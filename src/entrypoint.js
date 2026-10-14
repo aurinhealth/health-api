@@ -38,7 +38,7 @@ import { validateCoachActions, actionSafetyContext, actionsNote } from './coach-
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
 import { workloadMetrics } from "./workload-ratio.js";
-import { createReflection, listReflections, activityFromRow, dedupeActivities } from "./coach-reflection.js";
+import { createReflection, listReflections, activityFromRow, dedupeActivities, fillWellness } from "./coach-reflection.js";
 import { addLoads } from "./training-load.js";
 import { savePersonalFood } from './personal-foods.js';
 import { processFoodGoogle, backfillFoodGoogle } from './food-google-sync.js';
@@ -391,7 +391,7 @@ async function todayReadiness(env, ctx, date, { fresh = false } = {}) {
 // push may go out (5–11 local, a device token, nothing sent today).
 function morningPush(env, ctx, options = {}) {
   if (!pushConfigured(env)) return Promise.resolve({ sent: 0, reason: 'not-configured' });
-  return sendMorningReadiness(env, { readiness: date => todayReadiness(env, ctx, date, options) });
+  return sendMorningReadiness(env, { readiness: async date => { const r = await todayReadiness(env, ctx, date, options); return r ? { ...r, athleteState: (await getAthleteState(env.DB).catch(() => null))?.status || null } : r; } });
 }
 
 // Load targets of a week: CTL and daily load from Intervals.icu wellness, what
@@ -456,11 +456,13 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
     googleHealthFor(env,ctx,date).catch(()=>({})),
     app.fetch(new Request('https://internal/health/sleep?start='+from+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({})).then(d=>withIntervalsSleep(env,d,from,shiftDate(date,1))).catch(()=>({})),
     dashboardProfile(env).catch(()=>null),
-    screen==='training'?getCheckin(env.DB,date).catch(()=>null):null
+    getCheckin(env.DB,date).catch(()=>null)
   ]);
   const sessions=sleep?.sessions||[];
-  const coachTrends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions,age:profile?.age??null});
-  const readiness=screen==='training'?dayReadiness({date,fitness,health:{...health,sleep:sessions},profile,checkin}):null;
+  const coachTrends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions,age:profile?.age??null,sleepGoal:profile?.sleepGoal??null});
+  const readiness=dayReadiness({date,fitness,health:{...health,sleep:sessions},profile,checkin});
+  // Today has its own readiness on screen; the coach adds why (parts) and the athlete's status.
+  if(screen==='today'){const state=await getAthleteState(env.DB).catch(()=>null);return {...(coachTrends?{coachTrends}:{}),...(readiness?{readinessDetail:readiness}:{}),athleteState:state?.status||null};}
   return {...(coachTrends?{coachTrends}:{}),...(readiness?{readiness}:{})};
 }
 function loadCoachInputs(env,ctx,internalAuth,date){return cached(env,ctx,'coach-inputs:'+date,()=>loadCoachInputsFresh(env,ctx,internalAuth,date));}
@@ -506,14 +508,20 @@ async function reflectionData(env,ctx,internalAuth,date,workoutId=null){
     WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<?
       AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time`).bind(env.USER_ID,from,to).all().catch(()=>({results:[]}))).results||[];
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
-  const [fitness,sleep,food,recentFeedback,workout,profile]=await Promise.all([
+  const [fitness,sleep,food,recentFeedback,workout,profile,watch,checkin,gymSets]=await Promise.all([
     internal('/app/api/fitness?days=42').then(r=>r.json()).catch(()=>({})),
     app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-21)+'&end='+to,{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>withIntervalsSleep(env,d,shiftDate(date,-21),to)),
     env.DB.prepare("SELECT consumed_at,recipe_title,kcal,carbs_g FROM food_logs WHERE user_id=? AND consumed_date=? AND (status IS NULL OR status='eaten') ORDER BY consumed_at").bind(env.USER_ID,date).all().then(r=>r.results||[]).catch(()=>[]),
     recentWorkoutFeedback(env.DB,shiftDate(date,-21)),
     workoutId?getWorkout(env.DB,workoutId).catch(()=>null):null,
-    dashboardProfile(env).catch(()=>null)
+    dashboardProfile(env).catch(()=>null),
+    // HRV and resting HR from the watch, the check-in and the day's gym sets.
+    googleHealthFor(env,ctx,date).catch(()=>({})),
+    getCheckin(env.DB,date).catch(()=>null),
+    env.DB.prepare("SELECT exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND workout_date=? AND type='WORK' AND completed=1 ORDER BY id").bind(env.USER_ID,date).all().then(r=>r.results||[]).catch(()=>[])
   ]);
+  const wellness=fillWellness(fitness.wellness||[],watch?.wellness||[]);
+  const readiness=dayReadiness({date,fitness,health:{...watch,sleep:sleep.sessions||[]},profile,checkin});
   // The next two days' plan, so the coach knows whether tomorrow is a rest day or a hard session.
   const nextDays=await Promise.all([1,2].map(async k=>{const d=shiftDate(date,k);
     const [daily,gym]=await Promise.all([app.fetch(new Request('https://internal/analysis/daily?date='+d,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({})),readGymPlan(env.DB,d).catch(()=>null)]);
@@ -526,7 +534,8 @@ async function reflectionData(env,ctx,internalAuth,date,workoutId=null){
   return {
     workout:workout?{id:workout.id,name:workout.name,system:workout.primary_system,sport:workout.sport,durationMinutes:workout.duration_minutes}:null,
     activities:dedupeActivities(activityRows.map(activityFromRow)),
-    wellness:fitness.wellness||[],sleep:[...nights.values()],food,recentFeedback,nextDays,focus:athleteFocus(profile,date),athleteState:await getAthleteState(env.DB)
+    wellness,sleep:[...nights.values()],food,recentFeedback,nextDays,focus:athleteFocus(profile,date),athleteState:await getAthleteState(env.DB),
+    readiness,gym:gymSets.map(r=>({exercise:r.exercise,set:Number(r.set_no)||null,kg:r.actual_kg,reps:r.actual_reps,rpe:r.rpe}))
   };
 }
 
@@ -802,7 +811,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const readinessDate=date<localToday()?date:localToday();
       const readiness=dayReadiness({date:readinessDate,fitness:inputs.fitness,health:inputs.health,profile:inputs.profile,checkin:readinessDate===date?inputs.checkin:await getCheckin(env.DB,readinessDate).catch(()=>null)});
       const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text})),readiness});
-      const state=await getAthleteState(env.DB);Object.assign(input,{athleteState:state.status,statusNote:state.note,preferenceMemory:state.memories,availability:availabilityOn(prefs,date)});
+      const state=await getAthleteState(env.DB);Object.assign(input,{athleteState:state.status,statusNote:state.note,preferenceMemory:state.memories,availability:availabilityOn(prefs,date),...(inputs.cycle?{cycle:inputs.cycle}:{}),...(inputs.upcomingTest?{upcomingTest:inputs.upcomingTest}:{})});
       const reviews=[await reviewDay(env,input,null,inputs.focus).catch(error=>({model:lightModel(env),error:error.message}))];
       return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
@@ -1296,14 +1305,16 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // Up to two weeks ahead: the advisers then talk about the planned day.
       const requestedDate=url.searchParams.get('date'),date=validTrainingDay(requestedDate)&&requestedDate<=shiftDate(localToday(),14)?requestedDate:localToday(),ahead=date>localToday(),oldest=shiftDate(date,-14);
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
-      const fitnessJob=env.INTERVALS_API_KEY?fetch('https://intervals.icu/api/v1/athlete/0/wellness?oldest='+oldest+'&newest='+date,{headers:{Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json'}}).then(r=>r.ok?r.json():[]).catch(()=>[]):[];
+      // Form from the same series as Training (/app/api/fitness: Intervals.icu and the watch's workouts), so Today and Training agree.
+      const fitnessSeries=cached(env,ctx,'fitness:90',()=>handleDashboardApi(new Request('https://internal/app/api/fitness?days=90'),env,ctx,new URL('https://internal/app/api/fitness?days=90')).then(r=>r.json())).catch(()=>null);
+      const fitnessJob=fitnessSeries.then(f=>(Array.isArray(f?.wellness)?f.wellness:[]).filter(r=>String(r.id||'')>=oldest&&String(r.id||'')<=date));
       // A completed ride's intervals (one small Intervals.icu request, cached)
       // let its review compare every step with the plan.
       const dailyJob=read('/analysis/daily?date='+date);
       const rideJob=dailyJob.then(d=>rideDetailsFor(env,ctx,d.training)).catch(()=>({}));
       // The acute:chronic workload ratio and monotony need 4 weeks of daily
       // loads (workload-ratio.js), from the same cached series as the Training screen.
-      const workloadJob=ahead?null:cached(env,ctx,'fitness:90',()=>handleDashboardApi(new Request('https://internal/app/api/fitness?days=90'),env,ctx,new URL('https://internal/app/api/fitness?days=90')).then(r=>r.json())).then(f=>workloadMetrics(f?.wellness,date)).catch(()=>null);
+      const workloadJob=ahead?null:fitnessSeries.then(f=>workloadMetrics(f?.wellness,date)).catch(()=>null);
       const [daily,yesterday,sleepData,rows,profile,athleteState,gym,thresholds,rideDetails,workload]=await Promise.all([
         dailyJob,read('/analysis/daily?date='+shiftDate(date,-1)),
         read('/health/sleep?start='+oldest+'&end='+shiftDate(date,1)).then(d=>withIntervalsSleep(env,d,oldest,shiftDate(date,1))),fitnessJob,dashboardProfile(env),
