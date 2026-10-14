@@ -53,7 +53,8 @@ function nightsByDay(sessions) {
 // wellness: the Google/Apple rows (health.wellness), intervals: Intervals.icu's
 // (fitness.wellness, with CTL); sessions: the sleep sessions; need: the sleep
 // need in minutes (else from the age).
-export function trendFacts({ date, wellness = [], intervals = [], sessions = [], need = null, age = null } = {}) {
+// sleepGoal: the athlete's own sleep goal in minutes, as Today's ring counts the night.
+export function trendFacts({ date, wellness = [], intervals = [], sessions = [], need = null, age = null, sleepGoal = null } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) return null;
   const rows = mergeWellnessRows(Array.isArray(wellness) ? wellness : [], Array.isArray(intervals) ? intervals : []);
   const facts = {};
@@ -63,7 +64,7 @@ export function trendFacts({ date, wellness = [], intervals = [], sessions = [],
   const rhr = windows(rows, date, "restingHR", "restingHRSource");
   if (rhr) facts.restingHRChange6w = { bpm: round(rhr.now - rhr.before, 1), now: round(rhr.now), before: round(rhr.before) };
 
-  const want = positive(need) ?? sleepNeedMinutes({ age });
+  const want = positive(need) ?? sleepNeedMinutes({ age, goal: sleepGoal });
   const nights = nightsByDay(sessions);
   const week = [...nights.keys()].filter(d => d > shift(date, -7) && d <= date);
   if (week.length >= 5) {

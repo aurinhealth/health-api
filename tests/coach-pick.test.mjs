@@ -33,3 +33,19 @@ test("a workout done today turns the pick to recovery", () => {
   const r = rankOptions({ ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"], today: ["ride"] });
   assert.ok(["rest", "sauna"].includes(r.options[0].kind));
 });
+
+test("the reason speaks of quality only when the pick is a hard session", () => {
+  assert.match(rankOptions({ ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"] }).options[0].reason, /kvalitu/);
+  const easy = rankOptions({ ride: coach("green", "endurance", 90), run: coach("green", "endurance"), mainSport: "cycling", sports: ["ride"] }).options[0];
+  assert.equal(easy.kind, "ride");
+  assert.doesNotMatch(easy.reason, /kvalitu/);
+  assert.match(easy.reason, /klidném tempu/);
+});
+
+test("Doporučení trenéra builds the ride and run like the library's proposal (plan, role, free time, abilities)", async () => {
+  const src = (await import("node:fs")).readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
+  assert.match(route, /defaultDayCoach\(env,inputs,date,'ride',week\)/);
+  const helper = src.slice(src.indexOf("async function defaultDayCoach"), src.indexOf("// The athlete's ratings since a day"));
+  for (const part of [/targetFor\(targets,date,sport\)/, /roleFor\(prefs,date,sport/, /trainingBudget\(prefs,date/, /getCapabilities\(env\.DB,sport\)/]) assert.match(helper, part);
+});

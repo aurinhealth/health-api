@@ -255,3 +255,17 @@ test("push tokens and the push log are personal data", () => {
   const { env } = setup();
   assert.throws(() => env.DB.prepare("SELECT token FROM push_tokens"), /Unscoped query/);
 });
+
+test("the morning push waits for last night and never says 'intervals' to a sick athlete", async () => {
+  assert.equal(readinessMessage({ score: 80, zone: "green", flags: ["skin_temp_elevated"] }), "Připravenost 80 · dech nebo teplota jsou vyšší, dnes bez intenzity");
+  assert.equal(readinessMessage({ score: 80, zone: "green", flags: ["checkin_sick"] }), "Připravenost 80 · dnes odpočinek");
+  assert.equal(readinessMessage({ score: 80, zone: "green", athleteState: "injured" }), "Připravenost 80 · dnes odpočinek");
+  _resetPushForTest();
+  const { env } = setup();
+  await savePushToken(env.DB, TOKEN_A);
+  const { fetchImpl } = fakeApns();
+  const readiness = () => ({ score: 70, zone: "green", missing: ["sleep"] });
+  assert.equal((await sendMorningReadiness(env, { readiness, now: MORNING, fetchImpl })).reason, "waiting-for-sleep");
+  // 10:30 in Prague, the last hour of the window: it goes out anyway.
+  assert.equal((await sendMorningReadiness(env, { readiness, now: new Date("2026-10-12T08:30:00Z"), fetchImpl })).sent, 1);
+});

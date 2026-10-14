@@ -92,6 +92,21 @@ export function todayWeather(location, forecast, date) {
   };
 }
 
+// The coach's morning summary obeys the readiness: on a red morning, a sick
+// check-in or signs of illness (breathing or temperature up) it never says to
+// keep the plan; the advice is rest or an easy session. Its facts stay.
+export function readinessSummary(summary, readiness = {}, checkin = null, hasPlan = false) {
+  const flags = readiness?.flags || [];
+  const sick = checkin === "sick" || flags.includes("checkin_sick");
+  const signs = flags.some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f));
+  if (!(readiness?.zone === "red" || sick || signs)) return summary;
+  const recommendation = sick ? L("Když je ti špatně, trénink dnes vynech a odpočívej. Vrať se, až budeš zase fit.", "If you feel unwell, skip training today and rest. Come back when you're well again.")
+    : signs ? L("Dech nebo teplota jsou vyšší než obvykle, to může být začátek nemoci. Dnes bez intenzity, a když se necítíš dobře, odpočívej.", "Your breathing or temperature is higher than usual, which can be the start of an illness. No intensity today, and rest if you don't feel well.")
+    : hasPlan ? L("Připravenost je dnes nízká: náročný trénink vynech a dej volno nebo jen lehký pohyb do 45 minut.", "Readiness is low today: skip the hard session and take a rest day or just easy movement up to 45 minutes.")
+    : L("Připravenost je dnes nízká: dej si volno, procházku a jdi dřív spát.", "Readiness is low today: take a rest day, go for a walk and get to bed earlier.");
+  return { ...(summary || { text: null }), headline: sick || readiness?.zone === "red" ? L("Den na odpočinek", "A day to recover") : L("Dnes opatrně", "Take care today"), recommendation };
+}
+
 export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
@@ -147,7 +162,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   const cumulative = hours => hours.reduce((out, v) => [...out, (out.at(-1) || 0) + (num(v) || 0)], []);
   const earlier = Object.keys(byHour).filter(d => d < date && byHour[d].some(v => v > 0)).sort().slice(-14).map(d => cumulative(byHour[d]));
   const usual = earlier.length ? Array.from({ length: 24 }, (_, h) => Math.round(earlier.reduce((s, c) => s + c[h], 0) / earlier.length)) : null;
-  const summary = coaches.morningSummary || null;
+  const summary = readinessSummary(coaches.morningSummary || null, readiness, checkin, planned.length > 0);
 
   // The day's plan: what was done at its time, then what is still planned in
   // the order of the plan (no clock: it comes after the last record, whenever

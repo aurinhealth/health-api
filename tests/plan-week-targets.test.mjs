@@ -26,6 +26,7 @@ test('week targets without prefs use the saved week plan', async () => {
     planWeekRoles: days => { seen.days = days; return {}; },
     weekTargets: () => ({ status: 'ok', items: [] }), estimatedTargets: () => ({ status: 'ok', items: [] }),
     weekLoadsBefore: () => [], hrvWeekTrendDown: () => false,
+    hrvSourceRows: rows => rows, googleHealthFor: async () => null,
     capRunVolume: t => t, capWeekTargets: (t, prefs) => { seen.prefs = prefs; return t; }
   });
   vm.runInContext(slice(source, 'async function computeWeekTargets(', '\n// What the active plan asks'), context);

@@ -342,7 +342,7 @@ extension APIClient {
         if let chip { body["chip"] = .string(chip) }
         if let text { body["text"] = .string(text) }
         body["others"] = .array(others.map { o in
-            var x: JSONObject = ["date": .string(o.date), "sport": .string(o.sport)]
+            var x: JSONObject = ["date": .string(o.date), "sport": .string(o.sport), "minutes": .number(Double(o.minutes))]
             if let kind = o.kind { x["kind"] = .string(kind) }
             if let system = o.workout?.primary_system { x["system"] = .string(system) }
             return .object(x)

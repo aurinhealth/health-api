@@ -60,6 +60,20 @@ export function dedupeActivities(list) {
 
 function signal(list, id, weight, text, data = {}) { list.push({ id, weight, text, data }); }
 
+// Intervals.icu wellness (form) with HRV and resting HR from the watch
+// (Apple Health, Google Health, Ultrahuman) where Intervals has none, so the
+// note sees the body without Intervals too.
+export function fillWellness(intervals = [], watch = []) {
+  const byDate = new Map((intervals || []).filter(r => r?.id).map(r => [String(r.id).slice(0, 10), { ...r }]));
+  for (const r of watch || []) {
+    if (!r?.id) continue;
+    const id = String(r.id).slice(0, 10), row = byDate.get(id) || { id };
+    for (const key of ["hrv", "restingHR"]) if (!(n(row[key]) > 0) && n(r[key]) > 0) row[key] = n(r[key]);
+    byDate.set(id, row);
+  }
+  return [...byDate.values()].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+}
+
 // Deterministic signals, strongest first. `date` is the workout's day.
 export function reflectionSignals({ date, feedback = {}, workout = {}, activities = [], wellness = [], sleep = [], recentFeedback = [] }) {
   const out = [], system = workout.system || null, sport = workout.sport === "run" ? "run" : "ride";
@@ -159,7 +173,8 @@ export async function aiReflection(env, input, focus = null) {
 }
 
 // The data the coach sees, kept compact.
-export function reflectionInput({ date, feedback, workout, signals, activities, wellness, sleep, food, recentFeedback, previous,athleteState=null,nextDays=[] }) {
+// readiness: the day's verdict (coach-review.js dayReadiness); gym: the sets logged that day.
+export function reflectionInput({ date, feedback, workout, signals, activities, wellness, sleep, food, recentFeedback, previous,athleteState=null,nextDays=[],readiness=null,gym=[] }) {
   const since = d => String(d) >= shift(date, -14) && String(d) <= date;
   return {
     date, feedback, workout,athleteState:trainingStatus(athleteState), signals: signals.map(({ id, weight, text }) => ({ id, weight, text })),
@@ -170,7 +185,9 @@ export function reflectionInput({ date, feedback, workout, signals, activities, 
     sleep: sleep.filter(s => since(s.date)).map(s => ({ date: s.date, minutes: n(s.durationMin) })),
     recentFeedback: recentFeedback.filter(f => f.date < date || f.workoutId !== workout?.id).slice(0, 8),
     previousCoachNotes: (previous || []).slice(0, 3).map(r => ({ date: r.date, text: r.text })),
-    nextDays: (nextDays || []).slice(0, 2)
+    nextDays: (nextDays || []).slice(0, 2),
+    ...(readiness ? { readiness: { score: n(readiness.score), zone: readiness.zone || null, parts: readiness.parts || [], flags: readiness.flags || [] } } : {}),
+    ...(gym?.length ? { gymSets: gym.slice(0, 40) } : {})
   };
 }
 
@@ -211,7 +228,7 @@ export async function createReflection(env, { date, workoutId = null, rpe = null
   let text = null, source = "rules", model = null;
   if (env.OPENAI_API_KEY) {
     try {
-      const r = await aiReflection(env, reflectionInput({ date, feedback, workout, signals, activities: data.activities, wellness: data.wellness, sleep: data.sleep, food: data.food, recentFeedback: data.recentFeedback, previous,athleteState:data.athleteState,nextDays:data.nextDays }), data.focus || null);
+      const r = await aiReflection(env, reflectionInput({ date, feedback, workout, signals, activities: data.activities, wellness: data.wellness, sleep: data.sleep, food: data.food, recentFeedback: data.recentFeedback, previous,athleteState:data.athleteState,nextDays:data.nextDays,readiness:data.readiness||null,gym:data.gym||[] }), data.focus || null);
       text = r.text; model = r.model; source = "ai";
     } catch (error) { console.error("Coach reflection AI failed", error.message); }
   }
