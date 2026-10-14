@@ -22,6 +22,8 @@ const PUBLIC_PATHS = new Set([
   "/terms",
   "/support",
   "/logo.svg",
+  "/robots.txt",
+  "/sitemap.xml",
   "/app/logout",
   "/auth/google",
   "/auth/google/callback",

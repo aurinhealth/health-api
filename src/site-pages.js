@@ -1,7 +1,9 @@
 // Public pages: the Aurin overview on / and the policy pages. They use the iPhone app's light
 // palette (ios-native/Shared/Palette.swift): warm paper, white cards, Newsreader headings.
-// The phone on the overview is drawn in HTML from the app's Today screen, so it needs no screenshots
-// and speaks both languages. When the app changes what a section shows, change the section here too.
+// The phone on the overview is drawn in HTML from the app's Today screen, so it needs no screenshots.
+// When the app changes what a section shows, change the section here too.
+// The site is in English only (Aurin is for the whole world); the privacy policy and the terms also
+// have a Czech version at ?lang=cs, linked from the page and the footer.
 import {themeTokens} from './design-system.js';
 import {icon} from './icons.js';
 import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
@@ -29,10 +31,6 @@ p{margin:0}
 .pill-nav .links{display:flex;gap:2px;margin-right:6px}
 .pill-nav .links a{padding:7px 12px;border-radius:999px;color:var(--muted);text-decoration:none;font-size:14px;font-weight:500}
 .pill-nav .links a:hover{color:var(--text);background:var(--track)}
-.lang-switch{display:inline-flex;align-items:center;gap:2px;padding:3px;border-radius:999px;background:var(--track)}
-.lang-switch button{display:grid;place-items:center;min-width:32px;height:30px;padding:0 8px;border:0;border-radius:999px;background:none;color:var(--muted);cursor:pointer;font-family:inherit;font-size:12px;font-weight:600;line-height:1;letter-spacing:.02em}
-.lang-switch button:hover{color:var(--text)}
-.lang-switch button[aria-checked=true]{background:var(--panel);color:var(--text);box-shadow:0 1px 2px rgba(60,45,20,.12)}
 
 /* The store badge: the app is not in the App Store yet, so it is a label, not a link. */
 .store{display:inline-flex;align-items:center;gap:10px;height:54px;padding:0 26px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:17px;font-weight:600}
@@ -231,9 +229,9 @@ section[class*=glow-]{background:radial-gradient(min(70%,620px) 330px at 50% 380
 }
 `;
 
-// Language: ?lang= in the link, then the lw-lang cookie (shared with the app), then the
-// browser's first language (Czech or Slovak → cs, anything else → en). The switch in the top
-// bar sets the cookie, or clears it when you pick the browser's own language.
+// Language of the app-facing pages (sign-in by e-mail, shared workouts): ?lang= in the link, then
+// the lw-lang cookie (shared with the app), then the browser's first language (Czech or Slovak → cs,
+// anything else → en). The public site itself is English; see pageLang.
 export function siteLang(request) {
   const url = new URL(request.url), asked = url.searchParams.get('lang');
   if (asked === 'cs' || asked === 'en') return asked;
@@ -250,23 +248,17 @@ const APPLE_LOGO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 1
 // The Aurin mark (Rovnováha): the load half over the recovery half, offset as in the app icon.
 const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" height="${Math.round(width * 80 / 88)}" aria-hidden="true"><path d="M6 46A36 36 0 0 1 78 46Z" fill="var(--logo-load)"/><path d="M22 54A36 36 0 0 0 94 54Z" fill="var(--logo-recovery)"/></svg>`;
 const LOCK = '<svg class="icon lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>';
-const store = t => `<span class="store">${APPLE_LOGO}${t('Brzy v App Store', 'Coming soon to the App Store')}</span>`;
+const store = () => `<span class="store">${APPLE_LOGO}Coming soon to the App Store</span>`;
 
 const revealScript = `<script>(function(){var r=document.documentElement;r.classList.add('js');
 if(!('IntersectionObserver' in window)){r.classList.remove('js');return;}
 var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
 document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});})();</script>`;
 
-const langSwitch = lang => `<div class="theme-switch lang-switch" role="radiogroup" aria-label="${lang === 'en' ? 'Language' : 'Jazyk'}">${[['cs','CZ','Čeština'],['en','EN','English']].map(([code, label, name]) => `<button type="button" role="radio" data-lang-choice="${code}" lang="${code}" aria-label="${name}" aria-checked="${code === lang}">${label}</button>`).join('')}</div>`;
-const langSwitchScript = `<script>(function(){document.addEventListener('click',function(e){var b=e.target.closest('[data-lang-choice]');if(!b)return;
-var c=b.dataset.langChoice,dev=document.documentElement.dataset.deviceLang;
-document.cookie=c===dev?'lw-lang=; path=/; max-age=0; samesite=lax':'lw-lang='+c+'; path=/; max-age=31536000; samesite=lax';
-var u=new URL(location.href);u.searchParams.delete('lang');location.replace(u.pathname+u.search+u.hash);});})();</script>`;
-
-function sitePage({title, description, lang, device, origin, path, body, index=true}) {
-  const t = (cs, en) => lang === 'en' ? en : cs;
+function sitePage({title, description, lang, origin, path, body, czech=false, index=true}) {
+  const self = `${origin}${path}${lang === 'cs' ? '?lang=cs' : ''}`;
   const html = `<!doctype html>
-<html lang="${lang}" class="site" data-device-lang="${device}">
+<html lang="${lang}" class="site">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -275,52 +267,51 @@ function sitePage({title, description, lang, device, origin, path, body, index=t
 <meta name="description" content="${description}">
 <meta property="og:title" content="${title}">
 <meta property="og:description" content="${description}">
-<meta property="og:image" content="${origin}/site/og${lang === 'en' ? '-en' : ''}.png">
-<meta property="og:locale" content="${t('cs_CZ', 'en_US')}">
-<link rel="alternate" hreflang="cs" href="${origin}${path}?lang=cs">
-<link rel="alternate" hreflang="en" href="${origin}${path}?lang=en">
-<link rel="alternate" hreflang="x-default" href="${origin}${path}">
+<meta property="og:image" content="${origin}/site/og-en.png">
+<meta property="og:locale" content="${lang === 'cs' ? 'cs_CZ' : 'en_US'}">
+<link rel="canonical" href="${self}">
+${czech ? `<link rel="alternate" hreflang="en" href="${origin}${path}">\n<link rel="alternate" hreflang="cs" href="${origin}${path}?lang=cs">` : ''}
 ${index ? '' : '<meta name="robots" content="noindex">'}
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preload" href="/site/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
 <style>${themeTokens}${siteCss}</style>
 </head>
 <body>
-<header class="site-head"><nav class="pill-nav" aria-label="${t('Hlavní', 'Main')}">
+<header class="site-head"><nav class="pill-nav" aria-label="Main">
 <a class="logo" href="/">${mark(30)}<span>Aurin</span></a>
-<div class="links"><a href="/#pripravenost">${t('Funkce', 'Features')}</a><a href="/#kouc">${t('AI kouč', 'AI coach')}</a><a href="/#propojeni">${t('Propojení', 'Connections')}</a><a href="/#soukromi">${t('Soukromí', 'Privacy')}</a></div>
-${langSwitch(lang)}
+<div class="links"><a href="/#pripravenost">Features</a><a href="/#kouc">AI coach</a><a href="/#propojeni">Connections</a><a href="/#soukromi">Privacy</a></div>
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
 <div class="top">
-<div class="brand">${mark(40)}<p>${t('Trénuj podle toho, jak se dnes máš.', 'Train for how you feel today.')}</p></div>
-<nav aria-label="Aurin"><h3>Aurin</h3><ul><li><a href="/#pripravenost">${t('Funkce', 'Features')}</a></li><li><a href="/#kouc">${t('AI kouč', 'AI coach')}</a></li><li><a href="/#propojeni">${t('Propojení', 'Connections')}</a></li></ul></nav>
-<nav aria-label="${t('Pomoc', 'Help')}"><h3>${t('Pomoc', 'Help')}</h3><ul><li><a href="/support">${t('Podpora', 'Support')}</a></li><li><a href="/support#problem">${t('Nahlásit problém', 'Report a problem')}</a></li><li><a href="mailto:${CONTACT_EMAIL}">${t('Napsat nám', 'Write to us')}</a></li></ul></nav>
-<nav aria-label="${t('Dokumenty', 'Documents')}"><h3>${t('Dokumenty', 'Documents')}</h3><ul><li><a href="/privacy">${t('Ochrana soukromí', 'Privacy Policy')}</a></li><li><a href="/terms">${t('Podmínky', 'Terms')}</a></li></ul></nav>
+<div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
+<nav aria-label="Aurin"><h3>Aurin</h3><ul><li><a href="/#pripravenost">Features</a></li><li><a href="/#kouc">AI coach</a></li><li><a href="/#propojeni">Connections</a></li></ul></nav>
+<nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
+<nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li lang="cs">Česky: <a href="/privacy?lang=cs" hreflang="cs">Soukromí</a> · <a href="/terms?lang=cs" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
-<div class="base"><span>© 2026 Aurin · ${t('provozuje Petr Bouma, Česká republika', 'run by Petr Bouma, Czech Republic')}</span><span>${t('Aurin není zdravotnický prostředek.', 'Aurin is not a medical device.')}</span></div>
+<div class="base"><span>© 2026 Aurin · run by Petr Bouma, Czech Republic</span><span>Aurin is not a medical device.</span></div>
 </div></footer>
-${langSwitchScript}${revealScript}
+${revealScript}
 </body></html>`;
-  // The same URL serves both languages, so caches must key on the cookie and the browser language.
-  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'vary':'Cookie, Accept-Language', 'cache-control':'private, max-age=0, must-revalidate'}});
+  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate'}});
 }
 
-// Pages take the request (to pick the language and host) or nothing (Czech on aurin.health, for tests).
-function pageLang(request) {
-  if (!request) return {lang: 'cs', device: 'cs', origin: SITE_ORIGIN};
+// Pages take the request (to pick the host, and ?lang=cs on the pages that have Czech) or nothing
+// (English on aurin.health, for tests).
+function pageLang(request, czech = false) {
+  if (!request) return {lang: 'en', origin: SITE_ORIGIN};
   // The site's home is aurin.health; petrfitnessdata.eu serves the same pages for older links.
   // Absolute links (share image, language versions) keep to the host the page is served on.
   const host = new URL(request.url).hostname;
-  return {lang: siteLang(request), device: deviceLang(request), origin: SERVER_HOSTS.has(host) ? `https://${host}` : SITE_ORIGIN};
+  const lang = czech && new URL(request.url).searchParams.get('lang') === 'cs' ? 'cs' : 'en';
+  return {lang, origin: SERVER_HOSTS.has(host) ? `https://${host}` : SITE_ORIGIN};
 }
 
 // Google's policies ask the privacy policy to name every party that receives data, how it is stored and
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '13. října 2026', en: '13 October 2026'};
+const UPDATED = {cs: '14. října 2026', en: '14 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -330,19 +321,19 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // The overview follows the app section by section: Today, readiness, strain, the plan, the gym,
 // food, the coach and the connections. The numbers are one believable morning, the same everywhere.
 export function overviewPage(request) {
-  const {lang, device, origin} = pageLang(request), t = (cs, en) => lang === 'en' ? en : cs;
-  const days = t(['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'], ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
-  const short = t(['P', 'Ú', 'S', 'Č', 'P', 'S', 'N'], ['M', 'T', 'W', 'T', 'F', 'S', 'S']);
-  const today = `<div class="phone" role="img" aria-label="${t('Aurin v telefonu: obrazovka Dnes s připraveností, spánkem, námahou, HRV a dnešním tréninkem', 'Aurin on a phone: the Today screen with readiness, sleep, strain, HRV and today’s workout')}"><div class="screen" aria-hidden="true">
-<div class="top"><span>${t('Pondělí 12. 10.', 'Monday, Oct 12')}</span><span class="me">P</span></div>
-<div class="lbl">${t('Připravenost', 'Readiness')}</div>
-<div class="ready"><b>78</b><span class="pill good">${t('vysoká', 'high')}</span></div>
+  const {lang, origin} = pageLang(request);
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const short = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const today = `<div class="phone" role="img" aria-label="Aurin on a phone: the Today screen with readiness, sleep, strain, HRV and today’s workout"><div class="screen" aria-hidden="true">
+<div class="top"><span>Monday, Oct 12</span><span class="me">P</span></div>
+<div class="lbl">Readiness</div>
+<div class="ready"><b>78</b><span class="pill good">high</span></div>
 <div class="pc cells">
-<div><div class="k">${t('Spánek', 'Sleep')}</div><div class="v">7:12</div><div class="d sleep">index 84</div></div>
-<div><div class="k">${t('Námaha', 'Strain')}</div><div class="v">${t('11,4', '11.4')}</div><div class="d warm">${t('plán ~14', 'plan ~14')}</div></div>
+<div><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">index 84</div></div>
+<div><div class="k">Strain</div><div class="v">11.4</div><div class="d warm">plan ~14</div></div>
 <div><div class="k">HRV</div><div class="v">66</div><div class="d up">↑ 8 ms</div></div></div>
-<div class="pc next"><span class="sport" style="background:var(--amber-bar)">${icon('bike')}</span><div><div class="t">Sweet spot 3×12 ${icon('spark')}</div><div class="s">${t('1 h 25 min · dnes v 17:30', '1h 25m · today at 5:30 pm')}</div></div></div>
-<div class="pc"><div class="s" style="color:var(--muted);font-size:12px">${t('Kouč', 'Coach')}</div><div style="margin-top:3px">${t('Spal jsi dobře a HRV je nad normálem. Dnešní intervaly dej naplno.', 'You slept well and your HRV is above normal. Go all in on today’s intervals.')}</div></div>
+<div class="pc next"><span class="sport" style="background:var(--amber-bar)">${icon('bike')}</span><div><div class="t">Sweet spot 3×12 ${icon('spark')}</div><div class="s">1h 25m · today at 5:30 pm</div></div></div>
+<div class="pc"><div class="s" style="color:var(--muted);font-size:12px">Coach</div><div style="margin-top:3px">You slept well and your HRV is above normal. Go all in on today’s intervals.</div></div>
 <div class="tabbar"><span class="on">${icon('today')}</span><span>${icon('training')}</span><span class="add">${icon('plus')}</span><span>${icon('meal')}</span><span>${icon('heart')}</span></div>
 </div></div>`;
   const graph = [[9,34,'easy'],[15,74,'hard'],[4,34,'easy'],[15,74,'hard'],[4,34,'easy'],[15,74,'hard'],[9,28,'easy']]
@@ -350,46 +341,45 @@ export function overviewPage(request) {
   const cal = [['12','today'],['13','gym'],['14','run'],['15',''],['16','ride'],['17','run'],['18','']]
     .map(([n, k], i) => `<div>${days[i]}<b class="${k}">${n}</b></div>`).join('');
   const week = [30,55,20,70,45,15,62].map((h, i) => `<i class="${[1,3,4,6].includes(i) ? 'on' : ''}" style="height:${h}%"></i>`).join('');
-  const muscles = [[t('Hrudník', 'Chest'),92,'green'],[t('Záda', 'Back'),81,'green'],[t('Nohy', 'Legs'),54,'amber-bar'],[t('Ramena', 'Shoulders'),38,'rust']]
+  const muscles = [['Chest',92,'green'],['Back',81,'green'],['Legs',54,'amber-bar'],['Shoulders',38,'rust']]
     .map(([m, p, c]) => `<div class="muscle"><span class="m">${m}</span><span class="bar"><i style="width:${p}%;background:var(--${c})"></i></span><span class="p">${p} %</span></div>`).join('');
-  const sources = [['Apple Zdraví', 'Apple Health', `<span class="logo-tile health-red">${icon('heart')}</span>`],
-    ['Google Health', 'Google Health', '<span class="logo-tile google">G</span>'],
-    ['Intervals.icu', 'Intervals.icu', '<span class="logo-tile icu">i.icu</span>'],
-    ['Prsten Ultrahuman', 'Ultrahuman Ring', '<span class="logo-tile uh">U</span>']]
-    .map(([cs, en, logo]) => `<div class="source">${logo}<span>${t(cs, en)}</span><span class="ok">${icon('check')}</span></div>`).join('');
-  return sitePage({lang, device, origin, path: '/',
-    title: t('Aurin · trénuj podle toho, jak se dnes máš', 'Aurin · train for how you feel today'),
-    description: t('Aurin pro iPhone čte spánek, HRV a tréninky z Apple Zdraví, Google Health a Intervals.icu, každé ráno ukáže připravenost a podle ní navrhne trénink a jídlo.',
-      'Aurin for iPhone reads your sleep, HRV and workouts from Apple Health, Google Health and Intervals.icu, shows your readiness every morning and plans your training and food around it.'),
+  const sources = [['Apple Health', `<span class="logo-tile health-red">${icon('heart')}</span>`],
+    ['Google Health', '<span class="logo-tile google">G</span>'],
+    ['Intervals.icu', '<span class="logo-tile icu">i.icu</span>'],
+    ['Ultrahuman Ring', '<span class="logo-tile uh">U</span>']]
+    .map(([name, logo]) => `<div class="source">${logo}<span>${name}</span><span class="ok">${icon('check')}</span></div>`).join('');
+  return sitePage({lang, origin, path: '/',
+    title: 'Aurin · train for how you feel today',
+    description: 'Aurin for iPhone reads your sleep, HRV and workouts from Apple Health, Google Health and Intervals.icu, shows your readiness every morning and plans your training and food around it.',
     body: `<main>
 <div class="hero">
 <div class="wrap">
-<h1>${t('Trénuj podle toho, jak se dnes máš.', 'Train for how you feel today.')}</h1>
-${store(t)}
+<h1>Train for how you feel today.</h1>
+${store()}
 </div>
 <div class="stage reveal">
 <div class="float left" aria-hidden="true"><div class="k">HRV</div><div class="v">66 ms</div><div class="d up">↑ 8 ms</div></div>
-<div class="float right" aria-hidden="true"><div class="k">${t('Spánek', 'Sleep')}</div><div class="v">7:12</div><div class="d sleep">index 84</div></div>
+<div class="float right" aria-hidden="true"><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">index 84</div></div>
 ${today}
 </div>
 </div>
 
 <section id="pripravenost" class="glow-health"><div class="wrap feature">
-<div class="text reveal"><div class="eyebrow">${t('Připravenost', 'Readiness')}</div><h2>${t('Každé ráno jedno číslo.', 'One number every morning.')}</h2></div>
+<div class="text reveal"><div class="eyebrow">Readiness</div><h2>One number every morning.</h2></div>
 <div class="visual readiness reveal">
-<div class="card"><div class="big">78</div><p class="note">${t('HRV, klidový tep a spánek proti tvému normálu', 'HRV, resting heart rate and sleep against your normal')}</p></div>
+<div class="card"><div class="big">78</div><p class="note">HRV, resting heart rate and sleep against your normal</p></div>
 <div class="trio">
 <div class="card"><div class="k">HRV</div><div class="v">66</div><div class="d up">↑ 8 ms</div></div>
-<div class="card"><div class="k">${t('Tep v klidu', 'Resting HR')}</div><div class="v">48</div><div class="d up">↓ 2</div></div>
-<div class="card"><div class="k">${t('Spánek', 'Sleep')}</div><div class="v">7:12</div><div class="d sleep">${t('dluh 0:40', 'debt 0:40')}</div></div>
+<div class="card"><div class="k">Resting HR</div><div class="v">48</div><div class="d up">↓ 2</div></div>
+<div class="card"><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">debt 0:40</div></div>
 </div></div>
 </div></section>
 
 <section id="zatez"><div class="wrap feature flip">
-<div class="text reveal"><div class="eyebrow">${t('Námaha', 'Strain')}</div><h2>${t('Víš, kdy přidat a kdy ubrat.', 'Know when to push and when to back off.')}</h2></div>
+<div class="text reveal"><div class="eyebrow">Strain</div><h2>Know when to push and when to back off.</h2></div>
 <div class="visual reveal"><div class="card">
-<div class="gauge-head"><span>${t('Dnes', 'Today')}</span><span class="warm">${t('cíl 12–15', 'target 12–15')}</span></div>
-<div class="num">${t('11,4', '11.4')}</div>
+<div class="gauge-head"><span>Today</span><span class="warm">target 12–15</span></div>
+<div class="num">11.4</div>
 <div class="gauge"><i class="band"></i><i class="fill"></i></div>
 <div class="week">${week}</div>
 <div class="days">${short.map(d => `<span>${d}</span>`).join('')}</div>
@@ -397,65 +387,65 @@ ${today}
 </div></section>
 
 <section id="trenink" class="glow-training"><div class="wrap feature">
-<div class="text reveal"><div class="eyebrow">${t('Trénink', 'Training')}</div><h2>${t('Plán, který se přizpůsobí.', 'A plan that adapts.')}</h2></div>
+<div class="text reveal"><div class="eyebrow">Training</div><h2>A plan that adapts.</h2></div>
 <div class="visual reveal">
 <div class="card cal">${cal}</div>
 <div class="card workout">
-<div class="head"><span class="name">Sweet spot 3×12 ${icon('spark')}</span><span class="len">${t('1 h 25 min', '1h 25m')}</span></div>
+<div class="head"><span class="name">Sweet spot 3×12 ${icon('spark')}</span><span class="len">1h 25m</span></div>
 <div class="graph" aria-hidden="true">${graph}</div>
-<p class="note">${t('Vybráno AI z knihovny podle dnešní připravenosti.', 'Picked by AI from the library for today’s readiness.')}</p>
+<p class="note">Picked by AI from the library for today’s readiness.</p>
 </div>
-<div class="chips"><span>${t('Trénink dne od kouče', 'Coach’s pick of the day')}</span><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Plán týdne sám nebo od AI', 'Week plan by you or the AI')}</span><span>${t('Revize po tréninku', 'Review after each workout')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span><span>${t('Jeden trénink z hodinek i Intervals.icu', 'One workout from watch and Intervals.icu')}</span><span>${t('Vlastní tréninky', 'Your own workouts')}</span><span>${t('Sdílení s přáteli', 'Share with friends')}</span></div>
+<div class="chips"><span>Coach’s pick of the day</span><span>Ride</span><span>Run</span><span>Gym</span><span>Week plan by you or the AI</span><span>Review after each workout</span><span>Syncs with Intervals.icu</span><span>One workout from watch and Intervals.icu</span><span>Your own workouts</span><span>Share with friends</span></div>
 </div>
 </div></section>
 
 <section id="posilovna"><div class="wrap feature flip">
-<div class="text reveal"><div class="eyebrow">${t('Posilovna', 'Gym')}</div><h2>${t('Série, váhy a regenerace svalů.', 'Sets, weights and muscle recovery.')}</h2></div>
+<div class="text reveal"><div class="eyebrow">Gym</div><h2>Sets, weights and muscle recovery.</h2></div>
 <div class="visual reveal">
 <div class="card">${muscles}</div>
-<div class="card live"><span class="sport" style="background:var(--indigo)">${icon('gym')}</span><div><div class="t">Bench press</div><div class="s">${t('Série 3 ze 4 · 80 kg × 8', 'Set 3 of 4 · 80 kg × 8')}</div></div><span class="clock">1:30</span></div>
-<div class="chips"><span>${t('Supersérie', 'Supersets')}</span><span>${t('Levá a pravá strana', 'Left and right side')}</span><span>${t('Síla, svaly nebo kondice', 'Strength, muscle or fitness')}</span><span>${t('Rozcvička a protažení', 'Warm-up and stretching')}</span></div>
+<div class="card live"><span class="sport" style="background:var(--indigo)">${icon('gym')}</span><div><div class="t">Bench press</div><div class="s">Set 3 of 4 · 80 kg × 8</div></div><span class="clock">1:30</span></div>
+<div class="chips"><span>Supersets</span><span>Left and right side</span><span>Strength, muscle or fitness</span><span>Warm-up and stretching</span></div>
 </div>
 </div></section>
 
 <section id="vyziva" class="glow-food"><div class="wrap feature">
-<div class="text reveal"><div class="eyebrow">${t('Výživa', 'Nutrition')}</div><h2>${t('Jídlo podle tréninku.', 'Food that follows your training.')}</h2></div>
+<div class="text reveal"><div class="eyebrow">Nutrition</div><h2>Food that follows your training.</h2></div>
 <div class="visual reveal">
 <div class="card food">
 <svg class="ring" viewBox="0 0 120 120" aria-hidden="true"><circle class="track" cx="60" cy="60" r="50"/><circle class="val" cx="60" cy="60" r="50" stroke-dasharray="218 314"/></svg>
-<div><div class="kcal">${t('1 840', '1,840')}</div><div class="of">${t('z 2 650 kcal', 'of 2,650 kcal')}</div>
-<ul class="macros"><li><i style="background:var(--protein)"></i>${t('bílkoviny', 'protein')} 112 g</li><li><i style="background:var(--carbs)"></i>${t('sacharidy', 'carbs')} 240 g</li><li><i style="background:var(--fat)"></i>${t('tuky', 'fat')} 58 g</li></ul></div>
+<div><div class="kcal">1,840</div><div class="of">of 2,650 kcal</div>
+<ul class="macros"><li><i style="background:var(--protein)"></i>protein 112 g</li><li><i style="background:var(--carbs)"></i>carbs 240 g</li><li><i style="background:var(--fat)"></i>fat 58 g</li></ul></div>
 </div>
 <div class="trio">
-<div class="card tile" style="color:var(--green)">${icon('camera')}<span style="color:var(--text)">${t('Fotka', 'Photo')}</span></div>
-<div class="card tile" style="color:var(--amber)">${icon('barcode')}<span style="color:var(--text)">${t('Kód', 'Barcode')}</span></div>
-<div class="card tile" style="color:var(--blue)">${icon('drop')}<span style="color:var(--text)">${t('Pití', 'Drinks')}</span></div>
+<div class="card tile" style="color:var(--green)">${icon('camera')}<span style="color:var(--text)">Photo</span></div>
+<div class="card tile" style="color:var(--amber)">${icon('barcode')}<span style="color:var(--text)">Barcode</span></div>
+<div class="card tile" style="color:var(--blue)">${icon('drop')}<span style="color:var(--text)">Drinks</span></div>
 </div>
-<div class="chips"><span>${t('AI odhad', 'AI estimate')}</span><span>${t('Jídlo z jiných aplikací', 'Food from other apps')}</span><span>${t('Hromadné kopírování a přesun', 'Copy and move in bulk')}</span></div>
+<div class="chips"><span>AI estimate</span><span>Food from other apps</span><span>Copy and move in bulk</span></div>
 </div>
 </div></section>
 
 <section id="kouc" class="glow-today"><div class="wrap feature flip">
-<div class="text reveal"><div class="eyebrow">${t('AI kouč', 'AI coach')}</div><h2>${t('Ptej se. Zná tvoje data.', 'Just ask. It knows your data.')}</h2><p class="free">${t('Zdarma pro všechny.', 'Free for everyone.')}</p></div>
+<div class="text reveal"><div class="eyebrow">AI coach</div><h2>Just ask. It knows your data.</h2><p class="free">Free for everyone.</p></div>
 <div class="visual chat reveal">
-<div class="me">${t('Spal jsem jen 6 hodin. Mám jet ty intervaly?', 'I only slept 6 hours. Should I still do the intervals?')}</div>
-<div class="ai">${t('HRV máš v normálu, ale spánkový dluh roste. Zkrátil bych to na 2×12 a dnes šel spát o 30 minut dřív.', 'Your HRV is normal, but your sleep debt is growing. I’d cut it to 2×12 and go to bed 30 minutes earlier tonight.')}
-<div class="acts" aria-hidden="true"><span>${t('Upravit trénink', 'Adjust workout')}</span><span>${t('Nechat', 'Keep it')}</span></div></div>
+<div class="me">I only slept 6 hours. Should I still do the intervals?</div>
+<div class="ai">Your HRV is normal, but your sleep debt is growing. I’d cut it to 2×12 and go to bed 30 minutes earlier tonight.
+<div class="acts" aria-hidden="true"><span>Adjust workout</span><span>Keep it</span></div></div>
 </div>
 </div></section>
 
 <section id="propojeni"><div class="wrap feature">
-<div class="text reveal"><div class="eyebrow">${t('Propojení', 'Connections')}</div><h2>${t('Data odtud, tréninky tam.', 'Data in, workouts out.')}</h2><p>${t('Nosíš víc zařízení? Noc i den bere Aurin z toho, které nosíš nejvíc, nebo si zdroj vybereš sám.', 'Wear more than one device? Aurin takes the night and the day from the one you wear most, or you pick the source yourself.')}</p></div>
+<div class="text reveal"><div class="eyebrow">Connections</div><h2>Data in, workouts out.</h2><p>Wear more than one device? Aurin takes the night and the day from the one you wear most, or you pick the source yourself.</p></div>
 <div class="visual sources reveal">${sources}</div>
 </div></section>
 
 <section id="soukromi"><div class="wrap">
-<div class="center reveal">${LOCK}<h2>${t('Tvoje data slouží jen tobě.', 'Your data works only for you.')}</h2></div>
+<div class="center reveal">${LOCK}<h2>Your data works only for you.</h2></div>
 <ul class="card checks reveal">
-${check(t('Čte jen to, co mu povolíš.', 'It reads only what you allow.'))}
-${check(t('Data neprodává ani nepoužívá k reklamě.', 'It never sells your data or uses it for ads.'))}
-${check(t('Účet i se všemi daty kdykoli smažeš v Nastavení.', 'You can delete your account and all its data in Settings at any time.'))}
-${check(`<a href="/privacy">${t('Celé zásady ochrany soukromí', 'Full privacy policy')}</a>`)}
+${check('It reads only what you allow.')}
+${check('It never sells your data or uses it for ads.')}
+${check('You can delete your account and all its data in Settings at any time.')}
+${check(`<a href="/privacy">Full privacy policy</a>`)}
 </ul>
 <div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Aurin (Petr Fitness Data) is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
@@ -469,18 +459,21 @@ ${check(`<a href="/privacy">${t('Celé zásady ochrany soukromí', 'Full privacy
 <section class="final"><div class="wrap reveal">
 ${mark(96)}
 <h2>Aurin</h2>
-${store(t)}
+${store()}
 </div></section>
 </main>`
   });
 }
 
-// Policy pages. The English text is the reference version (Google verification reads it);
-// the Czech one says the same.
+// Policy pages. The English text is the reference version (Google verification reads it). The
+// privacy policy and the terms also have a Czech version that says the same, at ?lang=cs.
 function doc(request, path, title, html) {
-  const {lang, device, origin} = pageLang(request), pick = x => lang === 'en' ? x.en : x.cs;
-  return sitePage({lang, device, origin, path, title: `${pick(title)} · Aurin`, description: lang === 'en' ? `${title.en} for Aurin (aurin.health).` : `${title.cs} pro Aurin (aurin.health).`,
-    body: `<main class="wrap doc"><h1>${pick(title)}</h1>${pick(html)}</main>`});
+  const czech = Boolean(html.cs), {lang, origin} = pageLang(request, czech), pick = x => lang === 'cs' ? x.cs : x.en;
+  const other = !czech ? '' : lang === 'cs'
+    ? `<p class="muted"><a href="${path}" lang="en" hreflang="en">English version</a></p>`
+    : `<p class="muted"><a href="${path}?lang=cs" lang="cs" hreflang="cs">Česká verze</a></p>`;
+  return sitePage({lang, origin, path, czech, title: `${pick(title)} · Aurin`, description: lang === 'cs' ? `${title.cs} pro Aurin (aurin.health).` : `${title.en} for Aurin (aurin.health).`,
+    body: `<main class="wrap doc"><h1>${pick(title)}</h1>${other}${pick(html)}</main>`});
 }
 
 // Sign in with Apple and e-mail codes are described only once they are set up (signIn from the
@@ -538,6 +531,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <ul>
 <li>On iPhone, Aurin reads from Apple Health only the types you allow, such as sleep, workouts, heart rate, HRV, steps, active energy, VO₂ max, weight, and food and water logged in other apps. It uses them only to show and evaluate your recovery, training load, workouts, food diary and calorie target.</li>
 <li>Cycle tracking, only if you turn it on (Settings → Cycle): the periods, their strength, symptoms, contraception, the pill you mark as taken and the dates you enter, plus menstrual flow and ovulation tests from Apple Health if you allow them. They are used to show your cycle, to judge your readiness against your own normal for each phase and to ease a hard training day. They go to the AI coach only if you turn on "Coach knows my cycle", and then only today's phase, cycle day, bleeding and symptoms, never dates or history. They are not sent to any connected service, and turning the tracking off keeps them until you delete your account.</li>
+<li>Writing to Apple Health, only if you turn it on (Settings → Sync → Apple Health): workouts you log in Aurin and, for the types you choose, the weight you type in, the day’s food (energy, protein, carbohydrates and fat) and water. iOS asks your permission for each type, and you can turn writing off in the same place or in the iPhone Settings → Health → Data Access &amp; Devices → Aurin. What Aurin wrote stays in Apple Health when you delete your account.</li>
 <li>Apple Health data goes only to our server and, for features you use, to the services under “Who receives your data”. We do not sell it, do not use or share it for advertising, and do not give it to data brokers.</li>
 <li>You change or remove access in the iPhone Settings → Health → Data Access & Devices → Aurin. Data already synced is deleted with your account.</li>
 </ul>
@@ -564,7 +558,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <ul>
 <li>We keep your data while you have an account. An account nobody has signed in to for two years is deleted automatically with all its data.</li>
 <li><strong>Disconnecting a service</strong> in Settings stops Aurin from reading from and writing to it and removes the stored access; for Google, Aurin also gives up its access at Google. Data imported so far stays in your account until you delete it or the account.</li>
-<li><strong>Deleting your account</strong> in Settings → Account immediately deletes your account and permanently deletes all its data in Aurin (for a large account, the rest within minutes): profile, food, workouts, sleep and health data, connections, passkeys and assistant history. The record of your consents is deleted with it. Aurin also gives up its access to your Google Account and clears its copy on the device you use. Database backups are overwritten within 30 days.</li>
+<li><strong>Deleting your account</strong> in Settings → Privacy &amp; data immediately deletes your account and permanently deletes all its data in Aurin (for a large account, the rest within minutes): profile, food, workouts, sleep and health data, connections, passkeys and assistant history. The record of your consents is deleted with it. Aurin also gives up its access to your Google Account and clears its copy on the device you use. Database backups are overwritten within 30 days.</li>
 <li>To stop using a passkey, delete it from your iPhone or password manager. Deleting your account removes all your passkeys from Aurin.</li>
 <li>Data that Aurin copied to Intervals.icu or Google Health stays there; you can delete it in those services.</li>
 <li>You can also remove Aurin’s access at any time in your Google Account under <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>. Aurin then can no longer read or write your Google data.</li>
@@ -573,8 +567,8 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 </ul>
 <p>The <a href="/support">Support</a> page explains step by step how to manage and delete your data.</p>
 <h2>Legal bases and your rights</h2>
-<p>We process your data to provide the service you asked for (Article 6(1)(b) GDPR). Health data, from Google Health, Apple Health, Intervals.icu or entered by you, is processed only with your explicit consent (Article 9(2)(a) GDPR). You give it in the app before you first use it, and we record when and to which version of this text; syncing of your connected services in the background also runs only after it. The consent covers sending the data an AI feature needs to OpenAI, because the AI features are part of the service. You withdraw your consent by deleting your account in Settings → Account, where you can first download all your data; disconnecting a service stops new data from it. Withdrawing does not affect processing before it. Technical logs rely on our legitimate interest in a secure service (Article 6(1)(f) GDPR).</p>
-<p>You have the right to access, correct and delete your data, to restrict or object to its processing and to receive it in a portable format. Most of this you can do directly in the app: in Settings → Account you can download all your data as a JSON Lines (NDJSON) file or delete your account. You can also lodge a complaint with the Czech Office for Personal Data Protection (<a href="https://uoou.gov.cz">uoou.gov.cz</a>).</p>
+<p>We process your data to provide the service you asked for (Article 6(1)(b) GDPR). Health data, from Google Health, Apple Health, Intervals.icu or entered by you, is processed only with your explicit consent (Article 9(2)(a) GDPR). You give it in the app before you first use it, and we record when and to which version of this text; syncing of your connected services in the background also runs only after it. The consent covers sending the data an AI feature needs to OpenAI, because the AI features are part of the service. You withdraw your consent by deleting your account in Settings → Privacy &amp; data, where you can first download all your data; disconnecting a service stops new data from it. Withdrawing does not affect processing before it. Technical logs rely on our legitimate interest in a secure service (Article 6(1)(f) GDPR).</p>
+<p>You have the right to access, correct and delete your data, to restrict or object to its processing and to receive it in a portable format. Most of this you can do directly in the app: in Settings → Privacy &amp; data you can download all your data as a JSON Lines (NDJSON) file or delete your account. You can also lodge a complaint with the Czech Office for Personal Data Protection (<a href="https://uoou.gov.cz">uoou.gov.cz</a>).</p>
 <h2>Children</h2>
 <p>Aurin is not intended for children under 16, and we do not knowingly collect their data.</p>
 <h2>Changes</h2>
@@ -631,6 +625,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <ul>
 <li>Na iPhonu Aurin čte z Apple Health jen údaje, které povolíš, třeba spánek, tréninky, tep, HRV, kroky, aktivní energii, VO₂max, váhu a jídlo a pití zapsané v jiných aplikacích. Používá je jen k tomu, aby ti ukázal a vyhodnotil regeneraci, tréninkovou zátěž, tréninky, jídelníček a kalorický cíl.</li>
 <li>Sledování cyklu, jen když ho zapneš (Nastavení → Cyklus): menstruace, jejich síla, potíže, antikoncepce, prášky, které odklikneš, a data, která zadáš, a z Apple Health menstruace a ovulační testy, pokud je povolíš. Slouží k zobrazení cyklu, k hodnocení připravenosti proti tvému normálu v dané fázi a ke zlehčení náročného tréninku. AI kouč je dostane jen po zapnutí „Kouč ví o cyklu“, a to jen dnešní fázi, den cyklu, krvácení a potíže, nikdy data ani historii. Žádné připojené službě je neposíláme a po vypnutí sledování zůstanou uložené, dokud nesmažeš účet.</li>
+<li>Zápis do Apple Health, jen když ho zapneš (Nastavení → Synchronizace → Apple Zdraví): tréninky, které zapíšeš v Aurinu, a u typů, které vybereš, i váha, kterou zadáš, denní jídlo (energie, bílkoviny, sacharidy a tuky) a pití. iOS se tě na každý typ zeptá zvlášť a zápis vypneš na stejném místě nebo v Nastavení iPhonu → Zdraví → Přístup k datům a zařízení → Aurin. Co Aurin zapsal, zůstane v Apple Health i po smazání účtu.</li>
 <li>Data z Apple Health jdou jen na náš server a kvůli funkcím, které používáš, ke službám z části Kdo data dostává. Neprodáváme je, nepoužíváme ani nepředáváme k reklamě a nedáváme je obchodníkům s daty.</li>
 <li>Přístup změníš nebo zrušíš v Nastavení iPhonu → Zdraví → Přístup k datům a zařízení → Aurin. Už synchronizovaná data se smažou s účtem.</li>
 </ul>
@@ -657,7 +652,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <ul>
 <li>Data uchováváme, dokud máš účet. Účet, do kterého se nikdo dva roky nepřihlásil, automaticky smažeme i se všemi daty.</li>
 <li><strong>Odpojení služby</strong> v Nastavení zastaví čtení i zápis do ní a smaže uložený přístup; u Googlu se Aurin vzdá přístupu i přímo u Googlu. Data, která se do té doby načetla, zůstanou v tvém účtu, dokud je nesmažeš, nebo nesmažeš účet.</li>
-<li><strong>Smazání účtu</strong> v Nastavení → Účet okamžitě smaže tvůj účet a natrvalo všechna data v Aurinu (u velkého účtu zbytek do několika minut): profil, jídla, tréninky, spánek a zdravotní data, připojení služeb, přístupové klíče i historii asistenta. Smaže se i záznam o tvých souhlasech. Aurin se zároveň vzdá přístupu k tvému účtu Google a smaže svou kopii v zařízení, ve kterém účet mažeš. Zálohy databáze se přepíšou do 30 dní.</li>
+<li><strong>Smazání účtu</strong> v Nastavení → Soukromí a data okamžitě smaže tvůj účet a natrvalo všechna data v Aurinu (u velkého účtu zbytek do několika minut): profil, jídla, tréninky, spánek a zdravotní data, připojení služeb, přístupové klíče i historii asistenta. Smaže se i záznam o tvých souhlasech. Aurin se zároveň vzdá přístupu k tvému účtu Google a smaže svou kopii v zařízení, ve kterém účet mažeš. Zálohy databáze se přepíšou do 30 dní.</li>
 <li>Přístupový klíč přestaneš používat, když ho smažeš z iPhonu nebo ze správce hesel. Smazáním účtu zmizí z Aurinu všechny tvoje přístupové klíče.</li>
 <li>Co Aurin zkopíroval do Intervals.icu nebo Google Health, tam zůstane; smazat to můžeš v těchto službách.</li>
 <li>Přístup Aurinu můžeš kdykoli odebrat i ve svém účtu Google v části <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>. Aurin pak už tvoje data z Googlu nepřečte ani nezapíše.</li>
@@ -666,8 +661,8 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
 </ul>
 <p>Na stránce <a href="/support">Podpora</a> najdeš postup krok za krokem, jak data spravovat a smazat.</p>
 <h2>Právní základ a tvoje práva</h2>
-<p>Data zpracováváme, abychom ti poskytli službu, o kterou stojíš (čl. 6 odst. 1 písm. b) GDPR). Údaje o zdraví, z Google Health, Apple Health, Intervals.icu i ty, které zadáš sám, zpracováváme jen s tvým výslovným souhlasem (čl. 9 odst. 2 písm. a) GDPR). Dáváš ho v aplikaci před prvním použitím a my zaznamenáme kdy a ke které verzi tohoto textu; synchronizace propojených služeb na pozadí běží až po něm. Souhlas zahrnuje i posílání dat, která AI funkce potřebuje, do OpenAI, protože AI funkce jsou součástí služby. Souhlas odvoláš smazáním účtu v Nastavení → Účet, kde si předtím můžeš stáhnout všechna svoje data; odpojením služby zastavíš nová data z ní. Odvoláním nepřestává být zákonné zpracování před ním. Technické záznamy vedeme na základě oprávněného zájmu na bezpečné službě (čl. 6 odst. 1 písm. f) GDPR).</p>
-<p>Máš právo na přístup ke svým datům, jejich opravu a výmaz, na omezení zpracování, vznesení námitky a na přenositelnost dat. Většinu z toho uděláš přímo v aplikaci: v Nastavení → Účet si všechna svoje data stáhneš jako soubor JSON Lines (NDJSON), nebo smažeš účet. Můžeš si také stěžovat u Úřadu pro ochranu osobních údajů (<a href="https://uoou.gov.cz">uoou.gov.cz</a>).</p>
+<p>Data zpracováváme, abychom ti poskytli službu, o kterou stojíš (čl. 6 odst. 1 písm. b) GDPR). Údaje o zdraví, z Google Health, Apple Health, Intervals.icu i ty, které zadáš sám, zpracováváme jen s tvým výslovným souhlasem (čl. 9 odst. 2 písm. a) GDPR). Dáváš ho v aplikaci před prvním použitím a my zaznamenáme kdy a ke které verzi tohoto textu; synchronizace propojených služeb na pozadí běží až po něm. Souhlas zahrnuje i posílání dat, která AI funkce potřebuje, do OpenAI, protože AI funkce jsou součástí služby. Souhlas odvoláš smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data; odpojením služby zastavíš nová data z ní. Odvoláním nepřestává být zákonné zpracování před ním. Technické záznamy vedeme na základě oprávněného zájmu na bezpečné službě (čl. 6 odst. 1 písm. f) GDPR).</p>
+<p>Máš právo na přístup ke svým datům, jejich opravu a výmaz, na omezení zpracování, vznesení námitky a na přenositelnost dat. Většinu z toho uděláš přímo v aplikaci: v Nastavení → Soukromí a data si všechna svoje data stáhneš jako soubor JSON Lines (NDJSON), nebo smažeš účet. Můžeš si také stěžovat u Úřadu pro ochranu osobních údajů (<a href="https://uoou.gov.cz">uoou.gov.cz</a>).</p>
 <h2>Děti</h2>
 <p>Aurin není určený dětem mladším 16 let a jejich data vědomě nesbíráme.</p>
 <h2>Změny</h2>
@@ -821,7 +816,7 @@ export function termsPage(request) {
 }
 
 export function supportPage(request, {apple = false, email = false, open = false} = {}) {
-  return doc(request, '/support', {cs: 'Podpora', en: 'Support'}, {
+  return doc(request, '/support', {en: 'Support'}, {
     en: `<p>${open ? '' : 'Aurin is currently available only by personal invitation. '}If something does not work, report it in the app or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Never send passwords, API keys or other secrets.</p>
 <h2 id="problem">Reporting a problem</h2>
 <ol>
@@ -861,46 +856,23 @@ export function supportPage(request, {apple = false, email = false, open = false
 <li>If you want to keep a copy, first choose <strong>Download my data</strong>.</li>
 <li>Choose <strong>Delete account</strong>, type DELETE to confirm and choose <strong>Delete</strong>.</li>
 </ol>
-<p>Aurin immediately and permanently deletes your account and all its data: profile, food, workouts, sleep and health data, connections, passkeys and assistant history. It also gives up its access to your Google Account and clears its copy on your device. Database backups are overwritten within 30 days. Data already in Apple Health, Intervals.icu or Google Health stays there. More in the <a href="/privacy">Privacy Policy</a>.</p>`,
-    cs: `<p>${open ? '' : 'Aurin je zatím dostupný jen na osobní pozvánku. '}Když něco nefunguje, nahlas to v aplikaci nebo napiš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Nikdy neposílej hesla, klíče API ani jiná tajemství.</p>
-<h2 id="problem">Nahlášení problému</h2>
-<ol>
-<li>V aplikaci otevři <strong>Nastavení → Pomoc → Nahlásit problém</strong>.</li>
-<li>Do <strong>Co se stalo</strong> popiš, co nefungovalo a přibližně kdy. Když to pomůže, přidej snímek obrazovky.</li>
-<li>Nech zapnuté <strong>Přiložit diagnostiku</strong>: hlášení pak nese technické údaje o aplikaci, synchronizaci a posledních chybách, takže se příčina najde rychleji. Přes <strong>Zobrazit diagnostiku</strong> si je můžeš nejdřív přečíst, nebo je vypnout.</li>
-<li>Zvol <strong>Odeslat</strong>.</li>
-</ol>
-<p>Když aplikaci nemůžeš otevřít, napiš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>, co nefungovalo, přibližně kdy, jakou chybu aplikace ukázala a jaký máš iPhone a verzi iOS. S čímkoli jiným ti <strong>Nastavení → Pomoc → Kontaktovat nás</strong> otevře e-mail s vyplněnou verzí aplikace.</p>
-<h2>Přihlášení</h2>
-<p>V aplikaci pro iPhone zvol ${apple ? '<strong>Pokračovat přes Apple</strong>, ' : ''}<strong>Pokračovat přes Google</strong>${email ? ' nebo <strong>Pokračovat e-mailem</strong>: přijde ti šestimístný kód, který platí 10 minut' : ''}. Přihlašuj se pokaždé stejně, ať se dostaneš do stejného účtu.${open ? '' : ' Když aplikace hlásí, že účet není pozvaný, požádej provozovatele, ať pozve adresu, kterou používáš.'}</p>
-<h2>Přístupové klíče (passkeys)</h2>
-<ul>
-<li>Po prvním přihlášení kódem z e-mailu ti aplikace nabídne <strong>Příště přes Face ID</strong>. Když souhlasíš, iPhone si uloží přístupový klíč do správce hesel.</li>
-<li>Příště zvol <strong>Přihlásit přes passkey</strong> a odemkni ho přes Face ID, Touch ID nebo kódem telefonu. Klíč uložený v Klíčence na iCloudu funguje i na tvých dalších zařízeních Apple.</li>
-<li>Přístupový klíč přestaneš používat, když ho smažeš z iPhonu nebo ze správce hesel. Smazáním účtu zmizí z Aurinu všechny tvoje přístupové klíče.</li>
-</ul>
-<h2>Připojení a odpojení služeb</h2>
-<ul>
-<li>V aplikaci otevři <strong>Nastavení → Zdroje dat</strong>. Přes <strong>+</strong> připojíš Apple Zdraví, Google Health, Intervals.icu nebo prsten Ultrahuman. Každá připojená služba má vlastní stránku a dole na ní <strong>Odpojit</strong>.</li>
-<li>U Apple Zdraví se iPhone zeptá, která data smí Aurin číst. Později to změníš v Nastavení iPhonu → Zdraví → Přístup k datům a zařízení → Aurin.</li>
-<li>Než tě Aurin pošle na Google, ukáže, co z Google Health čte, co tam zapisuje a kdo data dostane, a požádá tě o souhlas.</li>
-<li>Odpojení zastaví čtení i zápis dat v dané službě. U Googlu se Aurin vzdá přístupu i přímo u Googlu. Odpojení prstenu Ultrahuman smaže i data, která Aurin z prstenu získal.</li>
-<li>Přístup Aurinu můžeš odebrat i ve svém účtu Google: otevři <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>, vyber Aurin a přístup odeber.</li>
-<li>Když totéž měří dvě tvoje zařízení, rozhodne <strong>Odkud brát data</strong> ve Zdrojích dat, ze kterého Aurin bere noci a ze kterého dny. <strong>Automaticky</strong> to vybere za tebe.</li>
-</ul>
-<h2>Správa dat</h2>
-<ul>
-<li>Záznamy jídla, pití a váhy upravíš nebo smažeš tam, kde je v aplikaci vidíš, a profil změníš v Nastavení.</li>
-<li>Co Aurin zkopíroval do Apple Zdraví, Intervals.icu nebo Google Health, upravíš nebo smažeš v těchto službách.</li>
-<li><strong>Nastavení → Soukromí a data → AI funkce</strong> zapíná a vypíná posílání dat k AI. Bez něj přestane fungovat kouč, fotky jídla a dohledání potravin, zbytek aplikace jede dál.</li>
-<li>Kopii všeho, co o tobě Aurin ukládá, si stáhneš v <strong>Nastavení → Soukromí a data</strong> tlačítkem <strong>Stáhnout moje data</strong> (soubor JSON Lines, jeden záznam na řádek).</li>
-</ul>
-<h2>Smazání účtu a dat</h2>
-<ol>
-<li>Otevři <strong>Nastavení → Soukromí a data</strong>.</li>
-<li>Jestli si chceš data nechat, nejdřív zvol <strong>Stáhnout moje data</strong>.</li>
-<li>Zvol <strong>Smazat účet</strong>, pro potvrzení napiš SMAZAT a zvol <strong>Smazat</strong>.</li>
-</ol>
-<p>Aurin okamžitě a natrvalo smaže tvůj účet a všechna data: profil, jídla, tréninky, spánek a zdravotní data, připojení služeb, přístupové klíče i historii asistenta. Zároveň se vzdá přístupu k tvému účtu Google a smaže svou kopii ve tvém zařízení. Zálohy databáze se přepíšou do 30 dní. Co už je v Apple Zdraví, Intervals.icu nebo Google Health, tam zůstane. Víc v <a href="/privacy">Zásadách ochrany soukromí</a>.</p>`
+<p>Aurin immediately and permanently deletes your account and all its data: profile, food, workouts, sleep and health data, connections, passkeys and assistant history. It also gives up its access to your Google Account and clears its copy on your device. Database backups are overwritten within 30 days. Data already in Apple Health, Intervals.icu or Google Health stays there. More in the <a href="/privacy">Privacy Policy</a>.</p>`
   });
+}
+
+// Search engines: the public pages are listed in the sitemap; sign-in, the app's API and shared
+// workouts are left out of the index.
+const PUBLIC_PAGES = ['/', '/support', '/privacy', '/terms', '/privacy?lang=cs', '/terms?lang=cs'];
+
+export function robotsTxt(request) {
+  const {origin} = pageLang(request);
+  return new Response(`User-agent: *\nDisallow: /app/\nDisallow: /auth/\nDisallow: /oauth/\nDisallow: /t/\n\nSitemap: ${origin}/sitemap.xml\n`,
+    {headers: {'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=3600'}});
+}
+
+export function sitemapXml(request) {
+  const {origin} = pageLang(request);
+  const urls = PUBLIC_PAGES.map(path => `<url><loc>${origin}${path.replace('&', '&amp;')}</loc></url>`).join('\n');
+  return new Response(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,
+    {headers: {'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600'}});
 }
