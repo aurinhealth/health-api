@@ -166,6 +166,7 @@ p{margin:0}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .hub{position:relative;aspect-ratio:520/320;border-radius:32px;overflow:hidden;background:var(--panel2);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--panel) 70%,transparent)}
 .hub .lines{position:absolute;inset:0;width:100%;height:100%}
+.hub .lines.tall{display:none}
 .hub .lines path{fill:none;stroke-linecap:round}
 .hub .base{stroke:color-mix(in srgb,var(--panel) 80%,transparent);stroke-width:2.5}
 .hub .flow{stroke-width:5;stroke-dasharray:0 18;transition:opacity .4s}
@@ -177,7 +178,7 @@ p{margin:0}
 .hub .pk svg{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .hub .pk.in svg{stroke:var(--green)}.hub .pk.out svg{stroke:var(--amber)}
 .hub .core{position:absolute;left:50%;top:50%;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:0 14px 34px rgba(60,45,20,.16)}
-.hub .node{position:absolute;width:64px;height:64px;margin:-32px 0 0 -32px;padding:0;border:0;border-radius:18px;background:none;cursor:pointer;transition:transform .4s cubic-bezier(.16,1,.3,1)}
+.hub .node{position:absolute;left:var(--x);top:var(--y);width:64px;height:64px;margin:-32px 0 0 -32px;padding:0;border:0;border-radius:18px;background:none;cursor:pointer;transition:transform .4s cubic-bezier(.16,1,.3,1)}
 .hub .node::before{content:"";position:absolute;inset:-10px;border-radius:26px;background:var(--panel);opacity:0;transition:opacity .3s;box-shadow:0 10px 30px rgba(60,45,20,.14)}
 .hub .node[aria-selected=true]{transform:scale(1.1)}
 .hub .node[aria-selected=true]::before{opacity:1}
@@ -326,7 +327,10 @@ p{margin:0}
   .glass.g1{top:110px}.glass.g2{top:300px}
   .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
   .panels{padding:20px}
-  .hub{border-radius:24px}
+  .hub{border-radius:24px;aspect-ratio:340/460}
+  .hub .lines.wide{display:none}.hub .lines.tall{display:block}
+  .hub .node{left:var(--mx);top:var(--my);width:58px;height:58px;margin:-29px 0 0 -29px}
+  .hub .core{width:84px;height:84px;margin:-42px 0 0 -42px}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 `;
@@ -381,7 +385,7 @@ function ask(){if(!queued){queued=true;requestAnimationFrame(frame);}}
 addEventListener('scroll',ask,{passive:true});addEventListener('resize',ask);frame();
 // Connections: a logo shows what Aurin reads from it and sends back; they take turns until one is picked.
 var hub=document.querySelector('.hub');if(!hub)return;
-if(still&&hub.querySelector('svg').pauseAnimations)hub.querySelector('svg').pauseAnimations();
+if(still)hub.querySelectorAll('svg.lines').forEach(function(s){if(s.pauseAnimations)s.pauseAnimations();});
 var tabs=[].slice.call(hub.querySelectorAll('[role=tab]')),cur=0,timer;
 function pick(i){cur=i;tabs.forEach(function(t,j){var on=j===i,id=t.id.slice(4);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
 document.getElementById('svc-'+id).classList.toggle('on',on);hub.querySelectorAll('[data-svc='+id+']').forEach(function(g){g.classList.toggle('on',on);});});}
@@ -509,27 +513,41 @@ ${tabbar('today')}`;
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
   // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
   const services = [
-    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="">', x: 84, y: 70,
+    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="">',
       reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['scale', 'weight']],
       sends: [['bike', 'workouts'], ['scale', 'weight'], ['meal', 'food'], ['drop', 'water']]},
-    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" class="pad">', x: 84, y: 250,
+    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" class="pad">',
       reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['meal', 'food']],
       sends: [['meal', 'food'], ['drop', 'drinks'], ['bike', 'workouts, if you allow'], ['scale', 'weight, if you allow']]},
-    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="">', x: 436, y: 70,
+    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="">',
       reads: [['bolt', 'workouts with power'], ['calendar', 'plan'], ['zones', 'zones'], ['scale', 'weight']],
       sends: [['calendar', 'planned workouts'], ['flame', 'calorie target'], ['scale', 'weight'], ['training', 'sleep, HRV and daily values']]},
-    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt=""></span>', x: 436, y: 250,
+    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt=""></span>',
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'VO₂max'], ['thermo', 'temperature']], sends: []}];
-  // Two curves per service: dots and what they carry flow along the upper one into Aurin and along the lower one back out.
-  const into = (x, y) => `M${x} ${y - 8}C${(x + 260) / 2} ${y - 8} ${(x + 260) / 2} 152 260 152`;
-  const back = (x, y) => `M260 168C${(x + 260) / 2} 168 ${(x + 260) / 2} ${y + 8} ${x} ${y + 8}`;
+  // Two curves per service: dots and what they carry flow along one into Aurin and along the other back
+  // out. A wide layout for computers (left and right of the mark) and a tall one for phones (above and
+  // below it), so the curves stay long arcs on a narrow screen instead of hiding behind the logos.
+  const LAYOUTS = {
+    wide: {w: 520, h: 320, at: [[84, 70], [84, 250], [436, 70], [436, 250]],
+      into: ([x, y]) => `M${x} ${y - 8}C${(x + 260) / 2} ${y - 8} ${(x + 260) / 2} 152 260 152`,
+      back: ([x, y]) => `M260 168C${(x + 260) / 2} 168 ${(x + 260) / 2} ${y + 8} ${x} ${y + 8}`},
+    tall: {w: 340, h: 460, at: [[70, 74], [70, 386], [270, 74], [270, 386]],
+      // Down (or up) from the logo, then a wide turn into the mark; in and out never cross.
+      into: ([x, y]) => { const ix = x + (x < 170 ? 7 : -7), iy = y < 230 ? 222 : 238; return `M${ix} ${y}C${ix} ${iy} ${ix} ${iy} 170 ${iy}`; },
+      back: ([x, y]) => { const ox = x - (x < 170 ? 7 : -7), oy = y < 230 ? 238 : 222; return `M170 ${oy}C${ox} ${oy} ${ox} ${oy} ${ox} ${y}`; }}};
   const packets = (items, d, dir) => items.map(([name], i) => {
     const dur = 3.6, begin = (i * dur / items.length).toFixed(2);
     return `<g class="pk ${dir}" opacity="0"><circle r="17"/><svg x="-10" y="-10" width="20" height="20" viewBox="0 0 24 24">${ICON_PATHS[name]}</svg><animateMotion dur="${dur}s" begin="${begin}s" repeatCount="indefinite" path="${d}" keyPoints="0;1" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .25 1"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.82;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/></g>`;
   }).join('');
-  const lines = services.map(({id, x, y, reads, sends}, i) => `<g data-svc="${id}"${i === 0 ? ' class="on"' : ''}><path class="base" d="${into(x, y)}"/><path class="flow in" d="${into(x, y)}"/>${sends.length ? `<path class="base" d="${back(x, y)}"/><path class="flow out" d="${back(x, y)}"/>` : ''}</g>`).join('')
-    + services.map(({id, x, y, reads, sends}, i) => `<g class="packets${i === 0 ? ' on' : ''}" data-svc="${id}">${packets(reads, into(x, y), 'in')}${packets(sends, back(x, y), 'out')}</g>`).join('');
-  const nodes = services.map(({id, name, logo, x, y}, i) => `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="left:${(x / 5.2).toFixed(2)}%;top:${(y / 3.2).toFixed(2)}%">${logo}<span class="vh">${name}</span></button>`).join('');
+  const lines = Object.entries(LAYOUTS).map(([kind, {w, h, at, into, back}]) => `<svg class="lines ${kind}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
+    + services.map(({id, sends}, i) => `<g data-svc="${id}"${i === 0 ? ' class="on"' : ''}><path class="base" d="${into(at[i])}"/><path class="flow in" d="${into(at[i])}"/>${sends.length ? `<path class="base" d="${back(at[i])}"/><path class="flow out" d="${back(at[i])}"/>` : ''}</g>`).join('')
+    + services.map(({id, reads, sends}, i) => `<g class="packets${i === 0 ? ' on' : ''}" data-svc="${id}">${packets(reads, into(at[i]), 'in')}${packets(sends, back(at[i]), 'out')}</g>`).join('')
+    + '</svg>').join('');
+  const pos = ({w, h, at}, i) => [(at[i][0] / w * 100).toFixed(2), (at[i][1] / h * 100).toFixed(2)];
+  const nodes = services.map(({id, name, logo}, i) => {
+    const [x, y] = pos(LAYOUTS.wide, i), [mx, my] = pos(LAYOUTS.tall, i);
+    return `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="--x:${x}%;--y:${y}%;--mx:${mx}%;--my:${my}%">${logo}<span class="vh">${name}</span></button>`;
+  }).join('');
   const chips = items => `<div class="items">${items.map(([name, label], i) => `<span style="--i:${i}">${icon(name)}${label}</span>`).join('')}</div>`;
   const panels = services.map(({id, name, reads, sends}, i) => `<div class="svc${i === 0 ? ' on' : ''}" id="svc-${id}" role="tabpanel" aria-labelledby="tab-${id}">
 <h3>${name}</h3>
@@ -581,7 +599,7 @@ ${steps}
 <div class="center reveal"><h2>Works with what you wear.</h2><p class="sub">Any watch or ring that saves to Apple Health or Google Health, plus power and plans from Intervals.icu. Wear more than one? Aurin takes each night and day from the one you wear most, or you pick.</p></div>
 <div class="box reveal">
 <div class="hub">
-<svg class="lines" viewBox="0 0 520 320" aria-hidden="true">${lines}</svg>
+${lines}
 <div class="core" aria-hidden="true">${mark(52)}</div>
 <div role="tablist" aria-label="Connected services">${nodes}</div>
 </div>
