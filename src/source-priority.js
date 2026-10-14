@@ -1,5 +1,5 @@
 // Which device's data counts when several measure the same thing (Apple Health,
-// Google Health, the Ultrahuman ring). The other copies become duplicates
+// Google Health, the Ultrahuman ring, WHOOP). The other copies become duplicates
 // (record_role 'duplicate', matched_activity_id MARK), which every reader skips.
 //
 // Night (sleep, HRV, resting heart rate, breathing, oxygen, temperature, and the
@@ -19,10 +19,10 @@ export const MARK = 'source-priority';
 // Markers of the rules this replaces (apple-health.js, ultrahuman.js): rows they
 // set aside are this module's to bring back.
 const OURS = `('${MARK}','apple-health','ultrahuman')`;
-export const FAMILIES = ['ultrahuman', 'apple-health', 'google-wearables'];
+export const FAMILIES = ['ultrahuman', 'whoop', 'apple-health', 'google-wearables'];
 const FAMILY_SQL = `(${FAMILIES.map(f => `'${f}'`).join(',')})`;
 // The app's names for them.
-export const PROVIDER_FAMILY = { ultrahuman: 'ultrahuman', apple: 'apple-health', google: 'google-wearables' };
+export const PROVIDER_FAMILY = { ultrahuman: 'ultrahuman', whoop: 'whoop', apple: 'apple-health', google: 'google-wearables' };
 const FAMILY_PROVIDER = Object.fromEntries(Object.entries(PROVIDER_FAMILY).map(([p, f]) => [f, p]));
 
 // Each group is one measurement; the temperature types are three names for it.
@@ -40,13 +40,13 @@ const DAY_OF = "substr(COALESCE(sample_time,end_time,start_time),1,10)";
 const HOUR_OF = 'substr(start_time,1,13)';
 const WINDOW_DAYS = 30;
 const addDays = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
-const VALID = { night: ['auto', 'ultrahuman', 'apple', 'google'], day: ['auto', 'apple', 'google'] };
+const VALID = { night: ['auto', 'ultrahuman', 'whoop', 'apple', 'google'], day: ['auto', 'apple', 'google'] };
 
 async function table(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS sync_status (user_id INTEGER NOT NULL,sync_name TEXT NOT NULL,status TEXT,started_at TEXT,finished_at TEXT,details_json TEXT,updated_at TEXT,PRIMARY KEY(user_id,sync_name))").run();
 }
 
-// { night: 'auto' | 'ultrahuman' | 'apple' | 'google', day: 'auto' | 'apple' | 'google' }
+// { night: 'auto' | 'ultrahuman' | 'whoop' | 'apple' | 'google', day: 'auto' | 'apple' | 'google' }
 export async function readSourcePriority(db, userId) {
   const out = { night: 'auto', day: 'auto' };
   try {
@@ -166,7 +166,7 @@ export async function resolveSources(db, userId, { part, types, since, now = Dat
 export function priorityChoices(connected = []) {
   const has = id => connected.includes(id);
   return {
-    night: ['ultrahuman', 'google', 'apple'].filter(has),
+    night: ['ultrahuman', 'whoop', 'google', 'apple'].filter(has),
     day: ['google', 'apple'].filter(has)
   };
 }
