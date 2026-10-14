@@ -1,6 +1,8 @@
 // Chats with the AI assistant. Each chat keeps its own messages; the coach
 // sees only the turns of the chat it answers in, so a new chat starts clean.
 // Chats untouched for 90 days are removed when the list is read.
+import { L } from './lang.js';
+
 const KEEP_DAYS = 90, CONTEXT_TURNS = 12, MAX_CONTENT = 16000;
 
 export async function ensureAssistantChats(db) {
@@ -10,7 +12,7 @@ export async function ensureAssistantChats(db) {
 
 export function chatTitle(message) {
   const text = String(message || '').replace(/\s+/g, ' ').trim();
-  return text.length > 60 ? text.slice(0, 57).replace(/\s+\S*$/, '') + '…' : text || 'Nový chat';
+  return text.length > 60 ? text.slice(0, 57).replace(/\s+\S*$/, '') + '…' : text || L('Nový chat', 'New chat');
 }
 
 const validId = id => Number.isInteger(Number(id)) && Number(id) > 0;

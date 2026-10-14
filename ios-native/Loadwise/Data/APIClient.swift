@@ -106,7 +106,7 @@ final class APIClient: @unchecked Sendable {
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.setValue("application/x-ndjson, application/json", forHTTPHeaderField: "Accept")
                     request.timeoutInterval = 180
-                    var body: JSONObject = ["message": .string(message), "stream": .bool(true), "mode": .string("coach"),
+                    var body: JSONObject = ["message": .string(message), "stream": .bool(true), "mode": .string("auto"),
                                             "appContext": .object(["view": .string(view), "date": .string(Self.localToday())])]
                     if let chatId { body["chatId"] = .number(Double(chatId)) }
                     request.httpBody = try JSONEncoder().encode(body)
@@ -144,11 +144,18 @@ final class APIClient: @unchecked Sendable {
         }
     }
 
-    func decideCoachAction(draftId: Int, confirm: Bool) async throws -> String? {
-        struct Response: Decodable { let message: String? }
+    /// The server's line ("Návrh potvrzen.", "Smazáno") and, for a change of a
+    /// done activity, the token "Vrátit" sends back.
+    func decideCoachAction(draftId: Int, confirm: Bool) async throws -> (message: String?, undo: String?) {
+        struct Response: Decodable { let message: String?; let undo: String? }
         let r: Response = try await send("/app/api/assistant/action", method: "POST",
                                          body: ["draftId": JSONValue.number(Double(draftId)), "decision": .string(confirm ? "confirm" : "reject")])
-        return r.message
+        return (r.message, r.undo)
+    }
+
+    /// "Vrátit" under a confirmed delete, merge or time change of a done activity.
+    func undoActivityChange(token: String) async throws {
+        let _: JSONValue = try await send("/app/api/activity/undo", method: "POST", body: ["token": JSONValue.string(token)])
     }
 
     func chats() async throws -> [ChatSummary] {

@@ -11,7 +11,43 @@ struct CoachCheckIn: Decodable {
         let headline: String?
         let reasons: [String]?
         let message: String?
+        /// "memory_check": a passing memory ("bolí mě koleno") to confirm or forget;
+        /// "illness": signs of an oncoming illness (src/illness-check.js).
+        var kind: String? = nil
+        var memory: String? = nil
+        /// illness: each sign against the normal, and the sessions it may cancel.
+        var rows: [Row]? = nil
+        var sessions: [Session]? = nil
+
+        struct Row: Decodable, Equatable, Identifiable {
+            let id: String
+            let label: String
+            let value: String
+        }
+
+        struct Session: Decodable, Equatable, Identifiable {
+            let eventId: String
+            let date: String
+            let name: String
+            var id: String { eventId }
+        }
     }
+}
+
+/// What the coach's push offered and how it ended (src/coach-push.js).
+struct CoachNudge: Decodable {
+    /// "pending", "kept" or "swapped".
+    let status: String
+    let to: Replacement?
+
+    struct Replacement: Decodable {
+        let name: String?
+        let minutes: Int?
+    }
+}
+
+private struct CoachMemoriesResponse: Decodable {
+    let memories: [CoachMemory]?
 }
 
 struct WeekProposalResponse: Decodable {
@@ -260,6 +296,46 @@ extension APIClient {
         let _: JSONValue = try await send("/app/api/athlete-state", method: "POST", body: ["dismiss": JSONValue.string(id)])
     }
 
+    /// What the coach remembers about the athlete.
+    func coachMemories() async throws -> [CoachMemory] {
+        let r: CoachMemoriesResponse = try await get("/app/api/athlete-state")
+        return r.memories ?? []
+    }
+
+    @discardableResult
+    func addMemory(_ text: String) async throws -> [CoachMemory] {
+        try await changeMemories(["memory": .string(text)])
+    }
+
+    @discardableResult
+    func editMemory(from: String, to: String) async throws -> [CoachMemory] {
+        try await changeMemories(["edit": .object(["from": .string(from), "to": .string(to)])])
+    }
+
+    @discardableResult
+    func forgetMemory(_ text: String) async throws -> [CoachMemory] {
+        try await changeMemories(["forget": .string(text)])
+    }
+
+    /// A passing memory still holds: the coach asks again in two weeks.
+    @discardableResult
+    func keepMemory(_ text: String) async throws -> [CoachMemory] {
+        try await changeMemories(["keep": .string(text)])
+    }
+
+    /// The coach's push "… vyměním za lehkou jízdu 60 min?": "swap" or "keep".
+    /// Answers the easy session put in its place.
+    func answerCoachNudge(date: String, decision: String) async throws -> CoachNudge? {
+        struct Response: Decodable { let nudge: CoachNudge? }
+        let r: Response = try await send("/app/api/coach/nudge", method: "POST", body: ["date": JSONValue.string(date), "decision": .string(decision)])
+        return r.nudge
+    }
+
+    private func changeMemories(_ body: [String: JSONValue]) async throws -> [CoachMemory] {
+        let r: CoachMemoriesResponse = try await send("/app/api/athlete-state", method: "POST", body: body)
+        return r.memories ?? []
+    }
+
     /// The sessions the coach would put into the rest of the week.
     func weekProposal(start: String) async throws -> WeekProposalResponse {
         try await send("/app/api/coach/week", method: "POST", body: ["start": JSONValue.string(start)])
@@ -342,7 +418,7 @@ extension APIClient {
         if let chip { body["chip"] = .string(chip) }
         if let text { body["text"] = .string(text) }
         body["others"] = .array(others.map { o in
-            var x: JSONObject = ["date": .string(o.date), "sport": .string(o.sport)]
+            var x: JSONObject = ["date": .string(o.date), "sport": .string(o.sport), "minutes": .number(Double(o.minutes))]
             if let kind = o.kind { x["kind"] = .string(kind) }
             if let system = o.workout?.primary_system { x["system"] = .string(system) }
             return .object(x)

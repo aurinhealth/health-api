@@ -5,6 +5,7 @@
 // language of the request (src/lang.js).
 import { parseStrengthPlan } from './strength-history.js';
 import { progressionDecision, EXERCISE_INTELLIGENCE } from './strength-intelligence.js';
+import { strengthSetOptions } from './gym-set-options.js';
 import { recoverySignals } from './ride-review.js';
 import { L as t, isEnglish, isImperial, kgToLb } from './lang.js';
 
@@ -47,9 +48,10 @@ export function buildGymReview({ values = null, history = [], date, wellness = [
     const lastDate = own.map(r => String(r.workout_date).slice(0, 10)).sort().at(-1);
     const lastBest = lastDate ? own.filter(r => String(r.workout_date).slice(0, 10) === lastDate).reduce((a, r) => Math.max(a, e1rm(n(r.actual_kg), n(r.actual_reps)) || 0), 0) : null;
     const range = repRange(rows[0].plannedReps);
-    const rows4progression = [...own, ...finished.map(s => ({ workout_date: date, actual_kg: s.kg, actual_reps: s.reps, rpe: s.rpe }))];
+    const rows4progression = [...own, ...finished.map(s => ({ workout_date: date, actual_kg: s.kg, actual_reps: s.reps, rpe: s.rpe, toFailure: s.toFailure }))];
     const decision = finished.length ? progressionDecision(rows4progression, name, rows[0].plannedReps, 1, date) : null;
-    const rpes = finished.map(s => s.rpe).filter(v => v != null && v > 0);
+    // A set prescribed to failure is meant to be at RPE 10: no "keep reps in reserve" for it.
+    const rpes = finished.filter(s => !strengthSetOptions(s).toFailure).map(s => s.rpe).filter(v => v != null && v > 0);
     exercises.push({ name, muscle: EXERCISE_INTELLIGENCE[name]?.muscle || null, plannedSets: sets.length, doneSets: finished.length, sets, best, lastBest, lastDate, decision, maxRpe: rpes.length ? Math.max(...rpes) : null, range });
   }
 

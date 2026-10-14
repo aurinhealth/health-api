@@ -702,6 +702,7 @@
 "Uložit" = "Save";
 "Uložit %@" = "Save %@";
 "Uložit %@ jako předvolbu" = "Save %@ as preset";
+"Uložit délku jako předvolbu" = "Save the length as a preset";
 "Uložit do plánu" = "Save to plan";
 "Uložit recept" = "Save recipe";
 "Uložit vybavení" = "Save equipment";
@@ -1971,6 +1972,62 @@
 "upraveno" = "edited";
 "odhad, hodinky %@" = "estimate, watch %@";
 "Kalorie %@ (%@): %@ kcal" = "Calories of %@ (%@): %@ kcal";
+"Co si kouč pamatuje" = "What the coach remembers";
+"Kouč si zatím nic nepamatuje." = "The coach doesn't remember anything yet.";
+"Co si má kouč pamatovat" = "What the coach should remember";
+"Vráceno" = "Undone";
+"Zapamatováno" = "Remembered";
+"Zapomenuto: %@" = "Forgotten: %@";
+"Upraveno: %@" = "Changed: %@";
+"Už neplatí" = "No longer true";
+"Pořád platí" = "Still true";
+
+/* Possible illness (coach check-in on Dnes) */
+"Přepnout na Nemoc" = "Switch to Sick";
+"Do kdy" = "Until";
+"Neurčito" = "Open-ended";
+"Tréninky, které zruším" = "Sessions I'll cancel";
+"Stav Nemoc" = "Status: Sick";
+"Stav Nemoc do %@" = "Status: Sick through %@";
+"Zrušené tréninky: %@. Až se ti uleví, napiš kouči a plán vrátíme." = "Cancelled sessions: %@. When you feel better, tell the coach and we'll bring the plan back.";
+"Až se ti uleví, napiš kouči a plán vrátíme." = "When you feel better, tell the coach and we'll bring the plan back.";
+"Zpět na Trénink" = "Back to Training";
+
+/* The coach's own push (Settings → Oznámení → Kouč) */
+"Ozve se sám, nejvýš 1× denně" = "Speaks up on its own, at most once a day";
+"Vyměněno" = "Swapped";
+"Trénink zůstal, jak byl" = "The session stayed as it was";
+"%@ min" = "%@ min";
+
+/* The coach's changes to done activities in the chat */
+"Sloučit 2 aktivity" = "Merge 2 activities";
+"Upravit čas" = "Change the time";
+
+/* Trénink → Svaly (MuscleViews.swift) */
+"odpočaté" = "rested";
+"pozítří" = "in 2 days";
+"za %@ dny" = "in %@ days";
+"za %@ dní" = "in %@ days";
+"Z posledních 3 dní" = "From the last 3 days";
+"Všechny svaly jsou odpočaté" = "All muscles are rested";
+"Vnější stehna" = "Abductors";
+"Vnitřní stehna" = "Adductors";
+"Běh 14 km" = "Run 14 km";
+"Posilovna, nohy" = "Gym, legs";
+"Posilovna, horní část těla" = "Gym, upper body";
+"pondělí" = "Monday";
+
+/* Trénink → Svaly: the figure and a tapped muscle (MuscleViews.swift) */
+"zepředu" = "front";
+"zezadu" = "back";
+"unavené" = "tired";
+"zotavuje se" = "recovering";
+"Z čeho" = "What tired it";
+"hlavně" = "mostly";
+"trochu" = "a little";
+"1 série" = "1 set";
+"%@ série" = "%@ sets";
+"%@ sérií" = "%@ sets";
 "Propojit %@ s Aurinem" = "Connect %@ with Aurin";
 "Aurin čte" = "Aurin reads";
 "Aurin zapisuje" = "Aurin writes";
@@ -1986,3 +2043,111 @@
 "Tréninky, plán, zóny a váhu." = "Workouts, plan, zones and weight.";
 "Tréninky naplánované v Aurinu, kalorický cíl, váhu a denní hodnoty z Google Health." = "Workouts planned in Aurin, calorie target, weight and daily values from Google Health.";
 "Spánek, klidový tep, HRV, VO₂max a teplotu z prstenu." = "Sleep, resting heart rate, HRV, VO₂max and temperature from the ring.";
+
+/* Settings → Ikona aplikace */
+"Ikona aplikace" = "App icon";
+"Výchozí" = "Default";
+"Roční období" = "Seasons";
+"Odměna" = "Reward";
+"Speciální · Aurin Pro" = "Special · Aurin Pro";
+"Odznak" = "Badge";
+"Zlatý odznak" = "Gold badge";
+"Dráha" = "Track";
+"Zlatá dráha" = "Gold track";
+"Jaro" = "Spring";
+"Léto" = "Summer";
+"Podzim" = "Autumn";
+"Zima" = "Winter";
+"Polární záře" = "Aurora";
+"Půlnoc" = "Midnight";
+"Zatmění" = "Eclipse";
+"Porcelán" = "Porcelain";
+"Nebe" = "Sky";
+"jen na jaře" = "spring only";
+"jen v létě" = "summer only";
+"jen na podzim" = "autumn only";
+"jen v zimě" = "winter only";
+"zbývá %@" = "%@ to go";
+"Ikonu se nepodařilo změnit. Zkus to znovu." = "The icon couldn't be changed. Try again.";
+"Odemkneš ji, až naběháš celkem %@." = "Unlocks once you've run %@ in total.";
+"Odemkneš ji, až najezdíš na kole celkem %@." = "Unlocks once you've ridden %@ in total.";
+"Odemkneš ji po %@ trénincích v posilovně." = "Unlocks after %@ gym workouts.";
+"Odemkneš ji, když budeš trénovat %@ dní v řadě." = "Unlocks when you train %@ days in a row.";
+"Dá se vybrat jen v tomto ročním období." = "Can only be picked during its season.";
+
+/* Training plans: preview, start, the running plan, the result */
+"Dny na kole" = "Riding days";
+"Dny běhu" = "Running days";
+"Plán splněn" = "Plan complete";
+"%@ se přesune %@." = "%1$@ moves %2$@.";
+"+ další %@" = "+ %@ more";
+"Co dál" = "What next";
+"Dny" = "Days";
+"Do konce týdne už není jiný den." = "There is no other day left this week.";
+"FTP" = "FTP";
+"Hlavní část zůstane, zkrátí se rozjetí a vyjetí." = "The main set stays; the warm-up and cool-down get shorter.";
+"Jiný plán" = "Another plan";
+"Klíčové tréninky zůstanou." = "The key sessions stay.";
+"Konec %@" = "Ends %@";
+"Přehled" = "Overview";
+"Týden %@ z %@" = "Week %1$@ of %2$@";
+"Týdny" = "Weeks";
+"Upravit týden" = "Update the week";
+"V tomto týdnu nejsou žádné tréninky." = "No sessions this week.";
+"Vrátit podle plánu" = "Back to the plan";
+"Vyber délku" = "Pick a length";
+"Vynechat" = "Skip";
+"Vynechat %@?" = "Skip %@?";
+"Začíná %@" = "Starts %@";
+"Začít %@" = "Start %@";
+"Začít dnes" = "Start today";
+"Začít znovu %@" = "Start again %@";
+"Zkrátit" = "Shorten";
+"Zkrátit %@" = "Shorten %@";
+"Zkrátit na %@" = "Shorten to %@";
+"Změnit začátek" = "Change the start";
+"celkem" = "in total";
+"test" = "test";
+"testy" = "tests";
+"testů" = "tests";
+"test FTP" = "FTP test";
+"testy FTP" = "FTP tests";
+"testů FTP" = "FTP tests";
+"týdně" = "a week";
+"vypadne" = "dropped";
+"čas" = "time";
+
+/* Food from a sentence in the coach (FoodDraftCard.swift) */
+"Zapsat" = "Log";
+"Celkem" = "Total";
+"Nezapsáno." = "Not logged.";
+"bez hodnot" = "no values";
+"Zbývá ti %d kcal." = "%d kcal left.";
+"Zbývá ti %d kcal a %d g bílkovin." = "%1$d kcal and %2$d g of protein left.";
+"Cíl na dnešek je splněný." = "Today's target is reached.";
+"B %d g" = "P %d g";
+"S %d g" = "C %d g";
+"T %d g" = "F %d g";
+"Zapsáno" = "Logged";
+"Zapsáno do snídaně" = "Logged to breakfast";
+"Zapsáno do dopolední svačiny" = "Logged to the morning snack";
+"Zapsáno do oběda" = "Logged to lunch";
+"Zapsáno do odpolední svačiny" = "Logged to the afternoon snack";
+"Zapsáno do večeře" = "Logged to dinner";
+"Zapsáno do druhé večeře" = "Logged to the second dinner";
+
+/* WHOOP in Zdroje dat */
+"Data z WHOOPu se smažou a noc se zase bude brát z ostatních zdrojů." = "The WHOOP data will be deleted and your nights will come from your other sources again.";
+"Spánek a jeho fáze, klidový tep, HRV, dech a okysličení krve." = "Sleep and its stages, resting heart rate, HRV, breathing and blood oxygen.";
+"Odpojit a smazat data z WHOOPu" = "Disconnect and delete the WHOOP data";
+
+/* Aktivita dne (CoachPick.swift) */
+"Aktivita dne" = "Activity of the day";
+"trenažér" = "trainer";
+"pás" = "treadmill";
+"Sbalit" = "Collapse";
+"Rozbalit" = "Expand";
+"Doporučovat méně" = "Recommend less";
+"Doporučuješ méně" = "Recommended less";
+"Doporučovat znovu" = "Recommend again";
+"Sauna" = "Sauna";

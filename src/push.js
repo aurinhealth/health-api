@@ -123,13 +123,15 @@ const apnsHost = (env, environment) => env.APNS_SANDBOX === "1" || env.APNS_SAND
 const DEAD_TOKEN = new Set(["BadDeviceToken", "Unregistered", "DeviceTokenNotForTopic", "ExpiredToken"]);
 
 // One alert to one device: {ok}, {ok:false, gone:true} for a dead token.
-export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now() } = {}) {
+// alert: a text, or {title, body}; category names the phone's buttons for it
+// (the coach's "Vyměnit" / "Nechat"), data rides along for them.
+export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null } = {}) {
   if (!pushConfigured(env)) return { ok: false, skipped: true };
   const jwt = await apnsJwt(env, now);
   const response = await fetchImpl(`https://${apnsHost(env, device.environment)}/3/device/${device.token}`, {
     method: "POST",
     headers: { authorization: "bearer " + jwt, "apns-topic": APNS_TOPIC, "apns-push-type": "alert", "apns-priority": "10", "content-type": "application/json" },
-    body: JSON.stringify({ aps: { alert, sound: "default" } })
+    body: JSON.stringify({ ...(data || {}), aps: { alert, sound: "default", ...(category ? { category } : {}) } })
   });
   if (response.status === 200) return { ok: true };
   const reason = await response.json().then(x => x?.reason || null).catch(() => null);
@@ -139,13 +141,18 @@ export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Da
 }
 
 // The readiness and one short piece of advice from its zone.
-export function readinessMessage({ score, zone }) {
+// Signs of illness (breathing or temperature up), a sick check-in or a paused
+// athlete never get "intervals are fine".
+export function readinessMessage({ score, zone, flags = [], checkin = null, athleteState = null }) {
+  const sick = checkin === "sick" || (flags || []).includes("checkin_sick"), signs = (flags || []).some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f));
+  const head = L("Připravenost", "Readiness") + " " + Math.round(Number(score));
+  if (sick || (athleteState && athleteState !== "active")) return head + " · " + L("dnes odpočinek", "rest today");
+  if (signs) return head + " · " + L("dech nebo teplota jsou vyšší, dnes bez intenzity", "breathing or temperature is up, no intensity today");
   const advice = {
     green: L("dnes klidně intervaly", "intervals are fine today"),
     yellow: L("dnes spíš lehčeji, bez intervalů", "go easier today, skip the intervals"),
     red: L("dnes odpočinek nebo jen lehký pohyb", "rest or only light movement today")
   }[zone];
-  const head = L("Připravenost", "Readiness") + " " + Math.round(Number(score));
   return advice ? head + " · " + advice : head;
 }
 
@@ -172,6 +179,9 @@ export async function sendMorningReadiness(env, { readiness, now = new Date(), f
     if (await db.prepare("SELECT 1 AS sent FROM push_log WHERE user_id=? AND kind=? AND local_date=?").bind(db.userId, MORNING_READINESS, date).first()) return { sent: 0, reason: "already-sent" };
     const value = typeof readiness === "function" ? await readiness(date) : readiness;
     if (!value || value.score == null || !Number.isFinite(Number(value.score))) return { sent: 0, reason: "no-score" };
+    // Without last night the score is HRV and resting HR only: wait for the
+    // night's upload until the last hour of the window.
+    if ((value.missing || []).includes("sleep") && localHour(now) < MORNING_TO_HOUR - 1) return { sent: 0, reason: "waiting-for-sleep" };
     // The day is claimed before sending, so an upload and the cron at the same moment send one push.
     const claim = await db.prepare("INSERT INTO push_log(user_id,kind,local_date) VALUES(?,?,?) ON CONFLICT(user_id,kind,local_date) DO NOTHING").bind(db.userId, MORNING_READINESS, date).run();
     if (!Number(claim?.meta?.changes)) return { sent: 0, reason: "already-sent" };

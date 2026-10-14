@@ -305,6 +305,13 @@ struct GeneratedWorkout: Decodable {
 struct WorkoutSearchResponse: Decodable {
     let workouts: [LibraryWorkout]
     let total: Int?
+    /// The coach's type and length for the day the list is ranked by.
+    let coachPick: CoachLength?
+
+    struct CoachLength: Decodable {
+        let system: String?
+        let durationMinutes: Double?
+    }
 }
 
 struct LibraryWorkout: Decodable, Equatable, Identifiable, Hashable {

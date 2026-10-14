@@ -18,11 +18,21 @@ export const MAX_LOOKUPS = 3;
 // English: "I had/ate/drank …", "… for breakfast", "snack: …", "log …".
 const FOOD_QUESTION = /^(?:mám|mam|můžu|muzu|mohu|smím|co|kolik|jak|je|jsou|stačí|staci|měl[a]? bych|mel[a]? bych|potřebuj\p{L}*|should|can|could|may|what|how|is|are|do|does|did|which)(?!\p{L})/u;
 const FOOD_PAST = /(?<!\p{L})(?:měl[a]? jsem|mel[a]? jsem|snědl[a]?|jedl[a]? jsem|dal[a]? jsem si|vypil[a]?|(?:jsem|jsme) (?:si )?(?:měl[a]?|snědl[a]?|jedl[a]?|dal[a]?|vypil[a]?)|zapiš (?:si )?(?:jídlo|že)|i(?:'ve)? (?:just )?(?:had|ate|drank|eaten)|(?:had|ate|drank) (?:a|an|some|two|three|\d)|for (?:breakfast|lunch|dinner|(?:a )?snack)|(?:breakfast|lunch|dinner|snack)(?: was| were)?:|log (?:food|a meal|my (?:breakfast|lunch|dinner|snack)|that i))(?!\p{L})/u;
-const NOT_FOOD = /trénin|workout|jízd\p{L}*|(?<!\p{L})kol(?:[aeou]m?|o)(?!\p{L})|interval|běh|běž|gym|posil|cvič|spán|spal|train|(?<!\p{L})(?:ride|run|session|sleep|slept)(?!\p{L})/u;
+// "kolu" is the drink (Vypil jsem kolu), not the bike.
+const NOT_FOOD = /trénin|workout|jízd\p{L}*|(?<!\p{L})kol(?:[aeo]m?|o)(?!\p{L})|interval|běh|běž|gym|posil|cvič|spán|spal|train|(?<!\p{L})(?:ride|run|session|sleep|slept)(?!\p{L})/u;
+// A meal named without a verb: "Dneska k obědu kuře s rýží", "Lunch was chicken and rice".
+const MEAL_SAID = /(?<!\p{L})(?:(?:k|ke|na) (?:snídani|snidani|obědu|obedu|oběd|obed|večeři|veceri|svačině|svačinu|svacine|svacinu)|(?:breakfast|lunch|dinner|snack) (?:was|were|today was))(?!\p{L})/u;
+// …but not a wish or a plan ("K obědu bych si dal…", "Na večeři půjdu…").
+const NOT_DONE = /(?<!\p{L})(?:bych|bys|by|budu|půjdu|pujdu|chci|chtěl|chtela|chtěla|plánuju|planuju|dám si|dam si|will|going to|want|would|plan)(?!\p{L})/u;
+// When and around what it was eaten is not a training message: "Po jízdě jsem snědl banán".
+const AROUND_TRAINING = /(?<!\p{L})(?:po|před|pred|během|behem|cestou z|after|before|during|on) (?:(?:the|my|dnešní|dnesni|ranní|ranni|\p{L}+é) )?(?:jízd\p{L}*|kole|kolem|běhu|behu|tréninku|treninku|posilovně|posilovne|intervalech|ride|run|training|workout|gym)(?!\p{L})/gu;
+const ATE = /(?<!\p{L})(?:snědl[a]?|snedl[a]?|jedl[a]?|vypil[a]?|dal[a]? jsem si|ate|drank|eaten)(?!\p{L})/u;
 export function isFoodLogMessage(message) {
-  const t = String(message || "").toLowerCase().trim();
+  const t = String(message || "").toLowerCase().replace(/[’‘]/g, "'").trim();
   if (!t || t.includes("?") || FOOD_QUESTION.test(t)) return false;
-  return FOOD_PAST.test(t) && !NOT_FOOD.test(t);
+  const said = FOOD_PAST.test(t) || (MEAL_SAID.test(t) && !NOT_DONE.test(t));
+  // Only a real eating or drinking verb lets the training around it go ("Po jízdě jsem měl křeče" is not food).
+  return said && !NOT_FOOD.test(ATE.test(t) ? t.replace(AROUND_TRAINING, " ") : t);
 }
 
 export const FOOD_PARSE_SCHEMA = {

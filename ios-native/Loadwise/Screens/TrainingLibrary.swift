@@ -159,6 +159,10 @@ struct WorkoutLibrarySection: View {
     @AppStorage("libraryToleranceRun") private var toleranceRun = 10
     @State private var minutes: Int? = nil
     @State private var slider: Double = 60
+    /// While the finger is on the slider (the time above follows it).
+    @State private var dragging = false
+    /// The coach's length for today (the search's coachPick), shown on Doporučená.
+    @State private var recommended: Int?
     @State private var system: String? = nil
     @State private var level: Level = .any
     @State private var workouts: [LibraryWorkout] = []
@@ -274,51 +278,75 @@ struct WorkoutLibrarySection: View {
     }
 
     /// "Doporučená" or the own length: presets to tap, a slider, and how far
-    /// from it a workout may be (± minutes).
+    /// from it a workout may be (± minutes). The time above follows the finger;
+    /// "+" at the end of the presets saves the own length, holding a preset
+    /// removes it.
     private var lengthFilter: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let shown = dragging || minutes != nil ? Int(slider) : recommended
+        let own = minutes.flatMap { presets.contains($0) ? nil : $0 }
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel(text: "Délka")
                 Spacer()
-                Text(minutes.map { Fmt.duration($0) + " ± \(tolerance.wrappedValue) min" } ?? "doporučená pro dnešek")
-                    .font(Typo.caption).foregroundStyle(Palette.muted)
+                if let shown {
+                    Text(verbatim: Fmt.duration(shown)).font(Typo.number(26)).foregroundStyle(Palette.ink)
+                        .contentTransition(.numericText()).animation(.snappy, value: shown)
+                    Text(verbatim: "± \(tolerance.wrappedValue) min").font(Typo.caption).foregroundStyle(Palette.muted)
+                }
             }
-            ChipFlow(items: [0] + presets, label: { $0 == 0 ? "Doporučená" : Fmt.duration($0) },
-                     isOn: { ($0 == 0 && minutes == nil) || $0 == minutes },
-                     toggle: { value in
-                         if value == 0 { minutes = nil } else { minutes = value; slider = Double(value) }
-                     })
+            FlowLayout(spacing: 8) {
+                lengthChip(L10n.tr("Doporučená"), on: minutes == nil && !dragging) { minutes = nil; if let recommended { slider = Double(recommended) } }
+                ForEach(presets, id: \.self) { value in
+                    lengthChip(Fmt.duration(value), on: !dragging && minutes == value) { minutes = value; slider = Double(value) }
+                        .contextMenu {
+                            Button(role: .destructive) { removePreset(value) } label: { Label("Odebrat z předvoleb", systemImage: "trash") }
+                        }
+                }
+                Button { if let own { addPreset(own) } } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus")
+                        if let own { Text(verbatim: L10n.f("Uložit %@", Fmt.duration(own))) }
+                    }
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(own == nil ? Palette.faint : Palette.amber)
+                        .padding(.horizontal, 12).frame(minWidth: 32, minHeight: 32)
+                        .background(own == nil ? Color.clear : Palette.amberSoft, in: Capsule())
+                        .overlay(Capsule().stroke(own == nil ? Palette.ink.opacity(0.25) : Palette.amberBar, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+                }
+                .buttonStyle(.plain)
+                .disabled(own == nil || presets.count >= 8)
+                .accessibilityLabel(own.map { L10n.f("Uložit %@", Fmt.duration($0)) } ?? L10n.tr("Uložit délku jako předvolbu"))
+            }
             Slider(value: $slider, in: range, step: step, onEditingChanged: { editing in
+                dragging = editing
                 if !editing { minutes = Int(slider) }
             })
             .tint(Palette.amberBar)
-            HStack(spacing: 8) {
-                Menu {
-                    ForEach([5, 10, 15, 20, 30, 45], id: \.self) { t in
-                        Button("± \(t) min") { tolerance.wrappedValue = t }
-                    }
-                } label: {
-                    Label("± \(tolerance.wrappedValue) min", systemImage: "arrow.left.and.right")
-                        .font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
-                        .padding(.horizontal, 12).frame(height: 32)
-                        .background(Palette.card, in: Capsule())
+            Menu {
+                ForEach([5, 10, 15, 20, 30, 45], id: \.self) { t in
+                    Button("± \(t) min") { tolerance.wrappedValue = t }
                 }
-                Spacer()
-                if let minutes {
-                    if presets.contains(minutes) {
-                        Button { removePreset(minutes) } label: {
-                            Label("Odebrat z předvoleb", systemImage: "minus").font(.footnote.weight(.medium))
-                        }
-                    } else {
-                        Button { addPreset(minutes) } label: {
-                            Label("Uložit \(Fmt.duration(minutes))", systemImage: "plus").font(.footnote.weight(.medium))
-                        }
-                    }
-                }
+            } label: {
+                Label("± \(tolerance.wrappedValue) min", systemImage: "arrow.left.and.right")
+                    .font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
+                    .padding(.horizontal, 12).frame(height: 32)
+                    .background(Palette.card, in: Capsule())
             }
-            .foregroundStyle(Palette.ink)
         }
         .padding(.top, 20)
+    }
+
+    private func lengthChip(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(verbatim: title)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                .padding(.horizontal, 12).frame(height: 32)
+                .background(on ? Palette.button : Palette.card, in: Capsule())
+                .overlay(Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.12), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private func addPreset(_ value: Int) {
@@ -339,8 +367,13 @@ struct WorkoutLibrarySection: View {
         loading = true
         defer { loading = false }
         do {
-            workouts = try await model.api.searchWorkouts(sport: sport, minutes: minutes, tolerance: tolerance.wrappedValue,
-                                                          system: system, indoor: indoor, difficulty: level.range)
+            let result = try await model.api.searchWorkouts(sport: sport, minutes: minutes, tolerance: tolerance.wrappedValue,
+                                                            system: system, indoor: indoor, difficulty: level.range)
+            workouts = result.workouts
+            if let length = result.coachPick?.durationMinutes {
+                recommended = Int(length)
+                if minutes == nil && !dragging { slider = min(max(Double(length), range.lowerBound), range.upperBound) }
+            }
             error = nil
         } catch is CancellationError {
         } catch let failure as URLError where failure.code == .cancelled {

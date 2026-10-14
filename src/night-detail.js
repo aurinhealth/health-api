@@ -53,7 +53,7 @@ export function nightStats(segments, hr = [], hrv = []) {
 
 export async function nightDetail(db, { date }) {
   const rows = (await db.prepare(`SELECT external_id, start_time, end_time, payload_json FROM health_datapoints
-    WHERE user_id=? AND source_family IN ('google-wearables','apple-health','ultrahuman') AND data_type='sleep' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')
+    WHERE user_id=? AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop') AND data_type='sleep' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')
     ORDER BY start_time DESC LIMIT 60`).bind(db.userId, shift(date, -9), date + "T23:59:59Z").all()).results || [];
   const seen = new Set(), nights = [];
   for (const row of rows) {

@@ -7,7 +7,7 @@
 // with the account) as sync_name 'connection_<provider>'.
 import { L } from "./lang.js";
 
-export const HEALTH_PROVIDERS = ["google", "intervals", "ultrahuman"];
+export const HEALTH_PROVIDERS = ["google", "intervals", "ultrahuman", "whoop"];
 const name = provider => "connection_" + provider;
 
 async function ensure(db) {

@@ -19,6 +19,7 @@ struct CoachView: View {
     @State private var unsent: (bubble: UUID, text: String)?
     @State private var home: CoachesSnapshot?
     @State private var showChats = false
+    @State private var showMemory = false
     @FocusState private var focused: Bool
 
     struct Bubble: Identifiable, Equatable {
@@ -27,7 +28,14 @@ struct CoachView: View {
         var text: String
         var actions: [CoachAction] = []
         var decided: [Int: String] = [:]
+        /// A confirmed change of a done activity that "Vrátit" can take back.
+        var undo: [Int: String] = [:]
         var visuals: [String] = []
+        var memory: [CoachMemoryChip] = []
+        /// Food read from a sentence, waiting for "Zapsat"; `logged` once decided.
+        var food: FoodDraft? = nil
+        var logged: String? = nil
+        var loggedOK = false
     }
 
     var body: some View {
@@ -38,7 +46,11 @@ struct CoachView: View {
                         VStack(alignment: .leading, spacing: 14) {
                             if messages.isEmpty { welcome }
                             ForEach(messages) { bubble in
-                                BubbleView(bubble: bubble, decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } })
+                                BubbleView(bubble: bubble,
+                                           decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
+                                           undoMemory: { chip in Task { await undo(chip, in: bubble.id) } },
+                                           undoAction: { action in Task { await undo(action, in: bubble.id) } },
+                                           logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } })
                                     .id(bubble.id)
                             }
                             if let progress, sending {
@@ -67,6 +79,7 @@ struct CoachView: View {
                     Menu {
                         Button { newChat() } label: { Label("Nová konverzace", systemImage: "square.and.pencil") }
                         Button { showChats = true } label: { Label("Předchozí konverzace", systemImage: "clock.arrow.circlepath") }
+                        Button { showMemory = true } label: { Label("Co si kouč pamatuje", systemImage: "sparkles") }
                     } label: { Image(systemName: "ellipsis.circle") }
                     // Not while an answer streams in: it writes into the current conversation.
                     .disabled(sending)
@@ -74,6 +87,7 @@ struct CoachView: View {
                 }
             }
             .sheet(isPresented: $showChats) { ChatsSheet { id in Task { await open(id) } } }
+            .navigationDestination(isPresented: $showMemory) { CoachMemoryView() }
         }
         .tint(Palette.ink)
         .task {
@@ -199,11 +213,17 @@ struct CoachView: View {
                         if let a = result.answer { $0.text = a }
                         $0.actions = result.actions ?? []
                         $0.visuals = result.visuals ?? []
+                        $0.memory = result.memoryChanges?.chips ?? []
+                        // A food sentence: the card says it all, the summary text is not shown.
+                        if result.kind == "food_draft", let draft = result.draft, draft.items.contains(where: { $0.product != nil }) {
+                            $0.food = draft
+                            $0.text = ""
+                        }
                     }
                     if let chat = result.chatId { chatId = chat }
                 }
             }
-            messages.removeAll { $0.id == id && $0.text.isEmpty }
+            messages.removeAll { $0.id == id && $0.text.isEmpty && $0.food == nil }
         } catch APIError.aiConsentRequired {
             messages.removeAll { $0.id == id }
             unsent = (mine.id, text)
@@ -225,12 +245,70 @@ struct CoachView: View {
     private func decide(_ action: CoachAction, confirm: Bool, in bubble: UUID) async {
         guard let draftId = action.draftId else { return }
         do {
-            let message = try await model.api.decideCoachAction(draftId: draftId, confirm: confirm)
-            edit(bubble) { $0.decided[draftId] = message ?? (confirm ? "Hotovo." : "Zamítnuto.") }
+            let answer = try await model.api.decideCoachAction(draftId: draftId, confirm: confirm)
+            edit(bubble) {
+                $0.decided[draftId] = answer.message ?? (confirm ? "Hotovo." : "Zamítnuto.")
+                if let token = answer.undo { $0.undo[draftId] = token }
+            }
             if confirm { await model.refreshTraining(); await model.refresh() }
         } catch {
             edit(bubble) { $0.decided[draftId] = error.localizedDescription }
         }
+    }
+
+    /// "Vrátit" under a confirmed change of a done activity.
+    private func undo(_ action: CoachAction, in bubble: UUID) async {
+        guard let draftId = action.draftId, let token = messages.first(where: { $0.id == bubble })?.undo[draftId] else { return }
+        do {
+            try await model.api.undoActivityChange(token: token)
+            edit(bubble) { $0.undo[draftId] = nil; $0.decided[draftId] = L10n.tr("Vráceno") }
+            await model.refreshTraining(); await model.refresh()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// "Zpět" under an answer: what the coach remembered, forgot or rewrote goes back.
+    private func undo(_ chip: CoachMemoryChip, in bubble: UUID) async {
+        do {
+            switch chip.kind {
+            case .saved: try await model.api.forgetMemory(chip.text)
+            case .forgotten: try await model.api.addMemory(chip.text)
+            case .updated: try await model.api.editMemory(from: chip.text, to: chip.from ?? chip.text)
+            }
+            edit(bubble) { b in
+                if let i = b.memory.firstIndex(where: { $0.id == chip.id }) { b.memory[i].undone = true }
+            }
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    /// Logs the confirmed foods (nil items: "Ne"), then says what is left of the day.
+    private func logFood(_ items: [(product: FoodProduct, amount: Double, meal: String)]?, meal: String, in bubble: UUID) async {
+        guard let draft = messages.first(where: { $0.id == bubble })?.food else { return }
+        guard let items else { edit(bubble) { $0.logged = L10n.tr("Nezapsáno.") }; return }
+        var failed: String?
+        for item in items {
+            if let message = await model.logFood(product: item.product, amount: item.amount, meal: item.meal, day: draft.date, refreshAfter: false) { failed = message }
+        }
+        await model.refreshFood()
+        await model.refresh()
+        if let failed { edit(bubble) { $0.logged = failed }; return }
+        edit(bubble) { $0.logged = L10n.tr(Self.loggedTo[meal] ?? "Zapsáno"); $0.loggedOK = true }
+        if let left = Self.leftText(model.food, date: draft.date) { messages.append(Bubble(mine: false, text: left)) }
+    }
+
+    static let loggedTo = ["breakfast": "Zapsáno do snídaně", "snack_am": "Zapsáno do dopolední svačiny", "lunch": "Zapsáno do oběda",
+                           "snack_pm": "Zapsáno do odpolední svačiny", "dinner": "Zapsáno do večeře", "snack_late": "Zapsáno do druhé večeře"]
+
+    /// "Zbývá ti 1 340 kcal a 88 g bílkovin." from the day's food, when it is that day.
+    static func leftText(_ food: FoodSnapshot?, date: String) -> String? {
+        guard let food, food.date == date, let target = food.target else { return nil }
+        let kcal = Int((target - (food.kcal ?? 0)).rounded())
+        if kcal <= 0 { return L10n.tr("Cíl na dnešek je splněný.") }
+        let protein = food.macros.protein.target.map { Int(($0 - (food.macros.protein.eaten ?? 0)).rounded()) } ?? 0
+        return protein > 0 ? L10n.f("Zbývá ti %d kcal a %d g bílkovin.", kcal, protein) : L10n.f("Zbývá ti %d kcal.", kcal)
     }
 
     private func newChat() {
@@ -239,11 +317,17 @@ struct CoachView: View {
         error = nil
     }
 
+    /// The server keeps a one-line "[Návrhy: …]" with each answer, so later
+    /// turns know what was proposed; a reopened chat shows the answer only.
+    static func withoutProposalNote(_ text: String) -> String {
+        text.replacingOccurrences(of: #"\s*\[(?:Návrhy|Proposals): [^\]]*\]\s*$"#, with: "", options: .regularExpression)
+    }
+
     private func open(_ id: Int) async {
         do {
             let chat = try await model.api.chat(id: id)
             chatId = chat.id
-            messages = chat.messages.map { Bubble(mine: $0.role == "user", text: $0.content) }
+            messages = chat.messages.map { Bubble(mine: $0.role == "user", text: $0.role == "user" ? $0.content : Self.withoutProposalNote($0.content)) }
         } catch {
             self.error = error.localizedDescription
         }
@@ -253,6 +337,9 @@ struct CoachView: View {
 struct BubbleView: View {
     let bubble: CoachView.Bubble
     var decide: (CoachAction, Bool) -> Void
+    var undoMemory: (CoachMemoryChip) -> Void = { _ in }
+    var undoAction: (CoachAction) -> Void = { _ in }
+    var logFood: ([(product: FoodProduct, amount: Double, meal: String)]?, String) -> Void = { _, _ in }
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
@@ -274,8 +361,16 @@ struct BubbleView: View {
             ForEach(bubble.visuals, id: \.self) { kind in
                 CoachVisual(kind: kind)
             }
+            ForEach(bubble.memory) { chip in
+                MemoryChipView(chip: chip) { undoMemory(chip) }
+            }
             ForEach(bubble.actions) { action in
-                ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] }, decide: { decide(action, $0) })
+                ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] },
+                           canUndo: action.draftId.map { bubble.undo[$0] != nil } ?? false,
+                           decide: { decide(action, $0) }, undo: { undoAction(action) })
+            }
+            if let food = bubble.food {
+                FoodDraftCard(draft: food, logged: bubble.logged, ok: bubble.loggedOK, log: logFood)
             }
         }
         .frame(maxWidth: .infinity, alignment: bubble.mine ? .trailing : .leading)
@@ -287,14 +382,28 @@ struct BubbleView: View {
 struct ActionCard: View {
     let action: CoachAction
     let result: String?
+    var canUndo = false
     var decide: (Bool) -> Void
+    var undo: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(action.title, systemImage: "wand.and.stars").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+            if let detail = action.detail, !detail.isEmpty {
+                Text(detail).font(Typo.caption).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             if let reason = action.reason { Text(reason).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
             if let result {
-                Text(result).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.green)
+                HStack(spacing: 6) {
+                    if canUndo { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
+                    Text(result).font(Typo.caption.weight(.medium))
+                    if canUndo {
+                        Text("·")
+                        Button(action: undo) { Text("Vrátit").font(Typo.caption.weight(.medium)) }
+                            .buttonStyle(.plain)
+                    }
+                }
+                .foregroundStyle(Palette.green)
             } else if action.draftId != nil {
                 HStack(spacing: 8) {
                     Button { decide(true) } label: {

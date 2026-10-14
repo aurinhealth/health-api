@@ -432,9 +432,9 @@ final class AppModel {
 
     /// A new Stav sportovce. The coach and the plans follow it, so Today and
     /// Training load again.
-    func setAthleteStatus(_ status: String, until: String?, note: String?) async throws {
+    func setAthleteStatus(_ status: String, until: String?, note: String?, cancel: [String] = []) async throws {
         guard !demo else { athleteStatus = AthleteStatus(status: status, note: note, statusUntil: until); return }
-        athleteStatus = try await api.setAthleteStatus(status, until: until, note: note)
+        athleteStatus = try await api.setAthleteStatus(status, until: until, note: note, cancel: cancel)
         await refresh()
         if training != nil { await refreshTraining() }
     }
@@ -849,9 +849,11 @@ final class AppModel {
     }
 
     /// Logs a food; nil when it worked, else the message to show.
-    func logFood(product: FoodProduct, amount: Double, meal: String) async -> String? {
+    /// `day`: another day than the one shown (a food the coach drafted from a sentence);
+    /// `refreshAfter: false` when several are logged at once and refreshed after the last.
+    func logFood(product: FoodProduct, amount: Double, meal: String, day: String? = nil, refreshAfter: Bool = true) async -> String? {
         guard !demo else { return nil }
-        let date = writeDay
+        let date = day ?? writeDay
         let request = FoodLogRequest(date: date, product: product.forLogging, quantity: amount, unit: product.unit, mealType: meal)
         let overlay = OutboxOverlay(kind: .food, date: date, id: Outbox.localId(), name: product.name, meal: meal,
                                     kcal: product.kcal(for: amount), protein: product.grams(product.protein_100g, for: amount),
@@ -863,7 +865,7 @@ final class AppModel {
         let item = OutboxItem(path: "/app/api/food/log", method: "POST", body: OutboxItem.json(request, adding: extra),
                               label: product.name, overlay: overlay)
         do {
-            if try await deliver(item) {
+            if try await deliver(item), refreshAfter {
                 await refreshFood()
                 await refresh()
             }

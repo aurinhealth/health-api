@@ -99,7 +99,7 @@ struct ProfileSettingsView: View {
         Calendar(identifier: .gregorian).dateComponents([.year], from: birth, to: Date()).year ?? 0
     }
 
-    private static let dayFormat: DateFormatter = {
+    static let dayFormat: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")

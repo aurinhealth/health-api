@@ -35,10 +35,13 @@ enum AppRoute: Hashable {
     case weekPlan
     case dayReview
     case insights
+    /// Trénink → Svaly: how tired each muscle is (MuscleViews.swift).
+    case muscles
     /// Cycle tracking's calendar (Health → Cyklus).
     case cycle
-    /// Doporučení trenéra: every option for today (Today's card, + Trénink dne).
-    case coachPick
+    /// Aktivita dne: Další možnosti from Today's card (false), every option
+    /// with the day's activity from + (true).
+    case coachPick(Bool)
     /// Knihovna → Moje tréninky and Od přátel (MyWorkouts.swift).
     case myWorkouts
     case friendWorkouts
@@ -88,6 +91,7 @@ enum AppRoute: Hashable {
         case "week-plan": self = .weekPlan
         case "day-review": self = .dayReview
         case "records": self = .insights
+        case "muscles": self = .muscles
         case "cycle": self = .cycle
         case "my-workouts": self = .myWorkouts
         case "friend-workouts": self = .friendWorkouts
@@ -155,8 +159,9 @@ struct RouteScreen: View {
         case .weekPlan: WeekPlanView()
         case .dayReview: DayReviewView()
         case .insights: InsightsView()
+        case .muscles: MusclesView()
         case .cycle: CycleCalendarView()
-        case .coachPick: CoachPickView()
+        case .coachPick(let all): CoachPickView(all: all)
         case .myWorkouts: MyWorkoutsView(friends: false)
         case .friendWorkouts: MyWorkoutsView(friends: true)
         case .sharedWorkout(let id): SharedWorkoutView(id: id)

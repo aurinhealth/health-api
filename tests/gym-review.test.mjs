@@ -41,3 +41,12 @@ test('a finished gym session replaces its preparation card with the review', () 
   assert.equal(council.reviews[0].title, 'Po tréninku · Posilovna');
   assert.equal(council.reviews[0].headline, 'Horní tělo A');
 });
+
+test('a set the plan sent to failure neither drops the weight nor earns "keep reps in reserve"', () => {
+  const fail = (no, reps) => ['WORK', 'Leg extension', no, 40, '10-12', 40, reps, 10, 'TRUE', '', '', 'TRUE', ''];
+  const v = [...values.slice(0, 7), fail(1, 12), fail(2, 11)];
+  const r = withLang('cs', () => buildGymReview({ values: v, history: [{ workout_date: '2026-10-03', exercise: 'Leg extension', actual_kg: 40, actual_reps: 11, rpe: 8 }], date })), text = JSON.stringify(r);
+  assert.doesNotMatch(text, /v rezervě/);
+  assert.doesNotMatch(text, /Leg extension [\d,]+ kg \(−/);
+  assert.match(text, /Leg extension( Prime)? 40 kg, přidat opakování/);
+});
