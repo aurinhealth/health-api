@@ -984,10 +984,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/plans/preview'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{
-      const template=getTemplate(String(url.searchParams.get('templateId')||''));
-      if(!template)throw new Error(L('Neznámý plán.', 'Unknown plan.'));
       const today=localToday(),raceDate=url.searchParams.get('raceDate'),startDate=url.searchParams.get('startDate');
-      const when=planStart(template,{today,raceDate:template.race&&raceDate?raceDate:null,startDate:!template.race&&startDate?startDate:null});
+      // ?active=1: the running plan's weeks (its start, its days).
+      const running=url.searchParams.get('active')==='1'?(await syncedPlans(env,today)).active:null;
+      const template=getTemplate(running?running.templateId:String(url.searchParams.get('templateId')||''));
+      if(!template)throw new Error(L('Neznámý plán.', 'Unknown plan.'));
+      const when=running?{startDate:running.startDate,firstDay:running.firstDay||null,firstWeek:1,raceDate:running.raceDate}:planStart(template,{today,raceDate:template.race&&raceDate?raceDate:null,startDate:!template.race&&startDate?startDate:null});
       const prefs=await getWeekPlan(env.DB),chosen=chosenDays(url.searchParams.get('days')?.split(','));
       const days=chosen||sportDays(planDays(template,prefs).days,template.sport);
       const preview=planPreview(template,{ctl:await currentCtl(env,ctx),days,firstDay:when.firstDay,startDate:when.startDate,availability:prefs.availability});
