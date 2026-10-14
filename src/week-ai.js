@@ -60,7 +60,9 @@ export function sessionNote(text) {
 const easedNote = why => L("Lehčí trénink: ", "An easier session: ") + {
   red: L("dnes máš červenou připravenost.", "your readiness is red today."),
   neighbour: L("vedle je jiný tvrdý den.", "there's another hard day next to it."),
-  count: L("v týdnu už jsou dva tvrdé dny.", "the week already has two hard days.")
+  count: L("v týdnu už jsou dva tvrdé dny.", "the week already has two hard days."),
+  fatigue: L("forma (TSB) je pod −20, tělo potřebuje ubrat.", "your form (TSB) is below −20, so the body needs less."),
+  recovery: L("tento týden je odpočinkový.", "this is a recovery week.")
 }[why];
 export function gymNote(text) {
   const kept = String(text || "").split(/(?<=[.!?])\s+/).filter(s => s.trim() && !GYM_DETAIL.test(s));
@@ -72,7 +74,12 @@ export function gymNote(text) {
 // at most two hard days and never two in a row. Gym is always "gym".
 // usedByDate: minutes already in the calendar that day; existingSports: the
 // sports already there (the same sport is not added twice to a day).
-export function sanitizeWeekDays(days, { start, today, prefs = null, readiness = "green", usedByDate = {}, existingSports = {} } = {}) {
+// fixedHard: dates with a hard session the AI didn't plan (already in the
+// calendar, done, or a key session of the training plan); they count toward
+// the two hard days and keep the AI's hard days off their neighbours.
+// tsb and recoveryWeek turn the prompt's rules into checks: no hard day below
+// TSB −20 or in a recovery week. A day of the plan (`plan`) is never eased.
+export function sanitizeWeekDays(days, { start, today, prefs = null, readiness = "green", usedByDate = {}, existingSports = {}, fixedHard = [], tsb = null, recoveryWeek = false } = {}) {
   const first = today > start ? today : start, last = shift(start, 6);
   const used = new Map(Object.entries(usedByDate).map(([d, m]) => [d, Number(m) || 0])), perDay = new Map(Object.entries(existingSports).map(([d, list]) => [d, list.length]));
   const out = [];
@@ -95,22 +102,21 @@ export function sanitizeWeekDays(days, { start, today, prefs = null, readiness =
     used.set(date, (used.get(date) || 0) + minutes);
     perDay.set(date, (perDay.get(date) || 0) + 1);
     const reason = String(raw?.reason || "").trim().slice(0, 200) || null;
-    out.push({ date, sport, minutes, environment, kind, reason: sport === "gym" ? gymNote(reason) : sessionNote(reason) });
+    out.push({ date, sport, minutes, environment, kind, reason: sport === "gym" ? gymNote(reason) : sessionNote(reason), ...(raw?.plan ? { plan: raw.plan, label: raw.label || null } : {}) });
   }
   out.sort((a, b) => a.date.localeCompare(b.date) || WEEK_SPORTS.indexOf(a.sport) - WEEK_SPORTS.indexOf(b.sport));
-  // Hard days: none on a red morning (today), two at most, never back to back.
-  let hardDays = 0, lastHard = null, eased = 0;
+  // Hard days: none on a red morning (today), below TSB −20 or in a recovery
+  // week; two at most, the fixed ones included, and never next to another.
+  const hardDates = new Set((fixedHard || []).filter(d => d >= shift(first, -1) && d <= shift(last, 1)));
+  for (const x of out) if (x.plan && HARD_KINDS.has(x.kind)) hardDates.add(x.date);
+  let hardDays = [...hardDates].filter(d => d >= first && d <= last).length, eased = 0;
+  const near = date => [...hardDates].some(d => Math.abs((Date.parse(d) - Date.parse(date)) / 86400000) <= 1);
   for (const x of out) {
-    if (!HARD_KINDS.has(x.kind)) continue;
-    const tooSoon = lastHard && (lastHard === x.date || shift(lastHard, 1) === x.date);
-    if ((readiness === "red" && x.date === today) || hardDays >= 2 || tooSoon) {
-      x.kind = "endurance";
-      x.reason = easedNote(readiness === "red" && x.date === today ? "red" : tooSoon ? "neighbour" : "count");
-      eased++;
-      continue;
-    }
-    if (lastHard !== x.date) hardDays++;
-    lastHard = x.date;
+    if (x.plan || !HARD_KINDS.has(x.kind)) continue;
+    const why = readiness === "red" && x.date === today ? "red" : num(tsb) != null && num(tsb) < -20 ? "fatigue" : recoveryWeek ? "recovery" : near(x.date) ? "neighbour" : hardDays >= 2 ? "count" : null;
+    if (why) { x.kind = "endurance"; x.reason = easedNote(why); eased++; continue; }
+    hardDays++;
+    hardDates.add(x.date);
   }
   // How many hard days the checks eased; the week's summary may name them.
   Object.defineProperty(out, "eased", { value: eased });
@@ -141,10 +147,26 @@ export function applyRequests(days, requested, { start } = {}) {
   return out;
 }
 
+// The training plan's key sessions (quality, test, race, long) keep their day:
+// the AI's session on that day and sport becomes the plan's, and the generator
+// then builds the plan's own workout (no focus, so it takes the plan's).
+// planDays: the rules' items that carry `plan` (training-plans.js applyPlan).
+const PLAN_KEYS = new Set(["quality", "test", "race", "long"]);
+export function lockPlanDays(days, planDays = [], planName = null) {
+  const keys = (planDays || []).filter(p => p?.plan && PLAN_KEYS.has(p.plan.kind));
+  return (Array.isArray(days) ? days : []).map(d => {
+    const p = keys.find(k => k.date === d?.date && (k.sport === "strength" ? "gym" : k.sport) === d?.sport);
+    if (!p) return d;
+    const kind = p.plan.kind === "long" ? "long" : p.plan.kind === "test" ? "threshold" : kindOfSystem(p.plan.family || p.plan.workoutId, "threshold");
+    return { ...d, kind, minutes: p.minutes || d.minutes, plan: p.plan, label: p.label || null, reason: L("Klíčový trénink z plánu", "A key session of the plan") + (planName ? " " + planName : "") + "." };
+  });
+}
+
 export function weekItem(x, slotOf) {
   const labels = KIND_LABELS();
   const slot = slotOf(x.date, x.sport);
-  return { date: x.date, sport: x.sport, minutes: x.minutes, environment: x.sport === "gym" ? null : x.environment, kind: x.kind, focus: FOCUS_OF[x.kind] || null, label: labels[x.kind] || null, reason: x.reason, role: x.kind, slot };
+  // A plan day goes to the generator without a focus, so it builds the plan's workout.
+  return { date: x.date, sport: x.sport, minutes: x.minutes, environment: x.sport === "gym" ? null : x.environment, kind: x.kind, focus: x.plan ? null : FOCUS_OF[x.kind] || null, label: x.plan ? x.label || labels[x.kind] || null : labels[x.kind] || null, reason: x.reason, role: x.kind, slot };
 }
 
 export function itemsFromDays(days) {
@@ -180,12 +202,12 @@ const WEEK_SCHEMA = {
 
 export const weekInstructions = () => L(
   `Jsi trenér vytrvalostního sportovce (kolo, běh, posilovna). Naplánuj tréninkový týden: pro každý den, kdy dává smysl trénovat, sport, délku v minutách, místo (venku/uvnitř) a druh tréninku. Volné dny do days nedávej. Piš česky, tykej.
-Drž se dat: availabilityByDate je časový rozpočet dne (nikdy ho nepřekroč, null = neznámý), existingSessions jsou tréninky, které už v kalendáři jsou (nepřidávej k nim stejný sport ve stejný den), rulesProposal je návrh pravidel aplikace (zátěž týdne, role dnů, tréninkový plán) a výchozí bod jen pro dny, o kterých sportovec nic neřekl. weekDays říká, který den v týdnu je které datum.
+Drž se dat: availabilityByDate je časový rozpočet dne (nikdy ho nepřekroč, null = neznámý), existingSessions jsou tréninky, které už v kalendáři jsou (nepřidávej k nim stejný sport ve stejný den), rulesProposal je návrh pravidel aplikace (zátěž týdne, role dnů, tréninkový plán) a výchozí bod jen pro dny, o kterých sportovec nic neřekl. weekDays říká, který den v týdnu je které datum. Den s planSession v rulesProposal je trénink z aktivního tréninkového plánu (quality, test, race, long): nech ho na tom dni a se stejným sportem, aplikace tam dá trénink z plánu; jiný tvrdý den vedle něj nedávej.
 Přání sportovce (note a correction) má přednost před historií, rulesProposal i previousProposal: když řekne, jaký sport chce na který den (třeba „posilovnu na pátek, sobotu a neděli“), dej na ten den přesně to a nic jiného; když řekne, že nějaký den nemůže nebo chce volno, nedávej tam nic. Tyto dny vypiš do requested (date a sports přesně podle přání, prázdné sports = volno); dny, o kterých nic neřekl, do requested nedávej. Bezpečnostní pravidla níže platí dál: tvrdý trénink ztlum na lehčí, ale sport, který si sportovec určil, neměň. Když je v datech correction, je to oprava předchozího návrhu (previousProposal): oprav, co chce, a zbytek nech.
 Pravidla: nejvýš dva tvrdé dny (tempo, sweet_spot, threshold, vo2max) a nikdy dva po sobě; po tvrdém dni lehký nebo volno; dlouhý trénink nejvýš jeden, nejlépe o víkendu; posilovna ne den před tvrdým kolem nebo během; při red připravenosti dnes jen recovery nebo volno; při TSB pod −20 žádné tvrdé dny; odpočinkový týden (recoveryWeek) = kratší a bez tvrdých dnů; v zimě a za špatného počasí kolo spíš uvnitř a kratší. Na ostatní dny ber sporty z historie a cíle sportovce, nevymýšlej nové.
 summary: jedna až dvě krátké věty, jak je týden postavený (klíčové dny a proč), s konkrétním číslem z dat, když se hodí. reason u dne: krátce proč tento den, nebo prázdné; nepiš strukturu intervalů ani watty, tu vybere aplikace. U posilovny v reason nejmenuj cviky, partie, série ani selhání: cviky sestaví aplikace sama podle regenerace a délky, takže piš jen, proč je posilovna právě v tento den.`,
   `You are the coach of an endurance athlete (ride, run, gym). Plan the training week: for each day it makes sense to train, the sport, the length in minutes, the place (outdoor/indoor) and the kind of session. Leave rest days out of days. Write in English, in a friendly, direct voice.
-Stick to the data: availabilityByDate is the day's time budget (never exceed it, null = unknown), existingSessions are sessions already in the calendar (don't add the same sport on the same day), rulesProposal is the app's rule-based proposal (the week's load, day roles, the training plan) and a starting point only for the days the athlete said nothing about. weekDays says which weekday each date is.
+Stick to the data: availabilityByDate is the day's time budget (never exceed it, null = unknown), existingSessions are sessions already in the calendar (don't add the same sport on the same day), rulesProposal is the app's rule-based proposal (the week's load, day roles, the training plan) and a starting point only for the days the athlete said nothing about. weekDays says which weekday each date is. A day with planSession in rulesProposal is a session of the active training plan (quality, test, race, long): keep it on that day with the same sport, the app puts the plan's workout there; don't put another hard day next to it.
 The athlete's wishes (note and correction) come before the history, rulesProposal and previousProposal: when they say which sport they want on which day (say "gym on Friday, Saturday and Sunday"), put exactly that on the day and nothing else; when they say they can't train on a day or want it off, put nothing there. List those days in requested (date and sports exactly as wished, empty sports = rest); leave days they said nothing about out of requested. The safety rules below still apply: ease a hard session, but don't change a sport the athlete chose. When the data has a correction, it corrects the previous proposal (previousProposal): fix what they ask and keep the rest.
 Rules: two hard days at most (tempo, sweet_spot, threshold, vo2max) and never two in a row; an easy day or rest after a hard one; one long session at most, ideally at the weekend; no gym the day before a hard ride or run; on a red readiness today only recovery or rest; with TSB below −20 no hard days; a recovery week (recoveryWeek) = shorter and no hard days; in winter and in bad weather ride indoors and shorter. On the other days take the sports from the athlete's history and goal, don't invent new ones.
 summary: one or two short sentences on how the week is built (the key days and why), with a concrete number from the data where it helps. reason for a day: briefly why this day, or empty; don't write an interval structure or watts, the app picks them. For the gym, don't name exercises, body parts, sets or failure in reason: the app picks the exercises itself from recovery and the length, so only say why the gym falls on this day.`
@@ -194,10 +216,11 @@ summary: one or two short sentences on how the week is built (the key days and w
 // facts: { start, today, availabilityByDate, existingSessions, rulesProposal,
 // readiness, recoveryWeek, weather, coach (coachContext), note, weekDays,
 // and for a correction previousProposal and correction }.
-export async function proposeWeekAI(env, facts, { prefs = null, focus = null, usedByDate = {}, existingSports = {}, ask = callOpenAI } = {}) {
+export async function proposeWeekAI(env, facts, { prefs = null, focus = null, usedByDate = {}, existingSports = {}, planDays = [], fixedHard = [], ask = callOpenAI } = {}) {
   const r = await ask(env, { feature: "week-plan", instructions: withFocus(weekInstructions(), focus), input: L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts), format: WEEK_SCHEMA, maxOutputTokens: 4000, model: complexModel(env) });
   let parsed; try { parsed = JSON.parse(r.text); } catch { const error = new Error(L("Návrh týdne se nepodařilo zpracovat. Zkus to znovu.", "The week couldn't be processed. Try again.")); error.ai = true; throw error; }
-  const days = sanitizeWeekDays(applyRequests(parsed?.days, parsed?.requested, { start: facts.start }), { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports });
+  const asked = lockPlanDays(applyRequests(parsed?.days, parsed?.requested, { start: facts.start }), planDays, facts.trainingPlan?.name || null);
+  const days = sanitizeWeekDays(asked, { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports, fixedHard, tsb: facts.readiness?.tsb ?? null, recoveryWeek: Boolean(facts.recoveryWeek) });
   // A summary written for days the checks then eased would promise them still.
   return { summary: days.eased ? null : String(parsed?.summary || "").trim().slice(0, 400) || null, items: itemsFromDays(days) };
 }

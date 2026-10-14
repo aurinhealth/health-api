@@ -2,7 +2,7 @@
 // answer is checked before the app shows it.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sanitizeWeekDays, gymNote, itemsFromDays, proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, applyRequests } from "../src/week-ai.js";
+import { sanitizeWeekDays, gymNote, lockPlanDays, itemsFromDays, proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, applyRequests } from "../src/week-ai.js";
 
 const start = "2026-10-12", today = "2026-10-13";
 const prefs = { availability: [60, 90, 60, 90, 0, 240, 60].map(minutes => ({ minutes, window: "", preferredSports: [] })) };
@@ -141,4 +141,25 @@ test("a note never promises a harder session or intervals the checks and library
   const adjusted = await adjustByText({}, { session: { date: "2026-10-17", sport: "ride", minutes: 60, environment: "outdoor", kind: "endurance" }, request: "chci práh", weekDays: [start, "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"], otherSessions: [{ date: "2026-10-18", kind: "vo2max" }], prefs, today }, { ask: async () => ({ text: JSON.stringify({ date: "2026-10-17", sport: "ride", minutes: 60, environment: "outdoor", kind: "threshold", note: "Změnil jsem to na práh 3×10." }) }) });
   assert.equal(adjusted.kind, "endurance");
   assert.match(adjusted.note, /vedle je jiný tvrdý den/);
+});
+
+test("the plan's key days hold, and hard days in the calendar, deep fatigue and a recovery week are checked, not just asked", () => {
+  const planDays = [{ date: "2026-10-15", sport: "ride", minutes: 75, label: "Test FTP", plan: { kind: "test", workoutId: "test-ride-ftp20" } }, { date: "2026-10-17", sport: "ride", minutes: 120, plan: { kind: "easy" } }];
+  const locked = lockPlanDays([{ date: "2026-10-15", sport: "ride", minutes: 60, kind: "endurance", reason: "Klidně." }, { date: "2026-10-17", sport: "ride", minutes: 90, kind: "long", reason: "" }], planDays, "Rozvoj FTP");
+  assert.equal(locked[0].kind, "threshold");
+  assert.equal(locked[0].plan.kind, "test");
+  assert.match(locked[0].reason, /Klíčový trénink z plánu Rozvoj FTP/);
+  assert.equal(locked[1].plan, undefined);
+  // The AI's VO2max next to the plan's test is eased; the test stays and goes to the generator without a focus.
+  const days = sanitizeWeekDays([...locked, { date: "2026-10-14", sport: "run", minutes: 45, kind: "vo2max", reason: "" }], { start, today, prefs });
+  assert.equal(days.find(d => d.date === "2026-10-14").kind, "endurance");
+  const [item] = itemsFromDays(days.filter(d => d.plan));
+  assert.deepEqual([item.kind, item.focus, item.label], ["threshold", null, "Test FTP"]);
+  // A hard ride already in the calendar on Tuesday keeps Wednesday easy.
+  assert.equal(sanitizeWeekDays([{ date: "2026-10-14", sport: "ride", minutes: 60, kind: "threshold", reason: "" }], { start, today, prefs, fixedHard: ["2026-10-13"] })[0].kind, "endurance");
+  for (const opts of [{ tsb: -25 }, { recoveryWeek: true }]) {
+    const [d] = sanitizeWeekDays([{ date: "2026-10-17", sport: "ride", minutes: 60, kind: "threshold", reason: "Práh." }], { start, today, prefs, ...opts });
+    assert.equal(d.kind, "endurance");
+    assert.match(d.reason, opts.tsb ? /TSB/ : /odpočinkový/);
+  }
 });
