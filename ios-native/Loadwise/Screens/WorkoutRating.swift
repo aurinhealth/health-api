@@ -178,8 +178,9 @@ struct FeedbackRow: View {
     }
 
     private var title: String {
-        let parts: [String?] = [rpe.map { L10n.tr("Náročnost") + " \($0)" },
-                     fit.flatMap { id in PlanFitPicker.fits.first { $0.id == id } }.map { L10n.tr($0.label) }].compactMap { $0 }
+        let effort: String? = rpe.map { L10n.tr("Náročnost") + " \($0)" }
+        let fitted: String? = fit.flatMap { id in PlanFitPicker.fits.first { $0.id == id } }.map { L10n.tr($0.label) }
+        let parts: [String] = [effort, fitted].compactMap { $0 }
         return parts.isEmpty ? L10n.tr("Jak to šlo?") : parts.joined(separator: " · ")
     }
 
