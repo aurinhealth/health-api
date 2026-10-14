@@ -24,6 +24,8 @@ struct GymSessionView: View {
     /// Opened on a workout already done: its sets as a table to fix (GymLog.swift).
     @State private var doneMode = false
     @State private var changingType = false
+    /// What the warm-up and stretching add to each length, shown under the length picker.
+    @State private var extra: [String: GymPreferences.Extra]?
     @State private var deleting = false
     @State private var editingKcal = false
 
@@ -154,6 +156,10 @@ struct GymSessionView: View {
             } else if let day, !day.exercises.isEmpty {
                 Text(day.planName ?? "Silový trénink").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
                 progress(day)
+                if let planned = day.plannedMinutes, day.warmup != nil || day.stretching != nil {
+                    GymTimeCard(minutes: planned, warmup: day.warmup?.minutes ?? 0, stretching: day.stretching?.minutes ?? 0)
+                        .padding(.top, 14)
+                }
                 if !muscles.isEmpty {
                     Card {
                         WidgetHeader(title: "Co procvičíš", color: Palette.amberBar)
@@ -170,8 +176,14 @@ struct GymSessionView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 16)
+                if let warmup = day.warmup {
+                    StretchingCard(stretching: warmup, date: date, kind: .warmup).padding(.top, 20)
+                }
                 exerciseCards(day)
                     .padding(.top, 20)
+                if let stretching = day.stretching {
+                    StretchingCard(stretching: stretching, date: date).padding(.top, 16)
+                }
                 PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: finishing) {
                     Task { await finish() }
                 }
@@ -189,6 +201,14 @@ struct GymSessionView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.top, 18)
+                .task { if !model.demo, extra == nil { extra = (try? await model.api.gymPreferences())?.extraMinutes } }
+                if let added = extra?[String(minutes)], added.warmup + added.stretching > 0 {
+                    HStack(spacing: 8) {
+                        if added.warmup > 0 { ExtraMinutesPill(text: L10n.f("+ %@ min rozcvička", String(added.warmup)), color: Palette.amber) }
+                        if added.stretching > 0 { ExtraMinutesPill(text: L10n.f("+ %@ min protažení", String(added.stretching)), color: Palette.indigo) }
+                    }
+                    .padding(.top, 10)
+                }
                 Button { Task { await generate() } } label: {
                     Text(saving ? "Sestavuji…" : "Sestavit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
@@ -762,6 +782,8 @@ struct YouTubePlayer: UIViewRepresentable {
 /// The start and end position of an exercise, one photo per page.
 struct ExercisePhotos: View {
     let urls: [URL]
+    /// Začátek and Konec on the photos (a stretch's two photos are one position).
+    var labeled = true
     @State private var page = 0
 
     var body: some View {
@@ -776,12 +798,14 @@ struct ExercisePhotos: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
                     .overlay(alignment: .bottomLeading) {
+                        if labeled {
                         Text(index == 0 ? L10n.tr("Začátek") : L10n.tr("Konec"))
                             .font(Typo.caption)
                             .foregroundStyle(Palette.ink)
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(Palette.background.opacity(0.65), in: Capsule())
                             .padding(10)
+                        }
                     }
                     .tag(index)
                 }

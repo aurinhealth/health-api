@@ -23,11 +23,14 @@ export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60) {
   return { requestedMinutes, estimatedMinutes: Math.ceil(totalSeconds / 60), totalSeconds, workSeconds: Math.round(workSeconds), warmupSeconds: Math.round(warmupSeconds), restSeconds, setupSeconds, bufferSeconds };
 }
 
-export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoad = new Map(), protectedLegs = false, recoveryScore = null, firstSession = false } = {}) {
+// Rests by the gym goal: heavy strength sets need the longest, fitness the shortest.
+const GOAL_RESTS = { strength: [180, 180, 120], strength_muscle: [150, 150, 90], muscle: [120, 105, 75], muscle_fitness: [90, 75, 60], fitness: [75, 60, 45] };
+export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoad = new Map(), protectedLegs = false, recoveryScore = null, firstSession = false, goal = 'auto' } = {}) {
+  const [heavy, main, other] = GOAL_RESTS[goal] || [150, 120, 75];
   for (const r of rows) {
     const def = catalog[r[1]] || {}, warm = r[0] === 'WARMUP';
     r[11] = 'FALSE'; r[12] = '';
-    const rest = warm ? 60 : def.fatigue >= 1.2 ? 150 : def.warmup ? 120 : 75;
+    const rest = warm ? 60 : def.fatigue >= 1.2 ? heavy : def.warmup ? main : other;
     r[9] = String(r[9] || '').replace(/\s*\[Pauza \d+ s\]/g, '').replace(/; (?:poslední série do technického selhání, jen při čistém provedení|last set to technical failure, only with clean technique)/g, '') + ' [Pauza ' + rest + ' s]';
   }
   const names = [...new Set(rows.filter(r => r[0] === 'WORK').map(r => r[1]))];
