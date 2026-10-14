@@ -2148,6 +2148,13 @@
 "Server neodpověděl včas. Zkus to za chvíli znovu." = "The server didn't answer in time. Try again in a moment.";
 "Nepodařilo se spojit se serverem Aurinu. Zkontroluj připojení a zkus to znovu." = "Couldn't reach the Aurin server. Check your connection and try again.";
 
+/* Wahoo in Zdroje dat */
+"Jízdy a běhy z Wahoo se v Aurinu smažou a plán do Wahoo přestane chodit." = "The Wahoo rides and runs will be deleted from Aurin and the plan will stop going to Wahoo.";
+"Hotové jízdy a běhy: čas, vzdálenost, výkon, TSS, tep a kadenci." = "Done rides and runs: time, distance, power, TSS, heart rate and cadence.";
+"Tréninky naplánované v Aurinu, do ELEMNT a KICKR." = "Workouts planned in Aurin, to the ELEMNT and KICKR.";
+"Odpojit a smazat jízdy z Wahoo" = "Disconnect and delete the Wahoo rides";
+"Jen v Aurinu: Wahoo ho dál má, Aurin ho nepočítá." = "In Aurin only: Wahoo keeps it, Aurin stops counting it.";
+
 /* Aktivita dne (CoachPick.swift) */
 "Aktivita dne" = "Activity of the day";
 "trenažér" = "trainer";

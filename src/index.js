@@ -1334,7 +1334,7 @@ export async function matchActivities(env, { days = null } = {}) {
     `SELECT source_family, data_type, external_id, start_time, end_time, payload_json, record_role, matched_activity_id
      FROM health_datapoints
      WHERE user_id = ?
-     AND ((source_family IN ('intervals','local') AND data_type = 'activity') OR (source_family IN ('google-wearables','apple-health') AND data_type = 'exercise'))
+     AND ((source_family IN ('intervals','local','wahoo') AND data_type = 'activity') OR (source_family IN ('google-wearables','apple-health') AND data_type = 'exercise'))
      -- Google copies of Apple Health workouts stay out (apple-health.js).
      AND NOT (source_family = 'google-wearables' AND COALESCE(matched_activity_id,'') = 'apple-health')
      -- Deleted in Aurin (activity-edits.js): stays hidden, pairs with nothing.
@@ -1751,7 +1751,7 @@ async function energyForDate(env, date) {
   const activities = await env.DB.prepare(`
     SELECT *
     FROM health_datapoints
-    WHERE user_id = ? AND source_family IN ('intervals','local')
+    WHERE user_id = ? AND source_family IN ('intervals','local','wahoo')
       AND data_type = 'activity'
       AND start_time >= ?
       AND start_time < ?

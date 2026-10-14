@@ -121,7 +121,7 @@ struct SyncAppIcon: View {
         let shape = RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
         ZStack {
             switch id {
-            case "apple", "google", "intervals":
+            case "apple", "google", "intervals", "wahoo":
                 IntegrationIcon(id: id, size: size)
             case "strava":
                 shape.fill(Color(light: 0xFC4C02, dark: 0xFC4C02))

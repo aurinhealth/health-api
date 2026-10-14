@@ -18,7 +18,7 @@ import { L } from "./lang.js";
 
 const TICKET_SECONDS = 120;
 // "google-extra": the optional Google scopes (writing weight and workouts).
-const PROVIDERS = new Set(["google", "google-extra", "intervals", "strava", "ultrahuman", "whoop"]);
+const PROVIDERS = new Set(["google", "google-extra", "intervals", "strava", "ultrahuman", "whoop", "wahoo"]);
 
 const b64 = bytes => { let s = ""; for (const b of bytes) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
 const unb64 = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
@@ -64,7 +64,7 @@ const expired = () => new Response(null, { status: 302, headers: { Location: "lo
 
 function confirmPage(request, ticketText, ticket, email) {
   const en = /^en\b/i.test(request.headers.get("Accept-Language") || "");
-  const service = ticket.provider.startsWith("google") ? "Google Health" : ticket.provider === "strava" ? "Strava" : ticket.provider === "ultrahuman" ? "Ultrahuman" : ticket.provider === "whoop" ? "WHOOP" : "Intervals.icu";
+  const service = ticket.provider.startsWith("google") ? "Google Health" : ticket.provider === "strava" ? "Strava" : ticket.provider === "ultrahuman" ? "Ultrahuman" : ticket.provider === "whoop" ? "WHOOP" : ticket.provider === "wahoo" ? "Wahoo" : "Intervals.icu";
   const t = en
     ? { title: "Connect " + service, body: "Connect " + service + " to the Aurin account", note: "If this isn't your account, close this page.", go: "Continue", lang: "en" }
     : { title: "Připojit " + service, body: "Připojit " + service + " k účtu Aurin", note: "Pokud to není tvůj účet, zavři tuto stránku.", go: "Pokračovat", lang: "cs" };
@@ -79,7 +79,7 @@ function confirmPage(request, ticketText, ticket, email) {
 async function continueToProvider(env, ticket) {
   if (!(await useTicket(env.DB, ticket))) return expired();
   // Google's data policy: the app showed its own disclosure right before this (consent=1).
-  const next = { google: "/oauth/google?consent=1&return=native", "google-extra": "/oauth/google?consent=1&extra=1&return=native", strava: "/oauth/strava?return=native", ultrahuman: "/oauth/ultrahuman?return=native", whoop: "/oauth/whoop?return=native" }[ticket.provider] || "/oauth/intervals?return=native";
+  const next = { google: "/oauth/google?consent=1&return=native", "google-extra": "/oauth/google?consent=1&extra=1&return=native", strava: "/oauth/strava?return=native", ultrahuman: "/oauth/ultrahuman?return=native", whoop: "/oauth/whoop?return=native", wahoo: "/oauth/wahoo?return=native" }[ticket.provider] || "/oauth/intervals?return=native";
   const headers = new Headers({ Location: next, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
   headers.append("Set-Cookie", await userSessionCookie(env.DB, ticket.uid, sessionSecret(env)));
   return new Response(null, { status: 303, headers });

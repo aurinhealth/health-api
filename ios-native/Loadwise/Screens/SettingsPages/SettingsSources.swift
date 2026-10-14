@@ -161,7 +161,7 @@ struct SourcesSettingsView: View {
         if !connected.contains(where: { $0.id == "apple" }) && AppleHealth.shared.isAvailable {
             list.append(Offer(id: "apple", name: "Apple Health", note: L10n.tr("připojit")))
         }
-        for provider in available where ["google", "ultrahuman", "whoop", "intervals"].contains(provider.id) {
+        for provider in available where ["google", "ultrahuman", "whoop", "wahoo", "intervals"].contains(provider.id) {
             list.append(Offer(id: provider.id, name: provider.name ?? provider.id, note: L10n.tr("připojit")))
         }
         return list

@@ -32,7 +32,7 @@ async function activityRow(env, id) {
   const key = String(id || '').slice(0, 300);
   if (!key) return null;
   return env.DB.prepare(`SELECT id, source_family, data_type, external_id, start_time, payload_json FROM health_datapoints
-    WHERE user_id = ? AND external_id = ? AND ((source_family IN ('intervals', 'local') AND data_type = 'activity')
+    WHERE user_id = ? AND external_id = ? AND ((source_family IN ('intervals', 'local', 'wahoo') AND data_type = 'activity')
       OR (source_family IN ('google-wearables', 'apple-health') AND data_type = 'exercise')) LIMIT 1`).bind(env.USER_ID, key).first();
 }
 
@@ -113,6 +113,8 @@ export async function deleteOptions(env, id) {
     const p = parse(row.payload_json), remote = String(p.id || row.external_id);
     return { kind: /^loadwise:/.test(String(p.external_id || '')) || await sentByApp(env, remote) ? 'app' : 'intervals' };
   }
+  // A Wahoo ride stays in Wahoo; here it is only hidden, like a watch's record.
+  if (row.source_family === 'wahoo') return { kind: 'watch', source: 'wahoo' };
   return { kind: 'watch', source: row.source_family === 'apple-health' ? 'apple' : 'google' };
 }
 
