@@ -2036,6 +2036,79 @@
 "bez" = "without";
 "30 rán" = "30 mornings";
 "dny s ✓" = "days with ✓";
+/* Settings → Ikona aplikace */
+"Ikona aplikace" = "App icon";
+"Výchozí" = "Default";
+"Roční období" = "Seasons";
+"Odměna" = "Reward";
+"Speciální · Aurin Pro" = "Special · Aurin Pro";
+"Odznak" = "Badge";
+"Zlatý odznak" = "Gold badge";
+"Dráha" = "Track";
+"Zlatá dráha" = "Gold track";
+"Jaro" = "Spring";
+"Léto" = "Summer";
+"Podzim" = "Autumn";
+"Zima" = "Winter";
+"Polární záře" = "Aurora";
+"Půlnoc" = "Midnight";
+"Zatmění" = "Eclipse";
+"Porcelán" = "Porcelain";
+"Nebe" = "Sky";
+"jen na jaře" = "spring only";
+"jen v létě" = "summer only";
+"jen na podzim" = "autumn only";
+"jen v zimě" = "winter only";
+"zbývá %@" = "%@ to go";
+"Ikonu se nepodařilo změnit. Zkus to znovu." = "The icon couldn't be changed. Try again.";
+"Odemkneš ji, až naběháš celkem %@." = "Unlocks once you've run %@ in total.";
+"Odemkneš ji, až najezdíš na kole celkem %@." = "Unlocks once you've ridden %@ in total.";
+"Odemkneš ji po %@ trénincích v posilovně." = "Unlocks after %@ gym workouts.";
+"Odemkneš ji, když budeš trénovat %@ dní v řadě." = "Unlocks when you train %@ days in a row.";
+"Dá se vybrat jen v tomto ročním období." = "Can only be picked during its season.";
+
+/* Training plans: preview, start, the running plan, the result */
+"Dny na kole" = "Riding days";
+"Dny běhu" = "Running days";
+"Plán splněn" = "Plan complete";
+"%@ se přesune %@." = "%1$@ moves %2$@.";
+"+ další %@" = "+ %@ more";
+"Co dál" = "What next";
+"Dny" = "Days";
+"Do konce týdne už není jiný den." = "There is no other day left this week.";
+"FTP" = "FTP";
+"Hlavní část zůstane, zkrátí se rozjetí a vyjetí." = "The main set stays; the warm-up and cool-down get shorter.";
+"Jiný plán" = "Another plan";
+"Klíčové tréninky zůstanou." = "The key sessions stay.";
+"Konec %@" = "Ends %@";
+"Přehled" = "Overview";
+"Týden %@ z %@" = "Week %1$@ of %2$@";
+"Týdny" = "Weeks";
+"Upravit týden" = "Update the week";
+"V tomto týdnu nejsou žádné tréninky." = "No sessions this week.";
+"Vrátit podle plánu" = "Back to the plan";
+"Vyber délku" = "Pick a length";
+"Vynechat" = "Skip";
+"Vynechat %@?" = "Skip %@?";
+"Začíná %@" = "Starts %@";
+"Začít %@" = "Start %@";
+"Začít dnes" = "Start today";
+"Začít znovu %@" = "Start again %@";
+"Zkrátit" = "Shorten";
+"Zkrátit %@" = "Shorten %@";
+"Zkrátit na %@" = "Shorten to %@";
+"Změnit začátek" = "Change the start";
+"celkem" = "in total";
+"test" = "test";
+"testy" = "tests";
+"testů" = "tests";
+"test FTP" = "FTP test";
+"testy FTP" = "FTP tests";
+"testů FTP" = "FTP tests";
+"týdně" = "a week";
+"vypadne" = "dropped";
+"čas" = "time";
+
 /* Food from a sentence in the coach (FoodDraftCard.swift) */
 "Zapsat" = "Log";
 "Celkem" = "Total";
@@ -2054,3 +2127,8 @@
 "Zapsáno do odpolední svačiny" = "Logged to the afternoon snack";
 "Zapsáno do večeře" = "Logged to dinner";
 "Zapsáno do druhé večeře" = "Logged to the second dinner";
+
+/* WHOOP in Zdroje dat */
+"Data z WHOOPu se smažou a noc se zase bude brát z ostatních zdrojů." = "The WHOOP data will be deleted and your nights will come from your other sources again.";
+"Spánek a jeho fáze, klidový tep, HRV, dech a okysličení krve." = "Sleep and its stages, resting heart rate, HRV, breathing and blood oxygen.";
+"Odpojit a smazat data z WHOOPu" = "Disconnect and delete the WHOOP data";

@@ -5,6 +5,7 @@ import { INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { readConnectionHealth } from "./connection-health.js";
 import { appleHealthStatus } from "./apple-health.js";
 import { ultrahumanConfigured } from "./ultrahuman.js";
+import { whoopConfigured } from "./whoop.js";
 import { readSourcePriority } from "./source-priority.js";
 // Connection metadata never exposes credentials. Provider consent remains on the provider's site.
 export async function connectionStatus(env) {
@@ -16,6 +17,7 @@ export async function connectionStatus(env) {
   const state = (provider, connected) => connected ? health[provider] : { needsReconnect: false, lastError: null, lastErrorAt: null, lastSuccessAt: null };
   // Apple Health is connected on the iPhone (HealthKit); the server only knows what the phone sent.
   const ultrahuman = ultrahumanConfigured(env), ultrahumanConnected = Boolean(env.ULTRAHUMAN_TOKEN);
+  const whoop = whoopConfigured(env), whoopConnected = Boolean(env.WHOOP_TOKEN);
   const apple = env.DB && env.USER_ID != null ? await appleHealthStatus(env.DB, env.USER_ID).catch(() => ({ connected: false })) : { connected: false };
   // Where nights and days come from when several sources measure them (source-priority.js).
   const priority = env.DB && env.USER_ID != null ? await readSourcePriority(env.DB, env.USER_ID) : { night: "auto", day: "auto" };
@@ -32,6 +34,8 @@ export async function connectionStatus(env) {
     // Offered once the Ultrahuman app is registered; which night counts is source-priority.js's call.
     ,...(ultrahuman||ultrahumanConnected?[{id:"ultrahuman",name:"Ultrahuman",required:false,configured:ultrahuman,connected:ultrahumanConnected,...state("ultrahuman",ultrahumanConnected),connectUrl:ultrahuman?"/oauth/ultrahuman":null,
       metrics:[L("Spánek a fáze", "Sleep and stages"),L("HRV a klidový tep", "HRV and resting heart rate"),L("Teplota kůže", "Skin temperature"),"VO2max"],note:L("Připojení probíhá na stránce Ultrahumanu. Po tvém souhlasu tě vrátíme zpět.", "Connecting happens on the Ultrahuman site. After you agree, we'll bring you back.")}]:[])
+    ,...(whoop||whoopConnected?[{id:"whoop",name:"WHOOP",required:false,configured:whoop,connected:whoopConnected,...state("whoop",whoopConnected),connectUrl:whoop?"/oauth/whoop":null,
+      metrics:[L("Spánek a fáze", "Sleep and stages"),L("HRV a klidový tep", "HRV and resting heart rate"),L("Dech a kyslík", "Breathing and oxygen")],note:L("Připojení probíhá na stránce WHOOPu. Po tvém souhlasu tě vrátíme zpět.", "Connecting happens on the WHOOP site. After you agree, we'll bring you back.")}]:[])
     // Listed once the phone has connected it: the web cannot connect HealthKit.
     ,...(apple.connected?[{id:"apple",name:"Apple Health",required:false,configured:true,connected:apple.connected,method:"healthkit",needsReconnect:false,lastError:null,lastErrorAt:null,lastSuccessAt:apple.lastSuccessAt||null,categories:apple.categories||[],
       metrics:[L("Spánek a fáze", "Sleep and stages"),L("Tréninky", "Workouts"),L("Tep, HRV a VO2max", "Heart rate, HRV and VO2max"),L("Kroky a energie", "Steps and energy"),L("Hmotnost", "Weight")],note:L("Data čte aplikace Aurin v iPhonu. Co smí číst, vybereš v Aurinu a potvrdíš v systému.", "The Aurin iPhone app reads the data. Choose what it may read in Aurin and confirm it in iOS.")}]:[])

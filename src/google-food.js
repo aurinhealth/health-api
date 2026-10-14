@@ -35,17 +35,30 @@ export function googleLocal(interval) {
 const pointId = name => { const id = String(name || "").split("/").pop(); return id ? "g:" + id : null; };
 const grams = v => { const n = Number(v?.grams ?? v); return Number.isFinite(n) ? n : null; };
 
+// Fitbit keeps a day's totals in Google Health as entries of their own at
+// midnight: "Výchozí potraviny" with only the energy, and nameless ones with
+// one macro each. They repeat what was eaten that day (Aurin's own food
+// included), so they are not meals.
+export function dayTotal(log, meal) {
+  const start = Date.parse(log?.interval?.startTime || ""), end = Date.parse(log?.interval?.endTime || "");
+  if (Number.isFinite(start) && Number.isFinite(end) && end - start >= 6 * 3600000) return true;
+  const macros = [meal.protein, meal.carbs, meal.fat].filter(v => Number(v) > 0).length;
+  if (!meal.name && !(meal.kcal > 0)) return true;
+  return meal.time === "00:00" && (!meal.name || (meal.kcal > 0 && macros === 0) || (!(meal.kcal > 0) && macros <= 1));
+}
+
 export function googleMeal(point) {
   const log = point?.nutritionLog, when = googleLocal(log?.interval), id = pointId(point?.name);
   if (!log || !when || !id) return null;
   const nutrient = re => grams((log.nutrients || []).find(n => re.test(String(n?.nutrient || "")))?.quantity);
   const sodium = nutrient(/^SODIUM$/i);
-  return {
+  const meal = {
     id, date: when.date, time: when.time, app: googleAppName(point.dataSource), mealType: log.mealType,
     name: log.foodDisplayName || log.food?.displayName || "",
     kcal: Number(log.energy?.kcal ?? 0), protein: nutrient(/^PROTEIN$/i), carbs: grams(log.totalCarbohydrate), fat: grams(log.totalFat),
     fiber: nutrient(/FIBER/i), sugar: nutrient(/SUGAR/i), salt: sodium == null ? null : sodium * 2.5
   };
+  return dayTotal(log, meal) ? null : meal;
 }
 
 export function googleDrink(point) {
@@ -90,6 +103,8 @@ export async function importGoogleFood(env, { token, fetcher = fetch, days = DAY
   const foreign = p => !ours.has(p?.name) && !(client && p?.dataSource?.application?.googleWebClientId === client);
   const meals = nutrition.filter(foreign).map(googleMeal).filter(Boolean);
   const drinks = hydration ? hydration.filter(foreign).map(googleDrink).filter(Boolean) : undefined;
+  // Day totals brought in before they were recognised, outside the window too.
+  await db.prepare("DELETE FROM food_logs WHERE user_id=? AND source=? AND substr(consumed_at,12,5)='00:00' AND (recipe_title IN ('Výchozí potraviny','Google Health') OR (kcal=0 AND (protein_g>0)+(carbs_g>0)+(fat_g>0)<=1) OR (kcal>0 AND protein_g=0 AND carbs_g=0 AND fat_g=0))").bind(userId, GOOGLE_FOOD_SOURCE).run().catch(() => {});
   const result = await saveAppleFood(db, userId, { from, to, meals, ...(drinks ? { drinks } : {}) }, { source: GOOGLE_FOOD_SOURCE });
   return { status: "ok", ...result };
 }

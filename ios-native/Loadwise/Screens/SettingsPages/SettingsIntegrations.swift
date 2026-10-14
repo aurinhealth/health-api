@@ -24,7 +24,7 @@ struct IntegrationTile: View {
     }
 }
 
-/// One connected service: its icon, name, what it brings and its state.
+/// One connected service: its icon, name and state (no subtitle, only a problem shows).
 struct IntegrationCard: View {
     let provider: ConnectionsResponse.Provider
     let lastSync: String?
@@ -37,8 +37,6 @@ struct IntegrationCard: View {
                 Text(verbatim: provider.name ?? provider.id).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
                 if let problem = provider.problemText {
                     Text(problem).font(Typo.caption).foregroundStyle(Palette.rust)
-                } else {
-                    Text(Self.brings(provider.id)).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                 }
             }
             Spacer(minLength: 8)
@@ -52,16 +50,6 @@ struct IntegrationCard: View {
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         .contentShape(Rectangle())
-    }
-
-    static func brings(_ id: String) -> String {
-        switch id {
-        case "apple": return L10n.tr("spánek, tréninky, srdce, pohyb")
-        case "intervals": return L10n.tr("tréninky, plán, zóny")
-        case "google": return L10n.tr("spánek, tep, kroky")
-        case "ultrahuman": return L10n.tr("spánek, HRV, klidový tep, teplota")
-        default: return L10n.tr("tréninky")
-        }
     }
 }
 
@@ -204,7 +192,7 @@ struct IntegrationDetailView: View {
 
             SettingsGroup {
                 Button { flow.disconnecting = current } label: {
-                    SettingsRow(title: current.id == "ultrahuman" ? "Odpojit a smazat data z prstenu" : "Odpojit", chevron: false, titleColor: Palette.rust)
+                    SettingsRow(title: current.id == "ultrahuman" ? "Odpojit a smazat data z prstenu" : current.id == "whoop" ? "Odpojit a smazat data z WHOOPu" : "Odpojit", chevron: false, titleColor: Palette.rust)
                 }
                 .buttonStyle(.plain)
                 .disabled(store.demo)

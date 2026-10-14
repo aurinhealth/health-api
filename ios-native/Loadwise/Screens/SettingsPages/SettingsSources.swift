@@ -128,7 +128,7 @@ struct SourcesSettingsView: View {
     }
 
     /// The connected sources that measure the night (the ring too) and the day, in the server's order.
-    private var nightChoices: [String] { ["ultrahuman", "google", "apple"].filter { id in connected.contains { $0.id == id } } }
+    private var nightChoices: [String] { ["ultrahuman", "whoop", "google", "apple"].filter { id in connected.contains { $0.id == id } } }
     private var dayChoices: [String] { ["google", "apple"].filter { id in connected.contains { $0.id == id } } }
 
     private func priorityRow(_ part: PriorityPart) -> some View {
@@ -161,7 +161,7 @@ struct SourcesSettingsView: View {
         if !connected.contains(where: { $0.id == "apple" }) && AppleHealth.shared.isAvailable {
             list.append(Offer(id: "apple", name: "Apple Health", note: L10n.tr("připojit")))
         }
-        for provider in available where ["google", "ultrahuman", "intervals"].contains(provider.id) {
+        for provider in available where ["google", "ultrahuman", "whoop", "intervals"].contains(provider.id) {
             list.append(Offer(id: provider.id, name: provider.name ?? provider.id, note: L10n.tr("připojit")))
         }
         return list
@@ -187,6 +187,7 @@ struct SourcePrioritySheet: View {
         case "apple": "Apple Health"
         case "google": "Google Health"
         case "ultrahuman": "Ultrahuman"
+        case "whoop": "WHOOP"
         default: L10n.tr("Automaticky")
         }
     }

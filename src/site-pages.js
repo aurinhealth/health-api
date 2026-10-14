@@ -343,7 +343,8 @@ export function overviewPage(request) {
   const sources = [['Apple Zdraví', 'Apple Health', `<span class="logo-tile health-red">${icon('heart')}</span>`],
     ['Google Health', 'Google Health', '<span class="logo-tile google">G</span>'],
     ['Intervals.icu', 'Intervals.icu', '<span class="logo-tile icu">i.icu</span>'],
-    ['Prsten Ultrahuman', 'Ultrahuman Ring', '<span class="logo-tile uh">U</span>']]
+    ['Prsten Ultrahuman', 'Ultrahuman Ring', '<span class="logo-tile uh">U</span>'],
+    ['WHOOP', 'WHOOP', '<span class="logo-tile uh">W</span>']]
     .map(([cs, en, logo]) => `<div class="source">${logo}<span>${t(cs, en)}</span><span class="ok">${icon('check')}</span></div>`).join('');
   return sitePage({lang, device, origin, path: '/',
     title: t('Aurin · trénuj podle toho, jak se dnes máš', 'Aurin · train for how you feel today'),
@@ -393,7 +394,7 @@ ${today}
 <div class="graph" aria-hidden="true">${graph}</div>
 <p class="note">${t('Vybráno AI z knihovny podle dnešní připravenosti.', 'Picked by AI from the library for today’s readiness.')}</p>
 </div>
-<div class="chips"><span>${t('Trénink dne od kouče', 'Coach’s pick of the day')}</span><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Plán týdne sám nebo od AI', 'Week plan by you or the AI')}</span><span>${t('Revize po tréninku', 'Review after each workout')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span><span>${t('Jeden trénink z hodinek i Intervals.icu', 'One workout from watch and Intervals.icu')}</span><span>${t('Vlastní tréninky', 'Your own workouts')}</span><span>${t('Sdílení s přáteli', 'Share with friends')}</span></div>
+<div class="chips"><span>${t('Trénink dne od kouče', 'Coach’s pick of the day')}</span><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Plán týdne sám nebo od AI', 'Week plan by you or the AI')}</span><span>${t('Tréninkové plány s přehledem týdnů', 'Training plans with a week-by-week overview')}</span><span>${t('Revize po tréninku', 'Review after each workout')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span><span>${t('Jeden trénink z hodinek i Intervals.icu', 'One workout from watch and Intervals.icu')}</span><span>${t('Vlastní tréninky', 'Your own workouts')}</span><span>${t('Sdílení s přáteli', 'Share with friends')}</span></div>
 </div>
 </div></section>
 
@@ -498,6 +499,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <p>Two optional permissions are asked for separately: reading your date of birth from your Google Account, to fill in your age, and writing your weight to Google Health.</p>
 <p><strong>Intervals.icu</strong>, only if you connect it with your API key: your activities and their details, planned workouts and events, wellness data and sport settings.</p>
 <p><strong>Ultrahuman</strong>, only if you connect your Ultrahuman Ring: your sleep and its stages, heart rate variability, resting heart rate, skin temperature deviation and VO2max, to work out your readiness. Aurin only reads this data, never passes it on to other services, and deletes it when you disconnect the ring.</p>
+<p><strong>WHOOP</strong>, only if you connect your WHOOP account: your sleep and its stages, resting heart rate, heart rate variability, breathing rate and blood oxygen, to work out your readiness. Aurin only reads this data, never passes it on to other services, and deletes it when you disconnect WHOOP.</p>
 <p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training), food and drinks, workouts and how they went, notes, your journal answers (such as alcohol, caffeine, sauna or how you felt), and your conversations with the assistant.</p>
 <p><strong>On your device:</strong> a sign-in cookie valid for up to 30 days, a short-lived cookie that protects signing in, cookies with your theme and language and, in the browser’s storage, a copy of the last loaded day and a few display settings so the app opens instantly, and, once you add or use a passkey, your email with the passkey’s identifier, so this device signs you in with it instead of sending a code. We use no advertising or tracking cookies.</p>
 <p><strong>Technical logs:</strong> our hosting provider records technical details of requests (such as time, IP address, page and errors) to keep the service running and secure. These logs are kept for a few days.</p>
@@ -591,6 +593,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <p>Dvě oprávnění jsou nepovinná a žádáme o ně zvlášť: čtení data narození z tvého účtu Google, aby se doplnil věk, a zápis váhy do Google Health.</p>
 <p><strong>Intervals.icu</strong>, jen když ho připojíš svým klíčem API: tvoje aktivity a jejich podrobnosti, plánované tréninky a události, wellness údaje a nastavení sportů.</p>
 <p><strong>Ultrahuman</strong>, jen když připojíš prsten Ultrahuman: tvůj spánek a jeho fáze, variabilitu srdečního tepu, klidový tep, odchylku teploty kůže a VO2max, z nichž počítáme připravenost. Aurin tato data jen čte, nikomu dalšímu je nepředává a po odpojení prstenu je smaže.</p>
+<p><strong>WHOOP</strong>, jen když připojíš účet WHOOP: tvůj spánek a jeho fáze, klidový tep, variabilitu srdečního tepu, dechovou frekvenci a okysličení krve, z nichž počítáme připravenost. Aurin tato data jen čte, nikomu dalšímu je nepředává a po odpojení WHOOPu je smaže.</p>
 <p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink), jídlo a pití, tréninky a jejich hodnocení, poznámky, odpovědi v deníku (třeba alkohol, kofein, sauna nebo jak ti bylo) a konverzace s asistentem.</p>
 <p><strong>Ve tvém zařízení:</strong> cookie přihlášení s platností nejvýš 30 dní, krátkodobá cookie, která chrání přihlašování, cookies s vybraným vzhledem a jazykem a v úložišti prohlížeče kopie naposledy načteného dne a několik nastavení zobrazení, aby se aplikace otevřela hned, a když si přidáš nebo použiješ přístupový klíč, tvůj e-mail s označením klíče, aby tě zařízení přihlásilo jím a nemuselo posílat kód. Reklamní ani sledovací cookies nepoužíváme.</p>
 <p><strong>Technické záznamy:</strong> náš poskytovatel hostingu zaznamenává technické údaje o požadavcích (třeba čas, IP adresu, stránku a chyby), aby služba fungovala a byla bezpečná. Tyto záznamy se uchovávají několik dní.</p>
