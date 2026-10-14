@@ -131,17 +131,17 @@ export function fatigueDoses({ sets = [], activities = [], now }) {
     const at = Math.min(now, endOf(date));
     if (!Number.isFinite(at)) continue;
     const effort = setEffort(s.rpe), failure = isFailure(s.rpe), key = "gym:" + date;
-    if (!sources.has(key)) sources.set(key, { kind: "gym", date, at, muscles: {} });
+    if (!sources.has(key)) sources.set(key, { key, kind: "gym", date, at, muscles: {} });
     const source = sources.get(key);
     for (const [muscle, share] of Object.entries(muscles)) {
-      doses.push({ at, muscle, dose: share * effort, failure, estimated: false, source: key });
+      doses.push({ at, muscle, dose: share * effort, failure, estimated: false, source: key, exercise: s.exercise });
       source.muscles[muscle] = (source.muscles[muscle] || 0) + share * effort;
     }
   }
   activities.forEach((a, i) => {
     const kind = a.kind || activityKind(a);
     if (!["ride", "run", "walk"].includes(kind) || !Number.isFinite(a.end) || a.end > now) return;
-    const key = "activity:" + i, source = { kind, date: localDate(new Date(a.end)), at: a.end, distance: a.distance, minutes: a.minutes, muscles: {} };
+    const key = "activity:" + i, source = { key, kind, date: localDate(new Date(a.end)), at: a.end, distance: a.distance, minutes: a.minutes, muscles: {} };
     for (const e of muscleEvents({ activities: [{ ...a, date: source.date }] })) {
       const muscle = e.muscle === "hips" ? "glutes" : e.muscle, dose = e.load / SET_LOAD * (kind === "ride" ? RIDE_SHARE : 1);
       doses.push({ at: a.end, muscle, dose, failure: false, estimated: true, source: key });
@@ -191,6 +191,32 @@ function sourceTitle(s) {
   return name + " " + (minutes >= 60 ? Math.floor(minutes / 60) + " h" + (minutes % 60 ? " " + (minutes % 60) + " min" : "") : minutes + " min");
 }
 
+// What tired one muscle, the biggest part first: each gym exercise (with its
+// sets) or ride, run and walk that still makes up at least a tenth of the
+// muscle's fatigue now, at most three; main when it is half or more.
+const CAUSE_FROM = 0.1;
+export function muscleCauses(doses, sources, muscle, now, today) {
+  const own = doses.filter(d => d.muscle === muscle && d.at <= now);
+  const total = fatigueAt(own, now);
+  if (total <= 0) return [];
+  const groups = new Map();
+  for (const d of own) {
+    const key = d.source + "|" + (d.exercise || "");
+    if (!groups.has(key)) groups.set(key, { source: d.source, exercise: d.exercise || null, doses: [] });
+    groups.get(key).doses.push(d);
+  }
+  const bySource = new Map(sources.map(s => [s.key, s]));
+  return [...groups.values()]
+    .map(g => ({ g, part: fatigueAt(g.doses, now) / total }))
+    .filter(x => x.part >= CAUSE_FROM && bySource.has(x.g.source))
+    .sort((a, b) => b.part - a.part)
+    .slice(0, 3)
+    .map(({ g, part }) => {
+      const s = bySource.get(g.source);
+      return { title: g.exercise || sourceTitle(s), sets: g.exercise ? g.doses.length : null, day: dayText(s.date, today), main: part >= 0.5, estimated: !g.exercise };
+    });
+}
+
 // The screen: every muscle with its state, the most tired first, and what
 // tired them in the last 3 days. sets: completed WORK sets {workout_date,
 // exercise, rpe, updated_at}; activities: {kind, end (ms), tss, durationHours
@@ -202,7 +228,7 @@ export function muscleFatigue({ sets = [], activities = [], now, today }) {
     return {
       id, label: muscleLabel(id), state: m.state, level: Math.round(Math.min(1, m.fatigue / FULL) * 100) / 100,
       hours: m.hours, readyAt: readyAt ? readyAt.toISOString() : null, readyDate: readyAt ? localDate(readyAt) : null,
-      estimated: m.estimated, order
+      estimated: m.estimated, from: m.state === "rested" ? [] : muscleCauses(doses, sources, id, now, today), order
     };
   }).sort((a, b) => b.hours - a.hours || b.level - a.level || a.order - b.order).map(({ order, ...m }) => m);
   const from = shiftDate(today, -3);

@@ -20,6 +20,18 @@ struct MuscleFatigue: Decodable {
         /// The user's day the muscle is rested on.
         let readyDate: String?
         let estimated: Bool?
+        /// What tired it, the biggest part first (at most three).
+        let from: [Cause]?
+    }
+
+    /// One gym exercise (with its sets) or a ride, run or walk.
+    struct Cause: Decodable, Hashable {
+        let title: String
+        let sets: Int?
+        let day: String
+        /// Half or more of the muscle's fatigue.
+        let main: Bool
+        let estimated: Bool?
     }
 
     struct Source: Decodable, Hashable {
@@ -38,6 +50,13 @@ struct MuscleFatigue: Decodable {
 
     /// The muscles that are not rested yet, the most tired first.
     var tired: [Muscle] { (muscles ?? []).filter { $0.state != "rested" } }
+
+    /// The figure's colours by muscle id.
+    var figureColors: [String: Color] {
+        var colors: [String: Color] = [:]
+        for muscle in muscles ?? [] { if let color = muscle.figureColor { colors[muscle.id] = color } }
+        return colors
+    }
 }
 
 extension MuscleFatigue.Muscle {
@@ -48,6 +67,9 @@ extension MuscleFatigue.Muscle {
         default: return Palette.green
         }
     }
+
+    /// The colour on the figure: none for a rested muscle (it stays grey).
+    var figureColor: Color? { state == "rested" ? nil : color }
 
     /// The colour of the text on the right (amber reads better than the bar's colour).
     var textColor: Color {

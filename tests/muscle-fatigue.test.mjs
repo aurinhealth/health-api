@@ -92,6 +92,22 @@ test("what tired the muscles in the last 3 days, in Czech and English", () => {
   assert.deepEqual(muscleFatigue({ sets: sets("DB bench press", 4), now, today }).recent.map(x => x.title), ["Posilovna, horní část těla"]);
 });
 
+test("what tired each muscle: the exercise with its sets, or the run", () => {
+  const r = muscleFatigue({
+    sets: [...sets("Barbell back squat", 4, { date: "2026-10-07", at: "2026-10-07 16:00:00" }), ...sets("Adduction machine", 3, { date: "2026-10-07", at: "2026-10-07 16:00:00" })],
+    activities: [{ kind: "run", type: "Run", end: hours(3), tss: 80, distance: 14000, minutes: 72 }],
+    now, today
+  });
+  const quads = muscle(r, "quads");
+  assert.deepEqual(quads.from[0], { title: "Barbell back squat", sets: 4, day: "včera", main: true, estimated: false });
+  assert.ok(quads.from.some(c => c.title === "Běh 14 km" && c.sets === null && c.estimated));
+  // The adduction machine leads the inner thighs, the squats help.
+  const adductors = muscle(r, "adductors");
+  assert.deepEqual(adductors.from.map(c => c.title), ["Adduction machine", "Barbell back squat"]);
+  assert.ok(adductors.from.length <= 3);
+  assert.deepEqual(muscle(r, "chest").from, []);
+});
+
 test("loads the user's own sets and activities, a watch's copy of a run once, the gym time from the watch", async () => {
   const raw = createD1();
   raw.sqlite.exec(`CREATE TABLE strength_sets (user_id INTEGER, workout_date TEXT, exercise TEXT, rpe REAL, completed INTEGER, type TEXT, updated_at TEXT);

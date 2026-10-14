@@ -2015,3 +2015,15 @@
 "Posilovna, nohy" = "Gym, legs";
 "Posilovna, horní část těla" = "Gym, upper body";
 "pondělí" = "Monday";
+
+/* Trénink → Svaly: the figure and a tapped muscle (MuscleViews.swift) */
+"zepředu" = "front";
+"zezadu" = "back";
+"unavené" = "tired";
+"zotavuje se" = "recovering";
+"Z čeho" = "What tired it";
+"hlavně" = "mostly";
+"trochu" = "a little";
+"1 série" = "1 set";
+"%@ série" = "%@ sets";
+"%@ sérií" = "%@ sets";
