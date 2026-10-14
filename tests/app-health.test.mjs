@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildHealth, readinessParts } from "../src/app-health.js";
+import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
 
 const DATE = "2026-10-08";
 const day = offset => new Date(Date.parse(DATE + "T12:00:00Z") + offset * 86400000).toISOString().slice(0, 10);
@@ -77,6 +78,15 @@ test("Readiness parts: penalties for breathing and temperature", () => {
   const parts = readinessParts({ score: 50, components: { hrv: { score: 70 }, respiration: { elevated: true }, skinTemp: { elevated: true } } });
   assert.deepEqual(parts, [{ key: "hrv", points: 0 }, { key: "respiration", points: -10 }, { key: "skinTemp", points: -10 }]);
   assert.deepEqual(readinessParts({ score: null, components: {} }), []);
+});
+
+// "Tep −8" on Health is readiness points; the coach gets the same row so it
+// doesn't read it as beats per minute (TestFlight feedback 2026-10-14).
+test("the coach gets the readiness parts Health shows", () => {
+  const h = buildHealth(input);
+  const coach = buildCyclingCoachV2({ date: DATE, health: { wellness, sleep: sessions }, fitness: { wellness: intervals }, profile: input.profile });
+  assert.equal(coach.readiness.todayScore, h.readiness.score);
+  assert.deepEqual(coach.readiness.todayParts, h.readiness.parts);
 });
 
 test("Health stays usable without data", () => {

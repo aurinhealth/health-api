@@ -63,6 +63,7 @@ struct CoachView: View {
                         }
                         .padding(20)
                     }
+                    .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages) { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
                 }
                 inputBar
