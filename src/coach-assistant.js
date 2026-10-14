@@ -307,7 +307,7 @@ export function compactWellness(rows,{date=null,days=14}={}){
 
 // The long-term facts for the chat, as { trends } or nothing.
 export function coachTrends({date,fitness,health,profile}){
-  const trends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions:health?.sleep,age:profile?.age??null});
+  const trends=trendFacts({date,wellness:health?.wellness,intervals:fitness?.wellness,sessions:health?.sleep,age:profile?.age??null,sleepGoal:profile?.sleepGoal??null});
   return trends?{trends}:{};
 }
 export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null}) {

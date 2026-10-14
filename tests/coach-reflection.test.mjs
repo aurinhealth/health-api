@@ -123,3 +123,17 @@ test("RPE feedback starts the coach's note in the background", () => {
   assert.match(entry, /url\.pathname==='\/app\/api\/coach\/reflections'/);
   assert.match(entry, /coachContext\(\{\.\.\.inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState,/);
 });
+
+test("the note after a workout sees HRV and resting HR from the watch, the readiness and the gym sets", async () => {
+  const { fillWellness, reflectionSignals, reflectionInput } = await import("../src/coach-reflection.js");
+  const days = Array.from({ length: 15 }, (_, i) => new Date(Date.parse("2026-10-14T12:00:00Z") - i * 86400000).toISOString().slice(0, 10));
+  const watch = days.map((id, i) => ({ id, hrv: i === 0 ? 40 : 60, restingHR: 50 }));
+  const wellness = fillWellness([{ id: "2026-10-14", ctl: 50, atl: 60 }], watch);
+  assert.equal(wellness.find(r => r.id === "2026-10-14").ctl, 50);
+  assert.equal(wellness.find(r => r.id === "2026-10-14").hrv, 40);
+  const signals = reflectionSignals({ date: "2026-10-14", wellness, activities: [], sleep: [] });
+  assert.ok(signals.some(s => s.id === "hrv_low"));
+  const input = reflectionInput({ date: "2026-10-14", feedback: {}, workout: {}, signals, activities: [], wellness, sleep: [], food: [], recentFeedback: [], previous: [], readiness: { score: 40, zone: "yellow", parts: [], flags: [] }, gym: [{ exercise: "Leg press", set: 1, kg: 100, reps: 10, rpe: 8 }] });
+  assert.equal(input.readiness.zone, "yellow");
+  assert.equal(input.gymSets[0].exercise, "Leg press");
+});
