@@ -107,6 +107,8 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
   const system = String(filters.system || "").toLowerCase(), duration = n(filters.durationMinutes), durationTolerance = n(filters.durationTolerance, 15);
   // A soft length (the coach's suggestion) only ranks; nothing is filtered out by length.
   const softDuration = filters.durationSoft === true && duration != null, durationScale = softDuration ? Math.max(30, duration * .6) : durationTolerance;
+  // The day's time in the week plan caps a soft (coach's) length: nothing longer is offered.
+  const maxDuration = n(filters.maxDurationMinutes);
   const targetLoad = n(filters.targetLoad), loadTolerance = n(filters.loadTolerance, 35), maxDifficulty = n(filters.maxDifficulty), minDifficulty = n(filters.minDifficulty);
   const readiness = String(context.readiness || "green").toLowerCase(), hardDays = n(context.hardBikeDaysRolling7d, 0), phase = String(context.phase || "").toLowerCase();
   const recentFamilies = new Set(context.recentFamilies || []);
@@ -118,6 +120,7 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
   const reachable = 25 + (system ? 25 : preferred ? 15 : 0) + (duration != null ? durationWeight : 0) + (targetLoad != null ? 12 : 0) + 18;
   const ranked = workouts.filter(w => (!system || w.primary_system === system || w.secondary_system === system)
     && (duration == null || softDuration || Math.abs(n(w.duration_minutes, 0) - duration) <= durationTolerance)
+    && (maxDuration == null || n(w.duration_minutes, 0) <= maxDuration)
     && (maxDifficulty == null || n(w.difficulty, 99) <= maxDifficulty)
     && (minDifficulty == null || n(w.difficulty, 0) >= minDifficulty)
     && (filters.environment !== "outdoor" || !n(w.indoor_only, 0))

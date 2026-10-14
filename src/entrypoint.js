@@ -1736,6 +1736,9 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const freeMinutes=free&&filters.environment==='indoor'?indoorMinutes(sport,free):free,dayMinutes=coachMinutes&&freeMinutes?Math.min(coachMinutes,freeMinutes):coachMinutes||freeMinutes;
       const autoDuration=filters.durationMinutes==null&&dayMinutes>0?{durationMinutes:dayMinutes}:null;
       if(autoDuration)Object.assign(filters,{durationMinutes:autoDuration.durationMinutes,durationSoft:true});
+      // Doporučená keeps to the day's time in the week plan (a length the athlete picks does not).
+      const dayLimit=filters.durationMinutes==null||autoDuration?trainingBudget(prefs,date,null):null;
+      if(dayLimit>0)filters.maxDurationMinutes=dayLimit;
       // With no type chosen, the type the coach recommends for the day ranks first.
       const coachKind=coach.recommendation?.session?.kind;if(!filters.system&&coachKind)filters.preferredSystem=coachKind==='long_endurance'?'endurance':coachKind==='vo2'?'vo2max':coachKind;
       const [result,thresholds]=await Promise.all([searchWorkoutLibrary(env.DB,filters,context),cached(env,ctx,'thresholds',()=>athleteThresholds(env))]);

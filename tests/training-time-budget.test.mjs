@@ -178,3 +178,13 @@ test('the library ranks by the coach\'s session, as the proposal above it, not b
   assert.equal(list.data.coachPick.system, kind === 'long_endurance' ? 'endurance' : kind === 'vo2' ? 'vo2max' : kind);
   assert.ok(Math.abs(list.data.workouts[0].duration_minutes - session) <= 30, `top workout ${list.data.workouts[0].duration_minutes} min vs ${session}`);
 });
+
+test('Doporučená in the library keeps to the day\'s time in the week plan; a picked length does not', async () => {
+  const app = await api(45);
+  const list = await app.get('/app/api/workouts/search?sport=ride&environment=outdoor&limit=40');
+  assert.equal(list.status, 200, list.data.message);
+  assert.ok(list.data.workouts.length > 0);
+  assert.ok(list.data.workouts.every(w => w.duration_minutes <= 45), list.data.workouts.map(w => w.duration_minutes).join(','));
+  const picked = await app.get('/app/api/workouts/search?sport=ride&environment=outdoor&limit=40&duration=120&durationTolerance=15');
+  assert.ok(picked.data.workouts.some(w => w.duration_minutes > 45));
+});
