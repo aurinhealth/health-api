@@ -1902,6 +1902,36 @@
 "Co to je? Třeba „tyčinka Margot“" = "What is it? E.g. \"Snickers bar\"";
 "Odhadnout AI" = "Estimate with AI";
 "AI ten kód nezná. Napiš, co to je, a odhadne to." = "The AI doesn't know this code. Write what it is and it will estimate it.";
+"Trénink na míru" = "Tailored training";
+"Zkušenost" = "Experience";
+"Protažení na konci" = "Stretching at the end";
+"Protažení" = "Stretching";
+"Svaly" = "Muscle";
+"začátečník" = "beginner";
+"pravidelně" = "regular";
+"zkušený" = "experienced";
+"Síla a svaly" = "Strength and muscle";
+"Svaly a kondice" = "Muscle and fitness";
+"podle sportu" = "from your sport";
+"na stranu" = "per side";
+"levá" = "left";
+"pravá" = "right";
+"Spustit" = "Start";
+"Protažení hotovo" = "Stretching done";
+"Připrav se" = "Get ready";
+"Drž" = "Hold";
+"Pohyb dělej v klidu a bez bolesti, má táhnout, ne bolet." = "Move calmly and without pain; it should pull, not hurt.";
+"Rozcvička hotová" = "Warm-up done";
+"Cvič" = "Go";
+"Rozcvička" = "Warm-up";
+"s kardiem" = "with cardio";
+"bez kardia" = "without cardio";
+"+%@ min navíc" = "+%@ min extra";
+"Celkem %@ min" = "%@ min in total";
+"%@ + %@ navíc" = "%@ + %@ extra";
+"+ %@ min rozcvička" = "+ %@ min warm-up";
+"+ %@ min protažení" = "+ %@ min stretching";
+"Posilování" = "Lifting";
 
 /* Vybrat: several foods or drinks at once */
 "Vybrat" = "Select";
