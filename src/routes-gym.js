@@ -108,10 +108,11 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       const body=await request.json().catch(()=>({})),text=String(body.request||'').trim().slice(0,300);
       if(!text)throw new Error(L('Napiš, co v tréninku změnit.', 'Write what to change in the workout.'));
       const rows=cleanGymRows(body.rows,new Set([...catalogNames(),...(Array.isArray(body.rows)?body.rows:[]).map(r=>String(r?.[1]??'').trim()).filter(Boolean)]));
-      // What the athlete's equipment allows, the session's time and what they said about recent sessions.
-      const [history,taste,setup,ratings]=await Promise.all([getStrengthHistory(env.DB,300).catch(()=>[]),exercisePreferences(env.DB),trainingSetup(env.DB).catch(()=>null),recentWorkoutRatings(env.DB,{sport:'strength',since:shiftDate(localToday(),-28)})]);
+      // What the athlete's equipment allows, the session's time, what they said about recent sessions
+      // and the lasting wishes the chat remembered ("no squats").
+      const [history,taste,setup,ratings,state]=await Promise.all([getStrengthHistory(env.DB,300).catch(()=>[]),exercisePreferences(env.DB),trainingSetup(env.DB).catch(()=>null),recentWorkoutRatings(env.DB,{sport:'strength',since:shiftDate(localToday(),-28)}),getAthleteState(env.DB).catch(()=>({}))]);
       const minutes=Number(body.minutes)>0&&Number(body.minutes)<=240?Number(body.minutes):null;
-      const result=await adjustGymPlan(env,{rows,request:text,history,taste,ratings,equipment:setup?name=>fitsEquipment(name,setup):null,dumbbells:setup?.dumbbellWeights||null,minutes});
+      const result=await adjustGymPlan(env,{rows,request:text,history,taste:{...taste,memories:state.memories||[]},ratings,equipment:setup?name=>fitsEquipment(name,setup):null,dumbbells:setup?.dumbbellWeights||null,minutes});
       const muscles=Object.fromEntries([...new Set(result.rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]));
       return Response.json({status:'ok',...result,muscles},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.limit?error.message:error.ai?L('AI úprava se nepovedla: ', 'The AI edit failed: ')+error.message:error.message},{status:error.limit?(error.status||429):error.ai?502:400})}

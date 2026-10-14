@@ -1,6 +1,7 @@
 // A gym plan changed by the athlete's words ("bez nohou", "kratší") and the
 // rows a proposal is confirmed with: only exercises from the gym's catalog
 // (or already in the plan), the plan's own columns, no logged results.
+import { MEMORY_RULE } from './athlete-state.js';
 import { L } from './lang.js';
 import { callOpenAI, lightModel } from './coach-assistant.js';
 import { gymExerciseCatalog, gymLoadEstimate } from './gym-catalog.js';
@@ -130,8 +131,8 @@ export async function adjustGymPlan(env, { rows, request, history = [], taste = 
   const items = gymExerciseCatalog().filter(e => inPlan.has(e.name) || !equipment || equipment(e.name)), catalog = new Map(items.map(e => [e.name, e]));
   const recent = {};
   for (const h of history) if (h?.exercise && !recent[h.exercise] && Number(h.actual_kg) > 0) recent[h.exercise] = { kg: Number(h.actual_kg), reps: Number(h.actual_reps) || null, date: String(h.workout_date || '').slice(0, 10) };
-  const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent, liked: taste.liked || [], disliked: taste.disliked || [], minutes: Number(minutes) > 0 ? Number(minutes) : null, ratings });
-  const params = { instructions: adjustInstructions(), input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) };
+  const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent, liked: taste.liked || [], disliked: taste.disliked || [], minutes: Number(minutes) > 0 ? Number(minutes) : null, ratings, ...(taste.memories?.length ? { preferenceMemory: taste.memories } : {}) });
+  const params = { instructions: adjustInstructions() + MEMORY_RULE(), input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) };
   const r = ask ? await ask(env, { feature: "gym-adjust", ...params }) : await callOpenAI(env, { feature: "gym-adjust", ...params });
   const data = JSON.parse(r.text), out = fitGymMinutes(snapGymDumbbells(fillGymLoads(rowsFromModel(data.exercises, rows, catalog), history), dumbbells), minutes);
   if (!out.length) throw new Error(L('Úpravu se nepodařilo připravit, zkus ji napsat jinak.', 'The change couldn\'t be prepared; try wording it differently.'));

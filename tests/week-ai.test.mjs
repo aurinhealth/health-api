@@ -2,6 +2,7 @@
 // answer is checked before the app shows it.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { sanitizeWeekDays, gymNote, lockPlanDays, itemsFromDays, proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, applyRequests } from "../src/week-ai.js";
 
 const start = "2026-10-12", today = "2026-10-13";
@@ -169,4 +170,13 @@ test("Upravit s AI counts the day's other sessions against its free time", async
   const weekDays = ["2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"];
   const r = await adjustByText({}, { session: { date: "2026-10-17", sport: "ride", minutes: 60, environment: "outdoor", kind: "endurance" }, request: "Dej to na úterý", weekDays, otherSessions: [{ date: "2026-10-13", sport: "run", kind: "endurance", minutes: 45 }], prefs, today }, { ask });
   assert.deepEqual([r.date, r.minutes], ["2026-10-13", 45]);
+});
+
+test("the athlete's remembered wishes reach the week plan and the change of a session", async () => {
+  const calls = [];
+  const ask = async (env, p) => { calls.push(p); return { text: JSON.stringify({ date: "2026-10-17", sport: "ride", minutes: 60, environment: "outdoor", kind: "endurance", note: "" }) }; };
+  await adjustByText({}, { session: { date: "2026-10-17", sport: "ride", minutes: 70, environment: "outdoor", kind: "endurance" }, request: "Kratší", weekDays: ["2026-10-17"], prefs, today, preferenceMemory: ["žádný běh"] }, { ask });
+  assert.match(calls[0].input, /žádný běh/);
+  assert.match(calls[0].instructions, /preferenceMemory/);
+  assert.match(readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8"), /preferenceMemory:state\.memories\?\.length/);
 });
