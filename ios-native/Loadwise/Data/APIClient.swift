@@ -106,7 +106,7 @@ final class APIClient: @unchecked Sendable {
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                     request.setValue("application/x-ndjson, application/json", forHTTPHeaderField: "Accept")
                     request.timeoutInterval = 180
-                    var body: JSONObject = ["message": .string(message), "stream": .bool(true), "mode": .string("coach"),
+                    var body: JSONObject = ["message": .string(message), "stream": .bool(true), "mode": .string("auto"),
                                             "appContext": .object(["view": .string(view), "date": .string(Self.localToday())])]
                     if let chatId { body["chatId"] = .number(Double(chatId)) }
                     request.httpBody = try JSONEncoder().encode(body)

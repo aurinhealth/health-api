@@ -419,7 +419,7 @@ ${today}
 <div class="card tile" style="color:var(--amber)">${icon('barcode')}<span style="color:var(--text)">${t('Kód', 'Barcode')}</span></div>
 <div class="card tile" style="color:var(--blue)">${icon('drop')}<span style="color:var(--text)">${t('Pití', 'Drinks')}</span></div>
 </div>
-<div class="chips"><span>${t('AI odhad', 'AI estimate')}</span><span>${t('Jídlo z jiných aplikací', 'Food from other apps')}</span><span>${t('Hromadné kopírování a přesun', 'Copy and move in bulk')}</span></div>
+<div class="chips"><span>${t('AI odhad', 'AI estimate')}</span><span>${t('Jídlo z jiných aplikací', 'Food from other apps')}</span><span>${t('Hromadné kopírování a přesun', 'Copy and move in bulk')}</span><span>${t('Zápis větou kouči', 'Log it by telling the coach')}</span></div>
 </div>
 </div></section>
 
