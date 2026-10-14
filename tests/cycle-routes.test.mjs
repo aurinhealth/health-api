@@ -80,3 +80,17 @@ test("turning on 'Coach knows my cycle' records when, and turning it off clears 
   assert.equal((await saveCycleSettings(db, { adaptTraining: false })).shareWithCoachAt, on.shareWithCoachAt);
   assert.equal((await saveCycleSettings(db, { shareWithCoach: false })).shareWithCoachAt, null);
 });
+
+test("cycle tracking is open whatever the profile's sex", async () => {
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { scopedDb } = await import("../src/tenancy.js");
+  const { handleCycleApi } = await import("../src/routes-cycle.js");
+  const env = { DB: scopedDb(createD1(), 1), USER_ID: 1 };
+  const url = new URL("https://aurin.health/app/api/cycle/settings");
+  const post = new Request(url, { method: "POST", headers: { Origin: url.origin }, body: JSON.stringify({ enabled: true }) });
+  const saved = await (await handleCycleApi(post, env, null, url, { signedIn: true })).json();
+  assert.equal(saved.settings.enabled, true);
+  const getUrl = new URL("https://aurin.health/app/api/cycle");
+  const view = await (await handleCycleApi(new Request(getUrl), env, null, getUrl, { signedIn: true })).json();
+  assert.equal(view.available, true);
+});
