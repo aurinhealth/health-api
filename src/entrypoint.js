@@ -71,6 +71,7 @@ import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevisio
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { illnessWarning } from './illness-check.js';
 import { readinessFor } from './readiness.js';
+import { lockReadiness } from "./readiness-lock.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { loadMuscleFatigue } from "./muscle-fatigue.js";
 import { readGymPlan, ensureGymPlans } from "./gym-plan-store.js";
@@ -397,6 +398,7 @@ async function todayReadiness(env, ctx, date, { fresh = false } = {}) {
     dashboardProfile(env).catch(() => null),
     getCheckin(env.DB, date).catch(() => null)
   ]);
+  if (date === localToday() && profile) ctx.waitUntil(lockReadiness(env.DB, { date, health, fitness, sleep, profile }).catch(() => false));
   return buildToday({ date, hour: localHour(), health, fitness, sleep, profile: profile || {}, checkin }).readiness;
 }
 
@@ -1481,6 +1483,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const trainingPlan=summary?.started?{name:summary.name,week:summary.week,weeksCount:summary.weeksCount,phaseLabel:summary.phaseLabel,raceDate:summary.raceDate,paused:summary.paused,canUndo:Boolean(active.undo),proposal:proposal?{type:proposal.type,title:proposal.title,text:proposal.text,options:proposal.options,days:proposal.days||null,button:proposal.button}:null}:null;
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
       const problems=connectionProblems(await connectionStatus(env).catch(()=>null));
+      if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
       applyEnergyBudget(daily,profile,health);
       return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
         recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery}}),{headers:{'Cache-Control':'no-store'}});
@@ -1519,6 +1522,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         // Muscle mass from a scale through Apple Health (lean body mass).
         env.DB.prepare("SELECT sample_time,value_numeric FROM health_datapoints WHERE user_id=? AND data_type='lean-body-mass' AND record_role='primary' AND sample_time>=? ORDER BY sample_time LIMIT 400").bind(env.USER_ID,shiftDate(date,-60)).all().then(r=>r.results||[]).catch(()=>[])
       ]);
+      if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
       return Response.json(buildHealth({date,hour:date===localToday()?localHour():null,health,fitness,sleep,weight,profile:profile||{},checkin,muscle}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
