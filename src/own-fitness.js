@@ -41,14 +41,14 @@ export async function loadAthlete(env,to,ctx=null){
   return {ftp:thresholds.ftp,lthr:thresholds.lthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null),sex:profile?.sex||null};
 }
 // With Intervals.icu connected: the load of the workouts only the watch
-// recorded (Apple Health, Google Health), as rows to add to its CTL and ATL
+// recorded (Apple Health, Google Health) or Wahoo brought, as rows to add to its CTL and ATL
 // (training-load.js watchOnly, addLoads); null when there are none.
 export async function watchOnlyFitness(env,ctx,from,to){
   const warmup=120,start=shiftDate(from,-warmup);
   const rows=await loadActivityRows(env,start,to);
   const byActivity=new Map(),watch=[],intervals=[];
   for(const row of rows){const a=activityFromRow(row);if(!a)continue;byActivity.set(a,row);
-    if(row.source_family==='google-wearables'||row.source_family==='apple-health')watch.push(a);else if(row.source_family==='intervals')intervals.push(a);}
+    if(row.source_family==='google-wearables'||row.source_family==='apple-health'||row.source_family==='wahoo')watch.push(a);else if(row.source_family==='intervals')intervals.push(a);}
   const extra=watchOnly(dedupeActivities(watch),intervals);
   if(!extra.length)return null;
   return loadSeries(dailyLoads(sessionsFrom(extra,byActivity,[]),await loadAthlete(env,to,ctx)),{from,to,warmup});

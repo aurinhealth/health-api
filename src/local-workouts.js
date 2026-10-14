@@ -1,6 +1,8 @@
 import { L } from './lang.js';
 import { intervalsAuthorization } from './intervals-auth.js';
 import { readSyncPrefs } from './sync-destinations.js';
+import { syncWahooWorkout, readWahooTokens } from './wahoo.js';
+import { athleteThresholds } from './intervals-athlete.js';
 // App-owned events and an outbox; providers are destinations, not storage.
 export async function ensureLocalWorkouts(db){
   await db.prepare("CREATE TABLE IF NOT EXISTS local_workouts (user_id INTEGER NOT NULL,id TEXT NOT NULL,event_key TEXT NOT NULL,event_json TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'scheduled',revision INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,id),UNIQUE(user_id,event_key))").run();
@@ -28,7 +30,18 @@ export async function storeLocalEvent(db,event,{key=event.external_id,id=null}={
 export async function localWorkout(db,id){
   await ensureLocalWorkouts(db);return db.prepare('SELECT * FROM local_workouts WHERE user_id=? AND id=?').bind(db.userId,String(id).replace(/^planned:/,'' )).first();
 }
+// The plan goes to Intervals.icu and to Wahoo (wahoo.js), each as connected
+// and chosen in Synchronizace. The answer is Intervals.icu's, or Wahoo's when
+// only Wahoo took it.
 export async function syncLocalWorkout(env,id,fetchImpl=fetch){
+  const intervals=await syncIntervalsWorkout(env,id,fetchImpl);
+  if(!readWahooTokens(env))return intervals;
+  const thresholds=await athleteThresholds(env,fetchImpl).catch(()=>null);
+  const wahoo=await syncWahooWorkout(env,id,{fetchImpl,thresholds}).catch(()=>({status:'error'}));
+  if(['not_connected','off'].includes(intervals.status)&&['synced','error'].includes(wahoo.status))return {...wahoo,destination:'wahoo'};
+  return {...intervals,wahoo:wahoo.status};
+}
+async function syncIntervalsWorkout(env,id,fetchImpl=fetch){
   const db=env.DB,row=await localWorkout(db,id);
   if(!row)return {status:'not_found'};
   if(!env.INTERVALS_API_KEY)return {status:'not_connected',message:L('Trénink je uložený v aplikaci. Intervals.icu není připojeno.', 'The workout is saved in the app. Intervals.icu isn\'t connected.')};
@@ -75,7 +88,7 @@ export async function retryWorkoutExports(env){
   await ensureLocalWorkouts(env.DB);
   if(!env.INTERVALS_API_KEY)return [];
   const rows=(await env.DB.prepare("SELECT local_id FROM workout_exports WHERE user_id=? AND provider='intervals' AND (status IN ('pending','error') OR (status='running' AND updated_at<datetime('now','-5 minutes'))) ORDER BY updated_at LIMIT 20").bind(env.DB.userId).all()).results;
-  const results=[];for(const row of rows)results.push(await syncLocalWorkout(env,row.local_id));return results;
+  const results=[];for(const row of rows)results.push(await syncIntervalsWorkout(env,row.local_id));return results;
 }
 export async function localExportIndex(db,userId=db.userId){
   await ensureLocalWorkouts(db);
