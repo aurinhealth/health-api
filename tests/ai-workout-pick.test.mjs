@@ -42,3 +42,11 @@ test("an answer outside the safe candidates, no consent or a failure keeps the r
   assert.equal((await aiWorkoutPick({ DB: scopedDb(createD1(), 2), USER_ID: 2, OPENAI_API_KEY: "test" }, generated, { minutes: 60, ask: never })).workout.id, "easy");
   assert.equal((await aiWorkoutPick(owner(), generated, { minutes: 60, ask: async () => { throw new Error("down"); } })).workout.id, "easy");
 });
+
+test("the pick knows the athlete's goal and race", async () => {
+  let prompt = null;
+  const ask = async (env, req) => { prompt = req.instructions; return { text: JSON.stringify({ id: "tempo", reason: "Připravenost 74." }) }; };
+  await aiWorkoutPick(owner(), generated, { minutes: 60, coach: { readiness: { status: "green", score: 74 } }, focus: { sport: "cycling", sportLabel: "Cyklistika", goal: "Zlepšit FTP", event: { name: "L'Etape", date: "2026-11-20", daysLeft: 37 } }, ask });
+  assert.match(prompt, /Zlepšit FTP/);
+  assert.match(prompt, /L'Etape/);
+});
