@@ -7,11 +7,13 @@ import {bumpCacheVersion} from './api-cache.js';
 import {retryWorkoutExports} from './local-workouts.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
+import {syncUltrahuman} from './ultrahuman.js';
 import {L} from './lang.js';
 const shiftDate=(date,days)=>new Date(Date.parse(date+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);
 
 export async function initialImport(env,ctx,{provider:onlyProvider,force=false}={}){
-  const providers=(env.CONNECTED_PROVIDERS||[]).filter(provider=>!onlyProvider||provider===onlyProvider);if(!providers.length)return {status:'idle'};
+  // Strava only receives, and Ultrahuman imported its history when it was connected (ultrahuman.js).
+  const providers=(env.CONNECTED_PROVIDERS||[]).filter(provider=>['google','intervals'].includes(provider)&&(!onlyProvider||provider===onlyProvider));if(!providers.length)return {status:'idle'};
   const runs=[];
   // Separate claims prevent a second connector from being lost during the first import.
   for(const provider of providers){
@@ -42,6 +44,7 @@ export async function recentDashboardImport(env,ctx){
   };
   if(providers.includes('google'))jobs.push(collect('google','/sync/google/recent'));
   if(providers.includes('intervals'))jobs.push(collect('intervals','/sync/intervals/recent'));
+  if(providers.includes('ultrahuman'))jobs.push(syncUltrahuman(env,{days:3}).then(r=>({source:'ultrahuman',status:r.status})).catch(()=>({source:'ultrahuman',status:'error'})));
   const results=await Promise.all(jobs);
   results.push(...await retryWorkoutExports(env).catch(()=>[{source:'exports',status:'error'}]));
   results.push(await collect('matching','/sync/match'));
