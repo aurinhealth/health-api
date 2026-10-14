@@ -94,6 +94,9 @@ struct TrainingContent: View {
                         .padding(.top, 20)
                 }
 
+                MuscleCard()
+                    .padding(.top, 20)
+
                 if let event = training.event {
                     EventCard(event: event)
                         .padding(.top, 28)

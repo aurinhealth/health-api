@@ -11,6 +11,7 @@ import { rideFtpFor } from './intervals-athlete.js';
 import { aiLanguageNote, L, lang } from './lang.js';
 import { assertAiAllowance, claimAiSlot, recordAiUsage } from './ai-usage.js';
 import { trendFacts } from './trend-facts.js';
+import { localDateTime } from './user-time.js';
 
 // The parts of the prompt that depend on the athlete's main sport (A5): the
 // priorities, the hard-days rule, what a plan lists and when gym legs are
@@ -200,6 +201,13 @@ function watchMetric(metrics,match){
 // rather than on the activity; the coach gets these numbers, not the record.
 // Watch sessions add theirs from metricsSummary, so a ride or run recorded only
 // by Apple Watch or a Fitbit still reaches the coach with distance and power.
+// When an activity ran ("07:02"–"07:58", the user's time) and where it is from
+// (google-wearables, apple-health, intervals, local = typed into Aurin), so the
+// coach can merge, delete or move it (activity-chat-edits.js).
+function activityClock(a){
+  const at=v=>v?localDateTime(v).slice(11,16)||undefined:undefined;
+  return {start:at(a.start),end:at(a.end),source:a.family||(/^(activity|merged):/.test(String(a.id||''))?'local':a.source)};
+}
 export function compactActivity(a={}){
   const p=a.payload&&typeof a.payload==='object'?a.payload:{},w=p.exercise?.metricsSummary&&typeof p.exercise.metricsSummary==='object'?p.exercise.metricsSummary:{};
   const intensity=first(a.intensityFactor,p.icu_intensity),distance=first(p.distance,watchMetric(w,/^distance/i));
@@ -207,7 +215,7 @@ export function compactActivity(a={}){
   const pace=run&&distance>=500&&hours>0?hours*3600/(distance/1000):null;
   const minutes=secs=>round(num(secs)/60);
   return compactObject({
-    id:a.id,name:a.name||p.name,type:a.type||p.type,durationHours:round(num(a.durationHours),2),tss:round(first(a.tss,p.icu_training_load)),
+    id:a.id,name:a.name||p.name,type:a.type||p.type,...activityClock(a),durationHours:round(num(a.durationHours),2),tss:round(first(a.tss,p.icu_training_load)),
     averagePower:round(first(a.averagePower,p.icu_average_watts,p.average_watts,watchMetric(w,/power/i))),normalizedPower:round(first(a.normalizedPower,p.icu_weighted_average_watts,p.weighted_average_watts)),
     averageHeartRate:round(first(a.averageHeartRate,p.average_heartrate,p.average_hr,watchMetric(w,/heart.*(avg|average)|(avg|average).*heart/i))),maxHeartRate:round(first(a.maxHeartRate,p.max_heartrate,watchMetric(w,/heart.*max|max.*heart/i))),
     // Intervals stores intensity as a percentage of FTP (75 = IF 0.75).
@@ -510,7 +518,8 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
   if(incomplete)answer=(answer?answer+'\n\n':'')+L(TRUNCATED_NOTE,'The answer was cut short. Write “continue” or narrow the question.');
   else if(!answer)answer=L('Odpověď se nepodařilo zpracovat. Zkus to prosím znovu.', 'The answer couldn\'t be processed. Please try again.');
   const visuals=Array.isArray(parsed?.visuals)?[...new Set(parsed.visuals.filter(v=>COACH_VISUALS.includes(v)))].slice(0,2):[];
-  return {answer,visuals,actions:Array.isArray(parsed?.actions)?parsed.actions:[]};
+  const memory={forget:Array.isArray(parsed?.memory?.forget)?parsed.memory.forget:[],update:Array.isArray(parsed?.memory?.update)?parsed.memory.update:[]};
+  return {answer,visuals,actions:Array.isArray(parsed?.actions)?parsed.actions:[],memory};
 }
 
 export async function askCoach(env, message, context, {model = null, focus = null, task = assistantTask(message), actions = false,concise=false,onAnswer=null} = {}) {
@@ -527,5 +536,5 @@ export async function askCoach(env, message, context, {model = null, focus = nul
   const onText=onAnswer?delta=>{streamed+=delta;const answer=actions?partialCoachAnswer(streamed):streamed;if(answer!==lastAnswer){lastAnswer=answer;onAnswer(answer);}}:null;
   const r = await callOpenAI(env, {feature:'assistant',instructions:withFocus(coachInstructionsFor(focus), focus)+(actions?'\n\n'+actionInstructions():'')+(brief?L('\nTento požadavek vyřiď stručně: answer nejvýše 90 slov, důvod každé akce jedna věta. Neopisuj celý kalendář.','\nHandle this request briefly: answer at most 90 words, one sentence of reason per action. Do not recite the whole calendar.'):''), input, model:chosen, reasoningEffort:light ? 'low' : complexEffort(env), maxOutputTokens:TASK_LIMITS[task]||TASK_LIMITS.planning,timeoutMs:TASK_TIMEOUTS[task]||TASK_TIMEOUTS.planning,format:actions?COACH_ACTION_FORMAT:null,onText});
   const reply=coachAnswerText(r.text,{actions,incomplete:r.incomplete});
-  return {status:'ok', answer:reply.answer,visuals:reply.visuals,actions:reply.actions,incomplete:Boolean(r.incomplete), model:r.model || chosen, usage:r.usage, ms:Date.now() - started, coachEngine:context?.cyclingCoachV2?.version||null};
+  return {status:'ok', answer:reply.answer,visuals:reply.visuals,actions:reply.actions,memory:reply.memory,incomplete:Boolean(r.incomplete), model:r.model || chosen, usage:r.usage, ms:Date.now() - started, coachEngine:context?.cyclingCoachV2?.version||null};
 }
