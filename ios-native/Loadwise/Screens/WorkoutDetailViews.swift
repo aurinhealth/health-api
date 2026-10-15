@@ -247,7 +247,7 @@ struct ActivityDetailView: View {
                 HStack {
                     SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
                     Spacer()
-                    if session.status == "done", detail != nil || basicOnly {
+                    if session.status == "done", detail != nil {
                         Button { sharing = true } label: {
                             Image(systemName: "square.and.arrow.up").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
                                 .frame(width: 36, height: 32).contentShape(Rectangle())
