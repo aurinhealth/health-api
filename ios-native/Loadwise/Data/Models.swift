@@ -163,6 +163,8 @@ struct TodaySnapshot: Decodable, Equatable {
         /// Stretching or sauna: which one, and its saved row to delete it from the day.
         var recovery: String? = nil
         var recoveryId: Int? = nil
+        /// A done workout: what it added to the day's strain (Den: "+5,1 tréninkem").
+        var strain: Double? = nil
 
         struct Eased: Decodable, Equatable {
             let title: String
