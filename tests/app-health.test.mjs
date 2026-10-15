@@ -31,13 +31,14 @@ test("Health: readiness with its parts and 14 days of history", () => {
   assert.ok(h.readiness.score > 70);
   assert.equal(h.readiness.zone, "green");
   const keys = h.readiness.parts.map(p => p.key);
-  assert.deepEqual(keys, ["hrv", "restingHR", "sleep"]);
+  assert.deepEqual(keys, ["sleep", "hrv", "restingHR"]);
   assert.ok(Math.abs(70 + h.readiness.parts.reduce((s, p) => s + p.points, 0) - h.readiness.score) <= 2, "parts add up to the score");
-  assert.ok(h.readiness.parts[0].points > 0, "HRV above normal raises it");
+  const hrv = h.readiness.parts.find(p => p.key === "hrv");
+  assert.ok(hrv.points > 0, "HRV above normal raises it");
   // Today's value and the usual range for the row under the number.
   for (const p of h.readiness.parts) assert.ok(p.value != null && p.low < p.high, p.key);
-  assert.equal(h.readiness.parts[0].value, 66);
-  assert.ok(h.readiness.parts[0].value > h.readiness.parts[0].high, "66 ms is above the usual range");
+  assert.equal(hrv.value, 66);
+  assert.ok(hrv.value > hrv.high, "66 ms is above the usual range");
   assert.equal(h.readiness.history.length, 14);
   assert.equal(h.readiness.history.at(-1).value, h.readiness.score);
   assert.equal(h.readiness.hrv, 66);

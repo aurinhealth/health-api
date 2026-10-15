@@ -120,7 +120,7 @@ struct ReadinessCard: View {
     }
 }
 
-/// HRV, resting heart rate and sleep under the readiness: today's value,
+/// Sleep, HRV and resting heart rate under the readiness: today's value,
 /// higher or lower than usual and a band with the usual range. Parts without
 /// a range (breathing, temperature, the morning check-in) follow in one line
 /// as readiness points.
