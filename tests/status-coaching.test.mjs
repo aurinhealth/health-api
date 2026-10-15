@@ -97,3 +97,10 @@ test('persisted status applies on every read and returning to Active restores no
   assert.deepEqual(buildCoachCouncil({daily,athleteState:await getAthleteState(db)}).coaches.map(c=>c.id),['cycling','gym','nutrition']);
   assert.notEqual(buildCyclingCoachV2({...inputs,athleteState:await getAthleteState(db)}).recommendation.session.kind,'rest');
 });
+
+test('an English message about illness or injury keeps the status proposal',()=>{
+  const sick={type:'status',status:'sick',reason:'Rest until better'},hurt={type:'status',status:'injured',reason:'Knee'};
+  assert.equal(validateCoachActions([sick],{athleteState:'active',userMessage:'I have a fever and the flu'},date)[0]?.status,'sick');
+  assert.equal(validateCoachActions([hurt],{athleteState:'active',userMessage:'My knee hurts after the run'},date)[0]?.status,'injured');
+  assert.deepEqual(validateCoachActions([sick],{athleteState:'active',userMessage:'Easy week please'},date),[]);
+});

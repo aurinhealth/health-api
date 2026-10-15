@@ -16,6 +16,22 @@ final class SnapshotTests: XCTestCase {
         try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
+    func testRecoveryTimeDays() {
+        // Days only, never a clock time; after 22:00 it counts for the next morning.
+        var parts = DateComponents(year: 2026, month: 10, day: 15, hour: 23, minute: 30)
+        let lateThursday = Calendar.current.date(from: parts) ?? Date()
+        XCTAssertEqual(RecoveryTime.when(lateThursday, today: "2026-10-15"), "pátek")
+        XCTAssertEqual(RecoveryTime.phrase(lateThursday, today: "2026-10-15"), "v pátek")
+        parts.hour = 17
+        let thursday = Calendar.current.date(from: parts) ?? Date()
+        XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-15"), "dnes")
+        XCTAssertEqual(RecoveryTime.phrase(thursday, today: "2026-10-14"), "ve čtvrtek")
+        XCTAssertEqual(RecoveryTime.dayName("2026-10-11", today: "2026-10-15"), "neděle")
+        XCTAssertEqual(RecoveryTime.dayName("2026-10-14", today: "2026-10-15"), "včera")
+        let gym = RecoveryTime.Cause(kind: "gym", title: "Posilovna, celé tělo", detail: nil, date: "2026-10-11", hours: 96, readyAt: "2026-10-15T15:49:00Z")
+        XCTAssertEqual(RecoveryTimeContent.detail(gym, today: "2026-10-15"), "neděle · svaly 96 h")
+    }
+
     /// Dnes → Den: the night, readiness, done workout and its strain, steps,
     /// "teď", then the plan with bedtime last; no "teď" on another day.
     func testDayTimelineOrder() {
@@ -79,8 +95,8 @@ final class SnapshotTests: XCTestCase {
 
     func testHealthAndFoodDecode() throws {
         let h = DemoData.health
-        XCTAssertEqual(h.readiness.score, 89)
-        XCTAssertEqual(h.readiness.parts.map(\.key), ["hrv", "restingHR", "sleep"])
+        XCTAssertEqual(h.readiness.score, 78, "the same morning as Today")
+        XCTAssertEqual(h.readiness.parts.map(\.key), ["sleep", "restingHR", "hrv"])
         XCTAssertEqual(h.sleep.night?.stages?.deep, 83)
         let f = DemoData.food
         XCTAssertEqual(f.meals.map(\.type), ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"])
@@ -179,6 +195,16 @@ final class SnapshotTests: XCTestCase {
         try render("health-weight-en", glow: Palette.Glow.health) { WeightDetailContent(health: DemoData.health).padding(24).padding(.top, 30) }
         let store = SettingsStore(api: APIClient(), demo: true)
         try render("settings-en", height: 1100) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
+    }
+
+    /// The long Today in English and metric units: the website's coach chapter is cut from it.
+    func testWebsiteToday() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        try render("site-today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
     }
 
     func testSettingsScreens() throws {

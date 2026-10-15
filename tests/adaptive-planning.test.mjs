@@ -91,6 +91,14 @@ test('multiple recent recovery signals suggest a break, never diagnose sickness'
   assert.equal(proactiveAdvice({...input,state:{status:'active',dismissed:[a.id]}}),null);
   assert.equal(proactiveAdvice({...input,state:{status:'sick'}}),null);
 });
+test('without Intervals.icu the break advice reads HRV and resting HR from the watch',()=>{
+  const day=k=>new Date(Date.UTC(2026,9,5-k)).toISOString().slice(0,10);
+  const watch=Array.from({length:15},(_,k)=>({id:day(k),hrv:k===0?40:60,restingHR:k===0?60:52}));
+  const input={date:'2026-10-05',fitness:{wellness:[{id:'2026-10-05',ctl:40,atl:42,tsb:-2}]},health:{wellness:watch,sleep:[]},state:{status:'active'}};
+  const a=proactiveAdvice(input);
+  assert.equal(a?.status,'on_break');
+  assert.equal(proactiveAdvice({...input,health:{wellness:[],sleep:[]}}),null);
+});
 test('scheduling respects a pause and a clock window before external writes',async()=>{
   const raw=createD1(),db=scopedDb(raw,1);
   await updateAthleteState(db,{status:'sick'});
@@ -178,4 +186,15 @@ test('switching Nemoc back to Aktivní, or its end date passing, remembers the d
   const c=scopedDb(createD1(),3);
   await updateAthleteState(c,{status:'injured'},{date:'2026-10-10'});await updateAthleteState(c,{status:'active'},{date:'2026-10-12'});
   assert.equal((await getAthleteState(c,{date:'2026-10-12'})).recoveredAt,undefined);
+});
+
+test('sessions cancelled for an illness are kept for the coach, at most 21 days',async()=>{
+  const db=scopedDb(createD1(),1);
+  await updateAthleteState(db,{status:'sick'},{date:'2026-10-01'});
+  await updateAthleteState(db,{cancelled:[{date:'2026-10-02',name:'VO2max 5×4',type:'Ride',minutes:75}]},{date:'2026-10-01'});
+  let s=await getAthleteState(db,{date:'2026-10-02'});
+  assert.deepEqual(s.cancelled.map(c=>c.name),['VO2max 5×4']);
+  await updateAthleteState(db,{cancelled:[{date:'2026-10-25',name:'Long ride'}]},{date:'2026-10-24'});
+  s=await getAthleteState(db,{date:'2026-10-24'});
+  assert.deepEqual(s.cancelled.map(c=>c.name),['Long ride']);
 });
