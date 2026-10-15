@@ -1,3 +1,4 @@
+import { scaleMicros } from './micronutrients.js';
 import { L } from './lang.js';
 export function parseFoodQuantity(value){
   const text=String(value??'').trim().replace(',','.');
@@ -29,5 +30,6 @@ export function foodIntake(product,quantity,unit,options={}){
   if(amount>100000)throw new Error(L('Množství je příliš velké.', 'The amount is too large.'));
   const factor=amountUnit==='portion'?q:amount/100,result={amount,unit:amountUnit,factor};
   for(const [key,field]of [['calories','calories_100g'],['protein_g','protein_100g'],['carbs_g','carbs_100g'],['fat_g','fat_100g'],['sugar_g','sugars_100g'],['fiber_g','fiber_100g'],['salt_g','salt_100g']])result[key]=product?.[field]==null||product[field]===''?null:Number(product[field])*factor;
+  result.micros=scaleMicros(product?.micros_100g,factor);
   return result;
 }

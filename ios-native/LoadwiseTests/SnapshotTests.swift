@@ -90,6 +90,13 @@ final class SnapshotTests: XCTestCase {
 
     func testFoodScreens() throws {
         try render("food", glow: Palette.Glow.food) { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
+        var pinned = DemoData.food
+        pinned.nutrients = DemoData.pinnedNutrients
+        try render("food-nutrients-pinned", glow: Palette.Glow.food) { FoodContent(food: pinned).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
+        try render("nutrients", glow: Palette.Glow.food) { NutrientsContent(page: DemoData.nutrients, week: .constant(false), date: "2026-10-08").padding(24).padding(.top, 30) }
+        try render("nutrients-free", glow: Palette.Glow.food) { NutrientsContent(page: DemoData.nutrientsFree, week: .constant(false), date: "2026-10-08").padding(24).padding(.top, 30) }
+        try render("nutrient-detail", glow: Palette.Glow.food) { NutrientDetailContent(detail: DemoData.nutrientDetail).padding(24).padding(.top, 30) }
+        try render("nutrient-favorites", glow: Palette.Glow.food) { NutrientFavoritesList(items: DemoData.nutrients.items, chosen: .constant(DemoData.nutrients.favorites)).padding(24).padding(.top, 30) }
         try render("food-amount", height: 700) { NavigationStack { FoodAmountView(product: DemoData.foods[0], meal: "snack_pm") }.environment(AppModel(demo: true)) }
     }
 

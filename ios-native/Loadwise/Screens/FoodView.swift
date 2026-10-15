@@ -140,12 +140,20 @@ struct FoodContent: View {
         CoachTextCard(screen: "food", fallbackText: food.sentence, live: (page.map(\.selectedDate) ?? model.selectedDate) == nil).padding(.top, 16)
 
         MacroCells(macros: food.macros).padding(.top, 26)
-        if let fiber = food.macros.fiber {
-            FiberRow(title: "Vláknina", amount: fiber, color: Palette.green).padding(.top, 12)
+        // Pro: the nutrients picked under Živiny → Upravit; the rest is one tap away.
+        ForEach(food.nutrients ?? []) { item in
+            NutrientRow(item: item).padding(.top, 8)
         }
-        if let sugar = food.macros.sugar {
-            FiberRow(title: "Cukry", amount: sugar, color: Palette.amberBar, limit: true).padding(.top, 8)
+        NavigationLink { NutrientsView(date: food.date) } label: {
+            HStack(spacing: 6) {
+                Text("Všechny živiny").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+                Image(systemName: "chevron.right").font(.caption2.weight(.semibold)).foregroundStyle(Palette.muted)
+            }
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .padding(.top, 8)
 
         board.padding(.top, 18)
 

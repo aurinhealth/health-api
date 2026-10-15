@@ -1,3 +1,4 @@
+import { scaleMicros } from './micronutrients.js';
 import { L } from './lang.js';
 import { hideAppleFood, OTHER_APP_SOURCES } from './apple-food.js';
 const MEALS=new Set(['breakfast','snack_am','lunch','snack_pm','dinner','snack_late','snack']);
@@ -24,6 +25,7 @@ async function existing(db,id){const row=await db.prepare('SELECT * FROM food_lo
 // The amount the entry was logged with, in its own unit (150 g, 2 ks, 1 porce):
 // what the athlete typed first, else the resolved amount, else amount_g.
 function loggedAmount(note){
+  if(note.micros)note.micros=scaleMicros(note.micros,ratio)||undefined;
   for(const key of ['enteredQuantity','amount','amount_g']){const value=Number(note[key]);if(note[key]!=null&&note[key]!==''&&Number.isFinite(value)&&value>0)return value}
   return null;
 }
