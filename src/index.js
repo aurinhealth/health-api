@@ -66,7 +66,7 @@ export default {
         return await googleSyncStatus(env);
       }
       if(url.pathname==='/sync/google/recent'&&request.method==='POST')return Response.json(await syncGoogleRecent(env));
-      if(url.pathname==='/sync/intervals/recent'&&request.method==='POST')return syncIntervals(env,{activityDays:3});
+      if(url.pathname==='/sync/intervals/recent'&&request.method==='POST')return syncIntervals(env,{activityDays:3,parts:url.searchParams.get('parts')});
       if(url.pathname==='/sync/match'&&request.method==='POST')return Response.json(await matchActivities(env));
 
       // Starting a sync changes data, so it takes POST only: a link or an image
@@ -1305,17 +1305,21 @@ async function syncIntervalsEvents(env) {
 // ======================================================
 // INTERVALS SYNC
 // ======================================================
+// options.parts ("activities,planned"): only those, for an Intervals.icu
+// webhook that says what changed (intervals-webhook.js).
 async function syncIntervals(env,options={}) {
-  const names = ['activities', 'planned', 'weight'];
-  const settled = await Promise.allSettled([
-    syncIntervalsActivities(env,options), syncIntervalsEvents(env),
-    importIntervalsWeights(env,{days:options.activityDays ? CONFIG.weightDays : CONFIG.activityDays})
-  ]);
+  const jobs = {
+    activities: () => syncIntervalsActivities(env,options), planned: () => syncIntervalsEvents(env),
+    weight: () => importIntervalsWeights(env,{days:options.activityDays ? CONFIG.weightDays : CONFIG.activityDays})
+  };
+  const wanted = String(options.parts || '').split(',').filter(name => jobs[name]);
+  const names = wanted.length ? wanted : Object.keys(jobs);
+  const settled = await Promise.allSettled(names.map(name => jobs[name]()));
   const parts = Object.fromEntries(settled.map((result,i) => [names[i], result.status === 'fulfilled'
     ? result.value : {status:'error',message:result.reason?.message || 'Import failed'}]));
   const failures = settled.filter(r => r.status === 'rejected').length;
   // The new activities against the watch's Google exercises (and back).
-  if (settled[0].status === 'fulfilled') await matchActivities(env, { days: 14 }).catch(error => console.error('Activity matching failed', error.message));
+  if (names.includes('activities') && settled[names.indexOf('activities')].status === 'fulfilled') await matchActivities(env, { days: 14 }).catch(error => console.error('Activity matching failed', error.message));
   return Response.json({status:failures === names.length ? 'error' : failures ? 'partial' : 'ok',source:'intervals.icu',...parts});
 }
 

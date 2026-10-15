@@ -2,7 +2,8 @@
 // copying a personal API key. It needs an app registered with Intervals.icu
 // (secrets INTERVALS_CLIENT_ID and INTERVALS_CLIENT_SECRET); until then the
 // API key form is the way to connect. The access token never expires; a new
-// authorization replaces it.
+// authorization replaces it. Disconnecting gives the access back
+// (disconnectIntervalsApp), which also stops the webhooks.
 import { saveConnectionSecret } from "./connection-secrets.js";
 import { INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { connectReturn, connectReturnUrl } from "./connect-return.js";
@@ -52,5 +53,16 @@ export async function handleIntervalsOAuth(request, env, pathname, fetchImpl = f
     return back(connectReturnUrl(to, "intervals-failed"));
   }
   await saveConnectionSecret(env, "intervals", INTERVALS_TOKEN_PREFIX + data.access_token);
+  // The athlete Intervals.icu's webhooks name (intervals-webhook.js).
+  if (data.athlete?.id != null) await saveConnectionSecret(env, "intervals_athlete", String(data.athlete.id));
   return back(connectReturnUrl(to, "intervals"));
+}
+
+// "Odpojit" for an OAuth connection: Intervals.icu forgets the app's access
+// and stops its webhooks. A personal API key has nothing to give back.
+export async function disconnectIntervalsApp(env, fetchImpl = fetch) {
+  const credential = String(env.INTERVALS_API_KEY || "");
+  if (!credential.startsWith(INTERVALS_TOKEN_PREFIX)) return;
+  await fetchImpl("https://intervals.icu/api/v1/disconnect-app", { method: "DELETE", headers: { Authorization: credential }, signal: AbortSignal.timeout(10000) })
+    .catch(error => console.error("Intervals.icu disconnect failed", error.message));
 }
