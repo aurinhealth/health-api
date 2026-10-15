@@ -2,7 +2,7 @@
 // photos, the cookbook and drinks.
 import { searchRecipes } from "./personal-recipes.js";
 import { savePersonalFood, listPersonalFoods, searchFoodCatalog as searchPersonalFoods } from "./personal-foods.js";
-import { searchWorldFoods, barcodeKey } from "./world-foods.js";
+import { searchWorldFoods, barcodeKey, microsFor } from "./world-foods.js";
 
 import { readBarcodeWithAI, readFoodPhotoWithAI } from "./food-photo.js";
 import { foodIntake } from "./food-portions.js";
@@ -119,6 +119,9 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
     try {const body=await request.json(),p=body.product||{};
       if(!/^\d{4}-\d{2}-\d{2}$/.test(body.date)||!String(p.name||'').trim()) return Response.json({message:L('Zkontroluj název a datum.', 'Check the name and date.')},{status:400});
       for(const field of ['calories_100g','protein_100g','carbs_100g','fat_100g'])if(p[field]==null||p[field]===''||!Number.isFinite(Number(p[field]))||Number(p[field])<0||Number(p[field])>(field==='calories_100g'?(p.nutrition_basis==='portion'?10000:1000):(p.nutrition_basis==='portion'?1000:100)))return Response.json({message:L('Vyplň energii, bílkoviny, sacharidy a tuky. Hodnoty musí sedět na 100 g, 100 ml nebo porci.', 'Fill in energy, protein, carbs and fat. The values must be per 100 g, 100 ml or serving.')},{status:400});
+      // Vitamins and minerals of a world-catalogue food (micros/ in R2, from
+      // the food tables or a matching generic food), when the app sent none.
+      if(typeof p.catalog_key==='string'&&p.catalog_key&&!p.micros_100g&&p.nutrition_basis!=='portion'){const m=(await microsFor(env,[p.catalog_key]).catch(()=>new Map())).get(p.catalog_key);if(m)p.micros_100g=m;}
       let amount;try{amount=foodIntake(p,body.quantity??body.grams,body.unit||(p.nutrition_basis==='portion'?'portion':p.nutrition_basis==='ml'?'ml':'g'),{pieceAmount:body.pieceAmount,pieceUnit:body.pieceUnit,density:body.density});}catch(error){return Response.json({message:error.message},{status:400});}
       const ingredients=Array.isArray(body.ingredients)?body.ingredients.slice(0,50).map(a=>({name:String(a.name||'').slice(0,180),amount:Number(a.amount)||null,unit:['g','ml','portion'].includes(a.unit)?a.unit:'g'})):[];
       const saved=await legacyHealthApi.fetch(new Request(new URL('/food/log',request.url),{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify({date:body.date,consumed_at:mealConsumedAt(body.date,body.mealType,body.time)||undefined,name:String(p.name).slice(0,180),kcal:amount.calories,protein_g:amount.protein_g,carbs_g:amount.carbs_g,fat_g:amount.fat_g,fiber_g:amount.fiber_g,source:'package_label',note:JSON.stringify({product:productFromLabel(p),amount:amount.amount,unit:amount.unit,enteredQuantity:body.quantity??body.grams,enteredUnit:body.unit||'g',barcode:p.barcode||null,brand:p.brand||null,mealType:body.mealType||'snack',salt_g:amount.salt_g,sugar_g:amount.sugar_g,...(amount.micros?{micros:amount.micros}:{}),source_url:p.source_url||null,...(p.source==='ai-estimate'?{estimate:true}:{}),ingredients})})}),env,ctx);
