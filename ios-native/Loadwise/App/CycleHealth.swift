@@ -1,16 +1,18 @@
 import Foundation
 import HealthKit
 
-/// Cycle tracking's data from Apple Health, read on the phone: menstrual flow
-/// and ovulation tests (sent to the server, src/cycle-store.js, where what the
-/// athlete logs in the app wins) and the latest contraception (only to fill
+/// Cycle tracking's data from Apple Health, read on the phone: menstrual flow,
+/// ovulation tests and the symptoms of perimenopause and menopause (hot
+/// flashes, night sweats, sleep changes; sent to the server,
+/// src/cycle-store.js, where what the athlete logs in the app wins) and the latest contraception (only to fill
 /// in the setup).
 enum CycleHealth {
     static var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
     static var readTypes: Set<HKObjectType> {
         [HKCategoryType(.menstrualFlow), HKCategoryType(.ovulationTestResult), HKCategoryType(.contraceptive),
-         HKQuantityType(.appleSleepingWristTemperature)]
+         HKQuantityType(.appleSleepingWristTemperature),
+         HKCategoryType(.hotFlashes), HKCategoryType(.nightSweats), HKCategoryType(.sleepChanges)]
     }
 
     /// Settings → Cyklus turned on: one permission sheet for the cycle's types.
@@ -39,13 +41,15 @@ enum CycleHealth {
         return out
     }
 
-    /// Sends Apple Health's flow and ovulation tests of the last 400 days.
+    /// Sends Apple Health's flow, ovulation tests and symptoms of the last 400 days.
     static func sync(api: APIClient) async {
         guard isAvailable else { return }
         let days = await flowDays(days: 400)
         guard !days.isEmpty else { return }
-        let body: [JSONValue] = days.map { d in
-            .object(["date": .string(d.date), "flow": .number(Double(d.flow)), "ovulationTest": .bool(d.ovulation)])
+        // The newest 400 days (the server takes at most 400).
+        let body: [JSONValue] = days.suffix(400).map { d in
+            .object(["date": .string(d.date), "flow": d.flowed ? .number(Double(d.flow)) : .null, "ovulationTest": .bool(d.ovulation),
+                     "symptoms": .array(d.symptoms.sorted().map { .string($0) })])
         }
         try? await api.importAppleCycle(body)
     }
@@ -54,6 +58,10 @@ enum CycleHealth {
         let date: String
         var flow: Int
         var ovulation: Bool
+        /// A flow sample that day (else the day is only a test or symptoms).
+        var flowed = false
+        /// "hot_flashes", "night_sweats", "poor_sleep".
+        var symptoms: Set<String> = []
     }
 
     /// One entry per day: the heaviest flow (1 light, 2 medium or unspecified,
@@ -77,6 +85,7 @@ enum CycleHealth {
             let date = AppModel.localDate(s.startDate)
             var day = byDay[date] ?? Day(date: date, flow: 0, ovulation: false)
             day.flow = max(day.flow, flow)
+            day.flowed = true
             byDay[date] = day
         }
         for s in tests {
@@ -86,6 +95,16 @@ enum CycleHealth {
             var day = byDay[date] ?? Day(date: date, flow: 0, ovulation: false)
             day.ovulation = true
             byDay[date] = day
+        }
+        // Symptoms: any severity but "not present" (raw value 1 of
+        // HKCategoryValueSeverity and HKCategoryValuePresence).
+        for (identifier, symptom) in [(HKCategoryTypeIdentifier.hotFlashes, "hot_flashes"), (.nightSweats, "night_sweats"), (.sleepChanges, "poor_sleep")] {
+            for s in await samples(store, HKCategoryType(identifier), from: start) where s.value != 1 {
+                let date = AppModel.localDate(s.startDate)
+                var day = byDay[date] ?? Day(date: date, flow: 0, ovulation: false)
+                day.symptoms.insert(symptom)
+                byDay[date] = day
+            }
         }
         return byDay.values.sorted { $0.date < $1.date }
     }
