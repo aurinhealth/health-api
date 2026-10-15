@@ -95,7 +95,7 @@ final class SnapshotTests: XCTestCase {
 
     func testHealthAndFoodDecode() throws {
         let h = DemoData.health
-        XCTAssertEqual(h.readiness.score, 89)
+        XCTAssertEqual(h.readiness.score, 78, "the same morning as Today")
         XCTAssertEqual(h.readiness.parts.map(\.key), ["hrv", "restingHR", "sleep"])
         XCTAssertEqual(h.sleep.night?.stages?.deep, 83)
         let f = DemoData.food
@@ -195,6 +195,16 @@ final class SnapshotTests: XCTestCase {
         try render("health-weight-en", glow: Palette.Glow.health) { WeightDetailContent(health: DemoData.health).padding(24).padding(.top, 30) }
         let store = SettingsStore(api: APIClient(), demo: true)
         try render("settings-en", height: 1100) { NavigationStack { SettingsMenu(store: store) }.environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
+    }
+
+    /// The long Today in English and metric units: the website's coach chapter is cut from it.
+    func testWebsiteToday() throws {
+        L10n.setLanguage("en")
+        defer {
+            L10n.setLanguage("cs")
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        try render("site-today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
     }
 
     func testSettingsScreens() throws {
