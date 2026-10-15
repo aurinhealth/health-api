@@ -672,7 +672,8 @@ if (process.argv[1]?.endsWith('build-micronutrients.mjs')) {
     for (const id of ['chicken_breast', 'spinach', 'lentils', 'milk', 'egg', 'oats']) {
       const ref = [...refs.values()].find(r => r.entry.id === id);
       if (ref) examples[`${id} (reference ${ref.k} ${ref.n})`] = out.get(ref.k) || ref.v;
-      const est = accepted.find(a => a.m.entry.id === id && a.r.cs) || accepted.find(a => a.m.entry.id === id);
+      // Prefer a product with a Czech barcode (GS1 859) and a Czech name.
+      const est = accepted.find(a => a.m.entry.id === id && a.r.cs && a.r.k.startsWith('gtin:0859')) || accepted.find(a => a.m.entry.id === id && a.r.cs) || accepted.find(a => a.m.entry.id === id);
       if (est) examples[`${id} estimate ${est.r.k} "${est.r.cs || est.r.en || est.r.n}"`] = out.get(est.r.k);
     }
     for (const [k, v] of Object.entries(examples)) log(`example ${k}: ${JSON.stringify(v)}`);
