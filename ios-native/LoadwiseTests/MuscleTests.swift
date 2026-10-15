@@ -38,4 +38,24 @@ final class MuscleTests: XCTestCase {
         let drawn = Set((MuscleFigure.front + MuscleFigure.back).map { $0.id })
         for muscle in DemoData.muscles.muscles ?? [] { XCTAssertTrue(drawn.contains(muscle.id), muscle.id) }
     }
+
+    func testBodyPartsAndOneMuscle() throws {
+        let sample = DemoData.muscles
+        XCTAssertEqual(sample.rings.map(\.id), ["legs", "glutes", "back", "chest", "shoulders", "arms"])
+        XCTAssertEqual(sample.readyToday, "upper")
+        XCTAssertEqual(sample.readyTitle, L10n.tr("Horní část těla"))
+        XCTAssertEqual(sample.focus, "upper")
+        XCTAssertEqual(sample.groups?.first { $0.id == "core" }?.ring, false)
+        // The gym's figure ids and the muscles here.
+        XCTAssertEqual(MuscleFatigue.fatigueIds(body: "lats"), ["back"])
+        XCTAssertEqual(MuscleFatigue.bodyId("glutes"), "hips")
+        XCTAssertEqual(sample.tired(body: "hips")?.id, "glutes")
+        XCTAssertNil(sample.tired(body: "biceps"))
+        let detail = try XCTUnwrap(DemoData.muscleDetail("quads"))
+        XCTAssertEqual(detail.strength?.exercise, "Barbell back squat")
+        XCTAssertGreaterThan(detail.strength?.points.count ?? 0, 4)
+        XCTAssertEqual(detail.calendar?.target, 2)
+        XCTAssertEqual(WidgetKind.musclesFigure.sizes, [.small, .medium, .large])
+        XCTAssertEqual(WidgetKind.musclesGlance.sizes, [.small, .medium])
+    }
 }

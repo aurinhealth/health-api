@@ -274,6 +274,7 @@ struct ActivityDetailView: View {
                 }
                 .padding(.top, 24)
                 Text(detail?.activity.name ?? session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                if let origin = detail?.origin { ActivityOriginLine(origin: origin).padding(.top, 8) }
                 if let detail {
                     ActivityRouteMap(detail: detail, localRoute: localRoute)
                     ActivityDetailContent(detail: detail, kcal: countedKcal, kcalNote: kcalNote,
@@ -359,6 +360,19 @@ struct ActivityDetailView: View {
         if let id = session.activityId { return try await model.api.activityDetail(id: id) }
         if let watch = session.watch { return try await model.api.watchDetail(watch) }
         return nil
+    }
+}
+
+/// Under an activity's name: the logo and name of what recorded it.
+struct ActivityOriginLine: View {
+    let origin: ActivityDetail.Origin
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let logo = origin.logo { IntegrationIcon(id: logo, size: 20) }
+            Text(verbatim: origin.name).font(Typo.small).foregroundStyle(Palette.muted)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

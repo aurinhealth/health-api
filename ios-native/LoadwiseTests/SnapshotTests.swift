@@ -532,10 +532,35 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    func testMuscleScreens() throws {
+        let model = AppModel(demo: true)
+        try render("muscles-widgets", glow: Palette.Glow.training, height: 1500) {
+            VStack(spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    MusclesWidget(figure: true, size: .small)
+                    MusclesWidget(figure: false, size: .small)
+                }
+                MusclesWidget(figure: true, size: .medium)
+                MusclesWidget(figure: false, size: .medium)
+                MusclesWidget(figure: true, size: .large)
+            }
+            .padding(24).environment(model)
+        }
+        try render("muscles", glow: Palette.Glow.training, height: 1500) {
+            NavigationStack { MusclesView() }.environment(model)
+        }
+        try render("muscle-detail", glow: Palette.Glow.training, height: 1300) {
+            NavigationStack { MuscleDetailView(id: "quads", detail: DemoData.muscleDetail("quads")) }.environment(model)
+        }
+        try render("gym-builder-muscles", glow: Palette.Glow.training, height: 1100) {
+            NavigationStack { GymBuilderView(date: DemoData.training.date) }.environment(model)
+        }
+    }
+
     func testRoundFourScreens() throws {
         let model = AppModel(demo: true)
         try render("training-tools", glow: Palette.Glow.training, height: 330) {
-            NavigationStack { TrainingTools(today: DemoData.training.date).padding(24) }
+            NavigationStack { TrainingTools(today: DemoData.training.date).padding(24) }.environment(model)
         }
         try render("drinks-card", glow: Palette.Glow.food, height: 460) {
             DrinksCard(water: DemoData.food.water).environment(model).padding(24)
