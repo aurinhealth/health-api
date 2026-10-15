@@ -159,8 +159,11 @@ export function parseUsda({ food, nutrient, foodNutrient }, dataTypes) {
     nutrients.set(id, { key: spec[0], prio: spec[1] ?? 0, unit });
   }
   csvRecords(food, ',', r => { if (!dataTypes || dataTypes.includes(r.DATA_TYPE)) foods.set(r.FDC_ID, { name: r.DESCRIPTION }); });
+  // FNDDS food_nutrient.csv gives the nutrient number in nutrient_id.
+  const byNumber = new Map();
+  csvRecords(nutrient, ',', r => { const spec = USDA_NUMBERS[Number(r.NUTRIENT_NBR)]; if (spec) byNumber.set(String(Number(r.NUTRIENT_NBR)), { key: spec[0], prio: spec[1] ?? 0, unit: r.UNIT_NAME }); });
   csvRecords(foodNutrient, ',', r => {
-    const f = foods.get(r.FDC_ID), n = f && nutrients.get(r.NUTRIENT_ID);
+    const f = foods.get(r.FDC_ID), n = f && (nutrients.get(r.NUTRIENT_ID) || byNumber.get(r.NUTRIENT_ID));
     if (n) setValue(f, n.key, number(r.AMOUNT), n.unit, n.prio);
   });
   for (const f of foods.values()) finish(f);
@@ -241,10 +244,11 @@ const UNIT_KEYS = { ...NUTRIENTS, ...MACROS };
 export function parseCofid(sheets, log = () => {}) {
   const foods = new Map(), taken = new Set();
   for (const { name: sheet, rows } of sheets) {
-    const h = rows.slice(0, 6).findIndex(r => r.some(c => /^food\s*code$/i.test(String(c ?? '').trim())));
-    if (h < 0) { log(`  CoFID ${sheet}: no "Food Code" header in ${JSON.stringify(rows.slice(0, 3).map(r => r.slice(0, 6)))}`); continue; }
+    // The header row has "Food Name" (one sheet leaves "Food Code" blank: the code is then the first column).
+    const h = rows.slice(0, 6).findIndex(r => r.some(c => /^food\s*name$/i.test(String(c ?? '').trim())));
+    if (h < 0) { log(`  CoFID ${sheet}: no header in ${JSON.stringify(rows.slice(0, 3).map(r => r.slice(0, 6)))}`); continue; }
     const head = rows[h].map(c => String(c ?? '').replace(/\s+/g, ' ').trim());
-    const code = head.findIndex(c => /^food\s*code$/i.test(c)), nameCol = head.findIndex(c => /^food\s*name$/i.test(c));
+    const nameCol = head.findIndex(c => /^food\s*name$/i.test(c)), code = Math.max(0, head.findIndex(c => /^food\s*code$/i.test(c)));
     const cols = [];
     for (const [key, re] of COFID_HEADERS) {
       if (taken.has(key)) continue;
@@ -328,16 +332,36 @@ export const SOURCES = {
   usda_foundation: { urls: ['2026-04-30', '2025-12-18', '2025-04-24', '2024-10-31', '2024-04-18'].map(d => `${FDC}FoodData_Central_foundation_food_csv_${d}.zip`), pages: FDC_PAGES, link: /FoodData_Central_foundation_food_csv_[\w-]+\.zip/g, need: [/^food\.csv$/, /^nutrient\.csv$/, /^food_nutrient\.csv$/] },
   usda_survey: { urls: ['2024-10-31', '2022-10-28'].map(d => `${FDC}FoodData_Central_survey_food_csv_${d}.zip`), pages: FDC_PAGES, link: /FoodData_Central_survey_food_csv_[\w-]+\.zip/g, need: [/^food\.csv$/, /^nutrient\.csv$/, /^food_nutrient\.csv$/] },
   fineli: { urls: ['https://fineli.fi/fineli/content/file/47', 'https://fineli.fi/fineli/content/file/48'], pages: ['https://fineli.fi/fineli/en/avoin-data', 'https://www.avoindata.fi/data/en_GB/dataset/fineli-elintarvikkeiden-koostumustietopankki', 'https://www.avoindata.fi/data/fi/dataset/fineli-elintarvikkeiden-koostumustietopankki'], link: /[^"'\s<>]*content\/file\/\d+|https?:\/\/[^"'\s<>]+\.zip/g, need: [/^component_value\.csv$/i, /^component\.csv$/i] },
-  // The catalogue has Ciqual 2025 (Zenodo); 2020 XML is the fallback.
-  ciqual: { pagesFirst: true, urls: ['https://ciqual.anses.fr/cms/sites/default/files/inline-files/XML_2020_07_07.zip'], pages: ['https://zenodo.org/api/records/17550133', 'https://www.data.gouv.fr/fr/datasets/table-de-composition-nutritionnelle-des-aliments-ciqual/'], link: /https:\/\/zenodo\.org\/api\/records\/\d+\/files\/[^"'\s<>]+?\/content|https?:\/\/[^"'\s<>]*\.zip/gi, prefer: /xml/i, need: [/^compo.*\.xml$/i, /^alim_(?!grp).*\.xml$/i, /^const.*\.xml$/i] },
+  // The catalogue has Ciqual 2025, published on Zenodo as separate XML files
+  // (ciqualFiles); the 2020 XML archive is the fallback.
+  ciqual: { urls: ['https://ciqual.anses.fr/cms/sites/default/files/inline-files/XML_2020_07_07.zip'], pages: [], link: /$^/g, need: [/^compo.*\.xml$/i, /^alim_(?!grp).*\.xml$/i, /^const.*\.xml$/i] },
   cofid: { urls: ['https://assets.publishing.service.gov.uk/media/60538e66d3bf7f0455a5d8cb/McCance_Widdowsons_Composition_of_Foods_Integrated_Dataset_2021..xlsx'], pages: ['https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid'], link: /https:\/\/assets\.publishing\.service\.gov\.uk\/[^"'\s<>]+\.xlsx/g, prefer: /Integrated_Dataset/i, need: [/^workbook\.xml$/] }
 };
 
 const HEADERS = { 'user-agent': UA, accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'accept-language': 'en-GB,en;q=0.9' };
 async function fetchTo(url, file) {
   const r = await fetch(url, { headers: HEADERS, redirect: 'follow', signal: AbortSignal.timeout(15 * 60 * 1000) });
-  if (!r.ok || !r.body) throw new Error(`HTTP ${r.status}, server ${r.headers.get('server')}`);
-  await pipeline(Readable.fromWeb(r.body), createWriteStream(file));
+  if (r.ok && r.body) return pipeline(Readable.fromWeb(r.body), createWriteStream(file));
+  // A bot filter may refuse Node's client but not curl's.
+  const c = spawnSync('curl', ['-fsSL', '--max-time', '900', '-A', UA, '-o', file, url], { encoding: 'utf8' });
+  if (c.status !== 0) throw new Error(`HTTP ${r.status}, server ${r.headers.get('server')}; curl: ${c.stderr.trim().slice(-200)}`);
+}
+// Ciqual 2025 from its Zenodo record: alim, compo and const XML files.
+const CIQUAL_RECORD = 'https://zenodo.org/api/records/17550133';
+async function ciqualFiles(dir, log) {
+  const r = await fetch(CIQUAL_RECORD, { headers: { ...HEADERS, accept: 'application/json' }, signal: AbortSignal.timeout(60000) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const files = (await r.json()).files || [];
+  const out = {};
+  for (const [part, re] of [['alim', /^alim_(?!grp).*\.xml$/i], ['compo', /^compo_.*\.xml$/i], ['constants', /^const_.*\.xml$/i]]) {
+    const f = files.find(x => re.test(x.key || ''));
+    if (!f?.links?.self?.startsWith('https://zenodo.org/')) throw new Error(`no ${part} file in ${CIQUAL_RECORD}`);
+    const file = join(dir, `ciqual-${part}.xml`);
+    if (!existsSync(file)) await fetchTo(f.links.self, file);
+    out[part] = decode(readFileSync(file));
+    log(`ciqual: ${part} from ${f.links.self} (${(statSync(file).size / 1048576).toFixed(1)} MB)`);
+  }
+  return { url: CIQUAL_RECORD, parts: out };
 }
 async function links(page, re) {
   const r = await fetch(page, { headers: HEADERS, redirect: 'follow', signal: AbortSignal.timeout(60000) });
@@ -377,6 +401,15 @@ export async function loadTables(dir, log = console.log) {
   const tables = {}, used = {};
   const errors = [];
   for (const id of TABLES) try {
+    if (id === 'ciqual') {
+      let got = null;
+      try { got = await ciqualFiles(dir, log); } catch (e) { log(`ciqual 2025: ${e.message}; falling back to the 2020 archive`); }
+      if (got) {
+        used[id] = got.url; tables[id] = parseCiqual(got.parts);
+        log(`ciqual: ${tables[id].size} foods`);
+        continue;
+      }
+    }
     const { file, url, entries } = await download(id, dir, log);
     used[id] = url;
     const text = re => { const e = findEntry(entries, re); return e ? decode(zipEntry(file, e)) : ''; };
