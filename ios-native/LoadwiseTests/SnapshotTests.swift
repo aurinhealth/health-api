@@ -16,6 +16,27 @@ final class SnapshotTests: XCTestCase {
         try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
+    /// Dnes → Den: the night, readiness, done workout and its strain, steps,
+    /// "teď", then the plan with bedtime last; no "teď" on another day.
+    func testDayTimelineOrder() {
+        let today = DemoData.today
+        let rows = DayTimelineRows.make(today, now: 15 * 60)
+        XCTAssertEqual(rows.map(\.id), ["sleep", "readiness", today.plan[0].id, "strain", "steps", "now", today.plan[1].id, today.plan[2].id])
+        if case .strain(let end, let score, let added) = rows[3] {
+            XCTAssertEqual(end, 7 * 60 + 30 + 42)
+            XCTAssertEqual(score, 8.4)
+            XCTAssertEqual(added, 5.1)
+        } else {
+            XCTFail("the strain follows the workout")
+        }
+        XCTAssertFalse(DayTimelineRows.make(today, now: nil).contains { $0.id == "now" })
+        XCTAssertEqual(DayTimelineRows.stats(today.plan[0].session).map(\.label), ["Vzdálenost", "Délka", "Energie"])
+    }
+
+    func testDayTimelineCard() throws {
+        try render("today-den", height: 760) { DayTimeline(today: DemoData.today).padding(24).environment(AppModel(demo: true)) }
+    }
+
     func testRecoveryTimeScreen() throws {
         let today = DemoData.today
         let time = try XCTUnwrap(today.recoveryTime)
@@ -308,7 +329,8 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(food.macros.fiber?.target, 32)
         XCTAssertEqual(food.water.drinks?.count, 3)
         XCTAssertEqual(food.water.drunkMl, 1600)
-        XCTAssertEqual(DemoData.today.plan.first?.sport, "strength")
+        XCTAssertEqual(DemoData.today.plan.first { !$0.done }?.sport, "strength")
+        XCTAssertEqual(DemoData.today.plan.first?.session?.distanceKm, 8.2)
         XCTAssertEqual(DemoData.today.tonight?.wakeSet, true)
         let result = try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ahoj","visuals":["sleep","form"]}"#.utf8))
         XCTAssertEqual(result.visuals, ["sleep", "form"])
