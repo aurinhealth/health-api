@@ -29,6 +29,7 @@
 ", pomocně: %@" = ", also: %@";
 "1 porce" = "1 serving";
 "14 dní %@–%@ %%" = "14 days %@–%@ %%";
+"%@ %% potřeby" = "%@ %% of need";
 "1–3 h" = "1–3 h";
 "2,5–25 po 2,5" = "2.5–25 by 2.5";
 "2–40 po 2" = "2–40 by 2";
@@ -1164,6 +1165,7 @@
 "Zranění" = "Injured";
 "Stav sportovce: %@, %@" = "Athlete status: %1$@, %2$@";
 "Do změny" = "Until changed";
+"do změny" = "until changed";
 "1 den" = "1 day";
 "3 dny" = "3 days";
 "1 týden" = "1 week";
@@ -2165,6 +2167,20 @@
 "Doporučuješ méně" = "Recommended less";
 "Doporučovat znovu" = "Recommend again";
 "Sauna" = "Sauna";
+"Skrýt klávesnici" = "Hide keyboard";
+"vyšší" = "higher";
+"nižší" = "lower";
+"delší" = "longer";
+"kratší" = "shorter";
+"v normálu" = "normal";
+"nad normálem" = "above normal";
+"pod normálem" = "below normal";
+"bod" = "point";
+"bodů" = "points";
+"%@ %@ připravenosti" = "%@ readiness %@";
+"tvůj normál %@" = "your normal %@";
+"níž" = "lower";
+"výš" = "higher";
 "Tmavá" = "Dark";
 "Bílá" = "White";
 "Sklo" = "Glass";
@@ -2177,3 +2193,23 @@
 "Co dnes trénovat?" = "What to train today?";
 "Připravenost %d" = "Readiness %d";
 "Na ikoně · %d ze %d" = "On the icon · %d of %d";
+
+/* Sdílet: share images of the day, a workout and the day's food */
+"Aktivita" = "Activity";
+"Osa" = "Timeline";
+"Čísla" = "Numbers";
+"Velké" = "Big";
+"Dlaždice" = "Tiles";
+"Trasa" = "Route";
+"Graf" = "Chart";
+"Rozdělení" = "Split";
+"Oblouk" = "Dial";
+"Skóre" = "Score";
+"%@ %% potřeby" = "%@%% of need";
+"krok" = "step";
+"Tmavé" = "Dark";
+"Světlé" = "Light";
+"Pozadí" = "Background";
+"Průhledné" = "Transparent";
+"Na ose" = "On the timeline";
+"Údaje" = "Details";

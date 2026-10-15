@@ -173,6 +173,7 @@ final class AppModel {
         todayBase = OutboxStore.savedSnapshot("today")
         foodBase = OutboxStore.savedSnapshot("food")
         applyOutbox()
+        SnapshotCache.prune(today: Self.localDate(Date()))
     }
 
     /// Notes whether a refresh reached the server; true when the error was a
@@ -383,6 +384,7 @@ final class AppModel {
                 async let cycle: Void = loadCycle()
                 await Reminders.reschedule(from: today)
                 WidgetBridge.update(today)
+                prefetchYesterday()
                 await cycle
             }
             if let status = await status { athleteStatus = status }
@@ -410,7 +412,10 @@ final class AppModel {
     /// Today of the shown day from the server, with the waiting writes over it.
     private func loadToday() async throws {
         let settled = Set(settlingToday.map { $0.id })
-        let (snapshot, data) = try await api.todayData(date: selectedDate)
+        let day = selectedDate
+        let (snapshot, data) = try await api.todayData(date: day)
+        // Another day was chosen meanwhile: its own load shows it.
+        guard selectedDate == day else { return }
         today = snapshot
         todayBase = data
         settlingToday.removeAll { settled.contains($0.id) }
@@ -526,7 +531,10 @@ final class AppModel {
         guard !demo, phase == .signedIn else { return }
         await AppleHealth.shared.sync(api: api)
         do {
-            health = try await api.health(date: selectedDate)
+            let day = selectedDate
+            let value = try await api.health(date: day)
+            guard selectedDate == day else { return }
+            health = value
             fetched[.health] = (Date(), shownDay)
             dataRevision += 1
             healthError = nil
@@ -546,7 +554,9 @@ final class AppModel {
         guard !demo, phase == .signedIn else { return }
         let settled = Set(settlingFood.map { $0.id })
         do {
-            let (snapshot, data) = try await api.foodData(date: selectedDate)
+            let day = selectedDate
+            let (snapshot, data) = try await api.foodData(date: day)
+            guard selectedDate == day else { return }
             food = snapshot
             foodBase = data
             settlingFood.removeAll { settled.contains($0.id) }
@@ -594,6 +604,10 @@ final class AppModel {
     /// the outbox; one the server refuses comes back as the outbox note.
     /// send: false when several are written at once and sent after the last.
     private func write(_ item: OutboxItem, send: Bool = true) {
+        // The saved copy of another day no longer holds; its next load saves it anew.
+        if let date = item.overlay?.date, date != Self.localDate(Date()) {
+            for screen in ["today", "food", "health"] { SnapshotCache.remove(key: SnapshotCache.dayKey(screen, date)) }
+        }
         enqueue(item)
         if send { Task { await sendOutbox(reloadToday: true) } }
     }
@@ -1000,20 +1014,120 @@ final class AppModel {
             return
         }
         selectedDate = date == todayDate ? nil : date
+        showSaved(selectedDate)
+        await refreshDay()
+    }
+
+    /// A day picked in Today's week strip; today or earlier.
+    func showDate(_ date: String) async {
+        let todayDate = Self.localDate(Date())
+        guard !demo, date <= todayDate, date != (selectedDate ?? todayDate) else { return }
+        selectedDate = date == todayDate ? nil : date
+        showSaved(selectedDate)
         await refreshDay()
     }
 
     func showToday() async {
         guard selectedDate != nil else { return }
         selectedDate = nil
+        showSaved(nil)
         await refreshDay()
     }
 
     /// The day changed: Today, and Food and Health when they were opened.
     func refreshDay() async {
-        await refresh()
-        if food != nil { await refreshFood() }
-        if health != nil { await refreshHealth() }
+        if let date = selectedDate {
+            await loadOtherDay(date)
+            return
+        }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.refresh() }
+            if food != nil { group.addTask { await self.refreshFood() } }
+            if health != nil { group.addTask { await self.refreshHealth() } }
+        }
+    }
+
+    /// The saved copy of a day (SnapshotCache), on screen at once while the
+    /// day loads; without one the screens keep the day before until it comes.
+    private func showSaved(_ date: String?) {
+        let decoder = JSONDecoder()
+        if let saved = SnapshotCache.data(key: SnapshotCache.dayKey("today", date)),
+           let value = try? decoder.decode(TodaySnapshot.self, from: saved.data) {
+            today = value
+            todayBase = saved.data
+        }
+        if food != nil, let saved = SnapshotCache.data(key: SnapshotCache.dayKey("food", date)),
+           let value = try? decoder.decode(FoodSnapshot.self, from: saved.data) {
+            food = value
+            foodBase = saved.data
+        }
+        if health != nil, let saved = SnapshotCache.data(key: SnapshotCache.dayKey("health", date)),
+           let value = try? decoder.decode(HealthSnapshot.self, from: saved.data) {
+            health = value
+        }
+        applyOutbox()
+    }
+
+    /// Another day than today: its Today, Food and Health from the server at
+    /// once, without the Apple Health sync, the waiting writes and the
+    /// athlete status, which belong to today. The arrows stay free: a newer
+    /// day chosen meanwhile wins and this answer is dropped.
+    private func loadOtherDay(_ date: String) async {
+        guard !demo, phase == .signedIn else { return }
+        let wantFood = food != nil, wantHealth = health != nil
+        let settledToday = Set(settlingToday.map { $0.id }), settledFood = Set(settlingFood.map { $0.id })
+        let api = api
+        async let todayAnswer: Result<(TodaySnapshot, Data), Error> = Self.attempt { try await api.todayData(date: date) }
+        async let foodAnswer: Result<(FoodSnapshot, Data), Error>? = wantFood ? Self.attempt { try await api.foodData(date: date) } : nil
+        async let healthAnswer: Result<HealthSnapshot, Error>? = wantHealth ? Self.attempt { try await api.health(date: date) } : nil
+        let (t, f, h) = await (todayAnswer, foodAnswer, healthAnswer)
+        guard selectedDate == date else { return }
+        var failure: Error?
+        switch t {
+        case .success(let (snapshot, data)):
+            today = snapshot
+            todayBase = data
+            settlingToday.removeAll { settledToday.contains($0.id) }
+            fetched[.today] = (Date(), date)
+        case .failure(let error): failure = error
+        }
+        if case .success(let (snapshot, data))? = f {
+            food = snapshot
+            foodBase = data
+            settlingFood.removeAll { settledFood.contains($0.id) }
+            fetched[.food] = (Date(), date)
+            Task { await AppleHealthExport.shared.saveFoodDay(snapshot) }
+        }
+        if case .success(let value)? = h {
+            health = value
+            fetched[.health] = (Date(), date)
+        }
+        dataRevision += 1
+        applyOutbox()
+        guard let failure else {
+            errorMessage = nil
+            _ = noteConnection(nil)
+            return
+        }
+        if (failure as? APIError) == .unauthorized { signOut(expired: true); return }
+        if Self.isCancellation(failure) { return }
+        // Without signal the saved day stays on screen; an error only without one.
+        let lost = noteConnection(failure)
+        if !lost { notice = failure.localizedDescription }
+    }
+
+    nonisolated private static func attempt<T>(_ body: () async throws -> T) async -> Result<T, Error> {
+        do { return .success(try await body()) } catch { return .failure(error) }
+    }
+
+    /// Yesterday's Today kept on the phone in advance (at most once an hour),
+    /// so the first step back opens at once.
+    private func prefetchYesterday() {
+        guard let yesterday = Self.shift(Self.localDate(Date()), by: -1) else { return }
+        if let saved = SnapshotCache.data(key: SnapshotCache.dayKey("today", yesterday)),
+           Date().timeIntervalSince(saved.savedAt) < 3600 { return }
+        let api = api
+        Task(priority: .utility) { _ = try? await api.todayData(date: yesterday) }
     }
 
     nonisolated static func localDate(_ date: Date) -> String {

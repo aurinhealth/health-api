@@ -4,6 +4,8 @@ struct TodayView: View {
     @Environment(AppModel.self) private var model
     var openSettings: () -> Void = {}
     var openCoach: () -> Void = {}
+    /// Sdílet: the day, a workout or the day's food as an image.
+    @State private var sharing = false
 
     var body: some View {
         NavigationStack(path: model.path(.today)) {
@@ -18,13 +20,14 @@ struct TodayView: View {
             ScreenBackground(glow: Palette.Glow.today)
             if let today = model.today {
                 PageScroll {
-                    TodayContent(today: today, openSettings: openSettings, openCoach: openCoach)
+                    TodayContent(today: today, openSettings: openSettings, openCoach: openCoach, openShare: { sharing = true })
                         .padding(.bottom, 100)
                 }
                 .refreshable { await model.refresh(announce: true) }
                 .tabTopBar {
                     DayBar(date: today.date)
                     Spacer(minLength: 0)
+                    ChromeButton(systemImage: "square.and.arrow.up", label: "Sdílet") { sharing = true }
                     ChromeButton(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: openCoach)
                     Button(action: openSettings) { AvatarView(size: 36) }
                         .buttonStyle(.plain)
@@ -44,6 +47,9 @@ struct TodayView: View {
             await model.refreshIfStale(.today)
             await DeviceLocation.refreshIfFollowing(model)
         }
+        .sheet(isPresented: $sharing) {
+            if let today = model.today { ShareSheet(source: .today(today)) }
+        }
     }
 }
 
@@ -53,6 +59,7 @@ struct TodayContent: View {
     let today: TodaySnapshot
     var openSettings: () -> Void = {}
     var openCoach: () -> Void = {}
+    var openShare: () -> Void = {}
     /// The account's first letter on the settings button (GET /app/api/me).
 
     /// "Upravit přehled": the cards below wiggle and can be moved, removed and added.
@@ -77,14 +84,29 @@ struct TodayContent: View {
 
     /// Everything above the widgets: the day, readiness, weather and the coach.
     @ViewBuilder private var header: some View {
+        // B3 (Petr, 2026-10-15): the month as the title and the week below it.
         HStack(spacing: 10) {
-            DayNavigator(date: today.date)
+            Text(verbatim: Fmt.monthTitle(today.date))
+                .font(Typo.sentence(30, relativeTo: .title))
+                .foregroundStyle(Palette.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .accessibilityAddTraits(.isHeader)
             Spacer()
+            if model.selectedDate != nil {
+                Button { Task { await model.showToday() } } label: {
+                    Label("Dnes", systemImage: "arrow.uturn.backward").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 10).frame(height: 30)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+            CircleButton(systemImage: "square.and.arrow.up", label: "Sdílet", action: openShare)
             CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: L10n.tr("Kouč"), action: openCoach)
             Button(action: openSettings) { AvatarView(size: 36) }
                 .buttonStyle(.plain)
             .accessibilityLabel("Profil a nastavení")
         }
+        WeekStrip(date: today.date, week: today.week).padding(.top, 14)
 
         if model.selectedDate == nil && !model.demo {
             DataAgePill()
@@ -99,10 +121,10 @@ struct TodayContent: View {
         .padding(.top, 40)
 
         if model.selectedDate == nil {
-            MorningCheckinCard(feeling: today.checkin, top: 20)
-            // Cycle tracking: the morning question, or the day's log.
+            // Cycle tracking: the morning question, or the day's log. (The
+            // "Jak se dnes cítíš?" card is gone: it lowered the readiness.)
             if let cycle = today.cycle, cycle.ask || cycle.flow > 0 {
-                TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
+                TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 20)
             }
         }
 
@@ -134,8 +156,9 @@ struct TodayContent: View {
             ThresholdCheckCard().padding(.top, 12)
         }
 
-        CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation, live: model.selectedDate == nil).padding(.top, 32)
-        RecoveryTodayCard(today: today).padding(.top, 12)
+        CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation, live: model.selectedDate == nil,
+                      tip: RecoveryTipRows.hasTip(today, selectedDate: model.selectedDate) ? AnyView(RecoveryTipRows(today: today)) : nil)
+            .padding(.top, 32)
     }
 }
 
@@ -249,6 +272,69 @@ struct DataAgePill: View {
         day.timeZone = calendar.timeZone
         day.dateFormat = L10n.isEnglish ? "MMM d" : "d. M."
         return L10n.f("data z %@", day.string(from: last) + " " + time)
+    }
+}
+
+/// Today's week, Monday to Sunday: a dot in the readiness colour under every
+/// day up to the shown one, today filled, an earlier day picked with a ring in
+/// its colour. A tap opens that day; later days are faint and do nothing.
+struct WeekStrip: View {
+    @Environment(AppModel.self) private var model
+    let date: String
+    let week: [TodaySnapshot.WeekDay]?
+
+    private var today: String { AppModel.localDate(Date()) }
+
+    /// The server's week, or Monday to Sunday without zones (an older server).
+    private var days: [TodaySnapshot.WeekDay] {
+        if let week, week.count == 7 { return week }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.timeZone = calendar.timeZone
+        parser.dateFormat = "yyyy-MM-dd"
+        let weekday = parser.date(from: date).map { (calendar.component(.weekday, from: $0) + 5) % 7 } ?? 0
+        let monday = AppModel.shift(date, by: -weekday) ?? date
+        return (0..<7).map { TodaySnapshot.WeekDay(date: AppModel.shift(monday, by: $0) ?? monday, zone: nil) }
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(days, id: \.date) { day in
+                Button { Task { await model.showDate(day.date) } } label: { cell(day) }
+                    .buttonStyle(.plain)
+                    .disabled(day.date > today || model.demo || model.loading)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, -6)
+    }
+
+    private func cell(_ day: TodaySnapshot.WeekDay) -> some View {
+        let isToday = day.date == today, selected = day.date == date, future = day.date > today
+        let color = ReadinessText.pill(day.zone)?.1
+        return VStack(spacing: 5) {
+            Text(verbatim: Fmt.weekdayShort(day.date)).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.muted)
+            ZStack {
+                if isToday && selected {
+                    Circle().fill(Palette.ink)
+                } else if selected {
+                    Circle().stroke(color ?? Palette.ink.opacity(0.5), lineWidth: 2)
+                } else if isToday {
+                    Circle().stroke(Palette.ink.opacity(0.3), lineWidth: 1.5)
+                }
+                Text(verbatim: Fmt.dayNumber(day.date))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isToday && selected ? Palette.background : selected ? (color ?? Palette.ink) : future ? Palette.faint : Palette.ink)
+            }
+            .frame(width: 38, height: 38)
+            Circle().fill(color ?? .clear).frame(width: 5, height: 5)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Fmt.dayMonth(day.date))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -503,49 +589,79 @@ struct MorningCheckinCard: View {
     }
 }
 
-/// Sleep · Strain · HRV under the readiness number.
+/// Sleep · Strain · HRV under the readiness number, each on a range bar:
+/// sleep against the night's need, the strain against today's goal, the HRV
+/// against the athlete's usual range.
 struct KeyNumbers: View {
     @Environment(AppModel.self) private var model
     let today: TodaySnapshot
 
     var body: some View {
         HStack(spacing: 0) {
-            RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), today.sleep?.index.map { L10n.f("index %@", "\($0)") }, Palette.indigo) }
+            RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), nil, sleep) }
             Divider().overlay(Palette.hairline)
-            RouteLink(route: .strain) {
-                cell("Námaha", Fmt.decimal(today.strain.score), strainNote, today.strain.target != nil ? Palette.green : Palette.amber)
-            }
+            RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
             Divider().overlay(Palette.hairline)
-            RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), hrvDelta, hrvColor) }
+            RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
         }
         .fixedSize(horizontal: false, vertical: true)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
     }
 
-    private var strainNote: String? {
-        // Whole numbers: "cíl 10,8–13,8" does not fit a third of the phone's width.
-        if let t = today.strain.target { return L10n.f("cíl %@–%@", Fmt.int(t.low), Fmt.int(t.high)) }
-        return today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }
+    /// A cell's bar (when it has a range) and the line under it.
+    struct Gauge {
+        var bar: (value: Double, low: Double, high: Double)?
+        var note: String?
+        var color: Color
     }
 
-    private var hrvDifference: Double? {
-        guard let value = today.hrv?.value, let base = today.hrv?.baseline else { return nil }
-        return (value - base).rounded()
+    /// The night against its need: the band is half an hour either side of it.
+    private var sleep: Gauge {
+        guard let minutes = today.sleep?.minutes else { return Gauge(note: nil, color: Palette.indigo) }
+        guard let need = today.sleep?.need, need > 0 else {
+            return Gauge(note: today.sleep?.index.map { L10n.f("index %@", "\($0)") }, color: Palette.indigo)
+        }
+        let low = Double(need) - 30, high = Double(need) + 30
+        return Gauge(bar: (minutes, low, high),
+                     note: L10n.f("%@ %% potřeby", Fmt.int(minutes / Double(need) * 100)),
+                     color: minutes >= low ? Palette.green : Palette.amber)
     }
 
-    private var hrvDelta: String? {
-        guard let d = hrvDifference else { return nil }
-        return (d >= 0 ? "↑ " : "↓ ") + Fmt.int(abs(d)) + " ms"
+    private var strain: Gauge {
+        if let t = today.strain.target {
+            // Whole numbers: "cíl 10,8–13,8" does not fit a third of the phone's width.
+            let note = L10n.f("cíl %@–%@", Fmt.int(t.low), Fmt.int(t.high))
+            guard let score = today.strain.score else { return Gauge(note: note, color: Palette.green) }
+            return Gauge(bar: (score, t.low, t.high), note: note,
+                         color: RangeBar.side(score, t.low, t.high) == 0 ? Palette.green : Palette.amber)
+        }
+        return Gauge(note: today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }, color: Palette.amber)
     }
 
-    private var hrvColor: Color { (hrvDifference ?? 0) >= 0 ? Palette.green : Palette.rust }
+    private var hrv: Gauge {
+        guard let value = today.hrv?.value else { return Gauge(note: nil, color: Palette.green) }
+        if let low = today.hrv?.low, let high = today.hrv?.high, high > low {
+            return Gauge(bar: (value, low, high), note: RangeBar.word(value, low, high),
+                         color: RangeBar.color(value, low, high, worseAbove: false))
+        }
+        guard let base = today.hrv?.baseline else { return Gauge(note: nil, color: Palette.green) }
+        let d = (value - base).rounded()
+        return Gauge(note: (d >= 0 ? "↑ " : "↓ ") + Fmt.int(abs(d)) + " ms", color: d >= 0 ? Palette.green : Palette.rust)
+    }
 
-    private func cell(_ title: String, _ value: String, _ note: String?, _ color: Color) -> some View {
+    private func cell(_ title: String, _ value: String, _ unit: String?, _ gauge: Gauge) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
-            Text(value).font(Typo.number(30)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
-            Text(note ?? " ").font(Typo.caption).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.75)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(value).font(Typo.number(30)).foregroundStyle(Palette.ink)
+                if let unit, value != "–" { Text(unit).font(Typo.caption).foregroundStyle(Palette.muted) }
+            }
+            .lineLimit(1).minimumScaleFactor(0.7)
+            if let bar = gauge.bar {
+                RangeBar(value: bar.value, low: bar.low, high: bar.high, color: gauge.color).padding(.vertical, 4)
+            }
+            Text(gauge.note ?? " ").font(Typo.caption.weight(.medium)).foregroundStyle(gauge.color).lineLimit(1).minimumScaleFactor(0.75)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

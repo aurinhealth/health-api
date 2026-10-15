@@ -191,7 +191,7 @@ struct HealthRoute: View {
             case .readiness:
                 // Today's check-in stays changeable here once Today hides it.
                 DetailScreen(glow: Palette.Glow.health, title: "Připravenost") {
-                    ReadinessDetailContent(health: health, checkin: model.selectedDate == nil && !model.demo && model.today != nil ? .some(model.today?.checkin) : nil)
+                    ReadinessDetailContent(health: health)
                 }
             case .heart: DetailScreen(glow: Palette.Glow.health, title: "Srdce") { HeartDetailContent(health: health) }
             case .weight: WeightDetailView(health: health)

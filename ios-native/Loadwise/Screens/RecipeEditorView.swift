@@ -152,7 +152,7 @@ struct IngredientPicker: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zavřít") { dismiss() } } }
         }
-        .task { own = (try? await model.api.personalFoods(frequent: true)) ?? [] }
+        .task { own = (try? await model.api.personalFoods(frequent: true, limit: 500)) ?? [] }
         .task(id: query) {
             let q = query.trimmingCharacters(in: .whitespaces)
             guard q.count >= 2 else { results = []; return }

@@ -88,7 +88,7 @@ final class APIClient: @unchecked Sendable {
     func todayData(date: String? = nil) async throws -> (TodaySnapshot, Data) {
         var path = "/app/api/today"
         if let date { path += "?date=" + date }
-        return try await getWithData(path, cacheKey: date == nil ? "today" : nil)
+        return try await getWithData(path, cacheKey: SnapshotCache.dayKey("today", date))
     }
 
     func training() async throws -> TrainingSnapshot {
@@ -354,7 +354,7 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Health
 
     func health(date: String? = nil) async throws -> HealthSnapshot {
-        try await get("/app/api/health" + (date.map { "?date=" + $0 } ?? ""), cacheKey: date == nil ? "health" : nil)
+        try await get("/app/api/health" + (date.map { "?date=" + $0 } ?? ""), cacheKey: SnapshotCache.dayKey("health", date))
     }
 
     func night(date: String) async throws -> NightDetail {
@@ -372,7 +372,7 @@ final class APIClient: @unchecked Sendable {
     }
 
     func foodData(date: String? = nil) async throws -> (FoodSnapshot, Data) {
-        try await getWithData("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: date == nil ? "food" : nil)
+        try await getWithData("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: SnapshotCache.dayKey("food", date))
     }
 
     /// Personal foods, the shared catalog and recipes; with a barcode, that code.
@@ -384,9 +384,9 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// Foods saved before: the newest first, or the most often logged.
-    func personalFoods(frequent: Bool = false) async throws -> [FoodProduct] {
+    func personalFoods(frequent: Bool = false, limit: Int = 100) async throws -> [FoodProduct] {
         struct Response: Decodable { let products: [FoodProduct]? }
-        let response: Response = try await get("/app/api/food/personal" + (frequent ? "?sort=frequent" : ""))
+        let response: Response = try await get("/app/api/food/personal?limit=\(limit)" + (frequent ? "&sort=frequent" : ""))
         return response.products ?? []
     }
 

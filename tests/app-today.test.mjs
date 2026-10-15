@@ -251,3 +251,13 @@ test("the day's strain target follows readiness, the plan, sleep debt and the zo
   assert.equal(t.strain.target.readiness, t.readiness.score);
   assert.equal(t.strain.target.plan, "Silový trénink");
 });
+
+test("the week strip: Monday to Sunday of the day's week, the day's own zone, no zone after it", async () => {
+  const { readinessWeek } = await import("../src/app-today.js");
+  const week = readinessWeek({ date: "2026-10-14", readiness: { score: 72, zone: "green", rows: [] } });
+  assert.deepEqual(week.map(d => d.date), ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"]);
+  assert.equal(week[2].zone, "green");
+  assert.equal(week[0].zone, null, "no readiness without data");
+  assert.ok(week.slice(3).every(d => d.zone === null));
+  assert.equal(readinessWeek({ date: "2026-10-18", readiness: { score: null, zone: null, rows: [] } })[0].date, "2026-10-12", "Sunday belongs to its Monday");
+});

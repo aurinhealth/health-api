@@ -18,6 +18,8 @@ struct RecoveryToday: Decodable, Equatable {
         let sport: String?
         let focus: String?
         let routine: Routine?
+        /// Sauna: the saved row once done, so a tap by mistake can be taken back.
+        var savedId: Int? = nil
 
         var id: String { kind }
         var isDone: Bool { done ?? false }
@@ -70,6 +72,12 @@ extension APIClient {
         if let sport { body["sport"] = .string(sport) }
         if let focus { body["focus"] = .string(focus) }
         let _: JSONValue = try await send("/app/api/recovery", method: "POST", body: body)
+    }
+
+    /// Removes a saved stretching or sauna from its day (Plán dne, a sauna ticked by mistake).
+    func deleteRecovery(id: Int) async throws {
+        let body: JSONObject = ["id": .number(Double(id))]
+        let _: JSONValue = try await send("/app/api/recovery", method: "DELETE", body: body)
     }
 
     func coachText(screen: String) async throws -> CoachText {

@@ -6,6 +6,7 @@ import { localToday } from "./user-time.js";
 import { L, plural as pluralWord } from "./lang.js";
 import { readinessFor } from "./readiness.js";
 import { manualReadinessFor } from "./morning-checkin.js";
+import { readinessParts } from "./app-health.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -485,7 +486,9 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     sport,
     date:targetDate,
     // flags: the recovery model's warnings (respiration_elevated, skin_temp_elevated, wrist_temp_elevated, hrv_trend_down) and a tired or sick check-in.
-    readiness:{score,status:readiness,todayZone:ready.zone||null,reasons:readinessReasons,flags:[...(body.flags||[]),...(["tired","sick"].includes(checkin)?["checkin_"+checkin]:[])],provisional:!!ready.provisional,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,wristTempDeviation:bw?.deviation??null,manualReadiness:manualReadiness??null},
+    // The "HRV +15 · Tep −8 · Spánek −13" row under the readiness on Health:
+    // points each signal added to or took from 70, never beats or ms.
+    readiness:{score,status:readiness,todayZone:ready.zone||null,todayScore:ready.score??null,todayParts:ready.score==null?[]:[...readinessParts(body),...(body.score!=null&&ready.score<body.score?[{key:"checkin",points:ready.score-body.score}]:[])],reasons:readinessReasons,flags:[...(body.flags||[]),...(["tired","sick"].includes(checkin)?["checkin_"+checkin]:[])],provisional:!!ready.provisional,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,wristTempDeviation:bw?.deviation??null,manualReadiness:manualReadiness??null},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
     athleteState:policy,rationale:policy.paused?policy.guidance:rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
     constraints:{availableMinutes:requestedMinutes,autoLength,novice,capacityMinutes:capacity?Math.round(capacity.minutes):null,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},
