@@ -98,6 +98,7 @@ function trainingFacts(d) {
     form: form ? { fitness: num(form.fitness), fatigue: num(form.fatigue), form: num(form.form), zone: form.label || null } : null,
     next: next ? { date: next.date || null, title: next.title || null, sport: next.sport || null, tss: num(next.tss), exercises: (next.exercises || []).slice(0, 6) } : null,
     event: event?.date ? { name: event.name || null, daysLeft: num(event.daysLeft), phase: event.phase || null } : null,
+    athleteState: d.athleteState && d.athleteState !== "active" ? d.athleteState : null,
     vo2max: d.vo2max ? { value: num(d.vo2max.value), change28d: num(d.vo2max.change) } : null,
     // The recovery model's readiness of today, as the day review gets it
     // (coach-review.js dayReadiness), added to the screen data by the route.
@@ -124,7 +125,7 @@ function trainingFacts(d) {
     fallback: form?.text ? { text: form.text, advice: null } : null,
     ready: week.planned != null || form != null,
     // A new readiness zone (a morning check-in, last night's sleep) asks for a new text too.
-    fingerprint: [done.length, week.planned ?? "", next ? (next.date || "") + (next.title || "") : "", form?.label || "", step(num(form?.form), 5), facts.readiness?.zone || "", step(facts.readiness?.score, 5)].join(":")
+    fingerprint: [done.length, week.planned ?? "", next ? (next.date || "") + (next.title || "") : "", form?.label || "", step(num(form?.form), 5), facts.readiness?.zone || "", step(facts.readiness?.score, 5), facts.athleteState || ""].join(":")
   };
 }
 

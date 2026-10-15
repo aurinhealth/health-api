@@ -12,6 +12,8 @@
 import { L, storedLanguage, withLang } from "./lang.js";
 import { localDate, localHour, localToday, storedTimeZone, withTimeZone } from "./user-time.js";
 
+const shiftDay = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
+
 // The app's bundle id (ios-native/project.yml), the topic every push names.
 export const APNS_TOPIC = "eu.petrfitnessdata.loadwise.native";
 export const MORNING_READINESS = "morning-readiness";
@@ -164,7 +166,8 @@ export function hasLastNight(records, now = new Date()) {
 
 // The morning push for the user of env, in their language and time zone: in
 // the 5–11 window, once a local day, only to a user with a device token and
-// only when today's readiness has a score. readiness(date) computes it
+// only when today's readiness has a score (or, in the last hour, a line that
+// the night hasn't arrived when yesterday had one). readiness(date) computes it
 // (entrypoint.js: as /app/api/today does) and runs only when everything else
 // allows a push.
 export async function sendMorningReadiness(env, { readiness, now = new Date(), fetchImpl = fetch } = {}) {
@@ -178,14 +181,22 @@ export async function sendMorningReadiness(env, { readiness, now = new Date(), f
     const date = localToday(now);
     if (await db.prepare("SELECT 1 AS sent FROM push_log WHERE user_id=? AND kind=? AND local_date=?").bind(db.userId, MORNING_READINESS, date).first()) return { sent: 0, reason: "already-sent" };
     const value = typeof readiness === "function" ? await readiness(date) : readiness;
-    if (!value || value.score == null || !Number.isFinite(Number(value.score))) return { sent: 0, reason: "no-score" };
+    const scored = v => v && v.score != null && Number.isFinite(Number(v.score));
+    // No night by the last hour of the window, while yesterday had a score: one
+    // line, so the athlete knows the watch hasn't synced (opening the app syncs).
+    // A new account without enough history gets nothing.
+    let text = null;
+    if (!scored(value)) {
+      if (localHour(now) < MORNING_TO_HOUR - 1 || typeof readiness !== "function" || !scored(await Promise.resolve().then(() => readiness(shiftDay(date, -1))).catch(() => null))) return { sent: 0, reason: "no-score" };
+      text = L("Data z noci zatím nedorazila. Otevři Aurin a synchronizuje se.", "Last night's data hasn't arrived yet. Open Aurin to sync.");
+    }
     // Without last night the score is HRV and resting HR only: wait for the
     // night's upload until the last hour of the window.
-    if ((value.missing || []).includes("sleep") && localHour(now) < MORNING_TO_HOUR - 1) return { sent: 0, reason: "waiting-for-sleep" };
+    if (!text && (value.missing || []).includes("sleep") && localHour(now) < MORNING_TO_HOUR - 1) return { sent: 0, reason: "waiting-for-sleep" };
     // The day is claimed before sending, so an upload and the cron at the same moment send one push.
     const claim = await db.prepare("INSERT INTO push_log(user_id,kind,local_date) VALUES(?,?,?) ON CONFLICT(user_id,kind,local_date) DO NOTHING").bind(db.userId, MORNING_READINESS, date).run();
     if (!Number(claim?.meta?.changes)) return { sent: 0, reason: "already-sent" };
-    const text = readinessMessage(value);
+    text ||= readinessMessage(value);
     let sent = 0, removed = 0;
     for (const device of devices) {
       const result = await sendPush(env, device, text, { fetchImpl, now: now.getTime() }).catch(error => ({ ok: false, error: error.message }));

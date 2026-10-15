@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { assistantTask, isSimpleMessage, askCoach, coachContext, compactActivity, coachAnswerText, TRUNCATED_NOTE, strengthProgress, nutritionContext, engineSport, focusGoal, sleepNights, localNow } from '../src/coach-assistant.js';
+import { assistantTask, isSimpleMessage, askCoach, coachContext, compactActivity, coachAnswerText, TRUNCATED_NOTE, strengthProgress, nutritionContext, engineSport, focusGoal, sleepNights, sleepNeedContext, localNow } from '../src/coach-assistant.js';
 import { isFoodLogMessage } from '../src/food-chat.js';
 import { validateCoachActions, actionSafetyContext, actionsNote, COACH_ACTION_FORMAT } from '../src/coach-actions.js';
 import { explicitPreference } from '../src/athlete-state.js';
@@ -245,4 +245,14 @@ test('the coach sees VO2max, walking heart rate, heart rate recovery and the ath
   assert.equal(row.hrRecovery, 31);
   assert.deepEqual(row.feelings, { fatigue: 3, soreness: 2, scale: '1 best, 4 worst' });
   assert.equal(compactWellnessRow({ id: '2026-10-13' }).feelings, undefined);
+});
+
+test('the coach sees how the nights went, not only how long, and the sleep debt',()=>{
+  const night={date:'2026-10-05',durationMin:390,timeInBedMin:450,stages:{DEEP:42,REM:70,LIGHT:278,AWAKE:55},latencyMin:25};
+  assert.deepEqual(sleepNights([night,{date:'2026-10-05',durationMin:40,nap:true}],'2026-10-05'),[{date:'2026-10-05',minutes:390,deep:42,rem:70,light:278,awake:55,fallAsleep:25,efficiency:87}]);
+  const short=[1,2,3,4,5].map(k=>({date:`2026-10-0${k}`,durationMin:360}));
+  const need=sleepNeedContext(short,{date:'2026-10-05',profile:{age:35}});
+  assert.ok(need.debt7dMinutes>=200);
+  assert.ok(need.tonightMinutes>=420);
+  assert.equal(sleepNeedContext([],{date:'2026-10-05'}),null);
 });
