@@ -16,6 +16,10 @@ export async function saveSharedFood(db,input,personalId=null){
   if(personalId)await db.prepare('INSERT INTO food_contributions(user_id,personal_id,catalog_id) VALUES(?,?,?)').bind(db.userId,personalId,key).run();
   return {...product,catalog_id:key};
 }
+// The SQL filter: the first three letters of the query's longest word, so the
+// 500 newest candidates are ones that can match (two letters of the whole query
+// let a big catalogue push the right food out). Fuzzy matching then decides.
+export const narrow=q=>{const w=q.split(/\s+/).reduce((a,b)=>b.length>a.length?b:a,'');return w.length>=2?w.slice(0,3):q.slice(0,2);};
 export async function searchSharedFoods(db,name,barcode){
   await ensure(db);
   // SQL narrows the candidate set before fuzzy Czech matching. Barcode lookups
@@ -23,7 +27,7 @@ export async function searchSharedFoods(db,name,barcode){
   const code=String(barcode||'').replace(/\D/g,''),q=foodKey(name).replace(/[%_]/g,'');
   if(!code&&q.length<2)return [];
   const base="SELECT food_key,product_json,(SELECT COUNT(*) FROM food_reports WHERE user_id IS NOT NULL AND catalog_id=food_key) AS reports FROM shared_foods WHERE ";
-  const rows=(await (code?db.prepare(base+"json_extract(product_json,'$.barcode')=? ORDER BY updated_at DESC LIMIT 500").bind(code):db.prepare(base+"search_name LIKE ? ORDER BY updated_at DESC LIMIT 500").bind('%'+q.slice(0,2)+'%')).all()).results;
+  const rows=(await (code?db.prepare(base+"json_extract(product_json,'$.barcode')=? ORDER BY updated_at DESC LIMIT 500").bind(code):db.prepare(base+"search_name LIKE ? ORDER BY updated_at DESC LIMIT 500").bind('%'+narrow(q)+'%')).all()).results;
   return rows.map(row=>({...JSON.parse(row.product_json),catalog_id:row.food_key,reports:row.reports,confidence:row.reports?'reported':'user'})).filter(p=>code?String(p.barcode)===code:foodSimilarity(name,p.name)>=.65).sort((a,b)=>foodSimilarity(name,b.name)-foodSimilarity(name,a.name)).slice(0,12);
 }
 
