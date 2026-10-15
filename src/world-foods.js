@@ -39,12 +39,29 @@ async function json(bucket, key) {
   cache.set(key, { value, until: Date.now() + TTL_MS });
   return value;
 }
-async function gzipLines(bucket, key, offset, length) {
+// A pack's slice never changes within a version (the key carries it), so the
+// decoded rows stay in the isolate (typing "jog", "jogu", "jogurt" reads one
+// node) and the text in the data centre's cache for other isolates.
+const decoded = new WeakMap();
+const NODES_KEPT = 40;
+async function gzipLines(bucket, key, offset, length, store = globalThis.caches?.default) {
   if (!length) return [];
-  const o = await bucket.get(key, { range: { offset, length } });
-  if (!o) return [];
-  const text = await new Response(o.body.pipeThrough(new DecompressionStream('gzip'))).text();
-  return text ? text.split('\n').map(line => JSON.parse(line)) : [];
+  const id = `${key}@${offset}+${length}`;
+  if (!decoded.has(bucket)) decoded.set(bucket, new Map());
+  const nodes = decoded.get(bucket);
+  if (nodes.has(id)) { const rows = nodes.get(id); nodes.delete(id); nodes.set(id, rows); return rows; }
+  const url = 'https://world-foods.internal/' + encodeURIComponent(id);
+  let text = await store?.match(url).then(r => r?.text()).catch(() => null);
+  if (text == null) {
+    const o = await bucket.get(key, { range: { offset, length } });
+    if (!o) return [];
+    text = await new Response(o.body.pipeThrough(new DecompressionStream('gzip'))).text();
+    await store?.put(url, new Response(text, { headers: { 'Cache-Control': 'max-age=86400' } })).catch(() => {});
+  }
+  const rows = text ? text.split('\n').map(line => JSON.parse(line)) : [];
+  nodes.set(id, rows);
+  if (nodes.size > NODES_KEPT) nodes.delete(nodes.keys().next().value);
+  return rows;
 }
 
 // The record in the shape of food-sources.js productFromLabel.

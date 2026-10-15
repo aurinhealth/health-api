@@ -127,3 +127,12 @@ test('codes and words fold like the release', () => {
   assert.equal(barcodeKey('123'), null);
   assert.deepEqual(words('Hořká čokoláda 70% a'), ['horka', 'cokolada', '70']);
 });
+
+test('typing more of the same word reads the catalogue node once', async () => {
+  const env = { FOOD_CATALOG_R2: bucketFrom(fixture.dir, 'test1') };
+  await searchWorldFoods(env, { name: 'jog', language: 'cs' });
+  const after = env.FOOD_CATALOG_R2.reads;
+  const [p] = await searchWorldFoods(env, { name: 'jogurt', language: 'cs' });
+  assert.equal(p.name, 'Bílý jogurt');
+  assert.equal(env.FOOD_CATALOG_R2.reads, after);
+});
