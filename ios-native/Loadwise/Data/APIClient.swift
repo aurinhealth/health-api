@@ -585,7 +585,9 @@ final class APIClient: @unchecked Sendable {
     /// Sends a write that may have waited for signal (Outbox). A missing
     /// connection throws the URLError; an answer other than 2xx throws
     /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx).
-    func sendQueued(_ item: OutboxItem) async throws {
+    /// The server's answer (the new entry's id, for a meal or drink).
+    @discardableResult
+    func sendQueued(_ item: OutboxItem) async throws -> Data {
         var request = makeRequest(item.path, method: item.method)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = item.body
@@ -605,6 +607,7 @@ final class APIClient: @unchecked Sendable {
             if (400..<500).contains(http.statusCode), ![408, 429].contains(http.statusCode) { throw OutboxRefusal.rejected(message) }
             throw OutboxRefusal.retry(message)
         }
+        return data
     }
 
     /// timeout: longer for AI that reads photos, which may wait in line on the
