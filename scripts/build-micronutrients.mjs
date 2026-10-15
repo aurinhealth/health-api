@@ -559,9 +559,10 @@ export function compute({ tables, records, log = console.log, entries = MATCHES 
   for (const { e, src, desc, id, f } of found) {
     const k = keyOf(src, id), cat = generic.get(k), m = cat && cat.p != null ? cat : { p: f.m.pro, f: f.m.fat, c: f.m.carb, e: f.m.kcal };
     if (!cat) log(`  reference ${k} (${desc}) is not in the catalogue; using the table's macros`);
-    if (m?.p == null || m?.f == null || m?.c == null || m?.e == null) { missing.push(`${e.id}: ${src} "${desc}" has no macros`); continue; }
+    if (m?.p == null || m?.f == null || m?.c == null || m?.e == null) { log(`  reference ${k} (${desc}) has no macros, skipped`); continue; }
     refs.set(`${src}\u0000${desc}`, { k, n: cat?.en || cat?.n || f.name, cs: cat?.cs, e: m.e, p: m.p, c: m.c, f: m.f, v: rounded(f.v), entry: e });
   }
+  for (const e of entries) if (!e.refs.some(([src, desc]) => refs.has(`${src}\u0000${desc}`))) missing.push(`${e.id}: no usable reference`);
   if (missing.length) throw new Error(`Missing references:\n${missing.join('\n')}`);
   const refOf = (src, desc) => refs.get(`${src}\u0000${desc}`) || null;
 
