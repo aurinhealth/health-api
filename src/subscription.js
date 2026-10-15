@@ -1,6 +1,6 @@
 import { L } from './lang.js';
 import { consentStatus } from './consent.js';
-// Billing is deliberately inactive during the invitation-only pilot.
+// Billing is deliberately inactive until Pro can be bought.
 export const SUBSCRIPTION_FEATURES = [
   {name:'Profil, kalorické cíle a přehledy', ai:false},
   {name:'Ruční zápis jídla, váhy a tréninků', ai:false},
@@ -42,7 +42,7 @@ export async function subscriptionStatus(env) {
   // Only a bare env without a database (local tools, tests) skips the check.
   const aiConsent=env.DB||env.RAW_DB||env.CONSENT_REQUIRED||env.USER_ID!=null?(await consentStatus(env)).aiAllowed:true;
   return {status:'ok',mode:enforced?'paid':'pilot',plan,introSeen:await introSeen(env),aiConsent,aiAccess:aiConsent&&(!enforced||plan==='ai'),billingActive:enforced,checkoutAvailable:false,features:SUBSCRIPTION_FEATURES.map(f=>({...f,name:L(f.name,FEATURES_EN[f.name]||f.name)})),
-    terms:L('Během pilotu pro pozvané jsou všechny dostupné funkce zdarma. Není potřeba platební karta a nic se automaticky neúčtuje. Budoucí AI předplatné, cenu, limity a podmínky oznámíme před spuštěním; placený tarif si zvolíš výslovně. Propojené služby mohou mít vlastní podmínky a ceny.', 'During the invitation-only pilot, all available features are free. No payment card is needed and nothing is charged automatically. We\'ll announce the future AI subscription, its price, limits and terms before it launches; you\'ll choose a paid plan explicitly. Connected services may have their own terms and prices.')};
+    terms:L('Zatím jsou všechny dostupné funkce zdarma. Není potřeba platební karta a nic se automaticky neúčtuje. Budoucí AI předplatné, cenu, limity a podmínky oznámíme před spuštěním; placený tarif si zvolíš výslovně. Propojené služby mohou mít vlastní podmínky a ceny.', 'For now, all available features are free. No payment card is needed and nothing is charged automatically. We\'ll announce the future AI subscription, its price, limits and terms before it launches; you\'ll choose a paid plan explicitly. Connected services may have their own terms and prices.')};
 }
 export async function assertAIAccess(env){
   const status=await subscriptionStatus(env);
