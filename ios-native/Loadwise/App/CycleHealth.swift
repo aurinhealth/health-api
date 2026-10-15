@@ -98,7 +98,8 @@ enum CycleHealth {
         }
         // Symptoms: any severity but "not present" (raw value 1 of
         // HKCategoryValueSeverity and HKCategoryValuePresence).
-        for (identifier, symptom) in [(HKCategoryTypeIdentifier.hotFlashes, "hot_flashes"), (.nightSweats, "night_sweats"), (.sleepChanges, "poor_sleep")] {
+        let symptomTypes: [(HKCategoryTypeIdentifier, String)] = [(.hotFlashes, "hot_flashes"), (.nightSweats, "night_sweats"), (.sleepChanges, "poor_sleep")]
+        for (identifier, symptom) in symptomTypes {
             for s in await samples(store, HKCategoryType(identifier), from: start) where s.value != 1 {
                 let date = AppModel.localDate(s.startDate)
                 var day = byDay[date] ?? Day(date: date, flow: 0, ovulation: false)
