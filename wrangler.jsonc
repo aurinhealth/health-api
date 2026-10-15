@@ -60,6 +60,11 @@
   "send_email": [
     { "name": "EMAIL" }
   ],
+  // The cron runs each user's background jobs in an invocation of their own
+  // (src/user-jobs-entrypoint.js), so one run's query limit is not shared by all.
+  "services": [
+    { "binding": "USER_JOBS", "service": "health-api", "entrypoint": "UserJobs" }
+  ],
   "workers_dev": true,
   // The owner is the first admin; existing single-user data belongs to this account.
   "vars": {
@@ -69,6 +74,9 @@
     "FOOD_CATALOG_ROUTING": "true",
     "USER_DATA_SHARD_COUNT": "20",
     "OWNER_EMAIL": "chelseafc.czsk@gmail.com",
+    // Anyone may create an account while shard capacity lasts (src/tenancy.js accountCapacity);
+    // when it is full, new e-mails land in signup_waitlist.
+    "OPEN_SIGNUP": "true",
     // Strava app (src/strava.js); public. STRAVA_CLIENT_SECRET is a Worker secret.
     "STRAVA_CLIENT_ID": "183664",
     // Ultrahuman app (src/ultrahuman.js); public. ULTRAHUMAN_CLIENT_SECRET is a Worker secret.
