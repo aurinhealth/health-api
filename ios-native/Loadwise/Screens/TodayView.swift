@@ -587,10 +587,9 @@ struct MorningCheckinCard: View {
     }
 }
 
-/// Sleep · HRV · Strain under the readiness number, each on a range bar:
-/// sleep against the night's need, the HRV against the athlete's usual range,
-/// the strain against today's goal. Sleep and HRV come first as everywhere in
-/// the app (Health's readiness row, share images, the coach).
+/// Sleep · Strain · HRV under the readiness number, each on a range bar:
+/// sleep against the night's need, the strain against today's goal, the HRV
+/// against the athlete's usual range.
 struct KeyNumbers: View {
     @Environment(AppModel.self) private var model
     let today: TodaySnapshot
@@ -599,9 +598,9 @@ struct KeyNumbers: View {
         HStack(spacing: 0) {
             RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), nil, sleep) }
             Divider().overlay(Palette.hairline)
-            RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
-            Divider().overlay(Palette.hairline)
             RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
+            Divider().overlay(Palette.hairline)
+            RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
         }
         .fixedSize(horizontal: false, vertical: true)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))

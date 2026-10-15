@@ -31,7 +31,7 @@ test("Health: readiness with its parts and 14 days of history", () => {
   assert.ok(h.readiness.score > 70);
   assert.equal(h.readiness.zone, "green");
   const keys = h.readiness.parts.map(p => p.key);
-  assert.deepEqual(keys, ["sleep", "hrv", "restingHR"]);
+  assert.deepEqual(keys, ["sleep", "restingHR", "hrv"]);
   assert.ok(Math.abs(70 + h.readiness.parts.reduce((s, p) => s + p.points, 0) - h.readiness.score) <= 2, "parts add up to the score");
   const hrv = h.readiness.parts.find(p => p.key === "hrv");
   assert.ok(hrv.points > 0, "HRV above normal raises it");
