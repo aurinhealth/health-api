@@ -242,7 +242,7 @@ export function parseCofid(sheets, log = () => {}) {
   const foods = new Map(), taken = new Set();
   for (const { name: sheet, rows } of sheets) {
     const h = rows.slice(0, 6).findIndex(r => r.some(c => /^food\s*code$/i.test(String(c ?? '').trim())));
-    if (h < 0) continue;
+    if (h < 0) { log(`  CoFID ${sheet}: no "Food Code" header in ${JSON.stringify(rows.slice(0, 3).map(r => r.slice(0, 6)))}`); continue; }
     const head = rows[h].map(c => String(c ?? '').replace(/\s+/g, ' ').trim());
     const code = head.findIndex(c => /^food\s*code$/i.test(c)), nameCol = head.findIndex(c => /^food\s*name$/i.test(c));
     const cols = [];
@@ -327,20 +327,21 @@ export const SOURCES = {
   usda_sr_legacy: { urls: [FDC + 'FoodData_Central_sr_legacy_food_csv_2018-04.zip'], pages: FDC_PAGES, link: /FoodData_Central_sr_legacy_food_csv_[\w-]+\.zip/g, need: [/^food\.csv$/, /^nutrient\.csv$/, /^food_nutrient\.csv$/] },
   usda_foundation: { urls: ['2026-04-30', '2025-12-18', '2025-04-24', '2024-10-31', '2024-04-18'].map(d => `${FDC}FoodData_Central_foundation_food_csv_${d}.zip`), pages: FDC_PAGES, link: /FoodData_Central_foundation_food_csv_[\w-]+\.zip/g, need: [/^food\.csv$/, /^nutrient\.csv$/, /^food_nutrient\.csv$/] },
   usda_survey: { urls: ['2024-10-31', '2022-10-28'].map(d => `${FDC}FoodData_Central_survey_food_csv_${d}.zip`), pages: FDC_PAGES, link: /FoodData_Central_survey_food_csv_[\w-]+\.zip/g, need: [/^food\.csv$/, /^nutrient\.csv$/, /^food_nutrient\.csv$/] },
-  fineli: { urls: ['https://fineli.fi/fineli/content/file/47', 'https://fineli.fi/fineli/content/file/48'], pages: ['https://fineli.fi/fineli/en/avoin-data', 'https://fineli.fi/fineli/fi/avoin-data'], link: /[^"'\s<>]*content\/file\/\d+/g, need: [/^component_value\.csv$/i, /^component\.csv$/i] },
+  fineli: { urls: ['https://fineli.fi/fineli/content/file/47', 'https://fineli.fi/fineli/content/file/48'], pages: ['https://fineli.fi/fineli/en/avoin-data', 'https://www.avoindata.fi/data/en_GB/dataset/fineli-elintarvikkeiden-koostumustietopankki', 'https://www.avoindata.fi/data/fi/dataset/fineli-elintarvikkeiden-koostumustietopankki'], link: /[^"'\s<>]*content\/file\/\d+|https?:\/\/[^"'\s<>]+\.zip/g, need: [/^component_value\.csv$/i, /^component\.csv$/i] },
   // The catalogue has Ciqual 2025 (Zenodo); 2020 XML is the fallback.
-  ciqual: { pagesFirst: true, urls: ['https://ciqual.anses.fr/cms/sites/default/files/inline-files/XML_2020_07_07.zip'], pages: ['https://zenodo.org/api/records/17550133', 'https://www.data.gouv.fr/fr/datasets/table-de-composition-nutritionnelle-des-aliments-ciqual/'], link: /https?:\/\/[^"'\s<>]*\.zip(?:\/content)?/gi, prefer: /xml/i, need: [/^compo.*\.xml$/i, /^alim_(?!grp).*\.xml$/i, /^const.*\.xml$/i] },
+  ciqual: { pagesFirst: true, urls: ['https://ciqual.anses.fr/cms/sites/default/files/inline-files/XML_2020_07_07.zip'], pages: ['https://zenodo.org/api/records/17550133', 'https://www.data.gouv.fr/fr/datasets/table-de-composition-nutritionnelle-des-aliments-ciqual/'], link: /https:\/\/zenodo\.org\/api\/records\/\d+\/files\/[^"'\s<>]+?\/content|https?:\/\/[^"'\s<>]*\.zip/gi, prefer: /xml/i, need: [/^compo.*\.xml$/i, /^alim_(?!grp).*\.xml$/i, /^const.*\.xml$/i] },
   cofid: { urls: ['https://assets.publishing.service.gov.uk/media/60538e66d3bf7f0455a5d8cb/McCance_Widdowsons_Composition_of_Foods_Integrated_Dataset_2021..xlsx'], pages: ['https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid'], link: /https:\/\/assets\.publishing\.service\.gov\.uk\/[^"'\s<>]+\.xlsx/g, prefer: /Integrated_Dataset/i, need: [/^workbook\.xml$/] }
 };
 
+const HEADERS = { 'user-agent': UA, accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'accept-language': 'en-GB,en;q=0.9' };
 async function fetchTo(url, file) {
-  const r = await fetch(url, { headers: { 'user-agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(15 * 60 * 1000) });
-  if (!r.ok || !r.body) throw new Error(`HTTP ${r.status}`);
+  const r = await fetch(url, { headers: HEADERS, redirect: 'follow', signal: AbortSignal.timeout(15 * 60 * 1000) });
+  if (!r.ok || !r.body) throw new Error(`HTTP ${r.status}, server ${r.headers.get('server')}`);
   await pipeline(Readable.fromWeb(r.body), createWriteStream(file));
 }
 async function links(page, re) {
-  const r = await fetch(page, { headers: { 'user-agent': UA }, redirect: 'follow', signal: AbortSignal.timeout(60000) });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const r = await fetch(page, { headers: HEADERS, redirect: 'follow', signal: AbortSignal.timeout(60000) });
+  if (!r.ok) throw new Error(`HTTP ${r.status}, server ${r.headers.get('server')}`);
   const html = await r.text();
   return [...new Set([...html.matchAll(re)].map(m => new URL(m[0].replace(/&amp;/g, '&'), r.url).href))];
 }
@@ -396,7 +397,11 @@ export async function loadTables(dir, log = console.log) {
     const foods = [...tables[id].values()];
     const per = Object.fromEntries(Object.keys(NUTRIENTS).map(k => [k, foods.filter(f => f.v[k] != null).length]));
     log(`${id}: ${foods.length} foods in ${((Date.now() - t0) / 1000).toFixed(1)} s; foods with each value: ${JSON.stringify(per)}`);
-    if (!foods.length || !per.fe) throw new Error(`${id}: no values parsed`);
+    if (!foods.length || !per.fe) {
+      log(`${id}: entries ${entries.join(', ')}`);
+      for (const re of [/^nutrient\.csv$/, /^food_nutrient\.csv$/, /^food\.csv$/]) { const e = findEntry(entries, re); if (e) log(`${id}: ${e}: ${JSON.stringify(text(re).slice(0, 400))}`); }
+      throw new Error(`${id}: no values parsed`);
+    }
   } catch (e) {
     // Keep going, so one run shows every problem (missing references too).
     errors.push(`${id}: ${e.message}`); log(`ERROR ${id}: ${e.stack || e.message}`); tables[id] = new Map();
@@ -465,6 +470,25 @@ export const normName = s => String(s || '').replace(/\s*\(includes foods for us
 const sample = (list, n, rnd) => { const a = [...list]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a.slice(0, n); };
 function seeded(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 2 ** 32; }; }
 
+// Each entry's references by source and exact description (USDA's
+// "(Includes foods for ...)" suffix ignored); misses list the nearest names.
+export function findRefs(tables, entries = MATCHES) {
+  const byName = {};
+  for (const [src, foods] of Object.entries(tables)) {
+    byName[src] = new Map();
+    for (const [id, f] of foods) if (f.name) { const n = normName(f.name); if (!byName[src].has(n)) byName[src].set(n, id); }
+  }
+  const found = [], missing = [];
+  for (const e of entries) for (const [src, desc] of e.refs) {
+    const id = byName[src]?.get(normName(desc)), f = id != null ? tables[src].get(id) : null;
+    if (f && Object.keys(rounded(f.v)).length) { found.push({ e, src, desc, id, f }); continue; }
+    const want = normName(desc).split(/[^a-z0-9%]+/).filter(Boolean);
+    const near = [...(byName[src]?.keys() || [])].map(n => [n, want.filter(w => n.includes(w.slice(0, 5))).length - n.length / 1000]).sort((a, b) => b[1] - a[1]).slice(0, 6).map(x => x[0]);
+    missing.push(`${e.id}: ${src} "${desc}" ${f ? 'has no values' : 'not found'}; nearest: ${near.map(n => JSON.stringify(n)).join(' | ')}`);
+  }
+  return { found, missing };
+}
+
 export function compute({ tables, records, log = console.log, entries = MATCHES }) {
   // Catalogue foods: table foods by key, other foods whose names match an entry.
   const generic = new Map(), candidates = [], seen = new Set(), bySource = {};
@@ -492,24 +516,12 @@ export function compute({ tables, records, log = console.log, entries = MATCHES 
   }
 
   // References: source + exact description, resolved once; missing ones fail the build.
-  const byName = {};
-  for (const [src, foods] of Object.entries(tables)) {
-    byName[src] = new Map();
-    for (const [id, f] of foods) if (f.name) { const n = normName(f.name); if (!byName[src].has(n)) byName[src].set(n, id); }
-  }
-  const refs = new Map(), missing = [];
-  for (const e of entries) for (const [src, desc] of e.refs) {
-    const id = byName[src]?.get(normName(desc)), k = id != null ? keyOf(src, id) : null;
-    const f = id != null ? tables[src].get(id) : null;
-    if (!f) {
-      const want = normName(desc).split(/[^a-z0-9%]+/).filter(Boolean);
-      const near = [...(byName[src]?.keys() || [])].map(n => [n, want.filter(w => n.includes(w.slice(0, 5))).length - n.length / 1000]).sort((a, b) => b[1] - a[1]).slice(0, 6).map(x => x[0]);
-      missing.push(`${e.id}: ${src} "${desc}" not found; nearest: ${near.map(n => JSON.stringify(n)).join(' | ')}`);
-      continue;
-    }
-    const cat = generic.get(k), m = cat && cat.p != null ? cat : { p: f.m.pro, f: f.m.fat, c: f.m.carb, e: f.m.kcal };
+  const { found, missing } = findRefs(tables, entries);
+  const refs = new Map();
+  for (const { e, src, desc, id, f } of found) {
+    const k = keyOf(src, id), cat = generic.get(k), m = cat && cat.p != null ? cat : { p: f.m.pro, f: f.m.fat, c: f.m.carb, e: f.m.kcal };
     if (!cat) log(`  reference ${k} (${desc}) is not in the catalogue; using the table's macros`);
-    if (!Object.keys(rounded(f.v)).length || m?.p == null || m?.f == null || m?.c == null || m?.e == null) { missing.push(`${e.id}: ${src} "${desc}" has no values or macros`); continue; }
+    if (m?.p == null || m?.f == null || m?.c == null || m?.e == null) { missing.push(`${e.id}: ${src} "${desc}" has no macros`); continue; }
     refs.set(`${src}\u0000${desc}`, { k, n: cat?.en || cat?.n || f.name, cs: cat?.cs, e: m.e, p: m.p, c: m.c, f: m.f, v: rounded(f.v), entry: e });
   }
   if (missing.length) throw new Error(`Missing references:\n${missing.join('\n')}`);
@@ -605,6 +617,9 @@ if (process.argv[1]?.endsWith('build-micronutrients.mjs')) {
   const t0 = Date.now(), log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s]`, ...a);
   try {
     const { tables, used, errors } = await loadTables(join(work, 'sources'), log);
+    // Fail before the long catalogue download when a table or reference is missing.
+    const early = [...errors, ...findRefs(tables).missing];
+    if (early.length) throw new Error(`Build failed:\n${early.join('\n')}`);
     const cat = await fetchCatalogue(join(work, 'catalogue'), bucket, log);
     let result;
     try { result = compute({ tables, records: catalogueRecords(cat), log }); } catch (e) { errors.push(e.message); }
