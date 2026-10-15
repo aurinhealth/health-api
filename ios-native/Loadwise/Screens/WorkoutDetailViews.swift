@@ -238,6 +238,7 @@ struct ActivityDetailView: View {
     @State private var editingKcal = false
     /// An Apple Health workout's route, read on the iPhone.
     @State private var localRoute: [ActivityDetail.StreamPoint] = []
+    @State private var sharing = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -246,6 +247,13 @@ struct ActivityDetailView: View {
                 HStack {
                     SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
                     Spacer()
+                    if session.status == "done", detail != nil {
+                        Button { sharing = true } label: {
+                            Image(systemName: "square.and.arrow.up").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                                .frame(width: 36, height: 32).contentShape(Rectangle())
+                        }
+                        .accessibilityLabel("Sdílet")
+                    }
                     if !model.demo, session.status == "done" {
                         Menu {
                             if session.activityId != nil {
@@ -282,10 +290,20 @@ struct ActivityDetailView: View {
         .activityEditing(id: session.id, title: detail?.activity.name ?? session.title, kcal: countedKcal ?? detail?.activity.calories,
                          edited: model.liveSession(session).kcalEdited == true, deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
         .sheet(isPresented: $feedback, onDismiss: { feedbackClosed += 1 }) { FeedbackSheet(session: session) }
+        .sheet(isPresented: $sharing) { ShareSheet(source: .activity(model.liveSession(session), withRoute)) }
         .sheet(isPresented: $changingType) {
             ActivityTypeSheet(activityId: session.id, current: detail?.activity.type, source: "intervals") { dismiss() }
         }
         .task { await load() }
+    }
+
+    /// The detail with the iPhone's own route when it has none.
+    private var withRoute: ActivityDetail? {
+        guard var detail else { return nil }
+        if !localRoute.isEmpty, !(detail.streams ?? []).contains(where: { $0.type == "latlng" }) {
+            detail.streams = (detail.streams ?? []) + [ActivityDetail.Stream(type: "latlng", points: localRoute)]
+        }
+        return detail
     }
 
     /// The calories Aurin counts for it: set in Aurin, the estimate the user
