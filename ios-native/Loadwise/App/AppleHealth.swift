@@ -479,60 +479,40 @@ final class HealthReader: @unchecked Sendable {
         func from(_ fullDays: Int) -> Date {
             calendar.startOfDay(for: calendar.date(byAdding: .day, value: -((days ?? fullDays) - 1), to: now) ?? now)
         }
-        var first: [AppleRecord] = []
-        var rest: [AppleRecord] = []
         var windows: [String: AppleHealthUpload.Window] = [:]
+        let nothing: [AppleRecord] = []
+        // The categories are read at the same time (HealthKit answers each on its
+        // own queue); inside a category the queries stay one after another.
+        let sleepStart = from(60).addingTimeInterval(-12 * 3600), workoutStart = from(180)
+        async let sleepRecords = categories.contains(.sleep) ? nights(from: sleepStart, to: now) : nothing
+        async let workoutRecords = categories.contains(.workouts) ? workouts(from: workoutStart, to: now) : nothing
+        async let stepRecords = categories.contains(.steps)
+            ? hourly(.stepCount, unit: .count(), type: "steps", prefix: "steps", from: from(30), to: now) : nothing
+        async let energyRecords = categories.contains(.energy)
+            ? hourly(.activeEnergyBurned, unit: .kilocalorie(), type: "active-energy-burned", prefix: "kcal", from: from(30), to: now) : nothing
+        async let restingRecords = categories.contains(.resting)
+            ? daily(.restingHeartRate, unit: .count().unitDivided(by: .minute()), type: "daily-resting-heart-rate", prefix: "rhr", from: from(90), to: now) : nothing
+        async let hrvRecords = categories.contains(.hrv) ? dailyHRV(from: from(90), to: now) : nothing
+        async let heartRecords = categories.contains(.heart) ? heart(from: from(90), recent: from(30), to: now) : nothing
+        async let breathingRecords = categories.contains(.breathing) ? breathing(from: from(90), to: now) : nothing
+        async let bodyRecords = categories.contains(.body) ? body(from: from(365), to: now) : nothing
+        let readFood = categories.contains(.food) || categories.contains(.water)
+        async let foodRead: AppleHealthUpload.Food? = readFood
+            ? foodUpload(from: from(30), to: now, meals: categories.contains(.food), drinks: categories.contains(.water)) : nil
 
         if categories.contains(.sleep) {
             // From noon the day before, so the first night is whole.
-            let start = from(60).addingTimeInterval(-12 * 3600)
-            first += await nights(from: start, to: now)
-            windows["sleep"] = .init(from: stamp(start), to: stamp(now.addingTimeInterval(3600)))
+            windows["sleep"] = .init(from: stamp(sleepStart), to: stamp(now.addingTimeInterval(3600)))
         }
         if categories.contains(.workouts) {
-            let start = from(180)
-            first += await workouts(from: start, to: now)
-            windows["exercise"] = .init(from: stamp(start), to: stamp(now.addingTimeInterval(3600)))
+            windows["exercise"] = .init(from: stamp(workoutStart), to: stamp(now.addingTimeInterval(3600)))
         }
-        if categories.contains(.steps) {
-            rest += await hourly(.stepCount, unit: .count(), type: "steps", prefix: "steps", from: from(30), to: now)
-        }
-        if categories.contains(.energy) {
-            rest += await hourly(.activeEnergyBurned, unit: .kilocalorie(), type: "active-energy-burned", prefix: "kcal", from: from(30), to: now)
-        }
-        if categories.contains(.resting) {
-            rest += await daily(.restingHeartRate, unit: .count().unitDivided(by: .minute()), type: "daily-resting-heart-rate", prefix: "rhr", from: from(90), to: now)
-        }
-        if categories.contains(.hrv) {
-            rest += await dailyHRV(from: from(90), to: now)
-        }
-        if categories.contains(.heart) {
-            let start = from(90)
-            rest += await daily(.vo2Max, unit: HKUnit(from: "ml/kg*min"), type: "daily-vo2-max", prefix: "vo2", from: start, to: now)
-            rest += await daily(.walkingHeartRateAverage, unit: .count().unitDivided(by: .minute()), type: "daily-walking-heart-rate", prefix: "whr", from: start, to: now)
-            rest += await daily(.heartRateRecoveryOneMinute, unit: .count().unitDivided(by: .minute()), type: "daily-heart-rate-recovery", prefix: "hrr", from: start, to: now)
-            rest += await zones(from: from(30), to: now)
-            rest += await wearHours(from: from(30), to: now)
-        }
-        if categories.contains(.breathing) {
-            let start = from(90)
-            rest += await nightly(.respiratoryRate, unit: .count().unitDivided(by: .minute()), type: "daily-respiratory-rate", prefix: "resp", from: start, to: now)
-            rest += await nightly(.oxygenSaturation, unit: .percent(), type: "daily-oxygen-saturation", prefix: "spo2", scale: 100, from: start, to: now)
-            // The watch's wrist temperature in sleep (°C, one value a night), to hundredths:
-            // the server compares it with the athlete's own nights (a few tenths matter).
-            rest += await nightly(.appleSleepingWristTemperature, unit: .degreeCelsius(), type: "daily-wrist-temperature", prefix: "wt", precision: 100, from: start, to: now)
-        }
-        if categories.contains(.body) {
-            let start = from(365)
-            rest += await measurements(.bodyMass, unit: .gramUnit(with: .kilo), type: "weight", from: start, to: now)
-            rest += await measurements(.bodyFatPercentage, unit: .percent(), type: "body-fat", scale: 100, from: start, to: now)
-            rest += await measurements(.leanBodyMass, unit: .gramUnit(with: .kilo), type: "lean-body-mass", from: start, to: now)
-        }
-
-        var food: AppleHealthUpload.Food?
-        if categories.contains(.food) || categories.contains(.water) {
-            food = await foodUpload(from: from(30), to: now, meals: categories.contains(.food), drinks: categories.contains(.water))
-        }
+        let first = await sleepRecords + workoutRecords
+        var rest = await stepRecords + energyRecords
+        rest += await restingRecords + hrvRecords
+        rest += await heartRecords + breathingRecords
+        rest += await bodyRecords
+        let food = await foodRead
 
         if closed.get() { return nil }
         var uploads = [AppleHealthUpload(records: first, windows: windows.isEmpty ? nil : windows, categories: names, food: food)]
@@ -789,6 +769,33 @@ final class HealthReader: @unchecked Sendable {
     /// strain, as % of heart-rate reserve (Karvonen): light 40–59 %, moderate
     /// 60–74 %, vigorous 75–84 %, peak 85 % and more. Each sample counts until
     /// the next one, at most 5 minutes.
+    /// VO2 max, walking heart rate, recovery, time in zones and hours worn.
+    private func heart(from start: Date, recent: Date, to now: Date) async -> [AppleRecord] {
+        let bpm = HKUnit.count().unitDivided(by: .minute())
+        var out = await daily(.vo2Max, unit: HKUnit(from: "ml/kg*min"), type: "daily-vo2-max", prefix: "vo2", from: start, to: now)
+        out += await daily(.walkingHeartRateAverage, unit: bpm, type: "daily-walking-heart-rate", prefix: "whr", from: start, to: now)
+        out += await daily(.heartRateRecoveryOneMinute, unit: bpm, type: "daily-heart-rate-recovery", prefix: "hrr", from: start, to: now)
+        out += await zones(from: recent, to: now)
+        out += await wearHours(from: recent, to: now)
+        return out
+    }
+
+    private func breathing(from start: Date, to now: Date) async -> [AppleRecord] {
+        var out = await nightly(.respiratoryRate, unit: .count().unitDivided(by: .minute()), type: "daily-respiratory-rate", prefix: "resp", from: start, to: now)
+        out += await nightly(.oxygenSaturation, unit: .percent(), type: "daily-oxygen-saturation", prefix: "spo2", scale: 100, from: start, to: now)
+        // The watch's wrist temperature in sleep (°C, one value a night), to hundredths:
+        // the server compares it with the athlete's own nights (a few tenths matter).
+        out += await nightly(.appleSleepingWristTemperature, unit: .degreeCelsius(), type: "daily-wrist-temperature", prefix: "wt", precision: 100, from: start, to: now)
+        return out
+    }
+
+    private func body(from start: Date, to now: Date) async -> [AppleRecord] {
+        var out = await measurements(.bodyMass, unit: .gramUnit(with: .kilo), type: "weight", from: start, to: now)
+        out += await measurements(.bodyFatPercentage, unit: .percent(), type: "body-fat", scale: 100, from: start, to: now)
+        out += await measurements(.leanBodyMass, unit: .gramUnit(with: .kilo), type: "lean-body-mass", from: start, to: now)
+        return out
+    }
+
     private func zones(from: Date, to: Date) async -> [AppleRecord] {
         let bpm = HKUnit.count().unitDivided(by: .minute())
         let rest = await samples(HKQuantityType(.restingHeartRate), from: to.addingTimeInterval(-30 * 86400), to: to)
@@ -823,6 +830,18 @@ final class HealthReader: @unchecked Sendable {
     /// The highest workout heart rate of half a year (a reading in a workout,
     /// not a spike at rest), 190 without workouts.
     private func maxHeartRate(to: Date) async -> Double {
+        // Half a year of workouts changes little within a day: read once a day.
+        let today = day(to), defaults = UserDefaults.standard
+        if defaults.string(forKey: "appleMaxHeartRateDay") == today, defaults.double(forKey: "appleMaxHeartRate") > 0 {
+            return defaults.double(forKey: "appleMaxHeartRate")
+        }
+        let value = await readMaxHeartRate(to: to)
+        defaults.set(value, forKey: "appleMaxHeartRate")
+        defaults.set(today, forKey: "appleMaxHeartRateDay")
+        return value
+    }
+
+    private func readMaxHeartRate(to: Date) async -> Double {
         let bpm = HKUnit.count().unitDivided(by: .minute())
         let workouts = await samples(HKObjectType.workoutType(), from: to.addingTimeInterval(-183 * 86400), to: to).compactMap { $0 as? HKWorkout }
         let peaks = workouts.compactMap { $0.statistics(for: HKQuantityType(.heartRate))?.maximumQuantity()?.doubleValue(for: bpm) }.filter { $0 > 120 && $0 < 225 }.sorted()

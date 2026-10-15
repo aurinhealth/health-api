@@ -236,8 +236,9 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   const statements = rows.map(row => upsert(db, userId, row));
   // Rows really written: the upsert leaves a row that did not change alone.
   let changed = 0;
-  for (let i = 0; i < statements.length; i += 50) {
-    for (const result of await db.batch(statements.slice(i, i + 50)) || []) changed += Number(result?.meta?.changes || 0);
+  // 200 statements a round trip: a first sync of 1500 records is 8 batches, not 30.
+  for (let i = 0; i < statements.length; i += 200) {
+    for (const result of await db.batch(statements.slice(i, i + 200)) || []) changed += Number(result?.meta?.changes || 0);
   }
 
   let removed = 0;
