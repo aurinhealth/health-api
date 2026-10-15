@@ -198,18 +198,24 @@ export async function syncUltrahuman(env, { days = 3, fetchImpl = fetch, today =
   return { status: failed && !saved ? 'error' : 'ok', saved, failed, replaced };
 }
 
+// Ultrahuman forgets Aurin's access (also when the Aurin account is deleted).
+export async function revokeUltrahuman(env, fetchImpl = fetch) {
+  const tokens = readUltrahumanTokens(env);
+  if (!tokens || !ultrahumanConfigured(env)) return 'none';
+  // An expired access token is refreshed first, else the revoke is refused.
+  const token = await ultrahumanAccessToken(env, { fetchImpl }).catch(() => tokens.access_token);
+  const response = await fetchImpl(REVOKE, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ token: token, client_id: String(env.ULTRAHUMAN_CLIENT_ID).trim(), client_secret: String(env.ULTRAHUMAN_CLIENT_SECRET).trim() }),
+    signal: AbortSignal.timeout(10000)
+  }).catch(() => null);
+  return response?.ok ? 'revoked' : 'failed';
+}
 // Disconnecting: Ultrahuman gets its access back and the ring's data is deleted
 // (as the application to Ultrahuman says); the nights it covered go back to the
 // Apple and Google rows set aside for it.
 export async function disconnectUltrahuman(env, { fetchImpl = fetch } = {}) {
-  const tokens = readUltrahumanTokens(env);
-  if (tokens && ultrahumanConfigured(env)) {
-    await fetchImpl(REVOKE, {
-      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ token: tokens.access_token, client_id: String(env.ULTRAHUMAN_CLIENT_ID).trim(), client_secret: String(env.ULTRAHUMAN_CLIENT_SECRET).trim() }),
-      signal: AbortSignal.timeout(10000)
-    }).catch(() => null);
-  }
+  await revokeUltrahuman(env, fetchImpl);
   const userId = env.USER_ID ?? env.DB.userId;
   await env.DB.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}'`).bind(userId).run();
   await resolveSources(env.DB, userId, { part: 'night', since: new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10) });
