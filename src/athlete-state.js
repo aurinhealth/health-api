@@ -13,7 +13,7 @@ const clean = v => String(v || '').trim().slice(0, 500);
 // statusUntil is the first calendar day on which the status no longer applies.
 export function effectiveAthleteState(state,date=localToday()){
   return state.statusUntil&&validDay(state.statusUntil)&&state.statusUntil<=date
-    ? {...state,status:'active',note:'',statusUntil:null} : state;
+    ? {...state,status:'active',note:'',statusUntil:null,...(state.status==='sick'?{recoveredAt:state.statusUntil}:{})} : state;
 }
 async function ensure(db) {
   await db.prepare('CREATE TABLE IF NOT EXISTS athlete_state (user_id INTEGER PRIMARY KEY, state_json TEXT NOT NULL)').run();
@@ -31,6 +31,8 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
     if (!Object.hasOwn(ATHLETE_STATUSES, patch.status)) throw new Error(L('Neznámý stav.','Unknown status.'));
     const until=patch.statusUntil||null;
     if(until&&(!validDay(until)||until<=date))throw new Error(L('Konec platnosti musí být v budoucnu.','The end date must be in the future.'));
+    // The day Nemoc ends: the first days back stay easy (cycling-coach-v2.js).
+    if (state.status === 'sick' && patch.status === 'active') state.recoveredAt = date;
     state.status = patch.status; state.note = clean(patch.note); state.changedAt = new Date().toISOString();
     state.statusUntil=patch.status==='active'?null:until;
   }

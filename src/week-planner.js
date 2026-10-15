@@ -256,7 +256,8 @@ export function hrvSourceRows(intervals = [], health = [], weekStart) {
   return candidates.reduce((best, rows) => mornings(rows) > mornings(best) ? rows : best);
 }
 // Training load of the three weeks before `weekStart` from Intervals.icu
-// wellness rows (last week first); a week with too few rows ends the series.
+// wellness rows, or the app's own rows without it (own-fitness.js `load`);
+// last week first; a week with too few rows ends the series.
 export function weekLoadsBefore(wellness, weekStart) {
   const shift = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
   const rows = (wellness || []).filter(r => r?.id && r.id < weekStart);
@@ -264,7 +265,7 @@ export function weekLoadsBefore(wellness, weekStart) {
   for (let k = 1; k <= 3; k++) {
     const from = shift(weekStart, -7 * k), to = shift(weekStart, -7 * k + 7), week = rows.filter(r => r.id >= from && r.id < to);
     if (week.length < 5) break;
-    loads.push(Math.round(week.reduce((sum, r) => sum + (Number(r.ctlLoad ?? r.atlLoad) || 0), 0)));
+    loads.push(Math.round(week.reduce((sum, r) => sum + (Number(r.ctlLoad ?? r.atlLoad ?? r.load) || 0), 0)));
   }
   return loads;
 }

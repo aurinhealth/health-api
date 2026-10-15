@@ -165,3 +165,17 @@ test('a replacement can be saved before deleting the original even with a 150 mi
     assert.equal((await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:longer.id,date:'2026-10-05',confirm:true})).status,'ok');
   }finally{globalThis.fetch=original;}
 });
+test('switching Nemoc back to Aktivní, or its end date passing, remembers the day of return',async()=>{
+  const a=scopedDb(createD1(),1);
+  await updateAthleteState(a,{status:'sick'},{date:'2026-10-10'});
+  await updateAthleteState(a,{status:'active'},{date:'2026-10-12'});
+  assert.equal((await getAthleteState(a,{date:'2026-10-12'})).recoveredAt,'2026-10-12');
+  const b=scopedDb(createD1(),2);
+  await updateAthleteState(b,{status:'sick',statusUntil:'2026-10-14'},{date:'2026-10-10'});
+  const later=await getAthleteState(b,{date:'2026-10-15'});
+  assert.equal(later.status,'active');assert.equal(later.recoveredAt,'2026-10-14');
+  // An injury ending is not an illness: no easy days added.
+  const c=scopedDb(createD1(),3);
+  await updateAthleteState(c,{status:'injured'},{date:'2026-10-10'});await updateAthleteState(c,{status:'active'},{date:'2026-10-12'});
+  assert.equal((await getAthleteState(c,{date:'2026-10-12'})).recoveredAt,undefined);
+});
