@@ -118,7 +118,8 @@ export async function saveAppleFood(db, userId, input = {}, { source = FOOD_SOUR
     const id = known.get(m.id);
     known.delete(m.id);
     statements.push(id
-      ? db.prepare("UPDATE food_logs SET consumed_date=?,consumed_at=?,recipe_title=?,kcal=?,protein_g=?,carbs_g=?,fat_g=?,fiber_g=?,note=? WHERE user_id=? AND id=?")
+      ? db.prepare(`UPDATE food_logs SET consumed_date=?1,consumed_at=?2,recipe_title=?3,kcal=?4,protein_g=?5,carbs_g=?6,fat_g=?7,fiber_g=?8,note=?9 WHERE user_id=?10 AND id=?11
+          AND (consumed_date IS NOT ?1 OR consumed_at IS NOT ?2 OR recipe_title IS NOT ?3 OR kcal IS NOT ?4 OR protein_g IS NOT ?5 OR carbs_g IS NOT ?6 OR fat_g IS NOT ?7 OR fiber_g IS NOT ?8 OR note IS NOT ?9)`)
         .bind(m.date, m.consumed_at, m.name, m.kcal, m.protein_g, m.carbs_g, m.fat_g, m.fiber_g, m.note, userId, id)
       : db.prepare("INSERT INTO food_logs (user_id,consumed_date,consumed_at,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note) VALUES (?,?,?,?,1,?,?,?,?,?,?,?)")
         .bind(userId, m.date, m.consumed_at, m.name, m.kcal, m.protein_g, m.carbs_g, m.fat_g, m.fiber_g, source, m.note));
@@ -132,13 +133,18 @@ export async function saveAppleFood(db, userId, input = {}, { source = FOOD_SOUR
     const id = knownDrinks.get(d.id);
     knownDrinks.delete(d.id);
     statements.push(id
-      ? db.prepare("UPDATE fluid_log SET date=?,consumed_at=?,ml=?,app=? WHERE user_id=? AND id=?").bind(d.date, d.consumed_at, d.ml, d.app, userId, id)
+      ? db.prepare("UPDATE fluid_log SET date=?1,consumed_at=?2,ml=?3,app=?4 WHERE user_id=?5 AND id=?6 AND (date IS NOT ?1 OR consumed_at IS NOT ?2 OR ml IS NOT ?3 OR app IS NOT ?4)")
+        .bind(d.date, d.consumed_at, d.ml, d.app, userId, id)
       : db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind,source,external_id,app) VALUES(?,?,?,?,'water',?,?,?)")
         .bind(userId, d.date, d.consumed_at, d.ml, source, d.id, d.app));
   }
   const removedDrinks = readDrinks ? [...knownDrinks.values()] : [];
   if (removedDrinks.length) statements.push(db.prepare("DELETE FROM fluid_log WHERE user_id=? AND source=? AND id IN (SELECT value FROM json_each(?))").bind(userId, source, JSON.stringify(removedDrinks)));
 
-  for (let i = 0; i < statements.length; i += 50) await db.batch(statements.slice(i, i + 50));
-  return { saved: meals.length + drinks.length, removed: removedMeals.length + removedDrinks.length };
+  // Rows really written: an update that changes nothing counts none.
+  let changed = 0;
+  for (let i = 0; i < statements.length; i += 50) {
+    for (const result of await db.batch(statements.slice(i, i + 50)) || []) changed += Number(result?.meta?.changes || 0);
+  }
+  return { saved: meals.length + drinks.length, removed: removedMeals.length + removedDrinks.length, changed };
 }

@@ -362,16 +362,30 @@ final class AppModel {
         defer { loading = false }
         if announce { syncStatus = .syncing }
         await sendOutbox()
-        // Last night and the morning's HRV from the watch before Today is computed.
-        await AppleHealth.shared.sync(api: api)
+        let health = AppleHealth.shared
+        // Until a late-morning sync, last night and the morning's HRV from the
+        // watch go out before Today is computed. Later in the day Today loads
+        // alongside the sync and again only when it brought something new.
+        var sync: Task<AppleHealth.SyncOutcome, Never>?
+        if health.hasMorningData {
+            let api = api
+            sync = Task { await health.run(api: api) }
+        } else {
+            _ = await health.run(api: api)
+        }
         do {
             try await loadToday()
+            // The day is on screen: the arrows and swipes work again.
+            loading = false
+            if let sync, await sync.value.changed { try? await loadToday() }
+            async let status = try? api.athleteStatus()
             if selectedDate == nil, let today {
-                await loadCycle()
+                async let cycle: Void = loadCycle()
                 await Reminders.reschedule(from: today)
                 WidgetBridge.update(today)
+                await cycle
             }
-            if let status = try? await api.athleteStatus() { athleteStatus = status }
+            if let status = await status { athleteStatus = status }
             if syncStatus == .syncing { finishSync(.done) }
         } catch APIError.unauthorized {
             syncStatus = nil
