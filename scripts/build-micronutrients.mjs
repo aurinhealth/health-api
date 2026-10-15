@@ -341,7 +341,12 @@ export const SOURCES = {
 
 const HEADERS = { 'user-agent': UA, accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'accept-language': 'en-GB,en;q=0.9' };
 async function fetchTo(url, file) {
-  const r = await fetch(url, { headers: HEADERS, redirect: 'follow', signal: AbortSignal.timeout(15 * 60 * 1000) });
+  // Transient network errors get two more tries.
+  let r;
+  for (let attempt = 1; ; attempt++) {
+    try { r = await fetch(url, { headers: HEADERS, redirect: 'follow', signal: AbortSignal.timeout(15 * 60 * 1000) }); break; }
+    catch (e) { if (attempt >= 3) throw e; await new Promise(res => setTimeout(res, 5000 * attempt)); }
+  }
   if (r.ok && r.body) return pipeline(Readable.fromWeb(r.body), createWriteStream(file));
   // A bot filter may refuse Node's client but not curl's.
   const c = spawnSync('curl', ['-fsSL', '--max-time', '900', '-A', UA, '-o', file, url], { encoding: 'utf8' });
@@ -405,17 +410,13 @@ export async function loadTables(dir, log = console.log) {
     if (id === 'ciqual') {
       let got = null;
       try { got = await ciqualFiles(dir, log); } catch (e) { log(`ciqual 2025: ${e.message}; falling back to the 2020 archive`); }
-      if (got) {
-        used[id] = got.url; tables[id] = parseCiqual(got.parts);
-        log(`ciqual: ${tables[id].size} foods`);
-        continue;
-      }
+      if (got) { used[id] = got.url; tables[id] = parseCiqual(got.parts); }
     }
-    const { file, url, entries } = await download(id, dir, log);
-    used[id] = url;
+    const { file, url, entries } = tables[id] ? {} : await download(id, dir, log);
+    if (url) used[id] = url;
     const text = re => { const e = findEntry(entries, re); return e ? decode(zipEntry(file, e)) : ''; };
     const t0 = Date.now();
-    if (id.startsWith('usda_')) {
+    if (tables[id]) { /* Ciqual 2025, read above */ } else if (id.startsWith('usda_')) {
       const type = { usda_sr_legacy: 'sr_legacy_food', usda_foundation: 'foundation_food', usda_survey: 'survey_fndds_food' }[id];
       tables[id] = parseUsda({ food: text(/^food\.csv$/), nutrient: text(/^nutrient\.csv$/), foodNutrient: text(/^food_nutrient\.csv$/) }, [type]);
     } else if (id === 'fineli') {
