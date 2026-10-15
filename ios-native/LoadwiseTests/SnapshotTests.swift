@@ -16,6 +16,22 @@ final class SnapshotTests: XCTestCase {
         try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
+    func testRecoveryTimeDays() {
+        // Days only, never a clock time; after 22:00 it counts for the next morning.
+        var parts = DateComponents(year: 2026, month: 10, day: 15, hour: 23, minute: 30)
+        let lateThursday = Calendar.current.date(from: parts) ?? Date()
+        XCTAssertEqual(RecoveryTime.when(lateThursday, today: "2026-10-15"), "pátek")
+        XCTAssertEqual(RecoveryTime.phrase(lateThursday, today: "2026-10-15"), "v pátek")
+        parts.hour = 17
+        let thursday = Calendar.current.date(from: parts) ?? Date()
+        XCTAssertEqual(RecoveryTime.when(thursday, today: "2026-10-15"), "dnes")
+        XCTAssertEqual(RecoveryTime.phrase(thursday, today: "2026-10-14"), "ve čtvrtek")
+        XCTAssertEqual(RecoveryTime.dayName("2026-10-11", today: "2026-10-15"), "neděle")
+        XCTAssertEqual(RecoveryTime.dayName("2026-10-14", today: "2026-10-15"), "včera")
+        let gym = RecoveryTime.Cause(kind: "gym", title: "Posilovna, celé tělo", detail: nil, date: "2026-10-11", hours: 96, readyAt: "2026-10-15T15:49:00Z")
+        XCTAssertEqual(RecoveryTimeContent.detail(gym, today: "2026-10-15"), "neděle · svaly 96 h")
+    }
+
     /// Dnes → Den: the night, readiness, done workout and its strain, steps,
     /// "teď", then the plan with bedtime last; no "teď" on another day.
     func testDayTimelineOrder() {
