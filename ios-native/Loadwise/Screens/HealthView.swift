@@ -63,6 +63,7 @@ struct DetailScreen<Content: View>: View {
 /// The Health screen without the scroll view, so tests can render it whole.
 struct HealthContent: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dayPage) private var page
     let health: HealthSnapshot
     @State private var editing = false
 
@@ -75,19 +76,19 @@ struct HealthContent: View {
                     .padding(.top, 24)
 
                 // Cycle tracking, only for today.
-                if model.selectedDate == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
+                if (page.map(\.selectedDate) ?? model.selectedDate) == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
                     CycleHealthSection(state: state).padding(.top, 12)
                 }
             }
 
             WidgetBoard(panel: .health,
-                        data: WidgetData(panel: .health, today: model.today, health: health, training: model.training, food: model.food),
+                        data: WidgetData(panel: .health, today: page.map(\.today) ?? model.today, health: health, training: model.training, food: page.map(\.food) ?? model.food),
                         editing: $editing)
                 .padding(.top, editing ? 0 : 30)
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
-        .daySwipe(date: health.date, enabled: !editing)
+        .daySwipe(date: health.date, enabled: !editing) { page in page.health.map { AnyView(HealthContent(health: $0)) } }
         .task { if model.cycle == nil { await model.loadCycle() } }
     }
 }

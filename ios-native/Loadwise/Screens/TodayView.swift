@@ -64,6 +64,9 @@ struct TodayContent: View {
 
     /// "Upravit přehled": the cards below wiggle and can be moved, removed and added.
     @State private var editing = false
+    /// A neighbouring day drawn beside this one during a swipe (DayPager.swift).
+    @Environment(\.dayPage) private var page
+    private var selectedDate: String? { page.map(\.selectedDate) ?? model.selectedDate }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -72,14 +75,14 @@ struct TodayContent: View {
             }
 
             WidgetBoard(panel: .today,
-                        data: WidgetData(panel: .today, today: today, health: model.health, training: model.training, food: model.food),
+                        data: WidgetData(panel: .today, today: today, health: page.map(\.health) ?? model.health, training: model.training, food: page.map(\.food) ?? model.food),
                         editing: $editing,
                         editTitle: "Upravit přehled")
                 .padding(.top, editing ? 0 : 28)
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
-        .daySwipe(date: today.date, enabled: !editing)
+        .daySwipe(date: today.date, enabled: !editing) { page in page.today.map { AnyView(TodayContent(today: $0)) } }
     }
 
     /// Everything above the widgets: the day, readiness, weather and the coach.
@@ -92,7 +95,7 @@ struct TodayContent: View {
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .accessibilityAddTraits(.isHeader)
             Spacer()
-            if model.selectedDate != nil {
+            if selectedDate != nil {
                 Button { Task { await model.showToday() } } label: {
                     Label("Dnes", systemImage: "arrow.uturn.backward").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                         .padding(.horizontal, 10).frame(height: 30)
@@ -108,7 +111,7 @@ struct TodayContent: View {
         }
         WeekStrip(date: today.date, week: today.week).padding(.top, 14)
 
-        if model.selectedDate == nil && !model.demo {
+        if selectedDate == nil && !model.demo {
             DataAgePill()
             ConnectionProblemCard()
         }
@@ -122,23 +125,23 @@ struct TodayContent: View {
 
         // Today's weather at the week plan's place (or the offer to set
         // it) with the athlete's status, above the key numbers.
-        if model.selectedDate == nil {
+        if selectedDate == nil {
             TodayWeatherCard(weather: today.weather).padding(.top, 28)
         }
 
         KeyNumbers(today: today)
-            .padding(.top, model.selectedDate == nil ? 12 : 28)
+            .padding(.top, selectedDate == nil ? 12 : 28)
 
         // Cycle tracking under the numbers it explains: the morning question,
         // the day's bleeding, or perimenopause and menopause symptoms.
-        if model.selectedDate == nil, let cycle = today.cycle, TodayCycleCard.shows(cycle) {
+        if selectedDate == nil, let cycle = today.cycle, TodayCycleCard.shows(cycle) {
             TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
         }
 
         // Aktivita dne: the day's activity from anything (CoachPick.swift).
-        if model.selectedDate == nil { CoachPickCard().padding(.top, 16) }
+        if selectedDate == nil { CoachPickCard().padding(.top, 16) }
 
-        if model.selectedDate == nil {
+        if selectedDate == nil {
             if let plan = today.trainingPlan {
                 Label(([plan.name, plan.paused == true ? L10n.tr("pozastaveno") : L10n.f("týden %@/%@", String(plan.week), String(plan.weeksCount))] + (plan.paused == true ? [] : plan.phaseLabel.map { [$0] } ?? [])).joined(separator: " · "), systemImage: "flag")
                     .font(Typo.small).foregroundStyle(Palette.secondary)
@@ -154,47 +157,9 @@ struct TodayContent: View {
             ThresholdCheckCard().padding(.top, 12)
         }
 
-        CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation, live: model.selectedDate == nil,
-                      tip: RecoveryTipRows.hasTip(today, selectedDate: model.selectedDate) ? AnyView(RecoveryTipRows(today: today)) : nil)
+        CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation, live: selectedDate == nil,
+                      tip: RecoveryTipRows.hasTip(today, selectedDate: selectedDate) ? AnyView(RecoveryTipRows(today: today)) : nil)
             .padding(.top, 32)
-    }
-}
-
-/// Dnes, Zdraví and Jídlo: a swipe right goes a day back, a swipe left a day
-/// forward, as far as the arrows go. Off while the widgets are being edited.
-/// The screen follows the finger a little, and the new day slides in.
-private struct DaySwipe: ViewModifier {
-    @Environment(AppModel.self) private var model
-    let date: String
-    var ahead: Bool
-    var enabled: Bool
-    @State private var drag: CGFloat = 0
-
-    func body(content: Content) -> some View {
-        content
-            .offset(x: drag)
-            .daySlide(date: date)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 30)
-                    .onChanged { value in
-                        let width = value.translation.width, height = value.translation.height
-                        guard enabled, !model.demo, abs(width) > abs(height) * 2 else { return }
-                        // Less give where there is no day to go to.
-                        let open = width > 0 || DayNavigator.canGoForward(model: model, date: date, ahead: ahead)
-                        drag = width * (open ? 0.18 : 0.06)
-                    }
-                    .onEnded { value in
-                        withAnimation(.snappy(duration: 0.25)) { drag = 0 }
-                        let width = value.translation.width, height = value.translation.height
-                        guard enabled, !model.demo, !model.loading, abs(width) > 80, abs(width) > abs(height) * 2 else { return }
-                        if width > 0 {
-                            Task { await model.showDay(offset: -1) }
-                        } else if DayNavigator.canGoForward(model: model, date: date, ahead: ahead) {
-                            Task { await model.showDay(offset: 1, ahead: ahead) }
-                        }
-                    },
-                including: enabled ? .all : .subviews
-            )
     }
 }
 
@@ -217,10 +182,6 @@ private struct DaySlide: ViewModifier {
 }
 
 extension View {
-    func daySwipe(date: String, ahead: Bool = false, enabled: Bool = true) -> some View {
-        modifier(DaySwipe(date: date, ahead: ahead, enabled: enabled))
-    }
-
     func daySlide(date: String) -> some View {
         modifier(DaySlide(date: date))
     }
@@ -341,6 +302,7 @@ struct WeekStrip: View {
 /// planned and copied meals). Scrolled down, DayBar keeps the day on top.
 struct DayNavigator: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dayPage) private var page
     let date: String
     var ahead = false
 
@@ -367,7 +329,7 @@ struct DayNavigator: View {
                     .foregroundStyle(Palette.muted)
                     .accessibilityLabel("Další den")
                 }
-                if model.selectedDate != nil {
+                if (page.map(\.selectedDate) ?? model.selectedDate) != nil {
                     Button { Task { await model.showToday() } } label: {
                         Text("Dnes").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                             .padding(.horizontal, 10).frame(height: 28)
