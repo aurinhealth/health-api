@@ -11,7 +11,20 @@ export const ICON_PATHS = {
   camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3Z"/><circle cx="12" cy="13" r="3"/>',
   barcode: '<path d="M3 5v14M7 5v14M11 5v14M15 5v14M18 5v14M21 5v14"/>',
   spark: '<path d="M12 3l1.9 5.6 5.6 1.9-5.6 1.9L12 18l-1.9-5.6-5.6-1.9 5.6-1.9Z"/><path d="M19 17v4M17 19h4"/>',
-  check: '<path d="M20 6 9 17l-5-5"/>'
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  // What a connected service brings in or gets back (the site's Connections).
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/>',
+  steps: '<path d="M8 14c-1.9 0-3-1.8-3-4.5S6.3 4 8 4s3 2.4 3 5-1.1 5-3 5ZM16 10c1.9 0 3-1.8 3-4.5S17.7 0.9 16 .9 13 3.3 13 5.9s1.1 4.1 3 4.1ZM6.5 17.5h3M14.5 13.5h3"/>',
+  scale: '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 11a6.5 6.5 0 0 1 10 0M12 11l2-3"/>',
+  thermo: '<path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a4 4 0 1 0 4 0Z"/>',
+  wind: '<path d="M3 8h10a3 3 0 1 0-3-3M3 12h15a3 3 0 1 1-3 3M3 16h7"/>',
+  calendar: '<rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
+  zones: '<path d="M4 20v-5M9.3 20v-9M14.7 20V7M20 20V3"/>',
+  flame: '<path d="M12 22a7 7 0 0 0 7-7c0-4-3-6.5-4-10-1.5 2-2.5 3-3 5.5C11 8.5 9.5 7.5 9 6c-2 2.5-4 5.3-4 9a7 7 0 0 0 7 7Z"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7Z"/>',
+  down: '<path d="M12 4v16M5 13l7 7 7-7"/>',
+  up: '<path d="M12 20V4M5 11l7-7 7 7"/>'
 };
 
 export const icon = name => '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">' + ICON_PATHS[name] + '</svg>';

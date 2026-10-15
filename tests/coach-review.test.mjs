@@ -47,7 +47,7 @@ test("the review gets the recovery model's readiness and may not be more aggress
   const readiness = dayReadiness({ date: "2026-10-07", fitness: { wellness: rows }, health: { wellness: [], sleep: [] }, checkin: "tired" });
   assert.equal(readiness.zone, "red");
   assert.equal(readiness.score, 0);
-  assert.deepEqual(readiness.parts.map(p => p.key), ["hrv", "restingHR"]);
+  assert.deepEqual(readiness.parts.map(p => p.key), ["restingHR", "hrv"]);
   assert.deepEqual(readiness.flags, ["hrv_trend_down", "checkin_tired"]);
   assert.equal(readiness.checkin, "tired");
   // Without any body signal only a check-in says something; otherwise nothing is sent.

@@ -536,9 +536,12 @@ struct PlannedWorkout: Decodable, Equatable {
         let paceFast: Double?
         let cadence: JSONValue?
         let note: String?
+        /// Without FTP or threshold pace: the heart-rate zone of the step (bpm).
+        let hrLow: Double?
+        let hrHigh: Double?
 
         enum CodingKeys: String, CodingKey {
-            case durationSeconds, percentLow, percentHigh, wattsLow, wattsHigh, paceSlow, paceFast, cadence, note
+            case durationSeconds, percentLow, percentHigh, wattsLow, wattsHigh, paceSlow, paceFast, cadence, note, hrLow, hrHigh
         }
 
         /// Lenient: the library sends paces as "4:35" text, the plan as seconds.
@@ -561,6 +564,8 @@ struct PlannedWorkout: Decodable, Equatable {
             paceFast = pace(.paceFast)
             cadence = value(.cadence)
             note = value(.note)?.string
+            hrLow = value(.hrLow)?.number
+            hrHigh = value(.hrHigh)?.number
         }
     }
 
