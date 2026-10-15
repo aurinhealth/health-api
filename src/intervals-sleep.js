@@ -28,10 +28,11 @@ export async function intervalsWellness(env, oldest, newest, fetchImpl = fetch) 
 }
 
 // A /health/sleep answer with the missing nights filled from Intervals.
-export async function withIntervalsSleep(env, data, start, end, fetchImpl = fetch) {
+// `loadWellness` lets the caller serve the wellness log from a cache.
+export async function withIntervalsSleep(env, data, start, end, fetchImpl = fetch, loadWellness = null) {
   const sessions = data?.sessions || [];
   if (!env.INTERVALS_API_KEY || !start || !end) return data;
-  const wellness = await intervalsWellness(env, start, end, fetchImpl);
+  const wellness = loadWellness ? await loadWellness(start, end).catch(() => []) : await intervalsWellness(env, start, end, fetchImpl);
   const merged = mergeIntervalsSleep(sessions, wellness, { start, end });
   return merged.length === sessions.length ? data : { ...data, sessions: merged, sources: [...(sessions.length ? ["google"] : []), "intervals"] };
 }

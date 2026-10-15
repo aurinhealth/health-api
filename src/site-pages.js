@@ -60,6 +60,12 @@ p{margin:0}
 .screen .day small{display:block;margin-top:3px;font-size:11.5px;font-weight:500;color:var(--muted)}
 .screen .me{width:28px;height:28px;border-radius:50%;background:var(--button);color:var(--on-button);display:grid;place-items:center;font-size:13px}
 .screen .lbl{margin-top:20px;color:var(--muted)}
+.wk{display:grid;grid-template-columns:repeat(7,1fr);margin:10px -4px 0;text-align:center}
+.wk small{display:block;font-size:9.5px;font-weight:500;color:var(--muted)}
+.wk b{display:grid;place-items:center;width:25px;height:25px;margin:3px auto 0;border-radius:50%;font-size:11.5px;font-weight:600}
+.wk .on b{background:var(--text);color:var(--bg)}.wk .fut b{color:var(--muted);opacity:.6}
+.wk i{display:block;width:4px;height:4px;margin:3px auto 0;border-radius:50%}
+.wk i.g{background:var(--green)}.wk i.a{background:var(--amber)}
 .screen .ready{display:flex;align-items:flex-end;gap:8px}
 .screen .ready b{font:400 92px/.9 Newsreader,Georgia,serif;letter-spacing:-.04em}
 .pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
@@ -328,7 +334,8 @@ export function overviewPage(request) {
   const days = t(['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'], ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
   const short = t(['P', 'Ú', 'S', 'Č', 'P', 'S', 'N'], ['M', 'T', 'W', 'T', 'F', 'S', 'S']);
   const today = `<div class="phone" role="img" aria-label="${t('Aurin v telefonu: obrazovka Dnes s připraveností, spánkem, námahou, HRV a dnešním tréninkem', 'Aurin on a phone: the Today screen with readiness, sleep, strain, HRV and today’s workout')}"><div class="screen" aria-hidden="true">
-<div class="top"><span class="day"><b>${t('Dnes', 'Today')}</b><small>${t('pondělí 12. října', 'Monday, October 12')}</small></span><span class="me">P</span></div>
+<div class="top"><span class="day"><b>${t('Říjen', 'October')}</b></span><span class="me">P</span></div>
+<div class="wk"><span class=""><small>${t('Po', 'Mo')}</small><b>12</b><i class="g"></i></span><span class=""><small>${t('Út', 'Tu')}</small><b>13</b><i class="a"></i></span><span class="on"><small>${t('St', 'We')}</small><b>14</b><i class="g"></i></span><span class="fut"><small>${t('Čt', 'Th')}</small><b>15</b><i class=""></i></span><span class="fut"><small>${t('Pá', 'Fr')}</small><b>16</b><i class=""></i></span><span class="fut"><small>${t('So', 'Sa')}</small><b>17</b><i class=""></i></span><span class="fut"><small>${t('Ne', 'Su')}</small><b>18</b><i class=""></i></span></div>
 <div class="lbl">${t('Připravenost', 'Readiness')}</div>
 <div class="ready"><b>78</b><span class="pill good">${t('vysoká', 'high')}</span></div>
 <div class="pc cells">
@@ -402,7 +409,7 @@ ${today}
 <div class="graph" aria-hidden="true">${graph}</div>
 <p class="note">${t('Vybráno AI z knihovny podle dnešní připravenosti. Když v ní nic nesedí, AI sestaví vlastní.', 'Picked by AI from the library for today’s readiness. When nothing there fits, the AI builds its own.')}</p>
 </div>
-<div class="chips"><span>${t('Aktivita dne, i volno nebo sauna, připravená předem', 'Activity of the day, rest or sauna included, ready in advance')}</span><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Plán týdne sám nebo od AI', 'Week plan by you or the AI')}</span><span>${t('Tréninkové plány s přehledem týdnů', 'Training plans with a week-by-week overview')}</span><span>${t('Revize po tréninku', 'Review after each workout')}</span><span>${t('Regenerace: kdy zase na tvrdý trénink', 'Recovery: when hard training is fine again')}</span><span>${t('Trénink podle cyklu, i v perimenopauze a menopauze', 'Training around your cycle, perimenopause and menopause too')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span><span>${t('Jeden trénink z hodinek i Intervals.icu', 'One workout from watch and Intervals.icu')}</span><span>${t('Vlastní tréninky', 'Your own workouts')}</span><span>${t('Sdílení s přáteli', 'Share with friends')}</span></div>
+<div class="chips"><span>${t('Aktivita dne, i volno nebo sauna, připravená předem', 'Activity of the day, rest or sauna included, ready in advance')}</span><span>${t('Kolo', 'Ride')}</span><span>${t('Běh', 'Run')}</span><span>${t('Posilovna', 'Gym')}</span><span>${t('Plán týdne sám nebo od AI', 'Week plan by you or the AI')}</span><span>${t('Tréninkové plány s přehledem týdnů', 'Training plans with a week-by-week overview')}</span><span>${t('Revize po tréninku', 'Review after each workout')}</span><span>${t('Regenerace: kdy zase na tvrdý trénink', 'Recovery: when hard training is fine again')}</span><span>${t('Trénink podle cyklu, i v perimenopauze a menopauze', 'Training around your cycle, perimenopause and menopause too')}</span><span>${t('Synchronizace s Intervals.icu', 'Syncs with Intervals.icu')}</span><span>${t('Jeden trénink z hodinek i Intervals.icu', 'One workout from watch and Intervals.icu')}</span><span>${t('Vlastní tréninky', 'Your own workouts')}</span><span>${t('Sdílení s přáteli', 'Share with friends')}</span><span>${t('Den, trénink nebo jídlo jako obrázek ke sdílení', 'Your day, a workout or your food as an image to share')}</span></div>
 </div>
 </div></section>
 

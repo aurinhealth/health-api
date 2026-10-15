@@ -88,7 +88,7 @@ final class APIClient: @unchecked Sendable {
     func todayData(date: String? = nil) async throws -> (TodaySnapshot, Data) {
         var path = "/app/api/today"
         if let date { path += "?date=" + date }
-        return try await getWithData(path, cacheKey: date == nil ? "today" : nil)
+        return try await getWithData(path, cacheKey: SnapshotCache.dayKey("today", date))
     }
 
     func training() async throws -> TrainingSnapshot {
@@ -137,7 +137,7 @@ final class APIClient: @unchecked Sendable {
                     }
                     continuation.finish()
                 } catch {
-                    continuation.finish(throwing: error)
+                    continuation.finish(throwing: Self.readable(error))
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
@@ -354,7 +354,7 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Health
 
     func health(date: String? = nil) async throws -> HealthSnapshot {
-        try await get("/app/api/health" + (date.map { "?date=" + $0 } ?? ""), cacheKey: date == nil ? "health" : nil)
+        try await get("/app/api/health" + (date.map { "?date=" + $0 } ?? ""), cacheKey: SnapshotCache.dayKey("health", date))
     }
 
     func night(date: String) async throws -> NightDetail {
@@ -372,7 +372,7 @@ final class APIClient: @unchecked Sendable {
     }
 
     func foodData(date: String? = nil) async throws -> (FoodSnapshot, Data) {
-        try await getWithData("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: date == nil ? "food" : nil)
+        try await getWithData("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: SnapshotCache.dayKey("food", date))
     }
 
     /// Personal foods, the shared catalog and recipes; with a barcode, that code.
@@ -384,9 +384,9 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// Foods saved before: the newest first, or the most often logged.
-    func personalFoods(frequent: Bool = false) async throws -> [FoodProduct] {
+    func personalFoods(frequent: Bool = false, limit: Int = 100) async throws -> [FoodProduct] {
         struct Response: Decodable { let products: [FoodProduct]? }
-        let response: Response = try await get("/app/api/food/personal" + (frequent ? "?sort=frequent" : ""))
+        let response: Response = try await get("/app/api/food/personal?limit=\(limit)" + (frequent ? "&sort=frequent" : ""))
         return response.products ?? []
     }
 
@@ -585,7 +585,9 @@ final class APIClient: @unchecked Sendable {
     /// Sends a write that may have waited for signal (Outbox). A missing
     /// connection throws the URLError; an answer other than 2xx throws
     /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx).
-    func sendQueued(_ item: OutboxItem) async throws {
+    /// The server's answer (the new entry's id, for a meal or drink).
+    @discardableResult
+    func sendQueued(_ item: OutboxItem) async throws -> Data {
         var request = makeRequest(item.path, method: item.method)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = item.body
@@ -605,6 +607,7 @@ final class APIClient: @unchecked Sendable {
             if (400..<500).contains(http.statusCode), ![408, 429].contains(http.statusCode) { throw OutboxRefusal.rejected(message) }
             throw OutboxRefusal.retry(message)
         }
+        return data
     }
 
     /// timeout: longer for AI that reads photos, which may wait in line on the
@@ -641,8 +644,34 @@ final class APIClient: @unchecked Sendable {
             if (error as? URLError)?.code != .cancelled, !(error is CancellationError) {
                 ErrorLog.add(request, status: nil, message: error.localizedDescription)
             }
-            throw error
+            throw Self.readable(error)
         }
+    }
+
+    /// iOS words connection failures for engineers ("Chyba TLS způsobila
+    /// selhání zabezpečeného připojení"). This keeps the URLError and its code,
+    /// so Outbox and the offline notice still see it, and says what to do.
+    static func readable(_ error: Error) -> Error {
+        guard let url = error as? URLError else { return error }
+        let text: String
+        switch url.code {
+        case .secureConnectionFailed, .serverCertificateUntrusted, .serverCertificateHasUnknownRoot,
+             .serverCertificateHasBadDate, .serverCertificateNotYetValid, .clientCertificateRejected:
+            text = L10n.tr("Síť blokuje spojení. Přihlas se do Wi-Fi, nebo přepni na data.")
+        case .notConnectedToInternet, .dataNotAllowed:
+            text = L10n.tr("Telefon není připojený k internetu.")
+        case .internationalRoamingOff:
+            text = L10n.tr("Mobilní data v roamingu jsou vypnutá.")
+        case .timedOut:
+            text = L10n.tr("Server neodpověděl včas. Zkus to za chvíli znovu.")
+        case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed, .networkConnectionLost:
+            text = L10n.tr("Nepodařilo se spojit se serverem Aurinu. Zkontroluj připojení a zkus to znovu.")
+        default:
+            return error
+        }
+        var info = url.userInfo
+        info[NSLocalizedDescriptionKey] = text
+        return URLError(url.code, userInfo: info)
     }
 
     private func makeRequest(_ path: String, method: String = "GET") -> URLRequest {
@@ -670,7 +699,7 @@ final class APIClient: @unchecked Sendable {
             let message = json?["message"] as? String
             if http.statusCode == 426 {
                 onUpdateRequired?()
-                throw APIError.updateRequired(message ?? L10n.tr("Tahle verze aplikace je zastaralá. Nainstaluj novou."))
+                throw APIError.updateRequired(message ?? L10n.tr("Tahle verze Aurinu už není podporovaná. Nainstaluj novější verzi."))
             }
             if json?["status"] as? String == "ai_consent_required" {
                 throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))

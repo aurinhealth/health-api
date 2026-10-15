@@ -1,6 +1,7 @@
 import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
 import { appOrigin } from "./app-origin.js";
+import { L } from "./lang.js";
 
 // "Sign in with Google" for the iPhone app. Only identity scopes are requested;
 // health data access stays in the separate /oauth/google connector flow.
@@ -42,11 +43,11 @@ function googleClientEnv(env) {
 function configured(env) {
   return Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.SESSION_SECRET && env.OWNER_EMAIL && env.DB);
 }
-const APP_ONLY = ["Přihlášení selhalo", "Přihlášení přes Google je jen v aplikaci Aurin pro iPhone.", 400];
+const APP_ONLY = () => [L("Přihlášení selhalo", "Sign-in failed"), L("Přihlášení přes Google je jen v aplikaci Aurin pro iPhone.", "Sign in with Google works only in the Aurin iPhone app."), 400];
 
 async function startLogin(env, request) {
   const app = new URL(request.url).searchParams.get("app") || "";
-  if (!APP_CHALLENGE.test(app)) return page(...APP_ONLY);
+  if (!APP_CHALLENGE.test(app)) return page(...APP_ONLY());
   if (!configured(env)) return appError("unavailable");
   const state = randomToken(), nonce = randomToken(), verifier = randomToken() + randomToken();
   const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
@@ -69,7 +70,7 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   const [expectedState, nonce, verifier, app] = (match?.[1] || "").split(".");
   // Every failure goes back to the iPhone app as loadwise://auth?error=…,
   // so its browser sheet closes and the app says what happened.
-  if (!APP_CHALLENGE.test(app || "")) return page(...APP_ONLY);
+  if (!APP_CHALLENGE.test(app || "")) return page(...APP_ONLY());
   const fail = reason => appError(reason);
   if (!configured(env)) return fail("unavailable");
   if (url.searchParams.get("error")) return fail("cancelled");
@@ -118,14 +119,14 @@ function appReturnPage(token) {
   const link = APP_RETURN_URL + "?token=" + encodeURIComponent(token);
   const headers = new Headers({ "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer" });
   headers.append("Set-Cookie", STATE_COOKIE + "=; Max-Age=0; Path=/auth/google; Secure; HttpOnly; SameSite=Lax");
-  return new Response("<!doctype html><html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>Přihlášení hotovo</h1><p>Vrať se do aplikace Aurin.</p><p><a id=\"open\" href=\"" + esc(link) + "\" style=\"display:inline-block;padding:12px 18px;border-radius:10px;background:#9ec5ff;color:#0a0d12;text-decoration:none;font-weight:600\">Otevřít aplikaci</a></p><script>location.href=document.getElementById(\"open\").href</script></body></html>", { status: 200, headers });
+  return new Response("<!doctype html><html lang=\"" + L("cs", "en") + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + L("Přihlášení hotovo", "Signed in") + "</h1><p>" + L("Vrať se do aplikace Aurin.", "Go back to the Aurin app.") + "</p><p><a id=\"open\" href=\"" + esc(link) + "\" style=\"display:inline-block;padding:12px 18px;border-radius:10px;background:#9ec5ff;color:#0a0d12;text-decoration:none;font-weight:600\">" + L("Otevřít aplikaci", "Open the app") + "</a></p><script>location.href=document.getElementById(\"open\").href</script></body></html>", { status: 200, headers });
 }
 
 // The app's web view trades the handoff token and its verifier for a session.
 // JSON only, so another site cannot post a token from a hidden form.
 async function finishAppLogin(request, env) {
-  if (!configured(env)) return Response.json({ status: "error", message: "Přihlášení není nastavené." }, { status: 503 });
-  const fail = () => Response.json({ status: "error", message: "Přihlášení vypršelo. Zkus to znovu." }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  if (!configured(env)) return Response.json({ status: "error", message: L("Přihlášení přes Google teď není dostupné.", "Sign in with Google isn't available right now.") }, { status: 503 });
+  const fail = () => Response.json({ status: "error", message: L("Přihlášení vypršelo. Zkus to znovu.", "Sign-in expired. Try again.") }, { status: 401, headers: { "Cache-Control": "no-store" } });
   const origin = request.headers.get("Origin");
   if (!(request.headers.get("Content-Type") || "").startsWith("application/json") || (origin && origin !== new URL(request.url).origin)) return fail();
   const { token, verifier } = await request.json().catch(() => ({}));
@@ -182,7 +183,7 @@ async function googleJwks(fetchImpl, kid) {
 export function _resetJwksCacheForTest() { cachedJwks = null; cachedJwksAt = 0; forcedJwksAt = 0; }
 
 function page(title, message, status) {
-  return new Response("<!doctype html><html lang=\"cs\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + esc(title) + "</h1><p>" + esc(message) + "</p><p><a href=\"/app\" style=\"color:#9ec5ff\">Zpět na přihlášení</a></p></body></html>", { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer" } });
+  return new Response("<!doctype html><html lang=\"" + L("cs", "en") + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + esc(title) + "</h1><p>" + esc(message) + "</p><p><a href=\"/app\" style=\"color:#9ec5ff\">" + L("Zpět na přihlášení", "Back to sign-in") + "</a></p></body></html>", { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer" } });
 }
 function esc(value) { return String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c])); }
 function randomToken() { return base64url(crypto.getRandomValues(new Uint8Array(24))); }

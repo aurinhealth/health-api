@@ -253,7 +253,7 @@ struct WeekRevisionCard: View {
             if apply {
                 await model.refreshTraining()
                 if next?.changes?.contains(where: { $0.applied == false }) == true {
-                    error = L10n.tr("Některý trénink se mezitím změnil, ten zůstal beze změny.")
+                    error = L10n.tr("Některé tréninky se nepodařilo změnit, zůstaly beze změny.")
                 }
             }
         } catch {

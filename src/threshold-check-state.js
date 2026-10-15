@@ -91,10 +91,10 @@ export async function thresholdCheckState(env,ctx,today){
 // A manually entered test result into the values to confirm.
 export function manualTestResult(testId,values={}){
   const num=v=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):null;
-  if(testId==='test-ride-ftp20'){const p=num(values.power20);if(!p||p>1500)throw new Error(L('Zadej průměrný výkon z 20 minut.','Enter the average power of the 20 minutes.'));return {ftp:Math.round(p*.95),power20:p};}
+  if(testId==='test-ride-ftp20'){const p=num(values.power20);if(!p||p>1500)throw new Error(L('Zadej průměrný výkon za 20 minut.','Enter your average power over 20 minutes.'));return {ftp:Math.round(p*.95),power20:p};}
   if(testId==='test-ride-lthr30'){const hr=num(values.hr);if(!hr||hr<80||hr>230)throw new Error(L('Zadej průměrný tep posledních 20 minut.','Enter the average heart rate of the last 20 minutes.'));return {lthr:Math.round(hr)};}
   const km=num(String(values.distanceKm??'').replace(',','.')),pace=km?Math.round(1800/km):null;
-  if(!pace||pace<150||pace>600)throw new Error(L('Zadej vzdálenost, kterou jsi za 30 minut uběhl.','Enter the distance you ran in the 30 minutes.'));
+  if(!pace||pace<150||pace>600)throw new Error(L('Zadej vzdálenost uběhnutou za 30 minut.','Enter the distance you ran in 30 minutes.'));
   const hr=num(values.hr);
   return {runThresholdPace:pace,runLthr:hr&&hr>=80&&hr<=230?Math.round(hr):null,distance:Math.round(km*1000)};
 }

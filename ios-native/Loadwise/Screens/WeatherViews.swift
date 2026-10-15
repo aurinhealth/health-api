@@ -76,32 +76,32 @@ enum WeatherText {
     static func indoor(_ advice: TodaySnapshot.Advice?) -> Bool { advice?.environment == "indoor" }
 }
 
-/// Today's card above the key numbers: the place with the location arrow and
-/// the day's temperatures, the athlete's status in the corner and a few
-/// hours of the forecast.
+/// Today's card above the key numbers: the athlete's status as its first
+/// row, then the place with the location arrow and the day's temperatures
+/// and a few hours of the forecast.
 struct TodayWeatherCard: View {
     let weather: TodaySnapshot.Weather?
     @State private var open = false
 
     var body: some View {
         Card {
-            HStack(alignment: .center) {
-                Button { open = true } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "location.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.blue)
-                        if let weather {
-                            Text(verbatim: (weather.place ?? L10n.tr("Počasí")) + " · " + WeatherText.range(weather))
-                                .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                        } else {
-                            Text("Nastavit polohu pro počasí").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
-                        }
+            // The athlete's status first, always visible (Petr, 2026-10-15: no frame).
+            AthleteStatusRow()
+            Divider().overlay(Palette.hairline)
+            Button { open = true } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "location.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.blue)
+                    if let weather {
+                        Text(verbatim: (weather.place ?? L10n.tr("Počasí")) + " · " + WeatherText.range(weather))
+                            .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                    } else {
+                        Text("Nastavit polohu pro počasí").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
                     }
-                    .contentShape(Rectangle())
+                    Spacer(minLength: 0)
                 }
-                .buttonStyle(.plain)
-                Spacer(minLength: 8)
-                AthleteStatusPill(compact: true)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             if let hours = weather?.hours, !hours.isEmpty {
                 Button { open = true } label: {
                     HStack(spacing: 0) {
@@ -253,7 +253,7 @@ enum DeviceLocation {
         case denied, unavailable
         var errorDescription: String? {
             switch self {
-            case .denied: return L10n.tr("Aurin nemá přístup k poloze. Povol ho v Nastavení iPhonu → Aurin → Poloha.")
+            case .denied: return L10n.tr("Aurin nemá přístup k poloze. Povol ho v Nastavení iPhonu → Soukromí a zabezpečení → Polohové služby → Aurin.")
             case .unavailable: return L10n.tr("Polohu se nepodařilo zjistit. Zkus to znovu venku nebo vyhledej místo.")
             }
         }

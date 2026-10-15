@@ -69,7 +69,7 @@ export function withoutDisliked(pool, disliked, nameOf = x => x) {
 export function parseWorkoutRating(body = {}) {
   const date = String(body?.date || ''), rating = String(body?.rating || '');
   if (!DAY.test(date)) throw new Error(L('Neplatné datum.', 'Invalid date.'));
-  if (!WORKOUT_RATINGS.includes(rating)) throw new Error(L('Vyber, jak trénink sedělo.', 'Choose how well the workout fitted.'));
+  if (!WORKOUT_RATINGS.includes(rating)) throw new Error(L('Vyber, jak ti trénink sedl.', 'Choose how the workout felt.'));
   const raw = String(body?.sport || 'other').toLowerCase(), sport = raw === 'gym' ? 'strength' : SPORTS.has(raw) ? raw : 'other';
   // The app's session id ("gym:<date>", an activity id, or a name for a session without one).
   const sessionId = String(body?.sessionId || '').replace(/[^A-Za-z0-9:._-]+/g, '_').slice(0, 120);

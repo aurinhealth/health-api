@@ -58,7 +58,7 @@ test('cancellation hides a pending gym plan, preserves history and survives auto
   assert.deepEqual(JSON.parse(raw.sqlite.prepare('SELECT values_json FROM gym_plans WHERE user_id=1').get().values_json),values);
   assert.equal((await getStrengthHistory(db,50)).length,1);
   assert.equal((await readGymPlan(other,plan.date)).cancelled,false);
-  assert.match(await nightlyGymSkip(db,plan.date),/zrušil/);
+  assert.match(await nightlyGymSkip(db,plan.date),/zrušený/);
   assert.deepEqual(await plannedGymSessions({DB:db,USER_ID:1},'2026-10-02'),[]);
   const archive=await readGymPlan(db,plan.date,{includeCancelled:true});assert.equal(archive.cancelledEvent.moving_time,3600);
   await restoreGymPlan(db,plan.date);assert.equal((await readGymPlan(db,plan.date)).stored,true);
