@@ -21,3 +21,14 @@ test('without Intervals.icu the sleep answer stays as it is', async () => {
   assert.deepEqual(r.sources, ['intervals']);
   assert.equal(r.sessions.length, 2);
 });
+
+test('a cached wellness loader replaces the live Intervals call, and its failure keeps the Google nights', async () => {
+  const wellness = [{ id: '2026-10-03', sleepSecs: 25200 }];
+  let fetched = 0;
+  const live = async () => { fetched++; return new Response('[]', { status: 200 }); };
+  const r = await withIntervalsSleep({ INTERVALS_API_KEY: 'k' }, { sessions: [] }, '2026-10-01', '2026-10-06', live, async () => wellness);
+  assert.equal(fetched, 0);
+  assert.equal(r.sessions[0].durationMin, 420);
+  const data = { sessions: [{ date: '2026-10-02' }] };
+  assert.equal(await withIntervalsSleep({ INTERVALS_API_KEY: 'k' }, data, '2026-10-01', '2026-10-06', live, async () => { throw new Error('down'); }), data);
+});
