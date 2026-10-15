@@ -26,6 +26,7 @@
 "%lld min" = "%lld min";
 "+%@ trénink" = "+%@ training";
 "+%@ námahy" = "+%@ strain";
+"+%@ další" = "+%@ more";
 ", pomocně: %@" = ", also: %@";
 "1 porce" = "1 serving";
 "14 dní %@–%@ %%" = "14 days %@–%@ %%";

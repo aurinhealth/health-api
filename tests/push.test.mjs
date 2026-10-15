@@ -269,3 +269,21 @@ test("the morning push waits for last night and never says 'intervals' to a sick
   // 10:30 in Prague, the last hour of the window: it goes out anyway.
   assert.equal((await sendMorningReadiness(env, { readiness, now: new Date("2026-10-12T08:30:00Z"), fetchImpl })).sent, 1);
 });
+
+test("no night by 10:00 sends one line about the missing data, only to someone who had a score yesterday", async () => {
+  _resetPushForTest();
+  const { env } = setup();
+  await savePushToken(env.DB, TOKEN_A);
+  const { calls, fetchImpl } = fakeApns();
+  const missing = date => date === "2026-10-12" ? null : { score: 70, zone: "green" };
+  // 8:00 Prague: still waiting for the night.
+  assert.equal((await sendMorningReadiness(env, { readiness: missing, now: new Date("2026-10-12T06:00:00Z"), fetchImpl })).reason, "no-score");
+  const late = await sendMorningReadiness(env, { readiness: missing, now: new Date("2026-10-12T08:15:00Z"), fetchImpl });
+  assert.equal(late.sent, 1);
+  assert.match(calls[0].body.aps.alert, /Data z noci zatím nedorazila/);
+  // A new account without a score yesterday gets nothing.
+  _resetPushForTest();
+  const fresh = setup();
+  await savePushToken(fresh.env.DB, TOKEN_A);
+  assert.equal((await sendMorningReadiness(fresh.env, { readiness: () => null, now: new Date("2026-10-12T08:15:00Z"), fetchImpl })).reason, "no-score");
+});

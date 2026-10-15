@@ -1,4 +1,4 @@
-import { reflectionSignals } from './coach-reflection.js';
+import { reflectionSignals, fillWellness } from './coach-reflection.js';
 
 import { ATHLETE_STATUSES } from './training-status.js';
 import { validDay } from './training-availability.js';
@@ -54,6 +54,13 @@ export async function updateAthleteState(db, patch,{date=localToday()}={}) {
   // Kept by the coach's push (coach-push.js): the last time zone seen and the message waiting for an answer.
   if (patch.zone !== undefined) state.zone = patch.zone;
   if (patch.nudge !== undefined) state.nudge = patch.nudge;
+  // Sessions cancelled when switching to Nemoc, Zranění or Pauza: the coach
+  // offers them back afterwards. Kept 21 days, at most 14.
+  if (Array.isArray(patch.cancelled)) {
+    const since = shiftDate(date, -21);
+    state.cancelled = [...(state.cancelled || []), ...patch.cancelled.map(c => ({ date: validDay(c?.date) ? c.date : null, name: clean(c?.name).slice(0, 80) || null, type: clean(c?.type).slice(0, 30) || null, minutes: Number(c?.minutes) > 0 ? Math.round(Number(c.minutes)) : null, at: date }))]
+      .filter(c => c.at >= since).slice(-14);
+  }
   if (patch.dismiss) state.dismissed = [...new Set([...state.dismissed, clean(patch.dismiss)])].slice(-30);
   await db.prepare('INSERT INTO athlete_state(user_id,state_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET state_json=excluded.state_json').bind(db.userId, JSON.stringify(state)).run();
   return state;
@@ -108,7 +115,9 @@ export function assertTrainingAllowed(state) {
 // based on multiple recent signals, and always let the athlete decide.
 export function proactiveAdvice({ date, fitness = {}, health = {}, week = {}, state = {} }) {
   if (state.status !== 'active') return null;
-  const signals = reflectionSignals({ date, wellness: fitness.wellness || [], sleep: health.sleep || [] }).filter(s => ['sleep_short', 'hrv_low', 'rhr_high', 'tsb_low', 'tsb_chronic'].includes(s.id));
+  // HRV and resting HR from the watch where Intervals.icu has none: without
+  // Intervals the form rows carry only the load (own-fitness.js).
+  const signals = reflectionSignals({ date, wellness: fillWellness(fitness.wellness || [], health.wellness || []), sleep: health.sleep || [] }).filter(s => ['sleep_short', 'hrv_low', 'rhr_high', 'tsb_low', 'tsb_chronic'].includes(s.id));
   if (signals.length < 2) return null;
   const id = date + ':recovery';
   if (state.dismissed?.includes(id)) return null;

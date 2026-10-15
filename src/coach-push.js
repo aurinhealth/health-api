@@ -75,7 +75,7 @@ export function coachNudge({ date, hour, zone = null, illness = null, recovery =
         kind: 'recovery',
         title: nights >= 2 ? L(`${word} krátké noci za sebou`, `${word} short nights in a row`) : L('Tělo se ještě nezotavilo', "Your body hasn't recovered yet"),
         body: L(`${today ? 'Dnešní' : 'Zítřejší'} ${what} vyměním za ${easy}?`, `Swap ${today ? "today's" : "tomorrow's"} ${what} for ${easy}?`),
-        swap: { eventId: hard.eventId, date: hard.date, sport: hard.sport, environment: hard.environment || 'outdoor', minutes, kind: 'endurance', name: hard.name || null }
+        swap: { eventId: hard.eventId, date: hard.date, sport: hard.sport, environment: hard.environment || 'outdoor', minutes, kind: 'endurance', name: hard.name || null, what, fromMinutes: hard.minutes || null }
       };
     }
   }
@@ -93,4 +93,14 @@ export function coachNudge({ date, hour, zone = null, illness = null, recovery =
     }
   }
   return null;
+}
+
+// The swap the morning push offered, as a card on Today until it is answered:
+// "VO2max · 75 min → Lehká jízda · 45 min" with Vyměnit and Nechat.
+export function swapOffer(state = {}, date) {
+  const n = state?.nudge;
+  if (!n || n.status !== 'pending' || n.day !== date || !n.date || n.date < date) return null;
+  const easy = n.sport === 'run' ? L('Lehký běh', 'Easy run') : L('Lehká jízda', 'Easy ride');
+  const from = (n.name || n.what || L('Trénink', 'Session')) + (n.fromMinutes ? ' · ' + n.fromMinutes + ' min' : '');
+  return { kind: 'swap', id: date + ':swap', headline: n.title || L('Tělo se ještě nezotavilo', "Your body hasn't recovered yet"), date: n.day, from, to: easy + ' · ' + n.minutes + ' min' };
 }
