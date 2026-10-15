@@ -21,7 +21,7 @@ export const EXCLUDED = ['obal', 'marin', 'uzen', 'sunk', 'salam', 'parek', 'par
   'dressing', 'nugget', 'kebab', 'gyros', 'burger', 'pizza', 'polevk', 'soup', 'pastik', 'pate', 'jerky', 'susen', 'dried',
   'dzem', 'marmelad', 'kompot', 'syrup', 'nektar', 'nectar', 'chips', 'lupin', 'hranol', 'kroket', 'steril', 'nakladan',
   'pickl', 'brine', 'nalev', 'kysan', 'prasek', 'powder', 'protein', 'instant', 'smes', 'salat', 'salad', 'jogurt', 'yog',
-  'tycin', 'dort', 'kolac', 'musli', 'muesli', 'granola', 'cereal', 'zmrzlin', 'bonbon', 'puding', 'pudding', 'dezert',
+  'tycin', 'rolk', 'chrum', 'snack', 'crisp', 'puff', 'pufovan', 'dort', 'kolac', 'musli', 'muesli', 'granola', 'cereal', 'zmrzlin', 'bonbon', 'puding', 'pudding', 'dezert',
   'dessert', 'smoothie', 'napoj', 'drink', 'vegan', 'veggi', 'rostlinn', 'imitac', 'alternativ', 'vanil', 'kakao', 'cocoa',
   'cukr', 'sugar', 'krem', 'cream', 'pomazank', 'spread', 'hotov', 'sous', 'konzerv', 'canned', 'tavene', 'taveny',
   'tavenn', 'chut', 'aroma', 'koren', 'spice', 'seasoned', 'stuffed', 'plnen', 'dzus', 'juice', 'mlecn', 'mouc', 'pecivo'];
@@ -32,7 +32,7 @@ export const EXCLUDED_WORDS = ['med', 'honey', 'bar', 'jam', 'ice', 'mix', 'styl
 const SR = 'usda_sr_legacy', COFID = 'cofid';
 const PLANT_MILK = 'sojov\\w*|ovesn\\w*|mandl\\w*|kokos\\w*|ryzov\\w*|rostlin\\w*|soy\\w*|oat|almond|coconut|rice|kozi|goat|kondenz\\w*|condensed|zakys\\w*|kefir\\w*|podmasl\\w*|buttermilk|acidof\\w*';
 const CHICKEN = 'kure|kurec\\w*|kurat\\w*|chicken|broiler';
-const NOT_PART = 'stehen\\w*|stehn\\w*|thigh|kridl\\w*|kridel|wing\\w*|jatr\\w*|liver|mlet\\w*|ground|minced|palick\\w*|drumstick|cele|whole|ctvrt\\w*|kuze|skin';
+const NOT_PART = 'drum\\w*|stehen\\w*|stehn\\w*|thigh|kridl\\w*|kridel|wing\\w*|jatr\\w*|liver|mlet\\w*|ground|minced|palick\\w*|drumstick|cele|whole|ctvrt\\w*|kuze|skin';
 
 // [id, Czech label, has (all), refs, options]
 const RAW = [
@@ -268,7 +268,9 @@ export function nameMatches(rec, entries = MATCHES) {
   const joined = names.some(n => /[&+]/.test(n));
   const out = [];
   for (const e of entries) {
-    if (!texts.some(t => e.has.every(r => r.test(t)))) continue;
+    // The name shown (Czech, else English, else the original) must match:
+    // Open Food Facts names in other languages are sometimes another product.
+    if (!e.has.every(r => r.test(texts[0]))) continue;
     if (e.not && texts.some(t => e.not.test(t))) continue;
     if (joined || [...all].some(w => excludedWord(w, e))) continue;
     out.push(e);
