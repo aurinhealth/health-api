@@ -37,3 +37,14 @@ test("with the user databases full an invited address waits on the list instead 
   assert.equal(await mayCreateAccount(full, env, "stranger@example.com"), false);
   assert.equal(full.sqlite.prepare("SELECT COUNT(*) AS n FROM signup_waitlist").get().n, 1);
 });
+
+test("ACCOUNT_LIMIT stops open sign-up at that many accounts, invitations still get in", async () => {
+  const open = { ...env, OPEN_SIGNUP: "true", ACCOUNT_LIMIT: "2" };
+  assert.equal(await mayCreateAccount(database({ placed: 1 }), open, "stranger@example.com"), true);
+  const full = database({ placed: 2 });
+  assert.equal(await mayCreateAccount(full, open, "stranger@example.com"), false);
+  assert.equal(full.sqlite.prepare("SELECT COUNT(*) AS n FROM signup_waitlist WHERE email='stranger@example.com'").get().n, 1);
+  assert.equal(await mayCreateAccount(full, open, "new@example.com"), true);
+  assert.equal(await mayCreateAccount(full, open, "owner@example.com"), true);
+  assert.equal(await mayCreateAccount(full, { ...open, ACCOUNT_LIMIT: "" }, "stranger@example.com"), true);
+});

@@ -375,16 +375,26 @@ export const openSignup = env => String(env?.OPEN_SIGNUP || "").trim() === "true
 export async function mayCreateAccount(db, env, address) {
   if (!address) return false;
   if (address === ownerEmail(env)) return true;
-  if (!openSignup(env) && !(await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first())) return false;
+  const invited = Boolean(await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first());
+  if (!openSignup(env) && !invited) return false;
+  // ACCOUNT_LIMIT (a Worker variable) caps open sign-up at that many accounts;
+  // later addresses wait on the list until the owner invites them.
+  const limit = Number(env?.ACCOUNT_LIMIT) || 0;
+  if (limit > 0 && !invited) {
+    const users = await db.prepare("SELECT COUNT(*) AS n FROM users").first();
+    if ((Number(users?.n) || 0) >= limit) return waitlist(db, address, "account limit reached");
+  }
   // A new account needs a place in a user database; without one every request
   // of it would fail, so the address waits on the list (signup_waitlist) instead.
   const room = await accountCapacity(db, env).catch(() => null);
-  if (room && room.free <= 0) {
-    console.warn("New account refused: the user databases are full");
-    await db.prepare("INSERT INTO signup_waitlist(email) VALUES(?) ON CONFLICT(email) DO NOTHING").bind(address).run().catch(() => null);
-    return false;
-  }
+  if (room && room.free <= 0) return waitlist(db, address, "the user databases are full");
   return true;
+}
+
+async function waitlist(db, address, reason) {
+  console.warn(`New account refused: ${reason}`);
+  await db.prepare("INSERT INTO signup_waitlist(email) VALUES(?) ON CONFLICT(email) DO NOTHING").bind(address).run().catch(() => null);
+  return false;
 }
 
 // Places for new accounts in the user databases (user-data-shards.js): the free

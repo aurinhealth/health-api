@@ -77,6 +77,9 @@
     // Anyone may create an account while shard capacity lasts (src/tenancy.js accountCapacity);
     // when it is full, new e-mails land in signup_waitlist.
     "OPEN_SIGNUP": "true",
+    // Open sign-up stops at this many accounts (testers first); later e-mails wait in
+    // signup_waitlist until they get an invitation (user_invites). Empty = no limit.
+    "ACCOUNT_LIMIT": "22",
     // Strava app (src/strava.js); public. STRAVA_CLIENT_SECRET is a Worker secret.
     "STRAVA_CLIENT_ID": "183664",
     // Ultrahuman app (src/ultrahuman.js); public. ULTRAHUMAN_CLIENT_SECRET is a Worker secret.
