@@ -1,5 +1,5 @@
 import {initialImport,recentDashboardImport} from './account-sync.js';
-
+import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
 import { trainingSetup } from './onboarding.js';
 import { subscriptionStatus, assertAIAccess } from './subscription.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
@@ -242,7 +242,7 @@ export async function runUserJobs(env, ctx, { cron, scheduledTime }, user, names
   const controller = { cron, scheduledTime };
   await withLang(language, () => withUnits(unitsChoice, () => withTimeZone(zone, async () => {
     for (const job of jobs) {
-      try { await job.run(scoped, ctx, controller); }
+      try { await withOpsScope(env.DB, job.name, () => job.run(scoped, ctx, controller)); }
       catch (error) { console.error("Per-user job failed", user.id, job.name, error.message); }
     }
   })));
@@ -291,6 +291,8 @@ const worker = {
     }
     // Connection keys saved before CONNECTION_KEY existed get it (connection-secrets.js).
     if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await migrateConnectionSecrets(env).then(result => { if (result.migrated || result.failed) console.log("Connection key migration", result); }).catch(error => console.error("Connection key migration failed", error.message));
+    // Yesterday's failed syncs, broken connections and server errors, to the owner (ops-report.js).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 6 && new Date().getUTCMinutes() % 10 === 0) await sendDailyOpsReport(env).catch(error => console.error("Daily ops report failed", error.message));
     // Every user's jobs due this minute (USER_JOBS), each user in its own invocation.
     await fanOutUserJobs(env, ctx, controller);
   },
@@ -448,7 +450,13 @@ export default {
     // An installed iPhone app older than the API answers with 426 (app-version.js).
     const outdated = appUpdateRequired(request);
     if (outdated) return outdated;
-    return worker.fetch(request, env, ctx);
+    // Server errors are counted for the owner's morning e-mail (ops-report.js); 503 is a planned "try again".
+    const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", `${request.method} ${routeName(new URL(request.url).pathname)}`, message));
+    try {
+      const response = await worker.fetch(request, env, ctx);
+      if (response.status >= 500 && response.status !== 503) count(`HTTP ${response.status}`);
+      return response;
+    } catch (error) { count(error); throw error; }
   }
 };
 
