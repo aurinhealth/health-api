@@ -56,8 +56,8 @@ final class ShareImageTests: XCTestCase {
         XCTAssertEqual(d.readiness, 78)
         XCTAssertEqual(d.sleepEnd, "07:02")
         XCTAssertEqual(d.readinessLabel, "vysoká")
-        // The demo's plan workout is still planned: nothing done to show.
-        XCTAssertTrue(d.workouts.isEmpty)
+        // The demo's morning run is done; the gym session is still planned.
+        XCTAssertEqual(d.workouts.count, 1)
         XCTAssertEqual(ShareDay.minutes("17:30"), 1050)
         XCTAssertEqual(ride.end, "18:42")
         XCTAssertEqual(ride.available, ["Vzdálenost", "Čas", "Výkon", "Tep", "Převýšení"])

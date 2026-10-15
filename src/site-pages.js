@@ -81,12 +81,28 @@ p{margin:0}
 .rb:before{content:"";position:absolute;left:33.3%;width:33.3%;top:0;bottom:0;border-radius:2px;background:rgba(27,26,23,.34)}
 .rb i{position:absolute;top:-3px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--green);box-shadow:0 0 0 2px var(--panel)}
 .rb i.warm{background:var(--amber)}
-.next{display:flex;align-items:center;gap:11px}
 .sport{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;color:#fff}
 .sport .icon{width:19px;height:19px}
-.next .t{font-weight:600;display:flex;align-items:center;gap:5px}
-.next .t .icon{width:12px;height:12px;color:var(--amber)}
-.next .s{font-size:12px;color:var(--muted)}
+/* Den: the day on one line (DayTimeline.swift). Done above the amber "now", planned below with dashed dots. */
+.den .h{font-size:9.5px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.tl{margin-top:4px}
+.tl .r{position:relative;display:grid;grid-template-columns:34px 14px 1fr;gap:7px;align-items:center;min-height:26px}
+.tl .r::before{content:"";position:absolute;left:47px;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--line)}
+.tl .r:first-child::before{top:9px}.tl .r:last-child::before{bottom:50%}
+.tl .r>span:first-child{font-size:9.5px;font-weight:500;color:var(--muted);text-align:right;white-space:nowrap}
+.tl .r.span>span:first-child{align-self:stretch;display:flex;flex-direction:column;justify-content:space-between;padding:4px 0}
+.tl .d{position:relative;z-index:1;display:block;width:11px;height:11px;margin:0 auto;border-radius:50%;box-sizing:border-box;border:2.5px solid var(--c);background:var(--panel)}
+.tl .f .d{border:1.5px dashed var(--c)}
+.tl .r.span>i{position:relative;align-self:stretch;display:flex;flex-direction:column;justify-content:space-between;padding:4px 0}
+.tl .r.span>i::before{content:"";position:absolute;left:50%;top:9px;bottom:9px;width:3px;margin-left:-1.5px;border-radius:2px;background:var(--c)}
+.tl .r.span.f>i::before{background:repeating-linear-gradient(180deg,var(--c) 0 4px,transparent 4px 7px);opacity:.7}
+.tl .r.span{min-height:40px}
+.tl b{font-weight:600}.tl .v{font:400 17px/1 Newsreader,Georgia,serif}.tl .s{font-size:10.5px;color:var(--muted)}
+.tl .now>span:first-child{color:var(--amber);font-weight:700}
+.tl .now .d{width:8px;height:8px;border:0;background:var(--amber);box-shadow:0 0 0 3px color-mix(in srgb,var(--amber) 22%,transparent)}
+.tl .now em{height:1.5px;background:linear-gradient(90deg,var(--amber),transparent)}
+.tl .go{display:flex;align-items:center;justify-content:space-between;gap:6px}.tl .go b{white-space:nowrap}
+.tl .go u{text-decoration:none;padding:4px 10px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:10.5px;font-weight:600}
 .tabbar{position:absolute;left:12px;right:12px;bottom:12px;height:54px;border-radius:27px;background:var(--panel);display:flex;justify-content:space-around;align-items:center;box-shadow:0 4px 20px rgba(60,45,20,.10);color:var(--muted)}
 .tabbar .icon{width:21px;height:21px}
 .tabbar .on{color:var(--text)}
@@ -333,7 +349,7 @@ export function overviewPage(request) {
   const {lang, device, origin} = pageLang(request), t = (cs, en) => lang === 'en' ? en : cs;
   const days = t(['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'], ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
   const short = t(['P', 'Ú', 'S', 'Č', 'P', 'S', 'N'], ['M', 'T', 'W', 'T', 'F', 'S', 'S']);
-  const today = `<div class="phone" role="img" aria-label="${t('Aurin v telefonu: obrazovka Dnes s připraveností, spánkem, námahou, HRV a dnešním tréninkem', 'Aurin on a phone: the Today screen with readiness, sleep, strain, HRV and today’s workout')}"><div class="screen" aria-hidden="true">
+  const today = `<div class="phone" role="img" aria-label="${t('Aurin v telefonu: obrazovka Dnes s připraveností, spánkem, námahou, HRV a časovou osou dne s dnešním tréninkem', 'Aurin on a phone: the Today screen with readiness, sleep, strain, HRV and the day’s timeline with today’s workout')}"><div class="screen" aria-hidden="true">
 <div class="top"><span class="day"><b>${t('Říjen', 'October')}</b></span><span class="me">P</span></div>
 <div class="wk"><span class=""><small>${t('Po', 'Mo')}</small><b>12</b><i class="g"></i></span><span class=""><small>${t('Út', 'Tu')}</small><b>13</b><i class="a"></i></span><span class="on"><small>${t('St', 'We')}</small><b>14</b><i class="g"></i></span><span class="fut"><small>${t('Čt', 'Th')}</small><b>15</b><i class=""></i></span><span class="fut"><small>${t('Pá', 'Fr')}</small><b>16</b><i class=""></i></span><span class="fut"><small>${t('So', 'Sa')}</small><b>17</b><i class=""></i></span><span class="fut"><small>${t('Ne', 'Su')}</small><b>18</b><i class=""></i></span></div>
 <div class="lbl">${t('Připravenost', 'Readiness')}</div>
@@ -342,7 +358,12 @@ export function overviewPage(request) {
 <div><div class="k">${t('Spánek', 'Sleep')}</div><div class="v">7:12</div><div class="rb"><i style="left:44%"></i></div><div class="d up">${t('94 % potřeby', '94% of need')}</div></div>
 <div><div class="k">${t('Námaha', 'Strain')}</div><div class="v">${t('11,4', '11.4')}</div><div class="rb"><i class="warm" style="left:24%"></i></div><div class="d warm">${t('cíl 12–15', 'target 12–15')}</div></div>
 <div><div class="k">HRV</div><div class="v">66</div><div class="rb"><i style="left:72%"></i></div><div class="d up">${t('nad normálem', 'above normal')}</div></div></div>
-<div class="pc next"><span class="sport" style="background:var(--amber-bar)">${icon('bike')}</span><div><div class="t">Sweet spot 3×12 ${icon('spark')}</div><div class="s">${t('1 h 25 min · dnes v 17:30', '1h 25m · today at 5:30 pm')}</div></div></div>
+<div class="pc den"><div class="h">${t('Den', 'Day')}</div><div class="tl">
+<div class="r span" style="--c:var(--indigo)"><span><span>${t('23:30', '11:30 PM')}</span><span>${t('6:42', '6:42 AM')}</span></span><i><i class="d"></i><i class="d"></i></i><div><b>${t('Spánek', 'Sleep')}</b> <span class="v">7:12</span></div></div>
+<div class="r now"><span>${t('12:00', '12:00 PM')}</span><i class="d"></i><em></em></div>
+<div class="r span f" style="--c:var(--amber-bar)"><span><span>${t('17:30', '5:30 PM')}</span><span>${t('18:55', '6:55 PM')}</span></span><i><i class="d"></i><i class="d"></i></i><div class="go"><div><b>Sweet spot 3×12</b><div class="s">${t('85 min · 92 TSS', '85 min · 92 TSS')}</div></div><u>${t('Začít', 'Start')}</u></div></div>
+<div class="r f" style="--c:var(--indigo)"><span>${t('22:30', '10:30 PM')}</span><i class="d"></i><div><b>${t('Do postele', 'Bedtime')}</b> <span class="s">${t('potřeba 8 h 05 min', 'need 8 h 05 min')}</span></div></div>
+</div></div>
 <div class="pc"><div class="s" style="color:var(--muted);font-size:12px">${t('Kouč', 'Coach')}</div><div style="margin-top:3px">${t('Spal jsi dobře a HRV je nad normálem. Dnešní intervaly dej naplno.', 'You slept well and your HRV is above normal. Go all in on today’s intervals.')}</div></div>
 <div class="tabbar"><span class="on">${icon('today')}</span><span>${icon('heart')}</span><span>${icon('training')}</span><span>${icon('meal')}</span></div>
 </div></div>`;

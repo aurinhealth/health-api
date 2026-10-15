@@ -102,6 +102,25 @@ test("Today's plan shows what was done at its time, then the plan, a gym session
   assert.equal(past.plan.find(p => p.kind === "workout").status, "missed");
 });
 
+test("Den: a done ride carries its distance, power and what it added to the strain", () => {
+  const training = {
+    planned: [],
+    completed: [
+      { id: "activity:i2", source: "intervals", start: DATE + "T17:30:00", durationHours: 1.2, tss: 85, name: "Kolo · tempo", type: "Ride", payload: { distance: 34600, icu_average_watts: 198.4 } },
+      { id: "watch:1", family: "apple-health", start: DATE + "T07:00:00", durationHours: 0.5, name: "Běh", type: "Run", payload: { exercise: { metricsSummary: { distanceMillimeters: 5200000, averagePowerWatts: 0 } } } }
+    ],
+    matched: []
+  };
+  const t = buildToday({ ...input, hour: 20, daily: { ...input.daily, training } });
+  const [run, ride] = t.plan.filter(p => p.kind === "workout");
+  assert.equal(ride.session.distanceKm, 34.6);
+  assert.equal(ride.session.watts, 198);
+  assert.ok(ride.strain > 0 && ride.strain < 21);
+  assert.equal(run.session.distanceKm, 5.2);
+  assert.equal(run.session.watts, undefined, "no power from the watch");
+  assert.equal(run.strain, undefined, "no TSS, no estimate");
+});
+
 test("Today stays usable without data", () => {
   const t = buildToday({ date: DATE });
   assert.equal(t.readiness.score, null);
