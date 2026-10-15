@@ -23,11 +23,20 @@ final class ShareImageTests: XCTestCase {
         w.heartRate = 142
         w.elevation = 486
         w.tss = 84
-        w.route = (0..<120).map { i in
-            let t = Double(i) / 119
-            return [50.08 + 0.05 * t + 0.006 * sin(t * 9), 14.40 + 0.07 * t + 0.01 * cos(t * 7)]
+        var route: [[Double]] = []
+        for i in 0..<120 {
+            let t: Double = Double(i) / 119
+            let lat: Double = 50.08 + 0.05 * t + 0.006 * sin(t * 9)
+            let lon: Double = 14.40 + 0.07 * t + 0.01 * cos(t * 7)
+            route.append([lat, lon])
         }
-        w.curve = (0..<60).map { i in 150 + 60 * sin(Double(i) / 5) + Double(i % 7) * 4 }
+        w.route = route
+        var curve: [Double] = []
+        for i in 0..<60 {
+            let wave: Double = 60 * sin(Double(i) / 5)
+            curve.append(150 + wave + Double(i % 7) * 4)
+        }
+        w.curve = curve
         w.curveIsPower = true
         w.zones = [14, 22, 30, 24, 10]
         return w
