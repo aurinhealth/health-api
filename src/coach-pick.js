@@ -6,6 +6,7 @@
 // turns down loses weight for two weeks (the coach learns from declines).
 import { L } from "./lang.js";
 import { activityKindOf, sessionOf } from "./activity-match.js";
+import { addRecovery, ensureRecoveryTable } from "./recovery-plan.js";
 
 const TABLE = "CREATE TABLE IF NOT EXISTS coach_picks (user_id INTEGER NOT NULL, date TEXT NOT NULL, kind TEXT NOT NULL, top TEXT, created_at TEXT NOT NULL, PRIMARY KEY (user_id, date))";
 const KINDS = ["ride", "run", "gym", "swim", "sauna", "rest"];
@@ -133,10 +134,27 @@ export async function pickState(db, userId, date) {
   return { chosen: chosen?.kind || null, declines };
 }
 
+// What an option without a workout puts into Plán dne (recovery-plan.js):
+// the day off is a walk and stretching. A ride or run is in the calendar and
+// the gym in its plan already (the app saves those before the choice).
+export const PICK_PLAN = { swim: ["swim"], sauna: ["sauna"], rest: ["walk", "stretch"] };
+
 // The athlete's choice for the day; another than the coach's top is a decline of it.
+// The choice goes into the day's plan; a changed mind takes the earlier
+// choice's rows out again (unless already done).
 export async function savePick(db, userId, { date, kind, top }) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || !KINDS.includes(kind)) throw new Error(L("Neplatná volba.", "Invalid choice."));
   await db.prepare(TABLE).run();
+  const before = (await db.prepare("SELECT kind FROM coach_picks WHERE user_id=? AND date=?").bind(userId, date).first())?.kind || null;
+  if (before && before !== kind && PICK_PLAN[before]) {
+    await ensureRecoveryTable(db);
+    for (const k of PICK_PLAN[before]) await db.prepare("DELETE FROM recovery_sessions WHERE user_id=? AND date=? AND kind=? AND done_at IS NULL").bind(userId, date, k).run();
+  }
+  if (PICK_PLAN[kind]) {
+    await ensureRecoveryTable(db);
+    const there = new Set(((await db.prepare("SELECT kind FROM recovery_sessions WHERE user_id=? AND date=?").bind(userId, date).all()).results || []).map(r => r.kind));
+    for (const k of PICK_PLAN[kind]) if (!there.has(k)) await addRecovery(db, { date, kind: k });
+  }
   await db.prepare("INSERT INTO coach_picks (user_id, date, kind, top, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET kind=excluded.kind, top=COALESCE(coach_picks.top, excluded.top), created_at=excluded.created_at")
     .bind(userId, date, kind, KINDS.includes(top) ? top : null, new Date().toISOString()).run();
   return { status: "ok", chosen: kind };
