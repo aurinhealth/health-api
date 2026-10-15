@@ -527,7 +527,7 @@ final class SnapshotTests: XCTestCase {
     func testRoundFourScreens() throws {
         let model = AppModel(demo: true)
         try render("training-tools", glow: Palette.Glow.training, height: 330) {
-            NavigationStack { TrainingTools(today: DemoData.training.date).padding(24) }
+            NavigationStack { TrainingTools(today: DemoData.training.date).padding(24) }.environment(model)
         }
         try render("drinks-card", glow: Palette.Glow.food, height: 460) {
             DrinksCard(water: DemoData.food.water).environment(model).padding(24)
