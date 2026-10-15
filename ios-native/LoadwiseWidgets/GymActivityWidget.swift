@@ -3,7 +3,7 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// The gym Live Activity: on the lock screen a dark card with the workout's
+/// The gym Live Activity: on the lock screen a card, light or dark as the phone, with the workout's
 /// clock, heart rate and kcal, the rest counting down with the next set (+30 s,
 /// Přeskočit pauzu), then the set with Série hotová; in the Dynamic Island the
 /// rest's countdown. The buttons run in the app (GymActivityInbox). Once the
@@ -13,9 +13,8 @@ struct GymActivityWidget: Widget {
         ActivityConfiguration(for: GymActivityAttributes.self) { context in
             GymActivityCard(context: context)
                 .padding(16)
-                .environment(\.colorScheme, .dark)
-                .activityBackgroundTint(Color(red: 0.08, green: 0.086, blue: 0.094).opacity(0.86))
-                .activitySystemActionForegroundColor(.white)
+                .activityBackgroundTint(Palette.card.opacity(0.9))
+                .activitySystemActionForegroundColor(Palette.ink)
         } dynamicIsland: { context in
             let resting = GymActivityCard.resting(context)
             return DynamicIsland {
@@ -183,7 +182,7 @@ struct GymSegments: View {
             ForEach(values.indices, id: \.self) { i in
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.14))
+                        Capsule().fill(Palette.ink.opacity(0.14))
                         Capsule().fill(Palette.green).frame(width: geo.size.width * min(1, max(0, values[i])))
                     }
                 }
@@ -214,9 +213,9 @@ struct GymActivityButtons: View {
 
     private func pill(_ text: String, primary: Bool) -> some View {
         Text(text).font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(primary ? Color(red: 0.04, green: 0.043, blue: 0.047) : Palette.ink)
+            .foregroundStyle(primary ? Palette.onButton : Palette.ink)
             .frame(maxWidth: .infinity).frame(height: 40)
-            .background(primary ? Color(red: 0.957, green: 0.949, blue: 0.933) : Color.white.opacity(0.12), in: Capsule())
+            .background(primary ? Palette.button : Palette.ink.opacity(0.12), in: Capsule())
     }
 }
 
