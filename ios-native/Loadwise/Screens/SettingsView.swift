@@ -121,6 +121,10 @@ struct SettingsMenu: View {
                     SettingsRow(icon: SettingsIcon(systemImage: "app.badge", color: Palette.amber), title: "Ikona aplikace")
                 }
                 SettingsDivider()
+                NavigationLink { QuickActionsSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "hand.tap", color: Palette.green), title: "Rychlé akce")
+                }
+                SettingsDivider()
                 NavigationLink { LanguageSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "globe", color: Palette.blue), title: "Jazyk")
                 }
