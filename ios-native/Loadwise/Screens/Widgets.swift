@@ -238,7 +238,13 @@ private struct PlanItemIcon: View {
     private var symbol: String {
         switch item.kind {
         case "workout": return item.status == "missed" ? "xmark" : SportIcon.symbol(item.sport ?? "")
-        case "recovery": return item.recovery == "sauna" ? "flame.fill" : "figure.flexibility"
+        case "recovery":
+            switch item.recovery {
+            case "sauna": return "flame.fill"
+            case "swim": return "figure.pool.swim"
+            case "walk": return "figure.walk"
+            default: return "figure.flexibility"
+            }
         case "bedtime": return "bed.double.fill"
         case "pill": return "pills.fill"
         default: return "circle"
@@ -255,7 +261,12 @@ private struct PlanItemIcon: View {
             case "strength": return Palette.blue
             default: return Palette.muted
             }
-        case "recovery": return item.recovery == "sauna" ? Palette.amber : Palette.green
+        case "recovery":
+            switch item.recovery {
+            case "sauna": return Palette.amber
+            case "swim": return Palette.blue
+            default: return Palette.green
+            }
         case "bedtime": return Palette.indigo
         case "pill": return Palette.pink
         default: return Palette.muted

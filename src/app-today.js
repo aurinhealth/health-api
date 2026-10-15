@@ -212,7 +212,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     recoveryId: r.id ?? null,
     time: r.done ? clockOf(r.doneAt) : null,
     title: r.kind === "stretch" && stretchName ? stretchName : r.title,
-    detail: r.minutes + " min" + (r.kind === "sauna" ? "" : " · " + r.items.length + " " + L("cviků", "moves")) + (r.done ? L(" · hotovo", " · done") : ""),
+    detail: r.minutes + " min" + (r.kind !== "stretch" ? "" : " · " + r.items.length + " " + L("cviků", "moves")) + (r.done ? L(" · hotovo", " · done") : ""),
     done: r.done,
     status: r.done ? "done" : "planned"
   }));
