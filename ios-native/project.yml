@@ -77,7 +77,7 @@ targets:
         ENABLE_PREVIEWS: YES
         # Aurin's App ID from developers.facebook.com: Sdílet → "Do příběhu na
         # Instagramu" (ShareExport.instagram) stays hidden while it is empty.
-        META_APP_ID: ""
+        META_APP_ID: "1387617773155698"
     info:
       path: Loadwise/Info.plist
       properties:
