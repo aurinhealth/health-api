@@ -721,10 +721,10 @@ struct ExerciseCatalog: View {
                 Text(verbatim: L10n.tr(title))
             }
             .font(.footnote.weight(.medium))
-                .foregroundStyle(on ? Palette.onButton : Palette.ink)
-                .padding(.horizontal, 12).frame(height: 32)
-                .background(on ? Palette.button : Palette.card, in: Capsule())
-                .contentShape(Capsule())
+            .foregroundStyle(on ? Palette.onButton : Palette.ink)
+            .padding(.horizontal, 12).frame(height: 32)
+            .background(on ? Palette.button : Palette.card, in: Capsule())
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])

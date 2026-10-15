@@ -127,11 +127,11 @@ struct ChipFlow<Item: Hashable>: View {
                         if let color = mark(item) { Circle().fill(color).frame(width: 7, height: 7) }
                         Text(label(item))
                     }
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(isOn(item) ? Palette.onButton : Palette.ink)
-                        .padding(.horizontal, 12).frame(height: 32)
-                        .background(isOn(item) ? Palette.button : Palette.card, in: Capsule())
-                        .overlay(Capsule().stroke(Palette.ink.opacity(isOn(item) ? 0 : 0.12), lineWidth: 1))
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(isOn(item) ? Palette.onButton : Palette.ink)
+                    .padding(.horizontal, 12).frame(height: 32)
+                    .background(isOn(item) ? Palette.button : Palette.card, in: Capsule())
+                    .overlay(Capsule().stroke(Palette.ink.opacity(isOn(item) ? 0 : 0.12), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(isOn(item) ? .isSelected : [])
