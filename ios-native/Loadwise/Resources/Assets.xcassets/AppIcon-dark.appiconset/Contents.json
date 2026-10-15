@@ -1,19 +1,7 @@
 {
   "images": [
     {
-      "filename": "appicon-auto.png",
-      "idiom": "universal",
-      "platform": "ios",
-      "size": "1024x1024"
-    },
-    {
-      "appearances": [
-        {
-          "appearance": "luminosity",
-          "value": "dark"
-        }
-      ],
-      "filename": "appicon-auto-dark.png",
+      "filename": "appicon-dark.png",
       "idiom": "universal",
       "platform": "ios",
       "size": "1024x1024"
@@ -25,7 +13,7 @@
           "value": "tinted"
         }
       ],
-      "filename": "appicon-auto-tinted.png",
+      "filename": "appicon-dark-tinted.png",
       "idiom": "universal",
       "platform": "ios",
       "size": "1024x1024"
