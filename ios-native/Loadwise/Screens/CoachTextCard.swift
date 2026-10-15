@@ -136,6 +136,9 @@ struct CoachTextCard: View {
             // Asked again whenever any data changed; the server writes a new
             // text when the change matters and answers from its cache otherwise.
             if kept.revision == model.dataRevision { return }
+            // One write reloads Food, Health and Today one after another: ask once, after the last.
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
         }
         do {
             let value = try await model.api.coachText(screen: screen)

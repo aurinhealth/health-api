@@ -187,8 +187,9 @@ struct CoachPickCard: View {
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             }
         }
-        // Again whenever Today reloads (a new workout, a sync, pull to refresh).
-        .task(id: model.today) { await reload() }
+        // Again whenever Today comes from the server (a new workout, a sync, pull
+        // to refresh); a meal or drink shown before it is sent does not ask.
+        .task(id: model.todayRevision) { await reload() }
     }
 
     private func take(_ option: CoachPick.Option, _ pick: CoachPick) async {
