@@ -102,6 +102,9 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/screens/site"
           xcrun simctl ui "$udid" appearance light
           xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
+          # The switch back from the dark shots above takes a while: without the wait
+          # the first screens came out dark or dimmed halfway through the change.
+          sleep 10
           for tab in today training health food; do
             xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en
             sleep 6
