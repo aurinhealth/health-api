@@ -32,6 +32,22 @@ struct CycleSettings: Codable, Equatable {
     var pillReminderInPause: Bool
     /// The AI coach sees today's cycle (src/cycle-model.js cycleForCoach).
     var shareWithCoach: Bool?
+    /// Fáze života: "regular", "perimenopause" or "menopause"; nil from an older server.
+    var lifeStage: String?
+    /// Hormone therapy, for the coach.
+    var hrt: Bool?
+
+    var stage: String { lifeStage ?? "regular" }
+
+    static let lifeStages: [(id: String, title: String, symbol: String)] = [
+        ("regular", "Pravidelný cyklus", "circle"),
+        ("perimenopause", "Perimenopauza", "water.waves"),
+        ("menopause", "Menopauza", "leaf")
+    ]
+
+    static func title(ofStage stage: String) -> String {
+        lifeStages.first { $0.id == stage }?.title ?? "Pravidelný cyklus"
+    }
 
     var hormonal: Bool { Self.hormonal.contains(contraception) }
     static let hormonal: Set<String> = ["pill", "patch", "ring", "hormonal_iud", "implant", "injection"]
@@ -68,10 +84,17 @@ struct CycleState: Decodable, Equatable {
     var ovulation: String? = nil
     var next: Next? = nil
     var daysToNext: Int? = nil
-    /// Hormonal contraception: days since the last bleeding.
+    /// Perimenopause: the shortest and longest of the recent cycles.
+    var range: Gaps? = nil
+    /// Hormonal contraception and menopause: days since the last bleeding.
     var daysSinceBleeding: Int? = nil
     var pill: PillDay? = nil
     var today: Logged? = nil
+
+    struct Gaps: Decodable, Equatable {
+        let shortest: Int
+        let longest: Int
+    }
 
     struct Next: Decodable, Equatable {
         let start: String
@@ -115,6 +138,8 @@ struct CycleDay: Decodable, Equatable, Identifiable {
 struct TodayCycle: Decodable, Equatable {
     let ask: Bool
     let hormonal: Bool
+    /// "regular", "perimenopause" or "menopause".
+    var lifeStage: String? = nil
     var cycleDay: Int? = nil
     var phase: String? = nil
     let flow: Int
@@ -123,11 +148,17 @@ struct TodayCycle: Decodable, Equatable {
     let eased: Bool
     var keptPlan: Bool? = nil
     var note: String? = nil
+
+    var stage: String { lifeStage ?? "regular" }
 }
 
 enum CycleText {
     /// The symptoms in the order of the sheet: id, Czech label, SF Symbol.
     static let symptoms: [(id: String, title: String, symbol: String)] = [
+        ("hot_flashes", "Návaly horka", "flame"),
+        ("night_sweats", "Noční pocení", "humidity"),
+        ("poor_sleep", "Horší spánek", "moon.zzz"),
+        ("joint_pain", "Klouby", "figure.flexibility"),
         ("cramps", "Křeče", "waveform.path"),
         ("fatigue", "Únava", "bed.double"),
         ("headache", "Hlava", "brain.head.profile"),
@@ -135,6 +166,13 @@ enum CycleText {
         ("mood", "Nálada", "face.dashed"),
         ("appetite", "Chuť k jídlu", "fork.knife")
     ]
+
+    /// Perimenopause and menopause add their own symptoms in front.
+    static let lifeStageSymptoms: Set<String> = ["hot_flashes", "night_sweats", "poor_sleep", "joint_pain"]
+
+    static func symptoms(for stage: String) -> [(id: String, title: String, symbol: String)] {
+        stage == "regular" ? symptoms.filter { !lifeStageSymptoms.contains($0.id) } : symptoms
+    }
 
     static func symptom(_ id: String) -> String {
         L10n.tr(symptoms.first { $0.id == id }?.title ?? id).lowercased()

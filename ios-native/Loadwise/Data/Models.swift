@@ -28,6 +28,9 @@ struct TodaySnapshot: Decodable, Equatable {
     let trainingPlan: PlanLine?
     /// Cycle tracking, nil when off (Data/CycleModels.swift).
     var cycle: TodayCycle? = nil
+    /// Regenerace: when hard training is fine again (Data/RecoveryModels.swift);
+    /// nil when nothing is left to recover from, on another day or from an older server.
+    var recoveryTime: RecoveryTime? = nil
     /// The week strip above Dnes: Monday to Sunday of the day's week, each
     /// day up to it with its readiness zone (src/app-today.js readinessWeek).
     var week: [WeekDay]? = nil

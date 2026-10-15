@@ -172,7 +172,7 @@ function dayText(date, today) {
   return L(cs, en);
 }
 const LEGS = new Set(["quads", "hamstrings", "glutes", "calves", "adductors", "abductors"]);
-function sourceTitle(s) {
+export function sourceTitle(s) {
   if (s.kind === "gym") {
     const total = Object.values(s.muscles).reduce((a, b) => a + b, 0) || 1;
     const legs = Object.entries(s.muscles).filter(([m]) => LEGS.has(m)).reduce((a, [, v]) => a + v, 0) / total;
@@ -240,6 +240,13 @@ export function muscleFatigue({ sets = [], activities = [], now, today }) {
 
 // Server side: the last week's completed sets and activities from D1.
 export async function loadMuscleFatigue(db, { now = Date.now() } = {}) {
+  const { sets, activities, today } = await loadTrainingDoses(db, { now });
+  return muscleFatigue({ sets, activities, now, today });
+}
+
+// The completed sets and the activities of the last week, as both Trénink →
+// Svaly and Regenerace (recovery-time.js) read them.
+export async function loadTrainingDoses(db, { now = Date.now() } = {}) {
   const today = localDate(new Date(now)), since = shiftDate(today, -WINDOW_DAYS);
   // The source and type lists first, so the read stays on the index
   // (user_id, source_family, data_type, start_time).
@@ -251,6 +258,5 @@ export async function loadMuscleFatigue(db, { now = Date.now() } = {}) {
     const s = sessionOf(row), minutes = s?.minutes || Number(a.moving_time) / 60 || 0;
     return { ...a, kind: activityKind(a), minutes, durationHours: minutes / 60, end: s ? s.at + minutes * 60000 : NaN };
   });
-  return muscleFatigue({ sets: setRows.results || [], activities, now, today });
+  return { sets: setRows.results || [], activities, today };
 }
-
