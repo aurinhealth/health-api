@@ -611,12 +611,18 @@ final class AppModel {
     @discardableResult
     func addDrink(ml: Int, kind: String) async -> Bool {
         guard !demo else { return true }
-        write(drinkItem(ml: ml, kind: kind, date: writeDay))
+        write(Self.drinkItem(ml: ml, kind: kind, date: writeDay))
         return true
     }
 
+    /// A drink from Siri or Shortcuts: always today, whatever day the app shows.
+    func addDrinkToday(ml: Int, kind: String) {
+        guard !demo else { return }
+        write(Self.drinkItem(ml: ml, kind: kind, date: Self.localDate(Date())))
+    }
+
     /// POST /app/api/fluids with the time it was drunk, so a later send keeps it.
-    private func drinkItem(ml: Int, kind: String, date: String, at: Date = Date()) -> OutboxItem {
+    static func drinkItem(ml: Int, kind: String, date: String, at: Date = Date()) -> OutboxItem {
         let localId = Outbox.localId()
         var body: JSONObject = ["ml": .number(Double(ml)), "kind": .string(kind), "date": .string(date),
                                 "requestId": .string(UUID().uuidString)]
@@ -690,7 +696,7 @@ final class AppModel {
     private func takeWidgetDrinks() {
         let drinks = PendingDrinks.take()
         guard !drinks.isEmpty else { return }
-        outbox += drinks.map { drinkItem(ml: $0.ml, kind: "water", date: $0.date) }
+        outbox += drinks.map { Self.drinkItem(ml: $0.ml, kind: "water", date: $0.date) }
         saveOutbox()
     }
 

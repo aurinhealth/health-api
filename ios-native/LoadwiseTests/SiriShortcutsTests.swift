@@ -34,4 +34,29 @@ final class SiriShortcutsTests: XCTestCase {
         XCTAssertEqual(PendingDrinks.glassMl(saved: nil, imperial: false), 250)
         XCTAssertEqual(PendingDrinks.glassMl(saved: nil, imperial: true), Units.roundedMl(fluidOunces: 8))
     }
+
+    func testWorkoutSaysWhatIsLeftThenWhatIsDoneThenTheCoachsPick() {
+        let ride = TodaySnapshot.PlanItem(kind: "workout", time: "17:30", title: "Tempo 3 × 8 min", detail: nil, done: false)
+        let gym = TodaySnapshot.PlanItem(kind: "workout", time: nil, title: "Posilovna", detail: nil, done: true)
+        let meal = TodaySnapshot.PlanItem(kind: "meal", time: "12:00", title: "Oběd", detail: nil, done: false)
+        XCTAssertEqual(SiriAnswer.workout(plan: [meal, gym, ride], pick: nil), "Dnes máš v plánu: Tempo 3 × 8 min, začátek v 17:30.")
+        XCTAssertEqual(SiriAnswer.workout(plan: [gym], pick: nil), "Dnešní trénink máš hotový: Posilovna.")
+        let pick = CoachPick.Option(kind: "run", title: "Lehký běh", detail: nil, reason: nil, best: true, action: "library")
+        XCTAssertEqual(SiriAnswer.workout(plan: [meal], pick: pick), "Na dnes nemáš naplánovaný trénink. Aktivita dne doporučuje: Lehký běh.")
+        XCTAssertEqual(SiriAnswer.activity(pick), "Aktivita dne: Lehký běh.")
+    }
+
+    func testSleepWithAndWithoutTheNight() {
+        let night = TodaySnapshot.Sleep(minutes: 432, inBedMinutes: 458, index: 82, need: 525, start: "23:48", end: "07:02")
+        let text = SiriAnswer.sleep(night)
+        XCTAssertTrue(text.hasPrefix("Dnes v noci: "), text)
+        XCTAssertTrue(text.contains("od 23:48 do 07:02. Index spánku 82. Potřeba byla "), text)
+        XCTAssertTrue(SiriAnswer.sleep(nil).hasPrefix("Dnešní spánek zatím není."))
+    }
+
+    func testDrinkNamesTheDrinkAndAmount() {
+        XCTAssertEqual(SiriAnswer.drink(SiriDrink.coffee.name, ml: 200, sent: true), "Zapsáno: Káva, 200 ml.")
+        L10n.setLanguage("en")
+        XCTAssertEqual(SiriAnswer.drink(SiriDrink.water.name, ml: 500, sent: true), "Logged: Water, 500 ml.")
+    }
 }
