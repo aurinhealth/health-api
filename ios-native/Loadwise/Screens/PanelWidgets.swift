@@ -426,15 +426,21 @@ struct PanelWidget: View {
 
     private var route: AppRoute? {
         switch item.kind {
-        case .restingHR, .hrv: return .heart
+        case .hrv: return .metric(.hrv)
+        case .restingHR: return .metric(.restingHR)
+        case .respiration: return .metric(.respiration)
+        case .skinTemp: return .metric(.temperature)
+        case .oxygen: return .metric(.oxygen)
         case .vo2max: return .vo2max
-        case .respiration, .skinTemp, .oxygen, .sleep, .sleepDebt: return .sleep
+        case .sleep, .sleepDebt: return .sleep
         case .bedtime: return .sleepSettings
         case .form: return .form
         case .zones: return .zones
         case .activeCalories: return .activeEnergy
         case .steps: return .steps
-        case .weight, .bodyFat: return .weight
+        case .weight: return .weight
+        case .bodyFat: return .metric(.bodyFat)
+        case .muscle: return .metric(.muscle)
         // The large one has its own button; the card itself opens Svaly (content).
         case .musclesFigure: return item.size == .large ? nil : .muscles
         case .musclesGlance: return .muscles
