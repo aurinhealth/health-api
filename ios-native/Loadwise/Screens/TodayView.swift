@@ -4,6 +4,8 @@ struct TodayView: View {
     @Environment(AppModel.self) private var model
     var openSettings: () -> Void = {}
     var openCoach: () -> Void = {}
+    /// Sdílet: the day, a workout or the day's food as an image.
+    @State private var sharing = false
 
     var body: some View {
         NavigationStack(path: model.path(.today)) {
@@ -18,13 +20,14 @@ struct TodayView: View {
             ScreenBackground(glow: Palette.Glow.today)
             if let today = model.today {
                 PageScroll {
-                    TodayContent(today: today, openSettings: openSettings, openCoach: openCoach)
+                    TodayContent(today: today, openSettings: openSettings, openCoach: openCoach, openShare: { sharing = true })
                         .padding(.bottom, 100)
                 }
                 .refreshable { await model.refresh(announce: true) }
                 .tabTopBar {
                     DayBar(date: today.date)
                     Spacer(minLength: 0)
+                    ChromeButton(systemImage: "square.and.arrow.up", label: "Sdílet") { sharing = true }
                     ChromeButton(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: openCoach)
                     Button(action: openSettings) { AvatarView(size: 36) }
                         .buttonStyle(.plain)
@@ -44,6 +47,9 @@ struct TodayView: View {
             await model.refreshIfStale(.today)
             await DeviceLocation.refreshIfFollowing(model)
         }
+        .sheet(isPresented: $sharing) {
+            if let today = model.today { ShareSheet(source: .today(today)) }
+        }
     }
 }
 
@@ -53,6 +59,7 @@ struct TodayContent: View {
     let today: TodaySnapshot
     var openSettings: () -> Void = {}
     var openCoach: () -> Void = {}
+    var openShare: () -> Void = {}
     /// The account's first letter on the settings button (GET /app/api/me).
 
     /// "Upravit přehled": the cards below wiggle and can be moved, removed and added.
@@ -80,6 +87,7 @@ struct TodayContent: View {
         HStack(spacing: 10) {
             DayNavigator(date: today.date)
             Spacer()
+            CircleButton(systemImage: "square.and.arrow.up", label: "Sdílet", action: openShare)
             CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: L10n.tr("Kouč"), action: openCoach)
             Button(action: openSettings) { AvatarView(size: 36) }
                 .buttonStyle(.plain)
