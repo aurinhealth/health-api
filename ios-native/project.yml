@@ -25,9 +25,9 @@ targets:
       # The privacy manifest App Store Connect checks (UserDefaults, file dates, the data sent to the server).
       - path: Privacy/App/PrivacyInfo.xcprivacy
         buildPhase: resources
-      # The main icon in Icon Composer's Liquid Glass format: iOS 26 draws the
-      # glass, dark, clear and tinted looks from its layers; older iOS uses
-      # AppIcon.appiconset of the same name.
+      # The main icon in Icon Composer's Liquid Glass format, white in light
+      # mode and dark in dark mode: iOS 26 draws the glass, clear and tinted
+      # looks from its layers; older iOS uses AppIcon.appiconset of the same name.
       - path: Icon/AppIcon.icon
         type: file
         buildPhase: resources
