@@ -26,9 +26,11 @@ export function revisionSignature(done = [], feedback = [], planFit = []) {
     "fit:" + planFit.map(f => f.rating + "/" + text(f.text)).join(",")].join("|");
 }
 
-// How long a card with nothing waiting stays on Today: a few hours after it
+// How long a card with nothing waiting stays on Today: 60 minutes after it
 // was written (or decided), and never into the next day (Petr, 2026-10-14).
-export const REVISION_SHOWN_MS = 3 * 3600000;
+// It is written on the first GET after the workout, i.e. when the app is
+// first opened after it, so the hour runs from then.
+export const REVISION_SHOWN_MS = 60 * 60000;
 const utc = v => { const t = Date.parse(String(v || "").replace(" ", "T") + (/Z|[+-]\d\d:?\d\d$/.test(String(v || "")) ? "" : "Z")); return Number.isFinite(t) ? t : null; };
 
 // The revision as Today shows it, or null. Proposed changes stay until

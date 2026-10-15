@@ -4,6 +4,7 @@ import { cached } from "./api-cache.js";
 import { googleDashboard } from "./google-dashboard.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { cycleInputs } from "./cycle-store.js";
+import { readinessLocks } from "./readiness-lock.js";
 import { dateFormat } from "./date-format.js";
 import { dayStartUtc, timeZone, localToday } from "./user-time.js";
 
@@ -15,9 +16,13 @@ export const googleHealthFor = (env, ctx, date) => cached(env, ctx, "google-dash
 // Google Health and steps filling the gaps; null when there is nothing yet.
 // With cycle tracking on, `cycle` carries its settings and logged days, so
 // every readiness (readiness.js) knows the phase.
+// With the locked morning readiness of the last two days (readiness-lock.js),
+// so every readiness keeps the morning's number.
 export async function dashboardProfile(env) {
-  const [profile, cycle] = await Promise.all([loadEffectiveProfile(env.DB, env.USER_ID), cycleInputs(env.DB, localToday()).catch(() => null)]);
-  return profile && cycle ? { ...profile, cycle } : profile;
+  const [profile, cycle, locks] = await Promise.all([loadEffectiveProfile(env.DB, env.USER_ID), cycleInputs(env.DB, localToday()).catch(() => null),
+    readinessLocks(env.DB, shiftDate(localToday(), -1)).catch(() => ({}))]);
+  if (!profile) return profile;
+  return { ...profile, ...(cycle ? { cycle } : {}), ...(Object.keys(locks).length ? { readinessLocks: locks } : {}) };
 }
 
 export const mondayOfDate=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));

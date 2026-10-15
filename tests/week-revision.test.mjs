@@ -80,8 +80,9 @@ test("\"Nesedělo\" is never answered with \"went to plan\"", () => {
   assert.match(r.summary, /nesedl/);
 });
 
-test("Today shows a card with nothing to decide for 3 hours, never the next day", () => {
-  const now = Date.parse("2026-10-14T15:00:00Z"), today = "2026-10-14";
+test("Today shows a card with nothing to decide for an hour after the app opened, never the next day", () => {
+  const now = Date.parse("2026-10-14T13:40:00Z"), today = "2026-10-14";
+  assert.equal(REVISION_SHOWN_MS, 3600000);
   const done = { date: today, status: "pending", changes: [], createdAt: "2026-10-14 13:00:00" };
   assert.equal(shownRevision(done, { today, now }), done);
   assert.equal(shownRevision(done, { today, now: now + REVISION_SHOWN_MS }), null);

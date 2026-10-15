@@ -7,6 +7,8 @@
 // so the app draws both the same way. An Intervals.icu ride with no heart rate
 // or route of its own gets them from the watch's copy of the same workout.
 import { heartRateZones, heartRateRecovery } from './activity-detail.js';
+import { watchOrigin } from './activity-origin.js';
+import { activityRecoveryHours } from './recovery-hours.js';
 
 const MAX_POINTS = 1500;
 const ROUTE_TYPE = 'exercise-route';
@@ -137,12 +139,13 @@ export async function watchDetail(env, { source, id, hrZones = [], token = null,
   };
   const time = heart.map(x => x[0]), bpm = heart.map(x => x[1]);
   return {
-    status: 'ok', activity, analysis: null, intervals: [],
+    status: 'ok', activity, recoveryHours: activityRecoveryHours(activity), analysis: null, intervals: [],
     hrZones: heartRateZones({ icu_hr_zones: bounds, icu_hr_zone_times: zoneSeconds(bounds, time, bpm) }, time, bpm),
     streams: streamsOf(heart, route),
     hrr: heartRateRecovery(time, bpm, bounds.length >= 4 ? bounds[2] + 1 : null),
     watch: { source, id: row.external_id, start, hasGps: ex.exerciseMetadata?.hasGps === true, route: Boolean(route?.length) },
-    source
+    source,
+    origin: watchOrigin(source)
   };
 }
 
@@ -180,6 +183,8 @@ export async function withWatch(env, detail, activityId, options = {}) {
     ...detail, activity, streams,
     hrZones: watch.hrZones?.length ? watch.hrZones : detail.hrZones,
     hrr: watch.hrr || detail.hrr,
-    watch: watch.watch
+    watch: watch.watch,
+    // Intervals.icu without a known recorder: the watch recorded it.
+    origin: detail.origin?.logo === 'intervals' && watch.origin ? watch.origin : detail.origin
   };
 }

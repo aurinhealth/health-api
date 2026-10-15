@@ -35,6 +35,11 @@ extension APIClient {
         try await get("/app/api/muscles")
     }
 
+    /// Svaly → one muscle: strength over 8 weeks and how often (src/muscle-detail.js).
+    func muscleDetail(id: String) async throws -> MuscleDetailData {
+        try await get("/app/api/muscles/detail?id=" + (id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? id))
+    }
+
     // MARK: Activity type
 
     /// Every sport a done activity can be (src/activity-type.js).

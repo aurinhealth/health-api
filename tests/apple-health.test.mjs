@@ -89,10 +89,11 @@ test("saving is idempotent and the Health summary reads Apple rows", async () =>
     { type: "time-in-heart-rate-zone", id: "zone:2026-10-10:MODERATE", zone: "MODERATE", minutes: 42, start: "2026-10-09T22:00:00Z" },
     { type: "bogus", id: "x" }
   ] };
-  assert.deepEqual(await saveAppleHealth(db, 1, body), { status: "ok", saved: 4, skipped: 1, removed: 0, replaced: 0 });
+  assert.deepEqual(await saveAppleHealth(db, 1, body), { status: "ok", saved: 4, changed: 4, skipped: 1, removed: 0, replaced: 0 });
   const before = rows(raw).map(r => r.updated_at + r.payload_json);
   raw.sqlite.exec("UPDATE health_datapoints SET updated_at='2000-01-01'");
-  await saveAppleHealth(db, 1, body);
+  // The same hours again: nothing changed, so the cached screens stay valid.
+  assert.equal((await saveAppleHealth(db, 1, body)).changed, 0);
   assert.ok(rows(raw).every(r => r.updated_at === "2000-01-01"), "unchanged records are not written again");
   assert.equal(before.length, 4);
   assert.ok(rows(raw).every(r => r.record_role === "primary"));

@@ -83,6 +83,13 @@ extension APIClient {
     }
 }
 
+/// The last answer, so returning to today or switching tabs does not ask again
+/// for a while; an action on the card asks at once.
+@MainActor
+enum ThresholdCheckMemory {
+    static var kept: (check: ThresholdCheck?, at: Date)?
+}
+
 /// On Today: the threshold estimate and the test to confirm it. The athlete
 /// picks the day (the recommended one is chosen), or declines; after the test
 /// the new value is saved only when confirmed.
@@ -106,12 +113,15 @@ struct ThresholdCheckCard: View {
         }
         .task {
             guard !model.demo else { return }
+            if let kept = ThresholdCheckMemory.kept, Date().timeIntervalSince(kept.at) < 15 * 60 { check = kept.check; return }
             await load()
         }
     }
 
     private func load() async {
-        check = try? await model.api.thresholdCheck()
+        let fresh = try? await model.api.thresholdCheck()
+        check = fresh
+        if fresh != nil { ThresholdCheckMemory.kept = (fresh, Date()) }
     }
 
     private func sportTitle(_ sport: String) -> String { L10n.tr(sport == "run" ? "Běh" : "Kolo") }

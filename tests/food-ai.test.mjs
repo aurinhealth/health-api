@@ -35,7 +35,8 @@ test("not found, missing macros or impossible values are not offered", () => {
 test("the server offers the AI lookup and saves the confirmed food for next time", () => {
   const entry = serverSource();
   assert.match(entry, /url\.pathname==='\/app\/api\/food\/ai-lookup'/);
-  assert.match(entry, /personal=await savePersonalFood\(env\.DB,p,\{used:true\}\)/);
+  assert.match(entry, /const saving=savePersonalFood\(env\.DB,p,\{used:true\}\)/);
+  assert.match(entry, /ctx\.waitUntil\(saving\)/);
 });
 
 test("AI values are checked against their macros: kJ becomes kcal, impossible ones are dropped, a mismatch is flagged", () => {

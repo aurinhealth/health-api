@@ -1,0 +1,27 @@
+name: TestFlight notes
+
+# An app pull request carries a "## TestFlight" section in its description,
+# in Czech: "Co je nového" and "Co otestovat" for the testers, or "Nic k
+# otestování". ios-testflight.yml turns these sections into "What to Test"
+# (see "TestFlight notes" in CLAUDE.md). Editing the description re-runs it.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+    paths:
+      - "ios-native/**"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Check the TestFlight section of the description
+        run: |
+          python3 .github/scripts/testflight_notes.py check > notes.txt
+          { echo "### What to Test from this pull request"; echo; cat notes.txt; } >> "$GITHUB_STEP_SUMMARY"

@@ -137,3 +137,35 @@ test("cycleForCoach shares today's cycle only when the athlete turns it on", asy
   const pill = cycleForCoach({ settings: { ...settings, contraception: "pill", shareWithCoach: true }, days: [], date: "2026-10-12" });
   assert.deepEqual(pill, { hormonal: true, flow: "none", symptoms: [] });
 });
+
+test("perimenopause: irregular gaps count, no phases, a wide range and no morning question", () => {
+  const settings = on({ lifeStage: "perimenopause" });
+  assert.equal(normalizeCycleSettings(settings).lifeStage, "perimenopause");
+  assert.equal(normalizeCycleSettings(on({ lifeStage: "other" })).lifeStage, "regular");
+  // Gaps of 24, 45 and 62 days: all of them count in perimenopause.
+  const days = [...bleed("2026-05-01"), ...bleed("2026-05-25"), ...bleed("2026-07-09"), ...bleed("2026-09-09")];
+  const len = cycleLength(periodStarts(days, settings), settings);
+  assert.equal(len.learned, true);
+  assert.deepEqual([len.shortest, len.longest], [24, 62]);
+  const st = cycleState({ settings, days, date: "2026-10-12" });
+  assert.equal(st.phase, null);
+  assert.equal(st.ovulation, undefined);
+  assert.deepEqual(st.range, { shortest: 24, longest: 62 });
+  assert.equal(st.next.from, "2026-10-03");
+  assert.equal(st.next.to, "2026-11-10");
+  assert.equal(askPeriodToday(st), false);
+  // The calendar marks no forecast and the readiness no phases.
+  assert.ok(!cycleMonth({ settings, days, today: "2026-10-12" }, "2026-10").some(d => d.forecast));
+  assert.deepEqual(markCyclePhases([{ id: "2026-10-12" }], { settings, days }), [{ id: "2026-10-12" }]);
+});
+
+test("menopause has no cycle, only the symptoms, which the coach sees with hormone therapy", async () => {
+  const { cycleForCoach } = await import("../src/cycle-model.js");
+  const settings = on({ lifeStage: "menopause", hrt: true, shareWithCoach: true });
+  const days = [{ date: "2026-10-12", symptoms: ["hot_flashes", "night_sweats", "nonsense"] }];
+  const st = cycleState({ settings, days, date: "2026-10-12" });
+  assert.equal(st.cycleDay, undefined);
+  assert.equal(st.next, undefined);
+  assert.deepEqual(st.today.symptoms, ["hot_flashes", "night_sweats"]);
+  assert.deepEqual(cycleForCoach({ settings, days, date: "2026-10-12" }), { hormonal: false, flow: "none", symptoms: ["hot_flashes", "night_sweats"], lifeStage: "menopause", hrt: true });
+});

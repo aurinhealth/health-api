@@ -30,6 +30,8 @@ extension DemoData {
         "Silový trénink": "Strength training",
         "45 min · celé tělo": "45 min · full body",
         "Do postele": "Bedtime",
+        "Ranní běh": "Morning run",
+        "Kolo · tempo": "Ride · tempo",
         "potřeba spánku 8 h 05 min": "sleep need 8 h 05 min",
         "Praha": "Prague",
         "Podle dostupné předpovědi.": "Based on the available forecast.",

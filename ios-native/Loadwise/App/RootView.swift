@@ -10,6 +10,9 @@ struct RootView: View {
     @State private var showSettings = false
     @State private var showCoach = false
     @State private var showSyncStatus = false
+    /// Přidat jídlo and Vyfotit jídlo from the icon's menu.
+    @State private var quickFood: FoodStart?
+    @State private var quickActions = QuickActions.shared
     /// Scrolled down: the tab bar is only the open section's icon and "+".
     @State private var compactBar = false
     @State private var tabTaps = 0
@@ -108,6 +111,18 @@ struct RootView: View {
             .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showCoach) { CoachView().dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet().dynamicTypeSize(Self.textSizes) }
+            .sheet(item: $quickFood) { start in
+                AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start)
+                    .dynamicTypeSize(Self.textSizes)
+                    // Food from the icon goes to today, like "+".
+                    .onAppear { model.writesToday = true }
+                    .onDisappear { model.writesToday = false }
+            }
+            .onChange(of: quickActions.pick, initial: true) { _, pick in
+                guard let pick else { return }
+                quickActions.pick = nil
+                run(pick.id)
+            }
             .animation(.snappy, value: model.syncReport?.id)
             .animation(.snappy, value: model.undoToast?.id)
             // Without "Zpět" in 6 s the deletion goes through; also when another
@@ -135,6 +150,8 @@ struct RootView: View {
             // added from the widget) goes out.
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background, !model.demo { BackgroundRefresh.schedule() }
+                // The icon's menu in the language and order of the moment.
+                if phase == .background { QuickActions.update(model.today) }
                 guard phase == .active else { return }
                 Task {
                     if model.today != nil || !model.outbox.isEmpty { await model.refresh(announce: true) }
@@ -145,10 +162,61 @@ struct RootView: View {
         }
     }
 
+    /// An item of the icon's menu (QuickActions): what it opens, over
+    /// whatever sheet was open.
+    private func run(_ id: String) {
+        let covered = showAdd || showSettings || showCoach || showSyncStatus || quickFood != nil
+        showAdd = false
+        showSettings = false
+        showCoach = false
+        showSyncStatus = false
+        quickFood = nil
+        // One sheet at a time: the new one opens once the old has closed.
+        DispatchQueue.main.asyncAfter(deadline: .now() + (covered ? 0.45 : 0)) {
+            Task { await open(id) }
+        }
+    }
+
+    private func open(_ id: String) async {
+        let today = AppModel.localDate(Date())
+        switch id {
+        case "today":
+            if model.today == nil { await model.refresh() }
+            // Today's workout not done yet, else Aktivita dne.
+            let next = model.today?.plan.first { $0.kind == "workout" && !$0.done }
+            if let session = next?.session, let route = WeekSessionsList.destination(session) {
+                model.open(route)
+            } else {
+                model.open(.coachPick(false))
+            }
+        case "coach": showCoach = true
+        case "food": quickFood = .search
+        case "photo": quickFood = .photo
+        case "water":
+            model.tab = .food
+            model.paths[.food] = []
+            model.writesToday = true
+            _ = await model.addDrink(ml: QuickAction.glassMl, kind: "water")
+            model.writesToday = false
+        case "readiness": model.open(.readiness)
+        case "liveGym": model.open(.liveGym(today, false))
+        case "weekPlan": model.open(.weekPlan)
+        case "sleep": model.open(.sleep)
+        default: break
+        }
+    }
+
     /// The tab again: back to its first screen.
     private func select(_ tab: AppTab) {
         withAnimation(.snappy) { compactBar = false }
-        if model.tab == tab { model.paths[tab] = [] } else { tabTaps += 1 }
+        if model.tab == tab {
+            model.paths[tab] = []
+        } else {
+            tabTaps += 1
+            // Leaving a tab closes its details, so coming back shows its main
+            // screen; a workout being logged or built keeps its place.
+            if !(model.paths[model.tab] ?? []).contains(where: \.keepsPlace) { model.paths[model.tab] = [] }
+        }
         model.tab = tab
     }
 }

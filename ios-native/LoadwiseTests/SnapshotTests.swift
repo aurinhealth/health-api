@@ -16,6 +16,35 @@ final class SnapshotTests: XCTestCase {
         try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
+    /// Dnes → Den: the night, readiness, done workout and its strain, steps,
+    /// "teď", then the plan with bedtime last; no "teď" on another day.
+    func testDayTimelineOrder() {
+        let today = DemoData.today
+        let rows = DayTimelineRows.make(today, now: 15 * 60)
+        XCTAssertEqual(rows.map(\.id), ["sleep", "readiness", today.plan[0].id, "strain", "steps", "now", today.plan[1].id, today.plan[2].id])
+        if case .strain(let end, let score, let added) = rows[3] {
+            XCTAssertEqual(end, 7 * 60 + 30 + 42)
+            XCTAssertEqual(score, 8.4)
+            XCTAssertEqual(added, 5.1)
+        } else {
+            XCTFail("the strain follows the workout")
+        }
+        XCTAssertFalse(DayTimelineRows.make(today, now: nil).contains { $0.id == "now" })
+        XCTAssertEqual(DayTimelineRows.stats(today.plan[0].session).map(\.label), ["Vzdálenost", "Délka", "Energie"])
+    }
+
+    func testDayTimelineCard() throws {
+        try render("today-den", height: 760) { DayTimeline(today: DemoData.today).padding(24).environment(AppModel(demo: true)) }
+    }
+
+    func testRecoveryTimeScreen() throws {
+        let today = DemoData.today
+        let time = try XCTUnwrap(today.recoveryTime)
+        try render("today-recovery", glow: Palette.Glow.today) {
+            RecoveryTimeContent(time: time, today: today.date, now: RecoveryTime.date("2026-10-08T08:00:00Z") ?? Date()).padding(24).padding(.top, 30)
+        }
+    }
+
     func testTrainingScreen() throws {
         try render("training", glow: Palette.Glow.training) { TrainingContent(training: DemoData.training).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
@@ -218,7 +247,7 @@ final class SnapshotTests: XCTestCase {
     func testDemoDataDecodes() {
         let today = DemoData.today
         XCTAssertEqual(today.readiness.score, 78)
-        XCTAssertEqual(today.plan.count, 2)
+        XCTAssertEqual(today.plan.count, 3)
         XCTAssertEqual(today.steps.hourly?.reduce(0, +), today.steps.today)
         XCTAssertEqual(Fmt.dayHeading(today.date), "ČTVRTEK 8. ŘÍJNA")
         XCTAssertEqual(Fmt.dayTitle("2026-10-08", today: "2026-10-08"), "Dnes")
@@ -310,7 +339,8 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(food.macros.fiber?.target, 32)
         XCTAssertEqual(food.water.drinks?.count, 3)
         XCTAssertEqual(food.water.drunkMl, 1600)
-        XCTAssertEqual(DemoData.today.plan.first?.sport, "strength")
+        XCTAssertEqual(DemoData.today.plan.first { !$0.done }?.sport, "strength")
+        XCTAssertEqual(DemoData.today.plan.first?.session?.distanceKm, 8.2)
         XCTAssertEqual(DemoData.today.tonight?.wakeSet, true)
         let result = try JSONDecoder().decode(AssistantResult.self, from: Data(#"{"status":"ok","answer":"Ahoj","visuals":["sleep","form"]}"#.utf8))
         XCTAssertEqual(result.visuals, ["sleep", "form"])
@@ -534,10 +564,35 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
+    func testMuscleScreens() throws {
+        let model = AppModel(demo: true)
+        try render("muscles-widgets", glow: Palette.Glow.training, height: 1500) {
+            VStack(spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    MusclesWidget(figure: true, size: .small)
+                    MusclesWidget(figure: false, size: .small)
+                }
+                MusclesWidget(figure: true, size: .medium)
+                MusclesWidget(figure: false, size: .medium)
+                MusclesWidget(figure: true, size: .large)
+            }
+            .padding(24).environment(model)
+        }
+        try render("muscles", glow: Palette.Glow.training, height: 1500) {
+            NavigationStack { MusclesView() }.environment(model)
+        }
+        try render("muscle-detail", glow: Palette.Glow.training, height: 1300) {
+            NavigationStack { MuscleDetailView(id: "quads", detail: DemoData.muscleDetail("quads")) }.environment(model)
+        }
+        try render("gym-builder-muscles", glow: Palette.Glow.training, height: 1100) {
+            NavigationStack { GymBuilderView(date: DemoData.training.date) }.environment(model)
+        }
+    }
+
     func testRoundFourScreens() throws {
         let model = AppModel(demo: true)
         try render("training-tools", glow: Palette.Glow.training, height: 330) {
-            NavigationStack { TrainingTools(today: DemoData.training.date).padding(24) }
+            NavigationStack { TrainingTools(today: DemoData.training.date).padding(24) }.environment(model)
         }
         try render("drinks-card", glow: Palette.Glow.food, height: 460) {
             DrinksCard(water: DemoData.food.water).environment(model).padding(24)

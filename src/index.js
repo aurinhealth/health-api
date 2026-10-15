@@ -1728,7 +1728,10 @@ function nutritionContext(energy) {
 async function energyForDate(env, date) {
   const nextDate = dateDaysFromDate(date, 1);
 
-  const google = await env.DB.prepare(`
+  // Google Health stores UTC: the user's day runs from local midnight to midnight.
+  const dayStart = dayStartUtc(date), dayEnd = dayStartUtc(nextDate);
+  // The day's reads don't depend on each other, so they run together.
+  const [google, planned, activities, googleExercises, weight, profile, activityTracked] = await Promise.all([env.DB.prepare(`
     SELECT value_numeric, sample_time
     FROM health_datapoints
     WHERE user_id = ? AND data_type = 'total-calories'
@@ -1736,9 +1739,8 @@ async function energyForDate(env, date) {
       AND sample_time < ?
     ORDER BY sample_time DESC, id DESC
     LIMIT 1
-  `).bind(env.USER_ID, date, nextDate).first();
-
-  const planned = await env.DB.prepare(`
+  `).bind(env.USER_ID, date, nextDate).first(),
+  env.DB.prepare(`
     SELECT *
     FROM health_datapoints
     WHERE user_id = ? AND source_family IN ('intervals','local')
@@ -1746,9 +1748,8 @@ async function energyForDate(env, date) {
       AND start_time >= ?
       AND start_time < ?
     ORDER BY start_time
-  `).bind(env.USER_ID, date, nextDate).all();
-
-  const activities = await env.DB.prepare(`
+  `).bind(env.USER_ID, date, nextDate).all(),
+  env.DB.prepare(`
     SELECT *
     FROM health_datapoints
     WHERE user_id = ? AND source_family IN ('intervals','local','wahoo')
@@ -1757,11 +1758,8 @@ async function energyForDate(env, date) {
       AND start_time < ?
       AND (record_role IS NULL OR record_role != 'duplicate')
     ORDER BY start_time
-  `).bind(env.USER_ID, date, nextDate).all();
-
-  // Google Health stores UTC: the user's day runs from local midnight to midnight.
-  const dayStart = dayStartUtc(date), dayEnd = dayStartUtc(nextDate);
-  const googleExercises = await env.DB.prepare(`
+  `).bind(env.USER_ID, date, nextDate).all(),
+  env.DB.prepare(`
     SELECT *
     FROM health_datapoints
     WHERE user_id = ? AND source_family IN ('google-wearables','apple-health')
@@ -1770,12 +1768,11 @@ async function energyForDate(env, date) {
       AND start_time < ?
       AND (record_role IS NULL OR record_role != 'duplicate')
     ORDER BY start_time
-  `).bind(env.USER_ID, dayStart, dayEnd).all();
-
-  const weight = await latestStoredWeight(env.DB, env.USER_ID);
-  const profile = await loadEffectiveProfile(env.DB, env.USER_ID);
+  `).bind(env.USER_ID, dayStart, dayEnd).all(),
+  latestStoredWeight(env.DB, env.USER_ID),
+  loadEffectiveProfile(env.DB, env.USER_ID),
   // Sport is estimated from the profile only when no source tracks activities.
-  const activityTracked = await hasRecentActivityData(env.DB,env.USER_ID);
+  hasRecentActivityData(env.DB,env.USER_ID)]);
   const baseline = energyBaseline(profile, weight ? Number(weight.value_numeric) : null, {
     isOwner: env.USER_IS_OWNER === true,
     activityTracked
@@ -2013,17 +2010,11 @@ async function analysisDaily(
     ) ||
     localToday();
 
-  const energy =
-    await energyForDate(
-      env,
-      date
-    );
-
-  const weights =
-    await weightHistory(
-      env,
-      CONFIG.weightDays
-    );
+  const [energy, weights, foodLog] = await Promise.all([
+    energyForDate(env, date),
+    weightHistory(env, CONFIG.weightDays),
+    foodLogForDate(env, date)
+  ]);
 
   const weight7 =
     weightTrend(
@@ -2116,8 +2107,7 @@ async function analysisDaily(
           : L("Dnešní cíl vychází z klidového energetického základu a ", "Today's goal is based on your resting energy baseline and ") + goalPhrase(energy) + ".")
         + (energy.calorieBreakdown?.trendAdjustment ? L(" Podle vývoje váhy: ", " Based on your weight trend: ") + TREND_REASONS[energy.calorieBreakdown.trendReason] + L(", o ", ", ") + Math.abs(energy.calorieBreakdown.trendAdjustment) + " kcal " + (energy.calorieBreakdown.trendAdjustment < 0 ? L("méně", "less") : L("víc", "more")) + "." : "")
         + (energy.calorieBreakdown?.floorApplied ? L(` Cíl drží bezpečné minimum ${energy.calorieBreakdown.minTarget} kcal, takže hubnutí půjde pomaleji než zvolené tempo.`, ` The goal stays at the safe minimum of ${energy.calorieBreakdown.minTarget} kcal, so weight loss will be slower than the chosen rate.`) : ""),
-      foodLog:
-        await foodLogForDate(env, date)
+      foodLog
     },
 
     training: {

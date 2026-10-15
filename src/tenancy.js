@@ -69,6 +69,8 @@ export const PERSONAL_TABLES = {
   // Cycle tracking (cycle-store.js): the settings and the logged days.
   cycle_settings: {},
   cycle_days: {},
+  // The morning readiness locked for the day (readiness-lock.js).
+  readiness_locks: { pk: ["user_id", "date"] },
   // The athlete's training plans (training-plans.js).
   training_plans: {},
   // Pairings made by hand (manual-pairs.js) and the choice of an activity's

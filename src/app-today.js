@@ -56,6 +56,20 @@ export function dayStrain(rows, date) {
 // 0.5 per half hour (at most 2), and a yellow morning caps it at 12, a red one
 // at 6, as WHOOP's strain target follows recovery. The morning check-in is in
 // the readiness already. ±1.5 around the middle.
+// The week strip above Dnes (Mon–Sun of the day's week): each day up to the
+// shown one with its readiness zone ("green", "yellow", "red", null without
+// a number); later days have no zone.
+export function readinessWeek({ date, readiness, sessions = [], profile = null }) {
+  const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
+  const monday = shift(date, -weekday);
+  return Array.from({ length: 7 }, (_, i) => {
+    const day = shift(monday, i);
+    if (day > date) return { date: day, zone: null };
+    const r = day === date ? readiness : readinessFor({ date: day, rows: readiness.rows, sessions, profile });
+    return { date: day, zone: r.score == null ? null : r.zone || null };
+  });
+}
+
 export function strainTarget({ readiness = null, zone = null, planned = null, debt = 0, rest = false } = {}) {
   let mid = readiness != null ? 4 + 0.12 * readiness : 10;
   if (planned > 0) mid = (mid + planned) / 2;
@@ -119,6 +133,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   // readiness the coaches use (readiness.js); the morning check-in can lower it.
   const readiness = readinessFor({ date, google, intervals: fitness.wellness, sessions, profile, checkin });
   const rows = readiness.rows, night = readiness.night, need = readiness.need.need;
+  const week = readinessWeek({ date, readiness, sessions, profile });
   const hrv = readiness.components?.hrv || null;
 
   // The coming night: the need from the strain of the day before it and the
@@ -186,16 +201,18 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     yesterday: daySessions(shift(date, -1), date, rec.yesterday || {}, gymByDate[shift(date, -1)] || null).sessions,
     tomorrow: rec.tomorrow ? daySessions(shift(date, 1), date, rec.tomorrow, gymByDate[shift(date, 1)] || null).sessions : null,
     gym: gymByDate,
-    tonight: plan ? { bedtime: clock(plan.bed), need: tonightNeed } : null,
-    saved: savedRecovery
+    saved: savedRecovery,
+    less: Array.isArray(rec.less) ? rec.less : []
   }) : null;
   const stretchName = recoveryCard?.items?.find(i => i.kind === "stretch")?.title;
   const recoveryItems = savedRecovery.map(r => ({
     kind: "recovery",
     recovery: r.kind,
+    // The saved row, so Plán dne can delete it (DELETE /app/api/recovery).
+    recoveryId: r.id ?? null,
     time: r.done ? clockOf(r.doneAt) : null,
     title: r.kind === "stretch" && stretchName ? stretchName : r.title,
-    detail: r.minutes + " min" + (r.kind === "sauna" ? "" : " · " + r.items.length + " " + L("cviků", "moves")) + (r.done ? L(" · hotovo", " · done") : ""),
+    detail: r.minutes + " min" + (r.kind !== "stretch" ? "" : " · " + r.items.length + " " + L("cviků", "moves")) + (r.done ? L(" · hotovo", " · done") : ""),
     done: r.done,
     status: r.done ? "done" : "planned"
   }));
@@ -234,7 +251,10 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       done: s.status === "done",
       // "done", "planned" or "missed" (a past day's plan nothing was done for).
       status: s.status,
-      session: s
+      session: s,
+      // What a done session added to the day's strain (Den: "+5,1 tréninkem"),
+      // from its TSS the same way the plan's strain is estimated.
+      ...(s.status === "done" && plannedStrain(num(s.tss)) != null ? { strain: plannedStrain(num(s.tss)) } : {})
     })),
     ...recoveryItems,
     ...pillItems
@@ -252,6 +272,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     // provisional: the baseline is carried over from another source until the
     // new one has 14 days of its own (recovery-model.js sourceBaseline).
     readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional },
+    week,
     // The morning check-in: fresh, normal, tired, sick or null (not answered).
     checkin: checkin || null,
     trainingPlan: trainingPlan || null,
@@ -268,7 +289,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     // Today's HRV shows even before its source has the 14 days a baseline needs.
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }
       : num(rows.find(r => r.id === date)?.hrv) > 0 ? { value: round(num(rows.find(r => r.id === date).hrv)), baseline: null, low: null, high: null, trend: null, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") } : null,
-    restingHR: restingHR ? { value: round(restingHR.value), baseline: round(restingHR.baseline, 1), series: last(14, "restingHR") } : null,
+    restingHR: restingHR ? { value: round(restingHR.value), baseline: round(restingHR.baseline, 1), low: round(restingHR.low, 1), high: round(restingHR.high, 1), series: last(14, "restingHR") } : null,
     summary: summary ? { headline: summary.headline || null, text: summary.text || null, recommendation: summary.recommendation || null } : null,
     nutrition: {
       kcal: round(num(totals.kcal)),
@@ -285,6 +306,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     cycle: cyc ? {
       ask: askPeriodToday(cyc),
       hormonal: !!cyc.hormonal,
+      // "regular", "perimenopause" or "menopause" (cycle-model.js).
+      lifeStage: cyc.lifeStage || "regular",
       cycleDay: cyc.cycleDay ?? null,
       phase: cyc.phase ?? null,
       flow: cyc.today?.flow || 0,
@@ -295,6 +318,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       note: eased ? L("Dnes jen lehce, náročný trénink počká na lepší den.", "Easy today; the hard session can wait for a better day.") : null
     } : null,
     recovery: recoveryCard,
+    // Regenerace (recovery-time.js): /app/api/today fills it in for today.
+    recoveryTime: null,
     tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting" } : null,
     steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: activeKcal(num(todayRow.activeCalories), watchExtra), activeKcalExcluded: watchExtra || null, activeMinutes: activeMinutes(google, date) },
     weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null,

@@ -28,10 +28,24 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 BackgroundRefresh.schedule()
             }
         }
+        // A tap outside a text field hides the keyboard (KeyboardDismiss.swift).
+        MainActor.assumeIsolated { KeyboardDismiss.install() }
         let center = UNUserNotificationCenter.current()
         center.setNotificationCategories([Reminders.pillNotificationCategory, CoachPush.category])
         center.delegate = self
         return true
+    }
+
+    /// The icon's menu (QuickActions.swift): a pick that launches the app comes
+    /// here, later picks go to the scene delegate.
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        if let item = options.shortcutItem {
+            MainActor.assumeIsolated { QuickActions.shared.receive(item) }
+        }
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        configuration.delegateClass = QuickActionSceneDelegate.self
+        return configuration
     }
 
     /// In the app the pill reminder shows as a banner; the others stay quiet

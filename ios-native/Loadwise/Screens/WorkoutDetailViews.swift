@@ -166,7 +166,9 @@ struct WeekSessionsList: View {
         // its detail is the planned one, where it can move or be deleted.
         if s.kind == "planned", let id = s.eventId, id.hasPrefix("planned:local-"), s.sport == "strength" { return .planned(s) }
         if s.kind == "gym" || s.sport == "strength" { return .gym(s.date) }
-        if s.kind == "activity" { return s.activityId != nil || s.watch != nil ? .activity(s) : nil }
+        // An activity from another source (Wahoo, typed in) opens too: its
+        // numbers from the list, with the ⋯ to delete it.
+        if s.kind == "activity" { return .activity(s) }
         if s.kind == "planned", s.eventId != nil { return .planned(s) }
         return nil
     }
@@ -236,8 +238,11 @@ struct ActivityDetailView: View {
     @State private var changingType = false
     @State private var deleting = false
     @State private var editingKcal = false
+    /// No source detail to load: the numbers Training lists.
+    @State private var basicOnly = false
     /// An Apple Health workout's route, read on the iPhone.
     @State private var localRoute: [ActivityDetail.StreamPoint] = []
+    @State private var sharing = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -246,6 +251,13 @@ struct ActivityDetailView: View {
                 HStack {
                     SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
                     Spacer()
+                    if session.status == "done", detail != nil {
+                        Button { sharing = true } label: {
+                            Image(systemName: "square.and.arrow.up").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                                .frame(width: 36, height: 32).contentShape(Rectangle())
+                        }
+                        .accessibilityLabel("Sdílet")
+                    }
                     if !model.demo, session.status == "done" {
                         Menu {
                             if session.activityId != nil {
@@ -262,12 +274,15 @@ struct ActivityDetailView: View {
                 }
                 .padding(.top, 24)
                 Text(detail?.activity.name ?? session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
+                if let origin = detail?.origin { ActivityOriginLine(origin: origin).padding(.top, 8) }
                 if let detail {
                     ActivityRouteMap(detail: detail, localRoute: localRoute)
                     ActivityDetailContent(detail: detail, kcal: countedKcal, kcalNote: kcalNote,
                                           rating: model.demo ? nil : AnyView(FeedbackRow(session: session, reload: feedbackClosed) { feedback = true }))
                     // Device calories that look like a measurement error (src/activity-energy-check.js).
                     if !model.demo { KcalCheck(session: model.liveSession(session), date: session.date) }
+                } else if basicOnly {
+                    BasicActivityNumbers(session: model.liveSession(session), kcal: countedKcal)
                 } else if let error {
                     Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
                 } else {
@@ -282,10 +297,20 @@ struct ActivityDetailView: View {
         .activityEditing(id: session.id, title: detail?.activity.name ?? session.title, kcal: countedKcal ?? detail?.activity.calories,
                          edited: model.liveSession(session).kcalEdited == true, deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
         .sheet(isPresented: $feedback, onDismiss: { feedbackClosed += 1 }) { FeedbackSheet(session: session) }
+        .sheet(isPresented: $sharing) { ShareSheet(source: .activity(model.liveSession(session), withRoute)) }
         .sheet(isPresented: $changingType) {
             ActivityTypeSheet(activityId: session.id, current: detail?.activity.type, source: "intervals") { dismiss() }
         }
         .task { await load() }
+    }
+
+    /// The detail with the iPhone's own route when it has none.
+    private var withRoute: ActivityDetail? {
+        guard var detail else { return nil }
+        if !localRoute.isEmpty, !(detail.streams ?? []).contains(where: { $0.type == "latlng" }) {
+            detail.streams = (detail.streams ?? []) + [ActivityDetail.Stream(type: "latlng", points: localRoute)]
+        }
+        return detail
     }
 
     /// The calories Aurin counts for it: set in Aurin, the estimate the user
@@ -309,18 +334,79 @@ struct ActivityDetailView: View {
     private func load() async {
         guard detail == nil else { return }
         if model.demo { error = L10n.tr("V ukázce se detail nenačítá."); return }
-        do {
-            if let id = session.activityId {
-                detail = try await model.api.activityDetail(id: id)
-            } else if let watch = session.watch {
-                detail = try await model.api.watchDetail(watch)
+        guard session.activityId != nil || session.watch != nil else { basicOnly = true; return }
+        let key = session.activityId.map { "intervals:" + $0 } ?? session.watch.map { "watch:" + $0.source + ":" + $0.id }
+        // Opened before in this launch: at once, and asked again only when data changed since.
+        if let key, let kept = ActivityDetailMemory.values[key] {
+            detail = kept.detail
+            if kept.revision != model.dataRevision, let fresh = try? await fetch() {
+                detail = fresh
+                ActivityDetailMemory.keep(fresh, key: key, revision: model.dataRevision)
             }
-        } catch {
-            self.error = error.localizedDescription
-            return
+        } else {
+            do {
+                detail = try await fetch()
+                if let key, let detail { ActivityDetailMemory.keep(detail, key: key, revision: model.dataRevision) }
+            } catch {
+                self.error = error.localizedDescription
+                return
+            }
         }
         // Apple Health is the route's source when it has one (it stays on the iPhone).
         if let uuid = detail?.watch?.appleUUID { localRoute = await AppleWorkoutRoute.points(workout: uuid) }
+    }
+
+    private func fetch() async throws -> ActivityDetail? {
+        if let id = session.activityId { return try await model.api.activityDetail(id: id) }
+        if let watch = session.watch { return try await model.api.watchDetail(watch) }
+        return nil
+    }
+}
+
+/// Under an activity's name: the logo and name of what recorded it.
+struct ActivityOriginLine: View {
+    let origin: ActivityDetail.Origin
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let logo = origin.logo { IntegrationIcon(id: logo, size: 20) }
+            Text(verbatim: origin.name).font(Typo.small).foregroundStyle(Palette.muted)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// An activity without a source detail (Wahoo, typed in): time, load and energy.
+private struct BasicActivityNumbers: View {
+    let session: WeekSession
+    var kcal: Double?
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 16) {
+            if let m = session.minutes { stat("Čas", Fmt.duration(m)) }
+            if let t = session.tss { stat("Zátěž", Fmt.int(t) + " TSS") }
+            if let k = kcal { stat("Energie", Fmt.int(k) + " kcal") }
+        }
+        .padding(.top, 22)
+    }
+
+    private func stat(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
+            Text(verbatim: value).font(Typo.number(24)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+        }
+    }
+}
+
+/// Activity details opened in this launch (the last 20), so opening a workout
+/// again shows it at once.
+@MainActor
+enum ActivityDetailMemory {
+    static var values: [String: (detail: ActivityDetail, revision: Int, at: Date)] = [:]
+
+    static func keep(_ detail: ActivityDetail, key: String, revision: Int) {
+        values[key] = (detail, revision, Date())
+        if values.count > 20, let oldest = values.min(by: { $0.value.at < $1.value.at })?.key { values[oldest] = nil }
     }
 }
 
@@ -347,6 +433,7 @@ struct ActivityDetailContent: View {
                 if let i = a.icu_intensity { stat("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2)) }
                 if let pace = runPace { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
                 if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Fmt.int(e) + " m") }
+                if let h = detail.recoveryHours { stat("Regenerace", "\(h) h") }
                 if let c = kcal ?? a.calories {
                     VStack(alignment: .leading, spacing: 2) {
                         stat("Energie", Fmt.int(c) + " kcal")

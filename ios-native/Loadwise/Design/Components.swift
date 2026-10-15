@@ -82,6 +82,105 @@ struct ProgressLine: View {
     }
 }
 
+/// A slim track with the athlete's usual range (or today's goal) as a lighter
+/// band and a dot at the value: Dnes, the Zdraví tiles and the details. The
+/// band takes the middle third, so values well outside it still fit.
+struct RangeBar: View {
+    let value: Double
+    let low: Double
+    let high: Double
+    var color: Color = Palette.green
+    var height: CGFloat = 6
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            ZStack(alignment: .leading) {
+                Capsule().fill(Palette.ink.opacity(0.07))
+                Capsule().fill(Palette.ink.opacity(0.34)).frame(width: w / 3).offset(x: w / 3)
+                Circle().fill(color)
+                    .overlay(Circle().stroke(Palette.card, lineWidth: 2.5))
+                    .frame(width: height + 6, height: height + 6)
+                    .offset(x: position * w - (height + 6) / 2)
+            }
+            .frame(height: height)
+            .frame(maxHeight: .infinity)
+        }
+        .frame(height: height + 6)
+        .accessibilityHidden(true)
+    }
+
+    private var position: Double {
+        guard high > low else { return 0.5 }
+        let span = high - low
+        return min(max((value - low + span) / (3 * span), 0.03), 0.97)
+    }
+
+    /// -1 under the range, 1 above it, 0 within.
+    static func side(_ value: Double, _ low: Double, _ high: Double) -> Int {
+        value > high ? 1 : value < low ? -1 : 0
+    }
+
+    /// "v normálu", "nad normálem", "pod normálem" under a tile's bar.
+    static func word(_ value: Double, _ low: Double, _ high: Double) -> String {
+        switch side(value, low, high) {
+        case 1: return L10n.tr("nad normálem")
+        case -1: return L10n.tr("pod normálem")
+        default: return L10n.tr("v normálu")
+        }
+    }
+
+    /// Green within the range or on its good side, amber on its bad side.
+    static func color(_ value: Double, _ low: Double, _ high: Double, worseAbove: Bool) -> Color {
+        let side = side(value, low, high)
+        return side == 0 || (side == 1) != worseAbove ? Palette.green : Palette.amber
+    }
+}
+
+/// A tile's range bar and the word under it, between the number and the chart.
+struct TileRange: View {
+    let value: Double
+    let low: Double
+    let high: Double
+    var worseAbove = false
+    /// Replaces "v normálu" (Váha: "cíl 76 kg").
+    var text: String? = nil
+
+    var body: some View {
+        let color = text == nil ? RangeBar.color(value, low, high, worseAbove: worseAbove) : Palette.blue
+        VStack(alignment: .leading, spacing: 8) {
+            RangeBar(value: value, low: low, high: high, color: color)
+            Text(verbatim: text ?? RangeBar.word(value, low, high))
+                .font(Typo.caption.weight(.medium)).foregroundStyle(color)
+                .lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .padding(.top, 6)
+    }
+}
+
+/// A detail's range bar under its big number: "níž · tvůj normál 52–68 ms · výš".
+struct DetailRange: View {
+    let value: Double
+    let low: Double
+    let high: Double
+    let label: String
+    var worseAbove = false
+
+    var body: some View {
+        VStack(spacing: 8) {
+            RangeBar(value: value, low: low, high: high, color: RangeBar.color(value, low, high, worseAbove: worseAbove), height: 8)
+            HStack {
+                Text("níž")
+                Spacer()
+                Text(verbatim: label)
+                Spacer()
+                Text("výš")
+            }
+            .font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+    }
+}
+
 /// Round outlined icon button used in screen headers.
 struct CircleButton: View {
     let systemImage: String

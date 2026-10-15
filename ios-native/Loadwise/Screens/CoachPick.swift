@@ -54,6 +54,7 @@ struct CoachPick: Decodable, Equatable {
         case "gym": return "dumbbell.fill"
         case "swim": return "drop"
         case "sauna": return "flame"
+        case "stretch": return "figure.flexibility"
         default: return "moon"
         }
     }
@@ -68,7 +69,7 @@ struct CoachPick: Decodable, Equatable {
     }
 
     static func name(_ kind: String) -> String {
-        L10n.tr(["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "swim": "Plavání", "sauna": "Sauna"][kind] ?? "Volno")
+        L10n.tr(["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "swim": "Plavání", "sauna": "Sauna", "stretch": "Protažení"][kind] ?? "Volno")
     }
 
     /// The day's pick as last fetched (also in the background), when it is today's.
@@ -136,7 +137,9 @@ private struct PickDetails: View {
 
 /// Dnes: the day's activity with everything that belongs to it, "Dát na dnes"
 /// and "Další možnosti". It shows what was fetched last (the background
-/// refresh keeps it current), so it opens without loading.
+/// refresh keeps it current), so it opens without loading. Once something is
+/// taken for today it leaves: the choice is in Plán dne (+ → Aktivita dne
+/// still changes it).
 struct CoachPickCard: View {
     @Environment(AppModel.self) private var model
     @State private var pick: CoachPick? = CoachPick.stored
@@ -145,7 +148,7 @@ struct CoachPickCard: View {
 
     var body: some View {
         Group {
-            if let pick, let best = pick.best {
+            if let pick, pick.chosen == nil, let best = pick.best {
                 VStack(alignment: .leading, spacing: 12) {
                     Label("Aktivita dne", systemImage: "sparkles")
                         .font(.caption.weight(.semibold)).textCase(.uppercase).tracking(1.2).foregroundStyle(Palette.green)
@@ -165,13 +168,8 @@ struct CoachPickCard: View {
                     }
                     if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                     HStack(spacing: 10) {
-                        if let chosen = pick.options.first(where: { $0.kind == pick.chosen }) {
-                            Label(L10n.f("Dnes: %@", chosen.title), systemImage: "checkmark").font(Typo.bodyStrong).foregroundStyle(Palette.green)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } else {
-                            PrimaryButton(title: L10n.tr("Dát na dnes"), systemImage: "calendar", busy: busy) {
-                                Task { await take(best, pick) }
-                            }
+                        PrimaryButton(title: L10n.tr("Dát na dnes"), systemImage: "calendar", busy: busy) {
+                            Task { await take(best, pick) }
                         }
                         if !pick.others.isEmpty {
                             NavigationLink(value: AppRoute.coachPick(false)) {
@@ -187,13 +185,14 @@ struct CoachPickCard: View {
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
             }
         }
-        // Again whenever Today reloads (a new workout, a sync, pull to refresh).
-        .task(id: model.today) { await reload() }
+        // Again whenever Today comes from the server (a new workout, a sync, pull
+        // to refresh); a meal or drink shown before it is sent does not ask.
+        .task(id: model.todayRevision) { await reload() }
     }
 
     private func take(_ option: CoachPick.Option, _ pick: CoachPick) async {
         busy = true; error = nil
-        do { try await CoachPickActions.take(option, pick: pick, model: model) } catch { self.error = error.localizedDescription }
+        do { _ = try await CoachPickActions.take(option, pick: pick, model: model) } catch { self.error = error.localizedDescription }
         busy = false
         await reload()
     }
@@ -210,6 +209,7 @@ struct CoachPickCard: View {
 /// from + it comes first, open.
 struct CoachPickView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     /// Also the day's activity (the + menu).
     var all = false
     @State private var pick: CoachPick? = CoachPick.stored
@@ -306,9 +306,12 @@ struct CoachPickView: View {
         .padding(.top, 18)
     }
 
+    /// Taken, back to Today, where it now sits in Plán dne.
     private func take(_ option: CoachPick.Option, _ pick: CoachPick) async {
         busy = option.id; error = nil
-        do { try await CoachPickActions.take(option, pick: pick, model: model) } catch { self.error = error.localizedDescription }
+        do {
+            if try await CoachPickActions.take(option, pick: pick, model: model) { busy = nil; dismiss(); return }
+        } catch { self.error = error.localizedDescription }
         busy = nil
         if let fresh = try? await model.api.coachPick() { self.pick = fresh }
     }
@@ -324,25 +327,28 @@ struct CoachPickView: View {
 
 enum CoachPickActions {
     /// "Dát na dnes": the ready ride or run goes to today's calendar, the gym
-    /// proposal is saved as today's plan, the rest is noted. The choice is
+    /// proposal is saved as today's plan, and the server puts the rest into
+    /// Plán dne (swimming, the sauna, a walk and stretching). The choice is
     /// saved too (another than the best one teaches the coach). Without a
-    /// ready workout the library or the gym builder opens, as before.
-    @MainActor
-    static func take(_ option: CoachPick.Option, pick: CoachPick, model: AppModel) async throws {
-        guard !model.demo else { return }
+    /// ready workout the library or the gym builder opens, and nothing is
+    /// taken until it is planned there. True when the choice is in the plan.
+    @MainActor @discardableResult
+    static func take(_ option: CoachPick.Option, pick: CoachPick, model: AppModel) async throws -> Bool {
+        guard !model.demo else { return false }
         let today = AppModel.localDate(Date())
         switch option.action {
         case "library":
-            guard let w = option.workout else { model.push(.workoutLibrary(option.kind)); break }
+            guard let w = option.workout else { model.push(.workoutLibrary(option.kind)); return false }
             try await model.api.scheduleWorkout(id: w.id, date: today, indoor: w.environment == "indoor")
         case "gym":
             if option.gym?.planned == true { break }
-            guard let draft = option.gym?.draftId, let rows = option.gym?.rows else { model.push(.gymBuilder); break }
+            guard let draft = option.gym?.draftId, let rows = option.gym?.rows else { model.push(.gymBuilder); return false }
             try await model.api.confirmGym(draftId: draft, rows: rows)
         default: break
         }
-        try? await model.api.chooseCoachPick(kind: option.kind, top: pick.best?.kind)
+        try await model.api.chooseCoachPick(kind: option.kind, top: pick.best?.kind)
         await model.refresh()
         await model.refreshTraining()
+        return true
     }
 }

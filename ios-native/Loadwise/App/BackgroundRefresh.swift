@@ -39,13 +39,13 @@ enum BackgroundRefresh {
     }
 
     /// Apple Health out, then Today for the widgets: always from the refresh
-    /// task, from a HealthKit wake only when something was sent.
+    /// task, from a HealthKit wake only when the server got something new.
     @discardableResult
     static func refresh(api: APIClient, widgets always: Bool) async -> Bool {
         guard api.hasSession else { return false }
-        let before = AppleHealth.shared.lastSync
-        let synced = await AppleHealth.shared.sync(api: api)
-        guard always || AppleHealth.shared.lastSync != before else { return synced }
+        let outcome = await AppleHealth.shared.run(api: api)
+        let synced = outcome.ok
+        guard always || outcome.changed else { return synced }
         guard !Task.isCancelled, let today = try? await api.today() else { return false }
         WidgetBridge.update(today)
         // Aktivita dne for the new data, kept for Today's card (CoachPick.stored),

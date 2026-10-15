@@ -63,6 +63,7 @@ struct CoachView: View {
                         }
                         .padding(20)
                     }
+                    .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages) { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
                 }
                 inputBar
@@ -292,8 +293,9 @@ struct CoachView: View {
         for item in items {
             if let message = await model.logFood(product: item.product, amount: item.amount, meal: item.meal, day: draft.date, refreshAfter: false) { failed = message }
         }
-        await model.refreshFood()
-        await model.refresh()
+        // Shown at once; they go out in the background, Food and Today load after.
+        Task { await model.sendOutbox(reloadToday: true) }
+        if model.food == nil { await model.refreshFood() }
         if let failed { edit(bubble) { $0.logged = failed }; return }
         edit(bubble) { $0.logged = L10n.tr(Self.loggedTo[meal] ?? "Zapsáno"); $0.loggedOK = true }
         if let left = Self.leftText(model.food, date: draft.date) { messages.append(Bubble(mine: false, text: left)) }
