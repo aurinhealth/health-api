@@ -109,6 +109,23 @@ enum Fmt {
     }
 
     /// Two-letter Czech weekday: "Po", "Út", "St", "Čt", "Pá", "So", "Ne".
+    /// "Říjen", "October": the month of Today's week strip.
+    static func monthTitle(_ isoDate: String) -> String {
+        guard let date = parse(isoDate) else { return "" }
+        let out = DateFormatter()
+        out.locale = locale
+        out.timeZone = utc
+        out.dateFormat = "LLLL"
+        let text = out.string(from: date)
+        return text.prefix(1).uppercased(with: locale) + text.dropFirst()
+    }
+
+    /// "14": the day of the month.
+    static func dayNumber(_ isoDate: String) -> String {
+        guard let day = Int(isoDate.suffix(2)) else { return "" }
+        return String(day)
+    }
+
     static func weekdayShort(_ isoDate: String) -> String {
         guard let date = parse(isoDate) else { return "" }
         let names = L10n.isEnglish ? ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] : ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"]

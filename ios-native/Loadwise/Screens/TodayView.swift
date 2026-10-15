@@ -84,15 +84,29 @@ struct TodayContent: View {
 
     /// Everything above the widgets: the day, readiness, weather and the coach.
     @ViewBuilder private var header: some View {
+        // B3 (Petr, 2026-10-15): the month as the title and the week below it.
         HStack(spacing: 10) {
-            DayNavigator(date: today.date)
+            Text(verbatim: Fmt.monthTitle(today.date))
+                .font(Typo.sentence(30, relativeTo: .title))
+                .foregroundStyle(Palette.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .accessibilityAddTraits(.isHeader)
             Spacer()
+            if model.selectedDate != nil {
+                Button { Task { await model.showToday() } } label: {
+                    Label("Dnes", systemImage: "arrow.uturn.backward").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 10).frame(height: 30)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
             CircleButton(systemImage: "square.and.arrow.up", label: "Sdílet", action: openShare)
             CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: L10n.tr("Kouč"), action: openCoach)
             Button(action: openSettings) { AvatarView(size: 36) }
                 .buttonStyle(.plain)
             .accessibilityLabel("Profil a nastavení")
         }
+        WeekStrip(date: today.date, week: today.week).padding(.top, 14)
 
         if model.selectedDate == nil && !model.demo {
             DataAgePill()
@@ -222,6 +236,69 @@ struct DataAgePill: View {
         day.timeZone = calendar.timeZone
         day.dateFormat = L10n.isEnglish ? "MMM d" : "d. M."
         return L10n.f("data z %@", day.string(from: last) + " " + time)
+    }
+}
+
+/// Today's week, Monday to Sunday: a dot in the readiness colour under every
+/// day up to the shown one, today filled, an earlier day picked with a ring in
+/// its colour. A tap opens that day; later days are faint and do nothing.
+struct WeekStrip: View {
+    @Environment(AppModel.self) private var model
+    let date: String
+    let week: [TodaySnapshot.WeekDay]?
+
+    private var today: String { AppModel.localDate(Date()) }
+
+    /// The server's week, or Monday to Sunday without zones (an older server).
+    private var days: [TodaySnapshot.WeekDay] {
+        if let week, week.count == 7 { return week }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.timeZone = calendar.timeZone
+        parser.dateFormat = "yyyy-MM-dd"
+        let weekday = parser.date(from: date).map { (calendar.component(.weekday, from: $0) + 5) % 7 } ?? 0
+        let monday = AppModel.shift(date, by: -weekday) ?? date
+        return (0..<7).map { TodaySnapshot.WeekDay(date: AppModel.shift(monday, by: $0) ?? monday, zone: nil) }
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(days, id: \.date) { day in
+                Button { Task { await model.showDate(day.date) } } label: { cell(day) }
+                    .buttonStyle(.plain)
+                    .disabled(day.date > today || model.demo || model.loading)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(.horizontal, -6)
+    }
+
+    private func cell(_ day: TodaySnapshot.WeekDay) -> some View {
+        let isToday = day.date == today, selected = day.date == date, future = day.date > today
+        let color = ReadinessText.pill(day.zone)?.1
+        return VStack(spacing: 5) {
+            Text(verbatim: Fmt.weekdayShort(day.date)).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.muted)
+            ZStack {
+                if isToday && selected {
+                    Circle().fill(Palette.ink)
+                } else if selected {
+                    Circle().stroke(color ?? Palette.ink.opacity(0.5), lineWidth: 2)
+                } else if isToday {
+                    Circle().stroke(Palette.ink.opacity(0.3), lineWidth: 1.5)
+                }
+                Text(verbatim: Fmt.dayNumber(day.date))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(isToday && selected ? Palette.background : selected ? (color ?? Palette.ink) : future ? Palette.faint : Palette.ink)
+            }
+            .frame(width: 38, height: 38)
+            Circle().fill(color ?? .clear).frame(width: 5, height: 5)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Fmt.dayMonth(day.date))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

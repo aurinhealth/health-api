@@ -1165,6 +1165,7 @@
 "Zranění" = "Injured";
 "Stav sportovce: %@, %@" = "Athlete status: %1$@, %2$@";
 "Do změny" = "Until changed";
+"do změny" = "until changed";
 "1 den" = "1 day";
 "3 dny" = "3 days";
 "1 týden" = "1 week";
