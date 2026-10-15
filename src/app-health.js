@@ -25,13 +25,22 @@ const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null
 // its normal; a raised breathing rate or skin temperature costs 10 each, a
 // raised Apple Watch wrist temperature 5 or 10 (recoveryReadiness). These are the "+12 HRV, −5 …" parts of the number.
 const WEIGHTS = { hrv: 0.5, restingHR: 0.25, sleep: 0.25 };
+// Today's value and the athlete's usual range for the readiness row: HRV and
+// resting heart rate ±1 SD around their own baseline, sleep from 90 % of the
+// need (where it starts to cost points) to 105 %.
+const r1 = x => Math.round(x * 10) / 10;
+function normalRange(key, c) {
+  if (key === "sleep") return { value: c.minutes, low: Math.round(c.need * 0.9), high: Math.round(c.need * 1.05) };
+  if (c.low == null || c.high == null) return {};
+  return { value: r1(c.value), low: r1(c.low), high: r1(c.high) };
+}
 export function readinessParts(readiness) {
   const c = readiness?.components || {};
   const used = Object.keys(WEIGHTS).filter(k => c[k]);
   const total = used.reduce((s, k) => s + WEIGHTS[k], 0);
   if (readiness?.score == null || !total) return [];
   // cycle: compared with the athlete's luteal normal (cycle tracking).
-  const parts = used.map(k => ({ key: k, points: Math.round(WEIGHTS[k] * (c[k].score - 70) / total), ...(c[k].cycle ? { cycle: true } : {}) }));
+  const parts = used.map(k => ({ key: k, points: Math.round(WEIGHTS[k] * (c[k].score - 70) / total), ...normalRange(k, c[k]), ...(c[k].cycle ? { cycle: true } : {}) }));
   if (c.respiration?.elevated) parts.push({ key: "respiration", points: -10 });
   if (c.skinTemp?.elevated) parts.push({ key: "skinTemp", points: -10 });
   if (c.wristTemp?.points < 0) parts.push({ key: "wristTemp", points: c.wristTemp.points });

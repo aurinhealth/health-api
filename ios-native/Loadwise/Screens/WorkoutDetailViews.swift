@@ -166,7 +166,9 @@ struct WeekSessionsList: View {
         // its detail is the planned one, where it can move or be deleted.
         if s.kind == "planned", let id = s.eventId, id.hasPrefix("planned:local-"), s.sport == "strength" { return .planned(s) }
         if s.kind == "gym" || s.sport == "strength" { return .gym(s.date) }
-        if s.kind == "activity" { return s.activityId != nil || s.watch != nil ? .activity(s) : nil }
+        // An activity from another source (Wahoo, typed in) opens too: its
+        // numbers from the list, with the ⋯ to delete it.
+        if s.kind == "activity" { return .activity(s) }
         if s.kind == "planned", s.eventId != nil { return .planned(s) }
         return nil
     }
@@ -236,6 +238,8 @@ struct ActivityDetailView: View {
     @State private var changingType = false
     @State private var deleting = false
     @State private var editingKcal = false
+    /// No source detail to load: the numbers Training lists.
+    @State private var basicOnly = false
     /// An Apple Health workout's route, read on the iPhone.
     @State private var localRoute: [ActivityDetail.StreamPoint] = []
     @State private var sharing = false
@@ -276,6 +280,8 @@ struct ActivityDetailView: View {
                                           rating: model.demo ? nil : AnyView(FeedbackRow(session: session, reload: feedbackClosed) { feedback = true }))
                     // Device calories that look like a measurement error (src/activity-energy-check.js).
                     if !model.demo { KcalCheck(session: model.liveSession(session), date: session.date) }
+                } else if basicOnly {
+                    BasicActivityNumbers(session: model.liveSession(session), kcal: countedKcal)
                 } else if let error {
                     Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
                 } else {
@@ -332,6 +338,9 @@ struct ActivityDetailView: View {
                 detail = try await model.api.activityDetail(id: id)
             } else if let watch = session.watch {
                 detail = try await model.api.watchDetail(watch)
+            } else {
+                basicOnly = true
+                return
             }
         } catch {
             self.error = error.localizedDescription
@@ -339,6 +348,28 @@ struct ActivityDetailView: View {
         }
         // Apple Health is the route's source when it has one (it stays on the iPhone).
         if let uuid = detail?.watch?.appleUUID { localRoute = await AppleWorkoutRoute.points(workout: uuid) }
+    }
+}
+
+/// An activity without a source detail (Wahoo, typed in): time, load and energy.
+private struct BasicActivityNumbers: View {
+    let session: WeekSession
+    var kcal: Double?
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 16) {
+            if let m = session.minutes { stat("Čas", Fmt.duration(m)) }
+            if let t = session.tss { stat("Zátěž", Fmt.int(t) + " TSS") }
+            if let k = kcal { stat("Energie", Fmt.int(k) + " kcal") }
+        }
+        .padding(.top, 22)
+    }
+
+    private func stat(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
+            Text(verbatim: value).font(Typo.number(24)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+        }
     }
 }
 

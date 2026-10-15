@@ -1018,6 +1018,15 @@ final class AppModel {
         await refreshDay()
     }
 
+    /// A day picked in Today's week strip; today or earlier.
+    func showDate(_ date: String) async {
+        let todayDate = Self.localDate(Date())
+        guard !demo, date <= todayDate, date != (selectedDate ?? todayDate) else { return }
+        selectedDate = date == todayDate ? nil : date
+        showSaved(selectedDate)
+        await refreshDay()
+    }
+
     func showToday() async {
         guard selectedDate != nil else { return }
         selectedDate = nil

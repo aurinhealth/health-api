@@ -295,7 +295,7 @@ export function recoveryReadiness(input) {
     // baseline over all days plus the luteal rise (lutealOffset).
     const cycle = today.cyclePhase === "luteal" ? lutealOffset(rows, date, "restingHR", 1, 3) : 0;
     const sd = Math.max(settled(rb, 3), 1.5), z = (Number(today.restingHR) - rb.mean - cycle) / sd;
-    components.restingHR = { value: Number(today.restingHR), baseline: rb.mean + cycle, z, score: recoveryComponentScore(-z), days: rb.count };
+    components.restingHR = { value: Number(today.restingHR), baseline: rb.mean + cycle, low: rb.mean + cycle - sd, high: rb.mean + cycle + sd, z, score: recoveryComponentScore(-z), days: rb.count };
     if (cycle) components.restingHR.cycle = cycle;
     if (mixed) flags.push("restingHRMixed");
   }

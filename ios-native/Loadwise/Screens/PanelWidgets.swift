@@ -360,12 +360,15 @@ struct SizedWidgetBody<Value: View, Chart: View>: View {
     var smallChart: CGFloat = 40
     var mediumChart: CGFloat = 56
     var largeChart: CGFloat = 120
+    /// False when the small tile shows a range bar instead of its chart.
+    var showsSmallChart: Bool = true
     let value: Value
     let chart: (CGFloat) -> Chart
 
-    init(size: WidgetSize, smallChart: CGFloat = 40, mediumChart: CGFloat = 56, largeChart: CGFloat = 120,
+    init(size: WidgetSize, smallChart: CGFloat = 40, mediumChart: CGFloat = 56, largeChart: CGFloat = 120, smallShowsChart: Bool = true,
          @ViewBuilder value: () -> Value, @ViewBuilder chart: @escaping (CGFloat) -> Chart) {
         self.size = size
+        self.showsSmallChart = smallShowsChart
         self.smallChart = smallChart
         self.mediumChart = mediumChart
         self.largeChart = largeChart
@@ -378,7 +381,7 @@ struct SizedWidgetBody<Value: View, Chart: View>: View {
         case .small:
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) { value }
-                chart(smallChart)
+                if showsSmallChart { chart(smallChart) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         case .medium:

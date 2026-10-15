@@ -298,6 +298,10 @@ struct HeartDetailContent: View {
                     Text("ms").font(Typo.small).foregroundStyle(Palette.faint)
                     if let s = status(hrv) { Pill(text: s.0, foreground: s.1, background: s.2) }
                 }
+                if let value = hrv.value, let low = hrv.low, let high = hrv.high, high > low {
+                    DetailRange(value: value, low: low, high: high, label: L10n.f("tvůj normál %@", Fmt.int(low) + "–" + Fmt.int(high) + " ms"))
+                        .padding(.top, 14)
+                }
                 Card {
                     WidgetHeader(title: "HRV po nocích", color: Palette.green)
                     TrendChart(points: hrv.series, color: Palette.green, unit: "ms",
@@ -314,6 +318,11 @@ struct HeartDetailContent: View {
                     Text("bpm" + (rhr.baseline.map { " · " + L10n.f("norma %@", Fmt.decimal($0)) } ?? "")).font(Typo.small).foregroundStyle(Palette.faint)
                 }
                 .padding(.top, 8)
+                if let value = rhr.value, let base = rhr.baseline {
+                    DetailRange(value: value, low: base - 2, high: base + 2,
+                                label: L10n.f("tvůj normál %@", Fmt.int(base - 2) + "–" + Fmt.int(base + 2) + " bpm"), worseAbove: true)
+                        .padding(.top, 12)
+                }
                 Card {
                     WidgetHeader(title: "Klidový tep po dnech", color: Palette.rust)
                     TrendChart(points: rhr.series, color: Palette.rust, unit: "bpm",

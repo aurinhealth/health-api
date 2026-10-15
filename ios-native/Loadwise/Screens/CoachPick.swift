@@ -54,6 +54,7 @@ struct CoachPick: Decodable, Equatable {
         case "gym": return "dumbbell.fill"
         case "swim": return "drop"
         case "sauna": return "flame"
+        case "stretch": return "figure.flexibility"
         default: return "moon"
         }
     }
@@ -68,7 +69,7 @@ struct CoachPick: Decodable, Equatable {
     }
 
     static func name(_ kind: String) -> String {
-        L10n.tr(["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "swim": "Plavání", "sauna": "Sauna"][kind] ?? "Volno")
+        L10n.tr(["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "swim": "Plavání", "sauna": "Sauna", "stretch": "Protažení"][kind] ?? "Volno")
     }
 
     /// The day's pick as last fetched (also in the background), when it is today's.
