@@ -69,6 +69,17 @@ test("the store keeps the app's log over Apple Health's and merges partial write
   assert.equal((await cycleInputs(db, "2026-10-12")).days.length, 4);
 });
 
+test("Apple Health's hot flashes and night sweats fill days the athlete did not log", async () => {
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { saveCycleSettings, saveCycleDay, importAppleCycle, listCycleDays } = await import("../src/cycle-store.js");
+  const db = createD1(); db.userId = 8;
+  await saveCycleSettings(db, { enabled: true, lifeStage: "menopause" });
+  await importAppleCycle(db, [{ date: "2026-10-10", symptoms: ["hot_flashes", "night_sweats", "x"] }, { date: "2026-10-11", symptoms: ["hot_flashes"] }]);
+  await saveCycleDay(db, { date: "2026-10-11", symptoms: ["joint_pain"] });
+  const days = await listCycleDays(db, "2026-10-01", "2026-10-31");
+  assert.deepEqual(days.map(d => [d.date, d.symptoms]), [["2026-10-10", ["hot_flashes", "night_sweats"]], ["2026-10-11", ["joint_pain"]]]);
+});
+
 test("turning on 'Coach knows my cycle' records when, and turning it off clears it", async () => {
   const { createD1 } = await import("./helpers/d1.mjs");
   const { scopedDb } = await import("../src/tenancy.js");
