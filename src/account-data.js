@@ -5,6 +5,9 @@
 import { L } from './lang.js';
 import { PERSONAL_TABLES, publicUser, ownerEmail } from "./tenancy.js";
 import { revokeApple } from "./apple-login.js";
+import { revokeWhoop } from "./whoop.js";
+import { revokeUltrahuman } from "./ultrahuman.js";
+import { revokeWahoo } from "./wahoo.js";
 
 // Sign-in keys of the connected services are never exported.
 const SECRET_TABLES = new Set(["connection_credentials"]);
@@ -126,6 +129,8 @@ export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = R
   if (user.isOwner) throw new Error(L("Účet správce nejde smazat: patří k němu data a nastavení aplikace.", "The admin account can't be deleted: the app's data and settings belong to it."));
   const google = await revokeGoogle(env, fetchImpl);
   const apple = await revokeApple(env, fetchImpl);
+  // WHOOP, Ultrahuman and Wahoo would keep Aurin among the allowed apps.
+  const [whoop, ultrahuman, wahoo] = await Promise.all([revokeWhoop(env, fetchImpl), revokeUltrahuman(env, fetchImpl), revokeWahoo(env, fetchImpl)]);
   // The account row goes first, together with the note that its data is to be
   // removed: the session no longer signs anyone in, signing in again needs a
   // new invitation (and gets a new id), and the cron finishes the data if this
@@ -139,12 +144,12 @@ export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = R
     purge = await purgeUserData(env.DB, env.USER_ID, { deadline: Date.now() + budgetMs, chunkRows });
   } catch (error) {
     console.error("Account data deletion continues in the cron", error.message);
-    return { status: "ok", google, apple, deleted: {}, pending: true };
+    return { status: "ok", google, apple, whoop, ultrahuman, wahoo, deleted: {}, pending: true };
   }
   if (purge.done) {
     await completeDeletion(env.DB, env.USER_ID, env.USER_DATA_ROUTING === 'true');
   }
-  return { status: "ok", google, apple, deleted: purge.deleted, pending: !purge.done };
+  return { status: "ok", google, apple, whoop, ultrahuman, wahoo, deleted: purge.deleted, pending: !purge.done };
 }
 
 async function completeDeletion(db, userId, routed) {
