@@ -96,6 +96,8 @@ export function reportFindings(diagnostics, server, now = Date.now()) {
   if (apple?.lastError) out.push(`apple: ${apple.lastError}`);
   for (const [screen, message] of Object.entries(d.lastErrors && typeof d.lastErrors === "object" ? d.lastErrors : {})) out.push(`on screen (${screen}): ${message}`);
   const recent = Array.isArray(d.recentErrors) ? d.recentErrors : [];
+  const crashes = Array.isArray(d.crashes) ? d.crashes : [];
+  if (crashes.length) out.push(`${crashes.length} crash(es) in the app in the last two weeks, latest ${[crashes[0].at, crashes[0].app, crashes[0].exception, crashes[0].signal != null ? `signal ${crashes[0].signal}` : null, Array.isArray(crashes[0].frames) ? crashes[0].frames[0] : null].filter(v => v != null && v !== "").join(" ")}`);
   if (recent.length) out.push(`${recent.length} failed request(s) in the app this week, latest ${[recent[0].at, recent[0].path, recent[0].status, recent[0].message].filter(v => v != null && v !== "").join(" ")}`);
   for (const s of server?.syncs || []) {
     if (/^(error|broken|partial)$/.test(s.status) || s.problems?.length) out.push(`server sync ${s.name}: ${s.status}${s.lastError ? ` (${s.lastError})` : ""}${(s.problems || []).map(p => `; ${p.source} ${p.status}${p.message ? ` ${p.message}` : ""}`).join("")}`);

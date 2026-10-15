@@ -887,7 +887,7 @@ export function supportPage(request, {apple = false, email = false, open = false
 <ol>
 <li>In the app, open <strong>Settings → Help → Report a problem</strong>.</li>
 <li>Under <strong>What happened</strong>, describe the problem and roughly when it happened. Add a screenshot if it helps.</li>
-<li>Leave <strong>Attach diagnostics</strong> on: the report then carries technical details about the app, syncing and recent errors, so the cause is easier to find. You can read them first under <strong>View diagnostics</strong>, or turn them off.</li>
+<li>Leave <strong>Attach diagnostics</strong> on: the report then carries technical details about the app, syncing, recent errors and crashes, so the cause is easier to find. You can read them first under <strong>View diagnostics</strong>, or turn them off.</li>
 <li>Choose <strong>Send</strong>.</li>
 </ol>
 <p>If you cannot open the app, e-mail <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> what went wrong, roughly when, the error message the app showed and your iPhone model and iOS version. For anything else, <strong>Settings → Help → Contact us</strong> opens an e-mail with your app version already filled in.</p>
