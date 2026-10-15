@@ -1,0 +1,76 @@
+name: Food micronutrients
+
+# Builds vitamins and minerals for the world food catalogue in R2
+# (scripts/build-micronutrients.mjs). The publishers' tables are downloaded
+# here because only runners reach them.
+#
+# A push to the data branch is a dry run (nothing written to R2); the result is
+# kept as an artifact. To upload, run the workflow by hand with "upload", or,
+# while the workflow exists only on the branch (workflow_dispatch needs it on
+# the default branch), push a commit whose message contains [upload].
+# Uploading only adds micros/<version>/ objects and micros/current.json; the
+# catalogue's own files are never touched.
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "Upload to R2 and switch micros/current.json"
+        type: boolean
+        default: false
+  push:
+    branches:
+      - claude/project-thread-8mn7r0-zivinny-data
+    paths:
+      - "scripts/build-micronutrients.mjs"
+      - "scripts/micronutrient-matches.mjs"
+      - ".github/workflows/food-micros.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: food-micros
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Run tests
+        run: node --test tests/micronutrients.test.mjs tests/world-foods.test.mjs
+
+      - name: Build (and upload when asked)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          UPLOAD: ${{ (github.event_name == 'workflow_dispatch' && inputs.upload) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[upload]')) }}
+          NODE_OPTIONS: --max-old-space-size=6144
+        shell: bash
+        run: |
+          set -euo pipefail
+          flag=""
+          if [ "$UPLOAD" = "true" ]; then flag="--upload"; echo "Uploading to R2"; else echo "Dry run"; fi
+          node scripts/build-micronutrients.mjs "$RUNNER_TEMP/micros-work" out/micros $flag
+
+      - name: Keep the result for inspection
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: food-micros
+          path: |
+            out/micros/*/meta.json
+            out/micros/*/top.json
+            out/micros/*/sample.json
+            out/micros/*/000.json
+          if-no-files-found: ignore
+          retention-days: 14
