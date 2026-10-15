@@ -14,6 +14,7 @@
 //    closes the sheet (connect-return.js).
 import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { findUser } from "./tenancy.js";
+import { L } from "./lang.js";
 
 const TICKET_SECONDS = 120;
 // "google-extra": the optional Google scopes (writing weight and workouts).
@@ -86,10 +87,10 @@ async function continueToProvider(env, ticket) {
 
 export async function handleNativeConnect(request, env, url, { user, signedIn }) {
   if (url.pathname === "/app/api/connect/start" && request.method === "POST") {
-    if (!signedIn || !user) return Response.json({ message: "Přihlas se do aplikace." }, { status: 401 });
-    if (request.headers.get("Origin") !== url.origin) return Response.json({ message: "Neplatný původ požadavku." }, { status: 403 });
+    if (!signedIn || !user) return Response.json({ message: L("Přihlas se do aplikace.", "Sign in to the app.") }, { status: 401 });
+    if (request.headers.get("Origin") !== url.origin) return Response.json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, { status: 403 });
     const { provider } = await request.json().catch(() => ({}));
-    if (!PROVIDERS.has(provider)) return Response.json({ message: "Neznámá služba." }, { status: 400 });
+    if (!PROVIDERS.has(provider)) return Response.json({ message: L("Neznámá služba.", "Unknown service.") }, { status: 400 });
     const ticket = await connectTicket(user.id, provider, sessionSecret(env));
     return Response.json({ status: "ok", url: url.origin + "/auth/app/connect?ticket=" + encodeURIComponent(ticket) }, { headers: { "Cache-Control": "no-store" } });
   }
@@ -107,7 +108,7 @@ export async function handleNativeConnect(request, env, url, { user, signedIn })
   }
   if (url.pathname === "/auth/app/connect" && request.method === "POST") {
     // Only the confirm button on this site's own page, never a form posted from elsewhere.
-    if (!postedFromHere(request, url)) return Response.json({ message: "Neplatný původ požadavku." }, { status: 403 });
+    if (!postedFromHere(request, url)) return Response.json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, { status: 403 });
     const form = await request.formData().catch(() => null);
     const ticket = await readConnectTicket(form?.get("ticket"), sessionSecret(env));
     if (!ticket) return expired();

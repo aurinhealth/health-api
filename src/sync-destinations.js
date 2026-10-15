@@ -277,7 +277,7 @@ const PUSH = { google: pushGoogle, intervals: pushIntervals, strava: pushStrava 
 
 function failure(destination, error) {
   if (error.scope) return L('Povol Aurinu zápis tréninků do Google Health (Rozšířit oprávnění Google).', 'Allow Aurin to write workouts to Google Health (Extend Google permissions).');
-  if (/HTTP 40[13]/.test(error.message)) return L(NAMES[destination] + ' odmítlo přístup. Připoj ho znovu.', NAMES[destination] + ' refused access. Connect it again.');
+  if (/HTTP 40[13]/.test(error.message)) return L('Služba ' + NAMES[destination] + ' odmítla přístup. Připoj ji znovu.', NAMES[destination] + ' denied access. Reconnect it.');
   return L('Odeslání se nepodařilo. Zkus to znovu.', 'Sending failed. Try again.');
 }
 
@@ -293,7 +293,7 @@ const googleUnsure = row => row.destination === 'google' && row.status === 'unkn
 async function deliver(env, row, options) {
   if (!PUSH[row.destination]) return { destination: row.destination, status: row.status, message: row.message || null };
   if (!destinationConnected(env, row.destination)) {
-    const message = L(NAMES[row.destination] + ' není připojené.', NAMES[row.destination] + ' isn\'t connected.');
+    const message = L('Služba ' + NAMES[row.destination] + ' není připojená.', NAMES[row.destination] + ' isn\'t connected.');
     await setStatus(env, row, 'error', message);
     return { destination: row.destination, status: 'error', message };
   }
@@ -356,7 +356,7 @@ export async function activitySends(env, key) {
 export async function retrySend(env, key, destination, { fetchImpl = fetch, googleToken = null } = {}) {
   await ensureSyncTables(env.DB);
   const row = await env.DB.prepare('SELECT * FROM sync_sends WHERE user_id = ? AND activity_key = ? AND destination = ?').bind(env.USER_ID, String(key || ''), String(destination || '')).first();
-  if (!row) throw Object.assign(new Error(L('Odeslání nebylo nalezeno.', 'The send wasn\'t found.')), { status: 404 });
+  if (!row) throw Object.assign(new Error(L('Odeslání se nenašlo. Zkus to znovu.', 'Couldn\'t find this send. Try again.')), { status: 404 });
   return deliver(env, row, { fetchImpl, googleToken, force: true });
 }
 

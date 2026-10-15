@@ -76,7 +76,7 @@ export async function assertAiAllowance(env) {
   const failed = error => { console.error("AI usage read failed", error?.message || error); return 0; };
   const [monthSpent, daySpent] = await Promise.all([monthLimit == null ? 0 : aiSpentThisMonth(env).catch(failed), dayLimit == null ? 0 : aiSpentToday(env).catch(failed)]);
   if (monthLimit != null && monthSpent >= monthLimit) throw limitError(L(`Měsíční limit AI je vyčerpaný (${usd(monthLimit)}). Obnoví se prvního dne dalšího měsíce.`, `The monthly AI limit is used up (${usd(monthLimit)}). It resets on the first day of next month.`));
-  if (dayLimit != null && daySpent >= dayLimit) throw limitError(L(`Denní limit AI je vyčerpaný (${usd(dayLimit)}). Zítra se obnoví.`, `The daily AI limit is used up (${usd(dayLimit)}). It resets tomorrow.`));
+  if (dayLimit != null && daySpent >= dayLimit) throw limitError(L(`Denní limit AI je vyčerpaný (${usd(dayLimit)}). Obnoví se zítra.`, `You've used up today's AI limit (${usd(dayLimit)}). It resets tomorrow.`));
 }
 
 // Limits are checked before a call and its cost recorded after it, so parallel

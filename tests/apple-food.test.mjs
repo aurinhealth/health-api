@@ -16,7 +16,7 @@ const yogurt = { id: "A1", date: "2026-10-13", time: "12:40", name: "Řecký jog
 test("food and water other apps wrote to Apple Health land in the diary and stay in step", async () => {
   const raw = createD1(), db = scopedDb(raw, 7);
   diary(raw);
-  assert.deepEqual(await saveAppleFood(raw, 7, { ...window, meals: [yogurt, { id: "A2", date: "2026-10-12", name: "Breakfast", app: "MyFitnessPal", kcal: 430 }], drinks: [{ id: "W1", date: "2026-10-13", time: "09:30", ml: 300, app: "Yazio" }] }), { saved: 3, removed: 0 });
+  assert.deepEqual(await saveAppleFood(raw, 7, { ...window, meals: [yogurt, { id: "A2", date: "2026-10-12", name: "Breakfast", app: "MyFitnessPal", kcal: 430 }], drinks: [{ id: "W1", date: "2026-10-13", time: "09:30", ml: 300, app: "Yazio" }] }), { saved: 3, removed: 0, changed: 3 });
   const rows = (await raw.prepare("SELECT * FROM food_logs WHERE user_id=7 ORDER BY consumed_date").all()).results;
   assert.equal(rows.length, 2);
   assert.equal(JSON.parse(rows[0].note).mealType, "breakfast");
@@ -27,14 +27,16 @@ test("food and water other apps wrote to Apple Health land in the diary and stay
 
   // Sent again with a change and without the breakfast: updated in place, the breakfast gone.
   const result = await saveAppleFood(raw, 7, { ...window, meals: [{ ...yogurt, kcal: 210 }], drinks: [] });
-  assert.deepEqual(result, { saved: 1, removed: 2 });
+  assert.deepEqual(result, { saved: 1, removed: 2, changed: 3 });
+  // The same again changes nothing.
+  assert.equal((await saveAppleFood(raw, 7, { ...window, meals: [{ ...yogurt, kcal: 210 }], drinks: [] })).changed, 0);
   const after = (await raw.prepare("SELECT id,kcal FROM food_logs WHERE user_id=7").all()).results;
   assert.deepEqual(after, [{ id: rows[1].id, kcal: 210 }]);
   assert.equal((await listFluids(db, "2026-10-13")).length, 0);
 
   // Pití switched off: no drinks list, so food still reconciles and drinks stay.
   await saveAppleFood(raw, 7, { ...window, meals: [], drinks: [{ id: "W2", date: "2026-10-13", ml: 250 }] });
-  assert.deepEqual(await saveAppleFood(raw, 7, { ...window, meals: [{ ...yogurt, kcal: 210 }] }), { saved: 1, removed: 0 });
+  assert.deepEqual(await saveAppleFood(raw, 7, { ...window, meals: [{ ...yogurt, kcal: 210 }] }), { saved: 1, removed: 0, changed: 1 });
   assert.equal((await listFluids(db, "2026-10-13")).length, 1);
 });
 

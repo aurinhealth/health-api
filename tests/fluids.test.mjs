@@ -71,3 +71,15 @@ test("drinks logged as food count automatically; alcohol and foods in grams do n
   const drinks = await foodDrinks(scopedDb(raw, 7), 7, "2026-10-03");
   assert.deepEqual(drinks.map(d => [d.name, d.ml, d.kind]), [["Monster Energy", 500, "food"]]);
 });
+
+test("a drink the catalog keeps in grams or servings counts by its name", () => {
+  const row = (recipe_title, note) => ({ id: 1, consumed_at: "2026-10-15T08:00", recipe_title, note: JSON.stringify(note) });
+  assert.equal(drinkFromFoodEntry(row("Coca-Cola", { amount: 500, unit: "g" })).ml, 500);
+  assert.equal(drinkFromFoodEntry(row("Coca-Cola Zero", { amount: 1, unit: "portion", product: { serving_size: "0,5 l" } })).ml, 500);
+  assert.equal(drinkFromFoodEntry(row("Pomerančový džus", { amount_g: 250 })).ml, 250);
+  assert.equal(drinkFromFoodEntry(row("Kofola", { amount: 330, unit: "ml" })).ml, 330);
+  assert.equal(drinkFromFoodEntry(row("Pivo Plzeň", { amount: 500, unit: "g" })).alcohol, true, "beer is listed, not counted");
+  assert.equal(drinkFromFoodEntry(row("Kuřecí prsa", { amount: 200, unit: "g" })), null);
+  assert.equal(drinkFromFoodEntry(row("Kávový dort", { amount: 120, unit: "g" })), null);
+  assert.equal(drinkFromFoodEntry(row("Mléčná čokoláda", { amount: 50, unit: "g" })), null);
+});

@@ -40,7 +40,7 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
         switch code {
         case "cancelled": return APIError.message(L10n.tr("Přihlášení přes Google bylo zrušeno."))
         case "not_invited": return APIError.message(L10n.tr("Tento Google účet nemá do Aurinu pozvánku. Požádej o ni správce, nebo se přihlas jiným účtem."))
-        case "expired": return APIError.message(L10n.tr("Přihlášení vypršelo. Zkus to znovu."))
+        case "expired": return APIError.message(L10n.tr("Přihlášení se přerušilo. Zkus to znovu."))
         case "unavailable": return APIError.message(L10n.tr("Přihlášení přes Google teď nejde. Zkus to později nebo se přihlas e-mailem."))
         default: return APIError.message(L10n.tr("Google přihlášení se nepodařilo ověřit. Zkus to znovu."))
         }

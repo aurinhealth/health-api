@@ -121,6 +121,24 @@ final class AppleHealth {
     @ObservationIgnored private let reader = HealthReader()
     @ObservationIgnored private var observers: [HKObserverQuery] = []
     @ObservationIgnored private weak var api: APIClient?
+    /// The sync on its way: a caller that comes meanwhile waits for it instead
+    /// of going on without it (Today then still gets last night).
+    @ObservationIgnored private var running: Task<SyncOutcome, Never>?
+
+    /// What a sync did: ok is false on an error; changed when the server stored
+    /// something new (the same hours sent again change nothing).
+    struct SyncOutcome {
+        var ok: Bool
+        var changed: Bool
+    }
+
+    /// A sync after 10:00 today already brought last night: Today no longer
+    /// waits for the next one (AppModel.refresh).
+    var hasMorningData: Bool {
+        guard let lastSync else { return false }
+        let ten = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: Date()) ?? Date()
+        return lastSync >= ten
+    }
 
     private static let enabledKey = "appleHealth.enabled"
     private static let categoriesKey = "appleHealth.categories"
@@ -139,7 +157,7 @@ final class AppleHealth {
     /// The iOS permission sheet for these categories, then the history.
     func connect(_ chosen: Set<HealthCategory>, api: APIClient) async -> Bool {
         guard isAvailable else { message = L10n.tr("Apple Health na tomhle zařízení není."); return false }
-        guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jednu oblast."); return false }
+        guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jeden typ dat."); return false }
         do {
             // What Synchronizace writes there stays allowed in the same sheet.
             let export = AppleHealthExport.shared
@@ -200,7 +218,7 @@ final class AppleHealth {
     /// Zdroje dat → Apple Health → Oprávnění: fewer categories only stop
     /// reading; a new one asks iOS and loads its history.
     func update(_ chosen: Set<HealthCategory>, api: APIClient) async {
-        guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jednu oblast."); return }
+        guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jeden typ dat."); return }
         if chosen.isSubset(of: categories) {
             setCategories(chosen)
             stopObservers()
@@ -251,11 +269,24 @@ final class AppleHealth {
     /// refresh and every wake from HealthKit asks). Returns false on an error.
     @discardableResult
     func sync(api: APIClient, force: Bool = false) async -> Bool {
-        guard enabled, isAvailable, !syncing, api.hasSession else { return false }
+        await run(api: api, force: force).ok
+    }
+
+    /// The sync with what it did; one already running is awaited, not skipped.
+    func run(api: APIClient, force: Bool = false) async -> SyncOutcome {
+        if let running { return await running.value }
+        guard enabled, isAvailable, api.hasSession else { return SyncOutcome(ok: false, changed: false) }
         // A locked iPhone keeps Apple Health closed: nothing would be read and
         // the empty windows would delete nights and workouts on the server.
-        guard UIApplication.shared.isProtectedDataAvailable else { return false }
-        if !force, let lastSync, Date().timeIntervalSince(lastSync) < 600 { return true }
+        guard UIApplication.shared.isProtectedDataAvailable else { return SyncOutcome(ok: false, changed: false) }
+        if !force, let lastSync, Date().timeIntervalSince(lastSync) < 600 { return SyncOutcome(ok: true, changed: false) }
+        let task = Task { await perform(api: api) }
+        running = task
+        defer { running = nil }
+        return await task.value
+    }
+
+    private func perform(api: APIClient) async -> SyncOutcome {
         syncing = true
         defer { syncing = false }
         // A type added in an update (muscle mass) is asked for once, in the app;
@@ -266,19 +297,27 @@ final class AppleHealth {
         // one and a day more (late watch data), at most a month.
         let days: Int? = lastSync.map { min(30, max(2, Int(started.timeIntervalSince($0) / 86400) + 2)) }
         do {
-            guard let uploads = await reader.collect(categories, days: days, now: started) else { return false }
+            guard let uploads = await reader.collect(categories, days: days, now: started) else { return SyncOutcome(ok: false, changed: false) }
+            var changed = false
             for upload in uploads {
-                let _: JSONValue = try await api.send("/app/api/health/apple", method: "POST", body: upload)
+                let answer: UploadAnswer = try await api.send("/app/api/health/apple", method: "POST", body: upload)
+                // An older server does not say: count it as new.
+                changed = changed || (answer.changed ?? 1) > 0
             }
             lastSync = started
             UserDefaults.standard.set(started, forKey: Self.lastSyncKey)
             message = nil
-            return true
+            return SyncOutcome(ok: true, changed: changed)
         } catch {
             message = error.localizedDescription
-            return false
+            return SyncOutcome(ok: false, changed: false)
         }
     }
+}
+
+/// POST /app/api/health/apple: how many rows the upload really changed.
+private struct UploadAnswer: Decodable {
+    let changed: Int?
 }
 
 /// GET /app/api/health/apple: whether the account reads Apple Health.
@@ -497,6 +536,11 @@ final class HealthReader: @unchecked Sendable {
 
         if closed.get() { return nil }
         var uploads = [AppleHealthUpload(records: first, windows: windows.isEmpty ? nil : windows, categories: names, food: food)]
+        // The usual sync of the last days is small: one request, one pass on the server.
+        if days != nil, first.count + rest.count <= 1500 {
+            uploads[0].records += rest
+            return uploads
+        }
         for i in stride(from: 0, to: rest.count, by: 1500) {
             uploads.append(AppleHealthUpload(records: Array(rest[i..<min(i + 1500, rest.count)]), categories: names))
         }

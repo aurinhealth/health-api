@@ -27,7 +27,7 @@ enum SystemAlarm {
             do {
                 let manager = AlarmManager.shared
                 switch manager.authorizationState {
-                case .denied: return L10n.tr("Budík nemá povolení. Zapni ho v Nastavení iPhonu → Aurin → Budíky.")
+                case .denied: return L10n.tr("Budík nemá povolení. Povol ho v Nastavení iPhonu → Aplikace → Aurin.")
                 case .authorized: break
                 default:
                     guard try await manager.requestAuthorization() == .authorized else {

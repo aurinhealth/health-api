@@ -38,5 +38,36 @@ final class OutboxTests: XCTestCase {
         XCTAssertTrue(Outbox.isNoConnection(URLError(.timedOut)))
         XCTAssertFalse(Outbox.isNoConnection(URLError(.badServerResponse)))
         XCTAssertFalse(Outbox.isNoConnection(APIError.message("400")))
+        // A Wi-Fi that wants a sign-in breaks the secure connection: the write waits too.
+        XCTAssertTrue(Outbox.isNoConnection(URLError(.secureConnectionFailed)))
+    }
+
+    func testConnectionErrorsSayWhatToDo() {
+        let tls = APIClient.readable(URLError(.secureConnectionFailed))
+        XCTAssertEqual((tls as? URLError)?.code, .secureConnectionFailed)
+        XCTAssertTrue(tls.localizedDescription.contains("Wi-Fi"))
+        XCTAssertTrue(Outbox.isNoConnection(APIClient.readable(URLError(.notConnectedToInternet))))
+        // What the app does not word stays as iOS says it.
+        XCTAssertEqual((APIClient.readable(URLError(.badURL)) as? URLError)?.code, .badURL)
+        XCTAssertEqual(APIClient.readable(APIError.unauthorized) as? APIError, .unauthorized)
+    }
+
+    /// A meal or drink just sent keeps its server id, so "Vrátit" deletes it there.
+    func testSentEntryKeepsTheServerId() {
+        XCTAssertEqual(Outbox.entryId(Data(#"{"status":"ok","id":42,"date":"2026-10-09"}"#.utf8)), 42)
+        XCTAssertEqual(Outbox.entryId(Data(#"{"status":"ok","entry":{"id":9,"ml":250}}"#.utf8)), 9)
+        XCTAssertNil(Outbox.entryId(Data(#"{"status":"ok","duplicate":true}"#.utf8)))
+    }
+
+    /// A sent meal (server id) and its delete both still waiting for Food's
+    /// next answer: the meal shows, then goes again.
+    func testSentMealAndItsDeleteCancelOut() throws {
+        let overlays = [
+            OutboxOverlay(kind: .food, date: "2026-10-09", id: 50, name: "Jogurt", meal: "lunch", kcal: 150, protein: 10, carbs: 12, fat: 5),
+            OutboxOverlay(kind: .removeFood, date: "2026-10-09", id: 50, kcal: 150, protein: 10, carbs: 12, fat: 5)
+        ]
+        let patched = try JSONDecoder().decode(FoodSnapshot.self, from: OutboxPatch.food(Data(food.utf8), overlays))
+        XCTAssertEqual(patched.kcal, 500)
+        XCTAssertEqual(patched.meals[0].entries.map(\.id), [7])
     }
 }

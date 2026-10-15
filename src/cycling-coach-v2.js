@@ -178,7 +178,7 @@ function capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,
   else if(sleepMinutes!=null&&sleepMinutes<420)apply(.9,L("spánek pod 7 h","sleep under 7 h"));
   if(tsb!=null&&tsb<=-25)apply(.75,L("velká únava","high fatigue")+" (TSB "+Math.round(tsb)+")");
   else if(tsb!=null&&tsb<=-15)apply(.85,L("únava","fatigue")+" (TSB "+Math.round(tsb)+")");
-  else if(tsb!=null&&tsb>=5)apply(1.15,L("jsi odpočatý","you're rested")+" (TSB "+Math.round(tsb)+")");
+  else if(tsb!=null&&tsb>=5)apply(1.15,L("tělo je odpočaté","you're rested")+" (TSB "+Math.round(tsb)+")");
   if(readiness==="red")apply(.7,L("nízká připravenost","low readiness"));
   else if(readiness==="yellow")apply(.9,L("střední připravenost","moderate readiness"));
   if(recoveryWeek)apply(.7,L("regenerační týden","recovery week"));
@@ -387,7 +387,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       const lastTouched=sys=>Date.parse(capabilities?.[sys]?.updated_at||"")||0;
       const pick=[...order].sort((a,b)=>lastTouched(a)-lastTouched(b))[0];
       kind=pick==="vo2max"?"vo2":pick;
-      rationale.push(L("Tento týden zatím žádná kvalita a jsi odpočatý"+(tsb!=null?" (TSB "+Math.round(tsb)+")":"")+" – je čas na kvalitní trénink. "+W.labels[pick]+" jsi z kvalitních systémů netrénoval nejdéle.","No quality yet this week and you're rested"+(tsb!=null?" (TSB "+Math.round(tsb)+")":"")+" – time for a quality session. Of the quality systems, "+W.labels[pick]+" is the one you trained longest ago."));
+      rationale.push(L("Tento týden zatím žádná kvalita a tělo je odpočaté"+(tsb!=null?" (TSB "+Math.round(tsb)+")":"")+" – je čas na kvalitní trénink. "+W.labels[pick]+" jsi z kvalitních systémů netrénoval nejdéle.","No quality yet this week and you're rested"+(tsb!=null?" (TSB "+Math.round(tsb)+")":"")+" – time for a quality session. Of the quality systems, "+W.labels[pick]+" is the one you trained longest ago."));
     } else if(readiness==="green"&&hard7===1&&(lastHard==null||lastHard>=2)){
       kind=domains.high<domains.moderate?"vo2":"threshold";
       rationale.push(L("Jedna kvalita v týdnu už byla a od ní "+(lastHard==null?"uběhlo několik dní":pluralWord(lastHard,"uběhl","uběhly","uběhlo")+" "+count(lastHard,"den","dny","dní"))+" – přidávám druhou, jiného typu.","There's been one quality session this week, "+(lastHard==null?"a few days":count(lastHard,"","","","day","days"))+" ago – I'm adding a second one of a different type."));
