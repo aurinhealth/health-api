@@ -87,6 +87,13 @@ enum Outbox {
         -Int.random(in: 1...999_999_999)
     }
 
+    /// The new entry's id in the server's answer: a meal's {"id"}, a drink's {"entry": {"id"}}.
+    static func entryId(_ answer: Data) -> Int? {
+        guard let json = (try? JSONSerialization.jsonObject(with: answer)) as? [String: Any] else { return nil }
+        let id = json["id"] ?? (json["entry"] as? [String: Any])?["id"]
+        return (id as? NSNumber)?.intValue
+    }
+
     /// "HH:mm" now, and "yyyy-MM-ddTHH:mm" for the drink's time.
     static func clock(_ date: Date = Date(), withDay: Bool = false) -> String {
         let f = DateFormatter()
