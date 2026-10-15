@@ -131,7 +131,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .form: return "Forma"
         case .thisWeek: return "Tento týden"
         case .sessions: return "Tréninky týdne"
-        case .plan: return "Plán dne"
+        case .plan: return "Den"
         case .zones: return "Aktivní minuty v zónách"
         case .musclesFigure: return MuscleFatigue.title
         case .musclesGlance: return L10n.isEnglish ? "Muscles at a glance" : "Svaly v kostce"
@@ -343,8 +343,7 @@ struct WidgetData {
         case .thisWeek: return training != nil
         case .sessions: return !(training?.sessions ?? []).isEmpty
         case .plan:
-            guard let t = today else { return false }
-            return !t.plan.isEmpty || (t.tonight == nil && t.steps.hour != nil)
+            return today != nil
         case .zones: return training?.zones != nil
         case .food: return today != nil
         case .drinks, .macros: return food != nil
@@ -540,11 +539,11 @@ struct PanelWidget: View {
         }
     }
 
-    /// The day's plan, and on a day without an evening plan the offer to set
-    /// the alarm and sleep goal.
+    /// The day on one line (Den, in place of Plán dne), and on a day without
+    /// an evening plan the offer to set the alarm and sleep goal.
     private func plan(_ t: TodaySnapshot) -> some View {
         VStack(spacing: 12) {
-            if !t.plan.isEmpty { PlanWidget(items: t.plan, today: t.date) }
+            DayTimeline(today: t)
             if t.tonight == nil, t.steps.hour != nil {
                 if linked {
                     RouteLink(route: .sleepSettings) { BedtimeSetupCard() }

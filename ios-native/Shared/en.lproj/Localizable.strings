@@ -2296,3 +2296,5 @@
 "Dnešní noc" = "Tonight";
 "spánek %@" = "sleep %@";
 "Otevře plán spánku" = "Opens the sleep plan";
+"+%@ tréninkem" = "+%@ from training";
+"Teď %@" = "Now %@";

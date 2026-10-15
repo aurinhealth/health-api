@@ -339,8 +339,24 @@ function sessionOf(w, date, status) {
     // A workout from the watch opens its own detail (watch-detail.js).
     ...(done && ["google-wearables", "apple-health"].includes(w.family) && w.id ? { watch: { source: w.family, id: String(w.id) } }
       : done && /^(google-wearables|apple-health):./.test(String(w.payload?.pairedWith || "")) ? { watch: { source: w.payload.pairedWith.slice(0, w.payload.pairedWith.indexOf(":")), id: w.payload.pairedWith.slice(w.payload.pairedWith.indexOf(":") + 1) } } : {}),
-    ...(done ? energyOf(w) : {})
+    ...(done ? energyOf(w) : {}),
+    ...(done ? distanceAndPower(w) : {})
   };
+}
+
+// Dnes → Den: a done ride or run's distance and average power, from
+// Intervals.icu or the watch's summary; absent when the device had none.
+function distanceAndPower(w) {
+  const p = w.payload && typeof w.payload === "object" ? w.payload : {};
+  const m = p.exercise?.metricsSummary && typeof p.exercise.metricsSummary === "object" ? p.exercise.metricsSummary : {};
+  const metric = match => {
+    const key = Object.keys(m).find(k => match.test(k) && !/zone|variab|max/i.test(k));
+    const v = key ? num(m[key] && typeof m[key] === "object" ? m[key].value : m[key]) : null;
+    return v > 0 ? (/millimeter/i.test(key) ? v / 1000 : v) : null;
+  };
+  const meters = num(p.distance) ?? metric(/^distance/i);
+  const watts = p.device_watts === false ? null : num(p.icu_average_watts ?? p.average_watts) ?? metric(/power/i);
+  return { ...(meters > 0 ? { distanceKm: round(meters / 1000, 1) } : {}), ...(watts > 0 ? { watts: Math.round(watts) } : {}) };
 }
 
 // What the device says the session burned and, when that is implausible
