@@ -26,6 +26,15 @@ struct TodaySnapshot: Decodable, Equatable {
     let trainingPlan: PlanLine?
     /// Cycle tracking, nil when off (Data/CycleModels.swift).
     var cycle: TodayCycle? = nil
+    /// The week strip above Dnes: Monday to Sunday of the day's week, each
+    /// day up to it with its readiness zone (src/app-today.js readinessWeek).
+    var week: [WeekDay]? = nil
+
+    struct WeekDay: Decodable, Equatable {
+        let date: String
+        /// "green", "yellow", "red"; nil without a readiness or after the day.
+        let zone: String?
+    }
 
     struct PlanLine: Decodable, Equatable {
         let name: String
@@ -146,6 +155,9 @@ struct TodaySnapshot: Decodable, Equatable {
         /// A hard session shown as an easy one on a hard cycle day; `title`
         /// is the original, back with "vrátit".
         var eased: Eased? = nil
+        /// Stretching or sauna: which one, and its saved row to delete it from the day.
+        var recovery: String? = nil
+        var recoveryId: Int? = nil
 
         struct Eased: Decodable, Equatable {
             let title: String

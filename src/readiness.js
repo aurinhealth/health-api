@@ -59,14 +59,50 @@ export function strainOn(rows, date) {
 // missing, provisional, checkin) with the body's own number (`body`), the
 // sleep need (`need`: need, base, hrv, debt, naps), the night and the rows.
 export function readinessFor({ date, rows = null, google = [], intervals = [], sessions = [], profile = null, checkin = null } = {}) {
-  const plain = Array.isArray(rows) ? rows.filter(r => r && r.id && r.id <= date) : readinessRows(google, intervals, date);
+  const lock = profile?.readinessLocks?.[date] || null;
+  const plain = withLock(Array.isArray(rows) ? rows.filter(r => r && r.id && r.id <= date) : readinessRows(google, intervals, date), date, lock);
   const merged = profile?.cycle ? markCyclePhases(plain, profile.cycle) : plain;
   const list = Array.isArray(sessions) ? sessions : [];
   const sleepSet = sleepSettings(profile || {});
   const need = sleepNeedFor({ date, age: num(profile?.age), goal: sleepSet.goal, strain: strainOn(merged, shift(date, -1)), rows: merged, sessions: list });
-  const night = primaryNights(list).get(date) || null;
+  const night = lock?.night || primaryNights(list).get(date) || null;
   const body = recoveryReadiness({ rows: merged, date, night, sleepNeed: need.need });
   return { ...applyCheckin(body, checkin), body, need, night, rows: merged };
+}
+
+// The morning readiness stays all day (Petr, 2026-10-14): Fitbit, Google and
+// Apple recompute the day's resting heart rate during the day and HRV,
+// breathing or temperature can arrive late, so the number used to drift (60
+// in the morning, over 70 in the evening). The first readiness of the day
+// with its night is locked (readiness-lock.js): the night and these signals
+// of the day then come from the lock; a signal the lock lacks still fills in.
+// Each group is taken from the lock whole (a value with its source).
+const LOCK_GROUPS = [["hrv", "hrvSource"], ["restingHR", "restingHRSource"], ["respiration"], ["skinTempDeviation", "skinTempSd"], ["wristTemp"]];
+const present = v => v !== null && v !== undefined && v !== "";
+
+// What to lock for `date` from a readiness (readinessFor's result): the day's
+// signals and its night, or null while the night or the number is missing.
+export function readinessLockOf(readiness, date) {
+  if (readiness?.body?.score == null || !readiness.night) return null;
+  const today = (readiness.rows || []).find(r => r && r.id === date);
+  if (!today) return null;
+  const row = {};
+  for (const group of LOCK_GROUPS) if (present(today[group[0]])) for (const key of group) if (present(today[key])) row[key] = today[key];
+  return { row, night: readiness.night };
+}
+
+function withLock(rows, date, lock) {
+  if (!lock?.row) return rows;
+  const at = rows.findIndex(r => r.id === date);
+  const live = at >= 0 ? rows[at] : { id: date };
+  const row = { ...live };
+  for (const group of LOCK_GROUPS) {
+    if (!present(lock.row[group[0]])) continue;
+    for (const key of group) { if (present(lock.row[key])) row[key] = lock.row[key]; else delete row[key]; }
+  }
+  const out = rows.slice();
+  if (at >= 0) out[at] = row; else out.push(row);
+  return out;
 }
 
 // The sleep index of a night: the model's own (sleepIndexScore) when the night

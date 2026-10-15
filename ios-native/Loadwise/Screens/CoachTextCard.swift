@@ -20,6 +20,8 @@ struct CoachTextCard: View {
     var fallbackAdvice: String? = nil
     /// Only today's screen asks for the AI text; an earlier day keeps its rule-based one.
     var live = true
+    /// Today's recovery tip under the sentence (RecoveryTipRows); it shows the card on its own too.
+    var tip: AnyView? = nil
 
     @State private var loaded: CoachText?
     @State private var showWhy = false
@@ -33,7 +35,7 @@ struct CoachTextCard: View {
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
         VStack(spacing: 0) {
-            if text != nil || advice != nil {
+            if text != nil || advice != nil || tip != nil {
                 card
             }
         }
@@ -52,11 +54,13 @@ struct CoachTextCard: View {
             }
             .foregroundStyle(Palette.indigo)
 
-            sentence
-                .font(Typo.sentence(21))
-                .foregroundStyle(Palette.ink)
-                .lineSpacing(3)
-                .fixedSize(horizontal: false, vertical: true)
+            if text != nil || advice != nil {
+                sentence
+                    .font(Typo.sentence(21))
+                    .foregroundStyle(Palette.ink)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if !chips.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -71,6 +75,11 @@ struct CoachTextCard: View {
                         }
                     }
                 }
+            }
+
+            if let tip {
+                Divider().overlay(Palette.hairline)
+                tip
             }
 
             if !basis.isEmpty {

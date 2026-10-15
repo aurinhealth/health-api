@@ -60,6 +60,39 @@ struct FoodWidget: View {
     }
 }
 
+/// Plán dne's long-press menu: "Smazat aktivitu" with the same questions as
+/// the activity's detail, or "Smazat" for a stretching or sauna.
+private struct PlanRowMenu: ViewModifier {
+    @Environment(AppModel.self) private var model
+    let item: TodaySnapshot.PlanItem
+    @State private var deleting = false
+    @State private var editingKcal = false
+
+    func body(content: Content) -> some View {
+        if model.demo {
+            content
+        } else if item.kind == "workout", item.done, let session = item.session, session.kind == "activity" {
+            content
+                .contextMenu {
+                    Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
+                }
+                .activityEditing(id: session.id, title: session.title, kcal: session.kcal,
+                                 edited: session.kcalEdited == true, deleting: $deleting, editingKcal: $editingKcal)
+        } else if item.kind == "recovery", let id = item.recoveryId {
+            content.contextMenu {
+                Button(role: .destructive) {
+                    Task {
+                        try? await model.api.deleteRecovery(id: id)
+                        await model.refresh()
+                    }
+                } label: { Label("Smazat", systemImage: "trash") }
+            }
+        } else {
+            content
+        }
+    }
+}
+
 struct PlanWidget: View {
     @Environment(AppModel.self) private var model
     let items: [TodaySnapshot.PlanItem]
@@ -94,8 +127,14 @@ struct PlanWidget: View {
 
     /// Bedtime opens Nastavení spánku, a gym session its workout mode, a ride
     /// or run its detail (done) or the planned workout.
-    @ViewBuilder
+    /// A long press deletes a done activity (as its detail's ⋯) or a saved
+    /// stretching or sauna.
     private func row(_ item: TodaySnapshot.PlanItem) -> some View {
+        rowContent(item).modifier(PlanRowMenu(item: item))
+    }
+
+    @ViewBuilder
+    private func rowContent(_ item: TodaySnapshot.PlanItem) -> some View {
         if item.kind == "pill" || item.eased != nil {
             // The pill (Vzato) and a session the cycle eased (vrátit) act in the row.
             line(item)
@@ -116,18 +155,16 @@ struct PlanWidget: View {
 
     private func line(_ item: TodaySnapshot.PlanItem) -> some View {
         HStack(spacing: 14) {
-            // A planned session has no clock: it comes after the last record.
-            Group {
+            // The kind's icon, with the clock under it (a planned session has
+            // none: it comes after the last record).
+            VStack(spacing: 3) {
+                PlanItemIcon(item: item)
                 if let time = item.time {
-                    Text(ClockText.format(time)).font(Typo.number(19)).foregroundStyle(item.done ? Palette.faint : Palette.ink)
-                        .lineLimit(1).minimumScaleFactor(0.5)
-                } else {
-                    Image(systemName: item.status == "missed" ? "xmark.circle" : "circle.dashed")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(item.status == "missed" ? Palette.rust : Palette.faint)
+                    Text(ClockText.format(time)).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.faint)
+                        .lineLimit(1).minimumScaleFactor(0.7)
                 }
             }
-            .frame(width: 46, alignment: .leading)
+            .frame(width: 46)
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.muted : Palette.ink)
                 if let eased = item.eased {
@@ -179,6 +216,49 @@ struct PlanWidget: View {
         } else if item.kind == "bedtime" {
             Image(systemName: "alarm").font(.footnote.weight(.semibold)).foregroundStyle(Palette.indigo)
                 .accessibilityLabel("Nastavit budík a cíl spánku")
+        }
+    }
+}
+
+/// Plán dne's icon: the sport, stretching, sauna, the pill or bedtime; a
+/// missed session in rust.
+private struct PlanItemIcon: View {
+    let item: TodaySnapshot.PlanItem
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(color)
+            .frame(width: 38, height: 38)
+            .background(color.opacity(0.16), in: Circle())
+            .opacity(item.done ? 0.7 : 1)
+            .accessibilityHidden(true)
+    }
+
+    private var symbol: String {
+        switch item.kind {
+        case "workout": return item.status == "missed" ? "xmark" : SportIcon.symbol(item.sport ?? "")
+        case "recovery": return item.recovery == "sauna" ? "flame.fill" : "figure.flexibility"
+        case "bedtime": return "bed.double.fill"
+        case "pill": return "pills.fill"
+        default: return "circle"
+        }
+    }
+
+    private var color: Color {
+        if item.status == "missed" { return Palette.rust }
+        switch item.kind {
+        case "workout":
+            switch item.sport {
+            case "ride": return Palette.green
+            case "run": return Palette.amber
+            case "strength": return Palette.blue
+            default: return Palette.muted
+            }
+        case "recovery": return item.recovery == "sauna" ? Palette.amber : Palette.green
+        case "bedtime": return Palette.indigo
+        case "pill": return Palette.pink
+        default: return Palette.muted
         }
     }
 }
@@ -250,25 +330,23 @@ struct RestingHRWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Klidový tep", color: Palette.rust)
-            SizedWidgetBody(size: size) {
+            SizedWidgetBody(size: size, smallShowsChart: range == nil) {
                 NumberText(value: Fmt.int(restingHR.value), unit: "bpm")
-                if let note { Text(note.text).font(Typo.caption).foregroundStyle(note.good ? Palette.green : Palette.rust) }
+                if let range, let value = restingHR.value {
+                    TileRange(value: value, low: range.lowerBound, high: range.upperBound, worseAbove: true)
+                }
             } chart: { height in
                 LineChart(values: values, color: Palette.rust,
                           lo: (values.min() ?? 40) - 3, hi: (values.max() ?? 60) + 3,
-                          band: restingHR.baseline.map { ($0 - 2)...($0 + 2) }, height: height)
+                          band: range, height: height)
             }
         }
     }
 
     private var values: [Double] { restingHR.series.map(\.value) }
 
-    private var note: (text: String, good: Bool)? {
-        guard let value = restingHR.value, let base = restingHR.baseline else { return nil }
-        let d = (value - base).rounded()
-        if d == 0 { return (L10n.tr("v normě"), true) }
-        return (L10n.f(d < 0 ? "↓ %@ pod normou" : "↑ %@ nad normou", Fmt.int(abs(d))), d < 0)
-    }
+    /// The usual resting heart rate, ±2 beats around the baseline.
+    private var range: ClosedRange<Double>? { restingHR.baseline.map { ($0 - 2)...($0 + 2) } }
 }
 
 struct HRVWidget: View {
@@ -279,9 +357,13 @@ struct HRVWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Srdce · HRV", color: Palette.green)
-            SizedWidgetBody(size: size) {
+            SizedWidgetBody(size: size, smallShowsChart: band == nil || hrv.value == nil) {
                 NumberText(value: Fmt.int(hrv.value ?? hrv.series.last?.value), unit: "ms")
-                Text(note).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
+                if let band, let value = hrv.value {
+                    TileRange(value: value, low: band.lowerBound, high: band.upperBound)
+                } else {
+                    Text(note).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
+                }
             } chart: { height in
                 LineChart(values: values, color: Palette.green,
                           lo: min(values.min() ?? 40, hrv.low ?? 40) - 4, hi: max(values.max() ?? 70, hrv.high ?? 70) + 4,
@@ -292,7 +374,7 @@ struct HRVWidget: View {
 
     private var values: [Double] { hrv.series.map(\.value) }
 
-    /// "v normě", with the resting heart rate on the wider sizes.
+    /// "30 dní" without a usual range, with the resting heart rate on the wider sizes.
     private var note: String {
         var text = L10n.tr(status)
         if size != .small, let rhr = restingHR { text += " · " + L10n.f("tep %@", Fmt.int(rhr)) }
@@ -334,9 +416,13 @@ struct WeightWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Váha", color: Palette.brown)
-            SizedWidgetBody(size: size, mediumChart: 64) {
+            SizedWidgetBody(size: size, mediumChart: 64, smallShowsChart: size != .small || goal == nil) {
                 NumberText(value: Fmt.decimal(Units.weight(weight.latest)), unit: Units.weightUnit)
-                if let change {
+                if size == .small, let goal {
+                    // The goal as the band, half a kilo (a pound) either side.
+                    TileRange(value: Units.weight(weight.latest), low: goal - 0.5, high: goal + 0.5,
+                              text: L10n.f("cíl %@", Fmt.decimal(goal)))
+                } else if let change {
                     Text(L10n.f("%@ %@ za 30 dní", change <= 0 ? "↓" : "↑", Units.weightText(abs(change))))
                         .font(Typo.caption).foregroundStyle(change <= 0 ? Palette.green : Palette.amber)
                         .lineLimit(1).minimumScaleFactor(0.8)

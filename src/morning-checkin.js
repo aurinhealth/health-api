@@ -18,6 +18,14 @@ export async function getCheckin(db, date) {
   return FEELINGS.includes(row?.feeling) ? row.feeling : null;
 }
 
+// The question left Today on 2026-10-14 (Petr: a sleepy 6 am for work is not
+// a tired body, so it must not lower the readiness). Readiness, the coaches
+// and the gym no longer read the stored answers; the table and the endpoint
+// stay for builds that still ask.
+export async function readinessCheckin() {
+  return null;
+}
+
 // null clears the day's answer.
 export async function saveCheckin(db, date, feeling) {
   if (feeling != null && !FEELINGS.includes(feeling)) throw new Error(L("Neznámá odpověď.", "Unknown answer."));

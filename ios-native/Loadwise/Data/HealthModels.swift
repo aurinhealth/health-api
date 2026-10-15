@@ -25,6 +25,11 @@ struct HealthSnapshot: Decodable, Equatable {
         /// "hrv", "restingHR", "sleep", "respiration", "skinTemp", "wristTemp" or "checkin".
         let key: String
         let points: Int
+        /// Today's value and the athlete's usual range (hrv, restingHR, sleep
+        /// in minutes); older servers and the other parts have none.
+        var value: Double? = nil
+        var low: Double? = nil
+        var high: Double? = nil
         var id: String { key }
     }
 
