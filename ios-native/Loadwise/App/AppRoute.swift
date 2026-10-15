@@ -59,6 +59,15 @@ enum AppRoute: Hashable {
         }
     }
 
+    /// A screen with work in progress (a workout being logged, built or
+    /// planned): switching tabs keeps it open instead of going back.
+    var keepsPlace: Bool {
+        switch self {
+        case .gym, .gymBuilder, .trainingMode, .liveGym, .planTemplate: return true
+        default: return false
+        }
+    }
+
     /// Hosts of shared workout links: aurin.health, older links on petrfitnessdata.eu.
     static let linkHosts: Set<String> = ["aurin.health", "www.aurin.health", "petrfitnessdata.eu", "www.petrfitnessdata.eu"]
 

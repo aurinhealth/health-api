@@ -52,6 +52,7 @@ struct TrainingCalendarCard: View {
             // An empty day shows no row at all, only the strip.
             if model.calendar[day].map({ !$0.activities.isEmpty }) ?? true {
                 CalendarDayList(date: day, today: today, day: model.calendar[day])
+                    .daySlide(date: day)
                     .padding(.top, 6)
             }
         }

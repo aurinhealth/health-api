@@ -141,31 +141,67 @@ struct TodayContent: View {
 
 /// Dnes, Zdraví and Jídlo: a swipe right goes a day back, a swipe left a day
 /// forward, as far as the arrows go. Off while the widgets are being edited.
+/// The screen follows the finger a little, and the new day slides in.
 private struct DaySwipe: ViewModifier {
     @Environment(AppModel.self) private var model
     let date: String
     var ahead: Bool
     var enabled: Bool
+    @State private var drag: CGFloat = 0
 
     func body(content: Content) -> some View {
-        content.simultaneousGesture(
-            DragGesture(minimumDistance: 30).onEnded { value in
-                let width = value.translation.width, height = value.translation.height
-                guard enabled, !model.demo, !model.loading, abs(width) > 80, abs(width) > abs(height) * 2 else { return }
-                if width > 0 {
-                    Task { await model.showDay(offset: -1) }
-                } else if DayNavigator.canGoForward(model: model, date: date, ahead: ahead) {
-                    Task { await model.showDay(offset: 1, ahead: ahead) }
-                }
-            },
-            including: enabled ? .all : .subviews
-        )
+        content
+            .offset(x: drag)
+            .daySlide(date: date)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 30)
+                    .onChanged { value in
+                        let width = value.translation.width, height = value.translation.height
+                        guard enabled, !model.demo, abs(width) > abs(height) * 2 else { return }
+                        // Less give where there is no day to go to.
+                        let open = width > 0 || DayNavigator.canGoForward(model: model, date: date, ahead: ahead)
+                        drag = width * (open ? 0.18 : 0.06)
+                    }
+                    .onEnded { value in
+                        withAnimation(.snappy(duration: 0.25)) { drag = 0 }
+                        let width = value.translation.width, height = value.translation.height
+                        guard enabled, !model.demo, !model.loading, abs(width) > 80, abs(width) > abs(height) * 2 else { return }
+                        if width > 0 {
+                            Task { await model.showDay(offset: -1) }
+                        } else if DayNavigator.canGoForward(model: model, date: date, ahead: ahead) {
+                            Task { await model.showDay(offset: 1, ahead: ahead) }
+                        }
+                    },
+                including: enabled ? .all : .subviews
+            )
+    }
+}
+
+/// When the day changes, the new one slides in from its side (a later day
+/// from the right) and fades in.
+private struct DaySlide: ViewModifier {
+    let date: String
+    @State private var shift: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: shift)
+            .opacity(1 - Double(min(abs(shift) / 40, 1)) * 0.85)
+            .onChange(of: date) { old, new in
+                shift = new > old ? 40 : -40
+                // After this frame, so the move starts from the side.
+                Task { @MainActor in withAnimation(.snappy(duration: 0.3)) { shift = 0 } }
+            }
     }
 }
 
 extension View {
     func daySwipe(date: String, ahead: Bool = false, enabled: Bool = true) -> some View {
         modifier(DaySwipe(date: date, ahead: ahead, enabled: enabled))
+    }
+
+    func daySlide(date: String) -> some View {
+        modifier(DaySlide(date: date))
     }
 }
 
