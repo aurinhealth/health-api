@@ -404,6 +404,9 @@ struct ActivityDetail: Decodable, Equatable {
     var hrZones: [Zone]? = nil
     /// The watch's copy (or the watch workout itself), for its route.
     var watch: WatchRef? = nil
+    /// Regenerace: the hours after it before hard training (src/recovery-hours.js);
+    /// nil for a short easy one, the gym or an older server.
+    var recoveryHours: Int? = nil
 
     struct Activity: Decodable, Equatable {
         let name: String?

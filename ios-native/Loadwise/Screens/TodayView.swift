@@ -120,14 +120,6 @@ struct TodayContent: View {
         }
         .padding(.top, 40)
 
-        if model.selectedDate == nil {
-            // Cycle tracking: the morning question, or the day's log. (The
-            // "Jak se dnes cítíš?" card is gone: it lowered the readiness.)
-            if let cycle = today.cycle, cycle.ask || cycle.flow > 0 {
-                TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 20)
-            }
-        }
-
         // Today's weather at the week plan's place (or the offer to set
         // it) with the athlete's status, above the key numbers.
         if model.selectedDate == nil {
@@ -136,6 +128,12 @@ struct TodayContent: View {
 
         KeyNumbers(today: today)
             .padding(.top, model.selectedDate == nil ? 12 : 28)
+
+        // Cycle tracking under the numbers it explains: the morning question,
+        // the day's bleeding, or perimenopause and menopause symptoms.
+        if model.selectedDate == nil, let cycle = today.cycle, TodayCycleCard.shows(cycle) {
+            TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
+        }
 
         // Aktivita dne: the day's activity from anything (CoachPick.swift).
         if model.selectedDate == nil { CoachPickCard().padding(.top, 16) }

@@ -16,6 +16,14 @@ final class SnapshotTests: XCTestCase {
         try render("today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
 
+    func testRecoveryTimeScreen() throws {
+        let today = DemoData.today
+        let time = try XCTUnwrap(today.recoveryTime)
+        try render("today-recovery", glow: Palette.Glow.today) {
+            RecoveryTimeContent(time: time, today: today.date, now: RecoveryTime.date("2026-10-08T08:00:00Z") ?? Date()).padding(24).padding(.top, 30)
+        }
+    }
+
     func testTrainingScreen() throws {
         try render("training", glow: Palette.Glow.training) { TrainingContent(training: DemoData.training).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
     }
