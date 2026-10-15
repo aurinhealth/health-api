@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { recordOpsEvent, withOpsScope, sendDailyOpsReport, opsReport, routeName } from "../src/ops-report.js";
+import { recordOpsEvent, withOpsScope, sendDailyOpsReport, opsReport, aiReport, routeName } from "../src/ops-report.js";
 
 test("errors a sync job logs and swallows are counted for its service", async () => {
   const db = createD1();
@@ -38,4 +38,18 @@ test("the report warns when account places are 80 % full", () => {
   assert.equal(opsReport([], { places: 200, used: 150, free: 50 }, "2026-10-15"), null);
   assert.match(opsReport([], { places: 200, used: 160, free: 40 }, "2026-10-15").text, /Obsazeno 160 z 200 \(80 %\)/);
   assert.equal(routeName("/app/api/workouts/123/feedback"), "/app/api/workouts/:id/feedback");
+});
+
+test("the AI section lists yesterday's cost per user with the costliest features and the month against the cap", () => {
+  const text = aiReport([
+    { email: "a@x.cz", feature: "assistant", calls: 10, cost: 0.08 },
+    { email: "a@x.cz", feature: "food-photo", calls: 3, cost: 0.02 },
+    { email: "b@x.cz", feature: "screen-text", calls: 4, cost: 0.004 }
+  ], [{ email: "a@x.cz", cost: 1 }, { email: "b@x.cz", cost: 0.2 }], 4);
+  assert.match(text, /Útrata AI včera: 0\.10 \$, 17 dotazů/);
+  assert.match(text, /- a@x\.cz: 0\.10 \$ \(13 dotazů\) · chat s koučem 0\.08 \$, jídlo z fotky 0\.02 \$/);
+  assert.match(text, /- a@x\.cz: 1\.00 \$ z 4\.00 \$ \(25 %\)/);
+  assert.ok(text.indexOf("a@x.cz") < text.indexOf("b@x.cz"));
+  assert.equal(aiReport([], [], 4), null);
+  assert.match(opsReport([], null, "2026-10-15", text).text, /Útrata AI včera/);
 });

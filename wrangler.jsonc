@@ -77,6 +77,8 @@
     // Anyone may create an account while shard capacity lasts (src/tenancy.js accountCapacity);
     // when it is full, new e-mails land in signup_waitlist.
     "OPEN_SIGNUP": "true",
+    // AI spend cap per account and month (src/ai-usage.js), the one planned for Pro.
+    "AI_MONTHLY_LIMIT_USD": "4",
     // Strava app (src/strava.js); public. STRAVA_CLIENT_SECRET is a Worker secret.
     "STRAVA_CLIENT_ID": "183664",
     // Ultrahuman app (src/ultrahuman.js); public. ULTRAHUMAN_CLIENT_SECRET is a Worker secret.

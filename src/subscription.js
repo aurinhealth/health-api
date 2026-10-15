@@ -30,7 +30,8 @@ export async function markAiIntroSeen(env) {
 }
 export async function subscriptionStatus(env) {
   const enforced = env.AI_PAYWALL_ENABLED === 'true';
-  let plan='free';
+  // Until Pro can be bought, everyone has Pro (testers see it unlocked, Pro icons included).
+  let plan=enforced?'free':'ai';
   if(enforced && env.DB){
     await env.DB.prepare('CREATE TABLE IF NOT EXISTS subscriptions (user_id INTEGER PRIMARY KEY,plan TEXT NOT NULL DEFAULT \'free\',valid_until TEXT)').run();
     const row=await env.DB.prepare('SELECT plan,valid_until FROM subscriptions WHERE user_id=?').bind(env.USER_ID ?? env.DB.userId).first();
