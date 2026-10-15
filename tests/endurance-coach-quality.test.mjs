@@ -185,3 +185,17 @@ test("the first three days after Nemoc stay easy, the first one only recovery", 
   assert.ok(third.recommendation.adaptations.some(a => /třetí den bez intenzity/.test(a)));
   assert.equal(coach({ ...fresh, athleteState: { status: "active", recoveredAt: day(-3) } }).recommendation.session.kind, "threshold");
 });
+
+test("the main race shapes the week's chips: no gym the day before, a reserve 2–3 days before, race day alone", () => {
+  const roles = planWeekRoles([["ride"], ["gym"], ["gym", "ride"], ["ride"], ["ride"], ["ride"], ["ride"]]);
+  const all = weekTargets({ roles, ctl: 60, days: [], today: "2026-10-05", weekStart: "2026-10-05" });
+  const race = weekTargets({ roles, ctl: 60, days: [], today: "2026-10-05", weekStart: "2026-10-05", eventDate: "2026-10-10" });
+  const on = (t, date) => t.items.filter(x => x.date === date);
+  assert.ok(on(all, "2026-10-10").length > 0);
+  assert.equal(on(race, "2026-10-10").length, 0);
+  assert.ok(on(race, "2026-10-09").every(x => x.sport !== "gym" && x.role === "recovery"));
+  assert.ok(on(race, "2026-10-07").filter(x => x.sport === "gym").every(x => x.role === "gym_upper"));
+  assert.ok(!race.items.some(x => x.date >= "2026-10-07" && x.date <= "2026-10-10" && x.role === "long"));
+  // After the race, nothing changes.
+  assert.deepEqual(on(race, "2026-10-11").map(x => x.role), on(all, "2026-10-11").map(x => x.role));
+});

@@ -290,7 +290,17 @@ const round5 = v => Math.round(v / 5) * 5;
 // `plan` (training-plans.js planLoad) replaces the usual +5 % with the plan's
 // week: { load, light }. The safety rules still win: a recovery week the data
 // calls stays one, and a ramp above 8 a week only holds.
-export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null, plan = null } = {}) {
+// The main race (athlete-focus.js) shapes the days before it: race day has no
+// other chips, the day before only an easy session without the gym, and up
+// to 3 days before the gym keeps a reserve and a long day becomes endurance.
+export function raceDayRole(x, date, eventDate) {
+  const left = eventDate ? Math.round((Date.parse(eventDate + "T12:00:00Z") - Date.parse(date + "T12:00:00Z")) / 86400000) : null;
+  if (left == null || left < 0 || left > 3) return x;
+  if (left === 0 || (left === 1 && x.sport === "gym")) return null;
+  const role = left === 1 ? "recovery" : x.sport === "gym" ? "gym_upper" : x.role === "long" ? "endurance" : x.role;
+  return role === x.role ? x : { ...x, role, label: ROLE_LABELS[role], share: SHARE[role], ...(x.sport === "gym" ? {} : { focus: ROLE_FOCUS[role] }) };
+}
+export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null, plan = null, eventDate = null } = {}) {
   const fitness = Number(ctl) > 0 ? Number(ctl) : null;
   if (!fitness) return { status: "no_fitness", items: [] };
   const base = Math.round(fitness * 7);
@@ -310,7 +320,7 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoad
   roles.forEach((day, i) => {
     const date = dateOf(i); if (date < today) return;
     const covered = sport => (info(date).sports || []).filter(s => s === sport).length;
-    for (const x of day.items || []) if ((x.slot || 0) >= covered(x.sport)) open.push({ date, ...x });
+    for (const item of day.items || []) { const x = raceDayRole(item, date, eventDate); if (x && (x.slot || 0) >= covered(x.sport)) open.push({ date, ...x }); }
   });
   let remaining = Math.max(0, target - committed - open.filter(x => x.sport === "gym").reduce((s, x) => s + (GYM_TSS[x.role] || 30), 0));
   const endurance = open.filter(x => x.sport !== "gym"), shares = endurance.reduce((s, x) => s + (x.share || 1), 0);
