@@ -287,6 +287,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     cycle: cyc ? {
       ask: askPeriodToday(cyc),
       hormonal: !!cyc.hormonal,
+      // "regular", "perimenopause" or "menopause" (cycle-model.js).
+      lifeStage: cyc.lifeStage || "regular",
       cycleDay: cyc.cycleDay ?? null,
       phase: cyc.phase ?? null,
       flow: cyc.today?.flow || 0,
