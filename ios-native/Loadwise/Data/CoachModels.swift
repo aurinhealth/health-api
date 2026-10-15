@@ -97,6 +97,14 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     var otherName: String? = nil
     var fromTime: String? = nil
     var time: String? = nil
+    /// workout: the session the server prepared for the card, a ride or run
+    /// (POST /app/api/workouts/generate) or the gym exercises (/gym/generate).
+    var preview: Preview? = nil
+
+    struct Preview: Decodable, Equatable {
+        var workout: LibraryWorkout? = nil
+        var plan: GymPreviewResponse.Plan? = nil
+    }
 
     struct Snapshot: Decodable, Equatable {
         let name: String?

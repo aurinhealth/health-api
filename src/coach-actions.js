@@ -31,8 +31,8 @@ type=status proposes a status change; sick/injured only when the user said so. s
 memory changes preferenceMemory: when the user clearly says in this message that something in preferenceMemory no longer applies ("my knee doesn't hurt any more", "I enjoy running again"), put that item's exact text in memory.forget; when it only changed ("rides only at the weekend" instead of "rides only on Tuesdays"), put its exact text in memory.update from and the new short wording, in the user's first person, in to. Otherwise leave both empty. The app shows the change under the answer and it can be undone; mention it only briefly in answer.`);
 export const ACTION_INSTRUCTIONS=actionInstructions();
 // Words the athlete must have used before the coach may propose Sick or Injured.
-export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot/i;
-export const INJURY_WORDS=/zran|bol[eíe]|bolest|injur|natáh|natah|podvrt|výron|vyron|nateklé|natekl/i;
+export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot|\bill\b|illness|unwell|fever|\bflu\b|\bcold\b|virus|sore throat|temperature/i;
+export const INJURY_WORDS=/zran|bol[eíe]|bolest|injur|natáh|natah|podvrt|výron|vyron|nateklé|natekl|\bpain|\bhurt|sprain|swollen|pulled/i;
 const SHORT_DAYS=['ne','po','út','st','čt','pá','so'],SHORT_DAYS_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MONTHS_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const shortDate=d=>!validDay(d)?'':L(SHORT_DAYS[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+'. '+Number(d.slice(5,7))+'.',SHORT_DAYS_EN[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+' '+MONTHS_EN[Number(d.slice(5,7))-1]);
 const SPORT_NAMES=()=>L({ride:'kolo',run:'běh',gym:'gym'},{ride:'ride',run:'run',gym:'gym'}),STATUS_NAMES=()=>L({active:'Aktivní',sick:'Nemoc',injured:'Zranění',on_break:'Pauza'},{active:'Active',sick:'Sick',injured:'Injured',on_break:'Rest'});
@@ -102,7 +102,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
     if(['move','rest'].includes(a.type)){
       const since=new Date(Date.parse(today+'T12:00:00Z')-86400000).toISOString().slice(0,10);
       const signals=[context.userMessage,...(context.athleteFeedback||[]).filter(f=>f.date&&f.date>=since&&f.date<=today).map(f=>f.notes)].join(' ');
-      const requestedRest=/(?:odpoč|pauz|zruš|zrus|volno|vynech|nemoc|horeč|horec|bolest|bolí|zran)/i.test(signals);
+      const requestedRest=/(?:odpoč|pauz|zruš|zrus|volno|vynech|nemoc|horeč|horec|bolest|bolí|zran|\brest\b|\bbreak\b|cancel|skip|day off|\bsick|\bill\b|fever|\bpain|\bhurt|injur)/i.test(signals);
       if(a.type==='rest'&&gymAdjustmentRequest(context.userMessage||'',context.appContext)&&!requestedRest&&!trainingStatus(context.athleteState).paused&&context.cyclingCoachV2?.readiness?.status!=='red')return [];
       const event=events.get(String(a.eventId));
       if(!event||event.date<today||!String(a.eventId).startsWith('planned:'))return [];

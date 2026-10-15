@@ -176,7 +176,7 @@ struct GymPreviewResponse: Decodable {
     let muscles: [String: [String: Double]]?
     let message: String?
 
-    struct Plan: Decodable {
+    struct Plan: Decodable, Equatable {
         let planName: String?
         let rationale: String?
         let rows: [[JSONValue]]
