@@ -36,6 +36,7 @@ export const NUTRIENTS = {
 // Macros of a table food (for references missing in the catalogue); own names, as p is phosphorus.
 const MACROS = { pro: 'g', fat: 'g', carb: 'g', kcal: 'kcal' };
 const TABLES = ['usda_sr_legacy', 'usda_foundation', 'usda_survey', 'fineli', 'ciqual', 'cofid'];
+const OPTIONAL = new Set(['fineli']);
 // Some publishers (Fineli) refuse unknown clients.
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 
@@ -399,7 +400,7 @@ export async function download(id, dir, log = console.log) {
 export async function loadTables(dir, log = console.log) {
   mkdirSync(dir, { recursive: true });
   const tables = {}, used = {};
-  const errors = [];
+  const errors = [], unavailable = [];
   for (const id of TABLES) try {
     if (id === 'ciqual') {
       let got = null;
@@ -437,9 +438,12 @@ export async function loadTables(dir, log = console.log) {
     }
   } catch (e) {
     // Keep going, so one run shows every problem (missing references too).
+    // Fineli refuses GitHub's runners (Cloudflare 403): its foods then go
+    // through the estimates like any other food instead of failing the build.
+    if (OPTIONAL.has(id)) { log(`WARNING ${id} unavailable, its foods get estimates only: ${e.message}`); unavailable.push(id); continue; }
     errors.push(`${id}: ${e.message}`); log(`ERROR ${id}: ${e.stack || e.message}`); tables[id] = new Map();
   }
-  return { tables, used, errors };
+  return { tables, used, errors, unavailable };
 }
 
 // ---- the catalogue in R2 ------------------------------------------------------
@@ -531,7 +535,7 @@ export function compute({ tables, records, log = console.log, entries = MATCHES 
     seen.add(r.k); total++;
     bySource[r.s] = (bySource[r.s] || 0) + 1;
     const slim = { k: r.k, n: r.n, cs: r.cs, en: r.en, e: r.e, p: r.p, c: r.c, f: r.f, u: r.u, s: r.s };
-    if (TABLES.includes(r.s)) generic.set(r.k, slim);
+    if (tables[r.s]) generic.set(r.k, slim);
     else if (nameMatches(slim, entries).length) candidates.push(slim);
   }
   log(`catalogue: ${total} unique foods ${JSON.stringify(bySource)}; ${candidates.length} name candidates for estimates`);
@@ -601,7 +605,7 @@ export function writeOutput(out, dir, { version, counts, used, catalogue, top, e
     estimate_flag: 'x: 1 marks values of a generic food whose name and macros match (scripts/micronutrient-matches.mjs)',
     counts, sources: [
       { id: 'usda', title: 'USDA FoodData Central (SR Legacy, Foundation Foods, FNDDS survey foods)', license: 'Public domain (CC0 1.0)', url: 'https://fdc.nal.usda.gov/', files: [used?.usda_sr_legacy, used?.usda_foundation, used?.usda_survey].filter(Boolean) },
-      { id: 'fineli', title: 'Fineli, Finnish Institute for Health and Welfare (THL)', license: 'CC BY 4.0', url: 'https://fineli.fi/', files: [used?.fineli].filter(Boolean) },
+      ...(used?.fineli ? [{ id: 'fineli', title: 'Fineli, Finnish Institute for Health and Welfare (THL)', license: 'CC BY 4.0', url: 'https://fineli.fi/', files: [used.fineli] }] : []),
       { id: 'ciqual', title: 'Anses, Ciqual French food composition table', license: 'Etalab Open Licence 2.0 (Licence Ouverte)', url: 'https://ciqual.anses.fr/', files: [used?.ciqual].filter(Boolean) },
       { id: 'cofid', title: "McCance and Widdowson's Composition of Foods Integrated Dataset (CoFID), Public Health England", license: 'Open Government Licence v3.0', url: 'https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid', files: [used?.cofid].filter(Boolean) }
     ], ...extra
@@ -649,7 +653,7 @@ if (process.argv[1]?.endsWith('build-micronutrients.mjs')) {
   if (!work || !outDir) { console.error('Usage: node scripts/build-micronutrients.mjs <work-dir> <out-dir> [--upload] [--bucket name] [--version v]'); process.exit(2); }
   const t0 = Date.now(), log = (...a) => console.log(`[${((Date.now() - t0) / 1000).toFixed(0)}s]`, ...a);
   try {
-    const { tables, used, errors } = await loadTables(join(work, 'sources'), log);
+    const { tables, used, errors, unavailable } = await loadTables(join(work, 'sources'), log);
     // Fail before the long catalogue download when a table or reference is missing.
     const early = [...errors, ...findRefs(tables).missing];
     if (early.length) throw new Error(`Build failed:\n${early.join('\n')}`);
@@ -659,7 +663,7 @@ if (process.argv[1]?.endsWith('build-micronutrients.mjs')) {
     if (errors.length) throw new Error(`Build failed:\n${errors.join('\n')}`);
     const { out, counts, top, refs, accepted } = result;
     const dir = join(outDir, version);
-    const meta = writeOutput(out, dir, { version, counts, used, catalogue: cat.version, top });
+    const meta = writeOutput(out, dir, { version, counts, used, catalogue: cat.version, top, extra: { unavailable } });
     log(`counts: ${JSON.stringify(counts)}`);
     // A few values to check by eye, also kept as sample.json for the artifact.
     const examples = {};
