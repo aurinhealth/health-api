@@ -61,6 +61,12 @@ final class AppModel {
     /// Counts every load of a tab's data: the coach's text asks again after
     /// any change (CoachTextCard), and the server writes it anew when it differs.
     private(set) var dataRevision = 0
+    /// Bumped only when Today comes from the server (not by a waiting write over it),
+    /// so Today's cards ask their own endpoints once per load.
+    private(set) var todayRevision = 0
+    /// Whether food/today currently carry waiting writes over the server's answer.
+    private var foodPatched = false
+    private var todayPatched = false
     /// The day the screens show: the chosen one, else today (so a load from
     /// 23:58 counts as stale after midnight).
     private var shownDay: String { selectedDate ?? Self.localDate(Date()) }
@@ -418,9 +424,11 @@ final class AppModel {
         guard selectedDate == day else { return }
         today = snapshot
         todayBase = data
+        todayPatched = false
         settlingToday.removeAll { settled.contains($0.id) }
         fetched[.today] = (Date(), shownDay)
         dataRevision += 1
+        todayRevision += 1
         applyOutbox()
         errorMessage = nil
         _ = noteConnection(nil)
@@ -649,8 +657,12 @@ final class AppModel {
     /// The Today and Food screens: the server's answer with the waiting writes.
     private func applyOutbox() {
         let overlays = outbox.compactMap(\.overlay)
-        if let foodBase, let value = try? JSONDecoder().decode(FoodSnapshot.self, from: OutboxPatch.food(foodBase, settlingFood.map({ $0.overlay }) + overlays)) { food = value }
-        if let todayBase, let value = try? JSONDecoder().decode(TodaySnapshot.self, from: OutboxPatch.today(todayBase, settlingToday.map({ $0.overlay }) + overlays)) { today = value }
+        // Nothing waiting and nothing shown over the server's answer: no second decode.
+        let foodLayers = settlingFood.map({ $0.overlay }) + overlays, todayLayers = settlingToday.map({ $0.overlay }) + overlays
+        if let foodBase, !foodLayers.isEmpty || foodPatched,
+           let value = try? JSONDecoder().decode(FoodSnapshot.self, from: OutboxPatch.food(foodBase, foodLayers)) { food = value; foodPatched = !foodLayers.isEmpty }
+        if let todayBase, !todayLayers.isEmpty || todayPatched,
+           let value = try? JSONDecoder().decode(TodaySnapshot.self, from: OutboxPatch.today(todayBase, todayLayers)) { today = value; todayPatched = !todayLayers.isEmpty }
     }
 
     /// Water added from the widget while the app was closed joins the outbox.
@@ -1167,6 +1179,8 @@ final class AppModel {
         api.signOut()
         SnapshotCache.clear()
         GymDayCache.clear()
+        CoachTextMemory.values = [:]
+        ThresholdCheckMemory.kept = nil
         GymHistoryCache.clear()
         if !expired {
             // Waiting writes belong to this account; the next one must not send them.
