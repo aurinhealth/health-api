@@ -64,7 +64,8 @@ final class SiriShortcutsTests: XCTestCase {
         typealias T = TodaySnapshot
         let left = T.Nutrition(kcal: 1380, target: 2650, trainingBonus: nil, protein: T.Macro(eaten: 84, target: 150),
                                carbs: T.Macro(eaten: 0, target: 0), fat: T.Macro(eaten: 0, target: 0), water: T.Water(ml: 2600, target: 2600))
-        XCTAssertEqual(SiriAnswer.foodLeft(left), "Dnes ti zbývá 1270 kcal a 66 g bílkovin.".replacingOccurrences(of: "1270", with: Fmt.int(1270)))
+        // Czech number and list formats put non-breaking spaces in "1 270" and after "a".
+        XCTAssertEqual(SiriAnswer.foodLeft(left).replacingOccurrences(of: "\u{a0}", with: " "), "Dnes ti zbývá 1 270 kcal a 66 g bílkovin.")
         let done = T.Nutrition(kcal: 2700, target: 2650, trainingBonus: nil, protein: T.Macro(eaten: 150, target: 150),
                                carbs: T.Macro(eaten: 0, target: 0), fat: T.Macro(eaten: 0, target: 0), water: T.Water(ml: 3000, target: 2600))
         XCTAssertEqual(SiriAnswer.foodLeft(done), "Kalorie, bílkoviny i vodu máš na dnes splněné.")
