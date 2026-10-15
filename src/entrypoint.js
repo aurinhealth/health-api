@@ -71,7 +71,7 @@ import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmen
 import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS, HARD_KINDS } from './week-ai.js';
 import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
-import { illnessWarning } from './illness-check.js';
+import { illnessWarning, illnessSigns } from './illness-check.js';
 import { readinessFor } from './readiness.js';
 import { lockReadiness } from "./readiness-lock.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
@@ -555,7 +555,7 @@ async function computeWeekTargets(env,ctx,start,prefs){
   const end=shiftDate(start,7),today=localToday();
   const fitness=await cached(env,ctx,'fitness:42',()=>handleDashboardApi(new Request('https://internal/app/api/fitness?days=42'),env,ctx,new URL('https://internal/app/api/fitness?days=42')).then(r=>r.json())).catch(()=>({}));
   const wellness=(fitness.wellness||[]).filter(r=>r.id<=today),ctl=[...wellness].reverse().find(r=>Number(r.ctl)>0)?.ctl;
-  const loadOn=date=>{const r=wellness.find(x=>x.id===date);return Number(r?.ctlLoad??r?.atlLoad)||0;};
+  const loadOn=date=>{const r=wellness.find(x=>x.id===date);return Number(r?.ctlLoad??r?.atlLoad??r?.load)||0;};
   let lastWeekLoad=0;for(let i=-7;i<0;i++)lastWeekLoad+=loadOn(shiftDate(start,i));
   const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local','wahoo') AND data_type IN ('planned-workout','activity')) OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,1)).all().catch(()=>({results:[]}))).results||[];
   const gymDays=new Set(((await env.DB.prepare("SELECT DISTINCT workout_date FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<?").bind(env.USER_ID,start,end).all().catch(()=>({results:[]}))).results||[]).map(r=>r.workout_date));
@@ -572,7 +572,7 @@ async function computeWeekTargets(env,ctx,start,prefs){
   const weather=await weekWeather(prefs.location,start).catch(()=>({}));
   const runCap=weeklyRunCap(await planningHistory(env,start,28).catch(()=>[]),start);
   const plan=await planForWeek(env,ctx,start),roles=planWeekRoles(prefs.days,plan.roles);
-  let targets=weekTargets({roles,ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),hrvDown:hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),rampRate:[...wellness].reverse().find(r=>Number.isFinite(Number(r.rampRate)))?.rampRate??null,days,today,weekStart:start,plan:plan.load});
+  let targets=weekTargets({roles,ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),hrvDown:hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),rampRate:[...wellness].reverse().find(r=>Number.isFinite(Number(r.rampRate)))?.rampRate??null,days,today,weekStart:start,plan:plan.load,eventDate:plan.plan?null:athleteFocus(await dashboardProfile(env).catch(()=>null),today).event?.date||null});
   // A plan needs its sessions even before there is a fitness history.
   if(plan.plan&&targets.status!=='ok')targets=estimatedTargets(roles,start,today,days);
   return capWeekTargets(capRunVolume(plan.apply(targets),runCap,runCommitted),prefs,[],weather);
@@ -784,10 +784,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       const [inputs,prefs,plan]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),getWeekPlan(env.DB,date).catch(()=>null),planForWeek(env,ctx,mondayOfDate(date)).catch(()=>null)]);
       const week={prefs,plan,targets:prefs?await computeWeekTargets(env,ctx,mondayOfDate(date),prefs).catch(()=>null):null};
-      const [ride,run]=await Promise.all([defaultDayCoach(env,inputs,date,'ride',week),defaultDayCoach(env,inputs,date,'run',week)]);
+      const athlete=await getAthleteState(env.DB).catch(()=>null);
+      const [ride,run]=await Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]);
       const [profiles,recent,state,gym]=await Promise.all([loadProfiles(env.DB,env.USER_ID).catch(()=>({})),recentKinds(env.DB,env.USER_ID,date),pickState(env.DB,env.USER_ID,date),readGymPlan(env.DB,date).catch(()=>null)]);
       const planned=[...(ride.constraints?.plannedToday&&activityKindOf(ride.constraints.plannedToday.type||ride.constraints.plannedToday.name)==='ride'?['ride']:[]),...(run.constraints?.plannedToday&&activityKindOf(run.constraints.plannedToday.type||run.constraints.plannedToday.name)==='run'?['run']:[]),...((gym?.values||[]).length>7?['gym']:[])];
-      const ranked=rankOptions({ride,run,mainSport:profiles?.effective?.mainSport||'general',sports:recent.sports,today:recent.today,declines:state.declines,planned,done:recent.done});
+      // Nemoc, Zranění or Pauza leaves only rest; signs of an illness drop the sauna.
+      const illness=illnessSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile})).length>0;
+      const ranked=rankOptions({ride,run,mainSport:profiles?.effective?.mainSport||'general',sports:recent.sports,today:recent.today,declines:state.declines,planned,done:recent.done,athleteStatus:athlete?.status||'active',illness});
       // The ready workouts stay while the options do (pickSignature), so a sync
       // that changes nothing asks the AI nothing.
       const signature=pickSignature(ranked);
@@ -1254,7 +1257,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         let workout=null;
         if(library){
           const w=renderForEnvironment(library,'outdoor');let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
-          w.steps=plan.sport==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});
+          w.steps=plan.sport==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones,hrZones:thresholds.runHrZones?.length?thresholds.runHrZones:thresholds.hrZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones,hrZones:thresholds.hrZones});
           workout={id:w.id,name:planName(w.name),sport:w.sport,environment:w.environment,duration_minutes:w.duration_minutes,target_load:w.target_load,intensity_factor:w.intensity_factor,description:w.description,steps:w.steps};
         }
         sessions.push({date:x.date,label:planName(x.label),kind:x.plan.kind,minutes:x.minutes,workoutId:x.plan.workoutId,workout,done:done.has(x.date),editable:x.date>=today&&!done.has(x.date),edited:Boolean(plan.edits?.[x.plan.movedFrom||x.date])});
@@ -1993,7 +1996,7 @@ async function pickDetails(env,ctx,ranked,date,gymPlan){
         const g=await post('/app/api/workouts/generate',{date,sport:o.kind,environment:'auto',ai:o.best===true}),w=g?.status==='ok'?g.workout:null;
         if(!w)return;
         let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
-        const steps=o.kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});
+        const steps=o.kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones,hrZones:thresholds.runHrZones?.length?thresholds.runHrZones:thresholds.hrZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones,hrZones:thresholds.hrZones});
         const {structure_json,...workout}=w;
         out[o.kind]={workout:{...workout,steps,ai:w.ai||g.ai||null},lines:workoutLines(steps,o.kind),minutes:Math.round(Number(w.duration_minutes)||0)||null};
       }else if(o.kind==='gym'){
@@ -2036,7 +2039,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(!event&&!library)return Response.json({status:'error',message:L('Trénink nebyl nalezen.', 'The workout wasn\'t found.')},{status:404});
       const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor'):plannedEventWorkout(event),kind=w.sport==='run'?'run':'ride';
       let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
-      w.steps=kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});
+      w.steps=kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones,hrZones:thresholds.runHrZones?.length?thresholds.runHrZones:thresholds.hrZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones,hrZones:thresholds.hrZones});
       return Response.json({status:'ok',source:library?'library':'intervals',workout:w,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/search'&&request.method==='GET'){
@@ -2046,7 +2049,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // the day's time), so the list ranks what the proposal above it says.
       const prefs=await getWeekPlan(env.DB,date).catch(()=>null),plan=prefs?await planForWeek(env,ctx,mondayOfDate(date)).catch(()=>null):null;
       const week={prefs,plan,targets:prefs?await computeWeekTargets(env,ctx,mondayOfDate(date),prefs).catch(()=>null):null};
-      const coach=await defaultDayCoach(env,await loadCoachInputs(env,ctx,internalAuth,date),date,sport,week);
+      const coach=await defaultDayCoach(env,{...await loadCoachInputs(env,ctx,internalAuth,date),athleteState:await getAthleteState(env.DB).catch(()=>null)},date,sport,week);
       const context={readiness:coach.readiness.status,hardBikeDaysRolling7d:coach.load.hardBikeDaysRolling7d,phase:String(url.searchParams.get('phase')||'')};
       // Without a length the list is ranked by the length of the coach's
       // session (the free time is only its limit), indoors shorter, as the
@@ -2063,7 +2066,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const [result,thresholds]=await Promise.all([searchWorkoutLibrary(env.DB,filters,context),cached(env,ctx,'thresholds',()=>athleteThresholds(env))]);
       result.autoDuration=autoDuration;result.coachPick={system:filters.preferredSystem||null,durationMinutes:autoDuration?.durationMinutes||null};
       // Step rows with watts or paces for each card.
-      for(const w of result.workouts){let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=sport==='run'?stepRows(structure,{environment:w.environment,sport,thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones});
+      for(const w of result.workouts){let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=sport==='run'?stepRows(structure,{environment:w.environment,sport,thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones,hrZones:thresholds.runHrZones?.length?thresholds.runHrZones:thresholds.hrZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones,hrZones:thresholds.hrZones});
         // How to ride or run it, fuelling and terrain, as the web's workout card explains it.
         try{const e=explainWorkout(w,{environment:w.environment||filters.environment,thresholds,sport});w.guide={title:e.title,how:e.how||[],fueling:e.fueling||[],environment:e.environment||[]};}catch{w.guide=null;}}
       return Response.json({...result,date,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,source:thresholds.source,runThresholdPace:thresholds.runThresholdPace,runPaceSource:thresholds.runPaceSource},rankingContext:{...context,tsb:coach.readiness.tsb,readinessScore:coach.readiness.score},sourcePolicy:sport==='run'?L('Vlastní PFD běžecké tréninky, publikované výzkumné protokoly (Helgerud, Billat, Seiler, Daniels) a veřejně popsané metody s uvedením zdroje. Placené plány a aplikace se nekopírují.', 'Own PFD running workouts, published research protocols (Helgerud, Billat, Seiler, Daniels) and publicly described methods with their source. Paid plans and apps are not copied.'):L('Vlastní PFD workouty, publikované výzkumné protokoly a veřejně popsané tréninky profi s uvedením zdroje. Proprietární knihovny (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) se nekopírují.', 'Own PFD workouts, published research protocols and publicly described pro workouts with their source. Proprietary libraries (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) are not copied.')},{headers:{'Cache-Control':'no-store'}});
@@ -2097,7 +2100,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const planFocus=planned?({quality:systemOf(genSport,planned.family),test:'threshold',long:'long_endurance',easy:'endurance',recovery:'recovery'})[planned.kind]||null:null;
       const roleFocus=askedFocus||planFocus||weekRole?.focus;
       const goalOf=focus=>body.phase||focus?{...(body.phase?{phase:String(body.phase)}:{}),...(focus?{focus}:{})}:null;
-      const coachInputs={...await loadCoachInputs(env,ctx,internalAuth,date),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),sport:genSport};
+      const coachInputs={...await loadCoachInputs(env,ctx,internalAuth,date),athleteState:await getAthleteState(env.DB).catch(()=>null),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),sport:genSport};
       let coach=buildCyclingCoachV2({...coachInputs,goal:goalOf(roleFocus)});
       // A hard kind asked for on a red morning gives way to the coach's own choice.
       if(askedFocus&&!['recovery','endurance','long_endurance'].includes(askedFocus)&&coach.readiness?.status==='red')coach=buildCyclingCoachV2({...coachInputs,goal:goalOf(planFocus||weekRole?.focus)});
