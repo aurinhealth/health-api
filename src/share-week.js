@@ -81,5 +81,5 @@ export function buildShareWeek({ date, today, rows = [], gymDays = [], google = 
   };
   const days = weekDays(monday, { today, activities, gymDays, scores });
   const before = weekDays(shift(monday, -7), { today, activities, gymDays, scores });
-  return { start: monday, end: shift(monday, 6), days, week: totals(days, activities, nights), previous: totals(before, activities, nights) };
+  return { start: monday, end: shift(monday, 6), today, days, week: totals(days, activities, nights), previous: totals(before, activities, nights) };
 }
