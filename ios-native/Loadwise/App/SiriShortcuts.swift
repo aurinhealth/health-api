@@ -4,7 +4,7 @@ import Foundation
 /// Siri and the Shortcuts app: today's readiness, water and a weigh-in, without
 /// opening the app. The intents run in the app's process (launched in the
 /// background when needed), so they reuse the signed-in model when it is there.
-/// The phrases are Czech here; Resources/en.lproj/AppShortcuts.strings has the
+/// The phrases are Czech here; Shared/en.lproj/AppShortcuts.strings has the
 /// English. Siri itself speaks no Czech: a Czech phone's Siri in English uses
 /// the English phrases, the Shortcuts app and Spotlight show the Czech ones.
 struct AurinShortcuts: AppShortcutsProvider {
@@ -55,28 +55,31 @@ struct ReadinessTodayIntent: AppIntent {
     }
 }
 
-/// "Zapsat váhu": a weigh-in in kg the way Zdraví → Váha saves it (the outbox
-/// without signal, Apple Health when switched on in Synchronizace).
+/// "Zapsat váhu": a weigh-in the way Zdraví → Váha saves it (the outbox
+/// without signal, Apple Health when switched on in Synchronizace). The number
+/// is in the app's units, kg or lb, like the sheet there.
 struct LogWeightIntent: AppIntent {
     static var title: LocalizedStringResource = "Zapsat váhu"
-    static var description = IntentDescription("Zapíše dnešní váhu v kilogramech.")
+    static var description = IntentDescription("Zapíše dnešní váhu.")
 
-    /// What Zdraví → Váha accepts.
+    /// What Zdraví → Váha accepts, in kg.
     static let range: ClosedRange<Double> = 30...300
 
-    @Parameter(title: "Váha v kg", requestValueDialog: IntentDialog("Kolik vážíš v kilogramech?"))
-    var kg: Double
+    @Parameter(title: "Váha", requestValueDialog: IntentDialog("Kolik vážíš?"))
+    var weight: Double
 
     init() {}
 
-    init(kg: Double) {
-        self.kg = kg
+    init(weight: Double) {
+        self.weight = weight
     }
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        let kg = Units.kg(weight)
         guard Self.range.contains(kg) else {
-            return .result(dialog: SiriAnswer.dialog(L10n.tr("Váha musí být mezi 30 a 300 kg.")))
+            let text = L10n.f("Váha musí být mezi %@ a %@.", Units.weightText(Self.range.lowerBound, digits: 0), Units.weightText(Self.range.upperBound, digits: 0))
+            return .result(dialog: SiriAnswer.dialog(text))
         }
         let sent: Bool
         do {
@@ -134,10 +137,9 @@ enum SiriAnswer {
         return text
     }
 
-    /// "Zapsáno 82,4 kg" (kg as asked for, also with imperial units on).
+    /// "Zapsáno 82,4 kg." in the app's units.
     static func weight(kg: Double, sent: Bool) -> String {
-        let number = kg.formatted(.number.precision(.fractionLength(0...1)).locale(L10n.locale))
-        let text = L10n.f("Zapsáno %@ kg.", number)
+        let text = L10n.f("Zapsáno %@.", Units.weightText(kg))
         return sent ? text : text + " " + L10n.tr("Odešle se, až bude signál.")
     }
 

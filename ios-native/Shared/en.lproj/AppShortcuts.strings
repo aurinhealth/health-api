@@ -1,0 +1,10 @@
+/* Siri and Shortcuts phrases (App/SiriShortcuts.swift); the keys are the Czech phrases. */
+"Připravenost dnes v aplikaci ${applicationName}" = "Today's readiness in ${applicationName}";
+"Jakou mám dnes připravenost v aplikaci ${applicationName}" = "What's my readiness today in ${applicationName}";
+"${applicationName} připravenost" = "${applicationName} readiness";
+"Zapsat vodu v aplikaci ${applicationName}" = "Log water in ${applicationName}";
+"Přidat sklenici vody v aplikaci ${applicationName}" = "Add a glass of water in ${applicationName}";
+"${applicationName} voda" = "${applicationName} water";
+"Zapsat váhu v aplikaci ${applicationName}" = "Log weight in ${applicationName}";
+"Zapiš moji váhu do aplikace ${applicationName}" = "Log my weight in ${applicationName}";
+"${applicationName} váha" = "${applicationName} weight";

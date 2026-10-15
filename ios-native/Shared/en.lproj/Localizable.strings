@@ -805,7 +805,6 @@
 "Zapsat trénink ručně" = "Log a workout manually";
 "Zapsat váhu" = "Log weight";
 "Zapsáno do Intervals.icu" = "Written to Intervals.icu";
-"Zapíše sklenici vody do dnešního pití." = "Logs a glass of water to today's drinks.";
 "Zatím bez čísla" = "No score yet";
 "Zatím nic" = "Nothing yet";
 "Zatím nic. Přidej první jídlo dne." = "Nothing yet. Add your first meal of the day.";
@@ -2335,3 +2334,19 @@
 "Otevře plán spánku" = "Opens the sleep plan";
 "+%@ tréninkem" = "+%@ from training";
 "Teď %@" = "Now %@";
+
+/* Siri and Shortcuts (App/SiriShortcuts.swift, Shared/QuickDrink.swift) */
+"Připravenost dnes" = "Today's readiness";
+"Řekne dnešní připravenost a co s ní dnes dělat." = "Tells you today's readiness and what to do with it.";
+"Zapsat vodu" = "Log water";
+"Zapíše vodu do dnešního pití." = "Logs water to today's drinks.";
+"Zapíše dnešní váhu." = "Logs today's weight.";
+"Kolik vážíš?" = "How much do you weigh?";
+"Váha musí být mezi %@ a %@." = "Weight must be between %@ and %@.";
+"Nejdřív se přihlas v aplikaci Aurin." = "Sign in to Aurin first.";
+"Dnešní připravenost zatím není. Ukáže se, až hodinky nahrají dnešní spánek." = "There's no readiness for today yet. It shows up once your watch uploads last night's sleep.";
+"Připravenost je dnes %d, %@." = "Your readiness today is %d, %@.";
+"Připravenost je dnes %d." = "Your readiness today is %d.";
+"Zapsáno %@." = "Logged %@.";
+"Odešle se, až bude signál." = "It goes out once you have signal.";
+"Zapsáno %@ vody." = "Logged %@ of water.";
