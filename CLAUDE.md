@@ -18,8 +18,9 @@ availability) updates the overview in the same pull request. The site is in Engl
 - The privacy policy and the terms also have a Czech version (`?lang=cs`, linked from the page and the
   footer) that says the same as the English one; change both together.
 - The privacy, terms and support pages are legal texts that Google verification reads: change them only
-  when the way data is handled changes, and keep the Google Health disclosure on the overview word for word
-  (`tests/site-pages.test.mjs`).
+  when the way data is handled changes. The Google Health disclosure stays word for word
+  (`googleDisclosure` in `src/site-pages.js`, `tests/site-pages.test.mjs`). It is off the overview for now
+  (`GOOGLE_DISCLOSURE_ON_HOME`) and goes back on before the app is sent to Google for verification.
 
 The "Website copy" workflow flags app pull requests that leave the overview untouched.
 

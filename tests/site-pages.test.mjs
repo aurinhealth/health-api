@@ -1,15 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
-import {overviewPage,privacyPage,termsPage,supportPage,robotsTxt,sitemapXml} from '../src/site-pages.js';
+import {overviewPage,privacyPage,termsPage,supportPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
   assert.match(html,/<title>Aurin/);
-  assert.match(html,/Google Health data disclosure/);
+  // The disclosure is off the overview until Petr asks Google to verify the app; the switch brings it back.
+  assert.equal(html.includes('Google Health data disclosure'),GOOGLE_DISCLOSURE_ON_HOME);
   for(const page of [overviewPage,privacyPage,termsPage,supportPage])assert.doesNotMatch(await page().text(),/sheet/i,'Google Sheets is gone; the public pages must not mention it');
-  assert.match(html,/may read fitness, health-metric, sleep, and nutrition data from Google Health/);
-  assert.match(html,/add nutrition logs to Google Health when you ask/);
+  assert.match(googleDisclosure(),/may read fitness, health-metric, sleep, and nutrition data from Google Health/);
+  assert.match(googleDisclosure(),/add nutrition logs to Google Health when you ask/);
   for(const href of ['/privacy','/terms','/support'])assert.match(html,new RegExp('href="'+href+'"'),href);
   assert.doesNotMatch(html,/href="\/app"/,'the web app is switched off');
 });
@@ -72,13 +73,12 @@ test('the overview speaks English and keeps the App Store label',async()=>{
   assert.match(en,/Coming soon to the App Store/);
   assert.match(en,/Train for how you feel today/);
   assert.doesNotMatch(en,/href="\/app"/);
-  assert.match(en,/Google Health data disclosure/);
   assert.match(await privacyPage().text(),/Google user data is used only to provide/);
 });
 
 test('the privacy policy and support page cover what Google verification asks for',async()=>{
   const en=path=>visit(path,{'accept-language':'en'});
-  const home=await overviewPage(en('/')).text(),privacy=await privacyPage(en('/privacy')).text(),support=await supportPage(en('/support')).text();
+  const home=googleDisclosure(),privacy=await privacyPage(en('/privacy')).text(),support=await supportPage(en('/support')).text();
   const limitedUse=[/Aurin’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="https:\/\/developers\.google\.com\/terms\/api-services-user-data-policy">Google API Services User Data Policy<\/a>, including the Limited Use requirements\./,
     /The use of information received from Google Health API and\/or Developer Tools will adhere to the <a href="https:\/\/developers\.google\.com\/health\/policies\/health-api-developer-user-data-policy">Google Health API Developer and User Data Policy<\/a>, including the Limited Use requirements\./];
   for(const statement of limitedUse){assert.match(home,statement);assert.match(privacy,statement);}
