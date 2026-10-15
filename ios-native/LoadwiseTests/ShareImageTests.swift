@@ -94,7 +94,7 @@ final class ShareImageTests: XCTestCase {
                     options.dark = dark
                     options.clear = clear
                     options.sleep = ["HRV", "Tep", "Hluboký"]
-                    let card = ShareCard(kind: kind, options: options, day: day, workout: ride, food: food)
+                    let card = ShareCard(kind: kind, options: options, day: day, workout: ride, food: food, week: .sample, milestones: .sample)
                     let image = try XCTUnwrap(ShareExport.image(card, clear: clear), "\(kind) \(i) did not render")
                     XCTAssertEqual(image.size.width * image.scale, 1080)
                     let data = try XCTUnwrap(image.pngData())
@@ -108,5 +108,45 @@ final class ShareImageTests: XCTestCase {
         let card = ShareCard(kind: .day, options: morning, day: day)
         let data = try XCTUnwrap(ShareExport.image(card, clear: false)?.pngData())
         try data.write(to: outputDirectory.appending(path: "share-day-1-morning.png"))
+        // Milník: the days in a row on the poster and the way there.
+        for variant in [0, 1] {
+            var options = ShareOptions()
+            options.variant = variant
+            options.milestone = "streak"
+            let streak = ShareCard(kind: .milestone, options: options, milestones: .sample)
+            let png = try XCTUnwrap(ShareExport.image(streak, clear: false)?.pngData())
+            try png.write(to: outputDirectory.appending(path: "share-milestone-\(variant + 1)-streak.png"))
+        }
+    }
+
+    func testWeekAndMilestoneData() throws {
+        let week = ShareWeek.sample
+        XCTAssertEqual(ShareWeek.value("Trénink", week.week)?.value, "7:40")
+        XCTAssertEqual(ShareWeek.delta("Trénink", now: 460, before: 395), "+1:05 h")
+        XCTAssertEqual(ShareWeek.delta("Běh", now: 18, before: 22), "−4")
+        XCTAssertEqual(ShareWeek.delta("Zátěž", now: 486, before: 412), "+74")
+        XCTAssertNil(ShareWeek.value("Kolo", ShareWeek.Totals()))
+        XCTAssertEqual(ShareText.range("2026-10-12", "2026-10-18"), "12.–18. 10.")
+        XCTAssertEqual(ShareText.range("2026-09-28", "2026-10-04"), "28. 9. – 4. 10.")
+        XCTAssertEqual(ShareText.weekday("2026-10-12"), "Po")
+
+        let json = #"{"since":"2026-06-12","today":"2026-10-15","items":[{"key":"run","value":25,"unit":"km","total":26,"since":"2026-06-12","reachedOn":"2026-10-14","sessions":2,"minutes":120,"elevation":0,"bars":[{"date":"2026-10-13","value":12},{"date":"2026-10-14","value":14}],"start":0}],"record":null}"#
+        let decoded = try JSONDecoder().decode(ShareMilestones.self, from: Data(json.utf8))
+        let run = try XCTUnwrap(decoded.item(nil))
+        XCTAssertEqual(run.path, [0, 12, 26])
+        XCTAssertEqual(run.noun, "naběhaných kilometrů")
+        XCTAssertEqual(run.sinceText, "od 12. června")
+        XCTAssertEqual(run.stat("Tréninky")?.label, "Běhy")
+        XCTAssertNil(run.stat("Převýšení"))
+        XCTAssertNil(decoded.record)
+        XCTAssertEqual(ShareMilestones.sample.item("streak")?.noun, "dní v řadě")
+        XCTAssertEqual(ShareMilestones.Record.duration(1200), "20 minut")
+        XCTAssertEqual(ShareMilestones.Record.duration(60), "1 minuta")
+        XCTAssertTrue(ShareMilestones(items: [], record: nil).isEmpty)
+
+        let weekJSON = #"{"start":"2026-10-12","end":"2026-10-18","today":"2026-10-15","days":[{"date":"2026-10-12","readiness":64,"zone":"green","sport":"run","minutes":50,"sessions":1,"tss":60}],"week":{"minutes":50,"sessions":1,"tss":60,"rideKm":0,"runKm":10,"sleepMinutes":420,"readiness":64},"previous":{"minutes":0,"sessions":0,"tss":0,"rideKm":0,"runKm":0,"sleepMinutes":null,"readiness":null}}"#
+        let parsed = try JSONDecoder().decode(ShareWeek.self, from: Data(weekJSON.utf8))
+        XCTAssertEqual(parsed.days.first?.readiness, 64)
+        XCTAssertNil(parsed.previous.readiness)
     }
 }
