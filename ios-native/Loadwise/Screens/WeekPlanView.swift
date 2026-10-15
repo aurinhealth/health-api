@@ -306,7 +306,7 @@ struct WeekPlanView: View {
                                         environment: sport == "gym" ? nil : item.environment ?? "outdoor",
                                         label: item.label, reason: item.reason, role: item.role)
             }
-            if sessions.isEmpty { error = L10n.tr("Na zvolené dny není čas. Uprav čas tento týden.") }
+            if sessions.isEmpty { error = L10n.tr("Na zvolené dny nezbývá dost času na trénink. Přidej čas nahoře.") }
             await buildAll()
         } catch {
             self.error = error.localizedDescription
@@ -368,7 +368,7 @@ struct WeekPlanView: View {
                 }
                 return next
             }
-            if sessions.isEmpty { error = L10n.tr("Na tento týden není co navrhnout.") }
+            if sessions.isEmpty { error = L10n.tr("Na tento týden nevyšel žádný trénink.") }
             if correction != nil { self.correction = "" }
             await buildAll()
         } catch {

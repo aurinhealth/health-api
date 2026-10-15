@@ -253,7 +253,7 @@ enum DeviceLocation {
         case denied, unavailable
         var errorDescription: String? {
             switch self {
-            case .denied: return L10n.tr("Aurin nemá přístup k poloze. Povol ho v Nastavení iPhonu → Aurin → Poloha.")
+            case .denied: return L10n.tr("Aurin nemá přístup k poloze. Povol ho v Nastavení iPhonu → Soukromí a zabezpečení → Polohové služby → Aurin.")
             case .unavailable: return L10n.tr("Polohu se nepodařilo zjistit. Zkus to znovu venku nebo vyhledej místo.")
             }
         }

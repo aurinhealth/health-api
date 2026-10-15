@@ -10,7 +10,7 @@ test("an app built for an older API is told to update", async () => {
   assert.equal(response.status, 426);
   const body = await response.json();
   assert.equal(body.status, "update_required");
-  assert.match(body.message, /Nainstaluj novou/);
+  assert.match(body.message, /Nainstaluj novější verzi/);
 });
 
 test("the Worker checks the app version before anything else runs", () => {
@@ -22,7 +22,7 @@ test("the Worker checks the app version before anything else runs", () => {
 
 test("the message follows the app language", async () => {
   const body = await appUpdateRequired(request({ [APP_API_HEADER]: "0", "X-Interface-Language": "en" })).json();
-  assert.match(body.message, /Install the new one/);
+  assert.match(body.message, /Install a newer version/);
 });
 
 test("a current app, a garbled header and requests without it", () => {

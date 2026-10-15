@@ -127,6 +127,7 @@ p{margin:0}
 .hub .node img.pad{padding:4%}
 .uh-tile{position:relative;display:grid;place-items:center;width:100%;height:100%;border-radius:26%;background:#000}
 .uh-tile img{width:56%!important;height:auto!important}
+.uh-tile.word img{width:78%!important}
 .legend{display:flex;gap:20px;justify-content:center;margin-top:16px;font-size:14px;color:var(--muted)}
 .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
 .legend .in{background:var(--green)}.legend .out{background:var(--amber-bar)}
@@ -406,21 +407,24 @@ export function overviewPage(request) {
     {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt=""></span>',
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'VO₂max'], ['thermo', 'temperature']], sends: [], none: 'nothing, Aurin only reads the ring'},
     {id: 'whoop', name: 'WHOOP', logo: '<img src="/site/logos/whoop.svg" alt="">',
-      reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'breathing rate'], ['drop', 'blood oxygen']], sends: [], none: 'nothing, Aurin only reads WHOOP'}];
+      reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'breathing rate'], ['drop', 'blood oxygen']], sends: [], none: 'nothing, Aurin only reads WHOOP'},
+    {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt=""></span>',
+      reads: [['bike', 'finished rides and runs'], ['bolt', 'power and TSS'], ['heart', 'heart rate']],
+      sends: [['calendar', 'planned workouts, to ELEMNT and KICKR']]}];
   // Two curves per service: dots and what they carry flow along one into Aurin and along the other back
   // out. A wide layout for computers (left and right of the mark) and a tall one for phones (above and
   // below it), so the curves stay long arcs on a narrow screen instead of hiding behind the logos.
-  // A logo straight under the mark (WHOOP) gets a loop instead: in on its left, back on its right.
+  // A logo straight under or over the mark (WHOOP, Wahoo) gets a loop instead: in on its left, back on its right.
   const LAYOUTS = {
-    wide: {w: 520, h: 360, c: [260, 180], at: [[84, 72], [84, 288], [436, 72], [436, 288], [260, 318]],
-      into: ([x, y], [cx, cy]) => x === cx ? `M${x - 8} ${y}C${x - 150} ${y + 6} ${x - 130} ${cy + 12} ${cx - 8} ${cy}`
+    wide: {w: 520, h: 360, c: [260, 180], at: [[84, 72], [84, 288], [436, 72], [436, 288], [260, 318], [260, 42]],
+      into: ([x, y], [cx, cy]) => x === cx ? `M${x - 8} ${y}C${x - 150} ${y + 6 * Math.sign(y - cy)} ${x - 130} ${cy + 12 * Math.sign(y - cy)} ${cx - 8} ${cy}`
         : `M${x} ${y - 8}C${(x + cx) / 2} ${y - 8} ${(x + cx) / 2} ${cy - 8} ${cx} ${cy - 8}`,
-      back: ([x, y], [cx, cy]) => x === cx ? `M${cx + 8} ${cy}C${x + 130} ${cy + 12} ${x + 150} ${y + 6} ${x + 8} ${y}`
+      back: ([x, y], [cx, cy]) => x === cx ? `M${cx + 8} ${cy}C${x + 130} ${cy + 12 * Math.sign(y - cy)} ${x + 150} ${y + 6 * Math.sign(y - cy)} ${x + 8} ${y}`
         : `M${cx} ${cy + 8}C${(x + cx) / 2} ${cy + 8} ${(x + cx) / 2} ${y + 8} ${x} ${y + 8}`},
-    tall: {w: 340, h: 520, c: [170, 260], at: [[70, 74], [70, 380], [270, 74], [270, 380], [170, 468]],
+    tall: {w: 340, h: 520, c: [170, 260], at: [[70, 74], [70, 380], [270, 74], [270, 380], [170, 468], [170, 52]],
       // Down (or up) from the logo, then a wide turn into the mark; in and out never cross.
-      into: ([x, y], [cx, cy]) => { if (x === cx) return `M${x - 7} ${y}C${x - 84} ${y + 4} ${x - 74} ${cy + 14} ${cx - 7} ${cy}`; const ix = x + (x < cx ? 7 : -7), iy = y < cy ? cy - 8 : cy + 8; return `M${ix} ${y}C${ix} ${iy} ${ix} ${iy} ${cx} ${iy}`; },
-      back: ([x, y], [cx, cy]) => { if (x === cx) return `M${cx + 7} ${cy}C${x + 74} ${cy + 14} ${x + 84} ${y + 4} ${x + 7} ${y}`; const ox = x - (x < cx ? 7 : -7), oy = y < cy ? cy + 8 : cy - 8; return `M${cx} ${oy}C${ox} ${oy} ${ox} ${oy} ${ox} ${y}`; }}};
+      into: ([x, y], [cx, cy]) => { if (x === cx) return `M${x - 7} ${y}C${x - 84} ${y + 4 * Math.sign(y - cy)} ${x - 74} ${cy + 14 * Math.sign(y - cy)} ${cx - 7} ${cy}`; const ix = x + (x < cx ? 7 : -7), iy = y < cy ? cy - 8 : cy + 8; return `M${ix} ${y}C${ix} ${iy} ${ix} ${iy} ${cx} ${iy}`; },
+      back: ([x, y], [cx, cy]) => { if (x === cx) return `M${cx + 7} ${cy}C${x + 74} ${cy + 14 * Math.sign(y - cy)} ${x + 84} ${y + 4 * Math.sign(y - cy)} ${x + 7} ${y}`; const ox = x - (x < cx ? 7 : -7), oy = y < cy ? cy + 8 : cy - 8; return `M${cx} ${oy}C${ox} ${oy} ${ox} ${oy} ${ox} ${y}`; }}};
   const packets = (items, d, dir) => items.map(([name], i) => {
     const dur = 3.6, begin = (i * dur / items.length).toFixed(2);
     return `<g class="pk ${dir}" opacity="0"><circle r="17"/><svg x="-10" y="-10" width="20" height="20" viewBox="0 0 24 24">${ICON_PATHS[name]}</svg><animateMotion dur="${dur}s" begin="${begin}s" repeatCount="indefinite" path="${d}" keyPoints="0;1" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .25 1"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.82;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/></g>`;
@@ -442,7 +446,7 @@ export function overviewPage(request) {
 </div>`).join('');
 
   const faq = [
-    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring and WHOOP connect directly.'],
+    ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
     ['What does it cost?', 'Aurin is free, the AI coach included. If paid features come later, you will see the price before you buy, and they will be sold only through the App Store.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from.'],
@@ -559,6 +563,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <p><strong>Intervals.icu</strong>, only if you connect it with your API key: your activities and their details, planned workouts and events, wellness data and sport settings.</p>
 <p><strong>Ultrahuman</strong>, only if you connect your Ultrahuman Ring: your sleep and its stages, heart rate variability, resting heart rate, skin temperature deviation and VO2max, to work out your readiness. Aurin only reads this data, never passes it on to other services, and deletes it when you disconnect the ring.</p>
 <p><strong>WHOOP</strong>, only if you connect your WHOOP account: your sleep and its stages, resting heart rate, heart rate variability, breathing rate and blood oxygen, to work out your readiness. Aurin only reads this data, never passes it on to other services, and deletes it when you disconnect WHOOP.</p>
+<p><strong>Wahoo</strong>, only if you connect your Wahoo account: your finished rides and runs (start, duration, distance, climbing, power, training load, heart rate, cadence and calories), to count them in your training load. Aurin deletes them when you disconnect Wahoo.</p>
 <p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training), food and drinks, workouts and how they went, notes, and your conversations with the assistant.</p>
 <p><strong>On your device:</strong> a sign-in cookie valid for up to 30 days, a short-lived cookie that protects signing in, cookies with your theme and language and, in the browser’s storage, a copy of the last loaded day and a few display settings so the app opens instantly, and, once you add or use a passkey, your email with the passkey’s identifier, so this device signs you in with it instead of sending a code. We use no advertising or tracking cookies.</p>
 <p><strong>Technical logs:</strong> our hosting provider records technical details of requests (such as time, IP address, page and errors) to keep the service running and secure. These logs are kept for a few days.</p>
@@ -594,6 +599,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <h2>Who receives your data</h2>
 <ul>
 <li><strong>Intervals.icu</strong>, if you connect it: the workouts you plan in Aurin, nutrition notes and calorie targets in your calendar, your weight, and every hour a copy of your daily wellness from Google Health (sleep, average sleeping heart rate, steps, resting heart rate, HRV, oxygen saturation, respiration, VO2 max and body fat). Intervals.icu handles this data under its own privacy policy.</li>
+<li><strong>Wahoo</strong>, if you connect it: the rides and runs you plan in Aurin, with their steps and targets, so they appear on your ELEMNT and KICKR. Wahoo handles this data under its own privacy policy.</li>
 <li><strong>Google Health</strong>: the food and drinks you log and, if you allow it, your weight.</li>
 <li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data. OpenAI processes it on our behalf, does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse.</li>
 <li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''}</li>
@@ -654,6 +660,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <p><strong>Intervals.icu</strong>, jen když ho připojíš svým klíčem API: tvoje aktivity a jejich podrobnosti, plánované tréninky a události, wellness údaje a nastavení sportů.</p>
 <p><strong>Ultrahuman</strong>, jen když připojíš prsten Ultrahuman: tvůj spánek a jeho fáze, variabilitu srdečního tepu, klidový tep, odchylku teploty kůže a VO2max, z nichž počítáme připravenost. Aurin tato data jen čte, nikomu dalšímu je nepředává a po odpojení prstenu je smaže.</p>
 <p><strong>WHOOP</strong>, jen když připojíš účet WHOOP: tvůj spánek a jeho fáze, klidový tep, variabilitu srdečního tepu, dechovou frekvenci a okysličení krve, z nichž počítáme připravenost. Aurin tato data jen čte, nikomu dalšímu je nepředává a po odpojení WHOOPu je smaže.</p>
+<p><strong>Wahoo</strong>, jen když připojíš účet Wahoo: tvoje dokončené jízdy a běhy (začátek, délku, vzdálenost, převýšení, výkon, tréninkovou zátěž, tep, kadenci a kalorie), aby se započítaly do tréninkové zátěže. Aurin je po odpojení Wahoo smaže.</p>
 <p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink), jídlo a pití, tréninky a jejich hodnocení, poznámky a konverzace s asistentem.</p>
 <p><strong>Ve tvém zařízení:</strong> cookie přihlášení s platností nejvýš 30 dní, krátkodobá cookie, která chrání přihlašování, cookies s vybraným vzhledem a jazykem a v úložišti prohlížeče kopie naposledy načteného dne a několik nastavení zobrazení, aby se aplikace otevřela hned, a když si přidáš nebo použiješ přístupový klíč, tvůj e-mail s označením klíče, aby tě zařízení přihlásilo jím a nemuselo posílat kód. Reklamní ani sledovací cookies nepoužíváme.</p>
 <p><strong>Technické záznamy:</strong> náš poskytovatel hostingu zaznamenává technické údaje o požadavcích (třeba čas, IP adresu, stránku a chyby), aby služba fungovala a byla bezpečná. Tyto záznamy se uchovávají několik dní.</p>
@@ -689,6 +696,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <h2>Kdo data dostává</h2>
 <ul>
 <li><strong>Intervals.icu</strong>, když ho připojíš: tréninky, které naplánuješ v Aurinu, poznámky k výživě a cíle kalorií v kalendáři, tvoji váhu a každou hodinu kopii denních wellness údajů z Google Health (spánek, průměrný tep ve spánku, kroky, klidový tep, HRV, okysličení krve, dech, VO₂max a tělesný tuk). Intervals.icu s nimi zachází podle svých zásad ochrany soukromí.</li>
+<li><strong>Wahoo</strong>, když ho připojíš: jízdy a běhy, které naplánuješ v Aurinu, s jejich úseky a cíli, aby se objevily v ELEMNT a KICKR. Wahoo s nimi nakládá podle svých zásad ochrany osobních údajů.</li>
 <li><strong>Google Health</strong>: jídlo a pití, které zapíšeš, a když to povolíš, i tvoje váha.</li>
 <li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě. OpenAI je zpracovává naším jménem, data poslaná přes své API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití.</li>
 <li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''}</li>
@@ -740,7 +748,7 @@ export function termsPage(request) {
 <p>These terms are the agreement between you and the operator of Aurin when you use the Aurin iPhone app and aurin.health. Aurin is run by Petr Bouma, a private individual in the Czech Republic (“we” below), reachable at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. By creating an account or using Aurin you agree to them. How we handle your personal data is described in the <a href="/privacy">Privacy Policy</a>.</p>
 <h2>What Aurin does</h2>
 <ul>
-<li>Aurin reads the data you connect (Apple Health, Google Health, Intervals.icu, Ultrahuman Ring, WHOOP), evaluates your recovery and training load, and suggests workouts, training plans and nutrition targets.</li>
+<li>Aurin reads the data you connect (Apple Health, Google Health, Intervals.icu, Ultrahuman Ring, WHOOP, Wahoo), evaluates your recovery and training load, and suggests workouts, training plans and nutrition targets.</li>
 <li>Readiness, strain, calories, zones and similar numbers are estimates calculated from your devices’ measurements. They depend on the quality of that data and can be wrong.</li>
 </ul>
 <h2>Aurin is not medical care</h2>
@@ -764,7 +772,7 @@ export function termsPage(request) {
 </ul>
 <h2>Connected services</h2>
 <ul>
-<li>Apple Health, Google Health, Intervals.icu, Ultrahuman and WHOOP are run by other companies under their own terms. We are not responsible for their availability, for the accuracy of the data they provide or for changes on their side, and a connection can stop working if a service changes or withdraws access.</li>
+<li>Apple Health, Google Health, Intervals.icu, Ultrahuman, WHOOP and Wahoo are run by other companies under their own terms. We are not responsible for their availability, for the accuracy of the data they provide or for changes on their side, and a connection can stop working if a service changes or withdraws access.</li>
 <li>Names and logos of these services belong to their owners. Aurin shows them only so you can see which service you are connecting. Aurin is not made, endorsed or sponsored by those companies.</li>
 </ul>
 <h2>AI features</h2>
@@ -806,7 +814,7 @@ export function termsPage(request) {
 <p>Tyto podmínky jsou dohodou mezi tebou a provozovatelem Aurinu, když používáš aplikaci Aurin pro iPhone a web aurin.health. Aurin provozuje Petr Bouma, soukromá osoba v České republice (dál „my“), na adrese <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Založením účtu nebo používáním Aurinu s nimi souhlasíš. Jak zacházíme s tvými osobními údaji, popisují <a href="/privacy">Zásady ochrany soukromí</a>.</p>
 <h2>Co Aurin dělá</h2>
 <ul>
-<li>Aurin čte data, která propojíš (Apple Zdraví, Google Health, Intervals.icu, prsten Ultrahuman, WHOOP), vyhodnocuje tvou regeneraci a tréninkovou zátěž a navrhuje tréninky, tréninkové plány a cíle výživy.</li>
+<li>Aurin čte data, která propojíš (Apple Zdraví, Google Health, Intervals.icu, prsten Ultrahuman, WHOOP, Wahoo), vyhodnocuje tvou regeneraci a tréninkovou zátěž a navrhuje tréninky, tréninkové plány a cíle výživy.</li>
 <li>Připravenost, námaha, kalorie, zóny a podobná čísla jsou odhady spočítané z měření tvých zařízení. Závisí na kvalitě těchto dat a můžou být nepřesné.</li>
 </ul>
 <h2>Aurin není zdravotní péče</h2>
@@ -830,7 +838,7 @@ export function termsPage(request) {
 </ul>
 <h2>Propojené služby</h2>
 <ul>
-<li>Apple Zdraví, Google Health, Intervals.icu, Ultrahuman a WHOOP provozují jiné firmy podle svých podmínek. Neodpovídáme za jejich dostupnost, za správnost dat, která poskytují, ani za změny na jejich straně a propojení může přestat fungovat, když služba něco změní nebo přístup odebere.</li>
+<li>Apple Zdraví, Google Health, Intervals.icu, Ultrahuman, WHOOP a Wahoo provozují jiné firmy podle svých podmínek. Neodpovídáme za jejich dostupnost, za správnost dat, která poskytují, ani za změny na jejich straně a propojení může přestat fungovat, když služba něco změní nebo přístup odebere.</li>
 <li>Názvy a loga těchto služeb patří jejich vlastníkům. Aurin je ukazuje jen proto, aby bylo vidět, kterou službu propojuješ. Aurin tyto firmy nevytvořily, nedoporučují ani nesponzorují.</li>
 </ul>
 <h2>AI funkce</h2>
@@ -893,10 +901,10 @@ export function supportPage(request, {apple = false, email = false, open = false
 </ul>
 <h2>Connecting and disconnecting services</h2>
 <ul>
-<li>In the app, open <strong>Settings → Data sources</strong>. Tap <strong>+</strong> to connect Apple Health, Google Health, Intervals.icu, the Ultrahuman Ring or WHOOP. Each connected service has its own page, with <strong>Disconnect</strong> at the bottom.</li>
+<li>In the app, open <strong>Settings → Data sources</strong>. Tap <strong>+</strong> to connect Apple Health, Google Health, Intervals.icu, the Ultrahuman Ring, WHOOP or Wahoo. Each connected service has its own page, with <strong>Disconnect</strong> at the bottom.</li>
 <li>For Apple Health, your iPhone asks which data Aurin may read. You change that later in the iPhone Settings → Health → Data Access &amp; Devices → Aurin.</li>
 <li>Before sending you to Google, Aurin shows what it reads from Google Health, what it writes there and who receives the data, and asks for your consent.</li>
-<li>Disconnecting stops Aurin from reading and writing data in that service. For Google, Aurin also gives up its access at Google. Disconnecting the Ultrahuman Ring or WHOOP also deletes the data Aurin got from it.</li>
+<li>Disconnecting stops Aurin from reading and writing data in that service. For Google, Aurin also gives up its access at Google. Disconnecting the Ultrahuman Ring, WHOOP or Wahoo also deletes the data Aurin got from it.</li>
 <li>You can also remove Aurin’s access in your Google Account: open <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>, choose Aurin and remove its access.</li>
 <li>When two of your devices measure the same thing, <strong>Where to take data from</strong> in Data sources decides which one Aurin uses for your nights and your days. <strong>Automatic</strong> picks it for you.</li>
 </ul>

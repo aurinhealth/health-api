@@ -121,7 +121,7 @@ struct SyncAppIcon: View {
         let shape = RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
         ZStack {
             switch id {
-            case "apple", "google", "intervals":
+            case "apple", "google", "intervals", "wahoo":
                 IntegrationIcon(id: id, size: size)
             case "strava":
                 shape.fill(Color(light: 0xFC4C02, dark: 0xFC4C02))
@@ -334,7 +334,7 @@ struct SyncDestinationView: View {
                     .disabled(connecting)
             } else {
                 NavigationLink { SourcesSettingsView(store: store) } label: {
-                    Text("Připojit v Zdrojích dat").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    Text("Připojit ve Zdrojích dat").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50)
                         .background(Palette.button, in: Capsule())
                 }
@@ -353,9 +353,9 @@ struct SyncDestinationView: View {
             guard let event = try await model.connect(provider: "strava") else { return }
             switch event {
             case "strava": note = L10n.tr("Strava je připojená.")
-            case "strava-full": note = L10n.tr("Strava zatím není dostupná pro další uživatele.")
+            case "strava-full": note = L10n.tr("Aurin u Stravy vyčerpal limit uživatelů, další zatím připojit nejde.")
             case "strava-cancelled": note = L10n.tr("Připojení Stravy bylo zrušeno.")
-            case "expired": note = L10n.tr("Odkaz vypršel, zkus to znovu.")
+            case "expired": note = L10n.tr("Odkaz vypršel. Zkus to znovu.")
             default: note = L10n.tr("Stravu se nepodařilo připojit. Zkus to znovu.")
             }
             await sync.load()
@@ -381,7 +381,7 @@ struct SyncDestinationView: View {
             Text("Google zatím nepovolil zápis").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
             Text(missing.map(Self.scopeName).joined(separator: ", "))
                 .font(Typo.small).foregroundStyle(Palette.muted)
-            Text("Aurin otevře souhlas Googlu jen pro zápis toho, co tu zapneš. Číst víc nebude.")
+            Text("Google se zeptá na zápis váhy a tréninků a na čtení data narození a tras aktivit.")
                 .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             PrimaryButton(title: L10n.tr("Rozšířit oprávnění Google"), busy: connecting) { Task { await extendGoogle() } }
                 .disabled(connecting)

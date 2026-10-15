@@ -744,7 +744,7 @@ struct MoveSessionSheet: View {
                     .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if days.isEmpty {
-                Text("Do konce týdne už není jiný den.").font(Typo.small).foregroundStyle(Palette.muted)
+                Text("Do konce týdne už není den, kam ho přesunout.").font(Typo.small).foregroundStyle(Palette.muted)
             }
             PrimaryButton(title: day.map { L10n.f("Přesunout %@", Fmt.onWeekday($0)) } ?? L10n.tr("Vyber den"), busy: busy) {
                 guard let day else { return }

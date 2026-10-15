@@ -175,17 +175,21 @@ test('the connections use the app’s own logos and only the services the app of
   const section=html.slice(html.indexOf('<section id="propojeni"'),html.indexOf('<section id="soukromi"'));
   const asset=path=>readFileSync(new URL('../ios-native/Loadwise/Resources/Assets.xcassets/'+path,import.meta.url));
   const site=file=>readFileSync(new URL('../public/site/logos/'+file,import.meta.url));
-  for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg'],['whoop.svg','WhoopLogo.imageset/whoop-black.svg']]){
+  for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg'],['whoop.svg','WhoopLogo.imageset/whoop-black.svg'],['wahoo.png','WahooLogo.imageset/wahoo-wordmark-white.png']]){
     assert.ok(site(file).equals(asset(source)),file+' is the app’s logo, unchanged');
     assert.ok(section.includes('/site/logos/'+file),file);
   }
-  assert.deepEqual([...section.matchAll(/id="tab-(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman','whoop']);
-  assert.doesNotMatch(section,/strava|garmin|wahoo|oura/i,'only services the app offers');
+  assert.deepEqual([...section.matchAll(/id="tab-(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman','whoop','wahoo']);
+  assert.doesNotMatch(section,/strava|garmin|oura/i,'only services the app offers');
   const sync=readFileSync(new URL('../ios-native/Loadwise/Screens/SyncViews.swift',import.meta.url),'utf8');
   for(const id of ['apple','google','intervals'])assert.match(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
   for(const id of ['ultrahuman','whoop'])assert.doesNotMatch(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
   assert.match(section,/nothing, Aurin only reads the ring/);
   assert.match(section,/nothing, Aurin only reads WHOOP/);
+  // Wahoo gets the planned workouts, as its connect sheet says (SettingsConnectFlow.swift).
+  const connect=readFileSync(new URL('../ios-native/Loadwise/Screens/SettingsPages/SettingsConnectFlow.swift',import.meta.url),'utf8');
+  assert.match(connect,/Tréninky naplánované v Aurinu, do ELEMNT a KICKR/);
+  assert.match(section,/planned workouts, to ELEMNT and KICKR/);
 });
 
 test('the questions open without JS and name the app’s real Settings paths',async()=>{

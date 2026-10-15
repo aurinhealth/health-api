@@ -390,6 +390,8 @@ final class AppModel {
             } else if !lost && today != nil {
                 notice = error.localizedDescription
             }
+            // "Bez připojení" alone hides that a Wi-Fi wants a sign-in: say so.
+            if lost, (error as? URLError)?.code == .secureConnectionFailed { notice = error.localizedDescription }
         }
     }
 
