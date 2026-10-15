@@ -97,6 +97,7 @@ enum MealSlot {
 /// The Food screen without the scroll view, so tests can render it whole.
 struct FoodContent: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dayPage) private var page
     let food: FoodSnapshot
     var add: (String) -> Void = { _ in }
     var scan: () -> Void = {}
@@ -107,28 +108,28 @@ struct FoodContent: View {
             if editing {
                 board
             } else {
-                HStack {
-                    DayNavigator(date: food.date, ahead: true)
-                    Spacer()
-                    CircleButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
-                }
-                // The day below the title moves with a swipe.
-                VStack(alignment: .leading, spacing: 0) { content }
-                    .daySwipe(date: food.date, ahead: true)
+                content
             }
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+        .daySwipe(date: food.date, ahead: true, enabled: !editing) { page in page.food.map { AnyView(FoodContent(food: $0)) } }
     }
 
     private var board: some View {
         WidgetBoard(panel: .food,
-                    data: WidgetData(panel: .food, today: model.today, health: model.health, training: model.training, food: food),
+                    data: WidgetData(panel: .food, today: page.map(\.today) ?? model.today, health: page.map(\.health) ?? model.health, training: model.training, food: food),
                     editing: $editing,
                     editTitle: nil)
     }
 
     @ViewBuilder private var content: some View {
+        HStack {
+            DayNavigator(date: food.date, ahead: true)
+            Spacer()
+            CircleButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
+        }
+
         HStack(alignment: .lastTextBaseline, spacing: 12) {
             Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
             if let target = food.target {
@@ -136,7 +137,7 @@ struct FoodContent: View {
             }
         }
         .padding(.top, 34)
-        CoachTextCard(screen: "food", fallbackText: food.sentence, live: model.selectedDate == nil).padding(.top, 16)
+        CoachTextCard(screen: "food", fallbackText: food.sentence, live: (page.map(\.selectedDate) ?? model.selectedDate) == nil).padding(.top, 16)
 
         MacroCells(macros: food.macros).padding(.top, 26)
         if let fiber = food.macros.fiber {

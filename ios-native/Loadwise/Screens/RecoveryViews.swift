@@ -13,6 +13,7 @@ import UIKit
 /// The tip rows under the coach's sentence; nothing on a day without recovery or on an earlier day.
 struct RecoveryTipRows: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dayPage) private var page
     let today: TodaySnapshot
 
     @State private var routineItem: RecoveryToday.Item?
@@ -24,7 +25,7 @@ struct RecoveryTipRows: View {
     }
 
     var body: some View {
-        if Self.hasTip(today, selectedDate: model.selectedDate) {
+        if Self.hasTip(today, selectedDate: page.map(\.selectedDate) ?? model.selectedDate) {
             let items = today.recovery?.items ?? []
             VStack(alignment: .leading, spacing: 0) {
                 // Regenerace first: when hard training is fine again.
