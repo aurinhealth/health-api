@@ -26,6 +26,8 @@ import {withIdempotency} from './idempotency.js';
 import {buildTraining, weekStart} from './app-training.js';
 import {buildCalendar} from './app-calendar.js';
 import {buildMilestones} from './app-milestones.js';
+import { buildShareWeek, mondayOf } from './share-week.js';
+import { buildShareMilestones, intervalsRecord } from './share-milestone.js';
 import {buildHealth} from './app-health.js';
 import {buildFood} from './app-food.js';
 import {normalizeProfile} from './energy-profile.js';
@@ -399,6 +401,19 @@ async function staticRoute(url, request, env) {
   return logoResponse();
 }
 
+
+// What the milestones count (app-milestones.js, share-milestone.js): every
+// activity, the days with gym sets logged, and the day the account was made,
+// since only what was done since joining Aurin counts, not the history synced from before.
+async function milestoneInputs(env,today){
+  const [rows,gym,joined]=await Promise.all([
+    env.DB.prepare("SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local','wahoo') AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID).all().then(r=>r.results||[]).catch(()=>[]),
+    trainingGymPlans(env,'2000-01-01',today).catch(()=>({})),
+    (env.RAW_DB||env.DB).prepare('SELECT created_at FROM users WHERE id=?').bind(env.USER_ID).first().catch(()=>null)
+  ]);
+  const since=/^\d{4}-\d{2}-\d{2}/.test(String(joined?.created_at||''))?localDate(String(joined.created_at).replace(' ','T')+(String(joined.created_at).includes('Z')?'':'Z')):'';
+  return {rows,since,gymDays:Object.keys(gym).filter(d=>gym[d].logged>0)};
+}
 
 // Today's readiness exactly as /app/api/today computes it (buildToday), from
 // only the inputs it needs. fresh skips the short-lived cache: right after an
@@ -1629,13 +1644,48 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/milestones'&&request.method==='GET'){
     try{
       const today=localToday();
-      const result=await cached(env,ctx,'milestones:'+today,async()=>{
-        const rows=(await env.DB.prepare("SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local','wahoo') AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID).all().catch(()=>({results:[]}))).results||[];
-        const gym=await trainingGymPlans(env,'2000-01-01',today).catch(()=>({}));
-        // Only what was done since joining Aurin counts, not the history synced from before.
-        const joined=await (env.RAW_DB||env.DB).prepare('SELECT created_at FROM users WHERE id=?').bind(env.USER_ID).first().catch(()=>null);
-        const since=/^\d{4}-\d{2}-\d{2}/.test(String(joined?.created_at||''))?localDate(String(joined.created_at).replace(' ','T')+(String(joined.created_at).includes('Z')?'':'Z')):'';
-        return buildMilestones({rows,today,since,gymDays:Object.keys(gym).filter(d=>gym[d].logged>0)});
+      const result=await cached(env,ctx,'milestones:'+today,async()=>buildMilestones({...await milestoneInputs(env,today),today}),{ttl:300});
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
+  }
+
+  // Sdílet → Milník: the round numbers reached since joining, with the sessions
+  // behind them, and a power record from Intervals.icu (share-milestone.js).
+  if(url.pathname==='/app/api/share/milestones'&&request.method==='GET'){
+    try{
+      const today=localToday();
+      const result=await cached(env,ctx,'share-milestones:'+today,async()=>{
+        const [inputs,record]=await Promise.all([
+          milestoneInputs(env,today),
+          intervalsRecord(env,intervalsAuthorization(env.INTERVALS_API_KEY),today).catch(()=>null)
+        ]);
+        return {...buildShareMilestones({...inputs,today}),record};
+      },{ttl:300});
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
+  }
+
+  // Sdílet → Týden: Monday to Sunday of ?date= and the week before (share-week.js).
+  if(url.pathname==='/app/api/share/week'&&request.method==='GET'){
+    try{
+      const today=localToday(),asked=url.searchParams.get('date');
+      const date=/^\d{4}-\d{2}-\d{2}$/.test(String(asked||''))&&asked<=today?asked:today;
+      const start=shiftDate(mondayOf(date),-7),end=shiftDate(mondayOf(date),6),last=end<today?end:today;
+      const result=await cached(env,ctx,'share-week:'+start+':'+today,async()=>{
+        const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
+        const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path)).then(r=>r.ok?r.json():{}).catch(()=>({}));
+        // The readiness of each day as Today shows it (readiness.js), its sleep need from the month before.
+        const from=shiftDate(start,-30),to=shiftDate(last,1);
+        const [rows,gym,health,fitness,sleep,profile]=await Promise.all([
+          env.DB.prepare("SELECT source_family,external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local','wahoo') AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,2)).all().then(r=>r.results||[]).catch(()=>[]),
+          trainingGymPlans(env,start,end).catch(()=>({})),
+          googleHealthFor(env,ctx,last).catch(()=>({})),
+          cached(env,ctx,'fitness:90',()=>internal('/app/api/fitness?days=90')).catch(()=>({})),
+          read('/health/sleep?start='+from+'&end='+to).then(d=>intervalsSleep(env,ctx,d,from,to)).catch(()=>({})),
+          dashboardProfile(env).catch(()=>null)
+        ]);
+        return buildShareWeek({date,today,rows,gymDays:Object.keys(gym).filter(d=>gym[d].logged>0),
+          google:health?.wellness||[],intervals:fitness?.wellness||[],sessions:Array.isArray(sleep?.sessions)?sleep.sessions:[],profile});
       },{ttl:300});
       return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}

@@ -4,10 +4,10 @@ import UIKit
 
 // MARK: - Share images (Sdílet on Dnes and in a workout's detail)
 
-/// What a share image shows: the day, one workout or the day's nutrition.
-/// Týden and Milník come with their server data later.
+/// What a share image shows: the day, one workout, the day's nutrition, the
+/// week or a milestone.
 enum ShareKind: String, CaseIterable, Identifiable {
-    case day, activity, food
+    case day, activity, food, week, milestone
 
     var id: String { rawValue }
 
@@ -16,6 +16,8 @@ enum ShareKind: String, CaseIterable, Identifiable {
         case .day: return "Den"
         case .activity: return "Aktivita"
         case .food: return "Jídlo"
+        case .week: return "Týden"
+        case .milestone: return "Milník"
         }
     }
 
@@ -25,6 +27,8 @@ enum ShareKind: String, CaseIterable, Identifiable {
         case .day: return ["Osa", "Čísla", "Velké", "Dlaždice"]
         case .activity: return ["Trasa", "Graf", "Čísla"]
         case .food: return ["Makra", "Rozdělení", "Oblouk"]
+        case .week: return ["Po dnech", "Kolečka", "Čísla", "Proti minulému"]
+        case .milestone: return ["Plakát", "Cesta", "Rekord"]
         }
     }
 
@@ -34,6 +38,8 @@ enum ShareKind: String, CaseIterable, Identifiable {
         case .day: return ShareDay.rows
         case .activity: return ShareWorkout.stats
         case .food: return ShareFood.rows
+        case .week: return ShareWeek.rows
+        case .milestone: return ShareMilestones.rows
         }
     }
 }
@@ -48,6 +54,8 @@ struct ShareOptions: Codable, Equatable {
     /// Den: what the night and a workout show on the line.
     var sleep: [String] = ["HRV", "Tep"]
     var workout: [String] = ["Vzdálenost", "Výkon", "Délka"]
+    /// Milník: ride, run, gym or streak; nil for the newest.
+    var milestone: String?
 
     func shows(_ row: String) -> Bool { !hidden.contains(row) }
 
@@ -391,6 +399,47 @@ enum ShareText {
 
     /// A clock in the phone's format, "18:42" or "6:42 PM".
     static func clock(_ text: String?) -> String { text.map { ClockText.format($0) } ?? "" }
+
+    private static func day(_ iso: String) -> Date? {
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.timeZone = TimeZone(identifier: "UTC")
+        parser.dateFormat = "yyyy-MM-dd"
+        return parser.date(from: iso)
+    }
+
+    private static func format(_ iso: String, _ pattern: String) -> String {
+        guard let date = day(iso) else { return iso }
+        let out = DateFormatter()
+        out.locale = L10n.locale
+        out.timeZone = TimeZone(identifier: "UTC")
+        out.dateFormat = pattern
+        return out.string(from: date)
+    }
+
+    /// "15. 10." / "Oct 15".
+    static func short(_ iso: String) -> String { format(iso, L10n.isEnglish ? "MMM d" : "d. M.") }
+
+    /// "12. června" / "June 12".
+    static func dayMonth(_ iso: String) -> String { format(iso, L10n.isEnglish ? "MMMM d" : "d. MMMM") }
+
+    /// "čvn" / "Jun".
+    static func month(_ iso: String) -> String { format(iso, "LLL") }
+
+    /// "Po" / "Mon".
+    static func weekday(_ iso: String) -> String {
+        let text = format(iso, L10n.isEnglish ? "EEE" : "EEEEEE")
+        return text.prefix(1).uppercased() + text.dropFirst()
+    }
+
+    /// A week: "12.–18. 10.", "28. 9. – 4. 10." / "Oct 12–18".
+    static func range(_ start: String, _ end: String) -> String {
+        let sameMonth = start.prefix(7) == end.prefix(7)
+        if L10n.isEnglish {
+            return sameMonth ? format(start, "MMM d") + "–" + format(end, "d") : format(start, "MMM d") + " – " + format(end, "MMM d")
+        }
+        return sameMonth ? format(start, "d.") + "–" + format(end, "d. M.") : format(start, "d. M.") + " – " + format(end, "d. M.")
+    }
 }
 
 // MARK: - Export
@@ -416,6 +465,31 @@ enum ShareExport {
         } catch {
             return nil
         }
+    }
+
+    /// Instagram Stories with the image: transparent as a sticker over the
+    /// card's colour, otherwise as the whole background. Only with Aurin's
+    /// Meta app ID (META_APP_ID in project.yml) and Instagram installed.
+    static var instagramURL: URL? {
+        let id = (Bundle.main.object(forInfoDictionaryKey: "MetaAppID") as? String ?? "").trimmingCharacters(in: .whitespaces)
+        guard !id.isEmpty, !id.hasPrefix("$") else { return nil }
+        return URL(string: "instagram-stories://share?source_application=" + id)
+    }
+
+    static var canShareToInstagram: Bool { instagramURL.map { UIApplication.shared.canOpenURL($0) } ?? false }
+
+    static func instagram(_ image: UIImage, clear: Bool, dark: Bool) {
+        guard let url = instagramURL, let data = image.pngData() else { return }
+        var item: [String: Any] = [:]
+        if clear {
+            item["com.instagram.sharedSticker.stickerImage"] = data
+            item["com.instagram.sharedSticker.backgroundTopColor"] = dark ? "#2C2416" : "#F3E1C6"
+            item["com.instagram.sharedSticker.backgroundBottomColor"] = dark ? "#0B0C0D" : "#F3EFE8"
+        } else {
+            item["com.instagram.sharedSticker.backgroundImage"] = data
+        }
+        UIPasteboard.general.setItems([item], options: [.expirationDate: Date().addingTimeInterval(300)])
+        UIApplication.shared.open(url)
     }
 
     static func present(_ url: URL, title: String, image: UIImage) {
