@@ -37,22 +37,22 @@ const NOT_PART = 'stehen\\w*|stehn\\w*|thigh|kridl\\w*|kridel|wing\\w*|jatr\\w*|
 // [id, Czech label, has (all), refs, options]
 const RAW = [
   // Poultry
-  ['chicken_breast', 'Kuřecí prsa', [CHICKEN, 'prs\\w*|breast\\w*|rizk\\w*|rizek|file\\w*|fillet\\w*|supreme'], [[SR, 'Chicken, broilers or fryers, breast, meat only, raw']], { not: NOT_PART }],
-  ['chicken_thigh', 'Kuřecí stehna', [CHICKEN, 'stehen\\w*|stehn\\w*|thigh\\w*|horn\\w*'], [[SR, 'Chicken, broilers or fryers, thigh, meat only, raw'], [SR, 'Chicken, broilers or fryers, thigh, meat and skin, raw']], { not: 'jatr\\w*|liver|kridl\\w*|wing\\w*' }],
-  ['chicken_drumstick', 'Kuřecí paličky', [CHICKEN, 'palick\\w*|drumstick\\w*'], [[SR, 'Chicken, broilers or fryers, drumstick, meat and skin, raw'], [SR, 'Chicken, broilers or fryers, drumstick, meat only, raw']]],
+  ['chicken_breast', 'Kuřecí prsa', [CHICKEN, 'prs\\w*|breast\\w*|rizk\\w*|rizek|file\\w*|fillet\\w*|supreme'], [[SR, 'Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw']], { not: NOT_PART }],
+  ['chicken_thigh', 'Kuřecí stehna', [CHICKEN, 'stehen\\w*|stehn\\w*|thigh\\w*|horn\\w*'], [[SR, 'Chicken, broilers or fryers, dark meat, thigh, meat only, raw'], [SR, 'Chicken, broilers or fryers, thigh, meat and skin, raw']], { not: 'jatr\\w*|liver|kridl\\w*|wing\\w*' }],
+  ['chicken_drumstick', 'Kuřecí paličky', [CHICKEN, 'palick\\w*|drumstick\\w*'], [[SR, 'Chicken, broilers or fryers, drumstick, meat and skin, raw'], [SR, 'Chicken, broilers or fryers, dark meat, drumstick, meat only, raw']]],
   ['chicken_wing', 'Kuřecí křídla', [CHICKEN, 'kridl\\w*|kridel|wing\\w*'], [[SR, 'Chicken, broilers or fryers, wing, meat and skin, raw']]],
   ['chicken_whole', 'Kuře celé', ['kure|chicken', 'cele|cely|whole|grilovaci'], [[SR, 'Chicken, broilers or fryers, meat and skin, raw']], { not: 'prs\\w*|breast|stehn\\w*|thigh|kridl\\w*|wing' }],
   ['chicken_ground', 'Kuřecí mleté maso', [CHICKEN, 'mlet\\w*|ground|minced'], [[SR, 'Chicken, ground, raw']]],
   ['chicken_liver', 'Kuřecí játra', [CHICKEN, 'jatr\\w*|liver\\w*'], [[SR, 'Chicken, liver, all classes, raw']]],
   ['turkey_breast', 'Krůtí prsa', ['kruti|krut\\w*|turkey', 'prs\\w*|breast\\w*|rizk\\w*|file\\w*|fillet\\w*'], [[SR, 'Turkey, whole, breast, meat only, raw']], { not: 'stehn\\w*|stehen\\w*|thigh|mlet\\w*|ground|minced' }],
-  ['turkey_thigh', 'Krůtí stehno', ['kruti|krut\\w*|turkey', 'stehn\\w*|stehen\\w*|thigh\\w*|horn\\w*'], [[SR, 'Turkey, whole, thigh, meat only, raw']]],
-  ['turkey_ground', 'Krůtí mleté maso', ['kruti|krut\\w*|turkey', 'mlet\\w*|ground|minced'], [[SR, 'Ground turkey, raw']]],
+  ['turkey_thigh', 'Krůtí stehno', ['kruti|krut\\w*|turkey', 'stehn\\w*|stehen\\w*|thigh\\w*|horn\\w*'], [[SR, 'Turkey, thigh, from whole bird, meat only, raw']]],
+  ['turkey_ground', 'Krůtí mleté maso', ['kruti|krut\\w*|turkey', 'mlet\\w*|ground|minced'], [[SR, 'Turkey, ground, raw']]],
   ['duck', 'Kachna', ['kachna|kachni|duck'], [[SR, 'Duck, domesticated, meat and skin, raw'], [SR, 'Duck, domesticated, meat only, raw']], { not: 'jatr\\w*|liver|sadl\\w*|fat' }],
   // Beef, veal, pork, lamb, game
   ['beef_ground', 'Hovězí mleté maso', ['hovezi|beef', 'mlet\\w*|ground|minced'], [[SR, 'Beef, ground, 95% lean meat / 5% fat, raw'], [SR, 'Beef, ground, 90% lean meat / 10% fat, raw'], [SR, 'Beef, ground, 85% lean meat / 15% fat, raw'], [SR, 'Beef, ground, 80% lean meat / 20% fat, raw'], [SR, 'Beef, ground, 75% lean meat / 25% fat, raw']], { not: 'veprov\\w*|pork' }],
   ['beef_tenderloin', 'Hovězí svíčková', ['hovezi|beef|svickov\\w*', 'svickov\\w*|tenderloin|filet\\w*|fillet'], [[SR, 'Beef, tenderloin, steak, separable lean only, trimmed to 1/8" fat, all grades, raw']]],
-  ['beef_sirloin', 'Hovězí roštěná', ['hovezi|beef|rosten\\w*', 'rosten\\w*|sirloin|steak\\w*|ribeye|entrecote|rump\\w*'], [[SR, 'Beef, top sirloin, steak, separable lean only, trimmed to 1/8" fat, all grades, raw'], [SR, 'Beef, rib eye, small end (ribs 10-12), separable lean and fat, trimmed to 0" fat, all grades, raw']]],
-  ['beef_round', 'Hovězí kýta', ['hovezi|beef', 'kyt\\w*|round|ořech|orech|valek|spicka|plec\\w*|chuck|zadni|predni|guláš|gulas\\w*|stew'], [[SR, 'Beef, round, top round, steak, separable lean only, trimmed to 0" fat, all grades, raw'], [SR, 'Beef, chuck, arm pot roast, separable lean only, trimmed to 0" fat, all grades, raw'], [SR, 'Beef, chuck, arm pot roast, separable lean and fat, trimmed to 0" fat, all grades, raw']]],
+  ['beef_sirloin', 'Hovězí roštěná', ['hovezi|beef|rosten\\w*', 'rosten\\w*|sirloin|steak\\w*|ribeye|entrecote|rump\\w*'], [[SR, 'Beef, top sirloin, steak, separable lean only, trimmed to 1/8" fat, all grades, raw'], [SR, 'Beef, rib, eye, small end (ribs 10-12), separable lean and fat, trimmed to 0" fat, choice, raw']]],
+  ['beef_round', 'Hovězí kýta', ['hovezi|beef', 'kyt\\w*|round|ořech|orech|valek|spicka|plec\\w*|chuck|zadni|predni|guláš|gulas\\w*|stew'], [[SR, 'Beef, round, top round, steak, separable lean only, trimmed to 1/8" fat, all grades, raw'], [SR, 'Beef, chuck, arm pot roast, separable lean only, trimmed to 1/8" fat, all grades, raw'], [SR, 'Beef, chuck, arm pot roast, separable lean and fat, trimmed to 1/8" fat, all grades, raw']]],
   ['beef_liver', 'Hovězí játra', ['hovezi|beef', 'jatr\\w*|liver'], [[SR, 'Beef, variety meats and by-products, liver, raw']]],
   ['pork_tenderloin', 'Vepřová panenka', ['panenk\\w*|tenderloin'], [[SR, 'Pork, fresh, loin, tenderloin, separable lean only, raw']], { not: 'hovezi|beef' }],
   ['pork_loin', 'Vepřová kotleta', ['veprov\\w*|pork', 'kotlet\\w*|chop\\w*|loin|nizk\\w*|vysok\\w*|karbanatek'], [[SR, 'Pork, fresh, loin, center loin (chops), bone-in, separable lean only, raw'], [SR, 'Pork, fresh, loin, center loin (chops), bone-in, separable lean and fat, raw']], { not: 'tenderloin|panenk\\w*' }],
@@ -63,7 +63,7 @@ const RAW = [
   ['pork_ground', 'Vepřové mleté maso', ['veprov\\w*|pork', 'mlet\\w*|ground|minced'], [[SR, 'Pork, fresh, ground, raw']], { not: 'hovezi|beef' }],
   ['pork_liver', 'Vepřová játra', ['veprov\\w*|pork', 'jatr\\w*|liver'], [[SR, 'Pork, fresh, variety meats and by-products, liver, raw']]],
   ['veal', 'Telecí maso', ['telec\\w*|veal'], [[SR, 'Veal, leg (top round), separable lean only, raw']], { not: 'jatr\\w*|liver' }],
-  ['lamb', 'Jehněčí maso', ['jehnec\\w*|lamb'], [[SR, 'Lamb, domestic, leg, whole (shank and sirloin), separable lean only, trimmed to 1/4" fat, choice, raw'], [SR, 'Lamb, domestic, composite of trimmed retail cuts, separable lean and fat, trimmed to 1/4" fat, choice, raw']]],
+  ['lamb', 'Jehněčí maso', ['jehnec\\w*|lamb'], [[SR, 'Lamb, leg, whole (shank and sirloin), separable lean only, trimmed to 1/4" fat, choice, raw'], [SR, 'Lamb, composite of trimmed retail cuts, separable lean and fat, trimmed to 1/4" fat, choice, raw']]],
   ['rabbit', 'Králík', ['kralik\\w*|kralic\\w*|rabbit'], [[SR, 'Game meat, rabbit, domesticated, composite of cuts, raw']]],
   ['venison', 'Zvěřina', ['zverin\\w*|jelen\\w*|srnci|srnec|venison|deer'], [[SR, 'Game meat, deer, raw']]],
   // Fish and seafood
@@ -80,7 +80,7 @@ const RAW = [
   ['herring', 'Sleď', ['sled|sledi|sledu|herring'], [[SR, 'Fish, herring, Atlantic, raw']]],
   ['sardines', 'Sardinky v oleji', ['sardin\\w*|sardines?'], [[SR, 'Fish, sardine, Atlantic, canned in oil, drained solids with bone']], { allow: 'v|ve|in|olej\\w*|oil|konzerv\\w*|canned' }],
   ['tilapia', 'Tilápie', ['tilapi\\w*'], [[SR, 'Fish, tilapia, raw']]],
-  ['shrimp', 'Krevety', ['krevet\\w*|shrimps?|prawns?'], [[SR, 'Crustaceans, shrimp, raw (not previously frozen)']]],
+  ['shrimp', 'Krevety', ['krevet\\w*|shrimps?|prawns?'], [[SR, 'Crustaceans, shrimp, raw']]],
   ['mussels', 'Slávky', ['slavk\\w*|musle|mussels?'], [[SR, 'Mollusks, mussel, blue, raw']]],
   // Eggs
   ['egg', 'Vejce', ['vejce|vajicko|vajicka|eggs?'], [[SR, 'Egg, whole, raw, fresh']], { not: 'bilk\\w*|bile|white|zloutk\\w*|yolk\\w*|nudle|testovin\\w*|noodle\\w*|pasta|liker|majonez\\w*|mayo\\w*|cokolad\\w*|kinder' }],
@@ -101,7 +101,6 @@ const RAW = [
   ['feta', 'Balkánský sýr / feta', ['feta|balkansk\\w*|salatov\\w*'], [[SR, 'Cheese, feta']], { allow: 'salat\\w*' }],
   ['brie', 'Hermelín / brie', ['hermelin\\w*|brie|camembert\\w*|camembert'], [[SR, 'Cheese, brie'], [SR, 'Cheese, camembert']], { not: 'nakladan\\w*|pecen\\w*' }],
   ['ricotta', 'Ricotta', ['ricott\\w*'], [[SR, 'Cheese, ricotta, whole milk']]],
-  ['mascarpone', 'Mascarpone', ['mascarpone'], [[SR, 'Cheese, mascarpone']]],
   ['butter', 'Máslo', ['maslo|masla|butter'], [[SR, 'Butter, without salt'], [SR, 'Butter, salted']], { not: 'arasid\\w*|peanut\\w*|orech\\w*|nut\\w*|kakao\\w*|cocoa|bylink\\w*|herb\\w*|cesnek\\w*|garlic|rostlin\\w*|bambuck\\w*|pecivo|cookies?|susenk\\w*|margarin\\w*|shea|bodybutter' }],
   ['cream_whipping', 'Smetana ke šlehání', ['smetan\\w*|cream|sahne', 'sleh\\w*|whipping|heavy|double|31|33|35|36|40'], [[SR, 'Cream, fluid, heavy whipping']], { allow: 'cream|krem', not: 'rostlin\\w*|sprej|spray|ztuzovac\\w*|sour|zakys\\w*' }],
   ['sour_cream', 'Zakysaná smetana', ['zakysan\\w*|sour'], [[SR, 'Cream, sour, cultured']], { allow: 'cream|kysan\\w*', not: 'onion|cibul\\w*|chips|dip' }],
@@ -135,7 +134,7 @@ const RAW = [
   ['figs', 'Fíky', ['fiky|fik|figs?'], [[SR, 'Figs, raw']]],
   ['pomegranate', 'Granátové jablko', ['granatov\\w*|pomegranates?'], [[SR, 'Pomegranates, raw']]],
   ['prunes', 'Sušené švestky', ['svestk\\w*|prunes?|plums?', 'susen\\w*|dried|prunes?'], [[SR, 'Plums, dried (prunes), uncooked']], { allow: 'susen\\w*|dried' }],
-  ['raisins', 'Rozinky', ['rozink\\w*|raisins?'], [[SR, 'Raisins, seedless']]],
+  ['raisins', 'Rozinky', ['rozink\\w*|raisins?'], [[SR, 'Raisins, dark, seedless']]],
   ['dates', 'Datle', ['datle|datli|dates?'], [[SR, 'Dates, medjool'], [SR, 'Dates, deglet noor']], { allow: 'susen\\w*|dried' }],
   ['dried_apricots', 'Sušené meruňky', ['merunk\\w*|apricots?', 'susen\\w*|dried'], [[SR, 'Apricots, dried, sulfured, uncooked']], { allow: 'susen\\w*|dried' }],
   // Vegetables
@@ -185,7 +184,7 @@ const RAW = [
   ['beans_red', 'Fazole červené', ['fazol\\w*|beans?', 'cerven\\w*|red|kidney|ledvin\\w*'], [[SR, 'Beans, kidney, red, mature seeds, raw'], [SR, 'Beans, kidney, red, mature seeds, cooked, boiled, without salt']], { allow: 'steril\\w*|konzerv\\w*|canned|varen\\w*|cooked|nalev\\w*|brine|v|ve|in', not: 'chili|chilli|tomat\\w*|rajc\\w*|baked|zapecen\\w*|fazolk\\w*' }],
   ['beans_white', 'Fazole bílé', ['fazol\\w*|beans?', 'bil\\w*|white|navy|cannellini|great northern'], [[SR, 'Beans, white, mature seeds, raw'], [SR, 'Beans, white, mature seeds, cooked, boiled, without salt']], { allow: 'steril\\w*|konzerv\\w*|canned|varen\\w*|cooked|nalev\\w*|brine|v|ve|in', not: 'tomat\\w*|rajc\\w*|baked|zapecen\\w*|fazolk\\w*' }],
   ['beans_black', 'Fazole černé', ['fazol\\w*|beans?', 'cern\\w*|black'], [[SR, 'Beans, black, mature seeds, raw']], { not: 'tomat\\w*|rajc\\w*|fazolk\\w*' }],
-  ['split_peas', 'Hrách loupaný', ['hrach\\w*|peas?', 'loupan\\w*|pulen\\w*|split|zlut\\w*|yellow'], [[SR, 'Peas, split, mature seeds, raw']], { not: 'protein|mouk\\w*|flour' }],
+  ['split_peas', 'Hrách loupaný', ['hrach\\w*|peas?', 'loupan\\w*|pulen\\w*|split|zlut\\w*|yellow'], [[SR, 'Peas, green, split, mature seeds, raw']], { not: 'protein|mouk\\w*|flour' }],
   ['soybeans', 'Sójové boby', ['soj\\w*|soy\\w*', 'boby|bob|beans?|zrn\\w*'], [[SR, 'Soybeans, mature seeds, raw']], { not: 'omack\\w*|sauce|napoj\\w*|drink|mlek\\w*|milk|maso|kostky|granul\\w*|chunks?|klicky|sprouts?|edamame' }],
   ['mung', 'Mungo', ['mungo|mung'], [[SR, 'Mung beans, mature seeds, raw']], { not: 'klicky|sprouts?' }],
   // Grains
@@ -209,7 +208,7 @@ const RAW = [
   // Bread (European tables: US and UK white flour is fortified)
   ['bread_rye', 'Chléb žitnopšeničný', ['chleb\\w*|bread', 'zitn\\w*|rye|konzumn\\w*|kmin\\w*|sumav\\w*|selsk\\w*|kvas\\w*|sourdough|mix|pecnik|cesk\\w*|psenicnozitn\\w*|zitnopsenicn\\w*'], [['fineli', 'Mixed grain bread, rye-wheat, sourdough']], { allow: 'mix|pecen\\w*', not: 'toast\\w*|tostov\\w*|celozrn\\w*|whole\\w*|tmav\\w*|vícezrn\\w*|vicezrn\\w*|semin\\w*|seeds?|bezlep\\w*|gluten|knackebrot|krehk\\w*|crisp\\w*|chlebic\\w*|krutony|strouh\\w*|crumbs?|sendvic\\w*|sandwich\\w*|pomazank\\w*|chlebovk\\w*|tortill\\w*|pita|naan|bagel\\w*|brioch\\w*|sladk\\w*|dyn\\w*|slunecn\\w*|chia|len\\w*|ovesn\\w*|spald\\w*|kukur\\w*|mrkv\\w*|brambor\\w*' }],
   ['bread_rye_dark', 'Chléb žitný celozrnný', ['chleb\\w*|bread', 'zitn\\w*|rye', 'celozrn\\w*|whole\\w*|tmav\\w*|dark|pumpernickel|100'], [['fineli', 'Rye bread, wholemeal']], { allow: 'pecen\\w*', not: 'toast\\w*|semin\\w*|seeds?|knackebrot|krehk\\w*|crisp\\w*|chlebic\\w*' }],
-  ['bread_white', 'Rohlík / bílé pečivo', ['rohlik\\w*|bulk\\w*|bageta|bagety|baguett\\w*|veka|vek\\w*|kaiserk\\w*|houska|housk\\w*|white bread|bily chleb'], [['ciqual', 'French bread, baguette, plain']], { allow: 'pecen\\w*|pecivo', not: 'celozrn\\w*|whole\\w*|grahamov\\w*|vicezrn\\w*|semin\\w*|seeds?|sladk\\w*|maslov\\w*|butter|plnen\\w*|filled|sunk\\w*|syr\\w*|cheese|cesnek\\w*|garlic|bylink\\w*|herb\\w*|sendvic\\w*|sandwich\\w*|hot dog|hotdog|parek|bezlep\\w*|gluten|chips|krutony|strouh\\w*|crumbs?|tvaroh\\w*|mak\\w*|jablk\\w*|ovoc\\w*|cokol\\w*|kakao|pizza|tortill\\w*|sojov\\w*|sypan\\w*|sol\\w*|kmin\\w*|spald\\w*|zitn\\w*|rye|kukur\\w*' }],
+  ['bread_white', 'Rohlík / bílé pečivo', ['rohlik\\w*|bulk\\w*|bageta|bagety|baguett\\w*|veka|vek\\w*|kaiserk\\w*|houska|housk\\w*|white bread|bily chleb'], [['ciqual', 'Bread, French bread, baguette']], { allow: 'pecen\\w*|pecivo', not: 'celozrn\\w*|whole\\w*|grahamov\\w*|vicezrn\\w*|semin\\w*|seeds?|sladk\\w*|maslov\\w*|butter|plnen\\w*|filled|sunk\\w*|syr\\w*|cheese|cesnek\\w*|garlic|bylink\\w*|herb\\w*|sendvic\\w*|sandwich\\w*|hot dog|hotdog|parek|bezlep\\w*|gluten|chips|krutony|strouh\\w*|crumbs?|tvaroh\\w*|mak\\w*|jablk\\w*|ovoc\\w*|cokol\\w*|kakao|pizza|tortill\\w*|sojov\\w*|sypan\\w*|sol\\w*|kmin\\w*|spald\\w*|zitn\\w*|rye|kukur\\w*' }],
   ['bread_whole', 'Chléb celozrnný pšeničný', ['chleb\\w*|bread|rohlik\\w*|bulk\\w*|housk\\w*|bageta', 'celozrn\\w*|whole\\w*|wholemeal|grahamov\\w*'], [[SR, 'Bread, whole-wheat, commercially prepared']], { allow: 'pecen\\w*|pecivo', not: 'zitn\\w*|rye|toast\\w*|tostov\\w*|semin\\w*|seeds?|spald\\w*|spelt|sladk\\w*|krehk\\w*|crisp\\w*|chlebic\\w*|knackebrot|tortill\\w*|pita|wrap\\w*|bezlep\\w*|gluten' }],
   // Nuts and seeds (roasted unsalted nuts are close enough)
   ['almonds', 'Mandle', ['mandle|mandli|almonds?'], [[SR, 'Nuts, almonds'], [SR, 'Nuts, almonds, dry roasted, without salt added']], { allow: 'prazen\\w*|roast\\w*|loupan\\w*|blanch\\w*|platk\\w*|plátky|platky|sliced|mlet\\w*|ground|natural\\w*', not: 'napoj\\w*|drink|mlek\\w*|milk|maslo|butter|mouk\\w*|flour|cokol\\w*|cokolad\\w*|chocolate|jogurt\\w*|yog\\w*|med\\w*|honey|soln\\w*|salted|uzen\\w*|smoked|tamari|chili|bbq|wasabi|marcipan\\w*|marzipan|krem\\w*|pasta|paste|sirup\\w*|olej\\w*|oil|mix|smes\\w*|karamel\\w*|caramel|skorice|cinnamon|kakao|cocoa' }],

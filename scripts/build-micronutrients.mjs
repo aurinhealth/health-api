@@ -33,9 +33,11 @@ export const NUTRIENTS = {
   fol: 'ug', // dietary folate equivalents where given, else total folate
   b12: 'ug', chol: 'mg', sfa: 'g'
 };
-const MACROS = { p: 'g', f: 'g', c: 'g', e: 'kcal' };
+// Macros of a table food (for references missing in the catalogue); own names, as p is phosphorus.
+const MACROS = { pro: 'g', fat: 'g', carb: 'g', kcal: 'kcal' };
 const TABLES = ['usda_sr_legacy', 'usda_foundation', 'usda_survey', 'fineli', 'ciqual', 'cofid'];
-const UA = 'Mozilla/5.0 (compatible; aurin-food-micros/1.0; +https://aurin.health)';
+// Some publishers (Fineli) refuse unknown clients.
+const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 
 // ---- numbers and units ----------------------------------------------------
 
@@ -137,7 +139,14 @@ export const USDA_NUMBERS = {
   303: ['fe'], 301: ['ca'], 304: ['mg'], 306: ['k'], 309: ['zn'], 305: ['p'], 317: ['se'], 314: ['iod'],
   328: ['vitd'], 320: ['vita'], 323: ['vite'], 430: ['vitk'], 401: ['vitc'], 404: ['b1'], 405: ['b2'],
   406: ['b3'], 415: ['b6'], 435: ['fol', 0], 417: ['fol', 1], 418: ['b12'], 601: ['chol'], 606: ['sfa'],
-  203: ['p'], 204: ['f'], 205: ['c'], 208: ['e', 0], 958: ['e', 1], 957: ['e', 2]
+  203: ['pro'], 204: ['fat'], 205: ['carb'], 208: ['kcal', 0], 958: ['kcal', 1], 957: ['kcal', 2]
+};
+// FNDDS releases leave nutrient_nbr empty: the FDC nutrient ids, with units.
+export const USDA_IDS = {
+  1089: [303, 'mg'], 1087: [301, 'mg'], 1090: [304, 'mg'], 1092: [306, 'mg'], 1095: [309, 'mg'], 1091: [305, 'mg'], 1103: [317, 'ug'],
+  1100: [314, 'ug'], 1114: [328, 'ug'], 1106: [320, 'ug'], 1109: [323, 'mg'], 1185: [430, 'ug'], 1162: [401, 'mg'], 1165: [404, 'mg'],
+  1166: [405, 'mg'], 1167: [406, 'mg'], 1175: [415, 'mg'], 1190: [435, 'ug'], 1177: [417, 'ug'], 1178: [418, 'ug'], 1253: [601, 'mg'],
+  1258: [606, 'g'], 1003: [203, 'g'], 1004: [204, 'g'], 1005: [205, 'g'], 1008: [208, 'kcal'], 2048: [958, 'kcal'], 2047: [957, 'kcal']
 };
 export function parseUsda({ food, nutrient, foodNutrient }, dataTypes) {
   const nutrients = new Map(), foods = new Map();
@@ -145,6 +154,10 @@ export function parseUsda({ food, nutrient, foodNutrient }, dataTypes) {
     const spec = USDA_NUMBERS[Number(r.NUTRIENT_NBR)];
     if (spec) nutrients.set(r.ID, { key: spec[0], prio: spec[1] ?? 0, unit: r.UNIT_NAME });
   });
+  for (const [id, [nbr, unit]] of Object.entries(USDA_IDS)) if (!nutrients.has(id)) {
+    const spec = USDA_NUMBERS[nbr];
+    nutrients.set(id, { key: spec[0], prio: spec[1] ?? 0, unit });
+  }
   csvRecords(food, ',', r => { if (!dataTypes || dataTypes.includes(r.DATA_TYPE)) foods.set(r.FDC_ID, { name: r.DESCRIPTION }); });
   csvRecords(foodNutrient, ',', r => {
     const f = foods.get(r.FDC_ID), n = f && nutrients.get(r.NUTRIENT_ID);
@@ -159,7 +172,7 @@ export function parseUsda({ food, nutrient, foodNutrient }, dataTypes) {
 export const FINELI_CODES = {
   FE: 'fe', CA: 'ca', MG: 'mg', K: 'k', ZN: 'zn', P: 'p', SE: 'se', ID: 'iod', VITD: 'vitd', VITA: 'vita', VITE: 'vite',
   VITK: 'vitk', VITC: 'vitc', THIA: 'b1', RIBF: 'b2', NIA: 'b3', VITPYRID: 'b6', FOL: 'fol', VITB12: 'b12', CHOLE: 'chol',
-  FASAT: 'sfa', PROT: 'p', FAT: 'f', CHOAVL: 'c', ENERC: 'e'
+  FASAT: 'sfa', PROT: 'pro', FAT: 'fat', CHOAVL: 'carb', ENERC: 'kcal'
 };
 export function parseFineli({ componentValue, component, foodNames = '' }, log = () => {}) {
   const units = new Map(), foods = new Map();
@@ -187,7 +200,7 @@ export const CIQUAL_NAMES = [
   ['bcar', /^beta-carotene\b/], ['vite', /^vitamin e\b/], ['vitk', /^vitamin k1\b/], ['vitc', /^vitamin c\b/],
   ['b1', /^vitamin b1\b/], ['b2', /^vitamin b2\b/], ['b3', /^vitamin b3\b/], ['b6', /^vitamin b6\b/],
   ['fol', /^vitamin b9\b/], ['b12', /^vitamin b12\b/], ['chol', /^cholesterol\b/], ['sfa', /^fa saturated\b/],
-  ['p', /^protein \(g/], ['f', /^fat \(g/], ['c', /^carbohydrate \(g/], ['e', /^energy, regulation eu no 1169\/2011 \(kcal/]
+  ['pro', /^protein \(g/], ['fat', /^fat \(g/], ['carb', /^carbohydrate \(g/], ['kcal', /^energy, regulation eu no 1169\/2011 \(kcal/]
 ];
 export function parseCiqual({ alim, compo, constants }) {
   const consts = new Map(), foods = new Map();
@@ -222,7 +235,7 @@ export const COFID_HEADERS = [
   ['vite', /^vitamin e\b/], ['vitk', /^vitamin k1\b/], ['vitc', /^vitamin c\b/], ['b1', /^thiamin\b/], ['b2', /^riboflavin\b/],
   ['b3', /^niacin\b(?!\s*equiv)/], ['b6', /^vitamin b6\b/], ['fol', /^folate\b/], ['b12', /^vitamin b12\b/],
   ['chol', /^cholesterol\b/], ['sfa', /^(satd|saturated)\b.*(fd|food)\b/],
-  ['p', /^protein\b/], ['f', /^fat\b/], ['c', /^carbohydrate\b/], ['e', /^energy\b.*kcal/]
+  ['pro', /^protein\b/], ['fat', /^fat\b/], ['carb', /^carbohydrate\b/], ['kcal', /^energy\b.*kcal/]
 ];
 const UNIT_KEYS = { ...NUTRIENTS, ...MACROS };
 export function parseCofid(sheets, log = () => {}) {
@@ -312,11 +325,12 @@ const FDC = 'https://fdc.nal.usda.gov/fdc-datasets/';
 const FDC_PAGES = ['https://fdc.nal.usda.gov/download-datasets', 'https://fdc.nal.usda.gov/download-datasets.html'];
 export const SOURCES = {
   usda_sr_legacy: { urls: [FDC + 'FoodData_Central_sr_legacy_food_csv_2018-04.zip'], pages: FDC_PAGES, link: /FoodData_Central_sr_legacy_food_csv_[\w-]+\.zip/g, need: [/^food\.csv$/, /^nutrient\.csv$/, /^food_nutrient\.csv$/] },
-  usda_foundation: { urls: ['2025-12-18', '2025-04-24', '2024-10-31', '2024-04-18'].map(d => `${FDC}FoodData_Central_foundation_food_csv_${d}.zip`), pages: FDC_PAGES, link: /FoodData_Central_foundation_food_csv_[\w-]+\.zip/g, need: [/^food\.csv$/, /^nutrient\.csv$/, /^food_nutrient\.csv$/] },
+  usda_foundation: { urls: ['2026-04-30', '2025-12-18', '2025-04-24', '2024-10-31', '2024-04-18'].map(d => `${FDC}FoodData_Central_foundation_food_csv_${d}.zip`), pages: FDC_PAGES, link: /FoodData_Central_foundation_food_csv_[\w-]+\.zip/g, need: [/^food\.csv$/, /^nutrient\.csv$/, /^food_nutrient\.csv$/] },
   usda_survey: { urls: ['2024-10-31', '2022-10-28'].map(d => `${FDC}FoodData_Central_survey_food_csv_${d}.zip`), pages: FDC_PAGES, link: /FoodData_Central_survey_food_csv_[\w-]+\.zip/g, need: [/^food\.csv$/, /^nutrient\.csv$/, /^food_nutrient\.csv$/] },
   fineli: { urls: ['https://fineli.fi/fineli/content/file/47', 'https://fineli.fi/fineli/content/file/48'], pages: ['https://fineli.fi/fineli/en/avoin-data', 'https://fineli.fi/fineli/fi/avoin-data'], link: /[^"'\s<>]*content\/file\/\d+/g, need: [/^component_value\.csv$/i, /^component\.csv$/i] },
-  ciqual: { urls: ['https://ciqual.anses.fr/cms/sites/default/files/inline-files/XML_2020_07_07.zip'], pages: ['https://www.data.gouv.fr/fr/datasets/table-de-composition-nutritionnelle-des-aliments-ciqual/', 'https://ciqual.anses.fr/'], link: /https?:\/\/[^"'\s<>]*xml[^"'\s<>]*\.zip/gi, need: [/^compo.*\.xml$/i, /^alim_(?!grp).*\.xml$/i, /^const.*\.xml$/i] },
-  cofid: { urls: ['https://assets.publishing.service.gov.uk/media/60538e66d3bf7f0455a5d8cb/McCance_Widdowsons_Composition_of_Foods_Integrated_Dataset_2021..xlsx'], pages: ['https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid'], link: /https:\/\/assets\.publishing\.service\.gov\.uk\/[^"'\s<>]+\.xlsx/g, need: [/^workbook\.xml$/] }
+  // The catalogue has Ciqual 2025 (Zenodo); 2020 XML is the fallback.
+  ciqual: { pagesFirst: true, urls: ['https://ciqual.anses.fr/cms/sites/default/files/inline-files/XML_2020_07_07.zip'], pages: ['https://zenodo.org/api/records/17550133', 'https://www.data.gouv.fr/fr/datasets/table-de-composition-nutritionnelle-des-aliments-ciqual/'], link: /https?:\/\/[^"'\s<>]*\.zip(?:\/content)?/gi, prefer: /xml/i, need: [/^compo.*\.xml$/i, /^alim_(?!grp).*\.xml$/i, /^const.*\.xml$/i] },
+  cofid: { urls: ['https://assets.publishing.service.gov.uk/media/60538e66d3bf7f0455a5d8cb/McCance_Widdowsons_Composition_of_Foods_Integrated_Dataset_2021..xlsx'], pages: ['https://www.gov.uk/government/publications/composition-of-foods-integrated-dataset-cofid'], link: /https:\/\/assets\.publishing\.service\.gov\.uk\/[^"'\s<>]+\.xlsx/g, prefer: /Integrated_Dataset/i, need: [/^workbook\.xml$/] }
 };
 
 async function fetchTo(url, file) {
@@ -331,7 +345,7 @@ async function links(page, re) {
   return [...new Set([...html.matchAll(re)].map(m => new URL(m[0].replace(/&amp;/g, '&'), r.url).href))];
 }
 export async function download(id, dir, log = console.log) {
-  const { urls, pages, link, need } = SOURCES[id];
+  const { urls, pages, link, need, prefer } = SOURCES[id];
   const file = join(dir, `${id}.bin`), meta = join(dir, `${id}.url`);
   const ok = () => { const e = zipList(file); return e && need.every(re => findEntry(e, re)) ? e : null; };
   if (existsSync(file) && existsSync(meta) && ok()) { log(`${id}: cached ${readFileSync(meta, 'utf8')}`); return { file, url: readFileSync(meta, 'utf8'), entries: zipList(file) }; }
@@ -346,13 +360,14 @@ export async function download(id, dir, log = console.log) {
     log(`${id}: using ${url} (${(statSync(file).size / 1048576).toFixed(1)} MB)`);
     return { file, url, entries };
   };
-  for (const url of urls) { const got = await attempt(url); if (got) return got; }
+  if (!SOURCES[id].pagesFirst) for (const url of urls) { const got = await attempt(url); if (got) return got; }
   for (const page of pages) {
     let found = [];
     try { found = await links(page, link); } catch (e) { log(`${id}: page ${page} failed (${e.message})`); continue; }
-    log(`${id}: ${found.length} link(s) on ${page}: ${found.slice(0, 8).join(' ')}`);
-    for (const url of found.reverse()) { const got = await attempt(url); if (got) return got; }
+    log(`${id}: ${found.length} link(s) on ${page}: ${found.slice(0, 12).join(' ')}`);
+    for (const url of found.sort((a, b) => (prefer?.test(b) ? 1 : 0) - (prefer?.test(a) ? 1 : 0))) { const got = await attempt(url); if (got) return got; }
   }
+  if (SOURCES[id].pagesFirst) for (const url of urls) { const got = await attempt(url); if (got) return got; }
   throw new Error(`${id}: no working download`);
 }
 
@@ -488,11 +503,11 @@ export function compute({ tables, records, log = console.log, entries = MATCHES 
     const f = id != null ? tables[src].get(id) : null;
     if (!f) {
       const want = normName(desc).split(/[^a-z0-9%]+/).filter(Boolean);
-      const near = [...(byName[src]?.keys() || [])].map(n => [n, want.filter(w => n.includes(w)).length - n.length / 1000]).sort((a, b) => b[1] - a[1]).slice(0, 6).map(x => x[0]);
+      const near = [...(byName[src]?.keys() || [])].map(n => [n, want.filter(w => n.includes(w.slice(0, 5))).length - n.length / 1000]).sort((a, b) => b[1] - a[1]).slice(0, 6).map(x => x[0]);
       missing.push(`${e.id}: ${src} "${desc}" not found; nearest: ${near.map(n => JSON.stringify(n)).join(' | ')}`);
       continue;
     }
-    const cat = generic.get(k), m = cat && cat.p != null ? cat : f.m;
+    const cat = generic.get(k), m = cat && cat.p != null ? cat : { p: f.m.pro, f: f.m.fat, c: f.m.carb, e: f.m.kcal };
     if (!cat) log(`  reference ${k} (${desc}) is not in the catalogue; using the table's macros`);
     if (!Object.keys(rounded(f.v)).length || m?.p == null || m?.f == null || m?.c == null || m?.e == null) { missing.push(`${e.id}: ${src} "${desc}" has no values or macros`); continue; }
     refs.set(`${src}\u0000${desc}`, { k, n: cat?.en || cat?.n || f.name, cs: cat?.cs, e: m.e, p: m.p, c: m.c, f: m.f, v: rounded(f.v), entry: e });

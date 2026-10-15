@@ -36,7 +36,7 @@ test('USDA: nutrient numbers to keys, DFE folate preferred, other data types ign
   const f = foods.get('171077');
   assert.equal(f.name, 'Chicken, broilers or fryers, breast, meat only, raw');
   assert.deepEqual(f.v, { fol: 5, fe: 0.37, se: 22.8 });
-  assert.deepEqual(f.m, { p: 22.5 });
+  assert.deepEqual(f.m, { pro: 22.5 });
 });
 
 test('Fineli: decimal comma, units from component.csv, kJ to kcal', () => {
@@ -46,7 +46,7 @@ test('Fineli: decimal comma, units from component.csv, kJ to kcal', () => {
   const f = foods.get('1');
   assert.equal(f.name, 'Salmon, farmed');
   assert.deepEqual(f.v, { fe: 1.2, vitd: 0.5, sfa: 3 });
-  assert.equal(Math.round(f.m.e), 100);
+  assert.equal(Math.round(f.m.kcal), 100);
 });
 
 test('Ciqual: constituents by name and unit, traces left out, retinol equivalents', () => {
@@ -76,7 +76,7 @@ test('CoFID: header row found, columns by name, Tr and N left out', () => {
   const f = parseCofid(sheets).get('13-145');
   assert.equal(f.name, 'Lentils, red, dried');
   assert.deepEqual(f.v, { chol: 0, sfa: 0.2, fe: 7.6, vita: 3, b3: 2, fol: 35 });
-  assert.deepEqual(f.m, { p: 23.8, f: 1.3 });
+  assert.deepEqual(f.m, { pro: 23.8, fat: 1.3 });
 });
 
 test('xlsx sheet cells: shared strings, inline strings, gaps', () => {
@@ -98,7 +98,7 @@ test('the shard of a key is FNV-1a mod 256, three digits', () => {
 
 const BREAST = { k: 'usda_sr_legacy:171077', e: 120, p: 22.5, c: 0, f: 2.62, v: { fe: 0.37 } };
 const MILK = { k: 'cofid:12-345', e: 46, p: 3.4, c: 4.7, f: 1.7, v: { ca: 120 } };
-const refOf = (src, desc) => desc === 'Chicken, broilers or fryers, breast, meat only, raw' ? BREAST
+const refOf = (src, desc) => desc === 'Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw' ? BREAST
   : desc === 'Milk, semi-skimmed, pasteurised, average' ? MILK : null;
 
 test('matcher: raw chicken breast is estimated, breaded and smoked are not', () => {
@@ -142,12 +142,12 @@ test('every match entry has a Czech label, patterns and references', () => {
 
 test('compute: direct values for table foods, estimates flagged, missing references fail', () => {
   const tables = {
-    usda_sr_legacy: new Map([['171077', { name: 'Chicken, broilers or fryers, breast, meat only, raw', v: { fe: 0.37, se: 22.8 }, m: { p: 22.5, f: 2.62, c: 0, e: 120 } }]]),
-    cofid: new Map([['12-345', { name: 'Milk, semi-skimmed, pasteurised, average', v: { ca: 120.4 }, m: { p: 3.4, f: 1.7, c: 4.7, e: 46 } }]])
+    usda_sr_legacy: new Map([['171077', { name: 'Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw', v: { fe: 0.37, se: 22.8 }, m: { pro: 22.5, fat: 2.62, carb: 0, kcal: 120 } }]]),
+    cofid: new Map([['12-345', { name: 'Milk, semi-skimmed, pasteurised, average', v: { ca: 120.4 }, m: { pro: 3.4, fat: 1.7, carb: 4.7, kcal: 46 } }]])
   };
   const entries = MATCHES.filter(e => e.id === 'chicken_breast' || e.id === 'milk').map(e => ({ ...e, refs: e.refs.filter(([, d]) => refOf(null, d)) }));
   const records = [
-    { k: 'usda_sr_legacy:171077', n: 'Chicken, broilers or fryers, breast, meat only, raw', s: 'usda_sr_legacy', e: 120, p: 22.5, c: 0, f: 2.62 },
+    { k: 'usda_sr_legacy:171077', n: 'Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw', s: 'usda_sr_legacy', e: 120, p: 22.5, c: 0, f: 2.62 },
     { k: 'cofid:12-345', n: 'Milk, semi-skimmed, pasteurised, average', s: 'cofid', e: 46, p: 3.4, c: 4.7, f: 1.7 },
     { k: 'gtin:08590000000001', n: 'Kuřecí prsní řízky', cs: 'Kuřecí prsní řízky', s: 'off', e: 110, p: 23, c: 0, f: 1.5 },
     { k: 'gtin:08590000000001', n: 'Kuřecí prsní řízky', cs: 'Kuřecí prsní řízky', s: 'off', e: 110, p: 23, c: 0, f: 1.5 },
@@ -164,7 +164,7 @@ test('compute: direct values for table foods, estimates flagged, missing referen
   assert.equal(top.fe[0].k, 'usda_sr_legacy:171077');
   assert.equal(top.fe[0].cs, 'Kuřecí prsa');
   const broken = [{ ...entries[0], refs: [['usda_sr_legacy', 'Chicken, breast, missing']] }];
-  assert.throws(() => compute({ tables, records, entries: broken, log: () => {} }), /Missing references[\s\S]*nearest: "chicken, broilers/);
+  assert.throws(() => compute({ tables, records, entries: broken, log: () => {} }), /Missing references[\s\S]*nearest: "chicken, broiler/);
   assert.equal(normName("Pasta, whole-wheat, dry (Includes foods for USDA's Food Distribution Program)"), 'pasta, whole-wheat, dry');
 });
 
