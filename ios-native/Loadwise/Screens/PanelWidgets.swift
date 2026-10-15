@@ -140,7 +140,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .macros: return "Makroživiny"
         case .sleep: return "Spánek"
         case .sleepDebt: return "Spánkový dluh"
-        case .bedtime: return "Večerka a cíl spánku"
+        case .bedtime: return "Dnešní noc"
         case .steps: return "Kroky"
         case .activeCalories: return "Aktivní výdej"
         case .weight: return "Váha"
