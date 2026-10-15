@@ -662,11 +662,16 @@ struct BedtimeSetupCard: View {
 
 /// A data source that stopped working (Google or Intervals.icu refused the
 /// stored access, or Google permissions are missing), with a way to connect
-/// it again right here. Loads the connections itself, like the coach's check-in.
+/// it again right here. The problems come with Today; after connecting here
+/// the card asks the connections itself until Today loads again.
 struct ConnectionProblemCard: View {
     @Environment(AppModel.self) private var model
-    @State private var problems: [ConnectionsResponse.Provider] = []
+    @State private var checked: [ConnectionsResponse.Provider]?
     @State private var connecting: ConnectTarget?
+
+    private var problems: [ConnectionsResponse.Provider] {
+        checked ?? (model.today?.connectionProblems ?? []).map(\.asProvider)
+    }
 
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
@@ -697,16 +702,13 @@ struct ConnectionProblemCard: View {
                 .padding(.top, 20)
             }
         }
-        .task(id: model.loading) {
-            guard !model.loading else { return }
-            await load()
-        }
+        .onChange(of: model.todayRevision) { checked = nil }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await load() } }
     }
 
     private func load() async {
         guard !model.demo, let response = try? await model.api.connections() else { return }
-        withAnimation { problems = response.providers.filter(\.needsAttention) }
+        withAnimation { checked = response.providers.filter(\.needsAttention) }
     }
 
     /// The service's connect screen (ServiceConnectSheet), the same as in Zdroje dat.
