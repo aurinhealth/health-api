@@ -275,7 +275,7 @@ struct SleepDial: View {
     }
 
     private func point(_ minutes: Int, _ radius: CGFloat, _ c: CGPoint) -> CGPoint {
-        let a = Double(minutes) / 1440 * 2 * .pi - .pi / 2
+        let a = CGFloat(minutes) / 1440 * 2 * .pi - .pi / 2
         return CGPoint(x: c.x + radius * cos(a), y: c.y + radius * sin(a))
     }
 
