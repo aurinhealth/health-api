@@ -237,7 +237,7 @@ final class SnapshotTests: XCTestCase {
     func testDemoDataDecodes() {
         let today = DemoData.today
         XCTAssertEqual(today.readiness.score, 78)
-        XCTAssertEqual(today.plan.count, 2)
+        XCTAssertEqual(today.plan.count, 3)
         XCTAssertEqual(today.steps.hourly?.reduce(0, +), today.steps.today)
         XCTAssertEqual(Fmt.dayHeading(today.date), "ČTVRTEK 8. ŘÍJNA")
         XCTAssertEqual(Fmt.dayTitle("2026-10-08", today: "2026-10-08"), "Dnes")
