@@ -35,6 +35,7 @@ const utc = iso => new Date(iso).toISOString().replace(/\.\d{3}Z$/, "Z");
 const round = (field, v) => { const m = 10 ** ROUND[field]; return Math.round(Number(v) * m) / m; };
 const same = (field, a, b) => a != null && b != null && Math.abs(Number(a) - Number(b)) <= (TOLERANCE[field] ?? 0.05);
 
+const PRIVATE_SLEEP = new Set(['whoop', 'ultrahuman']);
 // Google Health values per day: { "2026-10-01": { restingHR: 52, steps: 8400, … } }.
 export async function googleWellness(db, userId, oldest, sleepSessions = []) {
   const days = {};
@@ -52,7 +53,9 @@ export async function googleWellness(db, userId, oldest, sleepSessions = []) {
   // The night's main sleep: the longest session ending that day. Its average
   // heart rate comes from Google Health's heart-rate samples in that window.
   const longest = {};
-  for (const s of sleepSessions) if (s.date >= oldest && Number(s.durationMin) > 0 && Number(s.durationMin) > Number(longest[s.date]?.durationMin || 0)) longest[s.date] = s;
+  // WHOOP and Ultrahuman nights stay in Aurin: their terms and our privacy
+  // policy do not let us pass them on, so only Google and Apple sleep is sent.
+  for (const s of sleepSessions) if (!PRIVATE_SLEEP.has(s.source) && s.date >= oldest && Number(s.durationMin) > 0 && Number(s.durationMin) > Number(longest[s.date]?.durationMin || 0)) longest[s.date] = s;
   for (const [d, s] of Object.entries(longest)) {
     put(d, "sleepSecs", Number(s.durationMin) * 60);
     if (!s.startTime || !s.endTime) continue;

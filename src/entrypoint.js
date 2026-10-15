@@ -1,5 +1,5 @@
 import {initialImport,recentDashboardImport} from './account-sync.js';
-
+import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
 import { trainingSetup } from './onboarding.js';
 import { subscriptionStatus, assertAIAccess } from './subscription.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
@@ -187,6 +187,95 @@ async function forEachUser(env, providers, fn) {
 }
 
 
+// The background jobs of one user, by the services they connected and the
+// minute (UTC) they are due. One cron run used to go through every user in
+// turn and hit the 1000 database queries a run may make (users with a higher
+// account number then silently stopped syncing); now each user's due jobs run
+// in an invocation of their own (UserJobs, user-jobs-entrypoint.js).
+const minute = (cron, now, test) => cron === "* * * * *" && test(now.getUTCMinutes(), now.getUTCHours());
+const every5 = (cron, now) => minute(cron, now, m => m % 5 === 0);
+const USER_JOBS = [
+  // After the user's midnight (0:00–6:00 in their zone), heart-rate samples
+  // older than two weeks become 5-minute rows, six hours of samples a minute.
+  { name: "sync", providers: ["google", "intervals"], due: () => true, run: async (scoped, ctx, controller) => {
+    await app.scheduled(controller, scoped, ctx);
+    if (controller.cron === "* * * * *" && localHour() < 6 && (scoped.CONNECTED_PROVIDERS || []).includes("google")) await compactHeartRate(scoped.DB, scoped.USER_ID).catch(error => console.error("Heart-rate compaction failed", error.message));
+    // The morning readiness push once the night's data has synced (push.js),
+    // checked every five minutes; it goes out at most once a local day.
+    if (every5(controller.cron, new Date(controller.scheduledTime))) {
+      await morningPush(scoped, ctx).catch(error => console.error("Morning push failed", error.message));
+      await coachPush(scoped, ctx).catch(error => console.error("Coach push failed", error.message));
+    }
+  } },
+  { name: "google-food", providers: ["google"], due: every5, run: async scoped => { await backfillFoodGoogle(scoped.DB); await processFoodGoogle(scoped, { token: googleToken }); } },
+  { name: "intervals-exports", providers: ["intervals"], due: every5, run: scoped => retryWorkoutExports(scoped) },
+  // Done activities whose send to Google Health, Intervals.icu or Strava did not go through (sync-destinations.js).
+  { name: "sync-sends", providers: ["google", "intervals", "strava"], due: every5, run: scoped => retrySyncSends(scoped, { googleToken }) },
+  // Every hour at :20: the ring's last three days from Ultrahuman (the night lands in the morning).
+  { name: "ultrahuman", providers: ["ultrahuman"], due: (cron, now) => minute(cron, now, m => m === 20), run: async scoped => { const r = await syncUltrahuman(scoped, { days: 3 }); if (r.saved) await bumpCacheVersion(scoped.DB); } },
+  // Wahoo: plans not sent yet every five minutes; done workouts come by the webhook, and every
+  // three hours a look in case one was missed (the Sandbox allows 250 requests a day for the app).
+  { name: "wahoo-exports", providers: ["wahoo"], due: every5, run: scoped => retryWahooExports(scoped) },
+  { name: "wahoo", providers: ["wahoo"], due: (cron, now) => minute(cron, now, (m, h) => m === 35 && h % 3 === 0), run: async scoped => { const r = await syncWahoo(scoped, { days: 2, maxPages: 1 }); if (r.saved) { await matchActivities(scoped, { days: 3 }).catch(() => null); await bumpCacheVersion(scoped.DB); } } },
+  { name: "whoop", providers: ["whoop"], due: (cron, now) => minute(cron, now, m => m === 25), run: async scoped => { const r = await syncWhoop(scoped, { days: 3 }); if (r.saved) await bumpCacheVersion(scoped.DB); } },
+  // Hourly: the latest weight to Strava when it changed and the user sends it there.
+  { name: "strava-weight", providers: ["strava"], due: (cron, now) => minute(cron, now, m => m === 30), run: async scoped => syncStravaWeight(scoped, { allowed: healthAllowed(await readSyncPrefs(scoped.DB, scoped.USER_ID, "strava"), "weight") }) },
+  { name: "intervals-recent", providers: ["intervals"], due: every5, run: (scoped, ctx) => legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), scoped, ctx) },
+  // Hourly, half an hour after the Google Health sync: weight the same in the
+  // app, Google Health and Intervals.icu, and Google wellness (sleep, steps,
+  // heart rate, HRV, …) copied into Intervals.icu.
+  { name: "intervals-wellness", providers: ["intervals"], due: (cron, now) => minute(cron, now, m => m === 30), run: async (scoped, ctx) => {
+    await syncWeights(scoped, { googleToken }).catch(error => console.error("Weight sync failed", error.message));
+    await syncWellnessToIntervals(scoped, { sleepSessions: (from, to) => legacyHealthApi.fetch(new Request(`https://internal/health/sleep?start=${from}&end=${shiftDate(to, 1)}`), scoped, ctx).then(r => r.json()).then(d => d.sessions || []) }).catch(error => console.error("Wellness sync failed", error.message));
+  } }
+];
+export function dueUserJobs(cron, now) { return USER_JOBS.filter(job => job.due(cron, now)).map(job => job.name); }
+
+// One user's due jobs, in the user's language, units and time zone; a failing
+// job does not stop the next one.
+export async function runUserJobs(env, ctx, { cron, scheduledTime }, user, names) {
+  const scoped = await connectionEnvironment(await userDataEnvironment(env, user));
+  const connected = scoped.CONNECTED_PROVIDERS || [];
+  const jobs = USER_JOBS.filter(job => names.includes(job.name) && job.providers.some(p => connected.includes(p)));
+  if (!jobs.length) return;
+  const [language, zone] = await Promise.all([storedLanguage(env.DB, user.id, { fresh: true }), storedTimeZone(env.DB, user.id, { fresh: true })]), unitsChoice = await storedUnits(env.DB, user.id);
+  const controller = { cron, scheduledTime };
+  await withLang(language, () => withUnits(unitsChoice, () => withTimeZone(zone, async () => {
+    for (const job of jobs) {
+      try { await withOpsScope(env.DB, job.name, () => job.run(scoped, ctx, controller)); }
+      catch (error) { console.error("Per-user job failed", user.id, job.name, error.message); }
+    }
+  })));
+}
+// The UserJobs entrypoint (user-jobs-entrypoint.js): a fresh invocation for one user.
+export async function runUserJobsInvocation(env, ctx, { user, names, cron, scheduledTime }) {
+  await ensureTenancy(env.DB, env);
+  useCookbookDatabase(env.DB);
+  await runUserJobs(env, ctx, { cron, scheduledTime }, user, names);
+}
+// Ten users at a time through the USER_JOBS binding. Without the binding (tests,
+// local runs), or when it fails before any user went through, the jobs run here.
+export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } = {}) {
+  const scheduledTime = controller.scheduledTime || Date.now();
+  const names = dueUserJobs(controller.cron, new Date(scheduledTime));
+  if (!names.length) return { users: 0, names };
+  const providers = [...new Set(USER_JOBS.filter(job => names.includes(job.name)).flatMap(job => job.providers))];
+  // The App Review demo account syncs with no third-party service (app-review.js).
+  const users = (await usersWithProviders(env.DB, env, providers)).filter(user => !isReviewAccount(env, user));
+  let binding = env.USER_JOBS && typeof env.USER_JOBS.run === "function" ? env.USER_JOBS : null, delivered = 0;
+  const inline = user => runUserJobs(env, ctx, { cron: controller.cron, scheduledTime }, user, names).catch(error => console.error("Per-user job failed", user.id, error.message));
+  const one = async user => {
+    if (!binding) return inline(user);
+    try { await binding.run({ user, names, cron: controller.cron, scheduledTime }); delivered++; }
+    catch (error) {
+      console.error("User jobs invocation failed", user.id, error.message);
+      if (!delivered) { binding = null; return inline(user); }
+    }
+  };
+  for (let i = 0; i < users.length; i += binding ? concurrency : 1) await Promise.all(users.slice(i, i + (binding ? concurrency : 1)).map(one));
+  return { users: users.length, names };
+}
+
 const worker = {
   async scheduled(controller, env, ctx) {
     await ensureTenancy(env.DB, env);
@@ -200,40 +289,12 @@ const worker = {
         await deleteAccount(await connectionEnvironment(await userDataEnvironment(env, user)), user, { budgetMs: 1000 }).catch(error => console.error("Inactive account deletion failed", user.id, error.message));
       }
     }
-    // After the user's midnight (0:00–6:00 in their zone), heart-rate samples
-    // older than two weeks become 5-minute rows, six hours of samples a minute.
-    await forEachUser(env, ["google", "intervals"], async scoped => {
-      const result = await app.scheduled(controller, scoped, ctx);
-      if (controller.cron === "* * * * *" && localHour() < 6 && (scoped.CONNECTED_PROVIDERS || []).includes("google")) await compactHeartRate(scoped.DB, scoped.USER_ID).catch(error => console.error("Heart-rate compaction failed", error.message));
-      // The morning readiness push once the night's data has synced (push.js),
-      // checked every five minutes; it goes out at most once a local day.
-      if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await morningPush(scoped, ctx).catch(error => console.error("Morning push failed", error.message));
-      if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await coachPush(scoped, ctx).catch(error => console.error("Coach push failed", error.message));
-      return result;
-    });
     // Connection keys saved before CONNECTION_KEY existed get it (connection-secrets.js).
     if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await migrateConnectionSecrets(env).then(result => { if (result.migrated || result.failed) console.log("Connection key migration", result); }).catch(error => console.error("Connection key migration failed", error.message));
-    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['google'],async scoped=>{await backfillFoodGoogle(scoped.DB);return processFoodGoogle(scoped,{token:googleToken});});
-    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],async scoped=>{await retryWorkoutExports(scoped);});
-    // Done activities whose send to Google Health, Intervals.icu or Strava did not go through (sync-destinations.js).
-    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['google','intervals','strava'],scoped=>retrySyncSends(scoped,{googleToken}));
-    // Every hour at :20: the ring's last three days from Ultrahuman (the night lands in the morning).
-    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()===20)await forEachUser(env,['ultrahuman'],async scoped=>{const r=await syncUltrahuman(scoped,{days:3});if(r.saved)await bumpCacheVersion(scoped.DB);return r;});
-    // Wahoo: plans not sent yet every five minutes; done workouts come by the webhook, and every
-    // three hours a look in case one was missed (the Sandbox allows 250 requests a day for the app).
-    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['wahoo'],scoped=>retryWahooExports(scoped));
-    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()===35&&new Date().getUTCHours()%3===0)await forEachUser(env,['wahoo'],async scoped=>{const r=await syncWahoo(scoped,{days:2,maxPages:1});if(r.saved){await matchActivities(scoped,{days:3}).catch(()=>null);await bumpCacheVersion(scoped.DB);}return r;});
-    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()===25)await forEachUser(env,['whoop'],async scoped=>{const r=await syncWhoop(scoped,{days:3});if(r.saved)await bumpCacheVersion(scoped.DB);return r;});
-    // Hourly: the latest weight to Strava when it changed and the user sends it there.
-    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()===30)await forEachUser(env,['strava'],async scoped=>syncStravaWeight(scoped,{allowed:healthAllowed(await readSyncPrefs(scoped.DB,scoped.USER_ID,'strava'),'weight')}).catch(error=>({error:error.message})));
-    if(controller.cron==='* * * * *'&&new Date().getUTCMinutes()%5===0)await forEachUser(env,['intervals'],scoped=>legacyHealthApi.fetch(new Request('https://internal/sync/intervals/recent',{method:'POST'}),scoped,ctx));
-    // Hourly, half an hour after the Google Health sync: weight the same in the
-    // app, Google Health and Intervals.icu, and Google wellness (sleep, steps,
-    // heart rate, HRV, …) copied into Intervals.icu.
-    if (controller.cron === "* * * * *" && new Date().getUTCMinutes() === 30) await forEachUser(env, ["intervals"], async scoped => ({
-      weight: await syncWeights(scoped, { googleToken }).catch(error => ({ error: error.message })),
-      wellness: await syncWellnessToIntervals(scoped, { sleepSessions: (from, to) => legacyHealthApi.fetch(new Request(`https://internal/health/sleep?start=${from}&end=${shiftDate(to, 1)}`), scoped, ctx).then(r => r.json()).then(d => d.sessions || []) }).catch(error => ({ error: error.message }))
-    }));
+    // Yesterday's failed syncs, broken connections and server errors, to the owner (ops-report.js).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 6 && new Date().getUTCMinutes() % 10 === 0) await sendDailyOpsReport(env).catch(error => console.error("Daily ops report failed", error.message));
+    // Every user's jobs due this minute (USER_JOBS), each user in its own invocation.
+    await fanOutUserJobs(env, ctx, controller);
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -389,7 +450,13 @@ export default {
     // An installed iPhone app older than the API answers with 426 (app-version.js).
     const outdated = appUpdateRequired(request);
     if (outdated) return outdated;
-    return worker.fetch(request, env, ctx);
+    // Server errors are counted for the owner's morning e-mail (ops-report.js); 503 is a planned "try again".
+    const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", `${request.method} ${routeName(new URL(request.url).pathname)}`, message));
+    try {
+      const response = await worker.fetch(request, env, ctx);
+      if (response.status >= 500 && response.status !== 503) count(`HTTP ${response.status}`);
+      return response;
+    } catch (error) { count(error); throw error; }
   }
 };
 
