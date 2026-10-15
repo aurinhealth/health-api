@@ -37,6 +37,10 @@ enum AppRoute: Hashable {
     case insights
     /// Trénink → Svaly: how tired each muscle is (MuscleViews.swift).
     case muscles
+    /// Svaly → one muscle (its id in /app/api/muscles): strength and how often.
+    case muscle(String)
+    /// The exercise catalogue on one muscle chip (BodyFigure id).
+    case exercises(String)
     /// Cycle tracking's calendar (Health → Cyklus).
     case cycle
     /// Aktivita dne: Další možnosti from Today's card (false), every option
@@ -169,6 +173,8 @@ struct RouteScreen: View {
         case .dayReview: DayReviewView()
         case .insights: InsightsView()
         case .muscles: MusclesView()
+        case .muscle(let id): MuscleDetailView(id: id)
+        case .exercises(let muscle): ExerciseLibraryView(muscle: muscle)
         case .cycle: CycleCalendarView()
         case .coachPick(let all): CoachPickView(all: all)
         case .myWorkouts: MyWorkoutsView(friends: false)

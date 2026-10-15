@@ -46,6 +46,8 @@ import { localDate, zonedTime } from "./user-time.js";
 const HOUR = 3600000, DAY = 86400000;
 export const RESTED_BELOW = 1.75, MAX_HOURS = 96, FATIGUED_HOURS = 24, FULL = 6, WINDOW_DAYS = 7;
 const RIDE_SHARE = 0.7;
+// When each body part was last trained and how often this week: 4 weeks of sets.
+const HISTORY_DAYS = 28;
 // A gym day without a known time counts as done at 18:00.
 const GYM_HOUR = "T18:00:00";
 // An activity is listed under "Z posledních 3 dní" when it left at least half
@@ -173,13 +175,7 @@ function dayText(date, today) {
 }
 const LEGS = new Set(["quads", "hamstrings", "glutes", "calves", "adductors", "abductors"]);
 function sourceTitle(s) {
-  if (s.kind === "gym") {
-    const total = Object.values(s.muscles).reduce((a, b) => a + b, 0) || 1;
-    const legs = Object.entries(s.muscles).filter(([m]) => LEGS.has(m)).reduce((a, [, v]) => a + v, 0) / total;
-    const core = (s.muscles.core || 0) / total;
-    const part = legs >= .6 ? L("nohy", "legs") : core >= .6 ? L("střed těla", "core") : legs <= .2 ? L("horní část těla", "upper body") : L("celé tělo", "full body");
-    return L("Posilovna, ", "Gym, ") + part;
-  }
+  if (s.kind === "gym") return L("Posilovna, ", "Gym, ") + gymPart(s);
   const name = { ride: L("Jízda", "Ride"), run: L("Běh", "Run"), walk: L("Chůze", "Walk") }[s.kind];
   const km = Number(s.distance) / 1000;
   if (km >= 0.5) {
@@ -221,7 +217,9 @@ export function muscleCauses(doses, sources, muscle, now, today) {
 // tired them in the last 3 days. sets: completed WORK sets {workout_date,
 // exercise, rpe, updated_at}; activities: {kind, end (ms), tss, durationHours
 // or moving_time, distance (m), minutes}; now: ms; today: the user's date.
-export function muscleFatigue({ sets = [], activities = [], now, today }) {
+// history: the sets of the last 4 weeks for when each body part was trained
+// (the sets when left out).
+export function muscleFatigue({ sets = [], history = sets, activities = [], now, today }) {
   const { doses, sources } = fatigueDoses({ sets, activities, now });
   const muscles = MUSCLES.map((id, order) => {
     const m = muscleState(doses, id, now), readyAt = m.hours ? new Date(now + m.hours * HOUR) : null;
@@ -235,22 +233,106 @@ export function muscleFatigue({ sets = [], activities = [], now, today }) {
   const recent = sources.filter(s => s.date >= from && s.date <= today && Math.max(0, ...Object.values(s.muscles)) >= LISTED_FROM)
     .sort((a, b) => b.at - a.at)
     .map(s => ({ kind: s.kind, date: s.date, title: sourceTitle(s), day: dayText(s.date, today), estimated: s.kind !== "gym" }));
-  return { status: "ok", date: today, muscles, recent };
+  const groups = muscleGroups({ muscles, sets: history, today });
+  const lastGym = sources.filter(s => s.kind === "gym" && s.date <= today).sort((a, b) => b.at - a.at)[0];
+  return {
+    status: "ok", date: today, muscles, recent, groups,
+    readyToday: readyToday(groups, today),
+    lastGym: lastGym ? { part: gymPart(lastGym), day: dayText(lastGym.date, today) } : null,
+    recommend: recommendation(groups, today)
+  };
+}
+
+// The body parts of the widget's rings and of "Tento týden": each is as
+// rested as its most tired muscle. ring: shown in the rings (the core is
+// only on the week list).
+export const GROUPS = [
+  { id: "legs", cs: "Nohy", en: "Legs", muscles: ["quads", "hamstrings", "calves", "adductors", "abductors"], ring: true, lower: true },
+  { id: "glutes", cs: "Hýždě", en: "Glutes", muscles: ["glutes"], ring: true, lower: true },
+  { id: "back", cs: "Záda", en: "Back", muscles: ["back", "lower_back", "traps"], ring: true },
+  { id: "chest", cs: "Hrudník", en: "Chest", muscles: ["chest"], ring: true },
+  { id: "shoulders", cs: "Ramena", en: "Shoulders", muscles: ["shoulders", "side_delts", "rear_delts"], ring: true },
+  { id: "arms", cs: "Paže", en: "Arms", muscles: ["biceps", "triceps", "forearms"], ring: true },
+  { id: "core", cs: "Střed těla", en: "Core", muscles: ["core"], ring: false }
+];
+// A body part counts as trained on a day with at least one set's worth of
+// work on its muscles (a helper's share counts by its share).
+const TRAINED_FROM = 1;
+// The target of "Tento týden": twice a week per body part (Schoenfeld 2016).
+export const WEEKLY_TARGET = 2;
+const RANK = { rested: 0, recovering: 1, fatigued: 2 };
+
+const mondayOf = date => shiftDate(date, -((new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7));
+
+// The days each body part was trained, from the completed sets.
+export function trainedDays(sets, muscleIds) {
+  const want = new Set(muscleIds), perDay = new Map();
+  for (const s of sets) {
+    const date = dateOnly(s.workout_date);
+    if (!date) continue;
+    for (const [muscle, share] of Object.entries(setMuscles(s.exercise))) {
+      if (want.has(muscle)) perDay.set(date, (perDay.get(date) || 0) + share);
+    }
+  }
+  return [...perDay].filter(([, v]) => v >= TRAINED_FROM).map(([d]) => d).sort();
+}
+
+export function muscleGroups({ muscles, sets = [], today }) {
+  const byId = new Map(muscles.map(m => [m.id, m])), monday = mondayOf(today);
+  return GROUPS.map(g => {
+    const own = g.muscles.map(id => byId.get(id)).filter(Boolean);
+    const worst = own.reduce((a, m) => !a || RANK[m.state] > RANK[a.state] || (RANK[m.state] === RANK[a.state] && (m.level || 0) > (a.level || 0)) ? m : a, null);
+    const days = trainedDays(sets.filter(s => dateOnly(s.workout_date) <= today), g.muscles);
+    const last = days[days.length - 1] || null;
+    const percent = !worst || worst.state === "rested" ? 100 : Math.max(5, Math.min(95, Math.round((1 - (worst.level || 0)) * 100)));
+    return {
+      id: g.id, label: L(g.cs, g.en), ring: g.ring, lower: Boolean(g.lower), state: worst?.state || "rested", percent,
+      readyDate: worst?.state === "rested" ? null : worst?.readyDate || null, estimated: Boolean(worst?.estimated && worst.state !== "rested"),
+      thisWeek: days.filter(d => d >= monday).length, target: WEEKLY_TARGET,
+      lastDate: last, daysSince: last ? Math.round((Date.parse(today) - Date.parse(last)) / DAY) : null
+    };
+  });
+}
+
+// What today is good for: "full" (everything rested), "upper", "lower" or
+// "none". A body part rested later today counts.
+export function readyToday(groups, today) {
+  const ready = side => groups.filter(g => g.ring && Boolean(g.lower) === side).every(g => readyBy(g, today));
+  const lower = ready(true), upper = ready(false);
+  return lower && upper ? "full" : upper ? "upper" : lower ? "lower" : "none";
+}
+
+const readyBy = (g, today) => g.state === "rested" || (g.state === "recovering" && g.readyDate && g.readyDate <= today);
+// The ready body part of the rings trained longest ago (or never): why
+// today's suggestion.
+export function recommendation(groups, today) {
+  const rested = groups.filter(g => g.ring && readyBy(g, today));
+  if (!rested.length) return null;
+  const pick = rested.slice().sort((a, b) => (b.daysSince ?? 999) - (a.daysSince ?? 999))[0];
+  return { group: pick.id, label: pick.label, daysSince: pick.daysSince };
+}
+
+function gymPart(s) {
+  const total = Object.values(s.muscles).reduce((a, b) => a + b, 0) || 1;
+  const legs = Object.entries(s.muscles).filter(([m]) => LEGS.has(m)).reduce((a, [, v]) => a + v, 0) / total;
+  const core = (s.muscles.core || 0) / total;
+  return legs >= .6 ? L("nohy", "legs") : core >= .6 ? L("střed těla", "core") : legs <= .2 ? L("horní část těla", "upper body") : L("celé tělo", "full body");
 }
 
 // Server side: the last week's completed sets and activities from D1.
 export async function loadMuscleFatigue(db, { now = Date.now() } = {}) {
-  const today = localDate(new Date(now)), since = shiftDate(today, -WINDOW_DAYS);
+  const today = localDate(new Date(now)), since = shiftDate(today, -WINDOW_DAYS), history = shiftDate(today, -HISTORY_DAYS);
   // The source and type lists first, so the read stays on the index
   // (user_id, source_family, data_type, start_time).
   const [setRows, activityRows] = await Promise.all([
-    db.prepare("SELECT workout_date,exercise,rpe,updated_at FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' AND workout_date>=? AND workout_date<=?").bind(db.userId, since, today).all().catch(() => ({ results: [] })),
+    db.prepare("SELECT workout_date,exercise,rpe,updated_at FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' AND workout_date>=? AND workout_date<=?").bind(db.userId, history, today).all().catch(() => ({ results: [] })),
     db.prepare("SELECT source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local','google-wearables','apple-health') AND data_type IN ('activity','exercise') AND start_time>=? AND ((source_family IN ('intervals','local') AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND (record_role IS NULL OR record_role!='duplicate')").bind(db.userId, since).all().catch(() => ({ results: [] }))
   ]);
   const activities = storedActivities(activityRows.results || [], { keepRow: true }).map(({ row, ...a }) => {
     const s = sessionOf(row), minutes = s?.minutes || Number(a.moving_time) / 60 || 0;
     return { ...a, kind: activityKind(a), minutes, durationHours: minutes / 60, end: s ? s.at + minutes * 60000 : NaN };
   });
-  return muscleFatigue({ sets: setRows.results || [], activities, now, today });
+  const all = setRows.results || [];
+  return muscleFatigue({ sets: all.filter(s => dateOnly(s.workout_date) >= since), history: all, activities, now, today });
 }
 

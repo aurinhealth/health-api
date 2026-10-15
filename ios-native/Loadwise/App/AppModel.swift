@@ -50,6 +50,9 @@ final class AppModel {
     /// Cycle tracking (AppModel+Cycle.swift): nil until loaded, `available`
     /// false unless the profile's sex is female.
     var cycle: CycleResponse?
+    /// Svaly (MuscleViews.swift): loaded by the widgets, the screen and the
+    /// gym builder, whichever comes first.
+    var muscleFatigue: MuscleFatigue?
     /// Apple Health's cycle data went to the server in this run of the app.
     @ObservationIgnored var cycleHealthSynced = false
 

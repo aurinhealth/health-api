@@ -122,8 +122,10 @@ struct LibrarySportPanel: View {
     }
 }
 
-/// The gym part of the library: build a session with AI, then the exercises.
+/// The gym part of the library: build a session with AI, the muscles, then the exercises.
 struct GymLibrarySection: View {
+    @Environment(AppModel.self) private var model
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             RouteLink(route: .gymBuilder) {
@@ -141,9 +143,31 @@ struct GymLibrarySection: View {
             }
             .padding(.top, 18)
 
+            if let data = model.muscles {
+                RouteLink(route: .muscles) {
+                    HStack(spacing: 14) {
+                        MuscleFigurePair(colors: data.figureColors, spacing: 2).frame(height: 84)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(verbatim: L10n.tr(data.readyTitle == nil ? "Dnes" : "Dnes připravené")).font(Typo.caption).foregroundStyle(Palette.muted)
+                            Text(verbatim: data.headline).font(Typo.sentence(20)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
+                            if let most = data.tired.first {
+                                Text(verbatim: L10n.f("%@: odpočaté %@", most.label, most.readyText(today: data.date)))
+                                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                    }
+                    .padding(14)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+                .padding(.top, 12)
+            }
+
             SectionLabel(text: "Cviky").padding(.top, 26)
             ExerciseCatalog()
         }
+        .task { if model.muscleFatigue == nil { await model.loadMuscles() } }
     }
 }
 
@@ -556,12 +580,15 @@ struct LibraryWorkoutSheet: View {
 
 /// "Knihovna cviků" on its own screen (deep link loadwise://open/exercises).
 struct ExerciseLibraryView: View {
+    /// Opened on one muscle (Svaly → Cviky: …), a BodyFigure id.
+    var muscle: String? = nil
+
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Cviky") {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: "Posilovna · knihovna cviků").padding(.top, 24)
                 Text("Cviky").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
-                ExerciseCatalog()
+                ExerciseCatalog(muscle: muscle)
             }
         }
     }
@@ -570,10 +597,14 @@ struct ExerciseLibraryView: View {
 /// Search, the muscle chips, "Jen s mým vybavením" and the list of exercises.
 struct ExerciseCatalog: View {
     @Environment(AppModel.self) private var model
+    init(muscle: String? = nil) { _muscle = State(initialValue: muscle) }
+
     @State private var exercises: [GymCatalogExercise] = []
     @State private var equipment: GymEquipment?
     @State private var query = ""
     @State private var muscle: String?
+    /// Only exercises whose main muscle is rested (Svaly).
+    @State private var rested = false
     @State private var mine = true
     @State private var loading = true
     @State private var error: String?
@@ -595,7 +626,10 @@ struct ExerciseCatalog: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    chip("Vše", muscle == nil) { muscle = nil }
+                    chip("Vše", muscle == nil && !rested) { muscle = nil; rested = false }
+                    if model.muscles.map({ !$0.tired.isEmpty }) == true {
+                        chip("Odpočaté", rested, dot: Palette.green) { rested.toggle() }
+                    }
                     ForEach(BodyFigure.muscles.indices, id: \.self) { i in
                         let m = BodyFigure.muscles[i]
                         chip(m.label, muscle == m.id) { muscle = muscle == m.id ? nil : m.id }
@@ -624,7 +658,10 @@ struct ExerciseCatalog: View {
                 .padding(.top, 4)
             }
         }
-        .task { await load() }
+        .task {
+            if model.muscleFatigue == nil { await model.loadMuscles() }
+            await load()
+        }
         .sheet(item: $open) { ex in ExerciseSheet(exercise: ex) }
     }
 
@@ -635,6 +672,7 @@ struct ExerciseCatalog: View {
             guard words.allSatisfy({ text.contains($0) }) else { return false }
             if let muscle, !Self.works(ex, muscle) { return false }
             if mine, !EquipmentView.fits(ex, equipment) { return false }
+            if rested, tired(ex) != nil { return false }
             return true
         }
     }
@@ -658,6 +696,10 @@ struct ExerciseCatalog: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(ex.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
                 Text([ex.muscle, ex.station].compactMap { $0?.nilIfBlank }.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                if let m = tired(ex), let data = model.muscles {
+                    Text(verbatim: L10n.f("%@ unavené, odpočaté %@", m.label, m.readyText(today: data.date)))
+                        .font(Typo.caption).foregroundStyle(Palette.rust).lineLimit(1)
+                }
             }
             Spacer(minLength: 8)
             Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
@@ -666,9 +708,19 @@ struct ExerciseCatalog: View {
         .contentShape(Rectangle())
     }
 
-    private func chip(_ title: String, _ on: Bool, action: @escaping () -> Void) -> some View {
+    /// The tired muscle behind the exercise's main muscle, nil when it is rested.
+    private func tired(_ ex: GymCatalogExercise) -> MuscleFatigue.Muscle? {
+        guard let data = model.muscles, let main = (ex.muscles ?? [:]).max(by: { $0.value < $1.value }), main.value >= 0.5 else { return nil }
+        return data.tired(body: main.key)
+    }
+
+    private func chip(_ title: String, _ on: Bool, dot: Color? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.footnote.weight(.medium))
+            HStack(spacing: 6) {
+                if let dot { Circle().fill(dot).frame(width: 7, height: 7) }
+                Text(verbatim: L10n.tr(title))
+            }
+            .font(.footnote.weight(.medium))
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 12).frame(height: 32)
                 .background(on ? Palette.button : Palette.card, in: Capsule())

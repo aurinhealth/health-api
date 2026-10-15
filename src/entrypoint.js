@@ -74,6 +74,7 @@ import { readinessFor } from './readiness.js';
 import { lockReadiness } from "./readiness-lock.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
 import { loadMuscleFatigue } from "./muscle-fatigue.js";
+import { loadMuscleDetail } from "./muscle-detail.js";
 import { readGymPlan, ensureGymPlans } from "./gym-plan-store.js";
 import { listRecovery, addRecovery, updateRecovery } from "./recovery-plan.js";
 import { screenText, SCREENS, markScreenTextsStale } from "./screen-texts.js";
@@ -1090,6 +1091,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     catch(error){return Response.json({status:'error',message:error.message},{status:500})}
   }
   // Trénink → Svaly: how tired each muscle is and when it is rested (src/muscle-fatigue.js).
+  // Svaly → one muscle: strength over 8 weeks and how often (src/muscle-detail.js).
+  if(url.pathname==='/app/api/muscles/detail'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    try{const r=await loadMuscleDetail(env.DB,url.searchParams.get('id')||'');return Response.json(r,{status:r.status==='ok'?200:400,headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({status:'error',message:error.message},{status:500})}
+  }
   if(url.pathname==='/app/api/muscles'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{return Response.json(await loadMuscleFatigue(env.DB),{headers:{'Cache-Control':'no-store'}});}

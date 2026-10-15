@@ -116,12 +116,17 @@ struct ChipFlow<Item: Hashable>: View {
     let label: (Item) -> String
     let isOn: (Item) -> Bool
     let toggle: (Item) -> Void
+    /// A coloured dot before the name (a tired muscle), nil for none.
+    var mark: (Item) -> Color? = { _ in nil }
 
     var body: some View {
         FlowLayout(spacing: 8) {
             ForEach(items, id: \.self) { item in
                 Button { toggle(item) } label: {
-                    Text(label(item))
+                    HStack(spacing: 6) {
+                        if let color = mark(item) { Circle().fill(color).frame(width: 7, height: 7) }
+                        Text(label(item))
+                    }
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(isOn(item) ? Palette.onButton : Palette.ink)
                         .padding(.horizontal, 12).frame(height: 32)
@@ -226,6 +231,8 @@ struct GymBuilderView: View {
     @State private var day: Date = Date()
     @State private var minutes = 60
     @State private var focus = "auto"
+    /// The focus came from the rested muscles, not from a tap (Svaly).
+    @State private var focusPreset = false
     @State private var muscles: Set<String> = []
     @State private var proposal: GymProposal?
     @State private var wish = ""
@@ -258,6 +265,12 @@ struct GymBuilderView: View {
             if let minutes = template?.template.minutes { self.minutes = minutes }
             if !model.demo, equipment == nil { equipment = try? await model.api.gymEquipment() }
             if !model.demo, catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
+            if template == nil, model.muscleFatigue == nil { await model.loadMuscles() }
+            // What is rested today picks the focus, until the athlete picks one.
+            if template == nil, proposal == nil, focus == "auto", !focusPreset, let preset = model.muscles?.focus {
+                focusPreset = true
+                focus = preset
+            }
         }
         .sheet(item: Binding(get: { replacing.map { Named(name: $0) } }, set: { replacing = $0?.name })) { item in
             AlternativesSheet(date: isoDay, exercise: item.name, inPlan: proposal?.exercises.map(\.name) ?? [], footnote: nil,
@@ -274,8 +287,30 @@ struct GymBuilderView: View {
 
     // MARK: Form
 
+    /// Svaly on top: what is ready today and what is still tired; a tap opens Svaly.
+    private func musclesCard(_ data: MuscleFatigue) -> some View {
+        RouteLink(route: .muscles) {
+            HStack(spacing: 14) {
+                MuscleFigurePair(colors: data.figureColors, spacing: 2).frame(height: 96)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: L10n.tr(data.readyTitle == nil ? "Dnes" : "Dnes připravené")).font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(verbatim: data.headline).font(Typo.sentence(21)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
+                    if let most = data.tired.first {
+                        Text(verbatim: L10n.f("%@: odpočaté %@", most.label, most.readyText(today: data.date)))
+                            .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
+            .padding(14)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+    }
+
     private var form: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let data = model.muscles { musclesCard(data).padding(.top, 20) }
             SectionLabel(text: "Kdy a jak dlouho").padding(.top, 26)
             Card {
                 DatePicker("Den", selection: $day, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
@@ -304,7 +339,14 @@ struct GymBuilderView: View {
                     Text(L10n.f("Vybráno %@ z 5", String(muscles.count)))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     BodyMap(selected: muscles, onTap: toggle, height: 280)
-                    ChipFlow(items: BodyFigure.muscles.map { $0.id }, label: BodyFigure.label, isOn: { muscles.contains($0) }, toggle: toggle)
+                    ChipFlow(items: BodyFigure.muscles.map { $0.id }, label: BodyFigure.label, isOn: { muscles.contains($0) }, toggle: toggle,
+                             mark: { model.muscles?.tired(body: $0)?.color })
+                    if model.muscles.map({ !$0.tired.isEmpty }) == true {
+                        HStack(spacing: 6) {
+                            Circle().fill(Palette.rust).frame(width: 7, height: 7)
+                            Text("ještě unavené").font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
+                    }
                 }
                 .padding(.top, 12)
             }
