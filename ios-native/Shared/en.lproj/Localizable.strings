@@ -2275,3 +2275,5 @@
 "%@: odpočaté %@" = "%1$@: rested %2$@";
 "Odpočaté" = "Rested";
 "%@ unavené, odpočaté %@" = "%1$@ tired, rested %2$@";
+"+%@ tréninkem" = "+%@ from training";
+"Teď %@" = "Now %@";
