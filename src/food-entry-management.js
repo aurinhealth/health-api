@@ -25,7 +25,6 @@ async function existing(db,id){const row=await db.prepare('SELECT * FROM food_lo
 // The amount the entry was logged with, in its own unit (150 g, 2 ks, 1 porce):
 // what the athlete typed first, else the resolved amount, else amount_g.
 function loggedAmount(note){
-  if(note.micros)note.micros=scaleMicros(note.micros,ratio)||undefined;
   for(const key of ['enteredQuantity','amount','amount_g']){const value=Number(note[key]);if(note[key]!=null&&note[key]!==''&&Number.isFinite(value)&&value>0)return value}
   return null;
 }
@@ -42,6 +41,7 @@ function rescale(row,note,amount){
   const ratio=value/before,scaled={};
   for(const key of [...Object.keys(FIELDS),'fiber_g'])scaled[key]=row[key]==null?null:round1(Number(row[key]||0)*ratio);
   for(const key of ['sugar_g','salt_g']){const v=Number(note[key]);if(note[key]!=null&&note[key]!==''&&Number.isFinite(v))note[key]=Math.round(v*ratio*100)/100}
+  if(note.micros)note.micros=scaleMicros(note.micros,ratio)||undefined;
   for(const key of ['enteredQuantity','amount','amount_g']){const v=Number(note[key]);if(note[key]!=null&&note[key]!==''&&Number.isFinite(v))note[key]=key==='enteredQuantity'?round1(value):round1(v*ratio)}
   if(Array.isArray(note.ingredients))note.ingredients=note.ingredients.map(i=>i&&Number.isFinite(Number(i.amount))&&Number(i.amount)>0?{...i,amount:round1(Number(i.amount)*ratio)}:i);
   return scaled;
