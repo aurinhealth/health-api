@@ -140,6 +140,12 @@ final class AppModel {
         if let i = args.firstIndex(of: "-tab"), i + 1 < args.count {
             tab = ["training": AppTab.training, "food": .food, "health": .health][args[i + 1]] ?? .today
         }
+        // "-open readiness" (the website's screenshots) opens a detail as its link
+        // would, without the system's "Open in Aurin?" question that simctl openurl brings.
+        if let i = args.firstIndex(of: "-open"), i + 1 < args.count,
+           let url = URL(string: "loadwise://open/\(args[i + 1])") {
+            handle(url)
+        }
         // The network back: what waited goes out and the screens load again.
         if !demo {
             network = NetworkWatch { [weak self] in await self?.networkBack() }
