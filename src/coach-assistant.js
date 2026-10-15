@@ -496,7 +496,7 @@ const NEEDS_THOUGHT=/pro[cč]|doporu[cč]|navrh|uprav|zm[eě][nň]|vym[eě][nň]
 const NEEDS_THOUGHT_EN=/(?<!\p{L})(?:why|recommend|suggest|propose|adjust|chang(?:e|es|ing)|swap|plan\s+(?:me|a|an|my|the|next|this|for|out)|prepare|generate|create|add(?:s|ed|ing)?(?!\p{L})|move(?:s|d)?(?!\p{L})|cancel|analy|compare|evaluat|assess|rat(?:e|ing)\s+(?:my|the|this|that|it|how)|improve|suitable|better|advice|advise|help|worth|strategy|(?:should|can|could|would|shall|may|might)\s+(?:i|we)(?!\p{L}))/iu;
 export const isQuickQuestion=message=>{const m=String(message||'').trim();return m.length<=120&&!FOLLOW_UP.test(m)&&!isSimpleMessage(m)&&QUICK_ASK.test(m)&&!NEEDS_THOUGHT.test(m)&&!NEEDS_THOUGHT_EN.test(m);};
 // The screens about the athlete (the iOS coach opens on "today").
-const PLANNING_VIEWS=['workouts','training','health','today','nutrition'];
+const PLANNING_VIEWS=['workouts','training','health','today','food','nutrition'];
 function ownTask(message,appContext=null){
   const m=String(message||'');
   if(BLOCK.test(m)||LONG_PLAN.test(m)&&LONG_SPAN.test(m))return 'block';
