@@ -2168,3 +2168,12 @@
 "Tmavá" = "Dark";
 "Bílá" = "White";
 "Sklo" = "Glass";
+
+/* Rychlé akce: the menu on the app's icon (QuickActions.swift) */
+"Rychlé akce" = "Quick actions";
+"Dnešní trénink" = "Today's workout";
+"Vypít sklenici vody" = "Drink a glass of water";
+"Posilovna naživo" = "Live gym";
+"Co dnes trénovat?" = "What to train today?";
+"Připravenost %d" = "Readiness %d";
+"Na ikoně · %d ze %d" = "On the icon · %d of %d";
