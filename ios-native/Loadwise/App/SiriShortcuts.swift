@@ -2,7 +2,8 @@ import AppIntents
 import Foundation
 
 /// Siri and the Shortcuts app: today's readiness, workout, activity of the day
-/// and sleep, a drink and a weigh-in, without opening the app. The intents run
+/// and sleep, what is left to eat, a question for the coach, a drink and a
+/// weigh-in, without opening the app; "Začít trénink" opens it in the workout. The intents run
 /// in the app's process (launched in the background when needed), so they
 /// reuse the signed-in model when it is there. The phrases are Czech here;
 /// Shared/en.lproj/AppShortcuts.strings has the English. Siri itself speaks no
@@ -30,6 +31,18 @@ struct AurinShortcuts: AppShortcutsProvider {
             "Spánek dnes v aplikaci \(.applicationName)",
             "\(.applicationName) spánek"
         ], shortTitle: "Spánek dnes", systemImageName: "moon.zzz")
+        AppShortcut(intent: AskCoachIntent(), phrases: [
+            "Zeptat se kouče v aplikaci \(.applicationName)",
+            "\(.applicationName) kouč"
+        ], shortTitle: "Zeptat se kouče", systemImageName: "bubble.left.and.text.bubble.right")
+        AppShortcut(intent: FoodLeftIntent(), phrases: [
+            "Kolik mi dnes zbývá sníst v aplikaci \(.applicationName)",
+            "\(.applicationName) jídlo"
+        ], shortTitle: "Zbývá sníst", systemImageName: "fork.knife")
+        AppShortcut(intent: StartWorkoutIntent(), phrases: [
+            "Začít trénink v aplikaci \(.applicationName)",
+            "\(.applicationName) začít trénink"
+        ], shortTitle: "Začít trénink", systemImageName: "play.fill")
         AppShortcut(intent: LogDrinkIntent(), phrases: [
             "Zapsat pití \(\.$drink) v aplikaci \(.applicationName)",
             "Zapsat pití v aplikaci \(.applicationName)",
@@ -143,6 +156,129 @@ struct SleepLastNightIntent: AppIntent {
         if today?.sleep?.minutes == nil { today = await SiriData.today(fresh: true) }
         return .result(dialog: SiriAnswer.dialog(SiriAnswer.sleep(today?.sleep)))
     }
+}
+
+/// "Zeptat se kouče": the question to the AI coach, its answer read aloud. A
+/// proposal it makes waits in the coach's chat for a tap.
+struct AskCoachIntent: AppIntent {
+    static var title: LocalizedStringResource = "Zeptat se kouče"
+    static var description = IntentDescription("Zeptá se AI kouče a přečte odpověď.")
+
+    @Parameter(title: "Otázka", requestValueDialog: IntentDialog("Na co se chceš zeptat?"))
+    var question: String
+
+    init() {}
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        guard SiriData.signedIn else { return .result(dialog: SiriAnswer.dialog(SiriAnswer.signedOut)) }
+        var answer = ""
+        var proposal = false
+        do {
+            for try await event in SiriData.api.askCoach(question, chatId: nil, view: "today") {
+                switch event {
+                case .answer(let text): answer = text
+                case .done(let result):
+                    if let text = result.answer { answer = text }
+                    proposal = !(result.actions ?? []).isEmpty || result.kind == "food_draft"
+                case .progress: break
+                }
+            }
+        } catch APIError.aiConsentRequired {
+            return .result(dialog: SiriAnswer.dialog(L10n.tr("Nejdřív v aplikaci povol AI kouče.")))
+        } catch APIError.subscriptionRequired {
+            return .result(dialog: SiriAnswer.dialog(L10n.tr("Kouč je součástí Aurin Pro.")))
+        } catch APIError.unauthorized {
+            return .result(dialog: SiriAnswer.dialog(SiriAnswer.signedOut))
+        } catch {
+            return .result(dialog: SiriAnswer.dialog(L10n.tr("Kouč teď neodpověděl.")))
+        }
+        return .result(dialog: SiriAnswer.dialog(SiriAnswer.coach(answer, proposal: proposal)))
+    }
+}
+
+/// "Zbývá sníst": what is left of today's kcal, protein and water.
+struct FoodLeftIntent: AppIntent {
+    static var title: LocalizedStringResource = "Zbývá sníst"
+    static var description = IntentDescription("Řekne, kolik kalorií, bílkovin a vody ti dnes zbývá.")
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        guard SiriData.signedIn else { return .result(dialog: SiriAnswer.dialog(SiriAnswer.signedOut)) }
+        let today = await SiriData.today(fresh: true)
+        return .result(dialog: SiriAnswer.dialog(SiriAnswer.foodLeft(today?.nutrition)))
+    }
+}
+
+/// "Začít trénink": the app opens in today's workout, the gym live, as the
+/// icon's menu "Dnes: …" does (QuickActions); Aktivita dne without a plan.
+struct StartWorkoutIntent: AppIntent {
+    static var title: LocalizedStringResource = "Začít trénink"
+    static var description = IntentDescription("Otevře dnešní trénink.")
+    static var openAppWhenRun = true
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        let next = AppModel.live?.today?.plan.first { $0.kind == "workout" && !$0.done }
+        QuickActions.shared.pick = QuickActions.Pick(id: next?.sport == "strength" ? "liveGym" : "today")
+        return .result()
+    }
+}
+
+/// The numbers "Hodnota z Aurinu" gives to Shortcuts automations.
+enum SiriMetric: String, AppEnum {
+    case readiness, sleep, kcalLeft, strain, steps, hrv, restingHR
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Hodnota"
+    static var caseDisplayRepresentations: [SiriMetric: DisplayRepresentation] = [
+        .readiness: "Připravenost", .sleep: "Spánek v minutách", .kcalLeft: "Zbývající kalorie",
+        .strain: "Zátěž dne", .steps: "Kroky", .hrv: "HRV", .restingHR: "Klidový tep"
+    ]
+
+    func value(in today: TodaySnapshot) -> Double? {
+        switch self {
+        case .readiness: return today.readiness.score.map(Double.init)
+        case .sleep: return today.sleep?.minutes
+        case .kcalLeft:
+            guard let target = today.nutrition.target else { return nil }
+            return (target - (today.nutrition.kcal ?? 0)).rounded()
+        case .strain: return today.strain.score
+        case .steps: return today.steps.today
+        case .hrv: return today.hrv?.value
+        case .restingHR: return today.restingHR?.value
+        }
+    }
+}
+
+/// "Hodnota z Aurinu": a number of today for Shortcuts automations (no voice
+/// phrase), e.g. readiness under 50 → a later alarm.
+struct TodayValueIntent: AppIntent {
+    static var title: LocalizedStringResource = "Hodnota z Aurinu"
+    static var description = IntentDescription("Vrátí dnešní číslo z Aurinu pro automatizace ve Zkratkách.")
+
+    @Parameter(title: "Hodnota", default: .readiness)
+    var metric: SiriMetric
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Hodnota z Aurinu: \(\.$metric)")
+    }
+
+    init() {}
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<Double> {
+        guard SiriData.signedIn else { throw SiriFailure(text: SiriAnswer.signedOut) }
+        guard let today = await SiriData.today(fresh: true), let value = metric.value(in: today) else {
+            throw SiriFailure(text: L10n.tr("Tahle hodnota dnes zatím není."))
+        }
+        return .result(value: value)
+    }
+}
+
+/// An intent's failure, shown by Shortcuts as it is.
+struct SiriFailure: Error, CustomLocalizedStringResourceConvertible {
+    let text: String
+    var localizedStringResource: LocalizedStringResource { "\(text)" }
 }
 
 /// The drinks of Jídlo → Pití (DrinkKind.all), for Siri and Shortcuts.
@@ -313,6 +449,38 @@ enum SiriAnswer {
             text += " " + L10n.f("Potřeba byla %@.", spoken(minutes: need))
         }
         return text
+    }
+
+    /// The coach's answer for the ear: no markdown marks; a proposal waits in the app.
+    static func coach(_ answer: String, proposal: Bool) -> String {
+        var text = answer
+        for mark in ["**", "__", "`"] { text = text.replacingOccurrences(of: mark, with: "") }
+        text = text.split(separator: "\n", omittingEmptySubsequences: true).map { line in
+            var line = line.trimmingCharacters(in: .whitespaces)
+            while let first = line.first, "#-*•".contains(first) { line = String(line.dropFirst()).trimmingCharacters(in: .whitespaces) }
+            return line
+        }.filter { !$0.isEmpty }.joined(separator: "\n")
+        if text.isEmpty { text = L10n.tr("Kouč teď neodpověděl.") }
+        return proposal ? text + "\n" + L10n.tr("Návrh najdeš v aplikaci u kouče.") : text
+    }
+
+    /// "Dnes ti zbývá 1 270 kcal, 66 g bílkovin a 1,1 l vody."
+    static func foodLeft(_ nutrition: TodaySnapshot.Nutrition?) -> String {
+        guard let nutrition else { return L10n.tr("Dnešní jídlo se teď nepodařilo načíst.") }
+        var parts: [String] = []
+        if let target = nutrition.target, target - (nutrition.kcal ?? 0) >= 1 {
+            parts.append(L10n.f("%@ kcal", Fmt.int(target - (nutrition.kcal ?? 0))))
+        }
+        if let target = nutrition.protein.target, target - (nutrition.protein.eaten ?? 0) >= 1 {
+            parts.append(L10n.f("%@ g bílkovin", Fmt.int(target - (nutrition.protein.eaten ?? 0))))
+        }
+        if let target = nutrition.water.target, target - (nutrition.water.ml ?? 0) >= 1 {
+            parts.append(L10n.f("%@ vody", Units.volumeText(target - (nutrition.water.ml ?? 0))))
+        }
+        guard !parts.isEmpty else { return L10n.tr("Kalorie, bílkoviny i vodu máš na dnes splněné.") }
+        let list = ListFormatter()
+        list.locale = L10n.locale
+        return L10n.f("Dnes ti zbývá %@.", list.string(from: parts) ?? parts.joined(separator: ", "))
     }
 
     /// "Zapsáno: Káva, 200 ml."

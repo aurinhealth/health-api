@@ -19,3 +19,9 @@
 "Zapsat váhu v aplikaci ${applicationName}" = "Log weight in ${applicationName}";
 "Zapiš moji váhu do aplikace ${applicationName}" = "Log my weight in ${applicationName}";
 "${applicationName} váha" = "${applicationName} weight";
+"Zeptat se kouče v aplikaci ${applicationName}" = "Ask my coach in ${applicationName}";
+"${applicationName} kouč" = "${applicationName} coach";
+"Kolik mi dnes zbývá sníst v aplikaci ${applicationName}" = "How much can I still eat in ${applicationName}";
+"${applicationName} jídlo" = "${applicationName} food";
+"Začít trénink v aplikaci ${applicationName}" = "Start my workout in ${applicationName}";
+"${applicationName} začít trénink" = "${applicationName} start workout";

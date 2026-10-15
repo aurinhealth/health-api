@@ -59,4 +59,19 @@ final class SiriShortcutsTests: XCTestCase {
         L10n.setLanguage("en")
         XCTAssertEqual(SiriAnswer.drink(SiriDrink.water.name, ml: 500, sent: true), "Logged: Water, 500 ml.")
     }
+
+    func testFoodLeftListsWhatIsMissing() {
+        typealias T = TodaySnapshot
+        let left = T.Nutrition(kcal: 1380, target: 2650, trainingBonus: nil, protein: T.Macro(eaten: 84, target: 150),
+                               carbs: T.Macro(eaten: 0, target: 0), fat: T.Macro(eaten: 0, target: 0), water: T.Water(ml: 2600, target: 2600))
+        XCTAssertEqual(SiriAnswer.foodLeft(left), "Dnes ti zbývá 1270 kcal a 66 g bílkovin.".replacingOccurrences(of: "1270", with: Fmt.int(1270)))
+        let done = T.Nutrition(kcal: 2700, target: 2650, trainingBonus: nil, protein: T.Macro(eaten: 150, target: 150),
+                               carbs: T.Macro(eaten: 0, target: 0), fat: T.Macro(eaten: 0, target: 0), water: T.Water(ml: 3000, target: 2600))
+        XCTAssertEqual(SiriAnswer.foodLeft(done), "Kalorie, bílkoviny i vodu máš na dnes splněné.")
+    }
+
+    func testCoachAnswerWithoutMarkdown() {
+        XCTAssertEqual(SiriAnswer.coach("**Dnes** lehce.\n\n- Z2 45 min\n# Proč", proposal: false), "Dnes lehce.\nZ2 45 min\nProč")
+        XCTAssertTrue(SiriAnswer.coach("Ok", proposal: true).hasSuffix("Návrh najdeš v aplikaci u kouče."))
+    }
 }
