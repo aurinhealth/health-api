@@ -107,12 +107,18 @@ struct FoodContent: View {
             if editing {
                 board
             } else {
-                content
+                HStack {
+                    DayNavigator(date: food.date, ahead: true)
+                    Spacer()
+                    CircleButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
+                }
+                // The day below the title moves with a swipe.
+                VStack(alignment: .leading, spacing: 0) { content }
+                    .daySwipe(date: food.date, ahead: true)
             }
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
-        .daySwipe(date: food.date, ahead: true, enabled: !editing)
     }
 
     private var board: some View {
@@ -123,12 +129,6 @@ struct FoodContent: View {
     }
 
     @ViewBuilder private var content: some View {
-        HStack {
-            DayNavigator(date: food.date, ahead: true)
-            Spacer()
-            CircleButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
-        }
-
         HStack(alignment: .lastTextBaseline, spacing: 12) {
             Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
             if let target = food.target {

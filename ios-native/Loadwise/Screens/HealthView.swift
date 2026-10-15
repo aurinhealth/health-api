@@ -70,24 +70,29 @@ struct HealthContent: View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
                 DayNavigator(date: health.date)
-
-                RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness) }
-                    .padding(.top, 24)
-
-                // Cycle tracking, only for today.
-                if model.selectedDate == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
-                    CycleHealthSection(state: state).padding(.top, 12)
-                }
             }
 
-            WidgetBoard(panel: .health,
-                        data: WidgetData(panel: .health, today: model.today, health: health, training: model.training, food: model.food),
-                        editing: $editing)
-                .padding(.top, editing ? 0 : 30)
+            // The day below the title moves with a swipe.
+            VStack(alignment: .leading, spacing: 0) {
+                if !editing {
+                    RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness) }
+                        .padding(.top, 24)
+
+                    // Cycle tracking, only for today.
+                    if model.selectedDate == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
+                        CycleHealthSection(state: state).padding(.top, 12)
+                    }
+                }
+
+                WidgetBoard(panel: .health,
+                            data: WidgetData(panel: .health, today: model.today, health: health, training: model.training, food: model.food),
+                            editing: $editing)
+                    .padding(.top, editing ? 0 : 30)
+            }
+            .daySwipe(date: health.date, enabled: !editing)
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
-        .daySwipe(date: health.date, enabled: !editing)
         .task { if model.cycle == nil { await model.loadCycle() } }
     }
 }

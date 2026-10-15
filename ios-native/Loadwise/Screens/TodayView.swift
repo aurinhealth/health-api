@@ -68,22 +68,29 @@ struct TodayContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
-                header
+                top
             }
 
-            WidgetBoard(panel: .today,
-                        data: WidgetData(panel: .today, today: today, health: model.health, training: model.training, food: model.food),
-                        editing: $editing,
-                        editTitle: "Upravit přehled")
-                .padding(.top, editing ? 0 : 28)
+            // The day itself; the month and the week above stay put while it moves.
+            VStack(alignment: .leading, spacing: 0) {
+                if !editing {
+                    header
+                }
+
+                WidgetBoard(panel: .today,
+                            data: WidgetData(panel: .today, today: today, health: model.health, training: model.training, food: model.food),
+                            editing: $editing,
+                            editTitle: "Upravit přehled")
+                    .padding(.top, editing ? 0 : 28)
+            }
+            .daySwipe(date: today.date, enabled: !editing)
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
-        .daySwipe(date: today.date, enabled: !editing)
     }
 
-    /// Everything above the widgets: the day, readiness, weather and the coach.
-    @ViewBuilder private var header: some View {
+    /// The month, the buttons and the week.
+    @ViewBuilder private var top: some View {
         // B3 (Petr, 2026-10-15): the month as the title and the week below it.
         HStack(spacing: 10) {
             Text(verbatim: Fmt.monthTitle(today.date))
@@ -107,7 +114,10 @@ struct TodayContent: View {
             .accessibilityLabel("Profil a nastavení")
         }
         WeekStrip(date: today.date, week: today.week).padding(.top, 14)
+    }
 
+    /// Everything above the widgets: readiness, weather and the coach.
+    @ViewBuilder private var header: some View {
         if model.selectedDate == nil && !model.demo {
             DataAgePill()
             ConnectionProblemCard()
@@ -162,39 +172,104 @@ struct TodayContent: View {
 
 /// Dnes, Zdraví and Jídlo: a swipe right goes a day back, a swipe left a day
 /// forward, as far as the arrows go. Off while the widgets are being edited.
-/// The screen follows the finger a little, and the new day slides in.
+/// The day follows the finger with the next one coming in from the side as
+/// empty cards; let go past a third of the screen (or with a flick) and it
+/// slides over to the new day, otherwise back. A day picked another way (the
+/// week, the arrows) slides in the same way.
 private struct DaySwipe: ViewModifier {
     @Environment(AppModel.self) private var model
     let date: String
     var ahead: Bool
     var enabled: Bool
     @State private var drag: CGFloat = 0
+    @State private var width: CGFloat = 342
+    /// The neighbour's empty cards follow the drag; not while a picked day slides in.
+    @State private var neighbour = true
+    /// After a swipe: the day coming, shown as empty cards until it is here.
+    @State private var coming: String?
+
+    /// The space between two days: the page's side margins.
+    private let gap: CGFloat = 48
+    private var waiting: Bool { coming != nil && coming != date }
+    private var shown: String { model.selectedDate ?? AppModel.localDate(Date()) }
+    private var canGoForward: Bool { DayNavigator.canGoForward(model: model, date: shown, ahead: ahead) }
 
     func body(content: Content) -> some View {
         content
+            .opacity(waiting ? 0 : 1)
+            .overlay(alignment: .top) { if waiting { DayPlaceholder() } }
             .offset(x: drag)
-            .daySlide(date: date)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 30)
-                    .onChanged { value in
-                        let width = value.translation.width, height = value.translation.height
-                        guard enabled, !model.demo, abs(width) > abs(height) * 2 else { return }
-                        // Less give where there is no day to go to.
-                        let open = width > 0 || DayNavigator.canGoForward(model: model, date: date, ahead: ahead)
-                        drag = width * (open ? 0.18 : 0.06)
-                    }
-                    .onEnded { value in
-                        withAnimation(.snappy(duration: 0.25)) { drag = 0 }
-                        let width = value.translation.width, height = value.translation.height
-                        guard enabled, !model.demo, !model.loading, abs(width) > 80, abs(width) > abs(height) * 2 else { return }
-                        if width > 0 {
-                            Task { await model.showDay(offset: -1) }
-                        } else if DayNavigator.canGoForward(model: model, date: date, ahead: ahead) {
-                            Task { await model.showDay(offset: 1, ahead: ahead) }
-                        }
-                    },
-                including: enabled ? .all : .subviews
-            )
+            .background(alignment: .top) {
+                if neighbour && drag != 0 {
+                    DayPlaceholder().offset(x: drag > 0 ? drag - width - gap : drag + width + gap)
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .background {
+                // Not in the demo (and so not in the screenshots, which cannot draw it).
+                if !model.demo { HorizontalPan(enabled: enabled, changed: follow, ended: settle) }
+            }
+            .onChange(of: date) { old, new in
+                if new == coming { coming = nil; return }
+                coming = nil
+                // Picked in the week or with the arrows: in from its side.
+                var instant = Transaction()
+                instant.disablesAnimations = true
+                withTransaction(instant) {
+                    neighbour = false
+                    drag = (new > old ? 1 : -1) * (width + gap) * 0.5
+                }
+                withAnimation(.snappy(duration: 0.3)) { drag = 0 } completion: { neighbour = true }
+            }
+    }
+
+    private func follow(_ moved: CGFloat) {
+        // Less give where there is no day to go to.
+        drag = moved > 0 || canGoForward ? moved : moved * 0.15
+    }
+
+    private func settle(_ moved: CGFloat, _ speed: CGFloat) {
+        let forward = moved < 0
+        let far = abs(moved) > width / 3 || (abs(speed) > 600 && (speed < 0) == forward)
+        guard moved != 0, far, !model.loading, !forward || canGoForward,
+              let target = AppModel.shift(shown, by: forward ? 1 : -1) else {
+            withAnimation(.snappy(duration: 0.25)) { drag = 0 }
+            return
+        }
+        withAnimation(.snappy(duration: 0.22)) { drag = (forward ? -1 : 1) * (width + gap) } completion: {
+            coming = target
+            var instant = Transaction()
+            instant.disablesAnimations = true
+            withTransaction(instant) { drag = 0 }
+            Task { await model.showDay(offset: forward ? 1 : -1, ahead: ahead) }
+            // An answer that never comes: the old day back.
+            Task {
+                try? await Task.sleep(for: .seconds(8))
+                if coming == target { coming = nil }
+            }
+        }
+    }
+}
+
+/// A day that is not on screen yet: its cards, empty.
+private struct DayPlaceholder: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            block(150)
+            HStack(spacing: 12) { block(104); block(104) }
+            block(96)
+            block(96)
+        }
+        .frame(maxWidth: .infinity)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func block(_ height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .fill(Palette.ink.opacity(0.05))
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
     }
 }
 
