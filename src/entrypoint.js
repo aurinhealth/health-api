@@ -1456,10 +1456,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!/^[a-zA-Z0-9_-]{1,80}$/.test(id||''))return Response.json({message:L('Neplatná aktivita.', 'Invalid activity.')},{status:400});
     const known=await env.DB.prepare("SELECT external_id FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND external_id=? LIMIT 1").bind(env.USER_ID,'activity:'+id).first();
     if(!known)return Response.json({message:L('Aktivita není v tvé synchronizované historii.', 'The activity isn\'t in your synced history.')},{status:404});
-    // Heart rate and route from the watch when Intervals.icu has none.
-    const response=await activityDetail(request,env,id,true);
-    if(!response.ok)return response;
-    const detail=await withWatch(env,await response.json(),id,await watchOptions(env));
+    // Heart rate and route from the watch when Intervals.icu has none. A done
+    // activity barely changes: kept 6 hours, and any change the user makes
+    // (sync with new data, edit, delete) starts a new cache version. A failure
+    // is answered as it is and not kept.
+    let failed=null;
+    const detail=await cached(env,ctx,'activity-detail:'+id,async()=>{
+      const response=await activityDetail(request,env,id,true);
+      if(!response.ok){failed=response;throw new Error('activity detail');}
+      return withWatch(env,await response.json(),id,await watchOptions(env));
+    },{ttl:6*3600}).catch(error=>{if(failed)return null;throw error;});
+    if(!detail)return failed;
     return Response.json(detail,{headers:{'Cache-Control':'private, no-store'}});
   }
   // A workout from the watch (Apple Health, Google Health): summary, heart rate, zones, route.
