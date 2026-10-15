@@ -31,7 +31,7 @@ export async function queueFoodGoogleSafely(env,ctx,id,options){
 
 export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
   if(url.pathname==='/app/api/food/personal'&&request.method==='POST'){try{return Response.json({status:'ok',product:await savePersonalFood(env.DB,await request.json())});}catch(e){return Response.json({message:e.message},{status:400});}}
-  if(url.pathname==='/app/api/food/personal'&&request.method==='GET')return Response.json({status:'ok',products:await listPersonalFoods(env.DB,{sort:url.searchParams.get('sort')==='frequent'?'frequent':'recent'})},{headers:{'Cache-Control':'no-store'}});
+  if(url.pathname==='/app/api/food/personal'&&request.method==='GET')return Response.json({status:'ok',products:await listPersonalFoods(env.DB,{sort:url.searchParams.get('sort')==='frequent'?'frequent':'recent',limit:url.searchParams.get('limit')||500})},{headers:{'Cache-Control':'no-store'}});
 
   if(url.pathname==='/app/api/food/entry'&&['PATCH','POST','DELETE'].includes(request.method)){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
@@ -58,7 +58,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
     // Private saved foods first, then the common food-label catalogue, then
     // the read-only world catalogue in R2. A food users saved or corrected
     // replaces the world record with the same barcode.
-    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),[saved,world]=await Promise.all([(async()=>[...await searchPersonalFoods(env.DB,name,barcode),...(!barcode?await searchRecipes(env.DB,name):[])])(),searchWorldFoods(env,{name,barcode}).catch(error=>{console.error('world foods',error?.message);return [];})]),codes=new Set(saved.map(p=>barcodeKey(p.barcode)).filter(Boolean)),candidates=[...saved,...world.filter(p=>!codes.has(barcodeKey(p.barcode)))];return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
+    try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),[saved,world]=await Promise.all([Promise.all([searchPersonalFoods(env.DB,name,barcode),barcode?[]:searchRecipes(env.DB,name)]).then(([foods,recipes])=>[...foods,...recipes]),searchWorldFoods(env,{name,barcode}).catch(error=>{console.error('world foods',error?.message);return [];})]),codes=new Set(saved.map(p=>barcodeKey(p.barcode)).filter(Boolean)),candidates=[...saved,...world.filter(p=>!codes.has(barcodeKey(p.barcode)))];return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:L('Uložené potraviny se nepodařilo načíst. Zkus to znovu nebo zadej hodnoty z etikety.', 'Saved foods couldn\'t be loaded. Try again or enter the values from the label.'),detail:String(error.message).slice(0,160)},{status:500});}
   }
   // A food not saved yet: AI looks up its label values on the web. Only a
