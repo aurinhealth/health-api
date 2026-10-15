@@ -91,7 +91,13 @@ struct LineChart: View {
                 if let band {
                     let y1 = (size.height - 6) * (1 - scaled(band.upperBound, lo, hi)) + 3
                     let y0 = (size.height - 6) * (1 - scaled(band.lowerBound, lo, hi)) + 3
-                    Rectangle().fill(color.opacity(0.09)).frame(height: max(y0 - y1, 1)).offset(y: y1)
+                    Rectangle().fill(color.opacity(0.16)).frame(height: max(y0 - y1, 1)).offset(y: y1)
+                    // Dashed edges, so the usual range reads even on a small tile.
+                    Path { p in
+                        p.move(to: CGPoint(x: 0, y: y1)); p.addLine(to: CGPoint(x: size.width, y: y1))
+                        p.move(to: CGPoint(x: 0, y: y0)); p.addLine(to: CGPoint(x: size.width, y: y0))
+                    }
+                    .stroke(color.opacity(0.45), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                 }
                 if fill, let first = points.first, let last = points.last {
                     Path { p in

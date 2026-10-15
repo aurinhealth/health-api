@@ -99,7 +99,13 @@ struct TrendChart: View {
                 if let band, let first = list.first, let last = list.last {
                     RectangleMark(xStart: .value("Od", first.date), xEnd: .value("Do", last.date),
                                   yStart: .value("Spodek", band.lowerBound), yEnd: .value("Vršek", band.upperBound))
-                        .foregroundStyle(color.opacity(0.1))
+                        .foregroundStyle(color.opacity(0.16))
+                    // Dashed edges, so the usual range reads at a glance.
+                    ForEach([band.lowerBound, band.upperBound], id: \.self) { edge in
+                        RuleMark(y: .value("Hrana", edge))
+                            .foregroundStyle(color.opacity(0.45))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    }
                 }
                 ForEach(list) { s in
                     PointMark(x: .value("Den", s.date), y: .value("Hodnota", s.value))

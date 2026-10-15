@@ -160,33 +160,14 @@ struct PartsRow: View {
     }
 }
 
-/// A slim track with the usual range lighter and a dot at today's value; the
-/// range takes the middle third, so values well outside it still fit.
+/// The readiness part on the shared range bar.
 struct RangeBand: View {
     let part: HealthSnapshot.Part
 
     var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            ZStack(alignment: .leading) {
-                Capsule().fill(Palette.ink.opacity(0.07))
-                Capsule().fill(Palette.ink.opacity(0.16)).frame(width: w / 3).offset(x: w / 3)
-                Circle().fill(ReadinessText.color(part))
-                    .overlay(Circle().stroke(Palette.card, lineWidth: 2))
-                    .frame(width: 10, height: 10)
-                    .offset(x: position * w - 5)
-            }
-            .frame(height: 6)
-            .frame(maxHeight: .infinity)
+        if let value = part.value, let low = part.low, let high = part.high {
+            RangeBar(value: value, low: low, high: high, color: ReadinessText.color(part))
         }
-        .frame(height: 10)
-        .accessibilityHidden(true)
-    }
-
-    private var position: Double {
-        guard let value = part.value, let low = part.low, let high = part.high, high > low else { return 0.5 }
-        let span = high - low
-        return min(max((value - low + span) / (3 * span), 0.03), 0.97)
     }
 }
 
@@ -420,9 +401,13 @@ struct OxygenWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Kyslík v krvi", color: Palette.blue)
-            SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44) {
+            SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44, smallShowsChart: oxygen.high <= oxygen.low) {
                 NumberText(value: Fmt.decimal(oxygen.value, digits: oxygen.value.rounded() == oxygen.value ? 0 : 1), unit: "%")
-                Text(L10n.f("14 dní %@–%@ %%", Fmt.int(oxygen.low), Fmt.int(oxygen.high))).font(Typo.caption).foregroundStyle(Palette.faint)
+                if oxygen.high > oxygen.low {
+                    TileRange(value: oxygen.value, low: oxygen.low, high: oxygen.high)
+                } else {
+                    Text(L10n.f("14 dní %@–%@ %%", Fmt.int(oxygen.low), Fmt.int(oxygen.high))).font(Typo.caption).foregroundStyle(Palette.faint)
+                }
             } chart: { height in
                 LineChart(values: values, color: Palette.blue, lo: (values.min() ?? 90) - 1, hi: 100, height: height)
             }
@@ -439,9 +424,13 @@ struct RespirationWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Dech ve spánku", color: Palette.green)
-            SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44) {
+            SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44, smallShowsChart: respiration.baseline == nil) {
                 NumberText(value: Fmt.decimal(respiration.value), unit: "/min")
-                Text(respiration.elevated ? "zrychlený" : "stabilní").font(Typo.caption).foregroundStyle(respiration.elevated ? Palette.rust : Palette.green)
+                if let base = respiration.baseline {
+                    TileRange(value: respiration.value, low: base - 0.5, high: base + 0.5, worseAbove: true)
+                } else {
+                    Text(respiration.elevated ? "zrychlený" : "stabilní").font(Typo.caption).foregroundStyle(respiration.elevated ? Palette.rust : Palette.green)
+                }
             } chart: { height in
                 LineChart(values: values, color: Palette.green, lo: (values.min() ?? 12) - 0.5, hi: (values.max() ?? 18) + 0.5,
                           band: respiration.baseline.map { ($0 - 0.5)...($0 + 0.5) }, height: height)
@@ -459,9 +448,10 @@ struct SkinTempWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Teplota zápěstí", color: Palette.rust)
-            SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44) {
+            SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44, smallShowsChart: false) {
                 NumberText(value: Fmt.signed(Units.temperatureChange(skin.deviation), digits: 1), unit: Units.temperatureUnit)
-                Text(skin.elevated ? "zvýšená" : "odchylka v normě").font(Typo.caption).foregroundStyle(skin.elevated ? Palette.rust : Palette.green)
+                // The usual night is within half a degree of the athlete's own average.
+                TileRange(value: skin.deviation, low: -0.5, high: 0.5, worseAbove: true)
             } chart: { height in
                 BarChart(values: skin.series.map { $0.value + 1 }, styles: skin.series.map { BarStyle(fill: $0.value > 0 ? Palette.rust.opacity(0.6) : Palette.blue.opacity(0.5)) },
                          lo: 0, hi: 2, target: 1, height: height)
@@ -483,12 +473,16 @@ struct WristTempWidget: View {
             WidgetHeader(title: "Teplota zápěstí", color: Palette.rust, trailing: nights)
             VStack(alignment: .leading, spacing: 14) {
                 if let deviation = wrist.deviation {
-                    NumberText(value: Fmt.signed(Units.temperatureChange(deviation), digits: 1),
-                               unit: size == .small ? Units.temperatureUnit : L10n.f("%@ proti normálu", Units.temperatureUnit))
+                    VStack(alignment: .leading, spacing: 4) {
+                        NumberText(value: Fmt.signed(Units.temperatureChange(deviation), digits: 1),
+                                   unit: size == .small ? Units.temperatureUnit : L10n.f("%@ proti normálu", Units.temperatureUnit))
+                        // The usual night is within half a degree of the athlete's own average.
+                        TileRange(value: deviation, low: -0.5, high: 0.5, worseAbove: true)
+                    }
                 } else {
                     NumberText(value: Fmt.decimal(Units.temperature(wrist.value), digits: 1), unit: Units.temperatureUnit)
                 }
-                if bars.count > 1 {
+                if bars.count > 1 && (size != .small || wrist.deviation == nil) {
                     BarChart(values: bars.map { max($0.value, 0) },
                              styles: bars.indices.map { BarStyle(fill: $0 == bars.count - 1 ? Palette.rust : Palette.rust.opacity(0.28)) },
                              lo: 0, hi: max(bars.map(\.value).max() ?? 0, 0.5),

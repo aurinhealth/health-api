@@ -330,25 +330,23 @@ struct RestingHRWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Klidový tep", color: Palette.rust)
-            SizedWidgetBody(size: size) {
+            SizedWidgetBody(size: size, smallShowsChart: range == nil) {
                 NumberText(value: Fmt.int(restingHR.value), unit: "bpm")
-                if let note { Text(note.text).font(Typo.caption).foregroundStyle(note.good ? Palette.green : Palette.rust) }
+                if let range, let value = restingHR.value {
+                    TileRange(value: value, low: range.lowerBound, high: range.upperBound, worseAbove: true)
+                }
             } chart: { height in
                 LineChart(values: values, color: Palette.rust,
                           lo: (values.min() ?? 40) - 3, hi: (values.max() ?? 60) + 3,
-                          band: restingHR.baseline.map { ($0 - 2)...($0 + 2) }, height: height)
+                          band: range, height: height)
             }
         }
     }
 
     private var values: [Double] { restingHR.series.map(\.value) }
 
-    private var note: (text: String, good: Bool)? {
-        guard let value = restingHR.value, let base = restingHR.baseline else { return nil }
-        let d = (value - base).rounded()
-        if d == 0 { return (L10n.tr("v normě"), true) }
-        return (L10n.f(d < 0 ? "↓ %@ pod normou" : "↑ %@ nad normou", Fmt.int(abs(d))), d < 0)
-    }
+    /// The usual resting heart rate, ±2 beats around the baseline.
+    private var range: ClosedRange<Double>? { restingHR.baseline.map { ($0 - 2)...($0 + 2) } }
 }
 
 struct HRVWidget: View {
@@ -359,9 +357,13 @@ struct HRVWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Srdce · HRV", color: Palette.green)
-            SizedWidgetBody(size: size) {
+            SizedWidgetBody(size: size, smallShowsChart: band == nil || hrv.value == nil) {
                 NumberText(value: Fmt.int(hrv.value ?? hrv.series.last?.value), unit: "ms")
-                Text(note).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
+                if let band, let value = hrv.value {
+                    TileRange(value: value, low: band.lowerBound, high: band.upperBound)
+                } else {
+                    Text(note).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
+                }
             } chart: { height in
                 LineChart(values: values, color: Palette.green,
                           lo: min(values.min() ?? 40, hrv.low ?? 40) - 4, hi: max(values.max() ?? 70, hrv.high ?? 70) + 4,
@@ -372,7 +374,7 @@ struct HRVWidget: View {
 
     private var values: [Double] { hrv.series.map(\.value) }
 
-    /// "v normě", with the resting heart rate on the wider sizes.
+    /// "30 dní" without a usual range, with the resting heart rate on the wider sizes.
     private var note: String {
         var text = L10n.tr(status)
         if size != .small, let rhr = restingHR { text += " · " + L10n.f("tep %@", Fmt.int(rhr)) }
@@ -414,9 +416,13 @@ struct WeightWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Váha", color: Palette.brown)
-            SizedWidgetBody(size: size, mediumChart: 64) {
+            SizedWidgetBody(size: size, mediumChart: 64, smallShowsChart: size != .small || goal == nil) {
                 NumberText(value: Fmt.decimal(Units.weight(weight.latest)), unit: Units.weightUnit)
-                if let change {
+                if size == .small, let goal {
+                    // The goal as the band, half a kilo (a pound) either side.
+                    TileRange(value: Units.weight(weight.latest), low: goal - 0.5, high: goal + 0.5,
+                              text: L10n.f("cíl %@", Fmt.decimal(goal)))
+                } else if let change {
                     Text(L10n.f("%@ %@ za 30 dní", change <= 0 ? "↓" : "↑", Units.weightText(abs(change))))
                         .font(Typo.caption).foregroundStyle(change <= 0 ? Palette.green : Palette.amber)
                         .lineLimit(1).minimumScaleFactor(0.8)

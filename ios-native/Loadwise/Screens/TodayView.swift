@@ -468,49 +468,79 @@ struct MorningCheckinCard: View {
     }
 }
 
-/// Sleep · Strain · HRV under the readiness number.
+/// Sleep · Strain · HRV under the readiness number, each on a range bar:
+/// sleep against the night's need, the strain against today's goal, the HRV
+/// against the athlete's usual range.
 struct KeyNumbers: View {
     @Environment(AppModel.self) private var model
     let today: TodaySnapshot
 
     var body: some View {
         HStack(spacing: 0) {
-            RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), today.sleep?.index.map { L10n.f("index %@", "\($0)") }, Palette.indigo) }
+            RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), nil, sleep) }
             Divider().overlay(Palette.hairline)
-            RouteLink(route: .strain) {
-                cell("Námaha", Fmt.decimal(today.strain.score), strainNote, today.strain.target != nil ? Palette.green : Palette.amber)
-            }
+            RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
             Divider().overlay(Palette.hairline)
-            RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), hrvDelta, hrvColor) }
+            RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
         }
         .fixedSize(horizontal: false, vertical: true)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
     }
 
-    private var strainNote: String? {
-        // Whole numbers: "cíl 10,8–13,8" does not fit a third of the phone's width.
-        if let t = today.strain.target { return L10n.f("cíl %@–%@", Fmt.int(t.low), Fmt.int(t.high)) }
-        return today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }
+    /// A cell's bar (when it has a range) and the line under it.
+    struct Gauge {
+        var bar: (value: Double, low: Double, high: Double)?
+        var note: String?
+        var color: Color
     }
 
-    private var hrvDifference: Double? {
-        guard let value = today.hrv?.value, let base = today.hrv?.baseline else { return nil }
-        return (value - base).rounded()
+    /// The night against its need: the band is half an hour either side of it.
+    private var sleep: Gauge {
+        guard let minutes = today.sleep?.minutes else { return Gauge(note: nil, color: Palette.indigo) }
+        guard let need = today.sleep?.need, need > 0 else {
+            return Gauge(note: today.sleep?.index.map { L10n.f("index %@", "\($0)") }, color: Palette.indigo)
+        }
+        let low = Double(need) - 30, high = Double(need) + 30
+        return Gauge(bar: (minutes, low, high),
+                     note: L10n.f("%@ %% potřeby", Fmt.int(minutes / Double(need) * 100)),
+                     color: minutes >= low ? Palette.green : Palette.amber)
     }
 
-    private var hrvDelta: String? {
-        guard let d = hrvDifference else { return nil }
-        return (d >= 0 ? "↑ " : "↓ ") + Fmt.int(abs(d)) + " ms"
+    private var strain: Gauge {
+        if let t = today.strain.target {
+            // Whole numbers: "cíl 10,8–13,8" does not fit a third of the phone's width.
+            let note = L10n.f("cíl %@–%@", Fmt.int(t.low), Fmt.int(t.high))
+            guard let score = today.strain.score else { return Gauge(note: note, color: Palette.green) }
+            return Gauge(bar: (score, t.low, t.high), note: note,
+                         color: RangeBar.side(score, t.low, t.high) == 0 ? Palette.green : Palette.amber)
+        }
+        return Gauge(note: today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }, color: Palette.amber)
     }
 
-    private var hrvColor: Color { (hrvDifference ?? 0) >= 0 ? Palette.green : Palette.rust }
+    private var hrv: Gauge {
+        guard let value = today.hrv?.value else { return Gauge(note: nil, color: Palette.green) }
+        if let low = today.hrv?.low, let high = today.hrv?.high, high > low {
+            return Gauge(bar: (value, low, high), note: RangeBar.word(value, low, high),
+                         color: RangeBar.color(value, low, high, worseAbove: false))
+        }
+        guard let base = today.hrv?.baseline else { return Gauge(note: nil, color: Palette.green) }
+        let d = (value - base).rounded()
+        return Gauge(note: (d >= 0 ? "↑ " : "↓ ") + Fmt.int(abs(d)) + " ms", color: d >= 0 ? Palette.green : Palette.rust)
+    }
 
-    private func cell(_ title: String, _ value: String, _ note: String?, _ color: Color) -> some View {
+    private func cell(_ title: String, _ value: String, _ unit: String?, _ gauge: Gauge) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
-            Text(value).font(Typo.number(30)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
-            Text(note ?? " ").font(Typo.caption).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.75)
+            HStack(alignment: .firstTextBaseline, spacing: 3) {
+                Text(value).font(Typo.number(30)).foregroundStyle(Palette.ink)
+                if let unit, value != "–" { Text(unit).font(Typo.caption).foregroundStyle(Palette.muted) }
+            }
+            .lineLimit(1).minimumScaleFactor(0.7)
+            if let bar = gauge.bar {
+                RangeBar(value: bar.value, low: bar.low, high: bar.high, color: gauge.color).padding(.vertical, 4)
+            }
+            Text(gauge.note ?? " ").font(Typo.caption.weight(.medium)).foregroundStyle(gauge.color).lineLimit(1).minimumScaleFactor(0.75)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -70,7 +70,11 @@ p{margin:0}
 .cells>div+div{border-left:1px solid var(--line);padding-left:11px}
 .cells .k{font-size:11.5px;color:var(--muted)}
 .cells .v{font-size:23px;font-weight:500;letter-spacing:-.02em;margin-top:1px}
-.cells .d{font-size:11px}
+.cells .d{font-size:11px;white-space:nowrap}
+.rb{position:relative;height:4px;border-radius:2px;background:rgba(27,26,23,.07);margin:7px 8px 6px 0}
+.rb:before{content:"";position:absolute;left:33.3%;width:33.3%;top:0;bottom:0;border-radius:2px;background:rgba(27,26,23,.34)}
+.rb i{position:absolute;top:-3px;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:var(--green);box-shadow:0 0 0 2px var(--panel)}
+.rb i.warm{background:var(--amber)}
 .next{display:flex;align-items:center;gap:11px}
 .sport{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:none;color:#fff}
 .sport .icon{width:19px;height:19px}
@@ -328,9 +332,9 @@ export function overviewPage(request) {
 <div class="lbl">${t('Připravenost', 'Readiness')}</div>
 <div class="ready"><b>78</b><span class="pill good">${t('vysoká', 'high')}</span></div>
 <div class="pc cells">
-<div><div class="k">${t('Spánek', 'Sleep')}</div><div class="v">7:12</div><div class="d sleep">index 84</div></div>
-<div><div class="k">${t('Námaha', 'Strain')}</div><div class="v">${t('11,4', '11.4')}</div><div class="d warm">${t('plán ~14', 'plan ~14')}</div></div>
-<div><div class="k">HRV</div><div class="v">66</div><div class="d up">↑ 8 ms</div></div></div>
+<div><div class="k">${t('Spánek', 'Sleep')}</div><div class="v">7:12</div><div class="rb"><i style="left:44%"></i></div><div class="d up">${t('94 % potřeby', '94% of need')}</div></div>
+<div><div class="k">${t('Námaha', 'Strain')}</div><div class="v">${t('11,4', '11.4')}</div><div class="rb"><i class="warm" style="left:24%"></i></div><div class="d warm">${t('cíl 12–15', 'target 12–15')}</div></div>
+<div><div class="k">HRV</div><div class="v">66</div><div class="rb"><i style="left:72%"></i></div><div class="d up">${t('nad normálem', 'above normal')}</div></div></div>
 <div class="pc next"><span class="sport" style="background:var(--amber-bar)">${icon('bike')}</span><div><div class="t">Sweet spot 3×12 ${icon('spark')}</div><div class="s">${t('1 h 25 min · dnes v 17:30', '1h 25m · today at 5:30 pm')}</div></div></div>
 <div class="pc"><div class="s" style="color:var(--muted);font-size:12px">${t('Kouč', 'Coach')}</div><div style="margin-top:3px">${t('Spal jsi dobře a HRV je nad normálem. Dnešní intervaly dej naplno.', 'You slept well and your HRV is above normal. Go all in on today’s intervals.')}</div></div>
 <div class="tabbar"><span class="on">${icon('today')}</span><span>${icon('heart')}</span><span>${icon('training')}</span><span>${icon('meal')}</span></div>
@@ -361,8 +365,8 @@ export function overviewPage(request) {
 ${store(t)}
 </div>
 <div class="stage reveal">
-<div class="float left" aria-hidden="true"><div class="k">HRV</div><div class="v">66 ms</div><div class="d up">↑ 8 ms</div></div>
-<div class="float right" aria-hidden="true"><div class="k">${t('Spánek', 'Sleep')}</div><div class="v">7:12</div><div class="d sleep">index 84</div></div>
+<div class="float left" aria-hidden="true"><div class="k">HRV</div><div class="v">66 ms</div><div class="d up">${t('nad normálem', 'above normal')}</div></div>
+<div class="float right" aria-hidden="true"><div class="k">${t('Spánek', 'Sleep')}</div><div class="v">7:12</div><div class="d up">${t('94 % potřeby', '94% of need')}</div></div>
 ${today}
 </div>
 </div>
