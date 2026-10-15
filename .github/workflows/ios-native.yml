@@ -6,7 +6,8 @@ name: iOS native app
 # - Loadwise-native-unsigned.ipa: install with Sideloadly (free Apple ID,
 #   valid for 7 days, then install again). It sits next to the Capacitor app.
 # - Loadwise-native-screens: whole-screen snapshots in light and dark mode
-#   from the sample data, plus simulator screenshots of the running app.
+#   from the sample data, plus simulator screenshots of the running app
+#   (site/: the English, light-mode shots the website uses).
 
 on:
   workflow_dispatch:
@@ -91,6 +92,30 @@ jobs:
               sleep 6
               xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/simulator-$tab-$mode.png"
             done
+          done
+
+      # The website shows the real app (src/site-pages.js): English, light mode, sample
+      # data and a clean status bar.
+      - name: Screenshot the app for the website
+        run: |
+          udid=${{ steps.sim.outputs.udid }}
+          mkdir -p "$GITHUB_WORKSPACE/screens/site"
+          xcrun simctl ui "$udid" appearance light
+          xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
+          # The switch back from the dark shots above takes a while: without the wait
+          # the first screens came out dark or dimmed halfway through the change.
+          sleep 10
+          for tab in today training health food; do
+            xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            sleep 6
+            xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/$tab.png"
+          done
+          # Screens one tap deeper, opened as their link would (-open; simctl openurl
+          # stops on the system's "Open in Aurin?" question): readiness, strain, muscles, the gym session.
+          for route in readiness strain muscles gym/2026-10-08; do
+            xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            sleep 7
+            xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/${route%%/*}.png"
           done
 
       # Unsigned: Sideloadly signs it with the user's Apple ID.

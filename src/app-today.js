@@ -7,7 +7,7 @@ import { environmentFor } from "./adaptive-week.js";
 import { sleepNeedFor, bedtimePlan, heartRateLoad, strainScore, hrvMetric, sleepDebtMinutes, sleepNeedMinutes } from "./recovery-model.js";
 import { readinessFor, primaryNights, sleepIndexFor } from "./readiness.js";
 import { localDateTime } from "./user-time.js";
-import { sleepSettings } from "./energy-profile.js";
+import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { L } from "./lang.js";
 import { daySessions, deviceEnergyExtra } from "./app-training.js";
 import { recoveryToday } from "./recovery-today.js";
@@ -141,10 +141,12 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   // coming night is the one that ends this morning.
   const sleepDay = hour != null && hour < 6 && !nights.get(date) ? shift(date, -1) : date;
   const strainNow = dayStrain(google, date);
-  const tonightNeed = sleepNeedFor({ date: shift(sleepDay, 1), age, goal: sleepSet.goal, strain: dayStrain(google, sleepDay), rows, sessions }).need;
+  // The user's own length or wake time for tonight (Spánek) moves the bedtime.
+  const choice = tonightChoice(sleepSet, sleepDay, sleepNeedFor({ date: shift(sleepDay, 1), age, goal: sleepSet.goal, strain: dayStrain(google, sleepDay), rows, sessions }).need);
+  const tonightNeed = choice.need;
   const plan = bedtimePlan({
     date: sleepDay,
-    wake: sleepSet.wake,
+    wake: choice.wake,
     need: tonightNeed,
     nights: [...nights.values()].map(n => ({ date: nightDate(n), wakeMin: minutesOf(n.endTime), durationMin: num(n.durationMin), timeInBedMin: num(n.timeInBedMin) }))
   });
@@ -261,7 +263,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   ];
   // Done first in the order of the day, then what is still open, then bedtime.
   const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done),
-    ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), title: L("Do postele", "Bedtime"), detail: L("potřeba spánku ", "sleep need ") + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
+    ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), title: L("Do postele", "Bedtime"), detail: (choice.chosen != null ? L("spánek ", "sleep ") : L("potřeba spánku ", "sleep need ")) + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
   ];
 
   return {
