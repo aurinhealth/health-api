@@ -209,7 +209,14 @@ struct RootView: View {
     /// The tab again: back to its first screen.
     private func select(_ tab: AppTab) {
         withAnimation(.snappy) { compactBar = false }
-        if model.tab == tab { model.paths[tab] = [] } else { tabTaps += 1 }
+        if model.tab == tab {
+            model.paths[tab] = []
+        } else {
+            tabTaps += 1
+            // Leaving a tab closes its details, so coming back shows its main
+            // screen; a workout being logged or built keeps its place.
+            if !(model.paths[model.tab] ?? []).contains(where: \.keepsPlace) { model.paths[model.tab] = [] }
+        }
         model.tab = tab
     }
 }

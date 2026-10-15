@@ -418,7 +418,7 @@ ${today}
 <div class="visual reveal">
 <div class="card">${muscles}</div>
 <div class="card live"><span class="sport" style="background:var(--indigo)">${icon('gym')}</span><div><div class="t">Bench press</div><div class="s">${t('Série 3 ze 4 · 80 kg × 8', 'Set 3 of 4 · 80 kg × 8')}</div></div><span class="clock">1:30</span></div>
-<div class="chips"><span>${t('Únava svalů z posilovny i běhu', 'Muscle fatigue from the gym and runs')}</span><span>${t('Supersérie', 'Supersets')}</span><span>${t('Levá a pravá strana', 'Left and right side')}</span><span>${t('Síla, svaly nebo kondice', 'Strength, muscle or fitness')}</span><span>${t('Rozcvička a protažení', 'Warm-up and stretching')}</span></div>
+<div class="chips"><span>${t('Únava svalů z posilovny i běhu', 'Muscle fatigue from the gym and runs')}</span><span>${t('U každého svalu síla a jak často ho cvičíš', 'Strength and training frequency for every muscle')}</span><span>${t('Supersérie', 'Supersets')}</span><span>${t('Levá a pravá strana', 'Left and right side')}</span><span>${t('Síla, svaly nebo kondice', 'Strength, muscle or fitness')}</span><span>${t('Rozcvička a protažení', 'Warm-up and stretching')}</span></div>
 </div>
 </div></section>
 
