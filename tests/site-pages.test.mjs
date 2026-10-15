@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
-import {overviewPage,privacyPage,termsPage,supportPage} from '../src/site-pages.js';
+import {overviewPage,privacyPage,termsPage,supportPage,robotsTxt,sitemapXml} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
@@ -17,7 +17,7 @@ test('the overview keeps what Google verification reads on the homepage',async()
 test('public pages use the app’s light palette',async()=>{
   for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
     const html=await page().text();
-    assert.match(html,/<html lang="cs" class="site"/);
+    assert.match(html,/<html lang="en" class="site"/);
     assert.match(html,/:root\{color-scheme:light;[^}]*--bg:#F3EFE8;/);
     assert.equal((html.match(/:root\{[^}]*\}/g)||[]).length,1);
     assert.doesNotMatch(html,/data-theme-choice/,'the site has one look; the Vzhled switch stays in the app');
@@ -25,59 +25,55 @@ test('public pages use the app’s light palette',async()=>{
 });
 
 test('the overview follows the app section by section and every file it loads exists',async()=>{
-  for(const lang of ['cs','en']){
-    const html=await overviewPage(new Request('https://petrfitnessdata.eu/?lang='+lang)).text();
-    for(const id of ['pripravenost','zatez','trenink','posilovna','vyziva','kouc','propojeni','soukromi'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
-    const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/petrfitnessdata\.eu)?\/site\/([^"]+)"/g)].map(m=>m[1]))];
-    assert.ok(files.includes(lang==='en'?'og-en.png':'og.png'),'share image');
-    assert.ok(files.includes('fonts/newsreader.woff2'));
-    for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
-    assert.doesNotMatch(html,/\.webp"/,'the phone is drawn in HTML, not a screenshot');
-    assert.doesNotMatch(html,/undefined/,'every icon and text the page draws exists');
-  }
+  const html=await overviewPage(new Request('https://petrfitnessdata.eu/')).text();
+  for(const id of ['pripravenost','zatez','trenink','posilovna','vyziva','kouc','propojeni','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
+  const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/petrfitnessdata\.eu)?\/site\/([^"]+)"/g)].map(m=>m[1]))];
+  assert.ok(files.includes('og-en.png'),'share image');
+  assert.ok(files.includes('fonts/newsreader.woff2'));
+  for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
+  for(const name of ['today','readiness','strain','training','gym','food','coach'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
+  assert.doesNotMatch(html,/undefined/,'every icon and text the page draws exists');
 });
 
-// The phone in the hero is the Today screen: its key numbers carry the app's own labels
-// (TodayView.swift, English from Localizable.strings), so a rename in the app fails here.
-test('the phone in the hero labels the key numbers like the app’s Today screen',async()=>{
-  const read=path=>readFileSync(new URL('../ios-native/'+path,import.meta.url),'utf8');
-  const labels=[...read('Loadwise/Screens/TodayView.swift').matchAll(/\bcell\("([^"]+)"/g)].map(m=>m[1]);
-  assert.ok(labels.length>=3,'KeyNumbers cells');
-  const strings=read('Shared/en.lproj/Localizable.strings');
-  const en=label=>strings.match(new RegExp('^"'+label+'" = "([^"]+)";','m'))?.[1]||label;
-  for(const lang of ['cs','en']){
-    const html=await overviewPage(new Request('https://petrfitnessdata.eu/?lang='+lang)).text();
-    for(const label of labels)assert.match(html,new RegExp('<div class="k">'+(lang==='en'?en(label):label)+'</div>'),lang+' '+label);
-  }
+// The phones show the app's sample morning (screenshots from ios-native.yml), so the numbers floating
+// around the hero phone come from the same sample day (DemoData.swift) and change with it.
+test('the numbers around the hero phone are the sample morning its screenshot shows',async()=>{
+  const demo=readFileSync(new URL('../ios-native/Loadwise/Data/DemoData.swift',import.meta.url),'utf8');
+  const today=JSON.parse(demo.match(/json = """\n([\s\S]*?)\n    """/)[1]);
+  const html=await overviewPage().text();
+  const clock=m=>Math.floor(m/60)+':'+String(m%60).padStart(2,'0');
+  assert.match(html,new RegExp('readiness '+today.readiness.score+','));
+  assert.match(html,new RegExp('<div class="k">HRV</div><div class="v">'+today.hrv.value+' ms</div><div class="d up">↑ '+(today.hrv.value-today.hrv.baseline)+' ms above normal'));
+  assert.match(html,new RegExp('<div class="k">Sleep</div><div class="v">'+clock(today.sleep.minutes)+'</div><div class="d sleep">score '+today.sleep.index+'<'));
 });
 
 const visit=(path,headers={})=>new Request('https://petrfitnessdata.eu'+path,{headers});
 
-test('the site speaks the browser language unless a cookie or link says otherwise',async()=>{
-  const lang=async req=>(await overviewPage(req).text()).match(/<html lang="(cs|en)"/)[1];
-  assert.equal(await lang(visit('/',{'accept-language':'cs-CZ,cs;q=0.9,en;q=0.8'})),'cs');
-  assert.equal(await lang(visit('/',{'accept-language':'sk'})),'cs');
-  assert.equal(await lang(visit('/',{'accept-language':'en-US,en;q=0.9'})),'en');
-  assert.equal(await lang(visit('/',{'accept-language':'de-DE'})),'en');
-  assert.equal(await lang(visit('/',{'accept-language':'en-US',cookie:'a=1; lw-lang=cs'})),'cs');
-  assert.equal(await lang(visit('/?lang=en',{'accept-language':'cs',cookie:'lw-lang=cs'})),'en');
-  assert.match(overviewPage(visit('/')).headers.get('vary'),/Cookie.*Accept-Language/);
-  assert.equal(overviewPage(visit('/',{'accept-language':'en'})).headers.get('content-language'),'en');
+test('the site is English whatever the browser says; privacy and terms also have Czech',async()=>{
+  const lang=async (page,path,headers={})=>(await page(new Request('https://aurin.health'+path,{headers})).text()).match(/<html lang="(cs|en)"/)[1];
+  for(const page of [overviewPage,supportPage])assert.equal(await lang(page,'/?lang=cs',{'accept-language':'cs',cookie:'lw-lang=cs'}),'en');
+  for(const page of [privacyPage,termsPage]){
+    assert.equal(await lang(page,'/x',{'accept-language':'cs-CZ',cookie:'lw-lang=cs'}),'en');
+    assert.equal(await lang(page,'/x?lang=cs'),'cs');
+  }
+  for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
+    const html=await page().text();
+    assert.doesNotMatch(html,/data-lang-choice|lang-switch/,'no language switch');
+    assert.match(html,/<li lang="cs">Česky: <a href="\/privacy\?lang=cs" hreflang="cs">Soukromí<\/a> · <a href="\/terms\?lang=cs" hreflang="cs">Podmínky<\/a><\/li>/);
+  }
+  assert.match(await privacyPage().text(),/<a href="\/privacy\?lang=cs" lang="cs" hreflang="cs">Česká verze<\/a>/);
+  assert.match(await termsPage(new Request('https://aurin.health/terms?lang=cs')).text(),/<a href="\/terms" lang="en" hreflang="en">English version<\/a>/);
+  assert.doesNotMatch(await overviewPage().text(),/hreflang="cs" href=/,'the overview has no Czech version');
+  assert.equal(overviewPage(new Request('https://aurin.health/',{headers:{'accept-language':'cs'}})).headers.get('content-language'),'en');
 });
 
-test('every public page has the CZ / EN switch and an English version',async()=>{
-  for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
-    const cs=await page(visit('/',{'accept-language':'cs'})).text(),en=await page(visit('/',{'accept-language':'en'})).text();
-    for(const html of [cs,en])for(const code of ['cs','en'])assert.match(html,new RegExp('role="radio" data-lang-choice="'+code+'"'));
-    assert.match(en,/data-device-lang="en"/);
-    assert.notEqual(cs,en);
-  }
-  const en=await overviewPage(visit('/',{'accept-language':'en'})).text();
+test('the overview speaks English and keeps the App Store label',async()=>{
+  const en=await overviewPage().text();
   assert.match(en,/Coming soon to the App Store/);
   assert.match(en,/Train for how you feel today/);
   assert.doesNotMatch(en,/href="\/app"/);
   assert.match(en,/Google Health data disclosure/);
-  assert.match(await privacyPage(visit('/',{'accept-language':'en'})).text(),/Google user data is used only to provide/);
+  assert.match(await privacyPage().text(),/Google user data is used only to provide/);
 });
 
 test('the privacy policy and support page cover what Google verification asks for',async()=>{
@@ -100,7 +96,7 @@ test('the privacy policy and support page cover what Google verification asks fo
   assert.match(privacy,/uoou\.gov\.cz/);
   assert.match(support,/<h2>Deleting your account and data<\/h2>/);
   assert.match(support,/myaccount\.google\.com\/connections/);
-  const cs=await privacyPage(visit('/privacy',{'accept-language':'cs'})).text();
+  const cs=await privacyPage(visit('/privacy?lang=cs')).text();
   assert.match(cs,/Data uživatelů z Googlu slouží jen k funkcím Aurinu/);
   assert.match(cs,/<strong>Smazání účtu<\/strong> v Nastavení/);
 });
@@ -120,15 +116,88 @@ test('the privacy policy names the controller and the contact',async()=>{
 });
 
 test('with open sign-up the privacy policy and support page no longer speak of invitations',async()=>{
-  for(const lang of ['cs','en']){
-    const req=path=>new Request('https://petrfitnessdata.eu'+path+'?lang='+lang);
-    const invite=/invitation|pozvánk|pozvan/i;
-    for(const [page,path] of [[privacyPage,'/privacy'],[supportPage,'/support']]){
-      assert.match(await page(req(path),{apple:true,email:true}).text(),invite,path+' invite only');
-      assert.doesNotMatch(await page(req(path),{apple:true,email:true,open:true}).text(),invite,path+' open');
-    }
+  const invite=/invitation|pozvánk|pozvan/i;
+  for(const [page,path] of [[privacyPage,'/privacy?lang=en'],[privacyPage,'/privacy?lang=cs'],[supportPage,'/support']]){
+    const req=()=>new Request('https://petrfitnessdata.eu'+path);
+    assert.match(await page(req(),{apple:true,email:true}).text(),invite,path+' invite only');
+    assert.doesNotMatch(await page(req(),{apple:true,email:true,open:true}).text(),invite,path+' open');
   }
-  const support=await supportPage(new Request('https://petrfitnessdata.eu/support?lang=cs'),{apple:true,email:true,open:true}).text();
-  assert.match(support,/<strong>Pokračovat přes Apple<\/strong>, <strong>Pokračovat přes Google<\/strong> nebo <strong>Pokračovat e-mailem<\/strong>/);
-  assert.match(support,/Příště přes Face ID/);
+  const support=await supportPage(new Request('https://petrfitnessdata.eu/support'),{apple:true,email:true,open:true}).text();
+  assert.match(support,/<strong>Continue with Apple<\/strong>, <strong>Continue with Google<\/strong> or <strong>Continue with e-mail<\/strong>/);
+  assert.match(support,/Next time with Face ID/);
+});
+
+test('the terms say who runs Aurin, that it is not medical care, and name no internal service',async()=>{
+  for(const lang of ['en','cs']){
+    const html=await termsPage(new Request('https://aurin.health/terms?lang='+lang)).text();
+    assert.doesNotMatch(html,/health-api/);
+    assert.match(html,lang==='en'?/Aurin is run by Petr Bouma/:/Aurin provozuje Petr Bouma/);
+    assert.match(html,lang==='en'?/Aurin is not a medical device/:/Aurin není zdravotnický prostředek/);
+    assert.match(html,lang==='en'?/Cycle tracking is not contraception/:/Sledování cyklu není antikoncepce/);
+    assert.match(html,/apple\.com\/legal\/internet-services\/itunes\/dev\/stdeula/);
+  }
+});
+
+test('the support page follows the app’s Settings and every page has the footer groups',async()=>{
+  const read=path=>readFileSync(new URL('../ios-native/'+path,import.meta.url),'utf8');
+  const settings=read('Loadwise/Screens/SettingsView.swift'),strings=read('Shared/en.lproj/Localizable.strings');
+  const en=label=>strings.match(new RegExp('^"'+label+'" = "([^"]+)";','m'))?.[1];
+  for(const title of ['Zdroje dat','Soukromí a data','Nahlásit problém','Kontaktovat nás'])assert.match(settings,new RegExp('title: "'+title+'"'),title);
+  const support=await supportPage().text();
+  for(const label of ['Settings → '+en('Zdroje dat'),'Settings → '+en('Soukromí a data').replace('&','&amp;'),'Settings → Help → '+en('Nahlásit problém'),'Ultrahuman'])assert.ok(support.includes(label),label);
+  for(const page of [privacyPage,supportPage])for(const lang of ['en','cs'])
+    assert.doesNotMatch(await page(new Request('https://aurin.health/x?lang='+lang)).text(),/Nastavení → Účet,|Settings → Account(?!;)|Settings → Account you|Nastavení → Propojení|Settings → Connections/);
+  for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
+    const html=await page().text();
+    for(const href of ['/#pripravenost','/support#problem','mailto:support@aurin.health','/privacy','/terms'])assert.ok(html.includes('href="'+href+'"'),href);
+    assert.match(html,/Aurin is not a medical device\./);
+  }
+  assert.match(support,/<h2 id="problem">/);
+});
+
+test('the privacy policy says what Aurin writes to Apple Health, in both languages',async()=>{
+  assert.match(await privacyPage().text(),/<li>Writing to Apple Health, only if you turn it on \(Settings → Sync → Apple Health\)/);
+  assert.match(await privacyPage(new Request('https://aurin.health/privacy?lang=cs')).text(),/<li>Zápis do Apple Health, jen když ho zapneš/);
+});
+
+test('robots.txt and the sitemap list the public pages on the host they are served on',async()=>{
+  const robots=await robotsTxt(new Request('https://aurin.health/robots.txt')).text();
+  assert.match(robots,/Disallow: \/app\//);
+  assert.match(robots,/Sitemap: https:\/\/aurin\.health\/sitemap\.xml/);
+  const map=await sitemapXml(new Request('https://aurin.health/sitemap.xml')).text();
+  for(const path of ['/','/support','/privacy','/terms','/privacy?lang=cs','/terms?lang=cs'])assert.ok(map.includes('<loc>https://aurin.health'+path+'</loc>'),path);
+});
+
+// Connections show only the services the app offers to connect, each with the app's own logo file
+// (Assets.xcassets), and say what Aurin sends back only where the app can sync to that service.
+test('the connections use the app’s own logos and only the services the app offers',async()=>{
+  const html=await overviewPage().text();
+  const section=html.slice(html.indexOf('<section id="propojeni"'),html.indexOf('<section id="soukromi"'));
+  const asset=path=>readFileSync(new URL('../ios-native/Loadwise/Resources/Assets.xcassets/'+path,import.meta.url));
+  const site=file=>readFileSync(new URL('../public/site/logos/'+file,import.meta.url));
+  for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg'],['whoop.svg','WhoopLogo.imageset/whoop-black.svg'],['wahoo.png','WahooLogo.imageset/wahoo-wordmark-white.png']]){
+    assert.ok(site(file).equals(asset(source)),file+' is the app’s logo, unchanged');
+    assert.ok(section.includes('/site/logos/'+file),file);
+  }
+  assert.deepEqual([...section.matchAll(/id="tab-(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman','whoop','wahoo']);
+  assert.doesNotMatch(section,/strava|garmin|oura/i,'only services the app offers');
+  const sync=readFileSync(new URL('../ios-native/Loadwise/Screens/SyncViews.swift',import.meta.url),'utf8');
+  for(const id of ['apple','google','intervals'])assert.match(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
+  for(const id of ['ultrahuman','whoop'])assert.doesNotMatch(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
+  assert.match(section,/nothing, Aurin only reads the ring/);
+  assert.match(section,/nothing, Aurin only reads WHOOP/);
+  // Wahoo gets the planned workouts, as its connect sheet says (SettingsConnectFlow.swift).
+  const connect=readFileSync(new URL('../ios-native/Loadwise/Screens/SettingsPages/SettingsConnectFlow.swift',import.meta.url),'utf8');
+  assert.match(connect,/Tréninky naplánované v Aurinu, do ELEMNT a KICKR/);
+  assert.match(section,/planned workouts, to ELEMNT and KICKR/);
+});
+
+test('the questions open without JS and name the app’s real Settings paths',async()=>{
+  const strings=readFileSync(new URL('../ios-native/Shared/en.lproj/Localizable.strings',import.meta.url),'utf8');
+  const en=label=>strings.match(new RegExp('^"'+label+'" = "([^"]+)";','m'))?.[1];
+  const html=await overviewPage().text();
+  const faq=html.slice(html.indexOf('<section id="faq">'),html.indexOf('<section class="final">'));
+  assert.ok((faq.match(/<details><summary>/g)||[]).length>=6);
+  for(const label of ['Settings → '+en('Zdroje dat'),'Settings → '+en('Soukromí a data').replace('&','&amp;'),'Settings → Help → '+en('Nahlásit problém')])assert.ok(faq.includes(label),label);
+  assert.match(faq,/mailto:support@aurin\.health/);
 });

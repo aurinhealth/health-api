@@ -29,6 +29,17 @@ struct RootView: View {
     /// The tabs, the tab bar and the sheets grow with the text size up to a cap.
     private static let textSizes: PartialRangeThrough<DynamicTypeSize> = ...DynamicTypeSize.screenCap
 
+    /// The open tab as the coach's screen (src/assistant-app-context.js), so
+    /// "tenhle trénink" means the day and section the athlete is looking at.
+    private var coachView: String {
+        switch model.tab {
+        case .today: "today"
+        case .training: "training"
+        case .food: "nutrition"
+        case .health: "health"
+        }
+    }
+
     @ViewBuilder private var screens: some View {
         switch model.phase {
         case .signedOut:
@@ -109,7 +120,7 @@ struct RootView: View {
                 .dynamicTypeSize(Self.textSizes)
             }
             .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
-            .sheet(isPresented: $showCoach) { CoachView().dynamicTypeSize(Self.textSizes) }
+            .sheet(isPresented: $showCoach) { CoachView(view: coachView, date: model.selectedDate).dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet().dynamicTypeSize(Self.textSizes) }
             .sheet(item: $quickFood) { start in
                 AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start)

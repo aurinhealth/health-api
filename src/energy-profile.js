@@ -49,12 +49,38 @@ export function ageFrom(birthDate, now = new Date()) {
 // Cleans a profile posted from the dashboard; unknown values become null.
 const clockText = v => { const m = String(v ?? "").trim().match(/^(\d{1,2}):(\d{2})$/); return m && Number(m[1]) < 24 && Number(m[2]) < 60 ? m[1].padStart(2, "0") + ":" + m[2] : ""; };
 
-// The profile's sleep settings for the recovery model: the goal in minutes
-// and the wake times in minutes after midnight.
+// One night's own choice from the Spánek screen: the evening's date, how long
+// to sleep (5–12 h in minutes, null = the whole need) and a wake time for
+// that morning only ("HH:MM", empty = the alarm). Null when nothing is chosen.
+function sleepTonight(v) {
+  if (!v || typeof v !== "object" || !/^\d{4}-\d{2}-\d{2}$/.test(String(v.date || ""))) return null;
+  const m = num(v.minutes), minutes = Number.isFinite(m) && m >= 300 && m <= 720 ? Math.round(m / 5) * 5 : null, wake = clockText(v.wake);
+  return minutes == null && !wake ? null : { date: v.date, minutes, wake };
+}
+
+// The profile's sleep settings for the recovery model: the goal in minutes,
+// the wake times in minutes after midnight and tonight's own choice.
 export function sleepSettings(profile = {}) {
   const minutes = t => { const m = String(t || "").match(/^(\d{2}):(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
-  const goal = num(profile.sleepGoal);
-  return { goal: goal >= 360 && goal <= 600 ? goal : null, wake: { workday: minutes(profile.wakeTime), weekend: minutes(profile.wakeTimeWeekend) } };
+  const goal = num(profile.sleepGoal), once = sleepTonight(profile.sleepTonight);
+  return {
+    goal: goal >= 360 && goal <= 600 ? goal : null,
+    wake: { workday: minutes(profile.wakeTime), weekend: minutes(profile.wakeTimeWeekend) },
+    tonight: once ? { date: once.date, minutes: once.minutes, wake: minutes(once.wake) } : null
+  };
+}
+
+// The night that starts on the evening of sleepDay as planned: the user's own
+// length and wake time for this night when chosen, else the need and the alarm.
+// Today's "Do postele" and the Spánek screen both plan from it.
+export function tonightChoice(sleepSet, sleepDay, need) {
+  const once = sleepSet?.tonight?.date === sleepDay ? sleepSet.tonight : null;
+  return {
+    need: once?.minutes ?? need,
+    wake: once?.wake != null ? { workday: once.wake, weekend: once.wake } : sleepSet?.wake || {},
+    chosen: once?.minutes ?? null,
+    wakeOnce: once?.wake != null
+  };
 }
 
 export const MEAL_SLOTS = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner", "snack_late"];
@@ -81,6 +107,7 @@ export function normalizeProfile(p = {}) {
     sleepGoal: inRange(p.sleepGoal, 360, 600),
     wakeTime: clockText(p.wakeTime),
     wakeTimeWeekend: clockText(p.wakeTimeWeekend),
+    sleepTonight: sleepTonight(p.sleepTonight),
     // The meals of the day the app plans (app-food.js MEALS); empty is the usual five.
     meals: mealSlots(p.meals),
     ...normalizeFocus(p)

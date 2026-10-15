@@ -6,7 +6,7 @@
 import { sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, bedtimePlan, hrvMetric, wristTempDeviation } from "./recovery-model.js";
 import { clockOf, minutesOf, dayStrain } from "./app-today.js";
 import { readinessFor, readinessRows, primaryNights, sleepIndexFor } from "./readiness.js";
-import { sleepSettings } from "./energy-profile.js";
+import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { localDate } from "./user-time.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -25,6 +25,8 @@ const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null
 // its normal; a raised breathing rate or skin temperature costs 10 each, a
 // raised Apple Watch wrist temperature 5 or 10 (recoveryReadiness). These are the "+12 HRV, −5 …" parts of the number.
 const WEIGHTS = { hrv: 0.5, restingHR: 0.25, sleep: 0.25 };
+// The row lists them in the app's one order: sleep on the left, HRV on the right (as on Today).
+const ORDER = ["sleep", "restingHR", "hrv"];
 // Today's value and the athlete's usual range for the readiness row: HRV and
 // resting heart rate ±1 SD around their own baseline, sleep from 90 % of the
 // need (where it starts to cost points) to 105 %.
@@ -36,7 +38,7 @@ function normalRange(key, c) {
 }
 export function readinessParts(readiness) {
   const c = readiness?.components || {};
-  const used = Object.keys(WEIGHTS).filter(k => c[k]);
+  const used = ORDER.filter(k => c[k]);
   const total = used.reduce((s, k) => s + WEIGHTS[k], 0);
   if (readiness?.score == null || !total) return [];
   // cycle: compared with the athlete's luteal normal (cycle tracking).
@@ -73,10 +75,11 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const stageMin = key => round(num(stages[key]));
   const sleepDay = hour != null && hour < 6 && !night ? shift(date, -1) : date;
   const tonight = needOn(shift(sleepDay, 1));
+  const choice = tonightChoice(sleepSet, sleepDay, tonight.need);
   const plan = bedtimePlan({
     date: sleepDay,
-    wake: sleepSet.wake,
-    need: tonight.need,
+    wake: choice.wake,
+    need: choice.need,
     nights: [...nights.values()].map(n => ({ date: nightDate(n), wakeMin: minutesOf(n.endTime), durationMin: num(n.durationMin), timeInBedMin: num(n.timeInBedMin) }))
   });
   const debt = sleepDebtMinutes([...nights.values()], sleepDay, tonight.base);
@@ -161,7 +164,10 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       } : null,
       week,
       need: needToday.need,
-      tonight: { need: tonight.need, base: sleepNeedMinutes({ age, goal: sleepSet.goal }), strain: tonight.base - sleepNeedMinutes({ age, goal: sleepSet.goal }), goalSet: sleepSet.goal != null, wakeSet: plan?.wakeSource === "setting", hrv: tonight.hrv, debt: tonight.debt, naps: tonight.naps, bedtime: plan ? clock(plan.bed) : null, wake: plan ? clock(plan.wake) : null },
+      tonight: { need: tonight.need, base: sleepNeedMinutes({ age, goal: sleepSet.goal }), strain: tonight.base - sleepNeedMinutes({ age, goal: sleepSet.goal }), goalSet: sleepSet.goal != null, wakeSet: plan?.wakeSource === "setting", hrv: tonight.hrv, debt: tonight.debt, naps: tonight.naps, bedtime: plan ? clock(plan.bed) : null, wake: plan ? clock(plan.wake) : null,
+        // The planned night (Spánek): its evening, the sleep it plans (the need or
+        // the user's own length), the time in bed and the user's choices.
+        date: sleepDay, sleep: choice.need, inBed: plan ? plan.inBed : null, chosen: choice.chosen, wakeOnce: choice.wakeOnce },
       debt: debt ? { minutes: debt.minutes, nights: debt.nights } : null,
       regularity: beds.length >= 3 ? { bedtime: clock(bedAvg + 18 * 60), spread: Math.round(bedSd), nights: beds.map(b => ({ date: b.date, value: b.value })) } : null
     },
