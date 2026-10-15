@@ -88,7 +88,7 @@ final class APIClient: @unchecked Sendable {
     func todayData(date: String? = nil) async throws -> (TodaySnapshot, Data) {
         var path = "/app/api/today"
         if let date { path += "?date=" + date }
-        return try await getWithData(path, cacheKey: date == nil ? "today" : nil)
+        return try await getWithData(path, cacheKey: SnapshotCache.dayKey("today", date))
     }
 
     func training() async throws -> TrainingSnapshot {
@@ -354,7 +354,7 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Health
 
     func health(date: String? = nil) async throws -> HealthSnapshot {
-        try await get("/app/api/health" + (date.map { "?date=" + $0 } ?? ""), cacheKey: date == nil ? "health" : nil)
+        try await get("/app/api/health" + (date.map { "?date=" + $0 } ?? ""), cacheKey: SnapshotCache.dayKey("health", date))
     }
 
     func night(date: String) async throws -> NightDetail {
@@ -372,7 +372,7 @@ final class APIClient: @unchecked Sendable {
     }
 
     func foodData(date: String? = nil) async throws -> (FoodSnapshot, Data) {
-        try await getWithData("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: date == nil ? "food" : nil)
+        try await getWithData("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: SnapshotCache.dayKey("food", date))
     }
 
     /// Personal foods, the shared catalog and recipes; with a barcode, that code.
