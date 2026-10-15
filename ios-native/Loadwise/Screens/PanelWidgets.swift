@@ -61,7 +61,7 @@ enum WidgetPanel: String {
         switch self {
         case .today: return [.sleep, .vo2max, .drinks, .form, .activeCalories, .thisWeek, .sleepDebt, .oxygen]
         case .health: return [.steps, .vo2max, .form, .drinks, .food, .activeCalories]
-        case .training: return [.sleep, .hrv, .restingHR, .steps, .food, .weight]
+        case .training: return [.musclesFigure, .musclesGlance, .sleep, .hrv, .restingHR, .steps, .food, .weight]
         case .food: return [.food, .macros, .weight, .steps, .activeCalories, .sleep]
         }
     }
@@ -111,6 +111,8 @@ enum WidgetSection: String, CaseIterable, Identifiable, Hashable {
 enum WidgetKind: String, CaseIterable, Identifiable {
     case restingHR, hrv, vo2max, respiration, skinTemp, oxygen
     case form, thisWeek, sessions, plan, zones
+    /// Svaly (MuscleViews.swift): with the figure, or in short with the rings.
+    case musclesFigure, musclesGlance
     case food, drinks, macros
     case sleep, sleepDebt, bedtime
     case steps, activeCalories
@@ -129,14 +131,16 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .form: return "Forma"
         case .thisWeek: return "Tento týden"
         case .sessions: return "Tréninky týdne"
-        case .plan: return "Plán dne"
+        case .plan: return "Den"
         case .zones: return "Aktivní minuty v zónách"
+        case .musclesFigure: return MuscleFatigue.title
+        case .musclesGlance: return L10n.isEnglish ? "Muscles at a glance" : "Svaly v kostce"
         case .food: return "Jídlo a pití"
         case .drinks: return "Pití a hydratace"
         case .macros: return "Makroživiny"
         case .sleep: return "Spánek"
         case .sleepDebt: return "Spánkový dluh"
-        case .bedtime: return "Večerka a cíl spánku"
+        case .bedtime: return "Dnešní noc"
         case .steps: return "Kroky"
         case .activeCalories: return "Aktivní výdej"
         case .weight: return "Váha"
@@ -148,7 +152,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     var section: WidgetSection {
         switch self {
         case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen: return .health
-        case .form, .thisWeek, .sessions, .plan, .zones: return .training
+        case .form, .thisWeek, .sessions, .plan, .zones, .musclesFigure, .musclesGlance: return .training
         case .food, .drinks, .macros: return .food
         case .sleep, .sleepDebt, .bedtime: return .sleep
         case .steps, .activeCalories: return .movement
@@ -159,9 +163,9 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     /// The sizes the widget comes in, smallest first.
     var sizes: [WidgetSize] {
         switch self {
-        case .restingHR, .hrv, .vo2max, .form, .thisWeek, .sleep, .steps, .activeCalories, .weight, .bodyFat:
+        case .restingHR, .hrv, .vo2max, .form, .thisWeek, .sleep, .steps, .activeCalories, .weight, .bodyFat, .musclesFigure:
             return [.small, .medium, .large]
-        case .respiration, .skinTemp, .oxygen, .zones, .food, .drinks, .sleepDebt, .muscle:
+        case .respiration, .skinTemp, .oxygen, .zones, .food, .drinks, .sleepDebt, .muscle, .musclesGlance:
             return [.small, .medium]
         case .sessions, .plan, .macros, .bedtime:
             return [.medium]
@@ -182,7 +186,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .respiration, .skinTemp, .oxygen, .sleep, .sleepDebt, .bedtime, .bodyFat: return .health
         case .vo2max, .form, .thisWeek, .sessions, .zones, .activeCalories: return .training
         case .drinks, .macros: return .food
-        case .muscle: return nil
+        case .muscle, .musclesFigure, .musclesGlance: return nil
         }
     }
 }
@@ -333,12 +337,13 @@ struct WidgetData {
         // Shown only with data (a scale that measures muscle mass); until then
         // it waits in the widget gallery.
         case .muscle: return health?.weight?.muscle != nil
+        // The widget loads the muscles itself.
+        case .musclesFigure, .musclesGlance: return true
         case .form: return training?.form != nil
         case .thisWeek: return training != nil
         case .sessions: return !(training?.sessions ?? []).isEmpty
         case .plan:
-            guard let t = today else { return false }
-            return !t.plan.isEmpty || (t.tonight == nil && t.steps.hour != nil)
+            return today != nil
         case .zones: return training?.zones != nil
         case .food: return today != nil
         case .drinks, .macros: return food != nil
@@ -360,12 +365,15 @@ struct SizedWidgetBody<Value: View, Chart: View>: View {
     var smallChart: CGFloat = 40
     var mediumChart: CGFloat = 56
     var largeChart: CGFloat = 120
+    /// False when the small tile shows a range bar instead of its chart.
+    var showsSmallChart: Bool = true
     let value: Value
     let chart: (CGFloat) -> Chart
 
-    init(size: WidgetSize, smallChart: CGFloat = 40, mediumChart: CGFloat = 56, largeChart: CGFloat = 120,
+    init(size: WidgetSize, smallChart: CGFloat = 40, mediumChart: CGFloat = 56, largeChart: CGFloat = 120, smallShowsChart: Bool = true,
          @ViewBuilder value: () -> Value, @ViewBuilder chart: @escaping (CGFloat) -> Chart) {
         self.size = size
+        self.showsSmallChart = smallShowsChart
         self.smallChart = smallChart
         self.mediumChart = mediumChart
         self.largeChart = largeChart
@@ -378,7 +386,7 @@ struct SizedWidgetBody<Value: View, Chart: View>: View {
         case .small:
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) { value }
-                chart(smallChart)
+                if showsSmallChart { chart(smallChart) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         case .medium:
@@ -399,6 +407,7 @@ struct SizedWidgetBody<Value: View, Chart: View>: View {
 
 /// One widget drawn from the data, opening its detail when `linked`.
 struct PanelWidget: View {
+    @Environment(AppModel.self) private var model
     let item: PlacedWidget
     let data: WidgetData
     /// On the panel a card opens its detail; while editing and in the gallery
@@ -426,6 +435,9 @@ struct PanelWidget: View {
         case .activeCalories: return .activeEnergy
         case .steps: return .steps
         case .weight, .bodyFat: return .weight
+        // The large one has its own button; the card itself opens Svaly (content).
+        case .musclesFigure: return item.size == .large ? nil : .muscles
+        case .musclesGlance: return .muscles
         default: return nil
         }
     }
@@ -464,6 +476,17 @@ struct PanelWidget: View {
             if let value = data.health?.oxygen { OxygenWidget(oxygen: value, size: item.size) }
         case .muscle:
             if let value = data.health?.weight?.muscle { MuscleWidget(muscle: value, size: item.size) }
+        case .musclesFigure:
+            if item.size == .large && linked {
+                MusclesWidget(figure: true, size: item.size, linked: true)
+                    .contentShape(Rectangle())
+                    .onTapGesture { model.push(.muscles) }
+                    .accessibilityAddTraits(.isButton)
+            } else {
+                MusclesWidget(figure: true, size: item.size, linked: linked)
+            }
+        case .musclesGlance:
+            MusclesWidget(figure: false, size: item.size, linked: linked)
         case .form:
             if let t = data.training, let value = t.form {
                 FormWidget(form: value, loadNote: FormWidget.loadNote(acwr: t.acwr, monotony: t.monotony), size: item.size)
@@ -516,11 +539,11 @@ struct PanelWidget: View {
         }
     }
 
-    /// The day's plan, and on a day without an evening plan the offer to set
-    /// the alarm and sleep goal.
+    /// The day on one line (Den, in place of Plán dne), and on a day without
+    /// an evening plan the offer to set the alarm and sleep goal.
     private func plan(_ t: TodaySnapshot) -> some View {
         VStack(spacing: 12) {
-            if !t.plan.isEmpty { PlanWidget(items: t.plan, today: t.date) }
+            DayTimeline(today: t)
             if t.tonight == nil, t.steps.hour != nil {
                 if linked {
                     RouteLink(route: .sleepSettings) { BedtimeSetupCard() }

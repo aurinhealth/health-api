@@ -29,6 +29,7 @@
 ", pomocně: %@" = ", also: %@";
 "1 porce" = "1 serving";
 "14 dní %@–%@ %%" = "14 days %@–%@ %%";
+"%@ %% potřeby" = "%@ %% of need";
 "1–3 h" = "1–3 h";
 "2,5–25 po 2,5" = "2.5–25 by 2.5";
 "2–40 po 2" = "2–40 by 2";
@@ -65,7 +66,7 @@
 "Boční ramena" = "Side delts";
 "Budit mě v iPhonu" = "Wake me on iPhone";
 "Budík" = "Alarm";
-"Budík nemá povolení. Zapni ho v Nastavení iPhonu → Aurin → Budíky." = "Alarms aren't allowed. Turn them on in iPhone Settings → Aurin → Alarms.";
+"Budík nemá povolení. Povol ho v Nastavení iPhonu → Aplikace → Aurin." = "Alarms aren't allowed. Allow them in iPhone Settings → Apps → Aurin.";
 "Budík se nepodařilo nastavit: %@" = "Couldn't set the alarm: %@";
 "Budík v iPhonu potřebuje iOS 26." = "The iPhone alarm needs iOS 26.";
 "Budík zvoní %@." = "Alarm rings %@.";
@@ -133,7 +134,7 @@
 "Do postele" = "Bedtime";
 "Do postele %@" = "Bed by %@";
 "Do postele v %@" = "Bed at %@";
-"Do tohoto jídla zatím nic není. Přidej první potravinu." = "Nothing in this meal yet. Add the first food.";
+"V tomto jídle zatím nic není. Přidej první potravinu." = "This meal is empty. Add a food.";
 "Doba do usnutí" = "Time to fall asleep";
 "Dohledat AI" = "AI lookup";
 "Dohledat „%@“ pomocí AI" = "Look up “%@” with AI";
@@ -362,7 +363,7 @@
 "Odhlásit" = "Sign out";
 "Odhlásit se" = "Sign out";
 "Odkaz na připojení je neplatný." = "The connection link is invalid.";
-"Odkaz vypršel, zkus to znovu." = "The link expired, try again.";
+"Odkaz vypršel. Zkus to znovu." = "The link has expired. Try again.";
 "Odkud" = "From";
 "Odpojeno." = "Disconnected.";
 "Odpojit" = "Disconnect";
@@ -493,7 +494,7 @@
 "Přihlášení se nepodařilo dokončit. Zkus to znovu." = "Couldn't finish signing in. Try again.";
 "Přihlášení se nepodařilo." = "Sign-in failed.";
 "Přihlášení vypršelo. Přihlas se znovu." = "Your session expired. Please sign in again.";
-"Přihlášení vypršelo. Zkus to znovu." = "Sign-in expired. Please try again.";
+"Přihlášení se přerušilo. Zkus to znovu." = "Sign-in was interrupted. Please try again.";
 "Přiložit diagnostiku" = "Attach diagnostics";
 "Připojení Google Health" = "Connect Google Health";
 "Připojení Intervals.icu se nepovedlo. Zkus vložit API klíč." = "Couldn't connect Intervals.icu. Try entering an API key.";
@@ -505,7 +506,7 @@
 "Připravenost potřebuje aspoň 14 dní HRV nebo klidového tepu." = "Readiness needs at least 14 days of HRV or resting heart rate.";
 "Připravenost potřebuje dnešní noc a aspoň 14 dní HRV nebo klidového tepu." = "Readiness needs last night's data and at least 14 days of HRV or resting heart rate.";
 "Připravenost z HRV, tepu a spánku. Jedno číslo a jedna věta, co dnes dává smysl." = "Readiness from HRV, heart rate and sleep. One number and one sentence on what makes sense today.";
-"Aktivní výdej zatím není k dispozici. Bere se z Google Health." = "Active energy isn't available yet. It comes from Google Health.";
+"Aktivní výdej zatím není k dispozici. Bere se z Google Health nebo Apple Zdraví." = "Active energy isn't available yet. It comes from Google Health or Apple Health.";
 "Aktivní výdej dnes" = "Active energy today";
 "průměr %@ kcal za den" = "average %@ kcal a day";
 "Posledních 28 dní" = "Last 28 days";
@@ -518,7 +519,7 @@
 "doporučení WHO 150 min týdně · lehká aktivita %@" = "WHO recommends 150 min a week · light activity %@";
 "doporučení splněno" = "recommendation met";
 "chybí %@ min" = "%@ min to go";
-"Čas v zónách zatím není k dispozici. Počítá ho Google Health z tepu během dne." = "Time in zones isn't available yet. Google Health works it out from your heart rate through the day.";
+"Čas v zónách zatím není k dispozici. Počítá se z celodenního tepu z Google Health nebo Apple Zdraví." = "Time in zones isn't available yet. It's worked out from all-day heart rate in Google Health or Apple Health.";
 "Aktivní minuty v zónách · tento týden" = "Active zone minutes · this week";
 "Poslední 4 týdny" = "Last 4 weeks";
 "čísla týdnů" = "week numbers";
@@ -657,7 +658,7 @@
 "Tepové zóny pro kolo" = "Cycling heart rate zones";
 "Teď" = "Now";
 "Teď ne" = "Not now";
-"Tohle jídlo dnes není." = "This meal isn't in today's plan.";
+"Tohle jídlo v tento den není." = "This meal isn't on this day.";
 "Trapézy" = "Traps";
 "Trenažér" = "Trainer";
 "Trend" = "Trend";
@@ -702,6 +703,7 @@
 "Uložit" = "Save";
 "Uložit %@" = "Save %@";
 "Uložit %@ jako předvolbu" = "Save %@ as preset";
+"Uložit délku jako předvolbu" = "Save the length as a preset";
 "Uložit do plánu" = "Save to plan";
 "Uložit recept" = "Save recipe";
 "Uložit vybavení" = "Save equipment";
@@ -737,7 +739,7 @@
 "V zásobě zbývalo 1 opakování" = "1 rep in reserve";
 "V zásobě zbývaly 4 a víc opakování" = "4 or more reps in reserve";
 "VO2max" = "VO2max";
-"VO2max zatím není k dispozici. Hodinky ho odhadují z běhu nebo jízdy s tepovou frekvencí." = "VO2max isn't available yet. Your watch estimates it from runs or rides with heart rate.";
+"VO2max zatím není k dispozici. Objeví se, až ho pošlou tvoje hodinky nebo připojená služba." = "VO2max isn't available yet. It'll show up once your watch or a connected service provides it.";
 "Variabilita srdečního tepu v noci" = "Overnight heart rate variability";
 "Velryba" = "Whale";
 "Venku" = "Outdoors";
@@ -1092,7 +1094,7 @@
 "✓ Nalezeno" = "✓ Found";
 "Je potřeba nová verze" = "A new version is needed";
 "Server se změnil a tahle verze aplikace už jeho data nepřečte správně. Nainstaluj novou verzi přes Sideloadly. Data zůstávají uložená na serveru." = "The server has changed and this version of the app can no longer read its data correctly. Install the new version with Sideloadly. Your data stays on the server.";
-"Tahle verze aplikace je zastaralá. Nainstaluj novou." = "This version of the app is out of date. Install the new one.";
+"Tahle verze Aurinu už není podporovaná. Nainstaluj novější verzi." = "This version of Aurin is no longer supported. Install a newer version.";
 "Upravit údaje" = "Edit details";
 "Počet porcí" = "Servings";
 "1 %@ = %@ %@" = "1 %1$@ = %2$@ %3$@";
@@ -1163,6 +1165,7 @@
 "Zranění" = "Injured";
 "Stav sportovce: %@, %@" = "Athlete status: %1$@, %2$@";
 "Do změny" = "Until changed";
+"do změny" = "until changed";
 "1 den" = "1 day";
 "3 dny" = "3 days";
 "1 týden" = "1 week";
@@ -1239,7 +1242,7 @@
 "dechová frekvence, okysličení krve a teplota zápěstí ve spánku" = "respiratory rate, blood oxygen and wrist temperature in sleep";
 "hmotnost a tělesný tuk" = "weight and body fat";
 "Apple Health na tomhle zařízení není." = "Apple Health isn't available on this device.";
-"Vyber aspoň jednu oblast." = "Choose at least one area.";
+"Vyber aspoň jeden typ dat." = "Choose at least one data type.";
 "Co může Aurin číst" = "What Aurin may read";
 "Načítám data…" = "Loading data…";
 "Povolit přístup" = "Allow access";
@@ -1253,7 +1256,7 @@
 "Spárovat s aktivitou" = "Pair with an activity";
 "Zrušit spárování" = "Unpair";
 "Použít polohu iPhonu" = "Use iPhone location";
-"Aurin nemá přístup k poloze. Povol ho v Nastavení iPhonu → Aurin → Poloha." = "Aurin has no access to your location. Allow it in iPhone Settings → Aurin → Location.";
+"Aurin nemá přístup k poloze. Povol ho v Nastavení iPhonu → Soukromí a zabezpečení → Polohové služby → Aurin." = "Aurin doesn't have access to your location. Allow it in iPhone Settings → Privacy & Security → Location Services → Aurin.";
 "Polohu se nepodařilo zjistit. Zkus to znovu venku nebo vyhledej místo." = "Couldn't get your location. Try again outdoors or search for the place.";
 "Moje poloha" = "My location";
 "Předem" = "Before";
@@ -1448,7 +1451,7 @@
 "Historie" = "History";
 "OPAK." = "REPS";
 "rozcvička" = "warm-up";
-"Série %@ chybí: doplň váhu, nebo ji smaž." = "Set %@ is missing: fill in the weight or delete it.";
+"Série %@ není vyplněná: doplň opakování, nebo ji smaž." = "Set %@ isn't filled in: enter the reps or delete it.";
 "Naposledy" = "Recent";
 "v tréninku" = "in workout";
 "Nic se nenašlo." = "Nothing found.";
@@ -1463,7 +1466,7 @@
 "Další cvik?" = "Next exercise?";
 "Jiný cvik" = "Another exercise";
 "Posilovna · hotovo" = "Gym · done";
-"Zatím není odškrtnutá žádná série. Uložením se trénink zahodí." = "No set is ticked yet. Saving discards the workout.";
+"Žádná série není odškrtnutá, takže Uložit trénink zahodí." = "No sets are ticked, so Save will discard this workout.";
 "Zpět k tréninku" = "Back to the workout";
 "Série %@ šla jen na %@, další ubereme na %@ %@." = "Set %@ only reached %@, the next one drops to %@ %@.";
 "další %@" = "next %@";
@@ -1492,13 +1495,13 @@
 "Aurin do Stravy posílá hotové aktivity a váhu. Nic z ní nečte." = "Aurin sends completed activities and your weight to Strava. It never reads anything from it.";
 "Připoj ho a vyber, co do něj Aurin posílá." = "Connect it and choose what Aurin sends there.";
 "Připojit Stravu" = "Connect Strava";
-"Připojit v Zdrojích dat" = "Connect in Data sources";
+"Připojit ve Zdrojích dat" = "Connect in Data sources";
 "Strava je připojená." = "Strava is connected.";
-"Strava zatím není dostupná pro další uživatele." = "Strava isn't available to more users yet.";
+"Aurin u Stravy vyčerpal limit uživatelů, další zatím připojit nejde." = "Aurin has hit Strava's user limit, so no one else can connect yet.";
 "Připojení Stravy bylo zrušeno." = "Connecting Strava was cancelled.";
 "Stravu se nepodařilo připojit. Zkus to znovu." = "Strava couldn't be connected. Try again.";
 "Google zatím nepovolil zápis" = "Google hasn't allowed write access yet";
-"Aurin otevře souhlas Googlu jen pro zápis toho, co tu zapneš. Číst víc nebude." = "Aurin opens Google's consent only for writing what you switch on here. It won't read anything more.";
+"Google se zeptá na zápis váhy a tréninků a na čtení data narození a tras aktivit." = "Google will ask to let Aurin write weight and workouts, and read your birth date and workout routes.";
 "Rozšířit oprávnění Google" = "Extend Google permissions";
 "zápis tréninků" = "logging workouts";
 "zápis váhy" = "logging weight";
@@ -1515,7 +1518,7 @@
 "Odeslání" = "Sending";
 "Odesláno" = "Sent";
 "odešle se" = "will be sent";
-"Apple Zdraví nepovolilo zápis tréninků. Povol ho v Nastavení iPhonu → Zdraví → Přístup k datům." = "Apple Health didn't allow logging workouts. Allow it in iPhone Settings → Health → Data Access.";
+"Aurin nemá povolený zápis tréninků do Apple Zdraví. Povol ho v aplikaci Zdraví → profil → Aplikace → Aurin." = "Aurin isn't allowed to save workouts to Apple Health. Allow it in the Health app → your profile → Apps → Aurin.";
 
 /* Morning check-in on Today */
 "Jak se dnes cítíš?" = "How do you feel today?";
@@ -1714,13 +1717,13 @@
 "Bez tréninku" = "No workout";
 "Přidat sem" = "Add here";
 "Vytvořit tréninky" = "Create workouts";
-"Na zvolené dny není čas. Uprav čas tento týden." = "There's no time on the chosen days. Change this week's time.";
+"Na zvolené dny nezbývá dost času na trénink. Přidej čas nahoře." = "There isn't enough time for a workout on the chosen days. Add more time above.";
 "Poznámka pro AI" = "Note for the AI";
 "Třeba: v sobotu jedu s kamarády, ve čtvrtek nemůžu" = "E.g. riding with friends on Saturday, can't train on Thursday";
 "AI vychází ze tvého času, zátěže, spánku, počasí a cíle." = "The AI works from your time, load, sleep, weather and goal.";
 "Navrhnout týden" = "Propose the week";
 "Navrhuji…" = "Proposing…";
-"Na tento týden není co navrhnout." = "There's nothing to propose for this week.";
+"Na tento týden nevyšel žádný trénink." = "No workouts were proposed for this week.";
 "Uložit do kalendáře" = "Save to calendar";
 "Upravit sám" = "Edit myself";
 "Změnit rozvržení" = "Change the layout";
@@ -1741,7 +1744,7 @@
 "Revize po tréninku" = "Review after the workout";
 "Upraveno i v kalendáři" = "Changed in the calendar too";
 "Tento trénink se nepodařilo změnit." = "This workout couldn't be changed.";
-"Některý trénink se mezitím změnil, ten zůstal beze změny." = "A workout changed in the meantime, so it was left as it is.";
+"Některé tréninky se nepodařilo změnit, zůstaly beze změny." = "Some workouts couldn't be changed and were left as they were.";
 "Rozbalit menu" = "Show menu";
 "Synchronizováno" = "Synced";
 "Nepodařilo se · Zkusit znovu" = "Didn’t work · Try again";
@@ -1943,8 +1946,8 @@
 "Vybráno %@" = "%@ selected";
 "Kopírovat %@" = "Copy %@";
 "Přesunout %@" = "Move %@";
-"Jídlo z jiné aplikace jde jen zkopírovat nebo smazat, zůstalo na místě." = "Food from another app can only be copied or deleted, so it stayed where it was.";
-"Pití z jiné aplikace jde jen zkopírovat nebo smazat, zůstalo na místě." = "Drinks from another app can only be copied or deleted, so they stayed where they were.";
+"Jídlo z jiné aplikace nejde přesunout, jen zkopírovat nebo smazat. Zůstalo na místě." = "Food from another app can't be moved, only copied or deleted. It stayed where it was.";
+"Pití z jiné aplikace nejde přesunout, jen zkopírovat nebo smazat. Zůstalo na místě." = "Drinks from another app can't be moved, only copied or deleted. They stayed where they were.";
 /* Plán týdne: Opravit návrh */
 "Opravit návrh" = "Fix the proposal";
 "Třeba: v sobotu chci posilovnu, ne běh" = "E.g. gym on Saturday, not a run";
@@ -1962,7 +1965,7 @@
 "Vrátit hodnotu zařízení" = "Back to the device's number";
 "Změní se jen v Aurinu, zdroj aktivity zůstane beze změny." = "Changes in Aurin only; the activity's source stays as it is.";
 "Nepovedlo se" = "That didn't work";
-"Zadej kalorie mezi 1 a 6000." = "Enter calories between 1 and 6000.";
+"Zadej hodnotu od 1 do 6 000 kcal." = "Enter a value from 1 to 6,000 kcal.";
 "Trénink zapsaný v Aurinu zmizí i z Intervals.icu, kam ho Aurin poslal." = "The workout logged in Aurin also goes from Intervals.icu, where Aurin sent it.";
 "Jen v Aurinu: Intervals.icu ho dál má, Aurin ho nepočítá." = "In Aurin only: Intervals.icu keeps it, Aurin stops counting it.";
 "Apple Health dovolí smazat trénink jen aplikaci, která ho zapsala. Aurin ho přestane počítat." = "Apple Health lets only the app that recorded a workout delete it. Aurin stops counting it.";
@@ -1971,6 +1974,62 @@
 "upraveno" = "edited";
 "odhad, hodinky %@" = "estimate, watch %@";
 "Kalorie %@ (%@): %@ kcal" = "Calories of %@ (%@): %@ kcal";
+"Co si kouč pamatuje" = "What the coach remembers";
+"Kouč si zatím nic nepamatuje." = "The coach doesn't remember anything yet.";
+"Co si má kouč pamatovat" = "What the coach should remember";
+"Vráceno" = "Undone";
+"Zapamatováno" = "Remembered";
+"Zapomenuto: %@" = "Forgotten: %@";
+"Upraveno: %@" = "Changed: %@";
+"Už neplatí" = "No longer true";
+"Pořád platí" = "Still true";
+
+/* Possible illness (coach check-in on Dnes) */
+"Přepnout na Nemoc" = "Switch to Sick";
+"Do kdy" = "Until";
+"Neurčito" = "Open-ended";
+"Tréninky, které zruším" = "Sessions I'll cancel";
+"Stav Nemoc" = "Status: Sick";
+"Stav Nemoc do %@" = "Status: Sick through %@";
+"Zrušené tréninky: %@. Až se ti uleví, napiš kouči a plán vrátíme." = "Cancelled sessions: %@. When you feel better, tell the coach and we'll bring the plan back.";
+"Až se ti uleví, napiš kouči a plán vrátíme." = "When you feel better, tell the coach and we'll bring the plan back.";
+"Zpět na Trénink" = "Back to Training";
+
+/* The coach's own push (Settings → Oznámení → Kouč) */
+"Ozve se sám, nejvýš 1× denně" = "Speaks up on its own, at most once a day";
+"Vyměněno" = "Swapped";
+"Trénink zůstal, jak byl" = "The session stayed as it was";
+"%@ min" = "%@ min";
+
+/* The coach's changes to done activities in the chat */
+"Sloučit 2 aktivity" = "Merge 2 activities";
+"Upravit čas" = "Change the time";
+
+/* Trénink → Svaly (MuscleViews.swift) */
+"odpočaté" = "rested";
+"pozítří" = "in 2 days";
+"za %@ dny" = "in %@ days";
+"za %@ dní" = "in %@ days";
+"Z posledních 3 dní" = "From the last 3 days";
+"Všechny svaly jsou odpočaté" = "All muscles are rested";
+"Vnější stehna" = "Abductors";
+"Vnitřní stehna" = "Adductors";
+"Běh 14 km" = "Run 14 km";
+"Posilovna, nohy" = "Gym, legs";
+"Posilovna, horní část těla" = "Gym, upper body";
+"pondělí" = "Monday";
+
+/* Trénink → Svaly: the figure and a tapped muscle (MuscleViews.swift) */
+"zepředu" = "front";
+"zezadu" = "back";
+"unavené" = "tired";
+"zotavuje se" = "recovering";
+"Z čeho" = "What tired it";
+"hlavně" = "mostly";
+"trochu" = "a little";
+"1 série" = "1 set";
+"%@ série" = "%@ sets";
+"%@ sérií" = "%@ sets";
 "Propojit %@ s Aurinem" = "Connect %@ with Aurin";
 "Aurin čte" = "Aurin reads";
 "Aurin zapisuje" = "Aurin writes";
@@ -2092,7 +2151,7 @@
 "+ další %@" = "+ %@ more";
 "Co dál" = "What next";
 "Dny" = "Days";
-"Do konce týdne už není jiný den." = "There is no other day left this week.";
+"Do konce týdne už není den, kam ho přesunout." = "There's no day left this week to move it to.";
 "FTP" = "FTP";
 "Hlavní část zůstane, zkrátí se rozjetí a vyjetí." = "The main set stays; the warm-up and cool-down get shorter.";
 "Jiný plán" = "Another plan";
@@ -2149,3 +2208,196 @@
 "Data z WHOOPu se smažou a noc se zase bude brát z ostatních zdrojů." = "The WHOOP data will be deleted and your nights will come from your other sources again.";
 "Spánek a jeho fáze, klidový tep, HRV, dech a okysličení krve." = "Sleep and its stages, resting heart rate, HRV, breathing and blood oxygen.";
 "Odpojit a smazat data z WHOOPu" = "Disconnect and delete the WHOOP data";
+
+/* Connection failures in words a user can act on (APIClient.readable) */
+"Síť blokuje spojení. Přihlas se do Wi-Fi, nebo přepni na data." = "The network is blocking the connection. Sign in to the Wi-Fi or switch to mobile data.";
+"Telefon není připojený k internetu." = "Your phone isn't connected to the internet.";
+"Mobilní data v roamingu jsou vypnutá." = "Data roaming is off.";
+"Server neodpověděl včas. Zkus to za chvíli znovu." = "The server didn't answer in time. Try again in a moment.";
+"Nepodařilo se spojit se serverem Aurinu. Zkontroluj připojení a zkus to znovu." = "Couldn't reach the Aurin server. Check your connection and try again.";
+
+/* Wahoo in Zdroje dat */
+"Jízdy a běhy z Wahoo se v Aurinu smažou a plán do Wahoo přestane chodit." = "The Wahoo rides and runs will be deleted from Aurin and the plan will stop going to Wahoo.";
+"Hotové jízdy a běhy: čas, vzdálenost, výkon, TSS, tep a kadenci." = "Done rides and runs: time, distance, power, TSS, heart rate and cadence.";
+"Tréninky naplánované v Aurinu, do ELEMNT a KICKR." = "Workouts planned in Aurin, to the ELEMNT and KICKR.";
+"Odpojit a smazat jízdy z Wahoo" = "Disconnect and delete the Wahoo rides";
+"Jen v Aurinu: Wahoo ho dál má, Aurin ho nepočítá." = "In Aurin only: Wahoo keeps it, Aurin stops counting it.";
+
+/* Aktivita dne (CoachPick.swift) */
+"Aktivita dne" = "Activity of the day";
+"trenažér" = "trainer";
+"pás" = "treadmill";
+"Sbalit" = "Collapse";
+"Rozbalit" = "Expand";
+"Doporučovat méně" = "Recommend less";
+"Doporučuješ méně" = "Recommended less";
+"Doporučovat znovu" = "Recommend again";
+"Sauna" = "Sauna";
+"Skrýt klávesnici" = "Hide keyboard";
+"vyšší" = "higher";
+"nižší" = "lower";
+"delší" = "longer";
+"kratší" = "shorter";
+"v normálu" = "normal";
+"nad normálem" = "above normal";
+"pod normálem" = "below normal";
+"bod" = "point";
+"bodů" = "points";
+"%@ %@ připravenosti" = "%@ readiness %@";
+"tvůj normál %@" = "your normal %@";
+"níž" = "lower";
+"výš" = "higher";
+"tvrdý trénink %@" = "hard training %@";
+"Lehký trénink" = "Easy training";
+"Tvrdý trénink" = "Hard training";
+"už teď" = "now";
+"Co ji prodlužuje" = "What makes it longer";
+"Na co je tělo připravené" = "Your body is ready for";
+"svaly %d h" = "muscles %d h";
+"Z1–Z2, posilovna bez nohou" = "Z1–Z2, gym without legs";
+"Z1–Z2, jiné svaly" = "Z1–Z2, other muscles";
+"intervaly, těžké nohy" = "intervals, legs";
+"intervaly, těžká posilovna" = "intervals, heavy gym";
+"%d %% potřeby" = "%d%% of need";
+"Fáze života" = "Life stage";
+"Pravidelný cyklus" = "Regular cycle";
+"Perimenopauza" = "Perimenopause";
+"Menopauza" = "Menopause";
+"Hormonální terapie" = "Hormone therapy";
+"Návaly horka" = "Hot flashes";
+"Noční pocení" = "Night sweats";
+"Horší spánek" = "Poor sleep";
+"Klouby" = "Joints";
+"Tmavá" = "Dark";
+"Bílá" = "White";
+"Sklo" = "Glass";
+
+/* Rychlé akce: the menu on the app's icon (QuickActions.swift) */
+"Rychlé akce" = "Quick actions";
+"Dnešní trénink" = "Today's workout";
+"Vypít sklenici vody" = "Drink a glass of water";
+"Posilovna naživo" = "Live gym";
+"Co dnes trénovat?" = "What to train today?";
+"Připravenost %d" = "Readiness %d";
+"Na ikoně · %d ze %d" = "On the icon · %d of %d";
+
+/* Sdílet: share images of the day, a workout and the day's food */
+"Aktivita" = "Activity";
+"Osa" = "Timeline";
+"Čísla" = "Numbers";
+"Velké" = "Big";
+"Dlaždice" = "Tiles";
+"Trasa" = "Route";
+"Graf" = "Chart";
+"Rozdělení" = "Split";
+"Oblouk" = "Dial";
+"Skóre" = "Score";
+"%@ %% potřeby" = "%@%% of need";
+"krok" = "step";
+"Tmavé" = "Dark";
+"Světlé" = "Light";
+"Pozadí" = "Background";
+"Průhledné" = "Transparent";
+"Na ose" = "On the timeline";
+"Údaje" = "Details";
+"Milník" = "Milestone";
+"Kolečka" = "Rings";
+"Proti minulému" = "Vs last week";
+"Plakát" = "Poster";
+"Cesta" = "Journey";
+"Rekord" = "Record";
+"průměr týdne" = "weekly average";
+"proti minulému" = "vs last week";
+"minulý" = "last week";
+"Jízdy" = "Rides";
+"Běhy" = "Runs";
+"kilometrů na kole" = "kilometres on the bike";
+"mil na kole" = "miles on the bike";
+"naběhaných kilometrů" = "kilometres run";
+"naběhaných mil" = "miles run";
+"trénink v posilovně" = "gym session";
+"tréninky v posilovně" = "gym sessions";
+"tréninků v posilovně" = "gym sessions";
+"den v řadě" = "day in a row";
+"dny v řadě" = "days in a row";
+"dní v řadě" = "days in a row";
+"Dny v řadě" = "Days in a row";
+"na kole" = "on the bike";
+"naběháno" = "run";
+"sekunda" = "second";
+"sekundy" = "seconds";
+"sekund" = "seconds";
+"minuta" = "minute";
+"minuty" = "minutes";
+"hodina" = "hour";
+"hodiny" = "hours";
+"hodin" = "hours";
+"+%@ W než dosud" = "+%@ W on your previous best";
+"nejlepší za 30 dní" = "best of the last 30 days";
+"Do příběhu na Instagramu" = "To your Instagram story";
+
+/* Svaly: widgets, the screen and one muscle (MuscleViews.swift) */
+"Dnes připravené" = "Ready today";
+"Den na odpočinek" = "Rest day";
+"Všechny partie se ještě zotavují" = "Every body part is still recovering";
+"připravená" = "ready";
+"Svaly · odpočaté na %" = "Muscles · % rested";
+"Trénink: %@" = "Workout: %@";
+"odpočaté na %@ %%" = "%@ %% rested";
+"Pohled" = "View";
+"odpočatých" = "rested";
+"Dnes se hodí: %@" = "Good for today: %@";
+"Unavené svaly" = "Tired muscles";
+"Ostatní svaly (%@) jsou odpočaté." = "The other muscles (%@) are rested.";
+"%@ jsou tento měsíc ještě bez tréninku." = "%@: not trained yet this month.";
+"%@ naposledy před %@ dny." = "%1$@: last trained %2$@ days ago.";
+"Na růst svalu stačí každou partii procvičit %@× týdně." = "To build muscle, training each body part %@× a week is enough.";
+"Do konce týdne ještě: %@." = "Still to do this week: %@.";
+"%@× z %@" = "%1$@× of %2$@";
+"4 týdny bez tréninku" = "Not trained in 4 weeks";
+"naposledy dnes" = "trained today";
+"naposledy včera" = "trained yesterday";
+"naposledy před %@ dny" = "trained %@ days ago";
+"Cviky: %@" = "Exercises: %@";
+"%@ %% za %@" = "%1$@ %% in %2$@";
+"Odhad maxima: %@, z tvých sérií." = "Estimated max: %@, from your sets.";
+"Odhad maxima: %@. Trend uvidíš po dalším týdnu." = "Estimated max: %@. The trend shows after another week.";
+"Zatím bez vah" = "No weights yet";
+"Zapiš váhy a opakování a uvidíš, jak sílíš." = "Log weights and reps to see how you get stronger.";
+"Jak často" = "How often";
+"Průměrně %@× týdně" = "%@× a week on average";
+"Na růst svalu stačí %@× týdně." = "%@× a week is enough to build muscle.";
+"To držíš." = "You are keeping it up.";
+"Tento týden zatím %@×." = "This week so far: %@×.";
+"Nejlepší výkon" = "Best lift";
+"odhad maxima %@" = "estimated max %@";
+"Poslední trénink: %@, %@" = "Last workout: %1$@, %2$@";
+"ještě unavené" = "still tired";
+"%@: odpočaté %@" = "%1$@: rested %2$@";
+"Odpočaté" = "Rested";
+"%@ unavené, odpočaté %@" = "%1$@ tired, rested %2$@";
+"Dnes chci" = "Tonight I want";
+"Proč %@" = "Why %@";
+"Dospat" = "Catch up";
+"Celou potřebu" = "Full need";
+"Normálně" = "As usual";
+"Aspoň" = "At least";
+"Tvůj cíl" = "Your goal";
+"Cíl podle věku" = "Goal for your age";
+"Dnešní zátěž" = "Today's strain";
+"Nízká HRV" = "Low HRV";
+"Odpolední šlofík" = "Nap";
+"Horní hranice" = "Upper limit";
+"Dolní hranice" = "Lower limit";
+"jen zítra" = "tomorrow only";
+"Vstávání" = "Wake up";
+"Změní čas vstávání" = "Changes the wake-up time";
+"Zítra vstávám" = "Tomorrow I wake at";
+"Jen zítra" = "Tomorrow only";
+"Každý víkend" = "Every weekend";
+"Každý pracovní den" = "Every weekday";
+"Dnešní noc" = "Tonight";
+"spánek %@" = "sleep %@";
+"Otevře plán spánku" = "Opens the sleep plan";
+"+%@ tréninkem" = "+%@ from training";
+"Teď %@" = "Now %@";

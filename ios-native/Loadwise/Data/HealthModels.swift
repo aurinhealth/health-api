@@ -25,6 +25,11 @@ struct HealthSnapshot: Decodable, Equatable {
         /// "hrv", "restingHR", "sleep", "respiration", "skinTemp", "wristTemp" or "checkin".
         let key: String
         let points: Int
+        /// Today's value and the athlete's usual range (hrv, restingHR, sleep
+        /// in minutes); older servers and the other parts have none.
+        var value: Double? = nil
+        var low: Double? = nil
+        var high: Double? = nil
         var id: String { key }
     }
 
@@ -73,6 +78,15 @@ struct HealthSnapshot: Decodable, Equatable {
         /// The user set an own sleep goal / an alarm (Nastavení spánku).
         var goalSet: Bool? = nil
         var wakeSet: Bool? = nil
+        /// The planned night (Spánek): its evening, the sleep it plans (the need
+        /// or the user's own length), the time in bed, the own length chosen for
+        /// tonight (nil = the whole need) and whether the wake time is for
+        /// tomorrow only.
+        var date: String? = nil
+        var sleep: Int? = nil
+        var inBed: Int? = nil
+        var chosen: Int? = nil
+        var wakeOnce: Bool? = nil
     }
 
     struct Debt: Decodable, Equatable {

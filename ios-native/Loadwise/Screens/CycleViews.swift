@@ -191,6 +191,10 @@ struct TodayCycleCard: View {
         self.date = date
     }
 
+    static func shows(_ cycle: TodayCycle) -> Bool {
+        cycle.ask || cycle.flow > 0 || (cycle.stage != "regular" && !cycle.symptoms.isEmpty)
+    }
+
     var body: some View {
         Group {
             if cycle.ask {
@@ -211,7 +215,7 @@ struct TodayCycleCard: View {
                     }
                     .buttonStyle(.plain)
                 }
-            } else if cycle.flow > 0 {
+            } else if Self.shows(cycle) {
                 Button { logging = true } label: {
                     Card {
                         WidgetHeader(title: "Cyklus", color: Palette.pink)
@@ -230,8 +234,11 @@ struct TodayCycleCard: View {
         }
     }
 
-    /// "1. den · křeče, únava" or "Krvácení · křeče".
+    /// "1. den · křeče, únava", "Krvácení · křeče", or without bleeding "Návaly horka · noční pocení".
     private var summary: String {
+        if cycle.flow == 0 {
+            return Fmt.capitalized(cycle.symptoms.map { CycleText.symptom($0) }.joined(separator: " · "))
+        }
         let head = cycle.hormonal || cycle.cycleDay == nil ? L10n.tr("Krvácení") : L10n.f("%@. den", String(cycle.cycleDay ?? 1))
         let symptoms = cycle.symptoms.map { CycleText.symptom($0) }
         return ([head] + (symptoms.isEmpty ? [] : [symptoms.joined(separator: ", ")])).joined(separator: " · ")
@@ -291,7 +298,7 @@ struct CycleLogSheet: View {
                 }
                 Text("Potíže").font(Typo.bodyStrong).foregroundStyle(Palette.muted).padding(.top, 10)
                 LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(CycleText.symptoms, id: \.id) { s in
+                    ForEach(CycleText.symptoms(for: model.cycle?.settings?.stage ?? "regular"), id: \.id) { s in
                         tile(on: symptoms.contains(s.id), symbols: [s.symbol], title: s.title) {
                             if symptoms.contains(s.id) { symptoms.remove(s.id) } else { symptoms.insert(s.id) }
                         }
@@ -510,14 +517,21 @@ struct CycleSettingsView: View {
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             if enabled, let settings {
-                if let state = model.cycle?.state, !settings.hormonal, let day = state.cycleDay, let length = state.length {
+                SettingsGroup {
+                    NavigationLink { LifeStagePicker() } label: {
+                        SettingsRow(title: "Fáze života", value: L10n.tr(CycleSettings.title(ofStage: settings.stage)))
+                    }
+                    .buttonStyle(.plain)
+                }
+                if let state = model.cycle?.state, !settings.hormonal, settings.stage == "regular", let day = state.cycleDay, let length = state.length {
                     HStack {
                         Spacer()
                         CycleRing(day: day, length: length, periodLength: state.periodLength ?? 5, ovulationDay: state.ovulationDay, size: 140)
                         Spacer()
                     }
                 }
-                HStack(spacing: 10) {
+                // Menopause has no periods to date or count.
+                if settings.stage != "menopause" { HStack(spacing: 10) {
                     tile(value: lastPeriodText, label: settings.hormonal ? "Poslední krvácení" : "Poslední menstruace") { choosingDate = true }
                     if settings.hormonal {
                         NavigationLink { ContraceptionPicker() } label: {
@@ -527,7 +541,7 @@ struct CycleSettingsView: View {
                     } else {
                         tile(value: lengthText, label: "Délka cyklu") { choosingLength = true }
                     }
-                }
+                } }
                 SettingsGroup {
                     if !settings.hormonal {
                         NavigationLink { ContraceptionPicker() } label: {
@@ -570,6 +584,10 @@ struct CycleSettingsView: View {
     private var lastPeriod: String? { model.cycle?.state?.lastStart ?? settings?.lastPeriod }
     private var lastPeriodText: String { lastPeriod.map { Fmt.dayMonth($0) } ?? "–" }
     private var lengthText: String {
+        // Perimenopause: the range of the recent cycles, "24–45 dní".
+        if settings?.stage == "perimenopause", let range = model.cycle?.state?.range {
+            return "\(range.shortest)–\(range.longest) " + Fmt.plural(range.longest, "den", "dny", "dní")
+        }
         let n = model.cycle?.state?.length ?? settings?.cycleLength ?? 28
         return String(n) + " " + Fmt.plural(n, "den", "dny", "dní")
     }
@@ -620,6 +638,68 @@ struct CycleSettingsView: View {
             self.error = error.localizedDescription
         }
         saving = false
+    }
+}
+
+/// Fáze života: regular cycle, perimenopause or menopause as cards, and
+/// hormone therapy once it is not the regular cycle.
+struct LifeStagePicker: View {
+    @Environment(AppModel.self) private var model
+    @State private var saving = false
+    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+
+    private var settings: CycleSettings? { model.cycle?.settings }
+
+    var body: some View {
+        SettingsPage(title: "Fáze života") {
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(CycleSettings.lifeStages, id: \.id) { option in
+                    let on = (settings?.stage ?? "regular") == option.id
+                    Button { choose(option.id) } label: {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Image(systemName: option.symbol).font(.system(size: 19, weight: .medium))
+                                .foregroundStyle(on ? Palette.pink : Palette.secondary)
+                                .frame(width: 42, height: 42)
+                                .background(on ? Palette.pink.opacity(0.18) : Palette.track, in: Circle())
+                            Text(L10n.tr(option.title)).font(Typo.bodyStrong).foregroundStyle(on ? Palette.pink : Palette.ink)
+                                .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
+                        .background(on ? Palette.pinkSoft : Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? Palette.pink : Color.clear, lineWidth: 1.5))
+                        .overlay(alignment: .topTrailing) {
+                            if on {
+                                Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(Palette.onAccent)
+                                    .frame(width: 22, height: 22).background(Palette.pink, in: Circle()).padding(10)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(saving)
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+            if let settings, settings.stage != "regular" {
+                SettingsGroup {
+                    SettingsToggle(title: "Hormonální terapie", isOn: Binding(get: { settings.hrt == true }, set: { save(["hrt": .bool($0)]) }), disabled: saving)
+                }
+            }
+        }
+    }
+
+    private func choose(_ id: String) {
+        // Apple Health's hot flashes and night sweats need their permission.
+        if id != "regular" { Task { await CycleHealth.requestAccess() } }
+        save(["lifeStage": .string(id)])
+    }
+
+    private func save(_ changes: JSONObject) {
+        saving = true
+        Task {
+            try? await model.saveCycleSettings(changes)
+            saving = false
+        }
     }
 }
 

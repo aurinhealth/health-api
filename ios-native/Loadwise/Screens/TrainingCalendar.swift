@@ -7,6 +7,10 @@ import SwiftUI
 struct TrainingCalendarCard: View {
     @Environment(AppModel.self) private var model
     let today: String
+    /// The chosen day, for the pinned bar of Trénink.
+    var onPick: (String) -> Void = { _ in }
+    /// A day chosen in the pinned bar (its arrows and "Dnes").
+    var jump: DayJump? = nil
     @State private var selected: String?
     @State private var centered: String?
     @State private var expanded = false
@@ -26,7 +30,9 @@ struct TrainingCalendarCard: View {
     }
 
     private var day: String { selected ?? today }
-    private var stripDays: [String] { ISODay.range(ISODay.shift(today, -60), ISODay.shift(today, 30)) }
+    /// How far the strip (and the pinned bar's arrow) goes ahead.
+    static let daysAhead = 30
+    private var stripDays: [String] { ISODay.range(ISODay.shift(today, -60), ISODay.shift(today, Self.daysAhead)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,6 +52,7 @@ struct TrainingCalendarCard: View {
             // An empty day shows no row at all, only the strip.
             if model.calendar[day].map({ !$0.activities.isEmpty }) ?? true {
                 CalendarDayList(date: day, today: today, day: model.calendar[day])
+                    .daySlide(date: day)
                     .padding(.top, 6)
             }
         }
@@ -59,6 +66,16 @@ struct TrainingCalendarCard: View {
                 if value.translation.height < -40 && expanded { toggle() }
             }
         )
+        .onChange(of: day) { _, date in onPick(date) }
+        .onChange(of: jump) { _, jump in
+            guard let date = jump?.date, date != day else { return }
+            selected = date
+            centered = date
+            if expanded {
+                month = ISODay.monthStart(date)
+                Task { await model.loadCalendar(from: ISODay.monthStart(date), to: ISODay.monthEnd(ISODay.monthStart(date))) }
+            }
+        }
         .task { await model.loadCalendar(from: stripDays.first ?? today, to: stripDays.last ?? today) }
     }
 
@@ -126,6 +143,12 @@ struct TrainingCalendarCard: View {
         month = next
         Task { await model.loadCalendar(from: next, to: ISODay.monthEnd(next)) }
     }
+}
+
+/// A day set from Trénink's pinned bar; each tap is new, even to the same day.
+struct DayJump: Equatable {
+    let date: String
+    let id = UUID()
 }
 
 /// One day of the strip: "P", the main sport in a circle in the plan's colour
@@ -466,6 +489,9 @@ struct WatchActivityDetail: View {
                         }
                     }
                     .padding(.bottom, 18)
+                    if let origin = ActivityDetail.Origin.of(family: activity.source) {
+                        ActivityOriginLine(origin: origin).padding(.top, -8).padding(.bottom, 18)
+                    }
                     ForEach(rows, id: \.0) { row in StatRow(title: row.0, value: row.1, unit: row.2) }
                 }
                 .padding(24)

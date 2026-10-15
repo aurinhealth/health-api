@@ -50,6 +50,9 @@ final class AppModel {
     /// Cycle tracking (AppModel+Cycle.swift): nil until loaded, `available`
     /// false unless the profile's sex is female.
     var cycle: CycleResponse?
+    /// Svaly (MuscleViews.swift): loaded by the widgets, the screen and the
+    /// gym builder, whichever comes first.
+    var muscleFatigue: MuscleFatigue?
     /// Apple Health's cycle data went to the server in this run of the app.
     @ObservationIgnored var cycleHealthSynced = false
 
@@ -61,6 +64,12 @@ final class AppModel {
     /// Counts every load of a tab's data: the coach's text asks again after
     /// any change (CoachTextCard), and the server writes it anew when it differs.
     private(set) var dataRevision = 0
+    /// Bumped only when Today comes from the server (not by a waiting write over it),
+    /// so Today's cards ask their own endpoints once per load.
+    private(set) var todayRevision = 0
+    /// Whether food/today currently carry waiting writes over the server's answer.
+    private var foodPatched = false
+    private var todayPatched = false
     /// The day the screens show: the chosen one, else today (so a load from
     /// 23:58 counts as stale after midnight).
     private var shownDay: String { selectedDate ?? Self.localDate(Date()) }
@@ -111,6 +120,17 @@ final class AppModel {
     @ObservationIgnored private var todayBase: Data?
     @ObservationIgnored private var foodBase: Data?
     @ObservationIgnored private var sendingOutbox = false
+    /// Writes that just went out, still drawn over Food and Today until each
+    /// screen's next answer from the server has them, so nothing blinks away.
+    @ObservationIgnored private var settlingFood: [(id: UUID, overlay: OutboxOverlay)] = []
+    @ObservationIgnored private var settlingToday: [(id: UUID, overlay: OutboxOverlay)] = []
+    /// The server's id of a meal or drink logged on the phone (by its local
+    /// id), so "Vrátit" or a delete right after the save finds it.
+    @ObservationIgnored private var sentIds: [Int: Int] = [:]
+    /// The write on its way now; a write made meanwhile asks for one more round.
+    @ObservationIgnored private var sendingItem: UUID?
+    @ObservationIgnored private var sendAgain = false
+    @ObservationIgnored private var reloadTodayAfterSend = false
     @ObservationIgnored private var network: NetworkWatch?
 
     let api: APIClient
@@ -140,6 +160,12 @@ final class AppModel {
         if let i = args.firstIndex(of: "-tab"), i + 1 < args.count {
             tab = ["training": AppTab.training, "food": .food, "health": .health][args[i + 1]] ?? .today
         }
+        // "-open readiness" (the website's screenshots) opens a detail as its link
+        // would, without the system's "Open in Aurin?" question that simctl openurl brings.
+        if let i = args.firstIndex(of: "-open"), i + 1 < args.count,
+           let url = URL(string: "loadwise://open/\(args[i + 1])") {
+            handle(url)
+        }
         // The network back: what waited goes out and the screens load again.
         if !demo {
             network = NetworkWatch { [weak self] in await self?.networkBack() }
@@ -162,6 +188,7 @@ final class AppModel {
         todayBase = OutboxStore.savedSnapshot("today")
         foodBase = OutboxStore.savedSnapshot("food")
         applyOutbox()
+        SnapshotCache.prune(today: Self.localDate(Date()))
     }
 
     /// Notes whether a refresh reached the server; true when the error was a
@@ -351,23 +378,31 @@ final class AppModel {
         defer { loading = false }
         if announce { syncStatus = .syncing }
         await sendOutbox()
-        // Last night and the morning's HRV from the watch before Today is computed.
-        await AppleHealth.shared.sync(api: api)
+        let health = AppleHealth.shared
+        // Until a late-morning sync, last night and the morning's HRV from the
+        // watch go out before Today is computed. Later in the day Today loads
+        // alongside the sync and again only when it brought something new.
+        var sync: Task<AppleHealth.SyncOutcome, Never>?
+        if health.hasMorningData {
+            let api = api
+            sync = Task { await health.run(api: api) }
+        } else {
+            _ = await health.run(api: api)
+        }
         do {
-            let (snapshot, data) = try await api.todayData(date: selectedDate)
-            today = snapshot
-            todayBase = data
-            fetched[.today] = (Date(), shownDay)
-            dataRevision += 1
-            applyOutbox()
-            errorMessage = nil
-            _ = noteConnection(nil)
+            try await loadToday()
+            // The day is on screen: the arrows and swipes work again.
+            loading = false
+            if let sync, await sync.value.changed { try? await loadToday() }
+            async let status = try? api.athleteStatus()
             if selectedDate == nil, let today {
-                await loadCycle()
+                async let cycle: Void = loadCycle()
                 await Reminders.reschedule(from: today)
                 WidgetBridge.update(today)
+                prefetchYesterday()
+                await cycle
             }
-            if let status = try? await api.athleteStatus() { athleteStatus = status }
+            if let status = await status { athleteStatus = status }
             if syncStatus == .syncing { finishSync(.done) }
         } catch APIError.unauthorized {
             syncStatus = nil
@@ -384,6 +419,44 @@ final class AppModel {
             } else if !lost && today != nil {
                 notice = error.localizedDescription
             }
+            // "Bez připojení" alone hides that a Wi-Fi wants a sign-in: say so.
+            if lost, (error as? URLError)?.code == .secureConnectionFailed { notice = error.localizedDescription }
+        }
+    }
+
+    /// Today of the shown day from the server, with the waiting writes over it.
+    private func loadToday() async throws {
+        let settled = Set(settlingToday.map { $0.id })
+        let day = selectedDate
+        let (snapshot, data) = try await api.todayData(date: day)
+        // Another day was chosen meanwhile: its own load shows it.
+        guard selectedDate == day else { return }
+        today = snapshot
+        todayBase = data
+        todayPatched = false
+        settlingToday.removeAll { settled.contains($0.id) }
+        fetched[.today] = (Date(), shownDay)
+        dataRevision += 1
+        todayRevision += 1
+        applyOutbox()
+        errorMessage = nil
+        _ = noteConnection(nil)
+    }
+
+    /// Today again after a meal or drink went out: without the Apple Health
+    /// sync, the cycle and the athlete status, which a meal does not change.
+    private func reloadToday() async {
+        guard !demo, phase == .signedIn else { return }
+        do {
+            try await loadToday()
+            if selectedDate == nil, let today {
+                await Reminders.reschedule(from: today)
+                WidgetBridge.update(today)
+            }
+        } catch APIError.unauthorized {
+            signOut(expired: true)
+        } catch {
+            // The write stays drawn over the screen; the next load brings it.
         }
     }
 
@@ -432,9 +505,9 @@ final class AppModel {
 
     /// A new Stav sportovce. The coach and the plans follow it, so Today and
     /// Training load again.
-    func setAthleteStatus(_ status: String, until: String?, note: String?) async throws {
+    func setAthleteStatus(_ status: String, until: String?, note: String?, cancel: [String] = []) async throws {
         guard !demo else { athleteStatus = AthleteStatus(status: status, note: note, statusUntil: until); return }
-        athleteStatus = try await api.setAthleteStatus(status, until: until, note: note)
+        athleteStatus = try await api.setAthleteStatus(status, until: until, note: note, cancel: cancel)
         await refresh()
         if training != nil { await refreshTraining() }
     }
@@ -475,7 +548,10 @@ final class AppModel {
         guard !demo, phase == .signedIn else { return }
         await AppleHealth.shared.sync(api: api)
         do {
-            health = try await api.health(date: selectedDate)
+            let day = selectedDate
+            let value = try await api.health(date: day)
+            guard selectedDate == day else { return }
+            health = value
             fetched[.health] = (Date(), shownDay)
             dataRevision += 1
             healthError = nil
@@ -493,10 +569,14 @@ final class AppModel {
 
     func refreshFood() async {
         guard !demo, phase == .signedIn else { return }
+        let settled = Set(settlingFood.map { $0.id })
         do {
-            let (snapshot, data) = try await api.foodData(date: selectedDate)
+            let day = selectedDate
+            let (snapshot, data) = try await api.foodData(date: day)
+            guard selectedDate == day else { return }
             food = snapshot
             foodBase = data
+            settlingFood.removeAll { settled.contains($0.id) }
             // The day's food and water to Apple Health when switched on in Synchronizace.
             Task { await AppleHealthExport.shared.saveFoodDay(snapshot) }
             fetched[.food] = (Date(), shownDay)
@@ -519,17 +599,8 @@ final class AppModel {
     @discardableResult
     func addDrink(ml: Int, kind: String) async -> Bool {
         guard !demo else { return true }
-        do {
-            if try await deliver(drinkItem(ml: ml, kind: kind, date: writeDay)) {
-                await refreshFood()
-                await refresh()
-            }
-            return true
-        } catch {
-            foodError = error.localizedDescription
-            notice = error.localizedDescription
-            return false
-        }
+        write(drinkItem(ml: ml, kind: kind, date: writeDay))
+        return true
     }
 
     /// POST /app/api/fluids with the time it was drunk, so a later send keeps it.
@@ -544,6 +615,19 @@ final class AppModel {
     }
 
     // MARK: - Writes without signal
+
+    /// A meal or drink shows at once and goes out in the background, so the
+    /// sheet closes without waiting for the server. Without signal it waits in
+    /// the outbox; one the server refuses comes back as the outbox note.
+    /// send: false when several are written at once and sent after the last.
+    private func write(_ item: OutboxItem, send: Bool = true) {
+        // The saved copy of another day no longer holds; its next load saves it anew.
+        if let date = item.overlay?.date, date != Self.localDate(Date()) {
+            for screen in ["today", "food", "health"] { SnapshotCache.remove(key: SnapshotCache.dayKey(screen, date)) }
+        }
+        enqueue(item)
+        if send { Task { await sendOutbox(reloadToday: true) } }
+    }
 
     /// Sends a write now; without signal it waits in the outbox and shows on
     /// the screens meanwhile. True when it went out now. Throws when the
@@ -582,8 +666,12 @@ final class AppModel {
     /// The Today and Food screens: the server's answer with the waiting writes.
     private func applyOutbox() {
         let overlays = outbox.compactMap(\.overlay)
-        if let foodBase, let value = try? JSONDecoder().decode(FoodSnapshot.self, from: OutboxPatch.food(foodBase, overlays)) { food = value }
-        if let todayBase, let value = try? JSONDecoder().decode(TodaySnapshot.self, from: OutboxPatch.today(todayBase, overlays)) { today = value }
+        // Nothing waiting and nothing shown over the server's answer: no second decode.
+        let foodLayers = settlingFood.map({ $0.overlay }) + overlays, todayLayers = settlingToday.map({ $0.overlay }) + overlays
+        if let foodBase, !foodLayers.isEmpty || foodPatched,
+           let value = try? JSONDecoder().decode(FoodSnapshot.self, from: OutboxPatch.food(foodBase, foodLayers)) { food = value; foodPatched = !foodLayers.isEmpty }
+        if let todayBase, !todayLayers.isEmpty || todayPatched,
+           let value = try? JSONDecoder().decode(TodaySnapshot.self, from: OutboxPatch.today(todayBase, todayLayers)) { today = value; todayPatched = !todayLayers.isEmpty }
     }
 
     /// Water added from the widget while the app was closed joins the outbox.
@@ -594,20 +682,45 @@ final class AppModel {
         saveOutbox()
     }
 
-    /// Sends the waiting writes in order. Stops at the first that still finds
-    /// no connection; one the server refuses (4xx) is dropped with a note.
-    /// True when something went out.
+    /// Sends the waiting writes in order and loads Food (and Health) again.
+    /// reloadToday: Today too, without the Apple Health sync (after a meal or
+    /// drink; refresh() loads Today itself). True when something went out.
     @discardableResult
-    func sendOutbox() async -> Bool {
-        guard !demo, phase == .signedIn, !sendingOutbox else { return false }
-        takeWidgetDrinks()
-        guard !outbox.isEmpty else { return false }
+    func sendOutbox(reloadToday reload: Bool = false) async -> Bool {
+        guard !demo, phase == .signedIn else { return false }
+        if reload { reloadTodayAfterSend = true }
+        // Already sending: the running loop takes the new write in one more round.
+        guard !sendingOutbox else { sendAgain = true; return false }
         sendingOutbox = true
         defer { sendingOutbox = false }
+        var sentAny = false
+        repeat {
+            sendAgain = false
+            takeWidgetDrinks()
+            guard !outbox.isEmpty else { break }
+            let sent = await sendWaiting()
+            saveOutbox()
+            if sent {
+                sentAny = true
+                offline = false
+                let today = reloadTodayAfterSend
+                reloadTodayAfterSend = false
+                await reloadAfterWrites(today: today)
+            }
+        } while sendAgain
+        return sentAny
+    }
+
+    /// The waiting writes out in order. Stops at the first that still finds no
+    /// connection; one the server refuses (4xx) is dropped with a note.
+    private func sendWaiting() async -> Bool {
         var sent = false
         while let item = outbox.first {
+            sendingItem = item.id
+            defer { sendingItem = nil }
             do {
-                try await api.sendQueued(item)
+                let answer = try await api.sendQueued(item)
+                settle(item, answer: answer)
                 outbox.removeAll { $0.id == item.id }
                 sent = true
             } catch OutboxRefusal.rejected(let message) {
@@ -625,17 +738,43 @@ final class AppModel {
                 break
             } catch {
                 // Still no signal (or the session ended): the rest waits.
+                if Outbox.isNoConnection(error) { offline = true }
                 break
             }
             OutboxStore.save(outbox)
         }
-        saveOutbox()
-        if sent {
-            offline = false
-            if food != nil { await refreshFood() }
-            if health != nil { await refreshHealth() }
-        }
         return sent
+    }
+
+    /// A write that just went out stays drawn until Food and Today load it from
+    /// the server; a new meal or drink takes its server id.
+    private func settle(_ item: OutboxItem, answer: Data) {
+        guard var overlay = item.overlay else { return }
+        if let local = overlay.id, local < 0, let id = Outbox.entryId(answer) {
+            sentIds[local] = id
+            overlay.id = id
+        }
+        settlingFood.append((item.id, overlay))
+        settlingToday.append((item.id, overlay))
+    }
+
+    /// Food, Health and Today load at once after writes went out.
+    private func reloadAfterWrites(today: Bool) async {
+        await withTaskGroup(of: Void.self) { group in
+            if food != nil { group.addTask { await self.refreshFood() } }
+            if health != nil { group.addTask { await self.refreshHealth() } }
+            if today { group.addTask { await self.reloadToday() } }
+        }
+    }
+
+    /// A meal or drink logged on the phone (negative local id) as the server
+    /// knows it: nil while it still waits to be sent, its server id once sent.
+    private func serverId(of localId: Int) async -> Int? {
+        // On its way right now: its answer brings the id.
+        while let sending = sendingItem, outbox.first(where: { $0.id == sending })?.overlay?.id == localId {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        return sentIds[localId]
     }
 
     /// The network came back: send what waited and load the screens again.
@@ -792,16 +931,22 @@ final class AppModel {
 
     func updateDrink(id: Int, ml: Int, kind: String) async -> Bool {
         guard !demo else { return true }
-        // A drink not sent yet changes while it waits.
-        if id < 0, let i = outbox.firstIndex(where: { $0.overlay?.id == id }) {
-            var fields = outbox[i].fields
-            fields["ml"] = .number(Double(ml))
-            fields["kind"] = .string(kind)
-            outbox[i].body = OutboxItem.json(fields)
-            outbox[i].overlay?.ml = Double(ml)
-            outbox[i].overlay?.drink = kind
-            saveOutbox()
-            return true
+        var id = id
+        if id < 0 {
+            if let sent = await serverId(of: id) {
+                id = sent
+            } else {
+                // A drink not sent yet changes while it waits.
+                guard let i = outbox.firstIndex(where: { $0.overlay?.id == id }) else { return true }
+                var fields = outbox[i].fields
+                fields["ml"] = .number(Double(ml))
+                fields["kind"] = .string(kind)
+                outbox[i].body = OutboxItem.json(fields)
+                outbox[i].overlay?.ml = Double(ml)
+                outbox[i].overlay?.drink = kind
+                saveOutbox()
+                return true
+            }
         }
         let old = food?.water.drinks?.first { $0.id == id }
         let item = OutboxItem(path: "/app/api/fluids", method: "PATCH",
@@ -809,37 +954,23 @@ final class AppModel {
                               label: L10n.tr("Pití"),
                               overlay: OutboxOverlay(kind: .editDrink, date: food?.date ?? Self.localDate(Date()), id: id, ml: Double(ml), drink: kind,
                                                      previousMl: old?.ml, previousDrink: old?.kind))
-        do {
-            if try await deliver(item) {
-                await refreshFood()
-                await refresh()
-            }
-            return true
-        } catch {
-            foodError = error.localizedDescription
-            notice = error.localizedDescription
-            return false
-        }
+        write(item)
+        return true
     }
 
     @discardableResult
     func deleteDrink(id: Int) async -> Bool {
         guard !demo else { return true }
-        if id < 0 { dropWaiting(localId: id); return true }
+        var id = id
+        if id < 0 {
+            guard let sent = await serverId(of: id) else { dropWaiting(localId: id); return true }
+            id = sent
+        }
         let old = food?.water.drinks?.first { $0.id == id }
         let item = OutboxItem(path: "/app/api/fluids?id=\(id)", method: "DELETE", body: OutboxItem.json(JSONObject()), label: L10n.tr("Pití"),
                               overlay: OutboxOverlay(kind: .removeDrink, date: food?.date ?? Self.localDate(Date()), id: id, ml: old?.ml, drink: old?.kind))
-        do {
-            if try await deliver(item) {
-                await refreshFood()
-                await refresh()
-            }
-            return true
-        } catch {
-            foodError = error.localizedDescription
-            notice = error.localizedDescription
-            return false
-        }
+        write(item)
+        return true
     }
 
     /// A meal or drink taken back before it was sent.
@@ -848,9 +979,10 @@ final class AppModel {
         saveOutbox()
     }
 
-    /// Logs a food; nil when it worked, else the message to show.
+    /// Logs a food: it shows at once and goes out in the background (nil; a
+    /// refusal comes later as the outbox note).
     /// `day`: another day than the one shown (a food the coach drafted from a sentence);
-    /// `refreshAfter: false` when several are logged at once and refreshed after the last.
+    /// `refreshAfter: false` when several are logged at once and sent after the last.
     func logFood(product: FoodProduct, amount: Double, meal: String, day: String? = nil, refreshAfter: Bool = true) async -> String? {
         guard !demo else { return nil }
         let date = day ?? writeDay
@@ -864,38 +996,26 @@ final class AppModel {
         if date == Self.localDate(Date()) { extra["time"] = .string(Outbox.clock()) }
         let item = OutboxItem(path: "/app/api/food/log", method: "POST", body: OutboxItem.json(request, adding: extra),
                               label: product.name, overlay: overlay)
-        do {
-            if try await deliver(item), refreshAfter {
-                await refreshFood()
-                await refresh()
-            }
-            return nil
-        } catch {
-            return error.localizedDescription
-        }
+        write(item, send: refreshAfter)
+        return nil
     }
 
     /// true when it was deleted (or waits for signal).
     @discardableResult
     func deleteFood(id: Int) async -> Bool {
         guard !demo else { return true }
-        if id < 0 { dropWaiting(localId: id); return true }
+        var id = id
+        if id < 0 {
+            guard let sent = await serverId(of: id) else { dropWaiting(localId: id); return true }
+            id = sent
+        }
         let entry = food?.meals.flatMap(\.entries).first { $0.id == id }
         let item = OutboxItem(path: "/app/api/food/entry", method: "DELETE", body: OutboxItem.json(["id": JSONValue.number(Double(id))]),
                               label: entry?.name ?? L10n.tr("Jídlo"),
                               overlay: OutboxOverlay(kind: .removeFood, date: food?.date ?? Self.localDate(Date()), id: id,
                                                      kcal: entry?.kcal, protein: entry?.protein, carbs: entry?.carbs, fat: entry?.fat))
-        do {
-            if try await deliver(item) {
-                await refreshFood()
-                await refresh()
-            }
-            return true
-        } catch {
-            foodError = error.localizedDescription
-            notice = error.localizedDescription
-            return false
-        }
+        write(item)
+        return true
     }
 
     @discardableResult
@@ -915,20 +1035,120 @@ final class AppModel {
             return
         }
         selectedDate = date == todayDate ? nil : date
+        showSaved(selectedDate)
+        await refreshDay()
+    }
+
+    /// A day picked in Today's week strip; today or earlier.
+    func showDate(_ date: String) async {
+        let todayDate = Self.localDate(Date())
+        guard !demo, date <= todayDate, date != (selectedDate ?? todayDate) else { return }
+        selectedDate = date == todayDate ? nil : date
+        showSaved(selectedDate)
         await refreshDay()
     }
 
     func showToday() async {
         guard selectedDate != nil else { return }
         selectedDate = nil
+        showSaved(nil)
         await refreshDay()
     }
 
     /// The day changed: Today, and Food and Health when they were opened.
     func refreshDay() async {
-        await refresh()
-        if food != nil { await refreshFood() }
-        if health != nil { await refreshHealth() }
+        if let date = selectedDate {
+            await loadOtherDay(date)
+            return
+        }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await self.refresh() }
+            if food != nil { group.addTask { await self.refreshFood() } }
+            if health != nil { group.addTask { await self.refreshHealth() } }
+        }
+    }
+
+    /// The saved copy of a day (SnapshotCache), on screen at once while the
+    /// day loads; without one the screens keep the day before until it comes.
+    private func showSaved(_ date: String?) {
+        let decoder = JSONDecoder()
+        if let saved = SnapshotCache.data(key: SnapshotCache.dayKey("today", date)),
+           let value = try? decoder.decode(TodaySnapshot.self, from: saved.data) {
+            today = value
+            todayBase = saved.data
+        }
+        if food != nil, let saved = SnapshotCache.data(key: SnapshotCache.dayKey("food", date)),
+           let value = try? decoder.decode(FoodSnapshot.self, from: saved.data) {
+            food = value
+            foodBase = saved.data
+        }
+        if health != nil, let saved = SnapshotCache.data(key: SnapshotCache.dayKey("health", date)),
+           let value = try? decoder.decode(HealthSnapshot.self, from: saved.data) {
+            health = value
+        }
+        applyOutbox()
+    }
+
+    /// Another day than today: its Today, Food and Health from the server at
+    /// once, without the Apple Health sync, the waiting writes and the
+    /// athlete status, which belong to today. The arrows stay free: a newer
+    /// day chosen meanwhile wins and this answer is dropped.
+    private func loadOtherDay(_ date: String) async {
+        guard !demo, phase == .signedIn else { return }
+        let wantFood = food != nil, wantHealth = health != nil
+        let settledToday = Set(settlingToday.map { $0.id }), settledFood = Set(settlingFood.map { $0.id })
+        let api = api
+        async let todayAnswer: Result<(TodaySnapshot, Data), Error> = Self.attempt { try await api.todayData(date: date) }
+        async let foodAnswer: Result<(FoodSnapshot, Data), Error>? = wantFood ? Self.attempt { try await api.foodData(date: date) } : nil
+        async let healthAnswer: Result<HealthSnapshot, Error>? = wantHealth ? Self.attempt { try await api.health(date: date) } : nil
+        let (t, f, h) = await (todayAnswer, foodAnswer, healthAnswer)
+        guard selectedDate == date else { return }
+        var failure: Error?
+        switch t {
+        case .success(let (snapshot, data)):
+            today = snapshot
+            todayBase = data
+            settlingToday.removeAll { settledToday.contains($0.id) }
+            fetched[.today] = (Date(), date)
+        case .failure(let error): failure = error
+        }
+        if case .success(let (snapshot, data))? = f {
+            food = snapshot
+            foodBase = data
+            settlingFood.removeAll { settledFood.contains($0.id) }
+            fetched[.food] = (Date(), date)
+            Task { await AppleHealthExport.shared.saveFoodDay(snapshot) }
+        }
+        if case .success(let value)? = h {
+            health = value
+            fetched[.health] = (Date(), date)
+        }
+        dataRevision += 1
+        applyOutbox()
+        guard let failure else {
+            errorMessage = nil
+            _ = noteConnection(nil)
+            return
+        }
+        if (failure as? APIError) == .unauthorized { signOut(expired: true); return }
+        if Self.isCancellation(failure) { return }
+        // Without signal the saved day stays on screen; an error only without one.
+        let lost = noteConnection(failure)
+        if !lost { notice = failure.localizedDescription }
+    }
+
+    nonisolated private static func attempt<T>(_ body: () async throws -> T) async -> Result<T, Error> {
+        do { return .success(try await body()) } catch { return .failure(error) }
+    }
+
+    /// Yesterday's Today kept on the phone in advance (at most once an hour),
+    /// so the first step back opens at once.
+    private func prefetchYesterday() {
+        guard let yesterday = Self.shift(Self.localDate(Date()), by: -1) else { return }
+        if let saved = SnapshotCache.data(key: SnapshotCache.dayKey("today", yesterday)),
+           Date().timeIntervalSince(saved.savedAt) < 3600 { return }
+        let api = api
+        Task(priority: .utility) { _ = try? await api.todayData(date: yesterday) }
     }
 
     nonisolated static func localDate(_ date: Date) -> String {
@@ -968,7 +1188,10 @@ final class AppModel {
         api.signOut()
         SnapshotCache.clear()
         GymDayCache.clear()
+        CoachTextMemory.values = [:]
+        ThresholdCheckMemory.kept = nil
         GymHistoryCache.clear()
+        ActivityDetailMemory.values = [:]
         if !expired {
             // Waiting writes belong to this account; the next one must not send them.
             outbox = []
@@ -983,6 +1206,9 @@ final class AppModel {
         notice = nil
         todayBase = nil
         foodBase = nil
+        settlingFood = []
+        settlingToday = []
+        sentIds = [:]
         Reminders.cancelAll()
         // The next sign-in sends the push token again for its own account.
         PushRegistration.forget()

@@ -123,6 +123,11 @@ Zdroje byly ověřené přes abstrakty, bibliografické záznamy a primární do
   - Morán-Navarro R et al. Eur J Appl Physiol 2017;117:2387–2399: trénink do selhání prodlužuje zotavení přes 48 h.
 - **Proti konkurenci:** Fitbod a Bevel mají podobný model zotavení svalů, ale metodu nezveřejňují. My navíc započítáváme kolo a běh do zátěže nohou.
 
+### 2.4a Svaly na Tréninku (kdy jsou zase odpočaté)
+
+- **Výpočet:** `src/muscle-fatigue.js`, `GET /app/api/muscles`. Svaly jsou ty z katalogu cviků (`muscle` v `strength-generator.js`). Jednotka je jedna těžká série (RPE 8) daného svalu: RPE 6 se počítá napůl, RPE 10 jedenapůlkrát; svaly, které pomáhají (tabulka `SECONDARY` podle pohybového vzoru, např. dřep → hýždě 0,5 a vnitřní stehna 0,4), dostanou svůj podíl. Kolo, běh a chůze se počítají jen jako odhad: tréninková zátěž × podíl svalu jako v bodě 2.4, děleno 10, kolo na 70 % (koncentrická práce). Únava klesá exponenciálně s časovými konstantami z bodu 2.4. Sval je odpočatý, když zbývá méně než 1,75 série; to po běžném tréninku 4–6 sérií vychází na 48–72 h u stehen, hýždí a zadních stehen, 36–53 h u malých svalů, nejvýš 96 h. Den posilovny končí podle tréninku z hodinek, jinak posledním uložením série, jinak v 18:00.
+- **Limity:** konstanty 1,75 a podíly pomocných svalů jsou kalibrace, ne publikované hodnoty. Zátěž nohou z kola a běhu je hrubý odhad a aplikace ho tak označí (≈).
+
 ### 2.5 Únava z vytrvalosti v posilovně a regenerační týden
 
 - **Výpočet:**

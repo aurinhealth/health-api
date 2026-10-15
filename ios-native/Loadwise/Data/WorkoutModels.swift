@@ -34,6 +34,10 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     /// is what the device said (src/activity-edits.js).
     var kcalEdited: Bool? = nil
     var kcalDevice: Double? = nil
+    /// On a done ride or run: its distance and average power, when the
+    /// device had them (Dnes → Den).
+    var distanceKm: Double? = nil
+    var watts: Double? = nil
 
     struct KcalEstimate: Decodable, Hashable {
         let value: Double?
@@ -404,6 +408,30 @@ struct ActivityDetail: Decodable, Equatable {
     var hrZones: [Zone]? = nil
     /// The watch's copy (or the watch workout itself), for its route.
     var watch: WatchRef? = nil
+    /// Who recorded it ("Google Health", "Wahoo"), shown under the name
+    /// (src/activity-origin.js).
+    var origin: Origin? = nil
+
+    struct Origin: Decodable, Equatable {
+        let name: String
+        /// IntegrationIcon's id; nil: the name alone.
+        let logo: String?
+
+        /// A calendar session's source family, for a watch session without a detail.
+        static func of(family: String?) -> Origin? {
+            switch family {
+            case "google-wearables": return Origin(name: "Google Health", logo: "google")
+            case "apple-health": return Origin(name: "Apple Health", logo: "apple")
+            case "wahoo": return Origin(name: "Wahoo", logo: "wahoo")
+            case "intervals": return Origin(name: "Intervals.icu", logo: "intervals")
+            default: return nil
+            }
+        }
+    }
+
+    /// Regenerace: the hours after it before hard training (src/recovery-hours.js);
+    /// nil for a short easy one, the gym or an older server.
+    var recoveryHours: Int? = nil
 
     struct Activity: Decodable, Equatable {
         let name: String?

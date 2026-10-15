@@ -21,10 +21,10 @@ export const MUSCLES = Object.keys(FOCUS_GROUPS);
 // rest: most lifters are back within one rep of baseline at 48 h, squat-,
 // bench- and deadlift-type lifts often need 72 h (Korak 2015), and muscular
 // endurance is restored by 48 h (McLester 2003).
-const RECOVERY_DAYS = { quads: 2.4, hamstrings: 2.4, hips: 2.4, lower_back: 2.4, chest: 2.2, upper_back: 2.2, lats: 2.2, front_delts: 2.0, calves: 1.9, side_delts: 1.8, rear_delts: 1.8, biceps: 1.8, triceps: 1.8, traps: 1.8, abs: 1.4, obliques: 1.4, forearms: 1.4 };
+export const RECOVERY_DAYS = { quads: 2.4, hamstrings: 2.4, hips: 2.4, lower_back: 2.4, chest: 2.2, upper_back: 2.2, lats: 2.2, front_delts: 2.0, calves: 1.9, side_delts: 1.8, rear_delts: 1.8, biceps: 1.8, triceps: 1.8, traps: 1.8, abs: 1.4, obliques: 1.4, forearms: 1.4 };
 // Sets taken to failure (RPE ≥ 9.5) prolong recovery beyond 48 h compared
 // with sets that stop short of it (Morán-Navarro 2017).
-const FAILURE_RECOVERY = 1.3;
+export const FAILURE_RECOVERY = 1.3;
 // Primary muscle of the exercise catalog → body-map groups.
 const PRIMARY = { chest: ["chest"], back: ["upper_back", "lats"], shoulders: ["front_delts", "side_delts"], quads: ["quads"], hamstrings: ["hamstrings"], glutes: ["hips"], biceps: ["biceps"], triceps: ["triceps"], core: ["abs", "obliques"], adductors: ["hips"], abductors: ["hips"], calves: ["calves"], forearms: ["forearms"], traps: ["traps"], lower_back: ["lower_back"] };
 // Secondary muscles by movement pattern (share of the set's load).
@@ -55,15 +55,23 @@ export function activityKind(a) {
   return null;
 }
 
+// One hard set: the load of a set at RPE 8 of an exercise with catalog fatigue 1.
+export const SET_LOAD = 10;
+// RPE scales a set: RPE 8 counts once, RPE 6 half, RPE 10 1.5×; without RPE once.
+export function setEffort(value) {
+  const rpe = n(value, NaN);
+  return Number.isFinite(rpe) && rpe > 0 ? Math.min(1.5, Math.max(.4, (rpe - 4) / 4)) : 1;
+}
+export const isFailure = value => { const rpe = n(value, NaN); return Number.isFinite(rpe) && rpe >= 9.5; };
+
 // Muscle load events: hard sets (weighted by exercise fatigue and RPE) and cardio load.
 export function muscleEvents({ sets = [], activities = [] } = {}) {
   const events = [];
   for (const s of sets) {
     const date = iso(s.workout_date || s.date); if (!date) continue;
     const def = EXERCISES[normalizeExerciseName(s.exercise)];
-    const rpe = n(s.rpe, NaN), effort = Number.isFinite(rpe) && rpe > 0 ? Math.min(1.5, Math.max(.4, (rpe - 4) / 4)) : 1;
-    const load = 10 * n(def?.fatigue, 1) * effort;
-    const failure = Number.isFinite(rpe) && rpe >= 9.5;
+    const load = SET_LOAD * n(def?.fatigue, 1) * setEffort(s.rpe);
+    const failure = isFailure(s.rpe);
     for (const [muscle, w] of Object.entries(exerciseMuscles(s.exercise))) events.push({ date, muscle, load: load * w, source: "strength", ...(failure ? { failure } : {}) });
   }
   for (const a of activities) {
@@ -261,9 +269,17 @@ export async function loadFitnessInsights(db, today) {
   const since = "2000-01-01";
   const [setRows, activityRows] = await Promise.all([
     db.prepare("SELECT workout_date,exercise,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' ORDER BY workout_date").bind(db.userId).all().catch(() => ({ results: [] })),
-    db.prepare("SELECT source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family='intervals' AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')").bind(db.userId, since).all()
+    db.prepare("SELECT source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','wahoo') AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND (record_role IS NULL OR record_role!='duplicate')").bind(db.userId, since).all()
   ]);
-  const activities = (activityRows.results || []).map(r => {
+  return fitnessInsights({ sets: setRows.results || [], activities: storedActivities(activityRows.results || []), today });
+}
+
+// Activity rows of health_datapoints (an Intervals.icu or app activity, a
+// watch's exercise) as activities; a watch's exercise that Intervals also has
+// would count twice (the sync marks most as duplicates already): the one from
+// Intervals stays. `row` keeps the stored row when keepRow is set.
+export function storedActivities(rows, { keepRow = false } = {}) {
+  const activities = rows.map(r => {
     let p = {}; try { p = JSON.parse(r.payload_json || "{}"); } catch {}
     if ((r.source_family === "google-wearables" || r.source_family === "apple-health")) {
       const ex = p.exercise || {}, type = { WALKING: "Walk", RUNNING: "Run", BIKING: "Ride", HIKING: "Hike", WEIGHTLIFTING: "WeightTraining", WEIGHTS: "WeightTraining", STRENGTH_TRAINING: "WeightTraining" }[ex.exerciseType] || ex.exerciseType;
@@ -272,9 +288,6 @@ export async function loadFitnessInsights(db, today) {
     }
     return { ...p, source: "intervals", type: p.type, date: iso(p.start_date_local || r.start_time), name: p.name, tss: p.icu_training_load, payload: p, row: r };
   });
-  // A Google exercise that Intervals also has would count twice (the sync marks
-  // most as duplicates already): keep the one from Intervals.
   const intervals = activities.filter(a => a.source === "intervals");
-  const kept = activities.filter(a => a.source === "intervals" || !intervals.some(b => sameSession(a.row, b.row))).map(({ row, ...a }) => a);
-  return fitnessInsights({ sets: setRows.results || [], activities: kept, today });
+  return activities.filter(a => a.source === "intervals" || !intervals.some(b => sameSession(a.row, b.row))).map(({ row, ...a }) => keepRow ? { ...a, row } : a);
 }

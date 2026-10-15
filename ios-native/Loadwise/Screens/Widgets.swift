@@ -60,129 +60,6 @@ struct FoodWidget: View {
     }
 }
 
-struct PlanWidget: View {
-    @Environment(AppModel.self) private var model
-    let items: [TodaySnapshot.PlanItem]
-    var today: String = ""
-    /// A pill or "vrátit" being saved.
-    @State private var busy = false
-
-    init(items: [TodaySnapshot.PlanItem], today: String = "") {
-        self.items = items
-        self.today = today
-    }
-
-    private func act(_ work: @escaping () async throws -> Void) {
-        busy = true
-        Task {
-            try? await work()
-            busy = false
-        }
-    }
-
-    var body: some View {
-        Card {
-            WidgetHeader(title: "Plán dne", color: Palette.ink)
-            VStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    row(item)
-                    if index < items.count - 1 { Divider().overlay(Palette.hairline) }
-                }
-            }
-        }
-    }
-
-    /// Bedtime opens Nastavení spánku, a gym session its workout mode, a ride
-    /// or run its detail (done) or the planned workout.
-    @ViewBuilder
-    private func row(_ item: TodaySnapshot.PlanItem) -> some View {
-        if item.kind == "pill" || item.eased != nil {
-            // The pill (Vzato) and a session the cycle eased (vrátit) act in the row.
-            line(item)
-        } else if item.kind == "bedtime" {
-            NavigationLink(value: AppRoute.sleepSettings) { line(item) }.buttonStyle(.plain)
-        } else if item.kind == "workout", item.sport == "strength", !item.done, item.status != "missed" {
-            NavigationLink(value: AppRoute.trainingMode(today.isEmpty ? AppModel.localDate(Date()) : today)) { line(item) }.buttonStyle(.plain)
-        } else if item.kind == "workout", let session = item.session, let route = WeekSessionsList.destination(session) {
-            NavigationLink(value: route) { line(item) }.buttonStyle(.plain)
-        } else if item.kind == "workout", item.sport == "strength", !item.done {
-            NavigationLink(value: AppRoute.trainingMode(today.isEmpty ? AppModel.localDate(Date()) : today)) { line(item) }.buttonStyle(.plain)
-        } else if item.kind == "workout" {
-            Button { model.tab = .training } label: { line(item) }.buttonStyle(.plain)
-        } else {
-            line(item)
-        }
-    }
-
-    private func line(_ item: TodaySnapshot.PlanItem) -> some View {
-        HStack(spacing: 14) {
-            // A planned session has no clock: it comes after the last record.
-            Group {
-                if let time = item.time {
-                    Text(ClockText.format(time)).font(Typo.number(19)).foregroundStyle(item.done ? Palette.faint : Palette.ink)
-                        .lineLimit(1).minimumScaleFactor(0.5)
-                } else {
-                    Image(systemName: item.status == "missed" ? "xmark.circle" : "circle.dashed")
-                        .font(.system(size: 17, weight: .medium))
-                        .foregroundStyle(item.status == "missed" ? Palette.rust : Palette.faint)
-                }
-            }
-            .frame(width: 46, alignment: .leading)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.muted : Palette.ink)
-                if let eased = item.eased {
-                    Text(eased.title).font(Typo.caption).foregroundStyle(Palette.muted).strikethrough()
-                } else if let detail = item.detail {
-                    Text(detail).font(Typo.caption).foregroundStyle(Palette.muted)
-                }
-            }
-            Spacer(minLength: 8)
-            trailing(item)
-        }
-        .padding(.vertical, 11)
-        .contentShape(Rectangle())
-    }
-
-    @ViewBuilder
-    private func trailing(_ item: TodaySnapshot.PlanItem) -> some View {
-        if item.kind == "pill" {
-            PillButton(taken: item.done ? (item.time ?? "taken") : nil, saving: busy) { act { try await model.takePill(on: today.isEmpty ? nil : today) } }
-        } else if item.eased != nil {
-            Button { act { try await model.logCycleDay(today.isEmpty ? AppModel.localDate(Date()) : today, ["keepPlan": .bool(true)]) } } label: {
-                Label("vrátit", systemImage: "arrow.uturn.backward")
-                    .font(.footnote.weight(.semibold)).foregroundStyle(Palette.pink)
-                    .padding(.horizontal, 12).frame(height: 30)
-                    .background(Palette.pinkSoft, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            .disabled(busy)
-        } else if item.done, let session = item.session, let kcal = session.countedKcal {
-            // A done session with its calories; the device's number waits for a check.
-            VStack(alignment: .trailing, spacing: 1) {
-                NumberText(value: Fmt.int(kcal), unit: "kcal", size: 19)
-                if session.kcalNeedsCheck {
-                    Label("k ověření", systemImage: "exclamationmark.triangle")
-                        .font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.amber)
-                        .labelStyle(TitleAndOptionalIcon(hasIcon: true))
-                }
-            }
-            .accessibilityElement(children: .combine)
-        } else if item.done {
-            Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
-                .accessibilityLabel("Hotovo")
-        } else if item.status == "missed" {
-            Text("Nesplněno").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.rust)
-        } else if item.kind == "workout" {
-            Text(item.sport == "strength" ? "Začít" : "Detail").font(.footnote.weight(.semibold)).foregroundStyle(Palette.onButton)
-                .padding(.horizontal, 14).frame(height: 30)
-                .background(Palette.button, in: Capsule())
-        } else if item.kind == "bedtime" {
-            Image(systemName: "alarm").font(.footnote.weight(.semibold)).foregroundStyle(Palette.indigo)
-                .accessibilityLabel("Nastavit budík a cíl spánku")
-        }
-    }
-}
-
 struct StepsWidget: View {
     let steps: TodaySnapshot.Steps
     var size: WidgetSize = .medium
@@ -250,25 +127,23 @@ struct RestingHRWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Klidový tep", color: Palette.rust)
-            SizedWidgetBody(size: size) {
+            SizedWidgetBody(size: size, smallShowsChart: range == nil) {
                 NumberText(value: Fmt.int(restingHR.value), unit: "bpm")
-                if let note { Text(note.text).font(Typo.caption).foregroundStyle(note.good ? Palette.green : Palette.rust) }
+                if let range, let value = restingHR.value {
+                    TileRange(value: value, low: range.lowerBound, high: range.upperBound, worseAbove: true)
+                }
             } chart: { height in
                 LineChart(values: values, color: Palette.rust,
                           lo: (values.min() ?? 40) - 3, hi: (values.max() ?? 60) + 3,
-                          band: restingHR.baseline.map { ($0 - 2)...($0 + 2) }, height: height)
+                          band: range, height: height)
             }
         }
     }
 
     private var values: [Double] { restingHR.series.map(\.value) }
 
-    private var note: (text: String, good: Bool)? {
-        guard let value = restingHR.value, let base = restingHR.baseline else { return nil }
-        let d = (value - base).rounded()
-        if d == 0 { return (L10n.tr("v normě"), true) }
-        return (L10n.f(d < 0 ? "↓ %@ pod normou" : "↑ %@ nad normou", Fmt.int(abs(d))), d < 0)
-    }
+    /// The usual resting heart rate, ±2 beats around the baseline.
+    private var range: ClosedRange<Double>? { restingHR.baseline.map { ($0 - 2)...($0 + 2) } }
 }
 
 struct HRVWidget: View {
@@ -279,9 +154,13 @@ struct HRVWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Srdce · HRV", color: Palette.green)
-            SizedWidgetBody(size: size) {
+            SizedWidgetBody(size: size, smallShowsChart: band == nil || hrv.value == nil) {
                 NumberText(value: Fmt.int(hrv.value ?? hrv.series.last?.value), unit: "ms")
-                Text(note).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
+                if let band, let value = hrv.value {
+                    TileRange(value: value, low: band.lowerBound, high: band.upperBound)
+                } else {
+                    Text(note).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
+                }
             } chart: { height in
                 LineChart(values: values, color: Palette.green,
                           lo: min(values.min() ?? 40, hrv.low ?? 40) - 4, hi: max(values.max() ?? 70, hrv.high ?? 70) + 4,
@@ -292,7 +171,7 @@ struct HRVWidget: View {
 
     private var values: [Double] { hrv.series.map(\.value) }
 
-    /// "v normě", with the resting heart rate on the wider sizes.
+    /// "30 dní" without a usual range, with the resting heart rate on the wider sizes.
     private var note: String {
         var text = L10n.tr(status)
         if size != .small, let rhr = restingHR { text += " · " + L10n.f("tep %@", Fmt.int(rhr)) }
@@ -334,9 +213,13 @@ struct WeightWidget: View {
     var body: some View {
         Card {
             WidgetHeader(title: "Váha", color: Palette.brown)
-            SizedWidgetBody(size: size, mediumChart: 64) {
+            SizedWidgetBody(size: size, mediumChart: 64, smallShowsChart: size != .small || goal == nil) {
                 NumberText(value: Fmt.decimal(Units.weight(weight.latest)), unit: Units.weightUnit)
-                if let change {
+                if size == .small, let goal {
+                    // The goal as the band, half a kilo (a pound) either side.
+                    TileRange(value: Units.weight(weight.latest), low: goal - 0.5, high: goal + 0.5,
+                              text: L10n.f("cíl %@", Fmt.decimal(goal)))
+                } else if let change {
                     Text(L10n.f("%@ %@ za 30 dní", change <= 0 ? "↓" : "↑", Units.weightText(abs(change))))
                         .font(Typo.caption).foregroundStyle(change <= 0 ? Palette.green : Palette.amber)
                         .lineLimit(1).minimumScaleFactor(0.8)

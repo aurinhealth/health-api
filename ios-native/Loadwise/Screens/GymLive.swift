@@ -60,7 +60,6 @@ struct LiveGymView: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
-        .keyboardDoneButton()
         .task { await load() }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) } }
@@ -275,7 +274,7 @@ struct LiveGymView: View {
             }
             .padding(.top, 18)
             if done.isEmpty {
-                Text("Zatím není odškrtnutá žádná série. Uložením se trénink zahodí.")
+                Text("Žádná série není odškrtnutá, takže Uložit trénink zahodí.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 18)
             } else {
                 GymCoachLine(text: GymCoach.summaryLine(day, history: history, date: date)).padding(.top, 18)

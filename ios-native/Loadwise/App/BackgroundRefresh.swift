@@ -5,7 +5,8 @@ import UIKit
 /// new Apple Health data (HKObserverQuery, AppleHealth.start) and this
 /// refresh task, which iOS runs a few times a day when it chooses. Either
 /// way what is new in Apple Health goes to the server and the widgets get
-/// the server's Today, with Google Health and Intervals.icu data too.
+/// the server's Today, with Google Health and Intervals.icu data too, and
+/// the day's activity (Aktivita dne) for what is new.
 /// A locked iPhone keeps Apple Health closed, so that part waits for the
 /// next wake after unlocking.
 @MainActor
@@ -38,15 +39,18 @@ enum BackgroundRefresh {
     }
 
     /// Apple Health out, then Today for the widgets: always from the refresh
-    /// task, from a HealthKit wake only when something was sent.
+    /// task, from a HealthKit wake only when the server got something new.
     @discardableResult
     static func refresh(api: APIClient, widgets always: Bool) async -> Bool {
         guard api.hasSession else { return false }
-        let before = AppleHealth.shared.lastSync
-        let synced = await AppleHealth.shared.sync(api: api)
-        guard always || AppleHealth.shared.lastSync != before else { return synced }
+        let outcome = await AppleHealth.shared.run(api: api)
+        let synced = outcome.ok
+        guard always || outcome.changed else { return synced }
         guard !Task.isCancelled, let today = try? await api.today() else { return false }
         WidgetBridge.update(today)
+        // Aktivita dne for the new data, kept for Today's card (CoachPick.stored),
+        // so it opens ready without loading.
+        if !Task.isCancelled { _ = try? await api.coachPick() }
         return synced || !AppleHealth.shared.enabled
     }
 }

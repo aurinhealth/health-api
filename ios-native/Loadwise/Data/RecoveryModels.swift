@@ -18,6 +18,8 @@ struct RecoveryToday: Decodable, Equatable {
         let sport: String?
         let focus: String?
         let routine: Routine?
+        /// Sauna: the saved row once done, so a tap by mistake can be taken back.
+        var savedId: Int? = nil
 
         var id: String { kind }
         var isDone: Bool { done ?? false }
@@ -40,6 +42,108 @@ struct RecoveryToday: Decodable, Equatable {
         let sides: Bool?
 
         var id: String { key }
+    }
+}
+
+/// GET /app/api/today → recoveryTime (src/recovery-time.js): Regenerace,
+/// when hard training (intervals, heavy legs) is fine again after the last
+/// days' sessions and what makes it take that long.
+struct RecoveryTime: Decodable, Equatable {
+    /// ISO times: ready for hard training, the session it counts from, easy
+    /// training (nil: already now).
+    let readyAt: String
+    let from: String
+    let lightAt: String?
+    /// Hours left, and the share of the time already behind (0–1).
+    let hours: Int
+    let progress: Double
+    let causes: [Cause]
+
+    struct Cause: Decodable, Equatable, Hashable {
+        /// "ride", "run", "walk", "gym", or a morning sign: "sleep", "hrv", "restingHR".
+        let kind: String
+        let title: String?
+        /// "74 TSS" for a session.
+        let detail: String?
+        /// The session's day.
+        let date: String?
+        let hours: Int
+        /// A session: when it alone is recovered from (ISO), without the morning's signs.
+        var readyAt: String? = nil
+        /// Sleep: minutes slept and the night's need.
+        var minutes: Int? = nil
+        var need: Int? = nil
+        /// HRV (ms) and resting heart rate (bpm) against their usual range.
+        var value: Int? = nil
+        var low: Int? = nil
+        var high: Int? = nil
+
+        var isSession: Bool { ["ride", "run", "walk", "gym"].contains(kind) }
+        var ready: Date? { readyAt.flatMap(RecoveryTime.date) }
+    }
+
+    var ready: Date? { Self.date(readyAt) }
+    var start: Date? { Self.date(from) }
+    var light: Date? { lightAt.flatMap(Self.date) }
+    /// The main session works the legs (anything but a gym day that spared them).
+    var legsTired: Bool { causes.first.map { $0.kind != "gym" || ($0.title ?? "").contains("nohy") || ($0.title ?? "").contains("legs") } ?? false }
+
+    static func date(_ iso: String) -> Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f.date(from: iso) { return d }
+        f.formatOptions = [.withInternetDateTime]
+        return f.date(from: iso)
+    }
+
+    /// The day it counts for: after 22:00 the next morning's. Regenerace
+    /// shows days only, never a clock time (Petr, 2026-10-15).
+    private static func day(_ date: Date) -> Date {
+        Calendar.current.component(.hour, from: date) >= 22 ? date.addingTimeInterval(6 * 3600) : date
+    }
+
+    private static func format(_ date: Date, _ pattern: String) -> String {
+        let f = DateFormatter()
+        f.locale = L10n.locale
+        f.timeZone = .current
+        f.dateFormat = pattern
+        return f.string(from: date)
+    }
+
+    /// "dnes", "pátek" / "today", "Friday".
+    static func when(_ date: Date, today: String) -> String {
+        let d = day(date)
+        return AppModel.localDate(d) == today ? L10n.tr("dnes") : format(d, "EEEE")
+    }
+
+    /// In a sentence: "dnes", "v pátek", "ve čtvrtek" / "today", "on Friday".
+    static func phrase(_ date: Date, today: String) -> String {
+        let d = day(date)
+        if AppModel.localDate(d) == today { return L10n.tr("dnes") }
+        if L10n.isEnglish { return "on " + format(d, "EEEE") }
+        let weekday = Calendar.current.component(.weekday, from: d)
+        return ["v neděli", "v pondělí", "v úterý", "ve středu", "ve čtvrtek", "v pátek", "v sobotu"][weekday - 1]
+    }
+
+    /// "pá" / "Fri" for the bar's ends and the sessions.
+    static func short(_ date: Date, ready: Bool = true) -> String {
+        format(ready ? day(date) : date, L10n.isEnglish ? "EEE" : "EEEEEE").capitalized(with: L10n.locale)
+    }
+
+    /// A session's day: "dnes", "včera", "neděle" / "Sunday".
+    static func dayName(_ iso: String, today: String) -> String {
+        if iso == today { return L10n.tr("dnes") }
+        if Fmt.relativeDay(iso, today: today) == L10n.tr("včera") { return L10n.tr("včera") }
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.timeZone = TimeZone(identifier: "UTC")
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let date = parser.date(from: iso) else { return iso }
+        let out = DateFormatter()
+        out.locale = L10n.locale
+        out.timeZone = TimeZone(identifier: "UTC")
+        out.dateFormat = "EEEE"
+        return out.string(from: date)
     }
 }
 
@@ -70,6 +174,12 @@ extension APIClient {
         if let sport { body["sport"] = .string(sport) }
         if let focus { body["focus"] = .string(focus) }
         let _: JSONValue = try await send("/app/api/recovery", method: "POST", body: body)
+    }
+
+    /// Removes a saved stretching or sauna from its day (Plán dne, a sauna ticked by mistake).
+    func deleteRecovery(id: Int) async throws {
+        let body: JSONObject = ["id": .number(Double(id))]
+        let _: JSONValue = try await send("/app/api/recovery", method: "DELETE", body: body)
     }
 
     func coachText(screen: String) async throws -> CoachText {

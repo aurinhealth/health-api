@@ -91,7 +91,7 @@ function intervalsAuth(env) { if (!env.INTERVALS_API_KEY) throw new Error("INTER
 async function intervalsGet(env, path) {
   if(/\/(activities|events)\?/.test(path)){
     const query=new URL('https://internal'+path).searchParams,type=path.includes('/events?')?'planned-workout':'activity';
-    const rows=(await env.DB.prepare("SELECT source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND (source_family IN ('intervals','local') AND data_type=? OR ?='activity' AND source_family IN ('apple-health','google-wearables') AND data_type='exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,type,type,query.get('oldest'),query.get('newest')+'T23:59:59').all()).results||[];
+    const rows=(await env.DB.prepare("SELECT source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND (source_family IN ('intervals','local','wahoo') AND data_type=? OR ?='activity' AND source_family IN ('apple-health','google-wearables') AND data_type='exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,type,type,query.get('oldest'),query.get('newest')+'T23:59:59').all()).results||[];
     // Workouts from the watch (Apple Health, Google Health) count like the
     // ones from Intervals.icu; one recorded by both is kept from Intervals.
     const own=rows.filter(r=>r.source_family==='intervals'||r.source_family==='local');
@@ -237,9 +237,9 @@ export async function buildStrengthContext(env, requestedDate = null) {
   try { context.strength.plannedSessions = await plannedGymSessions(env, date); } catch { context.strength.plannedSessions = []; }
   // Sex sets the muscle priorities and the starting loads without history.
   // The morning check-in lowers the readiness (morning-checkin.js).
-  try { const { getCheckin } = await import("./morning-checkin.js"); context.checkin = await getCheckin(env.DB, date); } catch { context.checkin = null; }
+  try { const { readinessCheckin } = await import("./morning-checkin.js"); context.checkin = await readinessCheckin(env.DB, date); } catch { context.checkin = null; }
   // The sleep goal sets the sleep need, as on Today (readiness.js).
-  try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); context.profile = { sex: profile?.sex || "", age: profile?.age ?? null, sleepGoal: profile?.sleepGoal ?? null, mainSport: profile?.mainSport && profile.mainSport !== "auto" ? profile.mainSport : "" }; } catch { context.profile = { sex: "" }; }
+  try { const { loadEffectiveProfile } = await import("./profile-suggestions.js"); const profile = await loadEffectiveProfile(env.DB, env.USER_ID); const { readinessLocks } = await import("./readiness-lock.js"); const locks = await readinessLocks(env.DB, date).catch(() => ({})); context.profile = { sex: profile?.sex || "", age: profile?.age ?? null, sleepGoal: profile?.sleepGoal ?? null, mainSport: profile?.mainSport && profile.mainSport !== "auto" ? profile.mainSport : "", ...(Object.keys(locks).length ? { readinessLocks: locks } : {}) }; } catch { context.profile = { sex: "" }; }
   // The last 30 days of Google Health and Apple Health sleep (nights and
   // naps) with the Intervals.icu nights they miss, as Today has them: the
   // recovery score's sleep part and the sleep need.

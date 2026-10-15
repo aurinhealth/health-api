@@ -2,37 +2,42 @@ import Combine
 import SwiftUI
 import UIKit
 
-// "Regenerace na dnes" on Today after a training day (GET /app/api/today →
-// recovery, src/recovery-today.js): the coach's sentence and two or three
-// things to do. The stretch opens its routine (moves with a hold or reps, tick
+// The recovery tip on Today after a training day (GET /app/api/today →
+// recovery, src/recovery-today.js): one thing to do, shown inside the coach's
+// card, under Regenerace (recoveryTime, src/recovery-time.js): when hard
+// training is fine again, with its own page of what makes it take that long. The stretch opens its routine (moves with a hold or reps, tick
 // circles, a timer); a finished routine and a ticked sauna are saved into the
-// day's plan as done (POST /app/api/recovery).
+// day's plan as done (POST /app/api/recovery). A long press marks it done or
+// asks to see it less ("Doporučovat méně", POST /app/api/coach/pick/less).
 
-/// The card on Today; nothing on a day without recovery or on an earlier day.
-struct RecoveryTodayCard: View {
+/// The tip rows under the coach's sentence; nothing on a day without recovery or on an earlier day.
+struct RecoveryTipRows: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dayPage) private var page
     let today: TodaySnapshot
 
     @State private var routineItem: RecoveryToday.Item?
     @State private var savingSauna = false
     @State private var error: String?
 
+    static func hasTip(_ today: TodaySnapshot, selectedDate: String?) -> Bool {
+        selectedDate == nil && (today.recoveryTime != nil || !(today.recovery?.items.isEmpty ?? true))
+    }
+
     var body: some View {
-        if model.selectedDate == nil, let recovery = today.recovery, !recovery.items.isEmpty {
-            Card {
-                WidgetHeader(title: recovery.title ?? L10n.tr("Regenerace na dnes"), color: Palette.green)
-                if let text = recovery.text {
-                    Text(verbatim: text)
-                        .font(Typo.sentence(20))
-                        .foregroundStyle(Palette.ink)
-                        .lineSpacing(2)
-                        .fixedSize(horizontal: false, vertical: true)
+        if Self.hasTip(today, selectedDate: page.map(\.selectedDate) ?? model.selectedDate) {
+            let items = today.recovery?.items ?? []
+            VStack(alignment: .leading, spacing: 0) {
+                // Regenerace first: when hard training is fine again.
+                if let time = today.recoveryTime {
+                    NavigationLink(value: AppRoute.recoveryTime) { RecoveryTimeRow(time: time, today: today.date) }
+                        .buttonStyle(.plain)
+                    if !items.isEmpty { Divider().overlay(Palette.hairline) }
                 }
-                VStack(spacing: 0) {
-                    ForEach(Array(recovery.items.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { Divider().overlay(Palette.hairline) }
-                        row(item)
-                    }
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    if index > 0 { Divider().overlay(Palette.hairline) }
+                    row(item)
+                        .contextMenu { menu(item) }
                 }
                 if let error {
                     Text(error).font(Typo.caption).foregroundStyle(Palette.rust)
@@ -42,6 +47,32 @@ struct RecoveryTodayCard: View {
                 RecoveryRoutineView(item: item, date: today.date)
             }
         }
+    }
+
+    @ViewBuilder
+    private func menu(_ item: RecoveryToday.Item) -> some View {
+        if !item.isDone {
+            Button { Task { await markDone(item) } } label: { Label("Hotovo", systemImage: "checkmark.circle") }
+        }
+        Button { Task { await recommendLess(item) } } label: { Label("Doporučovat méně", systemImage: "minus.circle") }
+    }
+
+    private func markDone(_ item: RecoveryToday.Item) async {
+        guard !model.demo else { return }
+        do {
+            try await model.api.saveRecoveryDone(date: today.date, kind: item.kind, sport: item.sport, focus: item.focus)
+            error = nil
+            await model.refresh()
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func recommendLess(_ item: RecoveryToday.Item) async {
+        guard !model.demo else { return }
+        do {
+            try await model.api.recommendLess(kind: item.kind, less: true)
+            error = nil
+            await model.refresh()
+        } catch { self.error = error.localizedDescription }
     }
 
     @ViewBuilder
@@ -57,11 +88,8 @@ struct RecoveryTodayCard: View {
                 line(item, trailing: AnyView(tickCircle(item.isDone, busy: savingSauna)))
             }
             .buttonStyle(.plain)
-            .disabled(item.isDone || savingSauna || model.demo)
-            .accessibilityHint(item.isDone ? "" : L10n.tr("Označit jako hotové"))
-        case "bedtime":
-            NavigationLink(value: AppRoute.sleepSettings) { line(item, trailing: AnyView(chevron)) }
-                .buttonStyle(.plain)
+            .disabled(savingSauna || model.demo || (item.isDone && item.savedId == nil))
+            .accessibilityHint(item.isDone ? L10n.tr("Vrátit") : L10n.tr("Označit jako hotové"))
         default:
             line(item, trailing: AnyView(EmptyView()))
         }
@@ -113,12 +141,18 @@ struct RecoveryTodayCard: View {
         .frame(width: 26, height: 26)
     }
 
+    /// Ticks the sauna off, or takes back a tick made by mistake.
     private func saveSauna(_ item: RecoveryToday.Item) async {
-        guard !item.isDone, !model.demo else { return }
+        guard !model.demo else { return }
         savingSauna = true
         defer { savingSauna = false }
         do {
-            try await model.api.saveRecoveryDone(date: today.date, kind: "sauna", sport: nil, focus: nil)
+            if item.isDone {
+                guard let id = item.savedId else { return }
+                try await model.api.deleteRecovery(id: id)
+            } else {
+                try await model.api.saveRecoveryDone(date: today.date, kind: "sauna", sport: nil, focus: nil)
+            }
             error = nil
             await model.refresh()
         } catch {
@@ -357,6 +391,216 @@ struct RecoveryRoutineView: View {
             await model.refresh()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Regenerace
+
+/// The Regenerace row in the coach's card: a ring of the time already behind
+/// and when hard training is fine again.
+struct RecoveryTimeRow: View {
+    let time: RecoveryTime
+    let today: String
+
+    var body: some View {
+        HStack(spacing: 14) {
+            RecoveryRing(progress: time.liveProgress(), size: 38, line: 4)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Regenerace").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                if let ready = time.ready {
+                    Text(verbatim: L10n.f("tvrdý trénink %@", RecoveryTime.phrase(ready, today: today)))
+                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                .accessibilityHidden(true)
+        }
+        .padding(.vertical, 11)
+        .contentShape(Rectangle())
+    }
+}
+
+struct RecoveryRing: View {
+    let progress: Double
+    var size: CGFloat = 38
+    var line: CGFloat = 4
+
+    var body: some View {
+        ZStack {
+            Circle().stroke(Palette.track, lineWidth: line)
+            Circle().trim(from: 0, to: max(0.02, min(1, progress)))
+                .stroke(Palette.green, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+extension RecoveryTime {
+    /// The share of the time behind now (the server's number is from the last refresh).
+    func liveProgress(now: Date = Date()) -> Double {
+        guard let start, let ready, ready > start else { return progress }
+        return max(0, min(1, now.timeIntervalSince(start) / ready.timeIntervalSince(start)))
+    }
+
+    func hoursLeft(now: Date = Date()) -> Int {
+        guard let ready else { return hours }
+        return max(0, Int((ready.timeIntervalSince(now) / 3600).rounded(.up)))
+    }
+}
+
+/// Regenerace from Today: the hours left, when easy and hard training are
+/// fine, and what makes it take that long.
+struct RecoveryTimeView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        DetailScreen(glow: Palette.Glow.today, title: "Regenerace") {
+            if let today = model.today, let time = today.recoveryTime {
+                RecoveryTimeContent(time: time, today: today.date)
+            } else if model.today == nil {
+                ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
+            } else {
+                Text("Regenerace").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
+                Text("Tvrdý trénink").font(Typo.bodyStrong).foregroundStyle(Palette.green).padding(.top, 8)
+                Text("už teď").font(Typo.body).foregroundStyle(Palette.muted)
+            }
+        }
+        .task { if model.today == nil { await model.refresh() } }
+    }
+}
+
+struct RecoveryTimeContent: View {
+    let time: RecoveryTime
+    let today: String
+    var now = Date()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Regenerace").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
+            NumberText(value: String(time.hoursLeft(now: now)), unit: "h", size: 72).padding(.top, 4)
+            if let ready = time.ready {
+                Text(verbatim: L10n.f("tvrdý trénink %@", RecoveryTime.phrase(ready, today: today)))
+                    .font(Typo.bodyStrong).foregroundStyle(Palette.green)
+            }
+            bar.padding(.top, 18)
+
+            // When the body is ready for each, not a plan of sessions.
+            SectionLabel(text: "Na co je tělo připravené").padding(.top, 30).padding(.bottom, 10)
+            Card {
+                VStack(spacing: 0) {
+                    let lightLater = time.light.map { $0 > now } ?? false
+                    row(icon: "figure.walk", color: Palette.green, title: L10n.tr("Lehký trénink"),
+                        detail: L10n.tr(time.legsTired ? "Z1–Z2, posilovna bez nohou" : "Z1–Z2, jiné svaly"),
+                        trailing: lightLater ? time.light.map { RecoveryTime.when($0, today: today) } ?? "" : L10n.tr("už teď"),
+                        ready: !lightLater)
+                    Divider().overlay(Palette.hairline)
+                    row(icon: "flame.fill", color: Palette.amber, title: L10n.tr("Tvrdý trénink"),
+                        detail: L10n.tr(time.legsTired ? "intervaly, těžké nohy" : "intervaly, těžká posilovna"),
+                        trailing: time.ready.map { RecoveryTime.when($0, today: today) } ?? "")
+                }
+            }
+
+            if !time.causes.isEmpty {
+                SectionLabel(text: "Co ji prodlužuje").padding(.top, 30).padding(.bottom, 10)
+                Card {
+                    VStack(spacing: 0) {
+                        ForEach(Array(time.causes.enumerated()), id: \.offset) { index, cause in
+                            if index > 0 { Divider().overlay(Palette.hairline) }
+                            causeRow(cause)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// From the session to ready, with now on it.
+    private var bar: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Palette.track)
+                    Capsule().fill(Palette.green).frame(width: max(6, geo.size.width * time.liveProgress(now: now)))
+                }
+            }
+            .frame(height: 6)
+            HStack {
+                if let start = time.start { Text(verbatim: RecoveryTime.short(start, ready: false)) }
+                Spacer()
+                Text("teď")
+                Spacer()
+                if let ready = time.ready { Text(verbatim: RecoveryTime.short(ready)) }
+            }
+            .font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func row(icon: String, color: Color, title: String, detail: String, trailing: String, ready: Bool = false) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(color)
+                .frame(width: 38, height: 38).background(color.opacity(0.16), in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                Text(verbatim: detail).font(Typo.caption).foregroundStyle(Palette.muted)
+            }
+            Spacer(minLength: 8)
+            if ready {
+                Label(trailing, systemImage: "checkmark").font(Typo.bodyStrong).foregroundStyle(Palette.green).lineLimit(1)
+            } else {
+                Text(verbatim: trailing).font(Typo.number(20)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func causeRow(_ c: RecoveryTime.Cause) -> some View {
+        let (icon, color) = Self.look(c.kind)
+        // A session: when it alone is recovered from; a sign: the hours it adds.
+        let trailing = c.isSession ? (c.ready.map { RecoveryTime.when($0, today: today) } ?? "\(c.hours) h") : "+\(c.hours) h"
+        return row(icon: icon, color: color, title: Self.title(c), detail: Self.detail(c, today: today), trailing: trailing)
+    }
+
+    static func look(_ kind: String) -> (String, Color) {
+        switch kind {
+        case "ride": return ("bicycle", Palette.amber)
+        case "run": return ("figure.run", Palette.amber)
+        case "walk": return ("figure.walk", Palette.amber)
+        case "gym": return ("dumbbell.fill", Palette.amber)
+        case "sleep": return ("moon.fill", Palette.indigo)
+        case "hrv": return ("waveform.path.ecg", Palette.blue)
+        default: return ("heart.fill", Palette.rust)
+        }
+    }
+
+    static func title(_ c: RecoveryTime.Cause) -> String {
+        switch c.kind {
+        case "sleep": return L10n.tr("Spánek")
+        case "hrv": return "HRV"
+        case "restingHR": return L10n.tr("Klidový tep")
+        default: return c.title ?? ""
+        }
+    }
+
+    static func detail(_ c: RecoveryTime.Cause, today: String) -> String {
+        switch c.kind {
+        case "sleep":
+            let slept = c.minutes.map { String(format: "%d:%02d", $0 / 60, $0 % 60) } ?? ""
+            guard let m = c.minutes, let need = c.need, need > 0 else { return slept }
+            return slept + " · " + L10n.f("%d %% potřeby", Int((Double(m) / Double(need) * 100).rounded()))
+        case "hrv":
+            return (c.value.map { "\($0) ms · " } ?? "") + L10n.tr("pod normálem")
+        case "restingHR":
+            return (c.value.map { "\($0) bpm · " } ?? "") + L10n.tr("nad normálem")
+        default:
+            // "neděle · svaly 96 h", "včera · 74 TSS · 36 h".
+            let hours = c.kind == "gym" ? L10n.f("svaly %d h", c.hours) : "\(c.hours) h"
+            return [c.date.map { RecoveryTime.dayName($0, today: today) }, c.detail, c.ready == nil ? nil : hours].compactMap { $0 }.joined(separator: " · ")
         }
     }
 }

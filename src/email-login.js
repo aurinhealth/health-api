@@ -12,6 +12,7 @@ import { normalizeEmail, mayGetEmailCode, signInEmailUser, changeUserEmail } fro
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
+import { L } from "./lang.js";
 
 const CODE_SECONDS = 10 * 60;
 const RESEND_SECONDS = 60;
@@ -20,7 +21,7 @@ const MAX_SENDS_PER_DAY = 10;
 const DEFAULT_CODES_PER_DAY = 500;
 const STALE_SECONDS = 2 * 24 * 60 * 60;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const EXPIRED = "Kód už neplatí. Nech si poslat nový.";
+const EXPIRED = () => L("Kód už neplatí. Nech si poslat nový.", "That code has expired. Send a new one.");
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -31,14 +32,14 @@ export function requestLanguage(request) {
 
 export async function handleEmailLogin(request, env, pathname, ctx) {
   if (pathname !== "/auth/email/start" && pathname !== "/auth/email/verify") return null;
-  if (request.method !== "POST") return json({ message: "Použij POST." }, 405);
-  if (!emailConfigured(env)) return json({ message: "Přihlášení kódem z e-mailu není zapnuté." }, 404);
-  if (request.headers.get("Origin") !== new URL(request.url).origin) return json({ message: "Neplatný původ požadavku." }, 403);
+  if (request.method !== "POST") return json({ message: L("Použij POST.", "Use POST.") }, 405);
+  if (!emailConfigured(env)) return json({ message: L("Přihlášení kódem z e-mailu není zapnuté.", "Signing in with an email code isn't turned on.") }, 404);
+  if (request.headers.get("Origin") !== new URL(request.url).origin) return json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, 403);
   const body = await request.json().catch(() => ({}));
   const email = normalizeEmail(body?.email);
-  if (email.length > 254 || !EMAIL_PATTERN.test(email)) return json({ message: "Zadej platný e-mail." }, 400);
+  if (email.length > 254 || !EMAIL_PATTERN.test(email)) return json({ message: L("Zadej platný e-mail.", "Enter a valid email.") }, 400);
   if (pathname === "/auth/email/start") {
-    if (!(await allowClient(env.DB, request, sessionSecret(env), "email"))) return json({ message: "Příliš mnoho pokusů o přihlášení. Zkus to za chvíli." }, 429);
+    if (!(await allowClient(env.DB, request, sessionSecret(env), "email"))) return json({ message: L("Příliš mnoho pokusů o přihlášení. Zkus to za chvíli.", "Too many sign-in attempts. Try again in a moment.") }, 429);
     // Whether a code goes out (and how long that takes) stays out of the answer.
     const work = sendCode(env, email, requestLanguage(request)).catch(error => console.error("Sign-in code e-mail failed", error?.code || error?.message));
     if (ctx?.waitUntil) ctx.waitUntil(work); else await work;
@@ -97,36 +98,36 @@ async function verifyCode(env, email, input) {
   const refused = await useCode(env.DB, env, email, input, "email-code");
   if (refused) return refused;
   const user = await signInEmailUser(env.DB, env, email);
-  if (!user) return json({ message: "Tento e-mail nemá do aplikace přístup." }, 403);
+  if (!user) return json({ message: L("Tento e-mail nemá do Aurinu přístup.", "This email doesn't have access to Aurin.") }, 403);
   return signedInResponse(user.id, env, { status: "ok", created: user.created });
 }
 
 // Checks and uses up a code; returns the refusal, or null when the code was right.
 async function useCode(db, env, email, input, purpose) {
   const code = String(input || "").replace(/[\s-]/g, "");
-  if (!/^\d{6}$/.test(code)) return json({ message: "Kód má šest číslic." }, 400);
+  if (!/^\d{6}$/.test(code)) return json({ message: L("Kód má šest číslic.", "The code has six digits.") }, 400);
   const now = Math.floor(Date.now() / 1000);
   // Every try is counted before the comparison, so parallel guesses cannot get past the limit.
   const row = await db.prepare("UPDATE email_login_codes SET attempts = attempts + 1 WHERE email = ? AND code_hash IS NOT NULL AND expires_at > ? AND attempts < ? RETURNING code_hash, attempts")
     .bind(email, now, MAX_ATTEMPTS).first();
-  if (!row) return json({ message: EXPIRED }, 400);
+  if (!row) return json({ message: EXPIRED() }, 400);
   if (!timingSafeEqualString(row.code_hash, await codeHash(env, email, code, purpose))) {
-    return json({ message: row.attempts >= MAX_ATTEMPTS ? EXPIRED : "Kód nesedí. Zkontroluj ho, nebo si nech poslat nový." }, 400);
+    return json({ message: row.attempts >= MAX_ATTEMPTS ? EXPIRED() : L("Kód nesedí. Zkontroluj ho, nebo si nech poslat nový.", "That code is wrong. Check it or send a new one.") }, 400);
   }
   // Used up, so the same code never signs in twice.
   const used = await db.prepare("UPDATE email_login_codes SET code_hash = NULL WHERE email = ? AND code_hash = ? RETURNING email").bind(email, row.code_hash).first();
-  if (!used) return json({ message: EXPIRED }, 400);
+  if (!used) return json({ message: EXPIRED() }, 400);
   return null;
 }
 
 const CHANGE_REFUSED = {
-  invalid: ["Zadej platný e-mail.", 400],
-  same: ["Tohle je tvůj současný e-mail.", 400],
-  owner: ["E-mail správce aplikace se mění v nastavení Workeru (OWNER_EMAIL).", 400],
-  taken: ["Tenhle e-mail už má jiný účet.", 409],
-  missing: ["Účet nebyl nalezen.", 404]
+  invalid: [() => L("Zadej platný e-mail.", "Enter a valid email."), 400],
+  same: [() => L("Tohle je tvůj současný e-mail.", "That's your current email."), 400],
+  owner: [() => L("E-mail správce aplikace se mění v nastavení Workeru (OWNER_EMAIL).", "The app owner's email is changed in the Worker settings (OWNER_EMAIL)."), 400],
+  taken: [() => L("Tenhle e-mail už má jiný účet.", "Another account already uses this email."), 409],
+  missing: [() => L("Účet nebyl nalezen.", "Account not found."), 404]
 };
-export const emailChangeRefusal = error => json({ message: CHANGE_REFUSED[error][0] }, CHANGE_REFUSED[error][1]);
+export const emailChangeRefusal = error => json({ message: CHANGE_REFUSED[error][0]() }, CHANGE_REFUSED[error][1]);
 
 // Settings → Account: moving the account to another address. The code goes to the new address,
 // so only someone who reads it can move the account there; the old address is told afterwards.
@@ -134,10 +135,10 @@ export const emailChangeRefusal = error => json({ message: CHANGE_REFUSED[error]
 //   POST /app/api/account/email/verify { email, code } changes the address
 export async function handleEmailChange(request, env, url, session, ctx) {
   if (url.pathname !== "/app/api/account/email/start" && url.pathname !== "/app/api/account/email/verify") return null;
-  if (request.method !== "POST") return json({ message: "Použij POST." }, 405);
-  if (!session.signedIn || !session.user) return json({ message: "Přihlas se do dashboardu." }, 401);
-  if (!emailConfigured(env)) return json({ message: "Posílání e-mailů není zapnuté." }, 404);
-  if (request.headers.get("Origin") !== new URL(request.url).origin) return json({ message: "Neplatný původ požadavku." }, 403);
+  if (request.method !== "POST") return json({ message: L("Použij POST.", "Use POST.") }, 405);
+  if (!session.signedIn || !session.user) return json({ message: L("Přihlášení vypršelo. Přihlas se znovu.", "Your session has expired. Sign in again.") }, 401);
+  if (!emailConfigured(env)) return json({ message: L("Posílání e-mailů není zapnuté.", "Sending emails isn't turned on.") }, 404);
+  if (request.headers.get("Origin") !== new URL(request.url).origin) return json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, 403);
   const db = env.RAW_DB || env.DB, user = session.user, body = await request.json().catch(() => ({}));
   const email = normalizeEmail(body?.email), purpose = "email-change:" + user.id;
   if (email.length > 254 || !EMAIL_PATTERN.test(email)) return emailChangeRefusal("invalid");
@@ -147,7 +148,7 @@ export async function handleEmailChange(request, env, url, session, ctx) {
     if (await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first()) return emailChangeRefusal("taken");
     const code = randomCode(), lang = requestLanguage(request);
     const sent = await claimAndSend(db, env, email, code, purpose, emailChangeCodeEmail(lang, code), Date.now());
-    if (!sent) return json({ message: "Kód na tuhle adresu jsme poslali před chvílí. Další můžeš chtít za minutu." }, 429);
+    if (!sent) return json({ message: L("Kód na tuhle adresu jsme poslali před chvílí. Další můžeš chtít za minutu.", "We sent a code to this address a moment ago. You can ask for another in a minute.") }, 429);
     return json({ status: "ok" });
   }
   const refused = await useCode(db, env, email, body?.code, purpose);

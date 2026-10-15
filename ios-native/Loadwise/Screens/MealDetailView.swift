@@ -27,7 +27,7 @@ struct MealDetailView: View {
                 } else {
                     VStack(alignment: .leading, spacing: 16) {
                         BackSlot { dismiss() }
-                        Text("Tohle jídlo dnes není.").font(Typo.body).foregroundStyle(Palette.muted)
+                        Text("Tohle jídlo v tento den není.").font(Typo.body).foregroundStyle(Palette.muted)
                     }
                     .padding(24)
                 }
@@ -61,7 +61,7 @@ struct MealDetailView: View {
         if !model.demo, !ids.isEmpty {
             do {
                 let skipped = try await model.api.bulkFood(action, ids: Array(ids), date: date, mealType: mealType)
-                if !skipped.isEmpty { model.notice = L10n.tr("Jídlo z jiné aplikace jde jen zkopírovat nebo smazat, zůstalo na místě.") }
+                if !skipped.isEmpty { model.notice = L10n.tr("Jídlo z jiné aplikace nejde přesunout, jen zkopírovat nebo smazat. Zůstalo na místě.") }
             } catch {
                 return error.localizedDescription
             }
@@ -168,7 +168,7 @@ struct MealDetailContent: View {
 
             SectionLabel(text: meal.entries.isEmpty ? "Zatím nic" : L10n.f("Potraviny · %@", String(meal.entries.count))).padding(.top, 28)
             if meal.entries.isEmpty {
-                Text("Do tohoto jídla zatím nic není. Přidej první potravinu.").font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 10)
+                Text("V tomto jídle zatím nic není. Přidej první potravinu.").font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 10)
                 PrimaryButton(title: MealSlot.addText(meal.type), systemImage: "plus", action: add).padding(.top, 16)
             } else {
                 VStack(spacing: 10) {

@@ -22,6 +22,8 @@ const PUBLIC_PATHS = new Set([
   "/terms",
   "/support",
   "/logo.svg",
+  "/robots.txt",
+  "/sitemap.xml",
   "/app/logout",
   "/auth/google",
   "/auth/google/callback",
@@ -32,7 +34,9 @@ const PUBLIC_PATHS = new Set([
   "/auth/passkey/verify",
   "/auth/email/start",
   "/auth/email/verify",
-  "/automation/strength"
+  "/automation/strength",
+  // Wahoo's webhook: checked against WAHOO_WEBHOOK_TOKEN (wahoo.js).
+  "/webhooks/wahoo"
 ]);
 const PUBLIC_PREFIXES = ["/.well-known/", "/oauth/", "/t/"];
 

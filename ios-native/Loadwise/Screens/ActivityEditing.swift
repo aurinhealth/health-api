@@ -59,6 +59,7 @@ struct ActivityEditing: ViewModifier {
         case "app": return L10n.tr("Trénink zapsaný v Aurinu zmizí i z Intervals.icu, kam ho Aurin poslal.")
         case "intervals": return L10n.tr("Jen v Aurinu: Intervals.icu ho dál má, Aurin ho nepočítá.")
         default:
+            if o.source == "wahoo" { return L10n.tr("Jen v Aurinu: Wahoo ho dál má, Aurin ho nepočítá.") }
             return o.source == "apple"
                 ? L10n.tr("Apple Health dovolí smazat trénink jen aplikaci, která ho zapsala. Aurin ho přestane počítat.")
                 : L10n.tr("Google Health dovolí smazat trénink jen ve své aplikaci. Aurin ho přestane počítat.")
@@ -86,7 +87,7 @@ struct ActivityEditing: ViewModifier {
 
     private func saveKcal(_ value: Int?) async {
         guard !model.demo else { return }
-        if let value, !(1...6000).contains(value) { error = L10n.tr("Zadej kalorie mezi 1 a 6000."); return }
+        if let value, !(1...6000).contains(value) { error = L10n.tr("Zadej hodnotu od 1 do 6 000 kcal."); return }
         do {
             try await model.api.setActivityKcal(id: id, kcal: value)
             await model.refreshTraining()

@@ -234,7 +234,12 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   if (input.length > MAX_RECORDS) return { status: "error", code: 413, message: "Too many records in one request." };
   const rows = input.map(r => appleRow(r, now)).filter(Boolean);
   const statements = rows.map(row => upsert(db, userId, row));
-  for (let i = 0; i < statements.length; i += 50) await db.batch(statements.slice(i, i + 50));
+  // Rows really written: the upsert leaves a row that did not change alone.
+  let changed = 0;
+  // 200 statements a round trip: a first sync of 1500 records is 8 batches, not 30.
+  for (let i = 0; i < statements.length; i += 200) {
+    for (const result of await db.batch(statements.slice(i, i + 200)) || []) changed += Number(result?.meta?.changes || 0);
+  }
 
   let removed = 0;
   // A window reaching further back than the range starts at the range: rows
@@ -268,8 +273,11 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   const categories = (Array.isArray(body.categories) ? body.categories : []).map(String).filter(c => /^[a-z]{2,20}$/.test(c)).slice(0, 12);
   const saved = rows.length + food.saved;
   removed += food.removed;
+  // Nothing new (the usual sync that sends the same hours again): the cached
+  // screens and the coach's texts stay valid (entrypoint.js).
+  changed += removed + replaced + Number(food.changed || 0);
   await writeStatus(db, userId, "ok", { saved, skipped: input.length - rows.length, removed, replaced, categories });
-  return { status: "ok", saved, skipped: input.length - rows.length, removed, replaced, ...(body.food ? { food: food.saved } : {}) };
+  return { status: "ok", saved, changed, skipped: input.length - rows.length, removed, replaced, ...(body.food ? { food: food.saved } : {}) };
 }
 
 // Disconnecting: like the other services, the data Loadwise already has stays

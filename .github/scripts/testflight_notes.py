@@ -1,9 +1,26 @@
 #!/usr/bin/env python3
 """TestFlight "What to Test" notes for the build just uploaded.
 
+The notes are written by hand, in Czech, in each pull request's description:
+
+  ## TestFlight
+  **Co je nového**
+  - Jídlo a pití se uloží hned a okno se zavře okamžitě.
+  **Co otestovat**
+  - Přidej jídlo a hned ho smaž přes Vrátit.
+
+A pull request with nothing for testers says "Nic k otestování" in that
+section instead.
+
   testflight_notes.py write BASE_SHA OUT_FILE
-      Writes the changes to the app since BASE_SHA (commits touching
-      ios-native/, newest first) to OUT_FILE.
+      Collects the TestFlight sections of the pull requests merged since
+      BASE_SHA (squash commits touching ios-native/, newest first) into
+      OUT_FILE. With PR_NUMBER set, takes just that pull request.
+      Needs GH_TOKEN and GITHUB_REPOSITORY to read the descriptions.
+
+  testflight_notes.py check
+      Fails a pull request (GITHUB_EVENT_PATH) whose description has no
+      usable TestFlight section.
 
   testflight_notes.py upload NOTES_FILE
       Waits until App Store Connect lists the build, then sets the notes as
@@ -17,27 +34,108 @@ import base64, json, os, re, subprocess, sys, time, urllib.error, urllib.request
 
 LIMIT = 4000  # App Store Connect's limit for whatsNew
 API = "https://api.appstoreconnect.apple.com/v1"
+NEW, TEST = "Co je nového", "Co otestovat"
+NOTHING = "nic k otestování"
+EXAMPLE = f"""## TestFlight
+**{NEW}**
+- Jídlo a pití se uloží hned a okno se zavře okamžitě.
+**{TEST}**
+- Přidej jídlo a hned ho smaž přes Vrátit."""
 
 
 def git(*args):
     return subprocess.run(["git", *args], check=True, capture_output=True, text=True).stdout
 
 
-def notes_since(base):
-    rev = f"{base}..HEAD" if base else "-15"
-    log = git("log", "--no-merges", "--format=%x1e%s%x1f%b", rev, "--", "ios-native")
-    lines = []
-    for entry in filter(None, log.split("\x1e")):
-        subject, _, body = entry.partition("\x1f")
-        lines.append("• " + subject.strip())
-        # Squash merges list the PR's commits as "* title" lines.
-        for line in body.splitlines():
-            if line.startswith("* "):
-                lines.append("   – " + line[2:].strip())
-    text = "\n".join(lines) or "Drobné úpravy."
+def section(body):
+    """The pull request's TestFlight section: (new, test) bullet lists,
+    ([], []) when it says there is nothing to test, None when it is missing."""
+    lines = (body or "").replace("\r", "").split("\n")
+    start = next((i for i, l in enumerate(lines) if re.match(r"#{2,3}\s*TestFlight\s*$", l.strip(), re.I)), None)
+    if start is None:
+        return None
+    lists, current, text = {NEW: [], TEST: []}, None, []
+    for raw in lines[start + 1:]:
+        line = raw.strip()
+        if re.match(r"#{1,3}\s", line) and not re.match(r"#{1,3}\s*(co je nového|co otestovat)", line, re.I):
+            break  # the next section of the description
+        if line.startswith("---") or line.startswith("🤖"):
+            break  # the attribution footer
+        heading = re.sub(r"[#*_:\s]+", " ", line).strip().lower()
+        if heading in (NEW.lower(), TEST.lower()):
+            current = NEW if heading == NEW.lower() else TEST
+        elif re.match(r"[-*•]\s+", line) and current:
+            lists[current].append(re.sub(r"^[-*•]\s+", "", line).replace("**", "").replace("`", ""))
+        text.append(line)
+    if not lists[NEW] and not lists[TEST]:
+        return ([], []) if NOTHING in " ".join(text).lower() else None
+    return lists[NEW], lists[TEST]
+
+
+def pull_request(number):
+    req = urllib.request.Request(f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{number}",
+                                 headers={"Authorization": "Bearer " + os.environ["GH_TOKEN"],
+                                          "Accept": "application/vnd.github+json"})
+    try:
+        with urllib.request.urlopen(req) as res:
+            return json.load(res)
+    except urllib.error.HTTPError:
+        return None
+
+
+def render(entries):
+    """entries: (title, section) per pull request, newest first."""
+    new, test, untold = [], [], False
+    for _, sec in entries:
+        if sec is None:
+            untold = True
+        else:
+            new += sec[0]
+            test += sec[1]
+    if untold:
+        # A pull request without the section (from before it existed): its
+        # title is often English, so it is only counted, never quoted.
+        new.append("Další drobné úpravy.")
+    if not new and not test:
+        return "Drobné úpravy, nic nového k otestování."
+    parts = []
+    if new:
+        parts.append(NEW + "\n" + "\n".join("• " + l for l in new))
+    if test:
+        parts.append(TEST + "\n" + "\n".join("• " + l for l in test))
+    text = "\n\n".join(parts)
     if len(text) > LIMIT:
         text = text[: LIMIT - 1].rsplit("\n", 1)[0] + "\n…"
     return text
+
+
+def notes_since(base):
+    if os.environ.get("PR_NUMBER"):
+        pr = pull_request(os.environ["PR_NUMBER"]) or {}
+        return render([(pr.get("title", ""), section(pr.get("body")))])
+    rev = f"{base}..HEAD" if base else "-15"
+    log = git("log", "--no-merges", "--format=%s", rev, "--", "ios-native")
+    entries = []
+    for subject in filter(None, log.splitlines()):
+        m = re.search(r"\(#(\d+)\)\s*$", subject)
+        pr = pull_request(m.group(1)) if m else None
+        title = re.sub(r"\s*\(#\d+\)\s*$", "", subject).strip()
+        entries.append((title, section(pr.get("body")) if pr else None))
+    return render(entries)
+
+
+def check():
+    event = json.load(open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8"))
+    sec = section(event["pull_request"].get("body"))
+    if sec is None:
+        sys.exit("::error::Popis PR nemá sekci TestFlight pro testery. Přidej ji do popisu "
+                 "(česky, bez čísel PR a názvů v kódu), nebo do ní napiš „Nic k otestování“:\n\n" + EXAMPLE)
+    lines = sec[0] + sec[1]
+    if lines and not re.search(r"[ěščřžýáíéůúťďň]", " ".join(lines), re.I):
+        sys.exit("::error::Sekce TestFlight má být česky (Co je nového / Co otestovat).")
+    if sec[0] and not sec[1]:
+        sys.exit(f"::error::Sekce TestFlight potřebuje i „{TEST}“: konkrétní kroky v aplikaci.")
+    print(render([("", sec)]))
 
 
 def b64(data):
@@ -86,14 +184,15 @@ def upload(notes_file):
     app = apps[0]["id"]
     query = (f"/builds?filter[app]={app}&filter[version]={env['BUILD_NUMBER']}"
              f"&filter[preReleaseVersion.version]={env['MARKETING_VERSION']}")
-    # The build shows up a few minutes after the upload, while Apple processes it.
-    for _ in range(40):
+    # The build shows up after the upload, while Apple processes it; that has
+    # taken over 20 minutes (build 58), so this waits up to an hour.
+    for _ in range(120):
         builds = call("GET", query)["data"]
         if builds:
             break
         time.sleep(30)
     else:
-        sys.exit("The build did not appear in App Store Connect within 20 minutes")
+        sys.exit("The build did not appear in App Store Connect within an hour")
     build = builds[0]["id"]
     locales = {loc["attributes"]["locale"] for loc in call("GET", f"/apps/{app}/betaAppLocalizations")["data"]} or {"cs"}
     existing = {loc["attributes"]["locale"]: loc["id"] for loc in call("GET", f"/builds/{build}/betaBuildLocalizations")["data"]}
@@ -109,7 +208,9 @@ def upload(notes_file):
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == "write":
+    if sys.argv[1] == "check":
+        check()
+    elif sys.argv[1] == "write":
         with open(sys.argv[3], "w", encoding="utf-8") as out:
             out.write(notes_since(sys.argv[2]) + "\n")
     elif sys.argv[1] == "upload":

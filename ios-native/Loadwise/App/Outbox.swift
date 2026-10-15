@@ -74,16 +74,24 @@ enum OutboxRefusal: LocalizedError {
 
 enum Outbox {
     /// The request did not reach the server (no signal, the connection dropped,
-    /// it timed out); a server error is not one of these.
+    /// it timed out, a Wi-Fi that wants a sign-in broke the secure connection);
+    /// a server error is not one of these.
     static func isNoConnection(_ error: Error) -> Bool {
         guard let code = (error as? URLError)?.code else { return false }
         return [.notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost,
-                .dataNotAllowed, .internationalRoamingOff].contains(code)
+                .dataNotAllowed, .internationalRoamingOff, .secureConnectionFailed].contains(code)
     }
 
     /// A local id for a meal or drink not sent yet (negative, so never a server id).
     static func localId() -> Int {
         -Int.random(in: 1...999_999_999)
+    }
+
+    /// The new entry's id in the server's answer: a meal's {"id"}, a drink's {"entry": {"id"}}.
+    static func entryId(_ answer: Data) -> Int? {
+        guard let json = (try? JSONSerialization.jsonObject(with: answer)) as? [String: Any] else { return nil }
+        let id = json["id"] ?? (json["entry"] as? [String: Any])?["id"]
+        return (id as? NSNumber)?.intValue
     }
 
     /// "HH:mm" now, and "yyyy-MM-ddTHH:mm" for the drink's time.

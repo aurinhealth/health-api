@@ -96,9 +96,10 @@ struct ConnectFlowSheets: ViewModifier {
                     }
                 }
             } message: {
-                // Ultrahuman's and WHOOP's data is deleted on disconnecting (src/ultrahuman.js, src/whoop.js).
+                // Ultrahuman's, WHOOP's and Wahoo's data is deleted on disconnecting (src/ultrahuman.js, src/whoop.js, src/wahoo.js).
                 Text(flow.disconnecting?.id == "ultrahuman" ? "Data z prstenu se smažou a noc se zase bude brát z hodinek."
                      : flow.disconnecting?.id == "whoop" ? "Data z WHOOPu se smažou a noc se zase bude brát z ostatních zdrojů."
+                     : flow.disconnecting?.id == "wahoo" ? "Jízdy a běhy z Wahoo se v Aurinu smažou a plán do Wahoo přestane chodit."
                      : "Data, která už Aurin má, zůstanou. Nová přestanou chodit.")
             }
     }
@@ -143,6 +144,10 @@ struct ServiceConnectSheet: View {
             return Service(name: "WHOOP",
                            reads: L10n.tr("Spánek a jeho fáze, klidový tep, HRV, dech a okysličení krve."),
                            writes: L10n.tr("Nic."))
+        case "wahoo":
+            return Service(name: "Wahoo",
+                           reads: L10n.tr("Hotové jízdy a běhy: čas, vzdálenost, výkon, TSS, tep a kadenci."),
+                           writes: L10n.tr("Tréninky naplánované v Aurinu, do ELEMNT a KICKR."))
         case "ultrahuman":
             return Service(name: "Ultrahuman",
                            reads: L10n.tr("Spánek, klidový tep, HRV, VO₂max a teplotu z prstenu."),
@@ -280,7 +285,7 @@ struct ServiceConnectSheet: View {
             if event == target.id { await finished(); return }
             switch event {
             case "intervals-failed": phase = .key
-            case "expired": error = L10n.tr("Odkaz vypršel, zkus to znovu.")
+            case "expired": error = L10n.tr("Odkaz vypršel. Zkus to znovu.")
             case let cancelled where cancelled.hasSuffix("-cancelled"): break
             default: error = L10n.tr("Připojení se nedokončilo. Zkus to znovu.")
             }

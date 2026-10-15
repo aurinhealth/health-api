@@ -19,11 +19,20 @@
 //   injection) suppresses or masks ovulation, so there are no phases, no
 //   ovulation and no forecast: only what was logged. A copper IUD leaves the
 //   natural cycle.
+// - Fáze života (lifeStage): in perimenopause the cycles get irregular (gaps
+//   of 18–90 days count, and a 60-day gap marks late perimenopause; STRAW+10,
+//   Harlow 2012), ovulation is unreliable, so there are no phases: the next
+//   period is the range from the shortest to the longest recent gap and the
+//   morning question stays away. In menopause (12 months without a period)
+//   there is no cycle at all: only the logged symptoms. Hot flashes, night
+//   sweats, poor sleep and joint pain join the symptoms; hrt notes hormone
+//   therapy for the coach.
 
 export const CONTRACEPTION = ["none", "pill", "patch", "ring", "hormonal_iud", "copper_iud", "implant", "injection"];
 export const HORMONAL = new Set(["pill", "patch", "ring", "hormonal_iud", "implant", "injection"]);
 export const PILL_PACKS = { "21+7": 21, "24+4": 24, "28": 28 };
-export const SYMPTOMS = ["cramps", "fatigue", "headache", "bloating", "mood", "appetite"];
+export const SYMPTOMS = ["cramps", "fatigue", "headache", "bloating", "mood", "appetite", "hot_flashes", "night_sweats", "poor_sleep", "joint_pain"];
+export const LIFE_STAGES = ["regular", "perimenopause", "menopause"];
 export const DEFAULT_LENGTH = 28;
 export const DEFAULT_PERIOD = 5;
 export const LUTEAL_DAYS = 14;
@@ -45,6 +54,8 @@ export function normalizeCycleSettings(raw) {
     cycleLength: Number.isFinite(len) && len >= 21 && len <= 40 ? len : null,
     periodLength: Number.isFinite(per) && per >= 2 && per <= 10 ? per : null,
     contraception: CONTRACEPTION.includes(s.contraception) ? s.contraception : "none",
+    lifeStage: LIFE_STAGES.includes(s.lifeStage) ? s.lifeStage : "regular",
+    hrt: s.hrt === true,
     adaptTraining: s.adaptTraining !== false,
     pillPack: Object.hasOwn(PILL_PACKS, s.pillPack) ? s.pillPack : "21+7",
     packStart: isDate(s.packStart) ? s.packStart : null,
@@ -88,15 +99,17 @@ export function periodStarts(days, settings) {
 // 28. `spread` is half the range of those gaps (the forecast's ±), 1 day
 // before there are 2.
 export function cycleLength(starts, settings) {
+  const peri = settings && settings.lifeStage === "perimenopause";
   const gaps = [];
   for (let i = 1; i < (starts || []).length; i++) {
     const g = between(starts[i - 1], starts[i]);
-    if (g >= 18 && g <= 50) gaps.push(g);
+    if (g >= 18 && g <= (peri ? 90 : 50)) gaps.push(g);
   }
   const recent = gaps.slice(-6);
   if (recent.length >= 2) {
     const mean = Math.round(recent.reduce((s, g) => s + g, 0) / recent.length);
-    return { length: mean, spread: clamp(Math.round((Math.max(...recent) - Math.min(...recent)) / 2), 1, 7), learned: true, cycles: recent.length };
+    const shortest = Math.min(...recent), longest = Math.max(...recent);
+    return { length: mean, spread: clamp(Math.round((longest - shortest) / 2), 1, peri ? 30 : 7), learned: true, cycles: recent.length, shortest, longest };
   }
   return { length: (settings && settings.cycleLength) || DEFAULT_LENGTH, spread: 1, learned: false, cycles: recent.length };
 }
@@ -115,10 +128,16 @@ export function cycleState(input) {
   const hormonal = HORMONAL.has(settings.contraception);
   const lastStart = starts.at(-1) || null;
   const lastBleed = [...days].reverse().find(d => d.flow > 0)?.date || (lastStart && settings.lastPeriod === lastStart ? lastStart : null);
-  const out = { date, contraception: settings.contraception, hormonal, adaptTraining: settings.adaptTraining, today, pill: pillState(settings, date, today) };
-  if (hormonal) return { ...out, daysSinceBleeding: lastBleed ? between(lastBleed, date) : null };
+  const out = { date, contraception: settings.contraception, hormonal, lifeStage: settings.lifeStage, hrt: settings.hrt, adaptTraining: settings.adaptTraining, today, pill: pillState(settings, date, today) };
+  if (hormonal || settings.lifeStage === "menopause") return { ...out, daysSinceBleeding: lastBleed ? between(lastBleed, date) : null };
   if (!lastStart) return { ...out, cycleDay: null, phase: null, next: null };
-  const { length, spread, learned, cycles } = cycleLength(starts, settings);
+  const { length, spread, learned, cycles, shortest, longest } = cycleLength(starts, settings);
+  // Perimenopause: no phases, the next period from the shortest to the longest gap.
+  if (settings.lifeStage === "perimenopause") {
+    const from = shift(lastStart, learned ? shortest : Math.max(21, length - 7)), to = shift(lastStart, learned ? longest : length + 14);
+    return { ...out, cycleDay: between(lastStart, date) + 1, phase: null, length, learned, cycles, range: learned ? { shortest, longest } : null,
+      lastStart, next: { start: shift(lastStart, length), from, to, late: date > to }, daysToNext: Math.max(0, between(date, from)) };
+  }
   const cycleDay = between(lastStart, date) + 1;
   const periodLen = settings.periodLength || DEFAULT_PERIOD;
   // The last positive ovulation test in this cycle moves ovulation to the day
@@ -148,7 +167,7 @@ export function pillState(settings, date, today) {
 // range reached (from its first day to 10 days after its last), no bleeding
 // logged since the range opened and no "not yet" today.
 export function askPeriodToday(state) {
-  if (!state || state.hormonal || !state.next) return false;
+  if (!state || state.hormonal || !state.next || (state.lifeStage && state.lifeStage !== "regular")) return false;
   const { date, next, today } = state;
   if (date < next.from || date > shift(next.to, 10)) return false;
   if (today && (today.flow > 0 || today.noPeriod)) return false;
@@ -177,6 +196,7 @@ export function cycleForCoach(input) {
   if (!state) return null;
   const t = state.today;
   const out = { hormonal: state.hormonal, flow: ["none", "light", "medium", "heavy"][t ? t.flow : 0], symptoms: t ? t.symptoms : [] };
+  if (state.lifeStage !== "regular") Object.assign(out, { lifeStage: state.lifeStage, hrt: state.hrt });
   if (state.hormonal) {
     if (state.pill && state.pill.pause) out.pillPause = true;
     return out;
@@ -193,7 +213,7 @@ export function cycleForCoach(input) {
 // (recovery-model.js lutealOffset).
 export function markCyclePhases(rows, input) {
   const settings = normalizeCycleSettings(input && input.settings);
-  if (!settings.enabled || HORMONAL.has(settings.contraception)) return rows;
+  if (!settings.enabled || HORMONAL.has(settings.contraception) || settings.lifeStage !== "regular") return rows;
   return (rows || []).map(r => {
     if (!r || !isDate(r.id)) return r;
     const st = cycleState({ ...input, date: r.id });
@@ -215,7 +235,7 @@ export function cycleMonth(input, month) {
     const pill = pillState(settings, date, d || null);
     const row = { date, flow: d ? d.flow : 0, symptoms: d ? d.symptoms : [] };
     if (pill) row.pill = pill.pause ? "pause" : d && d.pill ? "taken" : "planned";
-    if (state && !state.hormonal && state.next && date > state.date) {
+    if (state && !state.hormonal && state.phase !== null && state.next && date > state.date) {
       if (date >= state.next.from && date <= state.next.to) row.forecast = true;
     }
     if (state && !state.hormonal && state.ovulation && date === state.ovulation) row.ovulation = true;

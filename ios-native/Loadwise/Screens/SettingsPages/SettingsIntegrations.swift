@@ -55,8 +55,9 @@ struct IntegrationCard: View {
 
 /// The services' own logos, unchanged: Apple and Google allow their marks only
 /// as published (no added tile, border or recolouring). Ultrahuman's mark is
-/// white, so it sits on black as in Ultrahuman's own app icon; WHOOP's puck has
-/// a black and a white version for light and dark mode.
+/// white, so it sits on black as in Ultrahuman's own app icon, and so does
+/// Wahoo's white wordmark; WHOOP's puck has a black and a white version for
+/// light and dark mode.
 struct IntegrationIcon: View {
     let id: String
     var size: CGFloat = 40
@@ -69,6 +70,10 @@ struct IntegrationIcon: View {
             case "google": logo("GoogleHealthLogo").padding(size * 0.04)
             case "intervals": logo("IntervalsLogo")
             case "whoop": logo("WhoopLogo")
+            case "aurin": logo("AurinLogo")
+            case "wahoo":
+                shape.fill(Color(light: 0x000000, dark: 0x000000))
+                logo("WahooLogo").frame(width: size * 0.78)
             case "ultrahuman":
                 shape.fill(Color(light: 0x000000, dark: 0x000000))
                 logo("UltrahumanMark").frame(width: size * 0.56)
@@ -192,7 +197,7 @@ struct IntegrationDetailView: View {
 
             SettingsGroup {
                 Button { flow.disconnecting = current } label: {
-                    SettingsRow(title: current.id == "ultrahuman" ? "Odpojit a smazat data z prstenu" : current.id == "whoop" ? "Odpojit a smazat data z WHOOPu" : "Odpojit", chevron: false, titleColor: Palette.rust)
+                    SettingsRow(title: current.id == "ultrahuman" ? "Odpojit a smazat data z prstenu" : current.id == "whoop" ? "Odpojit a smazat data z WHOOPu" : current.id == "wahoo" ? "Odpojit a smazat jízdy z Wahoo" : "Odpojit", chevron: false, titleColor: Palette.rust)
                 }
                 .buttonStyle(.plain)
                 .disabled(store.demo)

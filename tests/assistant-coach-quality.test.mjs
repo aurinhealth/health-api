@@ -145,7 +145,7 @@ test('passing remarks are not remembered and preferences are saved after the ans
 });
 
 test('a reply cut off by the token limit keeps its answer and never shows raw JSON',async()=>{
-  assert.deepEqual(coachAnswerText('{"answer":"Začni lehce","actions":[{"type":"re',{actions:true,incomplete:true}),{answer:'Začni lehce\n\n'+TRUNCATED_NOTE,visuals:[],actions:[]});
+  assert.deepEqual(coachAnswerText('{"answer":"Začni lehce","actions":[{"type":"re',{actions:true,incomplete:true}),{answer:'Začni lehce\n\n'+TRUNCATED_NOTE,visuals:[],actions:[],memory:{forget:[],update:[]}});
   assert.doesNotMatch(coachAnswerText('{"actions":[{"type":"rest"',{actions:true}).answer,/[{}]/);
   assert.equal(coachAnswerText('Obyčejný text',{actions:true}).answer,'Obyčejný text');
   const original=globalThis.fetch,calls=[];
@@ -159,7 +159,7 @@ test('a reply cut off by the token limit keeps its answer and never shows raw JS
     const streamed=await askCoach({OPENAI_API_KEY:'test'},'Naplánuj zimní tréninkový blok',{date:today},{actions:true,onAnswer:a=>seen.push(a)});
     assert.equal(streamed.answer,'Ahoj, dnes\n\n'+TRUNCATED_NOTE);assert.equal(seen.at(-1),'Ahoj, dnes');assert.equal(streamed.incomplete,true);
     globalThis.fetch=async()=>Response.json({status:'incomplete',output:[]});
-    await assert.rejects(askCoach({OPENAI_API_KEY:'test'},'Ahoj',{}),/nevešla/);
+    await assert.rejects(askCoach({OPENAI_API_KEY:'test'},'Ahoj',{}),/moc dlouhá/);
   }finally{globalThis.fetch=original;}
 });
 
@@ -172,7 +172,7 @@ test('earlier turns go to the model as messages with the data first and the ques
     assert.match(body.input[0].content,/^Kontext aplikace/);assert.doesNotMatch(body.input[0].content,/conversation/);assert.equal(body.input.at(-1).content,'Požadavek: A co zítra?');
   }finally{globalThis.fetch=original;}
   const move={type:'move',eventId:'planned:7',date:'2026-10-08',reason:'x',eventSnapshot:{name:'Long ride',date:'2026-10-06'}};
-  assert.equal(actionsNote([move,{type:'status',status:'sick',statusUntil:'2026-10-09'}]),'[Návrhy: Přesunout Long ride na čt 8. 10.; Stav Nemoc (znovu Trénink od pá 9. 10.)]');assert.equal(actionsNote([]),'');
+  assert.equal(actionsNote([move,{type:'status',status:'sick',statusUntil:'2026-10-09'}]),'[Návrhy: Přesunout Long ride na čt 8. 10.; Stav Nemoc (znovu Aktivní od pá 9. 10.)]');assert.equal(actionsNote([]),'');
 });
 
 test('assistant proposals are kept as drafts of this chat',()=>{

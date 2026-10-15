@@ -68,7 +68,7 @@ struct PrivacySettingsView: View {
 
     private func delete() async {
         guard ["SMAZAT", "DELETE"].contains(deleteText.trimmingCharacters(in: .whitespaces).uppercased()) else {
-            error = "Účet zůstal: pro smazání je potřeba napsat SMAZAT."
+            error = L10n.tr("Účet zůstal: pro smazání je potřeba napsat SMAZAT.")
             return
         }
         do {

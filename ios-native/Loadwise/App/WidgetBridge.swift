@@ -1,7 +1,8 @@
 import Foundation
 import WidgetKit
 
-/// Hands Today to the home-screen widgets (LoadwiseWidgets) via the App Group.
+/// Hands Today to the home-screen widgets (LoadwiseWidgets) via the App Group,
+/// and to the menu on the app's icon (QuickActions).
 enum WidgetBridge {
     static func update(_ today: TodaySnapshot) {
         let next = today.plan.first { $0.kind == "workout" && !$0.done }
@@ -17,6 +18,7 @@ enum WidgetBridge {
                                       bedtime: today.tonight?.bedtime, nextTitle: next?.title, nextTime: next?.time)
         snapshot.save()
         WidgetCenter.shared.reloadAllTimelines()
+        Task { @MainActor in QuickActions.update(today) }
     }
 
     /// Redraws the widgets in a new language or new units.
@@ -27,5 +29,6 @@ enum WidgetBridge {
     static func clear() {
         WidgetSnapshot.clear()
         WidgetCenter.shared.reloadAllTimelines()
+        Task { @MainActor in QuickActions.clear() }
     }
 }

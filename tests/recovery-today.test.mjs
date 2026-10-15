@@ -13,11 +13,11 @@ const DATE = "2026-10-11";
 const gymDone = { id: "gym:" + DATE, status: "done", date: DATE, title: "Horní tělo A", sport: "strength", minutes: null, tss: null };
 const intervals = { id: "p1", status: "planned", date: "2026-10-12", title: "Intervaly 5×4 min VO2max", sport: "ride", minutes: 75, tss: 85 };
 
-test("after a gym day: why, the stretch for the upper body, a sauna and bedtime", () => {
-  const r = recoveryToday({ date: DATE, today: [gymDone], tomorrow: [intervals], gym: { [DATE]: { name: "Horní tělo A", exercises: ["Bench press", "Přítahy"] } }, tonight: { bedtime: "22:10", need: 510 } });
+test("after a gym day: why and one tip, the stretch for the upper body; no bedtime", () => {
+  const r = recoveryToday({ date: DATE, today: [gymDone], tomorrow: [intervals], gym: { [DATE]: { name: "Horní tělo A", exercises: ["Bench press", "Přítahy"] } } });
   assert.equal(r.title, "Regenerace na dnes");
   assert.equal(r.text, "Posilovna dala zabrat horní části těla a zítra jedeš intervaly.");
-  assert.deepEqual(r.items.map(i => i.kind), ["stretch", "sauna", "bedtime"]);
+  assert.deepEqual(r.items.map(i => i.kind), ["stretch"]);
   const stretch = r.items[0];
   assert.equal(stretch.title, "Protažení po posilovně");
   assert.match(stretch.detail, /^\d+ min · hrudník, záda, ramena$/);
@@ -25,9 +25,15 @@ test("after a gym day: why, the stretch for the upper body, a sauna and bedtime"
   assert.equal(stretch.routine.items[0].dose, "40 s na stranu");
   assert.equal(stretch.routine.items[0].seconds, 80);
   assert.equal(stretch.sport, "gym");
-  assert.equal(r.items[1].detail, "3× 10 min večer, pak hodně pít");
-  assert.equal(r.items[2].title, "Do postele v 22:10");
-  assert.equal(r.items[2].detail, "dnes potřebuješ 8 h 30 spánku");
+});
+
+test("Doporučovat méně: the sauna instead of stretching, nothing when both are less", () => {
+  const sauna = recoveryToday({ date: DATE, today: [gymDone], less: ["stretch"] });
+  assert.deepEqual(sauna.items.map(i => i.kind), ["sauna"]);
+  assert.equal(sauna.items[0].detail, "3× 10 min večer, pak hodně pít");
+  assert.equal(recoveryToday({ date: DATE, today: [gymDone], less: ["stretch", "sauna"] }), null);
+  // The morning after has no sauna: nothing to offer instead.
+  assert.equal(recoveryToday({ date: DATE, yesterday: [{ status: "done", sport: "ride", minutes: 180, tss: 160 }], less: ["stretch"] }), null);
 });
 
 test("a leg day, a ride and the morning after a long ride; nothing after a rest day", () => {
@@ -44,15 +50,16 @@ test("a leg day, a ride and the morning after a long ride; nothing after a rest 
   assert.equal(recoveryToday({ date: DATE, today: [{ status: "done", sport: "other", minutes: 15, tss: 5 }] }), null);
 });
 
-test("done stretching and sauna are marked; English texts", () => {
-  const r = recoveryToday({ date: DATE, today: [gymDone], saved: [{ kind: "stretch", done: true }, { kind: "sauna", done: false }] });
+test("done stretching and sauna are marked, the sauna with its row to take back; English texts", () => {
+  const r = recoveryToday({ date: DATE, today: [gymDone], saved: [{ kind: "stretch", done: true }, { id: 9, kind: "sauna", done: true }] });
   assert.equal(r.items[0].done, true);
-  assert.equal(r.items[1].done, false);
-  const en = withLang("en", () => recoveryToday({ date: DATE, today: [gymDone], tomorrow: [intervals], tonight: { bedtime: "22:10", need: 480 } }));
+  const sauna = recoveryToday({ date: DATE, today: [gymDone], less: ["stretch"], saved: [{ id: 9, kind: "sauna", done: true }] });
+  assert.equal(sauna.items[0].done, true);
+  assert.equal(sauna.items[0].savedId, 9);
+  const en = withLang("en", () => recoveryToday({ date: DATE, today: [gymDone], tomorrow: [intervals] }));
   assert.equal(en.title, "Recovery for today");
   assert.equal(en.text, "The gym session worked your upper body and tomorrow you ride intervals.");
   assert.match(en.items[0].detail, /chest, back, shoulders/);
-  assert.equal(en.items[2].detail, "you need 8 h of sleep tonight");
   assert.deepEqual(withLang("en", () => routineAreas(recoveryRoutine({ sport: "run" }).items)), ["calves", "thighs", "hips"]);
 });
 
@@ -75,7 +82,6 @@ test("sauna and a finished routine are saved as done and join Today's plan", asy
   });
   assert.equal(today.recovery.text, "Posilovna dala zabrat horní části těla a zítra jedeš intervaly.");
   assert.equal(today.recovery.items[0].done, true);
-  assert.equal(today.recovery.items[1].done, true);
   const rows = today.plan.filter(i => i.kind === "recovery");
   assert.deepEqual(rows.map(i => i.title), ["Protažení po posilovně", "Sauna"]);
   assert.ok(rows.every(i => i.done && /hotovo$/.test(i.detail)));

@@ -89,6 +89,42 @@ struct AthleteStatusPill: View {
     }
 }
 
+/// The first row of Today's weather card: a dot and the state in its colour,
+/// then for a state other than Aktivní how long it lasts ("do 17. 10.",
+/// "do změny") and an injury's note. No frame; a tap changes it.
+struct AthleteStatusRow: View {
+    @Environment(AppModel.self) private var model
+    @State private var editing = false
+
+    var body: some View {
+        let status = model.athleteStatus ?? .active
+        let kind = AthleteStatusKind.from(status.status)
+        Button { editing = true } label: {
+            HStack(spacing: 8) {
+                Circle().fill(kind.color).frame(width: 8, height: 8)
+                Text(kind.title).font(.subheadline.weight(.semibold)).foregroundStyle(kind.color)
+                if let detail = Self.detail(status, kind) {
+                    Text(verbatim: "· " + detail).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.f("Stav sportovce: %@, %@", kind.title, AthleteStatusSheet.untilText(status.statusUntil)))
+        .sheet(isPresented: $editing) { AthleteStatusSheet(current: status) }
+    }
+
+    /// "koleno · do 20. 10.", "do změny"; nil while active.
+    static func detail(_ status: AthleteStatus, _ kind: AthleteStatusKind) -> String? {
+        guard kind != .active else { return nil }
+        let until = status.statusUntil.map { L10n.f("do %@", Fmt.dayMonth(ISODay.shift($0, -1))) } ?? L10n.tr("do změny")
+        let note = kind == .injured ? status.note?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank : nil
+        return [note, until].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
 struct AthleteStatusSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

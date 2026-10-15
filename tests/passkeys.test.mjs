@@ -109,7 +109,7 @@ test("sign-in refuses other sites, unknown passkeys, a wrong account and blocked
   const stranger = (await createPasskey({ challenge: "x" })).passkey;
   const unknown = await signIn(env, stranger);
   assert.equal(unknown.status, 401);
-  assert.deepEqual(await unknown.json(), { message: "Tenhle přístupový klíč Aurin nezná. Přihlas se jinak a přidej si nový v Nastavení → Účet.", unknownCredential: true, rpId: "petrfitnessdata.eu" });
+  assert.deepEqual(await unknown.json(), { message: "Tenhle přístupový klíč Aurin nezná. Přihlas se jinak, třeba kódem z e-mailu.", unknownCredential: true, rpId: "petrfitnessdata.eu" });
 
   assert.equal((await signIn(env, passkey, { userHandle: "c29tZW9uZS1lbHNl" })).status, 401);
   assert.equal((await signIn(env, passkey, { userHandle: null })).status, 401);

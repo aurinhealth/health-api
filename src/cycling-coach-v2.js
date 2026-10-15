@@ -6,6 +6,7 @@ import { localToday } from "./user-time.js";
 import { L, plural as pluralWord } from "./lang.js";
 import { readinessFor } from "./readiness.js";
 import { manualReadinessFor } from "./morning-checkin.js";
+import { readinessParts } from "./app-health.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -177,7 +178,7 @@ function capacityMinutes({ctl,tsb,sleepMinutes,readiness,recoveryWeek,returning,
   else if(sleepMinutes!=null&&sleepMinutes<420)apply(.9,L("spánek pod 7 h","sleep under 7 h"));
   if(tsb!=null&&tsb<=-25)apply(.75,L("velká únava","high fatigue")+" (TSB "+Math.round(tsb)+")");
   else if(tsb!=null&&tsb<=-15)apply(.85,L("únava","fatigue")+" (TSB "+Math.round(tsb)+")");
-  else if(tsb!=null&&tsb>=5)apply(1.15,L("jsi odpočatý","you're rested")+" (TSB "+Math.round(tsb)+")");
+  else if(tsb!=null&&tsb>=5)apply(1.15,L("tělo je odpočaté","you're rested")+" (TSB "+Math.round(tsb)+")");
   if(readiness==="red")apply(.7,L("nízká připravenost","low readiness"));
   else if(readiness==="yellow")apply(.9,L("střední připravenost","moderate readiness"));
   if(recoveryWeek)apply(.7,L("regenerační týden","recovery week"));
@@ -386,7 +387,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       const lastTouched=sys=>Date.parse(capabilities?.[sys]?.updated_at||"")||0;
       const pick=[...order].sort((a,b)=>lastTouched(a)-lastTouched(b))[0];
       kind=pick==="vo2max"?"vo2":pick;
-      rationale.push(L("Tento týden zatím žádná kvalita a jsi odpočatý"+(tsb!=null?" (TSB "+Math.round(tsb)+")":"")+" – je čas na kvalitní trénink. "+W.labels[pick]+" jsi z kvalitních systémů netrénoval nejdéle.","No quality yet this week and you're rested"+(tsb!=null?" (TSB "+Math.round(tsb)+")":"")+" – time for a quality session. Of the quality systems, "+W.labels[pick]+" is the one you trained longest ago."));
+      rationale.push(L("Tento týden zatím žádná kvalita a tělo je odpočaté"+(tsb!=null?" (TSB "+Math.round(tsb)+")":"")+" – je čas na kvalitní trénink. "+W.labels[pick]+" jsi z kvalitních systémů netrénoval nejdéle.","No quality yet this week and you're rested"+(tsb!=null?" (TSB "+Math.round(tsb)+")":"")+" – time for a quality session. Of the quality systems, "+W.labels[pick]+" is the one you trained longest ago."));
     } else if(readiness==="green"&&hard7===1&&(lastHard==null||lastHard>=2)){
       kind=domains.high<domains.moderate?"vo2":"threshold";
       rationale.push(L("Jedna kvalita v týdnu už byla a od ní "+(lastHard==null?"uběhlo několik dní":pluralWord(lastHard,"uběhl","uběhly","uběhlo")+" "+count(lastHard,"den","dny","dní"))+" – přidávám druhou, jiného typu.","There's been one quality session this week, "+(lastHard==null?"a few days":count(lastHard,"","","","day","days"))+" ago – I'm adding a second one of a different type."));
@@ -485,7 +486,9 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     sport,
     date:targetDate,
     // flags: the recovery model's warnings (respiration_elevated, skin_temp_elevated, wrist_temp_elevated, hrv_trend_down) and a tired or sick check-in.
-    readiness:{score,status:readiness,todayZone:ready.zone||null,reasons:readinessReasons,flags:[...(body.flags||[]),...(["tired","sick"].includes(checkin)?["checkin_"+checkin]:[])],provisional:!!ready.provisional,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,wristTempDeviation:bw?.deviation??null,manualReadiness:manualReadiness??null},
+    // The "HRV +15 · Tep −8 · Spánek −13" row under the readiness on Health:
+    // points each signal added to or took from 70, never beats or ms.
+    readiness:{score,status:readiness,todayZone:ready.zone||null,todayScore:ready.score??null,todayParts:ready.score==null?[]:[...readinessParts(body),...(body.score!=null&&ready.score<body.score?[{key:"checkin",points:ready.score-body.score}]:[])],reasons:readinessReasons,flags:[...(body.flags||[]),...(["tired","sick"].includes(checkin)?["checkin_"+checkin]:[])],provisional:!!ready.provisional,sleepMinutes,ctl,atl,tsb,rampRate:ramp,hrv,restingHr:rhr,wristTempDeviation:bw?.deviation??null,manualReadiness:manualReadiness??null},
     load:{bikeTssRolling7d:Math.round(tss7),hardBikeDaysRolling7d:hard7,domainLoadRolling7d:domains,lowerBodyGymSignals48h:lowerGym.length},
     athleteState:policy,rationale:policy.paused?policy.guidance:rationale,week:{recoveryWeek,thisWeekLoad,lastWeekLoad},
     constraints:{availableMinutes:requestedMinutes,autoLength,novice,capacityMinutes:capacity?Math.round(capacity.minutes):null,plannedToday:plannedToday?{name:plannedToday.name,type:plannedToday.type,durationHours:plannedToday.durationHours,tss:plannedToday.tss,system:plannedInfo?.system||null,minutes:plannedInfo?.minutes||null,intensityFactor:plannedInfo?.intensityFactor??null,structure:plannedInfo?.structure||[]}:null,cadence,phase:phase||"auto"},

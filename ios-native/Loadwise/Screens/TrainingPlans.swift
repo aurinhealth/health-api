@@ -385,6 +385,72 @@ struct TrainingPlanCard: View {
     }
 }
 
+/// Training's tools grid: "Tréninkový plán" opens the running plan (or the
+/// gym plan, or a finished plan's result), both when two run, else the
+/// choice of plans.
+struct TrainingPlanTile: View {
+    @Environment(AppModel.self) private var model
+    @State private var plans: TrainingPlans?
+    @State private var choosing = false
+    @State private var tried = false
+
+    private var tile: some View {
+        ToolTile(symbol: "flag.fill", title: L10n.tr("Tréninkový plán"), color: Palette.amberBar)
+    }
+
+    var body: some View {
+        Group {
+            if let plans, plans.active != nil || plans.activeGym != nil || plans.finished != nil {
+                NavigationLink { destination(plans) } label: { tile }
+                    .buttonStyle(PressableCardStyle())
+            } else {
+                Button { open() } label: { tile }
+                    .buttonStyle(PressableCardStyle())
+            }
+        }
+        .accessibilityLabel(L10n.tr("Tréninkový plán"))
+        .task {
+            guard !model.demo else { return }
+            await load()
+        }
+        // Back from a plan (started, stopped, finished): its state again.
+        .onAppear { if tried, !model.demo { Task { await load() } } }
+        .sheet(isPresented: $choosing, onDismiss: { Task { await load() } }) {
+            if let plans { TrainingPlansSheet(plans: plans) }
+        }
+    }
+
+    @ViewBuilder
+    private func destination(_ plans: TrainingPlans) -> some View {
+        if plans.active != nil, plans.activeGym == nil {
+            ActivePlanView(plans: plans)
+        } else if let gym = plans.activeGym, plans.active == nil {
+            PlanDetailView(template: gym.template, active: gym)
+        } else if plans.active == nil, let result = plans.finished {
+            PlanResultView(result: result, plans: plans)
+        } else {
+            DetailScreen(glow: Palette.Glow.training, title: L10n.tr("Tréninkový plán")) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Tréninkový plán").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
+                        .padding(.top, 24).padding(.bottom, 16)
+                    TrainingPlanCard()
+                }
+            }
+        }
+    }
+
+    /// The list of plans; when they have not loaded yet (no signal), tries again first.
+    private func open() {
+        if plans != nil { choosing = true; return }
+        Task { await load(); choosing = plans != nil }
+    }
+
+    private func load() async {
+        if let fresh = try? await model.api.trainingPlans() { plans = fresh }
+        tried = true
+    }
+}
+
 /// The active plan on Training: its name, the weeks as small bars (past ones
 /// coloured by how much was done) and this week's key sessions.
 struct ActivePlanSummary: View {

@@ -18,6 +18,8 @@ enum AppRoute: Hashable {
     case steps
     /// The day's strain, what it is made of and the form forecast (Today → Zátěž).
     case strain
+    /// Regenerace from the coach's card on Today (RecoveryViews.swift).
+    case recoveryTime
     case gym(String)
     case activity(WeekSession)
     case planned(WeekSession)
@@ -35,10 +37,17 @@ enum AppRoute: Hashable {
     case weekPlan
     case dayReview
     case insights
+    /// Trénink → Svaly: how tired each muscle is (MuscleViews.swift).
+    case muscles
+    /// Svaly → one muscle (its id in /app/api/muscles): strength and how often.
+    case muscle(String)
+    /// The exercise catalogue on one muscle chip (BodyFigure id).
+    case exercises(String)
     /// Cycle tracking's calendar (Health → Cyklus).
     case cycle
-    /// Doporučení trenéra: every option for today (Today's card, + Trénink dne).
-    case coachPick
+    /// Aktivita dne: Další možnosti from Today's card (false), every option
+    /// with the day's activity from + (true).
+    case coachPick(Bool)
     /// Knihovna → Moje tréninky and Od přátel (MyWorkouts.swift).
     case myWorkouts
     case friendWorkouts
@@ -55,8 +64,17 @@ enum AppRoute: Hashable {
     var tab: AppTab {
         switch self {
         case .readiness, .sleep, .heart, .weight, .cycle: return .health
-        case .sleepSettings, .dayReview, .steps, .strain, .coachPick, .journal, .journalImpact, .journalItem: return .today
+        case .sleepSettings, .dayReview, .steps, .strain, .recoveryTime, .coachPick, .journal, .journalImpact, .journalItem: return .today
         default: return .training
+        }
+    }
+
+    /// A screen with work in progress (a workout being logged, built or
+    /// planned): switching tabs keeps it open instead of going back.
+    var keepsPlace: Bool {
+        switch self {
+        case .gym, .gymBuilder, .trainingMode, .liveGym, .planTemplate: return true
+        default: return false
         }
     }
 
@@ -92,6 +110,7 @@ enum AppRoute: Hashable {
         case "week-plan": self = .weekPlan
         case "day-review": self = .dayReview
         case "records": self = .insights
+        case "muscles": self = .muscles
         case "cycle": self = .cycle
         case "journal": self = .journal(parts.count > 1 ? parts[1] : AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))
         case "my-workouts": self = .myWorkouts
@@ -146,6 +165,7 @@ struct RouteScreen: View {
             if let training = model.training { ZonesDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
         case .steps: StepsDetailView()
         case .strain: StrainDetailView()
+        case .recoveryTime: RecoveryTimeView()
         case .gym(let date): GymSessionView(date: date)
         case .activity(let session): ActivityDetailView(session: session)
         case .planned(let session): PlannedWorkoutView(session: session)
@@ -160,8 +180,11 @@ struct RouteScreen: View {
         case .weekPlan: WeekPlanView()
         case .dayReview: DayReviewView()
         case .insights: InsightsView()
+        case .muscles: MusclesView()
+        case .muscle(let id): MuscleDetailView(id: id)
+        case .exercises(let muscle): ExerciseLibraryView(muscle: muscle)
         case .cycle: CycleCalendarView()
-        case .coachPick: CoachPickView()
+        case .coachPick(let all): CoachPickView(all: all)
         case .myWorkouts: MyWorkoutsView(friends: false)
         case .friendWorkouts: MyWorkoutsView(friends: true)
         case .sharedWorkout(let id): SharedWorkoutView(id: id)
@@ -185,7 +208,7 @@ struct HealthRoute: View {
             case .readiness:
                 // Today's check-in stays changeable here once Today hides it.
                 DetailScreen(glow: Palette.Glow.health, title: "Připravenost") {
-                    ReadinessDetailContent(health: health, checkin: model.selectedDate == nil && !model.demo && model.today != nil ? .some(model.today?.checkin) : nil)
+                    ReadinessDetailContent(health: health)
                 }
             case .heart: DetailScreen(glow: Palette.Glow.health, title: "Srdce") { HeartDetailContent(health: health) }
             case .weight: WeightDetailView(health: health)

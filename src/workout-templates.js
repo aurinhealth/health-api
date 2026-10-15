@@ -225,7 +225,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
     if (path === "/app/api/my-workouts/describe" && request.method === "POST") {
       const sport = body.sport === "run" ? "run" : "ride", words = text(body.text, 400);
       if (!words) throw new Error(L("Popiš, jaký trénink chceš.", "Describe the workout you want."));
-      if (!env.OPENAI_API_KEY) return json({ message: L("AI není připojena (chybí OPENAI_API_KEY).", "AI is not connected (OPENAI_API_KEY is missing).") }, 503);
+      if (!env.OPENAI_API_KEY) return json({ message: L("AI teď není dostupná. Zkus to později.", "AI isn't available right now. Try again later.") }, 503);
       return json({ status: "ok", template: await describeWorkout(env, sport, words, await thresholdsOf(env)) });
     }
     const one = /^\/app\/api\/my-workouts\/([A-Za-z0-9]{10})$/.exec(path);
@@ -255,7 +255,7 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       const db = env.RAW_DB || env.DB;
       await ensureShareTable(db);
       const today = (await db.prepare("SELECT COUNT(*) AS n FROM workout_shares WHERE user_id=? AND created_at>=datetime('now','-1 day')").bind(env.USER_ID).first())?.n || 0;
-      if (today >= MAX_SHARES_PER_DAY) return json({ message: L("Dnes už jsi sdílel hodně tréninků, zkus to zítra.", "You've shared many workouts today; try again tomorrow.") }, 429);
+      if (today >= MAX_SHARES_PER_DAY) return json({ message: L("Dnešní limit sdílení tréninků je vyčerpaný. Zkus to zítra.", "You've reached today's limit for sharing workouts. Try again tomorrow.") }, 429);
       const id = newId(), from = await senderName(env, session.user), date = DATE.test(String(body.date || "")) && body.date >= localToday() ? body.date : null;
       await db.prepare("INSERT INTO workout_shares(id,user_id,sport,name,from_name,plan_date,template_json,image_png) VALUES(?,?,?,?,?,?,?,?)").bind(id, env.USER_ID, template.sport, template.name, from, date, JSON.stringify(template), image).run();
       return json({ status: "ok", id, url: shareUrl(env, id) });
@@ -277,7 +277,9 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       const date = DATE.test(String(body.date || "")) ? body.date : localToday();
       if (date < localToday()) throw new Error(L("Trénink jde naplánovat jen na dnešek nebo později.", "A workout can only be planned for today or later."));
       assertTrainingAllowed(await getAthleteState(env.DB));
-      const context = await buildStrengthContext(env, date);
+      let context;
+      try { context = await buildStrengthContext(env, date); }
+      catch (error) { console.error("Strength context for a saved gym workout failed", error.message); throw new Error(L("Trénink se nepodařilo sestavit. Zkus to znovu.", "Couldn't build the workout. Try again.")); }
       if (context.status !== "ok") throw new Error(L("Data pro posilovnu nejsou připravená.", "The gym data isn't ready."));
       const plan = templateStrengthPlan(context, template, { fromName: text(body.fromName, 40) });
       const minutes = template.minutes || plan.timing?.estimatedMinutes || 60;

@@ -1,6 +1,8 @@
 import { L } from './lang.js';
 import {analyzeRide} from './ride-analysis.js';
 import { intervalsAuthorization } from "./intervals-auth.js";
+import { intervalsOrigin } from './activity-origin.js';
+import { activityRecoveryHours } from "./recovery-hours.js";
 const present=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));
 export function sampleActivityStreams(streams,limit=1200){
   const rows=Array.isArray(streams)?streams:[],time=rows.find(s=>s.type==='time')?.data||[];
@@ -70,6 +72,6 @@ export async function activityDetail(request,env,id,authorized){
     const activity=compactActivity(detail);
     const stream=type=>(Array.isArray(streams)?streams:[]).find(x=>x.type===type)?.data||[],zones=Array.isArray(detail.icu_hr_zones)?detail.icu_hr_zones:null;
     const hrr=heartRateRecovery(stream('time'),stream('heartrate'),zones&&zones.length>=4?Number(zones[2])+1:null);
-    return Response.json({status:'ok',activity,analysis:analyzeRide(activity,streams),hrZones:heartRateZones(detail,stream('time'),stream('heartrate')),streams:sampleActivityStreams(streams),intervals:activityIntervals(detail),hrr,source:'intervals.icu'},{headers:{'Cache-Control':'private, no-store'}});
+    return Response.json({status:'ok',activity,recoveryHours:activityRecoveryHours(activity),analysis:analyzeRide(activity,streams),hrZones:heartRateZones(detail,stream('time'),stream('heartrate')),streams:sampleActivityStreams(streams),intervals:activityIntervals(detail),hrr,source:'intervals.icu',origin:intervalsOrigin(detail)},{headers:{'Cache-Control':'private, no-store'}});
   }catch{return Response.json({message:L('Detail není dostupný. Některé aktivity nemají přístupný GPS nebo výkonový stream.', 'Details aren\'t available. Some activities have no accessible GPS or power stream.')},{status:502,headers:{'Cache-Control':'no-store'}});}
 }

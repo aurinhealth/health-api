@@ -19,6 +19,10 @@ struct AddFoodSheet: View {
     @State private var recent: [FoodProduct] = []
     @State private var frequent: [FoodProduct] = []
     @State private var recipes: [FoodRecipe] = []
+    /// The own foods (up to 100 of each list), matched on the phone while typing.
+    @State private var saved: [FoodProduct] = []
+    /// Answers of this sheet's searches, so backspace and typing again shows them at once.
+    @State private var answers: [String: [FoodProduct]] = [:]
     @State private var tab = "foods"
     @AppStorage("foodListOrder") private var order = "recent"
     @State private var searching = false
@@ -178,12 +182,18 @@ struct AddFoodSheet: View {
     private func search() async {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard q.count >= 2 else { results = []; return }
+        let key = Self.fold(q)
+        if let known = answers[key] { results = known; return }
+        // The own foods that match show at once; the server adds the rest.
+        results = localMatches(key)
         try? await Task.sleep(for: .milliseconds(350))
         guard !Task.isCancelled, !model.demo else { return }
         searching = true
         defer { searching = false }
         do {
-            results = try await model.api.searchFood(name: q)
+            let found = try await model.api.searchFood(name: q)
+            answers[key] = found
+            if !Task.isCancelled { results = found }
             message = nil
         } catch is CancellationError {
         } catch {
@@ -280,14 +290,41 @@ struct AddFoodSheet: View {
         return parts.joined(separator: " · ")
     }
 
+    /// Every query word starts a word of the name (no diacritics, any case).
+    private func localMatches(_ key: String) -> [FoodProduct] {
+        let wanted = key.split(separator: " ")
+        var seen = Set<String>()
+        return saved.filter { product in
+            let words = Self.fold(product.name).split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            guard wanted.allSatisfy({ q in words.contains { $0.hasPrefix(q) } }) else { return false }
+            return seen.insert(Self.fold(product.name + "|" + (product.brand ?? ""))).inserted
+        }
+        .prefix(12).map { $0 }
+    }
+
+    static func fold(_ text: String) -> String {
+        text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil).lowercased()
+            .split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+    }
+
+    /// The lists saved on the phone show at once; the server's answer replaces them.
     private func loadRecent() async {
         guard !model.demo else { recent = DemoData.foods; frequent = DemoData.foods; return }
+        let latestKey = "foods-recent", oftenKey = "foods-frequent"
+        if recent.isEmpty, let kept = SnapshotCache.load([FoodProduct].self, key: latestKey)?.value { recent = Array(kept.prefix(12)); saved = kept }
+        if frequent.isEmpty, let kept = SnapshotCache.load([FoodProduct].self, key: oftenKey)?.value { frequent = Array(kept.prefix(12)); saved += kept }
         async let latest = model.api.personalFoods()
         async let often = model.api.personalFoods(frequent: true)
         async let own = model.api.recipes()
-        recent = Array(((try? await latest) ?? []).prefix(12))
-        frequent = Array(((try? await often) ?? []).prefix(12))
+        let newest = try? await latest, most = try? await often
+        if let newest { recent = Array(newest.prefix(12)); Self.keep(newest, key: latestKey) }
+        if let most { frequent = Array(most.prefix(12)); Self.keep(most, key: oftenKey) }
+        if newest != nil || most != nil { saved = (newest ?? []) + (most ?? []) }
         recipes = (try? await own) ?? []
+    }
+
+    private static func keep(_ foods: [FoodProduct], key: String) {
+        if let data = try? JSONEncoder().encode(foods) { SnapshotCache.save(data, key: key) }
     }
 
     /// A photo of a meal or a nutrition label, read by AI on the server.
