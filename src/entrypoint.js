@@ -13,7 +13,7 @@ import { buildCoachCouncil } from "./coach-engine.js";
 import { connectionStatus } from "./connections.js";
 import { saveSourcePriority } from "./source-priority.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, migrateConnectionSecrets } from "./connection-secrets.js";
-import { withIntervalsSleep } from './intervals-sleep.js';
+import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
@@ -409,7 +409,7 @@ async function todayReadiness(env, ctx, date, { fresh = false } = {}) {
   const [health, fitness, sleep, profile, checkin] = await Promise.all([
     (fresh ? googleDashboard(env.DB, date) : googleHealthFor(env, ctx, date)).catch(() => ({})),
     (fresh ? internal('/app/api/fitness?days=90') : cached(env, ctx, 'fitness:90', () => internal('/app/api/fitness?days=90'))).catch(() => ({})),
-    read('/health/sleep?start=' + from + '&end=' + to).then(d => withIntervalsSleep(env, d, from, to)).catch(() => ({})),
+    read('/health/sleep?start=' + from + '&end=' + to).then(d => intervalsSleep(env,ctx,d,from, to)).catch(() => ({})),
     dashboardProfile(env).catch(() => null),
     readinessCheckin(env.DB, date).catch(() => null)
   ]);
@@ -519,11 +519,21 @@ async function replacePlannedSession(env, c) {
 // Load targets of a week: CTL and daily load from Intervals.icu wellness, what
 // is done or planned per day from D1, then the shared calculation.
 const sportOfType=t=>{t=String(t||'').toLowerCase();return /weight|strength/.test(t)?'gym':/ride|cycl|bike/.test(t)?'ride':/run/.test(t)?'run':null;};
+// Intervals.icu nights for a sleep answer, the wellness log cached for 5 minutes
+// (an empty or failed answer is not cached, so it is asked again next time).
+function intervalsSleep(env,ctx,data,start,end){
+  return withIntervalsSleep(env,data,start,end,fetch,(s,e)=>cached(env,ctx,'intervals-wellness:'+s+':'+e,async()=>{
+    const wellness=await intervalsWellness(env,s,e);
+    if(!wellness.length)throw new Error('no wellness');
+    return wellness;
+  },{ttl:300}));
+}
+
 async function computeWeekTargets(env,ctx,start,prefs){
   // Without prefs (the plan's week, the plan proposal) the saved week plan decides.
   prefs=prefs||await getWeekPlan(env.DB,start);
   const end=shiftDate(start,7),today=localToday();
-  const fitness=await handleDashboardApi(new Request('https://internal/app/api/fitness?days=42'),env,ctx,new URL('https://internal/app/api/fitness?days=42')).then(r=>r.json()).catch(()=>({}));
+  const fitness=await cached(env,ctx,'fitness:42',()=>handleDashboardApi(new Request('https://internal/app/api/fitness?days=42'),env,ctx,new URL('https://internal/app/api/fitness?days=42')).then(r=>r.json())).catch(()=>({}));
   const wellness=(fitness.wellness||[]).filter(r=>r.id<=today),ctl=[...wellness].reverse().find(r=>Number(r.ctl)>0)?.ctl;
   const loadOn=date=>{const r=wellness.find(x=>x.id===date);return Number(r?.ctlLoad??r?.atlLoad)||0;};
   let lastWeekLoad=0;for(let i=-7;i<0;i++)lastWeekLoad+=loadOn(shiftDate(start,i));
@@ -604,7 +614,7 @@ async function coachTextExtras(env,ctx,internalAuth,screen){
   const [fitness,health,sleep,profile,checkin]=await Promise.all([
     cached(env,ctx,'fitness:90',()=>internal('/app/api/fitness?days=90').then(r=>r.json()).catch(()=>({}))).catch(()=>({})),
     googleHealthFor(env,ctx,date).catch(()=>({})),
-    app.fetch(new Request('https://internal/health/sleep?start='+from+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({})).then(d=>withIntervalsSleep(env,d,from,shiftDate(date,1))).catch(()=>({})),
+    app.fetch(new Request('https://internal/health/sleep?start='+from+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,from,shiftDate(date,1))).catch(()=>({})),
     dashboardProfile(env).catch(()=>null),
     readinessCheckin(env.DB,date).catch(()=>null)
   ]);
@@ -637,7 +647,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
     app.fetch(new Request('https://internal/analysis/daily?date='+date,{headers:internalAuth}),env,ctx),
     cached(env,ctx,'fitness:90',()=>internal('/app/api/fitness?days=90').then(json)).then(d=>Response.json(d)),internal('/app/api/gym?date='+date),
     // The same 30 nights as Today: one readiness (readiness.js) needs the same inputs.
-    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-30)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>withIntervalsSleep(env,d,shiftDate(date,-30),shiftDate(date,1))).then(d=>Response.json(d)),
+    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-30)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,shiftDate(date,-30),shiftDate(date,1))).then(d=>Response.json(d)),
     googleHealthFor(env,ctx,date).catch(()=>({}))
   ]);
   // The three weeks are the heavy part (every day's analysis, food and
@@ -661,7 +671,7 @@ async function reflectionData(env,ctx,internalAuth,date,workoutId=null){
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
   const [fitness,sleep,food,recentFeedback,workout,profile,watch,checkin,gymSets]=await Promise.all([
     internal('/app/api/fitness?days=42').then(r=>r.json()).catch(()=>({})),
-    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-21)+'&end='+to,{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>withIntervalsSleep(env,d,shiftDate(date,-21),to)),
+    app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-21)+'&end='+to,{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,shiftDate(date,-21),to)),
     env.DB.prepare("SELECT consumed_at,recipe_title,kcal,carbs_g FROM food_logs WHERE user_id=? AND consumed_date=? AND (status IS NULL OR status='eaten') ORDER BY consumed_at").bind(env.USER_ID,date).all().then(r=>r.results||[]).catch(()=>[]),
     recentWorkoutFeedback(env.DB,shiftDate(date,-21)),
     workoutId?getWorkout(env.DB,workoutId).catch(()=>null):null,
@@ -1069,7 +1079,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
       const [fitness,sleep]=await Promise.all([
         internal('/app/api/fitness?days=180').then(r=>r.json()).catch(()=>({})),
-        app.fetch(new Request('https://internal/health/sleep?start='+from+'&end='+shiftDate(today,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>withIntervalsSleep(env,d,from,shiftDate(today,1)))
+        app.fetch(new Request('https://internal/health/sleep?start='+from+'&end='+shiftDate(today,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,from,shiftDate(today,1)))
       ]);
       return Response.json(await loadRecoveryValidation(env.DB,{today,days,intervalsWellness:fitness.wellness||[],sleepSessions:sleep.sessions||[]}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:500})}
@@ -1483,23 +1493,27 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const from=shiftDate(date,-30),to=shiftDate(date,1),isToday=date===localToday();
+      // The active training plan, today's plan proposal and the connection check start with the rest.
+      const syncing=syncedPlans(env).catch(()=>({}));
+      const proposing=syncing.then(p=>isToday&&p.active?planProposal(env,ctx).catch(()=>null):null);
+      const checking=connectionStatus(env).catch(()=>null);
       // Today only: yesterday's sessions and tomorrow's plan for "Regenerace na dnes" (recovery-today.js).
-      const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym,yesterday,tomorrow,savedRecovery,checkin,recoveryLess]=await Promise.all([
+      const [daily,health,fitness,sleep,fluids,weight,coaches,profile,place,gym,yesterday,tomorrow,savedRecovery,checkin,synced,proposal,status,recoveryLess]=await Promise.all([
         read('/analysis/daily?date='+date),googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
-        read('/health/sleep?start='+from+'&end='+to).then(d=>withIntervalsSleep(env,d,from,to)).catch(()=>({})),
+        read('/health/sleep?start='+from+'&end='+to).then(d=>intervalsSleep(env,ctx,d,from,to)).catch(()=>({})),
         api('/app/api/fluids?date='+date),read('/health/weight'),api('/app/api/coaches?date='+date),dashboardProfile(env).catch(()=>null),
         todayPlace(env,ctx,date),trainingGymPlans(env,isToday?shiftDate(date,-1):date,isToday?shiftDate(date,1):date).catch(()=>({})),
         isToday?read('/analysis/daily?date='+shiftDate(date,-1)):null,isToday?read('/analysis/daily?date='+shiftDate(date,1)):null,
         listRecovery(env.DB,{from:date,to:date}).catch(()=>[]),readinessCheckin(env.DB,date).catch(()=>null),
+        syncing,proposing,checking,
         isToday?lessKinds(env.DB,env.USER_ID).catch(()=>[]):[]
       ]);
       // The active training plan in one line (training-plans.js).
-      const synced=await syncedPlans(env).catch(()=>({})),active=synced.active??synced.gym,summary=active?planSummary(active,date):null;
-      const proposal=date===localToday()&&synced.active?await planProposal(env,ctx).catch(()=>null):null;
+      const active=synced.active??synced.gym,summary=active?planSummary(active,date):null;
       const trainingPlan=summary?.started?{name:summary.name,week:summary.week,weeksCount:summary.weeksCount,phaseLabel:summary.phaseLabel,raceDate:summary.raceDate,paused:summary.paused,canUndo:Boolean(active.undo),proposal:proposal?{type:proposal.type,title:proposal.title,text:proposal.text,options:proposal.options,days:proposal.days||null,button:proposal.button}:null}:null;
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
-      const problems=connectionProblems(await connectionStatus(env).catch(()=>null));
+      const problems=connectionProblems(status);
       if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
       applyEnergyBudget(daily,profile,health);
       return Response.json(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
@@ -1534,7 +1548,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [health,fitness,sleep,weight,profile,checkin,muscle]=await Promise.all([
         googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:90',()=>api('/app/api/fitness?days=90')).catch(()=>({})),
-        read('/health/sleep?start='+from+'&end='+to).then(d=>withIntervalsSleep(env,d,from,to)).catch(()=>({})),
+        read('/health/sleep?start='+from+'&end='+to).then(d=>intervalsSleep(env,ctx,d,from,to)).catch(()=>({})),
         read('/health/weight'),dashboardProfile(env).catch(()=>null),readinessCheckin(env.DB,date).catch(()=>null),
         // Muscle mass from a scale through Apple Health (lean body mass).
         env.DB.prepare("SELECT sample_time,value_numeric FROM health_datapoints WHERE user_id=? AND data_type='lean-body-mass' AND record_role='primary' AND sample_time>=? ORDER BY sample_time LIMIT 400").bind(env.USER_ID,shiftDate(date,-60)).all().then(r=>r.results||[]).catch(()=>[])
@@ -1618,7 +1632,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const workloadJob=ahead?null:fitnessSeries.then(f=>workloadMetrics(f?.wellness,date)).catch(()=>null);
       const [daily,yesterday,sleepData,rows,profile,athleteState,gym,thresholds,rideDetails,workload]=await Promise.all([
         dailyJob,read('/analysis/daily?date='+shiftDate(date,-1)),
-        read('/health/sleep?start='+oldest+'&end='+shiftDate(date,1)).then(d=>withIntervalsSleep(env,d,oldest,shiftDate(date,1))),fitnessJob,dashboardProfile(env),
+        read('/health/sleep?start='+oldest+'&end='+shiftDate(date,1)).then(d=>intervalsSleep(env,ctx,d,oldest,shiftDate(date,1))),fitnessJob,dashboardProfile(env),
         date>=localToday()?getAthleteState(env.DB):{status:'active',note:'',statusUntil:null},readGymPlan(env.DB,date).catch(()=>null),
         cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>null),rideJob,workloadJob
       ]);
@@ -1849,7 +1863,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const response = await app.fetch(new Request(internal, { method: "GET", headers: internalAuth }), env, ctx);
     if (!response.ok) return response;
     const start = url.searchParams.get("start") || shiftDate(localToday(), -30), end = url.searchParams.get("end") || shiftDate(localToday(), 1);
-    return Response.json(await withIntervalsSleep(env, await response.json(), start, end), { headers: { "Cache-Control": "no-store" } });
+    return Response.json(await intervalsSleep(env,ctx,await response.json(),start, end), { headers: { "Cache-Control": "no-store" } });
   }
 
   const internal = new URL(target, request.url);

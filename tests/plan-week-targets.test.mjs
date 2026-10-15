@@ -17,7 +17,7 @@ test('week targets without prefs use the saved week plan', async () => {
     Request, Response, URL,
     shiftDate: (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); },
     localToday: () => '2026-10-14', localDate: t => String(t).slice(0, 10),
-    handleDashboardApi: async () => Response.json({ wellness: [] }),
+    handleDashboardApi: async () => Response.json({ wellness: [] }), cached: (_env, _ctx, _key, compute) => compute(),
     getWeekPlan: async (_db, start) => { seen.start = start; return saved; },
     sportOfType: () => null, activityFromRow: () => null,
     weekWeather: async location => { seen.location = location; return {}; },
