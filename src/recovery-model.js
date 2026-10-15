@@ -339,10 +339,13 @@ export function recoveryReadiness(input) {
   // until the new source has 14 days of its own.
   const provisional = !!((components.hrv && hb.carried) || (components.restingHR && rb.carried));
   if (provisional) flags.push("provisional");
+  // Days until the newest source has its own 14 (shown as "zpřesní se za …").
+  const owns = [components.hrv && hb.carried, components.restingHR && rb.carried].filter(Boolean).map(c => Math.max(1, 14 - (c.own || 0)));
+  const provisionalDays = owns.length ? Math.max(...owns) : null;
   const weights = { hrv: 0.5, restingHR: 0.25, sleep: 0.25 };
   const used = Object.keys(weights).filter(k => components[k]);
   const missing = Object.keys(weights).filter(k => !components[k]);
-  if (!(components.hrv || components.restingHR) || used.reduce((s, k) => s + weights[k], 0) < 0.5) return { score: null, zone: null, components, flags, missing, provisional };
+  if (!(components.hrv || components.restingHR) || used.reduce((s, k) => s + weights[k], 0) < 0.5) return { score: null, zone: null, components, flags, missing, provisional, provisionalDays };
   let score = used.reduce((s, k) => s + weights[k] * components[k].score, 0) / used.reduce((s, k) => s + weights[k], 0);
   if (components.respiration && components.respiration.elevated) score -= 10;
   const skinCost = components.skinTemp && components.skinTemp.elevated ? 10 : 0;
@@ -353,7 +356,7 @@ export function recoveryReadiness(input) {
     score -= extra;
   }
   score = Math.round(Math.max(0, Math.min(100, score)));
-  return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing, provisional };
+  return { score, zone: score >= 67 ? "green" : score >= 34 ? "yellow" : "red", components, flags, missing, provisional, provisionalDays };
 }
 
 // The morning check-in (morning-checkin.js) on top of the body's readiness: it

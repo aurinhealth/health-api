@@ -2336,3 +2336,5 @@
 "Otevře plán spánku" = "Opens the sleep plan";
 "+%@ tréninkem" = "+%@ from training";
 "Teď %@" = "Now %@";
+"Orientační: nový zdroj dat, zpřesní se za %@." = "Provisional: new data source, settles in %@.";
+"Orientační: nový zdroj dat, číslo se ještě zpřesní." = "Provisional: new data source, the number will settle.";
