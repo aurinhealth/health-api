@@ -41,11 +41,13 @@ test("www.aurin.health leads to aurin.health, other hosts pass", () => {
 
 test("the public pages link to the host they are served on, aurin.health by default", async () => {
   for (const origin of hosts) {
-    const html = await (await overviewPage(new Request(origin + "/?lang=en"))).text();
+    const html = await (await overviewPage(new Request(origin + "/"))).text();
     assert.match(html, new RegExp(`<meta property="og:image" content="${origin}/site/og-en\\.png">`));
-    assert.match(html, new RegExp(`hreflang="cs" href="${origin}/\\?lang=cs"`));
+    assert.match(html, new RegExp(`<link rel="canonical" href="${origin}/">`));
+    const privacy = await (await privacyPage(new Request(origin + "/privacy"))).text();
+    assert.match(privacy, new RegExp(`hreflang="cs" href="${origin}/privacy\\?lang=cs"`));
   }
-  assert.match(await overviewPage().text(), /content="https:\/\/aurin\.health\/site\/og\.png"/);
+  assert.match(await overviewPage().text(), /content="https:\/\/aurin\.health\/site\/og-en\.png"/);
   const unknown = await (await privacyPage(new Request("https://evil.example/privacy"))).text();
-  assert.match(unknown, /hreflang="x-default" href="https:\/\/aurin\.health\/privacy"/);
+  assert.match(unknown, /<link rel="canonical" href="https:\/\/aurin\.health\/privacy">/);
 });
