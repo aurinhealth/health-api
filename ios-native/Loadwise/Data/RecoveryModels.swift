@@ -146,3 +146,43 @@ struct RecoveryTime: Decodable, Equatable {
         return out.string(from: date)
     }
 }
+
+/// GET /app/api/coach-text?screen= (src/screen-texts.js): the coach's sentence
+/// on Today, Training and Food. source "ai" with the text, else "rules": the
+/// screen keeps its own rule-based text.
+struct CoachText: Decodable, Equatable {
+    let source: String?
+    let text: String?
+    let advice: String?
+    let chips: [String]?
+    let basis: [Basis]?
+    /// When the AI wrote it, "07:12".
+    let time: String?
+
+    struct Basis: Decodable, Equatable, Hashable {
+        let label: String
+        let value: String
+    }
+
+    var isAI: Bool { source == "ai" && !(text ?? "").isEmpty }
+}
+
+extension APIClient {
+    /// Saves a finished stretching routine or a sauna into the day's plan as done.
+    func saveRecoveryDone(date: String, kind: String, sport: String?, focus: String?) async throws {
+        var body: JSONObject = ["date": .string(date), "kind": .string(kind), "done": .bool(true)]
+        if let sport { body["sport"] = .string(sport) }
+        if let focus { body["focus"] = .string(focus) }
+        let _: JSONValue = try await send("/app/api/recovery", method: "POST", body: body)
+    }
+
+    /// Removes a saved stretching or sauna from its day (Plán dne, a sauna ticked by mistake).
+    func deleteRecovery(id: Int) async throws {
+        let body: JSONObject = ["id": .number(Double(id))]
+        let _: JSONValue = try await send("/app/api/recovery", method: "DELETE", body: body)
+    }
+
+    func coachText(screen: String) async throws -> CoachText {
+        try await get("/app/api/coach-text?screen=" + screen)
+    }
+}
