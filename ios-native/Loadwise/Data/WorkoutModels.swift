@@ -34,6 +34,10 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     /// is what the device said (src/activity-edits.js).
     var kcalEdited: Bool? = nil
     var kcalDevice: Double? = nil
+    /// On a done ride or run: its distance and average power, when the
+    /// device had them (Dnes → Den).
+    var distanceKm: Double? = nil
+    var watts: Double? = nil
 
     struct KcalEstimate: Decodable, Hashable {
         let value: Double?

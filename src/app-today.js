@@ -251,7 +251,10 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       done: s.status === "done",
       // "done", "planned" or "missed" (a past day's plan nothing was done for).
       status: s.status,
-      session: s
+      session: s,
+      // What a done session added to the day's strain (Den: "+5,1 tréninkem"),
+      // from its TSS the same way the plan's strain is estimated.
+      ...(s.status === "done" && plannedStrain(num(s.tss)) != null ? { strain: plannedStrain(num(s.tss)) } : {})
     })),
     ...recoveryItems,
     ...pillItems
