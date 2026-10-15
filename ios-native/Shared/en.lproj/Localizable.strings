@@ -2173,3 +2173,13 @@
 "tvůj normál %@" = "your normal %@";
 "níž" = "lower";
 "výš" = "higher";
+"tvrdý trénink %@" = "hard training %@";
+"Lehký trénink" = "Easy training";
+"Tvrdý trénink" = "Hard training";
+"už teď" = "now";
+"Co ji prodlužuje" = "What makes it longer";
+"Z1–Z2, posilovna bez nohou" = "Z1–Z2, gym without legs";
+"Z1–Z2, jiné svaly" = "Z1–Z2, other muscles";
+"intervaly, těžké nohy" = "intervals, legs";
+"intervaly, těžká posilovna" = "intervals, heavy gym";
+"%d %% potřeby" = "%d%% of need";

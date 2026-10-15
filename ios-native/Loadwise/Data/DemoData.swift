@@ -117,6 +117,7 @@ enum DemoData {
         { "kind": "bedtime", "time": "22:45", "title": "Do postele", "detail": "potřeba spánku 8 h 05 min", "done": false }
       ],
       "tonight": { "bedtime": "22:45", "wake": "07:00", "need": 485, "wakeSet": true },
+      "recoveryTime": { "readyAt": "2026-10-09T12:00:00.000Z", "from": "2026-10-07T16:15:00.000Z", "lightAt": null, "hours": 28, "progress": 0.42, "causes": [{ "kind": "ride", "title": "Kolo · tempo", "detail": "74 TSS", "date": "2026-10-07", "hours": 36 }, { "kind": "sleep", "hours": 4, "minutes": 410, "need": 525 }] },
       "steps": { "today": 6420, "goal": 10000, "hour": 15,
         "hourly": [0,0,0,0,0,0,60,460,460,270,210,340,550,210,3540,320,0,0,0,0,0,0,0,0],
         "usual": [0,0,0,0,0,0,80,600,1300,1900,2500,3100,4000,4700,5400,6100,6900,7700,8500,9100,9500,9700,9800,9800],

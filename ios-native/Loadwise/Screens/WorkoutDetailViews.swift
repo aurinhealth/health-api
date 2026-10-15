@@ -378,6 +378,7 @@ struct ActivityDetailContent: View {
                 if let i = a.icu_intensity { stat("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2)) }
                 if let pace = runPace { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
                 if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Fmt.int(e) + " m") }
+                if let h = detail.recoveryHours { stat("Regenerace", "\(h) h") }
                 if let c = kcal ?? a.calories {
                     VStack(alignment: .leading, spacing: 2) {
                         stat("Energie", Fmt.int(c) + " kcal")
