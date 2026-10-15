@@ -2192,3 +2192,23 @@
 "Co dnes trénovat?" = "What to train today?";
 "Připravenost %d" = "Readiness %d";
 "Na ikoně · %d ze %d" = "On the icon · %d of %d";
+
+/* Sdílet: share images of the day, a workout and the day's food */
+"Aktivita" = "Activity";
+"Osa" = "Timeline";
+"Čísla" = "Numbers";
+"Velké" = "Big";
+"Dlaždice" = "Tiles";
+"Trasa" = "Route";
+"Graf" = "Chart";
+"Rozdělení" = "Split";
+"Oblouk" = "Dial";
+"Skóre" = "Score";
+"%@ %% potřeby" = "%@%% of need";
+"krok" = "step";
+"Tmavé" = "Dark";
+"Světlé" = "Light";
+"Pozadí" = "Background";
+"Průhledné" = "Transparent";
+"Na ose" = "On the timeline";
+"Údaje" = "Details";
