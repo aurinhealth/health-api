@@ -480,7 +480,7 @@ struct WeightEntrySheet: View {
     private var value: Double? {
         guard let shown = Double(text.replacingOccurrences(of: ",", with: ".")) else { return nil }
         let v = Units.kg(shown)
-        guard v >= 30, v <= 300 else { return nil }
+        guard LogWeightIntent.range.contains(v) else { return nil }
         return v
     }
 
