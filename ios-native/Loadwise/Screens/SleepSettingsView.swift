@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// Nastavení spánku: the own sleep goal and the alarm on work days and at the
-/// weekend. The bedtime in "Plán dne" is the alarm minus tonight's need (the
-/// goal plus the day's strain, low HRV and debt) minus the time to fall asleep.
+/// Spánek: tonight on a 24-hour dial (bedtime and wake time, both draggable),
+/// how long to sleep tonight, why the need is what it is, then the own sleep
+/// goal and the alarm on work days and at the weekend. The bedtime is the wake
+/// time minus the time in bed for tonight's sleep (the need: the goal plus the
+/// day's strain, low HRV and debt, minus naps; or the user's own length).
 struct SleepSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var store: SettingsStore?
@@ -40,27 +42,17 @@ struct SleepSettingsForm: View {
     @AppStorage("systemAlarm") private var systemAlarm = false
     @State private var alarmNote: String?
     @State private var alarmOK = false
+    @State private var plannerSaving = false
 
     static let goals: [Int] = Array(stride(from: 360, through: 600, by: 15))
 
     var body: some View {
         SettingsPage(title: L10n.tr("Spánek")) {
-            if let tonight = model.today?.tonight, let bed = tonight.bedtime {
-                Card {
-                    WidgetHeader(title: "Dnešní večerka", color: Palette.indigo)
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(ClockText.format(bed)).font(Typo.number(46)).foregroundStyle(Palette.ink)
-                        Text("do postele").font(Typo.small).foregroundStyle(Palette.muted)
-                        Spacer()
-                        if let wake = tonight.wake {
-                            Label(ClockText.format(wake), systemImage: "alarm").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
-                        }
-                    }
-                    if let need = tonight.need {
-                        Text(L10n.tr("Potřeba na dnešní noc") + " " + Fmt.duration(need))
-                            .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+            if let tonight = model.health?.sleep.tonight, tonight.bedtime != nil, tonight.wake != nil {
+                SleepPlanner(tonight: tonight, usual: model.health?.sleep.regularity?.bedtime, saving: plannerSaving,
+                             weekendMorning: Self.weekendMorning(after: tonight.date),
+                             onChoose: { minutes, wake in Task { await saveTonight(minutes: minutes, wake: wake) } },
+                             onEveryDay: { wake, weekend in Task { await saveEveryDay(wake, weekend: weekend) } })
             }
 
             SettingsGroup(title: "Cíl spánku") {
@@ -104,6 +96,7 @@ struct SleepSettingsForm: View {
         }
         .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
         .onAppear(perform: fill)
+        .task { if model.health == nil { await model.refreshHealth() } }
         .onChange(of: systemAlarm) { _, on in Task { await syncAlarm(on) } }
     }
 
@@ -145,6 +138,56 @@ struct SleepSettingsForm: View {
         await model.refreshHealth()
     }
 
+    /// Tonight's own length (nil = the whole need) and a wake time for tomorrow
+    /// only (nil = the alarm). Saved at once: Dnes plans its bedtime from it too.
+    private func saveTonight(minutes: Int?, wake: Int?) async {
+        guard let date = model.health?.sleep.tonight.date else { return }
+        plannerSaving = true
+        defer { plannerSaving = false }
+        let value: JSONValue = minutes == nil && wake == nil ? .null : JSONValue.object([
+            "date": .string(date),
+            "minutes": minutes.map { JSONValue.number(Double($0)) } ?? JSONValue.null,
+            "wake": .string(wake.map { Self.text(minutes: $0) } ?? "")
+        ])
+        guard await store.saveProfile(["sleepTonight": value]) else { return }
+        await model.refreshHealth()
+        await model.refresh()
+    }
+
+    /// A new wake time for every work day (or weekend day): the alarm itself,
+    /// with tonight's own wake time dropped.
+    private func saveEveryDay(_ wake: Int, weekend: Bool) async {
+        if weekend { weekendAlarm = true; weekendTime = Self.clock(Self.text(minutes: wake)) } else { workAlarm = true; workTime = Self.clock(Self.text(minutes: wake)) }
+        let chosen = model.health?.sleep.tonight.chosen
+        var next = changes
+        next["sleepTonight"] = chosen.map { JSONValue.object(["date": .string(model.health?.sleep.tonight.date ?? ""), "minutes": .number(Double($0)), "wake": .string("")]) } ?? .null
+        plannerSaving = true
+        defer { plannerSaving = false }
+        guard await store.saveProfile(next) else { return }
+        fill()
+        if systemAlarm { await syncAlarm(true) }
+        await model.refreshHealth()
+        await model.refresh()
+    }
+
+    /// The morning after the evening `date` ("2026-10-15") is a Saturday or Sunday.
+    static func weekendMorning(after date: String?) -> Bool {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd"
+        guard let date, let day = f.date(from: date) else { return false }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let weekday = cal.component(.weekday, from: day.addingTimeInterval(86400))
+        return weekday == 1 || weekday == 7
+    }
+
+    static func text(minutes: Int) -> String {
+        let m = ((minutes % 1440) + 1440) % 1440
+        return String(format: "%02d:%02d", m / 60, m % 60)
+    }
+
     /// The iPhone alarm at the times on screen, or none.
     private func syncAlarm(_ on: Bool) async {
         guard on else { SystemAlarm.cancel(); return }
@@ -177,31 +220,31 @@ struct SleepSettingsForm: View {
     }
 }
 
-/// Health → Spánek: tonight's bedtime and alarm, opens Nastavení spánku.
+/// Health → Spánek: tonight from bedtime to the wake time and the sleep it
+/// plans; opens Spánek with the dial.
 struct SleepSettingsCard: View {
     let tonight: HealthSnapshot.Tonight
 
     var body: some View {
         Card {
-            WidgetHeader(title: "Večerka a cíl spánku", color: Palette.indigo)
-            HStack(alignment: .center, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    if let bed = tonight.bedtime {
-                        Text(L10n.f("Do postele v %@", ClockText.format(bed))).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
-                        Text([tonight.wake.map { tonight.wakeSet == true ? L10n.f("budík %@", ClockText.format($0)) : L10n.f("budík %@ (obvyklé vstávání)", ClockText.format($0)) },
-                              tonight.goalSet == true ? L10n.f("cíl %@", Fmt.duration(tonight.base)) : L10n.f("cíl %@ podle věku", Fmt.duration(tonight.base))]
-                            .compactMap { $0 }.joined(separator: " · "))
-                            .font(Typo.caption).foregroundStyle(Palette.muted)
-                    } else {
-                        Text("Nastav si budík").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
-                    }
-                }
+            HStack {
+                WidgetHeader(title: "Dnešní noc", color: Palette.indigo)
                 Spacer(minLength: 8)
-                Image(systemName: "alarm").font(.system(size: 20)).foregroundStyle(Palette.indigo)
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
+            if let bed = tonight.bedtime, let wake = tonight.wake {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(ClockText.format(bed)).font(Typo.number(38)).foregroundStyle(Palette.ink)
+                    Image(systemName: "arrow.right").font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.faint)
+                    Text(ClockText.format(wake)).font(Typo.number(38)).foregroundStyle(Palette.ink)
+                }
+                Text(L10n.f("spánek %@", SleepPlanner.short(tonight.sleep ?? tonight.need)))
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
+            } else {
+                Text("Nastav si budík").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityHint("Otevře nastavení spánku")
+        .accessibilityHint("Otevře plán spánku")
     }
 }
