@@ -1182,6 +1182,7 @@ final class AppModel {
         CoachTextMemory.values = [:]
         ThresholdCheckMemory.kept = nil
         GymHistoryCache.clear()
+        ActivityDetailMemory.values = [:]
         if !expired {
             // Waiting writes belong to this account; the next one must not send them.
             outbox = []
