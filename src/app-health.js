@@ -6,7 +6,7 @@
 import { sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, bedtimePlan, hrvMetric, wristTempDeviation } from "./recovery-model.js";
 import { clockOf, minutesOf, dayStrain } from "./app-today.js";
 import { readinessFor, readinessRows, primaryNights, sleepIndexFor } from "./readiness.js";
-import { sleepSettings } from "./energy-profile.js";
+import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { localDate } from "./user-time.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -75,10 +75,11 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const stageMin = key => round(num(stages[key]));
   const sleepDay = hour != null && hour < 6 && !night ? shift(date, -1) : date;
   const tonight = needOn(shift(sleepDay, 1));
+  const choice = tonightChoice(sleepSet, sleepDay, tonight.need);
   const plan = bedtimePlan({
     date: sleepDay,
-    wake: sleepSet.wake,
-    need: tonight.need,
+    wake: choice.wake,
+    need: choice.need,
     nights: [...nights.values()].map(n => ({ date: nightDate(n), wakeMin: minutesOf(n.endTime), durationMin: num(n.durationMin), timeInBedMin: num(n.timeInBedMin) }))
   });
   const debt = sleepDebtMinutes([...nights.values()], sleepDay, tonight.base);
@@ -163,7 +164,10 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
       } : null,
       week,
       need: needToday.need,
-      tonight: { need: tonight.need, base: sleepNeedMinutes({ age, goal: sleepSet.goal }), strain: tonight.base - sleepNeedMinutes({ age, goal: sleepSet.goal }), goalSet: sleepSet.goal != null, wakeSet: plan?.wakeSource === "setting", hrv: tonight.hrv, debt: tonight.debt, naps: tonight.naps, bedtime: plan ? clock(plan.bed) : null, wake: plan ? clock(plan.wake) : null },
+      tonight: { need: tonight.need, base: sleepNeedMinutes({ age, goal: sleepSet.goal }), strain: tonight.base - sleepNeedMinutes({ age, goal: sleepSet.goal }), goalSet: sleepSet.goal != null, wakeSet: plan?.wakeSource === "setting", hrv: tonight.hrv, debt: tonight.debt, naps: tonight.naps, bedtime: plan ? clock(plan.bed) : null, wake: plan ? clock(plan.wake) : null,
+        // The planned night (Spánek): its evening, the sleep it plans (the need or
+        // the user's own length), the time in bed and the user's choices.
+        date: sleepDay, sleep: choice.need, inBed: plan ? plan.inBed : null, chosen: choice.chosen, wakeOnce: choice.wakeOnce },
       debt: debt ? { minutes: debt.minutes, nights: debt.nights } : null,
       regularity: beds.length >= 3 ? { bedtime: clock(bedAvg + 18 * 60), spread: Math.round(bedSd), nights: beds.map(b => ({ date: b.date, value: b.value })) } : null
     },

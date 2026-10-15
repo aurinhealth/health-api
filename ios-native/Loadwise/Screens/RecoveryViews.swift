@@ -13,6 +13,7 @@ import UIKit
 /// The tip rows under the coach's sentence; nothing on a day without recovery or on an earlier day.
 struct RecoveryTipRows: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dayPage) private var page
     let today: TodaySnapshot
 
     @State private var routineItem: RecoveryToday.Item?
@@ -24,7 +25,7 @@ struct RecoveryTipRows: View {
     }
 
     var body: some View {
-        if Self.hasTip(today, selectedDate: model.selectedDate) {
+        if Self.hasTip(today, selectedDate: page.map(\.selectedDate) ?? model.selectedDate) {
             let items = today.recovery?.items ?? []
             VStack(alignment: .leading, spacing: 0) {
                 // Regenerace first: when hard training is fine again.
@@ -408,7 +409,7 @@ struct RecoveryTimeRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Regenerace").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 if let ready = time.ready {
-                    Text(verbatim: L10n.f("tvrdý trénink %@", RecoveryTime.when(ready, today: today)))
+                    Text(verbatim: L10n.f("tvrdý trénink %@", RecoveryTime.phrase(ready, today: today)))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }
@@ -482,23 +483,26 @@ struct RecoveryTimeContent: View {
             Text("Regenerace").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
             NumberText(value: String(time.hoursLeft(now: now)), unit: "h", size: 72).padding(.top, 4)
             if let ready = time.ready {
-                Text(verbatim: L10n.f("tvrdý trénink %@", RecoveryTime.when(ready, today: today)))
+                Text(verbatim: L10n.f("tvrdý trénink %@", RecoveryTime.phrase(ready, today: today)))
                     .font(Typo.bodyStrong).foregroundStyle(Palette.green)
             }
             bar.padding(.top, 18)
 
+            // When the body is ready for each, not a plan of sessions.
+            SectionLabel(text: "Na co je tělo připravené").padding(.top, 30).padding(.bottom, 10)
             Card {
                 VStack(spacing: 0) {
+                    let lightLater = time.light.map { $0 > now } ?? false
                     row(icon: "figure.walk", color: Palette.green, title: L10n.tr("Lehký trénink"),
                         detail: L10n.tr(time.legsTired ? "Z1–Z2, posilovna bez nohou" : "Z1–Z2, jiné svaly"),
-                        trailing: time.light.map { $0 > now ? RecoveryTime.when($0, today: today) : L10n.tr("už teď") } ?? L10n.tr("už teď"))
+                        trailing: lightLater ? time.light.map { RecoveryTime.when($0, today: today) } ?? "" : L10n.tr("už teď"),
+                        ready: !lightLater)
                     Divider().overlay(Palette.hairline)
                     row(icon: "flame.fill", color: Palette.amber, title: L10n.tr("Tvrdý trénink"),
                         detail: L10n.tr(time.legsTired ? "intervaly, těžké nohy" : "intervaly, těžká posilovna"),
                         trailing: time.ready.map { RecoveryTime.when($0, today: today) } ?? "")
                 }
             }
-            .padding(.top, 22)
 
             if !time.causes.isEmpty {
                 SectionLabel(text: "Co ji prodlužuje").padding(.top, 30).padding(.bottom, 10)
@@ -525,7 +529,7 @@ struct RecoveryTimeContent: View {
             }
             .frame(height: 6)
             HStack {
-                if let start = time.start { Text(verbatim: RecoveryTime.short(start)) }
+                if let start = time.start { Text(verbatim: RecoveryTime.short(start, ready: false)) }
                 Spacer()
                 Text("teď")
                 Spacer()
@@ -536,7 +540,7 @@ struct RecoveryTimeContent: View {
         .accessibilityElement(children: .combine)
     }
 
-    private func row(icon: String, color: Color, title: String, detail: String, trailing: String) -> some View {
+    private func row(icon: String, color: Color, title: String, detail: String, trailing: String, ready: Bool = false) -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(color)
                 .frame(width: 38, height: 38).background(color.opacity(0.16), in: Circle())
@@ -546,15 +550,20 @@ struct RecoveryTimeContent: View {
                 Text(verbatim: detail).font(Typo.caption).foregroundStyle(Palette.muted)
             }
             Spacer(minLength: 8)
-            Text(verbatim: trailing).font(Typo.number(20)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+            if ready {
+                Label(trailing, systemImage: "checkmark").font(Typo.bodyStrong).foregroundStyle(Palette.green).lineLimit(1)
+            } else {
+                Text(verbatim: trailing).font(Typo.number(20)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
+            }
         }
         .padding(.vertical, 8)
     }
 
     private func causeRow(_ c: RecoveryTime.Cause) -> some View {
         let (icon, color) = Self.look(c.kind)
-        return row(icon: icon, color: color, title: Self.title(c), detail: Self.detail(c),
-                   trailing: c.isSession ? "\(c.hours) h" : "+\(c.hours) h")
+        // A session: when it alone is recovered from; a sign: the hours it adds.
+        let trailing = c.isSession ? (c.ready.map { RecoveryTime.when($0, today: today) } ?? "\(c.hours) h") : "+\(c.hours) h"
+        return row(icon: icon, color: color, title: Self.title(c), detail: Self.detail(c, today: today), trailing: trailing)
     }
 
     static func look(_ kind: String) -> (String, Color) {
@@ -578,7 +587,7 @@ struct RecoveryTimeContent: View {
         }
     }
 
-    static func detail(_ c: RecoveryTime.Cause) -> String {
+    static func detail(_ c: RecoveryTime.Cause, today: String) -> String {
         switch c.kind {
         case "sleep":
             let slept = c.minutes.map { String(format: "%d:%02d", $0 / 60, $0 % 60) } ?? ""
@@ -589,7 +598,9 @@ struct RecoveryTimeContent: View {
         case "restingHR":
             return (c.value.map { "\($0) bpm · " } ?? "") + L10n.tr("nad normálem")
         default:
-            return [c.date.map { Fmt.weekdayShort($0).lowercased(with: L10n.locale) }, c.detail].compactMap { $0 }.joined(separator: " · ")
+            // "neděle · svaly 96 h", "včera · 74 TSS · 36 h".
+            let hours = c.kind == "gym" ? L10n.f("svaly %d h", c.hours) : "\(c.hours) h"
+            return [c.date.map { RecoveryTime.dayName($0, today: today) }, c.detail, c.ready == nil ? nil : hours].compactMap { $0 }.joined(separator: " · ")
         }
     }
 }

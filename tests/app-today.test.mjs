@@ -85,6 +85,17 @@ test("Today's plan lists workouts and tonight's bedtime in time order", () => {
   assert.equal(t.tonight.bedtime, t.plan[1].time);
 });
 
+test("Tonight's own length and wake time from Spánek move the bedtime row on Today", () => {
+  const plain = buildToday({ ...input, hour: 12 });
+  const t = buildToday({ ...input, hour: 12, profile: { ...(input.profile || {}), sleepTonight: { date: DATE, minutes: 420, wake: "06:00" } } });
+  const row = t.plan.find(p => p.kind === "bedtime");
+  assert.equal(t.tonight.wake, "06:00");
+  assert.equal(t.tonight.need, 420);
+  assert.equal(row.time, t.tonight.bedtime);
+  assert.notEqual(row.time, plain.tonight.bedtime);
+  assert.equal(row.detail, "spánek 7 h 00 min");
+});
+
 test("Today's plan shows what was done at its time, then the plan, a gym session outside the plan too", () => {
   const training = {
     planned: [{ id: "planned:1", start: DATE + "T17:30:00", durationHours: 1, tss: 60, name: "Endurance", type: "Ride" }],
@@ -100,6 +111,25 @@ test("Today's plan shows what was done at its time, then the plan, a gym session
   // Viewing a past day: what was not done is missed.
   const past = buildToday({ ...input, date: DATE, hour: null, daily: { ...input.daily, training: { planned: training.planned, completed: [], matched: [] } } });
   assert.equal(past.plan.find(p => p.kind === "workout").status, "missed");
+});
+
+test("Den: a done ride carries its distance, power and what it added to the strain", () => {
+  const training = {
+    planned: [],
+    completed: [
+      { id: "activity:i2", source: "intervals", start: DATE + "T17:30:00", durationHours: 1.2, tss: 85, name: "Kolo · tempo", type: "Ride", payload: { distance: 34600, icu_average_watts: 198.4 } },
+      { id: "watch:1", family: "apple-health", start: DATE + "T07:00:00", durationHours: 0.5, name: "Běh", type: "Run", payload: { exercise: { metricsSummary: { distanceMillimeters: 5200000, averagePowerWatts: 0 } } } }
+    ],
+    matched: []
+  };
+  const t = buildToday({ ...input, hour: 20, daily: { ...input.daily, training } });
+  const [run, ride] = t.plan.filter(p => p.kind === "workout");
+  assert.equal(ride.session.distanceKm, 34.6);
+  assert.equal(ride.session.watts, 198);
+  assert.ok(ride.strain > 0 && ride.strain < 21);
+  assert.equal(run.session.distanceKm, 5.2);
+  assert.equal(run.session.watts, undefined, "no power from the watch");
+  assert.equal(run.strain, undefined, "no TSS, no estimate");
 });
 
 test("Today stays usable without data", () => {

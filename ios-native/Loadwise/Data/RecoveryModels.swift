@@ -68,6 +68,8 @@ struct RecoveryTime: Decodable, Equatable {
         /// The session's day.
         let date: String?
         let hours: Int
+        /// A session: when it alone is recovered from (ISO), without the morning's signs.
+        var readyAt: String? = nil
         /// Sleep: minutes slept and the night's need.
         var minutes: Int? = nil
         var need: Int? = nil
@@ -77,6 +79,7 @@ struct RecoveryTime: Decodable, Equatable {
         var high: Int? = nil
 
         var isSession: Bool { ["ride", "run", "walk", "gym"].contains(kind) }
+        var ready: Date? { readyAt.flatMap(RecoveryTime.date) }
     }
 
     var ready: Date? { Self.date(readyAt) }
@@ -93,22 +96,54 @@ struct RecoveryTime: Decodable, Equatable {
         return f.date(from: iso)
     }
 
-    /// "zítra 14:00", "dnes 18:30", "ve čtvrtek 7:00" relative to `today`.
-    static func when(_ date: Date, today: String) -> String {
-        let f = DateFormatter()
-        f.locale = L10n.locale
-        f.timeZone = .current
-        f.dateFormat = L10n.isEnglish ? "h:mm a" : "H:mm"
-        return Fmt.relativeDay(AppModel.localDate(date), today: today) + " " + f.string(from: date)
+    /// The day it counts for: after 22:00 the next morning's. Regenerace
+    /// shows days only, never a clock time (Petr, 2026-10-15).
+    private static func day(_ date: Date) -> Date {
+        Calendar.current.component(.hour, from: date) >= 22 ? date.addingTimeInterval(6 * 3600) : date
     }
 
-    /// "út 18:15" for the bar's ends.
-    static func short(_ date: Date) -> String {
+    private static func format(_ date: Date, _ pattern: String) -> String {
         let f = DateFormatter()
         f.locale = L10n.locale
         f.timeZone = .current
-        f.dateFormat = L10n.isEnglish ? "EEE h:mm a" : "EEEEEE H:mm"
+        f.dateFormat = pattern
         return f.string(from: date)
+    }
+
+    /// "dnes", "pátek" / "today", "Friday".
+    static func when(_ date: Date, today: String) -> String {
+        let d = day(date)
+        return AppModel.localDate(d) == today ? L10n.tr("dnes") : format(d, "EEEE")
+    }
+
+    /// In a sentence: "dnes", "v pátek", "ve čtvrtek" / "today", "on Friday".
+    static func phrase(_ date: Date, today: String) -> String {
+        let d = day(date)
+        if AppModel.localDate(d) == today { return L10n.tr("dnes") }
+        if L10n.isEnglish { return "on " + format(d, "EEEE") }
+        let weekday = Calendar.current.component(.weekday, from: d)
+        return ["v neděli", "v pondělí", "v úterý", "ve středu", "ve čtvrtek", "v pátek", "v sobotu"][weekday - 1]
+    }
+
+    /// "pá" / "Fri" for the bar's ends and the sessions.
+    static func short(_ date: Date, ready: Bool = true) -> String {
+        format(ready ? day(date) : date, L10n.isEnglish ? "EEE" : "EEEEEE").capitalized(with: L10n.locale)
+    }
+
+    /// A session's day: "dnes", "včera", "neděle" / "Sunday".
+    static func dayName(_ iso: String, today: String) -> String {
+        if iso == today { return L10n.tr("dnes") }
+        if Fmt.relativeDay(iso, today: today) == L10n.tr("včera") { return L10n.tr("včera") }
+        let parser = DateFormatter()
+        parser.locale = Locale(identifier: "en_US_POSIX")
+        parser.timeZone = TimeZone(identifier: "UTC")
+        parser.dateFormat = "yyyy-MM-dd"
+        guard let date = parser.date(from: iso) else { return iso }
+        let out = DateFormatter()
+        out.locale = L10n.locale
+        out.timeZone = TimeZone(identifier: "UTC")
+        out.dateFormat = "EEEE"
+        return out.string(from: date)
     }
 }
 

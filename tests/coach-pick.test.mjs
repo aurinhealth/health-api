@@ -96,3 +96,23 @@ test("Aktivita dne asks for the ready workouts only when the options change, the
   const helper = src.slice(src.indexOf("async function pickDetails"), src.indexOf("async function workoutPreview"));
   assert.match(helper, /ai:o\.best===true/);
 });
+
+test("a choice without a workout goes into the day's plan, and a changed mind takes it out", async () => {
+  const { savePick } = await import("../src/coach-pick.js");
+  const { listRecovery, updateRecovery } = await import("../src/recovery-plan.js");
+  const db = scopedDb(createD1(), 7), date = "2026-10-15";
+  const kinds = async () => (await listRecovery(db, { from: date, to: date })).map(r => r.kind).sort();
+  await savePick(db, 7, { date, kind: "rest", top: "ride" });
+  assert.deepEqual(await kinds(), ["stretch", "walk"]);
+  const walk = (await listRecovery(db, { from: date, to: date })).find(r => r.kind === "walk");
+  assert.equal(walk.title, "Procházka");
+  assert.equal(walk.minutes, 30);
+  // The same choice again adds nothing; a done walk stays when the mind changes.
+  await savePick(db, 7, { date, kind: "rest", top: "ride" });
+  assert.deepEqual(await kinds(), ["stretch", "walk"]);
+  await updateRecovery(db, walk.id, { done: true });
+  await savePick(db, 7, { date, kind: "swim", top: "ride" });
+  assert.deepEqual(await kinds(), ["swim", "walk"]);
+  await savePick(db, 7, { date, kind: "ride", top: "ride" });
+  assert.deepEqual(await kinds(), ["walk"]);
+});

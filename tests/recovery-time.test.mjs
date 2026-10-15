@@ -32,6 +32,8 @@ test("Regenerace waits for the last session and adds the morning's signs", () =>
   assert.equal(plain.hours, 36 - 14);
   assert.equal(plain.causes[0].title, "Kolo · tempo");
   assert.equal(plain.causes[0].hours, 36);
+  // When that session alone is done, without the morning's signs.
+  assert.equal(plain.causes[0].readyAt, plain.readyAt);
   const signs = recoveryTime({ activities: [ride(14, 84, 88)], now, sleep: { minutes: 420, need: 480 }, hrv: { value: 40, low: 50, high: 70 }, restingHR: { value: 60, high: 55 } });
   assert.equal(signs.hours, 22 + 2 + 3 + 2);
   assert.deepEqual(signs.causes.slice(1).map(c => c.kind), ["sleep", "hrv", "restingHR"]);

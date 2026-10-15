@@ -100,7 +100,7 @@ export function recoveryTime({ sets = [], activities = [], now, sleep = null, hr
     // What makes it take this long: the sessions still recovering (the
     // longest first, at most three) and the morning's signs.
     causes: [
-      ...sessions.slice(0, 3).map(s => ({ kind: s.kind, title: s.title, detail: s.detail, date: localDate(new Date(s.end)), hours: s.hours })),
+      ...sessions.slice(0, 3).map(s => ({ kind: s.kind, title: s.title, detail: s.detail, date: localDate(new Date(s.end)), hours: s.hours, readyAt: new Date(s.readyAt).toISOString() })),
       ...signs
     ]
   };
