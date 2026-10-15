@@ -32,8 +32,9 @@ struct TrainingTools: View {
             LibraryWidget()
             LazyVGrid(columns: columns, spacing: 10) {
                 tile(.weekPlan, "calendar.badge.plus", "Plán týdne", Palette.green)
-                tile(.insights, "trophy.fill", "Rekordy", Palette.gold)
+                TrainingPlanTile()
                 tile(.equipment, "dumbbell", "Vybavení", Palette.indigo)
+                tile(.insights, "trophy.fill", "Rekordy", Palette.gold)
             }
             Button(action: addWorkout) {
                 Label("Zapsat trénink ručně", systemImage: "square.and.pencil")
@@ -47,21 +48,30 @@ struct TrainingTools: View {
     }
 
     private func tile(_ route: AppRoute, _ symbol: String, _ title: String, _ color: Color) -> some View {
-        RouteLink(route: route) {
-            HStack(spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Palette.onAccent)
-                    .frame(width: 34, height: 34)
-                    .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Text(title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.85)
-                Spacer(minLength: 0)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
+        RouteLink(route: route) { ToolTile(symbol: symbol, title: title, color: color) }
+    }
+}
+
+/// One tile of Training's tools grid: a coloured icon and the name.
+struct ToolTile: View {
+    let symbol: String
+    let title: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Palette.onAccent)
+                .frame(width: 34, height: 34)
+                .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Text(title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.85)
+            Spacer(minLength: 0)
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
     }
 }
 

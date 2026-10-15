@@ -70,6 +70,7 @@ struct IntegrationIcon: View {
             case "google": logo("GoogleHealthLogo").padding(size * 0.04)
             case "intervals": logo("IntervalsLogo")
             case "whoop": logo("WhoopLogo")
+            case "aurin": logo("AurinLogo")
             case "wahoo":
                 shape.fill(Color(light: 0x000000, dark: 0x000000))
                 logo("WahooLogo").frame(width: size * 0.78)

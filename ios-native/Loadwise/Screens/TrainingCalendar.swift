@@ -489,6 +489,9 @@ struct WatchActivityDetail: View {
                         }
                     }
                     .padding(.bottom, 18)
+                    if let origin = ActivityDetail.Origin.of(family: activity.source) {
+                        ActivityOriginLine(origin: origin).padding(.top, -8).padding(.bottom, 18)
+                    }
                     ForEach(rows, id: \.0) { row in StatRow(title: row.0, value: row.1, unit: row.2) }
                 }
                 .padding(24)
