@@ -8,6 +8,6 @@ list with each point's state.
 |---|-------|-------|
 | 1 | Ikony (app icons): sets A and G and 13 new Pro icons in the icon picker | built, waiting for CI |
 | 2 | Deník (journal): ✕/✓ questions filled from the day's data, own items, "Co na tebe působí" impact on readiness, HRV, sleep and resting heart rate | built, waiting for CI |
-| 3 | 3D postava svalů: the Svaly screen gets a rotating 3D figure (male and female by profile sex), coloured by fatigue, tap a muscle for "Z čeho". Needs a licensed model; the paid model is fetched from R2 at build time and never enters the repo. Notes: `/mnt/project-files/mockups/svaly/3d-moznosti.md` | idea, not started |
+| 3 | 3D postava svalů: Svaly → Odpočinek shows a 3D figure coloured by fatigue. Drag sideways to turn it, tap a muscle for a bubble (name, how rested, when), tap the bubble and the camera moves in before the muscle's detail opens; the detail's header is the figure close on that muscle. Model: "Muscle Anatomy Visualized \| Ecorche" by Alexander Lashko (Superhive Standard licence, male only), packed by `scripts/build-muscle-model.mjs`, uploaded to R2 by `scripts/upload-muscle-model.mjs`, served by `/app/api/muscles/model` and kept by the app; it never enters the repo. Without it the flat figure stays. | built (`Muscle3D.swift`) |
 
 Mockups: `/mnt/project-files/mockups/denik/` (journal), `/mnt/project-files/mockups/ikona/roadmap/` (icons: the script that renders sets A and G and the Pro icons).

@@ -135,6 +135,7 @@ import { handleTrainingEditsApi, handleThresholdApi } from "./routes-training.js
 import { handleFoodApi, queueFoodGoogleSafely } from "./routes-food.js";
 import { handleCycleApi } from "./routes-cycle.js";
 import { handleJournalApi, journalForCoach } from "./routes-journal.js";
+import { muscleModelResponse } from "./muscle-model.js";
 import { morningMetrics } from "./journal-impact.js";
 import { cycleForCoach } from "./cycle-model.js";
 import { ownerOnlyRefusal } from "./owner-only-routes.js";
@@ -1143,6 +1144,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{const r=await loadMuscleDetail(env.DB,url.searchParams.get('id')||'');return Response.json(r,{status:r.status==='ok'?200:400,headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({status:'error',message:error.message},{status:500})}
+  }
+  // Svaly's 3D figure, the file the app keeps (src/muscle-model.js).
+  if(url.pathname==='/app/api/muscles/model'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    return muscleModelResponse(env,request,url.searchParams.get('v')||'');
   }
   if(url.pathname==='/app/api/muscles'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
