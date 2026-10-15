@@ -36,17 +36,24 @@ struct AppIconChoice: Identifiable, Equatable {
     var iconName: String? { id == "default" ? nil : "AppIcon-" + id }
     var preview: String { "IconPreview/" + id }
 
-    static let aurin = AppIconChoice(id: "default", name: "Tmavá", rule: .free)
+    /// The main icon: white in light mode, dark in dark mode.
+    static let aurin = AppIconChoice(id: "default", name: "Automaticky", rule: .free)
 
-    /// Výchozí: the logo dark, white, switching with the phone's light and
-    /// dark mode, and in glass (white by day, dark in dark mode). Each set has
-    /// a tinted image, so iOS can also show it tinted and clear.
+    /// Výchozí: the main icon switching with the phone's light and dark mode,
+    /// the logo dark, white, and in glass (white by day, dark in dark mode).
+    /// Each set has a tinted image, so iOS can also show it tinted and clear.
     static let defaults: [AppIconChoice] = [
         aurin,
+        AppIconChoice(id: "dark", name: "Tmavá", rule: .free),
         AppIconChoice(id: "white", name: "Bílá", rule: .free),
-        AppIconChoice(id: "auto", name: "Automaticky", rule: .free),
         AppIconChoice(id: "glass", name: "Sklo", rule: .free)
     ]
+
+    /// Automaticky was the AppIcon-auto alternate before it became the main
+    /// icon; a phone still set to it shows the main icon.
+    static func current(_ alternate: String?) -> String? {
+        alternate == "AppIcon-auto" ? nil : alternate
+    }
 
     /// Odznak, Zlatý odznak, Dráha, Zlatá dráha of one sport.
     static func sport(_ key: String, base: Rule, gold: Rule) -> [AppIconChoice] {
@@ -231,7 +238,7 @@ struct AppIconSettingsView: View {
     }
 
     @MainActor private func load() async {
-        current = UIApplication.shared.alternateIconName
+        current = AppIconChoice.current(UIApplication.shared.alternateIconName)
         guard !model.demo else { return }
         if let totals = try? await model.api.milestones() { milestones = totals }
         hasPro = (try? await model.api.subscription())?.hasAI == true
