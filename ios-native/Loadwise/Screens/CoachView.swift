@@ -5,7 +5,9 @@ import SwiftUI
 struct CoachView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    /// The screen the coach was opened from and the day it shows (src/assistant-app-context.js).
     var view = "today"
+    var date: String? = nil
     @State private var messages: [Bubble] = []
     @State private var chatId: Int?
     @State private var input = ""
@@ -205,7 +207,7 @@ struct CoachView: View {
         progress = "Kouč přemýšlí…"
         defer { sending = false; progress = nil }
         do {
-            for try await event in model.api.askCoach(text, chatId: chatId, view: view) {
+            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date) {
                 switch event {
                 case .progress(let p): progress = p
                 case .answer(let a): edit(id) { $0.text = a }
