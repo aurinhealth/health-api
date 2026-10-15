@@ -75,7 +75,7 @@ final class SnapshotTests: XCTestCase {
         try render("health-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30) }
         try render("health-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: nil).padding(24).padding(.top, 30) }
         for metric in HealthMetric.allCases {
-            try render("health-" + metric.rawValue, glow: Palette.Glow.health) { NavigationStack { MetricDetailContent(metric: metric, health: health).padding(24).padding(.top, 30) } }
+            try render("health-" + metric.rawValue, glow: Palette.Glow.health) { MetricDetailContent(metric: metric, health: health).padding(24).padding(.top, 30) }
         }
         try render("health-weight", glow: Palette.Glow.health) { WeightDetailContent(health: health).padding(24).padding(.top, 30) }
     }
