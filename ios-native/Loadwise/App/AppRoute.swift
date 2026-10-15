@@ -6,7 +6,8 @@ import SwiftUI
 enum AppRoute: Hashable {
     case readiness
     case sleep
-    case heart
+    /// A value of Zdraví with its own detail (MetricDetails.swift).
+    case metric(HealthMetric)
     case weight
     case form
     case vo2max
@@ -63,7 +64,7 @@ enum AppRoute: Hashable {
     /// The tab a deep link (loadwise://open/sleep) opens the route on.
     var tab: AppTab {
         switch self {
-        case .readiness, .sleep, .heart, .weight, .cycle: return .health
+        case .readiness, .sleep, .metric, .weight, .cycle: return .health
         case .sleepSettings, .dayReview, .steps, .strain, .recoveryTime, .coachPick, .journal, .journalImpact, .journalItem: return .today
         default: return .training
         }
@@ -94,7 +95,8 @@ enum AppRoute: Hashable {
         switch parts.first {
         case "readiness": self = .readiness
         case "sleep": self = .sleep
-        case "heart": self = .heart
+        case "heart", "hrv": self = .metric(.hrv)
+        case "metric" where parts.count > 1: guard let metric = HealthMetric(rawValue: parts[1]) else { return nil }; self = .metric(metric)
         case "weight": self = .weight
         case "form": self = .form
         case "vo2max": self = .vo2max
@@ -153,7 +155,7 @@ struct RouteScreen: View {
 
     var body: some View {
         switch route {
-        case .readiness, .sleep, .heart, .weight:
+        case .readiness, .sleep, .metric, .weight:
             HealthRoute(route: route)
         case .form:
             if let training = model.training { FormDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
@@ -210,7 +212,7 @@ struct HealthRoute: View {
                 DetailScreen(glow: Palette.Glow.health, title: "Připravenost") {
                     ReadinessDetailContent(health: health)
                 }
-            case .heart: DetailScreen(glow: Palette.Glow.health, title: "Srdce") { HeartDetailContent(health: health) }
+            case .metric(let metric): MetricDetailView(metric: metric, health: health)
             case .weight: WeightDetailView(health: health)
             default: SleepDetailView(health: health)
             }

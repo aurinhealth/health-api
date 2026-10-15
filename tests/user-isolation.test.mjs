@@ -17,7 +17,9 @@ const table = new RegExp(`\\b(${personal.join("|")})\\b`, "i");
 // link is read by its id by whoever opens it (workout-templates.js); it holds
 // only the workout and the sender's first name.
 const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens WHERE token=\? AND user_id<>\?"$/,/FROM users u JOIN connection_credentials c ON c\.user_id = u\.id/, /FROM connection_credentials WHERE encrypted NOT LIKE 'v2\.%'/, /FROM user_identities i JOIN users u ON u\.id = i\.user_id WHERE i\.provider = 'apple' AND i\.subject = \?/, /^"SELECT user_id FROM user_identities WHERE provider = 'apple' AND subject = \?"$/,
-  /^"SELECT id, user_id, user_handle, public_key, alg, sign_count FROM user_passkeys WHERE id = \?"$/];
+  /^"SELECT id, user_id, user_handle, public_key, alg, sign_count FROM user_passkeys WHERE id = \?"$/,
+  // The owner's morning report sums AI cost over all accounts (ops-report.js).
+  /^"SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_usage'"$/, /FROM ai_usage a LEFT JOIN users u ON u\.id = a\.user_id/];
 
 test("personal tables are known", () => {
   for (const name of ["health_datapoints", "food_logs", "dashboard_profile", "connection_credentials"]) assert.ok(personal.includes(name), name);

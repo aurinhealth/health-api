@@ -25,6 +25,8 @@ const mean = xs => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null
 // its normal; a raised breathing rate or skin temperature costs 10 each, a
 // raised Apple Watch wrist temperature 5 or 10 (recoveryReadiness). These are the "+12 HRV, −5 …" parts of the number.
 const WEIGHTS = { hrv: 0.5, restingHR: 0.25, sleep: 0.25 };
+// The row lists them in the app's one order: sleep on the left, HRV on the right (as on Today).
+const ORDER = ["sleep", "restingHR", "hrv"];
 // Today's value and the athlete's usual range for the readiness row: HRV and
 // resting heart rate ±1 SD around their own baseline, sleep from 90 % of the
 // need (where it starts to cost points) to 105 %.
@@ -36,7 +38,7 @@ function normalRange(key, c) {
 }
 export function readinessParts(readiness) {
   const c = readiness?.components || {};
-  const used = Object.keys(WEIGHTS).filter(k => c[k]);
+  const used = ORDER.filter(k => c[k]);
   const total = used.reduce((s, k) => s + WEIGHTS[k], 0);
   if (readiness?.score == null || !total) return [];
   // cycle: compared with the athlete's luteal normal (cycle tracking).

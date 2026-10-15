@@ -26,6 +26,7 @@
 "%lld min" = "%lld min";
 "+%@ trénink" = "+%@ training";
 "+%@ námahy" = "+%@ strain";
+"+%@ další" = "+%@ more";
 ", pomocně: %@" = ", also: %@";
 "1 porce" = "1 serving";
 "14 dní %@–%@ %%" = "14 days %@–%@ %%";
@@ -2402,3 +2403,20 @@
 "Otevře plán spánku" = "Opens the sleep plan";
 "+%@ tréninkem" = "+%@ from training";
 "Teď %@" = "Now %@";
+
+/* Health value details (MetricDetails.swift) */
+"Nejnižší tep dne v klidu" = "Lowest heart rate of the day at rest";
+"Dechů za minutu ve spánku" = "Breaths per minute in sleep";
+"Dech po nocích" = "Breathing by night";
+"Teplota po nocích" = "Temperature by night";
+"Odchylka od tvého normálu v noci" = "Overnight difference from your normal";
+"Teplota zápěstí v noci" = "Overnight wrist temperature";
+"Nocí" = "Nights";
+"Norma" = "Normal";
+"Nasycení krve kyslíkem ve spánku" = "Blood oxygen saturation in sleep";
+"Kyslík po nocích" = "Oxygen by night";
+"Podíl tuku v těle" = "Share of fat in your body";
+"Svalová hmota z chytré váhy" = "Muscle mass from a smart scale";
+"Po měřeních" = "By measurement";
+"Za 2 měsíce" = "In 2 months";
+"Zatím žádné měření." = "No measurement yet.";

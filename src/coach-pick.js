@@ -27,7 +27,8 @@ const sentence = text => { const t = String(text || "").trim(); return t ? t[0].
 // done today, declines: [{top, date}] of the last two weeks, planned: the
 // kinds planned for today.
 // done: today's sessions [{kind, minutes, tss}] for the words after training.
-export function rankOptions({ ride, run, mainSport = "general", sports = [], today = [], declines = [], planned = [], done = [] }) {
+export function rankOptions({ ride, run, mainSport = "general", sports = [], today = [], declines = [], planned = [], done = [], athleteStatus = "active", illness = false }) {
+  if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus);
   const status = ride?.readiness?.status || run?.readiness?.status || "yellow";
   const names = KIND_NAMES();
   const lowerTired = (ride?.load?.lowerBodyGymSignals48h || 0) > 0;
@@ -68,16 +69,32 @@ export function rankOptions({ ride, run, mainSport = "general", sports = [], tod
     score -= Math.min(30, 10 * declines.filter(d => d.top === o.kind).length);
     o.score = score;
   }
+  // Signs of an oncoming illness (illness-check.js): no sauna, it only adds load.
+  if (illness) options.splice(options.findIndex(o => o.kind === "sauna"), 1);
   options.sort((a, b) => b.score - a.score);
   const best = options[0];
   // A day off on a bad morning comes with the sauna when it helps.
-  if (best.kind === "rest" && status === "red" && !trainedToday) { best.title = L("Volno a sauna", "Day off and sauna"); best.detail = L("Procházka · sauna 3 × 12 min", "A walk · sauna 3 × 12 min"); best.lines = [[L("Procházka", "Walk"), "30 min"], [L("Sauna", "Sauna"), L("3 × 12 min", "3 × 12 min")]]; }
+  if (best.kind === "rest" && status === "red" && !trainedToday && !illness) { best.title = L("Volno a sauna", "Day off and sauna"); best.detail = L("Procházka · sauna 3 × 12 min", "A walk · sauna 3 × 12 min"); best.lines = [[L("Procházka", "Walk"), "30 min"], [L("Sauna", "Sauna"), L("3 × 12 min", "3 × 12 min")]]; }
   // After training the day off is stretching and an evening walk.
   const rest = options.find(o => o.kind === "rest");
   if (trainedToday && rest) { rest.title = L("Protažení", "Stretching"); rest.detail = L("15 min · večer procházka 30 min", "15 min · an evening walk of 30 min"); rest.lines = [[L("Protažení", "Stretching"), "15 min"], [L("Večer", "Evening"), L("procházka 30 min", "a 30 min walk")]]; }
   best.best = true;
   best.reason = reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done });
   return { status, score: ride?.readiness?.score ?? null, lowerTired, options: options.map(({ score, hard, rest, ...o }) => ({ ...o, action: o.kind === "ride" || o.kind === "run" ? "library" : o.kind === "gym" ? "gym" : "accept" })) };
+}
+
+// Nemoc, Zranění or Pauza set by the athlete: no training on offer, only rest
+// (the sauna too during a break, never while ill).
+function pausedOptions(athleteStatus) {
+  const rest = athleteStatus === "sick"
+    ? { kind: "rest", title: L("Odpočinek", "Rest"), detail: L("Spánek, pití a klid", "Sleep, drinks and quiet"), lines: [[L("Pití", "Drink"), L("2–3 l během dne", "2–3 l through the day")], [L("Spánek", "Sleep"), L("o hodinu déle", "an hour longer")]] }
+    : { kind: "rest", title: L("Volno", "Day off"), detail: L("Procházka 30 min a protažení", "A 30 min walk and stretching"), lines: [[L("Procházka", "Walk"), "30 min"], [L("Protažení", "Stretching"), "15 min"]] };
+  const reason = { sick: L("Máš nastavenou Nemoc. Dnes odpočívej, trénink i sauna počkají, až budeš zdravý.", "Your status is Sick. Rest today; training and the sauna wait until you're well."),
+    injured: L("Máš nastavené Zranění. Náhradní trénink navrhnu, až kouči popíšeš svá omezení.", "Your status is Injured. I'll suggest other training once you tell the coach your limitations."),
+    on_break: L("Máš nastavenou Pauzu, dnes bez tréninku.", "Your status is Rest, no training today.") }[athleteStatus] || L("Dnes bez tréninku.", "No training today.");
+  const options = [{ ...rest, best: true, reason }];
+  if (athleteStatus === "on_break") options.push({ kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min", "3 × 12 min"), lines: [[L("3 kola", "3 rounds"), L("12 min v sauně", "12 min in the sauna")], [L("Mezi tím", "Between"), L("5 min venku nebo sprcha", "5 min outside or a shower")], [L("Pití", "Drink"), L("0,5 l vody", "0.5 l of water")]] });
+  return { status: "red", score: null, lowerTired: false, paused: athleteStatus, options: options.map(o => ({ ...o, action: "accept" })) };
 }
 
 // "Dnes máš za sebou kolo, 1 h 07, 74 TSS." from today's longest session.

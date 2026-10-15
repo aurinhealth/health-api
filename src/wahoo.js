@@ -22,6 +22,7 @@
 // nothing polls Wahoo: a failed export waits for the next retry.
 //
 // Wahoo's terms: data deleted on disconnecting, the connection itself never paid.
+import { exportDue, failedExport } from './export-retry.js';
 import { saveConnectionSecret, deleteConnectionSecret } from './connection-secrets.js';
 import { connectReturn, connectReturnUrl } from './connect-return.js';
 import { appOrigin } from './app-origin.js';
@@ -373,11 +374,12 @@ export async function syncWahooWorkout(env, localId, { fetchImpl = fetch, now = 
       }
       remote = plannedId + ':' + doneId;
     }
-    await db.prepare("UPDATE workout_exports SET remote_id=?,revision=?,status=CASE WHEN ?=(SELECT revision FROM local_workouts WHERE user_id=? AND id=?) THEN 'synced' ELSE 'pending' END,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='wahoo'")
+    await db.prepare("UPDATE workout_exports SET remote_id=?,revision=?,status=CASE WHEN ?=(SELECT revision FROM local_workouts WHERE user_id=? AND id=?) THEN 'synced' ELSE 'pending' END,attempts=0,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='wahoo'")
       .bind(remote, row.revision, row.revision, userId, row.id, userId, row.id).run();
     return { status: 'synced', eventId: remote };
   } catch (error) {
-    await db.prepare("UPDATE workout_exports SET status=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='wahoo'").bind(error.status === 429 ? 'pending' : 'error', userId, row.id).run();
+    // Wahoo's limit (429) counts as a failure too: it waits like any other.
+    await db.prepare(`UPDATE workout_exports SET ${failedExport},updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='wahoo'`).bind(userId, row.id).run();
     return { status: 'error', message: L('Trénink je uložený v aplikaci. Do Wahoo se zatím neodeslal; zkusí se to znovu.', 'The workout is saved in the app. It hasn\'t reached Wahoo yet; it will be tried again.') };
   }
 }
@@ -391,7 +393,7 @@ export async function retryWahooExports(env, { limit = 4, fetchImpl = fetch, now
   const until = new Date(Date.parse(today + 'T12:00:00Z') + 14 * 86400000).toISOString().slice(0, 10);
   const due = (await db.prepare(`SELECT l.id FROM local_workouts l LEFT JOIN workout_exports e ON e.user_id=l.user_id AND e.local_id=l.id AND e.provider='wahoo'
     WHERE l.user_id=? AND (((e.local_id IS NULL OR (e.status='off' AND e.remote_id IS NULL)) AND l.status='scheduled' AND substr(json_extract(l.event_json,'$.start_date_local'),1,10) BETWEEN ? AND ?)
-      OR e.status IN ('pending','error') OR (e.status='running' AND e.updated_at<datetime('now','-5 minutes')))
+      OR ${exportDue('e.')})
     ORDER BY l.updated_at LIMIT 20`).bind(userId, today, until).all().catch(() => ({ results: [] }))).results || [];
   const results = [];
   // The FTP and threshold pace for the targets, asked for only when something goes out.
@@ -403,11 +405,19 @@ export async function retryWahooExports(env, { limit = 4, fetchImpl = fetch, now
   return results;
 }
 
+// Wahoo forgets Aurin's access (also when the Aurin account is deleted).
+export async function revokeWahoo(env, fetchImpl = fetch) {
+  const tokens = readWahooTokens(env);
+  if (!tokens) return 'none';
+  // An expired access token is refreshed first, else the revoke is refused.
+  const token = await wahooAccessToken(env, { fetchImpl }).catch(() => tokens.access_token);
+  const response = await fetchImpl(API + '/v1/permissions', { method: 'DELETE', headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(10000) }).catch(() => null);
+  return response?.ok ? 'revoked' : 'failed';
+}
 // Disconnecting: Wahoo's access is revoked (Wahoo removes the plans Aurin
 // made, as set in its app settings) and every Wahoo activity is deleted here.
 export async function disconnectWahoo(env, { fetchImpl = fetch } = {}) {
-  const tokens = readWahooTokens(env);
-  if (tokens) await fetchImpl(API + '/v1/permissions', { method: 'DELETE', headers: { Authorization: 'Bearer ' + tokens.access_token }, signal: AbortSignal.timeout(10000) }).catch(() => null);
+  await revokeWahoo(env, fetchImpl);
   const userId = env.USER_ID ?? env.DB.userId;
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}'`).bind(userId),
