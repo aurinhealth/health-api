@@ -286,7 +286,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     // Today's HRV shows even before its source has the 14 days a baseline needs.
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }
       : num(rows.find(r => r.id === date)?.hrv) > 0 ? { value: round(num(rows.find(r => r.id === date).hrv)), baseline: null, low: null, high: null, trend: null, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") } : null,
-    restingHR: restingHR ? { value: round(restingHR.value), baseline: round(restingHR.baseline, 1), series: last(14, "restingHR") } : null,
+    restingHR: restingHR ? { value: round(restingHR.value), baseline: round(restingHR.baseline, 1), low: round(restingHR.low, 1), high: round(restingHR.high, 1), series: last(14, "restingHR") } : null,
     summary: summary ? { headline: summary.headline || null, text: summary.text || null, recommendation: summary.recommendation || null } : null,
     nutrition: {
       kcal: round(num(totals.kcal)),
@@ -303,6 +303,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     cycle: cyc ? {
       ask: askPeriodToday(cyc),
       hormonal: !!cyc.hormonal,
+      // "regular", "perimenopause" or "menopause" (cycle-model.js).
+      lifeStage: cyc.lifeStage || "regular",
       cycleDay: cyc.cycleDay ?? null,
       phase: cyc.phase ?? null,
       flow: cyc.today?.flow || 0,
@@ -313,6 +315,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       note: eased ? L("Dnes jen lehce, náročný trénink počká na lepší den.", "Easy today; the hard session can wait for a better day.") : null
     } : null,
     recovery: recoveryCard,
+    // Regenerace (recovery-time.js): /app/api/today fills it in for today.
+    recoveryTime: null,
     tonight: plan ? { bedtime: clock(plan.bed), wake: clock(plan.wake), need: tonightNeed, wakeSet: plan.wakeSource === "setting" } : null,
     steps: { today: num(todayRow.steps), goal: STEP_GOAL, week: last(7, "steps"), month: last(30, "steps"), hourly: byHour[date] ? byHour[date].map(v => Math.round(v)) : null, usual, hour, activeKcal: activeKcal(num(todayRow.activeCalories), watchExtra), activeKcalExcluded: watchExtra || null, activeMinutes: activeMinutes(google, date) },
     weight: weights.length ? { latest: weights.at(-1).value, goal: num(profile.targetWeight), series: weights } : null,

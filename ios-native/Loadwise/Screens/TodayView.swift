@@ -120,14 +120,6 @@ struct TodayContent: View {
         }
         .padding(.top, 40)
 
-        if model.selectedDate == nil {
-            // Cycle tracking: the morning question, or the day's log. (The
-            // "Jak se dnes cítíš?" card is gone: it lowered the readiness.)
-            if let cycle = today.cycle, cycle.ask || cycle.flow > 0 {
-                TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 20)
-            }
-        }
-
         // Today's weather at the week plan's place (or the offer to set
         // it) with the athlete's status, above the key numbers.
         if model.selectedDate == nil {
@@ -136,6 +128,12 @@ struct TodayContent: View {
 
         KeyNumbers(today: today)
             .padding(.top, model.selectedDate == nil ? 12 : 28)
+
+        // Cycle tracking under the numbers it explains: the morning question,
+        // the day's bleeding, or perimenopause and menopause symptoms.
+        if model.selectedDate == nil, let cycle = today.cycle, TodayCycleCard.shows(cycle) {
+            TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
+        }
 
         // Aktivita dne: the day's activity from anything (CoachPick.swift).
         if model.selectedDate == nil { CoachPickCard().padding(.top, 16) }
@@ -700,11 +698,16 @@ struct BedtimeSetupCard: View {
 
 /// A data source that stopped working (Google or Intervals.icu refused the
 /// stored access, or Google permissions are missing), with a way to connect
-/// it again right here. Loads the connections itself, like the coach's check-in.
+/// it again right here. The problems come with Today; after connecting here
+/// the card asks the connections itself until Today loads again.
 struct ConnectionProblemCard: View {
     @Environment(AppModel.self) private var model
-    @State private var problems: [ConnectionsResponse.Provider] = []
+    @State private var checked: [ConnectionsResponse.Provider]?
     @State private var connecting: ConnectTarget?
+
+    private var problems: [ConnectionsResponse.Provider] {
+        checked ?? (model.today?.connectionProblems ?? []).map(\.asProvider)
+    }
 
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
@@ -735,16 +738,13 @@ struct ConnectionProblemCard: View {
                 .padding(.top, 20)
             }
         }
-        .task(id: model.loading) {
-            guard !model.loading else { return }
-            await load()
-        }
+        .onChange(of: model.todayRevision) { checked = nil }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await load() } }
     }
 
     private func load() async {
         guard !model.demo, let response = try? await model.api.connections() else { return }
-        withAnimation { problems = response.providers.filter(\.needsAttention) }
+        withAnimation { checked = response.providers.filter(\.needsAttention) }
     }
 
     /// The service's connect screen (ServiceConnectSheet), the same as in Zdroje dat.

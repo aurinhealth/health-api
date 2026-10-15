@@ -334,21 +334,32 @@ struct ActivityDetailView: View {
     private func load() async {
         guard detail == nil else { return }
         if model.demo { error = L10n.tr("V ukázce se detail nenačítá."); return }
-        do {
-            if let id = session.activityId {
-                detail = try await model.api.activityDetail(id: id)
-            } else if let watch = session.watch {
-                detail = try await model.api.watchDetail(watch)
-            } else {
-                basicOnly = true
+        guard session.activityId != nil || session.watch != nil else { basicOnly = true; return }
+        let key = session.activityId.map { "intervals:" + $0 } ?? session.watch.map { "watch:" + $0.source + ":" + $0.id }
+        // Opened before in this launch: at once, and asked again only when data changed since.
+        if let key, let kept = ActivityDetailMemory.values[key] {
+            detail = kept.detail
+            if kept.revision != model.dataRevision, let fresh = try? await fetch() {
+                detail = fresh
+                ActivityDetailMemory.keep(fresh, key: key, revision: model.dataRevision)
+            }
+        } else {
+            do {
+                detail = try await fetch()
+                if let key, let detail { ActivityDetailMemory.keep(detail, key: key, revision: model.dataRevision) }
+            } catch {
+                self.error = error.localizedDescription
                 return
             }
-        } catch {
-            self.error = error.localizedDescription
-            return
         }
         // Apple Health is the route's source when it has one (it stays on the iPhone).
         if let uuid = detail?.watch?.appleUUID { localRoute = await AppleWorkoutRoute.points(workout: uuid) }
+    }
+
+    private func fetch() async throws -> ActivityDetail? {
+        if let id = session.activityId { return try await model.api.activityDetail(id: id) }
+        if let watch = session.watch { return try await model.api.watchDetail(watch) }
+        return nil
     }
 }
 
@@ -387,6 +398,18 @@ private struct BasicActivityNumbers: View {
     }
 }
 
+/// Activity details opened in this launch (the last 20), so opening a workout
+/// again shows it at once.
+@MainActor
+enum ActivityDetailMemory {
+    static var values: [String: (detail: ActivityDetail, revision: Int, at: Date)] = [:]
+
+    static func keep(_ detail: ActivityDetail, key: String, revision: Int) {
+        values[key] = (detail, revision, Date())
+        if values.count > 20, let oldest = values.min(by: { $0.value.at < $1.value.at })?.key { values[oldest] = nil }
+    }
+}
+
 struct ActivityDetailContent: View {
     let detail: ActivityDetail
     /// What Aurin counts, when it differs from the source's number, and why.
@@ -410,6 +433,7 @@ struct ActivityDetailContent: View {
                 if let i = a.icu_intensity { stat("IF", Fmt.decimal(i > 2 ? i / 100 : i, digits: 2)) }
                 if let pace = runPace { stat(L10n.isEnglish ? "Pace" : "Tempo", pace) }
                 if let e = a.total_elevation_gain, e > 0 { stat("Převýšení", Fmt.int(e) + " m") }
+                if let h = detail.recoveryHours { stat("Regenerace", "\(h) h") }
                 if let c = kcal ?? a.calories {
                     VStack(alignment: .leading, spacing: 2) {
                         stat("Energie", Fmt.int(c) + " kcal")

@@ -425,6 +425,10 @@ struct ActivityDetail: Decodable, Equatable {
         }
     }
 
+    /// Regenerace: the hours after it before hard training (src/recovery-hours.js);
+    /// nil for a short easy one, the gym or an older server.
+    var recoveryHours: Int? = nil
+
     struct Activity: Decodable, Equatable {
         let name: String?
         let type: String?

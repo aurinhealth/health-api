@@ -2,17 +2,23 @@
 // - cycle_settings: one JSON row per user (normalizeCycleSettings);
 // - cycle_days: one row per day with what was logged in the app (flow,
 //   symptoms, the pill, a "not yet" answer, "keep my plan") and what Apple
-//   Health had (apple_flow, apple_ovulation). The app's own flow wins over
-//   Apple Health's; Apple Health's fills the days the athlete did not log.
+//   Health had (apple_flow, apple_ovulation, apple_symptoms: hot flashes,
+//   night sweats, sleep changes). The app's own flow and symptoms win over
+//   Apple Health's; Apple Health's fill the days the athlete did not log.
 import { normalizeCycleSettings, normalizeCycleDay, SYMPTOMS } from "./cycle-model.js";
 import { L } from "./lang.js";
 
 const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+const migrated = new WeakSet();
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 
 async function ensure(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS cycle_settings (user_id INTEGER NOT NULL PRIMARY KEY, settings_json TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
-  await db.prepare("CREATE TABLE IF NOT EXISTS cycle_days (user_id INTEGER NOT NULL, date TEXT NOT NULL, flow INTEGER, symptoms TEXT, pill TEXT, no_period INTEGER NOT NULL DEFAULT 0, ovulation_test INTEGER NOT NULL DEFAULT 0, keep_plan INTEGER NOT NULL DEFAULT 0, apple_flow INTEGER, apple_ovulation INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, date))").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS cycle_days (user_id INTEGER NOT NULL, date TEXT NOT NULL, flow INTEGER, symptoms TEXT, pill TEXT, no_period INTEGER NOT NULL DEFAULT 0, ovulation_test INTEGER NOT NULL DEFAULT 0, keep_plan INTEGER NOT NULL DEFAULT 0, apple_flow INTEGER, apple_ovulation INTEGER NOT NULL DEFAULT 0, apple_symptoms TEXT, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, date))").run();
+  if (!migrated.has(db)) {
+    try { await db.prepare("ALTER TABLE cycle_days ADD COLUMN apple_symptoms TEXT").run(); } catch { /* already there */ }
+    migrated.add(db);
+  }
 }
 
 export async function getCycleSettings(db) {
@@ -37,7 +43,7 @@ export async function saveCycleSettings(db, changes) {
 const dayOf = r => normalizeCycleDay({
   date: r.date,
   flow: r.flow != null ? r.flow : r.apple_flow,
-  symptoms: (() => { try { return JSON.parse(r.symptoms || "[]"); } catch { return []; } })(),
+  symptoms: (() => { try { return JSON.parse(r.symptoms ?? r.apple_symptoms ?? "[]") || []; } catch { return []; } })(),
   pill: r.pill,
   noPeriod: !!r.no_period,
   ovulationTest: !!(r.ovulation_test || r.apple_ovulation),
@@ -72,16 +78,17 @@ export async function saveCycleDay(db, body) {
   return { ...dayOf(row), keepPlan: !!row.keep_plan };
 }
 
-// Apple Health's menstrual flow and ovulation tests for the days it sent
-// (at most 400): only the apple_* columns change, what was logged in the app
-// stays.
+// Apple Health's menstrual flow, ovulation tests and symptoms for the days it
+// sent (at most 400): only the apple_* columns change, what was logged in the
+// app stays.
 export async function importAppleCycle(db, days) {
   await ensure(db);
   const list = (Array.isArray(days) ? days : []).filter(d => d && isDate(d.date)).slice(0, 400);
   for (const d of list) {
     const flow = d.flow == null ? null : Math.max(0, Math.min(3, Math.round(Number(d.flow)) || 0));
-    await db.prepare("INSERT INTO cycle_days(user_id,date,apple_flow,apple_ovulation) VALUES(?,?,?,?) ON CONFLICT(user_id,date) DO UPDATE SET apple_flow=excluded.apple_flow,apple_ovulation=excluded.apple_ovulation,updated_at=CURRENT_TIMESTAMP")
-      .bind(db.userId, d.date, flow, d.ovulationTest ? 1 : 0).run();
+    const symptoms = Array.isArray(d.symptoms) && d.symptoms.length ? JSON.stringify([...new Set(d.symptoms.filter(x => SYMPTOMS.includes(x)))]) : null;
+    await db.prepare("INSERT INTO cycle_days(user_id,date,apple_flow,apple_ovulation,apple_symptoms) VALUES(?,?,?,?,?) ON CONFLICT(user_id,date) DO UPDATE SET apple_flow=excluded.apple_flow,apple_ovulation=excluded.apple_ovulation,apple_symptoms=excluded.apple_symptoms,updated_at=CURRENT_TIMESTAMP")
+      .bind(db.userId, d.date, flow, d.ovulationTest ? 1 : 0, symptoms).run();
   }
   return list.length;
 }

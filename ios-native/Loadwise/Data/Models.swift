@@ -3,6 +3,8 @@ import Foundation
 /// GET /app/api/today (src/app-today.js): everything the Today screen shows.
 struct TodaySnapshot: Decodable, Equatable {
     let date: String
+    /// Connected services that need the user (src/connection-health.js connectionProblems).
+    var connectionProblems: [ConnectionProblem]?
     let readiness: Readiness
     let sleep: Sleep?
     let strain: Strain
@@ -26,6 +28,9 @@ struct TodaySnapshot: Decodable, Equatable {
     let trainingPlan: PlanLine?
     /// Cycle tracking, nil when off (Data/CycleModels.swift).
     var cycle: TodayCycle? = nil
+    /// Regenerace: when hard training is fine again (Data/RecoveryModels.swift);
+    /// nil when nothing is left to recover from, on another day or from an older server.
+    var recoveryTime: RecoveryTime? = nil
     /// The week strip above Dnes: Monday to Sunday of the day's week, each
     /// day up to it with its readiness zone (src/app-today.js readinessWeek).
     var week: [WeekDay]? = nil
@@ -232,5 +237,19 @@ struct TodaySnapshot: Decodable, Equatable {
         /// "indoor" or "outdoor".
         let environment: String?
         let reason: String?
+    }
+}
+
+/// A connected service whose access was refused or whose permissions are missing.
+struct ConnectionProblem: Decodable, Equatable {
+    let provider: String
+    let name: String?
+    let needsReconnect: Bool?
+    let missingPermissions: [JSONValue]?
+
+    /// In the shape of GET /app/api/connections, for the card's rows.
+    var asProvider: ConnectionsResponse.Provider {
+        ConnectionsResponse.Provider(id: provider, name: name, connected: true, configured: true, missingPermissions: missingPermissions,
+                                     metrics: nil, note: nil, needsReconnect: needsReconnect)
     }
 }
