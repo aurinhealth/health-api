@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { coachNudge, shortNights, zoneShiftHours } from '../src/coach-push.js';
+import { coachNudge, shortNights, zoneShiftHours, swapOffer } from '../src/coach-push.js';
 import { withLang } from '../src/lang.js';
 
 const date = '2026-10-15';
@@ -14,7 +14,7 @@ test('three short nights before a hard session offer an easy ride in its place',
   const nudge = coachNudge({ date, hour: 7, morning: true, recovery: { id: 'x' }, upcoming: [hard], sleep });
   assert.equal(nudge.title, 'Tři krátké noci za sebou');
   assert.equal(nudge.body, 'Zítřejší práh vyměním za lehkou jízdu 60 min?');
-  assert.deepEqual(nudge.swap, { eventId: 'planned:7', date: '2026-10-16', sport: 'ride', environment: 'outdoor', minutes: 60, kind: 'endurance', name: 'Práh 4×8' });
+  assert.deepEqual(nudge.swap, { eventId: 'planned:7', date: '2026-10-16', sport: 'ride', environment: 'outdoor', minutes: 60, kind: 'endurance', name: 'Práh 4×8', what: 'práh', fromMinutes: 90 });
 }));
 
 test('no push without a hard session, at night, or for one weak sign', () => {
@@ -39,3 +39,10 @@ test('a new time zone 6 hours away comes first, in English too', () => withLang(
   assert.equal(nudge.title, 'Your clock moved by 6 hours');
   assert.equal(coachNudge({ date, hour: 9, zone: { shift: 1, changed: date } }), null);
 }));
+
+test("the swap the push offered waits on Today until it is answered", () => {
+  const nudge = { eventId: "e1", date: "2026-10-15", sport: "ride", minutes: 45, name: "VO2max 5×4", fromMinutes: 75, title: "Dvě krátké noci za sebou", day: "2026-10-15", status: "pending" };
+  assert.deepEqual(swapOffer({ nudge }, "2026-10-15"), { kind: "swap", id: "2026-10-15:swap", headline: "Dvě krátké noci za sebou", date: "2026-10-15", from: "VO2max 5×4 · 75 min", to: "Lehká jízda · 45 min" });
+  assert.equal(swapOffer({ nudge: { ...nudge, status: "kept" } }, "2026-10-15"), null);
+  assert.equal(swapOffer({ nudge }, "2026-10-16"), null);
+});

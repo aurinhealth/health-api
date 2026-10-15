@@ -392,7 +392,11 @@ struct ActionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(action.title, systemImage: "wand.and.stars").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+            if let preview = action.preview, action.type == "workout", preview.workout != nil || preview.plan != nil {
+                WorkoutPreviewBlock(action: action, preview: preview)
+            } else {
+                Label(action.title, systemImage: "wand.and.stars").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+            }
             if let detail = action.detail, !detail.isEmpty {
                 Text(detail).font(Typo.caption).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -425,6 +429,62 @@ struct ActionCard: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.amberSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+/// The proposed session on the coach's card: "Naplánovat · Pá 16. 10.", its
+/// name, the profile with length, TSS and the hardest step, or the gym
+/// exercises with their sets and weights.
+struct WorkoutPreviewBlock: View {
+    let action: CoachAction
+    let preview: CoachAction.Preview
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(L10n.tr("Naplánovat") + (action.date.map { " · " + Fmt.weekdayShort($0) + " " + Fmt.dayMonth($0) } ?? ""), systemImage: "wand.and.stars")
+                .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+            if let workout = preview.workout {
+                Text(verbatim: workout.name).font(Typo.sentence(22)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                if let blocks = workout.steps, !WorkoutProfile.segments(blocks).isEmpty {
+                    WorkoutProfile(blocks: blocks, sport: action.sport ?? "ride", compact: true)
+                }
+                Text(verbatim: numbers(workout)).font(Typo.caption).foregroundStyle(Palette.secondary)
+            } else if let plan = preview.plan {
+                let exercises = GymProposal(draftId: nil, planName: plan.planName ?? "", rationale: nil, rows: plan.rows, muscles: [:]).exercises
+                Text(verbatim: plan.planName.flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Posilovna")).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                VStack(spacing: 0) {
+                    ForEach(Array(exercises.prefix(5).enumerated()), id: \.offset) { _, e in
+                        HStack {
+                            Text(verbatim: e.name).foregroundStyle(Palette.ink)
+                            Spacer(minLength: 8)
+                            Text(verbatim: "\(max(1, e.sets))×\(e.reps)" + (e.kg.isEmpty ? "" : " · \(e.kg) kg")).foregroundStyle(Palette.secondary).monospacedDigit()
+                        }
+                        .font(Typo.caption)
+                        .padding(.vertical, 7)
+                        .overlay(alignment: .top) { Rectangle().fill(Palette.ink.opacity(0.1)).frame(height: 1) }
+                    }
+                }
+                if exercises.count > 5 {
+                    Text(L10n.f("+%@ další", String(exercises.count - 5))).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                if let minutes = action.minutes, minutes > 0 {
+                    Text(verbatim: Fmt.duration(Int(minutes))).font(Typo.caption).foregroundStyle(Palette.secondary)
+                }
+            }
+        }
+    }
+
+    /// "1 h · 62 TSS · 88–93 % FTP": the length, the load and the hardest step.
+    private func numbers(_ w: LibraryWorkout) -> String {
+        var parts: [String] = []
+        if let m = w.duration_minutes ?? action.minutes, m > 0 { parts.append(Fmt.duration(Int(m.rounded()))) }
+        if let tss = w.target_load, tss > 0 { parts.append("\(Int(tss.rounded())) TSS") }
+        if (action.sport ?? "ride") == "ride", let top = WorkoutProfile.segments(w.steps ?? []).max(by: { $0.percent < $1.percent })?.step,
+           let hi = top.percentHigh ?? top.percentLow {
+            let lo = top.percentLow ?? hi
+            parts.append((lo == hi ? "\(Int(hi))" : "\(Int(lo))–\(Int(hi))") + " % FTP")
+        }
+        return parts.joined(separator: " · ")
     }
 }
 
