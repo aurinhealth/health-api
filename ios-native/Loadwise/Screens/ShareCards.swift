@@ -13,6 +13,8 @@ struct ShareCard: View {
     var day: ShareDay?
     var workout: ShareWorkout?
     var food: ShareFood?
+    var week: ShareWeek?
+    var milestones: ShareMilestones?
     var width: CGFloat = ShareCard.width
 
     private var s: ShareStyle { ShareStyle(u: width / 100, t: ShareTheme(dark: options.dark, clear: options.clear)) }
@@ -40,6 +42,11 @@ struct ShareCard: View {
         case (.food, 1): return .indigo
         case (.food, 2): return .green
         case (.food, _): return .warm
+        case (.week, 1): return .green
+        case (.week, 0): return .warm
+        case (.week, _): return .indigo
+        case (.milestone, 2): return .warm
+        case (.milestone, _): return .rust
         }
     }
 
@@ -51,6 +58,10 @@ struct ShareCard: View {
             if let workout { ShareActivityCard(workout: workout, options: options, s: s) }
         case .food:
             if let food { ShareFoodCard(food: food, options: options, s: s) }
+        case .week:
+            if let week { ShareWeekCard(week: week, options: options, s: s) }
+        case .milestone:
+            if let milestones { ShareMilestoneCard(milestones: milestones, options: options, s: s) }
         }
     }
 }
@@ -62,6 +73,7 @@ struct ShareStyle {
 
     func serif(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Regular", fixedSize: u * size) }
     func news(_ size: CGFloat) -> Font { .custom("Newsreader-Regular", fixedSize: u * size) }
+    func italic(_ size: CGFloat) -> Font { .custom("Newsreader-Italic", fixedSize: u * size) }
     func sans(_ size: CGFloat, _ weight: Font.Weight = .medium) -> Font { .system(size: u * size, weight: weight) }
 
     /// The header: the mark and Aurin on the left, the date on the right.

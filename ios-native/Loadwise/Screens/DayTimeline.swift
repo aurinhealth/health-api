@@ -193,11 +193,11 @@ struct DayTimeline: View {
         }
     }
 
-    /// Stretching or sauna, the pill and bedtime.
+    /// Stretching, sauna, a swim or walk (Aktivita dne), the pill and bedtime.
     @ViewBuilder
     private func itemRow(_ item: TodaySnapshot.PlanItem, first: Bool, last: Bool) -> some View {
         let color: Color = switch item.kind {
-        case "recovery": item.recovery == "sauna" ? Palette.amber : Palette.green
+        case "recovery": item.recovery == "sauna" ? Palette.amber : item.recovery == "swim" ? Palette.blue : Palette.green
         case "pill": Palette.pink
         default: Palette.indigo
         }

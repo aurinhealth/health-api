@@ -75,6 +75,9 @@ targets:
         # The icons of Settings → Ikona aplikace (AppIcon-*.appiconset), for setAlternateIconName.
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         ENABLE_PREVIEWS: YES
+        # Aurin's App ID from developers.facebook.com: Sdílet → "Do příběhu na
+        # Instagramu" (ShareExport.instagram) stays hidden while it is empty.
+        META_APP_ID: "1387617773155698"
     info:
       path: Loadwise/Info.plist
       properties:
@@ -107,6 +110,10 @@ targets:
           - fetch
         BGTaskSchedulerPermittedIdentifiers:
           - eu.petrfitnessdata.loadwise.native.refresh
+        # Sdílet → Instagram Stories (ShareExport.instagram) with the Meta app ID.
+        LSApplicationQueriesSchemes:
+          - instagram-stories
+        MetaAppID: $(META_APP_ID)
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:

@@ -62,6 +62,27 @@ test("Health: the night, its stages, the week and the coming night", () => {
   assert.equal(h.sleep.regularity.spread, 0);
 });
 
+test("Health: tonight's own length and wake time move the bedtime, the need stays", () => {
+  const plain = buildHealth({ ...input, hour: 15 }).sleep.tonight;
+  assert.equal(plain.date, DATE);
+  assert.equal(plain.sleep, plain.need);
+  assert.equal(plain.chosen, null);
+  assert.equal(plain.wakeOnce, false);
+  assert.ok(plain.inBed > plain.need);
+  const profile = { ...input.profile, sleepTonight: { date: DATE, minutes: 420, wake: "06:00" } };
+  const t = buildHealth({ ...input, hour: 15, profile }).sleep.tonight;
+  assert.equal(t.need, plain.need, "the need itself does not change");
+  assert.equal(t.sleep, 420);
+  assert.equal(t.chosen, 420);
+  assert.equal(t.wakeOnce, true);
+  assert.equal(t.wake, "06:00");
+  const bed = Number(t.bedtime.slice(0, 2)) * 60 + Number(t.bedtime.slice(3));
+  assert.equal((360 - bed + 1440) % 1440, t.inBed, "bedtime = wake − time in bed");
+  // A choice for another evening is ignored.
+  const old = buildHealth({ ...input, hour: 15, profile: { ...input.profile, sleepTonight: { date: day(-1), minutes: 420, wake: "06:00" } } }).sleep.tonight;
+  assert.equal(old.bedtime, plain.bedtime);
+});
+
 test("Health: heart, breathing, temperature, oxygen and weight", () => {
   const h = buildHealth(input);
   assert.equal(h.hrv.value, 66);
