@@ -368,7 +368,7 @@ function pageLang(request, czech = false) {
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '14. října 2026', en: '14 October 2026'};
+const UPDATED = {cs: '16. října 2026', en: '16 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -560,7 +560,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li>nutrition: food and drink logs.</li>
 </ul>
 <p>Two optional permissions are asked for separately: reading your date of birth from your Google Account, to fill in your age, and writing your weight to Google Health.</p>
-<p><strong>Intervals.icu</strong>, only if you connect it with your API key: your activities and their details, planned workouts and events, wellness data and sport settings.</p>
+<p><strong>Intervals.icu</strong>, only if you connect it: your activities and their details, planned workouts and events, wellness data and sport settings.</p>
 <p><strong>Ultrahuman</strong>, only if you connect your Ultrahuman Ring: your sleep and its stages, heart rate variability, resting heart rate, skin temperature deviation and VO2max, to work out your readiness. Aurin only reads this data, never passes it on to other services, and deletes it when you disconnect the ring.</p>
 <p><strong>WHOOP</strong>, only if you connect your WHOOP account: your sleep and its stages, resting heart rate, heart rate variability, breathing rate and blood oxygen, to work out your readiness. Aurin only reads this data, never passes it on to other services, and deletes it when you disconnect WHOOP.</p>
 <p><strong>Wahoo</strong>, only if you connect your Wahoo account: your finished rides and runs (start, duration, distance, climbing, power, training load, heart rate, cadence and calories), to count them in your training load. Aurin deletes them when you disconnect Wahoo.</p>
@@ -657,7 +657,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li>výživa: záznamy jídla a pití.</li>
 </ul>
 <p>Dvě oprávnění jsou nepovinná a žádáme o ně zvlášť: čtení data narození z tvého účtu Google, aby se doplnil věk, a zápis váhy do Google Health.</p>
-<p><strong>Intervals.icu</strong>, jen když ho připojíš svým klíčem API: tvoje aktivity a jejich podrobnosti, plánované tréninky a události, wellness údaje a nastavení sportů.</p>
+<p><strong>Intervals.icu</strong>, jen když ho připojíš: tvoje aktivity a jejich podrobnosti, plánované tréninky a události, wellness údaje a nastavení sportů.</p>
 <p><strong>Ultrahuman</strong>, jen když připojíš prsten Ultrahuman: tvůj spánek a jeho fáze, variabilitu srdečního tepu, klidový tep, odchylku teploty kůže a VO2max, z nichž počítáme připravenost. Aurin tato data jen čte, nikomu dalšímu je nepředává a po odpojení prstenu je smaže.</p>
 <p><strong>WHOOP</strong>, jen když připojíš účet WHOOP: tvůj spánek a jeho fáze, klidový tep, variabilitu srdečního tepu, dechovou frekvenci a okysličení krve, z nichž počítáme připravenost. Aurin tato data jen čte, nikomu dalšímu je nepředává a po odpojení WHOOPu je smaže.</p>
 <p><strong>Wahoo</strong>, jen když připojíš účet Wahoo: tvoje dokončené jízdy a běhy (začátek, délku, vzdálenost, převýšení, výkon, tréninkovou zátěž, tep, kadenci a kalorie), aby se započítaly do tréninkové zátěže. Aurin je po odpojení Wahoo smaže.</p>

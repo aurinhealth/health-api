@@ -198,11 +198,6 @@ struct SetupFlowView: View {
             Spacer()
             if provider.connected == true {
                 Label("připojeno", systemImage: "checkmark").font(Typo.small).foregroundStyle(Palette.green)
-            } else if provider.id == "intervals" {
-                Menu {
-                    Button { connecting = ConnectTarget(id: "intervals") } label: { Label("Připojit", systemImage: "link") }
-                    Button { connecting = ConnectTarget(id: "intervals", withKey: true) } label: { Label("Vložit API klíč", systemImage: "key") }
-                } label: { connectLabel }
             } else {
                 Button { connecting = ConnectTarget(id: provider.id) } label: { connectLabel }
                     .buttonStyle(.plain)
