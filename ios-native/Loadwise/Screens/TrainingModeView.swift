@@ -870,7 +870,8 @@ struct TrainingModeView: View {
             restoreMinimized()
             history = await model.gymHistory()
             // The figure of Celkem dnes (MuscleProgressCard), kept on the phone after once.
-            await MuscleModelStore.shared.load(api: model.api)
+            let api = model.api
+            Task { await MuscleModelStore.shared.load(api: api) }
             sideChoices = (try? await model.api.gymSides())?.choices ?? [:]
             if let profile = try? await model.api.trainingProfile() {
                 zoneLows = profile.hrZones.sorted { $0.zone < $1.zone }.map { $0.bpmLow ?? 0 }
