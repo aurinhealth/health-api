@@ -2033,7 +2033,7 @@
 "Aktivitu a kondici (kroky, vzdálenost, aktivní energii, tréninky), zdravotní měření (tep, HRV, okysličení krve, dech, VO₂max, váhu, výšku, tělesný tuk), spánek a záznamy jídla." = "Activity and fitness (steps, distance, active energy, workouts), health measurements (heart rate, HRV, blood oxygen, breathing, VO₂max, weight, height, body fat), sleep and food logs.";
 "Jen jídlo a pití, které zapíšeš v Aurinu." = "Only the food and drinks you log in Aurin.";
 "Tréninky, plán, zóny a váhu." = "Workouts, plan, zones and weight.";
-"Tréninky naplánované v Aurinu, kalorický cíl, váhu a denní hodnoty z Google Health." = "Workouts planned in Aurin, calorie target, weight and daily values from Google Health.";
+"Tréninky naplánované i odcvičené v Aurinu, kalorický cíl, váhu a denní hodnoty z Apple Zdraví a Google Health." = "Workouts planned and done in Aurin, calorie target, weight and daily values from Apple Health and Google Health.";
 "Spánek, klidový tep, HRV, VO₂max a teplotu z prstenu." = "Sleep, resting heart rate, HRV, VO₂max and temperature from the ring.";
 
 /* Deník, the habit journal (JournalViews.swift, JournalEditor.swift, JournalImpact.swift) */

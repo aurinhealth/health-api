@@ -188,7 +188,13 @@ export function normalizeActivity(input = {}) {
   const rpe = Number(input.rpe);
   // type: the Intervals.icu type the user chose (Změnit typ aktivity).
   const type = /^[A-Za-z]{2,40}$/.test(String(input.type || '')) ? String(input.type) : null;
-  return { key, sport, ...(type ? { type } : {}), name, date, startLocal, startUtc, minutes: Math.round(minutes), notes: String(input.notes || '').slice(0, 2000), rpe: Number.isInteger(rpe) && rpe >= 1 && rpe <= 10 ? rpe : null };
+  // What a watch measured (watch-forward.js): distance (m), heart rate, kcal.
+  const measured = {};
+  for (const [field, hi] of [['distance', 1000000], ['avgHr', 250], ['maxHr', 250], ['kcal', 20000]]) {
+    const v = Number(input[field]);
+    if (input[field] != null && Number.isFinite(v) && v > 0 && v <= hi) measured[field] = Math.round(v);
+  }
+  return { key, sport, ...(type ? { type } : {}), name, date, startLocal, startUtc, minutes: Math.round(minutes), notes: String(input.notes || '').slice(0, 2000), rpe: Number.isInteger(rpe) && rpe >= 1 && rpe <= 10 ? rpe : null, ...measured };
 }
 
 const intervalsType = sport => ({ gym: 'WeightTraining', strength: 'WeightTraining', run: 'Run', ride: 'Ride', walk: 'Walk', swim: 'Swim', yoga: 'Yoga' }[sport] || 'Workout');
@@ -206,6 +212,10 @@ export function intervalsActivity(userId, activity) {
     external_id: 'loadwise:' + userId + ':' + activity.key
   };
   if (activity.rpe) body.icu_rpe = activity.rpe;
+  if (activity.distance) body.distance = activity.distance;
+  if (activity.avgHr) body.average_heartrate = activity.avgHr;
+  if (activity.maxHr) body.max_heartrate = activity.maxHr;
+  if (activity.kcal) body.calories = activity.kcal;
   return body;
 }
 
@@ -319,12 +329,12 @@ async function deliver(env, row, options) {
 // A done activity to every destination the user sends activities to. Returns
 // one entry per destination it went to (sent or error); Apple Health is
 // written by the iPhone and is not in the list. `googleToken` makes the
-// Google access token (index.js googleToken).
-export async function sendActivity(env, input, { fetchImpl = fetch, googleToken = null } = {}) {
+// Google access token (index.js googleToken); `only` limits the destinations.
+export async function sendActivity(env, input, { fetchImpl = fetch, googleToken = null, only = SERVER_DESTINATIONS } = {}) {
   const activity = normalizeActivity(input);
   await ensureSyncTables(env.DB);
   const sends = [];
-  for (const destination of SERVER_DESTINATIONS) {
+  for (const destination of SERVER_DESTINATIONS.filter(d => only.includes(d))) {
     const prefs = await readSyncPrefs(env.DB, env.USER_ID, destination);
     if (!prefs.pushActivities || !offered(env, destination) || !destinationConnected(env, destination)) continue;
     // A changed activity (the same key) is sent again with its new content; a

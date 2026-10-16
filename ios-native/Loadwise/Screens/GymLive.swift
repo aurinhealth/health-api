@@ -519,13 +519,7 @@ struct LiveGymView: View {
                 return
             }
             // A session with sets goes to the apps chosen in Synchronizace.
-            if !names.isEmpty, let start = next.startedAt {
-                let minutes = max(1, next.loggedMinutes ?? Int((Date().timeIntervalSince(start) / 60).rounded()))
-                let sets = next.exercises.filter { $0.doneCount > 0 }.map { $0.name + ": " + GymCoach.setsLine($0.sets) }.joined(separator: "\n")
-                let activity = ActivityToSync(key: "gym:" + date, sport: "gym", name: next.planName ?? L10n.tr("Silový trénink"), date: date,
-                                              start: start, minutes: minutes, notes: sets)
-                await model.shareActivity(activity)
-            }
+            await model.shareGym(next, date: date)
             await model.refreshTraining()
             if !names.isEmpty { rating = true; return }
         }
