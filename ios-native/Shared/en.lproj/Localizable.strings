@@ -1606,6 +1606,7 @@
 "Zhubnout" = "Lose weight";
 
 "Pocit" = "Feeling";
+"Ranní pocit" = "Morning feeling";
 "zatím bez dat" = "no data yet";
 "cíl %@–%@" = "target %@–%@";
 "Dnešní cíl" = "Today's target";
@@ -2403,6 +2404,8 @@
 "Otevře plán spánku" = "Opens the sleep plan";
 "+%@ tréninkem" = "+%@ from training";
 "Teď %@" = "Now %@";
+"Orientační: nový zdroj dat, zpřesní se za %@." = "Provisional: new data source, settles in %@.";
+"Orientační: nový zdroj dat, číslo se ještě zpřesní." = "Provisional: new data source, the number will settle.";
 
 /* Health value details (MetricDetails.swift) */
 "Nejnižší tep dne v klidu" = "Lowest heart rate of the day at rest";

@@ -145,7 +145,11 @@ struct PillCard: View {
     private func take() {
         saving = true
         Task {
-            try? await model.takePill(on: date)
+            do {
+                try await model.takePill(on: date)
+            } catch {
+                model.notice = error.localizedDescription
+            }
             saving = false
         }
     }
@@ -247,7 +251,11 @@ struct TodayCycleCard: View {
     private func notYet() {
         saving = true
         Task {
-            try? await model.logCycleDay(date, ["noPeriod": .bool(true)])
+            do {
+                try await model.logCycleDay(date, ["noPeriod": .bool(true)])
+            } catch {
+                model.notice = error.localizedDescription
+            }
             saving = false
         }
     }

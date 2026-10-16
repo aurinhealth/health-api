@@ -273,7 +273,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     connectionProblems: Array.isArray(connectionProblems) ? connectionProblems : [],
     // provisional: the baseline is carried over from another source until the
     // new one has 14 days of its own (recovery-model.js sourceBaseline).
-    readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional },
+    readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional, provisionalDays: readiness.provisional ? readiness.provisionalDays ?? null : null },
     week,
     // The morning check-in: fresh, normal, tired, sick or null (not answered).
     checkin: checkin || null,

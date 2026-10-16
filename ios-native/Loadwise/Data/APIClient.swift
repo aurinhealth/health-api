@@ -215,7 +215,7 @@ final class APIClient: @unchecked Sendable {
             try check(response, data)
             throw APIError.message(L10n.f("Server odpověděl chybou %@.", String(status)))
         }
-        let url = FileManager.default.temporaryDirectory.appending(path: "loadwise-data-" + Self.localToday() + ".ndjson")
+        let url = FileManager.default.temporaryDirectory.appending(path: "aurin-data-" + Self.localToday() + ".ndjson")
         try? FileManager.default.removeItem(at: url)
         try FileManager.default.moveItem(at: downloaded, to: url)
         return url
