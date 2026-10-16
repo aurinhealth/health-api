@@ -2032,7 +2032,7 @@
 "Aktivitu a kondici (kroky, vzdálenost, aktivní energii, tréninky), zdravotní měření (tep, HRV, okysličení krve, dech, VO₂max, váhu, výšku, tělesný tuk), spánek a záznamy jídla." = "Activity and fitness (steps, distance, active energy, workouts), health measurements (heart rate, HRV, blood oxygen, breathing, VO₂max, weight, height, body fat), sleep and food logs.";
 "Jen jídlo a pití, které zapíšeš v Aurinu." = "Only the food and drinks you log in Aurin.";
 "Tréninky, plán, zóny a váhu." = "Workouts, plan, zones and weight.";
-"Tréninky naplánované v Aurinu, kalorický cíl, váhu a denní hodnoty z Google Health." = "Workouts planned in Aurin, calorie target, weight and daily values from Google Health.";
+"Tréninky naplánované i odcvičené v Aurinu, kalorický cíl, váhu a denní hodnoty z Apple Zdraví a Google Health." = "Workouts planned and done in Aurin, calorie target, weight and daily values from Apple Health and Google Health.";
 "Spánek, klidový tep, HRV, VO₂max a teplotu z prstenu." = "Sleep, resting heart rate, HRV, VO₂max and temperature from the ring.";
 
 /* Deník, the habit journal (JournalViews.swift, JournalEditor.swift, JournalImpact.swift) */
@@ -2330,7 +2330,7 @@
 "Den na odpočinek" = "Rest day";
 "Všechny partie se ještě zotavují" = "Every body part is still recovering";
 "připravená" = "ready";
-"Svaly · odpočaté na %" = "Muscles · % rested";
+"Únava svalů · odpočaté na %" = "Muscle fatigue · % rested";
 "Trénink: %@" = "Workout: %@";
 "odpočaté na %@ %%" = "%@ %% rested";
 "Postava se svaly" = "Muscle figure";
@@ -2533,3 +2533,18 @@
 "✦ automaticky" = "✦ automatic";
 "Sledovat deník" = "Keep a journal";
 "Ptát se ráno" = "Ask in the morning";
+"Pokračovat v tréninku" = "Resume workout";
+"Přejít na cvik" = "Go to this exercise";
+"Tep se měří" = "Heart rate measured";
+"Tep se neměří" = "No heart rate";
+"připojeno, zatím neposílá tep" = "connected, no heart rate yet";
+"Skrýt trénink" = "Hide workout";
+"Zpět do tréninku" = "Back to the workout";
+"Únava svalů" = "Muscle fatigue";
+"Co znamenají procenta" = "What the percentages mean";
+"Procento říká, jak moc je sval už odpočatý. 100 % je plně připravený, 5 % je hned po tvrdém tréninku." = "The percentage is how rested a muscle already is. 100 % is fully ready, 5 % is right after a hard workout.";
+"Čím nižší číslo, tím déle se sval ještě zotavuje. Sval na 5 % bude odpočatý třeba za 4 dny, sval na 30 % už zítra." = "The lower the number, the longer the muscle still needs. A muscle at 5 % may be rested in 4 days, one at 30 % tomorrow.";
+"Velké svaly (stehna, hýždě, záda) se po těžkých cvicích zotavují až 3 dny, malé svaly paží a ramen kolem 2 dnů. Série do selhání prodlouží zotavení." = "Large muscles (thighs, glutes, back) take up to 3 days after heavy lifts, the small muscles of the arms and shoulders about 2 days. Sets to failure make it longer.";
+"Počítá se z tvých sérií v posilovně za posledních 7 dní a z běhu, kola a chůze, které zatěžují nohy." = "It comes from your gym sets of the last 7 days and from the runs, rides and walks that load your legs.";
+"rozjeté" = "started";
+"hotové" = "done";

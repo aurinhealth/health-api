@@ -25,6 +25,14 @@ test('real questions about the athlete get the planning context, small talk stay
   assert.equal(assistantTask('Díky!',{view:'workouts'}),'planning');assert.equal(assistantTask('Díky!',{view:'today',sport:'ride'}),'planning');
 });
 
+test('health, weight loss and today\'s decision never go to the light model',()=>{
+  for(const m of ['Je normální, že mě bolí na hrudi?','Jak dlouho mám pauzírovat, když mě bolí koleno?','Jak zhubnout 5 kg do měsíce?','Kolik mám jíst, když chci rychle zhubnout?','Co mám dnes dělat?','Jaký trénink mám dnes dělat?','Jaká mám dnes udělat intervaly?','Je bezpečné trénovat s betablokátory?','Jak dlouho můžu držet 48 h půst?','Je v pořádku mít tep 190?','Jak spát líp?','Is it normal to feel dizzy?'])
+    for(const screen of [{view:'today'},null])assert.equal(assistantTask(m,screen),'planning',m);
+  // Without an open screen these still get the athlete's data, not small talk.
+  for(const m of ['Necítím se dobře','Chci volno'])assert.equal(assistantTask(m),'planning',m);
+  for(const m of ['Jaké mám FTP?','Kolik mám dnes bílkovin?','What\'s my FTP?'])assert.equal(assistantTask(m,{view:'today'}),'quick',m);
+});
+
 test('Czech ň and ď reach the gym adjustment; "blok" needs a whole word',()=>{
   assert.equal(assistantTask('Vyměň dřep za leg press',{sport:'gym'}),'adjustment');
   assert.equal(assistantTask('Změň mi ten cvik'),'adjustment');assert.equal(assistantTask('Nahraď bench něčím jiným'),'adjustment');
@@ -123,6 +131,21 @@ test('a workout proposal carries only a library workout the coach was offered',(
   const schema=COACH_ACTION_FORMAT.schema.properties.actions.items;assert.ok(schema.required.includes('workoutId')&&schema.required.includes('statusUntil'));
   const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
   assert.match(entry,/a\.workoutId&&a\.sport!=='gym'\?\{workoutId:a\.workoutId,resizeTo:a\.minutes\}/);
+});
+
+test('no hard workout is prepared for today on a red day or with signs of illness',()=>{
+  const ride=(kind,date=today,extra={})=>({type:'workout',date,sport:'ride',minutes:75,reason:'Intervaly',kind,...extra});
+  const ctx=readiness=>({athleteState:'active',cyclingCoachV2:{readiness},workoutLibraryRecommendations:[{id:'v5x4',name:'VO2max 5×4',sport:'ride',system:'vo2max'}]});
+  const red=ctx({status:'red',flags:[]}),breath=ctx({status:'yellow',flags:['respiration_elevated']}),sick=ctx({status:'green',flags:['checkin_sick']}),green=ctx({status:'green',flags:[]});
+  for(const c of [red,breath,sick])for(const k of ['vo2max','threshold','tempo','sweet_spot']){
+    assert.deepEqual(validateCoachActions([ride(k)],c,today),[],k);
+    assert.deepEqual(validateCoachActions([ride(k)],c,today,{userInitiated:true}),[],k);
+  }
+  assert.deepEqual(validateCoachActions([ride('',today,{workoutId:'v5x4'})],red,today),[]);
+  // Easy work today, hard work on a later day and a green day stay.
+  assert.equal(validateCoachActions([ride('recovery')],red,today)[0].kind,'recovery');
+  assert.equal(validateCoachActions([ride('vo2max','2026-10-07')],red,today)[0].kind,'vo2max');
+  assert.equal(validateCoachActions([ride('vo2max')],green,today)[0].kind,'vo2max');
 });
 
 test('status proposals accept common words for illness and injury, with an optional end',()=>{

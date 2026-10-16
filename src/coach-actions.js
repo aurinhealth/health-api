@@ -44,6 +44,14 @@ export function actionSafetyContext(days,today,planFor){
   };
 }
 export const actionsNote=actions=>actions?.length?L('[Návrhy: ','[Proposals: ')+actions.map(actionSummary).join('; ')+']':'';
+// Hard work the app never prepares for today on a red readiness day or with
+// signs of illness (safetyNote): the answer may say so, the card cannot.
+const INTENSE=['vo2max','threshold','tempo','sweet_spot','anaerobic','sprint'];
+const ILLNESS_FLAG=/^(?:respiration|skin_temp|wrist_temp)_elevated$|^checkin_sick$/;
+export function holdBackToday(context){
+  const r=context?.cyclingCoachV2?.readiness;
+  return r?.status==='red'||r?.todayZone==='red'||(r?.flags||[]).some(f=>ILLNESS_FLAG.test(f));
+}
 export function validateCoachActions(actions,context,today,{userInitiated=false}={}){
   const events=new Map((context.week||[]).flatMap(d=>(d.planned||[]).map(a=>[String(a.id),{date:d.date,...a}])));
   return (Array.isArray(actions)?actions:[]).slice(0,3).flatMap(a=>{
@@ -100,6 +108,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       // Only a workout the coach was actually offered; the preview then shows exactly it.
       const library=a.workoutId?(context.workoutLibraryRecommendations||[]).find(w=>String(w.id)===String(a.workoutId)&&(!w.sport||w.sport===a.sport)):null;
       const kind=a.sport!=='gym'&&!library&&WORKOUT_KINDS.includes(a.kind)?{kind:a.kind}:{};
+      if(a.sport!=='gym'&&a.date===today&&INTENSE.includes(library?library.system:a.kind)&&holdBackToday(context))return [];
       return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason,...kind,...(library&&a.sport!=='gym'?{workoutId:String(library.id),workoutName:library.name}:{})}];
     }
     return [];

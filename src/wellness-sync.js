@@ -1,4 +1,4 @@
-// Copies Google Health wellness into Intervals.icu: sleep, average sleeping
+// Copies Google Health and Apple Health wellness into Intervals.icu: sleep, average sleeping
 // heart rate, steps, resting heart rate, HRV, SpO2, respiration, VO2max and
 // body fat, per day.
 //
@@ -97,10 +97,11 @@ async function remember(db, userId, date, fields) {
 
 const auth = env => ({ Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json", "Content-Type": "application/json" });
 
-// One pass for one user with both Google Health and Intervals.icu connected.
+// One pass for one user with Intervals.icu connected. Apple Health comes from
+// the iPhone, so it is not a connection here: without Google Health the
+// Apple Health days still go.
 export async function syncWellnessToIntervals(env, { sleepSessions = async () => [], fetchImpl = intervalsReads(env), now = Date.now() } = {}) {
-  const providers = env.CONNECTED_PROVIDERS || [];
-  if (!providers.includes("google") || !providers.includes("intervals")) return { status: "skipped" };
+  if (!(env.CONNECTED_PROVIDERS || []).includes("intervals")) return { status: "skipped" };
   const prefs = await readSyncPrefs(env.DB, env.USER_ID, "intervals");
   if (prefs.health !== "all" && !prefs.health.some(type => type !== "weight")) return { status: "skipped", reason: "off" };
   const newest = localDate(new Date(now).toISOString()), oldest = localDate(new Date(now - (WELLNESS_SYNC_DAYS - 1) * 86400000).toISOString());

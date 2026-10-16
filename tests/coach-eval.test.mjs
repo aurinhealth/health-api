@@ -45,9 +45,9 @@ test('a situation runs through the coach and the app checks its actions', async 
     actions: [{ type: 'workout', sport: 'ride', date, minutes: 75, kind: 'vo2max', reason: 'Chce to' }, { type: 'move', eventId: 'planned:9001', date: '2026-10-18', reason: 'Až po zotavení' }] }; };
   const result = await runScenario({}, scenarioById('S02'), { ask, date, now });
   assert.equal(asked.options.actions, true);assert.equal(asked.options.task, 'planning');assert.equal(asked.options.focus.sport, 'cycling');
-  assert.deepEqual(result.kept.map(a => a.type), ['workout', 'move']);
-  // The app's action checks let a VO2max through on a red day: the run says so.
-  assert.equal(result.passed, false);
+  // The app's action checks drop a VO2max for today on a red day; the move stays.
+  assert.deepEqual(result.kept.map(a => a.type), ['move']);
+  assert.equal(result.passed, true);
   assert.deepEqual(result.usage, { input: 10, output: 5 });
   const unavailable = await runScenario({}, scenarioById('S01'), { ask: async () => ({ status: 'unavailable', message: 'AI není' }), date, now });
   assert.equal(unavailable.status, 'unavailable');

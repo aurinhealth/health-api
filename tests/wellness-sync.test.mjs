@@ -59,8 +59,9 @@ test("one pass writes to Intervals.icu, remembers, and does not repeat", async (
   puts.length = 0;
   await syncWellnessToIntervals(env, deps);
   assert.deepEqual(puts, []);
-  // Needs both services.
-  assert.equal((await syncWellnessToIntervals({ ...env, CONNECTED_PROVIDERS: ["intervals"] }, deps)).status, "skipped");
+  // Needs Intervals.icu; Apple Health days go without Google Health.
+  assert.equal((await syncWellnessToIntervals({ ...env, CONNECTED_PROVIDERS: ["google"] }, deps)).status, "skipped");
+  assert.equal((await syncWellnessToIntervals({ ...env, CONNECTED_PROVIDERS: ["intervals"] }, deps)).status, "ok");
 });
 
 test("Synchronizace: only the chosen health data goes to Intervals.icu", async () => {

@@ -89,6 +89,9 @@ final class AppModel {
     var passkeyOffer = false
     /// A full-screen flow (Režim tréninku) hides the tab bar.
     var immersive = false
+    /// Režim tréninku hidden with its arrow: the workout goes on and a bar
+    /// over the tab bar leads back (MinimizedGymBar).
+    var minimizedGym: MinimizedGym?
     /// Writes made without signal, oldest first (Outbox.swift); the screens
     /// show them meanwhile.
     private(set) var outbox: [OutboxItem] = []
@@ -843,10 +846,23 @@ final class AppModel {
     /// them as "odešle se" while there is no signal.
     static let activityDestinationsKey = "sync.activityDestinations"
 
+    /// A finished gym session (Posilovna or Režim tréninku) to those apps, under
+    /// the day's key, so finishing it again updates the same activity.
+    /// `appleSaved`: the live workout is in Apple Health already.
+    func shareGym(_ day: GymDay, date: String, start: Date? = nil, minutes: Int? = nil, appleSaved: Bool = false) async {
+        let done = day.exercises.filter { $0.doneCount > 0 }
+        guard !done.isEmpty, let start = day.startedAt ?? start else { return }
+        let length = max(1, minutes ?? day.loggedMinutes ?? Int((Date().timeIntervalSince(start) / 60).rounded()))
+        let sets = done.map { $0.name + ": " + GymCoach.setsLine($0.sets) }.joined(separator: "\n")
+        await shareActivity(ActivityToSync(key: "gym:" + date, sport: "gym", name: day.planName ?? L10n.tr("Silový trénink"), date: date,
+                                           start: start, minutes: length, notes: sets), apple: !appleSaved)
+    }
+
     /// A done activity (a gym session, a workout typed in) to the apps chosen
     /// in Synchronizace; `sends` when the server already sent it (a manual
     /// workout). Shows the toast when it went anywhere.
-    func shareActivity(_ activity: ActivityToSync, sends: [SyncSend]? = nil) async {
+    /// `toApple` false when the workout is in Apple Health already.
+    func shareActivity(_ activity: ActivityToSync, sends: [SyncSend]? = nil, apple toApple: Bool = true) async {
         guard !demo else { return }
         var rows: [SyncReport.Row] = []
         if let sends {
@@ -867,7 +883,7 @@ final class AppModel {
             }
         }
         let apple = AppleHealthExport.shared
-        if apple.prefs.pushActivities {
+        if toApple && apple.prefs.pushActivities {
             let failed = await apple.saveWorkout(activity)
             rows.insert(SyncReport.Row(destination: "apple", status: failed == nil ? .sent : .error, message: failed), at: 0)
         }
