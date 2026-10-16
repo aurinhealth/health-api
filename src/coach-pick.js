@@ -6,6 +6,7 @@
 // turns down loses weight for two weeks (the coach learns from declines).
 import { L } from "./lang.js";
 import { activityKindOf, sessionOf } from "./activity-match.js";
+import { addRecovery, ensureRecoveryTable } from "./recovery-plan.js";
 
 const TABLE = "CREATE TABLE IF NOT EXISTS coach_picks (user_id INTEGER NOT NULL, date TEXT NOT NULL, kind TEXT NOT NULL, top TEXT, created_at TEXT NOT NULL, PRIMARY KEY (user_id, date))";
 const KINDS = ["ride", "run", "gym", "swim", "sauna", "rest"];
@@ -26,7 +27,8 @@ const sentence = text => { const t = String(text || "").trim(); return t ? t[0].
 // done today, declines: [{top, date}] of the last two weeks, planned: the
 // kinds planned for today.
 // done: today's sessions [{kind, minutes, tss}] for the words after training.
-export function rankOptions({ ride, run, mainSport = "general", sports = [], today = [], declines = [], planned = [], done = [] }) {
+export function rankOptions({ ride, run, mainSport = "general", sports = [], today = [], declines = [], planned = [], done = [], athleteStatus = "active", illness = false }) {
+  if (athleteStatus && athleteStatus !== "active") return pausedOptions(athleteStatus);
   const status = ride?.readiness?.status || run?.readiness?.status || "yellow";
   const names = KIND_NAMES();
   const lowerTired = (ride?.load?.lowerBodyGymSignals48h || 0) > 0;
@@ -67,16 +69,32 @@ export function rankOptions({ ride, run, mainSport = "general", sports = [], tod
     score -= Math.min(30, 10 * declines.filter(d => d.top === o.kind).length);
     o.score = score;
   }
+  // Signs of an oncoming illness (illness-check.js): no sauna, it only adds load.
+  if (illness) options.splice(options.findIndex(o => o.kind === "sauna"), 1);
   options.sort((a, b) => b.score - a.score);
   const best = options[0];
   // A day off on a bad morning comes with the sauna when it helps.
-  if (best.kind === "rest" && status === "red" && !trainedToday) { best.title = L("Volno a sauna", "Day off and sauna"); best.detail = L("Procházka · sauna 3 × 12 min", "A walk · sauna 3 × 12 min"); best.lines = [[L("Procházka", "Walk"), "30 min"], [L("Sauna", "Sauna"), L("3 × 12 min", "3 × 12 min")]]; }
+  if (best.kind === "rest" && status === "red" && !trainedToday && !illness) { best.title = L("Volno a sauna", "Day off and sauna"); best.detail = L("Procházka · sauna 3 × 12 min", "A walk · sauna 3 × 12 min"); best.lines = [[L("Procházka", "Walk"), "30 min"], [L("Sauna", "Sauna"), L("3 × 12 min", "3 × 12 min")]]; }
   // After training the day off is stretching and an evening walk.
   const rest = options.find(o => o.kind === "rest");
   if (trainedToday && rest) { rest.title = L("Protažení", "Stretching"); rest.detail = L("15 min · večer procházka 30 min", "15 min · an evening walk of 30 min"); rest.lines = [[L("Protažení", "Stretching"), "15 min"], [L("Večer", "Evening"), L("procházka 30 min", "a 30 min walk")]]; }
   best.best = true;
   best.reason = reasonFor(best, { status, ride, lowerTired, planned, trainedToday, done });
   return { status, score: ride?.readiness?.score ?? null, lowerTired, options: options.map(({ score, hard, rest, ...o }) => ({ ...o, action: o.kind === "ride" || o.kind === "run" ? "library" : o.kind === "gym" ? "gym" : "accept" })) };
+}
+
+// Nemoc, Zranění or Pauza set by the athlete: no training on offer, only rest
+// (the sauna too during a break, never while ill).
+function pausedOptions(athleteStatus) {
+  const rest = athleteStatus === "sick"
+    ? { kind: "rest", title: L("Odpočinek", "Rest"), detail: L("Spánek, pití a klid", "Sleep, drinks and quiet"), lines: [[L("Pití", "Drink"), L("2–3 l během dne", "2–3 l through the day")], [L("Spánek", "Sleep"), L("o hodinu déle", "an hour longer")]] }
+    : { kind: "rest", title: L("Volno", "Day off"), detail: L("Procházka 30 min a protažení", "A 30 min walk and stretching"), lines: [[L("Procházka", "Walk"), "30 min"], [L("Protažení", "Stretching"), "15 min"]] };
+  const reason = { sick: L("Máš nastavenou Nemoc. Dnes odpočívej, trénink i sauna počkají, až budeš zdravý.", "Your status is Sick. Rest today; training and the sauna wait until you're well."),
+    injured: L("Máš nastavené Zranění. Náhradní trénink navrhnu, až kouči popíšeš svá omezení.", "Your status is Injured. I'll suggest other training once you tell the coach your limitations."),
+    on_break: L("Máš nastavenou Pauzu, dnes bez tréninku.", "Your status is Rest, no training today.") }[athleteStatus] || L("Dnes bez tréninku.", "No training today.");
+  const options = [{ ...rest, best: true, reason }];
+  if (athleteStatus === "on_break") options.push({ kind: "sauna", title: L("Sauna", "Sauna"), detail: L("3 × 12 min", "3 × 12 min"), lines: [[L("3 kola", "3 rounds"), L("12 min v sauně", "12 min in the sauna")], [L("Mezi tím", "Between"), L("5 min venku nebo sprcha", "5 min outside or a shower")], [L("Pití", "Drink"), L("0,5 l vody", "0.5 l of water")]] });
+  return { status: "red", score: null, lowerTired: false, paused: athleteStatus, options: options.map(o => ({ ...o, action: "accept" })) };
 }
 
 // "Dnes máš za sebou kolo, 1 h 07, 74 TSS." from today's longest session.
@@ -133,10 +151,27 @@ export async function pickState(db, userId, date) {
   return { chosen: chosen?.kind || null, declines };
 }
 
+// What an option without a workout puts into Plán dne (recovery-plan.js):
+// the day off is a walk and stretching. A ride or run is in the calendar and
+// the gym in its plan already (the app saves those before the choice).
+export const PICK_PLAN = { swim: ["swim"], sauna: ["sauna"], rest: ["walk", "stretch"] };
+
 // The athlete's choice for the day; another than the coach's top is a decline of it.
+// The choice goes into the day's plan; a changed mind takes the earlier
+// choice's rows out again (unless already done).
 export async function savePick(db, userId, { date, kind, top }) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || !KINDS.includes(kind)) throw new Error(L("Neplatná volba.", "Invalid choice."));
   await db.prepare(TABLE).run();
+  const before = (await db.prepare("SELECT kind FROM coach_picks WHERE user_id=? AND date=?").bind(userId, date).first())?.kind || null;
+  if (before && before !== kind && PICK_PLAN[before]) {
+    await ensureRecoveryTable(db);
+    for (const k of PICK_PLAN[before]) await db.prepare("DELETE FROM recovery_sessions WHERE user_id=? AND date=? AND kind=? AND done_at IS NULL").bind(userId, date, k).run();
+  }
+  if (PICK_PLAN[kind]) {
+    await ensureRecoveryTable(db);
+    const there = new Set(((await db.prepare("SELECT kind FROM recovery_sessions WHERE user_id=? AND date=?").bind(userId, date).all()).results || []).map(r => r.kind));
+    for (const k of PICK_PLAN[kind]) if (!there.has(k)) await addRecovery(db, { date, kind: k });
+  }
   await db.prepare("INSERT INTO coach_picks (user_id, date, kind, top, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET kind=excluded.kind, top=COALESCE(coach_picks.top, excluded.top), created_at=excluded.created_at")
     .bind(userId, date, kind, KINDS.includes(top) ? top : null, new Date().toISOString()).run();
   return { status: "ok", chosen: kind };

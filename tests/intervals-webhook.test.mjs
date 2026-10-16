@@ -47,7 +47,7 @@ test("disconnecting an OAuth connection gives the access back to Intervals.icu; 
 test("an OAuth connection is not imported every 5 minutes; the webhook route is wired", () => {
   const entry = serverSource();
   assert.match(entry, /url\.pathname === "\/webhooks\/intervals"/);
-  assert.match(entry, /intervalsOAuthQuiet\(scoped\)\?null:legacyHealthApi\.fetch\(new Request\('https:\/\/internal\/sync\/intervals\/recent'/);
-  assert.match(entry, /intervalsOAuthQuiet\(scoped, 30\)/);
+  assert.match(entry, /name: "intervals-recent".*intervalsOAuthQuiet\(scoped, 40, .*\) \? null : legacyHealthApi\.fetch/);
+  assert.match(entry, /if \(intervalsOAuthQuiet\(scoped, 30, .*\)\) return;\n    await syncWeights/);
   assert.match(entry, /disconnectIntervalsApp\(env\);await deleteConnectionSecret\(env,'intervals_athlete'\)/);
 });

@@ -39,10 +39,12 @@ extension APIClient {
 }
 
 // The morning check-in on Today (src/morning-checkin.js): how the athlete
-// feels, which can only lower the readiness.
+// feels, which can only lower the readiness. The server keeps one answer a
+// day, so sending it again (from the outbox) changes nothing.
 extension APIClient {
-    func setMorningCheckin(_ feeling: String?, date: String) async throws {
+    static func morningCheckinItem(_ feeling: String?, date: String) -> OutboxItem {
         let body: JSONObject = ["date": .string(date), "feeling": feeling.map { .string($0) } ?? .null]
-        let _: JSONValue = try await send("/app/api/morning-checkin", method: "POST", body: body)
+        return OutboxItem(path: "/app/api/morning-checkin", method: "POST", body: OutboxItem.json(body),
+                          label: L10n.tr("Ranní pocit"), key: "checkin:" + date)
     }
 }

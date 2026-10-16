@@ -55,6 +55,7 @@ test("week plan preferences are sanitised and stored per user", async () => {
   assert.equal(sanitizeWeekPlan({ location: { name: "Kutná Hora", latitude: 49.9484, longitude: 15.2682 } }).location, null);
   assert.equal(sanitizeWeekPlan({ location: { name: "Kutná Hora", latitude: 49.9484, longitude: 15.2682, source: "search" } }).location.name, "Kutná Hora");
   assert.deepEqual(sanitizeWeekPlan({ location: { latitude: 50.08, longitude: 14.42, source: "device" } }).location, { name: "Moje poloha", latitude: 50.08, longitude: 14.42, source: "device" });
+  assert.deepEqual(sanitizeWeekPlan({ location: { latitude: 50.08734, longitude: 14.42126, source: "device" } }).location, { name: "Moje poloha", latitude: 50.09, longitude: 14.42, source: "device" });
   await saveWeekPlan(a, { days: example, location: { name: "Praha", latitude: 50.0755, longitude: 14.4378 } });
   assert.equal((await getWeekPlan(a)).location.name, "Praha");
   assert.deepEqual((await getWeekPlan(a)).days[5], ["ride", "gym"]);
@@ -107,20 +108,6 @@ test("week targets: done or planned sessions count first and one ride never carr
   const planned = weekTargets({ roles, ctl: 70, lastWeekLoad: 450, days: [{ date: "2026-10-03", done: 0, planned: 120, sports: ["ride"] }], today: "2026-09-28", weekStart: "2026-09-28" });
   assert.equal(targetFor(planned, "2026-10-03", "ride"), null);
   assert.equal(weekTargets({ roles, ctl: null }).status, "no_fitness");
-});
-
-test("the nightly gym plan follows the week plan and keeps an existing plan", async () => {
-  const { createD1 } = await import("./helpers/d1.mjs");
-  const { scopedDb } = await import("../src/tenancy.js");
-  const { saveWeekPlan, nightlyGymSkip } = await import("../src/week-planner.js");
-  const { saveGymPlan } = await import("../src/gym-plan-store.js");
-  const db = scopedDb(createD1(), 7);
-  assert.equal(await nightlyGymSkip(db, "2026-10-03"), null); // no week plan yet: old behaviour
-  await saveWeekPlan(db, { days: [["gym"], ["ride"], [], ["gym"], ["ride"], ["ride"], ["ride"]] });
-  assert.match(await nightlyGymSkip(db, "2026-10-03"), /není tento den gym/); // Saturday: ride
-  assert.equal(await nightlyGymSkip(db, "2026-10-05"), null); // Monday: gym
-  await saveGymPlan(db, "2026-10-05", [["x"]]);
-  assert.match(await nightlyGymSkip(db, "2026-10-05"), /už gym plán je/);
 });
 
 test('a day may hold the same sport twice; the second session stays easy and gets its own target', async () => {

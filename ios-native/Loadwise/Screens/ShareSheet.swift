@@ -17,8 +17,11 @@ struct ShareSheet: View {
     @State private var day: ShareDay? = nil
     @State private var workout: ShareWorkout? = nil
     @State private var food: ShareFood? = nil
+    @State private var week: ShareWeek? = nil
+    @State private var milestones: ShareMilestones? = nil
     @State private var editing = false
     @State private var busy = false
+    @State private var instagram = false
 
     init(source: Source) {
         self.source = source
@@ -42,6 +45,8 @@ struct ShareSheet: View {
             case .day: return day != nil
             case .activity: return workout != nil
             case .food: return food != nil
+            case .week: return week != nil
+            case .milestone: return milestones?.isEmpty == false
             }
         }
     }
@@ -55,7 +60,7 @@ struct ShareSheet: View {
     }
 
     private func card(_ options: ShareOptions, width: CGFloat) -> ShareCard {
-        ShareCard(kind: kind, options: options, day: day, workout: workout, food: food, width: width)
+        ShareCard(kind: kind, options: options, day: day, workout: workout, food: food, week: week, milestones: milestones, width: width)
     }
 
     var body: some View {
@@ -72,6 +77,10 @@ struct ShareSheet: View {
                     PrimaryButton(title: L10n.tr("Sdílet"), systemImage: "square.and.arrow.up", busy: busy) { share() }
                         .disabled(busy)
                         .padding(.top, 10)
+                    if instagram {
+                        SecondaryButton(title: "Do příběhu na Instagramu", systemImage: "camera") { shareToInstagram() }
+                            .padding(.top, 10)
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 28)
@@ -79,10 +88,13 @@ struct ShareSheet: View {
             .background(Palette.background.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $editing) {
-                ShareEditView(kind: kind, options: current, workout: workout) { self.card($0, width: $1) }
+                ShareEditView(kind: kind, options: current, workout: workout, milestones: milestones?.items ?? []) { self.card($0, width: $1) }
             }
         }
-        .task { await load() }
+        .task {
+            instagram = ShareExport.canShareToInstagram
+            await load()
+        }
     }
 
     private var kindChips: some View {
@@ -131,9 +143,17 @@ struct ShareSheet: View {
         return shown
     }
 
-    /// The night's stages and the done workouts' details, after the sheet shows.
+    /// The week, the milestones, the night's stages and the done workouts'
+    /// details, after the sheet shows.
     private func load() async {
-        guard case .today(let today) = source, !model.demo else { return }
+        guard case .today(let today) = source else { return }
+        if model.demo {
+            week = ShareWeek.sample
+            milestones = ShareMilestones.sample
+            return
+        }
+        week = try? await model.api.shareWeek(date: today.date)
+        milestones = try? await model.api.shareMilestones()
         let items = ShareDay.doneWorkouts(today)
         for (i, item) in items.enumerated() {
             guard let session = item.session else { continue }
@@ -154,9 +174,16 @@ struct ShareSheet: View {
         defer { busy = false }
         let options = current.wrappedValue
         guard let image = ShareExport.image(card(options, width: ShareCard.width), clear: options.clear) else { return }
-        let date = day?.date ?? food?.date ?? workout?.date ?? AppModel.localDate(Date())
+        let date = (kind == .week ? week?.start : nil) ?? day?.date ?? food?.date ?? workout?.date ?? AppModel.localDate(Date())
+        let title = kind == .week ? week.map { ShareText.range($0.start, $0.end) } ?? ShareText.date(date) : ShareText.date(date)
         guard let url = ShareExport.file(image, name: "Aurin-" + kind.rawValue + "-" + date) else { return }
-        ShareExport.present(url, title: "Aurin · " + ShareText.date(date), image: image)
+        ShareExport.present(url, title: "Aurin · " + title, image: image)
+    }
+
+    private func shareToInstagram() {
+        let options = current.wrappedValue
+        guard let image = ShareExport.image(card(options, width: ShareCard.width), clear: options.clear) else { return }
+        ShareExport.instagram(image, clear: options.clear, dark: options.dark)
     }
 }
 
@@ -216,6 +243,7 @@ struct ShareEditView: View {
     let kind: ShareKind
     @Binding var options: ShareOptions
     let workout: ShareWorkout?
+    var milestones: [ShareMilestones.Item] = []
     let card: (ShareOptions, CGFloat) -> ShareCard
     @Environment(\.dismiss) private var dismiss
 
@@ -240,8 +268,18 @@ struct ShareEditView: View {
                     look("Průhledné", on: options.clear, swatch: .clear) { options.clear = true }
                 }
                 .padding(.top, 10)
-                SectionLabel(text: kind == .day && options.variant == 0 ? "Na ose" : "Údaje").padding(.top, 26).padding(.horizontal, 4)
-                rows.padding(.top, 10)
+                if kind == .milestone && options.variant != 2 && milestones.count > 1 {
+                    SectionLabel(text: "Milník").padding(.top, 26).padding(.horizontal, 4)
+                    let chosen = milestones.first { item in item.key == options.milestone }?.key ?? milestones[0].key
+                    ChipFlow(items: milestones.map(\.key), label: { key in L10n.tr(milestones.first { item in item.key == key }?.title ?? key) },
+                             isOn: { key in key == chosen },
+                             toggle: { key in options.milestone = key })
+                        .padding(.top, 10)
+                }
+                if !(kind == .milestone && options.variant == 2) && !(kind == .week && options.variant == 1) {
+                    SectionLabel(text: kind == .day && options.variant == 0 ? "Na ose" : "Údaje").padding(.top, 26).padding(.horizontal, 4)
+                    rows.padding(.top, 10)
+                }
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 30)
@@ -345,6 +383,11 @@ struct ShareEditView: View {
         case .food:
             return [Row(key: "Energie", color: Palette.green), Row(key: "Bílkoviny", color: Palette.protein), Row(key: "Sacharidy", color: Palette.carbs),
                     Row(key: "Tuky", color: Palette.fat), Row(key: "Voda", color: Palette.blue)]
+        case .week:
+            let colors: [String: Color] = ["Zátěž": Palette.amber, "Kolo": Palette.amber, "Běh": Palette.green, "Spánek": Palette.indigo, "Připravenost": Palette.green]
+            return ShareWeek.rows.map { Row(key: $0, color: colors[$0] ?? Palette.secondary) }
+        case .milestone:
+            return ShareMilestones.rows.map { Row(key: $0, color: Palette.amber) }
         }
     }
 

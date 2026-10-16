@@ -32,7 +32,7 @@ jobs:
           if git diff --name-only "$BASE...$HEAD" | grep -qx 'src/site-pages.js'; then
             echo "The overview changed together with the app." >> "$GITHUB_STEP_SUMMARY"
           else
-            msg="This pull request changes the app but not the website. If users will see the change, update overviewPage in src/site-pages.js (Czech and English)."
+            msg="This pull request changes the app but not the website. If users will see the change, update overviewPage in src/site-pages.js."
             echo "::warning title=Website copy::$msg"
             echo "$msg" >> "$GITHUB_STEP_SUMMARY"
           fi

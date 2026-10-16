@@ -160,6 +160,12 @@ final class AppModel {
         if let i = args.firstIndex(of: "-tab"), i + 1 < args.count {
             tab = ["training": AppTab.training, "food": .food, "health": .health][args[i + 1]] ?? .today
         }
+        // "-open readiness" (the website's screenshots) opens a detail as its link
+        // would, without the system's "Open in Aurin?" question that simctl openurl brings.
+        if let i = args.firstIndex(of: "-open"), i + 1 < args.count,
+           let url = URL(string: "loadwise://open/\(args[i + 1])") {
+            handle(url)
+        }
         // The network back: what waited goes out and the screens load again.
         if !demo {
             network = NetworkWatch { [weak self] in await self?.networkBack() }
@@ -171,7 +177,19 @@ final class AppModel {
         api.onSubscriptionRequired = { [weak self] in
             Task { @MainActor in if let self { Paywall.present(self) } }
         }
+        if !demo {
+            Self.live = self
+            // Water from Siri or Shortcuts (AddWaterIntent) goes out now, not on the next refresh.
+            drinkObserver = NotificationCenter.default.addObserver(forName: PendingDrinks.added, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in _ = await self?.sendOutbox(reloadToday: true) }
+            }
+        }
     }
+
+    /// The signed-in app's model, for Siri and Shortcuts (SiriShortcuts.swift),
+    /// which run in the app's process but outside its views.
+    static weak var live: AppModel?
+    @ObservationIgnored private var drinkObserver: NSObjectProtocol?
 
     /// The screens as they were last time, until the server answers.
     private func loadSaved() {
@@ -489,10 +507,12 @@ final class AppModel {
     }
     @ObservationIgnored private var refreshing: Set<AppTab> = []
 
-    /// The morning check-in on Today. It lowers the readiness, so Today loads again.
+    /// The morning check-in on Today. It lowers the readiness, so Today loads
+    /// again; without signal the answer waits in the outbox (a newer one
+    /// replaces it) and Today follows once it went out.
     func setMorningCheckin(_ feeling: String?) async throws {
         guard !demo, let today else { return }
-        try await api.setMorningCheckin(feeling, date: today.date)
+        guard try await deliver(APIClient.morningCheckinItem(feeling, date: today.date)) else { return }
         await refresh()
         if health != nil { await refreshHealth() }
     }
@@ -593,12 +613,18 @@ final class AppModel {
     @discardableResult
     func addDrink(ml: Int, kind: String) async -> Bool {
         guard !demo else { return true }
-        write(drinkItem(ml: ml, kind: kind, date: writeDay))
+        write(Self.drinkItem(ml: ml, kind: kind, date: writeDay))
         return true
     }
 
+    /// A drink from Siri or Shortcuts: always today, whatever day the app shows.
+    func addDrinkToday(ml: Int, kind: String) {
+        guard !demo else { return }
+        write(Self.drinkItem(ml: ml, kind: kind, date: Self.localDate(Date())))
+    }
+
     /// POST /app/api/fluids with the time it was drunk, so a later send keeps it.
-    private func drinkItem(ml: Int, kind: String, date: String, at: Date = Date()) -> OutboxItem {
+    static func drinkItem(ml: Int, kind: String, date: String, at: Date = Date()) -> OutboxItem {
         let localId = Outbox.localId()
         var body: JSONObject = ["ml": .number(Double(ml)), "kind": .string(kind), "date": .string(date),
                                 "requestId": .string(UUID().uuidString)]
@@ -672,7 +698,7 @@ final class AppModel {
     private func takeWidgetDrinks() {
         let drinks = PendingDrinks.take()
         guard !drinks.isEmpty else { return }
-        outbox += drinks.map { drinkItem(ml: $0.ml, kind: "water", date: $0.date) }
+        outbox += drinks.map { Self.drinkItem(ml: $0.ml, kind: "water", date: $0.date) }
         saveOutbox()
     }
 
@@ -778,19 +804,29 @@ final class AppModel {
         if food != nil { await refreshFood() }
     }
 
-    /// A weigh-in (kg); waits for signal when there is none. Throws the server's refusal.
-    func addWeight(kg: Double) async throws {
-        guard !demo else { return }
+    /// A weigh-in (kg); waits for signal when there is none. Throws the server's
+    /// refusal. True when it went out now. reload: false for Siri, which waits
+    /// for the answer and needs no screens loaded.
+    @discardableResult
+    func addWeight(kg: Double, reload: Bool = true) async throws -> Bool {
+        guard !demo else { return true }
         let date = Self.localDate(Date())
-        let body: JSONObject = ["kg": .number(kg), "date": .string(date), "requestId": .string(UUID().uuidString)]
-        let item = OutboxItem(path: "/app/api/weight", method: "POST", body: OutboxItem.json(body), label: L10n.tr("Váha"),
-                              overlay: OutboxOverlay(kind: .weight, date: date, kg: kg))
+        let item = Self.weightItem(kg: kg, date: date)
         // Apple Health gets it too when weight is switched on in Synchronizace.
         Task { await AppleHealthExport.shared.saveWeight(kg: kg, date: date) }
-        if try await deliver(item) {
+        let sent = try await deliver(item)
+        if sent && reload {
             await refreshHealth()
             await refresh()
         }
+        return sent
+    }
+
+    /// POST /app/api/weight; the requestId keeps one weigh-in when it goes out twice.
+    nonisolated static func weightItem(kg: Double, date: String) -> OutboxItem {
+        let body: JSONObject = ["kg": .number(kg), "date": .string(date), "requestId": .string(UUID().uuidString)]
+        return OutboxItem(path: "/app/api/weight", method: "POST", body: OutboxItem.json(body), label: L10n.tr("Váha"),
+                          overlay: OutboxOverlay(kind: .weight, date: date, kg: kg))
     }
 
     // MARK: - Synchronizace

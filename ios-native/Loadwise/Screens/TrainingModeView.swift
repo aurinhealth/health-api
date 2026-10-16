@@ -90,9 +90,20 @@ struct TrainingModeView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .task { await load() }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) } }
-        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) } }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true
+            GymActivityInbox.handler = { activityAction($0) }
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) }
+            GymActivityInbox.handler = nil
+            GymLiveActivity.end()
+        }
+        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
+        .onChange(of: day) { _, _ in syncActivity() }
+        .onChange(of: index) { _, _ in syncActivity() }
+        .onChange(of: finishedSession) { _, _ in syncActivity() }
+        .onChange(of: live.heartRate) { _, _ in syncActivity(quiet: true) }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
             ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
@@ -717,6 +728,33 @@ struct TrainingModeView: View {
         restEnd = next.timeIntervalSinceNow <= 0 ? nil : next
     }
 
+    // MARK: Live Activity
+
+    /// The lock screen and Dynamic Island follow the exercise on screen (GymLiveActivity).
+    private func syncActivity(quiet: Bool = false) {
+        GymLiveActivity.sync(day: finishedSession ? nil : day, focus: index, restStart: restStart, restEnd: restEnd, quiet: quiet)
+    }
+
+    /// +30 s, Přeskočit pauzu and Série hotová from the lock screen.
+    private func activityAction(_ action: GymActivityAction) {
+        switch action {
+        case .extend:
+            if let end = restEnd {
+                if end <= Date() { restEnd = Date().addingTimeInterval(30) } else { shiftRest(30) }
+            }
+        case .skip:
+            restEnd = nil
+        case .complete(let row):
+            guard let list = day?.exercises, let at = list.firstIndex(where: { $0.sets.contains { $0.row == row } }),
+                  let set = list[at].sets.first(where: { $0.row == row && !$0.done }), !saving else { break }
+            index = at
+            restEnd = nil
+            prefill(set)
+            Task { await complete(set) }
+        }
+        syncActivity()
+    }
+
     // MARK: Server
 
     private func load() async {
@@ -732,8 +770,10 @@ struct TrainingModeView: View {
             if let profile = try? await model.api.trainingProfile() {
                 zoneLows = profile.hrZones.sorted { $0.zone < $1.zone }.map { $0.bpmLow ?? 0 }
             }
-            // The clock, calories and heart rate while sets are left.
-            if let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }) {
+            // The clock, calories and heart rate (a workout recorded in Apple
+            // Health) start with the first ticked set; a workout already under
+            // way with sets left goes on. Only opening it records nothing.
+            if let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }), day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
                 await live.begin(since: nil, weightKg: model.today?.weight?.latest)
             }
             // An empty workout: the exercise list for Přidat cvik.
@@ -795,7 +835,6 @@ struct TrainingModeView: View {
         restEnd = nil
         // Straight to the new exercise when nothing else is left.
         if allDone { index = next.exercises.count - 1 }
-        if !live.running && !model.demo { await live.begin(since: nil, weightKg: model.today?.weight?.latest) }
         await loadMuscles(next)
         guard !model.demo else { return }
         do {
@@ -811,6 +850,8 @@ struct TrainingModeView: View {
         if !finishedSession, let day, day != original, !day.exercises.isEmpty {
             confirmClose = true
         } else {
+            // Nothing done here: the recording (if any) stops with the screen.
+            live.reset()
             dismiss()
         }
     }
@@ -898,6 +939,7 @@ struct TrainingModeView: View {
         next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.plannedReps ?? "") : r, rpe: String(rpe))
         day = next
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if !live.running && !model.demo { Task { await live.begin(since: nil, weightKg: model.today?.weight?.latest) } }
         // The last set of the exercise: on to the next one after a longer rest.
         var rest = set.warmup ? 60 : restSets
         let otherSide = set.side == "L" && next.exercises[safe: index]?.sets.contains { $0.number == set.number && $0.side == "P" && !$0.done } == true
@@ -917,6 +959,8 @@ struct TrainingModeView: View {
             restStart = Date()
             restEnd = Date().addingTimeInterval(TimeInterval(rest))
         }
+        // Before the save: the lock screen may be all that's awake.
+        syncActivity()
         guard !model.demo else { return }
         saving = true
         defer { saving = false }

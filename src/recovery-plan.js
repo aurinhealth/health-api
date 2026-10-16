@@ -42,14 +42,17 @@ const seconds = item => { const s = STRETCHES[item.key]; return s ? (s.hold ? s.
 // The time the move itself takes (both sides), for the app's timer.
 const holdSeconds = s => (s.hold ? s.hold : s.reps * 4) * (s.sides ? 2 : 1);
 export const SAUNA_MINUTES = 30;
+// Swimming and a walk join the plan from Aktivita dne (coach-pick.js), without moves.
+const PLAIN = { sauna: () => ["Sauna", SAUNA_MINUTES], swim: () => [L("Plavání", "Swim"), 45], walk: () => [L("Procházka", "Walk"), 30] };
+export const RECOVERY_KINDS = ["stretch", ...Object.keys(PLAIN)];
 export function describeRecovery(row) {
-  const sauna = row.kind === "sauna";
-  const items = sauna ? [] : (row.items || []).filter(i => STRETCHES[i.key]).map(i => {
+  const plain = PLAIN[row.kind]?.();
+  const items = plain ? [] : (row.items || []).filter(i => STRETCHES[i.key]).map(i => {
     const s = STRETCHES[i.key];
     return { key: i.key, name: L(s.cs, s.en), dose: s.hold ? s.hold + " s" + (s.sides ? L(" na stranu", " per side") : "") : s.reps + "×" + (s.sides ? L(" na stranu", " per side") : ""), cue: L(s.cueCs, s.cueEn) + (i.gentle ? L(" Jemně a bez bolesti.", " Gently, without pain.") : ""), gentle: Boolean(i.gentle), seconds: holdSeconds(s), sides: Boolean(s.sides) };
   });
-  const minutes = sauna ? SAUNA_MINUTES : Math.max(5, Math.round((row.items || []).reduce((a, i) => a + seconds(i), 0) / 60));
-  return { id: row.id, date: row.date, kind: row.kind, title: sauna ? "Sauna" : L("Protažení", "Stretching"), minutes, items, done: Boolean(row.done_at), doneAt: row.done_at || null };
+  const minutes = plain ? plain[1] : Math.max(5, Math.round((row.items || []).reduce((a, i) => a + seconds(i), 0) / 60));
+  return { id: row.id, date: row.date, kind: row.kind, title: plain ? plain[0] : L("Protažení", "Stretching"), minutes, items, done: Boolean(row.done_at), doneAt: row.done_at || null };
 }
 
 // The body parts a routine stretches, in its order: "hrudník, záda, ramena".
@@ -79,12 +82,12 @@ export async function listRecovery(db, { from, to }) {
   return (rows.results || []).map(parse);
 }
 
-// One stretching session per day: adding again replaces the routine. A sauna
-// is its own kind without moves. `done` stores it as already done (the app
+// One stretching session per day: adding again replaces the routine. A sauna,
+// a swim and a walk are their own kinds without moves. `done` stores it as already done (the app
 // saves a finished routine or sauna straight into the day's plan).
 export async function addRecovery(db, { date, sport = null, focus = "", note = "", kind = "stretch", done = false }) {
   await ensureRecoveryTable(db);
-  const routine = kind === "sauna" ? { kind: "sauna", items: [] } : recoveryRoutine({ sport, focus, note });
+  const routine = PLAIN[kind] ? { kind, items: [] } : recoveryRoutine({ sport, focus, note });
   await db.prepare("DELETE FROM recovery_sessions WHERE user_id=? AND date=? AND kind=? AND done_at IS NULL").bind(db.userId, date, routine.kind).run();
   await db.prepare("INSERT INTO recovery_sessions(user_id,date,kind,items_json,done_at) VALUES(?,?,?,?,?)").bind(db.userId, date, routine.kind, JSON.stringify(routine.items), done ? new Date().toISOString() : null).run();
   return (await listRecovery(db, { from: date, to: date })).filter(r => r.kind === routine.kind).at(-1);

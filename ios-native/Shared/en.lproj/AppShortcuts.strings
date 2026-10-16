@@ -1,0 +1,27 @@
+/* Siri and Shortcuts phrases (App/SiriShortcuts.swift); the keys are the Czech phrases. */
+"Připravenost dnes v aplikaci ${applicationName}" = "Today's readiness in ${applicationName}";
+"Jakou mám dnes připravenost v aplikaci ${applicationName}" = "What's my readiness today in ${applicationName}";
+"${applicationName} připravenost" = "${applicationName} readiness";
+"Přidat sklenici vody v aplikaci ${applicationName}" = "Add a glass of water in ${applicationName}";
+"${applicationName} sklenice vody" = "${applicationName} glass of water";
+"Jaký mám dnes trénink v aplikaci ${applicationName}" = "What is my workout today in ${applicationName}";
+"Trénink dnes v aplikaci ${applicationName}" = "Today's workout in ${applicationName}";
+"${applicationName} trénink" = "${applicationName} workout";
+"Jaká je aktivita dne v aplikaci ${applicationName}" = "What is my activity of the day in ${applicationName}";
+"Aktivita dne v aplikaci ${applicationName}" = "Activity of the day in ${applicationName}";
+"${applicationName} aktivita dne" = "${applicationName} activity of the day";
+"Jak jsem dnes spal v aplikaci ${applicationName}" = "How was my sleep in ${applicationName}";
+"Spánek dnes v aplikaci ${applicationName}" = "Last night's sleep in ${applicationName}";
+"${applicationName} spánek" = "${applicationName} sleep";
+"Zapsat pití ${drink} v aplikaci ${applicationName}" = "Log ${drink} in ${applicationName}";
+"Zapsat pití v aplikaci ${applicationName}" = "Log a drink in ${applicationName}";
+"${applicationName} pití ${drink}" = "${applicationName} log ${drink}";
+"Zapsat váhu v aplikaci ${applicationName}" = "Log weight in ${applicationName}";
+"Zapiš moji váhu do aplikace ${applicationName}" = "Log my weight in ${applicationName}";
+"${applicationName} váha" = "${applicationName} weight";
+"Zeptat se kouče v aplikaci ${applicationName}" = "Ask my coach in ${applicationName}";
+"${applicationName} kouč" = "${applicationName} coach";
+"Kolik mi dnes zbývá sníst v aplikaci ${applicationName}" = "How much can I still eat in ${applicationName}";
+"${applicationName} jídlo" = "${applicationName} food";
+"Začít trénink v aplikaci ${applicationName}" = "Start my workout in ${applicationName}";
+"${applicationName} začít trénink" = "${applicationName} start workout";

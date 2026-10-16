@@ -30,6 +30,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
         // A tap outside a text field hides the keyboard (KeyboardDismiss.swift).
         MainActor.assumeIsolated { KeyboardDismiss.install() }
+        // Crashes from MetricKit for "Nahlásit problém" (CrashReports.swift).
+        CrashReports.shared.start()
         let center = UNUserNotificationCenter.current()
         center.setNotificationCategories([Reminders.pillNotificationCategory, CoachPush.category])
         center.delegate = self

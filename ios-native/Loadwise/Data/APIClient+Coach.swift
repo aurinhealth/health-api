@@ -18,6 +18,10 @@ struct CoachCheckIn: Decodable {
         /// illness: each sign against the normal, and the sessions it may cancel.
         var rows: [Row]? = nil
         var sessions: [Session]? = nil
+        /// swap: the morning push's offer, the session now and the easier one.
+        var date: String? = nil
+        var from: String? = nil
+        var to: String? = nil
 
         struct Row: Decodable, Equatable, Identifiable {
             let id: String

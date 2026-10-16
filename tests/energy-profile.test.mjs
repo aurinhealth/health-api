@@ -63,13 +63,21 @@ test("sleep settings: a goal of 6–10 h and alarm clock times", () => {
   assert.equal(p.wakeTime, "06:30");
   assert.equal(p.wakeTimeWeekend, "", "an impossible time is dropped");
   assert.equal(normalizeProfile({ sleepGoal: 200 }).sleepGoal, null);
-  assert.deepEqual(sleepSettings(p), { goal: 450, wake: { workday: 390, weekend: null } });
+  assert.deepEqual(sleepSettings(p), { goal: 450, wake: { workday: 390, weekend: null }, tonight: null });
+});
+
+test("sleep settings: tonight's own length and wake time", () => {
+  const p = normalizeProfile({ sleepTonight: { date: "2026-10-15", minutes: 452, wake: "6:45" } });
+  assert.deepEqual(p.sleepTonight, { date: "2026-10-15", minutes: 450, wake: "06:45" });
+  assert.equal(normalizeProfile({ sleepTonight: { date: "x", minutes: 450 } }).sleepTonight, null);
+  assert.equal(normalizeProfile({ sleepTonight: { date: "2026-10-15", minutes: 100, wake: "" } }).sleepTonight, null);
+  assert.deepEqual(sleepSettings(p).tonight, { date: "2026-10-15", minutes: 450, wake: 405 });
 });
 
 test("the profile endpoint keeps only known values", () => {
   assert.deepEqual(normalizeProfile({ displayName: "  Petr   Bouma ", sex: "x", age: 12, height: 180, activity: "couch", sportHours: "3-6", goal: "lose_0.5", targetWeight: "72.5", extra: 1 }),
     { displayName: "Petr Bouma", sex: "", birthDate: "", age: null, height: 180, hrmax: null, rhr: null, activity: "", sportHours: "3-6", goal: "lose_0.5", targetWeight: 72.5,
-      sleepGoal: null, wakeTime: "", wakeTimeWeekend: "", meals: [],
+      sleepGoal: null, wakeTime: "", wakeTimeWeekend: "", sleepTonight: null, meals: [],
       mainSport: "general", sportGoal: "", eventName: "", eventDate: "", weeklyHours: null });
 });
 

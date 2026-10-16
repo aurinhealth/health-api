@@ -247,7 +247,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const split = Array.isArray(insights.cardioFocus?.weeks) ? insights.cardioFocus.weeks : [];
   const weeks = Array.from({ length: 8 }, (_, i) => {
     const from = shift(start, (i - 7) * 7), to = shift(from, 6);
-    const load = intervals.filter(r => r.id >= from && r.id <= to).reduce((s, r) => s + (num(r.ctlLoad ?? r.atlLoad) || 0), 0);
+    const load = intervals.filter(r => r.id >= from && r.id <= to).reduce((s, r) => s + (num(r.ctlLoad ?? r.atlLoad ?? r.load) || 0), 0);
     return { start: from, week: isoWeek(from), load: Math.round(load), planned: i === 7 ? Math.round(plannedTss) : null };
   });
   const intensity = insights.cardioFocus?.points > 0 ? {

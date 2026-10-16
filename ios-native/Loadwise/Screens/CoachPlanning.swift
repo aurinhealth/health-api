@@ -16,6 +16,7 @@ struct CoachCheckInCard: View {
     @State private var illnessSessions: [CoachCheckIn.Advice.Session] = []
     /// After switching to Nemoc: until when, and how many sessions went.
     @State private var switched: (until: String?, cancelled: Int)?
+    @State private var swapError: String?
 
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
@@ -55,7 +56,23 @@ struct CoachCheckInCard: View {
                     if let message = advice.message {
                         Text(message).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
-                    if advice.kind == "memory_check", let memory = advice.memory {
+                    if advice.kind == "swap", let from = advice.from, let to = advice.to {
+                        // "VO2max 5×4 · 75 min → Lehká jízda · 45 min", as the push offered it.
+                        HStack(spacing: 8) {
+                            Text(verbatim: from).strikethrough().foregroundStyle(Palette.muted)
+                            Image(systemName: "arrow.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.faint)
+                            Text(verbatim: to).fontWeight(.semibold).foregroundStyle(Palette.ink)
+                        }
+                        .font(Typo.small)
+                        .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 10) {
+                            PrimaryButton(title: L10n.tr("Vyměnit")) { Task { await answerSwap(advice, swap: true) } }
+                            SecondaryButton(title: "Nechat") { Task { await answerSwap(advice, swap: false) } }
+                        }
+                        if let swapError {
+                            Text(swapError).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+                        }
+                    } else if advice.kind == "memory_check", let memory = advice.memory {
                         // A pain or an illness the coach remembers: still true, or forget it.
                         HStack(spacing: 10) {
                             PrimaryButton(title: L10n.tr("Už neplatí")) { Task { await settle(memory, keep: false) } }
@@ -85,6 +102,19 @@ struct CoachCheckInCard: View {
         .task {
             guard !model.demo else { return }
             advice = try? await model.api.coachCheckIn()
+        }
+    }
+
+    /// Vyměnit puts the easier session in the plan, Nechat keeps the plan.
+    private func answerSwap(_ advice: CoachCheckIn.Advice, swap: Bool) async {
+        guard let date = advice.date else { return }
+        swapError = nil
+        do {
+            _ = try await model.api.answerCoachNudge(date: date, decision: swap ? "swap" : "keep")
+            withAnimation { self.advice = nil }
+            if swap { await model.refresh() }
+        } catch {
+            swapError = error.localizedDescription
         }
     }
 

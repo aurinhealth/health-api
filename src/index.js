@@ -2529,7 +2529,7 @@ async function healthSleep(env, url) {
   // session interval is nested inside payload_json. Read recent sleep rows first,
   // then normalize/filter using the nested interval as well.
   const rows = await env.DB.prepare(`
-    SELECT external_id, start_time, end_time, payload_json
+    SELECT external_id, source_family, start_time, end_time, payload_json
     FROM health_datapoints
     WHERE user_id = ? AND data_type = 'sleep'
       AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop')

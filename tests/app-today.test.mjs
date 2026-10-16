@@ -83,6 +83,19 @@ test("Today's plan lists workouts and tonight's bedtime in time order", () => {
   assert.match(t.plan[1].time, /^\d{2}:\d{2}$/);
   assert.equal(t.tonight.wake, "07:02", "the usual wake time");
   assert.equal(t.tonight.bedtime, t.plan[1].time);
+  assert.equal(t.plan[1].end, t.tonight.wake, "the night ahead ends at the planned wake time");
+});
+
+test("Tonight's own length and wake time from Spánek move the bedtime row on Today", () => {
+  const plain = buildToday({ ...input, hour: 12 });
+  const t = buildToday({ ...input, hour: 12, profile: { ...(input.profile || {}), sleepTonight: { date: DATE, minutes: 420, wake: "06:00" } } });
+  const row = t.plan.find(p => p.kind === "bedtime");
+  assert.equal(t.tonight.wake, "06:00");
+  assert.equal(t.tonight.need, 420);
+  assert.equal(row.time, t.tonight.bedtime);
+  assert.notEqual(row.time, plain.tonight.bedtime);
+  assert.equal(row.detail, "spánek 7 h 00 min");
+  assert.equal(row.end, "06:00", "the dashed night ends at the chosen wake time");
 });
 
 test("Today's plan shows what was done at its time, then the plan, a gym session outside the plan too", () => {

@@ -12,6 +12,8 @@ struct FoodSnapshot: Decodable, Equatable {
     let water: Water
     /// The meals of the day the athlete chose (Nastavení → Jídla dne).
     var mealSlots: [String]? = nil
+    /// Up to three nutrients pinned under the macros (Pro; Živiny → Upravit).
+    var nutrients: [NutrientItem]? = nil
 
     struct Amount: Decodable, Equatable {
         let eaten: Double?
@@ -111,10 +113,13 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     var barcode: String?
     var source: String?
     var source_url: String?
+    /// Vitamins and minerals per 100 g from the catalogue (src/micronutrients.js keys).
+    var micros_100g: [String: Double]?
+    var catalog_key: String?
 
     enum CodingKeys: String, CodingKey {
         case name, brand, calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugars_100g, salt_100g
-        case nutrition_basis, serving_size, quantity, barcode, source, source_url
+        case nutrition_basis, serving_size, quantity, barcode, source, source_url, micros_100g, catalog_key
     }
 
     init(name: String, brand: String? = nil, calories_100g: Double? = nil, protein_100g: Double? = nil, carbs_100g: Double? = nil,
@@ -150,6 +155,8 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         barcode = value(.barcode)?.string
         source = value(.source)?.string
         source_url = value(.source_url)?.string
+        micros_100g = try? c.decodeIfPresent([String: Double].self, forKey: .micros_100g)
+        catalog_key = value(.catalog_key)?.string
     }
 
     var id: String { (barcode ?? "") + "|" + name + "|" + (brand ?? "") + "|" + (source ?? "") }
@@ -275,4 +282,64 @@ struct FoodRecipe: Decodable, Equatable, Identifiable {
         p.source = "composed"
         return p
     }
+}
+
+/// One nutrient of GET /app/api/food/nutrients (src/micronutrients.js): the
+/// day's or the week's average against the target, or locked without Pro.
+struct NutrientItem: Decodable, Equatable, Identifiable {
+    let key: String
+    let name: String
+    let unit: String
+    /// main, min or vit.
+    let group: String
+    var eaten: Double? = nil
+    var target: Double? = nil
+    var limit: Bool = false
+    var locked: Bool = false
+    var percent: Double? = nil
+    var known: Bool? = nil
+
+    var id: String { key }
+
+    /// Under half the target: shown in rust.
+    var low: Bool { !limit && !locked && (percent ?? 100) <= 50 }
+    var over: Bool { limit && (eaten ?? 0) > (target ?? .infinity) }
+
+    /// "9 / 18 mg", "41 / max 66 g".
+    var text: String {
+        let value = Self.amount(eaten ?? 0)
+        guard let target else { return value + " " + unit }
+        return value + (limit ? " / max " : " / ") + Self.amount(target) + " " + unit
+    }
+
+    static func amount(_ v: Double) -> String {
+        v >= 100 ? Fmt.int(v) : v >= 10 ? Fmt.decimal(v, digits: v.rounded() == v ? 0 : 1) : Fmt.decimal(v, digits: v < 1 && v > 0 ? 2 : 1)
+    }
+}
+
+struct NutrientsPage: Decodable, Equatable {
+    let days: Int
+    let pro: Bool
+    let meals: Int
+    let withMicros: Int
+    let items: [NutrientItem]
+    var coach: String? = nil
+    var favorites: [String] = []
+}
+
+/// GET /app/api/food/nutrients?key=…: one nutrient with today's meals and rich foods.
+struct NutrientDetail: Decodable, Equatable {
+    struct Source: Decodable, Equatable, Hashable { let name: String; let amount: Double }
+    struct Rich: Decodable, Equatable, Hashable { let name: String; let per100: Double }
+    let key: String
+    let name: String
+    let unit: String
+    var limit: Bool = false
+    var eaten: Double? = nil
+    var target: Double? = nil
+    var percent: Double? = nil
+    var weekPercent: Double? = nil
+    var sources: [Source] = []
+    var richTitle: String? = nil
+    var rich: [Rich] = []
 }
