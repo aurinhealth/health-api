@@ -3,7 +3,10 @@ name: Vydat
 # Releases one tested build to the external testers, with the server it was
 # tested against:
 # 1. picks the build (the newest one uploaded from main, or the number typed in),
-# 2. deploys that build's commit to the live server (deploy-worker.yml, production),
+# 2. deploys the newest main to the live server (deploy-worker.yml, production);
+#    production only ever runs main commits, so this never goes back to an
+#    older server than a hand-started deploy left there, and server-only
+#    pull requests merged after the build go out too,
 # 3. sets "What to Test" to a summary of every pull request since the last
 #    release, adds the build to the external TestFlight group and sends it to
 #    Apple's beta review,
@@ -45,6 +48,7 @@ jobs:
     outputs:
       build: ${{ steps.pick.outputs.build }}
       sha: ${{ steps.pick.outputs.sha }}
+      server: ${{ steps.pick.outputs.server }}
       base: ${{ steps.pick.outputs.base }}
     steps:
       - name: Checkout repository
@@ -84,6 +88,12 @@ jobs:
           [ "$notes" = "success" ] || { echo "::error::Build $build se do TestFlightu nenahrál (notes: ${notes:-chybí})."; exit 1; }
           git cat-file -e "$sha^{commit}" || { echo "::error::Commit $sha buildu $build v main není."; exit 1; }
           git merge-base --is-ancestor "$sha" origin/main || { echo "::error::Build $build není z main."; exit 1; }
+          server="$(git rev-parse origin/main)"
+          # The newest build must hold every app change on main, else the testers
+          # would read about changes their build lacks.
+          if [ -z "$BUILD" ] && [ -n "$(git diff --name-only "$sha" "$server" -- ios-native)" ]; then
+            echo "::error::Build ze změn aplikace v main se do TestFlightu ještě nenahrál. Počkej na TestFlight build a spusť Vydat znovu."; exit 1
+          fi
           last="$(python3 .github/scripts/testflight_notes.py released)"
           base=""
           if [ -n "$last" ]; then
@@ -94,10 +104,12 @@ jobs:
           fi
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "server=$server" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "Vydání buildu $build (${sha::7}), minulé vydání: ${last:-žádné}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Vydání buildu $build (${sha::7}), server ${server::7}, minulé vydání: ${last:-žádné}" >> "$GITHUB_STEP_SUMMARY"
 
-  # The live server first: the build the testers get talks to it.
+  # The live server first: the build the testers get talks to it. The newest
+  # main contains the build's commit, so the server is never older than the app.
   deploy:
     needs: pick
     permissions:
@@ -107,7 +119,7 @@ jobs:
     uses: ./.github/workflows/deploy-worker.yml
     with:
       target: production
-      ref: ${{ needs.pick.outputs.sha }}
+      ref: ${{ needs.pick.outputs.server }}
     secrets: inherit
 
   release:
@@ -117,10 +129,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout the released commit
+      - name: Checkout the released server commit
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ needs.pick.outputs.sha }}
+          ref: ${{ needs.pick.outputs.server }}
           fetch-depth: 0
 
       # Every pull request since the last release, server changes included.
@@ -160,5 +172,6 @@ jobs:
       - name: Summary
         env:
           BUILD: ${{ needs.pick.outputs.build }}
-          SHA: ${{ needs.pick.outputs.sha }}
-        run: echo "Vydáno: build $BUILD, server ${SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+          SERVER: ${{ needs.pick.outputs.server }}
+        run: |
+          echo "Vydáno: build $BUILD, server ${SERVER::7}" >> "$GITHUB_STEP_SUMMARY"

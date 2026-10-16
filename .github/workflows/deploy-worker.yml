@@ -4,8 +4,8 @@ name: Deploy Cloudflare Worker
 # - staging (health-api-staging, https://staging.aurin.health): every merge to
 #   main lands here first; internal testers switch the app to it.
 # - production (health-api, https://aurin.health): only the "Vydat" workflow
-#   (vydat.yml) deploys it, with the commit of the build it releases to the
-#   external testers. Run this by hand with target production for a server-only fix.
+#   (vydat.yml) deploys it, with the newest main. Run this by hand with target
+#   production for a server-only fix. Production only takes commits on main.
 on:
   workflow_dispatch:
     inputs:
@@ -117,6 +117,21 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
+
+      # Only main reaches the live server: a branch commit would be overwritten
+      # by the next release, and Vydat relies on production being part of main.
+      - name: Check the commit is on main
+        if: env.TARGET == 'production'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$REF" --jq .status)"
+          case "$status" in
+            identical|behind) ;;
+            *) echo "::error::Commit ${REF::7} není v main ($status), na ostrý server jde jen main."; exit 1 ;;
+          esac
 
       # Sign-ins are signed with SESSION_SECRET only (src/dashboard-auth.js).
       # Without it nobody could sign in, so nothing is deployed.

@@ -31,7 +31,10 @@ Merges reach the internal TestFlight group (every build, with its pull request's
 server. `vydat.yml`, run by hand:
 
 1. picks the newest build uploaded from main, or the number typed in;
-2. deploys that build's commit to the live server (migrations, shards, smoke tests);
+2. deploys the newest main to the live server (migrations, shards, smoke tests). Production only
+   ever takes commits on main (deploy-worker.yml refuses others), so a release never puts back an
+   older server than a hand-started deploy left there. Without a typed build number it stops when
+   main has app changes the newest build lacks;
 3. writes "What to Test" from the TestFlight sections of every pull request since the build the
    external group already has, adds the build to the external group (`EXTERNAL_GROUP` repository
    variable when there is more than one) and submits it to Apple's beta review.
