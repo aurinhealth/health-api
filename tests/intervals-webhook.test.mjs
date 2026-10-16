@@ -12,11 +12,14 @@ test("each Intervals.icu event asks for only the part of the import it changed",
     { athlete_id: "i1", type: "ACTIVITY_UPLOADED" }, { athlete_id: "i1", type: "ACTIVITY_ANALYZED" },
     { athlete_id: "i1", type: "WELLNESS_UPDATED" }, { athlete_id: "i2", type: "CALENDAR_UPDATED", oauth_client_id: 12 },
     { athlete_id: "i3", type: "SPORT_SETTINGS_UPDATED" },
-    // A planned workout Aurin itself sent: nothing to fetch back.
+    // A planned workout or the wellness Aurin itself sent: nothing to fetch back.
     { athlete_id: "i4", type: "CALENDAR_UPDATED", oauth_client_id: 77, external_id: "pfd-library:x" },
+    { athlete_id: "i4", type: "WELLNESS_UPDATED", oauth_client_id: 77 },
     { type: "ACTIVITY_UPLOADED" }
   ] }, "77");
-  assert.deepEqual([...work].map(([a, parts]) => [a, [...parts]]), [["i1", ["activities", "weight"]], ["i2", ["planned"]], ["i3", [""]]]);
+  assert.deepEqual([...work].map(([a, w]) => [a, [...w.parts], [...w.kinds]]), [
+    ["i1", ["activities", "weight"], ["activities", "activity", "wellness"]], ["i2", ["planned"], ["calendar"]], ["i3", [""], ["settings"]]
+  ]);
 });
 
 test("the webhook needs the secret, answers at once and fetches for the athlete after", async () => {

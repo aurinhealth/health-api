@@ -134,6 +134,7 @@ struct WidgetBoard: View {
     }
 
     private func remove(_ kind: WidgetKind) {
+        if kind == .journal { UserDefaults.standard.set(true, forKey: WidgetLayoutStore.journalRemovedKey) }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
             save(items.filter { $0.kind != kind })
         }

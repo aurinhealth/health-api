@@ -55,3 +55,16 @@ test("the live server's deploy from Vydat, started by hand, gets in; other workf
   await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { ...vydat, ref: "refs/heads/feature" })), fetchImpl), /ref/);
   await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { ...vydat, workflow_ref: "shaarkyn/health-api/.github/workflows/ios-testflight.yml@refs/heads/main" })), fetchImpl), /workflow/);
 });
+
+test("the coach evaluation's token opens only its own audience and workflow", async () => {
+  _resetGitHubJwksCacheForTest();
+  const fetchImpl = async () => Response.json({ keys: [await jwkOf(first, "gh-1")] });
+  const evalOptions = { audience: "aurin-coach-eval", workflows: new Set(["shaarkyn/health-api/.github/workflows/coach-eval.yml@refs/heads/main"]) };
+  const evalClaims = { aud: "aurin-coach-eval", workflow_ref: "shaarkyn/health-api/.github/workflows/coach-eval.yml@refs/heads/main", event_name: "workflow_dispatch" };
+  assert.equal((await verifyGitHubActionsToken(request(await token(first, "gh-1", evalClaims)), fetchImpl, evalOptions)).actor, "shaarkyn");
+  // Its token is no deploy token, and a deploy token is no evaluation token.
+  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", evalClaims)), fetchImpl), /audience/);
+  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { ...evalClaims, aud: "health-strength" })), fetchImpl), /workflow/);
+  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { event_name: "workflow_dispatch" })), fetchImpl, evalOptions), /audience/);
+  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { ...evalClaims, workflow_ref: "shaarkyn/health-api/.github/workflows/deploy-worker.yml@refs/heads/main" })), fetchImpl, evalOptions), /workflow/);
+});

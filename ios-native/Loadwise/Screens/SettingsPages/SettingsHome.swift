@@ -172,12 +172,15 @@ struct SettingsSectionTiles: View {
         store.profile["sex"]?.string == "female" || model.cycle?.enabled == true
     }
 
+    /// Four tiles in a row; with Cyklus, three and two.
     var body: some View {
-        HStack(spacing: 10) {
+        let cycle = Self.cycleTile(store, model)
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: cycle ? 3 : 4), alignment: .leading, spacing: 10) {
             tile("Spánek", "moon.fill", Palette.indigo) { SleepSettingsView(given: store) }
             tile("Posilovna", "dumbbell.fill", Palette.brown) { GymSettingsView() }
             tile("Jídlo a pití", "fork.knife", Palette.amber) { FoodDrinkSettingsView() }
-            if Self.cycleTile(store, model) {
+            tile("Deník", "book.closed.fill", Palette.indigo) { JournalSettingsView() }
+            if cycle {
                 tile("Cyklus", "calendar", Palette.pink) { CycleSettingsView() }
             }
         }
@@ -201,6 +204,62 @@ struct SettingsSectionTiles: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// Deník: on or off (the Zdraví card, the morning sheet and the coach's view
+/// of it), the morning questions, and what it follows.
+struct JournalSettingsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var enabled = JournalSwitch.isOn
+    @State private var askMorning = true
+    @State private var tracked: Int?
+    @State private var tracking = false
+
+    var body: some View {
+        SettingsPage(title: "Deník") {
+            SettingsGroup {
+                SettingsToggle(title: "Sledovat deník", isOn: Binding(get: { enabled }, set: { on in
+                    enabled = on
+                    JournalSwitch.remember(on)
+                    Task { await save(["enabled": .bool(on)]) }
+                }))
+            }
+            if enabled {
+                SettingsGroup {
+                    SettingsToggle(title: "Ptát se ráno", isOn: Binding(get: { askMorning }, set: { on in
+                        askMorning = on
+                        Task { await save(["askMorning": .bool(on)]) }
+                    }))
+                }
+                SettingsGroup {
+                    Button { tracking = true } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "checklist", color: Palette.indigo), title: "Co sledovat",
+                                    value: tracked.map { String($0) })
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .sheet(isPresented: $tracking, onDismiss: { Task { await load() } }) { JournalEditorView() }
+        .task { await load() }
+    }
+
+    private func load() async {
+        if model.demo {
+            tracked = DemoJournal.catalog?.pinned.count
+            return
+        }
+        guard let catalog = try? await model.api.journalCatalog() else { return }
+        enabled = catalog.enabled ?? true
+        askMorning = catalog.askMorning ?? true
+        tracked = catalog.pinned.count
+        JournalSwitch.remember(catalog.enabled)
+    }
+
+    private func save(_ body: JSONObject) async {
+        guard !model.demo else { return }
+        try? await model.api.setJournalOptions(body)
     }
 }
 

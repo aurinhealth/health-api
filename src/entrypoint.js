@@ -94,6 +94,7 @@ import { handleNativeAppleLogin } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
+import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { handleWorkoutTemplatesApi, publicSharePage } from "./workout-templates.js";
@@ -102,6 +103,7 @@ import { internalHeaders } from "./internal-auth.js";
 import { deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
 import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.js";
 import { handleIntervalsWebhook } from "./intervals-webhook.js";
+import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
 import { handleStravaOAuth, disconnectStrava, syncStravaWeight } from "./strava.js";
 import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman, FIRST_IMPORT_DAYS } from "./ultrahuman.js";
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
@@ -172,10 +174,10 @@ const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|p
 const STATIC_PATHS = new Set(['/logo.svg','/','/privacy','/terms','/support','/robots.txt','/sitemap.xml']);
 
 // An OAuth connection to Intervals.icu skips a scheduled job except at minute
-// 40 (or the job's own minute) of every third hour (UTC).
+// 40 (or the job's own minute) of every sixth hour (UTC).
 function intervalsOAuthQuiet(env, minute = 40, now = new Date()) {
   if (!String(env.INTERVALS_API_KEY || "").startsWith(INTERVALS_TOKEN_PREFIX)) return false;
-  return !(now.getUTCHours() % 3 === 0 && now.getUTCMinutes() === minute);
+  return !(now.getUTCHours() % 6 === 0 && now.getUTCMinutes() === minute);
 }
 // Runs fn once per active user (with that user's env and credentials), for
 // cron jobs and GitHub automations that act on everyone's data.
@@ -235,7 +237,7 @@ const USER_JOBS = [
   // Hourly: the latest weight to Strava when it changed and the user sends it there.
   { name: "strava-weight", providers: ["strava"], due: (cron, now) => minute(cron, now, m => m === 30), run: async scoped => syncStravaWeight(scoped, { allowed: healthAllowed(await readSyncPrefs(scoped.DB, scoped.USER_ID, "strava"), "weight") }) },
   // Every 5 minutes for a personal API key; an OAuth connection gets
-  // webhooks (/webhooks/intervals), so only a look every 3 hours in case
+  // webhooks (/webhooks/intervals), so only a look every 6 hours in case
   // one was lost (an OAuth app has 100 requests per athlete a day).
   { name: "intervals-recent", providers: ["intervals"], due: every5, run: (scoped, ctx, controller) => intervalsOAuthQuiet(scoped, 40, new Date(controller.scheduledTime || Date.now())) ? null : legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), scoped, ctx) },
   // Hourly, half an hour after the Google Health sync: weight the same in the
@@ -330,6 +332,8 @@ const worker = {
     const rawEnv = env;
     // Deny by default: only allowlisted routes are reachable without a session or API key.
     let principal = await resolvePrincipal(request, env);
+    // The coach evaluation workflow acts as the owner, on the test server only.
+    if (!principal && url.pathname === "/automation/coach-eval") principal = await coachEvalPrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
     if (!isPublic && !principal) {
       const response = unauthorizedResponse();
@@ -343,7 +347,7 @@ const worker = {
       // A cookie from before the user signed out everywhere (or changed the e-mail, removed a passkey or the Apple ID) is no cookie.
       if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }
       if (!user && !isPublic) return unauthorizedResponse();
-    } else if (principal?.kind === "owner" || principal?.kind === "system") {
+    } else if (principal?.kind === "owner" || principal?.kind === "system" || principal?.kind === "coach-eval") {
       // The owner API key and GitHub automations act as the owner.
       user = await ownerUser(env.DB, env);
     }
@@ -393,6 +397,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       return legacyHealthApi.fetch(request, env, ctx);
     }
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
+    if (url.pathname === "/automation/coach-eval") return handleCoachEval(request, env, principal);
     // Wahoo's webhook: a finished workout of whoever is connected to that Wahoo account.
     if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forEachUser(rawEnv, ["wahoo"], async scoped => {
       if (String(readWahooTokens(scoped)?.user_id ?? "") !== wahooUser) return null;
@@ -401,8 +406,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       return result;
     }));
     // Intervals.icu's webhooks: what changed for an athlete connected with OAuth.
-    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts) => forEachUser(rawEnv, ["intervals"], async scoped => {
+    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds) => forEachUser(rawEnv, ["intervals"], async scoped => {
       if (!scoped.INTERVALS_ATHLETE_ID || scoped.INTERVALS_ATHLETE_ID !== athlete) return null;
+      await intervalsChanged(scoped, kinds);
       const result = parts.length ? await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent?parts=" + parts.join(","), { method: "POST" }), scoped, ctx).then(r => r.json()).catch(error => ({ error: error.message })) : null;
       await bumpCacheVersion(scoped.DB);
       return result;
@@ -1940,7 +1946,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if (!apiKey) return Response.json({status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness(env,isoDate(oldest),isoDate(newest))},{headers:{"Cache-Control":"no-store"}});
       const auth = intervalsAuthorization(apiKey);
       const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(isoDate(oldest))+"&newest="+encodeURIComponent(isoDate(newest));
-      const response = await fetch(target,{headers:{Authorization:auth,Accept:"application/json"}});
+      const response = await intervalsReads(env,ctx)(target,{headers:{Authorization:auth,Accept:"application/json"}});
       const data = await response.json().catch(()=>[]);
       if (!response.ok) return Response.json({status:"error",message:"Intervals wellness HTTP "+response.status,data},{status:response.status});
       const intervalsRows = (Array.isArray(data)?data:[]).map(x=>({...x,tsb:Number.isFinite(Number(x.ctl))&&Number.isFinite(Number(x.atl))?Number(x.ctl)-Number(x.atl):null})).filter(x=>x.id).sort((a,b)=>String(a.id).localeCompare(String(b.id)));

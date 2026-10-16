@@ -48,6 +48,12 @@ struct JournalItem: Decodable, Equatable, Identifiable {
     var extra: [String: Double]? = nil
     /// "2 · do 21:40", "300 mg", "21:15".
     var value: String? = nil
+    /// The row's value without the time, which has its own column: "2 nápoje", "vždy ne".
+    var short: String? = nil
+    /// "morning", "day", "evening" or "night".
+    var part: String? = nil
+    /// "Vždy ne" (0) / "Vždy ano" (1).
+    var fixed: Int? = nil
     var fromData: Bool? = nil
     // In the catalogue:
     var pinned: Bool? = nil
@@ -88,7 +94,9 @@ struct JournalDay: Decodable, Equatable {
     var mood: Double? = nil
     let answered: Int
     let total: Int
+    /// By part of the day: Ráno, Přes den, Večer, Noc.
     var sections: [JournalSection]
+    var enabled: Bool? = nil
 }
 
 struct JournalCategory: Decodable, Equatable, Identifiable {
@@ -103,6 +111,8 @@ struct JournalCatalog: Decodable, Equatable {
     let categories: [JournalCategory]
     let items: [JournalItem]
     let pinned: [String]
+    var enabled: Bool? = nil
+    var askMorning: Bool? = nil
 }
 
 /// The Today card: the questions about yesterday in the morning.
@@ -124,6 +134,17 @@ struct JournalCard: Decodable, Equatable {
     let total: Int
     let open: Int
     let rows: [Row]
+    /// Ranní otázky on: the sheet opens by itself on the first open of the day.
+    var ask: Bool? = nil
+}
+
+/// One of the biggest effects on readiness, for the Zdraví card.
+struct JournalEffect: Decodable, Equatable, Identifiable {
+    let key: String
+    let name: String
+    let icon: String
+    let effect: Int
+    var id: String { key }
 }
 
 /// "Nový objev": an item that first crossed the evidence line.
@@ -137,8 +158,18 @@ struct JournalDiscovery: Decodable, Equatable {
 }
 
 struct JournalToday: Decodable, Equatable {
+    var enabled: Bool? = nil
+    var askMorning: Bool? = nil
     var card: JournalCard? = nil
+    var top: [JournalEffect]? = nil
     var discovery: JournalDiscovery? = nil
+}
+
+/// Whether Deník is on, kept on the phone so Zdraví knows before loading.
+enum JournalSwitch {
+    static let key = "journal.enabled"
+    static var isOn: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
+    static func remember(_ on: Bool?) { if let on { UserDefaults.standard.set(on, forKey: key) } }
 }
 
 /// GET /app/api/journal/impact?metric=: Co na tebe působí.
@@ -256,6 +287,18 @@ extension APIClient {
         return response.item?.key
     }
 
+    /// Nastavení → Deník: {enabled, askMorning}.
+    func setJournalOptions(_ body: JSONObject) async throws {
+        let _: JSONValue = try await send("/app/api/journal/options", method: "POST", body: body)
+    }
+
+    /// "Vždy ne" (0) / "Vždy ano" (1) from the day on, nil ends it; the day comes back.
+    func setJournalFixed(key: String, answer: Int?, date: String) async throws -> JournalDay {
+        try await send("/app/api/journal/fixed", method: "POST", body: [
+            "key": .string(key), "date": .string(date), "answer": answer.map { JSONValue.number(Double($0)) } ?? JSONValue.null
+        ])
+    }
+
     func journalToday() async throws -> JournalToday {
         try await get("/app/api/journal/today")
     }
@@ -300,6 +343,9 @@ enum DemoJournal {
         ("\"Pozdní jídlo\"", "\"Late meal\""),
         ("\"Večerní trénink\"", "\"Evening training\""),
         ("\"Večer a noc\"", "\"Evening and night\""),
+        ("\"Přes den\"", "\"Daytime\""),
+        ("\"Večer\"", "\"Evening\""),
+        ("\"Noc\"", "\"Night\""),
         ("\"Mobil v posteli\"", "\"Phone in bed\""),
         ("\"Pozdě spát\"", "\"Late to bed\""),
         ("\"Spánek mimo domov\"", "\"Slept away from home\""),
@@ -322,11 +368,9 @@ enum DemoJournal {
 
     static var today: JournalToday {
         let json = """
-        {"card":{"date":"%yesterday%","isToday":false,"answered":4,"total":9,"open":5,"rows":[
-        {"key":"alcohol","name":"Alkohol","icon":"wineglass.fill","category":"food","value":"2 · do 21:40"},
-        {"key":"caffeine","name":"Kofein","icon":"cup.and.saucer.fill","category":"food","value":"180 mg · do 15:10"},
-        {"key":"late_meal","name":"Pozdní jídlo","icon":"fork.knife","category":"food","value":"21:15"},
-        {"key":"evening_training","name":"Večerní trénink","icon":"figure.run","category":"recovery","value":"19:00"}]}}
+        {"enabled":true,"askMorning":true,"card":{"date":"%yesterday%","isToday":false,"answered":4,"total":9,"open":5,"rows":[],"ask":false},
+        "top":[{"key":"alcohol","name":"Alkohol","icon":"wineglass.fill","effect":-17},{"key":"sauna","name":"Sauna","icon":"flame","effect":11},
+        {"key":"late_meal","name":"Pozdní jídlo","icon":"fork.knife","effect":-9}]}
         """
         return decode(fill(json, ["yesterday": yesterday])) ?? JournalToday()
     }
@@ -349,23 +393,21 @@ enum DemoJournal {
         let week = days.joined(separator: ",")
         let drinks = cs ? #"["nápoj","nápoje","nápojů"]"# : #"["drink","drinks","drinks"]"#
         let json = """
-        {"date":"%yesterday%","today":"%today%","week":[%week%],"answered":6,"total":9,"sections":[
-        {"key":"sleep","title":"Večer a noc","items":[
-        {"key":"phone_in_bed","name":"Mobil v posteli","category":"sleep","type":"yesno","icon":"iphone","answered":true,"answer":1},
-        {"key":"late_bed","name":"Pozdě spát","category":"sleep","type":"yesno","icon":"moon.fill","answered":true,"answer":0},
-        {"key":"sleep_away","name":"Spánek mimo domov","category":"sleep","type":"yesno","icon":"bed.double","answered":false}]},
-        {"key":"food","title":"Jídlo a pití","items":[
-        {"key":"alcohol","name":"Alkohol","category":"food","type":"amount","icon":"wineglass.fill","auto":true,"units":%drinks%,"step":1,"usual":1,"limit":15,"withTime":true,"answered":true,"answer":1,"amount":2,"time":"21:40","value":"2 · do 21:40","fromData":true},
-        {"key":"caffeine","name":"Kofein","category":"food","type":"amount","icon":"cup.and.saucer.fill","auto":true,"unit":"mg","units":["mg","mg","mg"],"step":20,"usual":100,"limit":1000,"withTime":true,"answered":true,"answer":1,"amount":180,"time":"15:10","value":"180 mg · do 15:10","fromData":true}]},
-        {"key":"recovery","title":"Regenerace","items":[
-        {"key":"sauna","name":"Sauna","category":"recovery","type":"yesno","icon":"flame","answered":true,"answer":1,"extra":{"minutes":15,"temp":90},
+        {"date":"%yesterday%","today":"%today%","week":[%week%],"answered":6,"total":9,"enabled":true,"sections":[
+        {"key":"day","title":"Přes den","items":[
+        {"key":"caffeine","name":"Kofein","category":"food","type":"amount","icon":"cup.and.saucer.fill","auto":true,"unit":"mg","units":["mg","mg","mg"],"step":20,"usual":100,"limit":1000,"withTime":true,"answered":true,"answer":1,"amount":180,"time":"15:10","value":"180 mg · do 15:10","short":"180 mg","part":"day","fromData":true},
+        {"key":"outdoors","name":"Venku 30+ min","category":"recovery","type":"yesno","icon":"sun.max.fill","auto":true,"answered":true,"answer":1,"part":"day","fromData":true}]},
+        {"key":"evening","title":"Večer","items":[
+        {"key":"alcohol","name":"Alkohol","category":"food","type":"amount","icon":"wineglass.fill","auto":true,"units":%drinks%,"step":1,"usual":1,"limit":15,"withTime":true,"answered":true,"answer":1,"amount":2,"time":"21:40","value":"2 · do 21:40","short":"%twodrinks%","part":"evening","fromData":true},
+        {"key":"sauna","name":"Sauna","category":"recovery","type":"yesno","icon":"flame","part":"evening","answered":true,"answer":1,"extra":{"minutes":15,"temp":90},
         "follow":[{"key":"minutes","label":"Kolik minut","kind":"stepper","unit":"min","low":5,"high":90,"step":5,"initial":15},{"key":"temp","label":"Teplota","kind":"chips","unit":"°C","options":[70,80,90],"initial":80}]},
-        {"key":"cold_exposure","name":"Otužování","category":"recovery","type":"yesno","icon":"drop.fill","answered":false},
-        {"key":"outdoors","name":"Venku 30+ min","category":"recovery","type":"yesno","icon":"sun.max.fill","answered":true,"answer":1}]},
-        {"key":"supplements","title":"Doplňky","items":[
-        {"key":"magnesium","name":"Hořčík","category":"supplements","type":"amount","icon":"capsule.portrait","unit":"mg","units":["mg","mg","mg"],"step":50,"usual":300,"limit":1000,"answered":false}]}]}
+        {"key":"magnesium","name":"Hořčík","category":"supplements","type":"amount","icon":"capsule.portrait","unit":"mg","units":["mg","mg","mg"],"step":50,"usual":300,"limit":1000,"part":"evening","answered":false}]},
+        {"key":"night","title":"Noc","items":[
+        {"key":"phone_in_bed","name":"Mobil v posteli","category":"sleep","type":"yesno","icon":"iphone","part":"night","answered":true,"answer":1},
+        {"key":"late_bed","name":"Pozdě spát","category":"sleep","type":"yesno","icon":"moon.fill","auto":true,"part":"night","answered":true,"answer":0,"fromData":true},
+        {"key":"sleep_away","name":"Spánek mimo domov","category":"sleep","type":"yesno","icon":"bed.double","part":"night","answered":false}]}]}
         """
-        return decode(fill(json, ["yesterday": yesterday, "today": today, "week": week, "drinks": drinks]))
+        return decode(fill(json, ["yesterday": yesterday, "today": today, "week": week, "drinks": drinks, "twodrinks": cs ? "2 nápoje" : "2 drinks"]))
     }
 
     /// Upravit deník in the sample: the sample's own items, all of them picked.

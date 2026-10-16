@@ -1,8 +1,9 @@
 import SwiftUI
 
-// Deník, the habit journal (src/routes-journal.js): the Today card with the
-// morning questions about yesterday, "Nový objev", the journal of a day with
-// its week, ✕ / ✓ answers and inline follow-ups, and the amount/time sheet.
+// Deník, the habit journal (src/routes-journal.js): the card on Zdraví with
+// the biggest effects and "Doplnit", the morning sheet "Včera" on the first
+// open of the day, and the journal of a day: the week, then the day's items
+// by part of the day, filled in from the data where it can, ✕ / ✓ where not.
 // Item names and values come from the server in the app's language.
 
 // MARK: - Shared pieces
@@ -72,292 +73,299 @@ struct JournalIcon: View {
     }
 }
 
-/// A face for the mood: 1 a frown … 5 a broad smile.
-private struct MoodMouth: Shape {
-    let level: Int
-
-    func path(in rect: CGRect) -> Path {
-        let bends: [CGFloat] = [-0.2, -0.1, 0, 0.1, 0.2]
-        let bend = bends[min(max(level - 1, 0), 4)]
-        let y = rect.height * 0.64
-        var p = Path()
-        p.move(to: CGPoint(x: rect.width * 0.33, y: y))
-        p.addQuadCurve(to: CGPoint(x: rect.width * 0.67, y: y), control: CGPoint(x: rect.midX, y: y + rect.height * bend))
-        return p
-    }
-}
-
-private struct MoodEyes: Shape {
-    func path(in rect: CGRect) -> Path {
-        let r = rect.width * 0.05
-        var p = Path()
-        p.addEllipse(in: CGRect(x: rect.width * 0.37 - r, y: rect.height * 0.42 - r, width: 2 * r, height: 2 * r))
-        p.addEllipse(in: CGRect(x: rect.width * 0.63 - r, y: rect.height * 0.42 - r, width: 2 * r, height: 2 * r))
-        return p
-    }
-}
-
-struct MoodFace: View {
-    let level: Int
-    let color: Color
+/// ✕ and ✓ as two round buttons (an unanswered row).
+struct JournalAnswerButtons: View {
+    let choose: (Int) -> Void
 
     var body: some View {
-        ZStack {
-            Circle().stroke(color, lineWidth: 1.8)
-            MoodEyes().fill(color)
-            MoodMouth(level: level).stroke(color, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
-        }
-        .frame(width: 28, height: 28)
-    }
-}
-
-/// "Jak se cítíš?": five faces, one chosen; a second tap clears it.
-struct MoodPicker: View {
-    let mood: Int?
-    var disabled = false
-    let choose: (Int?) -> Void
-
-    private static let labels = ["Hodně špatně", "Špatně", "Normálně", "Dobře", "Výborně"]
-
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(1...5, id: \.self) { level in
-                let on = mood == level
-                Button { choose(on ? nil : level) } label: {
-                    MoodFace(level: level, color: on ? Palette.onButton : Palette.secondary)
-                        .frame(width: 52, height: 52)
-                        .background(on ? Palette.button : Palette.track, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .disabled(disabled)
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel(L10n.tr(Self.labels[level - 1]))
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
+        HStack(spacing: 8) {
+            button(0, symbol: "xmark", label: "Ne")
+            button(1, symbol: "checkmark", label: "Ano")
         }
     }
-}
 
-/// ✕ and ✓ side by side; the chosen one coloured. Tapping it again clears
-/// the answer (unanswered is not ✕).
-struct YesNoToggle: View {
-    let answer: Int?
-    let choose: (Int?) -> Void
-
-    var body: some View {
-        HStack(spacing: 3) {
-            button(0, symbol: "xmark", color: Palette.rust, fill: Palette.rust.opacity(0.2), label: "Ne")
-            button(1, symbol: "checkmark", color: Palette.green, fill: Palette.greenSoft, label: "Ano")
-        }
-        .padding(3)
-        .background(Palette.track, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-    }
-
-    private func button(_ value: Int, symbol: String, color: Color, fill: Color, label: String) -> some View {
-        let on = answer == value
-        return Button { choose(on ? nil : value) } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(on ? color : Palette.faint)
-                .frame(width: 36, height: 30)
-                .background(on ? fill : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    private func button(_ value: Int, symbol: String, label: String) -> some View {
+        Button { choose(value) } label: {
+            Image(systemName: symbol).font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.secondary)
+                .frame(width: 34, height: 34).background(Palette.track, in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(label))
-        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 
-// MARK: - Today
-
-/// On Today: "Nový objev" once, and in the morning the questions about
-/// yesterday, most of them already filled in from the day's data.
-struct JournalTodayCard: View {
-    @Environment(AppModel.self) private var model
-    @State private var data: JournalToday?
-    @State private var mood: Int?
-    @State private var busy = false
+/// The answer's circle: amber when the day's data (or "Vždy") filled it in,
+/// green ✓ or rust ✕ for the athlete's own answer.
+struct JournalStateMark: View {
+    let item: JournalItem
 
     var body: some View {
-        VStack(spacing: 12) {
-            if let discovery = data?.discovery { discoveryCard(discovery) }
-            if let card = data?.card { journalCard(card) }
+        let yes = item.answer == 1
+        let own = item.fromData != true && item.fixed == nil
+        let color = own ? (yes ? Palette.green : Palette.rust) : Palette.amber
+        Image(systemName: yes ? "checkmark" : "xmark")
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(own ? Palette.onAccent : color)
+            .frame(width: 34, height: 34)
+            .background(own ? color : color.opacity(0.18), in: Circle())
+            .accessibilityLabel(L10n.tr(yes ? "Ano" : "Ne"))
+    }
+}
+
+// MARK: - Zdraví
+
+/// On Zdraví under Připravenost: "Včerejšek čeká · Doplnit" while yesterday
+/// has open items, and the biggest effects on readiness to swipe through.
+/// A widget, so it can be removed like the others.
+struct JournalHealthCard: View {
+    @Environment(AppModel.self) private var model
+    @State private var data: JournalToday?
+    @State private var page = 0
+
+    var body: some View {
+        Card {
+            let top = data?.top ?? []
+            WidgetHeader(title: L10n.tr("Deník"), color: Palette.indigo, trailing: top.count > 1 ? "\(page + 1) / \(top.count)" : nil)
+            if let card = data?.card {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Včerejšek čeká").font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
+                        Text(verbatim: String(card.open) + " " + L10n.tr(Fmt.plural(card.open, "otázka", "otázky", "otázek")))
+                            .font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    Spacer(minLength: 8)
+                    Button { model.push(.journal(card.date)) } label: {
+                        Text("Doplnit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
+                            .padding(.horizontal, 18).frame(height: 40).background(Palette.button, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                if !top.isEmpty { Rectangle().fill(Palette.hairline).frame(height: 1) }
+            }
+            if !top.isEmpty {
+                TabView(selection: $page) {
+                    ForEach(Array(top.enumerated()), id: \.element.id) { index, effect in
+                        Button { model.push(.journalImpact) } label: { effectView(effect) }
+                            .buttonStyle(.plain)
+                            .tag(index)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(height: 92)
+                if top.count > 1 { dots(top.count) }
+            } else if data?.card == nil, data != nil {
+                Button { model.push(.journal(AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))) } label: {
+                    Text("Co na tebe působí, ukážu po pár dnech.").font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .padding(.top, data?.card != nil || data?.discovery != nil ? 12 : 0)
+        .contentShape(Rectangle())
+        .onTapGesture { model.push(.journal(data?.card?.date ?? (AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date())))) }
         .task { await load() }
+    }
+
+    private func effectView(_ effect: JournalEffect) -> some View {
+        let color = effect.effect < 0 ? Palette.rust : Palette.green
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                Image(systemName: effect.icon).font(.system(size: 15, weight: .medium)).foregroundStyle(color)
+                Text(verbatim: effect.name).font(Typo.sentence(19)).foregroundStyle(Palette.secondary).lineLimit(1)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(verbatim: JournalText.percent(effect.effect)).font(Typo.number(48)).foregroundStyle(color)
+                Text("připravenost další ráno").font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private func dots(_ count: Int) -> some View {
+        HStack(spacing: 5) {
+            ForEach(0..<count, id: \.self) { i in
+                Capsule().fill(i == page ? Palette.secondary : Palette.ink.opacity(0.22))
+                    .frame(width: i == page ? 14 : 6, height: 6)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityHidden(true)
     }
 
     private func load() async {
         if model.demo {
             data = DemoJournal.today
-        } else if let fresh = try? await model.api.journalToday() {
+            return
+        }
+        if let fresh = try? await model.api.journalToday() {
             data = fresh
-        }
-        mood = data?.card?.mood.map { Int($0) }
-    }
-
-    private func discoveryCard(_ d: JournalDiscovery) -> some View {
-        Card {
-            WidgetHeader(title: "Nový objev", color: Palette.green)
-            HStack(spacing: 14) {
-                JournalIcon(symbol: d.icon, color: d.effect < 0 ? Palette.rust : Palette.green, size: 48)
-                Text(verbatim: d.text).font(Typo.sentence(20)).foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            HStack(spacing: 10) {
-                PrimaryButton(title: L10n.tr("Ukázat")) {
-                    Task {
-                        await seen()
-                        model.push(.journalItem(d.key, d.metric))
-                    }
-                }
-                SecondaryButton(title: "Zavřít") { Task { await seen() } }
-            }
+            JournalSwitch.remember(fresh.enabled)
         }
     }
+}
 
-    private func journalCard(_ card: JournalCard) -> some View {
-        Card {
-            HStack(spacing: 7) {
-                Circle().fill(Palette.indigo).frame(width: 8, height: 8)
-                Text(verbatim: L10n.tr("Deník") + " · " + (card.isToday ? L10n.tr("dnes") : JournalStyle.weekday(card.date)))
-                    .font(Typo.bodyStrong).foregroundStyle(Palette.secondary).lineLimit(1)
-                Spacer(minLength: 4)
-                Text(verbatim: L10n.f("%@ z %@", String(card.answered), String(card.total)))
-                    .font(Typo.caption).foregroundStyle(Palette.faint)
-                Button { Task { await dismissCard(card) } } label: {
-                    Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
-                        .frame(width: 28, height: 28).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.tr("Dnes už neukazovat"))
+// MARK: - The morning sheet
+
+/// "Včera": on the first open of the day while yesterday has open items and
+/// Ranní otázky are on. Pulled down, it waits on the Zdraví card.
+struct JournalMorningPrompt: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var phase
+    @AppStorage("journal.sheetDay") private var shownOn = ""
+    @State private var date: String?
+
+    func body(content: Content) -> some View {
+        content
+            .task(id: phase) {
+                guard phase == .active, !model.demo, JournalSwitch.isOn else { return }
+                let today = AppModel.localDate(Date())
+                guard shownOn != today, let fresh = try? await model.api.journalToday() else { return }
+                JournalSwitch.remember(fresh.enabled)
+                guard let card = fresh.card, card.ask != false else { return }
+                shownOn = today
+                date = card.date
             }
-            if card.askMood ?? card.isToday {
-                Text("Jak se cítíš?").font(Typo.sentence(21)).foregroundStyle(Palette.ink)
-                MoodPicker(mood: mood, disabled: busy) { level in Task { await setMood(card, level) } }
+            .sheet(item: Binding(get: { date.map(JournalSheetDate.init) }, set: { date = $0?.date })) { d in
+                JournalMorningSheet(date: d.date)
             }
-            VStack(spacing: 0) {
-                ForEach(Array(card.rows.enumerated()), id: \.element.id) { index, row in
-                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                    Button { model.push(.journal(card.date)) } label: {
-                        HStack(spacing: 12) {
-                            JournalIcon(symbol: row.icon, color: JournalStyle.color(row.category))
-                            Text(verbatim: row.name).font(.body).foregroundStyle(Palette.ink)
-                            Spacer(minLength: 8)
-                            Text(verbatim: row.value).font(.subheadline.weight(.medium)).foregroundStyle(Palette.secondary).lineLimit(1)
-                            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
-                        }
-                        .frame(minHeight: 50)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
+    }
+}
+
+struct JournalSheetDate: Identifiable {
+    let date: String
+    var id: String { date }
+}
+
+extension View {
+    func journalMorningPrompt() -> some View { modifier(JournalMorningPrompt()) }
+}
+
+struct JournalMorningSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let date: String
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Včera").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .padding(.top, 24)
+                JournalDayEditor(date: date, inSheet: true)
+                PrimaryButton(title: L10n.tr("Hotovo")) { dismiss() }
+                    .padding(.top, 24)
             }
-            if card.open > 0 {
-                PrimaryButton(title: L10n.f("Doplnit %@", String(card.open) + " " + Fmt.plural(card.open, "otázku", "otázky", "otázek"))) {
-                    model.push(.journal(card.date))
-                }
-            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 32)
         }
-    }
-
-    private func setMood(_ card: JournalCard, _ level: Int?) async {
-        mood = level
-        guard !model.demo else { return }
-        busy = true
-        defer { busy = false }
-        var body: JSONObject = ["date": .string(card.date), "key": .string("mood")]
-        if let level { body["amount"] = .number(Double(level)) } else { body["answer"] = JSONValue.null }
-        _ = try? await model.api.saveJournalEntry(body)
-        await load()
-    }
-
-    private func dismissCard(_ card: JournalCard) async {
-        data?.card = nil
-        guard !model.demo else { return }
-        try? await model.api.dismissJournal(["date": .string(card.date)])
-    }
-
-    private func seen() async {
-        data?.discovery = nil
-        guard !model.demo else { return }
-        try? await model.api.dismissJournal(["discovery": .bool(true)])
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(Palette.card)
     }
 }
 
 // MARK: - The journal of a day
 
-/// Deník: the week (Po–Ne, each day done, partial or empty), then the pinned
-/// items by section. A yes/no item is ✕ / ✓; a quantity, a time or a scale
-/// shows its value and opens the sheet. A ✓ with follow-ups opens them inline.
+/// Deník: the week, the chosen day's items by part of the day, and "Co na
+/// tebe působí". ··· holds Co sledovat, Ranní otázky and turning Deník off.
 struct JournalView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let date: String
+    @State private var tracking = false
+    @State private var askMorning = true
+    @State private var reload = 0
+
+    var body: some View {
+        DetailScreen(glow: Palette.Glow.health, title: "Deník") {
+            HStack(alignment: .center, spacing: 8) {
+                Text("Deník").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Spacer(minLength: 8)
+                Menu {
+                    Button { tracking = true } label: { Label("Co sledovat", systemImage: "checklist") }
+                    Toggle(isOn: Binding(get: { askMorning }, set: { on in askMorning = on; Task { await setOption(["askMorning": .bool(on)]) } })) {
+                        Label("Ranní otázky", systemImage: "bell")
+                    }
+                    Button(role: .destructive) {
+                        Task {
+                            await setOption(["enabled": .bool(false)])
+                            JournalSwitch.remember(false)
+                            dismiss()
+                        }
+                    } label: { Label("Vypnout Deník", systemImage: "eye.slash") }
+                } label: {
+                    Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                        .frame(width: 36, height: 36).background(Palette.card, in: Circle())
+                }
+                .accessibilityLabel(L10n.tr("Další možnosti"))
+            }
+            .padding(.top, 8)
+            JournalDayEditor(date: date, inSheet: false, reload: reload)
+        }
+        .sheet(isPresented: $tracking, onDismiss: { reload += 1 }) { JournalEditorView() }
+        .task {
+            guard !model.demo, let catalog = try? await model.api.journalCatalog() else { return }
+            askMorning = catalog.askMorning ?? true
+        }
+    }
+
+    private func setOption(_ body: JSONObject) async {
+        guard !model.demo else { return }
+        try? await model.api.setJournalOptions(body)
+    }
+}
+
+/// The day itself: in the journal with its week and the link to the effects,
+/// in the morning sheet without them.
+struct JournalDayEditor: View {
+    @Environment(AppModel.self) private var model
     @State private var date: String
+    let inSheet: Bool
+    /// Bumped after Co sledovat closes: the day loads again.
+    var reload = 0
     @State private var day: JournalDay?
     @State private var error: String?
-    @State private var editing = false
     @State private var valueItem: JournalItem?
 
-    init(date: String) {
+    init(date: String, inSheet: Bool, reload: Int = 0) {
         _date = State(initialValue: date)
+        self.inSheet = inSheet
+        self.reload = reload
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.today, title: "Deník") {
-            header
+        VStack(alignment: .leading, spacing: 0) {
             if let day {
-                weekStrip(day).padding(.top, 14)
+                if !inSheet {
+                    weekStrip(day).padding(.top, 14)
+                    Text(verbatim: Fmt.capitalized(JournalStyle.weekday(date)) + " " + Fmt.dayMonth(date))
+                        .font(.headline).foregroundStyle(Palette.ink)
+                        .padding(.top, 18)
+                }
                 if day.sections.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Deník je prázdný. Vyber si, na co se tě mám ptát.")
-                            .font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
-                        SecondaryButton(title: "Upravit deník", systemImage: "square.and.pencil") { editing = true }
-                    }
-                    .padding(.top, 24)
+                    Text("Nic nesleduješ. Vyber si to v Co sledovat.")
+                        .font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
+                        .padding(.top, 20)
                 }
                 ForEach(day.sections) { section in sectionView(section) }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
+                if !inSheet { JournalImpactLink().padding(.top, 24) }
             } else if let error {
                 Text(error).font(Typo.sentence(19)).foregroundStyle(Palette.secondary).padding(.top, 40)
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
             }
         }
-        .task(id: date) { await load() }
-        .sheet(isPresented: $editing, onDismiss: { Task { await load() } }) { JournalEditorView() }
+        .task(id: date + "|" + String(reload)) { await load() }
         .sheet(item: $valueItem) { item in
             JournalValueSheet(item: item, date: date) { body in await save(body) }
         }
-    }
-
-    private var header: some View {
-        HStack(alignment: .center, spacing: 8) {
-            Text("Deník").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
-            Spacer(minLength: 8)
-            Button { model.push(.journalImpact) } label: {
-                Label("Co na tebe působí", systemImage: "chart.bar")
-                    .font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                    .lineLimit(1)
-                    .padding(.horizontal, 12).frame(height: 36)
-                    .background(Palette.card, in: Capsule())
-            }
-            .buttonStyle(.plain)
-            Menu {
-                Button { editing = true } label: { Label("Upravit deník", systemImage: "square.and.pencil") }
-            } label: {
-                Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
-                    .frame(width: 36, height: 36).background(Palette.card, in: Circle())
-            }
-            .accessibilityLabel(L10n.tr("Další možnosti"))
-        }
-        .padding(.top, 8)
     }
 
     private func weekStrip(_ day: JournalDay) -> some View {
         HStack(spacing: 2) {
             ForEach(day.week) { d in
                 Button { if d.state != "future" { date = d.date } } label: {
-                    VStack(spacing: 5) {
+                    VStack(spacing: 6) {
                         Text(verbatim: Fmt.weekdayShort(d.date)).font(.caption).foregroundStyle(Palette.muted)
                         Text(verbatim: String(Int(d.date.suffix(2)) ?? 0)).font(.subheadline.weight(.semibold))
                             .foregroundStyle(d.state == "future" ? Palette.faint : Palette.ink)
@@ -365,7 +373,7 @@ struct JournalView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
-                    .background(d.date == date ? Palette.card : Color.clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(d.date == date ? Palette.ink.opacity(0.08) : Color.clear, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -376,64 +384,95 @@ struct JournalView: View {
         }
     }
 
+    /// Done: a green ✓; open items: an amber ring; nothing yet: a faint ring.
     @ViewBuilder private func mark(_ state: String) -> some View {
         switch state {
         case "done":
-            Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.onAccent)
-                .frame(width: 24, height: 24).background(Palette.amber, in: Circle())
+            Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.green)
+                .frame(width: 26, height: 26).background(Palette.green.opacity(0.18), in: Circle())
         case "partial":
-            ZStack {
-                Circle().stroke(Palette.track, lineWidth: 2.6)
-                Circle().trim(from: 0, to: 0.66).stroke(Palette.amber, style: StrokeStyle(lineWidth: 2.6, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
-            .frame(width: 22, height: 22).frame(width: 24, height: 24)
+            Circle().stroke(Palette.amber, lineWidth: 2).frame(width: 24, height: 24).frame(width: 26, height: 26)
+        case "future":
+            Circle().stroke(Palette.ink.opacity(0.08), lineWidth: 1).frame(width: 24, height: 24).frame(width: 26, height: 26)
         default:
-            Circle().stroke(Palette.track, lineWidth: 2).frame(width: 22, height: 22).frame(width: 24, height: 24)
+            Circle().stroke(Palette.ink.opacity(0.22), lineWidth: 2).frame(width: 24, height: 24).frame(width: 26, height: 26)
         }
     }
 
     private func sectionView(_ section: JournalSection) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 8) {
             SectionLabel(text: section.title).padding(.horizontal, 2)
-            VStack(spacing: 0) {
-                ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
-                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                    itemRow(item)
-                }
-            }
-            .padding(.horizontal, 16).padding(.vertical, 4)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            ForEach(section.items) { item in itemRow(item) }
         }
-        .padding(.top, 22)
+        .padding(.top, 18)
     }
 
+    /// One row: the time, the item, its value and the answer; open rows have
+    /// ✕ / ✓ and a thin amber edge. Held: Vždy ne / Vždy ano / Nesledovat.
     private func itemRow(_ item: JournalItem) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 12) {
-                JournalIcon(symbol: item.icon, color: JournalStyle.color(item.category))
-                Text(verbatim: item.name).font(.body).foregroundStyle(Palette.ink).lineLimit(2)
+        let open = !item.isAnswered
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Text(verbatim: item.time ?? "").font(.footnote).foregroundStyle(Palette.faint)
+                    .frame(width: 40, alignment: .leading)
+                Image(systemName: item.icon).font(.system(size: 16, weight: .medium)).foregroundStyle(JournalStyle.color(item.category))
+                    .frame(width: 24)
+                Text(verbatim: item.name).font(.body.weight(open ? .medium : .regular))
+                    .foregroundStyle(open ? Palette.ink : Palette.secondary).lineLimit(2)
                 Spacer(minLength: 8)
-                if item.isYesNo {
-                    YesNoToggle(answer: item.answer) { value in Task { await setAnswer(item, value) } }
-                } else {
-                    Button { valueItem = item } label: {
-                        HStack(spacing: 6) {
-                            Text(verbatim: item.value ?? "–").font(.subheadline.weight(.medium))
-                                .foregroundStyle(item.isAnswered ? Palette.secondary : Palette.faint).lineLimit(1)
-                            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                if let short = item.short, item.isAnswered {
+                    HStack(spacing: 4) {
+                        if item.fixed != nil {
+                            Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 11, weight: .semibold))
                         }
-                        .frame(minHeight: 44)
-                        .contentShape(Rectangle())
+                        Text(verbatim: short).lineLimit(1)
                     }
-                    .buttonStyle(.plain)
+                    .font(.subheadline).foregroundStyle(Palette.muted)
                 }
+                answer(item)
             }
-            .frame(minHeight: 54)
-            if item.isYesNo, item.answer == 1, item.follow?.isEmpty == false {
+            .padding(.leading, 12).padding(.trailing, 10)
+            .frame(minHeight: 56)
+            .contentShape(Rectangle())
+            .onTapGesture { if !item.isYesNo && item.isAnswered { valueItem = item } }
+            if item.isYesNo, item.answer == 1, item.follow?.isEmpty == false, item.fromData != true {
                 JournalFollowUps(item: item) { extra in Task { await saveExtra(item, extra) } }
-                    .padding(.leading, 44).padding(.bottom, 12)
+                    .padding(.leading, 86).padding(.trailing, 12).padding(.bottom, 12)
             }
+        }
+        .background(inSheet ? Palette.ink.opacity(0.05) : Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            if open { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.amber.opacity(0.35), lineWidth: 1) }
+        }
+        .contextMenu {
+            if item.fixed != 0 {
+                Button { Task { await fix(item, 0) } } label: { Label("Vždy ne", systemImage: "xmark") }
+            }
+            if item.fixed != 1, item.type != "time" {
+                Button { Task { await fix(item, 1) } } label: { Label("Vždy ano", systemImage: "checkmark") }
+            }
+            if item.fixed != nil {
+                Button { Task { await fix(item, nil) } } label: { Label("Ptát se zase", systemImage: "arrow.uturn.backward") }
+            }
+            Button(role: .destructive) { Task { await untrack(item) } } label: { Label("Nesledovat", systemImage: "eye.slash") }
+        }
+    }
+
+    /// Open: ✕ / ✓ (a ✓ of a quantity or a time opens its sheet). Answered:
+    /// its circle; a tap clears an own answer, or turns the data's or the
+    /// "Vždy" answer around for this day.
+    @ViewBuilder private func answer(_ item: JournalItem) -> some View {
+        if !item.isAnswered {
+            JournalAnswerButtons { value in
+                if value == 1 && !item.isYesNo { valueItem = item } else { Task { await setAnswer(item, value) } }
+            }
+        } else {
+            Button {
+                let own = item.fromData != true && item.fixed == nil
+                if !item.isYesNo && own { valueItem = item; return }
+                Task { await setAnswer(item, own ? nil : (item.answer == 1 ? 0 : 1)) }
+            } label: { JournalStateMark(item: item) }
+            .buttonStyle(.plain)
         }
     }
 
@@ -463,7 +502,7 @@ struct JournalView: View {
     }
 
     private func setAnswer(_ item: JournalItem, _ value: Int?) async {
-        update(item.key) { $0.answer = value; $0.answered = value != nil }
+        update(item.key) { $0.answer = value; $0.answered = value != nil; $0.fromData = false; $0.fixed = nil }
         var body: JSONObject = ["date": .string(date), "key": .string(item.key)]
         if let value { body["answer"] = JSONValue.number(Double(value)) } else { body["answer"] = JSONValue.null }
         if value == 1, let extra = item.extra { body["extra"] = JournalStyle.json(extra) }
@@ -474,6 +513,33 @@ struct JournalView: View {
         update(item.key) { $0.extra = extra }
         let body: JSONObject = ["date": .string(date), "key": .string(item.key), "answer": .number(1), "extra": JournalStyle.json(extra)]
         if let failure = await save(body) { error = failure }
+    }
+
+    private func fix(_ item: JournalItem, _ answer: Int?) async {
+        if model.demo {
+            update(item.key) { row in
+                row.fixed = answer
+                row.answer = answer ?? row.answer
+                row.answered = answer != nil || row.answered == true
+                row.short = answer.map { L10n.tr($0 == 1 ? "vždy ano" : "vždy ne") } ?? row.short
+            }
+            return
+        }
+        do {
+            day = try await model.api.setJournalFixed(key: item.key, answer: answer, date: date)
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func untrack(_ item: JournalItem) async {
+        guard var d = day else { return }
+        for s in d.sections.indices { d.sections[s].items.removeAll { $0.key == item.key } }
+        d.sections.removeAll { $0.items.isEmpty }
+        day = d
+        guard !model.demo, let catalog = try? await model.api.journalCatalog() else { return }
+        try? await model.api.setJournalPinned(catalog.pinned.filter { $0 != item.key })
     }
 
     /// Saves an answer; the day comes back with it. Nil on success, else the message.
@@ -503,28 +569,60 @@ struct JournalView: View {
         }
         let amount = body["amount"]?.number
         let time = body["time"]?.string
-        let last = L10n.isEnglish ? "last" : "do"
         update(key) { item in
             item.answer = answer
             item.answered = answer != nil
             item.fromData = false
+            item.fixed = nil
             if item.type == "amount" {
                 let value: Double = answer == 1 ? (amount ?? 0) : 0
                 item.amount = value
                 item.time = answer == 1 ? time : nil
                 var text = JournalText.amount(value)
-                if let unit = item.unit, !unit.isEmpty { text += " " + unit }
-                if answer == 1, let time { text += " · " + last + " " + time }
-                item.value = answer == nil ? nil : text
+                let unit = item.unitText(for: value)
+                if !unit.isEmpty { text += " " + unit }
+                item.short = answer == nil ? nil : text
             } else if item.type == "time" {
                 item.time = answer == 1 ? time : nil
-                var text: String? = nil
-                if answer == 1 { text = time } else if answer == 0 { text = L10n.tr("Ne") }
-                item.value = text
+                item.short = answer == 0 ? L10n.tr("Ne") : nil
             } else if item.type == "scale" {
                 item.amount = amount
-                item.value = amount.map { JournalText.amount($0) }
+                item.short = amount.map { JournalText.amount($0) }
             }
+        }
+    }
+}
+
+/// "Co na tebe působí" under the day: the two biggest effects, opening the chart.
+struct JournalImpactLink: View {
+    @Environment(AppModel.self) private var model
+    @State private var top: [JournalEffect] = []
+
+    var body: some View {
+        Button { model.push(.journalImpact) } label: {
+            Card {
+                HStack(spacing: 5) {
+                    Text("Co na tebe působí").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
+                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                }
+                if top.isEmpty {
+                    Text("Ukážu, až bude dost dní s ✓ i s ✕.").font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                ForEach(top.prefix(2)) { effect in
+                    HStack(spacing: 8) {
+                        Image(systemName: effect.icon).font(.system(size: 14)).foregroundStyle(Palette.muted).frame(width: 20)
+                        Text(verbatim: effect.name).font(.subheadline.weight(.medium)).foregroundStyle(Palette.secondary)
+                        Spacer(minLength: 8)
+                        Text(verbatim: JournalText.percent(effect.effect)).font(Typo.number(22))
+                            .foregroundStyle(effect.effect < 0 ? Palette.rust : Palette.green)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .task {
+            if model.demo { top = DemoJournal.today.top ?? []; return }
+            top = (try? await model.api.journalToday())?.top ?? []
         }
     }
 }

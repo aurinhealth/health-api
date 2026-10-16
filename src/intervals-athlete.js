@@ -6,6 +6,7 @@ import { getTrainingProfile } from "./training-profile.js";
 import { powerZones, hrZones, paceZones } from "./training-zones.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { loadProfiles, refreshSuggestions } from "./profile-suggestions.js";
+import { intervalsReads } from "./intervals-reads.js";
 const n = v => Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null;
 
 // On a trainer most riders hold a few per cent less than outdoors. Without an
@@ -25,7 +26,7 @@ function hrModelFor(model, lthr, maxHr, restHr) {
   return maxHr && restHr ? "karvonen" : maxHr ? "hrMax5" : model;
 }
 
-export async function athleteThresholds(env, fetchImpl = fetch) {
+export async function athleteThresholds(env, fetchImpl = intervalsReads(env)) {
   const out = { ftp: null, indoorFtp: null, lthr: null, maxHr: null, runThresholdPace: null, runPaceSource: null, intervalsRunPace: null, runLthr: null, runMaxHr: null, source: null, intervalsFtp: null, latestRideFtp: null };
   if (env.INTERVALS_API_KEY) {
     try {

@@ -12,6 +12,7 @@ import { grantedExtras } from "./google-scopes.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { localDate, localNoon } from "./user-time.js";
 import { readSyncPrefs, healthAllowed } from "./sync-destinations.js";
+import { intervalsReads } from "./intervals-reads.js";
 
 const TOLERANCE_KG = 0.05;
 export const WEIGHT_SYNC_DAYS = 14;
@@ -63,7 +64,7 @@ async function remember(db, userId, target, date, value) {
 const intervalsAuth = env => ({ Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json", "Content-Type": "application/json" });
 
 // Weight per day from Intervals.icu wellness.
-export async function intervalsWeights(env, oldest, newest, fetchImpl = fetch) {
+export async function intervalsWeights(env, oldest, newest, fetchImpl = intervalsReads(env)) {
   const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { headers: intervalsAuth(env), signal: AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error("Intervals wellness HTTP " + response.status);
   const rows = await response.json();
@@ -71,7 +72,7 @@ export async function intervalsWeights(env, oldest, newest, fetchImpl = fetch) {
   return Object.fromEntries(rows.map(r => [r.id, kg(r.weight)]).filter(([id, v]) => /^\d{4}-\d{2}-\d{2}$/.test(id) && id >= oldest && id <= newest && v != null));
 }
 
-export async function writeIntervalsWeight(env, date, value, fetchImpl = fetch) {
+export async function writeIntervalsWeight(env, date, value, fetchImpl = intervalsReads(env)) {
   const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness/${date}`, { method: "PUT", headers: intervalsAuth(env), body: JSON.stringify({ id: date, weight: value }) });
   if (!response.ok) throw new Error("Intervals wellness write HTTP " + response.status);
 }
@@ -111,7 +112,7 @@ export async function importIntervalsWeights(env, { days = 365, fetchImpl = fetc
 }
 
 // One sync pass for one user over the last WEIGHT_SYNC_DAYS days.
-export async function syncWeights(env, { googleToken, fetchImpl = fetch, now = Date.now() } = {}) {
+export async function syncWeights(env, { googleToken, fetchImpl = intervalsReads(env), now = Date.now() } = {}) {
   const providers = env.CONNECTED_PROVIDERS || [];
   const googleConnected = providers.includes("google"), intervalsConnected = providers.includes("intervals");
   if (!intervalsConnected) return { status: "skipped", reason: "Intervals.icu is not connected" };
