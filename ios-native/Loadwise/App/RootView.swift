@@ -26,6 +26,18 @@ struct RootView: View {
         }
     }
 
+    /// No tab bar in a full-screen flow nor on a detail: the detail has its
+    /// back button and the edge swipe, and the bar would lie over its last rows.
+    private var barHidden: Bool {
+        model.immersive || !(model.paths[model.tab] ?? []).isEmpty
+    }
+
+    /// Toasts sit above the tab bar and the hidden-workout bar, whichever show.
+    private var toastInset: CGFloat {
+        if model.immersive { return 16 }
+        return (barHidden ? 16 : 88) + (model.minimizedGym == nil ? 0 : 64)
+    }
+
     /// The tabs, the tab bar and the sheets grow with the text size up to a cap.
     private static let textSizes: PartialRangeThrough<DynamicTypeSize> = ...DynamicTypeSize.screenCap
 
@@ -86,7 +98,7 @@ struct RootView: View {
                 if let report = model.syncReport, !showSyncStatus {
                     SyncToastView(report: report) { showSyncStatus = true }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, model.immersive ? 16 : model.minimizedGym == nil ? 88 : 152)
+                        .padding(.bottom, toastInset)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
@@ -97,7 +109,7 @@ struct RootView: View {
                         if let undo = toast.settle(undo: true) { Task { await undo() } }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, model.immersive ? 16 : model.minimizedGym == nil ? 88 : 152)
+                    .padding(.bottom, toastInset)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
                 }
@@ -110,12 +122,16 @@ struct RootView: View {
                                 .dynamicTypeSize(Self.textSizes)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
-                               onExpand: { withAnimation(.snappy) { compactBar = false } }, onAdd: { showAdd = true })
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 8)
-                            .dynamicTypeSize(Self.textSizes)
-                            .sensoryFeedback(.impact(weight: .light), trigger: tabTaps)
+                        // Details have no tab bar; a hidden workout stays reachable there.
+                        if !barHidden {
+                            TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
+                                   onExpand: { withAnimation(.snappy) { compactBar = false } }, onAdd: { showAdd = true })
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 8)
+                                .dynamicTypeSize(Self.textSizes)
+                                .sensoryFeedback(.impact(weight: .light), trigger: tabTaps)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.snappy, value: model.minimizedGym == nil)
@@ -146,6 +162,7 @@ struct RootView: View {
             }
             .animation(.snappy, value: model.syncReport?.id)
             .animation(.snappy, value: model.undoToast?.id)
+            .animation(.snappy, value: barHidden)
             // Without "Zpět" in 6 s the deletion goes through; also when another
             // toast took its place.
             .task(id: model.undoToast?.id) {

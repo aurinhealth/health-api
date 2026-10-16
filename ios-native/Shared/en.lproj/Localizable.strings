@@ -876,7 +876,6 @@
 "cíl %@ podle věku" = "goal %@ by age";
 "cíl jídla" = "meal goal";
 "cíl splněn" = "goal reached";
-"cíl ~%@" = "goal ~%@";
 "další" = "more";
 "dalších" = "more";
 "den" = "day";
@@ -2504,6 +2503,12 @@
 "Odebrat %@?" = "Remove %@?";
 "Zařízení, které se s ním přihlásilo, se odhlásí." = "The device that signed in with it will be signed out.";
 "Přidán %@" = "Added %@";
+"Trénuješ a jsi v pořádku" = "Training and feeling well";
+"Odpočíváš, než se uzdravíš" = "Resting until you are well";
+"Zotavuješ se ze zranění" = "Recovering from an injury";
+"Dáváš si od tréninku volno" = "Taking time off training";
+"Po kategoriích" = "By category";
+"Libovolně" = "Any order";
 
 /* Deník: the Zdraví card, the morning sheet, the day, Co sledovat, Nastavení → Deník */
 "Včerejšek čeká" = "Yesterday is waiting";

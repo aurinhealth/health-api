@@ -259,6 +259,8 @@ struct RouteLink<Label: View>: View {
     var body: some View {
         NavigationLink(value: route) { label }
             .buttonStyle(PressableCardStyle())
+            // The smoke test (LoadwiseUITests) finds a card by its route: "open.readiness".
+            .accessibilityIdentifier("open.\(route)")
     }
 }
 

@@ -170,6 +170,19 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: eu.petrfitnessdata.loadwise.native.tests
+  # The smoke test before a release: the app tapped through on the simulator (ios-native.yml).
+  LoadwiseUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: LoadwiseUITests
+    dependencies:
+      - target: Loadwise
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: eu.petrfitnessdata.loadwise.native.uitests
+        TEST_TARGET_NAME: Loadwise
 schemes:
   Loadwise:
     build:
@@ -180,4 +193,14 @@ schemes:
       targets:
         - LoadwiseTests
       # The tests check the Czech source texts; the simulator itself speaks English.
+      language: cs
+  # Its own scheme, so the unit tests and screen renders run as before.
+  LoadwiseSmoke:
+    build:
+      targets:
+        Loadwise: all
+        LoadwiseUITests: [test]
+    test:
+      targets:
+        - LoadwiseUITests
       language: cs
