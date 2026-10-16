@@ -6,6 +6,7 @@
 // Such a night has no time in bed, so the sleep index falls back to its
 // sleepScore (readiness.js sleepIndexFor).
 import { intervalsAuthorization } from "./intervals-auth.js";
+import { intervalsReads } from "./intervals-reads.js";
 
 export function mergeIntervalsSleep(sessions = [], wellness = [], { start = "", end = "9999-12-31" } = {}) {
   const known = new Set(sessions.map(s => s.date || String(s.endTime || "").slice(0, 10)));
@@ -19,7 +20,7 @@ export function mergeIntervalsSleep(sessions = [], wellness = [], { start = "", 
   return [...sessions, ...extra].sort((a, b) => String(b.date || b.endTime || "").localeCompare(String(a.date || a.endTime || "")));
 }
 
-export async function intervalsWellness(env, oldest, newest, fetchImpl = fetch) {
+export async function intervalsWellness(env, oldest, newest, fetchImpl = intervalsReads(env)) {
   if (!env.INTERVALS_API_KEY) return [];
   try {
     const response = await fetchImpl(`https://intervals.icu/api/v1/athlete/0/wellness?oldest=${oldest}&newest=${newest}`, { headers: { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json" } });
@@ -29,7 +30,7 @@ export async function intervalsWellness(env, oldest, newest, fetchImpl = fetch) 
 
 // A /health/sleep answer with the missing nights filled from Intervals.
 // `loadWellness` lets the caller serve the wellness log from a cache.
-export async function withIntervalsSleep(env, data, start, end, fetchImpl = fetch, loadWellness = null) {
+export async function withIntervalsSleep(env, data, start, end, fetchImpl = intervalsReads(env), loadWellness = null) {
   const sessions = data?.sessions || [];
   if (!env.INTERVALS_API_KEY || !start || !end) return data;
   const wellness = loadWellness ? await loadWellness(start, end).catch(() => []) : await intervalsWellness(env, start, end, fetchImpl);
