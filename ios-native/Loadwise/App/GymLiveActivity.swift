@@ -22,13 +22,17 @@ enum GymLiveActivity {
         last = state
         lastUpdate = Date()
         let content = ActivityContent(state: state, staleDate: state.restEnd)
-        if let activity, activity.activityState == .active {
+        // Stale (the rest ran out on the lock screen) is still the same
+        // activity: updated, never a second one under it.
+        if let activity, activity.activityState == .active || activity.activityState == .stale {
             Task { await activity.update(content) }
             return
         }
+        activity = nil
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         endOrphans()
-        let attributes = GymActivityAttributes(startedAt: day.startedAt ?? Date(), labels: labels)
+        // The clock of the recording, the same as the screen's Čas.
+        let attributes = GymActivityAttributes(startedAt: LiveWorkout.shared.start ?? day.startedAt ?? Date(), labels: labels)
         activity = try? Activity.request(attributes: attributes, content: content)
     }
 

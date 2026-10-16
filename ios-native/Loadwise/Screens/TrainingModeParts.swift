@@ -112,7 +112,14 @@ struct GymSetRow: View {
     let state: Phase
     var kgText: Binding<String>? = nil
     var repsText: Binding<String>? = nil
+    /// A ticked set's weight and reps changed afterwards (shown kg, reps).
+    var onEdit: ((String, String) -> Void)? = nil
     var toggle: () -> Void = {}
+
+    private enum Field { case kg, reps }
+    @FocusState private var focus: Field?
+    @State private var editKg = ""
+    @State private var editReps = ""
 
     var body: some View {
         HStack(spacing: 8) {
@@ -126,8 +133,8 @@ struct GymSetRow: View {
             }
             Text(lastTime ?? "—").font(.footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            field(kg, kgText, keyboard: .decimalPad)
-            field(reps, repsText, keyboard: .numberPad).frame(width: 52)
+            field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg)
+            field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps).frame(width: 52)
             Button(action: toggle) {
                 Group {
                     if state == .done {
@@ -149,11 +156,29 @@ struct GymSetRow: View {
         .padding(.vertical, 5)
         .background(state == .current ? Palette.track : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(state == .current ? Palette.amber.opacity(0.55) : .clear, lineWidth: 1.5))
+        .onAppear { editKg = kg; editReps = reps }
+        .onChange(of: kg) { _, value in if focus == nil { editKg = value } }
+        .onChange(of: reps) { _, value in if focus == nil { editReps = value } }
+        // Leaving the field keeps what was typed.
+        .onChange(of: focus) { old, now in
+            guard old != nil, now == nil, let onEdit, editKg != kg || editReps != reps else { return }
+            onEdit(editKg, editReps)
+        }
     }
 
     @ViewBuilder
-    private func field(_ value: String, _ binding: Binding<String>?, keyboard: UIKeyboardType) -> some View {
-        if let binding, state == .current {
+    private func field(_ value: String, _ binding: Binding<String>?, keyboard: UIKeyboardType, edit: Binding<String>, field: Field) -> some View {
+        if state == .done, onEdit != nil {
+            // A ticked set stays editable: tap the number to fix it.
+            TextField("–", text: edit)
+                .keyboardType(keyboard)
+                .multilineTextAlignment(.center)
+                .font(Typo.number(22))
+                .foregroundStyle(Palette.ink)
+                .focused($focus, equals: field)
+                .frame(width: 64, height: 34)
+                .background(focus == field ? Palette.card : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else if let binding, state == .current {
             TextField("–", text: binding)
                 .keyboardType(keyboard)
                 .multilineTextAlignment(.center)

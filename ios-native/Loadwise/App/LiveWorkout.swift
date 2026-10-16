@@ -162,7 +162,7 @@ final class LiveWorkout: NSObject {
             // Strength training about 5 MET, 4 above rest: active kcal = 4 × kg × hours.
             kcal = 4.0 * weightKg * Date().timeIntervalSince(start) / 3600
         }
-        if builder == nil, !sensor.connected, let bpm = await latestHeartRate(since: Date().addingTimeInterval(-120)) { note(bpm) }
+        if builder == nil, sensor.liveBpm == nil, let bpm = await latestHeartRate(since: Date().addingTimeInterval(-120)) { note(bpm) }
     }
 
     private func sensorBeat(_ bpm: Double) {
@@ -284,7 +284,8 @@ final class LiveWorkout: NSObject {
 
     fileprivate func collected(energy: Double?, bpm: Double?) {
         if let energy, energy > 0 { kcal = energy; liveKcal = true }
-        if let bpm, bpm > 0, !sensor.connected { note(bpm) }
+        // A sensor that connected but sends nothing doesn't hide the others.
+        if let bpm, bpm > 0, sensor.liveBpm == nil { note(bpm) }
     }
 }
 

@@ -47,6 +47,10 @@ struct TrainingModeView: View {
     @State private var picking = false
     /// "Začít trénink" tapped (the sample day has no recording to show it).
     @State private var startTapped = false
+    /// The warm-up's stretches ticked (StretchingCard): all of them done, the
+    /// card makes way for the first exercise.
+    @AppStorage("gym.stretching.done") private var stretchesDone = ""
+    @Environment(\.scenePhase) private var scenePhase
     private var live: LiveWorkout { LiveWorkout.shared }
     /// The clock, heart rate and recording run only after "Začít trénink" (or
     /// for a workout already under way); opening the workout starts nothing.
@@ -71,7 +75,7 @@ struct TrainingModeView: View {
                                     LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
                                 }
                                 // The warm-up until the first set is done.
-                                if let warmup = day.warmup, restEnd == nil, !day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                                if let warmup = day.warmup, restEnd == nil, !warmupDone(warmup), !day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
                                     StretchingCard(stretching: warmup, date: date, kind: .warmup, compact: true).padding(.top, 14)
                                 }
                                 if let restEnd {
@@ -109,6 +113,10 @@ struct TrainingModeView: View {
         .onChange(of: index) { _, _ in syncActivity() }
         .onChange(of: finishedSession) { _, _ in syncActivity() }
         .onChange(of: live.heartRate) { _, _ in syncActivity(quiet: true) }
+        // Back from the lock screen after the rest ran out: straight to the set.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, let end = restEnd, end <= Date() { restEnd = nil }
+        }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
             ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
@@ -285,7 +293,8 @@ struct TrainingModeView: View {
         return GymSetRow(label: s.warmup ? "W" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
-                         kgText: $kg, repsText: $reps) {
+                         kgText: $kg, repsText: $reps,
+                         onEdit: s.done ? { k, r in Task { await editDone(s, kg: k, reps: r) } } : nil) {
             switch phase {
             case .done: Task { await undo(s) }
             case .current: Task { await complete(s) }
@@ -427,7 +436,15 @@ struct TrainingModeView: View {
             if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
             guard !Task.isCancelled, restEnd == end else { return }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+            // The rest is over: the screen turns to the set.
+            restEnd = nil
         }
+    }
+
+    /// Every stretch of the warm-up ticked (by hand or by its timer).
+    private func warmupDone(_ warmup: GymStretching) -> Bool {
+        let done = StretchingCard.done(stretchesDone, date: date)
+        return !warmup.items.isEmpty && warmup.items.allSatisfy { done.contains(GymRoutineKind.warmup.key + $0.id) }
     }
 
     private func recoveryPoints() -> [Double] {
@@ -939,6 +956,23 @@ struct TrainingModeView: View {
                 return
             }
             await model.refreshTraining()
+        }
+    }
+
+    /// The weight or reps of a ticked set changed afterwards.
+    private func editDone(_ set: GymSet, kg: String, reps: String) async {
+        guard var next = day else { return }
+        let k = LiftWeight.kgText(kg)
+        let r = reps.trimmingCharacters(in: .whitespaces)
+        guard !k.isEmpty || !r.isEmpty, (set.kg ?? "") != k || (set.reps ?? "") != r else { return }
+        next.edit(row: set.row, kg: k.isEmpty ? (set.kg ?? "") : k, reps: r.isEmpty ? (set.reps ?? "") : r)
+        day = next
+        guard !model.demo else { return }
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Sérii se nepodařilo uložit: %@", error.localizedDescription)
         }
     }
 

@@ -164,6 +164,9 @@ struct RootView: View {
                 // The icon's menu in the language and order of the moment.
                 if phase == .background { QuickActions.update(model.today) }
                 guard phase == .active else { return }
+                // Mid-workout (a look at the lock screen, another app between
+                // sets) the screen stays as it is; the workout's end refreshes.
+                guard !model.immersive, !LiveWorkout.shared.running else { return }
                 Task {
                     if model.today != nil || !model.outbox.isEmpty { await model.refresh(announce: true) }
                     // The open tab too, so Health or Food are not a day behind Today.
