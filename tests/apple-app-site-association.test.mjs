@@ -29,8 +29,10 @@ test("without a team id the file is not served; other paths and methods pass", (
 test("iOS reads it anonymously, and the app's entitlement names the server it talks to", () => {
   assert.equal(isPublicPath("/.well-known/apple-app-site-association"), true);
   const project = readFileSync(new URL("../ios-native/project.yml", import.meta.url), "utf8");
-  const client = readFileSync(new URL("../ios-native/Loadwise/Data/APIClient.swift", import.meta.url), "utf8");
-  const server = new URL(client.match(/static let server = URL\(string: "([^"]+)"\)!/)[1]).hostname;
+  // The live server (Data/ServerChoice.swift); passkeys are off on the test server.
+  const client = readFileSync(new URL("../ios-native/Loadwise/Data/ServerChoice.swift", import.meta.url), "utf8");
+  const server = new URL(client.match(/case \.live: URL\(string: "([^"]+)"\)!/)[1]).hostname;
+  assert.match(client, /var passkeys: Bool \{ self == \.live \}/);
   assert.equal(server, "aurin.health");
   const domains = project.match(/com\.apple\.developer\.associated-domains:\s*\n((?:\s*- .+\n)+)/)[1];
   assert.match(domains, new RegExp("- webcredentials:" + server.replace(/\./g, "\\.") + "\n"));

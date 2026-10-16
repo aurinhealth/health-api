@@ -4,9 +4,12 @@ const EXPECTED_AUDIENCE = "health-strength";
 const EXPECTED_REPOSITORY = "shaarkyn/health-api";
 const EXPECTED_REPOSITORY_ID = "1371310425";
 const EXPECTED_REPOSITORY_OWNER_ID = "329509326";
-// Only the deploy smoke test calls in (a push to main); nothing runs on a schedule.
+// Only the deploy smoke test calls in: run from main, or from "Vydat", which runs
+// deploy-worker.yml for the live server (the token names the calling workflow).
+// Nothing runs on a schedule.
 const EXPECTED_WORKFLOWS = new Set([
-  "shaarkyn/health-api/.github/workflows/deploy-worker.yml@refs/heads/main"
+  "shaarkyn/health-api/.github/workflows/deploy-worker.yml@refs/heads/main",
+  "shaarkyn/health-api/.github/workflows/vydat.yml@refs/heads/main"
 ]);
 
 let cachedJwks = null;
@@ -34,7 +37,8 @@ export async function verifyGitHubActionsToken(request, fetchImpl = fetch) {
   if (String(claims.repository_owner_id) !== EXPECTED_REPOSITORY_OWNER_ID) throw new Error("Invalid GitHub Actions repository owner");
   if (claims.ref !== "refs/heads/main") throw new Error("Invalid GitHub Actions ref");
   if (!EXPECTED_WORKFLOWS.has(claims.workflow_ref)) throw new Error("Invalid GitHub Actions workflow");
-  if (claims.event_name !== "push") throw new Error("Invalid GitHub Actions event");
+  // A push to main, or a deploy of the live server started by hand ("Vydat").
+  if (claims.event_name !== "push" && claims.event_name !== "workflow_dispatch") throw new Error("Invalid GitHub Actions event");
   if (claims.actor !== "shaarkyn") throw new Error("Invalid GitHub Actions actor");
   if (!Number.isFinite(claims.exp) || claims.exp <= now) throw new Error("Expired GitHub Actions token");
   if (Number.isFinite(claims.nbf) && claims.nbf > now + 60) throw new Error("GitHub Actions token is not active yet");

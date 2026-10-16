@@ -20,7 +20,7 @@ export function parseConfig(text) {
 }
 
 export function shardPlan(config, environment = '') {
-  if (environment !== '') throw new Error('Unsupported environment');
+  if (environment !== '' && environment !== 'staging') throw new Error('Unsupported environment');
   const selected = environment ? config.env?.[environment] : config;
   const core = selected?.d1_databases?.find(d => d.binding === 'DB');
   const expected = environment ? 'health-data-staging' : 'health-data';
@@ -89,7 +89,7 @@ export async function provisionDatabases({ accountId, token, plan, fetchImpl = f
 }
 
 async function main() {
-  const environment = '';
+  const environment = process.argv.includes('--staging') ? 'staging' : '';
   const activate = process.argv.includes('--activate');
   const config = parseConfig(readFileSync('wrangler.jsonc', 'utf8'));
   const plan = shardPlan(config, environment);

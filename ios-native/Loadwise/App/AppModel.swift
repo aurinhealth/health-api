@@ -322,7 +322,7 @@ final class AppModel {
     /// the app then offers a passkey ("Příště přes Face ID", RootView).
     func signIn(email: String, code: String) async throws {
         try await api.verifyEmailLogin(email: email, code: code)
-        if !PasskeyService.mayHaveOne { passkeyOffer = true }
+        if ServerChoice.current.passkeys && !PasskeyService.mayHaveOne { passkeyOffer = true }
         await signedIn()
         await refresh()
     }
@@ -395,17 +395,24 @@ final class AppModel {
         // watch go out before Today is computed. Later in the day Today loads
         // alongside the sync and again only when it brought something new.
         var sync: Task<AppleHealth.SyncOutcome, Never>?
+        var changed = false
         if health.hasMorningData {
             let api = api
             sync = Task { await health.run(api: api) }
         } else {
-            _ = await health.run(api: api)
+            changed = await health.run(api: api).changed
         }
         do {
             try await loadToday()
             // The day is on screen: the arrows and swipes work again.
             loading = false
-            if let sync, await sync.value.changed { try? await loadToday() }
+            if let sync, await sync.value.changed { changed = true; try? await loadToday() }
+            // New nights or workouts reach the Health snapshot too: the sleep
+            // detail opened from Today shows it.
+            if changed {
+                fetched[.health] = nil
+                if self.health != nil { Task { await self.refreshHealth() } }
+            }
             async let status = try? api.athleteStatus()
             if selectedDate == nil, let today {
                 async let cycle: Void = loadCycle()
@@ -1216,6 +1223,30 @@ final class AppModel {
     /// sign-in shows whether it is the same account (signedIn()).
     func signOut(expired: Bool = false) {
         api.signOut()
+        clearLocal(expired: expired)
+    }
+
+    /// Nastavení → Testování → Server: the other server, with its own account
+    /// data and sign-in. What the screens and the outbox hold belongs to the
+    /// old server; both sessions stay, so switching back needs no sign-in.
+    /// Apple Health pauses and resumes like a sign-out and a sign-in, each
+    /// server with its own last sync (AppleHealth.serverChanged).
+    func switchServer(to choice: ServerChoice) async {
+        guard !demo, choice != ServerChoice.current else { return }
+        if phase == .signedIn { await PushRegistration.unregister(api: api) }
+        AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
+        ServerChoice.current = choice
+        AppleHealth.shared.serverChanged()
+        clearLocal(expired: true)
+        outbox = []
+        OutboxStore.save([])
+        if api.hasSession {
+            await signedIn()
+            await refresh()
+        }
+    }
+
+    private func clearLocal(expired: Bool) {
         SnapshotCache.clear()
         GymDayCache.clear()
         CoachTextMemory.values = [:]

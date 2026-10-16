@@ -12,7 +12,20 @@ test('generated bindings preserve assets and never reuse the central database ID
   assert.equal(generated.d1_databases.length, 21);
   assert.deepEqual(generated.assets,c.assets);
   assert.throws(() => runtimeConfig(c,'',prod,prod.shards.map(s => ({name:s.name,uuid:prod.core.database_id,jurisdiction:'eu'}))), /Invalid/);
-  assert.throws(() => shardPlan(c,'staging'), /Unsupported/);
+  assert.throws(() => shardPlan(c,'other'), /Unsupported/);
+});
+
+test('the test server gets its own two user databases and keeps its own address', () => {
+  const c = config(), prod = shardPlan(c), stage = shardPlan(c,'staging');
+  assert.equal(stage.shards.length, 2);
+  assert.equal(stage.core.database_name, 'health-data-staging');
+  assert.notEqual(stage.core.database_id, prod.core.database_id);
+  assert.ok(prod.shards.every(s => !stage.shards.some(t => t.name === s.name)));
+  const generated = runtimeConfig(c,'staging',stage,stage.shards.map((s,i) => ({name:s.name,uuid:'staging-'+i,jurisdiction:'eu'})));
+  assert.equal(generated.env.staging.d1_databases.length, 3);
+  assert.equal(generated.d1_databases.length, 1);
+  assert.deepEqual(generated.env.staging.routes, c.env.staging.routes);
+  assert.throws(() => runtimeConfig(c,'staging',stage,stage.shards.map(s => ({name:s.name,uuid:stage.core.database_id,jurisdiction:'eu'}))), /Invalid/);
 });
 
 test('JSONC parser leaves HTTPS URLs, comment-looking strings and escapes intact', () => {
