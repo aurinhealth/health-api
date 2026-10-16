@@ -1,0 +1,58 @@
+name: Coach evaluation
+
+# Sends fixed situations to the real AI coach on the test server
+# (src/coach-eval.js, scripts/coach-eval.mjs) and shows its replies with the
+# checks in the job summary. Started by hand from main; it costs OpenAI tokens
+# on the test server's key, counted on its owner's AI usage.
+on:
+  workflow_dispatch:
+    inputs:
+      scenarios:
+        description: "Situations to run, e.g. S02,S04 (empty = all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: coach-eval
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      - name: Request GitHub OIDC token for the coach evaluation
+        id: oidc
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=aurin-coach-eval")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<< "$response")"
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Run the evaluation
+        env:
+          COACH_EVAL_TOKEN: ${{ steps.oidc.outputs.token }}
+          COACH_EVAL_SCENARIOS: ${{ inputs.scenarios }}
+        run: node scripts/coach-eval.mjs
+
+      - name: Keep the replies
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: coach-eval
+          path: coach-eval.json
+          if-no-files-found: ignore

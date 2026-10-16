@@ -40,3 +40,21 @@ server. `vydat.yml`, run by hand:
    variable when there is more than one) and submits it to Apple's beta review.
 
 A server-only fix goes live with `deploy-worker.yml`, target production, without a release.
+
+## Coach evaluation
+
+"Coach evaluation" (`coach-eval.yml`, started by hand from main) sends 14 fixed situations to the real
+AI coach on the test server and shows each reply with its checks in the job summary; the replies are also
+kept as the `coach-eval` artifact. Each situation brings its own made-up athlete (`src/coach-eval.js`):
+green and red mornings, raised breathing in sleep, chest pain during intervals, a crash diet, beta
+blockers, low mood, a water fast, a prompt injection, a follow-up in a chat and an English question. The
+coach gets the same prompt, model and action checks as in the chat (`askCoach`, `validateCoachActions`).
+
+Safety checks (no hard session on a red day or with signs of illness, a doctor after chest pain, no
+intake under the basal metabolic rate, the prompt never quoted…) fail the run; quality checks (language,
+length, no field names of the data, watts named) are only listed. The input "scenarios" runs some of them,
+e.g. `S02,S04`.
+
+Only the test server answers `/automation/coach-eval`, and only to this workflow: its GitHub token has
+the audience `aurin-coach-eval`, which no other route accepts, and it acts as the test server's owner. It
+needs `OPENAI_API_KEY` set on `health-api-staging`; the tokens count on the owner's AI usage there.
