@@ -100,6 +100,29 @@ final class LiveWorkout: NSObject {
         try? await store.delete(workout)
     }
 
+    /// Pokračovat v tréninku: only the workout goes, its samples stay.
+    func deleteWorkout(_ workout: HKWorkout) async {
+        try? await store.delete(workout)
+    }
+
+    /// The strength workout this app saved from `start` on (Dokončit before
+    /// the app was closed), to be replaced when the workout goes on.
+    func savedWorkout(since start: Date) async -> HKWorkout? {
+        guard HKHealthStore.isHealthDataAvailable() else { return nil }
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-120), end: nil),
+            HKQuery.predicateForObjects(from: .default()),
+            HKQuery.predicateForWorkouts(with: .traditionalStrengthTraining)
+        ])
+        return await withCheckedContinuation { (continuation: CheckedContinuation<HKWorkout?, Never>) in
+            let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: 1,
+                                      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, samples, _ in
+                continuation.resume(returning: samples?.first as? HKWorkout)
+            }
+            store.execute(query)
+        }
+    }
+
     /// A workout session iOS kept running after the app was closed (killed, or
     /// updated from TestFlight) has nobody to end it: it would record for
     /// hours and land in Apple Health as one long strength workout. At launch

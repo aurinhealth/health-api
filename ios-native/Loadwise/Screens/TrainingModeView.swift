@@ -44,6 +44,9 @@ struct TrainingModeView: View {
     @State private var confirmClose = false
     /// Zahodit trénink in the summary, after Dokončit.
     @State private var confirmDiscard = false
+    /// Opened on a workout already finished: its summary, with Ohodnotit and
+    /// Pokračovat v tréninku (Zahodit has no earlier day to go back to).
+    @State private var reopened = false
     @State private var picking = false
     /// "Začít trénink" tapped (the sample day has no recording to show it).
     @State private var startTapped = false
@@ -142,7 +145,8 @@ struct TrainingModeView: View {
         }
         .sheet(isPresented: $editing) {
             if let day {
-                PlanEditorSheet(day: day, catalog: catalog, date: date, current: index) { edited in Task { await saveEdited(edited) } }
+                PlanEditorSheet(day: day, catalog: catalog, date: date, current: index,
+                                go: { edited, id in Task { await saveEdited(edited, focus: id) } }) { edited in Task { await saveEdited(edited) } }
             }
         }
     }
@@ -231,6 +235,13 @@ struct TrainingModeView: View {
         }
         .onChange(of: set?.row) { _, _ in prefill(set) }
         .onAppear { prefill(set) }
+        // A swipe sideways goes to the next or the previous exercise.
+        .contentShape(Rectangle())
+        .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { drag in
+            let dx = drag.translation.width, dy = drag.translation.height
+            guard abs(dx) > 70, abs(dx) > abs(dy) * 2 else { return }
+            withAnimation(.snappy) { move(dx < 0 ? 1 : -1) }
+        })
         .task(id: exercise.name) { await loadMuscles(day) }
     }
 
@@ -485,12 +496,19 @@ struct TrainingModeView: View {
             if !finishedSession, let stretching = day.stretching { StretchingCard(stretching: stretching, date: date) }
             if finishedSession {
                 PrimaryButton(title: L10n.tr("Ohodnotit"), systemImage: "hand.thumbsup") { rating = true }
-                Button(role: .destructive) { confirmDiscard = true } label: {
-                    Text("Zahodit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
-                        .frame(maxWidth: .infinity).frame(height: 46)
+                // Dokončit by mistake: back to the workout, the clock from its start.
+                if !model.demo {
+                    SecondaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") { Task { await resume() } }
+                        .disabled(saving)
                 }
-                .buttonStyle(.plain)
-                .disabled(saving)
+                if !reopened {
+                    Button(role: .destructive) { confirmDiscard = true } label: {
+                        Text("Zahodit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
+                            .frame(maxWidth: .infinity).frame(height: 46)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(saving)
+                }
             } else {
                 PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: saving) { Task { await finish() } }
                     .disabled(saving)
@@ -798,6 +816,12 @@ struct TrainingModeView: View {
             day = try await model.gymDay(date: date)
             original = day
             startAtFirstOpen()
+            // Finished earlier (Dokončit): the summary, to rate it or go on.
+            if let day, day.finishedAt != nil, day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                reopened = true
+                finishedSession = true
+                if let minutes = day.loggedMinutes { totals = (minutes, nil, nil, nil, false, []) }
+            }
             history = await model.gymHistory()
             sideChoices = (try? await model.api.gymSides())?.choices ?? [:]
             if let profile = try? await model.api.trainingProfile() {
@@ -806,7 +830,7 @@ struct TrainingModeView: View {
             // The clock, calories and heart rate (a workout recorded in Apple
             // Health) start with the first ticked set; a workout already under
             // way with sets left goes on. Only opening it records nothing.
-            if let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }), day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+            if !finishedSession, let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }), day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
                 await live.begin(since: nil, weightKg: model.today?.weight?.latest)
             }
             // An empty workout: the exercise list for Přidat cvik.
@@ -841,10 +865,12 @@ struct TrainingModeView: View {
 
     /// The plan as changed in "Upravit plán": saved, and back on the first
     /// exercise with a set left.
-    private func saveEdited(_ edited: GymDay) async {
+    private func saveEdited(_ edited: GymDay, focus: String? = nil) async {
         day = edited
         restEnd = nil
         startAtFirstOpen()
+        // "Přejít na cvik": that one, whatever is left before it.
+        if let focus, let at = edited.exercises.firstIndex(where: { $0.id == focus }) { index = at }
         await loadMuscles(edited)
         guard !model.demo else { return }
         do {
@@ -938,6 +964,13 @@ struct TrainingModeView: View {
     /// then the rating.
     private func finish() async {
         restEnd = nil
+        // The start and end in the sheet: opened again, the workout shows its
+        // summary (Ohodnotit, Pokračovat v tréninku) and can go on from its start.
+        if var next = day {
+            if next.startedAt == nil, let start = live.start { next.markStarted(start) }
+            next.markFinished(Date())
+            day = next
+        }
         if live.running {
             let saved = await live.finish()
             totals = (live.minutes, live.kcal, live.avgHeartRate, live.maxHeartRate, saved, live.zoneMinutes(lows: zoneLows))
@@ -973,6 +1006,34 @@ struct TrainingModeView: View {
             error = nil
         } catch {
             self.error = L10n.f("Sérii se nepodařilo uložit: %@", error.localizedDescription)
+        }
+    }
+
+    /// Pokračovat v tréninku: the finished workout opens again where it was,
+    /// the clock from its first start; the workout Dokončit saved to Apple
+    /// Health is replaced by the one recorded from now on (its calories and
+    /// heart rate stay in Apple Health).
+    private func resume() async {
+        guard var next = day else { return }
+        saving = true
+        defer { saving = false }
+        next.clearFinished()
+        let start = next.startedAt
+        var saved = live.takeSaved()
+        if saved == nil, let start { saved = await live.savedWorkout(since: start) }
+        if let saved { await live.deleteWorkout(saved) }
+        day = next
+        totals = nil
+        finishedSession = false
+        startTapped = true
+        startAtFirstOpen()
+        if !live.running { await live.begin(since: start, weightKg: model.today?.weight?.latest) }
+        syncActivity()
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Trénink se nepodařilo uložit: %@", error.localizedDescription)
         }
     }
 

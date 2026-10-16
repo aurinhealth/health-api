@@ -500,6 +500,12 @@ extension GymDay {
         set(row: Self.timeRow, column: 2, Self.iso.string(from: date))
     }
 
+    /// Pokračovat v tréninku: the workout is under way again.
+    mutating func clearFinished() {
+        guard values.count > Self.timeRow else { return }
+        set(row: Self.timeRow, column: 2, "")
+    }
+
     /// Minutes from the start to the end of a workout logged in the app.
     var loggedMinutes: Int? {
         guard let start = startedAt, let end = finishedAt, end > start else { return nil }
