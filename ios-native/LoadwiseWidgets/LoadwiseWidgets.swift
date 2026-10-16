@@ -13,6 +13,7 @@ struct LoadwiseWidgetBundle: WidgetBundle {
         SleepWidget()
         DayWidget()
         FoodWaterWidget()
+        GymActivityWidget()
     }
 }
 
