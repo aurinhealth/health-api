@@ -145,3 +145,12 @@ test("dumbbells are picked before the note: a step up reaches the next dumbbell,
   assert.deepEqual([top.kg, top.progression], [25, "hold"]);
   assert.equal(dumbbellFor({ kg: 21, progression: "increase" }, []).kg, 21);
 });
+
+test("a machine's weight carries over to no other exercise, and an estimate stays near the catalogue",()=>{
+  const press=[{exercise:"Pivot leg press",actual_kg:150,actual_reps:10,rpe:8,completed:1,workout_date:"2026-10-14",type:"WORK",set_no:1}];
+  for(const exercise of ["Pendulum squat","Goblet squat","DB Bulgarian split squat"]){
+    const e=estimateStartingLoad({exercise,history:press,fallbackKg:20,targetReps:"8–12",today:"2026-10-16"});
+    assert.equal(e.source,"catalogue-default",exercise);
+    assert.equal(e.kg,20,exercise);
+  }
+});

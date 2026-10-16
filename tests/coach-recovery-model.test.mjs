@@ -76,3 +76,14 @@ test('the recovery week reads HRV from the source with the most mornings, never 
   const intervals = Array.from({ length: 67 }, (_, i) => ({ id: d(-67 + i), hrv: 70 + (i % 5) }));
   assert.equal(hrvWeekTrendDown(hrvSourceRows(intervals, health, monday), monday), false);
 });
+
+test('a red morning or signs of illness leave the gym out today',()=>{
+  const plan=(today,extra={})=>{const ctx={...context(today),strength:{recentCompletedSets:[]},...extra};ctx.adaptive=buildAdaptiveDecision(ctx);return ()=>generateStrengthPlan(ctx,{maxExercises:6});};
+  assert.doesNotThrow(plan({hrv:74,restingHR:50}));
+  assert.throws(plan({hrv:40,restingHR:60}),/červená zóna|red zone/);
+  const breathing=context({hrv:74,restingHR:50,respiration:19});
+  breathing.wellnessSeries=breathing.wellnessSeries.map(r=>r.id===date?r:{...r,respiration:14+(Number(r.id.slice(-1))%2)*0.2});
+  breathing.strength={recentCompletedSets:[]};breathing.adaptive=buildAdaptiveDecision(breathing);
+  assert.ok(breathing.adaptive.recovery.flags.includes('respiration_elevated'));
+  assert.throws(()=>generateStrengthPlan(breathing,{maxExercises:6}),/začátek nemoci|oncoming illness/);
+});
