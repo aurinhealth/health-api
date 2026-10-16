@@ -33,3 +33,11 @@ test('a structured workout_doc wins over the text and an event becomes a workout
   const run=plannedEventWorkout({name:'Lehký běh',type:'Run',description:'- 40m 75%'});
   assert.deepEqual([run.sport,run.environment,run.duration_minutes],['run','outdoor',40]);
 });
+test('without FTP or threshold pace each step gets the heart-rate zone of its power or pace zone',()=>{
+  const hrZones=[{zone:1,bpmLow:null,bpmHigh:130},{zone:2,bpmLow:131,bpmHigh:145},{zone:3,bpmLow:146,bpmHigh:155},{zone:4,bpmLow:156,bpmHigh:165},{zone:5,bpmLow:166,bpmHigh:190}];
+  const [easy,hard]=stepRows([{durationMinutes:20,power:65},{durationMinutes:5,power:110}],{environment:'indoor',hrZones}).map(b=>b.steps[0]);
+  assert.deepEqual([easy.hrLow,easy.hrHigh,hard.hrLow,hard.hrHigh],[131,145,166,190]);
+  assert.equal(stepRows([{durationMinutes:20,power:65}],{ftp:250,environment:'indoor',hrZones})[0].steps[0].hrLow,undefined);
+  const run=stepRows([{durationMinutes:20,power:97}],{sport:'run',environment:'indoor',hrZones})[0].steps[0];
+  assert.deepEqual([run.hrLow,run.hrHigh],[156,165]);
+});

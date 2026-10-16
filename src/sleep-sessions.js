@@ -34,6 +34,7 @@ export function sleepSessionFromRow(row) {
   const day = localDate(endTime || startTime);
   return {
     id: row.external_id,
+    ...(row.source_family ? { source: row.source_family } : {}),
     date: day,
     startTime,
     endTime,

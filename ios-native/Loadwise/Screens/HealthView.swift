@@ -272,30 +272,11 @@ struct ReadinessDetailContent: View {
             SectionLabel(text: "Co ji dnes tvoří").padding(.top, 32)
             VStack(spacing: 0) {
                 ForEach(r.parts) { part in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(ReadinessText.label(part.key)).font(.body).foregroundStyle(Palette.ink)
-                            Spacer()
-                            Text(value(part.key)).font(Typo.number(20)).foregroundStyle(Palette.ink)
-                        }
-                        if part.low != nil, part.high != nil, part.value != nil {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(L10n.f("tvůj normál %@", ReadinessText.range(part))).font(Typo.caption).foregroundStyle(Palette.muted)
-                                Spacer()
-                                Text(ReadinessText.longWord(part)).font(Typo.caption.weight(.medium)).foregroundStyle(ReadinessText.color(part))
-                            }
-                            RangeBand(part: part).padding(.top, 8)
-                        }
-                        HStack {
-                            Spacer()
-                            Text(ReadinessText.points(part.points)).font(Typo.caption.weight(.medium))
-                                .foregroundStyle(ReadinessText.color(part))
-                                .padding(.horizontal, 10).padding(.vertical, 4)
-                                .background(Palette.ink.opacity(0.06), in: Capsule())
-                        }
-                        .padding(.top, 6)
+                    if let route = Self.route(part.key) {
+                        RouteLink(route: route) { partRow(part).contentShape(Rectangle()) }
+                    } else {
+                        partRow(part)
                     }
-                    .padding(.vertical, 13)
                     Rectangle().fill(Palette.hairline).frame(height: 1)
                 }
             }
@@ -317,6 +298,45 @@ struct ReadinessDetailContent: View {
                     .padding(.top, 14)
             }
         }
+    }
+
+    /// The detail a part of the number opens (the check-in has none).
+    static func route(_ key: String) -> AppRoute? {
+        switch key {
+        case "hrv": return .metric(.hrv)
+        case "restingHR": return .metric(.restingHR)
+        case "sleep": return .sleep
+        case "respiration": return .metric(.respiration)
+        case "skinTemp", "wristTemp": return .metric(.temperature)
+        default: return nil
+        }
+    }
+
+    private func partRow(_ part: HealthSnapshot.Part) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(ReadinessText.label(part.key)).font(.body).foregroundStyle(Palette.ink)
+                Spacer()
+                Text(value(part.key)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+            }
+            if part.low != nil, part.high != nil, part.value != nil {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(L10n.f("tvůj normál %@", ReadinessText.range(part))).font(Typo.caption).foregroundStyle(Palette.muted)
+                    Spacer()
+                    Text(ReadinessText.longWord(part)).font(Typo.caption.weight(.medium)).foregroundStyle(ReadinessText.color(part))
+                }
+                RangeBand(part: part).padding(.top, 8)
+            }
+            HStack {
+                Spacer()
+                Text(ReadinessText.points(part.points)).font(Typo.caption.weight(.medium))
+                    .foregroundStyle(ReadinessText.color(part))
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(Palette.ink.opacity(0.06), in: Capsule())
+            }
+            .padding(.top, 6)
+        }
+        .padding(.vertical, 13)
     }
 
     private func value(_ key: String) -> String {

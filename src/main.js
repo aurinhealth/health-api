@@ -6,3 +6,5 @@ import { webAppClosed } from "./web-app-closed.js";
 import { secured } from "./web-security.js";
 
 export default secured(webAppClosed(app));
+// Each user's background jobs in an invocation of their own (USER_JOBS binding).
+export { UserJobs } from "./user-jobs-entrypoint.js";

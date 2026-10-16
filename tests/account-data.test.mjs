@@ -108,6 +108,19 @@ test("deleting the account removes its data and the account, revokes Google and 
   }
 });
 
+test("deleting the account also revokes WHOOP, Ultrahuman and Wahoo", async () => {
+  const db = database();
+  const calls = [];
+  const fetchImpl = async (url, init) => { calls.push([String(url), init.method]); return new Response("", { status: 200 }); };
+  const token = JSON.stringify({ access_token: "a", refresh_token: "r" });
+  const result = await deleteAccount({ DB: scopedDb(db, 3), USER_ID: 3, WHOOP_TOKEN: token, ULTRAHUMAN_TOKEN: token, WAHOO_TOKEN: token, ULTRAHUMAN_CLIENT_ID: "id", ULTRAHUMAN_CLIENT_SECRET: "s" }, user, { fetchImpl });
+  assert.deepEqual([result.whoop, result.ultrahuman, result.wahoo], ["revoked", "revoked", "revoked"]);
+  assert.ok(calls.some(([u, m]) => /whoop.*\/v2\/user\/access$/.test(u) && m === "DELETE"));
+  assert.ok(calls.some(([u]) => /ultrahuman.*oauth\/revoke$/.test(u)));
+  assert.ok(calls.some(([u, m]) => /wahoo.*\/v1\/permissions$/.test(u) && m === "DELETE"));
+  assert.equal(count(db, "users", 3), 0);
+});
+
 test("the owner's account cannot be deleted, and deleting needs the typed confirmation", async () => {
   const db = database();
   await assert.rejects(deleteAccount({ DB: scopedDb(db, 3), USER_ID: 3 }, { ...user, isOwner: true }), /správce/);

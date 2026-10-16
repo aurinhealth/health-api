@@ -153,7 +153,9 @@ const RUN_ZONE_RANGE = { Z1: [65, 77], Z2: [78, 88], Z3: [88, 94], Z4: [94, 100]
 
 // Steps grouped as they appear in the workout, with watt targets (running:
 // pace targets in s/km, paceFast from the upper % and paceSlow from the lower).
-export function stepRows(structure = [], { ftp = null, environment = "indoor", zones = null, sport = "ride", thresholdPace = null } = {}) {
+// hrZones: without FTP (ride) or threshold pace (run) each step also gets the
+// heart-rate zone of its power or pace zone, so the watch has a target.
+export function stepRows(structure = [], { ftp = null, environment = "indoor", zones = null, sport = "ride", thresholdPace = null, hrZones = null } = {}) {
   const run = sport === "run";
   const watts = pct => ftp ? Math.round(ftp * pct / 100) : null;
   const pace = pct => thresholdPace && pct > 0 ? Math.round(thresholdPace * 100 / pct) : null;
@@ -170,9 +172,20 @@ export function stepRows(structure = [], { ftp = null, environment = "indoor", z
       zone: zones && !s.free ? zoneForPercent(zones, (low + high) / 2)?.name || null : null
     };
     if (run) Object.assign(out, { paceSlow: s.free ? null : formatPace(pace(low)), paceFast: s.free ? null : formatPace(pace(high)) });
+    const hr = !s.free && !(run ? thresholdPace : ftp) ? heartRateFor((low + high) / 2, ranges, hrZones) : null;
+    if (hr) Object.assign(out, hr);
     return out;
   };
   return structure.map(block => block.steps ? { repeats: n(block.repeats, 1), note: block.note || null, steps: block.steps.map(row) } : { repeats: 1, steps: [row(block)] });
+}
+
+function heartRateFor(percent, ranges, hrZones) {
+  const zones = (Array.isArray(hrZones) ? hrZones : []).filter(z => z && (z.bpmLow != null || z.bpmHigh != null));
+  if (!zones.length || !(percent > 0)) return null;
+  const bounds = Object.values(ranges), index = bounds.findIndex(([, high]) => percent <= high);
+  const z = zones[Math.min(index < 0 ? bounds.length - 1 : index, zones.length - 1)];
+  const lowBpm = z.bpmLow ?? (z.bpmHigh != null ? z.bpmHigh - 20 : null), highBpm = z.bpmHigh ?? (z.bpmLow != null ? z.bpmLow + 10 : null);
+  return lowBpm > 0 && highBpm > lowBpm ? { hrLow: lowBpm, hrHigh: highBpm } : null;
 }
 
 // Without watts, pace or heart rate an easy session is steered by breathing.
@@ -211,8 +224,8 @@ export function explainWorkout(workout, { coach = {}, environment = "indoor", th
     environment: [terrainLine(structure, { sport: "ride", environment, system }), ...(workout.environment_notes || [])].filter(Boolean),
     fueling: [...fueling(minutes, system), ...(minutes > 75 ? [fuelTotals(minutes, minutes <= 150 ? 60 : 85, .65)] : [])],
     ftp: ftp || null, ftpSource: thresholds.source || null,
-    steps: stepRows(structure, { ftp, environment, zones: thresholds.powerZones }),
-    planned: planned ? { name: planned.name, minutes: planned.minutes, system: planned.system, intensityFactor: planned.intensityFactor, steps: stepRows(planned.structure || [], { ftp, environment: "indoor", zones: thresholds.powerZones }) } : null
+    steps: stepRows(structure, { ftp, environment, zones: thresholds.powerZones, hrZones: thresholds.hrZones }),
+    planned: planned ? { name: planned.name, minutes: planned.minutes, system: planned.system, intensityFactor: planned.intensityFactor, steps: stepRows(planned.structure || [], { ftp, environment: "indoor", zones: thresholds.powerZones, hrZones: thresholds.hrZones }) } : null
   };
 }
 
@@ -246,7 +259,7 @@ function explainRun(workout, structure, { coach, environment, thresholds, planne
   const hrZ2 = (thresholds.runHrZones || []).find(z => z.zone === 2);
   if (["recovery", "endurance"].includes(system) && hrZ2?.bpmHigh) how.push(L("Tep drž do ", "Keep your heart rate under ") + hrZ2.bpmHigh + " bpm (" + hrReference(thresholds.runHrModel, lthr) + ").");
   else if (["recovery", "endurance"].includes(system) && !pace) how.push(TALK_TEST());
-  const opts = { environment, zones: thresholds.paceZones, sport: "run", thresholdPace: pace };
+  const opts = { environment, zones: thresholds.paceZones, sport: "run", thresholdPace: pace, hrZones: thresholds.runHrZones?.length ? thresholds.runHrZones : thresholds.hrZones };
   return {
     title: RUN_LABELS()[system] || system,
     why, how,
