@@ -134,6 +134,9 @@ import { handleGymToolsApi, handleGymPlanApi } from "./routes-gym.js";
 import { handleTrainingEditsApi, handleThresholdApi } from "./routes-training.js";
 import { handleFoodApi, queueFoodGoogleSafely } from "./routes-food.js";
 import { handleCycleApi } from "./routes-cycle.js";
+import { handleJournalApi, journalForCoach } from "./routes-journal.js";
+import { muscleModelResponse } from "./muscle-model.js";
+import { morningMetrics } from "./journal-impact.js";
 import { cycleForCoach } from "./cycle-model.js";
 import { ownerOnlyRefusal } from "./owner-only-routes.js";
 import { setActivityKcal } from "./activity-edits.js";
@@ -503,6 +506,23 @@ async function todayReadiness(env, ctx, date, { fresh = false } = {}) {
   return buildToday({ date, hour: localHour(), health, fitness, sleep, profile: profile || {}, checkin }).readiness;
 }
 
+// Deník's "Co na tebe působí": the morning metrics (readiness, HRV, resting
+// heart rate, sleep, deep sleep) of each day from `from` to `to`, from the
+// same inputs as the Health screen (journal-impact.js morningMetrics).
+async function journalMornings(env, ctx, from, to) {
+  const internalAuth = internalHeaders();
+  const read = path => app.fetch(new Request('https://internal' + path, { headers: internalAuth }), env, ctx).then(r => r.ok ? r.json() : {}).catch(() => ({}));
+  const internal = path => handleDashboardApi(new Request('https://internal' + path), env, ctx, new URL('https://internal' + path)).then(r => r.ok ? r.json() : {}).catch(() => ({}));
+  const end = shiftDate(to, 1);
+  const [health, fitness, sleep, profile] = await Promise.all([
+    googleHealthFor(env, ctx, to).catch(() => ({})),
+    cached(env, ctx, 'fitness:90', () => internal('/app/api/fitness?days=90')).catch(() => ({})),
+    read('/health/sleep?start=' + from + '&end=' + end).then(d => withIntervalsSleep(env, d, from, end)).catch(() => ({})),
+    dashboardProfile(env).catch(() => null)
+  ]);
+  return morningMetrics({ from, to, health, fitness, sleep, profile: profile || {} });
+}
+
 // The morning readiness push (push.js); it computes the readiness only when a
 // push may go out (5–11 local, a device token, nothing sent today).
 async function morningPush(env, ctx, options = {}) {
@@ -757,7 +777,7 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   // Regenerace of today, as Today shows it (recovery-time.js).
   const training=date===localToday()?await loadTrainingDoses(env.DB).catch(()=>null):null;
   const regeneration=training?withRecoveryTime(buildToday({date,hour:localHour(),health,fitness,sleep,profile:profile||{},checkin}),training).recoveryTime:null;
-  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,sleepGoal:profile.sleepGoal,cycle:profile.cycle||null,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,recoveryTime:regeneration,upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null),performance:await coachPerformance(env,ctx,date)};
+  return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,sleepGoal:profile.sleepGoal,cycle:profile.cycle||null,training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,recoveryTime:regeneration,journal:await journalForCoach(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null),performance:await coachPerformance(env,ctx,date)};
 }
 
 // Everything the coach's note looks at for one day: 5 weeks of activities
@@ -1204,6 +1224,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{const r=await loadMuscleDetail(env.DB,url.searchParams.get('id')||'');return Response.json(r,{status:r.status==='ok'?200:400,headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({status:'error',message:error.message},{status:500})}
   }
+  // Svaly's 3D figure, the file the app keeps (src/muscle-model.js).
+  if(url.pathname==='/app/api/muscles/model'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    return muscleModelResponse(env,request,url.searchParams.get('v')||'');
+  }
   if(url.pathname==='/app/api/muscles'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{return Response.json(await loadMuscleFatigue(env.DB),{headers:{'Cache-Control':'no-store'}});}
@@ -1520,6 +1545,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
   {const r=await handleFoodApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   {const r=await handleCycleApi(request,env,ctx,url,session);if(r!==undefined)return r;}
+  {const r=await handleJournalApi(request,env,ctx,url,session,{mornings:(from,to)=>journalMornings(env,ctx,from,to)});if(r!==undefined)return r;}
 
   // "Nahlásit problém": the user's report with a screenshot and diagnostics (support-report.js).
   if (url.pathname === "/app/api/support/report") return handleSupportReport(request, env, { signedIn: session.signedIn, origin: url.origin });
