@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// The "+" in the tab bar, in four parts: food (search, photo, gallery,
-/// barcode, label), drinks (water at one tap, any drink with its hydration),
-/// weight, and training (log it, build a gym session with AI, the library),
-/// plus the AI coach.
+/// The "+" in the tab bar: shortcuts for training, food, drinks, weight and the
+/// coach, as small icon tiles four to a row with the name under each. By
+/// category (the default) a category with two shortcuts or fewer shares its row
+/// with the next such one; in any order the shortcuts go one after another
+/// without headings. The sheet is as tall as what it shows, at least a third of
+/// the screen and at most 80 %, and scrolls past that.
 struct AddSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -15,50 +17,71 @@ struct AddSheet: View {
     @State private var editing = false
     @State private var added: String?
     @State private var failed: String?
-    /// What "+" shows and in which order (PlusItem ids), set in Upravit.
+    /// The drink whose amounts are open under the tiles.
+    @State private var pouring: String?
+    @State private var busy: Int?
+    @State private var contentHeight: CGFloat = 0
+    /// What "+" shows and in which order (PlusItem ids), set with the pencil.
     @AppStorage("plusMenu.items") private var stored = PlusItem.defaults.joined(separator: ",")
+    @AppStorage("plusMenu.layout") private var layout = PlusLayout.categories.rawValue
 
-    private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
+    @AppStorage(DrinkPrefs.favoritesKey) private var favorites = DrinkPrefs.defaultFavorites
 
-    private var shown: [PlusItem] { PlusItem.list(stored) }
+    private var shown: [PlusItem] { PlusItem.tiles(PlusItem.list(stored), favorites: DrinkPrefs.list(favorites)) }
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 10, alignment: .top), count: 4)
 
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .firstTextBaseline) {
+                HStack(alignment: .center) {
                     Text("Co přidáme?").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     Spacer()
-                    Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
+                    Button { editing = true } label: {
+                        Image(systemName: "pencil").font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.ink)
+                            .frame(width: 34, height: 34)
+                            .overlay(Circle().stroke(Palette.ink.opacity(0.16), lineWidth: 1))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.tr("Upravit +"))
+                    Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted).padding(.leading, 10)
                 }
 
-                ForEach(PlusItem.Section.allCases, id: \.self) { section in
-                    let items = shown.filter { $0.section == section }
-                    if !items.isEmpty {
-                        header(section)
-                        if section == .drink {
-                            DrinkQuickRow(add: { ml, kind in await save(ml: ml, kind: kind) }, other: { drink = true })
-                            if let added { Label(added, systemImage: "checkmark.circle.fill").font(Typo.caption).foregroundStyle(Palette.green).padding(.top, 8) }
-                            if let failed { Text(failed).font(Typo.caption).foregroundStyle(Palette.rust).padding(.top, 8) }
-                        } else {
-                            LazyVGrid(columns: columns, spacing: 10) {
-                                ForEach(items) { item in tile(item) }
+                if PlusLayout(rawValue: layout) == .free {
+                    grid(shown).padding(.top, 18)
+                } else {
+                    ForEach(Array(PlusLayout.rows(shown).enumerated()), id: \.offset) { _, row in
+                        if row.count == 2 {
+                            // A wider gap between the two categories than between their tiles.
+                            HStack(alignment: .top, spacing: 24) {
+                                ForEach(row, id: \.section) { group in
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        header(group.section)
+                                        HStack(alignment: .top, spacing: 10) {
+                                            ForEach(group.items) { tile($0) }
+                                            if group.items.count == 1 { Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
                             }
+                        } else if let group = row.first {
+                            header(group.section)
+                            grid(group.items)
                         }
                     }
                 }
 
-                Button { editing = true } label: {
-                    Label("Upravit", systemImage: "pencil").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 46)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 24)
+                if let pouring, let d = DrinkKind.find(pouring) { amounts(d) }
+                if let added { Label(added, systemImage: "checkmark.circle.fill").font(Typo.caption).foregroundStyle(Palette.green).padding(.top, 12) }
+                if let failed { Text(failed).font(Typo.caption).foregroundStyle(Palette.rust).padding(.top, 12) }
             }
-            .padding(24)
+            .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 20)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
         }
-        .presentationDetents([.large])
+        .scrollBounceBehavior(.basedOnSize)
+        .presentationDetents([.height(sheetHeight)])
+        .presentationDragIndicator(.visible)
         .presentationBackground(Palette.background)
         // What "+" adds goes to today, also while the screens show another day.
         .onAppear { model.writesToday = true }
@@ -67,7 +90,19 @@ struct AddSheet: View {
         .sheet(isPresented: $weight, onDismiss: { dismiss() }) { WeightEntrySheet() }
         .sheet(isPresented: $workout, onDismiss: { dismiss() }) { ManualWorkoutSheet() }
         .sheet(isPresented: $drink) { DrinkSheet { ml, kind in await save(ml: ml, kind: kind) } }
-        .sheet(isPresented: $editing) { PlusMenuEditor(stored: $stored) }
+        .sheet(isPresented: $editing) { PlusMenuEditor(stored: $stored, layout: $layout) }
+    }
+
+    /// At least a third of the screen, at most 80 %.
+    private var sheetHeight: CGFloat {
+        let screen = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.screen.bounds.height ?? 800
+        return min(max(contentHeight + 24, screen / 3), screen * 0.8)
+    }
+
+    private func grid(_ items: [PlusItem]) -> some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+            ForEach(items) { tile($0) }
+        }
     }
 
     private func header(_ section: PlusItem.Section) -> some View {
@@ -75,23 +110,61 @@ struct AddSheet: View {
             .font(.caption.weight(.semibold)).textCase(.uppercase).tracking(1.2)
             .foregroundStyle(Palette.muted)
             .labelStyle(TintedIcon(color: section.color))
-            .padding(.top, 22).padding(.bottom, 10)
+            .lineLimit(1)
+            .padding(.top, 20).padding(.bottom, 10)
     }
 
+    /// The icon in a small rounded block, its name under it.
     private func tile(_ item: PlusItem) -> some View {
-        Button { run(item) } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                Image(systemName: item.symbol).font(.system(size: 18)).foregroundStyle(item.section.color)
-                Text(L10n.tr(item.title)).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.75)
+        let on = item.drink != nil && pouring == item.drink
+        return Button { run(item) } label: {
+            VStack(spacing: 6) {
+                Image(systemName: item.symbol).font(.system(size: 20))
+                    .foregroundStyle(on ? Palette.onButton : item.section == .drink ? Palette.ink : item.section.color)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .background(on ? Palette.blue : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                Text(L10n.tr(item.title)).font(.caption.weight(.medium)).foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, minHeight: 86, alignment: .leading)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .frame(maxWidth: .infinity)
         }
         .buttonStyle(PressableCardStyle())
     }
 
+    /// The amounts of the drink tapped, one tap adds it.
+    private func amounts(_ d: DrinkKind) -> some View {
+        HStack(spacing: 6) {
+            ForEach(DrinkPrefs.amounts(d.id), id: \.self) { ml in
+                Button {
+                    Task {
+                        busy = ml
+                        await save(ml: ml, kind: d.id)
+                        busy = nil
+                        withAnimation(.easeOut(duration: 0.2)) { pouring = nil }
+                    }
+                } label: {
+                    Group {
+                        if busy == ml { ProgressView().tint(Palette.onButton) } else { Text(Units.volumeText(Double(ml))).font(.footnote.weight(.semibold)) }
+                    }
+                    .foregroundStyle(Palette.onButton)
+                    .frame(maxWidth: .infinity).frame(height: 38)
+                    .background(Palette.blue, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(busy != nil)
+                .accessibilityLabel(L10n.f("Přidat %@ %@", L10n.tr(d.label).lowercased(with: L10n.locale), Units.volumeText(Double(ml))))
+            }
+        }
+        .padding(.top, 16)
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
     private func run(_ item: PlusItem) {
+        if let kind = item.drink {
+            withAnimation(.easeOut(duration: 0.2)) { pouring = pouring == kind ? nil : kind }
+            return
+        }
         switch item.id {
         // Today's plan, or an empty workout the exercises are added to.
         case "start": open(.trainingMode(AppModel.localDate(Date())))
@@ -105,6 +178,7 @@ struct AddSheet: View {
         case "scan": food = .scan
         case "label": food = .label
         case "manual": food = .manual
+        case "drinkCustom": drink = true
         case "weight": weight = true
         case "coach": openCoach()
         default: break
@@ -127,6 +201,34 @@ struct AddSheet: View {
     }
 }
 
+/// How "+" lays its shortcuts out.
+enum PlusLayout: String {
+    case categories, free
+
+    struct Group { let section: PlusItem.Section; let items: [PlusItem] }
+
+    /// The categories in their order, each on its own row, except that two
+    /// neighbouring categories of two shortcuts or fewer share one row.
+    static func rows(_ items: [PlusItem]) -> [[Group]] {
+        let groups = PlusItem.Section.allCases.compactMap { section -> Group? in
+            let list = items.filter { $0.section == section }
+            return list.isEmpty ? nil : Group(section: section, items: list)
+        }
+        var rows: [[Group]] = []
+        var i = 0
+        while i < groups.count {
+            if groups[i].items.count <= 2, i + 1 < groups.count, groups[i + 1].items.count <= 2 {
+                rows.append([groups[i], groups[i + 1]])
+                i += 2
+            } else {
+                rows.append([groups[i]])
+                i += 1
+            }
+        }
+        return rows
+    }
+}
+
 /// A label whose icon has its own colour.
 private struct TintedIcon: LabelStyle {
     let color: Color
@@ -135,7 +237,7 @@ private struct TintedIcon: LabelStyle {
     }
 }
 
-/// One thing "+" can do. The user picks which show and their order (Upravit).
+/// One thing "+" can do. The user picks which show and their order (pencil).
 struct PlusItem: Identifiable, Equatable {
     enum Section: CaseIterable {
         case training, food, drink, other
@@ -148,6 +250,9 @@ struct PlusItem: Identifiable, Equatable {
     let title: String
     let symbol: String
     let section: Section
+
+    /// The drink a drink shortcut pours (DrinkKind id).
+    var drink: String? { id.hasPrefix("drink.") ? String(id.dropFirst(6)) : nil }
 
     static let all: [PlusItem] = [
         PlusItem(id: "start", title: "Začít trénink", symbol: "play.fill", section: .training),
@@ -171,19 +276,41 @@ struct PlusItem: Identifiable, Equatable {
     static func list(_ stored: String) -> [PlusItem] {
         stored.split(separator: ",").compactMap { id in all.first { $0.id == id } }
     }
+
+    /// "Pití" shows as the favourite drinks (Nastavení → Oblíbené nápoje),
+    /// each its own tile, and Vlastní for any drink and amount.
+    static func tiles(_ items: [PlusItem], favorites: [String]) -> [PlusItem] {
+        items.flatMap { item -> [PlusItem] in
+            guard item.id == "drink" else { return [item] }
+            return favorites.compactMap(DrinkKind.find).map { PlusItem(id: "drink." + $0.id, title: $0.label, symbol: $0.symbol, section: .drink) }
+                + [PlusItem(id: "drinkCustom", title: "Vlastní", symbol: "slider.horizontal.3", section: .drink)]
+        }
+    }
 }
 
-/// Upravit +: drag to reorder, − hides, + adds.
+/// The pencil in "+": by category or in any order on top, then drag to
+/// reorder, − hides, + adds.
 struct PlusMenuEditor: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var stored: String
+    @Binding var layout: String
     @State private var shown: [PlusItem] = []
+    @State private var arrangement = PlusLayout.categories
 
     private var hidden: [PlusItem] { PlusItem.all.filter { !shown.contains($0) } }
 
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    Picker("", selection: $arrangement) {
+                        Text("Po kategoriích").tag(PlusLayout.categories)
+                        Text("Libovolně").tag(PlusLayout.free)
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                }
                 Section("Zobrazené") {
                     ForEach(shown) { item in row(item) }
                         .onMove { shown.move(fromOffsets: $0, toOffset: $1) }
@@ -210,16 +337,31 @@ struct PlusMenuEditor: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { stored = shown.map(\.id).joined(separator: ","); dismiss() } label: { Text("Hotovo").bold() }
+                    Button {
+                        stored = shown.map(\.id).joined(separator: ",")
+                        layout = arrangement.rawValue
+                        dismiss()
+                    } label: { Text("Hotovo").bold() }
                 }
             }
-            .onAppear { shown = PlusItem.list(stored) }
+            .onAppear {
+                shown = PlusItem.list(stored)
+                arrangement = PlusLayout(rawValue: layout) ?? .categories
+            }
         }
         .tint(Palette.ink)
     }
 
     private func row(_ item: PlusItem) -> some View {
-        Label(L10n.tr(item.title), systemImage: item.symbol).foregroundStyle(Palette.ink)
+        Label(L10n.tr(item.title), systemImage: item.symbol).foregroundStyle(item.section == .drink ? Palette.ink : item.section.color)
+            .labelStyle(EditorRow())
+    }
+}
+
+/// The editor row: the icon in its category's colour, the name in ink.
+private struct EditorRow: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 12) { configuration.icon.frame(width: 24); configuration.title.foregroundStyle(Palette.ink) }
     }
 }
 
