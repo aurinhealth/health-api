@@ -205,6 +205,13 @@ struct HealthRoute: View {
     let route: AppRoute
 
     var body: some View {
+        content
+            // The saved copy shows at once; a stale one loads again (a detail
+            // opened from Today before the Health screen was visited).
+            .task { await model.refreshIfStale(.health) }
+    }
+
+    @ViewBuilder private var content: some View {
         if let health = model.health {
             switch route {
             case .readiness:
