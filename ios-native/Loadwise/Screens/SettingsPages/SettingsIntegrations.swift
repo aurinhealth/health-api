@@ -181,14 +181,9 @@ struct IntegrationDetailView: View {
             } else if current.id == "apple" {
                 AppleHealthSettings(store: store)
             } else if current.id == "intervals" {
-                SettingsGroup(title: "Přístup", footer: "Klíč najdeš v Intervals.icu v Settings → Developer Settings.") {
+                SettingsGroup(title: "Přístup") {
                     Button { flow.start("intervals") } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "link", color: Palette.rust), title: "Připojit znovu", chevron: false)
-                    }
-                    .buttonStyle(.plain)
-                    SettingsDivider()
-                    Button { flow.intervalsKey = true } label: {
-                        SettingsRow(icon: SettingsIcon(systemImage: "key.fill", color: Palette.amberBar), title: "Vložit nový API klíč", chevron: false)
                     }
                     .buttonStyle(.plain)
                 }
@@ -243,13 +238,6 @@ struct AddIntegrationSheet: View {
                             row(provider, subtitle: L10n.tr("aktivity, plán tréninků, forma a wellness"))
                         }
                     }
-                }
-                SettingsGroup(title: "Hodinky a další aplikace", footer: "Garmin, Polar, Suunto, Coros, Wahoo nebo Oura připoj v Intervals.icu. Aurin jejich data dostane odtamtud.") {
-                    Link(destination: URL(string: "https://intervals.icu/settings")!) {
-                        SettingsRow(icon: SettingsIcon(systemImage: "applewatch", color: Palette.indigo), title: "Přes Intervals.icu",
-                                    subtitle: "Garmin, Polar, Suunto, Coros, Wahoo, Oura")
-                    }
-                    .buttonStyle(.plain)
                 }
             }
             .toolbar {

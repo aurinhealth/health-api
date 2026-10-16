@@ -45,8 +45,6 @@
 "AI kouč" = "AI coach";
 "AI potravinu nenašla. Zadej ji ručně." = "AI couldn't find this food. Enter it manually.";
 "AI ten kód nezná." = "AI doesn't know this code.";
-"API klíč" = "API key";
-"API klíč Intervals.icu" = "Intervals.icu API key";
 "Aby mohl odpovídat, potřebuje tvůj souhlas se zpracováním dat pomocí AI. Jde kdykoli vzít zpět v Nastavení → Soukromí a data." = "To answer, it needs your consent to process data with AI. You can withdraw it anytime in Settings → Privacy & data.";
 "Akorát" = "Just right";
 "Aktivita a cíl" = "Activity and goal";
@@ -190,9 +188,8 @@
 "Intenzita za %@ dní" = "Intensity over %@ days";
 "Intenzita · 4 týdny" = "Intensity · 4 weeks";
 "Intenzivní" = "Vigorous";
-"Intervals.icu je připojené." = "Intervals.icu is connected.";
 "Intervals.icu není připojené" = "Intervals.icu isn't connected";
-"Intervals.icu zápis odmítlo: připojení smí nastavení jen číst. Vlož nový API klíč, pak ulož zóny ještě jednou." = "Intervals.icu refused the write: the connection can only read settings. Paste a new API key, then save the zones again.";
+"Intervals.icu zápis odmítlo. Připoj ho znovu a ulož zóny ještě jednou." = "Intervals.icu refused the write. Connect it again, then save the zones again.";
 "Ionťák" = "Sports drink";
 "Jak ho běžet" = "How to run it";
 "Jak ho jet" = "How to ride it";
@@ -297,7 +294,6 @@
 "Nahlásit problém" = "Report a problem";
 "Nahradit cvik" = "Swap exercise";
 "Nahradí jen série, které ještě nejsou hotové." = "Only sets that aren't done yet are replaced.";
-"Najdeš ho v Intervals.icu v Settings → Developer Settings." = "Find it in Intervals.icu under Settings → Developer Settings.";
 "Najít video" = "Find a video";
 "Namiř na kód na obalu" = "Point at the barcode on the package";
 "Napij se" = "Time for a drink";
@@ -498,7 +494,6 @@
 "Přihlášení se přerušilo. Zkus to znovu." = "Sign-in was interrupted. Please try again.";
 "Přiložit diagnostiku" = "Attach diagnostics";
 "Připojení Google Health" = "Connect Google Health";
-"Připojení Intervals.icu se nepovedlo. Zkus vložit API klíč." = "Couldn't connect Intervals.icu. Try entering an API key.";
 "Připojení se nedokončilo." = "The connection wasn't completed.";
 "Připojit" = "Connect";
 "Připojit znovu" = "Reconnect";
@@ -749,7 +744,6 @@
 "Vlastní" = "Custom";
 "Vlastní váha" = "Bodyweight";
 "Vlnky ve vodě a efekt po splnění cíle" = "Ripples in the water and an effect at your goal";
-"Vložit API klíč" = "Enter API key";
 "Vláknina" = "Fiber";
 "Voda" = "Water";
 "Volno" = "Day off";
@@ -1140,16 +1134,11 @@
 "Upravit oprávnění" = "Edit permissions";
 "Povolit chybějící" = "Allow missing";
 "Přístup" = "Access";
-"Klíč najdeš v Intervals.icu v Settings → Developer Settings." = "You'll find the key in Intervals.icu under Settings → Developer Settings.";
-"Vložit nový API klíč" = "Paste a new API key";
 "Zdraví a spánek" = "Health and sleep";
 "spánek, tep, HRV, kroky, váha a jídlo" = "sleep, heart rate, HRV, steps, weight and food";
 "brzy" = "soon";
 "Tréninky" = "Workouts";
 "aktivity, plán tréninků, forma a wellness" = "activities, training plan, form and wellness";
-"Hodinky a další aplikace" = "Watches and other apps";
-"Garmin, Polar, Suunto, Coros, Wahoo nebo Oura připoj v Intervals.icu. Aurin jejich data dostane odtamtud." = "Connect Garmin, Polar, Suunto, Coros, Wahoo or Oura in Intervals.icu. Aurin gets their data from there.";
-"Přes Intervals.icu" = "Through Intervals.icu";
 "Profil se nepodařilo načíst, takže ho teď nejde uložit. Zkus to znovu za chvíli." = "The profile couldn't be loaded, so it can't be saved right now. Try again in a moment.";
 "zítra" = "tomorrow";
 "včera" = "yesterday";

@@ -5,6 +5,7 @@ import {editLocalWorkout} from './local-workouts.js';
 
 import { cancelGymPlan, moveGymPlan } from './gym-plan-store.js';
 import { intervalsAuthorization } from "./intervals-auth.js";
+import { intervalsReads } from "./intervals-reads.js";
 
 const BASE = "https://intervals.icu/api/v1/athlete/0/events/";
 export const isStrengthEvent = event => /^(WeightTraining|Strength|Gym)$/i.test(String(event?.type || ''));
@@ -34,7 +35,7 @@ async function plannedRow(db, eventId) {
 
 // A move keeps the time of day, unless the app sends one: "HH:MM", or null
 // for the day without a time (midnight, as Intervals.icu shows it).
-export async function movePlannedEvent(env, { eventId, date, time }, fetchImpl = fetch) {
+export async function movePlannedEvent(env, { eventId, date, time }, fetchImpl = intervalsReads(env)) {
   const id = eventIdOf(eventId);
   if (!id) throw new Error(L("Neplatný plánovaný trénink.", "Invalid planned workout."));
   if (!validDate(date)) throw new Error(L("Neplatné datum.", "Invalid date."));
@@ -59,7 +60,7 @@ export async function movePlannedEvent(env, { eventId, date, time }, fetchImpl =
 // Outdoors or on the trainer: Intervals.icu tells them apart by the event type
 // (Ride / VirtualRide, Run / VirtualRun). A workout scheduled from the library
 // keeps the environment on its link, so its steps are drawn for that place.
-export async function setPlannedEnvironment(env, { eventId, environment }, fetchImpl = fetch) {
+export async function setPlannedEnvironment(env, { eventId, environment }, fetchImpl = intervalsReads(env)) {
   const id = eventIdOf(eventId);
   if (!id) throw new Error(L("Neplatný plánovaný trénink.", "Invalid planned workout."));
   if (!["indoor", "outdoor"].includes(environment)) throw new Error(L("Vyber venku, nebo uvnitř.", "Choose outdoor or indoor."));
@@ -78,7 +79,7 @@ export async function setPlannedEnvironment(env, { eventId, environment }, fetch
   return { status: "ok", eventId: id, environment, type: event.type, name: event.name || null };
 }
 
-export async function deletePlannedEvent(env, { eventId }, fetchImpl = fetch) {
+export async function deletePlannedEvent(env, { eventId }, fetchImpl = intervalsReads(env)) {
   const id = eventIdOf(eventId);
   if (!id) throw new Error(L("Neplatný plánovaný trénink.", "Invalid planned workout."));
   const row = await plannedRow(env.DB, id);

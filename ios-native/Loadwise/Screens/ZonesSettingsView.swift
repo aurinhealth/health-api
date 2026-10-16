@@ -19,7 +19,7 @@ struct ZonesSettingsView: View {
     @State private var paceModel = "friel"
     @State private var original: JSONObject = [:]
     @AppStorage("writeIntervals") private var writeIntervals = true
-    @State private var askKey = false
+    @State private var reconnecting: ConnectTarget?
 
     var body: some View {
         SettingsPage(title: "Zóny") {
@@ -59,7 +59,7 @@ struct ZonesSettingsView: View {
         .toolbar { SaveButton(enabled: changes != original || heart != heartOriginal || (writeIntervals && store.training?.intervals?.status != "ok" && store.training?.intervalsConnected == true), saving: store.saving) { Task { await save() } } }
         .onAppear { fill(); fillHeart() }
         .onChange(of: store.training) { fill() }
-        .sheet(isPresented: $askKey) { IntervalsKeySheet { await store.load() } }
+        .sheet(item: $reconnecting) { target in ServiceConnectSheet(target: target) { await store.load() } }
     }
 
     // MARK: Run
@@ -133,11 +133,11 @@ struct ZonesSettingsView: View {
                     .font(Typo.small).foregroundStyle(Palette.green)
             case "needs-permission":
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Intervals.icu zápis odmítlo: připojení smí nastavení jen číst. Vlož nový API klíč, pak ulož zóny ještě jednou.")
+                    Text("Intervals.icu zápis odmítlo. Připoj ho znovu a ulož zóny ještě jednou.")
                         .font(Typo.small).foregroundStyle(Palette.rust)
                         .fixedSize(horizontal: false, vertical: true)
-                    Button { askKey = true } label: {
-                        Text("Vložit nový API klíč").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
+                    Button { reconnecting = ConnectTarget(id: "intervals") } label: {
+                        Text("Připojit znovu").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
                             .padding(.horizontal, 16).frame(height: 40)
                             .background(Palette.button, in: Capsule())
                     }

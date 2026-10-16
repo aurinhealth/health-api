@@ -6,6 +6,7 @@
 // SETTINGS:READ and have to be connected again.
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { POWER_ZONE_MODELS, PACE_ZONE_MODELS } from "./training-zones.js";
+import { intervalsReads } from "./intervals-reads.js";
 
 // Intervals.icu shows "Z1" itself: send "Regenerace", not "Z1 Regenerace".
 const bare = name => String(name || "").replace(/^(Z\d+[a-c+]?|SS|[EMTIR])\s+/, "").trim() || String(name || "");
@@ -59,7 +60,7 @@ export function intervalsSportSettings(t) {
 
 // Writes both sport settings. Returns { status: "ok" | "needs-permission" |
 // "not-connected" | "error", updated: ["Ride", "Run"], message }.
-export async function writeIntervalsZones(env, thresholds, fetchImpl = fetch) {
+export async function writeIntervalsZones(env, thresholds, fetchImpl = intervalsReads(env)) {
   if (!env.INTERVALS_API_KEY) return { status: "not-connected", updated: [] };
   const headers = { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json" };
   const denied = r => r.status === 401 || r.status === 403;

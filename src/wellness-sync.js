@@ -15,6 +15,7 @@ import { intervalsAuthorization } from "./intervals-auth.js";
 import { healthPointJson } from './health-point-json.js';
 import { localDate } from "./user-time.js";
 import { readSyncPrefs, allowedWellness } from "./sync-destinations.js";
+import { intervalsReads } from "./intervals-reads.js";
 
 export const WELLNESS_SYNC_DAYS = 14;
 
@@ -97,7 +98,7 @@ async function remember(db, userId, date, fields) {
 const auth = env => ({ Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json", "Content-Type": "application/json" });
 
 // One pass for one user with both Google Health and Intervals.icu connected.
-export async function syncWellnessToIntervals(env, { sleepSessions = async () => [], fetchImpl = fetch, now = Date.now() } = {}) {
+export async function syncWellnessToIntervals(env, { sleepSessions = async () => [], fetchImpl = intervalsReads(env), now = Date.now() } = {}) {
   const providers = env.CONNECTED_PROVIDERS || [];
   if (!providers.includes("google") || !providers.includes("intervals")) return { status: "skipped" };
   const prefs = await readSyncPrefs(env.DB, env.USER_ID, "intervals");

@@ -3,6 +3,7 @@ import {analyzeRide} from './ride-analysis.js';
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { intervalsOrigin } from './activity-origin.js';
 import { activityRecoveryHours } from "./recovery-hours.js";
+import { intervalsReads } from './intervals-reads.js';
 const present=v=>v!==null&&v!==undefined&&v!==''&&Number.isFinite(Number(v));
 export function sampleActivityStreams(streams,limit=1200){
   const rows=Array.isArray(streams)?streams:[],time=rows.find(s=>s.type==='time')?.data||[];
@@ -52,7 +53,7 @@ async function boundedJson(response,maxBytes=8*1024*1024){
 // does not answer, so a failure is not cached.
 export async function rideIntervals(env,id){
   if(!env.INTERVALS_API_KEY||!/^[a-zA-Z0-9_-]{1,80}$/.test(id||''))return null;
-  const detail=await fetch('https://intervals.icu/api/v1/activity/'+encodeURIComponent(id)+'?intervals=true',{headers:{Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json'},signal:AbortSignal.timeout(8000)}).then(r=>boundedJson(r,4*1024*1024));
+  const detail=await intervalsReads(env)('https://intervals.icu/api/v1/activity/'+encodeURIComponent(id)+'?intervals=true',{headers:{Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json'},signal:AbortSignal.timeout(8000)}).then(r=>boundedJson(r,4*1024*1024));
   return {activity:compactActivity(detail),intervals:activityIntervals(detail)};
 }
 const ACTIVITY_KEYS=['id','name','type','distance','moving_time','elapsed_time','total_elevation_gain','average_watts','icu_average_watts','icu_weighted_avg_watts','icu_normalized_watts','icu_weighted_average_watts','icu_ftp','average_heartrate','max_heartrate','average_cadence','icu_training_load','icu_intensity','average_speed','calories','hr_load','power_load','carbs_used','icu_rpe','feel'];
@@ -68,7 +69,8 @@ export async function activityDetail(request,env,id,authorized){
   if(!env.INTERVALS_API_KEY)return Response.json({message:L('Nejprve připoj Intervals.icu.', 'Connect Intervals.icu first.')},{status:409});
   const headers={Authorization:intervalsAuthorization(env.INTERVALS_API_KEY),Accept:'application/json'},base='https://intervals.icu/api/v1/activity/'+encodeURIComponent(id);
   try{
-    const [detail,streams]=await Promise.all([fetch(base+'?intervals=true',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson),fetch(base+'/streams?types=time,watts,heartrate,altitude,cadence,latlng',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson).catch(()=>[])]);
+    const get=intervalsReads(env);
+    const [detail,streams]=await Promise.all([get(base+'?intervals=true',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson),get(base+'/streams?types=time,watts,heartrate,altitude,cadence,latlng',{headers,signal:AbortSignal.timeout(10000)}).then(boundedJson).catch(()=>[])]);
     const activity=compactActivity(detail);
     const stream=type=>(Array.isArray(streams)?streams:[]).find(x=>x.type===type)?.data||[],zones=Array.isArray(detail.icu_hr_zones)?detail.icu_hr_zones:null;
     const hrr=heartRateRecovery(stream('time'),stream('heartrate'),zones&&zones.length>=4?Number(zones[2])+1:null);
