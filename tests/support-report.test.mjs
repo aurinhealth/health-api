@@ -98,6 +98,11 @@ test("the e-mail leads with what is worth a look, the server's side included", a
   assert.match(sent[0].html, /<li>apple: switched off on the iPhone/);
 });
 
+test("the app's crashes are flagged with the latest one", () => {
+  const crashes = [{ at: "2026-10-14T07:00:00Z", app: "1.0 (412)", ios: "26.0", exception: "1 code 2", signal: 11, frames: ["Loadwise +0x1a2b", "UIKitCore +0x40"] }, { at: "2026-10-10T07:00:00Z", app: "1.0 (400)", ios: "26.0", frames: [] }];
+  assert.deepEqual(reportFindings({ crashes }, null), ["2 crash(es) in the app in the last two weeks, latest 2026-10-14T07:00:00Z 1.0 (412) 1 code 2 signal 11 Loadwise +0x1a2b"]);
+});
+
 test("nothing to flag says so", () => {
   assert.deepEqual(reportFindings({ connections: [{ id: "google", connected: true, lastSuccessAt: new Date().toISOString() }], lastErrors: {} }, { syncs: [{ name: "connection_google", status: "ok" }], failedSends: [] }), []);
   assert.deepEqual(reportFindings(null, null), []);

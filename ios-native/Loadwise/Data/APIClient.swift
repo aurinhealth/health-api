@@ -98,7 +98,7 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Coach
 
     /// Asks the coach; yields the answer as it grows and the final result.
-    func askCoach(_ message: String, chatId: Int?, view: String) -> AsyncThrowingStream<AssistantEvent, Error> {
+    func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil) -> AsyncThrowingStream<AssistantEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -107,7 +107,7 @@ final class APIClient: @unchecked Sendable {
                     request.setValue("application/x-ndjson, application/json", forHTTPHeaderField: "Accept")
                     request.timeoutInterval = 180
                     var body: JSONObject = ["message": .string(message), "stream": .bool(true), "mode": .string("auto"),
-                                            "appContext": .object(["view": .string(view), "date": .string(Self.localToday())])]
+                                            "appContext": .object(["view": .string(view), "date": .string(date ?? Self.localToday())])]
                     if let chatId { body["chatId"] = .number(Double(chatId)) }
                     request.httpBody = try JSONEncoder().encode(body)
                     let (bytes, response) = try await session.bytes(for: request)
@@ -215,7 +215,7 @@ final class APIClient: @unchecked Sendable {
             try check(response, data)
             throw APIError.message(L10n.f("Server odpověděl chybou %@.", String(status)))
         }
-        let url = FileManager.default.temporaryDirectory.appending(path: "loadwise-data-" + Self.localToday() + ".ndjson")
+        let url = FileManager.default.temporaryDirectory.appending(path: "aurin-data-" + Self.localToday() + ".ndjson")
         try? FileManager.default.removeItem(at: url)
         try FileManager.default.moveItem(at: downloaded, to: url)
         return url
@@ -373,6 +373,20 @@ final class APIClient: @unchecked Sendable {
 
     func foodData(date: String? = nil) async throws -> (FoodSnapshot, Data) {
         try await getWithData("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: SnapshotCache.dayKey("food", date))
+    }
+
+    /// Živiny: the day (days 1) or the last 7 days up to date.
+    func nutrients(date: String, days: Int) async throws -> NutrientsPage {
+        try await get("/app/api/food/nutrients?date=\(date)&days=\(days)")
+    }
+
+    func nutrientDetail(key: String, date: String) async throws -> NutrientDetail {
+        try await get("/app/api/food/nutrients?date=\(date)&key=\(key)")
+    }
+
+    /// Up to three nutrients shown on Jídlo (Pro).
+    func saveNutrientFavorites(_ keys: [String]) async throws {
+        let _: JSONValue = try await send("/app/api/food/nutrients/favorites", method: "POST", body: ["favorites": keys])
     }
 
     /// Personal foods, the shared catalog and recipes; with a barcode, that code.
@@ -580,6 +594,16 @@ final class APIClient: @unchecked Sendable {
         }
         if let cacheKey { SnapshotCache.save(data, key: cacheKey) }
         return (value, data)
+    }
+
+    /// A file as it came, not JSON (Svaly's 3D figure, Muscle3D.swift).
+    func getData(_ path: String) async throws -> Data {
+        var request = makeRequest(path)
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 60
+        let (data, response) = try await load(request)
+        try check(response, data)
+        return data
     }
 
     /// Sends a write that may have waited for signal (Outbox). A missing

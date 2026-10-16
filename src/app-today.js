@@ -261,9 +261,10 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     ...recoveryItems,
     ...pillItems
   ];
-  // Done first in the order of the day, then what is still open, then bedtime.
+  // Done first in the order of the day, then what is still open, then bedtime
+  // with the planned wake time (Den draws the night ahead dashed to it).
   const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done),
-    ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), title: L("Do postele", "Bedtime"), detail: (choice.chosen != null ? L("spánek ", "sleep ") : L("potřeba spánku ", "sleep need ")) + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
+    ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), end: clock(plan.wake), title: L("Do postele", "Bedtime"), detail: (choice.chosen != null ? L("spánek ", "sleep ") : L("potřeba spánku ", "sleep need ")) + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
   ];
 
   return {
@@ -273,7 +274,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     connectionProblems: Array.isArray(connectionProblems) ? connectionProblems : [],
     // provisional: the baseline is carried over from another source until the
     // new one has 14 days of its own (recovery-model.js sourceBaseline).
-    readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional },
+    readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional, provisionalDays: readiness.provisional ? readiness.provisionalDays ?? null : null },
     week,
     // The morning check-in: fresh, normal, tired, sick or null (not answered).
     checkin: checkin || null,

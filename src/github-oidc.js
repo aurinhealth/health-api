@@ -4,9 +4,8 @@ const EXPECTED_AUDIENCE = "health-strength";
 const EXPECTED_REPOSITORY = "shaarkyn/health-api";
 const EXPECTED_REPOSITORY_ID = "1371310425";
 const EXPECTED_REPOSITORY_OWNER_ID = "329509326";
-const NIGHTLY_GYM_WORKFLOW = "shaarkyn/health-api/.github/workflows/health-strength.yml@refs/heads/main";
+// Only the deploy smoke test calls in (a push to main); nothing runs on a schedule.
 const EXPECTED_WORKFLOWS = new Set([
-  NIGHTLY_GYM_WORKFLOW,
   "shaarkyn/health-api/.github/workflows/deploy-worker.yml@refs/heads/main"
 ]);
 
@@ -35,9 +34,7 @@ export async function verifyGitHubActionsToken(request, fetchImpl = fetch) {
   if (String(claims.repository_owner_id) !== EXPECTED_REPOSITORY_OWNER_ID) throw new Error("Invalid GitHub Actions repository owner");
   if (claims.ref !== "refs/heads/main") throw new Error("Invalid GitHub Actions ref");
   if (!EXPECTED_WORKFLOWS.has(claims.workflow_ref)) throw new Error("Invalid GitHub Actions workflow");
-  if (claims.event_name !== "push" && !(claims.workflow_ref === NIGHTLY_GYM_WORKFLOW && claims.event_name === "schedule")) {
-    throw new Error("Invalid GitHub Actions event");
-  }
+  if (claims.event_name !== "push") throw new Error("Invalid GitHub Actions event");
   if (claims.actor !== "shaarkyn") throw new Error("Invalid GitHub Actions actor");
   if (!Number.isFinite(claims.exp) || claims.exp <= now) throw new Error("Expired GitHub Actions token");
   if (Number.isFinite(claims.nbf) && claims.nbf > now + 60) throw new Error("GitHub Actions token is not active yet");

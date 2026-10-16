@@ -63,6 +63,7 @@ struct DetailScreen<Content: View>: View {
 /// The Health screen without the scroll view, so tests can render it whole.
 struct HealthContent: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dayPage) private var page
     let health: HealthSnapshot
     @State private var editing = false
 
@@ -75,19 +76,19 @@ struct HealthContent: View {
                     .padding(.top, 24)
 
                 // Cycle tracking, only for today.
-                if model.selectedDate == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
+                if (page.map(\.selectedDate) ?? model.selectedDate) == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
                     CycleHealthSection(state: state).padding(.top, 12)
                 }
             }
 
             WidgetBoard(panel: .health,
-                        data: WidgetData(panel: .health, today: model.today, health: health, training: model.training, food: model.food),
+                        data: WidgetData(panel: .health, today: page.map(\.today) ?? model.today, health: health, training: model.training, food: page.map(\.food) ?? model.food),
                         editing: $editing)
                 .padding(.top, editing ? 0 : 30)
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
-        .daySwipe(date: health.date, enabled: !editing)
+        .daySwipe(date: health.date, enabled: !editing) { page in page.health.map { AnyView(HealthContent(health: $0)) } }
         .task { if model.cycle == nil { await model.loadCycle() } }
     }
 }
@@ -120,7 +121,7 @@ struct ReadinessCard: View {
     }
 }
 
-/// HRV, resting heart rate and sleep under the readiness: today's value,
+/// Sleep, resting heart rate and HRV under the readiness: today's value,
 /// higher or lower than usual and a band with the usual range. Parts without
 /// a range (breathing, temperature, the morning check-in) follow in one line
 /// as readiness points.
@@ -271,30 +272,11 @@ struct ReadinessDetailContent: View {
             SectionLabel(text: "Co ji dnes tvoří").padding(.top, 32)
             VStack(spacing: 0) {
                 ForEach(r.parts) { part in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(ReadinessText.label(part.key)).font(.body).foregroundStyle(Palette.ink)
-                            Spacer()
-                            Text(value(part.key)).font(Typo.number(20)).foregroundStyle(Palette.ink)
-                        }
-                        if part.low != nil, part.high != nil, part.value != nil {
-                            HStack(alignment: .firstTextBaseline) {
-                                Text(L10n.f("tvůj normál %@", ReadinessText.range(part))).font(Typo.caption).foregroundStyle(Palette.muted)
-                                Spacer()
-                                Text(ReadinessText.longWord(part)).font(Typo.caption.weight(.medium)).foregroundStyle(ReadinessText.color(part))
-                            }
-                            RangeBand(part: part).padding(.top, 8)
-                        }
-                        HStack {
-                            Spacer()
-                            Text(ReadinessText.points(part.points)).font(Typo.caption.weight(.medium))
-                                .foregroundStyle(ReadinessText.color(part))
-                                .padding(.horizontal, 10).padding(.vertical, 4)
-                                .background(Palette.ink.opacity(0.06), in: Capsule())
-                        }
-                        .padding(.top, 6)
+                    if let route = Self.route(part.key) {
+                        RouteLink(route: route) { partRow(part).contentShape(Rectangle()) }
+                    } else {
+                        partRow(part)
                     }
-                    .padding(.vertical, 13)
                     Rectangle().fill(Palette.hairline).frame(height: 1)
                 }
             }
@@ -316,6 +298,45 @@ struct ReadinessDetailContent: View {
                     .padding(.top, 14)
             }
         }
+    }
+
+    /// The detail a part of the number opens (the check-in has none).
+    static func route(_ key: String) -> AppRoute? {
+        switch key {
+        case "hrv": return .metric(.hrv)
+        case "restingHR": return .metric(.restingHR)
+        case "sleep": return .sleep
+        case "respiration": return .metric(.respiration)
+        case "skinTemp", "wristTemp": return .metric(.temperature)
+        default: return nil
+        }
+    }
+
+    private func partRow(_ part: HealthSnapshot.Part) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(ReadinessText.label(part.key)).font(.body).foregroundStyle(Palette.ink)
+                Spacer()
+                Text(value(part.key)).font(Typo.number(20)).foregroundStyle(Palette.ink)
+            }
+            if part.low != nil, part.high != nil, part.value != nil {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(L10n.f("tvůj normál %@", ReadinessText.range(part))).font(Typo.caption).foregroundStyle(Palette.muted)
+                    Spacer()
+                    Text(ReadinessText.longWord(part)).font(Typo.caption.weight(.medium)).foregroundStyle(ReadinessText.color(part))
+                }
+                RangeBand(part: part).padding(.top, 8)
+            }
+            HStack {
+                Spacer()
+                Text(ReadinessText.points(part.points)).font(Typo.caption.weight(.medium))
+                    .foregroundStyle(ReadinessText.color(part))
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(Palette.ink.opacity(0.06), in: Capsule())
+            }
+            .padding(.top, 6)
+        }
+        .padding(.vertical, 13)
     }
 
     private func value(_ key: String) -> String {

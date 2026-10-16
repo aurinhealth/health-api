@@ -3,10 +3,11 @@ import { intervalsAuthorization } from './intervals-auth.js';
 import { readSyncPrefs } from './sync-destinations.js';
 import { syncWahooWorkout, readWahooTokens } from './wahoo.js';
 import { athleteThresholds } from './intervals-athlete.js';
+import { exportDue, failedExport } from './export-retry.js';
 // App-owned events and an outbox; providers are destinations, not storage.
 export async function ensureLocalWorkouts(db){
   await db.prepare("CREATE TABLE IF NOT EXISTS local_workouts (user_id INTEGER NOT NULL,id TEXT NOT NULL,event_key TEXT NOT NULL,event_json TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'scheduled',revision INTEGER NOT NULL DEFAULT 1,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,id),UNIQUE(user_id,event_key))").run();
-  await db.prepare("CREATE TABLE IF NOT EXISTS workout_exports (user_id INTEGER NOT NULL,local_id TEXT NOT NULL,provider TEXT NOT NULL,remote_id TEXT,status TEXT NOT NULL DEFAULT 'pending',revision INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,local_id,provider))").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS workout_exports (user_id INTEGER NOT NULL,local_id TEXT NOT NULL,provider TEXT NOT NULL,remote_id TEXT,status TEXT NOT NULL DEFAULT 'pending',revision INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,attempts INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(user_id,local_id,provider))").run();
 }
 async function projection(db,id,event,remove=false){
   if(remove)return db.prepare("DELETE FROM health_datapoints WHERE user_id=? AND source_family='local' AND data_type='planned-workout' AND external_id=?").bind(db.userId,'planned:'+id);
@@ -23,7 +24,7 @@ export async function storeLocalEvent(db,event,{key=event.external_id,id=null}={
   await db.batch([
     db.prepare("INSERT INTO local_workouts(user_id,id,event_key,event_json) VALUES(?,?,?,?) ON CONFLICT(user_id,id) DO UPDATE SET event_key=excluded.event_key,event_json=excluded.event_json,status='scheduled',revision=local_workouts.revision+1,updated_at=CURRENT_TIMESTAMP").bind(db.userId,id,key,JSON.stringify(payload)),
     await projection(db,id,payload),
-    db.prepare("INSERT INTO workout_exports(user_id,local_id,provider) VALUES(?,?,'intervals') ON CONFLICT(user_id,local_id,provider) DO UPDATE SET status='pending',updated_at=CURRENT_TIMESTAMP WHERE workout_exports.status!='running'").bind(db.userId,id)
+    db.prepare("INSERT INTO workout_exports(user_id,local_id,provider) VALUES(?,?,'intervals') ON CONFLICT(user_id,local_id,provider) DO UPDATE SET status='pending',attempts=0,updated_at=CURRENT_TIMESTAMP WHERE workout_exports.status!='running'").bind(db.userId,id)
   ]);
   return {id,event:payload,existing:Boolean(existing)};
 }
@@ -75,19 +76,19 @@ async function syncIntervalsWorkout(env,id,fetchImpl=fetch){
       const data=await r.json(),saved=Array.isArray(data)?data[0]:data;
       if(saved?.id==null)throw new Error(L('Intervals.icu nepotvrdilo uložení.', 'Intervals.icu didn\'t confirm the save.'));remoteId=String(saved.id);
     }
-    await db.prepare("UPDATE workout_exports SET remote_id=?,revision=?,status=CASE WHEN ?=(SELECT revision FROM local_workouts WHERE user_id=? AND id=?) THEN 'synced' ELSE 'pending' END,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='intervals'").bind(remoteId==null?null:String(remoteId),row.revision,row.revision,db.userId,row.id,db.userId,row.id).run();
+    await db.prepare("UPDATE workout_exports SET remote_id=?,revision=?,status=CASE WHEN ?=(SELECT revision FROM local_workouts WHERE user_id=? AND id=?) THEN 'synced' ELSE 'pending' END,attempts=0,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='intervals'").bind(remoteId==null?null:String(remoteId),row.revision,row.revision,db.userId,row.id,db.userId,row.id).run();
     // An old imported projection must not double-count an app-owned event.
     if(remoteId!=null)await db.prepare("DELETE FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='planned-workout' AND external_id=?").bind(db.userId,'planned:'+remoteId).run();
     return {status:'synced',eventId:remoteId};
   }catch{
-    await db.prepare("UPDATE workout_exports SET status='error',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='intervals'").bind(db.userId,row.id).run();
+    await db.prepare(`UPDATE workout_exports SET ${failedExport},updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='intervals'`).bind(db.userId,row.id).run();
     return {status:'error',message:L('Trénink je uložený v aplikaci. Export se nepodařil; lze ho zkusit znovu.', 'The workout is saved in the app. The export failed; you can try again.')};
   }
 }
 export async function retryWorkoutExports(env){
   await ensureLocalWorkouts(env.DB);
   if(!env.INTERVALS_API_KEY)return [];
-  const rows=(await env.DB.prepare("SELECT local_id FROM workout_exports WHERE user_id=? AND provider='intervals' AND (status IN ('pending','error') OR (status='running' AND updated_at<datetime('now','-5 minutes'))) ORDER BY updated_at LIMIT 20").bind(env.DB.userId).all()).results;
+  const rows=(await env.DB.prepare(`SELECT local_id FROM workout_exports WHERE user_id=? AND provider='intervals' AND ${exportDue()} ORDER BY updated_at LIMIT 20`).bind(env.DB.userId).all()).results;
   const results=[];for(const row of rows)results.push(await syncIntervalsWorkout(env,row.local_id));return results;
 }
 export async function localExportIndex(db,userId=db.userId){
@@ -102,7 +103,7 @@ export async function editLocalWorkout(env,id,change,fetchImpl=fetch){
   const db=env.DB,row=await localWorkout(db,id);if(!row||row.status==='deleted')throw new Error(L('Trénink nebyl nalezen.', 'The workout wasn\'t found.'));
   const event=JSON.parse(row.event_json);
   if(change.deleted){
-    await db.batch([db.prepare("UPDATE local_workouts SET status='deleted',revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(db.userId,row.id),await projection(db,row.id,event,true),db.prepare("DELETE FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=?").bind(db.userId,row.id),db.prepare("UPDATE workout_exports SET status='pending' WHERE user_id=? AND local_id=? AND status!='running'").bind(db.userId,row.id)]);
+    await db.batch([db.prepare("UPDATE local_workouts SET status='deleted',revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(db.userId,row.id),await projection(db,row.id,event,true),db.prepare("DELETE FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=?").bind(db.userId,row.id),db.prepare("UPDATE workout_exports SET status='pending',attempts=0 WHERE user_id=? AND local_id=? AND status!='running'").bind(db.userId,row.id)]);
   }else{
     const next={...event,...change};
     const link=await db.prepare('SELECT workout_id FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=?').bind(db.userId,row.id).first();

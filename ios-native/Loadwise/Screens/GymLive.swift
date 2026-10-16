@@ -61,9 +61,18 @@ struct LiveGymView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .task { await load() }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) } }
-        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) } }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true
+            GymActivityInbox.handler = { activityAction($0) }
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) }
+            GymActivityInbox.handler = nil
+            GymLiveActivity.end()
+        }
+        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
+        .onChange(of: day) { _, _ in syncActivity() }
+        .onChange(of: summary) { _, _ in syncActivity() }
         .confirmationDialog("Ukončit trénink?", isPresented: $confirmClose, titleVisibility: .visible) {
             Button("Pokračovat později") { dismiss() }
             Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
@@ -379,6 +388,29 @@ struct LiveGymView: View {
             restEnd = Date().addingTimeInterval(TimeInterval(rest))
         }
         persist()
+    }
+
+    // MARK: Live Activity
+
+    /// The lock screen and Dynamic Island follow the sheet (GymLiveActivity).
+    private func syncActivity() {
+        GymLiveActivity.sync(day: summary || discarded ? nil : day, restStart: nil, restEnd: restEnd)
+    }
+
+    /// +30 s, Přeskočit pauzu and Série hotová from the lock screen.
+    private func activityAction(_ action: GymActivityAction) {
+        switch action {
+        case .extend:
+            if let end = restEnd { restEnd = max(end, Date()).addingTimeInterval(30) }
+        case .skip:
+            restEnd = nil
+        case .complete(let row):
+            restEnd = nil
+            if let set = day?.exercises.flatMap(\.sets).first(where: { $0.row == row && !$0.done }) {
+                toggle(set, kg: "", reps: "")
+            }
+        }
+        syncActivity()
     }
 
     /// "další 82,5 × 6".

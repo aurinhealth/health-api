@@ -30,6 +30,16 @@ struct PrivacySettingsView: View {
                     .disabled(exporting || model.demo)
                 }
             }
+            SettingsGroup {
+                Link(destination: Self.policyURL) {
+                    SettingsRow(title: "Zásady ochrany soukromí", chevron: false)
+                        .overlay(alignment: .trailing) {
+                            Image(systemName: "arrow.up.right.square").font(.system(size: 14)).foregroundStyle(Palette.faint)
+                                .padding(.trailing, 18).accessibilityHidden(true)
+                        }
+                }
+                .buttonStyle(.plain)
+            }
             SettingsGroup(footer: "Smaže účet i všechna data na serveru. Nejde vrátit. Data v Intervals.icu a Google zůstanou, kde jsou.") {
                 Button { confirmDelete = true } label: { SettingsRow(title: "Smazat účet", chevron: false, titleColor: Palette.rust) }
                     .buttonStyle(.plain)
@@ -49,6 +59,11 @@ struct PrivacySettingsView: View {
         } message: {
             Text("Pro potvrzení napiš SMAZAT.")
         }
+    }
+
+    /// The policy on aurin.health, in Czech while the app speaks Czech.
+    private static var policyURL: URL {
+        URL(string: L10n.language == "cs" ? "https://aurin.health/privacy?lang=cs" : "https://aurin.health/privacy")!
     }
 
     private func export() async {

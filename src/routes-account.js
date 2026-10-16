@@ -55,7 +55,7 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
   if(url.pathname==='/app/api/account/export'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     // NDJSON, streamed page by page (account-data.js): a large account never sits in memory whole.
-    return new Response(exportAccountStream(env,session.user),{headers:{'Content-Type':'application/x-ndjson; charset=utf-8','Content-Disposition':'attachment; filename="loadwise-data-'+localToday()+'.ndjson"','Cache-Control':'no-store'}});
+    return new Response(exportAccountStream(env,session.user),{headers:{'Content-Type':'application/x-ndjson; charset=utf-8','Content-Disposition':'attachment; filename="aurin-data-'+localToday()+'.ndjson"','Cache-Control':'no-store'}});
   }
   if(url.pathname==='/app/api/account/delete'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});

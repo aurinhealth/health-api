@@ -181,7 +181,7 @@ test("without Intervals.icu the app hears Wahoo's answer; a full Sandbox waits f
   const result = await syncLocalWorkout(env(db), local.id, busy.fetchImpl);
   assert.equal(result.status, "error");
   assert.equal(result.destination, "wahoo");
-  assert.equal(raw.sqlite.prepare("SELECT status FROM workout_exports WHERE provider='wahoo'").get().status, "pending");
+  assert.deepEqual({ ...raw.sqlite.prepare("SELECT status, attempts FROM workout_exports WHERE provider='wahoo'").get() }, { status: "error", attempts: 1 });
   // The plan went in, the workout did not: the next try makes only the workout.
   const half = api({ "POST /v1/workouts": () => new Response("{}", { status: 500 }) });
   assert.equal((await syncLocalWorkout(env(db), local.id, half.fetchImpl)).status, "error");
@@ -217,4 +217,20 @@ test("Wahoo is offered in Zdroje dat and Synchronizace once its app is registere
   assert.deepEqual((({ connected, connectUrl }) => ({ connected, connectUrl }))(on.providers.find(p => p.id === "wahoo")), { connected: true, connectUrl: "/oauth/wahoo" });
   const sync = (await syncOverview(env(db))).destinations.find(d => d.id === "wahoo");
   assert.deepEqual([sync.connected, sync.prefs, sync.supports], [true, { pushPlanned: true, pushActivities: false, pullActivities: true, health: [] }, { pushPlanned: true, pushActivities: false, pullActivities: true, health: false }]);
+});
+
+test("a failing export waits longer after each try and stops after eight", async () => {
+  const { db, raw } = setup();
+  const local = await storeLocalEvent(db, { external_id: "manual:retry12345", category: "WORKOUT", name: "Tempo", type: "Ride", start_date_local: "2099-01-01T12:00:00", moving_time: 3600 });
+  const broken = api({ "POST /v1/plans": () => new Response("{}", { status: 500 }) });
+  await syncLocalWorkout(env(db), local.id, broken.fetchImpl);
+  // Just failed: not due yet.
+  assert.equal((await retryWahooExports(env(db), { fetchImpl: broken.fetchImpl })).length, 0);
+  for (let i = 0; i < 8; i++) {
+    raw.sqlite.prepare("UPDATE workout_exports SET updated_at=datetime('now','-7 hours') WHERE provider='wahoo'").run();
+    await retryWahooExports(env(db), { fetchImpl: broken.fetchImpl });
+  }
+  assert.deepEqual({ ...raw.sqlite.prepare("SELECT status, attempts FROM workout_exports WHERE provider='wahoo'").get() }, { status: "failed", attempts: 8 });
+  raw.sqlite.prepare("UPDATE workout_exports SET updated_at=datetime('now','-7 hours') WHERE provider='wahoo'").run();
+  assert.equal((await retryWahooExports(env(db), { fetchImpl: broken.fetchImpl })).length, 0);
 });

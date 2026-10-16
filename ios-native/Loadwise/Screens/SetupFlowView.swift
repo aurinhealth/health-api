@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 /// After the first sign-in, two pages: where the data comes from ("Odkud brát
 /// data": Apple Health, Google Health, Intervals.icu and the consent to health
@@ -486,10 +487,22 @@ struct SetupFlowView: View {
         }
         do {
             try await model.api.completeOnboarding(profile: profile, weightKg: newWeight, training: JSONObject())
+            await askForNotifications()
             await model.finishSetup()
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// The morning readiness, the coach's messages and the reminders are on by
+    /// default, but iOS delivers none of them until it is allowed: the system
+    /// asks once here, before Today, unless it was answered already (as in
+    /// Nastavení → Oznámení). The push token follows the answer.
+    private func askForNotifications() async {
+        if await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .notDetermined {
+            _ = await Reminders.requestPermission()
+        }
+        await PushRegistration.refresh(api: model.api)
     }
 }
 
