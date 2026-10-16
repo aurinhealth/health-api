@@ -59,13 +59,17 @@ export function strainOn(rows, date) {
 // missing, provisional, checkin) with the body's own number (`body`), the
 // sleep need (`need`: need, base, hrv, debt, naps), the night and the rows.
 export function readinessFor({ date, rows = null, google = [], intervals = [], sessions = [], profile = null, checkin = null } = {}) {
-  const lock = profile?.readinessLocks?.[date] || null;
+  const list = Array.isArray(sessions) ? sessions : [];
+  const live = primaryNights(list).get(date) || null;
+  const locked = profile?.readinessLocks?.[date] || null;
+  // The rest of a night locked at a wake-up brings its own night signals
+  // too (HRV, resting HR, breathing, temperature): the lock is set anew.
+  const lock = locked?.night && continues(live, locked.night) ? null : locked;
   const plain = withLock(Array.isArray(rows) ? rows.filter(r => r && r.id && r.id <= date) : readinessRows(google, intervals, date), date, lock);
   const merged = profile?.cycle ? markCyclePhases(plain, profile.cycle) : plain;
-  const list = Array.isArray(sessions) ? sessions : [];
   const sleepSet = sleepSettings(profile || {});
   const need = sleepNeedFor({ date, age: num(profile?.age), goal: sleepSet.goal, strain: strainOn(merged, shift(date, -1)), rows: merged, sessions: list });
-  const night = lock?.night || primaryNights(list).get(date) || null;
+  const night = lock?.night || live;
   const body = recoveryReadiness({ rows: merged, date, night, sleepNeed: need.need });
   return { ...applyCheckin(body, checkin), body, need, night, rows: merged };
 }
@@ -89,6 +93,13 @@ export function readinessLockOf(readiness, date) {
   const row = {};
   for (const group of LOCK_GROUPS) if (present(today[group[0]])) for (const key of group) if (present(today[key])) row[key] = today[key];
   return { row, night: readiness.night };
+}
+
+// A night locked at a wake-up (up at 6:17, asleep again until 9:00) is not
+// the whole night: the live one that runs on past its end replaces it.
+function continues(live, locked) {
+  const t = v => Date.parse(v || "");
+  return Boolean(live) && t(live.startTime) <= t(locked.endTime) && t(live.endTime) > t(locked.endTime) && num(live.durationMin) > num(locked.durationMin);
 }
 
 function withLock(rows, date, lock) {
