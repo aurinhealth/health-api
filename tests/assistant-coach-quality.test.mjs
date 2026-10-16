@@ -148,6 +148,31 @@ test('no hard workout is prepared for today on a red day or with signs of illnes
   assert.equal(validateCoachActions([ride('vo2max')],green,today)[0].kind,'vo2max');
 });
 
+test('hard workouts in one answer keep 48 h apart and at most two in 7 days, with the week counted',()=>{
+  const ride=(kind,date,extra={})=>({type:'workout',date,sport:'ride',minutes:75,reason:'Intervaly',kind,...extra});
+  const lib={athleteState:'active',workoutLibraryRecommendations:[{id:'v5x4',name:'VO2max 5×4',sport:'ride',system:'vo2max'}]};
+  // Three VO2max days in a row: the middle one goes, the third keeps 48 h from the first.
+  assert.deepEqual(validateCoachActions([ride('vo2max','2026-10-06'),ride('vo2max','2026-10-07'),ride('vo2max','2026-10-08')],lib,today).map(a=>a.date),['2026-10-06','2026-10-08']);
+  // 48 h apart stays; a library workout counts the same as a kind.
+  assert.deepEqual(validateCoachActions([ride('vo2max','2026-10-06'),ride('',  '2026-10-08',{workoutId:'v5x4'})],lib,today).map(a=>a.date),['2026-10-06','2026-10-08']);
+  assert.deepEqual(validateCoachActions([ride('vo2max','2026-10-06'),ride('',  '2026-10-07',{workoutId:'v5x4'})],lib,today).map(a=>a.date),['2026-10-06']);
+  // A hard ride done yesterday blocks today; two in the week block a third, easy work stays.
+  const week=days=>({...lib,week:days});
+  assert.deepEqual(validateCoachActions([ride('threshold',today)],week([{date:'2026-10-04',completed:[{name:'VO2max 5x4',type:'Ride'}]}]),today),[]);
+  const two=week([{date:'2026-10-01',completed:[{name:'Threshold 3x10',type:'Ride'}]},{date:'2026-10-03',completed:[{name:'Sweet Spot',type:'Ride'}]}]);
+  assert.deepEqual(validateCoachActions([ride('vo2max','2026-10-06')],two,today),[]);
+  assert.equal(validateCoachActions([ride('endurance','2026-10-06')],two,today)[0].kind,'endurance');
+  assert.equal(validateCoachActions([ride('vo2max','2026-10-09')],two,today)[0].kind,'vo2max');
+  // A hard session planned on the proposed day is the one it replaces.
+  assert.equal(validateCoachActions([ride('threshold','2026-10-06')],week([{date:'2026-10-06',planned:[{id:'planned:1',name:'VO2max',type:'Ride'}]}]),today,{userInitiated:true})[0].kind,'threshold');
+});
+
+test('a library workout and a confirmed proposal pass the coach\'s check for their day',()=>{
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  assert.match(entry,/if\(workoutId&&\['tempo','sweet_spot','threshold','vo2max'\]\.includes\(libraryFocus\)&&!hardDay\)workoutId=null;/);
+  assert.match(entry,/const fresh=await workoutPreview\(env,ctx,a\)/);
+});
+
 test('status proposals accept common words for illness and injury, with an optional end',()=>{
   const status=(s,words,extra={})=>validateCoachActions([{type:'status',status:s,reason:'Stav',...extra}],{userMessage:words},today);
   for(const m of ['Mám chřipku','Jsem nachlazený','Mám rýmu','Mám covid','Asi nějaký viróza','Mám teplotu'])assert.equal(status('sick',m).length,1,m);

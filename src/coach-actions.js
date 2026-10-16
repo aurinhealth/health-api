@@ -3,6 +3,7 @@ import { validDay } from './training-availability.js';
 import { trainingStatus } from './training-status.js';
 import { prepareGymSwap,gymAdjustmentRequest } from './coach-gym-adjustment.js';
 import { kcalTargets } from './activity-edits.js';
+import { qualityDomain } from './session-intensity.js';
 import { actionInstructions } from './private/coach-actions.js';
 export { actionInstructions };
 
@@ -52,8 +53,23 @@ export function holdBackToday(context){
   const r=context?.cyclingCoachV2?.readiness;
   return r?.status==='red'||r?.todayZone==='red'||(r?.flags||[]).some(f=>ILLNESS_FLAG.test(f));
 }
+// The hard days around a proposed one: done and planned sessions of the week
+// by their names (session-intensity.js, tempo included), plus the hard
+// workouts proposed earlier in the same answer. A hard workout needs 48 h
+// from each and at most two hard days in any 7 (Revize 2026-10-16, nález 3).
+const HARD_NAME=/threshold|vo2|anaerob|sprint|sweet.?spot|tempo|pr[aá]h|race|z[aá]vod/i;
+const isHardSession=a=>{const text=String(a?.name||'')+' '+[].concat(a?.tags||[]).join(' ');return HARD_NAME.test(text)||Boolean(qualityDomain(text,/run/i.test(String(a?.type||''))?'run':'ride'));};
+const dayDiff=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
+export function hardDayConflict(date,hardDates){
+  if(hardDates.some(d=>Math.abs(dayDiff(d,date))<2))return true;
+  for(let start=-6;start<=0;start++){const from=dayDiff(date,'1970-01-01')+start;if(hardDates.filter(d=>{const x=dayDiff(d,'1970-01-01');return x>=from&&x<=from+6;}).length>=2)return true;}
+  return false;
+}
 export function validateCoachActions(actions,context,today,{userInitiated=false}={}){
   const events=new Map((context.week||[]).flatMap(d=>(d.planned||[]).map(a=>[String(a.id),{date:d.date,...a}])));
+  // A planned session on the proposed day itself is the one it replaces (a
+  // workout on a planned day passes only when the athlete asked for it).
+  const hard=(context.week||[]).flatMap(d=>[...(d.planned||[]).filter(isHardSession).map(()=>({date:d.date,planned:true})),...(d.completed||[]).filter(isHardSession).map(()=>({date:d.date}))]).filter(h=>validDay(h.date));
   return (Array.isArray(actions)?actions:[]).slice(0,3).flatMap(a=>{
     const reason=String(a.reason||'').trim().slice(0,500);if(!reason)return [];
     if(a.type==='gym_swap'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&context.gymPlan?.values?.length){
@@ -108,7 +124,9 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       // Only a workout the coach was actually offered; the preview then shows exactly it.
       const library=a.workoutId?(context.workoutLibraryRecommendations||[]).find(w=>String(w.id)===String(a.workoutId)&&(!w.sport||w.sport===a.sport)):null;
       const kind=a.sport!=='gym'&&!library&&WORKOUT_KINDS.includes(a.kind)?{kind:a.kind}:{};
-      if(a.sport!=='gym'&&a.date===today&&INTENSE.includes(library?library.system:a.kind)&&holdBackToday(context))return [];
+      const intense=a.sport!=='gym'&&INTENSE.includes(library?library.system:a.kind);
+      if(intense&&a.date===today&&holdBackToday(context))return [];
+      if(intense){if(hardDayConflict(a.date,hard.filter(h=>!(h.planned&&h.date===a.date)).map(h=>h.date)))return [];hard.push({date:a.date});}
       return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason,...kind,...(library&&a.sport!=='gym'?{workoutId:String(library.id),workoutName:library.name}:{})}];
     }
     return [];
