@@ -1,8 +1,7 @@
-// Admin routes (/app/api/admin/*) and the nightly gym plan automation.
+// Admin routes (/app/api/admin/*) and the deploy smoke test of the gym generator.
 import app from "./strength-gateway.js";
 import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { saveCookbook } from "./cookbook.js";
-import { nightlyGymSkip } from "./week-planner.js";
 import { internalHeaders } from "./internal-auth.js";
 import { listUsersAndInvites, inviteUser, removeInvite, changeUserEmail, setUserDisabled } from "./tenancy.js";
 import { emailChangeRefusal, notifyOldAddress, requestLanguage } from "./email-login.js";
@@ -37,8 +36,11 @@ export async function handleAdminApi(request, env, url, session, ctx) {
   return Response.json({status:"error",message:"Not found"},{status:404});
 }
 
-// The nightly gym plan (health-strength.yml). It follows the week plan: no gym
-// that day, no plan; a plan already there (made or edited by the athlete) is kept.
+// The deploy smoke test of the gym generator (deploy-worker.yml): the plan is
+// built, never written. A gym plan is saved only when the athlete asks for it
+// (Aktivita dne "Dát na dnes", the gym builder, Vygenerovat tréninky); the gym
+// days of the week plan are preferences for the AI, not a plan, so nothing
+// makes one at night.
 export async function handleStrengthAutomation(request, env, ctx) {
   if (request.method !== "POST") return Response.json({ status: "error", message: "Method not allowed" }, { status: 405 });
   try {
@@ -46,14 +48,11 @@ export async function handleStrengthAutomation(request, env, ctx) {
     const body = await request.json().catch(() => ({}));
     const date = body?.date == null || body.date === "" ? localToday() : String(body.date).trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return Response.json({ status: "error", message: "Invalid date; expected YYYY-MM-DD" }, { status: 400 });
-    // The deploy smoke test asks for a preview: the plan is built, never written.
-    const preview = body?.preview === true;
-    const skip = preview ? null : await nightlyGymSkip(env.DB, date);
-    if (skip) return Response.json({ status: "skipped", action: "generate", date, reason: skip });
+    if (body?.preview !== true) return Response.json({ status: "skipped", action: "generate", date, reason: "A gym plan is made only when the athlete asks for it." });
     const internalRequest = new Request(new URL("/strength/generate-plan", request.url), {
       method: "POST",
       headers: { ...internalHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify(preview ? { date, preview: true, action: "generate" } : { date, preview: false, action: "generate", nightly: true })
+      body: JSON.stringify({ date, preview: true, action: "generate" })
     });
     const response = await app.fetch(internalRequest, env, ctx);
     const result = await response.clone().json().catch(() => null);

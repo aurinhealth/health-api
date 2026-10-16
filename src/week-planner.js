@@ -1,8 +1,6 @@
 import { L, bilingual } from './lang.js';
-import { readGymPlan } from "./gym-plan-store.js";
 import { personalBaseline } from "./recovery-model.js";
 import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } from './training-availability.js';
-import { getAthleteState } from './athlete-state.js';
 import {trainingHistory,starterPlan} from './training-history.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
@@ -96,21 +94,6 @@ export async function getWeekPlan(db, date = null) {
   await ensureWeekOverrides(db);
   const override = await db.prepare('SELECT prefs_json FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).first();
   return override ? { ...sanitizeWeekPlan({ ...defaults, ...JSON.parse(override.prefs_json) }), source: 'week' } : { ...defaults, source: 'default' };
-}
-
-// Why the nightly gym plan is not made for `date`, or null to make it: the
-// week plan has no gym that day (an empty week plan does not decide), or a
-// plan made or edited by the athlete is already stored.
-export async function nightlyGymSkip(db, date) {
-  if ((await getAthleteState(db)).status !== 'active') return L('Aktuální stav pozastavuje tréninky.', 'Your current status pauses training.');
-  const prefs = await getWeekPlan(db, date);
-  const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
-  if (prefs.availability[weekday].minutes === 0) return L('Tento den nemáš čas na aktivitu.', 'You don\'t have time for an activity on this day.');
-  if (prefs.days.some(d => d.length) && !prefs.days[weekday].includes("gym")) return L("Podle týdenního plánu není tento den gym.", "The week plan has no gym on this day.");
-  const gym = await readGymPlan(db, date);
-  if (gym.cancelled) return L("Gym na tento den je zrušený.", "You cancelled the gym for this day.");
-  if (gym.stored) return L("Na tento den už gym plán je.", "There's already a gym plan for this day.");
-  return null;
 }
 
 export async function saveWeekPlan(db, input, date = null) {
