@@ -48,7 +48,14 @@ test("a night locked at a wake-up takes the rest of it when it arrives", () => {
   const lock = readinessLockOf(early, DATE);
   assert.equal(lock.night.durationMin, 368);
   const whole = sessions.map(s => (s.date === DATE ? { ...s, endTime: DATE + "T07:03:00Z", durationMin: 525, timeInBedMin: 555 } : s));
-  const later = readinessFor({ date: DATE, google: wellness, sessions: whole, profile: { readinessLocks: { [DATE]: lock } } });
+  // The night's HRV and resting HR come with the rest of the night too.
+  const rest = at(wellness, { hrv: 72, restingHR: 47 });
+  const later = readinessFor({ date: DATE, google: rest, sessions: whole, profile: { readinessLocks: { [DATE]: lock } } });
   assert.equal(later.night.durationMin, 525);
-  assert.equal(later.score, readinessFor({ date: DATE, google: wellness, sessions: whole }).score);
+  assert.equal(later.components.hrv.value, 72);
+  assert.equal(later.score, readinessFor({ date: DATE, google: rest, sessions: whole }).score);
+  // Locked again with the whole night, it stays.
+  const relock = readinessLockOf(later, DATE);
+  const evening = readinessFor({ date: DATE, google: at(rest, { restingHR: 60 }), sessions: whole, profile: { readinessLocks: { [DATE]: relock } } });
+  assert.equal(evening.score, later.score);
 });

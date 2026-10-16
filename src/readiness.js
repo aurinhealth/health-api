@@ -59,14 +59,17 @@ export function strainOn(rows, date) {
 // missing, provisional, checkin) with the body's own number (`body`), the
 // sleep need (`need`: need, base, hrv, debt, naps), the night and the rows.
 export function readinessFor({ date, rows = null, google = [], intervals = [], sessions = [], profile = null, checkin = null } = {}) {
-  const lock = profile?.readinessLocks?.[date] || null;
+  const list = Array.isArray(sessions) ? sessions : [];
+  const live = primaryNights(list).get(date) || null;
+  const locked = profile?.readinessLocks?.[date] || null;
+  // The rest of a night locked at a wake-up brings its own night signals
+  // too (HRV, resting HR, breathing, temperature): the lock is set anew.
+  const lock = locked?.night && continues(live, locked.night) ? null : locked;
   const plain = withLock(Array.isArray(rows) ? rows.filter(r => r && r.id && r.id <= date) : readinessRows(google, intervals, date), date, lock);
   const merged = profile?.cycle ? markCyclePhases(plain, profile.cycle) : plain;
-  const list = Array.isArray(sessions) ? sessions : [];
   const sleepSet = sleepSettings(profile || {});
   const need = sleepNeedFor({ date, age: num(profile?.age), goal: sleepSet.goal, strain: strainOn(merged, shift(date, -1)), rows: merged, sessions: list });
-  const live = primaryNights(list).get(date) || null;
-  const night = lock?.night && !continues(live, lock.night) ? lock.night : live || lock?.night || null;
+  const night = lock?.night || live;
   const body = recoveryReadiness({ rows: merged, date, night, sleepNeed: need.need });
   return { ...applyCheckin(body, checkin), body, need, night, rows: merged };
 }
