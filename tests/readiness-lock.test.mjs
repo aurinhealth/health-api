@@ -40,3 +40,15 @@ test("nothing is locked before the night arrives", () => {
   const r = readinessFor({ date: DATE, google: wellness, sessions: sessions.filter(s => s.date !== DATE) });
   assert.equal(readinessLockOf(r, DATE), null);
 });
+
+test("a night locked at a wake-up takes the rest of it when it arrives", () => {
+  // Synced at 6:17 while up for a moment; asleep again until 9:03.
+  const cut = sessions.map(s => (s.date === DATE ? { ...s, endTime: DATE + "T04:17:00Z", durationMin: 368, timeInBedMin: 384 } : s));
+  const early = readinessFor({ date: DATE, google: wellness, sessions: cut });
+  const lock = readinessLockOf(early, DATE);
+  assert.equal(lock.night.durationMin, 368);
+  const whole = sessions.map(s => (s.date === DATE ? { ...s, endTime: DATE + "T07:03:00Z", durationMin: 525, timeInBedMin: 555 } : s));
+  const later = readinessFor({ date: DATE, google: wellness, sessions: whole, profile: { readinessLocks: { [DATE]: lock } } });
+  assert.equal(later.night.durationMin, 525);
+  assert.equal(later.score, readinessFor({ date: DATE, google: wellness, sessions: whole }).score);
+});

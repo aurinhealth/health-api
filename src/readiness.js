@@ -65,7 +65,8 @@ export function readinessFor({ date, rows = null, google = [], intervals = [], s
   const list = Array.isArray(sessions) ? sessions : [];
   const sleepSet = sleepSettings(profile || {});
   const need = sleepNeedFor({ date, age: num(profile?.age), goal: sleepSet.goal, strain: strainOn(merged, shift(date, -1)), rows: merged, sessions: list });
-  const night = lock?.night || primaryNights(list).get(date) || null;
+  const live = primaryNights(list).get(date) || null;
+  const night = lock?.night && !continues(live, lock.night) ? lock.night : live || lock?.night || null;
   const body = recoveryReadiness({ rows: merged, date, night, sleepNeed: need.need });
   return { ...applyCheckin(body, checkin), body, need, night, rows: merged };
 }
@@ -89,6 +90,13 @@ export function readinessLockOf(readiness, date) {
   const row = {};
   for (const group of LOCK_GROUPS) if (present(today[group[0]])) for (const key of group) if (present(today[key])) row[key] = today[key];
   return { row, night: readiness.night };
+}
+
+// A night locked at a wake-up (up at 6:17, asleep again until 9:00) is not
+// the whole night: the live one that runs on past its end replaces it.
+function continues(live, locked) {
+  const t = v => Date.parse(v || "");
+  return Boolean(live) && t(live.startTime) <= t(locked.endTime) && t(live.endTime) > t(locked.endTime) && num(live.durationMin) > num(locked.durationMin);
 }
 
 function withLock(rows, date, lock) {
