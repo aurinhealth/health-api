@@ -45,11 +45,22 @@ test("the icon sets and previews name their PNG and have the sizes Xcode expects
 test("the picker's styles and Pro icons all have icons", () => {
   const swift = readFileSync(new URL("../ios-native/Loadwise/Screens/SettingsPages/SettingsAppIcon.swift", import.meta.url), "utf8");
   const styles = [...swift.matchAll(/Style\(key: "([a-z-]+)"/g)].map(m => m[1]);
-  assert.deepEqual(styles, ["badge", "track", "glow", "ring"]);
+  assert.deepEqual(styles, ["badge", "track"]);
   const slots = ["run", "run-gold", "ride", "ride-gold", "gym", "gym-gold", "spring", "summer", "autumn", "winter", "streak"];
   for (const style of styles) for (const slot of slots) assert.ok(icons.includes(`${style}-${slot}`), `${style}-${slot}`);
   const pro = [...swift.slice(swift.indexOf("static let proIcons")).split("\n    ]")[0].matchAll(/\("([a-z-]+)", "/g)].map(m => m[1]);
-  assert.equal(pro.length, 18);
+  assert.equal(pro.length, 5);
   for (const id of pro) assert.ok(icons.includes(`pro-${id}`), `pro-${id}`);
   assert.equal(icons.length, mains.length + styles.length * slots.length + pro.length);
+});
+
+// Záře, Prstenec and the 13 later Pro icons are kept for a later update, outside the app.
+test("the icons kept for later stay out of the asset catalog", () => {
+  const later = new URL("../ios-native/IconsLater/", import.meta.url);
+  const kept = readdirSync(later).filter(name => name.startsWith("AppIcon-")).map(name => name.slice("AppIcon-".length, -".appiconset".length));
+  assert.equal(kept.length, 35);
+  for (const id of kept) {
+    assert.ok(!icons.includes(id), id);
+    assert.ok(readdirSync(new URL("IconPreview/", later)).includes(`${id}.imageset`), id);
+  }
 });

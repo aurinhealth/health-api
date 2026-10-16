@@ -62,12 +62,11 @@ struct AppIconChoice: Identifiable, Equatable {
         let gold: String
     }
 
-    /// Odznak and Dráha from launch, Záře and Prstenec added later; one row each in a section.
+    /// Odznak and Dráha; one row each in a section. Záře and Prstenec are kept for
+    /// later in ios-native/IconsLater, outside the app.
     static let styles: [Style] = [
         Style(key: "badge", name: "Odznak", gold: "Zlatý odznak"),
-        Style(key: "track", name: "Dráha", gold: "Zlatá dráha"),
-        Style(key: "glow", name: "Záře", gold: "Zlatá záře"),
-        Style(key: "ring", name: "Prstenec", gold: "Zlatý prstenec")
+        Style(key: "track", name: "Dráha", gold: "Zlatá dráha")
     ]
 
     /// Odznak, Zlatý odznak, Dráha, Zlatá dráha, … of one sport.
@@ -78,12 +77,10 @@ struct AppIconChoice: Identifiable, Equatable {
         }
     }
 
-    /// The Aurin Pro icons: the five from launch, then the later dark and light ones.
+    /// The Aurin Pro icons from launch. The 13 later ones (Monochrom, Retro, Saturn, …)
+    /// are kept in ios-native/IconsLater, outside the app.
     static let proIcons: [(id: String, name: String)] = [
-        ("aurora", "Polární záře"), ("midnight", "Půlnoc"), ("eclipse", "Zatmění"), ("porcelain", "Porcelán"), ("sky", "Nebe"),
-        ("monochrome", "Monochrom"), ("retro", "Retro"), ("saturn", "Saturn"), ("holo", "Holo"), ("lava", "Láva"),
-        ("ocean", "Oceán"), ("blueprint", "Rýsovací deska"), ("glass-ring", "Skleněný prstenec"), ("orb", "Koule na podstavci"),
-        ("blueprint-white", "Rýsovací deska bílá"), ("paper", "Papír"), ("marble", "Mramor"), ("dunes", "Duny")
+        ("aurora", "Polární záře"), ("midnight", "Půlnoc"), ("eclipse", "Zatmění"), ("porcelain", "Porcelán"), ("sky", "Nebe")
     ]
 
     /// Spring 0, summer 1, autumn 2, winter 3 (northern seasons by month).
