@@ -20,21 +20,17 @@ final class AppIconTests: XCTestCase {
     func testEveryStyleHasEverySlot() {
         let slots = ["run", "run-gold", "ride", "ride-gold", "gym", "gym-gold", "spring", "summer", "autumn", "winter", "streak"]
         let ids = Set(icons.map(\.id))
-        XCTAssertEqual(AppIconChoice.styles.map(\.key), ["badge", "track", "glow", "ring"])
+        XCTAssertEqual(AppIconChoice.styles.map(\.key), ["badge", "track"])
         for style in AppIconChoice.styles {
             for slot in slots {
                 XCTAssertTrue(ids.contains(style.key + "-" + slot), style.key + "-" + slot)
             }
         }
-        XCTAssertEqual(AppIconChoice.sections.map { $0.icons.count }, [8, 8, 8, 16, 4, 18])
+        XCTAssertEqual(AppIconChoice.sections.map { $0.icons.count }, [4, 4, 4, 8, 2, 5])
     }
 
     func testProIcons() {
         let pro = icons.filter { $0.rule == .pro }
-        XCTAssertEqual(pro.count, 18)
-        XCTAssertEqual(pro.map(\.name).suffix(13).sorted(), [
-            "Duny", "Holo", "Koule na podstavci", "Láva", "Monochrom", "Mramor", "Oceán", "Papír", "Retro",
-            "Rýsovací deska", "Rýsovací deska bílá", "Saturn", "Skleněný prstenec"
-        ].sorted())
+        XCTAssertEqual(pro.map(\.name), ["Polární záře", "Půlnoc", "Zatmění", "Porcelán", "Nebe"])
     }
 }
