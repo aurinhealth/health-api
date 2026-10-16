@@ -8,6 +8,7 @@ import { gymExerciseCatalog, gymLoadEstimate } from './gym-catalog.js';
 import { GYM_PLAN_COLUMNS } from './gym-plan-store.js';
 import { estimateStrengthTiming } from './strength-timing.js';
 import { EXERCISE_INTELLIGENCE } from './strength-intelligence.js';
+import { adjustInstructions } from './private/gym-adjust.js';
 
 const MAX_ROWS = 80, MAX_EXERCISES = 14, MAX_SETS = 8;
 const kgText = v => v == null || v === '' || !Number.isFinite(Number(String(v).replace(',', '.'))) ? '' : String(Math.round(Number(String(v).replace(',', '.')) * 2) / 2).replace('.', ',');
@@ -33,23 +34,6 @@ const ADJUST_SCHEMA = { type: 'json_schema', name: 'gym_adjust', strict: true, s
   } } }
 } } };
 
-// The prompt in the app language; English is its own version, not a translation.
-const adjustInstructions = () => L(`Jsi trenér posilovny. Uprav silový trénink podle přání sportovce a vrať celý upravený plán.
-Používej jen přesné názvy cviků ze seznamu catalog nebo cviky, které už v plánu jsou. Nevymýšlej jiné cviky.
-Cviky, kterých se přání netýká, nech beze změny i s jejich vahami, opakováními a rozcvičkou (WARMUP).
-U nového cviku nastav váhu podle history (poslední série toho cviku), jinak kg null; opakování jako text, např. "8-10".
-Cviky ze seznamu disliked sportovec nemá rád: nepřidávej je, pokud o ně výslovně nežádá. Cviky ze seznamu liked má rád, při jinak rovné volbě je upřednostni.
-Kratší trénink znamená méně sérií nebo cviků, delší víc. Nejvýš ${MAX_EXERCISES} cviků a ${MAX_SETS} sérií na cvik. Když je minutes, trénink se do nich musí vejít.
-ratings jsou hodnocení posledních tréninků od sportovce (co mu nesedělo); ber je v úvahu.
-V answer jednou až dvěma krátkými českými větami řekni, co jsi změnil.`,
-`You are a gym coach. Change the strength session as the athlete asks and return the whole adjusted plan.
-Use only the exact exercise names from the catalog list or exercises already in the plan. Do not invent other exercises.
-Leave the exercises the request does not concern unchanged, including their loads, reps and warm-up (WARMUP).
-For a new exercise set the load from history (the last sets of that exercise), otherwise kg null; reps as text, e.g. "8-10".
-The athlete dislikes the exercises in disliked: do not add them unless explicitly asked. They like the ones in liked; prefer them when the choice is otherwise even.
-A shorter session means fewer sets or exercises, a longer one more. At most ${MAX_EXERCISES} exercises and ${MAX_SETS} sets per exercise. When minutes is given, the session must fit in it.
-ratings are the athlete's ratings of the last sessions (what didn't fit); take them into account.
-In answer say in one or two short English sentences what you changed.`);
 // The model's numbers are checked (A10): a weight within 0–500 kg or none, reps
 // like "8" or "8-10" or the plan's own value.
 const kgOf = v => { if (v == null || v === '') return null; const kg = Number(v); return Number.isFinite(kg) && kg >= 0 && kg <= 500 ? kg : null; };
@@ -138,3 +122,6 @@ export async function adjustGymPlan(env, { rows, request, history = [], taste = 
   if (!out.length) throw new Error(L('Úpravu se nepodařilo připravit, zkus ji napsat jinak.', 'The change couldn\'t be prepared; try wording it differently.'));
   return { rows: out, answer: String(data.answer || '').trim().slice(0, 400) };
 }
+
+export { MAX_EXERCISES };
+export { MAX_SETS };

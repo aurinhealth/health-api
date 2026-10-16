@@ -6,8 +6,9 @@
     "node": ">=22"
   },
   "scripts": {
+    "pretest": "node scripts/require-private-prompts.mjs",
     "test": "node --test tests/*.test.mjs",
-    "check": "for f in src/*.js scripts/*.mjs; do node --check \"$f\" || exit 1; done",
+    "check": "for f in src/*.js src/private/*.js scripts/*.mjs; do node --check \"$f\" || exit 1; done",
     "dev": "npx --yes wrangler@4 dev",
     "migrate:local": "npx --yes wrangler@4 d1 migrations apply health-data --local",
     "tail": "npx --yes wrangler@4 tail health-api",
