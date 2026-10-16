@@ -137,6 +137,8 @@ struct TodayContent: View {
         if selectedDate == nil, let cycle = today.cycle, TodayCycleCard.shows(cycle) {
             TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
         }
+        // Deník: the morning questions about yesterday, and "Nový objev".
+        if selectedDate == nil { JournalTodayCard() }
 
         // Aktivita dne: the day's activity from anything (CoachPick.swift).
         if selectedDate == nil { CoachPickCard().padding(.top, 16) }
