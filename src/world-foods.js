@@ -28,7 +28,18 @@ export function barcodeKey(value) {
 // Digits 10-13 (before the check digit) spread codes evenly over 10 000 buckets.
 export const bucketOf = key => Number(key.slice(9, 13));
 
-// Small JSON objects (version, indexes) stay in the isolate's memory.
+// Micronutrients per 100 g (scripts/build-micronutrients.mjs) sit beside the
+// catalogue in 256 small JSON shards under micros/<version>/, so the script and
+// the Worker must agree on the shard of a key: FNV-1a 32-bit of the (ASCII)
+// catalog_key, mod 256, as 000-255.
+export const MICROS_FORMAT = 1;
+export function microShard(key) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 0x01000193);
+  return String((h >>> 0) % 256).padStart(3, '0');
+}
+
+// Small JSON objects (version, indexes, micronutrient shards) stay in the isolate's memory.
 const caches = new WeakMap();
 async function json(bucket, key) {
   if (!caches.has(bucket)) caches.set(bucket, new Map());
@@ -139,4 +150,25 @@ export async function searchWorldFoods(env, { name = '', barcode = '', language 
     if (hits.length >= 400) break;
   }
   return hits.sort((a, b) => a.score - b.score || a.at - b.at).slice(0, RESULTS).map(h => h.product);
+}
+
+// catalog_key -> { fe, ca, ..., x } for the keys that have values (x: 1 marks
+// an estimate from a matching generic food). One read per shard touched.
+export async function microsFor(env, keys) {
+  const out = new Map(), bucket = env.FOOD_CATALOG_R2;
+  if (!bucket || !keys?.length) return out;
+  const current = await json(bucket, 'micros/current.json');
+  if (current?.format !== MICROS_FORMAT || !current.version) return out;
+  const shards = new Map();
+  for (const key of new Set(keys)) {
+    if (typeof key !== 'string' || !key) continue;
+    const s = microShard(key);
+    if (!shards.has(s)) shards.set(s, []);
+    shards.get(s).push(key);
+  }
+  await Promise.all([...shards].map(async ([s, list]) => {
+    const data = await json(bucket, `micros/${current.version}/${s}.json`);
+    for (const key of list) if (data && Object.hasOwn(data, key)) out.set(key, data[key]);
+  }));
+  return out;
 }

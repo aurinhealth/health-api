@@ -375,6 +375,20 @@ final class APIClient: @unchecked Sendable {
         try await getWithData("/app/api/food-today" + (date.map { "?date=" + $0 } ?? ""), cacheKey: SnapshotCache.dayKey("food", date))
     }
 
+    /// Živiny: the day (days 1) or the last 7 days up to date.
+    func nutrients(date: String, days: Int) async throws -> NutrientsPage {
+        try await get("/app/api/food/nutrients?date=\(date)&days=\(days)")
+    }
+
+    func nutrientDetail(key: String, date: String) async throws -> NutrientDetail {
+        try await get("/app/api/food/nutrients?date=\(date)&key=\(key)")
+    }
+
+    /// Up to three nutrients shown on Jídlo (Pro).
+    func saveNutrientFavorites(_ keys: [String]) async throws {
+        let _: JSONValue = try await send("/app/api/food/nutrients/favorites", method: "POST", body: ["favorites": keys])
+    }
+
     /// Personal foods, the shared catalog and recipes; with a barcode, that code.
     func searchFood(name: String, barcode: String? = nil) async throws -> [FoodProduct] {
         var body: JSONObject = ["name": .string(name)]
