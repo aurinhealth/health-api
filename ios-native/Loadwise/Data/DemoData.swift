@@ -123,7 +123,7 @@ enum DemoData {
           "session": { "id": "activity:demo-run", "kind": "activity", "status": "done", "date": "2026-10-08", "time": "07:30", "title": "Ranní běh", "sport": "run",
                        "minutes": 42, "tss": 48, "activityId": null, "eventId": null, "kcal": 520, "distanceKm": 8.2 } },
         { "kind": "workout", "time": "17:30", "title": "Silový trénink", "detail": "45 min · celé tělo", "done": false, "sport": "strength" },
-        { "kind": "bedtime", "time": "22:45", "title": "Do postele", "detail": "potřeba spánku 8 h 05 min", "done": false }
+        { "kind": "bedtime", "time": "22:45", "end": "07:00", "title": "Do postele", "detail": "potřeba spánku 8 h 05 min", "done": false }
       ],
       "tonight": { "bedtime": "22:45", "wake": "07:00", "need": 485, "wakeSet": true },
       "recoveryTime": { "readyAt": "2026-10-09T12:00:00.000Z", "from": "2026-10-07T16:15:00.000Z", "lightAt": null, "hours": 28, "progress": 0.42, "causes": [{ "kind": "ride", "title": "Kolo · tempo", "detail": "74 TSS", "date": "2026-10-07", "hours": 36, "readyAt": "2026-10-09T04:15:00.000Z" }, { "kind": "sleep", "hours": 4, "minutes": 410, "need": 525 }] },

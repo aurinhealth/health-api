@@ -4,8 +4,9 @@ import SwiftUI
 /// Plán dne. What already happened sits above "teď": the night, the readiness,
 /// done workouts and the strain they added, the steps so far. Below it, with
 /// dashed dots, what is still planned: a workout with Začít, stretching, the
-/// pill and bedtime, which moves later as the day's strain raises tonight's
-/// sleep need (src/app-today.js). The line starts at the first dot.
+/// pill and the night ahead, dashed from bedtime to the planned wake time;
+/// bedtime moves later as the day's strain raises tonight's sleep need
+/// (src/app-today.js). The line starts at the first dot.
 struct DayTimeline: View {
     @Environment(AppModel.self) private var model
     let today: TodaySnapshot
@@ -201,30 +202,45 @@ struct DayTimeline: View {
         case "pill": Palette.pink
         default: Palette.indigo
         }
-        let line = DayPointRow(color: color, time: item.time.map { ClockText.format($0) }, future: !item.done, first: first, last: last) {
-            HStack(alignment: .center, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.ink : Palette.secondary).lineLimit(2)
-                    if let detail = item.detail {
-                        Text(detail).font(Typo.caption).foregroundStyle(Palette.faint)
+        if item.kind == "bedtime" {
+            // The night ahead, dashed from bedtime to the planned wake time.
+            NavigationLink(value: AppRoute.sleepSettings) {
+                if let end = item.end {
+                    DaySpanRow(color: color, start: item.time.map { ClockText.format($0) }, end: ClockText.format(end), future: true, first: first, last: last) {
+                        itemContent(item)
+                    }
+                } else {
+                    DayPointRow(color: color, time: item.time.map { ClockText.format($0) }, future: true, first: first, last: last) {
+                        itemContent(item)
                     }
                 }
-                Spacer(minLength: 8)
-                if item.kind == "pill" {
-                    PillButton(taken: item.done ? (item.time ?? "taken") : nil, saving: busy) { act { try await model.takePill(on: day) } }
-                } else if item.kind == "bedtime" {
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
-                        .accessibilityHidden(true)
-                } else if item.done {
-                    Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
-                        .accessibilityLabel("Hotovo")
-                }
+            }
+            .buttonStyle(.plain)
+        } else {
+            DayPointRow(color: color, time: item.time.map { ClockText.format($0) }, future: !item.done, first: first, last: last) {
+                itemContent(item)
             }
         }
-        if item.kind == "bedtime" {
-            NavigationLink(value: AppRoute.sleepSettings) { line }.buttonStyle(.plain)
-        } else {
-            line
+    }
+
+    private func itemContent(_ item: TodaySnapshot.PlanItem) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.ink : Palette.secondary).lineLimit(2)
+                if let detail = item.detail {
+                    Text(detail).font(Typo.caption).foregroundStyle(Palette.faint)
+                }
+            }
+            Spacer(minLength: 8)
+            if item.kind == "pill" {
+                PillButton(taken: item.done ? (item.time ?? "taken") : nil, saving: busy) { act { try await model.takePill(on: day) } }
+            } else if item.kind == "bedtime" {
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                    .accessibilityHidden(true)
+            } else if item.done {
+                Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
+                    .accessibilityLabel("Hotovo")
+            }
         }
     }
 
