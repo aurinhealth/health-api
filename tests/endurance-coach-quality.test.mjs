@@ -148,3 +148,54 @@ test("the ride coach's readiness is the Today screen's, from Google or Apple Hea
   assert.equal(tired.readiness.score, today.readiness.score);
   assert.equal(tired.readiness.status, "red");
 });
+
+test("without Intervals.icu the weeks' load comes from the app's own rows", async () => {
+  const { weekLoadsBefore } = await import("../src/week-planner.js");
+  const rows = Array.from({ length: 21 }, (_, i) => ({ id: new Date(Date.UTC(2026, 8, 21 + i)).toISOString().slice(0, 10), ctl: 40, atl: 45, load: 60 }));
+  assert.deepEqual(weekLoadsBefore(rows, "2026-10-12"), [420, 420, 420]);
+});
+
+test("a hard run yesterday keeps today's ride easy and a watch workout counts by heart rate", () => {
+  const fresh = { fitness: { wellness: wellness({ tsb: 2 }) } };
+  const ride = { date: day(-3), type: "Ride", name: "Endurance", tss: 60, durationHours: 1.25 }, easyRun = { date: day(-3), type: "Run", name: "Lehký běh", tss: 45, durationHours: 0.75 };
+  const afterRun = coach({ ...fresh, week: week([ride, { date: day(-1), type: "Run", name: "Norský 4×4", tss: 70, durationHours: 1 }]) });
+  assert.ok(!["vo2", "threshold", "sweet_spot"].includes(afterRun.recommendation.session.kind));
+  assert.ok(afterRun.rationale.some(r => /Tvrdý běh byl včera – jízda dnes lehce/.test(r)));
+  // The run waits after a hard ride the same way.
+  const afterRide = coach({ ...fresh, sport: "run", week: week([easyRun, { date: day(-1), type: "Ride", name: "Seiler 4×8 min", tss: 85, durationHours: 1.3 }]) });
+  assert.ok(afterRide.rationale.some(r => /Tvrdá jízda byla včera – běh dnes lehce/.test(r)));
+  // A run recorded only by the watch has no TSS: its heart rate makes it hard.
+  const health = { ...sleep, wellness: Array.from({ length: 10 }, (_, i) => ({ id: day(-i), restingHR: 50 })) };
+  const watchRun = { date: day(-1), type: "Run", name: "Běh", durationHours: 1, averageHeartRate: 172 };
+  const byHeart = coach({ ...fresh, health, profile: { age: 35, sex: "male" }, week: week([ride, watchRun]) });
+  assert.ok(byHeart.rationale.some(r => /Tvrdý běh byl včera/.test(r)));
+  // An easy watch run stays easy.
+  const easy = coach({ ...fresh, health, profile: { age: 35, sex: "male" }, week: week([ride, { ...watchRun, averageHeartRate: 128 }]) });
+  assert.ok(!easy.rationale.some(r => /Tvrdý běh byl včera/.test(r)));
+});
+
+test("the first three days after Nemoc stay easy, the first one only recovery", () => {
+  const fresh = { fitness: { wellness: wellness({ tsb: 2 }) }, goal: { focus: "threshold" } };
+  assert.equal(coach(fresh).recommendation.session.kind, "threshold");
+  const first = coach({ ...fresh, athleteState: { status: "active", recoveredAt: date } });
+  assert.equal(first.recommendation.session.kind, "recovery");
+  assert.ok(first.recommendation.adaptations.some(a => /první den po nemoci/.test(a)));
+  const third = coach({ ...fresh, athleteState: { status: "active", recoveredAt: day(-2) } });
+  assert.equal(third.recommendation.session.kind, "endurance");
+  assert.ok(third.recommendation.adaptations.some(a => /třetí den bez intenzity/.test(a)));
+  assert.equal(coach({ ...fresh, athleteState: { status: "active", recoveredAt: day(-3) } }).recommendation.session.kind, "threshold");
+});
+
+test("the main race shapes the week's chips: no gym the day before, a reserve 2–3 days before, race day alone", () => {
+  const roles = planWeekRoles([["ride"], ["gym"], ["gym", "ride"], ["ride"], ["ride"], ["ride"], ["ride"]]);
+  const all = weekTargets({ roles, ctl: 60, days: [], today: "2026-10-05", weekStart: "2026-10-05" });
+  const race = weekTargets({ roles, ctl: 60, days: [], today: "2026-10-05", weekStart: "2026-10-05", eventDate: "2026-10-10" });
+  const on = (t, date) => t.items.filter(x => x.date === date);
+  assert.ok(on(all, "2026-10-10").length > 0);
+  assert.equal(on(race, "2026-10-10").length, 0);
+  assert.ok(on(race, "2026-10-09").every(x => x.sport !== "gym" && x.role === "recovery"));
+  assert.ok(on(race, "2026-10-07").filter(x => x.sport === "gym").every(x => x.role === "gym_upper"));
+  assert.ok(!race.items.some(x => x.date >= "2026-10-07" && x.date <= "2026-10-10" && x.role === "long"));
+  // After the race, nothing changes.
+  assert.deepEqual(on(race, "2026-10-11").map(x => x.role), on(all, "2026-10-11").map(x => x.role));
+});

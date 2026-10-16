@@ -66,6 +66,9 @@ test('an export outage preserves the app plan; retry is idempotent, import does 
  try{
   globalThis.fetch=async()=>new Response('',{status:503});const scheduled=await scheduleWorkoutInIntervals({...env,INTERVALS_API_KEY:'test'},a,{workoutId:'pfd-vo2-5x4x112-90',date:'2026-10-12',confirm:true});assert.equal(scheduled.sync.status,'error');assert.equal((await getScheduledWorkouts(a)).length,1);
   globalThis.fetch=async(_,options)=>{calls++;assert.equal(JSON.parse(options.body)[0].external_id.startsWith('loadwise:1:local-'),true);return Response.json([{id:777,category:'WORKOUT'}]);};
+  // A failed export waits before the next try (export-retry.js), then goes once.
+  await retryWorkoutExports({...env,INTERVALS_API_KEY:'test'});assert.equal(calls,0);
+  await a.prepare("UPDATE workout_exports SET updated_at=datetime('now','-1 hour') WHERE user_id=?").bind(1).run();
   await retryWorkoutExports({...env,INTERVALS_API_KEY:'test'});await retryWorkoutExports({...env,INTERVALS_API_KEY:'test'});assert.equal(calls,1);assert.equal(await importedEventIsLocal(a,{id:777}),true);
   await deletePlannedEvent(env,{eventId:scheduled.eventId});assert.equal((await getScheduledWorkouts(a)).length,0);
   globalThis.fetch=async(_,options)=>{calls++;assert.equal(options.method,'DELETE');return new Response('',{status:200});};await retryWorkoutExports({...env,INTERVALS_API_KEY:'test'});assert.equal(calls,2);

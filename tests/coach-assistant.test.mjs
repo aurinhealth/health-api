@@ -54,7 +54,7 @@ test('every AI prompt has its own English version, selected by the app language'
     assert.match(withFocus(coachInstructionsFor(), athleteFocus({ mainSport: 'running' }, '2026-10-03')), /^You are a professional coach for running and strength preparation\./);
     assert.match(prompts()[7], /Main race: “Prague Marathon” on 2026-11-15 \(in 43 days, 6 weeks\)/);
   });
-  withLang('cs', () => { for (const p of prompts()) assert.match(p, CZECH); assert.match(coachInstructionsFor(), /Odpovídej česky/); });
+  withLang('cs', () => { for (const p of prompts()) assert.match(p, CZECH); assert.match(coachInstructionsFor(), /Odpovídej v jazyce, ve kterém sportovec píše \(obvykle česky\)/); });
 });
 
 test('the priorities, hard-days and gym-legs rules follow the main sport; cycling keeps its text', () => {

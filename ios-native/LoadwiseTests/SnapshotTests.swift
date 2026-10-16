@@ -74,7 +74,9 @@ final class SnapshotTests: XCTestCase {
         try render("health", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: health) }.padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
         try render("health-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30) }
         try render("health-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: nil).padding(24).padding(.top, 30) }
-        try render("health-heart", glow: Palette.Glow.health) { HeartDetailContent(health: health).padding(24).padding(.top, 30) }
+        for metric in HealthMetric.allCases {
+            try render("health-" + metric.rawValue, glow: Palette.Glow.health) { MetricDetailContent(metric: metric, health: health).padding(24).padding(.top, 30) }
+        }
         try render("health-weight", glow: Palette.Glow.health) { WeightDetailContent(health: health).padding(24).padding(.top, 30) }
     }
 
@@ -340,6 +342,9 @@ final class SnapshotTests: XCTestCase {
 
     func testDeepLinks() {
         XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/sleep")!), .sleep)
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/heart")!), .metric(.hrv))
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/metric/temperature")!), .metric(.temperature))
+        XCTAssertNil(AppRoute(url: URL(string: "loadwise://open/metric/nope")!))
         XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/gym/2026-10-08")!), .gym("2026-10-08"))
         XCTAssertNil(AppRoute(url: URL(string: "loadwise://open/food")!))
         XCTAssertNil(AppRoute(url: URL(string: "https://open/sleep")!))

@@ -7,6 +7,7 @@ import { L, plural as pluralWord } from "./lang.js";
 import { readinessFor } from "./readiness.js";
 import { manualReadinessFor } from "./morning-checkin.js";
 import { readinessParts } from "./app-health.js";
+import { sessionLoad } from "./training-load.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -48,6 +49,23 @@ function allWeekActivities(week){
     for(const a of row?.daily?.training?.planned||[]) out.push({...a,date:a.date||row.date,planned:true});
   }
   return out;
+}
+// FTP-free load of a watch workout: resting HR (median of 30 days), max HR
+// from age (Tanaka) and sex, as own-fitness.js loadAthlete has them.
+function hrAthlete(health,profile,date){
+  const rest=(Array.isArray(health?.wellness)?health.wellness:[]).filter(r=>{const age=diffDays(date,r.id);return age!=null&&age>=0&&age<=30;}).map(r=>n(r.restingHR)).filter(v=>v>0).sort((a,b)=>a-b);
+  const age=n(profile?.age);
+  return {restHr:rest.length?rest[Math.floor(rest.length/2)]:null,maxHr:age?Math.round(208-0.7*age):null,sex:profile?.sex||null};
+}
+function withHeartRateLoad(activities,athlete){
+  if(!athlete.restHr||!athlete.maxHr)return activities;
+  return activities.map(a=>{
+    if(!a.completed||n(a.tss)!=null||!(isRide(a)||isRun(a)))return a;
+    const avgHr=n(a.averageHeartRate??a.payload?.average_heartrate),minutes=n(a.durationHours,0)*60;
+    if(!(avgHr>0)||!(minutes>0))return a;
+    const tss=sessionLoad({minutes,avgHr,kind:isRun(a)?"run":"ride"},athlete);
+    return tss!=null?{...a,tss,tssFromHeartRate:true}:a;
+  });
 }
 function latestWellness(fitness,date){
   const rows=Array.isArray(fitness?.wellness)?fitness.wellness:[];
@@ -217,7 +235,9 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   sport=sport==="run"?"run":"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard,run=sport==="run";
   const targetDate=isoDate(date)||localToday();
-  const weekActivities=allWeekActivities(week);
+  // Workouts only the watch recorded have no TSS: their heart-rate load
+  // (hrTSS, training-load.js) lets hardOf see a hard session from the watch.
+  const weekActivities=withHeartRateLoad(allWeekActivities(week),hrAthlete(health,profile,targetDate));
   const completedAll=weekActivities.filter(a=>a.completed&&isSport(a));
   const completed=completedAll.filter(a=>{const d=diffDays(targetDate,a.date);return d!=null&&d>=0&&d<=6;});
   const planned=weekActivities.filter(a=>{if(!a.planned||!isSport(a))return false;const d=diffDays(a.date,targetDate);return d!=null&&d>=0&&d<=14;});
@@ -346,7 +366,13 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
 
   const lastRide=completedAll.map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
   const lastHard=completedAll.filter(hardOf).map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
-  const qualityOk=!novice&&(lastHard==null||lastHard>=2)&&!(lastRide!=null&&lastRide>=7);
+  // The other sport tires the same legs and heart: a hard run counts before a
+  // hard ride (and the other way round) for the 48 h rule and the week's quality.
+  const otherIs=run?isRide:isRun,otherHardOf=run?isHard:isHardRun;
+  const otherHardDays=weekActivities.filter(a=>a.completed&&otherIs(a)&&otherHardOf(a)).map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0&&d<=6);
+  const lastOtherHard=otherHardDays.length?Math.min(...otherHardDays):null;
+  const otherRecent=lastOtherHard!=null&&lastOtherHard<2,hardAll7=hard7+otherHardDays.length;
+  const qualityOk=!novice&&(lastHard==null||lastHard>=2)&&!otherRecent&&hardAll7<3&&!(lastRide!=null&&lastRide>=7);
   let kind="endurance";
   const planText=txt(plannedToday?.name)+" "+txt(goal?.focus);
   const KIND_OF={recovery:"recovery",endurance:"endurance",tempo:"tempo",sweet_spot:"sweet_spot",threshold:"threshold",vo2max:"vo2"};
@@ -381,6 +407,11 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     } else if(novice){
       kind="endurance";
       rationale.push(W.novice);
+    } else if(otherRecent||hardAll7>=3){
+      kind="endurance";
+      rationale.push(otherRecent
+        ?(run?L("Tvrdá jízda byla "+(lastOtherHard===0?"dnes":"včera")+" – běh dnes lehce, nohy potřebují 48 h.","A hard ride was "+(lastOtherHard===0?"today":"yesterday")+" – an easy run today, the legs need 48 h."):L("Tvrdý běh byl "+(lastOtherHard===0?"dnes":"včera")+" – jízda dnes lehce, nohy potřebují 48 h.","A hard run was "+(lastOtherHard===0?"today":"yesterday")+" – an easy ride today, the legs need 48 h."))
+        :L("Za posledních 7 dní byly už 3 tvrdé tréninky kola a běhu dohromady – dnes lehce.","There have already been 3 hard rides and runs together in the last 7 days – easy today."));
     } else if(readiness==="green"&&hard7===0){
       // The quality system trained longest ago (by feedback), in phase order.
       const order=sport==="run"?(phase==="build"?["threshold","vo2max","tempo"]:["threshold","tempo","vo2max"]):phase==="build"?["threshold","vo2max","sweet_spot"]:["sweet_spot","threshold","vo2max"];
@@ -424,6 +455,15 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   if(requestedMinutes<(sport==="run"?45:55)&&kind==="long_endurance"){kind="tempo";adaptations.push(L("trénink zhuštěn do dostupného času","workout condensed into the available time"));}
   if(requestedMinutes<(sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push(L("krátké časové okno","short time window"));}
 
+  // Back from Nemoc (athlete-state.js recoveredAt): the first three days stay
+  // easy and shorter, the first one only recovery, whatever was planned.
+  const sinceIll=!policy.paused&&athleteState?.recoveredAt?diffDays(targetDate,athleteState.recoveredAt):null;
+  if(sinceIll!=null&&sinceIll>=0&&sinceIll<=2&&!["race","openers"].includes(kind)){
+    const easy=sinceIll===0?"recovery":"endurance";
+    if(kind!=="recovery"&&kind!==easy)kind=easy;
+    returning=true;
+    adaptations.push(sinceIll===0?L("první den po nemoci: jen lehce a krátce","first day after being ill: just short and easy"):L("návrat po nemoci: "+(sinceIll===1?"druhý":"třetí")+" den bez intenzity","back after being ill: day "+(sinceIll+1)+" without intensity"));
+  }
   // A beginner's ride grows like a run: at most 10 % over the longest ride of
   // the last two weeks, never below an hour.
   const noviceRideLimit=(()=>{

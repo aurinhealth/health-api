@@ -210,13 +210,19 @@ export async function syncWhoop(env, { days = 3, fetchImpl = fetch, now = Date.n
   return { status: 'ok', saved: rows.length, replaced };
 }
 
+// WHOOP forgets Aurin's access (also when the Aurin account is deleted).
+export async function revokeWhoop(env, fetchImpl = fetch) {
+  const tokens = readWhoopTokens(env);
+  if (!tokens) return 'none';
+  // An expired access token is refreshed first, else the revoke is refused.
+  const token = await whoopAccessToken(env, { fetchImpl }).catch(() => tokens.access_token);
+  const response = await fetchImpl(API + '/v2/user/access', { method: 'DELETE', headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(10000) }).catch(() => null);
+  return response?.ok ? 'revoked' : 'failed';
+}
 // Disconnecting: WHOOP's access is revoked and its data deleted; the nights it
 // covered go back to the other sources.
 export async function disconnectWhoop(env, { fetchImpl = fetch } = {}) {
-  const tokens = readWhoopTokens(env);
-  if (tokens) {
-    await fetchImpl(API + '/v2/user/access', { method: 'DELETE', headers: { Authorization: 'Bearer ' + tokens.access_token }, signal: AbortSignal.timeout(10000) }).catch(() => null);
-  }
+  await revokeWhoop(env, fetchImpl);
   const userId = env.USER_ID ?? env.DB.userId;
   await env.DB.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}'`).bind(userId).run();
   await resolveSources(env.DB, userId, { part: 'night', since: new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10) });
