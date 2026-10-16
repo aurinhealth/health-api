@@ -42,6 +42,9 @@ test("the coach's role and direction follow the main sport and goal", () => {
     const out = withFocus(base, focus);
     assert.match(out, /^Jsi profesionální trenér běhu a silové přípravy\./);
     assert.doesNotMatch(out, /^Jsi trenér v aplikaci Aurin/);
+    // The coach keeps nutrition, sleep and recovery; the review and reflection have no app scope.
+    if (base === coachInstructions) assert.match(out, /^Jsi profesionální trenér běhu a silové přípravy\. Radíš i s ostatními sporty v aplikaci Aurin \(kolo, běh, posilovna\), se sportovní výživou, spánkem a regenerací\./);
+    else assert.doesNotMatch(out, /Radíš i s ostatními sporty/);
     assert.match(out, /Hlavní sport: běh/);
     assert.match(out, /„maraton pod 3:30“/);
     assert.match(out, /za 43 dní, 6 týdnů/);
