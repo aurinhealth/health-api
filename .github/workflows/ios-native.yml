@@ -5,6 +5,9 @@ name: iOS native app
 # Artifacts (Actions → this run → Artifacts):
 # - Loadwise-native-unsigned.ipa: install with Sideloadly (free Apple ID,
 #   valid for 7 days, then install again). It sits next to the Capacitor app.
+#   Built on main and by hand only: on a pull request the Release build took
+#   about 12 of the run's 28 minutes, and after the merge the TestFlight
+#   archive (ios-testflight.yml) builds Release again anyway.
 # - Loadwise-native-screens: whole-screen snapshots in light and dark mode
 #   from the sample data, plus simulator screenshots of the running app
 #   (site/: the English, light-mode shots the website uses).
@@ -120,6 +123,7 @@ jobs:
 
       # Unsigned: Sideloadly signs it with the user's Apple ID.
       - name: Build for iPhone
+        if: github.event_name != 'pull_request'
         run: |
           xcodebuild -project Loadwise.xcodeproj -scheme Loadwise -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
@@ -134,6 +138,7 @@ jobs:
           (cd ipa && zip -qry "$GITHUB_WORKSPACE/Loadwise-native-unsigned.ipa" Payload)
 
       - name: Upload the app
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Loadwise-native-ios
