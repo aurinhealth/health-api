@@ -9,6 +9,8 @@
 // generators deep in the code can write L('česky', 'in English') without
 // passing it along.
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { aiLanguageNote } from './private/lang.js';
+export { aiLanguageNote };
 
 // The store holds the language and the units of the request or job.
 const current = new AsyncLocalStorage();
@@ -96,21 +98,6 @@ export async function rememberUnits(db, userId, value, language = 'cs') {
 }
 export function _resetLanguagesForTest() { known.clear(); }
 
-// Added to every AI request (coach-assistant.js callOpenAI). Every prompt has
-// its own English version (English is a separate language version of the app,
-// never a translation), so this note only settles what the data's language
-// means: free-form chat answers in the language the athlete writes in; what the
-// app stores follows the app language. Food parsing and lookups keep the
-// athlete's own food names and have their own language handling.
-export function aiLanguageNote(feature) {
-  if (['food-sentence', 'food-lookup', 'food-photo', 'barcode'].includes(feature)) return '';
-  if (feature === 'assistant') return (lang() === 'en'
-    ? '\n\nLANGUAGE: Reply in the language the athlete writes in (English unless they write in another language). Everything that is saved in the app or sent to Intervals.icu (workout names and descriptions, plans, labels, reasons of proposed actions, memories) must be in English, the app language, whatever the language of the data.'
-    : '\n\nJAZYK: Odpovídej v jazyce, ve kterém sportovec píše (obvykle česky). Vše, co se ukládá do aplikace nebo posílá do Intervals.icu (názvy a popisy tréninků, plány, popisky, důvody navržených akcí), piš česky.') + aiUnitsNote();
-  return (lang() === 'en'
-    ? '\n\nLANGUAGE: The athlete uses the app in English. Write every user-facing text in natural English, even where the data is in Czech. Keep names the athlete wrote (foods, workouts, notes) as they are.'
-    : '') + aiUnitsNote();
-}
 // An imperial user reads pounds and miles; the data the model gets stays metric.
 export function aiUnitsNote() {
   if (!isImperial()) return '';

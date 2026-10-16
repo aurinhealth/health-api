@@ -25,6 +25,7 @@ import { SITE_ORIGIN } from "./app-origin.js";
 import { plannedEventWorkout } from "./planned-detail.js";
 import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
+import { describeInstructions } from './private/workout-templates.js';
 
 export const SPORTS = ["gym", ...ENDURANCE_SPORTS];
 const MAX_EXERCISES = 30;
@@ -306,19 +307,6 @@ const DESCRIBE_SCHEMA = { type: "json_schema", name: "endurance_workout", strict
   blocks: { type: "array", items: { type: "object", additionalProperties: false, required: ["repeats", "steps"], properties: { repeats: { type: "integer" }, steps: { type: "array", items: STEP_SCHEMA } } } }
 } } };
 
-function describeInstructions(sport) {
-  const zones = Object.entries(ZONES[sport]).map(([z, [lo, hi]]) => z + " " + lo + "–" + hi + " %").join(", ");
-  return [
-    sport === "run" ? "You build a structured running workout from the athlete's description." : "You build a structured cycling workout from the athlete's description.",
-    "Return blocks in order. A block is a section (repeats 1, one step) or a repeat (repeats 2–30, 1–6 steps done in turn).",
-    "Each step has a short label in the athlete's language (warm-up, the effort, recovery, cool-down), a length in seconds" + (sport === "run" ? " or in km (then seconds is null)" : " (km is null)") + ", and an intensity range low–high as % of " + (sport === "run" ? "threshold pace speed" : "FTP") + ".",
-    "Zones: " + zones + ". Use the zone's range unless the athlete gives other numbers. Recoveries between efforts sit in Z1.",
-    "When the athlete gives " + (sport === "run" ? "a pace (min/km), convert it with the threshold pace in the data: % = threshold pace seconds ÷ given pace seconds × 100" : "watts, convert them with the FTP in the data: % = watts ÷ FTP × 100") + ". Without a threshold in the data use the zone that the description fits.",
-    "Add a warm-up and a cool-down when the athlete doesn't exclude them. Keep the total length the athlete asked for; at most 6 hours.",
-    sport === "ride" ? "Cadence in rpm only when the athlete asks for it, else null." : "Cadence is always null.",
-    "The name is short, like a workout title (\"Sweet spot 3×15\", \"Kilometrovky\"), in the athlete's language."
-  ].join("\n");
-}
 
 // The athlete's thresholds go along, so "3×10 at 280 W" or "4:10/km" turn into
 // the right % instead of a guess.

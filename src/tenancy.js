@@ -173,10 +173,12 @@ const COPY_CHUNK_ROWS = 5000;
 
 // Workers Builds preview versions share the production database, so only the
 // production hostnames (and cron runs, which previews never get) may upgrade it.
+// The test server has its own database and upgrades it from its APP_ORIGIN.
 const PRODUCTION_HOSTS = new Set(["petrfitnessdata.eu", "aurin.health", "health-api.chelseafc-czsk.workers.dev"]);
-export function mayUpgradeFrom(request) {
+export function mayUpgradeFrom(request, env = {}) {
   if (!request) return true;
   const host = new URL(request.url).hostname;
+  if (env.ENVIRONMENT === "staging") return Boolean(env.APP_ORIGIN) && new URL(env.APP_ORIGIN).hostname === host;
   return PRODUCTION_HOSTS.has(host);
 }
 
@@ -188,7 +190,7 @@ export async function ensureTenancy(db, env, { budgetMs = UPGRADE_BUDGET_MS, chu
 
   const owner = ownerEmail(env);
   if (!owner) throw new Error("OWNER_EMAIL is not configured");
-  if (!mayUpgradeFrom(request)) throw new TenancyUpgradeInProgress("The database has not been upgraded yet; previews cannot upgrade it.");
+  if (!mayUpgradeFrom(request, env)) throw new TenancyUpgradeInProgress("The database has not been upgraded yet; previews cannot upgrade it.");
   if (!(await acquireLock(db))) throw new TenancyUpgradeInProgress();
   const deadline = Date.now() + budgetMs;
   try {

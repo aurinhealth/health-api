@@ -40,3 +40,22 @@ test("nothing is locked before the night arrives", () => {
   const r = readinessFor({ date: DATE, google: wellness, sessions: sessions.filter(s => s.date !== DATE) });
   assert.equal(readinessLockOf(r, DATE), null);
 });
+
+test("a night locked at a wake-up takes the rest of it when it arrives", () => {
+  // Synced at 6:17 while up for a moment; asleep again until 9:03.
+  const cut = sessions.map(s => (s.date === DATE ? { ...s, endTime: DATE + "T04:17:00Z", durationMin: 368, timeInBedMin: 384 } : s));
+  const early = readinessFor({ date: DATE, google: wellness, sessions: cut });
+  const lock = readinessLockOf(early, DATE);
+  assert.equal(lock.night.durationMin, 368);
+  const whole = sessions.map(s => (s.date === DATE ? { ...s, endTime: DATE + "T07:03:00Z", durationMin: 525, timeInBedMin: 555 } : s));
+  // The night's HRV and resting HR come with the rest of the night too.
+  const rest = at(wellness, { hrv: 72, restingHR: 47 });
+  const later = readinessFor({ date: DATE, google: rest, sessions: whole, profile: { readinessLocks: { [DATE]: lock } } });
+  assert.equal(later.night.durationMin, 525);
+  assert.equal(later.components.hrv.value, 72);
+  assert.equal(later.score, readinessFor({ date: DATE, google: rest, sessions: whole }).score);
+  // Locked again with the whole night, it stays.
+  const relock = readinessLockOf(later, DATE);
+  const evening = readinessFor({ date: DATE, google: at(rest, { restingHR: 60 }), sessions: whole, profile: { readinessLocks: { [DATE]: relock } } });
+  assert.equal(evening.score, later.score);
+});

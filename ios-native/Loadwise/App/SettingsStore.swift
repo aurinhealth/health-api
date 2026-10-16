@@ -20,6 +20,9 @@ final class SettingsStore {
     private(set) var profileLoaded = false
     private(set) var saving = false
     var errorMessage: String?
+    /// Nastavení → Testování → Server is shown (GET /app/api/me → internalTester);
+    /// always on the test server, so the way back is there.
+    private(set) var internalTester = ServerChoice.current == .staging
     let demo: Bool
 
     private let api: APIClient
@@ -40,6 +43,7 @@ final class SettingsStore {
         async let training = api.trainingProfile()
         async let connections = api.connections()
         async let sync = api.syncStatus()
+        async let tester = api.internalTester()
         do {
             let response = try await profile
             self.profile = response.profile ?? [:]
@@ -56,6 +60,7 @@ final class SettingsStore {
             priority = status?.priority ?? .auto
             self.training = try? await training
             self.sync = try? await sync
+            internalTester = (try? await tester) ?? internalTester
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

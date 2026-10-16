@@ -14,3 +14,4 @@ kucharka*.json
 cookbook*.json
 cookbook*.sql
 out/
+src/private

@@ -68,7 +68,7 @@ test("the owner's upload is stored and used at once; anything else is refused", 
 
 // The printed book is copyrighted: its recipes must not come back into this public repository.
 test("the repository carries no embedded recipe data", () => {
-  for (const dir of ["src", "scripts"]) for (const file of readdirSync(new URL(`../${dir}/`, import.meta.url))) {
+  for (const dir of ["src", "scripts"]) for (const file of readdirSync(new URL(`../${dir}/`, import.meta.url)).filter(name => /\.m?js$/.test(name))) {
     const text = readFileSync(new URL(`../${dir}/${file}`, import.meta.url), "utf8");
     assert.doesNotMatch(text, /[A-Za-z0-9+/=]{20000}/, `${dir}/${file} holds a large encoded blob`);
     assert.doesNotMatch(text, /Banánové lívance/, `${dir}/${file} holds a recipe from the book`);

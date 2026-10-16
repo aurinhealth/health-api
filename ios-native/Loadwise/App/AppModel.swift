@@ -322,7 +322,7 @@ final class AppModel {
     /// the app then offers a passkey ("Příště přes Face ID", RootView).
     func signIn(email: String, code: String) async throws {
         try await api.verifyEmailLogin(email: email, code: code)
-        if !PasskeyService.mayHaveOne { passkeyOffer = true }
+        if ServerChoice.current.passkeys && !PasskeyService.mayHaveOne { passkeyOffer = true }
         await signedIn()
         await refresh()
     }
@@ -1223,6 +1223,30 @@ final class AppModel {
     /// sign-in shows whether it is the same account (signedIn()).
     func signOut(expired: Bool = false) {
         api.signOut()
+        clearLocal(expired: expired)
+    }
+
+    /// Nastavení → Testování → Server: the other server, with its own account
+    /// data and sign-in. What the screens and the outbox hold belongs to the
+    /// old server; both sessions stay, so switching back needs no sign-in.
+    /// Apple Health pauses and resumes like a sign-out and a sign-in, each
+    /// server with its own last sync (AppleHealth.serverChanged).
+    func switchServer(to choice: ServerChoice) async {
+        guard !demo, choice != ServerChoice.current else { return }
+        if phase == .signedIn { await PushRegistration.unregister(api: api) }
+        AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
+        ServerChoice.current = choice
+        AppleHealth.shared.serverChanged()
+        clearLocal(expired: true)
+        outbox = []
+        OutboxStore.save([])
+        if api.hasSession {
+            await signedIn()
+            await refresh()
+        }
+    }
+
+    private func clearLocal(expired: Bool) {
         SnapshotCache.clear()
         GymDayCache.clear()
         CoachTextMemory.values = [:]
