@@ -395,17 +395,24 @@ final class AppModel {
         // watch go out before Today is computed. Later in the day Today loads
         // alongside the sync and again only when it brought something new.
         var sync: Task<AppleHealth.SyncOutcome, Never>?
+        var changed = false
         if health.hasMorningData {
             let api = api
             sync = Task { await health.run(api: api) }
         } else {
-            _ = await health.run(api: api)
+            changed = await health.run(api: api).changed
         }
         do {
             try await loadToday()
             // The day is on screen: the arrows and swipes work again.
             loading = false
-            if let sync, await sync.value.changed { try? await loadToday() }
+            if let sync, await sync.value.changed { changed = true; try? await loadToday() }
+            // New nights or workouts reach the Health snapshot too: the sleep
+            // detail opened from Today shows it.
+            if changed {
+                fetched[.health] = nil
+                if self.health != nil { Task { await self.refreshHealth() } }
+            }
             async let status = try? api.athleteStatus()
             if selectedDate == nil, let today {
                 async let cycle: Void = loadCycle()
