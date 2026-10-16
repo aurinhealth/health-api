@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 AppleHealth.shared.start(api: client)
                 BackgroundRefresh.register(api: client)
                 BackgroundRefresh.schedule()
+                LiveWorkout.shared.endOrphanedSession()
             }
         }
         // A tap outside a text field hides the keyboard (KeyboardDismiss.swift).
