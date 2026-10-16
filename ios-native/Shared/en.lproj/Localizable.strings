@@ -2515,3 +2515,27 @@
 "Odebrat %@?" = "Remove %@?";
 "Zařízení, které se s ním přihlásilo, se odhlásí." = "The device that signed in with it will be signed out.";
 "Přidán %@" = "Added %@";
+
+/* Deník: the Zdraví card, the morning sheet, the day, Co sledovat, Nastavení → Deník */
+"Včerejšek čeká" = "Yesterday is waiting";
+"otázka" = "question";
+"Doplnit" = "Fill in";
+"připravenost další ráno" = "readiness the next morning";
+"Co na tebe působí, ukážu po pár dnech." = "What affects you shows up after a few days.";
+"Co sledovat" = "What to track";
+"Ranní otázky" = "Morning questions";
+"Vypnout Deník" = "Turn off Journal";
+"Nic nesleduješ. Vyber si to v Co sledovat." = "You're not tracking anything. Pick it in What to track.";
+"Vždy ne" = "Always no";
+"Vždy ano" = "Always yes";
+"Ptát se zase" = "Ask again";
+"Nesledovat" = "Stop tracking";
+"vždy ano" = "always yes";
+"vždy ne" = "always no";
+"Ukážu, až bude dost dní s ✓ i s ✕." = "Shows up once there are enough days with ✓ and with ✕.";
+"Škodí" = "Hurts";
+"Pomáhá" = "Helps";
+"Málo dní:" = "Too few days:";
+"✦ samo" = "✦ auto";
+"Sledovat deník" = "Keep a journal";
+"Ptát se ráno" = "Ask in the morning";

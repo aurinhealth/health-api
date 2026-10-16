@@ -384,7 +384,7 @@ export function overviewPage(request) {
   const shot = (name, lazy = true) => `<img src="/site/app/${name}.webp" alt="" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
   // The story's chapters: [section id, eyebrow, headline, line, glow, the app's screen].
   const chapters = [
-    ['pripravenost', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal. The journal shows what lifts it and what drags it down: alcohol, a late meal or the sauna.', 'glow-health', 'readiness'],
+    ['pripravenost', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal. The journal fills in what it can from your data and shows what lifts it and what drags it down: alcohol, a late meal or the sauna.', 'glow-health', 'readiness'],
     ['zatez', 'Strain', 'Know when to push and when to back off.', 'Every workout and every step adds up. Aurin shows where today should land and how your week builds.', 'glow-training', 'strain'],
     ['trenink', 'Training', 'A plan that adapts.', 'An activity for every day, picked for how you recovered and ready in advance. Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu.', 'glow-training', 'training'],
     ['posilovna', 'Gym', 'Sets, weights and muscle recovery.', 'Turn a 3D figure and tap a muscle to see how tired it is from the gym and your runs. Supersets, left and right side, warm-up and stretching, and a rest timer between sets that stays on your lock screen.', 'glow-health', 'gym'],
