@@ -61,7 +61,8 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .workouts:
             return [HKObjectType.workoutType(), HKSeriesType.workoutRoute(), HKQuantityType(.heartRate), HKQuantityType(.activeEnergyBurned),
                     HKQuantityType(.distanceWalkingRunning), HKQuantityType(.distanceCycling), HKQuantityType(.distanceSwimming),
-                    HKQuantityType(.cyclingPower), HKQuantityType(.runningPower), HKQuantityType(.cyclingCadence)]
+                    HKQuantityType(.cyclingPower), HKQuantityType(.runningPower), HKQuantityType(.cyclingCadence),
+                    HKObjectType.activitySummaryType()]
         case .heart:
             return [HKQuantityType(.heartRate), HKQuantityType(.vo2Max), HKQuantityType(.walkingHeartRateAverage),
                     HKQuantityType(.heartRateRecoveryOneMinute)]
@@ -72,7 +73,9 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .steps:
             return [HKQuantityType(.stepCount)]
         case .energy:
-            return [HKQuantityType(.activeEnergyBurned)]
+            // The Activity rings (Move/Exercise/Stand): Apple Health lists the
+            // app under Activity → Data Sources & Access only with this type.
+            return [HKQuantityType(.activeEnergyBurned), HKObjectType.activitySummaryType()]
         case .breathing:
             return [HKQuantityType(.respiratoryRate), HKQuantityType(.oxygenSaturation), HKQuantityType(.appleSleepingWristTemperature)]
         case .body:
