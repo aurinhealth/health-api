@@ -45,7 +45,12 @@ struct TrainingModeView: View {
     /// Zahodit trénink in the summary, after Dokončit.
     @State private var confirmDiscard = false
     @State private var picking = false
+    /// "Začít trénink" tapped (the sample day has no recording to show it).
+    @State private var startTapped = false
     private var live: LiveWorkout { LiveWorkout.shared }
+    /// The clock, heart rate and recording run only after "Začít trénink" (or
+    /// for a workout already under way); opening the workout starts nothing.
+    private var started: Bool { live.running || startTapped }
 
     var body: some View {
         ZStack {
@@ -145,12 +150,14 @@ struct TrainingModeView: View {
                 Spacer(minLength: 4)
                 if !finishedSession, current(day) != nil {
                     CircleButton(systemImage: "list.bullet", label: L10n.tr("Upravit plán")) { editing = true }
-                    Button { Task { await finish() } } label: {
-                        Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onAccent)
-                            .padding(.horizontal, 14).frame(height: 36).background(Palette.green, in: Capsule())
+                    if started {
+                        Button { Task { await finish() } } label: {
+                            Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
+                                .padding(.horizontal, 14).frame(height: 36).background(Palette.button, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(saving)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(saving)
                 }
             } else {
                 Spacer()
@@ -195,11 +202,20 @@ struct TrainingModeView: View {
 
             if let set {
                 effort.padding(.top, 14)
-                PrimaryButton(title: saving ? "Ukládám…" : "Série hotová", systemImage: "checkmark", busy: saving) {
-                    Task { await complete(set) }
+                if started {
+                    PrimaryButton(title: saving ? "Ukládám…" : "Série hotová", systemImage: "checkmark", busy: saving) {
+                        Task { await complete(set) }
+                    }
+                    .disabled(saving)
+                    .padding(.top, 14)
+                } else {
+                    Button { Task { await start() } } label: {
+                        Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                            .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 14)
                 }
-                .disabled(saving)
-                .padding(.top, 14)
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 8) }
             nextExercise(day).padding(.top, 14)
@@ -732,7 +748,7 @@ struct TrainingModeView: View {
 
     /// The lock screen and Dynamic Island follow the exercise on screen (GymLiveActivity).
     private func syncActivity(quiet: Bool = false) {
-        GymLiveActivity.sync(day: finishedSession ? nil : day, focus: index, restStart: restStart, restEnd: restEnd, quiet: quiet)
+        GymLiveActivity.sync(day: finishedSession || !started ? nil : day, focus: index, restStart: restStart, restEnd: restEnd, quiet: quiet)
     }
 
     /// +30 s, Přeskočit pauzu and Série hotová from the lock screen.
@@ -845,6 +861,15 @@ struct TrainingModeView: View {
         }
     }
 
+    /// "Začít trénink": the clock, calories and heart rate (a workout recorded
+    /// in Apple Health) and the lock screen's Live Activity start now.
+    private func start() async {
+        startTapped = true
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        if !model.demo && !live.running { await live.begin(since: nil, weightKg: model.today?.weight?.latest) }
+        syncActivity()
+    }
+
     /// The cross: a workout changed here can be kept for later or thrown away.
     private func close() {
         if !finishedSession, let day, day != original, !day.exercises.isEmpty {
@@ -939,7 +964,8 @@ struct TrainingModeView: View {
         next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.plannedReps ?? "") : r, rpe: String(rpe))
         day = next
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        if !live.running && !model.demo { Task { await live.begin(since: nil, weightKg: model.today?.weight?.latest) } }
+        // A set ticked in the table before "Začít trénink" starts the workout too.
+        if !started { Task { await start() } }
         // The last set of the exercise: on to the next one after a longer rest.
         var rest = set.warmup ? 60 : restSets
         let otherSide = set.side == "L" && next.exercises[safe: index]?.sets.contains { $0.number == set.number && $0.side == "P" && !$0.done } == true
