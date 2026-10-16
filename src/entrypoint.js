@@ -36,6 +36,7 @@ import {athleteFocus} from './athlete-focus.js';
 import { loadProfiles, refreshSuggestions } from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
+import {forwardWatchWorkouts} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport} from './coach-assistant.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import { validateCoachActions, actionSafetyContext, actionsNote } from './coach-actions.js';
@@ -238,7 +239,12 @@ const USER_JOBS = [
   // Every 5 minutes for a personal API key; an OAuth connection gets
   // webhooks (/webhooks/intervals), so only a look every 6 hours in case
   // one was lost (an OAuth app has 100 requests per athlete a day).
-  { name: "intervals-recent", providers: ["intervals"], due: every5, run: (scoped, ctx, controller) => intervalsOAuthQuiet(scoped, 40, new Date(controller.scheduledTime || Date.now())) ? null : legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), scoped, ctx) },
+  // After it, Apple Health workouts no other source brought go to Intervals.icu (watch-forward.js).
+  { name: "intervals-recent", providers: ["intervals"], due: every5, run: async (scoped, ctx, controller) => {
+    if (intervalsOAuthQuiet(scoped, 40, new Date(controller.scheduledTime || Date.now()))) return;
+    await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), scoped, ctx);
+    await forwardWatchWorkouts(scoped).catch(error => console.error("Watch workout forward failed", error.message));
+  } },
   // Hourly, half an hour after the Google Health sync: weight the same in the
   // app, Google Health and Intervals.icu, and Google wellness (sleep, steps,
   // heart rate, HRV, …) copied into Intervals.icu.
