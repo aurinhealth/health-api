@@ -44,9 +44,20 @@ struct TrainingModeView: View {
     @State private var confirmClose = false
     /// Zahodit trénink in the summary, after Dokončit.
     @State private var confirmDiscard = false
+    /// Opened on a workout already finished: its summary, with Ohodnotit and
+    /// Pokračovat v tréninku (Zahodit has no earlier day to go back to).
+    @State private var reopened = false
     @State private var picking = false
+    /// The heart rate sensors, from the heart in the header.
+    @State private var sensors = false
     /// "Začít trénink" tapped (the sample day has no recording to show it).
     @State private var startTapped = false
+    /// Hidden with the arrow: the workout goes on, only the screen closes.
+    @State private var minimizing = false
+    /// The warm-up's stretches ticked (StretchingCard): all of them done, the
+    /// card makes way for the first exercise.
+    @AppStorage("gym.stretching.done") private var stretchesDone = ""
+    @Environment(\.scenePhase) private var scenePhase
     private var live: LiveWorkout { LiveWorkout.shared }
     /// The clock, heart rate and recording run only after "Začít trénink" (or
     /// for a workout already under way); opening the workout starts nothing.
@@ -71,8 +82,13 @@ struct TrainingModeView: View {
                                     LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
                                 }
                                 // The warm-up until the first set is done.
-                                if let warmup = day.warmup, restEnd == nil, !day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
-                                    StretchingCard(stretching: warmup, date: date, kind: .warmup, compact: true).padding(.top, 14)
+                                if let warmup = day.warmup, restEnd == nil, !warmupDone(warmup), !day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                                    // Also gone once its minutes passed after Začít trénink.
+                                    TimelineView(.periodic(from: .now, by: 10)) { context in
+                                        if !warmupOver(warmup, at: context.date) {
+                                            StretchingCard(stretching: warmup, date: date, kind: .warmup, compact: true).padding(.top, 14)
+                                        }
+                                    }
                                 }
                                 if let restEnd {
                                     rest(day, exercise, until: restEnd)
@@ -100,15 +116,26 @@ struct TrainingModeView: View {
             GymActivityInbox.handler = { activityAction($0) }
         }
         .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) }
-            GymActivityInbox.handler = nil
-            GymLiveActivity.end()
+            UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false
+            if minimizing {
+                // The rest alarm and the Live Activity stay; their taps wait in the bar.
+                let model = model
+                GymActivityInbox.handler = { Self.minimizedAction($0, model: model) }
+            } else {
+                Task { await Reminders.restEnds(at: nil) }
+                GymActivityInbox.handler = nil
+                GymLiveActivity.end()
+            }
         }
         .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
         .onChange(of: day) { _, _ in syncActivity() }
         .onChange(of: index) { _, _ in syncActivity() }
         .onChange(of: finishedSession) { _, _ in syncActivity() }
         .onChange(of: live.heartRate) { _, _ in syncActivity(quiet: true) }
+        // Back from the lock screen after the rest ran out: straight to the set.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, let end = restEnd, end <= Date() { restEnd = nil }
+        }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
             ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
@@ -132,16 +159,26 @@ struct TrainingModeView: View {
                 Task { await add(name) }
             }
         }
+        .sheet(isPresented: $sensors) {
+            NavigationStack { HeartRateSensorView() }
+                .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $editing) {
             if let day {
-                PlanEditorSheet(day: day, catalog: catalog, date: date, current: index) { edited in Task { await saveEdited(edited) } }
+                PlanEditorSheet(day: day, catalog: catalog, date: date, current: index,
+                                go: { edited, id in Task { await saveEdited(edited, focus: id) } }) { edited in Task { await saveEdited(edited) } }
             }
         }
     }
 
     private var header: some View {
         HStack(spacing: 10) {
-            CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { close() }
+            // Under way: the arrow hides it and the workout goes on (MinimizedGymBar).
+            if started, !finishedSession, let day, current(day) != nil {
+                CircleButton(systemImage: "chevron.down", label: L10n.tr("Skrýt trénink")) { minimize() }
+            } else {
+                CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { close() }
+            }
             if let day, !day.exercises.isEmpty {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title(day)).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
@@ -149,6 +186,7 @@ struct TrainingModeView: View {
                 }
                 Spacer(minLength: 4)
                 if !finishedSession, current(day) != nil {
+                    HeartSourceButton(live: live) { sensors = true }
                     CircleButton(systemImage: "list.bullet", label: L10n.tr("Upravit plán")) { editing = true }
                     if started {
                         Button { Task { await finish() } } label: {
@@ -223,6 +261,13 @@ struct TrainingModeView: View {
         }
         .onChange(of: set?.row) { _, _ in prefill(set) }
         .onAppear { prefill(set) }
+        // A swipe sideways goes to the next or the previous exercise.
+        .contentShape(Rectangle())
+        .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { drag in
+            let dx = drag.translation.width, dy = drag.translation.height
+            guard abs(dx) > 70, abs(dx) > abs(dy) * 2 else { return }
+            withAnimation(.snappy) { move(dx < 0 ? 1 : -1) }
+        })
         .task(id: exercise.name) { await loadMuscles(day) }
     }
 
@@ -285,7 +330,8 @@ struct TrainingModeView: View {
         return GymSetRow(label: s.warmup ? "W" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
-                         kgText: $kg, repsText: $reps) {
+                         kgText: $kg, repsText: $reps,
+                         onEdit: s.done ? { k, r in Task { await editDone(s, kg: k, reps: r) } } : nil) {
             switch phase {
             case .done: Task { await undo(s) }
             case .current: Task { await complete(s) }
@@ -358,22 +404,31 @@ struct TrainingModeView: View {
         // In a superset the partner comes next (A1, B1, A2…).
         let partner = Self.supersetPartner(day.exercises, of: index)
         if let target = partner ?? (day.exercises.indices.contains(index + 1) ? index + 1 : nil), let next = day.exercises[safe: target] {
-            Button { move(target - index) } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Palette.secondary)
-                        .frame(width: 34, height: 34).background(Palette.track, in: Circle())
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
-                        Text(nextLine(next))
-                            .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+            HStack(spacing: 8) {
+                Button { move(target - index) } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Palette.secondary)
+                            .frame(width: 34, height: 34).background(Palette.track, in: Circle())
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
+                            Text(nextLine(next))
+                                .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                        }
+                        Spacer(minLength: 4)
                     }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .buttonStyle(.plain)
+                SmallInfoButton { technique = next.name }
+                Button { move(target - index) } label: {
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
+                        .frame(width: 20, height: 34).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         } else if index > 0 {
             Button { move(-1) } label: {
                 Label("Předchozí cvik", systemImage: "chevron.left").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
@@ -411,6 +466,7 @@ struct TrainingModeView: View {
                         Spacer(minLength: 6)
                         Text(plannedLine(set))
                             .font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1)
+                        SmallInfoButton { technique = exercise.name }.padding(.leading, 4)
                     }
                     if let previous = GymSessionMath.lastTime(set, in: exercise, last: last) {
                         Text(L10n.f("Minule %@", previous)).font(Typo.caption).foregroundStyle(Palette.muted)
@@ -419,15 +475,32 @@ struct TrainingModeView: View {
                 .padding(16)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             }
+            nextExercise(day)
             let progress = GymSessionMath.muscleProgress(day.exercises, muscles: muscles)
-            if !progress.isEmpty { MuscleProgressCard(items: progress) }
+            if !progress.isEmpty {
+                MuscleProgressCard(items: progress, total: (day.exercises.reduce(0) { $0 + $1.doneCount }, day.exercises.reduce(0) { $0 + $1.workCount }))
+            }
         }
         .task(id: end) {
             let wait = end.timeIntervalSinceNow
             if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
             guard !Task.isCancelled, restEnd == end else { return }
             UINotificationFeedbackGenerator().notificationOccurred(.success)
+            // The rest is over: the screen turns to the set.
+            restEnd = nil
         }
+    }
+
+    /// The warm-up's minutes have passed since the clock started.
+    private func warmupOver(_ warmup: GymStretching, at now: Date) -> Bool {
+        guard let start = live.clockStart else { return false }
+        return now.timeIntervalSince(start) >= Double(max(1, warmup.minutes) * 60)
+    }
+
+    /// Every stretch of the warm-up ticked (by hand or by its timer).
+    private func warmupDone(_ warmup: GymStretching) -> Bool {
+        let done = StretchingCard.done(stretchesDone, date: date)
+        return !warmup.items.isEmpty && warmup.items.allSatisfy { done.contains(GymRoutineKind.warmup.key + $0.id) }
     }
 
     private func recoveryPoints() -> [Double] {
@@ -468,12 +541,19 @@ struct TrainingModeView: View {
             if !finishedSession, let stretching = day.stretching { StretchingCard(stretching: stretching, date: date) }
             if finishedSession {
                 PrimaryButton(title: L10n.tr("Ohodnotit"), systemImage: "hand.thumbsup") { rating = true }
-                Button(role: .destructive) { confirmDiscard = true } label: {
-                    Text("Zahodit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
-                        .frame(maxWidth: .infinity).frame(height: 46)
+                // Dokončit by mistake: back to the workout, the clock from its start.
+                if !model.demo {
+                    SecondaryButton(title: "Pokračovat v tréninku", systemImage: "play.fill") { Task { await resume() } }
+                        .disabled(saving)
                 }
-                .buttonStyle(.plain)
-                .disabled(saving)
+                if !reopened {
+                    Button(role: .destructive) { confirmDiscard = true } label: {
+                        Text("Zahodit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
+                            .frame(maxWidth: .infinity).frame(height: 46)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(saving)
+                }
             } else {
                 PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: saving) { Task { await finish() } }
                     .disabled(saving)
@@ -774,14 +854,24 @@ struct TrainingModeView: View {
     // MARK: Server
 
     private func load() async {
-        if model.demo { day = DemoData.gym; history = DemoGymHistory.history; loading = false; startAtFirstOpen(); return }
+        if model.demo { day = DemoData.gym; history = DemoGymHistory.history; loading = false; startAtFirstOpen(); restoreMinimized(); return }
         loading = true
         defer { loading = false }
         do {
             day = try await model.gymDay(date: date)
             original = day
             startAtFirstOpen()
+            // Finished earlier (Dokončit): the summary, to rate it or go on.
+            if let day, day.finishedAt != nil, day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                reopened = true
+                finishedSession = true
+                if let minutes = day.loggedMinutes { totals = (minutes, nil, nil, nil, false, []) }
+            }
+            restoreMinimized()
             history = await model.gymHistory()
+            // The figure of Celkem dnes (MuscleProgressCard), kept on the phone after once.
+            let api = model.api
+            Task { await MuscleModelStore.shared.load(api: api) }
             sideChoices = (try? await model.api.gymSides())?.choices ?? [:]
             if let profile = try? await model.api.trainingProfile() {
                 zoneLows = profile.hrZones.sorted { $0.zone < $1.zone }.map { $0.bpmLow ?? 0 }
@@ -789,7 +879,7 @@ struct TrainingModeView: View {
             // The clock, calories and heart rate (a workout recorded in Apple
             // Health) start with the first ticked set; a workout already under
             // way with sets left goes on. Only opening it records nothing.
-            if let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }), day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+            if !finishedSession, let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }), day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
                 await live.begin(since: nil, weightKg: model.today?.weight?.latest)
             }
             // An empty workout: the exercise list for Přidat cvik.
@@ -824,10 +914,12 @@ struct TrainingModeView: View {
 
     /// The plan as changed in "Upravit plán": saved, and back on the first
     /// exercise with a set left.
-    private func saveEdited(_ edited: GymDay) async {
+    private func saveEdited(_ edited: GymDay, focus: String? = nil) async {
         day = edited
         restEnd = nil
         startAtFirstOpen()
+        // "Přejít na cvik": that one, whatever is left before it.
+        if let focus, let at = edited.exercises.firstIndex(where: { $0.id == focus }) { index = at }
         await loadMuscles(edited)
         guard !model.demo else { return }
         do {
@@ -868,6 +960,48 @@ struct TrainingModeView: View {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         if !model.demo && !live.running { await live.begin(since: nil, weightKg: model.today?.weight?.latest) }
         syncActivity()
+    }
+
+    /// The arrow: the screen closes, the clock, heart rate, rest alarm and
+    /// Live Activity go on, and the bar over the tab bar opens it again.
+    private func minimize() {
+        guard let day else { return }
+        model.minimizedGym = MinimizedGym(date: date, title: title(day), day: day, index: index, restStart: restStart,
+                                          restEnd: restEnd, restTotal: restTotal, next: current(day)?.name, startTapped: startTapped)
+        minimizing = true
+        dismiss()
+    }
+
+    /// Back from the bar: the same exercise and rest, then the lock-screen
+    /// taps made meanwhile.
+    private func restoreMinimized() {
+        guard let gym = model.minimizedGym, gym.date == date else { return }
+        model.minimizedGym = nil
+        guard !finishedSession, let count = day?.exercises.count, count > 0 else { return }
+        index = min(gym.index, count - 1)
+        startTapped = gym.startTapped
+        restTotal = gym.restTotal
+        restStart = gym.restStart
+        restEnd = gym.restEnd.flatMap { $0 > Date() ? $0 : nil }
+        for action in gym.pending { activityAction(action) }
+    }
+
+    /// +30 s and Přeskočit pauzu from the lock screen while the workout is
+    /// hidden; Série hotová waits until it opens again.
+    private static func minimizedAction(_ action: GymActivityAction, model: AppModel) {
+        guard var gym = model.minimizedGym else { return }
+        switch action {
+        case .extend:
+            if let end = gym.restEnd { gym.restEnd = max(end, Date()).addingTimeInterval(30); gym.restTotal += 30 }
+        case .skip:
+            gym.restEnd = nil
+        case .complete:
+            gym.pending.append(action)
+        }
+        model.minimizedGym = gym
+        let end = gym.restEnd
+        Task { await Reminders.restEnds(at: end) }
+        GymLiveActivity.sync(day: gym.day, focus: gym.index, restStart: gym.restStart, restEnd: gym.restEnd)
     }
 
     /// The cross: a workout changed here can be kept for later or thrown away.
@@ -921,6 +1055,13 @@ struct TrainingModeView: View {
     /// then the rating.
     private func finish() async {
         restEnd = nil
+        // The start and end in the sheet: opened again, the workout shows its
+        // summary (Ohodnotit, Pokračovat v tréninku) and can go on from its start.
+        if var next = day {
+            if next.startedAt == nil, let start = live.start { next.markStarted(start) }
+            next.markFinished(Date())
+            day = next
+        }
         if live.running {
             let saved = await live.finish()
             totals = (live.minutes, live.kcal, live.avgHeartRate, live.maxHeartRate, saved, live.zoneMinutes(lows: zoneLows))
@@ -944,6 +1085,50 @@ struct TrainingModeView: View {
             let minutes = totals.map { max(1, $0.minutes) }
             await model.shareGym(day, date: date, start: minutes.map { Date().addingTimeInterval(-Double($0) * 60) }, minutes: minutes,
                                  appleSaved: totals?.saved == true)
+        }
+    }
+
+    /// The weight or reps of a ticked set changed afterwards.
+    private func editDone(_ set: GymSet, kg: String, reps: String) async {
+        guard var next = day else { return }
+        let k = LiftWeight.kgText(kg)
+        let r = reps.trimmingCharacters(in: .whitespaces)
+        guard !k.isEmpty || !r.isEmpty, (set.kg ?? "") != k || (set.reps ?? "") != r else { return }
+        next.edit(row: set.row, kg: k.isEmpty ? (set.kg ?? "") : k, reps: r.isEmpty ? (set.reps ?? "") : r)
+        day = next
+        guard !model.demo else { return }
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Sérii se nepodařilo uložit: %@", error.localizedDescription)
+        }
+    }
+
+    /// Pokračovat v tréninku: the finished workout opens again where it was,
+    /// the clock where Dokončit stopped it (the time between is a pause), the
+    /// sets as logged. Apple Health gets one workout instead of the saved one,
+    /// with the calories and heart rate measured before the pause.
+    private func resume() async {
+        guard var next = day else { return }
+        saving = true
+        defer { saving = false }
+        let pausedAt = next.finishedAt ?? Date()
+        next.clearFinished()
+        let start = next.startedAt ?? pausedAt
+        let saved = live.takeSaved()
+        day = next
+        totals = nil
+        finishedSession = false
+        startTapped = true
+        startAtFirstOpen()
+        await live.resume(saved: saved, since: start, pausedAt: pausedAt, weightKg: model.today?.weight?.latest)
+        syncActivity()
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Trénink se nepodařilo uložit: %@", error.localizedDescription)
         }
     }
 

@@ -272,6 +272,7 @@ struct GymBuilderView: View {
                 focus = preset
             }
         }
+        .task { if !model.demo { await MuscleModelStore.shared.load(api: model.api) } }
         .sheet(item: Binding(get: { replacing.map { Named(name: $0) } }, set: { replacing = $0?.name })) { item in
             AlternativesSheet(date: isoDay, exercise: item.name, inPlan: proposal?.exercises.map(\.name) ?? [], footnote: nil,
                               choose: { _ in }, chooseAlternative: { alt in replace(item.name, with: alt) })
@@ -338,7 +339,15 @@ struct GymBuilderView: View {
                 Card {
                     Text(L10n.f("Vybráno %@ z 5", String(muscles.count)))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
-                    BodyMap(selected: muscles, onTap: toggle, height: 280)
+                    if let figure = MuscleModelStore.shared.figure {
+                        // Fixed front and back of the 3D figure; a tap picks the muscle.
+                        MuscleFigureFixedPair(figure: figure, colors: MuscleFigureFixedPair.colors(Dictionary(uniqueKeysWithValues: muscles.map { ($0, Palette.green) }))) {
+                            toggle(MuscleFatigue.bodyId($0))
+                        }
+                        .frame(height: 320)
+                    } else {
+                        BodyMap(selected: muscles, onTap: toggle, height: 280)
+                    }
                     ChipFlow(items: BodyFigure.muscles.map { $0.id }, label: BodyFigure.label, isOn: { muscles.contains($0) }, toggle: toggle,
                              mark: { model.muscles?.tired(body: $0)?.color })
                     if model.muscles.map({ !$0.tired.isEmpty }) == true {

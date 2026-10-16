@@ -89,6 +89,9 @@ final class AppModel {
     var passkeyOffer = false
     /// A full-screen flow (Režim tréninku) hides the tab bar.
     var immersive = false
+    /// Režim tréninku hidden with its arrow: the workout goes on and a bar
+    /// over the tab bar leads back (MinimizedGymBar).
+    var minimizedGym: MinimizedGym?
     /// Writes made without signal, oldest first (Outbox.swift); the screens
     /// show them meanwhile.
     private(set) var outbox: [OutboxItem] = []

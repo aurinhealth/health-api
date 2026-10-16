@@ -23,8 +23,13 @@ export async function handleGoogleOAuth(request, env, pathname) {
   if (!code || !state || !m || expected !== state) return html("Google OAuth failed","Invalid or missing OAuth state. Start again from /oauth/google.",400);
   const redirectUri=appOrigin(env, request)+"/oauth/google/callback";
   const response=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({code,client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,redirect_uri:redirectUri,grant_type:"authorization_code"})});
-  const data=await response.json();
-  if (!response.ok || !data.refresh_token) return html("Google OAuth token exchange failed","Google nevrátil oprávnění pro automatickou synchronizaci. Zkus obnovit souhlas v Nastavení.",502);
+  const data=await response.json().catch(()=>({}));
+  if (!response.ok || !data.refresh_token) {
+    // Google's own error code (invalid_client, invalid_grant, redirect_uri_mismatch…) says what to fix.
+    const reason = String(data?.error || (response.ok ? "no_refresh_token" : "HTTP " + response.status)).slice(0, 80);
+    console.error("Google OAuth token exchange failed", reason, String(data?.error_description || "").slice(0, 200));
+    return html("Google OAuth token exchange failed","Google nevrátil oprávnění pro automatickou synchronizaci. Zkus obnovit souhlas v Nastavení.<p>Kód od Googlu: <code>"+esc(reason)+"</code></p>",502);
+  }
   await saveConnectionSecret(env,'google',data.refresh_token);
   // What the user actually granted; optional scopes may have been declined.
   await saveConnectionSecret(env,'google_scopes',String(data.scope||HEALTH_SCOPES.join(' ')));

@@ -95,6 +95,7 @@ import { handleNativeAppleLogin } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
+import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { handleWorkoutTemplatesApi, publicSharePage } from "./workout-templates.js";
@@ -337,6 +338,8 @@ const worker = {
     const rawEnv = env;
     // Deny by default: only allowlisted routes are reachable without a session or API key.
     let principal = await resolvePrincipal(request, env);
+    // The coach evaluation workflow acts as the owner, on the test server only.
+    if (!principal && url.pathname === "/automation/coach-eval") principal = await coachEvalPrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
     if (!isPublic && !principal) {
       const response = unauthorizedResponse();
@@ -350,7 +353,7 @@ const worker = {
       // A cookie from before the user signed out everywhere (or changed the e-mail, removed a passkey or the Apple ID) is no cookie.
       if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }
       if (!user && !isPublic) return unauthorizedResponse();
-    } else if (principal?.kind === "owner" || principal?.kind === "system") {
+    } else if (principal?.kind === "owner" || principal?.kind === "system" || principal?.kind === "coach-eval") {
       // The owner API key and GitHub automations act as the owner.
       user = await ownerUser(env.DB, env);
     }
@@ -400,6 +403,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       return legacyHealthApi.fetch(request, env, ctx);
     }
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
+    if (url.pathname === "/automation/coach-eval") return handleCoachEval(request, env, principal);
     // Wahoo's webhook: a finished workout of whoever is connected to that Wahoo account.
     if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forEachUser(rawEnv, ["wahoo"], async scoped => {
       if (String(readWahooTokens(scoped)?.user_id ?? "") !== wahooUser) return null;

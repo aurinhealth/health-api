@@ -128,6 +128,10 @@ struct Muscle3DView: UIViewRepresentable {
     var selected: String? = nil
     var focus: String? = nil
     var yaw: Float = 0
+    /// A sideways drag turns the figure; off for the fixed front and back views.
+    var turns = true
+    /// The whole figure from a little further away (narrow views fit the arms).
+    var distance: Float = 1
     /// The muscle tapped (nil off the muscles) and where.
     var onTap: ((String?, CGPoint) -> Void)? = nil
 
@@ -140,9 +144,12 @@ struct Muscle3DView: UIViewRepresentable {
         view.scene = context.coordinator.scene
         view.pointOfView = context.coordinator.camera
         view.isAccessibilityElement = false
-        let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.pan(_:)))
-        pan.delegate = context.coordinator
-        view.addGestureRecognizer(pan)
+        if turns {
+            let pan = UIPanGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.pan(_:)))
+            pan.delegate = context.coordinator
+            view.addGestureRecognizer(pan)
+        }
+        context.coordinator.distance = distance
         view.addGestureRecognizer(UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tap(_:))))
         context.coordinator.turntable.eulerAngles.y = yaw
         context.coordinator.place(focus: focus, animated: false)
@@ -163,6 +170,7 @@ struct Muscle3DView: UIViewRepresentable {
         let turntable = SCNNode()
         let camera = SCNNode()
         var focus: String?
+        var distance: Float = 1
         var onTap: ((String?, CGPoint) -> Void)?
         private var materials: [SCNMaterial] = []
         private var painted: [String: UIColor]?
@@ -210,7 +218,7 @@ struct Muscle3DView: UIViewRepresentable {
         func place(focus: String?, animated: Bool) {
             self.focus = focus
             var target = SIMD3<Float>(0, 0.9, 0)
-            var distance: Float = 0.98 / tan(Figure3DStyle.halfField)
+            var distance: Float = 0.98 / tan(Figure3DStyle.halfField) * self.distance
             if let group = figure.group(focus) {
                 target = SIMD3(0, group.centre.y, 0)
                 distance = max(0.8, group.radius * 1.15 / tan(Figure3DStyle.halfField))
@@ -266,6 +274,40 @@ struct Muscle3DView: UIViewRepresentable {
             let velocity = pan.velocity(in: pan.view)
             return abs(velocity.x) > abs(velocity.y)
         }
+    }
+}
+
+/// The figure fixed from the front and from behind: the muscles picked in
+/// Sestavit trénink, today's muscles in the rest of Režim tréninku.
+struct MuscleFigureFixedPair: View {
+    let figure: MuscleFigure3D
+    /// Colours by muscle of the model (src/muscle-fatigue.js MUSCLES); the rest stay grey.
+    var colors: [String: Color]
+    var labels = true
+    /// A tap on a muscle of the model.
+    var onTap: ((String) -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 2) {
+            side(0, "Zepředu")
+            side(.pi, "Zezadu")
+        }
+    }
+
+    private func side(_ yaw: Float, _ title: String) -> some View {
+        VStack(spacing: 6) {
+            Muscle3DView(figure: figure, colors: colors, yaw: yaw, turns: false, distance: 1.12,
+                         onTap: onTap.map { tap in { (id: String?, _: CGPoint) in if let id { tap(id) } } })
+            if labels { Text(L10n.tr(title)).font(Typo.tiny).foregroundStyle(Palette.faint) }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// The model's muscles behind the gym's muscles (BodyFigure ids), each in its colour.
+    static func colors(_ body: [String: Color]) -> [String: Color] {
+        var out: [String: Color] = [:]
+        for (id, color) in body { for muscle in MuscleFatigue.fatigueIds(body: id) { out[muscle] = color } }
+        return out
     }
 }
 
