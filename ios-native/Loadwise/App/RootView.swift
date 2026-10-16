@@ -26,6 +26,12 @@ struct RootView: View {
         }
     }
 
+    /// No tab bar in a full-screen flow nor on a detail: the detail has its
+    /// back button and the edge swipe, and the bar would lie over its last rows.
+    private var barHidden: Bool {
+        model.immersive || !(model.paths[model.tab] ?? []).isEmpty
+    }
+
     /// The tabs, the tab bar and the sheets grow with the text size up to a cap.
     private static let textSizes: PartialRangeThrough<DynamicTypeSize> = ...DynamicTypeSize.screenCap
 
@@ -86,7 +92,7 @@ struct RootView: View {
                 if let report = model.syncReport, !showSyncStatus {
                     SyncToastView(report: report) { showSyncStatus = true }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, model.immersive ? 16 : 88)
+                        .padding(.bottom, barHidden ? 16 : 88)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
@@ -97,11 +103,11 @@ struct RootView: View {
                         if let undo = toast.settle(undo: true) { Task { await undo() } }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, model.immersive ? 16 : 88)
+                    .padding(.bottom, barHidden ? 16 : 88)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
                 }
-                if !model.immersive {
+                if !barHidden {
                     TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
                            onExpand: { withAnimation(.snappy) { compactBar = false } }, onAdd: { showAdd = true })
                         .padding(.horizontal, 20)
@@ -136,6 +142,7 @@ struct RootView: View {
             }
             .animation(.snappy, value: model.syncReport?.id)
             .animation(.snappy, value: model.undoToast?.id)
+            .animation(.snappy, value: barHidden)
             // Without "Zpět" in 6 s the deletion goes through; also when another
             // toast took its place.
             .task(id: model.undoToast?.id) {
