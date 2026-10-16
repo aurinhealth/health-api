@@ -54,7 +54,7 @@ import { getStrengthHistory, parseStrengthPlan } from "./strength-history.js";
 import { explainWorkout } from "./workout-explanation.js";
 import { aiWorkoutPick } from "./ai-workout-pick.js";
 import { composeWorkout, poorFit } from "./ai-workout-compose.js";
-import { rankOptions, recentKinds, pickState, savePick, lessKinds, setLess, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "./coach-pick.js";
+import { rankOptions, dayChoice, recentKinds, pickState, savePick, lessKinds, setLess, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "./coach-pick.js";
 import { activityKindOf } from "./activity-match.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, scheduledLink, stepRows } from "./workout-library.js";
 import { buildCyclingCoachV2 } from "./cycling-coach-v2.js";
@@ -914,7 +914,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const detail=d.minutes?d.minutes+' min'+(o.detail.includes(' · ')?o.detail.slice(o.detail.indexOf(' · ')):''):o.detail;
         return {...o,detail,lines:d.lines,...(d.workout?{workout:d.workout}:{}),...(d.gym?{gym:d.gym}:{})};
       });
-      return Response.json({status:'ok',date,...ranked,options,less,chosen:state.chosen},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',date,...ranked,options,less,chosen:dayChoice({chosen:state.chosen,planned})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
   if(url.pathname==='/app/api/coach/check-in'&&request.method==='GET'){
