@@ -15,13 +15,14 @@ import { handleEmailChange } from "./email-login.js";
 import { emailConfigured } from "./email-sender.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
+import { internalTester } from "./staging.js";
 
 export async function handleAccountApi(request,env,ctx,url,session,internalAuth){
   if (url.pathname === "/app/api/me" && request.method === "GET") {
     const [onboarding,ai,consent]=await Promise.all([onboardingStatus(env),session.signedIn&&env.OPENAI_API_KEY?aiAllowance(env).catch(error=>{console.error('AI usage read failed',error.message);return null;}):null,session.signedIn?consentStatus(env):null]);
     const apple = session.user ? await appleIdentity(env.RAW_DB, session.user.id) : null;
     const passkeys = session.user ? await listPasskeys(env.RAW_DB, session.user.id) : [];
-    return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env),onboarding,ai,consent,apple,passkeys,emailLogin:emailConfigured(env)},{headers:{"Cache-Control":"no-store"}});
+    return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env),onboarding,ai,consent,apple,passkeys,emailLogin:emailConfigured(env),internalTester:internalTester(env,session.user)},{headers:{"Cache-Control":"no-store"}});
   }
   // Consent to health data (required) and to AI with OpenAI (optional); consent.js.
   if(url.pathname==='/app/api/consent'&&request.method==='POST'){

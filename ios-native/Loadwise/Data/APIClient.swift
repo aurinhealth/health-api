@@ -36,24 +36,27 @@ final class APIClient: @unchecked Sendable {
     /// Called on the first 426: AppModel swaps the screens for the update notice.
     var onUpdateRequired: (@Sendable () -> Void)?
 
-    let baseURL: URL
+    /// A client made without an address follows Nastavení → Testování → Server,
+    /// also when it is switched while the client lives (AppDelegate's, Apple Health's).
+    private let fixedBaseURL: URL?
+    var baseURL: URL { fixedBaseURL ?? Self.server }
     private let session: URLSession
     private let decoder = JSONDecoder()
 
-    /// The server's address. petrfitnessdata.eu, the old one, still serves the
-    /// same server for builds from before the move.
-    static let server = URL(string: "https://aurin.health")!
+    /// The server's address (ServerChoice.swift). petrfitnessdata.eu, the old
+    /// one, still serves the live server for builds from before the move.
+    static var server: URL { ServerChoice.current.url }
     private static let legacyServer = URL(string: "https://petrfitnessdata.eu")!
 
-    init(baseURL: URL = APIClient.server) {
-        self.baseURL = baseURL
+    init(baseURL: URL? = nil) {
+        self.fixedBaseURL = baseURL
         let config = URLSessionConfiguration.default
         config.httpCookieStorage = .shared
         config.httpCookieAcceptPolicy = .always
         config.httpShouldSetCookies = true
         config.timeoutIntervalForRequest = 30
         session = URLSession(configuration: config)
-        Self.moveLegacySession(to: baseURL)
+        Self.moveLegacySession(to: self.baseURL)
     }
 
     /// Builds from before the move kept the session cookie for petrfitnessdata.eu.
@@ -61,7 +64,8 @@ final class APIClient: @unchecked Sendable {
     /// signed in on the new address. It moves rather than copies, so a sign-out
     /// on the new address stays a sign-out.
     private static func moveLegacySession(to baseURL: URL) {
-        guard let host = baseURL.host(), host != legacyServer.host() else { return }
+        // Only onto the live server: the test server has sessions of its own.
+        guard let host = baseURL.host(), host == ServerChoice.live.url.host() else { return }
         let storage = HTTPCookieStorage.shared
         guard let old = storage.cookies(for: legacyServer)?.first(where: { $0.name == sessionCookie }) else { return }
         storage.deleteCookie(old)
@@ -192,6 +196,13 @@ final class APIClient: @unchecked Sendable {
         struct Me: Decodable { let user: User? }
         let me: Me = try await get("/app/api/me")
         return (me.user?.name?.nilIfBlank, me.user?.email?.nilIfBlank)
+    }
+
+    /// An internal tester, who may switch the server (GET /app/api/me → internalTester).
+    func internalTester() async throws -> Bool {
+        struct Me: Decodable { let internalTester: Bool? }
+        let me: Me = try await get("/app/api/me")
+        return me.internalTester ?? false
     }
 
     func setAI(_ allowed: Bool) async throws {

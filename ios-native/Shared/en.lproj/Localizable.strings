@@ -2497,6 +2497,10 @@
 "Po měřeních" = "By measurement";
 "Za 2 měsíce" = "In 2 months";
 "Zatím žádné měření." = "No measurement yet.";
+"Ostrý" = "Live";
+"Testovací" = "Test";
+"Testování" = "Testing";
+"Testovací server" = "Test server";
 
 /* Account: sign-in (Face ID passkeys, other devices) */
 "Přihlášení" = "Sign-in";

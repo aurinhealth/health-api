@@ -6,7 +6,7 @@ import {parseConfig} from './provision-user-shards.mjs';
 import {cloudflareD1,foodPlan,provisionFoodDatabase,bindFoodDatabase,migrateFoodCatalog,verifyFoodDatabase} from './food-catalog-tools.mjs';
 
 async function main() {
-  const environment='';
+  const environment=process.argv.includes('--staging')?'staging':'';
   const config=parseConfig(readFileSync('wrangler.runtime.jsonc','utf8')),plan=foodPlan(config,environment);
   const api=cloudflareD1({accountId:process.env.CLOUDFLARE_ACCOUNT_ID,token:process.env.CLOUDFLARE_API_TOKEN});
   if (process.argv.includes('--migrate')) {
