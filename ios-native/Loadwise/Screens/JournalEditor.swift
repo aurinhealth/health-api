@@ -1,7 +1,10 @@
 import SwiftUI
 
-// Upravit deník: the whole catalogue to pick from (search, category tabs,
-// ⊕ / ✓), and "Vlastní položka" for an item of one's own.
+// Co sledovat: the whole catalogue on one screen. Category chips switch the
+// list in place, search looks through all of it; each item has a switch, the
+// tracked ones first, "✦ automaticky" on those the day's data fills in. The day
+// orders them by time, so there is nothing to reorder. "Vlastní položka" adds
+// an item of one's own.
 
 struct JournalEditorView: View {
     @Environment(AppModel.self) private var model
@@ -9,9 +12,11 @@ struct JournalEditorView: View {
     @State private var catalog: JournalCatalog?
     @State private var pinned: [String] = []
     @State private var query = ""
-    @State private var tab = "all"
+    @State private var tab = ""
     @State private var saving = false
     @State private var error: String?
+
+    private var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
         NavigationStack {
@@ -19,7 +24,7 @@ struct JournalEditorView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     if let catalog {
                         searchField(catalog.count)
-                        tabs(catalog.categories)
+                        if !searching { tabs(catalog.categories) }
                         list(catalog)
                     } else if let error {
                         Text(error).font(Typo.sentence(19)).foregroundStyle(Palette.secondary).padding(.top, 30)
@@ -34,7 +39,7 @@ struct JournalEditorView: View {
                 .padding(.bottom, 40)
             }
             .background(Palette.background.ignoresSafeArea())
-            .navigationTitle(L10n.tr("Upravit deník"))
+            .navigationTitle(L10n.tr("Co sledovat"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L10n.tr("Zrušit")) { dismiss() } }
@@ -54,7 +59,7 @@ struct JournalEditorView: View {
             TextField(L10n.f("Hledat ve %@ položkách", String(count)), text: $query)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-            if !query.isEmpty {
+            if searching {
                 Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.faint) }
                     .buttonStyle(.plain)
                     .accessibilityLabel(L10n.tr("Smazat"))
@@ -68,7 +73,6 @@ struct JournalEditorView: View {
     private func tabs(_ categories: [JournalCategory]) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                chip("all", title: L10n.tr("Vše"))
                 ForEach(categories) { c in chip(c.key, title: c.title) }
             }
         }
@@ -76,29 +80,48 @@ struct JournalEditorView: View {
 
     private func chip(_ key: String, title: String) -> some View {
         let on = tab == key
+        let count = catalog?.items.filter { $0.category == key && pinned.contains($0.key) }.count ?? 0
         return Button { tab = key } label: {
-            Text(verbatim: title).font(.footnote.weight(.medium))
-                .foregroundStyle(on ? Palette.onButton : Palette.ink)
-                .padding(.horizontal, 13).frame(height: 32)
-                .background(on ? Palette.button : Palette.card, in: Capsule())
+            HStack(spacing: 5) {
+                Text(verbatim: title)
+                if count > 0 { Text(verbatim: String(count)).opacity(0.6) }
+            }
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(on ? Palette.onButton : Palette.ink)
+            .padding(.horizontal, 13).frame(height: 32)
+            .background(on ? Palette.button : Palette.card, in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
+    /// The chosen category, or everything matching the search. The catalogue
+    /// comes with the tracked items first; a switch doesn't move its row.
     private func shown(_ catalog: JournalCatalog) -> [JournalItem] {
         let q = query.trimmingCharacters(in: .whitespaces).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Fmt.locale)
         return catalog.items.filter { item in
-            (tab == "all" || item.category == tab)
-                && (q.isEmpty || item.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Fmt.locale).contains(q))
+            q.isEmpty
+                ? item.category == tab
+                : item.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Fmt.locale).contains(q)
         }
     }
 
     private func list(_ catalog: JournalCatalog) -> some View {
         let items = shown(catalog)
         return VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                row(item)
+            }
+            if items.isEmpty {
+                Text("Nic takového tu není. Přidej si to jako vlastní položku.")
+                    .font(Typo.small).foregroundStyle(Palette.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 16)
+            }
+            Rectangle().fill(Palette.hairline).frame(height: 1)
             NavigationLink {
-                JournalCustomItemView(categories: catalog.categories, start: tab == "all" ? "supplements" : tab) { key in
+                JournalCustomItemView(categories: catalog.categories, start: tab.isEmpty ? "supplements" : tab) { key in
                     if let key, !pinned.contains(key) { pinned.append(key) }
                     Task { await load(keepPinned: true) }
                 }
@@ -113,40 +136,31 @@ struct JournalEditorView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            ForEach(items) { item in
-                Rectangle().fill(Palette.hairline).frame(height: 1)
-                row(item)
-            }
-            if items.isEmpty {
-                Rectangle().fill(Palette.hairline).frame(height: 1)
-                Text("Nic takového tu není. Přidej si to jako vlastní položku.")
-                    .font(Typo.small).foregroundStyle(Palette.muted)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 16)
-            }
         }
         .padding(.horizontal, 16).padding(.vertical, 2)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private func row(_ item: JournalItem) -> some View {
-        let on = pinned.contains(item.key)
-        return Button {
-            if on { pinned.removeAll { $0 == item.key } } else { pinned.append(item.key) }
-        } label: {
+        let on = Binding(
+            get: { pinned.contains(item.key) },
+            set: { value in
+                if value { if !pinned.contains(item.key) { pinned.append(item.key) } } else { pinned.removeAll { $0 == item.key } }
+            }
+        )
+        return Toggle(isOn: on) {
             HStack(spacing: 12) {
                 JournalIcon(symbol: item.icon, color: JournalStyle.color(item.category))
-                Text(verbatim: item.name).font(.body).foregroundStyle(Palette.ink).lineLimit(2)
-                Spacer(minLength: 8)
-                Image(systemName: on ? "checkmark.circle.fill" : "plus.circle")
-                    .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(on ? Palette.green : Palette.faint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: item.name).font(.body).foregroundStyle(Palette.ink).lineLimit(2)
+                    if item.auto == true {
+                        Text("✦ automaticky").font(.caption.weight(.medium)).foregroundStyle(Palette.amber)
+                    }
+                }
             }
-            .frame(minHeight: 52)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(on ? .isSelected : [])
+        .toggleStyle(LoadwiseToggleStyle())
+        .frame(minHeight: 54)
         .contextMenu {
             if item.custom == true {
                 Button(role: .destructive) { Task { await remove(item.key) } } label: {
@@ -163,6 +177,7 @@ struct JournalEditorView: View {
             if catalog == nil {
                 catalog = DemoJournal.catalog
                 pinned = catalog?.pinned ?? []
+                if tab.isEmpty { tab = catalog?.categories.first?.key ?? "" }
             }
             return
         }
@@ -170,6 +185,7 @@ struct JournalEditorView: View {
             let fresh = try await model.api.journalCatalog()
             catalog = fresh
             if !keepPinned { pinned = fresh.pinned }
+            if tab.isEmpty { tab = fresh.categories.first?.key ?? "" }
             error = nil
         } catch {
             self.error = error.localizedDescription

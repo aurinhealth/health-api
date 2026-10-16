@@ -39,7 +39,15 @@ function normalizeSettings(raw) {
     custom,
     dismissed: (Array.isArray(s.dismissed) ? s.dismissed.filter(isDate) : []).slice(-14),
     announced: Array.isArray(s.announced) ? [...new Set(s.announced.map(String))].slice(-200) : [],
-    discovery: s.discovery && typeof s.discovery === "object" && s.discovery.key ? s.discovery : null
+    discovery: s.discovery && typeof s.discovery === "object" && s.discovery.key ? s.discovery : null,
+    // Deník is on for everyone until they turn it off (Nastavení → Deník).
+    enabled: s.enabled !== false,
+    askMorning: s.askMorning !== false,
+    // "Vždy ne" / "Vždy ano": the answer filled in every day from `since` on
+    // where the day's data says nothing.
+    fixed: Object.fromEntries(Object.entries(s.fixed && typeof s.fixed === "object" ? s.fixed : {})
+      .filter(([k, v]) => known.has(k) && v && (v.answer === 0 || v.answer === 1) && isDate(v.since))
+      .map(([k, v]) => [k, { answer: v.answer, since: v.since }]))
   };
 }
 
@@ -80,6 +88,40 @@ export function findItem(settings, key) {
 }
 export function pinnedItems(settings) {
   return settings.pinned.map(k => findItem(settings, k)).filter(Boolean);
+}
+
+// {enabled, askMorning}: Nastavení → Deník.
+export async function setJournalOptions(db, options) {
+  const settings = await getJournalSettings(db);
+  const next = { ...settings };
+  if (typeof options?.enabled === "boolean") next.enabled = options.enabled;
+  if (typeof options?.askMorning === "boolean") next.askMorning = options.askMorning;
+  return saveJournalSettings(db, next);
+}
+
+// "Vždy ne" (0) / "Vždy ano" (1) from `since` on; null ends it.
+export async function setFixed(db, key, answer, since) {
+  const settings = await getJournalSettings(db);
+  const item = findItem(settings, key);
+  if (!item) throw new Error(L("Neznámá položka deníku.", "Unknown journal item."));
+  if (answer === 1 && item.type === "time") throw new Error(L("Čas nejde nastavit napořád.", "A time cannot be fixed."));
+  const fixed = { ...settings.fixed };
+  if (answer === 0 || answer === 1) fixed[key] = { answer, since }; else delete fixed[key];
+  return saveJournalSettings(db, { ...settings, fixed });
+}
+
+// The fixed answers as the day's data on the days they cover; real data wins.
+export function withFixed(settings, auto, from, to) {
+  const out = { ...auto };
+  for (const [key, f] of Object.entries(settings.fixed || {})) {
+    const item = findItem(settings, key);
+    if (!item) continue;
+    for (let d = f.since > from ? f.since : from; d <= to; d = shift(d, 1)) {
+      if (out[d]?.[key]) continue;
+      out[d] = { ...(out[d] || {}), [key]: { fixed: true, yes: f.answer === 1, ...(item.type === "amount" ? { amount: f.answer ? item.usual ?? 1 : 0 } : {}) } };
+    }
+  }
+  return out;
 }
 
 export async function setPinned(db, keys) {
@@ -175,15 +217,30 @@ export function alcoholDrinks(kind, ml, name = "") {
 const clockOf = value => localDateTime(value).slice(11, 16);
 const later = (a, b) => (!a ? b : !b ? a : (a.localeCompare(b) >= 0 ? a : b));
 
-// The day's data from `from` to `to` per date: alcohol {amount, time},
-// caffeine {amount, time}, late_caffeine {yes}, late_meal {time} (the last
-// meal) and evening_training {time} (the last workout from 18:00, walks left
-// out). A date without data has no key.
+// The day's data from `from` to `to` per date. From the drinks, the food
+// diary and the activities: alcohol {amount, time}, caffeine {amount, time},
+// late_caffeine, coffee_cups {amount, time}, little_water, energy_drink,
+// heavy_dinner, late_meal {time} (the last meal), evening_training {time} (the
+// last workout from 18:00, walks left out), rest_day, hard_training, yoga,
+// long_walk and outdoors (✓ only: a workout outside says yes, none says
+// nothing). From the nights: late_bed, regular_bedtime, drink_before_bed (a
+// drink in the hour before falling asleep) and nap. A date without data has no
+// key; a ✕ needs the day logged (drinks or food) or measured (a night).
 export async function autoDays(db, from, to) {
   const days = {};
   const at = (date, key) => ((days[date] ||= {})[key] ||= {});
+  const set = (date, key, yes) => { const e = at(date, key); e.yes = e.yes === true || yes; };
+  const logged = new Set(), drinkTimes = {};
   const drink = (date, time, kind, ml, name, alcohol) => {
+    logged.add(date);
+    if (time) (drinkTimes[date] ||= []).push(time);
     if (alcohol) { const a = at(date, "alcohol"); a.amount = (a.amount || 0) + alcoholDrinks(kind, ml, name); a.time = later(a.time, time); return; }
+    const water = (days[date] ||= {}).__water || 0;
+    days[date].__water = water + Math.max(0, Number(ml) || 0);
+    if (/energ|red bull|monster|\bburn\b|rockstar/i.test(String(name || ""))) set(date, "energy_drink", true);
+    if (kind === "coffee" || (kind === "food" && /espresso|ristretto|lungo|káv|kav|coffee|latte|cappucc|kafe|americano|flat white/i.test(String(name || "")))) {
+      const c = at(date, "coffee_cups"); c.amount = (c.amount || 0) + 1; c.time = later(c.time, time);
+    }
     const mg = caffeineMg(kind, ml, name);
     if (!(mg > 0)) return;
     const c = at(date, "caffeine"); c.amount = (c.amount || 0) + mg; c.time = later(c.time, time);
@@ -192,26 +249,85 @@ export async function autoDays(db, from, to) {
   const read = async (sql, ...args) => {
     try { return (await db.prepare(sql).bind(db.userId, ...args).all()).results || []; } catch (error) { if (missingTable(error)) return []; throw error; }
   };
-  const [fluids, food, activities] = await Promise.all([
+  const [fluids, food, activities, nights] = await Promise.all([
     read("SELECT date,consumed_at,ml,kind FROM fluid_log WHERE user_id=? AND date>=? AND date<=?", from, to),
-    read("SELECT id,consumed_date,consumed_at,recipe_title,note FROM food_logs WHERE user_id=? AND consumed_date>=? AND consumed_date<=? AND (status IS NULL OR status='eaten')", from, to),
+    read("SELECT id,consumed_date,consumed_at,recipe_title,note,kcal FROM food_logs WHERE user_id=? AND consumed_date>=? AND consumed_date<=? AND (status IS NULL OR status='eaten')", from, to),
     read(`SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints
       WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<?
-        AND (record_role IS NULL OR record_role!='duplicate')`, shift(from, -1), shift(to, 1) + "T23:59")
+        AND (record_role IS NULL OR record_role!='duplicate')`, shift(from, -1), shift(to, 1) + "T23:59"),
+    read(`SELECT start_time,end_time,payload_json FROM health_datapoints
+      WHERE user_id=? AND data_type='sleep' AND start_time>=? AND start_time<?
+        AND (record_role IS NULL OR record_role!='duplicate')`, shift(from, -16), shift(to, 2))
   ]);
   for (const f of fluids) drink(f.date, clockOf(f.consumed_at), f.kind, f.ml, "", f.kind === "beer" || f.kind === "wine");
+  const dinner = {};
   for (const row of food) {
+    logged.add(row.consumed_date);
     const time = row.consumed_at ? clockOf(row.consumed_at) : null;
     const d = drinkFromFoodEntry(row);
     if (d) { drink(row.consumed_date, time, "food", d.totalMl, d.name, d.alcohol); continue; }
     if (time) { const m = at(row.consumed_date, "late_meal"); m.time = later(m.time, time); }
+    if (time && time >= "18:00") dinner[row.consumed_date] = (dinner[row.consumed_date] || 0) + (Number(row.kcal) || 0);
   }
+  const trained = new Set(), measured = new Set();
   for (const a of dedupeActivities(activities.map(activityFromRow))) {
-    if (!a || a.date < from || a.date > to || a.kind === "walk") continue;
-    const time = a.start.slice(11, 16);
-    if (time >= "18:00") { const e = at(a.date, "evening_training"); e.time = later(e.time, time); }
+    if (!a || a.date < from || a.date > to) continue;
+    measured.add(a.date);
+    const minutes = Number(a.minutes) || 0;
+    if (a.kind === "walk") {
+      if (minutes >= 60) set(a.date, "long_walk", true);
+    } else {
+      trained.add(a.date);
+      const time = a.start.slice(11, 16);
+      if (time >= "18:00") { const e = at(a.date, "evening_training"); e.time = later(e.time, time); }
+      if (minutes >= 90 || (Number(a.tss) || 0) >= 120) set(a.date, "hard_training", true);
+      if (/yoga|jóga|joga/i.test(String(a.name || ""))) set(a.date, "yoga", true);
+    }
+    if (["walk", "run", "ride"].includes(a.kind) && minutes >= 30 && !/indoor|virtual|treadmill|trenažér|pás/i.test(String(a.name || ""))) set(a.date, "outdoors", true);
   }
-  for (const day of Object.values(days)) if (day.caffeine) day.caffeine.amount = Math.round(day.caffeine.amount / 5) * 5;
+  // The nights: the main sleep that began on the evening of a date (or after
+  // midnight), and naps by their own date.
+  const starts = [];
+  for (const r of nights) {
+    let p = {};
+    try { p = JSON.parse(r.payload_json || "{}"); } catch { p = {}; }
+    const start = localDateTime(r.start_time), end = localDateTime(r.end_time);
+    if (!start || !end) continue;
+    const minutes = (Date.parse(r.end_time) - Date.parse(r.start_time)) / 60000;
+    if (p.sleep?.metadata?.nap === true || (minutes > 0 && minutes < 180 && start.slice(11, 13) >= "09" && start.slice(11, 13) < "20")) {
+      const date = start.slice(0, 10);
+      if (date >= from && date <= to) { set(date, "nap", true); (days[date].nap.minutes = Math.round(minutes)); }
+      continue;
+    }
+    // A night that starts before noon belongs to the evening before.
+    const clock = start.slice(11, 16), date = clock < "12:00" ? shift(start.slice(0, 10), -1) : start.slice(0, 10);
+    starts.push({ date, clock: clock < "12:00" ? String(Number(clock.slice(0, 2)) + 24).padStart(2, "0") + clock.slice(2) : clock });
+  }
+  const minutesOf = c => Number(c.slice(0, 2)) * 60 + Number(c.slice(3, 5));
+  for (const n of starts) {
+    if (n.date < from || n.date > to) continue;
+    measured.add(n.date);
+    set(n.date, "late_bed", n.clock >= "23:30");
+    const before = starts.filter(o => o.date < n.date && o.date >= shift(n.date, -14)).map(o => minutesOf(o.clock)).sort((a, b) => a - b);
+    if (before.length >= 5) set(n.date, "regular_bedtime", Math.abs(minutesOf(n.clock) - before[Math.floor(before.length / 2)]) <= 45);
+    if (logged.has(n.date)) {
+      const bed = minutesOf(n.clock);
+      set(n.date, "drink_before_bed", (drinkTimes[n.date] || []).some(t => { const m = minutesOf(t) + (t < "12:00" ? 1440 : 0); return m <= bed && m >= bed - 60; }));
+    }
+  }
+  for (const date of logged) {
+    if (date < from || date > to) continue;
+    const day = days[date] ||= {};
+    if (day.__water != null) set(date, "little_water", day.__water < 1500);
+    if (!day.energy_drink) set(date, "energy_drink", false);
+    set(date, "heavy_dinner", (dinner[date] || 0) >= 900);
+  }
+  for (const date of measured) if (!trained.has(date) && !days[date]?.evening_training) set(date, "rest_day", true);
+  for (const date of trained) set(date, "rest_day", false);
+  for (const day of Object.values(days)) {
+    delete day.__water;
+    if (day.caffeine) day.caffeine.amount = Math.round(day.caffeine.amount / 5) * 5;
+  }
   return days;
 }
 

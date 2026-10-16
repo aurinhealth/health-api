@@ -5,7 +5,7 @@ import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
 import { CATALOG, DEFAULT_PINNED, CATEGORIES, normalizeCustomItem, itemView, catalogItem } from "../src/journal-catalog.js";
 import { percentEffect, impactOf, thresholdOf, rankImpacts, newDiscovery, dayState, itemDetail, morningMetrics, timeLevel, levelTime, shiftDay } from "../src/journal-impact.js";
-import { saveJournalEntry, listJournalEntries, getJournalSettings, saveCustomItem, autoDays, sickDays, caffeineMg, alcoholDrinks } from "../src/journal-store.js";
+import { saveJournalEntry, listJournalEntries, getJournalSettings, saveCustomItem, autoDays, sickDays, caffeineMg, alcoholDrinks, setJournalOptions, setFixed } from "../src/journal-store.js";
 import { journalDay, journalCard, journalCatalog, thresholdText, waitingText, valueText, handleJournalApi, journalForCoach } from "../src/routes-journal.js";
 import { exportPages } from "../src/account-data.js";
 import { localToday } from "../src/user-time.js";
@@ -184,7 +184,7 @@ function dataDb(userId = 5) {
     CREATE INDEX idx_health_datapoints_user_0 ON health_datapoints(user_id, data_type, sample_time DESC);
     CREATE TABLE fluid_log (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, date TEXT NOT NULL, consumed_at TEXT NOT NULL, ml INTEGER NOT NULL, kind TEXT NOT NULL DEFAULT 'water', created_at TEXT, source TEXT, external_id TEXT, app TEXT);
     CREATE INDEX idx_fluid_log_user_date ON fluid_log(user_id, date);
-    CREATE TABLE food_logs (user_id INTEGER NOT NULL, id INTEGER PRIMARY KEY AUTOINCREMENT, consumed_date TEXT NOT NULL, consumed_at TEXT, recipe_title TEXT, note TEXT, status TEXT);
+    CREATE TABLE food_logs (user_id INTEGER NOT NULL, id INTEGER PRIMARY KEY AUTOINCREMENT, consumed_date TEXT NOT NULL, consumed_at TEXT, recipe_title TEXT, note TEXT, kcal REAL NOT NULL DEFAULT 0, status TEXT);
     CREATE INDEX idx_food_logs_user ON food_logs(user_id, consumed_date, consumed_at);`);
   const fluid = raw.sqlite.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind) VALUES(?,?,?,?,?)");
   const food = raw.sqlite.prepare("INSERT INTO food_logs(user_id,consumed_date,consumed_at,recipe_title,note) VALUES(?,?,?,?,?)");
@@ -219,28 +219,74 @@ test("the day's data fills in alcohol, caffeine, the last meal and an evening wo
   // The journal day shows them as answered from the data; Today's card lists them.
   const day = await withLang("cs", () => journalDay(db, d, today));
   const items = day.sections.flatMap(s => s.items);
-  assert.deepEqual(items.filter(i => i.fromData).map(i => [i.key, i.value]), [["alcohol", "2 · do 21:40"], ["caffeine", "145 mg · do 15:10"], ["late_meal", "21:15"], ["evening_training", "19:00"]]);
-  assert.deepEqual([day.answered, day.total], [4, 9]);
-  assert.equal(day.sections[0].title, "Večer a noc");
+  assert.deepEqual(items.filter(i => i.fromData).map(i => [i.key, i.value]), [["caffeine", "145 mg · do 15:10"], ["outdoors", null], ["evening_training", "19:00"], ["late_meal", "21:15"], ["alcohol", "2 · do 21:40"]]);
+  // By part of the day and time; the row's value without the time.
+  assert.deepEqual(day.sections.map(s => [s.title, s.items.map(i => i.key)]), [["Přes den", ["caffeine", "outdoors"]], ["Večer", ["evening_training", "late_meal", "alcohol", "sauna"]], ["Noc", ["phone_in_bed", "late_bed", "sleep_away"]]]);
+  assert.deepEqual(items.filter(i => i.key === "alcohol" || i.key === "late_meal").map(i => i.short), [null, "2 nápoje"]);
+  assert.deepEqual([day.answered, day.total], [5, 9]);
   assert.deepEqual(day.week.map(w => w.state), ["empty", "empty", "partial", "empty", "future", "future", "future"]);
+  // More from the same day: coffee, too little water, no energy drink, no big dinner, a training day.
+  assert.deepEqual(auto[d].coffee_cups, { amount: 2, time: "15:10" });
+  assert.deepEqual([auto[d].little_water, auto[d].energy_drink, auto[d].heavy_dinner, auto[d].rest_day], [{ yes: true }, { yes: false }, { yes: false }, { yes: false }]);
   const card = await withLang("cs", () => journalCard(db, today, 7));
-  assert.deepEqual([card.date, card.open, card.answered, card.total, card.rows.length], [d, 5, 4, 9, 4]);
+  assert.deepEqual([card.date, card.open, card.answered, card.total], [d, 4, 5, 9]);
   assert.equal(await journalCard(db, today, 3), null);
 });
 
-test("the Today card goes once the day is answered or put away", async () => {
+test("Vždy ne / Vždy ano fills the days from then on, the day's data and own answers win", async () => {
+  const { db, fluid, userId } = dataDb(11);
+  const d = shiftDay(today, -1), before = shiftDay(today, -3);
+  await setFixed(db, "alcohol", 0, shiftDay(today, -2));
+  await setFixed(db, "sauna", 1, shiftDay(today, -2));
+  const day = await withLang("cs", () => journalDay(db, d, today));
+  const items = day.sections.flatMap(s => s.items);
+  const alcohol = items.find(i => i.key === "alcohol"), sauna = items.find(i => i.key === "sauna");
+  assert.deepEqual([alcohol.fixed, alcohol.answer, alcohol.short], [0, 0, "vždy ne"]);
+  assert.deepEqual([sauna.fixed, sauna.answer, sauna.short], [1, 1, "vždy ano"]);
+  // Not before it was set.
+  const earlier = (await journalDay(db, before, today)).sections.flatMap(s => s.items).find(i => i.key === "alcohol");
+  assert.equal(earlier.answered, false);
+  // A logged beer beats "Vždy ne".
+  fluid.run(userId, d, d + "T20:00", 500, "beer");
+  const drank = (await journalDay(db, d, today)).sections.flatMap(s => s.items).find(i => i.key === "alcohol");
+  assert.deepEqual([drank.fixed, drank.answer, drank.amount], [undefined, 1, 1]);
+  await assert.rejects(() => setFixed(db, "late_meal", 1, d));
+  await setFixed(db, "sauna", null, d);
+  assert.equal((await getJournalSettings(db)).fixed.sauna, undefined);
+});
+
+test("the nights fill in late to bed, the usual bedtime, a drink before bed and a nap", async () => {
+  const { raw, db, fluid, userId } = dataDb(12);
+  const insert = raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,start_time,end_time,payload_json) VALUES(?,?,?,?,?,?)");
+  // Local wall-clock times; a night ends the next morning.
+  const night = (date, start, end, nap = false) => insert.run(userId, "apple-health", "sleep", date + "T" + start + ":00",
+    (end < start ? shiftDay(date, 1) : date) + "T" + end + ":00", JSON.stringify({ sleep: { metadata: { nap } } }));
+  // Usual bedtime 22:30 for a week, then 0:15 after yesterday, a nap and a drink at 23:50.
+  const d = shiftDay(today, -1);
+  for (let i = 8; i >= 2; i--) night(shiftDay(today, -i), "22:30", "06:30");
+  night(today, "00:15", "07:00");
+  night(d, "14:00", "14:25", true);
+  fluid.run(userId, d, d + "T23:50", 300, "water");
+  const auto = await autoDays(db, shiftDay(today, -8), d);
+  assert.equal(auto[shiftDay(today, -3)].late_bed.yes, false);
+  assert.deepEqual([auto[d].late_bed.yes, auto[d].regular_bedtime.yes, auto[d].drink_before_bed.yes, auto[d].nap.yes], [true, false, true, true]);
+  assert.equal(auto[shiftDay(today, -2)].regular_bedtime?.yes, true);
+});
+
+test("the morning sheet goes once yesterday is answered, put away, or Deník is off", async () => {
   const db = scopedDb(createD1(), 8);
   const settings = await getJournalSettings(db);
   const d = shiftDay(today, -1);
+  assert.deepEqual([settings.enabled, settings.askMorning], [true, true]);
   assert.equal((await journalCard(db, today, 8)).open, 9);
-  assert.equal((await journalCard(db, today, 8)).askMood, false);
-  for (const key of settings.pinned) await saveJournalEntry(db, settings, { date: d, key, answer: 0 });
-  // In the morning the check-in asks how you feel, so yesterday's answers are enough.
+  await setJournalOptions(db, { askMorning: false });
+  assert.equal((await journalCard(db, today, 8)).ask, false);
+  await setJournalOptions(db, { enabled: false });
   assert.equal(await journalCard(db, today, 8), null);
-  // In the evening the card asks about today, the mood included.
-  for (const key of settings.pinned) await saveJournalEntry(db, settings, { date: today, key, answer: 0 });
-  const evening = await journalCard(db, today, 20);
-  assert.ok(evening === null || evening.askMood === true);
+  assert.equal(await journalForCoach(db, today), null);
+  await setJournalOptions(db, { enabled: true, askMorning: true });
+  for (const key of settings.pinned) await saveJournalEntry(db, settings, { date: d, key, answer: 0 });
+  assert.equal(await journalCard(db, today, 8), null);
   // Put away: gone for the day.
   const other = scopedDb(createD1(), 9);
   const request = (path, body) => new Request("https://aurin.health" + path, { method: body ? "POST" : "GET", headers: { Origin: "https://aurin.health" }, ...(body ? { body: JSON.stringify(body) } : {}) });

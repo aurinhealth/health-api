@@ -75,6 +75,7 @@ export function dayState(item, entry, auto) {
     return { yes: true, level: null };
   }
   if (!auto) return { yes: null, level: null };
+  if (auto.fixed) return { yes: !!auto.yes, level: item.type === "amount" ? num(auto.amount) : null };
   if (item.type === "amount") { const a = num(auto.amount); return a == null ? { yes: null, level: null } : { yes: a > 0, level: a }; }
   if (item.type === "time") { const t = timeLevel(auto.time); return t == null ? { yes: null, level: null } : { yes: !item.late || t >= timeLevel(item.late), level: t }; }
   return auto.yes == null ? { yes: null, level: null } : { yes: !!auto.yes, level: null };

@@ -44,7 +44,7 @@ enum WidgetPanel: String {
             // weight) are on Health.
             return [.init(kind: .food, size: .medium), .init(kind: .plan, size: .medium), .init(kind: .steps, size: .medium)]
         case .health:
-            return [.init(kind: .sleep, size: .medium), .init(kind: .sleepDebt, size: .small), .init(kind: .oxygen, size: .small),
+            return [.init(kind: .journal, size: .medium), .init(kind: .sleep, size: .medium), .init(kind: .sleepDebt, size: .small), .init(kind: .oxygen, size: .small),
                     .init(kind: .respiration, size: .small), .init(kind: .skinTemp, size: .small), .init(kind: .bedtime, size: .medium),
                     .init(kind: .hrv, size: .medium), .init(kind: .restingHR, size: .small),
                     .init(kind: .weight, size: .medium), .init(kind: .bodyFat, size: .medium), .init(kind: .muscle, size: .medium)]
@@ -117,6 +117,8 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     case sleep, sleepDebt, bedtime
     case steps, activeCalories
     case weight, bodyFat, muscle
+    /// Deník (JournalViews.swift): yesterday's open questions and the biggest effects.
+    case journal
 
     var id: String { rawValue }
 
@@ -146,12 +148,13 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .weight: return "Váha"
         case .bodyFat: return "Tělesný tuk"
         case .muscle: return "Svalová hmota"
+        case .journal: return "Deník"
         }
     }
 
     var section: WidgetSection {
         switch self {
-        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen: return .health
+        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen, .journal: return .health
         case .form, .thisWeek, .sessions, .plan, .zones, .musclesFigure, .musclesGlance: return .training
         case .food, .drinks, .macros: return .food
         case .sleep, .sleepDebt, .bedtime: return .sleep
@@ -167,7 +170,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
             return [.small, .medium, .large]
         case .respiration, .skinTemp, .oxygen, .zones, .food, .drinks, .sleepDebt, .muscle, .musclesGlance:
             return [.small, .medium]
-        case .sessions, .plan, .macros, .bedtime:
+        case .sessions, .plan, .macros, .bedtime, .journal:
             return [.medium]
         }
     }
@@ -186,7 +189,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .respiration, .skinTemp, .oxygen, .sleep, .sleepDebt, .bedtime, .bodyFat: return .health
         case .vo2max, .form, .thisWeek, .sessions, .zones, .activeCalories: return .training
         case .drinks, .macros: return .food
-        case .muscle, .musclesFigure, .musclesGlance: return nil
+        case .muscle, .musclesFigure, .musclesGlance, .journal: return nil
         }
     }
 }
@@ -231,8 +234,15 @@ enum WidgetLayoutStore {
             seen.insert(kind)
             out.append(PlacedWidget(kind: kind, size: size))
         }
+        // Deník came to Zdraví after the layouts were saved: on top, until removed.
+        if panel == .health, !seen.contains(.journal), !UserDefaults.standard.bool(forKey: journalRemovedKey) {
+            out.insert(PlacedWidget(kind: .journal, size: .medium), at: 0)
+        }
         return out
     }
+
+    /// Set when the athlete takes Deník off Zdraví, so it doesn't come back.
+    static let journalRemovedKey = "widgets.journalRemoved"
 
     static func encode(_ items: [PlacedWidget]) -> String {
         let stored = items.map { Stored(kind: $0.kind.rawValue, size: $0.size.rawValue) }
@@ -339,6 +349,8 @@ struct WidgetData {
         case .muscle: return health?.weight?.muscle != nil
         // The widget loads the muscles itself.
         case .musclesFigure, .musclesGlance: return true
+        // On unless turned off in Nastavení → Deník or its ··· menu.
+        case .journal: return JournalSwitch.isOn
         case .form: return training?.form != nil
         case .thisWeek: return training != nil
         case .sessions: return !(training?.sessions ?? []).isEmpty
@@ -542,6 +554,8 @@ struct PanelWidget: View {
             }
         case .bodyFat:
             if let value = data.health?.weight?.bodyFat { BodyFatWidget(fat: value, size: item.size) }
+        case .journal:
+            JournalHealthCard().allowsHitTesting(linked)
         }
     }
 

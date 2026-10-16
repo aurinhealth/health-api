@@ -25,10 +25,10 @@ struct JournalImpactView: View {
                         .font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.top, 22)
+                    if !impact.waiting.isEmpty { fewDays(impact.waiting).padding(.top, 12) }
                 } else {
-                    ranked(impact).padding(.top, 16)
+                    chart(impact).padding(.top, 16)
                 }
-                if !impact.waiting.isEmpty { waiting(impact.waiting).padding(.top, 26) }
                 Text("Srovnávám rána po dnech s ✓ a s ✕ za posledních 90 dní, bez dnů nemoci.")
                     .font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -55,69 +55,85 @@ struct JournalImpactView: View {
         }
     }
 
-    private func ranked(_ impact: JournalImpact) -> some View {
-        let scale = Double(Swift.max(20, impact.items.map { abs($0.effect) }.max() ?? 20))
-        return VStack(alignment: .leading, spacing: 4) {
+    /// Hurts left, helps right, from a centre line; the value at the bar's
+    /// end, the item on the other side of the line. Items without enough days
+    /// are named in one line underneath.
+    private func chart(_ impact: JournalImpact) -> some View {
+        let scale = Double(Swift.max(20, impact.items.map { abs($0.effect) }.max() ?? 20)) * 1.3
+        let items = impact.items.sorted { $0.effect < $1.effect }
+        return VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("▾ Škodí").font(.caption.weight(.semibold)).foregroundStyle(Palette.rust)
+                Text("Škodí").foregroundStyle(Palette.rust)
                 Spacer()
-                Text("Pomáhá ▴").font(.caption.weight(.semibold)).foregroundStyle(Palette.green)
+                Text("Pomáhá").foregroundStyle(Palette.green)
             }
-            .textCase(.uppercase)
+            .font(.caption.weight(.medium))
             .padding(.bottom, 6)
-            ForEach(impact.items) { item in
-                Button { model.push(.journalItem(item.key, impact.metric)) } label: {
-                    VStack(alignment: .leading, spacing: 7) {
-                        HStack {
-                            Text(verbatim: item.name).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
-                            Spacer(minLength: 8)
-                            Text(verbatim: JournalText.percent(item.effect)).font(.body.weight(.semibold))
-                                .foregroundStyle(item.effect < 0 ? Palette.rust : Palette.green)
-                        }
-                        DivergingBar(effect: item.effect, scale: scale)
-                        counts(yes: item.yes, no: item.no)
+            VStack(spacing: 0) {
+                ForEach(items) { item in
+                    Button { model.push(.journalItem(item.key, impact.metric)) } label: {
+                        ImpactBarRow(item: item, scale: scale)
                     }
-                    .padding(.vertical, 9)
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(item.name + ", " + JournalText.percent(item.effect))
+                    .accessibilityHint(L10n.f("%@ dní s ✓, %@ s ✕", String(item.yes), String(item.no)))
                 }
-                .buttonStyle(.plain)
-                .accessibilityElement(children: .combine)
+            }
+            .background(alignment: .center) {
+                Rectangle().fill(Palette.ink.opacity(0.22)).frame(width: 1)
+            }
+            if !impact.waiting.isEmpty {
+                Rectangle().fill(Palette.hairline).frame(height: 1).padding(.top, 14)
+                fewDays(impact.waiting).padding(.top, 12)
             }
         }
-        .padding(16)
+        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 16)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
-    private func waiting(_ list: [JournalImpact.Waiting]) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "Potřebuju víc dní").padding(.horizontal, 4)
-            VStack(spacing: 0) {
-                ForEach(Array(list.enumerated()), id: \.element.id) { index, item in
-                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                    HStack(alignment: .top, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(verbatim: item.name).font(.body).foregroundStyle(Palette.ink)
-                            Text(verbatim: item.text).font(Typo.caption).foregroundStyle(Palette.muted)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 8)
-                        counts(yes: item.yes, no: item.no)
-                    }
-                    .padding(.vertical, 12)
-                }
-            }
-            .padding(.horizontal, 16)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        }
+    private func fewDays(_ list: [JournalImpact.Waiting]) -> some View {
+        Text(verbatim: L10n.tr("Málo dní:") + " " + list.map(\.name).joined(separator: ", "))
+            .font(.footnote).foregroundStyle(Palette.faint)
+            .fixedSize(horizontal: false, vertical: true)
     }
+}
 
-    private func counts(yes: Int, no: Int) -> some View {
-        HStack(spacing: 8) {
-            Text(verbatim: "✕ " + String(no))
-            Text(verbatim: "✓ " + String(yes))
+/// One row of the chart: the bar from the centre line with its value at the
+/// end, the item's icon and name across the line.
+struct ImpactBarRow: View {
+    let item: JournalImpact.Ranked
+    let scale: Double
+
+    var body: some View {
+        let hurts = item.effect < 0
+        let color = hurts ? Palette.rust : Palette.green
+        GeometryReader { geo in
+            let half = geo.size.width / 2
+            let length = Swift.max(4, half * CGFloat(Swift.min(1, Double(abs(item.effect)) / scale)))
+            ZStack(alignment: .topLeading) {
+                UnevenRoundedRectangle(
+                    topLeadingRadius: hurts ? 6 : 0, bottomLeadingRadius: hurts ? 6 : 0,
+                    bottomTrailingRadius: hurts ? 0 : 6, topTrailingRadius: hurts ? 0 : 6, style: .continuous
+                )
+                .fill(LinearGradient(colors: [color.opacity(0.35), color], startPoint: hurts ? .trailing : .leading, endPoint: hurts ? .leading : .trailing))
+                .frame(width: length, height: 16)
+                .offset(x: hurts ? half - length : half, y: 12)
+                let value = Text(verbatim: JournalText.percent(item.effect)).font(Typo.number(19)).foregroundStyle(color).lineLimit(1)
+                if hurts {
+                    value.frame(width: Swift.max(0, half - length - 8), alignment: .trailing).offset(y: 8)
+                } else {
+                    value.fixedSize().offset(x: half + length + 8, y: 8)
+                }
+                HStack(spacing: 6) {
+                    Image(systemName: item.icon).font(.system(size: 13)).foregroundStyle(Palette.muted)
+                    Text(verbatim: item.name).font(.footnote.weight(.medium)).foregroundStyle(Palette.secondary).lineLimit(1)
+                }
+                .frame(width: half - 10, alignment: hurts ? .leading : .trailing)
+                .offset(x: hurts ? half + 10 : 0, y: 11)
+            }
         }
-        .font(Typo.caption).foregroundStyle(Palette.faint)
-        .accessibilityLabel(L10n.f("%@ dní s ✓, %@ s ✕", String(yes), String(no)))
+        .frame(height: 40)
+        .contentShape(Rectangle())
     }
 }
 

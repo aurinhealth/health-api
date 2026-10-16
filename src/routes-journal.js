@@ -1,17 +1,19 @@
 // Deník (the habit journal) routes of the app API (journal-store.js,
 // journal-catalog.js, journal-impact.js):
-// GET  /app/api/journal?date=          one day: the week strip, the mood and the pinned items by section
+// GET  /app/api/journal?date=          one day: the week strip, the mood and the tracked items by part of the day
 // POST /app/api/journal/entry          {date, key, answer, amount, time, extra}: one answer (answer null clears it)
 // GET  /app/api/journal/catalog        Upravit deník: every item with whether it is pinned
 // POST /app/api/journal/pinned         {pinned: [keys]}: the journal's items in their order
 // POST /app/api/journal/custom         {name, type, unit, usual, when, category}, or {remove: key}
-// GET  /app/api/journal/today          the Today card (the morning question about yesterday) and a new finding
-// POST /app/api/journal/dismiss        {date}: the card put away for that day; {discovery: true}: the finding seen
+// GET  /app/api/journal/today          the morning sheet about yesterday, the Zdraví card's effects and a new finding
+// POST /app/api/journal/dismiss        {date}: the morning sheet put away for that day; {discovery: true}: the finding seen
+// POST /app/api/journal/options        {enabled, askMorning}: Nastavení → Deník
+// POST /app/api/journal/fixed          {key, answer: 0 | 1 | null, date}: "Vždy ne" / "Vždy ano" from that day on
 // GET  /app/api/journal/impact?metric= Co na tebe působí: readiness, hrv, sleep or rhr
 // GET  /app/api/journal/item?key=&metric=  one item in detail
 // `mornings(from, to)` loads the morning metrics (entrypoint.js journalMornings).
-import { CATEGORIES, categoryTitle, sectionTitle, itemView, unitText, NOT_RANKED } from "./journal-catalog.js";
-import { getJournalSettings, saveJournalSettings, getJournalFindings, saveJournalFindings, journalItems, findItem, pinnedItems, setPinned, saveCustomItem, listJournalEntries, saveJournalEntry, autoDays, sickDays, MOOD } from "./journal-store.js";
+import { CATEGORIES, categoryTitle, itemView, unitText, NOT_RANKED, PARTS, partTitle, usualPart, partOfTime } from "./journal-catalog.js";
+import { getJournalSettings, saveJournalSettings, getJournalFindings, saveJournalFindings, journalItems, findItem, pinnedItems, setPinned, saveCustomItem, listJournalEntries, saveJournalEntry, autoDays, sickDays, setJournalOptions, setFixed, withFixed, MOOD } from "./journal-store.js";
 import { dayState, rankImpacts, newDiscovery, itemDetail, thresholdOf, levelTime, METRICS, WINDOW_DAYS, DISCOVERY_PERCENT, MIN_DAYS, shiftDay } from "./journal-impact.js";
 import { getAthleteState } from "./athlete-state.js";
 import { L, plural, num } from "./lang.js";
@@ -37,19 +39,31 @@ export function valueText(item, s) {
   return s.time && amount > 0 ? head + " · " + L("do ", "last ") + s.time : head;
 }
 
-// One item on a day: its own answer, else the day's data.
+// One item on a day: its own answer, else the day's data, else "Vždy ne / ano".
 function journalItemOnDay(item, entry, auto) {
   const state = dayState(item, entry, auto);
   const fromData = !entry && state.yes != null;
+  const fixed = !entry && auto?.fixed ? (auto.yes ? 1 : 0) : null;
   const amount = entry ? entry.amount : auto?.amount != null ? auto.amount : null;
   const time = entry ? entry.time : auto?.time || null;
-  const answer = entry ? entry.answer : fromData ? (item.type === "yesno" ? (state.yes ? 1 : 0) : (amount ?? 1) > 0 || time ? 1 : 0) : null;
+  const answer = entry ? entry.answer : fromData ? (item.type === "yesno" ? (state.yes ? 1 : 0) : (amount ?? 1) > 0 || time || fixed === 1 ? 1 : 0) : null;
   const shown = { yes: state.yes, amount, time };
-  return { ...itemView(item), answered: state.yes != null, answer, amount, time, extra: entry?.extra || null, value: valueText(item, shown), fromData };
+  const value = fixed != null ? (fixed ? L("vždy ano", "always yes") : L("vždy ne", "always no")) : valueText(item, shown);
+  // The row: the time on the left, the value without it on the right.
+  const short = fixed != null ? value
+    : item.type === "time" ? (time ? null : value)
+      : item.type === "amount" && state.yes != null ? num(amount ?? 0, 1) + (unitText(item.unit, amount ?? 0) ? " " + unitText(item.unit, amount ?? 0) : "")
+        : valueText(item, { ...shown, time: null });
+  const part = partOfTime(time) || usualPart(item);
+  return { ...itemView(item), answered: state.yes != null, answer, amount, time, extra: entry?.extra || null, value, short, part, fromData, ...(fixed != null ? { fixed } : {}) };
 }
 
-async function journalDayData(db, from, to) {
-  const [entries, auto] = await Promise.all([listJournalEntries(db, from, to), autoDays(db, from, to)]);
+// Within a part: by time (after midnight after the evening), untimed last.
+const partOrder = v => v.time ? (v.time < "04:00" ? "2" : "1") + v.time : "3";
+
+async function journalDayData(db, from, to, settings = null) {
+  const [entries, rawAuto] = await Promise.all([listJournalEntries(db, from, to), autoDays(db, from, to)]);
+  const auto = settings ? withFixed(settings, rawAuto, from, to) : rawAuto;
   const byDay = new Map();
   for (const e of entries) {
     if (!byDay.has(e.date)) byDay.set(e.date, new Map());
@@ -63,7 +77,7 @@ async function journalDayData(db, from, to) {
 export async function journalDay(db, date, today) {
   const settings = await getJournalSettings(db);
   const start = journalMonday(date), end = shiftDay(start, 6);
-  const { entries, auto } = await journalDayData(db, start, end < today ? end : today);
+  const { entries, auto } = await journalDayData(db, start, end < today ? end : today, settings);
   const items = pinnedItems(settings);
   const stateOf = d => {
     if (d > today) return "future";
@@ -72,17 +86,18 @@ export async function journalDay(db, date, today) {
   };
   const week = Array.from({ length: 7 }, (_, i) => shiftDay(start, i)).map(d => ({ date: d, state: stateOf(d) }));
   const views = items.map(i => journalItemOnDay(i, entries.get(date)?.get(i.key), auto[date]?.[i.key]));
-  const sections = CATEGORIES.map(cat => ({ key: cat, title: sectionTitle(cat), items: views.filter(v => v.category === cat) })).filter(s => s.items.length);
-  return { date, today, week, mood: entries.get(date)?.get(MOOD)?.amount ?? null, answered: views.filter(v => v.answered).length, total: views.length, sections };
+  const sections = PARTS.map(part => ({ key: part, title: partTitle(part), items: views.filter(v => v.part === part).sort((a, b) => partOrder(a).localeCompare(partOrder(b))) })).filter(s => s.items.length);
+  return { date, today, week, mood: entries.get(date)?.get(MOOD)?.amount ?? null, answered: views.filter(v => v.answered).length, total: views.length, sections, enabled: settings.enabled };
 }
 
 export async function journalCatalog(db) {
   const settings = await getJournalSettings(db);
   const pinned = new Set(settings.pinned);
-  const items = journalItems(settings).map(i => ({ ...itemView(i), pinned: pinned.has(i.key) }));
+  const items = journalItems(settings).map(i => ({ ...itemView(i), pinned: pinned.has(i.key), ...(settings.fixed[i.key] ? { fixed: settings.fixed[i.key].answer } : {}) }));
   const collator = new Intl.Collator(L("cs", "en"));
-  items.sort((a, b) => collator.compare(a.name, b.name));
-  return { count: items.length, categories: CATEGORIES.map(c => ({ key: c, title: categoryTitle(c) })), items, pinned: settings.pinned };
+  // Co sledovat: what is tracked first, then by name.
+  items.sort((a, b) => (b.pinned - a.pinned) || collator.compare(a.name, b.name));
+  return { count: items.length, categories: CATEGORIES.map(c => ({ key: c, title: categoryTitle(c) })), items, pinned: settings.pinned, enabled: settings.enabled, askMorning: settings.askMorning };
 }
 
 // ---- Impact ----
@@ -90,7 +105,7 @@ export async function journalCatalog(db) {
 // Each item's days over the last 90 days (journal days, yesterday the last).
 async function journalItemSeries(db, settings, today, keys = null) {
   const from = shiftDay(today, -WINDOW_DAYS), to = shiftDay(today, -1);
-  const { entries, auto } = await journalDayData(db, from, to);
+  const { entries, auto } = await journalDayData(db, from, to, settings);
   const answered = new Set();
   for (const day of entries.values()) for (const k of day.keys()) answered.add(k);
   for (const day of Object.values(auto)) for (const k of Object.keys(day)) answered.add(k);
@@ -155,37 +170,32 @@ export function thresholdText(item, days, threshold) {
   return L(`Od ${n}${unit ? " " + unit : ""} výš je to ${pct}`, `From ${n}${unit ? " " + unit : ""} up it is ${pct}`);
 }
 
-// ---- Today ----
+// ---- The morning sheet ----
 
-// The Today card: in the morning (from 4:00) the questions about yesterday,
-// in the evening (from 19:00) today's evening questions while unanswered.
-// Gone once the day is answered (and, in the evening, the mood given) or put
-// away. In the morning Today already asks "Jak se dnes cítíš?" (the check-in),
-// so the card about yesterday leaves the mood to the Deník screen.
+// From 4:00 the sheet "Včera" while yesterday has an unanswered item; gone
+// once answered or put away, and never when Deník or the morning questions
+// are off. The app shows it on the first open of the day and keeps "Doplnit"
+// on the Zdraví card while it is open.
 export async function journalCard(db, today, hour) {
   if (hour < 4) return null;
   const settings = await getJournalSettings(db);
+  if (!settings.enabled) return null;
   const items = pinnedItems(settings);
   if (!items.length) return null;
-  const yesterday = shiftDay(today, -1);
-  const { entries, auto } = await journalDayData(db, yesterday, today);
-  const open = d => items.filter(i => (d === today ? i.when === "evening" : true) && dayState(i, entries.get(d)?.get(i.key), auto[d]?.[i.key]).yes == null);
-  const date = hour >= 19 && open(today).length && !settings.dismissed.includes(today) ? today : yesterday;
+  const date = shiftDay(today, -1);
   if (settings.dismissed.includes(date)) return null;
-  const views = (date === today ? items.filter(i => i.when === "evening") : items).map(i => journalItemOnDay(i, entries.get(date)?.get(i.key), auto[date]?.[i.key]));
-  const mood = entries.get(date)?.get(MOOD)?.amount ?? null;
+  const { entries, auto } = await journalDayData(db, date, date, settings);
+  const views = items.map(i => journalItemOnDay(i, entries.get(date)?.get(i.key), auto[date]?.[i.key]));
   const unanswered = views.filter(v => !v.answered).length;
-  if (!unanswered && (mood != null || date !== today)) return null;
-  return {
-    date,
-    isToday: date === today,
-    mood,
-    askMood: date === today,
-    answered: views.length - unanswered,
-    total: views.length,
-    open: unanswered,
-    rows: views.filter(v => v.auto && v.answered && v.value).map(v => ({ key: v.key, name: v.name, icon: v.icon, category: v.category, value: v.value }))
-  };
+  if (!unanswered) return null;
+  return { date, isToday: false, answered: views.length - unanswered, total: views.length, open: unanswered, ask: settings.askMorning, rows: [] };
+}
+
+// The Zdraví card: the biggest effects on readiness (the last findings), at most 5.
+export function journalTop(settings, findings) {
+  return (findings?.ranked || []).filter(r => Math.abs(r.effect) >= 3 && findItem(settings, r.key))
+    .sort((a, b) => Math.abs(b.effect) - Math.abs(a.effect)).slice(0, 5)
+    .map(r => { const v = itemView(findItem(settings, r.key)); return { key: r.key, name: v.name, icon: v.icon, effect: r.effect }; });
 }
 
 function journalDiscoveryView(settings) {
@@ -206,9 +216,10 @@ function journalDiscoveryView(settings) {
 // yesterday's answers. Read only from what is stored; never computed here.
 export async function journalForCoach(db, date) {
   const settings = await getJournalSettings(db);
+  if (!settings.enabled) return null;
   const findings = await getJournalFindings(db);
   const yesterday = shiftDay(date, -1);
-  const { entries, auto } = await journalDayData(db, yesterday, yesterday);
+  const { entries, auto } = await journalDayData(db, yesterday, yesterday, settings);
   const answers = pinnedItems(settings).map(i => journalItemOnDay(i, entries.get(yesterday)?.get(i.key), auto[yesterday]?.[i.key])).filter(v => v.answered)
     .map(v => ({ item: v.name, answer: v.type === "yesno" ? (v.answer ? "yes" : "no") : v.value || (v.answer ? "yes" : "no") }));
   const top = (findings?.ranked || []).filter(r => Math.abs(r.effect) >= 3).sort((a, b) => Math.abs(b.effect) - Math.abs(a.effect)).slice(0, 6)
@@ -239,7 +250,8 @@ export async function handleJournalApi(request, env, ctx, url, session, { mornin
           await refreshJournalFindings(env, today, loadMornings).catch(error => console.error("Journal findings failed", error.message));
           settings = await getJournalSettings(db);
         }
-        return Response.json({ status: "ok", card: await journalCard(db, today, localHour()), discovery: journalDiscoveryView(settings) }, journalNoStore);
+        const latest = await getJournalFindings(db);
+        return Response.json({ status: "ok", enabled: settings.enabled, askMorning: settings.askMorning, card: await journalCard(db, today, localHour()), top: settings.enabled ? journalTop(settings, latest) : [], discovery: settings.enabled ? journalDiscoveryView(settings) : null }, journalNoStore);
       }
       if (url.pathname === "/app/api/journal/impact") {
         const metric = METRICS.includes(url.searchParams.get("metric")) ? url.searchParams.get("metric") : "readiness";
@@ -275,6 +287,18 @@ export async function handleJournalApi(request, env, ctx, url, session, { mornin
       const settings = await getJournalSettings(db);
       await saveJournalEntry(db, settings, body);
       return Response.json({ status: "ok", ...(await journalDay(db, body.date, today)) }, journalNoStore);
+    }
+    if (url.pathname === "/app/api/journal/options") {
+      const settings = await setJournalOptions(db, body);
+      return Response.json({ status: "ok", enabled: settings.enabled, askMorning: settings.askMorning }, journalNoStore);
+    }
+    if (url.pathname === "/app/api/journal/fixed") {
+      const date = isJournalDate(body.date) && body.date <= today ? body.date : shiftDay(today, -1);
+      const answer = body.answer === 0 || body.answer === 1 ? body.answer : null;
+      await setFixed(db, String(body.key || ""), answer, date);
+      // The day's own answer gives way to the fixed one, so the row shows it.
+      if (answer != null) await saveJournalEntry(db, await getJournalSettings(db), { date, key: String(body.key), answer: null });
+      return Response.json({ status: "ok", ...(await journalDay(db, date, today)) }, journalNoStore);
     }
     if (url.pathname === "/app/api/journal/pinned") {
       const settings = await setPinned(db, body.pinned);

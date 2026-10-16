@@ -46,13 +46,13 @@ const amount = (key, cs, en, cat, icon, unit, step, usual, max, extra = {}) => (
 export const CATALOG = [
   // Večer a noc
   y("phone_in_bed", "Mobil v posteli", "Phone in bed", "sleep", "iphone"),
-  y("late_bed", "Pozdě spát", "Late to bed", "sleep", "moon.fill"),
+  y("late_bed", "Pozdě spát", "Late to bed", "sleep", "moon.fill", { auto: "late_bed" }),
   y("sleep_away", "Spánek mimo domov", "Slept away from home", "sleep", "bed.double"),
   y("early_wake", "Brzké vstávání", "Early alarm", "sleep", "alarm"),
   y("reading_bed", "Čtení v posteli", "Reading in bed", "sleep", "books.vertical"),
   y("pet_bedroom", "Domácí mazlíček v ložnici", "Pet in the bedroom", "sleep", "heart"),
   y("partner_bed", "Partner v posteli", "Partner in bed", "sleep", "person.2"),
-  y("nap", "Spánek přes den", "Daytime nap", "sleep", "bed.double.fill", { follow: [minutes(20, 5, 120)] }),
+  y("nap", "Spánek přes den", "Daytime nap", "sleep", "bed.double.fill", { follow: [minutes(20, 5, 120)], auto: "nap" }),
   y("screen_late", "Obrazovka po 22:00", "Screen after 10 pm", "sleep", "iphone"),
   y("series_before_bed", "Seriál před spaním", "Series before bed", "sleep", "play.rectangle"),
   y("blackout_room", "Zatemněná ložnice", "Blackout bedroom", "sleep", "moon.zzz"),
@@ -63,7 +63,7 @@ export const CATALOG = [
   y("woken_kids", "Vzbudily mě děti", "Woken by the children", "sleep", "person.2"),
   y("wind_down", "Večerní rituál", "Wind-down routine", "sleep", "sparkles"),
   y("work_late", "Práce do večera", "Working late", "sleep", "square.and.pencil"),
-  y("regular_bedtime", "Spát ve stejnou dobu", "Same bedtime as usual", "sleep", "clock"),
+  y("regular_bedtime", "Spát ve stejnou dobu", "Same bedtime as usual", "sleep", "clock", { auto: "regular_bedtime" }),
   y("night_shift", "Noční směna", "Night shift", "sleep", "moon.fill"),
   y("mouth_tape", "Páska na ústa", "Mouth tape", "sleep", "bandage.fill"),
   y("white_noise", "Bílý šum", "White noise", "sleep", "waveform.path"),
@@ -76,12 +76,12 @@ export const CATALOG = [
   { key: "late_meal", cs: "Pozdní jídlo", en: "Late meal", cat: "food", type: "time", icon: "fork.knife", late: "20:00", auto: "late_meal" },
   y("late_caffeine", "Kofein po 14:00", "Caffeine after 2 pm", "food", "cup.and.saucer", { auto: "late_caffeine" }),
   y("extra_sugar", "Cukr navíc", "Extra sugar", "food", "takeoutbag.and.cup.and.straw.fill"),
-  y("heavy_dinner", "Vydatná večeře", "Big dinner", "food", "fork.knife"),
+  y("heavy_dinner", "Vydatná večeře", "Big dinner", "food", "fork.knife", { auto: "heavy_dinner" }),
   y("spicy_food", "Pálivé jídlo", "Spicy food", "food", "flame.fill"),
-  y("little_water", "Málo vody", "Too little water", "food", "drop.fill"),
+  y("little_water", "Málo vody", "Too little water", "food", "drop.fill", { auto: "little_water" }),
   y("fast_food", "Rychlé občerstvení", "Fast food", "food", "takeoutbag.and.cup.and.straw.fill"),
   y("fasting", "Půst", "Fasting", "food", "timer"),
-  y("energy_drink", "Energetický nápoj", "Energy drink", "food", "bolt.fill"),
+  y("energy_drink", "Energetický nápoj", "Energy drink", "food", "bolt.fill", { auto: "energy_drink" }),
   y("dairy", "Mléčné výrobky", "Dairy", "food", "drop.fill"),
   y("gluten", "Lepek", "Gluten", "food", "fork.knife"),
   y("red_meat", "Červené maso", "Red meat", "food", "fork.knife"),
@@ -94,28 +94,28 @@ export const CATALOG = [
   y("carbs_dinner", "Sacharidy k večeři", "Carbs at dinner", "food", "fork.knife"),
   y("herbal_tea", "Bylinný čaj večer", "Herbal tea in the evening", "food", "mug.fill"),
   y("fermented_food", "Fermentované potraviny", "Fermented foods", "food", "leaf.fill"),
-  y("drink_before_bed", "Pití před spaním", "Drinking before bed", "food", "drop.fill"),
-  amount("coffee_cups", "Káva", "Coffee", "food", "cup.and.saucer.fill", CUPS, 1, 2, 10),
+  y("drink_before_bed", "Pití před spaním", "Drinking before bed", "food", "drop.fill", { auto: "drink_before_bed" }),
+  amount("coffee_cups", "Káva", "Coffee", "food", "cup.and.saucer.fill", CUPS, 1, 2, 10, { withTime: true, auto: "coffee_cups" }),
   y("eating_out", "Jídlo v restauraci", "Eating out", "food", "fork.knife"),
   y("skipped_meal", "Vynechané jídlo", "Skipped meal", "food", "timer"),
 
   // Regenerace
   y("sauna", "Sauna", "Sauna", "recovery", "flame", { follow: [minutes(15, 5, 90), { key: "temp", cs: "Teplota", en: "Temperature", kind: "chips", unit: "°C", options: [70, 80, 90], default: 80 }] }),
   y("cold_exposure", "Otužování", "Cold exposure", "recovery", "drop.fill", { follow: [minutes(3, 1, 30)] }),
-  y("outdoors", "Venku 30+ min", "Outdoors 30+ min", "recovery", "sun.max.fill"),
+  y("outdoors", "Venku 30+ min", "Outdoors 30+ min", "recovery", "sun.max.fill", { auto: "outdoors" }),
   y("breathing", "Dechová cvičení", "Breathing exercises", "recovery", "wind", { follow: [minutes(10, 5, 60)] }),
   y("meditation", "Meditace", "Meditation", "recovery", "sparkle", { follow: [minutes(10, 5, 90)] }),
   y("massage", "Masáž", "Massage", "recovery", "figure.cooldown"),
   y("stretching", "Protahování", "Stretching", "recovery", "figure.flexibility", { follow: [minutes(15, 5, 90)] }),
-  y("yoga", "Jóga", "Yoga", "recovery", "figure.cooldown"),
+  y("yoga", "Jóga", "Yoga", "recovery", "figure.cooldown", { auto: "yoga" }),
   y("foam_rolling", "Válec", "Foam rolling", "recovery", "figure.flexibility"),
   y("walk_after_meal", "Procházka po jídle", "Walk after a meal", "recovery", "figure.walk"),
   y("morning_light", "Ranní světlo", "Morning daylight", "recovery", "sun.max"),
   y("hot_bath", "Horká koupel", "Hot bath", "recovery", "drop.fill"),
   y("compression", "Kompresní návleky", "Compression garments", "recovery", "figure.cooldown"),
   { key: "evening_training", cs: "Večerní trénink", en: "Evening training", cat: "recovery", type: "time", icon: "figure.run", late: "18:00", auto: "evening_training" },
-  y("hard_training", "Tvrdý trénink", "Hard workout", "recovery", "flame.fill"),
-  y("rest_day", "Den bez tréninku", "Day without training", "recovery", "beach.umbrella.fill"),
+  y("hard_training", "Tvrdý trénink", "Hard workout", "recovery", "flame.fill", { auto: "hard_training" }),
+  y("rest_day", "Den bez tréninku", "Day without training", "recovery", "beach.umbrella.fill", { auto: "rest_day" }),
   y("long_sitting", "Dlouhé sezení", "Long sitting", "recovery", "clock"),
   y("nature", "Čas v přírodě", "Time in nature", "recovery", "leaf.fill"),
   y("gratitude", "Vděčnost na papíře", "Gratitude written down", "recovery", "square.and.pencil"),
@@ -126,7 +126,7 @@ export const CATALOG = [
   y("physio", "Fyzioterapie", "Physiotherapy", "recovery", "figure.flexibility"),
   y("acupuncture", "Akupunktura", "Acupuncture", "recovery", "sparkle"),
   y("red_light", "Červené světlo", "Red-light therapy", "recovery", "sun.max"),
-  y("long_walk", "Dlouhá procházka", "Long walk", "recovery", "figure.walk"),
+  y("long_walk", "Dlouhá procházka", "Long walk", "recovery", "figure.walk", { auto: "long_walk" }),
 
   // Zdraví
   y("sick", "Nemoc", "Illness", "health", "bandage.fill"),
@@ -197,6 +197,31 @@ export const DEFAULT_PINNED = ["alcohol", "caffeine", "late_meal", "evening_trai
 // Items the impact screen never ranks: illness takes days out of every other
 // item's comparison instead (journal-impact.js).
 export const NOT_RANKED = new Set(["sick"]);
+
+// The part of the day an item belongs to in the journal's list ("Ráno",
+// "Přes den", "Večer", "Noc"): from its time when the day has one, else from
+// when it usually happens.
+export const PARTS = ["morning", "day", "evening", "night"];
+const PART_TEXT = { morning: ["Ráno", "Morning"], day: ["Přes den", "Daytime"], evening: ["Večer", "Evening"], night: ["Noc", "Night"] };
+export const partTitle = part => L(...(PART_TEXT[part] || PART_TEXT.day));
+const MORNING = new Set(["early_wake", "morning_light", "caffeine", "coffee_cups"]);
+const EVENING = new Set(["alcohol", "late_meal", "evening_training", "heavy_dinner", "sweets_evening", "carbs_dinner", "herbal_tea", "drink_before_bed",
+  "sauna", "hot_bath", "screen_late", "series_before_bed", "work_late", "wind_down", "reading_bed", "gratitude", "calm_music", "sex",
+  "melatonin", "glycine", "theanine", "magnesium", "tart_cherry", "sleeping_pill"]);
+const EVENING_SLEEP = new Set(["nap"]);
+export function usualPart(item) {
+  if (MORNING.has(item.key)) return "morning";
+  if (EVENING.has(item.key)) return "evening";
+  if (item.cat === "sleep") return EVENING_SLEEP.has(item.key) ? "day" : "night";
+  if (item.cat === "meds" || item.cat === "supplements") return "morning";
+  if (item.custom) return item.when === "evening" ? "evening" : "day";
+  return "day";
+}
+// "HH:MM" → the part; after midnight (until 4:00) is still the night.
+export function partOfTime(time) {
+  if (!/^\d{2}:\d{2}$/.test(String(time || ""))) return null;
+  return time < "04:00" ? "night" : time < "11:00" ? "morning" : time < "17:00" ? "day" : time < "22:00" ? "evening" : "night";
+}
 
 const TYPES = ["yesno", "amount", "time", "scale"];
 const clean = (value, max) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
