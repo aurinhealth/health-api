@@ -165,6 +165,8 @@ struct TodaySnapshot: Decodable, Equatable {
         var recoveryId: Int? = nil
         /// A done workout: what it added to the day's strain (Den: "+5,1 tréninkem").
         var strain: Double? = nil
+        /// Bedtime: the planned wake time, the end of the dashed night ahead.
+        var end: String? = nil
 
         struct Eased: Decodable, Equatable {
             let title: String
