@@ -132,6 +132,7 @@ struct TrainingContent: View {
 // MARK: - Strain
 
 struct StrainHero: View {
+    @Environment(AppModel.self) private var model
     let training: TrainingSnapshot
 
     var body: some View {
@@ -141,12 +142,21 @@ struct StrainHero: View {
                 Text(Fmt.decimal(training.strain.score ?? 0))
                     .font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5)
                     .foregroundStyle(Palette.ink)
-                if let target = training.strain.target {
-                    Pill(text: L10n.f("cíl ~%@", Fmt.decimal(target)), foreground: Palette.amber, background: Palette.amberSoft)
+                if let note {
+                    Pill(text: note, foreground: Palette.amber, background: Palette.amberSoft)
                 }
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// The same goal as Dnes and the Námaha detail (the range from readiness, whole numbers);
+    /// without it, where today's plan takes the strain, called a plan as on Dnes.
+    private var note: String? {
+        if let today = model.today, today.date == training.date, let t = today.strain.target {
+            return L10n.f("cíl %@–%@", Fmt.int(t.low), Fmt.int(t.high))
+        }
+        return training.strain.target.map { L10n.f("plán ~%@", Fmt.decimal($0)) }
     }
 }
 
