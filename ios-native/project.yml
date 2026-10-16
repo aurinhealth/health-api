@@ -104,6 +104,8 @@ targets:
           - CFBundleURLName: eu.petrfitnessdata.loadwise.native
             CFBundleURLSchemes:
               - loadwise
+        # Posilovna naživo and Režim tréninku on the lock screen and in the Dynamic Island (App/GymLiveActivity.swift).
+        NSSupportsLiveActivities: true
         # Syncing without the app being opened (App/BackgroundRefresh.swift):
         # iOS runs the refresh task a few times a day when it chooses.
         UIBackgroundModes:
