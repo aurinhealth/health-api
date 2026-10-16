@@ -138,6 +138,9 @@ targets:
     sources:
       - path: LoadwiseWidgets
       - path: Shared
+        # Siri phrases belong to the app's AurinShortcuts only.
+        excludes:
+          - "en.lproj/AppShortcuts.strings"
       - path: Privacy/Widgets/PrivacyInfo.xcprivacy
         buildPhase: resources
     entitlements:
