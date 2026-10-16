@@ -2,7 +2,7 @@ import SwiftUI
 
 // Co sledovat: the whole catalogue on one screen. Category chips switch the
 // list in place, search looks through all of it; each item has a switch, the
-// tracked ones first, "✦ samo" on those the day's data fills in. The day
+// tracked ones first, "✦ automaticky" on those the day's data fills in. The day
 // orders them by time, so there is nothing to reorder. "Vlastní položka" adds
 // an item of one's own.
 
@@ -154,7 +154,7 @@ struct JournalEditorView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: item.name).font(.body).foregroundStyle(Palette.ink).lineLimit(2)
                     if item.auto == true {
-                        Text("✦ samo").font(.caption.weight(.medium)).foregroundStyle(Palette.amber)
+                        Text("✦ automaticky").font(.caption.weight(.medium)).foregroundStyle(Palette.amber)
                     }
                 }
             }
