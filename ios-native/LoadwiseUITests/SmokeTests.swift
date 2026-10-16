@@ -26,7 +26,8 @@ final class SmokeTests: XCTestCase {
         skip.tap()
         let email = app.buttons["Pokračovat e-mailem"]
         XCTAssertTrue(email.waitForExistence(timeout: 5), "the sign-in did not appear")
-        XCTAssertTrue(app.buttons["Pokračovat přes Google"].exists)
+        // Its label also holds the "G" drawn as text.
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Pokračovat přes Google")).firstMatch.exists)
         shot("prihlaseni")
         email.tap()
         let cancel = app.buttons["Zrušit"]
