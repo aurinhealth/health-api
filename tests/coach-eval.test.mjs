@@ -37,6 +37,12 @@ test('every reply keeps its language, no data field names and no app line', () =
   assert.ok(failed('S10', { answer: 'Dnes jeď hodinu.', kept: [{ type: 'workout', minutes: 60 }] }).includes('quality:jazyk odpovědi'));
   assert.ok(failed('S01', { answer: 'Podle cyclingCoachV2 jeď 290 W, ať ti to sedí.', kept: [] }).includes('quality:bez názvů polí z dat'));
   assert.ok(failed('S01', { answer: 'Jeď 290 W, ať ti to sedí.\n\n[Návrhy: workout]', kept: [] }).includes('quality:bez řádku [Návrhy]'));
+  // In the evening resting is the right answer for S01, not the intervals' watts.
+  const names = (reply, at) => checkReply(scenarioById('S01'), reply, at).map(c => c.name + ':' + c.ok);
+  const rest = { answer: 'Dnes už bych netrénoval, přednost má spánek.', kept: [{ type: 'rest', eventId: 'planned:9001' }] };
+  assert.ok(names(rest, '2026-10-16 22:17').includes('večer radí volno:true'));
+  assert.ok(names(rest, '2026-10-16 07:40').includes('jmenuje watty:false'));
+  assert.ok(names({ answer: 'Jeď 5×4 min na 290 W.', kept: [] }, '2026-10-16 22:17').includes('večer radí volno:false'));
 });
 
 test('a situation runs through the coach and the app checks its actions', async () => {
