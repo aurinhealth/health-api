@@ -16,6 +16,8 @@ npm run dev           # wrangler dev; tajné hodnoty patří do .dev.vars
 
 Na produkci se nasazuje jen přes GitHub Actions po pushi do `main`. Aplikaci pro iPhone sestavuje GitHub Actions, postup je v `ios-native/README.md`.
 
+Texty pro AI jsou v soukromém repozitáři a do `src/private` se stahují zvlášť, bez nich testy ani server nepoběží.
+
 Tajné hodnoty (klíče a hesla) se nastavují v Cloudflare a v GitHub Actions secrets, nikdy ne v repozitáři.
 
 ## Dokumentace
