@@ -2,6 +2,7 @@ import {initialImport,recentDashboardImport} from './account-sync.js';
 import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
 import { trainingSetup } from './onboarding.js';
 import { subscriptionStatus, assertAIAccess } from './subscription.js';
+import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
 import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent} from './local-workouts.js';
@@ -143,6 +144,8 @@ import { setActivityKcal } from "./activity-edits.js";
 import { hideActivity, mergeActivities, setActivityTime, undoActivityChange } from "./activity-chat-edits.js";
 import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals } from "./performance-trends.js";
+const numOrNull=v=>v!=null&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
+const isPro=env=>subscriptionStatus(env).then(s=>s.plan==='ai').catch(()=>false);
 
 
 // Requests that read or preview only and so keep the cache.
@@ -1682,8 +1685,36 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         googleHealthFor(env,ctx,date).catch(()=>({})),dashboardProfile(env).catch(()=>null)
       ]);
       applyEnergyBudget(daily,profile,health);
-      return Response.json(buildFood({date,hour:date===localToday()?localHour():null,daily,food,fluids,slots:profile?.meals}),{headers:{'Cache-Control':'no-store'}});
+      const built=buildFood({date,hour:date===localToday()?localHour():null,daily,food,fluids,slots:profile?.meals});
+      // Up to three nutrients a Pro account pinned under the macros (micronutrients.js).
+      const [pro,favorites]=await Promise.all([isPro(env),nutrientFavorites(env.DB,env.USER_ID??env.DB.userId)]);
+      if(pro&&favorites.length){const items=buildNutrients({days:[{date,food}],profile,kcalTarget:numOrNull(daily?.nutrition?.calorieTarget),pro}).items;built.nutrients=favorites.map(k=>items.find(i=>i.key===k)).filter(Boolean);}
+      return Response.json(built,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
+  }
+
+  // The Živiny page (days=1 or 7) and one nutrient's detail (key=…). Without Pro
+  // only fibre, sugar and salt carry values (micronutrients.js).
+  if(url.pathname==='/app/api/food/nutrients'&&request.method==='GET'){
+    try{
+      const requested=url.searchParams.get('date'),date=validTrainingDay(requested)&&requested<=localToday()?requested:localToday();
+      const key=url.searchParams.get('key'),span=key||url.searchParams.get('days')==='7'?7:1;
+      const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      const [daily,profile,pro,favorites]=await Promise.all([read('/analysis/daily?date='+date),dashboardProfile(env).catch(()=>null),isPro(env),nutrientFavorites(env.DB,env.USER_ID??env.DB.userId)]);
+      const days=await Promise.all(Array.from({length:span},(_,i)=>shiftDate(date,i-span+1)).map(async d=>({date:d,food:await read('/food/log?date='+d)})));
+      const kcalTarget=numOrNull(daily?.nutrition?.calorieTarget),language=lang();
+      if(key){
+        if(!pro&&!FREE_KEYS.includes(key))return Response.json({message:L('Vitamíny a minerály jsou v Aurin Pro.', 'Vitamins and minerals are in Aurin Pro.')},{status:403});
+        const detail=buildNutrientDetail({key,today:days.at(-1).food,week:days,profile,kcalTarget,rich:(await microTop(env).catch(()=>({})))?.[key],language});
+        return detail?Response.json(detail,{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Unknown nutrient'},{status:404});
+      }
+      return Response.json({...buildNutrients({days,profile,kcalTarget,pro,language}),favorites},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:500})}
+  }
+  if(url.pathname==='/app/api/food/nutrients/favorites'&&request.method==='POST'){
+    if(!await isPro(env))return Response.json({message:L('Vlastní živiny na Jídle jsou v Aurin Pro.', 'Your own nutrients on Food are in Aurin Pro.')},{status:403});
+    const body=await request.json().catch(()=>({}));
+    return Response.json({status:'ok',favorites:await saveNutrientFavorites(env.DB,env.USER_ID??env.DB.userId,body.favorites)});
   }
 
   // The native app's Health screen (app-health.js).

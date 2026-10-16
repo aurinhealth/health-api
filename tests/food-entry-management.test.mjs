@@ -57,7 +57,7 @@ test('food changes reject invalid identifiers, dates, meals and nutrition',async
 
 test('a new amount rescales energy, macros, fibre, sugar, salt and the stored amounts',async()=>{
   const {raw,owner}=database();
-  const note={product:{name:'Jogurt'},amount:150,unit:'g',enteredQuantity:150,enteredUnit:'g',mealType:'snack_am',sugar_g:9,salt_g:0.3};
+  const note={product:{name:'Jogurt'},amount:150,unit:'g',enteredQuantity:150,enteredUnit:'g',mealType:'snack_am',sugar_g:9,salt_g:0.3,micros:{fe:1.5,ca:180}};
   raw.sqlite.prepare("INSERT INTO food_logs(id,user_id,consumed_date,consumed_at,recipe_title,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note) VALUES (8,1,'2026-09-28','2026-09-28T09:00:00.000Z','Jogurt',150,6,12,7.5,1,'package_label',?)").run(JSON.stringify(note));
   await updateFoodEntry(owner,8,{amount_g:300,mealType:'breakfast'});
   const r=row(raw,8),n=JSON.parse(r.note);
@@ -66,6 +66,7 @@ test('a new amount rescales energy, macros, fibre, sugar, salt and the stored am
   assert.equal(n.amount,300);
   assert.equal(n.sugar_g,18);
   assert.equal(n.salt_g,0.6);
+  assert.deepEqual(n.micros,{fe:3,ca:360});
   assert.equal(n.mealType,'breakfast');
   assert.equal(n.product.name,'Jogurt');
 });
