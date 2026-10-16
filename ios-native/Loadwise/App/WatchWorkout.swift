@@ -5,7 +5,7 @@ import WorkoutKit
 /// A planned ride or run as a WorkoutKit custom workout for the Apple Watch
 /// Workout app: each block with its repeats, each step for its time with the
 /// target the plan resolved for the athlete (watts from FTP, pace from the
-/// threshold pace). The system preview sheet (.workoutPreview) sends it to the
+/// threshold pace, else the heart-rate zone). The system preview sheet (.workoutPreview) sends it to the
 /// watch, so the app needs no scheduling permission of its own.
 enum WatchWorkout {
     static func plan(_ workout: PlannedWorkout.Workout, title: String) -> WorkoutPlan? {
@@ -33,6 +33,9 @@ enum WatchWorkout {
             // Pace (s/km) as speed: the slower pace is the lower speed.
             let lowSpeed = 1000 / max(slow, fast), highSpeed = 1000 / min(slow, fast)
             step.step.alert = SpeedRangeAlert(target: Measurement(value: lowSpeed, unit: UnitSpeed.metersPerSecond)...Measurement(value: highSpeed, unit: UnitSpeed.metersPerSecond), metric: .current)
+        } else if let low = s.hrLow, let high = s.hrHigh, low > 0, high > low {
+            // No FTP or threshold pace: the heart-rate zone the server matched to the step (bpm as Hz).
+            step.step.alert = HeartRateRangeAlert(target: Measurement(value: low / 60, unit: UnitFrequency.hertz)...Measurement(value: high / 60, unit: UnitFrequency.hertz))
         }
         return step
     }

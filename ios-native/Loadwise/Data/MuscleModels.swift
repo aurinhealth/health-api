@@ -175,6 +175,13 @@ extension MuscleFatigue.Muscle {
         }
     }
 
+    /// "odpočaté", or "odpočaté na 40 % · pozítří" (the muscle's detail and the 3D figure's bubble).
+    func stateText(today: String) -> String {
+        guard state != "rested" else { return L10n.tr("odpočaté") }
+        let percent = max(5, Int(((1 - (level ?? 0)) * 100).rounded()))
+        return L10n.f("odpočaté na %@ %%", String(percent)) + " · " + readyText(today: today)
+    }
+
     /// Coarse on purpose: "odpočaté", "dnes", "zítra", "pozítří", "za 3 dny";
     /// "≈" when it comes mostly from rides and runs, which are estimated.
     func readyText(today: String) -> String {

@@ -6,6 +6,7 @@
 // Kept in sync_status (one row per provider, already personal and deleted
 // with the account) as sync_name 'connection_<provider>'.
 import { L } from "./lang.js";
+import { recordOpsEvent } from "./ops-report.js";
 
 export const HEALTH_PROVIDERS = ["google", "intervals", "ultrahuman", "whoop", "wahoo"];
 const name = provider => "connection_" + provider;
@@ -30,10 +31,12 @@ export async function markConnectionBroken(env, provider, message) {
   try {
     await ensure(env.DB);
     const now = new Date().toISOString();
-    const row = await env.DB.prepare("SELECT details_json FROM sync_status WHERE user_id=? AND sync_name=?").bind(userOf(env), name(provider)).first();
+    const row = await env.DB.prepare("SELECT status,details_json FROM sync_status WHERE user_id=? AND sync_name=?").bind(userOf(env), name(provider)).first();
     const details = { ...parse(row?.details_json), lastError: String(message || "").slice(0, 300), lastErrorAt: now };
     await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,started_at,finished_at,details_json,updated_at) VALUES(?,?,'broken',NULL,?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status='broken',finished_at=excluded.finished_at,details_json=excluded.details_json,updated_at=excluded.updated_at")
       .bind(userOf(env), name(provider), now, JSON.stringify(details)).run();
+    // Counted once per break, for the owner's morning e-mail.
+    if (row?.status !== "broken") await recordOpsEvent(env.RAW_DB, "broken", provider, message);
   } catch (error) { console.error("Connection health write failed", provider, error.message); }
 }
 

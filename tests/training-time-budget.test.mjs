@@ -25,7 +25,7 @@ const today = '2026-10-07';
 const source = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
 const coachInbox = readFileSync(new URL('../src/coach-inbox.js', import.meta.url), 'utf8');
 // The dashboard API's route modules, called from handleDashboardApi in order.
-const routeModules = ['routes-account.js', 'routes-sync.js', 'routes-gym.js', 'routes-training.js', 'routes-food.js', 'routes-cycle.js']
+const routeModules = ['routes-account.js', 'routes-sync.js', 'routes-gym.js', 'routes-training.js', 'routes-food.js', 'routes-cycle.js', 'routes-journal.js']
   .map(file => readFileSync(new URL('../src/' + file, import.meta.url), 'utf8'));
 const gateway = readFileSync(new URL('../src/strength-gateway.js', import.meta.url), 'utf8');
 const slice = (text, from, to) => text.slice(text.indexOf(from), text.indexOf(to));

@@ -582,6 +582,16 @@ final class APIClient: @unchecked Sendable {
         return (value, data)
     }
 
+    /// A file as it came, not JSON (Svaly's 3D figure, Muscle3D.swift).
+    func getData(_ path: String) async throws -> Data {
+        var request = makeRequest(path)
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 60
+        let (data, response) = try await load(request)
+        try check(response, data)
+        return data
+    }
+
     /// Sends a write that may have waited for signal (Outbox). A missing
     /// connection throws the URLError; an answer other than 2xx throws
     /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx).

@@ -89,7 +89,11 @@ export const PERSONAL_TABLES = {
   saved_workouts: { pk: ["user_id", "id"] },
   // The AI's own rides and runs for a day (ai-workout-compose.js).
   ai_workouts: { pk: ["user_id", "id"] },
-  workout_shares: {}
+  workout_shares: {},
+  // Deník, the habit journal (journal-store.js): the pinned and own items, and
+  // the answers per day and item.
+  journal_settings: {},
+  journal_entries: { pk: ["user_id", "date", "item_key"] }
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 
@@ -374,8 +378,42 @@ export const openSignup = env => String(env?.OPEN_SIGNUP || "").trim() === "true
 // Whether a sign-in with this verified address may create a new account.
 export async function mayCreateAccount(db, env, address) {
   if (!address) return false;
-  if (address === ownerEmail(env) || openSignup(env)) return true;
-  return Boolean(await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first());
+  if (address === ownerEmail(env)) return true;
+  const invited = Boolean(await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first());
+  if (!openSignup(env) && !invited) return false;
+  // ACCOUNT_LIMIT (a Worker variable) caps open sign-up at that many accounts;
+  // later addresses wait on the list until the owner invites them.
+  const limit = Number(env?.ACCOUNT_LIMIT) || 0;
+  if (limit > 0 && !invited) {
+    const users = await db.prepare("SELECT COUNT(*) AS n FROM users").first();
+    if ((Number(users?.n) || 0) >= limit) return waitlist(db, address, "account limit reached");
+  }
+  // A new account needs a place in a user database; without one every request
+  // of it would fail, so the address waits on the list (signup_waitlist) instead.
+  const room = await accountCapacity(db, env).catch(() => null);
+  if (room && room.free <= 0) return waitlist(db, address, "the user databases are full");
+  return true;
+}
+
+async function waitlist(db, address, reason) {
+  console.warn(`New account refused: ${reason}`);
+  await db.prepare("INSERT INTO signup_waitlist(email) VALUES(?) ON CONFLICT(email) DO NOTHING").bind(address).run().catch(() => null);
+  return false;
+}
+
+// Places for new accounts in the user databases (user-data-shards.js): the free
+// places of the ready databases that take new accounts, less the accounts not
+// placed yet (they get a place on their first request). Null without sharding.
+export async function accountCapacity(db, env) {
+  if (env?.USER_DATA_ROUTING !== "true") return null;
+  const enabled = await db.prepare("SELECT value FROM schema_meta WHERE key='user_data_sharding_enabled'").first();
+  if (enabled?.value !== "1") return null;
+  const row = await db.prepare(`SELECT
+      (SELECT COALESCE(SUM(s.max_users),0) FROM user_data_shards s WHERE s.shard_key!='legacy' AND s.state='ready' AND s.accepting_new=1) AS places,
+      (SELECT COALESCE(SUM(MAX(0,s.max_users-(SELECT COUNT(*) FROM user_data_routes r WHERE r.shard_key=s.shard_key))),0) FROM user_data_shards s WHERE s.shard_key!='legacy' AND s.state='ready' AND s.accepting_new=1) AS open,
+      (SELECT COUNT(*) FROM users u WHERE NOT EXISTS (SELECT 1 FROM user_data_routes r WHERE r.user_id=u.id)) AS unplaced`).first();
+  const places = Number(row?.places) || 0, free = Math.max(0, (Number(row?.open) || 0) - (Number(row?.unplaced) || 0));
+  return { places, used: places - free, free };
 }
 
 // Signs in the owner of an e-mail address that confirmed a code: an existing
