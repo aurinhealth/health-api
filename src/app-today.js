@@ -261,9 +261,10 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     ...recoveryItems,
     ...pillItems
   ];
-  // Done first in the order of the day, then what is still open, then bedtime.
+  // Done first in the order of the day, then what is still open, then bedtime
+  // with the planned wake time (Den draws the night ahead dashed to it).
   const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done),
-    ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), title: L("Do postele", "Bedtime"), detail: (choice.chosen != null ? L("spánek ", "sleep ") : L("potřeba spánku ", "sleep need ")) + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
+    ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), end: clock(plan.wake), title: L("Do postele", "Bedtime"), detail: (choice.chosen != null ? L("spánek ", "sleep ") : L("potřeba spánku ", "sleep need ")) + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
   ];
 
   return {
