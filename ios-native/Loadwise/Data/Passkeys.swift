@@ -54,6 +54,36 @@ extension APIClient {
     func registerPasskey(credential: JSONObject) async throws {
         let _: JSONValue = try await send("/app/api/passkeys", method: "POST", body: ["credential": JSONValue.object(credential)])
     }
+
+    /// The account's passkeys (Profil → Face ID).
+    func passkeys() async throws -> [PasskeyInfo] {
+        let list: PasskeyList = try await get("/app/api/passkeys")
+        return list.passkeys
+    }
+
+    /// Removes one passkey; whoever signed in with it elsewhere is signed out.
+    func removePasskey(id: String) async throws -> [PasskeyInfo] {
+        let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&+=")))
+        let list: PasskeyList = try await send("/app/api/passkeys?id=" + (encoded ?? id), method: "DELETE", body: JSONObject())
+        return list.passkeys
+    }
+
+    /// Signs out every other device; this one gets a fresh cookie and stays.
+    func signOutOtherDevices() async throws {
+        let _: JSONValue = try await send("/app/api/account/sign-out-everywhere", method: "POST", body: JSONObject())
+    }
+}
+
+/// One passkey of the account as the server lists it (dates in UTC, "YYYY-MM-DD HH:MM:SS").
+struct PasskeyInfo: Decodable, Identifiable, Equatable {
+    let id: String
+    let name: String
+    let createdAt: String?
+    let lastUsedAt: String?
+}
+
+private struct PasskeyList: Decodable {
+    let passkeys: [PasskeyInfo]
 }
 
 /// Runs the system passkey sheet for a sign-in or a registration.

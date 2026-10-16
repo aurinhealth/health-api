@@ -87,6 +87,11 @@ test('a large history is saved in batches and a remote activity outage still imp
   assert.equal((await raw.prepare("SELECT COUNT(*) n FROM health_datapoints WHERE user_id=1 AND data_type='activity'").first()).n,125);
   t.mock.method(globalThis,'fetch',async url=>String(url).includes('/activities?')?new Response('',{status:503}):Response.json(String(url).includes('/wellness?')?[{id:localToday(),weight:61}]:[]));
   const partial=await sync(env,ctx,'/sync/intervals/recent');
+  // A webhook asks only for what changed (intervals-webhook.js).
+  const asked=[];t.mock.method(globalThis,'fetch',async url=>{asked.push(String(url));return Response.json(String(url).includes('/wellness?')?[{id:localToday(),weight:61}]:[]);});
+  const onlyWeight=await sync(env,ctx,'/sync/intervals/recent?parts=weight');
+  assert.deepEqual(Object.keys(onlyWeight).filter(k=>!['status','source'].includes(k)),['weight']);
+  assert.ok(asked.length&&asked.every(u=>u.includes('/wellness?')),asked.join(' '));
   assert.equal(partial.status,'partial');assert.match(partial.activities.message,/HTTP 503/);
   assert.equal((await latestStoredWeight(env.DB)).value_numeric,61);
 });

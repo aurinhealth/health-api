@@ -1,0 +1,57 @@
+// Intervals.icu's webhooks for the athletes connected with "Připojit
+// Intervals.icu" (OAuth, intervals-oauth.js): what changed there is fetched
+// right away, so those athletes need no import every 5 minutes (an OAuth app
+// has 100 requests per athlete a day by default). Intervals.icu sends the
+// secret from the app's "Webhook Authorization Header" (INTERVALS_WEBHOOK_SECRET)
+// and retries when it gets no 2xx, so the answer comes first and the work
+// runs after it. An event names the athlete, not the Aurin user: the athlete
+// id saved at connecting (intervals_athlete) finds them.
+import { timingSafeEqualString } from "./dashboard-auth.js";
+
+// Which part of the Intervals.icu import (index.js syncIntervals) each event
+// asks for; the rest (fitness, sport settings, permissions) only refreshes
+// what the app shows.
+const PARTS = {
+  ACTIVITY_UPLOADED: "activities", ACTIVITY_ANALYZED: "activities", ACTIVITY_UPDATED: "activities", ACTIVITY_DELETED: "activities",
+  CALENDAR_UPDATED: "planned", WELLNESS_UPDATED: "weight"
+};
+
+function authorized(request, body, expected) {
+  if (!expected) return false;
+  const header = String(request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  return timingSafeEqualString(header, expected) || timingSafeEqualString(String(body?.secret || ""), expected);
+}
+
+// A calendar change Aurin itself made (a planned workout it sent) needs no fetch back.
+function ownCalendarChange(event, clientId) {
+  const ids = [event, ...(Array.isArray(event.events) ? event.events : [])].map(e => e?.oauth_client_id).filter(id => id != null);
+  return Boolean(clientId) && ids.length > 0 && ids.every(id => String(id) === clientId);
+}
+
+// What each athlete needs fetched: {athleteId: Set of parts}; "" when nothing
+// is fetched but the app's numbers should refresh.
+export function webhookWork(body, clientId) {
+  const work = new Map();
+  for (const event of Array.isArray(body?.events) ? body.events : []) {
+    const athlete = String(event?.athlete_id ?? "");
+    if (!athlete || typeof event.type !== "string") continue;
+    if (event.type === "CALENDAR_UPDATED" && ownCalendarChange(event, clientId)) continue;
+    if (!work.has(athlete)) work.set(athlete, new Set());
+    work.get(athlete).add(PARTS[event.type] || "");
+  }
+  return work;
+}
+
+// forAthlete(athleteId, parts) does the fetching for the Aurin user connected
+// as that athlete; it runs after the answer (ctx.waitUntil).
+export async function handleIntervalsWebhook(request, env, ctx, forAthlete) {
+  const body = await request.json().catch(() => null);
+  if (!authorized(request, body, String(env.INTERVALS_WEBHOOK_SECRET || ""))) return new Response(null, { status: 401 });
+  const work = webhookWork(body, String(env.INTERVALS_CLIENT_ID || "").trim());
+  if (work.size) {
+    const job = Promise.all([...work].map(([athlete, parts]) => forAthlete(athlete, [...parts].filter(Boolean))
+      .catch(error => console.error("Intervals.icu webhook failed", error.message))));
+    if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
+  }
+  return Response.json({ status: "ok" });
+}
