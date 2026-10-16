@@ -90,7 +90,7 @@ test("the export route streams NDJSON as a .ndjson download", () => {
   const source = serverSource();
   assert.match(source, /new Response\(exportAccountStream\(env,session\.user\)/);
   assert.match(source, /'Content-Type':'application\/x-ndjson; charset=utf-8'/);
-  assert.match(source, /loadwise-data-'\+localToday\(\)\+'\.ndjson"/);
+  assert.match(source, /aurin-data-'\+localToday\(\)\+'\.ndjson"/);
   assert.doesNotMatch(source, /exportAccountData/);
 });
 

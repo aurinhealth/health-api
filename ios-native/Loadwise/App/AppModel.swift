@@ -495,10 +495,12 @@ final class AppModel {
     }
     @ObservationIgnored private var refreshing: Set<AppTab> = []
 
-    /// The morning check-in on Today. It lowers the readiness, so Today loads again.
+    /// The morning check-in on Today. It lowers the readiness, so Today loads
+    /// again; without signal the answer waits in the outbox (a newer one
+    /// replaces it) and Today follows once it went out.
     func setMorningCheckin(_ feeling: String?) async throws {
         guard !demo, let today else { return }
-        try await api.setMorningCheckin(feeling, date: today.date)
+        guard try await deliver(APIClient.morningCheckinItem(feeling, date: today.date)) else { return }
         await refresh()
         if health != nil { await refreshHealth() }
     }

@@ -55,6 +55,7 @@ test("week plan preferences are sanitised and stored per user", async () => {
   assert.equal(sanitizeWeekPlan({ location: { name: "Kutná Hora", latitude: 49.9484, longitude: 15.2682 } }).location, null);
   assert.equal(sanitizeWeekPlan({ location: { name: "Kutná Hora", latitude: 49.9484, longitude: 15.2682, source: "search" } }).location.name, "Kutná Hora");
   assert.deepEqual(sanitizeWeekPlan({ location: { latitude: 50.08, longitude: 14.42, source: "device" } }).location, { name: "Moje poloha", latitude: 50.08, longitude: 14.42, source: "device" });
+  assert.deepEqual(sanitizeWeekPlan({ location: { latitude: 50.08734, longitude: 14.42126, source: "device" } }).location, { name: "Moje poloha", latitude: 50.09, longitude: 14.42, source: "device" });
   await saveWeekPlan(a, { days: example, location: { name: "Praha", latitude: 50.0755, longitude: 14.4378 } });
   assert.equal((await getWeekPlan(a)).location.name, "Praha");
   assert.deepEqual((await getWeekPlan(a)).days[5], ["ride", "gym"]);

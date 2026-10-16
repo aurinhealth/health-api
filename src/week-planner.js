@@ -51,8 +51,10 @@ export function sanitizeWeekPlan(input = {}) {
   const lat = Number(loc.latitude), lon = Number(loc.longitude);
   const source = LOCATION_SOURCES.includes(loc.source) ? loc.source : null;
   const oldDefault = !source && lat === OLD_DEFAULT.latitude && lon === OLD_DEFAULT.longitude;
+  // The phone's own location is kept only to about 1 km (two decimals), as the privacy policy says.
+  const scale = source === "device" ? 1e2 : 1e4;
   const location = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && !oldDefault
-    ? { name: String(loc.name || "").trim().slice(0, 80) || L("Moje poloha", "My location"), latitude: Math.round(lat * 1e4) / 1e4, longitude: Math.round(lon * 1e4) / 1e4, ...(source ? { source } : {}) }
+    ? { name: String(loc.name || "").trim().slice(0, 80) || L("Moje poloha", "My location"), latitude: Math.round(lat * scale) / scale, longitude: Math.round(lon * scale) / scale, ...(source ? { source } : {}) }
     : null;
   const count = input.weeklyActivities == null || input.weeklyActivities === '' ? null : Number(input.weeklyActivities);
   if (count != null && (!Number.isInteger(count) || count < 0 || count > 14)) throw new Error(L('Počet aktivit musí být 0 až 14.', 'The number of activities must be 0 to 14.'));
