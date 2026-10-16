@@ -86,7 +86,7 @@ struct RootView: View {
                 if let report = model.syncReport, !showSyncStatus {
                     SyncToastView(report: report) { showSyncStatus = true }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, model.immersive ? 16 : 88)
+                        .padding(.bottom, model.immersive ? 16 : model.minimizedGym == nil ? 88 : 152)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
@@ -97,18 +97,28 @@ struct RootView: View {
                         if let undo = toast.settle(undo: true) { Task { await undo() } }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, model.immersive ? 16 : 88)
+                    .padding(.bottom, model.immersive ? 16 : model.minimizedGym == nil ? 88 : 152)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
                 }
                 if !model.immersive {
-                    TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
-                           onExpand: { withAnimation(.snappy) { compactBar = false } }, onAdd: { showAdd = true })
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 8)
-                        .dynamicTypeSize(Self.textSizes)
-                        .sensoryFeedback(.impact(weight: .light), trigger: tabTaps)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    VStack(spacing: 8) {
+                        // A workout hidden with its arrow (TrainingModeView): back to it.
+                        if let gym = model.minimizedGym {
+                            MinimizedGymBar(gym: gym, live: LiveWorkout.shared) { model.open(.trainingMode(gym.date)) }
+                                .padding(.horizontal, 28)
+                                .dynamicTypeSize(Self.textSizes)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
+                               onExpand: { withAnimation(.snappy) { compactBar = false } }, onAdd: { showAdd = true })
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 8)
+                            .dynamicTypeSize(Self.textSizes)
+                            .sensoryFeedback(.impact(weight: .light), trigger: tabTaps)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.snappy, value: model.minimizedGym == nil)
                 }
             }
             .sheet(isPresented: $showAdd) {
@@ -164,6 +174,9 @@ struct RootView: View {
                 // The icon's menu in the language and order of the moment.
                 if phase == .background { QuickActions.update(model.today) }
                 guard phase == .active else { return }
+                // Mid-workout (a look at the lock screen, another app between
+                // sets) the screen stays as it is; the workout's end refreshes.
+                guard !model.immersive, !LiveWorkout.shared.running else { return }
                 Task {
                     if model.today != nil || !model.outbox.isEmpty { await model.refresh(announce: true) }
                     // The open tab too, so Health or Food are not a day behind Today.

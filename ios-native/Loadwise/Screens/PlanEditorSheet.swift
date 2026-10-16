@@ -11,11 +11,15 @@ struct PlanEditorSheet: View {
     /// The day (for the alternatives) and the exercise in progress.
     var date: String? = nil
     var current: Int? = nil
+    /// "Přejít na cvik": the day as changed here and the exercise to go to.
+    var go: ((GymDay, String) -> Void)? = nil
     let save: (GymDay) -> Void
     @State private var adding = false
     @State private var swapping: String?
 
-    init(day: GymDay, catalog: [GymCatalogExercise], date: String? = nil, current: Int? = nil, save: @escaping (GymDay) -> Void) {
+    init(day: GymDay, catalog: [GymCatalogExercise], date: String? = nil, current: Int? = nil,
+         go: ((GymDay, String) -> Void)? = nil, save: @escaping (GymDay) -> Void) {
+        self.go = go
         _day = State(initialValue: day)
         self.catalog = catalog
         self.date = date
@@ -83,6 +87,9 @@ struct PlanEditorSheet: View {
             }
             Spacer(minLength: 6)
             Menu {
+                if let go, left, offset != current {
+                    Button { go(day, exercise.id); dismiss() } label: { Label("Přejít na cvik", systemImage: "arrow.right.circle") }
+                }
                 if date != nil, left {
                     Button { swapping = exercise.name } label: { Label("Vyměnit cvik", systemImage: "arrow.triangle.swap") }
                 }
