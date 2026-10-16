@@ -330,3 +330,46 @@ struct ZoneMinutesCard: View {
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }
+
+/// The heart in the workout's header: crossed out while nothing measures the
+/// heart rate, red with a green dot when a beat comes in. A tap opens the
+/// sensors (Nastavení → Snímač tepu) over the workout.
+struct HeartSourceButton: View {
+    let live: LiveWorkout
+    var action: () -> Void
+    private var sensor: HeartRateSensor { HeartRateSensor.shared }
+
+    var body: some View {
+        let measuring = live.heartRate != nil || sensor.liveBpm != nil
+        Button(action: action) {
+            Image(systemName: measuring ? "heart.fill" : "heart.slash")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(measuring ? Palette.rust : Palette.faint)
+                .frame(width: 36, height: 36)
+                .overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                .overlay(alignment: .topTrailing) {
+                    if measuring {
+                        Circle().fill(Palette.green).frame(width: 9, height: 9)
+                            .overlay(Circle().stroke(Palette.background, lineWidth: 2))
+                            .offset(x: -1, y: 1)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr(measuring ? "Tep se měří" : "Tep se neměří"))
+    }
+}
+
+/// The small "i" beside an exercise in the rest: how it is done.
+struct SmallInfoButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "info").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink)
+                .frame(width: 30, height: 30).background(Palette.track, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr("Technika"))
+    }
+}

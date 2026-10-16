@@ -32,7 +32,7 @@ enum GymLiveActivity {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         endOrphans()
         // The clock of the recording, the same as the screen's Čas.
-        let attributes = GymActivityAttributes(startedAt: LiveWorkout.shared.start ?? day.startedAt ?? Date(), labels: labels)
+        let attributes = GymActivityAttributes(startedAt: LiveWorkout.shared.clockStart ?? day.startedAt ?? Date(), labels: labels)
         activity = try? Activity.request(attributes: attributes, content: content)
     }
 

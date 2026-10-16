@@ -48,6 +48,8 @@ struct TrainingModeView: View {
     /// Pokračovat v tréninku (Zahodit has no earlier day to go back to).
     @State private var reopened = false
     @State private var picking = false
+    /// The heart rate sensors, from the heart in the header.
+    @State private var sensors = false
     /// "Začít trénink" tapped (the sample day has no recording to show it).
     @State private var startTapped = false
     /// The warm-up's stretches ticked (StretchingCard): all of them done, the
@@ -79,7 +81,12 @@ struct TrainingModeView: View {
                                 }
                                 // The warm-up until the first set is done.
                                 if let warmup = day.warmup, restEnd == nil, !warmupDone(warmup), !day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
-                                    StretchingCard(stretching: warmup, date: date, kind: .warmup, compact: true).padding(.top, 14)
+                                    // Also gone once its minutes passed after Začít trénink.
+                                    TimelineView(.periodic(from: .now, by: 10)) { context in
+                                        if !warmupOver(warmup, at: context.date) {
+                                            StretchingCard(stretching: warmup, date: date, kind: .warmup, compact: true).padding(.top, 14)
+                                        }
+                                    }
                                 }
                                 if let restEnd {
                                     rest(day, exercise, until: restEnd)
@@ -143,6 +150,10 @@ struct TrainingModeView: View {
                 Task { await add(name) }
             }
         }
+        .sheet(isPresented: $sensors) {
+            NavigationStack { HeartRateSensorView() }
+                .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $editing) {
             if let day {
                 PlanEditorSheet(day: day, catalog: catalog, date: date, current: index,
@@ -161,6 +172,7 @@ struct TrainingModeView: View {
                 }
                 Spacer(minLength: 4)
                 if !finishedSession, current(day) != nil {
+                    HeartSourceButton(live: live) { sensors = true }
                     CircleButton(systemImage: "list.bullet", label: L10n.tr("Upravit plán")) { editing = true }
                     if started {
                         Button { Task { await finish() } } label: {
@@ -378,22 +390,31 @@ struct TrainingModeView: View {
         // In a superset the partner comes next (A1, B1, A2…).
         let partner = Self.supersetPartner(day.exercises, of: index)
         if let target = partner ?? (day.exercises.indices.contains(index + 1) ? index + 1 : nil), let next = day.exercises[safe: target] {
-            Button { move(target - index) } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Palette.secondary)
-                        .frame(width: 34, height: 34).background(Palette.track, in: Circle())
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
-                        Text(nextLine(next))
-                            .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+            HStack(spacing: 8) {
+                Button { move(target - index) } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Palette.secondary)
+                            .frame(width: 34, height: 34).background(Palette.track, in: Circle())
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
+                            Text(nextLine(next))
+                                .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                        }
+                        Spacer(minLength: 4)
                     }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .buttonStyle(.plain)
+                SmallInfoButton { technique = next.name }
+                Button { move(target - index) } label: {
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
+                        .frame(width: 20, height: 34).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHidden(true)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         } else if index > 0 {
             Button { move(-1) } label: {
                 Label("Předchozí cvik", systemImage: "chevron.left").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
@@ -431,6 +452,7 @@ struct TrainingModeView: View {
                         Spacer(minLength: 6)
                         Text(plannedLine(set))
                             .font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1)
+                        SmallInfoButton { technique = exercise.name }.padding(.leading, 4)
                     }
                     if let previous = GymSessionMath.lastTime(set, in: exercise, last: last) {
                         Text(L10n.f("Minule %@", previous)).font(Typo.caption).foregroundStyle(Palette.muted)
@@ -439,6 +461,7 @@ struct TrainingModeView: View {
                 .padding(16)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             }
+            nextExercise(day)
             let progress = GymSessionMath.muscleProgress(day.exercises, muscles: muscles)
             if !progress.isEmpty { MuscleProgressCard(items: progress) }
         }
@@ -450,6 +473,12 @@ struct TrainingModeView: View {
             // The rest is over: the screen turns to the set.
             restEnd = nil
         }
+    }
+
+    /// The warm-up's minutes have passed since the clock started.
+    private func warmupOver(_ warmup: GymStretching, at now: Date) -> Bool {
+        guard let start = live.clockStart else { return false }
+        return now.timeIntervalSince(start) >= Double(max(1, warmup.minutes) * 60)
     }
 
     /// Every stretch of the warm-up ticked (by hand or by its timer).
@@ -1010,24 +1039,23 @@ struct TrainingModeView: View {
     }
 
     /// Pokračovat v tréninku: the finished workout opens again where it was,
-    /// the clock from its first start; the workout Dokončit saved to Apple
-    /// Health is replaced by the one recorded from now on (its calories and
-    /// heart rate stay in Apple Health).
+    /// the clock where Dokončit stopped it (the time between is a pause), the
+    /// sets as logged. Apple Health gets one workout instead of the saved one,
+    /// with the calories and heart rate measured before the pause.
     private func resume() async {
         guard var next = day else { return }
         saving = true
         defer { saving = false }
+        let pausedAt = next.finishedAt ?? Date()
         next.clearFinished()
-        let start = next.startedAt
-        var saved = live.takeSaved()
-        if saved == nil, let start { saved = await live.savedWorkout(since: start) }
-        if let saved { await live.deleteWorkout(saved) }
+        let start = next.startedAt ?? pausedAt
+        let saved = live.takeSaved()
         day = next
         totals = nil
         finishedSession = false
         startTapped = true
         startAtFirstOpen()
-        if !live.running { await live.begin(since: start, weightKg: model.today?.weight?.latest) }
+        await live.resume(saved: saved, since: start, pausedAt: pausedAt, weightKg: model.today?.weight?.latest)
         syncActivity()
         do {
             try await model.saveGym(next, date: date)

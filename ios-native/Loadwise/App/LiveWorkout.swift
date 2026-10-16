@@ -31,6 +31,11 @@ final class LiveWorkout: NSObject {
     /// The session saved its own workout to Apple Health.
     private(set) var savedToHealth = false
     var running: Bool { start != nil }
+    /// Seconds the workout stood between Dokončit and Pokračovat v tréninku:
+    /// not counted on the clock nor in Apple Health (a pause in the workout).
+    private(set) var paused: TimeInterval = 0
+    /// Where the clock counts from: the start moved by the pause.
+    var clockStart: Date? { start.map { $0.addingTimeInterval(paused) } }
 
     @ObservationIgnored private let store = HKHealthStore()
     @ObservationIgnored private var weightKg: Double = 80
@@ -45,9 +50,29 @@ final class LiveWorkout: NSObject {
     @ObservationIgnored private var savedWorkout: HKWorkout?
     /// Beats from the Bluetooth sensor, one per 5 s, saved with the workout.
     @ObservationIgnored private var sensorBeats: [(Date, Double)] = []
+    /// Pokračovat v tréninku: the pause and the samples of the workout saved
+    /// before it, carried into the one recorded now.
+    @ObservationIgnored private var carried: (pause: DateInterval, samples: [HKQuantitySample])?
     private var sensor: HeartRateSensor { HeartRateSensor.shared }
 
     /// Starts once per session; `since` is when the gym sheet started.
+    /// Pokračovat v tréninku after Dokončit: the workout saved then goes, and
+    /// one workout from the first start is recorded on, with the time between
+    /// as a pause and the calories and heart rate already measured in it.
+    func resume(saved: HKWorkout?, since: Date, pausedAt: Date, weightKg: Double?) async {
+        var workout = saved
+        if workout == nil { workout = await savedWorkout(since: since) }
+        var samples: [HKQuantitySample] = []
+        if let workout {
+            samples = await copies(of: workout)
+            await delete(workout)
+        }
+        reset()
+        let now = Date()
+        carried = (DateInterval(start: min(pausedAt, now), end: now), samples)
+        await begin(since: since, weightKg: weightKg)
+    }
+
     func begin(since: Date?, weightKg: Double?) async {
         // A session left running from another day (never finished) starts over.
         if let start, Date().timeIntervalSince(start) > 4 * 3600 { reset() }
@@ -60,6 +85,12 @@ final class LiveWorkout: NSObject {
         kcal = nil; heartRate = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
         sensorBeats = []
         trail = []
+        paused = carried?.pause.duration ?? 0
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        let beats = (carried?.samples ?? []).filter { $0.quantityType == HKQuantityType(.heartRate) }.sorted { $0.startDate < $1.startDate }
+        for sample in beats { note(sample.quantity.doubleValue(for: unit), at: sample.startDate) }
+        // The beat shown is a live one, not the last one before the pause.
+        heartRate = nil
         sensor.onBeat = { [weak self] bpm in self?.sensorBeat(bpm) }
         sensor.connectSaved()
         guard HKHealthStore.isHealthDataAvailable() else { tick(); return }
@@ -100,14 +131,9 @@ final class LiveWorkout: NSObject {
         try? await store.delete(workout)
     }
 
-    /// Pokračovat v tréninku: only the workout goes, its samples stay.
-    func deleteWorkout(_ workout: HKWorkout) async {
-        try? await store.delete(workout)
-    }
-
     /// The strength workout this app saved from `start` on (Dokončit before
     /// the app was closed), to be replaced when the workout goes on.
-    func savedWorkout(since start: Date) async -> HKWorkout? {
+    private func savedWorkout(since start: Date) async -> HKWorkout? {
         guard HKHealthStore.isHealthDataAvailable() else { return nil }
         let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
             HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-120), end: nil),
@@ -149,6 +175,8 @@ final class LiveWorkout: NSObject {
         }
         session = nil; builder = nil; liveKcal = false
         start = nil
+        paused = 0
+        carried = nil
     }
 
     /// Minutes per heart rate zone: `lows` are the zones' lower bounds (bpm),
@@ -165,7 +193,7 @@ final class LiveWorkout: NSObject {
         return out
     }
 
-    var minutes: Int { start.map { max(1, Int((Date().timeIntervalSince($0) / 60).rounded())) } ?? 0 }
+    var minutes: Int { clockStart.map { max(1, Int((Date().timeIntervalSince($0) / 60).rounded())) } ?? 0 }
 
     // MARK: Without a live builder
 
@@ -180,7 +208,7 @@ final class LiveWorkout: NSObject {
     }
 
     private func update() async {
-        guard let start else { return }
+        guard let start = clockStart else { return }
         if !liveKcal {
             // Strength training about 5 MET, 4 above rest: active kcal = 4 × kg × hours.
             kcal = 4.0 * weightKg * Date().timeIntervalSince(start) / 3600
@@ -216,9 +244,9 @@ final class LiveWorkout: NSObject {
         }
     }
 
-    private func note(_ bpm: Double) {
+    private func note(_ bpm: Double, at date: Date = Date()) {
         heartRate = bpm
-        trail.append((Date(), bpm))
+        trail.append((date, bpm))
         hrSum += bpm; hrCount += 1
         avgHeartRate = hrSum / Double(hrCount)
         maxHeartRate = max(maxHeartRate ?? 0, bpm)
@@ -253,6 +281,8 @@ final class LiveWorkout: NSObject {
             await add([sample], to: builder)
         }
         await add(beatSamples(), to: builder)
+        // The estimate already covers the time before a pause.
+        await addCarried(to: builder, kcal: false)
         builder.addMetadata([HKMetadataKeyWorkoutBrandName: "Aurin"]) { _, _ in }
         let ended: Bool = await withCheckedContinuation { continuation in
             builder.endCollection(withEnd: end) { ok, _ in continuation.resume(returning: ok) }
@@ -283,6 +313,36 @@ final class LiveWorkout: NSObject {
         guard started else { session.end(); return }
         self.session = session
         self.builder = builder
+        await addCarried(to: builder, kcal: true)
+    }
+
+    /// The samples and the pause of the workout before Pokračovat v tréninku.
+    private func addCarried(to builder: HKWorkoutBuilder, kcal: Bool) async {
+        guard let carried else { return }
+        let energy = HKQuantityType(.activeEnergyBurned)
+        await add(carried.samples.filter { kcal || $0.quantityType != energy }, to: builder)
+        guard carried.pause.duration > 0 else { return }
+        let events = [HKWorkoutEvent(type: .pause, dateInterval: DateInterval(start: carried.pause.start, duration: 0), metadata: nil),
+                      HKWorkoutEvent(type: .resume, dateInterval: DateInterval(start: carried.pause.end, duration: 0), metadata: nil)]
+        _ = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            builder.addWorkoutEvents(events) { ok, _ in continuation.resume(returning: ok) }
+        }
+    }
+
+    /// New samples like the calories and heart rate saved with a workout.
+    private func copies(of workout: HKWorkout) async -> [HKQuantitySample] {
+        var out: [HKQuantitySample] = []
+        for type in [HKQuantityType(.activeEnergyBurned), HKQuantityType(.heartRate)] {
+            let found: [HKQuantitySample] = await withCheckedContinuation { continuation in
+                let query = HKSampleQuery(sampleType: type, predicate: HKQuery.predicateForObjects(from: workout), limit: HKObjectQueryNoLimit,
+                                          sortDescriptors: nil) { _, samples, _ in
+                    continuation.resume(returning: (samples as? [HKQuantitySample]) ?? [])
+                }
+                store.execute(query)
+            }
+            out += found.map { HKQuantitySample(type: $0.quantityType, quantity: $0.quantity, start: $0.startDate, end: $0.endDate) }
+        }
+        return out
     }
 
     @available(iOS 26.0, *)
@@ -371,7 +431,7 @@ struct LiveWorkoutStrip: View {
     private var divider: some View { Rectangle().fill(Palette.hairline).frame(width: 1) }
 
     private func clock(at now: Date) -> String {
-        guard let start = live.start else { return "0:00" }
+        guard let start = live.clockStart else { return "0:00" }
         let s = max(0, Int(now.timeIntervalSince(start)))
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
     }

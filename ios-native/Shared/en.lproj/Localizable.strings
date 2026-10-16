@@ -2530,3 +2530,6 @@
 "Ptát se ráno" = "Ask in the morning";
 "Pokračovat v tréninku" = "Resume workout";
 "Přejít na cvik" = "Go to this exercise";
+"Tep se měří" = "Heart rate measured";
+"Tep se neměří" = "No heart rate";
+"připojeno, zatím neposílá tep" = "connected, no heart rate yet";
