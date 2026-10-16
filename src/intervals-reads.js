@@ -1,16 +1,17 @@
-// Intervals.icu allows an app signed in with OAuth 100 requests per athlete a
-// day. Without a cache the app asked for the same wellness log, curves and
-// sport settings on almost every screen (about 170–200 requests a day), so for
+// Intervals.icu allows an app signed in with OAuth 100 requests a day per
+// athlete (at least 8000 in all). Without a cache the app asked for the same
+// wellness log, curves and sport settings on almost every screen (about
+// 170–200 requests a day for one athlete), so for
 // an OAuth connection the reads go through intervalsReads: an answer is kept
 // until Intervals.icu says that kind of data changed (its webhooks,
-// intervals-webhook.js) or Aurin writes that kind there, and at most 6 hours.
+// intervals-webhook.js) or Aurin writes that kind there, and at most an hour.
 // The wellness log is fetched once for the last 200 days and every range
 // within it is cut from that one answer. A personal API key (5000 requests a
 // day) reads as before.
 import { INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 
 const STATUS = "intervals_reads";
-const TTL = 6 * 3600;
+const TTL = 3600;
 const WINDOW_DAYS = 200;
 export const KINDS = ["wellness", "activities", "activity", "settings", "calendar"];
 
