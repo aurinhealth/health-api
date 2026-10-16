@@ -770,8 +770,10 @@ struct TrainingModeView: View {
             if let profile = try? await model.api.trainingProfile() {
                 zoneLows = profile.hrZones.sorted { $0.zone < $1.zone }.map { $0.bpmLow ?? 0 }
             }
-            // The clock, calories and heart rate while sets are left.
-            if let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }) {
+            // The clock, calories and heart rate (a workout recorded in Apple
+            // Health) start with the first ticked set; a workout already under
+            // way with sets left goes on. Only opening it records nothing.
+            if let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }), day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
                 await live.begin(since: nil, weightKg: model.today?.weight?.latest)
             }
             // An empty workout: the exercise list for Přidat cvik.
@@ -833,7 +835,6 @@ struct TrainingModeView: View {
         restEnd = nil
         // Straight to the new exercise when nothing else is left.
         if allDone { index = next.exercises.count - 1 }
-        if !live.running && !model.demo { await live.begin(since: nil, weightKg: model.today?.weight?.latest) }
         await loadMuscles(next)
         guard !model.demo else { return }
         do {
@@ -849,6 +850,8 @@ struct TrainingModeView: View {
         if !finishedSession, let day, day != original, !day.exercises.isEmpty {
             confirmClose = true
         } else {
+            // Nothing done here: the recording (if any) stops with the screen.
+            live.reset()
             dismiss()
         }
     }
@@ -936,6 +939,7 @@ struct TrainingModeView: View {
         next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.plannedReps ?? "") : r, rpe: String(rpe))
         day = next
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if !live.running && !model.demo { Task { await live.begin(since: nil, weightKg: model.today?.weight?.latest) } }
         // The last set of the exercise: on to the next one after a longer rest.
         var rest = set.warmup ? 60 : restSets
         let otherSide = set.side == "L" && next.exercises[safe: index]?.sets.contains { $0.number == set.number && $0.side == "P" && !$0.done } == true
