@@ -2497,3 +2497,17 @@
 "Po měřeních" = "By measurement";
 "Za 2 měsíce" = "In 2 months";
 "Zatím žádné měření." = "No measurement yet.";
+
+/* Account: sign-in (Face ID passkeys, other devices) */
+"Přihlášení" = "Sign-in";
+"Face ID" = "Face ID";
+"Odhlašuji…" = "Signing out…";
+"Odhlásit ostatní zařízení" = "Sign out other devices";
+"Odhlásit ostatní zařízení?" = "Sign out other devices?";
+"Tenhle iPhone zůstane přihlášený." = "This iPhone stays signed in.";
+"Ostatní zařízení jsou odhlášená." = "Other devices are signed out.";
+"Zatím žádný klíč." = "No passkey yet.";
+"Přidat Face ID na tomto iPhonu" = "Add Face ID on this iPhone";
+"Odebrat %@?" = "Remove %@?";
+"Zařízení, které se s ním přihlásilo, se odhlásí." = "The device that signed in with it will be signed out.";
+"Přidán %@" = "Added %@";
