@@ -16,6 +16,14 @@ import { instructions } from './private/ai-workout-pick.js';
 const HARD_ZONES = new Set(["threshold", "vo2max", "anaerobic", "sprint"]);
 // The most minutes at threshold and above for the morning's readiness.
 export const HARD_CAP = { green: 45, yellow: 20, red: 0 };
+// The cap for the coach's session: an easy kind (the engine's answer on a
+// yellow or red morning, with signs of illness, after a hard day…) gets no
+// minutes at threshold and above, whatever the zone.
+const QUALITY_KINDS = new Set(["tempo", "sweet_spot", "threshold", "vo2", "vo2max", "openers", "race"]);
+export function hardCapFor(coach = {}, today = {}) {
+  const zone = String(coach.readiness?.status || today.zone || "green").toLowerCase(), kind = coach.recommendation?.session?.kind;
+  return kind && !QUALITY_KINDS.has(kind) ? 0 : HARD_CAP[zone] ?? HARD_CAP.green;
+}
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -38,8 +46,7 @@ export function workoutLoadCheck(w, sport = "ride") {
 
 // The candidates the AI may choose from: within the time the athlete has
 // (5 minutes of rounding) and the hard-minute cap of the morning.
-export function safeCandidates(workouts, { sport = "ride", minutes = null, zone = "green" } = {}) {
-  const cap = HARD_CAP[zone] ?? HARD_CAP.green;
+export function safeCandidates(workouts, { sport = "ride", minutes = null, zone = "green", cap = HARD_CAP[zone] ?? HARD_CAP.green } = {}) {
   return (workouts || []).filter(w => {
     if (!w?.id) return false;
     const c = workoutLoadCheck(w, sport);
@@ -67,7 +74,7 @@ export async function aiWorkoutPick(env, generated, { sport = "ride", minutes = 
   const consent = await consentStatus(env).catch(() => ({ aiAllowed: false }));
   if (!consent.aiAllowed) return generated;
   const zone = String(coach.readiness?.status || today.zone || "green").toLowerCase();
-  const pool = safeCandidates([generated.workout, ...(generated.alternatives || [])], { sport, minutes, zone });
+  const pool = safeCandidates([generated.workout, ...(generated.alternatives || [])], { sport, minutes, zone, cap: hardCapFor(coach, today) });
   if (pool.length < 2) return generated;
   const candidates = pool.map(w => {
     const c = workoutLoadCheck(w, sport);

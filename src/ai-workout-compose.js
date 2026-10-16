@@ -13,7 +13,7 @@ import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
 import { zonesFor, buildWorkout } from "./workout-model.js";
 import { cleanEnduranceTemplate, enduranceStructure, enduranceSystem } from "./endurance-templates.js";
-import { workoutLoadCheck, HARD_CAP } from "./ai-workout-pick.js";
+import { workoutLoadCheck, hardCapFor } from "./ai-workout-pick.js";
 import { instructions } from './private/ai-workout-compose.js';
 
 // Under this suitability (% of the reachable score) the library pick is a poor fit.
@@ -68,7 +68,7 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
   if (!env.OPENAI_API_KEY || !env.DB?.userId || !(length >= 20)) return null;
   const consent = await consentStatus(env).catch(() => ({ aiAllowed: false }));
   if (!consent.aiAllowed) return null;
-  const zone = String(coach.readiness?.status || today.zone || "green").toLowerCase(), cap = HARD_CAP[zone] ?? HARD_CAP.green;
+  const zone = String(coach.readiness?.status || today.zone || "green").toLowerCase(), cap = hardCapFor(coach, today);
   const facts = {
     sport, language: L("cs", "en"), type, minutes: length, hardMinutesCap: cap,
     readiness: { score: today.score ?? coach.readiness?.score ?? null, zone, feeling: today.feeling || null },
