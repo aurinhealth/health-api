@@ -2541,3 +2541,5 @@
 "Čím nižší číslo, tím déle se sval ještě zotavuje. Sval na 5 % bude odpočatý třeba za 4 dny, sval na 30 % už zítra." = "The lower the number, the longer the muscle still needs. A muscle at 5 % may be rested in 4 days, one at 30 % tomorrow.";
 "Velké svaly (stehna, hýždě, záda) se po těžkých cvicích zotavují až 3 dny, malé svaly paží a ramen kolem 2 dnů. Série do selhání prodlouží zotavení." = "Large muscles (thighs, glutes, back) take up to 3 days after heavy lifts, the small muscles of the arms and shoulders about 2 days. Sets to failure make it longer.";
 "Počítá se z tvých sérií v posilovně za posledních 7 dní a z běhu, kola a chůze, které zatěžují nohy." = "It comes from your gym sets of the last 7 days and from the runs, rides and walks that load your legs.";
+"rozjeté" = "started";
+"hotové" = "done";

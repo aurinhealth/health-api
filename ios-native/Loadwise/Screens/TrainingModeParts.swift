@@ -63,7 +63,7 @@ enum GymSessionMath {
     }
 
     /// The plan's main muscles and how much of their sets is done (0…1).
-    static func muscleProgress(_ exercises: [GymExercise], muscles: [String: [String: Double]]) -> [(id: String, share: Double)] {
+    static func muscleProgress(_ exercises: [GymExercise], muscles: [String: [String: Double]]) -> [(id: String, done: Int, planned: Int)] {
         var planned: [String: Double] = [:], done: [String: Double] = [:]
         for exercise in exercises {
             guard let map = muscles[exercise.name] else { continue }
@@ -73,12 +73,7 @@ enum GymSessionMath {
             }
         }
         let top = planned.sorted { $0.value > $1.value }.prefix(4)
-        var out: [(id: String, share: Double)] = []
-        for (muscle, count) in top {
-            let share: Double = min(1, (done[muscle] ?? 0) / max(1, count))
-            out.append((id: muscle, share: share))
-        }
-        return out
+        return top.map { (id: $0.key, done: Int(min(done[$0.key] ?? 0, $0.value)), planned: Int($0.value)) }
     }
 
     /// Today against last time: "+2,5 kg", "+1 op." or "=".
@@ -261,45 +256,67 @@ struct HeartRecoveryCard: View {
     }
 }
 
-/// "Celkem dnes": the plan's main muscles, each as a filled circle.
+/// "Celkem dnes": the plan's main muscles lit on the figure (begun amber,
+/// done green, still to come light grey) and their sets done of planned.
 struct MuscleProgressCard: View {
-    let items: [(id: String, share: Double)]
+    let items: [(id: String, done: Int, planned: Int)]
+    /// "1 z 23 sérií" of the whole workout.
+    let total: (done: Int, planned: Int)
+    private var store: MuscleModelStore { MuscleModelStore.shared }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Celkem dnes").font(Typo.small).foregroundStyle(Palette.muted)
             HStack {
-                ForEach(items, id: \.id) { item in
-                    VStack(spacing: 6) {
-                        ZStack {
-                            Circle().fill(Palette.track)
-                            PieSlice(share: item.share).fill(Palette.amber)
+                Text("Celkem dnes").font(Typo.small).foregroundStyle(Palette.muted)
+                Spacer()
+                Text(verbatim: L10n.f("%@ z %@", String(total.done), String(total.planned)) + " " + Fmt.plural(total.planned, "série", "série", "sérií"))
+                    .font(Typo.small).foregroundStyle(Palette.muted).monospacedDigit()
+            }
+            HStack(spacing: 10) {
+                if let figure = store.figure {
+                    MuscleFigureFixedPair(figure: figure, colors: MuscleFigureFixedPair.colors(colors), labels: false)
+                        .frame(width: 150, height: 180)
+                        .allowsHitTesting(false)
+                }
+                VStack(alignment: .leading, spacing: 9) {
+                    ForEach(items, id: \.id) { item in
+                        HStack {
+                            Text(BodyFigure.label(item.id)).font(Typo.small.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                            Spacer(minLength: 6)
+                            Text(verbatim: "\(item.done)/\(item.planned)").font(Typo.small.weight(.medium))
+                                .foregroundStyle(item.done >= item.planned ? Palette.green : item.done > 0 ? Palette.amber : Palette.muted).monospacedDigit()
                         }
-                        .frame(width: 44, height: 44)
-                        Text(BodyFigure.label(item.id)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.7)
+                        .accessibilityElement(children: .combine)
                     }
-                    .frame(maxWidth: .infinity)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityValue(Text(verbatim: Fmt.int(item.share * 100) + " %"))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            if store.figure != nil {
+                HStack(spacing: 14) {
+                    key("rozjeté", Palette.amber)
+                    key("v plánu", Self.planned)
+                    key("hotové", Palette.green)
                 }
             }
         }
         .padding(16)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
-}
 
-struct PieSlice: Shape {
-    let share: Double
+    /// The light grey of a muscle still to come today.
+    static let planned = Color(light: 0x8E8880, dark: 0x9AA3A8)
 
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        guard share > 0 else { return path }
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        path.move(to: center)
-        path.addArc(center: center, radius: min(rect.width, rect.height) / 2, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * min(1, share)), clockwise: false)
-        path.closeSubpath()
-        return path
+    private var colors: [String: Color] {
+        Dictionary(uniqueKeysWithValues: items.map { item in
+            (item.id, item.done >= item.planned ? Palette.green : item.done > 0 ? Palette.amber : Self.planned)
+        })
+    }
+
+    private func key(_ title: String, _ color: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted)
+        }
     }
 }
 

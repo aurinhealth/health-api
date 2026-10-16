@@ -477,7 +477,9 @@ struct TrainingModeView: View {
             }
             nextExercise(day)
             let progress = GymSessionMath.muscleProgress(day.exercises, muscles: muscles)
-            if !progress.isEmpty { MuscleProgressCard(items: progress) }
+            if !progress.isEmpty {
+                MuscleProgressCard(items: progress, total: (day.exercises.reduce(0) { $0 + $1.doneCount }, day.exercises.reduce(0) { $0 + $1.workCount }))
+            }
         }
         .task(id: end) {
             let wait = end.timeIntervalSinceNow
@@ -867,6 +869,8 @@ struct TrainingModeView: View {
             }
             restoreMinimized()
             history = await model.gymHistory()
+            // The figure of Celkem dnes (MuscleProgressCard), kept on the phone after once.
+            await MuscleModelStore.shared.load(api: model.api)
             sideChoices = (try? await model.api.gymSides())?.choices ?? [:]
             if let profile = try? await model.api.trainingProfile() {
                 zoneLows = profile.hrZones.sorted { $0.zone < $1.zone }.map { $0.bpmLow ?? 0 }
