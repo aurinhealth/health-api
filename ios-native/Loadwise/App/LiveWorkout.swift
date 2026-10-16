@@ -100,12 +100,30 @@ final class LiveWorkout: NSObject {
         try? await store.delete(workout)
     }
 
+    /// A workout session iOS kept running after the app was closed (killed, or
+    /// updated from TestFlight) has nobody to end it: it would record for
+    /// hours and land in Apple Health as one long strength workout. At launch
+    /// it is ended without saving; Režim tréninku starts a new one with the
+    /// next ticked set.
+    func endOrphanedSession() {
+        guard #available(iOS 26.0, *), HKHealthStore.isHealthDataAvailable(), start == nil else { return }
+        store.recoverActiveWorkoutSession { session, _ in
+            guard let session else { return }
+            session.associatedWorkoutBuilder().discardWorkout()
+            session.end()
+        }
+    }
+
     /// Clears everything after the summary was shown (or the screen left early).
     func reset() {
         poll?.cancel(); poll = nil
         stopSensor()
         sensorBeats = []
-        if #available(iOS 26.0, *), let session = session as? HKWorkoutSession, session.state == .running { session.end() }
+        // Stopped without Dokončit: nothing goes to Apple Health.
+        if #available(iOS 26.0, *), let session = session as? HKWorkoutSession, session.state == .running {
+            (builder as? HKLiveWorkoutBuilder)?.discardWorkout()
+            session.end()
+        }
         session = nil; builder = nil; liveKcal = false
         start = nil
     }
