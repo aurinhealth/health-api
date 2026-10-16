@@ -90,6 +90,14 @@ final class SmokeTests: XCTestCase {
         hittable(app.buttons.matching(identifier: "Profil a nastavení")).tap()
         XCTAssertTrue(app.staticTexts["Prohlížíš ukázková data. Změny se neukládají."].waitForExistence(timeout: 8), "the settings did not open")
         shot("nastaveni")
+
+        // Dnes → the athlete's status (Aktivní, Nemoc, Zranění, Pauza).
+        launch("-demo")
+        XCTAssertTrue(tab("Dnes").waitForExistence(timeout: 20))
+        hittable(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Stav sportovce"))).tap()
+        XCTAssertTrue(app.staticTexts["Trénuješ a jsi v pořádku"].waitForExistence(timeout: 8), "the status did not open")
+        pause()
+        shot("stav")
     }
 
     // MARK: - Helpers

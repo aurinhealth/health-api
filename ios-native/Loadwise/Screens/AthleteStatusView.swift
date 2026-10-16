@@ -16,6 +16,16 @@ enum AthleteStatusKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// One line under the state in the sheet, as Bevel's Activity Status has.
+    var subtitle: String {
+        switch self {
+        case .active: return L10n.tr("Trénuješ a jsi v pořádku")
+        case .sick: return L10n.tr("Odpočíváš, než se uzdravíš")
+        case .injured: return L10n.tr("Zotavuješ se ze zranění")
+        case .on_break: return L10n.tr("Dáváš si od tréninku volno")
+        }
+    }
+
     var symbol: String {
         switch self {
         case .active: return "figure.run"
@@ -89,7 +99,7 @@ struct AthleteStatusPill: View {
     }
 }
 
-/// The first row of Today's weather card: a dot and the state in its colour,
+/// The first row of Today's weather card: the state's icon and name in its colour,
 /// then for a state other than Aktivní how long it lasts ("do 17. 10.",
 /// "do změny") and an injury's note. No frame; a tap changes it.
 struct AthleteStatusRow: View {
@@ -101,13 +111,16 @@ struct AthleteStatusRow: View {
         let kind = AthleteStatusKind.from(status.status)
         Button { editing = true } label: {
             HStack(spacing: 8) {
-                Circle().fill(kind.color).frame(width: 8, height: 8)
+                // The state's icon, not a dot: a coloured dot read as "live".
+                Image(systemName: kind.symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(kind.color)
+                    .frame(width: 18)
                 Text(kind.title).font(.subheadline.weight(.semibold)).foregroundStyle(kind.color)
                 if let detail = Self.detail(status, kind) {
                     Text(verbatim: "· " + detail).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                // It opens a choice below, not a page: a quiet downward chevron.
+                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.faint.opacity(0.7))
             }
             .contentShape(Rectangle())
         }
@@ -136,6 +149,7 @@ struct AthleteStatusSheet: View {
     @State private var note = ""
     @State private var saving = false
     @State private var error: String?
+    @State private var contentHeight: CGFloat = 480
 
     static let durations: [(days: Int?, label: String)] = [(nil, "Do změny"), (1, "1 den"), (3, "3 dny"), (7, "1 týden"), (14, "2 týdny")]
 
@@ -151,7 +165,10 @@ struct AthleteStatusSheet: View {
                                     .foregroundStyle(Palette.onAccent)
                                     .frame(width: 40, height: 40)
                                     .background(option.color, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                                Text(option.title).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(option.title).font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
+                                    Text(option.subtitle).font(.footnote).foregroundStyle(Palette.muted)
+                                }
                                 Spacer()
                                 Image(systemName: kind == option ? "largecircle.fill.circle" : "circle")
                                     .font(.system(size: 20)).foregroundStyle(kind == option ? Palette.ink : Palette.faint)
@@ -195,6 +212,7 @@ struct AthleteStatusSheet: View {
                         .padding(.top, 8)
                 }
                 .padding(20)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             }
             .background(Palette.background.ignoresSafeArea())
             .navigationTitle("Stav sportovce")
@@ -207,7 +225,9 @@ struct AthleteStatusSheet: View {
             }
         }
         .tint(Palette.ink)
-        .presentationDetents([.large])
+        // Only as tall as the choice (plus the title bar), not the whole screen.
+        .presentationDetents([.height(contentHeight + 64)])
+        .presentationDragIndicator(.visible)
         .onAppear {
             kind = AthleteStatusKind.from(current.status)
             note = current.note ?? ""
