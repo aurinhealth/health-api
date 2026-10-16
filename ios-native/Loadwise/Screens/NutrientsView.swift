@@ -16,19 +16,12 @@ struct NutrientsView: View {
             ScreenBackground(glow: Palette.Glow.food)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        BackSlot { dismiss() }
-                        Spacer()
-                        Text("Živiny").font(.headline).foregroundStyle(Palette.ink)
-                        Spacer()
+                    NutrientsTopBar(title: "Živiny", back: { dismiss() }) {
                         if page?.pro == true {
                             NavigationLink { NutrientFavoritesView(items: page?.items ?? [], chosen: page?.favorites ?? []) } label: {
                                 Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
                             }
-                            .frame(width: 52, alignment: .trailing)
                             .accessibilityLabel("Upravit živiny na Jídle")
-                        } else {
-                            Color.clear.frame(width: 52, height: 36)
                         }
                     }
                     if let page {
@@ -68,11 +61,8 @@ struct NutrientsContent: View {
                 tab("7 dní", on: week, enabled: page.pro) { week = true }
             }
             if let coach = page.coach {
-                Text(coach).font(Typo.sentence(18)).foregroundStyle(Palette.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16).padding(.vertical, 14)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .padding(.top, 16)
+                // The coach card of Jídlo, with this page's rule-based sentence.
+                CoachTextCard(screen: "nutrients", fallbackText: coach, live: false).padding(.top, 16)
             }
             section("Hlavní", group("main"))
             if page.pro {
@@ -196,13 +186,7 @@ struct NutrientDetailView: View {
             ScreenBackground(glow: Palette.Glow.food)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        BackSlot { dismiss() }
-                        Spacer()
-                        Text(detail?.name ?? "").font(.headline).foregroundStyle(Palette.ink)
-                        Spacer()
-                        Color.clear.frame(width: 36, height: 36)
-                    }
+                    NutrientsTopBar(title: detail?.name ?? "", back: { dismiss() })
                     if let detail {
                         NutrientDetailContent(detail: detail)
                     } else if let error {
@@ -270,6 +254,30 @@ struct NutrientDetailContent: View {
     }
 }
 
+/// The top of the Živiny pages, like Pití dnes and a meal's detail: back, the
+/// title as a section label in the middle, and an optional action on the right.
+struct NutrientsTopBar<Trailing: View>: View {
+    let title: String
+    var back: () -> Void
+    @ViewBuilder var trailing: () -> Trailing
+
+    var body: some View {
+        HStack {
+            BackSlot(action: back)
+            Spacer()
+            SectionLabel(text: title).lineLimit(1)
+            Spacer()
+            trailing().frame(minWidth: 52, minHeight: 36, alignment: .trailing)
+        }
+    }
+}
+
+extension NutrientsTopBar where Trailing == EmptyView {
+    init(title: String, back: @escaping () -> Void) {
+        self.init(title: title, back: back) { EmptyView() }
+    }
+}
+
 /// Živiny → Upravit: up to three nutrients shown on Jídlo under the macros.
 struct NutrientFavoritesView: View {
     @Environment(AppModel.self) private var model
@@ -282,13 +290,7 @@ struct NutrientFavoritesView: View {
             ScreenBackground(glow: Palette.Glow.food)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        BackSlot { dismiss() }
-                        Spacer()
-                        Text("Na obrazovce Jídlo").font(.headline).foregroundStyle(Palette.ink)
-                        Spacer()
-                        Color.clear.frame(width: 36, height: 36)
-                    }
+                    NutrientsTopBar(title: "Na obrazovce Jídlo", back: { dismiss() })
                     NutrientFavoritesList(items: items, chosen: $chosen).padding(.top, 24)
                 }
                 .padding(24)
