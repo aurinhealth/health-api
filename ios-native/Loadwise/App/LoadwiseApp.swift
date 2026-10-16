@@ -17,6 +17,8 @@ struct LoadwiseApp: App {
                 .environment(model)
                 // loadwise://open/sleep from the home-screen widgets.
                 .onOpenURL { model.handle($0) }
+                // A gym Live Activity left from before the app closed has no screen behind it.
+                .task { GymLiveActivity.endOrphans() }
                 .tint(Palette.ink)
                 .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
                 .environment(\.locale, L10n.locale)

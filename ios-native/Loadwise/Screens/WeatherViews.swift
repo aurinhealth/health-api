@@ -320,9 +320,15 @@ enum DeviceLocation {
         }
         guard let location = found else { throw Failure.unavailable }
         let mark = try? await CLGeocoder().reverseGeocodeLocation(location).first
+        // Only the approximate place leaves the phone (the privacy manifest's
+        // coarse location): two decimals, about a kilometre, are plenty for a forecast.
         return GeoPlace(name: mark?.locality ?? mark?.name ?? L10n.tr("Moje poloha"),
-                        latitude: location.coordinate.latitude, longitude: location.coordinate.longitude,
+                        latitude: approximate(location.coordinate.latitude), longitude: approximate(location.coordinate.longitude),
                         admin1: mark?.administrativeArea, country: mark?.country)
+    }
+
+    static func approximate(_ degrees: Double) -> Double {
+        (degrees * 100).rounded() / 100
     }
 }
 

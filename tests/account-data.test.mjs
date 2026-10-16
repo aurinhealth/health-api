@@ -90,7 +90,7 @@ test("the export route streams NDJSON as a .ndjson download", () => {
   const source = serverSource();
   assert.match(source, /new Response\(exportAccountStream\(env,session\.user\)/);
   assert.match(source, /'Content-Type':'application\/x-ndjson; charset=utf-8'/);
-  assert.match(source, /loadwise-data-'\+localToday\(\)\+'\.ndjson"/);
+  assert.match(source, /aurin-data-'\+localToday\(\)\+'\.ndjson"/);
   assert.doesNotMatch(source, /exportAccountData/);
 });
 
@@ -106,6 +106,19 @@ test("deleting the account removes its data and the account, revokes Google and 
     assert.equal(count(db, table, 3), 0, table);
     assert.equal(count(db, table, 4), 1, table);
   }
+});
+
+test("deleting the account also revokes WHOOP, Ultrahuman and Wahoo", async () => {
+  const db = database();
+  const calls = [];
+  const fetchImpl = async (url, init) => { calls.push([String(url), init.method]); return new Response("", { status: 200 }); };
+  const token = JSON.stringify({ access_token: "a", refresh_token: "r" });
+  const result = await deleteAccount({ DB: scopedDb(db, 3), USER_ID: 3, WHOOP_TOKEN: token, ULTRAHUMAN_TOKEN: token, WAHOO_TOKEN: token, ULTRAHUMAN_CLIENT_ID: "id", ULTRAHUMAN_CLIENT_SECRET: "s" }, user, { fetchImpl });
+  assert.deepEqual([result.whoop, result.ultrahuman, result.wahoo], ["revoked", "revoked", "revoked"]);
+  assert.ok(calls.some(([u, m]) => /whoop.*\/v2\/user\/access$/.test(u) && m === "DELETE"));
+  assert.ok(calls.some(([u]) => /ultrahuman.*oauth\/revoke$/.test(u)));
+  assert.ok(calls.some(([u, m]) => /wahoo.*\/v1\/permissions$/.test(u) && m === "DELETE"));
+  assert.equal(count(db, "users", 3), 0);
 });
 
 test("the owner's account cannot be deleted, and deleting needs the typed confirmation", async () => {

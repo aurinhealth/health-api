@@ -30,7 +30,7 @@ section instead.
 
 Standard library only (the JWT is signed with the openssl command).
 """
-import base64, json, os, re, subprocess, sys, time, urllib.error, urllib.request
+import base64, json, os, re, subprocess, sys, time, unicodedata, urllib.error, urllib.request
 
 LIMIT = 4000  # App Store Connect's limit for whatsNew
 API = "https://api.appstoreconnect.apple.com/v1"
@@ -83,6 +83,13 @@ def pull_request(number):
         return None
 
 
+def plain(line):
+    """App Store Connect refuses symbols such as ✓, ✕ or emoji in whatsNew
+    (build 86); arrows and punctuation pass."""
+    line = "".join(c for c in line if unicodedata.category(c) != "So")
+    return re.sub(r"\s+([,.;:])", r"\1", re.sub(r"\s{2,}", " ", line)).strip()
+
+
 def render(entries):
     """entries: (title, section) per pull request, newest first."""
     new, test, untold = [], [], False
@@ -90,8 +97,8 @@ def render(entries):
         if sec is None:
             untold = True
         else:
-            new += sec[0]
-            test += sec[1]
+            new += [plain(l) for l in sec[0]]
+            test += [plain(l) for l in sec[1]]
     if untold:
         # A pull request without the section (from before it existed): its
         # title is often English, so it is only counted, never quoted.
@@ -135,6 +142,9 @@ def check():
         sys.exit("::error::Sekce TestFlight má být česky (Co je nového / Co otestovat).")
     if sec[0] and not sec[1]:
         sys.exit(f"::error::Sekce TestFlight potřebuje i „{TEST}“: konkrétní kroky v aplikaci.")
+    symbols = sorted({c for c in " ".join(lines) if unicodedata.category(c) == "So"})
+    if symbols:
+        sys.exit("::error::App Store Connect v sekci TestFlight nepřijme znaky " + " ".join(symbols) + ", napiš je slovy.")
     print(render([("", sec)]))
 
 

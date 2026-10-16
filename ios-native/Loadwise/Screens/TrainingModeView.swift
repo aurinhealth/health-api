@@ -90,9 +90,20 @@ struct TrainingModeView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .task { await load() }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) } }
-        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) } }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true
+            GymActivityInbox.handler = { activityAction($0) }
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) }
+            GymActivityInbox.handler = nil
+            GymLiveActivity.end()
+        }
+        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
+        .onChange(of: day) { _, _ in syncActivity() }
+        .onChange(of: index) { _, _ in syncActivity() }
+        .onChange(of: finishedSession) { _, _ in syncActivity() }
+        .onChange(of: live.heartRate) { _, _ in syncActivity(quiet: true) }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
             ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
@@ -717,6 +728,33 @@ struct TrainingModeView: View {
         restEnd = next.timeIntervalSinceNow <= 0 ? nil : next
     }
 
+    // MARK: Live Activity
+
+    /// The lock screen and Dynamic Island follow the exercise on screen (GymLiveActivity).
+    private func syncActivity(quiet: Bool = false) {
+        GymLiveActivity.sync(day: finishedSession ? nil : day, focus: index, restStart: restStart, restEnd: restEnd, quiet: quiet)
+    }
+
+    /// +30 s, Přeskočit pauzu and Série hotová from the lock screen.
+    private func activityAction(_ action: GymActivityAction) {
+        switch action {
+        case .extend:
+            if let end = restEnd {
+                if end <= Date() { restEnd = Date().addingTimeInterval(30) } else { shiftRest(30) }
+            }
+        case .skip:
+            restEnd = nil
+        case .complete(let row):
+            guard let list = day?.exercises, let at = list.firstIndex(where: { $0.sets.contains { $0.row == row } }),
+                  let set = list[at].sets.first(where: { $0.row == row && !$0.done }), !saving else { break }
+            index = at
+            restEnd = nil
+            prefill(set)
+            Task { await complete(set) }
+        }
+        syncActivity()
+    }
+
     // MARK: Server
 
     private func load() async {
@@ -917,6 +955,8 @@ struct TrainingModeView: View {
             restStart = Date()
             restEnd = Date().addingTimeInterval(TimeInterval(rest))
         }
+        // Before the save: the lock screen may be all that's awake.
+        syncActivity()
         guard !model.demo else { return }
         saving = true
         defer { saving = false }

@@ -137,6 +137,8 @@ struct TodayContent: View {
         if selectedDate == nil, let cycle = today.cycle, TodayCycleCard.shows(cycle) {
             TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
         }
+        // Deník: the morning questions about yesterday, and "Nový objev".
+        if selectedDate == nil { JournalTodayCard() }
 
         // Aktivita dne: the day's activity from anything (CoachPick.swift).
         if selectedDate == nil { CoachPickCard().padding(.top, 16) }
@@ -431,6 +433,10 @@ struct ReadinessHero: View {
                         Pill(text: pill.text, foreground: pill.fg, background: pill.bg)
                     }
                 }
+                if readiness.provisional == true {
+                    Text(provisionalLine)
+                        .font(Typo.small).foregroundStyle(Palette.muted)
+                }
             } else {
                 Text(nightMissing && isToday ? "Čeká na dnešní noc" : "Zatím bez čísla")
                     .font(Typo.sentence(34, relativeTo: .largeTitle))
@@ -443,6 +449,14 @@ struct ReadinessHero: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// Why the number may still move: a new data source without 14 days of its own.
+    private var provisionalLine: String {
+        if let days = readiness.provisionalDays, days > 0 {
+            return L10n.f("Orientační: nový zdroj dat, zpřesní se za %@.", String(days) + " " + Fmt.plural(days, "den", "dny", "dní"))
+        }
+        return L10n.tr("Orientační: nový zdroj dat, číslo se ještě zpřesní.")
     }
 
     private var pill: (text: String, fg: Color, bg: Color)? {
@@ -562,7 +576,7 @@ struct KeyNumbers: View {
             Divider().overlay(Palette.hairline)
             RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
             Divider().overlay(Palette.hairline)
-            RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
+            RouteLink(route: .metric(.hrv)) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
         }
         .fixedSize(horizontal: false, vertical: true)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))

@@ -147,3 +147,11 @@ test("a red or sick morning never keeps 'stick to the plan', and new numbers wri
   assert.notEqual(screenFacts("today", today({ readiness: { score: 70, zone: "green" } })).fingerprint, screenFacts("today", today({ readiness: { score: 88, zone: "green" } })).fingerprint);
   assert.equal(screenFacts("today", today({ readiness: { score: 70, zone: "green" } })).fingerprint, screenFacts("today", today({ readiness: { score: 71, zone: "green" } })).fingerprint);
 });
+
+test("Trénink knows a paused athlete: the status is in the facts and a new status asks for a new text", () => {
+  const data = { week: 41, thisWeek: { done: 1, planned: 4 }, next: { date: "2026-10-16", title: "VO2max 5×4", sport: "ride" } };
+  const active = screenFacts("training", data), sick = screenFacts("training", { ...data, athleteState: "sick" });
+  assert.equal(active.facts.athleteState, null);
+  assert.equal(sick.facts.athleteState, "sick");
+  assert.notEqual(active.fingerprint, sick.fingerprint);
+});

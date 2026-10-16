@@ -91,6 +91,7 @@ test("a new HRV source borrows the old baseline shifted by the offset learned on
   assert.ok(r.score != null);
   assert.equal(r.provisional, true);
   assert.ok(r.flags.includes("provisional"));
+  assert.equal(r.provisionalDays, 8, "6 own days of 14");
   assert.ok(Math.abs(r.components.hrv.z) < 0.5, "an ordinary SDNN day is an ordinary day");
 });
 
@@ -104,6 +105,7 @@ test("no overlap keeps today's behaviour; 14 days of its own end the provisional
   const s = recoveryReadiness({ rows: settled, date: DATE });
   assert.ok(s.score != null);
   assert.equal(s.provisional, false);
+  assert.equal(s.provisionalDays, null);
   assert.ok(!s.flags.includes("provisional"));
 });
 
