@@ -41,7 +41,7 @@ export async function verifyShards({ accountId, token, config, environment = '',
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   verifyShards({ accountId:process.env.CLOUDFLARE_ACCOUNT_ID,token:process.env.CLOUDFLARE_API_TOKEN,
-    config:parseConfig(readFileSync('wrangler.runtime.jsonc','utf8')),environment:''
+    config:parseConfig(readFileSync('wrangler.runtime.jsonc','utf8')),environment:process.argv.includes('--staging')?'staging':''
   }).then(result=>console.log('Verified '+result.verified+' independent user databases; synthetic rows removed.'))
     .catch(error=>{console.error(error.message);process.exitCode=1;});
 }

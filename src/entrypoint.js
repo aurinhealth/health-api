@@ -93,6 +93,7 @@ import { reviewRefusal, isReviewAccount } from "./app-review.js";
 import { handleNativeAppleLogin } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
+import { isStaging, markStaging } from "./staging.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { handleWorkoutTemplatesApi, publicSharePage } from "./workout-templates.js";
@@ -297,8 +298,9 @@ const worker = {
     }
     // Connection keys saved before CONNECTION_KEY existed get it (connection-secrets.js).
     if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await migrateConnectionSecrets(env).then(result => { if (result.migrated || result.failed) console.log("Connection key migration", result); }).catch(error => console.error("Connection key migration failed", error.message));
-    // Yesterday's failed syncs, broken connections and server errors, to the owner (ops-report.js).
-    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 6 && new Date().getUTCMinutes() % 10 === 0) await sendDailyOpsReport(env).catch(error => console.error("Daily ops report failed", error.message));
+    // Yesterday's failed syncs, broken connections and server errors, to the owner (ops-report.js);
+    // only from the live server.
+    if (!isStaging(env) && (controller.cron === "* * * * *" && new Date().getUTCHours() === 6 && new Date().getUTCMinutes() % 10 === 0)) await sendDailyOpsReport(env).catch(error => console.error("Daily ops report failed", error.message));
     // Every user's jobs due this minute (USER_JOBS), each user in its own invocation.
     await fanOutUserJobs(env, ctx, controller);
   },
@@ -455,13 +457,13 @@ export default {
   async fetch(request, env, ctx) {
     // An installed iPhone app older than the API answers with 426 (app-version.js).
     const outdated = appUpdateRequired(request);
-    if (outdated) return outdated;
+    if (outdated) return isStaging(env) ? markStaging(outdated) : outdated;
     // Server errors are counted for the owner's morning e-mail (ops-report.js); 503 is a planned "try again".
     const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", `${request.method} ${routeName(new URL(request.url).pathname)}`, message));
     try {
       const response = await worker.fetch(request, env, ctx);
       if (response.status >= 500 && response.status !== 503) count(`HTTP ${response.status}`);
-      return response;
+      return isStaging(env) ? markStaging(response) : response;
     } catch (error) { count(error); throw error; }
   }
 };

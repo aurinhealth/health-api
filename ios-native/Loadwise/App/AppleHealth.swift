@@ -142,7 +142,9 @@ final class AppleHealth {
 
     private static let enabledKey = "appleHealth.enabled"
     private static let categoriesKey = "appleHealth.categories"
-    private static let lastSyncKey = "appleHealth.lastSync"
+    /// Each server has its own last sync, so the days spent on the other one
+    /// (Nastavení → Testování → Server) are sent again after switching back.
+    private static var lastSyncKey: String { ServerChoice.current == .live ? "appleHealth.lastSync" : "appleHealth.lastSync.staging" }
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -175,6 +177,11 @@ final class AppleHealth {
         UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
         start(api: api)
         return await sync(api: api, force: true)
+    }
+
+    /// After switching the server: that server's last sync.
+    func serverChanged() {
+        lastSync = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
     }
 
     /// Stops reading. The server keeps what it already has.

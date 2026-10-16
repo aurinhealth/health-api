@@ -23,6 +23,14 @@ struct LoginView: View {
                 HStack {
                     SectionLabel(text: "Aurin")
                     Spacer()
+                    if ServerChoice.current == .staging {
+                        // Nastavení → Testování → Server: this sign-in is for the test server.
+                        Label("Testovací server", systemImage: "server.rack")
+                            .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.amber)
+                            .padding(.horizontal, 10).padding(.vertical, 4)
+                            .background(Palette.amber.opacity(0.14), in: Capsule())
+                        Spacer()
+                    }
                     Button("Přeskočit") { withAnimation { page = pages.count - 1 } }
                         .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                         .opacity(page < pages.count - 1 ? 1 : 0)
@@ -111,7 +119,7 @@ struct LoginView: View {
                 }
                 .disabled(model.signingIn)
                 .padding(.top, 10)
-                if PasskeyService.mayHaveOne {
+                if ServerChoice.current.passkeys && PasskeyService.mayHaveOne {
                     // A passkey was made on this phone (Data/Passkeys.swift).
                     Button { Task { await signInWithPasskey() } } label: {
                         Label("Přihlásit přes passkey", systemImage: "faceid")

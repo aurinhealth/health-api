@@ -47,6 +47,7 @@ struct SettingsMenu: View {
     let store: SettingsStore
     var signOut: () -> Void = {}
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var close
 
     var body: some View {
         SettingsPage(title: "Nastavení") {
@@ -150,10 +151,35 @@ struct SettingsMenu: View {
             }
             .buttonStyle(.plain)
 
+            // Only the internal testers: the live server or the test server (ServerChoice.swift).
+            if store.internalTester && !model.demo {
+                SettingsGroup(title: "Testování") {
+                    NavigationLink {
+                        OptionListPage(title: "Server", selection: serverSelection,
+                                       options: ServerChoice.allCases.map { ($0.rawValue, $0.title) })
+                    } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "server.rack", color: Palette.muted), title: "Server", value: ServerChoice.current.title)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+
             Text(verbatim: "Aurin \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                 .font(Typo.caption).foregroundStyle(Palette.faint)
                 .frame(maxWidth: .infinity)
         }
+    }
+
+    /// Picking the other server switches the whole app to it (AppModel.switchServer).
+    private var serverSelection: Binding<String> {
+        Binding(get: { ServerChoice.current.rawValue }, set: { raw in
+            guard let choice = ServerChoice(rawValue: raw) else { return }
+            Task {
+                await model.switchServer(to: choice)
+                // Settings showed the other server's account.
+                close()
+            }
+        })
     }
 
     /// Kontaktovat nás: a new e-mail to support in the phone's mail app, with
