@@ -1,6 +1,6 @@
 # health-api
 
-Cloudflare Worker za aplikací **Aurin** (dříve Loadwise) pro iPhone (`ios-native/`, API na `https://aurin.health/app/api/*`): trenér cyklistiky, běhu a posilovny, výživa a deník jídla a noční plán posilovny z GitHub Actions. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
+Cloudflare Worker za aplikací **Aurin** (dříve Loadwise) pro iPhone (`ios-native/`, API na `https://aurin.health/app/api/*`): trenér cyklistiky, běhu a posilovny, výživa a deník jídla. Data jsou v D1 (`health-data`), zdroje jsou Google Health a Intervals.icu.
 
 ## Lokálně
 
@@ -17,7 +17,7 @@ Na produkci se nasazuje jen přes GitHub Actions (`.github/workflows/deploy-work
 
 ## Jak teče požadavek
 
-`src/entrypoint.js` je vstupní bod Workeru. Řeší přihlášení (`dashboard-auth.js`), uživatele (`tenancy.js`), API aplikace (`/app/api/*`) a noční plán posilovny z GitHub Actions (`/automation/strength`). Co nezpracuje sám, posílá dál:
+`src/entrypoint.js` je vstupní bod Workeru. Řeší přihlášení (`dashboard-auth.js`), uživatele (`tenancy.js`), API aplikace (`/app/api/*`) a kontrolu generátoru posilovny po nasazení (`/automation/strength`, jen náhled). Co nezpracuje sám, posílá dál:
 
 ```
 entrypoint.js → strength-gateway.js → index.js

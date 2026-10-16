@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createD1 } from './helpers/d1.mjs';
 import { scopedDb } from '../src/tenancy.js';
 import { parseTimeWindow, normalizeAvailability, trainingBudget, validDay } from '../src/training-availability.js';
-import { getWeekPlan, saveWeekPlan, resetWeekPlan, sanitizeWeekPlan, nightlyGymSkip } from '../src/week-planner.js';
+import { getWeekPlan, saveWeekPlan, resetWeekPlan, sanitizeWeekPlan } from '../src/week-planner.js';
 import { getAthleteState, updateAthleteState, proactiveAdvice, explicitPreference } from '../src/athlete-state.js';
 import { capWeekTargets, weekProposal, environmentFor, activityHistoryEstimate } from '../src/adaptive-week.js';
 import { askCoach, assistantTask } from '../src/coach-assistant.js';
@@ -81,7 +81,6 @@ test('state, preference memory and conversations belong to one user',async()=>{
   assert.equal((await getAthleteState(a)).status,'injured');
   assert.equal((await getAthleteState(b)).status,'active');
   assert.deepEqual((await getAthleteState(b)).memories,[]);
-  assert.match(await nightlyGymSkip(a,'2026-10-05'),/pozastavuje/);
   await updateAthleteState(a,{forget:m});assert.deepEqual((await getAthleteState(a)).memories,[]);
 });
 test('multiple recent recovery signals suggest a break, never diagnose sickness',()=>{
