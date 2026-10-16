@@ -13,6 +13,19 @@ enum PendingDrinks {
     }
 
     private static let key = "pendingDrinks"
+    /// Posted after a drink is added; the app, when it runs (Siri), sends it at once.
+    static let added = Notification.Name("PendingDrinks.added")
+
+    /// The user's glass of water: the smallest amount saved for water in Jídlo →
+    /// Pití (DrinkPrefs, the app's own defaults), else 250 ml or 8 fl oz.
+    static var glassMl: Int {
+        glassMl(saved: UserDefaults.standard.string(forKey: "drinkAmounts.water"), imperial: Units.imperial)
+    }
+
+    static func glassMl(saved: String?, imperial: Bool) -> Int {
+        if let smallest = saved?.split(separator: ",").compactMap({ Int($0) }).filter({ $0 > 0 }).min() { return smallest }
+        return imperial ? Units.roundedMl(fluidOunces: 8) : 250
+    }
 
     static func add(_ ml: Int, on date: String) {
         let defaults = UserDefaults(suiteName: WidgetSnapshot.group)
@@ -47,13 +60,15 @@ enum PendingDrinks {
     }
 }
 
+/// The widget's water buttons, and "Zapsat vodu" in Siri and Shortcuts
+/// (AurinShortcuts), where the amount may be left out for the user's glass.
 struct AddWaterIntent: AppIntent {
-    static var title: LocalizedStringResource = "Přidat vodu"
-    static var description = IntentDescription("Zapíše sklenici vody do dnešního pití.")
+    static var title: LocalizedStringResource = "Zapsat vodu"
+    static var description = IntentDescription("Zapíše vodu do dnešního pití.")
 
     /// Millilitres; the title names no unit because an intent's texts are fixed at build time.
-    @Parameter(title: "Množství", default: 250)
-    var ml: Int
+    @Parameter(title: "Množství")
+    var ml: Int?
 
     init() {}
 
@@ -61,7 +76,8 @@ struct AddWaterIntent: AppIntent {
         self.ml = ml
     }
 
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let ml = min(max(self.ml ?? PendingDrinks.glassMl, 1), 3000)
         let today = PendingDrinks.localDate()
         PendingDrinks.add(ml, on: today)
         // After midnight the old day's snapshot starts the new day at zero water.
@@ -71,6 +87,7 @@ struct AddWaterIntent: AppIntent {
             snapshot.save()
         }
         WidgetCenter.shared.reloadAllTimelines()
-        return .result()
+        NotificationCenter.default.post(name: PendingDrinks.added, object: nil)
+        return .result(dialog: IntentDialog("\(L10n.f("Zapsáno %@ vody.", Units.volumeText(Double(ml))))"))
     }
 }
