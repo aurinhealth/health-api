@@ -8,8 +8,8 @@ import XCTest
 final class SmokeTests: XCTestCase {
     private var app: XCUIApplication!
     private var step = 0
-    /// The test's number: 1-… the first launch, 2-… the main screens.
-    private var prefix: String { name.contains("test1") ? "1" : "2" }
+    /// The test's number: 1-… the first launch, 2-… the main screens, 3-… the status.
+    private var prefix: String { name.contains("test1") ? "1" : name.contains("test2") ? "2" : "3" }
 
     override func setUp() {
         continueAfterFailure = false
@@ -98,6 +98,35 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Trénuješ a jsi v pořádku"].waitForExistence(timeout: 8), "the status did not open")
         pause()
         shot("stav")
+    }
+
+    /// The athlete's status in Czech and English: the sheet with each state
+    /// picked and Dnes after saving it (the sample data keeps it in memory).
+    func test3AthleteStatus() {
+        for language in ["cs", "en"] {
+            let english = language == "en"
+            let titles = english ? ["Sick", "Injured", "Rest", "Active"] : ["Nemoc", "Zranění", "Pauza", "Aktivní"]
+            let files = ["nemoc", "zraneni", "pauza", "aktivni"]
+            let save = english ? "Save" : "Uložit"
+            app.launchArguments = ["-demo", "-language", language, "-AppleLanguages", "(\(language))", "-AppleLocale", english ? "en_US" : "cs_CZ"]
+            app.launch()
+            let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", english ? "Athlete status" : "Stav sportovce"))
+            XCTAssertTrue(row.firstMatch.waitForExistence(timeout: 20), "the status row is missing (\(language))")
+            shot("\(language)-aktivni-dnes")
+            for (title, file) in zip(titles, files) {
+                hittable(row).tap()
+                let option = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+                XCTAssertTrue(option.waitForExistence(timeout: 8), "\(title) is missing in the sheet")
+                if file == "nemoc" { shot("\(language)-panel") }
+                option.tap()
+                pause(1)
+                shot("\(language)-\(file)-panel")
+                app.buttons[save].tap()
+                pause(2)
+                XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5))
+                shot("\(language)-\(file)-dnes")
+            }
+        }
     }
 
     // MARK: - Helpers
