@@ -121,6 +121,8 @@ test("Intervals.icu connects with one button once its app is registered", async 
   assert.deepEqual([exchanged.body.get("client_id"), exchanged.body.get("client_secret"), exchanged.body.get("code")], ["cid", "secret", "the-code"]);
   const resolved = await connectionEnvironment(env);
   assert.equal(resolved.INTERVALS_API_KEY, "Bearer tok123");
+  // The athlete Intervals.icu's webhooks name.
+  assert.equal(resolved.INTERVALS_ATHLETE_ID, "i1");
   assert.deepEqual(resolved.CONNECTED_PROVIDERS, ["intervals"]);
   const status = (await connectionStatus(resolved)).providers.find(p => p.id === "intervals");
   assert.deepEqual([status.connected, status.via, status.method, status.connectUrl], [true, "oauth", "oauth", "/oauth/intervals"]);

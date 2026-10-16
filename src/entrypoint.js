@@ -92,14 +92,15 @@ import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
 import { handleNativeAppleLogin } from "./apple-login.js";
 import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
-import { intervalsAuthorization } from "./intervals-auth.js";
+import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { handleWorkoutTemplatesApi, publicSharePage } from "./workout-templates.js";
 import { wwwRedirect } from "./app-origin.js";
 import { internalHeaders } from "./internal-auth.js";
 import { deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
-import { handleIntervalsOAuth } from "./intervals-oauth.js";
+import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.js";
+import { handleIntervalsWebhook } from "./intervals-webhook.js";
 import { handleStravaOAuth, disconnectStrava, syncStravaWeight } from "./strava.js";
 import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman, FIRST_IMPORT_DAYS } from "./ultrahuman.js";
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
@@ -169,6 +170,12 @@ function forgetScreens(userId) {
 const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|health\/apple$|account\/(email\/(start|verify)|sign-out-everywhere)$|support\/report$|push\/token$|passkeys$|passkeys\/options$)/;
 const STATIC_PATHS = new Set(['/logo.svg','/','/privacy','/terms','/support','/robots.txt','/sitemap.xml']);
 
+// An OAuth connection to Intervals.icu skips a scheduled job except at minute
+// 40 (or the job's own minute) of every third hour (UTC).
+function intervalsOAuthQuiet(env, minute = 40, now = new Date()) {
+  if (!String(env.INTERVALS_API_KEY || "").startsWith(INTERVALS_TOKEN_PREFIX)) return false;
+  return !(now.getUTCHours() % 3 === 0 && now.getUTCMinutes() === minute);
+}
 // Runs fn once per active user (with that user's env and credentials), for
 // cron jobs and GitHub automations that act on everyone's data.
 async function forEachUser(env, providers, fn) {
@@ -208,7 +215,7 @@ const USER_JOBS = [
     if (controller.cron === "* * * * *" && localHour() < 6 && (scoped.CONNECTED_PROVIDERS || []).includes("google")) await compactHeartRate(scoped.DB, scoped.USER_ID).catch(error => console.error("Heart-rate compaction failed", error.message));
     // The morning readiness push once the night's data has synced (push.js),
     // checked every five minutes; it goes out at most once a local day.
-    if (every5(controller.cron, new Date(controller.scheduledTime))) {
+    if (every5(controller.cron, new Date(controller.scheduledTime || Date.now()))) {
       await morningPush(scoped, ctx).catch(error => console.error("Morning push failed", error.message));
       await coachPush(scoped, ctx).catch(error => console.error("Coach push failed", error.message));
     }
@@ -226,11 +233,15 @@ const USER_JOBS = [
   { name: "whoop", providers: ["whoop"], due: (cron, now) => minute(cron, now, m => m === 25), run: async scoped => { const r = await syncWhoop(scoped, { days: 3 }); if (r.saved) await bumpCacheVersion(scoped.DB); } },
   // Hourly: the latest weight to Strava when it changed and the user sends it there.
   { name: "strava-weight", providers: ["strava"], due: (cron, now) => minute(cron, now, m => m === 30), run: async scoped => syncStravaWeight(scoped, { allowed: healthAllowed(await readSyncPrefs(scoped.DB, scoped.USER_ID, "strava"), "weight") }) },
-  { name: "intervals-recent", providers: ["intervals"], due: every5, run: (scoped, ctx) => legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), scoped, ctx) },
+  // Every 5 minutes for a personal API key; an OAuth connection gets
+  // webhooks (/webhooks/intervals), so only a look every 3 hours in case
+  // one was lost (an OAuth app has 100 requests per athlete a day).
+  { name: "intervals-recent", providers: ["intervals"], due: every5, run: (scoped, ctx, controller) => intervalsOAuthQuiet(scoped, 40, new Date(controller.scheduledTime || Date.now())) ? null : legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), scoped, ctx) },
   // Hourly, half an hour after the Google Health sync: weight the same in the
   // app, Google Health and Intervals.icu, and Google wellness (sleep, steps,
   // heart rate, HRV, …) copied into Intervals.icu.
-  { name: "intervals-wellness", providers: ["intervals"], due: (cron, now) => minute(cron, now, m => m === 30), run: async (scoped, ctx) => {
+  { name: "intervals-wellness", providers: ["intervals"], due: (cron, now) => minute(cron, now, m => m === 30), run: async (scoped, ctx, controller) => {
+    if (intervalsOAuthQuiet(scoped, 30, new Date(controller.scheduledTime || Date.now()))) return;
     await syncWeights(scoped, { googleToken }).catch(error => console.error("Weight sync failed", error.message));
     await syncWellnessToIntervals(scoped, { sleepSessions: (from, to) => legacyHealthApi.fetch(new Request(`https://internal/health/sleep?start=${from}&end=${shiftDate(to, 1)}`), scoped, ctx).then(r => r.json()).then(d => d.sessions || []) }).catch(error => console.error("Wellness sync failed", error.message));
   } }
@@ -385,6 +396,13 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
       if (String(readWahooTokens(scoped)?.user_id ?? "") !== wahooUser) return null;
       const result = await fn(scoped);
       if (result?.saved) { await matchActivities(scoped, { days: 3 }).catch(() => null); await bumpCacheVersion(scoped.DB); }
+      return result;
+    }));
+    // Intervals.icu's webhooks: what changed for an athlete connected with OAuth.
+    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts) => forEachUser(rawEnv, ["intervals"], async scoped => {
+      if (!scoped.INTERVALS_ATHLETE_ID || scoped.INTERVALS_ATHLETE_ID !== athlete) return null;
+      const result = parts.length ? await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent?parts=" + parts.join(","), { method: "POST" }), scoped, ctx).then(r => r.json()).catch(error => ({ error: error.message })) : null;
+      await bumpCacheVersion(scoped.DB);
       return result;
     }));
     // Passkeys in the iPhone app: the app's associated domain (apple-app-site-association.js).
@@ -1578,6 +1596,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:L('Neznámé připojení.', 'Unknown connection.')},{status:400});
       // Loadwise also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
       if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);
+      if(body.provider==='intervals'){await disconnectIntervalsApp(env);await deleteConnectionSecret(env,'intervals_athlete');}
       await deleteConnectionSecret(env,body.provider);
       if(body.provider==='google') await deleteConnectionSecret(env,'google_scopes');
       await clearConnectionHealth(env,body.provider);
@@ -1589,6 +1608,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!check.ok) return Response.json({message:L('Intervals klíč nepřijal. Zkontroluj klíč v nastavení Intervals.', 'Intervals didn\'t accept the key. Check the key in your Intervals settings.')},{status:400});
     const athlete=await check.json().catch(()=>({}));
     await saveConnectionSecret(env,'intervals',apiKey);
+    await deleteConnectionSecret(env,'intervals_athlete');
     await clearConnectionHealth(env,'intervals');
     await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_intervals'").bind(env.USER_ID).run();
     await initialImport(await connectionEnvironment(env),ctx);
