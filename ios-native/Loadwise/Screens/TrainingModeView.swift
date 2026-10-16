@@ -52,6 +52,8 @@ struct TrainingModeView: View {
     @State private var sensors = false
     /// "Začít trénink" tapped (the sample day has no recording to show it).
     @State private var startTapped = false
+    /// Hidden with the arrow: the workout goes on, only the screen closes.
+    @State private var minimizing = false
     /// The warm-up's stretches ticked (StretchingCard): all of them done, the
     /// card makes way for the first exercise.
     @AppStorage("gym.stretching.done") private var stretchesDone = ""
@@ -114,9 +116,16 @@ struct TrainingModeView: View {
             GymActivityInbox.handler = { activityAction($0) }
         }
         .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) }
-            GymActivityInbox.handler = nil
-            GymLiveActivity.end()
+            UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false
+            if minimizing {
+                // The rest alarm and the Live Activity stay; their taps wait in the bar.
+                let model = model
+                GymActivityInbox.handler = { Self.minimizedAction($0, model: model) }
+            } else {
+                Task { await Reminders.restEnds(at: nil) }
+                GymActivityInbox.handler = nil
+                GymLiveActivity.end()
+            }
         }
         .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
         .onChange(of: day) { _, _ in syncActivity() }
@@ -164,7 +173,12 @@ struct TrainingModeView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { close() }
+            // Under way: the arrow hides it and the workout goes on (MinimizedGymBar).
+            if started, !finishedSession, let day, current(day) != nil {
+                CircleButton(systemImage: "chevron.down", label: L10n.tr("Skrýt trénink")) { minimize() }
+            } else {
+                CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { close() }
+            }
             if let day, !day.exercises.isEmpty {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title(day)).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
@@ -838,7 +852,7 @@ struct TrainingModeView: View {
     // MARK: Server
 
     private func load() async {
-        if model.demo { day = DemoData.gym; history = DemoGymHistory.history; loading = false; startAtFirstOpen(); return }
+        if model.demo { day = DemoData.gym; history = DemoGymHistory.history; loading = false; startAtFirstOpen(); restoreMinimized(); return }
         loading = true
         defer { loading = false }
         do {
@@ -851,6 +865,7 @@ struct TrainingModeView: View {
                 finishedSession = true
                 if let minutes = day.loggedMinutes { totals = (minutes, nil, nil, nil, false, []) }
             }
+            restoreMinimized()
             history = await model.gymHistory()
             sideChoices = (try? await model.api.gymSides())?.choices ?? [:]
             if let profile = try? await model.api.trainingProfile() {
@@ -940,6 +955,48 @@ struct TrainingModeView: View {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         if !model.demo && !live.running { await live.begin(since: nil, weightKg: model.today?.weight?.latest) }
         syncActivity()
+    }
+
+    /// The arrow: the screen closes, the clock, heart rate, rest alarm and
+    /// Live Activity go on, and the bar over the tab bar opens it again.
+    private func minimize() {
+        guard let day else { return }
+        model.minimizedGym = MinimizedGym(date: date, title: title(day), day: day, index: index, restStart: restStart,
+                                          restEnd: restEnd, restTotal: restTotal, next: current(day)?.name, startTapped: startTapped)
+        minimizing = true
+        dismiss()
+    }
+
+    /// Back from the bar: the same exercise and rest, then the lock-screen
+    /// taps made meanwhile.
+    private func restoreMinimized() {
+        guard let gym = model.minimizedGym, gym.date == date else { return }
+        model.minimizedGym = nil
+        guard !finishedSession, let count = day?.exercises.count, count > 0 else { return }
+        index = min(gym.index, count - 1)
+        startTapped = gym.startTapped
+        restTotal = gym.restTotal
+        restStart = gym.restStart
+        restEnd = gym.restEnd.flatMap { $0 > Date() ? $0 : nil }
+        for action in gym.pending { activityAction(action) }
+    }
+
+    /// +30 s and Přeskočit pauzu from the lock screen while the workout is
+    /// hidden; Série hotová waits until it opens again.
+    private static func minimizedAction(_ action: GymActivityAction, model: AppModel) {
+        guard var gym = model.minimizedGym else { return }
+        switch action {
+        case .extend:
+            if let end = gym.restEnd { gym.restEnd = max(end, Date()).addingTimeInterval(30); gym.restTotal += 30 }
+        case .skip:
+            gym.restEnd = nil
+        case .complete:
+            gym.pending.append(action)
+        }
+        model.minimizedGym = gym
+        let end = gym.restEnd
+        Task { await Reminders.restEnds(at: end) }
+        GymLiveActivity.sync(day: gym.day, focus: gym.index, restStart: gym.restStart, restEnd: gym.restEnd)
     }
 
     /// The cross: a workout changed here can be kept for later or thrown away.

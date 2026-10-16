@@ -362,6 +362,7 @@ struct HeartSourceButton: View {
 
 /// The small "i" beside an exercise in the rest: how it is done.
 struct SmallInfoButton: View {
+    var label = "Technika"
     var action: () -> Void
 
     var body: some View {
@@ -370,6 +371,72 @@ struct SmallInfoButton: View {
                 .frame(width: 30, height: 30).background(Palette.track, in: Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(L10n.tr("Technika"))
+        .accessibilityLabel(L10n.tr(label))
+    }
+}
+
+/// Režim tréninku hidden with the arrow: where it was, so it opens the same
+/// (the exercise, the rest), and the lock-screen taps made meanwhile.
+struct MinimizedGym {
+    let date: String
+    let title: String
+    var day: GymDay
+    var index: Int
+    var restStart: Date?
+    var restEnd: Date?
+    var restTotal: Int
+    let next: String?
+    let startTapped: Bool
+    var pending: [GymActivityAction] = []
+}
+
+/// The bar over the tab bar while the workout is hidden: its time, the rest
+/// and the exercise; a tap opens it again.
+struct MinimizedGymBar: View {
+    let gym: MinimizedGym
+    let live: LiveWorkout
+    var open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 12) {
+                Image(systemName: "dumbbell.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.rust)
+                    .frame(width: 38, height: 38).background(Palette.track, in: Circle())
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 8) {
+                            Text(verbatim: gym.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                            Text(verbatim: elapsed(at: context.date)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).monospacedDigit()
+                        }
+                        if let line = line(at: context.date) {
+                            Text(verbatim: line).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                        }
+                    }
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.up").font(.footnote.weight(.semibold)).foregroundStyle(Palette.muted)
+            }
+            .padding(.leading, 10).padding(.trailing, 16).padding(.vertical, 9)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr("Zpět do tréninku"))
+    }
+
+    private func elapsed(at now: Date) -> String {
+        guard let start = live.clockStart else { return "" }
+        let s = max(0, Int(now.timeIntervalSince(start)))
+        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
+    }
+
+    /// "Pauza 0:40 · další Dřep", or the exercise.
+    private func line(at now: Date) -> String? {
+        if let end = gym.restEnd, end > now {
+            let s = Int(end.timeIntervalSince(now).rounded(.up))
+            let rest = L10n.tr("Pauza") + " " + String(format: "%d:%02d", s / 60, s % 60)
+            return gym.next.map { rest + " · " + L10n.f("další %@", $0) } ?? rest
+        }
+        return gym.next
     }
 }
