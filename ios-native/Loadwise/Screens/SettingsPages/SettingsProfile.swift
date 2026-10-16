@@ -19,6 +19,9 @@ struct ProfileSettingsView: View {
     @State private var height = ""
     @State private var original: JSONObject = [:]
     @State private var copied = false
+    @State private var confirmOthers = false
+    @State private var signingOutOthers = false
+    @State private var othersMessage: String?
     @AppStorage(AvatarStore.nameKey) private var accountName = ""
     @AppStorage(AvatarStore.emailKey) private var email = ""
 
@@ -75,6 +78,18 @@ struct ProfileSettingsView: View {
                 }
             }
 
+            if !model.demo {
+                SettingsGroup(title: "Přihlášení") {
+                    NavigationLink { PasskeysSettingsView() } label: { SettingsRow(title: "Face ID") }
+                        .buttonStyle(.plain)
+                    SettingsDivider()
+                    Button { confirmOthers = true } label: { SettingsRow(title: signingOutOthers ? "Odhlašuji…" : "Odhlásit ostatní zařízení", chevron: false) }
+                        .buttonStyle(.plain)
+                        .disabled(signingOutOthers)
+                }
+                if let othersMessage { Text(othersMessage).font(Typo.small).foregroundStyle(Palette.muted).padding(.horizontal, 4) }
+            }
+
             SettingsGroup {
                 Button(action: signOut) { SettingsRow(title: model.demo ? "Ukončit ukázku" : "Odhlásit se", chevron: false, titleColor: Palette.ink) }
                     .buttonStyle(.plain)
@@ -87,6 +102,23 @@ struct ProfileSettingsView: View {
         }
         .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
         .onAppear(perform: fill)
+        .confirmationDialog("Odhlásit ostatní zařízení?", isPresented: $confirmOthers, titleVisibility: .visible) {
+            Button("Odhlásit", role: .destructive) { Task { await signOutOthers() } }
+            Button("Zrušit", role: .cancel) {}
+        } message: {
+            Text("Tenhle iPhone zůstane přihlášený.")
+        }
+    }
+
+    private func signOutOthers() async {
+        signingOutOthers = true
+        defer { signingOutOthers = false }
+        do {
+            try await model.api.signOutOtherDevices()
+            othersMessage = L10n.tr("Ostatní zařízení jsou odhlášená.")
+        } catch {
+            othersMessage = APIClient.readable(error).localizedDescription
+        }
     }
 
     static var birthRange: ClosedRange<Date> {
