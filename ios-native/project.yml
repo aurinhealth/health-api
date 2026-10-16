@@ -110,12 +110,9 @@ targets:
         # iOS runs the refresh task a few times a day when it chooses.
         # bluetooth-central: the paired heart rate strap (App/HeartRateSensor.swift)
         # keeps sending beats while the phone is locked during Režim tréninku.
-        # workout-processing: the HKWorkoutSession of a gym session on iOS 26
-        # (App/LiveWorkout.swift) keeps running with the phone locked.
         UIBackgroundModes:
           - fetch
           - bluetooth-central
-          - workout-processing
         BGTaskSchedulerPermittedIdentifiers:
           - eu.petrfitnessdata.loadwise.native.refresh
         # Sdílet → Instagram Stories (ShareExport.instagram) with the Meta app ID.
