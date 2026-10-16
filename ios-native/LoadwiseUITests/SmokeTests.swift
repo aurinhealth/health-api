@@ -72,7 +72,7 @@ final class SmokeTests: XCTestCase {
         let add = app.buttons["Přidat záznam"]
         XCTAssertTrue(add.waitForExistence(timeout: 20))
         add.tap()
-        XCTAssertTrue(app.staticTexts["Co přidáme?"].waitForExistence(timeout: 5), "+ did not open")
+        XCTAssertTrue(app.buttons["Upravit +"].waitForExistence(timeout: 5), "+ did not open")
         shot("pridat")
 
         // The coach.

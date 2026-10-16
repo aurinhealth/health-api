@@ -33,8 +33,8 @@ struct AddSheet: View {
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 0) {
+                // No title: the tiles say what "+" is for.
                 HStack(alignment: .center) {
-                    Text("Co přidáme?").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                     Spacer()
                     Button { editing = true } label: {
                         Image(systemName: "pencil").font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.ink)
@@ -76,7 +76,7 @@ struct AddSheet: View {
                 if let added { Label(added, systemImage: "checkmark.circle.fill").font(Typo.caption).foregroundStyle(Palette.green).padding(.top, 12) }
                 if let failed { Text(failed).font(Typo.caption).foregroundStyle(Palette.rust).padding(.top, 12) }
             }
-            .padding(.horizontal, 20).padding(.top, 24).padding(.bottom, 20)
+            .padding(.horizontal, 20).padding(.top, 16).padding(.bottom, 20)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
         }
         .scrollBounceBehavior(.basedOnSize)
