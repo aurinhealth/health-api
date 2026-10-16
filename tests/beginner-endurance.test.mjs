@@ -51,7 +51,7 @@ test("too little data is said as such, not as fatigue", () => {
   assert.equal(none.recommendation.session.kind, "endurance");
   const tired = buildCyclingCoachV2({ date, week: week(history), fitness: { wellness: [{ id: date, ctl: 50, atl: 85 }] }, health: { sleep: [{ type: "sleep", durationMin: 300, endTime: date + "T06:30:00" }] }, manualReadiness: 10 });
   assert.equal(tired.readiness.status, "red");
-  assert.ok(tired.recommendation.adaptations.includes("nízká připravenost: bez intenzity"));
+  assert.ok(tired.recommendation.adaptations.includes("nízká připravenost: jen krátká regenerace"));
 });
 
 test("without LTHR the heart-rate zones come from the max and resting heart rate in the profile", async () => {
