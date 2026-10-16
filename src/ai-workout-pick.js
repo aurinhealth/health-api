@@ -11,6 +11,7 @@ import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { flattenSteps, zoneOf, zonesFor } from "./workout-model.js";
 import { withFocus } from "./athlete-focus.js";
+import { instructions } from './private/ai-workout-pick.js';
 
 const HARD_ZONES = new Set(["threshold", "vo2max", "anaerobic", "sprint"]);
 // The most minutes at threshold and above for the morning's readiness.
@@ -55,12 +56,6 @@ const SCHEMA = {
   schema: { type: "object", additionalProperties: false, required: ["id", "reason"], properties: { id: { type: "string" }, reason: { type: "string" } } }
 };
 
-function instructions() {
-  return L(
-    "Jsi trenér vytrvalostního sportu. Z nabídnutých tréninků z knihovny vyber jeden, který nejlépe sedí na dnešní ráno sportovce (připravenost, spánek, ranní pocit, únava a forma, poslední dny). Nevymýšlej jiný trénink ani intervaly, vrať jen id jednoho z kandidátů. Do reason napiš česky jednu až dvě krátké věty, proč právě tento, s konkrétním číslem z dat (např. připravenost 64). Bez úvodu a bez opakování názvu. recentRatings říká, jak sportovci sedělo sestavení posledních tréninků tohoto sportu (good, ok, bad a jeho slova): nevybírej trénink podobný tomu, který mu neseděl.",
-    "You are an endurance coach. From the library workouts offered pick the one that fits the athlete's morning best (readiness, sleep, morning feeling, fatigue and form, the last days). Do not invent another workout or intervals; return only the id of one candidate. In reason write in English one or two short sentences on why this one, with a specific number from the data (e.g. readiness 64). No intro and no repeating the name. recentRatings says how the last workouts of this sport fitted the athlete (good, ok, bad and their words): do not pick one like a workout that did not fit."
-  );
-}
 
 // generated: generateWorkout's answer. Returns it with the AI's workout first
 // and `ai: { reason }` on it, or unchanged.

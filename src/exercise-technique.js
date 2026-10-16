@@ -13,6 +13,7 @@ import { EXERCISES, FOCUS_GROUPS } from './strength-generator.js';
 import { stationLabel } from './gym-equipment.js';
 import { normalizeExerciseName } from './strength-normalization.js';
 import { exercisePhotos } from './exercise-photos.js';
+import { techniqueInstructions } from './private/exercise-technique.js';
 
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
@@ -85,9 +86,6 @@ export async function storedTechnique(db, exercise) {
 }
 const list = { type: 'array', items: { type: 'string' } };
 const TECHNIQUE_SCHEMA = { type: 'json_schema', name: 'exercise_technique', strict: true, schema: { type: 'object', additionalProperties: false, required: ['setup', 'steps', 'feel', 'mistakes', 'breathing', 'videoId', 'videoTitle', 'query'], properties: { setup: list, steps: list, feel: list, mistakes: list, breathing: { type: 'string' }, videoId: { type: ['string', 'null'] }, videoTitle: { type: 'string' }, query: { type: 'string' } } } };
-// The prompt names the app language itself (A3).
-const techniqueInstructions = () => L('Jsi trenér silového tréninku. Napiš česky technickou kartu cviku pro posilovnu: setup (2–3 body nastavení), steps (3–5 bodů provedení), feel (2 body: kde má být cvik cítit a co naopak nemá bolet nebo pracovat), mistakes (2–3 časté chyby), breathing (jedna věta). Krátké věty, bez úvodu. Vyhledej na webu jedno kvalitní video s technikou na YouTube a vrať jeho 11znakové id (videoId) a název; když žádné nenajdeš, videoId je null. query je anglický dotaz pro vyhledání videa.',
-  'You are a strength coach. Write, in English, a technique card for a gym exercise: setup (2–3 points on the set-up), steps (3–5 points on the execution), feel (2 points: where the exercise should be felt and what must not hurt or take over), mistakes (2–3 common mistakes), breathing (one sentence). Short sentences, no introduction. Search the web for one good technique video on YouTube and return its 11-character id (videoId) and title; when none is found, videoId is null. query is an English search query for the video.');
 // Written once per exercise; a broken answer stores nothing.
 export async function generateTechnique(env, exercise) {
   const name = normalizeExerciseName(exercise);

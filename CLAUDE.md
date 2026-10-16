@@ -39,3 +39,13 @@ section in its description, written in Czech for a tester, without PR numbers, f
 
 When nothing changes for a tester (a refactor, a build fix), the section says "Nic k otestování". The
 "TestFlight notes" workflow fails a pull request without a usable section; editing the description re-runs it.
+
+## AI prompt texts are private
+
+The texts the server sends to the AI models (the coach, food lookup and photos, week planning, gym, reviews)
+live in the private repository `shaarkyn/aurin-prompts`, checked out to `src/private` (gitignored):
+`git clone https://github.com/shaarkyn/aurin-prompts src/private`. The modules in `src/` import them from
+`./private/<same file name>`; CI checks the repository out with the `PROMPTS_REPO_TOKEN` secret before tests and
+the deploy. Change prompt texts with a pull request to `aurin-prompts`, never back in this public repository. A
+change that needs both repositories merges `aurin-prompts` first; a change to `aurin-prompts` alone goes live by
+running "Deploy Cloudflare Worker" on `main` (workflow_dispatch).
