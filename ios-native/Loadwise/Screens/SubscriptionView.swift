@@ -19,8 +19,8 @@ enum ProPlans {
     }
 
     static let main: [Plan] = [
-        Plan(id: "annual", title: "Ročně", price: "2 190 Kč / rok", note: "182,50 Kč měsíčně", best: true),
-        Plan(id: "monthly", title: "Měsíčně", price: "249 Kč / měsíc", note: "placeno měsíčně")
+        Plan(id: "annual", title: "Ročně", price: "1 490 Kč / rok", note: "124 Kč měsíčně", best: true),
+        Plan(id: "monthly", title: "Měsíčně", price: "199 Kč / měsíc", note: "placeno měsíčně")
     ]
     static let all: [Plan] = main
 }
