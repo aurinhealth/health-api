@@ -10,6 +10,13 @@ extension APIClient {
                                           body: ["date": JSONValue.string(date), "action": .string("cancel")])
     }
 
+    /// Zahodit trénink: the plan, its Intervals.icu event and the logged sets
+    /// leave the day.
+    func discardGym(date: String) async throws {
+        let _: JSONValue = try await send("/app/api/gym", method: "POST",
+                                          body: ["date": JSONValue.string(date), "action": .string("discard")])
+    }
+
     func uncancelGym(date: String) async throws {
         let _: JSONValue = try await send("/app/api/gym", method: "POST",
                                           body: ["date": JSONValue.string(date), "action": .string("uncancel")])

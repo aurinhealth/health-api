@@ -1785,7 +1785,7 @@
 "Prázdný trénink" = "Empty workout";
 "Rychlost" = "Speed";
 "Zahodit trénink?" = "Discard workout?";
-"Smažou se zapsané série i trénink uložený do Apple Zdraví." = "The logged sets and the workout saved to Apple Health will be deleted.";
+"Trénink zmizí z plánu dne, smažou se zapsané série i trénink uložený do Apple Zdraví." = "The workout leaves the day's plan; the logged sets and the workout saved to Apple Health will be deleted.";
 "Spárovat se záznamem z hodinek" = "Pair with the watch's record";
 "Trénink smazán" = "Workout deleted";
 "Trénink zahozen" = "Workout discarded";
