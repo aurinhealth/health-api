@@ -161,7 +161,7 @@ enum CycleText {
         ("joint_pain", "Klouby", "figure.flexibility"),
         ("cramps", "Křeče", "waveform.path"),
         ("fatigue", "Únava", "bed.double"),
-        ("headache", "Hlava", "brain.head.profile"),
+        ("headache", "Bolest hlavy", "brain.head.profile"),
         ("bloating", "Nadýmání", "circle.dotted"),
         ("mood", "Nálada", "face.dashed"),
         ("appetite", "Chuť k jídlu", "fork.knife")
