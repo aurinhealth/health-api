@@ -717,12 +717,17 @@ function workRows(exercise, historyMap, factor, protectedLegs, muscleLoad, volum
   // exercise new to them lighter, as on the first session.
   const def = EXERCISES[exercise], fallbackKg = def.baseKg == null ? null : def.baseKg * startingLoadScale(def.muscle, sex) * (firstSession ? FIRST_SESSION_LOAD : CATALOGUE_SCALE[experience] ?? CATALOGUE_SCALE.regular);
   const ownReps = planReps && !CORE_PATTERNS.has(def.pattern) ? planReps : goalReps(def, goal, experience);
-  let estimate = estimateStartingLoad({ exercise, history: [...historyMap.values()].flat(), targetReps: ownReps, fallbackKg, loadFactor: factor, today });
+  // Legs spared for a key session: the higher rep range at the load held (no
+  // step up) and no extra set, so never more than the 2 sets the caller allows
+  // (Revize 2026-10-16, nález 26).
+  const spared = protectedLegs && LEG_MUSCLES.has(def.muscle);
+  const reps = spared && ["quads", "hamstrings", "glutes"].includes(def.muscle) ? "8–12" : ownReps;
+  let estimate = estimateStartingLoad({ exercise, history: [...historyMap.values()].flat(), targetReps: reps, fallbackKg, loadFactor: factor, today });
+  if (spared && estimate.progression === "increase") estimate = { ...estimate, kg: estimate.referenceKg, progression: "hold" };
   if (EXERCISE_INTELLIGENCE[exercise]?.loadUnit === "per_hand_kg") estimate = dumbbellFor(estimate, dumbbells);
   const kg = estimate.kg, execution = def.unilateral ? "UNILATERAL" : DEFAULT_EXECUTION;
-  const reps = protectedLegs && (def.muscle === "quads" || def.muscle === "hamstrings") ? "8–12" : ownReps;
   // Strength for an experienced athlete: one more set of the main lifts.
-  const extra = !planReps && (goal === 'strength' || goal === 'strength_muscle') && experience === 'experienced' && def.warmup ? 1 : 0;
+  const extra = !spared && !planReps && (goal === 'strength' || goal === 'strength_muscle') && experience === 'experienced' && def.warmup ? 1 : 0;
   const sets = Math.min(adaptiveSetCount(exercise, muscleLoad, factor, volumeModifier) + extra, maxSets + extra);
   const progression = progressionNote(estimate);
   const note = (estimate.source === "cross-exercise-estimate" ? def.note + L("; odhad z ", "; estimated from ") + estimate.referenceExercise + L(", ověř RPE", ", check the RPE") : def.note) + (progression ? "; " + progression : "") + (firstSession ? "; " + FIRST_SESSION_NOTE() : estimate.source === "catalogue-default" && kg != null ? "; " + NEW_EXERCISE_NOTE() : "");
