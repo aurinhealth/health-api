@@ -1,7 +1,8 @@
 // Gym routes of the dashboard API: equipment, exercises, history and loads, the
 // day's plan, its confirmation and exercise technique.
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
-import { fitsEquipment, EXERCISES, recommendedGoal } from "./strength-generator.js";
+import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts } from "./strength-generator.js";
+import { buildStrengthContext } from "./strength-context.js";
 import { routineSize, stretchingFor, typicalExtraMinutes, warmupFor } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
@@ -112,7 +113,9 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       // and the lasting wishes the chat remembered ("no squats").
       const [history,taste,setup,ratings,state]=await Promise.all([getStrengthHistory(env.DB,300).catch(()=>[]),exercisePreferences(env.DB),trainingSetup(env.DB).catch(()=>null),recentWorkoutRatings(env.DB,{sport:'strength',since:shiftDate(localToday(),-28)}),getAthleteState(env.DB).catch(()=>({}))]);
       const minutes=Number(body.minutes)>0&&Number(body.minutes)<=240?Number(body.minutes):null;
-      const result=await adjustGymPlan(env,{rows,request:text,history,taste:{...taste,memories:state.memories||[]},ratings,equipment:setup?name=>fitsEquipment(name,setup):null,dumbbells:setup?.dumbbellWeights||null,minutes});
+      // Today's readiness, status and leg load, as the generator has them (Revize 2026-10-16, nález 27).
+      const day=await buildStrengthContext(env,localToday()).then(gymDayFacts).catch(()=>null);
+      const result=await adjustGymPlan(env,{rows,request:text,history,taste:{...taste,memories:state.memories||[]},ratings,equipment:setup?name=>fitsEquipment(name,setup):null,dumbbells:setup?.dumbbellWeights||null,minutes,day});
       const muscles=Object.fromEntries([...new Set(result.rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]));
       return Response.json({status:'ok',...result,muscles},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.limit?error.message:error.ai?L('AI úprava se nepovedla: ', 'The AI edit failed: ')+error.message:error.message},{status:error.limit?(error.status||429):error.ai?502:400})}

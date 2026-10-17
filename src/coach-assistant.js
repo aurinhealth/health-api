@@ -215,10 +215,14 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     planned: row.daily?.training?.planned?.map(compactPlanned),
     completed: row.daily?.training?.completed?.map(compactActivity)
   }));
+  // The day before a long ride, long run or race planned for the next day:
+  // hard training there is said and another day offered (běh 10, S21).
+  const longOrRace = x => /long|dlouh|závod|race/i.test(String(x?.name || "")) || Number(x?.durationHours) >= (/run/i.test(String(x?.type || "")) ? 1.5 : 2.5);
+  days?.forEach((d, i) => { const next = days[i + 1]?.planned?.find(longOrRace); if (next) d.beforeLong = next.name || (/run/i.test(String(next.type || "")) ? "long run" : "long ride"); });
   const cyclingCoachV2 = buildCyclingCoachV2({
     date, daily, week, fitness, health, gym,
     preferences:{cadence:"85–95 rpm",...preferences},
-    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest
+    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest,recoveryTime
   });
   return {
     date,...(now?{now}:{}),weekday:weekdayOf(date),
@@ -245,7 +249,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     ...(performance?{performance}:{}),
     gym:strengthSets.map(r=>compactObject({date:r.workout_date,exercise:r.exercise,set:num(r.set_no),...strengthSet(r),toFailure:r.toFailure||null})),
     strengthProgress:strengthProgress(gym?.history,date),
-    todayGym:todayGymContext(gym,date),
+    todayGym:todayGymContext(gym,date,athleteState?.memories),
     strengthCoverage:strengthCoverage({date,strength:{recentCompletedSets:strengthSets}},EXERCISES),
     capabilities,
     // The athlete's own words after workouts and the coach's notes on them.
@@ -298,7 +302,10 @@ export const isSimpleMessage=message=>{const m=String(message||'').trim();return
 const QUICK_ASK=/^(?:kolik|jak(?:ý|á|é|ou|ých|ým|ými)?(?=\s|\?|$)|kdy|kde|co\s+(?:mám|mam|je|bylo|jsem|dělám)|je\s|jsou\s|byl[aoy]?\s|ukaž|ukaz|vypiš|vypis|připomeň|pripomen|how\s+(?:much|many)|what(?:'s|\s+(?:is|was|are|were))?(?=\s|\?|$)|when|where|show|list|remind)/iu;
 const NEEDS_THOUGHT=/pro[cč]|doporu[cč]|navrh|uprav|zm[eě][nň]|vym[eě][nň]|napl[aá]n|p[řr]iprav|vygener|vytvo[řr]|p[řr]idej|p[řr]esu[nň]|zru[sš]|analyz|porovn|vyhodno|zhodno|hodnot|povedl|rozbor|zlep[sš]|vhodn|lep[sš][ií]|l[ií]p(?!\p{L})|l[eé]pe(?!\p{L})|norm[aá]ln|v\s+po[řr][aá]dku|bezpe[čc]n|rad[ua]\b|pomoz|pomoc|stoj[ií]\s+za|strategi|bude\s+st[aá][čt]|m[eě]l\s+bych|by\s*ch|co\s+bys|(?:m[aá]m|m[uů][zž]u|mohu|sm[ií]m)[^?]*?(?:j[ií]t|jet|b[eě][zž]et|cvi[cč]it|vynech|zkr[aá]t|d[aá]t|zvol|pokra[cč]ov|odpo[cč]in(?:out)?\b|tr[eé]nov|za[řr]adit|p[řr]idat|d[eě]lat|ud[eě]lat|j[ií]st|sn[ií]st|pauz)/iu;
 const NEEDS_THOUGHT_EN=/(?<!\p{L})(?:why|recommend|suggest|propose|adjust|chang(?:e|es|ing)|swap|plan\s+(?:me|a|an|my|the|next|this|for|out)|prepare|generate|create|add(?:s|ed|ing)?(?!\p{L})|move(?:s|d)?(?!\p{L})|cancel|analy|compare|evaluat|assess|rat(?:e|ing)\s+(?:my|the|this|that|it|how)|improve|suitable|better|advice|advise|help|worth|strategy|(?:should|can|could|would|shall|may|might)\s+(?:i|we)(?!\p{L}))/iu;
-export const isQuickQuestion=message=>{const m=String(message||'').trim();return m.length<=120&&!FOLLOW_UP.test(m)&&!isSimpleMessage(m)&&QUICK_ASK.test(m)&&!NEEDS_THOUGHT.test(m)&&!NEEDS_THOUGHT_EN.test(m)&&!RISK.test(m);};
+// "Jak mám jezdit zbytek týdne?" is advice on the plan, not a lookup: the full
+// model and the library (Revize doporučování tréninků 2026-10-16, nález 16).
+const HOW_TO_TRAIN=/jak\s+(?:m[aá]m|bych\s+m[eě]l\p{L}*|by\s+m[eě]l\p{L}*)\s+(?:dnes\s+|zítra\s+|zitra\s+|teď\s+|ted\s+)?(?:jezdit|jet|b[eě]hat|b[eě][zž]et|tr[eé]novat|cvi[cč]it|rozvrhnout|rozlo[zž]it|napl[aá]novat|pokra[cč]ovat|postupovat|zvl[aá]dnout|za[řr]adit|poskl[aá]dat|odpo[cč][ií]vat|regenerovat)|zbyt(?:ek|ku)\s+t[yý]dne|do\s+konce\s+t[yý]dne|rest\s+of\s+(?:the|this)\s+week/iu;
+export const isQuickQuestion=message=>{const m=String(message||'').trim();return m.length<=120&&!FOLLOW_UP.test(m)&&!isSimpleMessage(m)&&QUICK_ASK.test(m)&&!NEEDS_THOUGHT.test(m)&&!NEEDS_THOUGHT_EN.test(m)&&!HOW_TO_TRAIN.test(m)&&!RISK.test(m);};
 // The screens about the athlete (the iOS coach opens on "today").
 const PLANNING_VIEWS=['workouts','training','health','today','food','nutrition'];
 function ownTask(message,appContext=null){

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rankOptions, doneSentence, setLess, lessKinds, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "../src/coach-pick.js";
+import { rankOptions, dayChoice, doneSentence, setLess, lessKinds, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "../src/coach-pick.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 
@@ -127,4 +127,13 @@ test("Nemoc, Zranění or Pauza leave only rest; signs of an illness drop the sa
   const signs = rankOptions({ ride: coach("red", "recovery"), run: coach("red", "recovery"), mainSport: "cycling", sports: ["ride"], illness: true });
   assert.ok(!signs.options.some(o => o.kind === "sauna"));
   assert.equal(signs.options[0].title, "Volno");
+});
+
+test("a workout the athlete planned for today takes Aktivita dne like a choice", async () => {
+  assert.equal(dayChoice({ chosen: null, planned: [] }), null);
+  assert.equal(dayChoice({ chosen: null, planned: ["gym"] }), "gym");
+  assert.equal(dayChoice({ chosen: "sauna", planned: ["gym"] }), "sauna");
+  const src = (await import("node:fs")).readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
+  assert.match(route, /chosen:dayChoice\(\{chosen:state\.chosen,planned\}\)/);
 });

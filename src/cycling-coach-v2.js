@@ -2,7 +2,8 @@ import { classifyPlannedWorkout } from "./planned-workout.js";
 import { trainingStatus } from './training-status.js';
 import { qualityDomain } from './session-intensity.js';
 import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
-import { localToday } from "./user-time.js";
+import { localToday, localDateTime } from "./user-time.js";
+import { cycleState, cycleTrainingCaution } from "./cycle-model.js";
 import { L, plural as pluralWord } from "./lang.js";
 import { readinessFor } from "./readiness.js";
 import { manualReadinessFor } from "./morning-checkin.js";
@@ -230,7 +231,7 @@ const WORDS_EN={
 };
 
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"?"run":"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard,run=sport==="run";
@@ -376,7 +377,12 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   let kind="endurance";
   const planText=txt(plannedToday?.name)+" "+txt(goal?.focus);
   const KIND_OF={recovery:"recovery",endurance:"endurance",tempo:"tempo",sweet_spot:"sweet_spot",threshold:"threshold",vo2max:"vo2"};
-  if(plannedInfo?.system){
+  // A kind asked for (a chat card, the generator's chosen kind, a library
+  // workout) is what the card shows, over the day's plan in Intervals.icu; the
+  // checks below still ease it (Revize doporučování tréninků 2026-10-16, běh 10).
+  const askedKind=goal?.asked?{...KIND_OF,long_endurance:"long_endurance"}[txt(goal.focus)]||null:null;
+  if(askedKind&&!["race","openers"].includes(phase)) kind=askedKind;
+  else if(plannedInfo?.system){
     kind=KIND_OF[plannedInfo.system]||"endurance";
     const info=plannedInfo.minutes?" ("+plannedInfo.minutes+" min"+(plannedInfo.intensityFactor?", IF "+plannedInfo.intensityFactor.toFixed(2):"")+")":"";
     rationale.push(L("V Intervals.icu máš na tento den naplánováno „"+(plannedToday.name||"trénink")+"“"+info+" – doporučení se drží plánu.","You have “"+(plannedToday.name||"a workout")+"” planned for this day in Intervals.icu"+info+" – the recommendation follows the plan."));
@@ -436,14 +442,24 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // break, 48 h after a hard day of either sport, two quality days a week,
   // legs after the gym, a recovery week). Only the race and its openers keep
   // their kind.
-  if(requestedMinutes<(sport==="run"?45:55)&&kind==="long_endurance"){kind="tempo";adaptations.push(L("trénink zhuštěn do dostupného času","workout condensed into the available time"));}
-  if(requestedMinutes<(sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push(L("krátké časové okno","short time window"));}
+  // An asked kind keeps its kind in a short window (2×10 min sweet spot fits 45 min).
+  if(requestedMinutes<(sport==="run"?45:55)&&kind==="long_endurance"){kind=askedKind?"endurance":"tempo";adaptations.push(L("trénink zhuštěn do dostupného času","workout condensed into the available time"));}
+  if(!askedKind&&requestedMinutes<(sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push(L("krátké časové okno","short time window"));}
   const QUALITY=["tempo","sweet_spot","threshold","vo2"],quality=()=>QUALITY.includes(kind);
   // The longest session the day allows (red, illness, a break), applied with the length below.
   let cap=null;const capAt=(minutes,text)=>{if(!cap||minutes<cap.minutes)cap={minutes,text};};
   // Breathing or temperature in sleep well above the athlete's own, or a sick
   // morning check-in: no intensity and short, as Today says.
   const illness=(body.flags||[]).some(f=>/^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))||checkin==="sick";
+  // The cycle (cycle-model.js) as Today eases it: a bleeding day with heavy
+  // flow, cramps or fatigue makes a hard ride or run easy, unless the athlete
+  // kept the plan that day (Revize doporučování tréninků 2026-10-16, nález 11).
+  const cycleIn=profile?.cycle||null,cycleDay=cycleIn?.days?.find?.(d=>d.date===targetDate);
+  const cycleEase=Boolean(cycleIn&&!cycleDay?.keepPlan&&cycleTrainingCaution(cycleState({settings:cycleIn.settings,days:cycleIn.days,date:targetDate})));
+  // Regenerace (recovery-time.js): hard training waits until hardFrom, not
+  // only two calendar days; a day it does not reach by 18:00 stays easy
+  // (Revize doporučování tréninků 2026-10-16, nález 12).
+  const hardFrom=recoveryTime?.readyAt?localDateTime(recoveryTime.readyAt):null,notRecovered=Boolean(hardFrom&&hardFrom>targetDate+"T18:00");
   // No ride in the data at all with a known fitness says nothing about a break.
   const offBreak=lastRide!=null&&lastRide>=7;
   if(["race","openers"].includes(kind)){
@@ -457,12 +473,15 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       if(quality()||kind==="long_endurance")kind="endurance";
       capAt(run?40:60,L("možný začátek nemoci","possible oncoming illness"));
       adaptations.push(L("dech nebo teplota ve spánku jsou vyšší, může jít o začátek nemoci: bez intenzity a krátce","breathing or temperature in sleep are raised, which may be an oncoming illness: no intensity and short"));
+    } else if(cycleEase&&(quality()||kind==="long_endurance")){
+      kind="endurance";capAt(run?30:45,L("menstruace","period"));
+      adaptations.push(L("menstruace se silným krvácením, křečemi nebo únavou: dnes lehce a krátce","period with heavy flow, cramps or fatigue: easy and short today"));
     } else if(readiness==="yellow"&&quality()){
       kind="endurance";
       adaptations.push(L("střední připravenost: bez intenzity","moderate readiness: no intensity"));
     }
     if(quality()){
-      const why=novice?W.novice:offBreak?W.off(lastRide):lastHard!=null&&lastHard<2?W.recent:otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
+      const why=novice?W.novice:offBreak?W.off(lastRide):lastHard!=null&&lastHard<2?W.recent:notRecovered?L("regenerace po posledních trénincích potrvá do "+hardFrom.slice(8,10).replace(/^0/,"")+". "+hardFrom.slice(5,7).replace(/^0/,"")+". "+hardFrom.slice(11,16),"recovery from the last sessions lasts until "+hardFrom.slice(0,10)+" "+hardFrom.slice(11,16)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
       if(why){kind=recoveryWeek&&!plannedInfo?.system&&!novice&&!offBreak&&requestedMinutes<=75?"recovery":"endurance";adaptations.push(why);}
     }
     if(offBreak&&!novice){
