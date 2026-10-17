@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, runScenario, handleCoachEval, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS } from '../src/coach-eval.js';
+import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, handleCoachEval, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS } from '../src/coach-eval.js';
 import { coachInstructionsFor } from '../src/coach-assistant.js';
 import { isPublicPath } from '../src/dashboard-auth.js';
 import { lang } from '../src/lang.js';
@@ -185,4 +185,20 @@ test('run 9: "vrátil" after two weeks, tomorrow\'s card for S21, no ride card o
   const at = (id, kept) => checkReply(scenarioById(id), { answer: 'Zítra 45 minut.', kept, proposed: kept }, now, date).filter(c => !c.ok).map(c => c.severity + ':' + c.name);
   assert.ok(!at('S21', [{ type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance' }, { type: 'workout', sport: 'ride', date: shift(1), minutes: 45, kind: 'sweet_spot' }]).includes('quality:karta na zítřek, 35–55 min'));
   assert.ok(at('S19', [{ type: 'gym_swap', toExercise: 'Goblet squat', kg: null }, { type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance' }]).includes('quality:bez karty kola nebo běhu u otázky na posilovnu'));
+});
+
+test('run 10: the card shows the kind the coach named, intervals before the long ride are said', () => {
+  const shift = d => new Date(Date.parse(date + 'T12:00:00Z') + d * 86400000).toISOString().slice(0, 10);
+  // VO2max planned today, sweet spot yesterday: an asked recovery ride stays recovery, not the plan eased to endurance.
+  const { athlete } = scenarioContext(scenarioById('S13'), date);
+  assert.equal(cardKind(athlete, { type: 'workout', sport: 'ride', date, minutes: 60, kind: 'recovery' }), 'recovery');
+  assert.equal(cardKind(athlete, { type: 'workout', sport: 'ride', date, minutes: 60, kind: 'endurance' }), 'endurance');
+  // An asked sweet spot in 45 min stays sweet spot (2×10 min), not tempo.
+  assert.equal(cardKind(athlete, { type: 'workout', sport: 'ride', date: shift(3), minutes: 45, kind: 'sweet_spot' }), 'sweet_spot');
+  const at = (id, kept, answer = 'Lehce.') => checkReply(scenarioById(id), { answer, kept, proposed: kept }, now, date).filter(c => !c.ok).map(c => c.severity + ':' + c.name);
+  assert.ok(at('S13', [{ type: 'workout', sport: 'ride', date, minutes: 60, kind: 'recovery', card: 'endurance' }]).includes('quality:karta ukazuje druh tréninku z odpovědi'));
+  assert.ok(!at('S13', [{ type: 'workout', sport: 'ride', date, minutes: 60, kind: 'recovery', card: 'recovery' }]).includes('quality:karta ukazuje druh tréninku z odpovědi'));
+  const vo2 = [{ type: 'workout', sport: 'ride', date: shift(1), minutes: 45, workoutId: 'eval-lib-vo45', card: 'vo2' }];
+  assert.ok(at('S21', vo2, 'Zítra VO2max 5×3 min.').includes('quality:upozorní na dlouhou jízdu den po intervalech'));
+  assert.ok(!at('S21', vo2, 'Zítra VO2max 5×3 min; v pondělí máš dlouhou jízdu, klidně je dej až v úterý.').includes('quality:upozorní na dlouhou jízdu den po intervalech'));
 });

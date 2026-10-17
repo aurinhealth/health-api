@@ -42,7 +42,7 @@ export function askedSession(message, today) {
 export function chatLibraryQuery({ message, date, inputs = {}, sport = 'ride', todayCoach = null, availabilityMinutes = null }) {
   const asked = askedSession(message, date), day = asked.date && asked.date >= date ? asked.date : date;
   const coach = inputs.week && (day !== date || asked.minutes || asked.kind)
-    ? buildCyclingCoachV2({ ...inputs, date: day, daily: inputs.week.days?.find(d => d.date === day)?.daily || inputs.daily, availabilityMinutes: asked.minutes || null, goal: asked.kind ? { focus: FOCUS_OF[asked.kind] } : null, sport })
+    ? buildCyclingCoachV2({ ...inputs, date: day, daily: inputs.week.days?.find(d => d.date === day)?.daily || inputs.daily, availabilityMinutes: asked.minutes || null, goal: asked.kind ? { focus: FOCUS_OF[asked.kind], asked: true } : null, sport })
     : todayCoach;
   const rec = coach?.recommendation?.session || {}, system = rec.kind === 'long_endurance' ? 'endurance' : rec.kind === 'vo2' ? 'vo2max' : rec.kind;
   return {
