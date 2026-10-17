@@ -39,3 +39,16 @@ test('the timeline of a joined night shows the time up as awake', () => {
   assert.deepEqual(one.payload.stages.map(s => s.type), ['LIGHT', 'AWAKE', 'LIGHT']);
   assert.equal(one.payload.stages[1].startTime, night.endTime);
 });
+
+test('a Fitbit night that starts awake takes those minutes as the time to fall asleep', async () => {
+  const { sleepSessionFromRow } = await import('../src/sleep-sessions.js');
+  const sleep = { interval: { startTime: '2026-10-15T23:04:00Z', endTime: '2026-10-16T04:07:00Z' }, summary: { minutesToFallAsleep: '0', minutesAwake: '16', minutesAfterWakeUp: '0' }, stages: [
+    { type: 'AWAKE', startTime: '2026-10-15T23:04:00Z', endTime: '2026-10-15T23:20:00Z' },
+    { type: 'LIGHT', startTime: '2026-10-15T23:20:00Z', endTime: '2026-10-16T04:07:00Z' }] };
+  const s = sleepSessionFromRow({ external_id: 'x', start_time: sleep.interval.startTime, end_time: sleep.interval.endTime, payload_json: JSON.stringify({ sleep }) });
+  assert.equal(s.latencyMin, 16);
+  assert.equal(s.wasoMin, 0);
+  // A source that says how long it took keeps its own number.
+  sleep.summary.minutesToFallAsleep = '9';
+  assert.equal(sleepSessionFromRow({ external_id: 'x', payload_json: JSON.stringify({ sleep }) }).latencyMin, 9);
+});

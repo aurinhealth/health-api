@@ -10,6 +10,18 @@ function hoursBetween(start, end) {
   return Number.isNaN(a) || Number.isNaN(b) ? null : Math.max(0, (b - a) / 3600000);
 }
 
+function leadingAwakeMinutes(stages) {
+  const t = v => new Date(v || 0).getTime();
+  const sorted = [...stages].filter(x => t(x.endTime || x.end_time) > t(x.startTime || x.start_time)).sort((a, b) => t(a.startTime || a.start_time) - t(b.startTime || b.start_time));
+  if (!sorted.some(x => String(x.type || "").toUpperCase() !== "AWAKE")) return null;
+  let minutes = 0;
+  for (const x of sorted) {
+    if (String(x.type || "").toUpperCase() !== "AWAKE") break;
+    minutes += (t(x.endTime || x.end_time) - t(x.startTime || x.start_time)) / 60000;
+  }
+  return Math.round(minutes);
+}
+
 export function sleepSessionFromRow(row) {
   let p = {};
   try { p = JSON.parse(row.payload_json || "{}"); } catch {}
@@ -30,6 +42,11 @@ export function sleepSessionFromRow(row) {
   const startTime = row.start_time || interval.startTime || interval.civilStartTime || null;
   const endTime = row.end_time || interval.endTime || interval.civilEndTime || null;
   const durationMin = hoursBetween(startTime,endTime) * 60;
+  // Fitbit sends 0 minutes to fall asleep and starts the night with an awake
+  // stage instead: those minutes are the time it took to fall asleep.
+  const said = finiteOrNull(sleep.summary?.minutesToFallAsleep ?? sleep.minutesToFallAsleep);
+  const lead = leadingAwakeMinutes(stages);
+  const latency = said > 0 ? said : lead > 0 ? lead : said;
   // The night belongs to the day the user wakes up on, in their time zone.
   const day = localDate(endTime || startTime);
   return {
@@ -47,8 +64,8 @@ export function sleepSessionFromRow(row) {
     // NSF sleep-quality indicators (Ohayon 2017): time to fall asleep and
     // wake after sleep onset (awake minutes minus falling asleep and the
     // minutes after the final wake-up). A nap is flagged by Google.
-    latencyMin: finiteOrNull(sleep.summary?.minutesToFallAsleep ?? sleep.minutesToFallAsleep),
-    wasoMin: (() => { const awake = finiteOrNull(sleep.summary?.minutesAwake) ?? (stageMinutes.AWAKE != null ? Math.round(stageMinutes.AWAKE) : null); if (awake == null) return null; return Math.max(0, Math.round(awake - (finiteOrNull(sleep.summary?.minutesToFallAsleep) || 0) - (finiteOrNull(sleep.summary?.minutesAfterWakeUp) || 0))); })(),
+    latencyMin: latency,
+    wasoMin: (() => { const awake = finiteOrNull(sleep.summary?.minutesAwake) ?? (stageMinutes.AWAKE != null ? Math.round(stageMinutes.AWAKE) : null); if (awake == null) return null; return Math.max(0, Math.round(awake - (latency || 0) - (finiteOrNull(sleep.summary?.minutesAfterWakeUp) || 0))); })(),
     nap: sleep.metadata?.nap === true
   };
 }
