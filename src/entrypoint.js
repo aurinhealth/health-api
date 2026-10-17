@@ -2022,6 +2022,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   {const r=await handleGymPlanApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   if (url.pathname === "/app/api/gym/generate" && request.method === "POST") {
     const body = await request.json().catch(() => ({}));
+    if (body && typeof body === "object") delete body.diagnostic;
     // Training time is set only in the week plan: the day's gym chip sets the
     // length (and upper/full body unless the request chose the focus), and the
     // day's available time caps it.
