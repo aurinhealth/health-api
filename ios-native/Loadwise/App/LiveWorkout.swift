@@ -73,6 +73,18 @@ final class LiveWorkout: NSObject {
         await begin(since: since, weightKg: weightKg)
     }
 
+    /// After iOS closed the app mid-workout (an update, low memory): the same
+    /// workout goes on, one workout in Apple Health. On iOS 26 HealthKit hands
+    /// back the session that was running with all it measured; without it the
+    /// clock and the estimated calories count from the workout's start.
+    func continueWorkout(since: Date?, weightKg: Double?) async {
+        guard start == nil else { return }
+        if #available(iOS 26.0, *), await recoverSession(weightKg: weightKg) { return }
+        // A start from hours ago is a workout left unfinished: it starts now.
+        let recent = since.flatMap { Date().timeIntervalSince($0) < 4 * 3600 ? $0 : nil }
+        await begin(since: recent, weightKg: weightKg)
+    }
+
     func begin(since: Date?, weightKg: Double?) async {
         // A session left running from another day (never finished) starts over.
         if let start, Date().timeIntervalSince(start) > 4 * 3600 { reset() }
@@ -314,6 +326,37 @@ final class LiveWorkout: NSObject {
         self.session = session
         self.builder = builder
         await addCarried(to: builder, kcal: true)
+    }
+
+    /// The session left running when the app was closed, with its builder,
+    /// its start and the calories so far.
+    @available(iOS 26.0, *)
+    private func recoverSession(weightKg: Double?) async -> Bool {
+        guard HKHealthStore.isHealthDataAvailable() else { return false }
+        let recovered: HKWorkoutSession? = await withCheckedContinuation { continuation in
+            store.recoverActiveWorkoutSession { session, _ in continuation.resume(returning: session) }
+        }
+        guard let recovered, recovered.state == .running || recovered.state == .paused else { return false }
+        let builder = recovered.associatedWorkoutBuilder()
+        builder.dataSource = HKLiveWorkoutDataSource(healthStore: store, workoutConfiguration: recovered.workoutConfiguration)
+        builder.delegate = self
+        if recovered.state == .paused { recovered.resume() }
+        if let weightKg, weightKg > 30 { self.weightKg = weightKg }
+        start = builder.startDate ?? recovered.startDate ?? Date()
+        savedToHealth = false
+        savedWorkout = nil
+        heartRate = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
+        sensorBeats = []
+        trail = []
+        paused = 0
+        let energy = builder.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()?.doubleValue(for: .kilocalorie())
+        if let energy, energy > 0 { kcal = energy; liveKcal = true } else { kcal = nil }
+        session = recovered
+        self.builder = builder
+        sensor.onBeat = { [weak self] bpm in self?.sensorBeat(bpm) }
+        sensor.connectSaved()
+        tick()
+        return true
     }
 
     /// The samples and the pause of the workout before Pokračovat v tréninku.

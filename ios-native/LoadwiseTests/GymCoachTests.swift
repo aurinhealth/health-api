@@ -63,4 +63,22 @@ final class GymCoachTests: XCTestCase {
         XCTAssertEqual(day.exercises.first?.sets.count, 1)
         XCTAssertNotNil(day.startedAt)
     }
+
+    /// A generated plan keeps its warm-up and stretching in the row of the
+    /// times: the start and end go after them and the routines stay.
+    func testTimesKeepTheRoutines() {
+        var day = GymDay(date: "2026-10-17", values: [], cancelled: nil)
+        day.ensureHeader(date: "2026-10-17")
+        let json = #"{"warmup":{"minutes":5,"items":[]},"stretching":null}"#
+        day.set(row: GymDay.timeRow, column: 0, "Rozcvička a protažení")
+        day.set(row: GymDay.timeRow, column: 1, json)
+        day.markStarted(Date(timeIntervalSince1970: 1_800_000_000))
+        day.markFinished(Date(timeIntervalSince1970: 1_800_003_600))
+        XCTAssertEqual(day.values[GymDay.timeRow][0].string, "Rozcvička a protažení")
+        XCTAssertEqual(day.values[GymDay.timeRow][1].string, json)
+        XCTAssertEqual(day.loggedMinutes, 60)
+        day.clearFinished()
+        XCTAssertNil(day.finishedAt)
+        XCTAssertNotNil(day.startedAt)
+    }
 }

@@ -923,11 +923,12 @@ struct TrainingModeView: View {
                 if let minutes = day.loggedMinutes { totals = (minutes, nil, nil, nil, false, []) }
             }
             restoreMinimized()
-            // A workout under way (sets done, sets left), left or closed by iOS:
-            // it goes on at once, without Začít trénink again.
+            // A workout under way (sets done, sets left), left or closed by iOS
+            // (an update): it goes on at once, without Začít trénink again, its
+            // clock and calories from where they were, one workout in Apple Health.
             if !finishedSession, let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }), day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
                 startTapped = true
-                await live.begin(since: nil, weightKg: model.today?.weight?.latest)
+                await live.continueWorkout(since: day.startedAt, weightKg: model.today?.weight?.latest)
                 syncActivity()
             }
             history = await model.gymHistory()
@@ -1217,6 +1218,8 @@ struct TrainingModeView: View {
         // Nothing typed in reps: the plan's lower number ("5" of "5–8").
         let planned: String = GymCoach.firstNumber(set.plannedReps).map { String($0) } ?? (set.plannedReps ?? "")
         next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? planned : r, rpe: String(rpe))
+        // The start in the sheet: after iOS closes the app the clock goes on from it.
+        if next.startedAt == nil { next.markStarted(live.start ?? Date()) }
         day = next
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         // A set ticked in the table before "Začít trénink" starts the workout too.
