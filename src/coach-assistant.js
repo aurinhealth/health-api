@@ -215,6 +215,10 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     planned: row.daily?.training?.planned?.map(compactPlanned),
     completed: row.daily?.training?.completed?.map(compactActivity)
   }));
+  // The day before a long ride, long run or race planned for the next day:
+  // hard training there is said and another day offered (běh 10, S21).
+  const longOrRace = x => /long|dlouh|závod|race/i.test(String(x?.name || "")) || Number(x?.durationHours) >= (/run/i.test(String(x?.type || "")) ? 1.5 : 2.5);
+  days?.forEach((d, i) => { const next = days[i + 1]?.planned?.find(longOrRace); if (next) d.beforeLong = next.name || (/run/i.test(String(next.type || "")) ? "long run" : "long ride"); });
   const cyclingCoachV2 = buildCyclingCoachV2({
     date, daily, week, fitness, health, gym,
     preferences:{cadence:"85–95 rpm",...preferences},
