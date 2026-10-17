@@ -231,7 +231,7 @@ const WORDS_EN={
 };
 
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"?"run":"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard,run=sport==="run";
@@ -247,7 +247,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // on by the training load alone, as recovery by then is not known yet.
   // Missing data no longer makes it yellow: every hard session planned for the
   // day after tomorrow used to be eased that way (Petr, 2026-10-14).
-  const now=localToday(),bodyDate=targetDate>now?now:targetDate,daysAhead=Math.max(0,diffDays(targetDate,now)??0),farAhead=daysAhead>=2,signalDate=farAhead?targetDate:bodyDate;
+  // `today`: the day the caller sees as today (coach evaluation), else the user's.
+  const now=isoDate(today)||localToday(),bodyDate=targetDate>now?now:targetDate,daysAhead=Math.max(0,diffDays(targetDate,now)??0),farAhead=daysAhead>=2,signalDate=farAhead?targetDate:bodyDate;
   const wellness=latestWellness(fitness,bodyDate);
   const ctl=n(wellness.ctl),atl=n(wellness.atl),tsb=n(wellness.tsb,ctl!=null&&atl!=null?ctl-atl:null),ramp=n(wellness.rampRate??wellness.ramp_rate);
   const wellnessSleep=(Array.isArray(fitness?.wellness)?fitness.wellness:[]).filter(r=>{const age=diffDays(signalDate,r.id);return age!=null&&age>=0&&age<=1&&n(r.sleepSecs)>7200;}).sort((a,b)=>String(b.id).localeCompare(String(a.id)))[0];
