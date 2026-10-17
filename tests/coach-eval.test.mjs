@@ -10,7 +10,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply).filter(c => !c
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), Array.from({ length: 20 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')));
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), Array.from({ length: 24 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')));
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -73,7 +73,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 20);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 24);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -135,7 +135,7 @@ test('run 7 follow-up: a rest frees the hard day, red gets its rest card, no fas
   const alone = await run('S15', [w(4, 'vo2max')]);
   assert.deepEqual(alone.kept, []); assert.ok(names(alone).includes('quality:text neslibuje kartu, kterou aplikace zahodila'));
   // With today's VO2max cancelled in the same answer (the rest after it or before) it stays.
-  for (const actions of [[w(4, 'vo2max'), rest], [rest, w(4, 'vo2max')]]) {
+  for (const actions of [[w(4, 'vo2max'), rest, w(0, 'endurance')], [rest, w(4, 'vo2max'), w(0, 'endurance')]]) {
     const r = await run('S15', actions);
     assert.deepEqual(r.kept.map(a => a.type), actions.map(a => a.type)); assert.deepEqual(names(r), []);
   }
@@ -151,4 +151,30 @@ test('run 7 follow-up: a rest frees the hard day, red gets its rest card, no fas
   const gym = await run('S20', [{ ...w(0, ''), sport: 'gym' }], 'Dnes posilovnu vynech, dej si protažení a posilovnu přesuň na zítra.');
   assert.deepEqual(gym.kept, []); assert.equal(gym.passed, true);
   assert.ok(!names(gym).some(n => n.startsWith('safety:')));
+});
+
+test('run 8 follow-up: today\'s VO2max after the sweet spot, the library for the asked day, the cycle, Regenerace, the week question', async () => {
+  const shift = d => new Date(Date.parse(date + 'T12:00:00Z') + d * 86400000).toISOString().slice(0, 10);
+  const w = (d, kind, extra = {}) => ({ type: 'workout', eventId: '', date: shift(d), sport: 'ride', minutes: 60, status: '', statusUntil: '', reason: 'návrh', fromExercise: '', toExercise: '', workoutId: '', kind, activityId: '', otherActivityId: '', time: '', kcal: 0, gymFocus: '', ...extra });
+  const rest = { ...w(0, ''), type: 'rest', eventId: 'planned:9001', date: '', sport: '', minutes: 0 };
+  const run = (id, actions, answer = 'Dnes lehce, v sobotu dlouhá jízda. Menstruace a regenerace po závodě.') => runScenario({}, scenarioById(id), { date, now, ask: async () => ({ status: 'ok', answer, actions, visuals: [] }) });
+  const names = r => r.checks.filter(c => !c.ok).map(c => c.severity + ':' + c.name);
+  // S15: planning the next days still cancels today's VO2max a day after the sweet spot, with an easy ride.
+  assert.ok(names(await run('S15', [w(1, 'endurance')])).includes('quality:dnešní VO2max (méně než 48 h po sweet spotu) zruší a dá lehkou jízdu'));
+  assert.deepEqual(names(await run('S15', [rest, w(0, 'endurance'), w(1, 'endurance')])), []);
+  // S21: the library is searched for tomorrow and 45 minutes; a 45-minute card tomorrow passes.
+  const s21 = await run('S21', [w(1, '', { workoutId: 'eval-lib-z45', minutes: 45 })]);
+  assert.deepEqual(names(s21), []); assert.equal(s21.kept[0].workoutId, 'eval-lib-z45');
+  const offer = scenarioContext(scenarioById('S21'), date, now).ctx.workoutLibraryRecommendations;
+  assert.ok(offer.length && offer.every(x => Math.abs(x.durationMinutes - 45) <= 10), JSON.stringify(offer));
+  // S22 and S23: the asked VO2max becomes an easy card (heavy flow with cramps; Regenerace until tomorrow).
+  for (const id of ['S22', 'S23']) {
+    const r = await run(id, [rest, w(0, 'vo2max')]);
+    assert.equal(r.passed, true, id); assert.ok(['recovery', 'endurance'].includes(r.kept[1].card), id + ' ' + r.kept[1].card);
+  }
+  assert.equal(scenarioContext(scenarioById('S22'), date, now).ctx.cycle?.easeToday, true);
+  assert.ok(scenarioContext(scenarioById('S23'), date, now).ctx.recoveryTime?.hardFrom > date);
+  // S24: the week question goes to the full model.
+  const s24 = await run('S24', [w(1, 'endurance')]);
+  assert.equal(s24.task, 'planning'); assert.deepEqual(names(s24), []);
 });
