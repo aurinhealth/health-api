@@ -10,7 +10,8 @@ name: iOS native app
 #   archive (ios-testflight.yml) builds Release again anyway.
 # - Loadwise-native-screens: whole-screen snapshots in light and dark mode
 #   from the sample data, plus simulator screenshots of the running app
-#   (site/: the English, light-mode shots the website uses).
+#   (site/: the English, light-mode shots the website uses; smoke/: each step
+#   of the smoke test Vydat relies on).
 
 on:
   workflow_dispatch:
@@ -120,6 +121,19 @@ jobs:
             sleep 7
             xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/${route%%/*}.png"
           done
+
+      # Before a release (Vydat checks this run): the app tapped through like a
+      # person would, from a new phone's sign-in into the sample data and across
+      # the main screens (LoadwiseUITests/SmokeTests.swift). Fails on a crash or a
+      # missing screen; a screenshot of each step goes to smoke/.
+      - name: Smoke test of the main screens
+        env:
+          TEST_RUNNER_SMOKE_DIR: ${{ github.workspace }}/screens/smoke
+        run: |
+          xcrun simctl uninstall "${{ steps.sim.outputs.udid }}" eu.petrfitnessdata.loadwise.native || true
+          xcodebuild -project Loadwise.xcodeproj -scheme LoadwiseSmoke -configuration Debug \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO test
 
       # Unsigned: Sideloadly signs it with the user's Apple ID.
       - name: Build for iPhone

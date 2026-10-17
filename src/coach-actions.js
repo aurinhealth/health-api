@@ -3,6 +3,9 @@ import { validDay } from './training-availability.js';
 import { trainingStatus } from './training-status.js';
 import { prepareGymSwap,gymAdjustmentRequest } from './coach-gym-adjustment.js';
 import { kcalTargets } from './activity-edits.js';
+import { qualityDomain } from './session-intensity.js';
+import { trimGymPlan } from './gym-trim.js';
+import { parseStrengthPlan } from './strength-history.js';
 import { actionInstructions } from './private/coach-actions.js';
 export { actionInstructions };
 
@@ -11,7 +14,7 @@ export const COACH_VISUALS=['form','recovery','sleep','nutrition','week','traini
 // The kind of ride or run a proposed workout is (week-ai.js KINDS), so the
 // prepared workout is the one the answer talks about.
 export const WORKOUT_KINDS=['recovery','endurance','long','tempo','sweet_spot','threshold','vo2max'];
-export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['forget','update'],properties:{forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','activityId','otherActivityId','time','kcal'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'}}}}}}};
+export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['forget','update'],properties:{forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','activityId','otherActivityId','time','kcal','gymFocus'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},gymFocus:{type:'string',enum:['','upper','lower']},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'}}}}}}};
 export const ACTION_INSTRUCTIONS=actionInstructions();
 // Words the athlete must have used before the coach may propose Sick or Injured.
 export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot|\bill\b|illness|unwell|fever|\bflu\b|\bcold\b|virus|sore throat|temperature/i;
@@ -31,7 +34,9 @@ export function actionSummary(a){
   if(a.type==='status')return L('Stav ','Status ')+STATUS_NAMES()[a.status]+(a.statusUntil?L(' (znovu Aktivní od ',' (back to Active from ')+shortDate(a.statusUntil)+')':'');
   if(a.type==='move')return L('Přesunout ','Move ')+workout+L(' na ',' to ')+shortDate(a.date);
   if(a.type==='rest')return L('Odstranit ','Remove ')+workout+' ('+shortDate(a.date)+')';
-  return L('Připravit '+SPORT_NAMES()[a.sport],'Prepare a '+SPORT_NAMES()[a.sport])+(a.workoutName?L(' „'+a.workoutName+'“',' “'+a.workoutName+'”'):'')+' '+a.minutes+L(' min na ',' min on ')+shortDate(a.date);
+  if(a.trim)return a.workoutName+' ('+shortDate(a.date)+')';
+  const half=a.gymFocus?L({upper:' (horní polovina)',lower:' (nohy)'},{upper:' (upper body)',lower:' (legs)'})[a.gymFocus]:'';
+  return L('Připravit '+SPORT_NAMES()[a.sport]+half,'Prepare a '+SPORT_NAMES()[a.sport]+half)+(a.workoutName?L(' „'+a.workoutName+'“',' “'+a.workoutName+'”'):'')+' '+a.minutes+L(' min na ',' min on ')+shortDate(a.date);
 }
 // The safety inputs the week review sets, for the chat path too: each day's
 // time budget from its own week's plan and the sessions planned from today on.
@@ -44,12 +49,49 @@ export function actionSafetyContext(days,today,planFor){
   };
 }
 export const actionsNote=actions=>actions?.length?L('[Návrhy: ','[Proposals: ')+actions.map(actionSummary).join('; ')+']':'';
+// Hard work the app never prepares for today on a red readiness day or with
+// signs of illness (safetyNote): the answer may say so, the card cannot.
+const INTENSE=['vo2max','threshold','tempo','sweet_spot','anaerobic','sprint'];
+const ILLNESS_FLAG=/^(?:respiration|skin_temp|wrist_temp)_elevated$|^checkin_sick$/;
+export function holdBackToday(context){
+  const r=context?.cyclingCoachV2?.readiness;
+  return r?.status==='red'||r?.todayZone==='red'||(r?.flags||[]).some(f=>ILLNESS_FLAG.test(f));
+}
+// The hard days around a proposed one: done and planned sessions of the week
+// by their names (session-intensity.js, tempo included), plus the hard
+// workouts proposed earlier in the same answer. A hard workout needs 48 h
+// from each and at most two hard days in any 7 (Revize 2026-10-16, nález 3).
+const HARD_NAME=/threshold|vo2|anaerob|sprint|sweet.?spot|tempo|pr[aá]h|race|z[aá]vod/i;
+const isHardSession=a=>{const text=String(a?.name||'')+' '+[].concat(a?.tags||[]).join(' ');return HARD_NAME.test(text)||Boolean(qualityDomain(text,/run/i.test(String(a?.type||''))?'run':'ride'));};
+const dayDiff=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
+export function hardDayConflict(date,hardDates){
+  if(hardDates.some(d=>Math.abs(dayDiff(d,date))<2))return true;
+  for(let start=-6;start<=0;start++){const from=dayDiff(date,'1970-01-01')+start;if(hardDates.filter(d=>{const x=dayDiff(d,'1970-01-01');return x>=from&&x<=from+6;}).length>=2)return true;}
+  return false;
+}
+// The half of the body a gym proposal is for: the coach's field, else the
+// athlete's words ("jen na nohy", "bez nohou", "nohy bolí"); Revize 2026-10-16, nález 23.
+const GYM_UPPER=/bez\s+noh|horn[íi]\s+(?:polovin|část|cast)|vr[šs]ek|upper\s*body|no\s+legs|nohy\s+(?:bol|nemůž|nemuz)|bol[íi]\s+(?:mě\s+|me\s+)?nohy/i,GYM_LOWER=/(?:jen|pouze|jenom)\s+(?:na\s+)?nohy|na\s+nohy|doln[íi]\s+(?:polovin|část|cast)|leg\s*day|legs\s+only|only\s+legs|lower\s*body/i;
+export function gymFocusOf(a,message){
+  if(['upper','lower'].includes(a?.gymFocus))return a.gymFocus;
+  const m=String(message||'');return GYM_UPPER.test(m)?'upper':GYM_LOWER.test(m)?'lower':null;
+}
 export function validateCoachActions(actions,context,today,{userInitiated=false}={}){
   const events=new Map((context.week||[]).flatMap(d=>(d.planned||[]).map(a=>[String(a.id),{date:d.date,...a}])));
-  return (Array.isArray(actions)?actions:[]).slice(0,3).flatMap(a=>{
+  // A planned session on the proposed day itself is the one it replaces (a
+  // workout on a planned day passes only when the athlete asked for it).
+  let hard=(context.week||[]).flatMap(d=>[...(d.planned||[]).filter(isHardSession).map(a=>({date:d.date,planned:true,id:String(a.id)})),...(d.completed||[]).filter(isHardSession).map(()=>({date:d.date}))]).filter(h=>validDay(h.date));
+  // A rest or move in the same answer takes its planned session away first, so
+  // "rest today, VO2max on Tuesday" counts without today's VO2max (Revize
+  // doporučování tréninků 2026-10-16, S15); the cards keep their order.
+  const list=(Array.isArray(actions)?actions:[]).slice(0,3),first=a=>['move','rest'].includes(a?.type)?0:1;
+  const out=new Array(list.length);
+  for(const i of [...list.keys()].sort((i,j)=>first(list[i])-first(list[j])||i-j))out[i]=check(list[i]);
+  return out.flat();
+  function check(a){
     const reason=String(a.reason||'').trim().slice(0,500);if(!reason)return [];
     if(a.type==='gym_swap'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&context.gymPlan?.values?.length){
-      try{const swap=prepareGymSwap(context.gymPlan,a.fromExercise,a.toExercise,reason);return swap.date===a.date?[swap]:[];}catch{return [];}
+      try{const swap=prepareGymSwap(context.gymPlan,a.fromExercise,a.toExercise,reason,context.preferenceMemory);return swap.date===a.date?[swap]:[];}catch{return [];}
     }
     // Calories of a done activity it was shown, set in Aurin only (activity-edits.js).
     if(a.type==='activity_kcal'){
@@ -92,6 +134,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       if(a.type==='move'&&(!validDay(a.date)||a.date<today))return [];
       const budget=context.availabilityByDate?.[a.date]?.minutes;
       if(!userInitiated&&a.type==='move'&&budget!=null&&Number(event.durationHours)*60>budget)return [];
+      hard=hard.flatMap(h=>h.id!==String(a.eventId)?[h]:a.type==='move'?[{...h,date:a.date}]:[]);
       return [{type:a.type,eventId:String(a.eventId),date:a.type==='move'?a.date:event.date,reason,eventSnapshot:{name:event.name,date:event.date,durationHours:event.durationHours}}];
     }
     if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:30)&&a.minutes<=360){
@@ -100,8 +143,24 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       // Only a workout the coach was actually offered; the preview then shows exactly it.
       const library=a.workoutId?(context.workoutLibraryRecommendations||[]).find(w=>String(w.id)===String(a.workoutId)&&(!w.sport||w.sport===a.sport)):null;
       const kind=a.sport!=='gym'&&!library&&WORKOUT_KINDS.includes(a.kind)?{kind:a.kind}:{};
+      const intense=a.sport!=='gym'&&INTENSE.includes(library?library.system:a.kind);
+      if(intense&&a.date===today&&holdBackToday(context))return [];
+      if(intense){if(hardDayConflict(a.date,hard.filter(h=>!(h.planned&&h.date===a.date)).map(h=>h.date)))return [];hard.push({date:a.date});}
+      if(a.sport==='gym'){
+        // No gym today on a red morning or with signs of illness, not even shortened (S20).
+        if(a.date===today&&holdBackToday(context))return [];
+        // A day that already has a gym plan gets that plan shortened, never a
+        // second one (it could not be saved next to it).
+        let planDate=null;try{planDate=context.gymPlan?.values?.length?parseStrengthPlan(context.gymPlan.values).date:null;}catch{}
+        if(planDate&&planDate===a.date){
+          const trimmed=trimGymPlan(context.gymPlan.values,a.minutes);if(!trimmed)return [];
+          return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,workoutName:trimmed.name,trim:{values:trimmed.values,source:context.gymPlan.values,removed:trimmed.removed}}];
+        }
+        const focus=gymFocusOf(a,context.userMessage);
+        return [{type:'workout',date:a.date,sport:'gym',minutes:a.minutes,reason,...(focus?{gymFocus:focus}:{})}];
+      }
       return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason,...kind,...(library&&a.sport!=='gym'?{workoutId:String(library.id),workoutName:library.name}:{})}];
     }
     return [];
-  });
+  }
 }

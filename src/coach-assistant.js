@@ -215,10 +215,14 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     planned: row.daily?.training?.planned?.map(compactPlanned),
     completed: row.daily?.training?.completed?.map(compactActivity)
   }));
+  // The day before a long ride, long run or race planned for the next day:
+  // hard training there is said and another day offered (běh 10, S21).
+  const longOrRace = x => /long|dlouh|závod|race/i.test(String(x?.name || "")) || Number(x?.durationHours) >= (/run/i.test(String(x?.type || "")) ? 1.5 : 2.5);
+  days?.forEach((d, i) => { const next = days[i + 1]?.planned?.find(longOrRace); if (next) d.beforeLong = next.name || (/run/i.test(String(next.type || "")) ? "long run" : "long ride"); });
   const cyclingCoachV2 = buildCyclingCoachV2({
     date, daily, week, fitness, health, gym,
     preferences:{cadence:"85–95 rpm",...preferences},
-    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest
+    availabilityMinutes, goal:goal||focusGoal(focus), manualReadiness, capabilities,athleteState,sport:sport||engineSport(focus),focus,profile,checkin,upcomingTest,recoveryTime
   });
   return {
     date,...(now?{now}:{}),weekday:weekdayOf(date),
@@ -245,7 +249,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     ...(performance?{performance}:{}),
     gym:strengthSets.map(r=>compactObject({date:r.workout_date,exercise:r.exercise,set:num(r.set_no),...strengthSet(r),toFailure:r.toFailure||null})),
     strengthProgress:strengthProgress(gym?.history,date),
-    todayGym:todayGymContext(gym,date),
+    todayGym:todayGymContext(gym,date,athleteState?.memories),
     strengthCoverage:strengthCoverage({date,strength:{recentCompletedSets:strengthSets}},EXERCISES),
     capabilities,
     // The athlete's own words after workouts and the coach's notes on them.
@@ -286,16 +290,22 @@ const DATA=/pl[aá]n|tr[eé]n|posil|gym|cvi[cč]|cvik|s[eé]ri|opak|(?<!\p{L})kg
 const DATA_EN=word('train(?:s|ed|ing)?|workouts?|lifts?|lifting|sets?|reps?|lbs?|squats?|deadlifts?|pulls?|zones?|sore|pain(?:s|ful)?|sick|injur\\p{L}*|rides?|riding|bikes?|biking|cycling|runs?|running|jog(?:s|ging)?|tired|fatigued?|recover\\p{L}*|sleep(?:s|ing|y)?|slept|weeks?|review\\p{L}*|chang(?:e|es|ed|ing)|swap(?:s|ped)?|heart ?rate|power|calories?|kcal|food|eat(?:s|ing|en)?|ate|protein|carbs?|weight|health\\p{L}*|shorter|easier|add(?:s|ed|ing)?|moves?|moved|why|go through');
 // A follow-up ("A co zítra?", "Díky, a v sobotu?", "And Saturday?") continues the earlier topic.
 const FOLLOW_UP=/(?:^|[,;.!]\s*)(?:a(?:le)?|and)\s/iu;
-export const isSimpleMessage=message=>{const m=String(message||'').trim();return m.length<=120&&!PERSONAL.test(m)&&!PERSONAL_I.test(m)&&!DATA.test(m)&&!DATA_EN.test(m)&&!FOLLOW_UP.test(m);};
+// Health, pain, medication, weight loss, fasting and mental strain need the
+// full model and the athlete's data, however short or plain the question.
+const RISK=/(?<!\p{L})(?:bol[ieíe]|bolest|hru[dď]|srd[cí]|z[aá]vra[tť]|du[sš]n|omdl|mdlo|mot[aá]\s+se|tlak|l[eé]k(?:y|u|[uů]|ař|ar)?(?!\p{L})|l[eé]k[aá]ř|pr[aá][sš]k|betablok|nemoc|necí?t|cít[ií]m|citim|zran|[uú]raz|zhubn|hubn|shodit|diet|p[uů]st(?!\p{L})|hladov|nej[ií]st|vyho[řr]|depres|[uú]zkost|smysl|sebevra|t[eě]hot|koj[ií]m|chest|heart(?!\s*rate)|dizz|faint|breathless|short of breath|pain|hurt|injur|sick|ill(?!\p{L})|medic|pills?(?!\p{L})|beta.?block|lose weight|weight loss|losing weight|diet|fasting|water fast|starv|burn.?out|depress|anxi|pregnan)/iu;
+export const isSimpleMessage=message=>{const m=String(message||'').trim();return m.length<=120&&!PERSONAL.test(m)&&!PERSONAL_I.test(m)&&!DATA.test(m)&&!DATA_EN.test(m)&&!RISK.test(m)&&!FOLLOW_UP.test(m)&&!/volno|sp[aá]t/iu.test(m);};
 // A quick question about the athlete's own numbers ("Jaké mám FTP?", "Kolik
 // mám dnes bílkovin?", "Co mám zítra za trénink?"): the light model reads the
 // same data and answers fast. A decision, advice, a why or an evaluation
 // ("Mám dnes jít na intervaly?", "Kolik mám dát na bench?", "Jak se mi
 // povedla jízda?") stays with the main model.
 const QUICK_ASK=/^(?:kolik|jak(?:ý|á|é|ou|ých|ým|ými)?(?=\s|\?|$)|kdy|kde|co\s+(?:mám|mam|je|bylo|jsem|dělám)|je\s|jsou\s|byl[aoy]?\s|ukaž|ukaz|vypiš|vypis|připomeň|pripomen|how\s+(?:much|many)|what(?:'s|\s+(?:is|was|are|were))?(?=\s|\?|$)|when|where|show|list|remind)/iu;
-const NEEDS_THOUGHT=/pro[cč]|doporu[cč]|navrh|uprav|zm[eě][nň]|vym[eě][nň]|napl[aá]n|p[řr]iprav|vygener|vytvo[řr]|p[řr]idej|p[řr]esu[nň]|zru[sš]|analyz|porovn|vyhodno|zhodno|hodnot|povedl|rozbor|zlep[sš]|vhodn|lep[sš][ií]|rad[ua]\b|pomoz|pomoc|stoj[ií]\s+za|strategi|bude\s+st[aá][čt]|m[eě]l\s+bych|by\s*ch|co\s+bys|(?:m[aá]m|m[uů][zž]u|mohu|sm[ií]m)[^?]*?(?:j[ií]t|jet|b[eě][zž]et|cvi[cč]it|vynech|zkr[aá]t|d[aá]t|zvol|pokra[cč]ov|odpo[cč]in(?:out)?\b|tr[eé]nov|za[řr]adit|p[řr]idat)/iu;
+const NEEDS_THOUGHT=/pro[cč]|doporu[cč]|navrh|uprav|zm[eě][nň]|vym[eě][nň]|napl[aá]n|p[řr]iprav|vygener|vytvo[řr]|p[řr]idej|p[řr]esu[nň]|zru[sš]|analyz|porovn|vyhodno|zhodno|hodnot|povedl|rozbor|zlep[sš]|vhodn|lep[sš][ií]|l[ií]p(?!\p{L})|l[eé]pe(?!\p{L})|norm[aá]ln|v\s+po[řr][aá]dku|bezpe[čc]n|rad[ua]\b|pomoz|pomoc|stoj[ií]\s+za|strategi|bude\s+st[aá][čt]|m[eě]l\s+bych|by\s*ch|co\s+bys|(?:m[aá]m|m[uů][zž]u|mohu|sm[ií]m)[^?]*?(?:j[ií]t|jet|b[eě][zž]et|cvi[cč]it|vynech|zkr[aá]t|d[aá]t|zvol|pokra[cč]ov|odpo[cč]in(?:out)?\b|tr[eé]nov|za[řr]adit|p[řr]idat|d[eě]lat|ud[eě]lat|j[ií]st|sn[ií]st|pauz)/iu;
 const NEEDS_THOUGHT_EN=/(?<!\p{L})(?:why|recommend|suggest|propose|adjust|chang(?:e|es|ing)|swap|plan\s+(?:me|a|an|my|the|next|this|for|out)|prepare|generate|create|add(?:s|ed|ing)?(?!\p{L})|move(?:s|d)?(?!\p{L})|cancel|analy|compare|evaluat|assess|rat(?:e|ing)\s+(?:my|the|this|that|it|how)|improve|suitable|better|advice|advise|help|worth|strategy|(?:should|can|could|would|shall|may|might)\s+(?:i|we)(?!\p{L}))/iu;
-export const isQuickQuestion=message=>{const m=String(message||'').trim();return m.length<=120&&!FOLLOW_UP.test(m)&&!isSimpleMessage(m)&&QUICK_ASK.test(m)&&!NEEDS_THOUGHT.test(m)&&!NEEDS_THOUGHT_EN.test(m);};
+// "Jak mám jezdit zbytek týdne?" is advice on the plan, not a lookup: the full
+// model and the library (Revize doporučování tréninků 2026-10-16, nález 16).
+const HOW_TO_TRAIN=/jak\s+(?:m[aá]m|bych\s+m[eě]l\p{L}*|by\s+m[eě]l\p{L}*)\s+(?:dnes\s+|zítra\s+|zitra\s+|teď\s+|ted\s+)?(?:jezdit|jet|b[eě]hat|b[eě][zž]et|tr[eé]novat|cvi[cč]it|rozvrhnout|rozlo[zž]it|napl[aá]novat|pokra[cč]ovat|postupovat|zvl[aá]dnout|za[řr]adit|poskl[aá]dat|odpo[cč][ií]vat|regenerovat)|zbyt(?:ek|ku)\s+t[yý]dne|do\s+konce\s+t[yý]dne|rest\s+of\s+(?:the|this)\s+week/iu;
+export const isQuickQuestion=message=>{const m=String(message||'').trim();return m.length<=120&&!FOLLOW_UP.test(m)&&!isSimpleMessage(m)&&QUICK_ASK.test(m)&&!NEEDS_THOUGHT.test(m)&&!NEEDS_THOUGHT_EN.test(m)&&!HOW_TO_TRAIN.test(m)&&!RISK.test(m);};
 // The screens about the athlete (the iOS coach opens on "today").
 const PLANNING_VIEWS=['workouts','training','health','today','food','nutrition'];
 function ownTask(message,appContext=null){

@@ -34,15 +34,29 @@ A session counts as hard by its name (`src/session-intensity.js`): threshold, pr
 
 ## Readiness
 
-The score starts at 100 and drops for:
+Readiness is the shared recovery model (`src/readiness.js`, `src/recovery-model.js`), the number and
+zone Today shows, with the morning lock: HRV, resting heart rate and sleep against the athlete's own
+60-day baseline, minus points for breathing or temperature raised in sleep. Zones: green from 67,
+yellow 34–66, red under 34. Deep fatigue lowers the zone (TSB ≤ −20 yellow, ≤ −30 red).
 
-- form (TSB ≤ −30 / ≤ −20 / ≤ −10: −30 / −16 / −7),
-- a fast ramp (> 8: −10),
-- sleep (under 6 h / 7 h: −18 / −8), from Google Health or the Intervals.icu wellness,
-- HRV against the athlete's own 4-week average (20 % / 10 % lower: −22 / −10) and resting HR (7 / 4 beats higher: −18 / −8); both at once another −8,
-- hard days this week, lower-body gym in 48 h, a session already done today.
+## One check for every session
 
-Under 55 is red (no intensity), under 75 yellow (no VO₂/threshold/sweet spot).
+Whatever chose the session (the plan in Intervals.icu, a kind asked for in the chat or the week plan,
+the phase, the coach itself), the same check runs before its length is set. Only the race and its
+openers keep their kind.
+
+- Red: only recovery, at most 45 min (run 30).
+- Signs of illness (breathing or skin/wrist temperature raised in sleep, a sick check-in): no intensity,
+  at most 60 min (run 40).
+- Yellow: no intensity, tempo included.
+- Intensity (tempo, sweet spot, threshold, VO₂max) becomes easy for a beginner, after 7+ days without
+  the sport, within 48 h of a hard day of either sport, after two quality days in 7, after lower-body
+  gym in 48 h and in a recovery week.
+- After a break: no long session, at most 90 min (run 45). The three days after Nemoc: no intensity,
+  day 1 at most 45 min (run 30), days 2–3 at most 75 min (run 40).
+
+`tests/coach-matrix.test.mjs` checks these rules over 1080 days (6 mornings × 9 loads × 10 situations ×
+ride and run).
 
 ## Season phase
 

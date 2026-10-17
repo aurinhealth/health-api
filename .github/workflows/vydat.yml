@@ -2,7 +2,8 @@ name: Vydat
 
 # Releases one tested build to the external testers, with the server it was
 # tested against:
-# 1. picks the build (the newest one uploaded from main, or the number typed in),
+# 1. picks the build (the newest one uploaded from main, or the number typed in)
+#    and checks that the smoke test of its app passed (ios-native.yml on main),
 # 2. deploys the newest main to the live server (deploy-worker.yml, production);
 #    production only ever runs main commits, so this never goes back to an
 #    older server than a hand-started deploy left there, and server-only
@@ -94,6 +95,19 @@ jobs:
           if [ -z "$BUILD" ] && [ -n "$(git diff --name-only "$sha" "$server" -- ios-native)" ]; then
             echo "::error::Build ze změn aplikace v main se do TestFlightu ještě nenahrál. Počkej na TestFlight build a spusť Vydat znovu."; exit 1
           fi
+          # The smoke test (ios-native.yml) must have passed on the app the build holds:
+          # the newest iOS run on main whose commit has the build's app, without later app changes.
+          checks="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ios-native.yml --branch main \
+            --status completed --limit 50 --json headSha,conclusion,databaseId)"
+          check=""
+          while read -r row; do
+            csha="$(jq -r .headSha <<< "$row")"
+            if git cat-file -e "$csha^{commit}" 2>/dev/null && git merge-base --is-ancestor "$csha" "$sha" \
+              && [ -z "$(git diff --name-only "$csha" "$sha" -- ios-native)" ]; then check="$row"; break; fi
+          done < <(jq -c '.[]' <<< "$checks")
+          [ -n "$check" ] || { echo "::error::Pro build $build chybí kontrola aplikace (iOS native app na main). Spusť ji na main a pak Vydat znovu."; exit 1; }
+          check_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$(jq -r .databaseId <<< "$check")"
+          [ "$(jq -r .conclusion <<< "$check")" = "success" ] || { echo "::error::Kontrola aplikace pro build $build neprošla: $check_url"; exit 1; }
           last="$(python3 .github/scripts/testflight_notes.py released)"
           base=""
           if [ -n "$last" ]; then
@@ -107,6 +121,7 @@ jobs:
           echo "server=$server" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "Vydání buildu $build (${sha::7}), server ${server::7}, minulé vydání: ${last:-žádné}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Kontrola aplikace prošla, snímky obrazovek (Loadwise-native-screens → smoke): $check_url" >> "$GITHUB_STEP_SUMMARY"
 
   # The live server first: the build the testers get talks to it. The newest
   # main contains the build's commit, so the server is never older than the app.

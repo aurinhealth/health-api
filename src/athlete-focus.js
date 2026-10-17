@@ -46,7 +46,10 @@ export function athleteFocus(profile, today) {
 export function withFocus(instructions, focus) {
   if (!focus) return instructions;
   // The role line of a Czech or an English prompt (each is its own version, not a translation).
-  let out = focus.sport ? instructions.replace(/^(?:Jsi|You are) [^.]*\./, L(`Jsi profesionální trenér ${SPORTS[focus.sport].role}.`, `You are a professional coach for ${SPORT_ROLE_EN[focus.sport]}.`)) : instructions;
+  // The in-app coach keeps the rest of its scope (A3 of the 2026-10-16 review):
+  // the other sports, nutrition, sleep and recovery are still its questions.
+  const scope = /^(?:Jsi|You are) [^.]*Aurin[^.]*\./.test(instructions) ? L(" Radíš i s ostatními sporty v aplikaci Aurin (kolo, běh, posilovna), se sportovní výživou, spánkem a regenerací.", " You also advise on the other sports in the Aurin app (ride, run, gym), sports nutrition, sleep and recovery.") : "";
+  let out = focus.sport ? instructions.replace(/^(?:Jsi|You are) [^.]*\./, L(`Jsi profesionální trenér ${SPORTS[focus.sport].role}.`, `You are a professional coach for ${SPORT_ROLE_EN[focus.sport]}.`) + scope) : instructions;
   const lines = [], weeks = focus.event?.daysLeft != null ? Math.floor(focus.event.daysLeft / 7) : null;
   if (focus.sportLabel) lines.push(L(`Hlavní sport: ${focus.sportLabel}; ostatní sporty ber jako doplněk k němu.`, `Main sport: ${focus.sportLabel}; treat the other sports as a complement to it.`));
   if (focus.goal) lines.push(L(`Cíl sportovce (jeho slova): „${focus.goal}“.`, `The athlete's goal (their own words): “${focus.goal}”.`));

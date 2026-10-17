@@ -178,7 +178,7 @@ struct MusclesWidget: View {
     // M with the rings.
     private func mediumRings(_ data: MuscleFatigue) -> some View {
         Card {
-            WidgetHeader(title: L10n.tr("Svaly · odpočaté na %"), color: Palette.amberBar)
+            WidgetHeader(title: L10n.tr("Únava svalů · odpočaté na %"), color: Palette.amberBar)
             MuscleRingsRow(data: data)
         }
     }
@@ -221,6 +221,7 @@ struct MusclesView: View {
     @Environment(AppModel.self) private var model
     @State private var error: String?
     @State private var tab = 0
+    @State private var explaining = false
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: MuscleFatigue.title) {
@@ -249,6 +250,7 @@ struct MusclesView: View {
         .task { await load() }
         .task { if !model.demo { await MuscleModelStore.shared.load(api: model.api) } }
         .refreshable { await load() }
+        .sheet(isPresented: $explaining) { MuscleFatigueInfoSheet() }
     }
 
     private func load() async {
@@ -295,7 +297,12 @@ struct MusclesView: View {
         }
 
         if !data.tired.isEmpty {
-            SectionLabel(text: "Unavené svaly").padding(.top, 22)
+            HStack {
+                SectionLabel(text: "Unavené svaly")
+                Spacer()
+                SmallInfoButton(label: "Co znamenají procenta") { explaining = true }
+            }
+            .padding(.top, 14)
             Card {
                 ForEach(Array(data.tired.enumerated()), id: \.element.id) { index, muscle in
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
@@ -714,5 +721,35 @@ struct MuscleDetailView: View {
             }
             .padding(.top, 10)
         }
+    }
+}
+
+/// "i" of Unavené svaly: what the percentages and the days mean.
+struct MuscleFatigueInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private let lines = [
+        "Procento říká, jak moc je sval už odpočatý. 100 % je plně připravený, 5 % je hned po tvrdém tréninku.",
+        "Čím nižší číslo, tím déle se sval ještě zotavuje. Sval na 5 % bude odpočatý třeba za 4 dny, sval na 30 % už zítra.",
+        "Velké svaly (stehna, hýždě, záda) se po těžkých cvicích zotavují až 3 dny, malé svaly paží a ramen kolem 2 dnů. Série do selhání prodlouží zotavení.",
+        "Počítá se z tvých sérií v posilovně za posledních 7 dní a z běhu, kola a chůze, které zatěžují nohy.",
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(lines, id: \.self) { line in
+                        Text(L10n.tr(line)).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(20)
+            }
+            .background(Palette.background)
+            .navigationTitle(L10n.tr("Únava svalů"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

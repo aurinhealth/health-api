@@ -47,6 +47,10 @@ test('confirmed exercise swap preserves logged sets, options and unrelated edits
   changed[7][8]='TRUE';assert.throws(()=>applyGymSwap(changed,action),/mezitím/);
   assert.throws(()=>prepareGymSwap(gym,'Low row','Lat pulldown','Náhrada'),/Rozcvičený/);
   assert.throws(()=>prepareGymSwap(gym,'DB Arnold press','Pivot leg press','Náhrada'),/partii/);
+  // A remembered shoulder pain refuses an overhead press and hides it from the alternatives (Revize 2026-10-16, nález 24).
+  assert.throws(()=>prepareGymSwap(gym,'DB Arnold press','DB shoulder press','Náhrada',['Bolí mě rameno']),/bolí|hurts/);
+  assert.ok(!todayGymContext(gym,date,['Bolí mě rameno']).exercises[0].alternatives.some(a=>/press/i.test(a.name)));
+  assert.ok(todayGymContext(gym,date).exercises[0].alternatives.some(a=>/press/i.test(a.name)));
 });
 test('adjustment requests offer a swap and do not default to cancelling gym',()=>{
   const context={athleteState:'active',userMessage:'Upravil bys dnešní cvičení?',gymPlan:gym,week:[{date,planned:[{id:'planned:gym',name:'Gym'}]}]};

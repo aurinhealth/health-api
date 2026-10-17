@@ -325,7 +325,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          body="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/health/nutrition")"
+          response="$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/health/nutrition")"
+          code="${response##*$'\n'}"
+          body="${response%$'\n'*}"
+          if [ "$code" != "200" ]; then
+            # Only the server's short message (Google's error code), never the records.
+            echo "HTTP $code"
+            python -c 'import json,sys; print(str((json.load(sys.stdin) or {}).get("message",""))[:300])' <<< "$body" || true
+            exit 1
+          fi
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok","status="+str(d.get("status")); assert d.get("data_type")=="nutrition-log","data_type="+str(d.get("data_type"))' <<< "$body"
 
       - name: Smoke test shared food catalogue
