@@ -342,10 +342,12 @@ struct GymPreferences: Decodable, Equatable {
     var goal: String
     /// What "auto" follows: the goal for the main sport ("auto" without one).
     var recommendedGoal: String?
-    /// "auto" or the chosen beginner / regular / experienced.
+    /// "auto" or the chosen beginner / regular / experienced (the gym's).
     var experience: String
     /// What the training history says while the experience is "auto".
     var autoExperience: String?
+    /// strength, ride and run: auto or chosen, the level in use and the automatic one.
+    var experienceBySport: [String: SportExperience]?
     var warmup: Bool?
     var warmupCardio: Bool?
     var stretching: Bool
@@ -373,7 +375,6 @@ struct GymPreferencesGroup: View {
     @Environment(AppModel.self) private var model
     @State private var prefs: GymPreferences?
     @State private var goal = "auto"
-    @State private var experience = "auto"
     @State private var warmupMode = "cardio"
     @State private var stretching = true
     @State private var error: String?
@@ -383,7 +384,6 @@ struct GymPreferencesGroup: View {
     static func warmupMode(_ prefs: GymPreferences) -> String {
         prefs.warmup == false ? "off" : prefs.warmupCardio == false ? "moves" : "cardio"
     }
-    static let levels = [("beginner", "začátečník"), ("regular", "pravidelně"), ("experienced", "zkušený")]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -392,7 +392,6 @@ struct GymPreferencesGroup: View {
         }
         .task { await load() }
         .onChange(of: goal) { _, value in goalChanged(value) }
-        .onChange(of: experience) { _, value in experienceChanged(value) }
         .onChange(of: warmupMode) { _, value in warmupChanged(value) }
         .onChange(of: stretching) { _, value in stretchingChanged(value) }
     }
@@ -401,7 +400,8 @@ struct GymPreferencesGroup: View {
         SettingsGroup(title: "Trénink na míru") {
             SettingsPicker(title: "Cíl", selection: $goal, options: goalOptions)
             SettingsDivider()
-            SettingsPicker(title: "Zkušenost", selection: $experience, options: experienceOptions)
+            NavigationLink { ExperienceSettingsView() } label: { SettingsRow(title: "Zkušenost", value: experienceValue) }
+                .buttonStyle(.plain)
             SettingsDivider()
             SettingsPicker(title: "Rozcvička", selection: $warmupMode, options: Self.warmupModes)
             SettingsDivider()
@@ -412,10 +412,6 @@ struct GymPreferencesGroup: View {
 
     private func goalChanged(_ value: String) {
         save(["goal": .string(value)], unchanged: prefs?.goal == value)
-    }
-
-    private func experienceChanged(_ value: String) {
-        save(["experience": .string(value)], unchanged: prefs?.experience == value)
     }
 
     private func warmupChanged(_ value: String) {
@@ -436,22 +432,21 @@ struct GymPreferencesGroup: View {
         return [("auto", auto)] + Self.goals
     }
 
-    /// "automaticky · pravidelně": the level Aurin reads from the training history.
-    private var experienceOptions: [(String, String)] {
-        let guess = prefs?.autoExperience.flatMap { id in Self.levels.first { $0.0 == id }?.1 }
-        let auto = guess.map { L10n.tr("automaticky") + " · " + L10n.tr($0) } ?? L10n.tr("automaticky")
-        return [("auto", auto)] + Self.levels
+    /// "Auto · Mírně pokročilý" or the chosen level: the gym's experience (set in Profil).
+    private var experienceValue: String? {
+        guard let gym = prefs?.experienceBySport?["strength"] else { return nil }
+        return gym.mode == "auto" ? L10n.f("Auto · %@", ExperienceGroup.name(gym.autoLevel)) : ExperienceGroup.name(gym.level)
     }
 
     private func load() async {
-        guard !model.demo, prefs == nil else { return }
+        guard !model.demo else { return }
+        // Again on every return: the experience may have changed in Profil.
         do { apply(try await model.api.gymPreferences()) } catch { self.error = error.localizedDescription }
     }
 
     private func apply(_ value: GymPreferences) {
         prefs = value
         goal = value.goal
-        experience = value.experience
         warmupMode = Self.warmupMode(value)
         stretching = value.stretching
     }

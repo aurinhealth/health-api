@@ -81,7 +81,9 @@ export async function getCapabilities(db, sport = "ride") {
   await ensureTrainingTables(db);
   const rows = await db.prepare("SELECT * FROM training_capabilities WHERE user_id=? AND sport=?").bind(db.userId, sport).all();
   const training=await trainingSetup(db),defaults=defaultCapabilities(sport);
-  if(training.experience)for(const value of Object.values(defaults))value.level=training.experience==='beginner'?1:training.experience==='experienced'?4:3;
+  // Cycling level for rides, running level for runs (Profile → Experience).
+  const experience=training.experienceBySport?.[sport==='run'?'run':'ride']?.level||training.experience;
+  if(experience)for(const value of Object.values(defaults))value.level=experience==='beginner'?1:experience==='experienced'?4:3;
   return { ...defaults, ...Object.fromEntries((rows.results || []).map(x => [x.system, x])) };
 }
 
