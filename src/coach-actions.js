@@ -76,13 +76,6 @@ export function gymFocusOf(a,message){
   if(['upper','lower'].includes(a?.gymFocus))return a.gymFocus;
   const m=String(message||'');return GYM_UPPER.test(m)?'upper':GYM_LOWER.test(m)?'lower':null;
 }
-// Words of a message about training, the plan or a day (Petr 2026-10-16: plan
-// cards only when the athlete asks about training or the plan, or safety needs
-// them). A message without any (a recipe, a prompt injection) gets no ride,
-// run, rest or move card, unless the morning is red or shows illness.
-const TRAINING_TOPIC=/tr[eé]n|j[ií]zd|jezd|jet(?!\p{L})|jed[uue]|(?<!\p{L})kol[aeou]?(?!\p{L})|b[eě]h|b[eě][žz]|posil|gym|cvi[čc]|pl[aá]n|interv|z[aá]vod|dnes|z[ií]tra|v[ií]kend|t[ýy]d(?:en|ne|nu|ny)|pond[eě]l|[uú]ter|st[řr]ed|[čc]tvrt|p[aá]t(?:ek|k)|sobot|ned[eě]l|odpo[čc]|volno|pauz|[uú]nav|regener|sp[aá]nk|sp[aá]l|ftp|vo2|tempo|z[oó]n|nohy|svaly|bol[ií]|nemoc|zran|train|work ?out|ride|riding|bike|cycl|run|plan|race|today|tomorrow|week|rest|tired|recover|sleep|legs|sore|sick|injur|pain|minut|hodin(?:u|ku)(?!\p{L})|venku|trena[žz]|minutes|an hour|outside|indoor/iu;
-export const aboutTraining=(message,conversation=[])=>message==null||TRAINING_TOPIC.test([message,...(conversation||[]).filter(t=>t?.role==='user').map(t=>t.content)].join(' '));
-
 export function validateCoachActions(actions,context,today,{userInitiated=false}={}){
   const events=new Map((context.week||[]).flatMap(d=>(d.planned||[]).map(a=>[String(a.id),{date:d.date,...a}])));
   // A planned session on the proposed day itself is the one it replaces (a
@@ -97,7 +90,6 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
   return out.flat();
   function check(a){
     const reason=String(a.reason||'').trim().slice(0,500);if(!reason)return [];
-    if(['workout','rest','move'].includes(a.type)&&a.sport!=='gym'&&!aboutTraining(context.userMessage,context.conversation)&&!holdBackToday(context))return [];
     if(a.type==='gym_swap'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&context.gymPlan?.values?.length){
       try{const swap=prepareGymSwap(context.gymPlan,a.fromExercise,a.toExercise,reason,context.preferenceMemory);return swap.date===a.date?[swap]:[];}catch{return [];}
     }

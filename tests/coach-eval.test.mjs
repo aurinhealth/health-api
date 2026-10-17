@@ -225,12 +225,3 @@ test('Luna: three quick questions go to the light model and name the athlete\'s 
   assert.deepEqual(at('L03', 'Včera, 16. října, jsi spal 7 hodin a 25 minut.'), []);
   assert.ok(!checkReply(scenarioById('L02'), { answer: 'Dnes máš v plánu „VO₂max 5×4“, ale jel bych lehce.', kept: [{ type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance', card: 'endurance' }], proposed: [], model: 'gpt-6-luna' }, now, date).some(c => !c.ok));
 });
-
-test('run 12: a message outside training gets no ride, rest or move card (S07), one about the day keeps it', async () => {
-  const { validateCoachActions } = await import('../src/coach-actions.js');
-  const cards = [{ type: 'rest', eventId: 'planned:9001', date, reason: '48 h po sweet spotu.' }, { type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance', reason: 'Lehce místo VO2max.' }];
-  const kept = id => { const { ctx } = scenarioContext(scenarioById(id), date, now); ctx.userMessage = scenarioById(id).message; return validateCoachActions(cards, ctx, date, { userInitiated: true }).map(a => a.type); };
-  assert.deepEqual(kept('S07'), []);
-  assert.deepEqual(kept('S01'), ['rest', 'workout']);
-  assert.deepEqual(kept('S09'), ['rest', 'workout']);
-});
