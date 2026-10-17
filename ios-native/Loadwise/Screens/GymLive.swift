@@ -26,6 +26,7 @@ struct LiveGymView: View {
     @State private var restNext: String?
     @State private var picking = false
     @State private var historyFor: String?
+    @State private var technique: String?
     @State private var summary = false
     @State private var rating = false
     @State private var saving = false
@@ -81,6 +82,7 @@ struct LiveGymView: View {
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
             ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
         }
+        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
         // After Dokončit, as after a planned session: thumbs for each exercise.
         .sheet(isPresented: $rating, onDismiss: { dismiss() }) {
             GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
@@ -161,7 +163,8 @@ struct LiveGymView: View {
                              onEdit: { set, kg, reps in edit(set, kg: kg, reps: reps) },
                              onAddSet: { addSet(exercise) },
                              onRemove: { set in remove(set) },
-                             onHistory: { historyFor = exercise.name })
+                             onHistory: { historyFor = exercise.name },
+                             onTechnique: { technique = exercise.name })
         } else {
             Button { expanded.insert(exercise.id) } label: { collapsed(exercise) }
                 .buttonStyle(.plain)

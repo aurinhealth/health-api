@@ -11,8 +11,9 @@ import WidgetKit
 struct GymActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: GymActivityAttributes.self) { context in
+            // The lock screen gives the card about 160 pt: anything taller is cut.
             GymActivityCard(context: context)
-                .padding(16)
+                .padding(.horizontal, 16).padding(.vertical, 12)
                 .activityBackgroundTint(Palette.card.opacity(0.9))
                 .activitySystemActionForegroundColor(Palette.ink)
         } dynamicIsland: { context in
@@ -84,33 +85,36 @@ struct GymActivityCard: View {
         let labels = context.attributes.labels
         let resting = Self.resting(context)
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 7) {
-                AurinMark().frame(width: 16, height: 16)
-                Text("Aurin").foregroundStyle(Palette.ink)
-                Text("· " + s.header).foregroundStyle(Palette.muted).lineLimit(1)
+            // The clock, heart rate and kcal, with "2 ze 5 cviků" (no Aurin
+            // line: the card has no room for it).
+            HStack(spacing: 8) {
+                AurinMark().frame(width: 14, height: 14)
+                GymActivityStats(context: context).layoutPriority(1)
+                Spacer(minLength: 4)
+                // "2 ze 5 cviků" of "Posilovna · 2 ze 5 cviků".
+                Text(s.header.components(separatedBy: " · ").last ?? s.header).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted).lineLimit(1)
             }
-            .font(.system(size: 13, weight: .semibold))
-            GymActivityStats(context: context).padding(.top, 8)
             HStack(alignment: .bottom, spacing: 10) {
                 if resting, let start = s.restStart, let end = s.restEnd {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 0) {
                         Text(labels.rest.uppercased()).font(.system(size: 11, weight: .medium)).tracking(1.5).foregroundStyle(Palette.amberBar)
-                        GymRestTimer(start: start, end: end, size: 44)
+                        GymRestTimer(start: start, end: end, size: 36)
                     }
                     Spacer(minLength: 4)
                     VStack(alignment: .trailing, spacing: 1) {
-                        Text(labels.next).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted)
-                        Text(s.exercise + " · " + s.setLabel).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                        Text(labels.next + " · " + s.setLabel).font(.system(size: 12, weight: .medium)).foregroundStyle(Palette.muted)
+                        Text(s.exercise).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
                         Text(s.load).font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.secondary)
                     }
                     .lineLimit(1)
-                    .padding(.bottom, 4)
+                    .minimumScaleFactor(0.8)
+                    .padding(.bottom, 2)
                 } else {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(s.setLabel.uppercased()).font(.system(size: 11, weight: .medium)).tracking(1.5).foregroundStyle(Palette.muted)
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text(s.exercise).font(.system(size: 20, weight: .semibold)).foregroundStyle(Palette.ink)
-                            Text(s.load).font(W.number(28)).foregroundStyle(Palette.ink)
+                            Text(s.exercise).font(.system(size: 18, weight: .semibold)).foregroundStyle(Palette.ink)
+                            Text(s.load).font(W.number(24)).foregroundStyle(Palette.ink)
                         }
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -126,9 +130,9 @@ struct GymActivityCard: View {
                     }
                 }
             }
-            .padding(.top, 10)
-            GymSegments(values: s.segments).padding(.top, 12)
-            GymActivityButtons(context: context, resting: resting, short: false).padding(.top, 14)
+            .padding(.top, 8)
+            GymSegments(values: s.segments).padding(.top, 8)
+            GymActivityButtons(context: context, resting: resting, short: false).padding(.top, 10)
         }
     }
 }
@@ -212,9 +216,10 @@ struct GymActivityButtons: View {
     }
 
     private func pill(_ text: String, primary: Bool) -> some View {
+        // The lock screen card is short; the Dynamic Island keeps the taller pills.
         Text(text).font(.system(size: 14, weight: .semibold))
             .foregroundStyle(primary ? Palette.onButton : Palette.ink)
-            .frame(maxWidth: .infinity).frame(height: 40)
+            .frame(maxWidth: .infinity).frame(height: short ? 40 : 34)
             .background(primary ? Palette.button : Palette.ink.opacity(0.12), in: Capsule())
     }
 }

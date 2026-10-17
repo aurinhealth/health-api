@@ -1245,12 +1245,12 @@ final class AppModel {
     /// Nastavení → Testování → Server: the other server, with its own account
     /// data and sign-in. What the screens and the outbox hold belongs to the
     /// old server; both sessions stay, so switching back needs no sign-in.
-    /// Apple Health pauses and resumes like a sign-out and a sign-in, each
-    /// server with its own last sync (AppleHealth.serverChanged).
+    /// Apple Health stays as it is on this iPhone and reads into the chosen
+    /// server, each with its own last sync (AppleHealth.serverChanged). It
+    /// used to pause like a sign-out, and the way back switched it off for good.
     func switchServer(to choice: ServerChoice) async {
         guard !demo, choice != ServerChoice.current else { return }
         if phase == .signedIn { await PushRegistration.unregister(api: api) }
-        AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
         ServerChoice.current = choice
         AppleHealth.shared.serverChanged()
         clearLocal(expired: true)

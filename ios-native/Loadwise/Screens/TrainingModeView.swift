@@ -54,6 +54,8 @@ struct TrainingModeView: View {
     @State private var startTapped = false
     /// Hidden with the arrow: the workout goes on, only the screen closes.
     @State private var minimizing = false
+    /// Teď ("now") or Další ("next") with its sets unfolded in the rest.
+    @State private var unfolded: Set<String> = []
     /// The warm-up's stretches ticked (StretchingCard): all of them done, the
     /// card makes way for the first exercise.
     @AppStorage("gym.stretching.done") private var stretchesDone = ""
@@ -90,6 +92,10 @@ struct TrainingModeView: View {
                                         }
                                     }
                                 }
+                                // Before Začít trénink: what comes at the end too.
+                                if !started, let stretching = day.stretching {
+                                    StretchingCard(stretching: stretching, date: date, compact: true).padding(.top, 10)
+                                }
                                 if let restEnd {
                                     rest(day, exercise, until: restEnd)
                                 } else {
@@ -114,9 +120,18 @@ struct TrainingModeView: View {
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true
             GymActivityInbox.handler = { activityAction($0) }
+            // The paired sensor connects already when the workout opens, so the
+            // heart shows it before Začít trénink.
+            if !model.demo { HeartRateSensor.shared.connectSaved() }
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false
+            // Left another way than the arrow (the edge swipe, a link) while the
+            // workout runs: it goes on hidden, as with the arrow.
+            if !minimizing, live.running, !finishedSession, let day, current(day) != nil {
+                keepMinimized(day)
+                minimizing = true
+            }
             if minimizing {
                 // The rest alarm and the Live Activity stay; their taps wait in the bar.
                 let model = model
@@ -125,6 +140,7 @@ struct TrainingModeView: View {
                 Task { await Reminders.restEnds(at: nil) }
                 GymActivityInbox.handler = nil
                 GymLiveActivity.end()
+                if !live.running { HeartRateSensor.shared.disconnect() }
             }
         }
         .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
@@ -259,8 +275,8 @@ struct TrainingModeView: View {
             nextExercise(day).padding(.top, 14)
             addExerciseButton.padding(.top, 10)
         }
-        .onChange(of: set?.row) { _, _ in prefill(set) }
-        .onAppear { prefill(set) }
+        .onChange(of: set?.row) { _, _ in prefill(set, in: exercise) }
+        .onAppear { prefill(set, in: exercise) }
         // A swipe sideways goes to the next or the previous exercise.
         .contentShape(Rectangle())
         .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { drag in
@@ -324,13 +340,15 @@ struct TrainingModeView: View {
 
     private func setRow(_ s: GymSet, _ exercise: GymExercise, current: GymSet?, last: GymHistory.Session?) -> GymSetRow {
         let phase: GymSetRow.Phase = s.done ? .done : (s.row == current?.row ? .current : .next)
-        let shownKg: String = LiftWeight.shown(s.done ? s.kg : s.plannedKg) ?? ""
-        let shownReps: String = (s.done ? s.reps : s.plannedReps) ?? ""
+        // The sets to come show what the set before was done with.
+        let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise)
+        let shownKg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg) ?? ""
+        let shownReps: String = (s.done ? s.reps : carry?.reps ?? s.plannedReps) ?? ""
         // By sides the number shows on the L row only.
         return GymSetRow(label: s.warmup ? "W" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
-                         kgText: $kg, repsText: $reps,
+                         kgText: $kg, repsText: $reps, repsHint: s.plannedReps,
                          onEdit: s.done ? { k, r in Task { await editDone(s, kg: k, reps: r) } } : nil) {
             switch phase {
             case .done: Task { await undo(s) }
@@ -404,30 +422,34 @@ struct TrainingModeView: View {
         // In a superset the partner comes next (A1, B1, A2…).
         let partner = Self.supersetPartner(day.exercises, of: index)
         if let target = partner ?? (day.exercises.indices.contains(index + 1) ? index + 1 : nil), let next = day.exercises[safe: target] {
-            HStack(spacing: 8) {
-                Button { move(target - index) } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Palette.secondary)
-                            .frame(width: 34, height: 34).background(Palette.track, in: Circle())
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
-                            Text(nextLine(next))
-                                .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Button { move(target - index) } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Palette.secondary)
+                                .frame(width: 34, height: 34).background(Palette.track, in: Circle())
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
+                                Text(next.name)
+                                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                                Text(nextLoad(next)).font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
+                            }
+                            Spacer(minLength: 4)
                         }
-                        Spacer(minLength: 4)
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    SmallInfoButton { technique = next.name }
+                    foldButton("next")
                 }
-                .buttonStyle(.plain)
-                SmallInfoButton { technique = next.name }
-                Button { move(target - index) } label: {
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
-                        .frame(width: 20, height: 34).contentShape(Rectangle())
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                if unfolded.contains("next") {
+                    RestSetsList(exercise: next, last: history.last(next.name, before: date)) { typed in
+                        Task { await setWeight(LiftWeight.kgText(typed), of: next) }
+                    }
+                    .padding(.horizontal, 16).padding(.bottom, 10)
                 }
-                .buttonStyle(.plain)
-                .accessibilityHidden(true)
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         } else if index > 0 {
             Button { move(-1) } label: {
@@ -437,9 +459,39 @@ struct TrainingModeView: View {
         }
     }
 
-    private func nextLine(_ next: GymExercise) -> String {
-        let reps: String? = next.sets.first { !$0.warmup }?.plannedReps?.nilIfBlank
-        return next.name + " · " + PlanEditorSheet.summary(sets: next.workCount, reps: reps, done: 0)
+    /// "15 kg × 5–8 · 3 série": the first set still to do and the sets left.
+    private func nextLoad(_ next: GymExercise) -> String {
+        let left: Int = next.workCount - next.doneCount
+        let count: String = L10n.f("%@ %@", String(left), Fmt.plural(left, "série", "série", "sérií"))
+        guard let set = next.sets.first(where: { !$0.done && !$0.warmup }) else { return count }
+        return GymLiveActivity.load(set, in: next) + " · " + count
+    }
+
+    /// The arrow that unfolds the sets of Teď or Další.
+    private func foldButton(_ key: String) -> some View {
+        Button {
+            withAnimation(.snappy) { if unfolded.contains(key) { unfolded.remove(key) } else { unfolded.insert(key) } }
+        } label: {
+            Image(systemName: unfolded.contains(key) ? "chevron.up" : "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
+                .frame(width: 28, height: 34).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr(unfolded.contains(key) ? "Skrýt série" : "Ukázat série"))
+    }
+
+    /// A weight typed under Další: all its sets still to do take it.
+    private func setWeight(_ kg: String, of exercise: GymExercise) async {
+        guard !kg.isEmpty, var next = day else { return }
+        for set in exercise.sets where !set.done && !set.warmup { next.set(row: set.row, column: 3, kg) }
+        guard next != day else { return }
+        day = next
+        guard !model.demo else { return }
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
+        }
     }
 
     // MARK: The rest
@@ -464,13 +516,15 @@ struct TrainingModeView: View {
                         Text(nowLine(exercise, set))
                             .font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
                         Spacer(minLength: 6)
-                        Text(plannedLine(set))
+                        Text(plannedLine(set, in: exercise))
                             .font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1)
                         SmallInfoButton { technique = exercise.name }.padding(.leading, 4)
+                        foldButton("now")
                     }
                     if let previous = GymSessionMath.lastTime(set, in: exercise, last: last) {
                         Text(L10n.f("Minule %@", previous)).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
+                    if unfolded.contains("now") { RestSetsList(exercise: exercise, last: last) }
                 }
                 .padding(16)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -515,9 +569,10 @@ struct TrainingModeView: View {
     }
 
     /// "80 kg × 8".
-    private func plannedLine(_ set: GymSet) -> String {
-        let weight: String = LiftWeight.shown(set.plannedKg).map { $0 + " " + Units.weightUnit + " × " } ?? ""
-        return weight + (set.plannedReps ?? "")
+    private func plannedLine(_ set: GymSet, in exercise: GymExercise) -> String {
+        let carry = GymSessionMath.carried(set, in: exercise)
+        let weight: String = LiftWeight.shown(carry?.kg ?? set.plannedKg).map { $0 + " " + Units.weightUnit + " × " } ?? ""
+        return weight + (carry?.reps ?? set.plannedReps ?? "")
     }
 
     // MARK: The end
@@ -804,10 +859,14 @@ struct TrainingModeView: View {
         exercise.sets.first { !$0.done }
     }
 
-    private func prefill(_ set: GymSet?) {
+    /// The fields of the set at hand: the weight and reps the set before was
+    /// done with, else the planned weight and empty reps (the plan's "5–8"
+    /// shows in the field until a number is typed).
+    private func prefill(_ set: GymSet?, in exercise: GymExercise) {
         guard let set else { return }
-        kg = LiftWeight.shown(set.kg ?? set.plannedKg) ?? ""
-        reps = set.reps ?? set.plannedReps.map { String($0.prefix { $0.isNumber }) } ?? ""
+        let carry = GymSessionMath.carried(set, in: exercise)
+        kg = LiftWeight.shown(set.kg ?? carry?.kg ?? set.plannedKg) ?? ""
+        reps = set.reps ?? carry?.reps ?? ""
     }
 
     private func move(_ by: Int) {
@@ -845,7 +904,7 @@ struct TrainingModeView: View {
                   let set = list[at].sets.first(where: { $0.row == row && !$0.done }), !saving else { break }
             index = at
             restEnd = nil
-            prefill(set)
+            prefill(set, in: list[at])
             Task { await complete(set) }
         }
         syncActivity()
@@ -868,6 +927,17 @@ struct TrainingModeView: View {
                 if let minutes = day.loggedMinutes { totals = (minutes, nil, nil, nil, false, []) }
             }
             restoreMinimized()
+            // A workout under way (sets done, sets left), left or closed by iOS
+            // (an update): it goes on at once, without Začít trénink again, its
+            // clock and calories from where they were, one workout in Apple Health.
+            if !finishedSession, let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }), day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                startTapped = true
+                await live.continueWorkout(since: day.startedAt, weightKg: model.today?.weight?.latest)
+                syncActivity()
+            }
+            // The muscles of Celkem dnes now, not only from the exercise screen:
+            // back in a rest (the bar, the edge swipe) that screen isn't shown.
+            if let day { await loadMuscles(day) }
             history = await model.gymHistory()
             // The figure of Celkem dnes (MuscleProgressCard), kept on the phone after once.
             let api = model.api
@@ -877,11 +947,8 @@ struct TrainingModeView: View {
                 zoneLows = profile.hrZones.sorted { $0.zone < $1.zone }.map { $0.bpmLow ?? 0 }
             }
             // The clock, calories and heart rate (a workout recorded in Apple
-            // Health) start with the first ticked set; a workout already under
-            // way with sets left goes on. Only opening it records nothing.
-            if !finishedSession, let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }), day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
-                await live.begin(since: nil, weightKg: model.today?.weight?.latest)
-            }
+            // Health) start with Začít trénink or the first ticked set; only
+            // opening a workout not begun records nothing.
             // An empty workout: the exercise list for Přidat cvik.
             if day?.exercises.isEmpty ?? true, catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
         } catch {
@@ -966,10 +1033,14 @@ struct TrainingModeView: View {
     /// Live Activity go on, and the bar over the tab bar opens it again.
     private func minimize() {
         guard let day else { return }
-        model.minimizedGym = MinimizedGym(date: date, title: title(day), day: day, index: index, restStart: restStart,
-                                          restEnd: restEnd, restTotal: restTotal, next: current(day)?.name, startTapped: startTapped)
+        keepMinimized(day)
         minimizing = true
         dismiss()
+    }
+
+    private func keepMinimized(_ day: GymDay) {
+        model.minimizedGym = MinimizedGym(date: date, title: title(day), day: day, index: index, restStart: restStart,
+                                          restEnd: restEnd, restTotal: restTotal, next: current(day)?.name, startTapped: startTapped)
     }
 
     /// Back from the bar: the same exercise and rest, then the lock-screen
@@ -1151,7 +1222,11 @@ struct TrainingModeView: View {
         guard var next = day else { return }
         let k = LiftWeight.kgText(kg)
         let r = reps.trimmingCharacters(in: .whitespaces)
-        next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.plannedReps ?? "") : r, rpe: String(rpe))
+        // Nothing typed in reps: the plan's lower number ("5" of "5–8").
+        let planned: String = GymCoach.firstNumber(set.plannedReps).map { String($0) } ?? (set.plannedReps ?? "")
+        next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? planned : r, rpe: String(rpe))
+        // The start in the sheet: after iOS closes the app the clock goes on from it.
+        if next.startedAt == nil { next.markStarted(live.start ?? Date()) }
         day = next
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         // A set ticked in the table before "Začít trénink" starts the workout too.
@@ -1166,11 +1241,18 @@ struct TrainingModeView: View {
             // A superset: A1, B1, A2, B2…, the rest only after each round.
             index = turn.index
             rest = turn.rest == .none ? 0 : turn.rest == .round ? restSets : restExercises
-        } else if let exercise = next.exercises[safe: index], exercise.sets.allSatisfy(\.done), index < next.exercises.count - 1 {
-            index += 1
-            rest = restExercises
+        } else if let exercise = next.exercises[safe: index], exercise.sets.allSatisfy(\.done) {
+            // On to the next exercise with sets left, after the longer rest.
+            if let after = next.exercises.indices.first(where: { $0 > index && next.exercises[$0].sets.contains { !$0.done } }) {
+                index = after
+                rest = restExercises
+            } else {
+                // The last exercise is done: no rest, the workout is over.
+                rest = 0
+            }
         }
-        if next.exercises.contains(where: { $0.sets.contains { !$0.done } }), rest > 0 {
+        // A rest only before a set still to do on the screen it leads to.
+        if next.exercises[safe: index]?.sets.contains(where: { !$0.done }) == true, rest > 0 {
             restTotal = rest
             restStart = Date()
             restEnd = Date().addingTimeInterval(TimeInterval(rest))
