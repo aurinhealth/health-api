@@ -178,3 +178,11 @@ test('run 8 follow-up: today\'s VO2max after the sweet spot, the library for the
   const s24 = await run('S24', [w(1, 'endurance')]);
   assert.equal(s24.task, 'planning'); assert.deepEqual(names(s24), []);
 });
+
+test('run 9: "vrátil" after two weeks, tomorrow\'s card for S21, no ride card on a gym swap', () => {
+  const shift = d => new Date(Date.parse(date + 'T12:00:00Z') + d * 86400000).toISOString().slice(0, 10);
+  assert.ok(!failed('S17', { answer: 'Po zhruba dvou týdnech bez zaznamenané jízdy bych se nejdřív vrátil vytrvalostí.', kept: [] }).includes('quality:zmíní návrat po pauze'));
+  const at = (id, kept) => checkReply(scenarioById(id), { answer: 'Zítra 45 minut.', kept, proposed: kept }, now, date).filter(c => !c.ok).map(c => c.severity + ':' + c.name);
+  assert.ok(!at('S21', [{ type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance' }, { type: 'workout', sport: 'ride', date: shift(1), minutes: 45, kind: 'sweet_spot' }]).includes('quality:karta na zítřek, 35–55 min'));
+  assert.ok(at('S19', [{ type: 'gym_swap', toExercise: 'Goblet squat', kg: null }, { type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance' }]).includes('quality:bez karty kola nebo běhu u otázky na posilovnu'));
+});
