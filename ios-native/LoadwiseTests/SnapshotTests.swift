@@ -49,6 +49,16 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(DayTimelineRows.stats(today.plan[0].session).map(\.label), ["Vzdálenost", "Délka", "Energie"])
     }
 
+    /// A nap sits among what was done in the order of the day.
+    func testDayTimelineNap() {
+        var today = DemoData.today
+        today.naps = [TodaySnapshot.Nap(start: "14:05", end: "15:43", minutes: 92)]
+        let rows = DayTimelineRows.make(today, now: 17 * 60)
+        XCTAssertEqual(rows.map(\.id), ["sleep", "readiness", today.plan[0].id, "strain", "nap-14:05", "steps", "now", today.plan[1].id, today.plan[2].id])
+        today.naps = [TodaySnapshot.Nap(start: "06:00", end: "07:00", minutes: 60)]
+        XCTAssertEqual(DayTimelineRows.make(today, now: nil)[2].id, "nap-06:00")
+    }
+
     func testDayTimelineCard() throws {
         try render("today-den", height: 760) { DayTimeline(today: DemoData.today).padding(24).environment(AppModel(demo: true)) }
     }

@@ -7,7 +7,7 @@ import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { reconcileCancelledGymPlans } from './planned-events.js';
 import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck} from './activity-energy-check.js';
 import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
-import { sleepSessionFromRow } from "./sleep-sessions.js";
+import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
 import { d1WeightTrend } from "./strength-context.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
@@ -2547,7 +2547,7 @@ async function healthSleep(env, url) {
   });
   // Google can expose the same nightly session more than once through different
   // imported records. The dashboard should show one night, not duplicate rows.
-  const uniqueSessions = [];
+  let uniqueSessions = [];
   const seenSessions = new Set();
   for (const session of filteredSessions.sort((a,b)=>new Date(b.endTime||b.startTime||0)-new Date(a.endTime||a.startTime||0))) {
     const key = String(session.startTime||"")+"|"+String(session.endTime||"");
@@ -2555,6 +2555,8 @@ async function healthSleep(env, url) {
     seenSessions.add(key);
     uniqueSessions.push(session);
   }
+  // A night with a wake-up in the morning and more sleep after it is one night.
+  uniqueSessions = joinSplitNights(uniqueSessions).sort((a,b)=>new Date(b.endTime||b.startTime||0)-new Date(a.endTime||a.startTime||0));
 
   const totals = uniqueSessions.reduce((a,s)=>{
     a.durationMin += Number(s.durationMin||0);

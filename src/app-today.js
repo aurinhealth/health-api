@@ -121,6 +121,15 @@ export function readinessSummary(summary, readiness = {}, checkin = null, hasPla
   return { ...(summary || { text: null }), headline: sick || readiness?.zone === "red" ? L("Den na odpočinek", "A day to recover") : L("Dnes opatrně", "Take care today"), recommendation };
 }
 
+// Sleep that began on `date` other than the night, in the order of the day.
+export function napsOn(sessions, date, night) {
+  return (sessions || [])
+    .filter(s => s && s !== night && s.startTime && s.endTime && localDateTime(s.startTime).slice(0, 10) === date && num(s.durationMin) >= 10
+      && (!night?.endTime || Date.parse(s.startTime) >= Date.parse(night.endTime)))
+    .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))
+    .map(s => ({ start: clockOf(s.startTime), end: clockOf(s.endTime), minutes: Math.round(num(s.durationMin)) }));
+}
+
 export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
@@ -287,6 +296,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       start: clockOf(night.startTime),
       end: clockOf(night.endTime)
     } : null,
+    // The day's naps for Dnes → Den: each sleep that began today after the night.
+    naps: napsOn(sessions, date, night),
     strain: { score: strainNow, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: !daySession.length }), rest: !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || null } },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
     // Today's HRV shows even before its source has the 14 days a baseline needs.
