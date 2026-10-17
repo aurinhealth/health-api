@@ -34,6 +34,15 @@ struct TodaySnapshot: Decodable, Equatable {
     /// The week strip above Dnes: Monday to Sunday of the day's week, each
     /// day up to it with its readiness zone (src/app-today.js readinessWeek).
     var week: [WeekDay]? = nil
+    /// The day's naps for Dnes → Den, each from its start to its end
+    /// (src/app-today.js napsOn); nil from an older server.
+    var naps: [Nap]? = nil
+
+    struct Nap: Decodable, Equatable {
+        let start: String?
+        let end: String?
+        let minutes: Int
+    }
 
     struct WeekDay: Decodable, Equatable {
         let date: String

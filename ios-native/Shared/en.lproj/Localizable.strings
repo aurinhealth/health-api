@@ -2548,3 +2548,7 @@
 "Počítá se z tvých sérií v posilovně za posledních 7 dní a z běhu, kola a chůze, které zatěžují nohy." = "It comes from your gym sets of the last 7 days and from the runs, rides and walks that load your legs.";
 "rozjeté" = "started";
 "hotové" = "done";
+"Šlofík" = "Nap";
+"Usínáš obvykle mezi %@ a %@." = "You usually fall asleep between %@ and %@.";
+"V obvyklém čase" = "In your usual time";
+"Dřív nebo později než obvykle" = "Earlier or later than usual";

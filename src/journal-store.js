@@ -288,12 +288,16 @@ export async function autoDays(db, from, to) {
   // The nights: the main sleep that began on the evening of a date (or after
   // midnight), and naps by their own date.
   const starts = [];
+  const napRow = row => { try { return JSON.parse(row.payload_json || "{}").sleep?.metadata?.nap === true; } catch { return false; } };
   for (const r of nights) {
     let p = {};
     try { p = JSON.parse(r.payload_json || "{}"); } catch { p = {}; }
     const start = localDateTime(r.start_time), end = localDateTime(r.end_time);
     if (!start || !end) continue;
     const minutes = (Date.parse(r.end_time) - Date.parse(r.start_time)) / 60000;
+    // More sleep before noon at most 3 h after a night is the rest of it, not a nap (sleep-sessions.js joinSplitNights).
+    const rest = start.slice(11, 13) < "12" && nights.some(o => o !== r && !napRow(o) && Date.parse(o.end_time) <= Date.parse(r.start_time) && Date.parse(r.start_time) - Date.parse(o.end_time) <= 3 * 3600000);
+    if (rest) continue;
     if (p.sleep?.metadata?.nap === true || (minutes > 0 && minutes < 180 && start.slice(11, 13) >= "09" && start.slice(11, 13) < "20")) {
       const date = start.slice(0, 10);
       if (date >= from && date <= to) { set(date, "nap", true); (days[date].nap.minutes = Math.round(minutes)); }
