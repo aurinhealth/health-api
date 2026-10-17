@@ -931,6 +931,9 @@ struct TrainingModeView: View {
                 await live.continueWorkout(since: day.startedAt, weightKg: model.today?.weight?.latest)
                 syncActivity()
             }
+            // The muscles of Celkem dnes now, not only from the exercise screen:
+            // back in a rest (the bar, the edge swipe) that screen isn't shown.
+            if let day { await loadMuscles(day) }
             history = await model.gymHistory()
             // The figure of Celkem dnes (MuscleProgressCard), kept on the phone after once.
             let api = model.api
