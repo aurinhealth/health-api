@@ -134,9 +134,10 @@ struct TodayContent: View {
             .padding(.top, selectedDate == nil ? 12 : 28)
 
         // Cycle tracking under the numbers it explains: the morning question,
-        // the day's bleeding, or perimenopause and menopause symptoms.
-        if selectedDate == nil, let cycle = today.cycle, TodayCycleCard.shows(cycle) {
-            TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
+        // the day's bleeding, or perimenopause and menopause symptoms; on a
+        // past day what was logged that day, tap to change it.
+        if let cycle = today.cycle, TodayCycleCard.shows(cycle, past: selectedDate != nil) {
+            TodayCycleCard(cycle: cycle, date: today.date, past: selectedDate != nil).padding(.top, 12)
         }
         // Aktivita dne: the day's activity from anything (CoachPick.swift).
         if selectedDate == nil { CoachPickCard().padding(.top, 16) }
