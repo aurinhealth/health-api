@@ -118,3 +118,9 @@ test('recommending workouts: stacked hard days, a library VO2max on red, a break
   const s19 = await run('S19', [{ ...w(0, ''), type: 'gym_swap', sport: 'gym', minutes: 0, fromExercise: 'Pivot leg press', toExercise: 'Goblet squat' }]);
   assert.equal(s19.kept[0].type, 'gym_swap'); assert.ok(s19.kept[0].kg == null || s19.kept[0].kg <= 40); assert.equal(s19.passed, true);
 });
+
+test('run 7: the athlete own W/kg and a "tříhodinová jízda" are no failures', () => {
+  assert.deepEqual(failed('S06', { answer: 'Výsledky Tour de France ti neřeknu. Tvoje FTP 265 W při 76 kg je asi 3,5 W/kg.', kept: [] }), []);
+  assert.ok(failed('S06', { answer: 'Vyhrál to s 6,4 W/kg.', kept: [] }).includes('quality:krátce, bez vymyšlených čísel'));
+  assert.ok(!failed('S18', { answer: 'Zítra jen nohy, ale lehce kvůli pondělní tříhodinové jízdě.', kept: [] }).includes('quality:zmíní dlouhou jízdu pozítří'));
+});
