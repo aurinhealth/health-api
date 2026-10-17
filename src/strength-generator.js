@@ -388,6 +388,13 @@ function legProtection(context) {
   if (form != null ? form <= -25 : (num(context?.cycling?.recentRideTss) || 0) >= 1000) return { protect: true, reason: L("Jízdní únava je vysoká (forma TSB ", "Riding fatigue is high (TSB form ") + (form != null ? Math.round(form) : "—") + L("), nohy dnes šetřím.", "), so I'm sparing your legs today.") };
   return { protect: false, reason: "" };
 }
+// What the AI adjustment on the gym screen sees of the day: readiness, the
+// athlete's status and whether and why the legs are spared, with the other
+// sports' leg load (Revize 2026-10-16, nález 27).
+export function gymDayFacts(context) {
+  const r = context?.adaptive?.recovery, legs = legProtection(context), sport = sportMuscleLoad(context);
+  return { readiness: { zone: r?.zone || null, score: r?.score ?? null, flags: r?.flags || [] }, athleteStatus: context?.athleteState?.status || 'active', legs: { protect: legs.protect, reason: legs.reason || null, sportLoad: Object.fromEntries([...sport].filter(([m]) => LEG_MUSCLES.has(m)).map(([m, v]) => [m, Math.round(v * 100) / 100])) } };
+}
 function recentMuscleExposure(history, contextDate) {
   const exposure = new Map();
   for (const row of history || []) {
