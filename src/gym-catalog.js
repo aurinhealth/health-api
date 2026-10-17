@@ -1,5 +1,5 @@
 import {EXERCISES} from './strength-generator.js';
-import {EXERCISE_INTELLIGENCE,findExerciseAlternatives,estimateStartingLoad} from './strength-intelligence.js';
+import {EXERCISE_INTELLIGENCE,findExerciseAlternatives,estimateStartingLoad,resolveLoad} from './strength-intelligence.js';
 import {L} from './lang.js';
 import {normalizeExerciseName} from './strength-normalization.js';
 import {availableAt,hasKnownStations,stationLabel} from './gym-equipment.js';
@@ -131,7 +131,11 @@ export function gymExerciseCatalog(){
 export function gymLoadEstimate(exercise,history=[]){
   const name=normalizeExerciseName(exercise),def=EXERCISES[name];if(!def)return null;
   const estimate=estimateStartingLoad({exercise:name,history,targetReps:def.reps,fallbackKg:null});
-  return estimate.kg==null?null:{kg:estimate.kg,source:estimate.source,reference:estimate.referenceExercise||null};
+  if(estimate.kg==null)return null;
+  // From another exercise never more than twice the catalogue's start, as the
+  // generator (Revize 2026-10-16, nález 21: a 150 kg back squat gave a 135 kg pendulum squat).
+  const kg=estimate.source==='cross-exercise-estimate'&&def.baseKg>0?Math.min(estimate.kg,resolveLoad(name,def.baseKg*2)):estimate.kg;
+  return {kg,source:estimate.source,reference:estimate.referenceExercise||null};
 }
 // Exercises the athlete gave a thumbs down (taste.disliked) are offered only
 // when nothing else fits; liked ones come first among equally similar ones.

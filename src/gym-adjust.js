@@ -7,11 +7,13 @@ import { callOpenAI, lightModel } from './coach-assistant.js';
 import { gymExerciseCatalog, gymLoadEstimate } from './gym-catalog.js';
 import { GYM_PLAN_COLUMNS } from './gym-plan-store.js';
 import { estimateStrengthTiming } from './strength-timing.js';
-import { EXERCISE_INTELLIGENCE } from './strength-intelligence.js';
+import { EXERCISE_INTELLIGENCE, resolveLoad } from './strength-intelligence.js';
 import { adjustInstructions } from './private/gym-adjust.js';
 
 const MAX_ROWS = 80, MAX_EXERCISES = 14, MAX_SETS = 8;
-const kgText = v => v == null || v === '' || !Number.isFinite(Number(String(v).replace(',', '.'))) ? '' : String(Math.round(Number(String(v).replace(',', '.')) * 2) / 2).replace('.', ',');
+// A known exercise's weight goes to its equipment's step (a bar 17,5 kg, not
+// 17; dumbbells by 2,5 kg), any other to half a kilo (Revize 2026-10-16, nález 27).
+const kgText = (v, name = null) => { const x = Number(String(v ?? '').replace(',', '.')); return v == null || v === '' || !Number.isFinite(x) ? '' : String(name && EXERCISE_INTELLIGENCE[name] ? resolveLoad(name, x) : Math.round(x * 2) / 2).replace('.', ','); };
 
 // Plan rows as the client sends them, trimmed to known exercises and the
 // planning columns (a proposal has no results yet).
@@ -58,7 +60,7 @@ export function rowsFromModel(exercises, original, catalog) {
       const warm = s.type === 'WARMUP', failure = !warm && i === lastWork && work.some(r => /^(true|1)$/i.test(r[11]));
       const planned = (warm ? own.find(r => String(r[0]).toUpperCase() === 'WARMUP') : null) || first;
       // A note's "+2,5 kg" or "= last time" belongs to the old load: it goes when the AI changed the weight.
-      const kg = kgText(kgOf(s.kg)), note = warm ? '[WARMUP]' : first?.[9] != null && first[9] !== '' ? (kg !== first[3] ? withoutProgression(first[9]) : first[9]) : catalog.get(name)?.note || '';
+      const kg = kgText(kgOf(s.kg), name), note = warm ? '[WARMUP]' : first?.[9] != null && first[9] !== '' ? (kg !== first[3] ? withoutProgression(first[9]) : first[9]) : catalog.get(name)?.note || '';
       rows.push([warm ? 'WARMUP' : 'WORK', name, '', kg, repsOf(s.reps, String(planned?.[4] || '')).slice(0, 12), '', '', '', 'FALSE', note, '', failure ? 'TRUE' : 'FALSE', warm ? '' : first?.[12] || '']);
     });
   }
@@ -102,20 +104,21 @@ export function snapGymDumbbells(rows, weights) {
 // the exercise or a variant; a warm-up before them half and three quarters of it.
 export function fillGymLoads(rows, history = []) {
   const cache = new Map(), estimate = name => { if (!cache.has(name)) cache.set(name, gymLoadEstimate(name, history)); return cache.get(name); };
-  for (const r of rows) if (r[0] === 'WORK' && r[3] === '' && estimate(r[1])) r[3] = kgText(estimate(r[1]).kg);
+  for (const r of rows) if (r[0] === 'WORK' && r[3] === '' && estimate(r[1])) r[3] = kgText(estimate(r[1]).kg, r[1]);
   for (const name of new Set(rows.filter(r => r[0] === 'WARMUP' && r[3] === '').map(r => r[1]))) {
     const work = rows.find(r => r[1] === name && r[0] === 'WORK' && r[3] !== ''), warm = rows.filter(r => r[1] === name && r[0] === 'WARMUP');
-    if (work) warm.forEach((r, i) => { if (r[3] === '') r[3] = kgText(Number(work[3].replace(',', '.')) * (warm.length > 1 && i === warm.length - 1 ? .75 : .5)); });
+    if (work) warm.forEach((r, i) => { if (r[3] === '') r[3] = kgText(Number(work[3].replace(',', '.')) * (warm.length > 1 && i === warm.length - 1 ? .75 : .5), name); });
   }
   return rows;
 }
-export async function adjustGymPlan(env, { rows, request, history = [], taste = {}, ratings = [], equipment = null, dumbbells = null, minutes = null, ask = null }) {
+// day: today's readiness, the athlete's status and the legs' load (gymDayFacts), as the generator sees them (Revize 2026-10-16, nález 27).
+export async function adjustGymPlan(env, { rows, request, history = [], taste = {}, ratings = [], equipment = null, dumbbells = null, minutes = null, day = null, ask = null }) {
   // Only exercises the athlete's equipment allows (as "Přidat cvik" offers them); the plan's own stay.
   const inPlan = new Set(rows.map(r => r?.[1]).filter(Boolean));
   const items = gymExerciseCatalog().filter(e => inPlan.has(e.name) || !equipment || equipment(e.name)), catalog = new Map(items.map(e => [e.name, e]));
   const recent = {};
   for (const h of history) if (h?.exercise && !recent[h.exercise] && Number(h.actual_kg) > 0) recent[h.exercise] = { kg: Number(h.actual_kg), reps: Number(h.actual_reps) || null, date: String(h.workout_date || '').slice(0, 10) };
-  const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent, liked: taste.liked || [], disliked: taste.disliked || [], minutes: Number(minutes) > 0 ? Number(minutes) : null, ratings, ...(taste.memories?.length ? { preferenceMemory: taste.memories } : {}) });
+  const input = JSON.stringify({ request, plan: planForModel(rows), catalog: items.map(e => ({ name: e.name, muscle: e.muscle, reps: e.reps })), history: recent, liked: taste.liked || [], disliked: taste.disliked || [], minutes: Number(minutes) > 0 ? Number(minutes) : null, ratings, ...(day ? { readiness: day.readiness, athleteStatus: day.athleteStatus, legs: day.legs } : {}), ...(taste.memories?.length ? { preferenceMemory: taste.memories } : {}) });
   const params = { instructions: adjustInstructions() + MEMORY_RULE(), input, format: ADJUST_SCHEMA, maxOutputTokens: 4000, model: lightModel(env) };
   const r = ask ? await ask(env, { feature: "gym-adjust", ...params }) : await callOpenAI(env, { feature: "gym-adjust", ...params });
   const data = JSON.parse(r.text), out = fitGymMinutes(snapGymDumbbells(fillGymLoads(rowsFromModel(data.exercises, rows, catalog), history), dumbbells), minutes);

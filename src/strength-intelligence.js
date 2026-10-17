@@ -169,6 +169,11 @@ const UNIT_TRANSFER = {
 function transferFactor(from, to) {
   const a = EXERCISE_INTELLIGENCE[from], b = EXERCISE_INTELLIGENCE[to];
   if (!a || !b || !relatedExercises(from, to) || a.loadUnit === LOAD_UNITS.BODYWEIGHT || b.loadUnit === LOAD_UNITS.BODYWEIGHT) return null;
+  // A machine's number belongs to that machine: its lever, sled and
+  // counterweight differ from any other's (a 150 kg leg press is no 150 kg
+  // pendulum squat or 50 kg goblet squat), so it carries over to nothing else
+  // (Revize doporučování tréninků 2026-10-16, nález 21).
+  if (a.equipment === "machine") return null;
   if (a.loadUnit === b.loadUnit) return a.equipment === b.equipment && a.pattern === b.pattern ? 1 : 0.9;
   // Across load units only a listed variant (DB bench → barbell bench), not any
   // exercise of the muscle (a leg press is not a heavier squat).
@@ -300,6 +305,9 @@ export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, 
     const easy = maxRpe != null && maxRpe <= 6.5 && (!range || minReps >= range.max);
     kg = topKg + Math.max(step, stepDown(topKg * (easy ? 0.05 : 0.025), step));
   }
+  // Body weight alone progresses by reps, not by a 2,5 kg the athlete may not
+  // have; added weight (a belt) still steps up (Revize 2026-10-16, nález 25).
+  if (decision === "increase" && meta?.loadUnit === LOAD_UNITS.BODYWEIGHT && topKg === 0) { decision = "hold"; kg = 0; }
   // A poor recovery day keeps the load instead of adding to it.
   if (decision === "increase" && loadFactor < 0.9) { decision = "hold"; kg = topKg; }
   // After three weeks without the exercise, start a little lighter.
@@ -355,6 +363,8 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8�
     let kg = ref.kg * ref.factor;
     kg *= progressionMultiplier(ref.reps, normalizeRpe(ref.rpe), targetReps);
     kg *= recoveryMultiplier(loadFactor);
+    // Never far above the catalogue's start for an exercise not done yet.
+    if (fallbackKg != null && Number(fallbackKg) > 0) kg = Math.min(kg, Number(fallbackKg) * 2);
     const rounded = resolveLoad(exercise, kg);
     return { kg: rounded, source: "cross-exercise-estimate", confidence: clamp(0.55 + ref.similarity * 0.45, 0.55, 1), referenceExercise: ref.name, referenceKg: ref.kg, referenceRpe: ref.rpe, referenceReps: ref.reps, referenceDate: ref.date, similarity: ref.similarity, transferFactor: ref.factor };
   }
