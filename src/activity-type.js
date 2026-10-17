@@ -90,7 +90,7 @@ const TYPED = `CASE
   ELSE excluded.payload_json END`;
 const KCAL = "json_extract(health_datapoints.payload_json, '$.loadwiseKcal')";
 const DEVICE = "json_extract(health_datapoints.payload_json, '$.loadwiseKcalDevice')";
-export const KEEP_TYPE_SQL = `payload_json = CASE
+const KEEP_KCAL = `CASE
   WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json) AND ${KCAL} IS NOT NULL
   THEN CASE WHEN json_type(excluded.payload_json, '$.exercise.metricsSummary') = 'object'
     THEN json_set(${TYPED}, '$.loadwiseKcal', ${KCAL}, '$.loadwiseKcalDevice', ${DEVICE}, '$.exercise.metricsSummary.caloriesKcal', ${KCAL})
@@ -98,6 +98,12 @@ export const KEEP_TYPE_SQL = `payload_json = CASE
     THEN json_set(${TYPED}, '$.loadwiseKcal', ${KCAL}, '$.loadwiseKcalDevice', ${DEVICE}, '$.exercise.metricsSummary', json_object('caloriesKcal', ${KCAL}))
     ELSE json_replace(json_set(${TYPED}, '$.loadwiseKcal', ${KCAL}, '$.loadwiseKcalDevice', ${DEVICE}, '$.calories', ${KCAL}), '$.calories_kcal', ${KCAL}) END
   ELSE ${TYPED} END`;
+// Two records merged into one (workout-merge.js) stay merged too.
+const MERGE = "json_extract(health_datapoints.payload_json, '$.loadwiseMerge')";
+export const KEEP_TYPE_SQL = `payload_json = CASE
+  WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json) AND json_type(health_datapoints.payload_json, '$.loadwiseMerge') = 'object'
+  THEN json_set(${KEEP_KCAL}, '$.loadwiseMerge', json(${MERGE}))
+  ELSE ${KEEP_KCAL} END`;
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 

@@ -16,6 +16,7 @@ import { latestStoredWeight } from './athlete-weight.js';
 import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, skippedForPermission } from "./google-scopes.js";
 import { importGoogleFood } from "./google-food.js";
 import { pairSessions } from "./activity-match.js";
+import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
 import { afterGoogleSync } from "./apple-health.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
@@ -1362,6 +1363,14 @@ export async function matchActivities(env, { days = null } = {}) {
     wanted.set(copy, { role: "duplicate", matched: key(row) });
     wanted.set(row, { role: "primary", matched: watch });
   }
+  // Two watch records merged in the app (workout-merge.js): the one dropped
+  // stays a copy of the kept one, which pairs on like any other.
+  for (const [dropped, kept] of heldMerges(rows)) {
+    const copy = byKey.get(dropped);
+    if (!copy || held.has(copy) || !byKey.has(kept)) continue;
+    held.add(copy);
+    wanted.set(copy, { role: "duplicate", matched: kept });
+  }
   const pairs = pairSessions(rows.filter(row => !held.has(row)));
   for (const { keep, drop, inside } of pairs) {
     wanted.set(drop, { role: "duplicate", matched: key(keep) });
@@ -1624,9 +1633,11 @@ export function googleExerciseActivity(row) {
   };
   const type = typeMap[exerciseType] || exerciseType;
   const name = exercise.displayName || type;
-  const activeSeconds = String(exercise.activeDuration || "").match(/([0-9.]+)s/i);
+  // Merged with another device's record (workout-merge.js): the time chosen then.
+  const span = mergedSpan(payload);
+  const activeSeconds = span ? null : String(exercise.activeDuration || "").match(/([0-9.]+)s/i);
   const activeHours = activeSeconds ? Number(activeSeconds[1]) / 3600 : null;
-  const durationHours = activeHours || hoursBetween(row.start_time, row.end_time);
+  const durationHours = activeHours || hoursBetween(span?.start || row.start_time, span?.end || row.end_time);
   const averageHeartRate = googleExerciseHeartRate(metrics);
   // The dashboard reads the Intervals field name for every activity.
   if (averageHeartRate != null && payload.average_heartrate == null) payload.average_heartrate = averageHeartRate;
@@ -1638,11 +1649,13 @@ export function googleExerciseActivity(row) {
     averageHeartRate,
     type,
     calories: Number(metrics.caloriesKcal || 0),
-    start: row.start_time,
-    end: row.end_time,
+    start: span?.start || row.start_time,
+    end: span?.end || row.end_time,
     durationHours: durationHours || 0,
     pairedEventId: null,
     name,
+    // Who recorded it (Aurin, Apple Watch), for the row and the gym detail.
+    sources: sourcesOf(row, payload),
     payload
   };
 }

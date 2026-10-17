@@ -2554,6 +2554,11 @@
 "Usínáš obvykle mezi %@ a %@." = "You usually fall asleep between %@ and %@.";
 "V obvyklém čase" = "In your usual time";
 "Dřív nebo později než obvykle" = "Earlier or later than usual";
+"Sloučit" = "Merge";
+"Nechat oba" = "Keep both";
+"Sloučit tréninky" = "Merge workouts";
+"Kalorie a tep" = "Calories and heart rate";
+"tep a kalorie z %@" = "heart rate and calories from %@";
 "Začátečník" = "Beginner";
 "Mírně pokročilý" = "Intermediate";
 "Pokročilý" = "Advanced";

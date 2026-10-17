@@ -33,6 +33,8 @@ struct GymDoneDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
+            // Who recorded it, and after a merge whose heart rate and calories count.
+            if let line = SourceLine.gym(session) { line.padding(.top, 10) }
             stats.padding(.top, 18)
             if let session, session.kcal != nil, session.kcalEstimate?.value != nil {
                 KcalCheck(session: session, date: date)

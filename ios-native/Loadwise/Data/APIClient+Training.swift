@@ -72,6 +72,18 @@ extension APIClient {
         let _: JSONValue = try await send("/app/api/activity/kcal", method: "POST", body: ["id": JSONValue.string(id), "kcal": value])
     }
 
+    /// Two devices' records of one workout as one (src/workout-merge.js): the
+    /// record whose calories and heart rate stay, and the time ("both" or a record's id).
+    func mergeWorkouts(ids: [String], energy: String, span: String) async throws {
+        let _: JSONValue = try await send("/app/api/activity/merge", method: "POST",
+                                          body: ["ids": JSONValue.array(ids.map { .string($0) }), "energy": .string(energy), "span": .string(span)])
+    }
+
+    /// The two stay apart; the proposal does not come back.
+    func keepWorkoutsApart(ids: [String]) async throws {
+        let _: JSONValue = try await send("/app/api/activity/merge", method: "POST", body: ["ids": JSONValue.array(ids.map { .string($0) }), "separate": .bool(true)])
+    }
+
     // MARK: Exercises and the AI builder
 
     func gymExercises() async throws -> [GymCatalogExercise] {

@@ -26,7 +26,40 @@ struct CalendarDay: Decodable, Equatable, Identifiable {
     /// The day against the plan (src/app-training.js dayPlanState): "good",
     /// "off", "missed", "planned" or "offplan"; nil at rest or from an older server.
     var plan: String? = nil
+    /// Two devices recorded one workout: the proposal to merge them (src/workout-merge.js).
+    var merge: MergeProposal? = nil
     var id: String { date }
+}
+
+/// Two records of one workout (Aurin and the Apple Watch), with the times and
+/// whose calories and heart rate to keep; the server writes the texts.
+struct MergeProposal: Decodable, Equatable {
+    let ids: [String]
+    let title: String
+    let text: String
+    let note: String
+    let spans: [Span]
+    let energy: [Energy]
+
+    struct Span: Decodable, Equatable, Identifiable {
+        /// "both", or the id of the record whose own time it is.
+        let key: String
+        let start: String?
+        let end: String?
+        let minutes: Int?
+        let text: String
+        var id: String { key }
+    }
+
+    struct Energy: Decodable, Equatable, Identifiable {
+        /// The id of the record whose calories and heart rate stay.
+        let key: String
+        let name: String
+        let logo: String?
+        let kcal: Double?
+        let text: String
+        var id: String { key }
+    }
 }
 
 struct CalendarActivity: Decodable, Equatable, Identifiable {
@@ -55,6 +88,9 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
     var adherenceReason: String? = nil
     /// On a done session: the plan it fulfils.
     var plannedId: String? = nil
+    /// Who recorded it, and after a merge whose calories count (WeekSession.sources).
+    var sources: [ActivityDetail.Origin]? = nil
+    var mergeEnergy: String? = nil
 
     struct Summary: Decodable, Equatable {
         let source: String?
@@ -71,7 +107,8 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
         let rounded: Int? = minutes.map { Int($0.rounded()) }
         return WeekSession(id: id, kind: kind, status: status, date: date, time: time, title: title, sport: sport,
                            minutes: rounded, tss: nil, activityId: activityId, eventId: eventId, plannedId: plannedId,
-                           watch: watchRef, adherence: adherence, adherenceReason: adherenceReason)
+                           watch: watchRef, adherence: adherence, adherenceReason: adherenceReason,
+                           sources: sources, mergeEnergy: mergeEnergy)
     }
 
     /// A done session from the watch opens its own detail.

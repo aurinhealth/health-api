@@ -348,6 +348,9 @@ struct CalendarDayList: View {
     let day: CalendarDay?
     /// A watch session (no Intervals.icu detail) opened in its summary.
     @State private var watch: CalendarActivity?
+    /// Two records of one workout: the merge sheet, and the answer being sent.
+    @State private var merging: MergeProposal?
+    @State private var keepingApart = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -374,9 +377,32 @@ struct CalendarDayList: View {
                 Text(day == nil ? "Načítám…" : date > today ? "Nic v plánu." : "Volno, žádná aktivita.")
                     .font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 8)
             }
+            if let proposal = day?.merge, !model.demo {
+                MergeProposalCard(proposal: proposal, busy: keepingApart, merge: { merging = proposal }) {
+                    Task { await keepApart(proposal) }
+                }
+                .padding(.top, 6).padding(.bottom, 10)
+            }
         }
         .padding(.horizontal, 16)
         .sheet(item: $watch) { WatchActivityDetail(activity: $0) }
+        .sheet(item: Binding(get: { merging.map { Proposed(proposal: $0) } }, set: { merging = $0?.proposal })) {
+            MergeWorkoutsSheet(proposal: $0.proposal)
+        }
+    }
+
+    private struct Proposed: Identifiable {
+        let proposal: MergeProposal
+        var id: String { proposal.ids.joined(separator: "|") }
+    }
+
+    private func keepApart(_ proposal: MergeProposal) async {
+        keepingApart = true
+        defer { keepingApart = false }
+        do {
+            try await model.api.keepWorkoutsApart(ids: proposal.ids)
+            await model.refreshTraining()
+        } catch {}
     }
 
     /// The day's calories with the user's choices for flagged sessions.
@@ -419,6 +445,10 @@ struct CalendarActivityRow: View {
                 .accessibilityLabel(L10n.tr(state.title))
             VStack(alignment: .leading, spacing: 2) {
                 Text(activity.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
+                // Who recorded it: Aurin, the watch, Intervals.icu (both after a merge).
+                if activity.status == "done", let sources = activity.sources, !sources.isEmpty {
+                    SourceLine(sources: sources)
+                }
                 Text(Self.detail(activity)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 // Only a session done differently says why.
                 if state == .off, let reason = activity.adherenceReason, !reason.isEmpty {

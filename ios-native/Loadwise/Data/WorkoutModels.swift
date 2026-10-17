@@ -59,6 +59,10 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     var adherence: String? = nil
     /// With "off": why, in one line ("kratší než plán (1 h 30)").
     var adherenceReason: String? = nil
+    /// Who recorded a done session (Aurin, Apple Watch): two after merging
+    /// them (src/workout-merge.js), and whose calories and heart rate count.
+    var sources: [ActivityDetail.Origin]? = nil
+    var mergeEnergy: String? = nil
 }
 
 /// The answer to POST /app/api/planned/move (src/planned-events.js).
@@ -412,7 +416,7 @@ struct ActivityDetail: Decodable, Equatable {
     /// (src/activity-origin.js).
     var origin: Origin? = nil
 
-    struct Origin: Decodable, Equatable {
+    struct Origin: Decodable, Hashable {
         let name: String
         /// IntegrationIcon's id; nil: the name alone.
         let logo: String?

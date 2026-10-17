@@ -12,6 +12,8 @@ import { daySessions, dayPlanState } from "./app-training.js";
 import { localDate, localDateTime } from "./user-time.js";
 import { bilingual, L } from "./lang.js";
 import { groupOfType } from "./activity-type.js";
+import { mergeProposal, mergedSpan, sourcesOf } from "./workout-merge.js";
+import { intervalsOrigin } from "./activity-origin.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const round = (v, d = 0) => (v == null ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -53,6 +55,7 @@ function intervalsActivity(row) {
     kcal: round(num(p.calories_kcal ?? p.calories ?? p.icu_calories ?? row.value_numeric)) || null,
     activityId: /^[a-zA-Z0-9_-]{1,80}$/.test(id) && row.source_family === "intervals" ? id : null,
     eventId: null,
+    sources: [row.source_family === "local" ? { name: "Aurin", logo: "aurin" } : row.source_family === "wahoo" ? { name: "Wahoo", logo: "wahoo" } : intervalsOrigin(p)],
     // Typed in and paired with the watch's record: that record is its detail.
     ...(watchRef(p.pairedWith) ? { watch: watchRef(p.pairedWith) } : {}),
     // What the pairing with the plan reads (as index.js's daily activities).
@@ -76,9 +79,9 @@ function metric(metrics, match, skip = /zone|variab/i) {
 
 // What the app's detail of a watch session shows: Google gives a summary only
 // (no laps, no track), so the detail stays to these.
-function googleSummary(row, metrics) {
-  const local = sessionLocalStart(row) || "";
-  const endLocal = localDateTime(row.end_time) || "";
+function googleSummary(row, metrics, span = null) {
+  const local = (span ? localDateTime(span.start) : sessionLocalStart(row)) || "";
+  const endLocal = localDateTime(span?.end || row.end_time) || "";
   const avgHr = metric(metrics, k => /heart/i.test(k) && /avg|average/i.test(k));
   const maxHr = metric(metrics, k => /heart/i.test(k) && /max/i.test(k));
   const steps = metric(metrics, k => /steps/i.test(k));
@@ -99,10 +102,12 @@ function googleActivity(row) {
   const p = parse(row.payload_json), ex = p.exercise || {}, metrics = ex.metricsSummary || {};
   const type = GOOGLE_TYPES[String(ex.exerciseType || "")] || String(ex.exerciseType || "");
   const sport = sportOfActivity(type, ex.displayName);
-  const minutes = (seconds(ex.activeDuration) ?? 0) / 60 || minutesBetween(row.start_time, row.end_time);
+  // Merged with another device's record (workout-merge.js): the time chosen then.
+  const span = mergedSpan(p);
+  const minutes = span ? minutesBetween(span.start, span.end) : (seconds(ex.activeDuration) ?? 0) / 60 || minutesBetween(row.start_time, row.end_time);
   const mm = num(metrics.distanceMillimeters), m = num(metrics.distanceMeters);
   const meters = m ?? (mm != null ? mm / 1000 : null);
-  const local = sessionLocalStart(row) || "";
+  const local = (span ? localDateTime(span.start) : sessionLocalStart(row)) || "";
   return {
     row, id: String(row.external_id), sport, type: type || null, source: row.source_family, status: "done",
     title: String(ex.displayName || NAMES[sport]).slice(0, 120),
@@ -111,7 +116,9 @@ function googleActivity(row) {
     minutes: round(minutes), km: meters > 0 ? round(meters / 1000, 1) : null,
     kcal: round(num(metrics.caloriesKcal)) || null,
     activityId: null, eventId: null,
-    summary: googleSummary(row, metrics),
+    sources: sourcesOf(row, p),
+    ...(p.loadwiseMerge?.energy ? { mergeEnergy: String(p.loadwiseMerge.energy) } : {}),
+    summary: googleSummary(row, metrics, span),
     pair: { id: String(row.external_id), source: "google", type, name: ex.displayName || "", start: row.start_time, payload: p, durationHours: minutes > 0 ? minutes / 60 : null, tss: null, pairedEventId: null }
   };
 }
@@ -161,7 +168,7 @@ export function buildCalendar({ start, end, today, activities = [], google = [],
   const kept = [...done, ...watch].filter(a => !drop.has(a.row) && a.date);
   const plans = planned.map(plannedWorkout).filter(w => !w.weekly && w.date);
 
-  const days = new Map();
+  const days = new Map(), merges = new Map();
   for (let d = start; d <= end; d = shift(d, 1)) days.set(d, []);
   for (const [date, items] of days) {
     const dayDone = kept.filter(a => a.date === date), dayPlans = plans.filter(w => w.date === date);
@@ -193,6 +200,9 @@ export function buildCalendar({ start, end, today, activities = [], google = [],
       const { weekly, tss, pair, ...rest } = w;
       items.push({ ...rest, status: s.status });
     }
+    // Two devices recorded one workout: the proposal to merge them (workout-merge.js).
+    const proposal = mergeProposal(dayDone.filter(a => a.summary).map(a => a.row));
+    if (proposal) merges.set(date, proposal);
     // A gym plan saved in the app; its sets logged there make it done.
     const gymSession = byId.get("gym:" + date);
     if (gymSession && gymPlan) {
@@ -220,7 +230,8 @@ export function buildCalendar({ start, end, today, activities = [], google = [],
         // The day's colour (app-training.js dayPlanState): good, off, missed,
         // planned or offplan; null for a day without sessions.
         plan: dayPlanState(sorted),
-        activities: sorted
+        activities: sorted,
+        ...(merges.has(date) ? { merge: merges.get(date) } : {})
       };
     })
   };

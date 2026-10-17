@@ -340,7 +340,10 @@ function sessionOf(w, date, status) {
     ...(done && ["google-wearables", "apple-health"].includes(w.family) && w.id ? { watch: { source: w.family, id: String(w.id) } }
       : done && /^(google-wearables|apple-health):./.test(String(w.payload?.pairedWith || "")) ? { watch: { source: w.payload.pairedWith.slice(0, w.payload.pairedWith.indexOf(":")), id: w.payload.pairedWith.slice(w.payload.pairedWith.indexOf(":") + 1) } } : {}),
     ...(done ? energyOf(w) : {}),
-    ...(done ? distanceAndPower(w) : {})
+    ...(done ? distanceAndPower(w) : {}),
+    // Who recorded a watch workout (workout-merge.js sourcesOf): two after a merge.
+    ...(done && Array.isArray(w.sources) && w.sources.length ? { sources: w.sources } : {}),
+    ...(done && w.payload?.loadwiseMerge?.energy ? { mergeEnergy: String(w.payload.loadwiseMerge.energy) } : {})
   };
 }
 
