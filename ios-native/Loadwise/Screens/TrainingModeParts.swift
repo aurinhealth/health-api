@@ -473,3 +473,65 @@ struct MinimizedGymBar: View {
         return gym.next
     }
 }
+
+/// The sets of Teď or Další in the rest, unfolded with the arrow: the done
+/// ones ticked, the rest with the weight and reps to come. In Další the first
+/// set's weight can be changed and goes to all its sets still to do.
+struct RestSetsList: View {
+    let exercise: GymExercise
+    let last: GymHistory.Session?
+    var onWeight: ((String) -> Void)? = nil
+    @State private var typed = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let editable: Int? = onWeight == nil ? nil : exercise.sets.first { !$0.done && !$0.warmup }?.row
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("Série").frame(width: 40, alignment: .leading)
+                Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
+                Text(Units.weightUnit).frame(width: 64)
+                Text("Opak.").frame(width: 52)
+            }
+            .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
+            .padding(.top, 12).padding(.bottom, 4)
+            ForEach(exercise.sets) { s in
+                let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise)
+                let kg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg) ?? "–"
+                let reps: String = (s.done ? s.reps : carry?.reps ?? s.plannedReps)?.nilIfBlank ?? "–"
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                HStack(spacing: 8) {
+                    HStack(spacing: 4) {
+                        Text(s.warmup ? "W" : s.side == "P" ? "" : s.number)
+                        if let side = s.side { Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side)) }
+                        if s.done { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.green) }
+                    }
+                    .font(Typo.number(18)).foregroundStyle(s.done ? Palette.secondary : Palette.faint)
+                    .frame(width: 40, alignment: .leading)
+                    Text(GymSessionMath.lastTime(s, in: exercise, last: last) ?? "—").font(.footnote).foregroundStyle(Palette.faint)
+                        .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    if s.row == editable {
+                        TextField(kg, text: $typed)
+                            .keyboardType(.decimalPad).multilineTextAlignment(.center)
+                            .font(Typo.number(20)).foregroundStyle(Palette.ink)
+                            .focused($focused)
+                            .frame(width: 64, height: 32)
+                            .background(Palette.track, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(focused ? Palette.amber : .clear, lineWidth: 1.5))
+                            .onAppear { typed = kg == "–" ? "" : kg }
+                    } else {
+                        Text(kg).font(Typo.number(20)).foregroundStyle(s.done ? Palette.ink : Palette.faint).frame(width: 64)
+                    }
+                    Text(reps).font(Typo.number(20)).foregroundStyle(s.done ? Palette.ink : Palette.faint)
+                        .lineLimit(1).minimumScaleFactor(0.7).frame(width: 52)
+                }
+                .padding(.vertical, 7)
+            }
+        }
+        // Leaving the field: the weight goes to all the sets still to do.
+        .onChange(of: focused) { was, now in
+            guard was, !now, let onWeight, !typed.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+            onWeight(typed)
+        }
+    }
+}

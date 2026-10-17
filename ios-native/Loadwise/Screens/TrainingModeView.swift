@@ -54,6 +54,8 @@ struct TrainingModeView: View {
     @State private var startTapped = false
     /// Hidden with the arrow: the workout goes on, only the screen closes.
     @State private var minimizing = false
+    /// Teď ("now") or Další ("next") with its sets unfolded in the rest.
+    @State private var unfolded: Set<String> = []
     /// The warm-up's stretches ticked (StretchingCard): all of them done, the
     /// card makes way for the first exercise.
     @AppStorage("gym.stretching.done") private var stretchesDone = ""
@@ -120,6 +122,12 @@ struct TrainingModeView: View {
         }
         .onDisappear {
             UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false
+            // Left another way than the arrow (the edge swipe, a link) while the
+            // workout runs: it goes on hidden, as with the arrow.
+            if !minimizing, live.running, !finishedSession, let day, current(day) != nil {
+                keepMinimized(day)
+                minimizing = true
+            }
             if minimizing {
                 // The rest alarm and the Live Activity stay; their taps wait in the bar.
                 let model = model
@@ -410,30 +418,34 @@ struct TrainingModeView: View {
         // In a superset the partner comes next (A1, B1, A2…).
         let partner = Self.supersetPartner(day.exercises, of: index)
         if let target = partner ?? (day.exercises.indices.contains(index + 1) ? index + 1 : nil), let next = day.exercises[safe: target] {
-            HStack(spacing: 8) {
-                Button { move(target - index) } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Palette.secondary)
-                            .frame(width: 34, height: 34).background(Palette.track, in: Circle())
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
-                            Text(nextLine(next))
-                                .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Button { move(target - index) } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Palette.secondary)
+                                .frame(width: 34, height: 34).background(Palette.track, in: Circle())
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)
+                                Text(next.name)
+                                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                                Text(nextLoad(next)).font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
+                            }
+                            Spacer(minLength: 4)
                         }
-                        Spacer(minLength: 4)
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    SmallInfoButton { technique = next.name }
+                    foldButton("next")
                 }
-                .buttonStyle(.plain)
-                SmallInfoButton { technique = next.name }
-                Button { move(target - index) } label: {
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
-                        .frame(width: 20, height: 34).contentShape(Rectangle())
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                if unfolded.contains("next") {
+                    RestSetsList(exercise: next, last: history.last(next.name, before: date)) { typed in
+                        Task { await setWeight(LiftWeight.kgText(typed), of: next) }
+                    }
+                    .padding(.horizontal, 16).padding(.bottom, 10)
                 }
-                .buttonStyle(.plain)
-                .accessibilityHidden(true)
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         } else if index > 0 {
             Button { move(-1) } label: {
@@ -443,9 +455,39 @@ struct TrainingModeView: View {
         }
     }
 
-    private func nextLine(_ next: GymExercise) -> String {
-        let reps: String? = next.sets.first { !$0.warmup }?.plannedReps?.nilIfBlank
-        return next.name + " · " + PlanEditorSheet.summary(sets: next.workCount, reps: reps, done: 0)
+    /// "15 kg × 5–8 · 3 série": the first set still to do and the sets left.
+    private func nextLoad(_ next: GymExercise) -> String {
+        let left: Int = next.workCount - next.doneCount
+        let count: String = L10n.f("%@ %@", String(left), Fmt.plural(left, "série", "série", "sérií"))
+        guard let set = next.sets.first(where: { !$0.done && !$0.warmup }) else { return count }
+        return GymLiveActivity.load(set, in: next) + " · " + count
+    }
+
+    /// The arrow that unfolds the sets of Teď or Další.
+    private func foldButton(_ key: String) -> some View {
+        Button {
+            withAnimation(.snappy) { if unfolded.contains(key) { unfolded.remove(key) } else { unfolded.insert(key) } }
+        } label: {
+            Image(systemName: unfolded.contains(key) ? "chevron.up" : "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
+                .frame(width: 28, height: 34).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr(unfolded.contains(key) ? "Skrýt série" : "Ukázat série"))
+    }
+
+    /// A weight typed under Další: all its sets still to do take it.
+    private func setWeight(_ kg: String, of exercise: GymExercise) async {
+        guard !kg.isEmpty, var next = day else { return }
+        for set in exercise.sets where !set.done && !set.warmup { next.set(row: set.row, column: 3, kg) }
+        guard next != day else { return }
+        day = next
+        guard !model.demo else { return }
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
+        }
     }
 
     // MARK: The rest
@@ -473,10 +515,12 @@ struct TrainingModeView: View {
                         Text(plannedLine(set, in: exercise))
                             .font(Typo.number(22)).foregroundStyle(Palette.ink).lineLimit(1)
                         SmallInfoButton { technique = exercise.name }.padding(.leading, 4)
+                        foldButton("now")
                     }
                     if let previous = GymSessionMath.lastTime(set, in: exercise, last: last) {
                         Text(L10n.f("Minule %@", previous)).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
+                    if unfolded.contains("now") { RestSetsList(exercise: exercise, last: last) }
                 }
                 .padding(16)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -879,6 +923,13 @@ struct TrainingModeView: View {
                 if let minutes = day.loggedMinutes { totals = (minutes, nil, nil, nil, false, []) }
             }
             restoreMinimized()
+            // A workout under way (sets done, sets left), left or closed by iOS:
+            // it goes on at once, without Začít trénink again.
+            if !finishedSession, let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }), day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                startTapped = true
+                await live.begin(since: nil, weightKg: model.today?.weight?.latest)
+                syncActivity()
+            }
             history = await model.gymHistory()
             // The figure of Celkem dnes (MuscleProgressCard), kept on the phone after once.
             let api = model.api
@@ -888,11 +939,8 @@ struct TrainingModeView: View {
                 zoneLows = profile.hrZones.sorted { $0.zone < $1.zone }.map { $0.bpmLow ?? 0 }
             }
             // The clock, calories and heart rate (a workout recorded in Apple
-            // Health) start with the first ticked set; a workout already under
-            // way with sets left goes on. Only opening it records nothing.
-            if !finishedSession, let day, day.exercises.contains(where: { $0.sets.contains { !$0.done } }), day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
-                await live.begin(since: nil, weightKg: model.today?.weight?.latest)
-            }
+            // Health) start with Začít trénink or the first ticked set; only
+            // opening a workout not begun records nothing.
             // An empty workout: the exercise list for Přidat cvik.
             if day?.exercises.isEmpty ?? true, catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
         } catch {
@@ -977,10 +1025,14 @@ struct TrainingModeView: View {
     /// Live Activity go on, and the bar over the tab bar opens it again.
     private func minimize() {
         guard let day else { return }
-        model.minimizedGym = MinimizedGym(date: date, title: title(day), day: day, index: index, restStart: restStart,
-                                          restEnd: restEnd, restTotal: restTotal, next: current(day)?.name, startTapped: startTapped)
+        keepMinimized(day)
         minimizing = true
         dismiss()
+    }
+
+    private func keepMinimized(_ day: GymDay) {
+        model.minimizedGym = MinimizedGym(date: date, title: title(day), day: day, index: index, restStart: restStart,
+                                          restEnd: restEnd, restTotal: restTotal, next: current(day)?.name, startTapped: startTapped)
     }
 
     /// Back from the bar: the same exercise and rest, then the lock-screen
