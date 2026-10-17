@@ -218,8 +218,19 @@ export const COACH_EVAL_SCENARIOS = [
         quality('zmíní regeneraci po závodě', says(r, /regenera|zotav|závod/i))]; } },
   { id: 'S24', title: 'Jak jezdit zbytek týdne', message: 'Jak mám jezdit zbytek týdne?',
     checks: r => [safety('tvrdé dny 48 h od sebe, nejvýš 2 za 7 dní', !stackedHardDays(r, hardCards(r)).length, stackedHardDays(r, hardCards(r)).join(', ')),
-      quality('dotaz jde na plný model (plánování)', r.task === 'planning', r.task), quality('rozvrhne dny do neděle', says(r, /pondělí|úterý|střed|čtvrt|pátek|sobot|neděl|zítra/i))] }
+      quality('dotaz jde na plný model (plánování)', r.task === 'planning', r.task), quality('rozvrhne dny do neděle', says(r, /pondělí|úterý|střed|čtvrt|pátek|sobot|neděl|zítra/i))] },
+  // Quick questions about the athlete's own numbers: the app answers them with
+  // the light model (Luna, coach-assistant.js lightModel), from the same data.
+  { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
+    checks: r => [...luna(r), quality('řekne FTP 265 W', says(r, /265\s*W/i))] },
+  { id: 'L02', title: 'Luna: co mám dnes v plánu', message: 'Co mám dnes v plánu?',
+    checks: r => [safety('žádná tvrdá karta dnes', !hardCards(r).some(a => a.date === r.date)), ...luna(r),
+      quality('řekne dnešní VO2max 5×4', says(r, /VO2|VO₂/i) && says(r, /5\s*[x×]\s*4/i))] },
+  { id: 'L03', title: 'Luna: jak dlouho jsem spal', message: 'Jak dlouho jsem včera spal?',
+    checks: r => [...luna(r), quality('řekne 7 h 25 min', says(r, /7\s*h(?:od\p{L}*)?\s*25|7:25|445\s*min/iu))] }
 ];
+// The light model answers, as a quick question, without a card nobody asked for.
+const luna = r => [quality('odpovídá lehký model (Luna)', /luna/i.test(r.model || ''), r.model || ''), quality('dotaz jde jako rychlá otázka', r.task === 'quick', r.task), noUnaskedCard(r)];
 
 // What every answer has to keep: the language, no field names of the data, no app line, a sensible length.
 function commonChecks(r, scenario) {
@@ -263,7 +274,7 @@ export function scenarioContext(scenario, date = localToday(), now = localNow())
 }
 
 export function checkReply(scenario, reply, now = null, date = localToday()) {
-  const r = { answer: String(reply.answer || ''), kept: reply.kept || [], proposed: reply.proposed || [], task: reply.task || assistantTask(scenario.message, { view: 'today' }), now, date };
+  const r = { answer: String(reply.answer || ''), kept: reply.kept || [], proposed: reply.proposed || [], task: reply.task || assistantTask(scenario.message, { view: 'today' }), model: reply.model || null, now, date };
   return [...(scenario.checks ? scenario.checks(r) : []), ...commonChecks(r, scenario)];
 }
 
@@ -290,7 +301,7 @@ export async function runScenario(env, scenario, { ask = askCoach, date = localT
   if (reply.status !== 'ok') return { id: scenario.id, title: scenario.title, status: reply.status, message: reply.message };
   ctx.userMessage = scenario.message;
   const keptActions = validateCoachActions(reply.actions, ctx, date, { userInitiated: true }).map(a => { const card = cardKind(athlete, a, ctx.workoutLibraryRecommendations || []); return card ? { ...a, card } : a; });
-  const checks = checkReply(scenario, { answer: reply.answer, kept: keptActions, proposed: reply.actions || [], task }, now, date);
+  const checks = checkReply(scenario, { answer: reply.answer, kept: keptActions, proposed: reply.actions || [], task, model: reply.model }, now, date);
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), message: scenario.message, task, model: reply.model, ms: Date.now() - started,
     usage: { input: reply.usage?.input_tokens ?? null, output: reply.usage?.output_tokens ?? null }, answer: reply.answer, visuals: reply.visuals, proposed: reply.actions, kept: keptActions, checks,
     passed: checks.every(c => c.ok || c.severity !== 'safety') };
