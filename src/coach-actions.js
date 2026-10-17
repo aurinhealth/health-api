@@ -84,7 +84,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
   return (Array.isArray(actions)?actions:[]).slice(0,3).flatMap(a=>{
     const reason=String(a.reason||'').trim().slice(0,500);if(!reason)return [];
     if(a.type==='gym_swap'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&context.gymPlan?.values?.length){
-      try{const swap=prepareGymSwap(context.gymPlan,a.fromExercise,a.toExercise,reason);return swap.date===a.date?[swap]:[];}catch{return [];}
+      try{const swap=prepareGymSwap(context.gymPlan,a.fromExercise,a.toExercise,reason,context.preferenceMemory);return swap.date===a.date?[swap]:[];}catch{return [];}
     }
     // Calories of a done activity it was shown, set in Aurin only (activity-edits.js).
     if(a.type==='activity_kcal'){

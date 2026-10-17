@@ -5,7 +5,7 @@ import { isIntensity } from "../src/strength-context.js";
 import { normalizeExerciseName } from "../src/strength-normalization.js";
 import { parseStrengthPlan } from "../src/strength-history.js";
 import { estimateStartingLoad } from "../src/strength-intelligence.js";
-import { FOCUS_GROUPS, generateStrengthPlan, validateFocusMuscles } from "../src/strength-generator.js";
+import { FOCUS_GROUPS, generateStrengthPlan, validateFocusMuscles, painfulExercises } from "../src/strength-generator.js";
 
 test('focused gym validates the selected groups', () => {
   assert.deepEqual(validateFocusMuscles(['chest', 'upper_back']), ['chest', 'upper_back']);
@@ -481,4 +481,20 @@ test("a variant of a lifted exercise gets a load, an unrelated new one does not"
   // A leg press is not a heavier squat, and a never-trained muscle has nothing to go by.
   assert.equal(gymLoadEstimate("Pivot leg press", history), null);
   assert.equal(gymLoadEstimate("Hip thrust", history), null);
+});
+
+test('a pain the coach remembers leaves out the exercises that load it (Revize 2026-10-16, nález 24)', () => {
+  const ctx=memories=>({date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]},athleteState:{status:'active',memories}});
+  const names=plan=>[...new Set(plan.rows.filter(r=>r[0]==='WORK').map(r=>r[1]))];
+  const knee=names(generateStrengthPlan(ctx(['Koleno bolí při dřepech']),{focus:'lower',durationMinutes:75}));
+  assert.ok(knee.length,'some lower-body work stays');
+  assert.ok(!knee.some(n=>/squat|lunge|leg press|step-up|leg extension/i.test(n)),knee.join(', '));
+  const back=generateStrengthPlan(ctx(['Lower back pain after deadlifts']),{focus:'lower',durationMinutes:75});
+  assert.ok(!names(back).some(n=>/deadlift|good morning/i.test(n)),names(back).join(', '));
+  assert.match(back.rationale,/bolest|pain/);
+  const shoulder=names(generateStrengthPlan(ctx(['Bolí mě pravé rameno']),{focus:'upper',durationMinutes:75}));
+  assert.ok(!shoulder.some(n=>/press|dip/i.test(n)&&!/pallof/i.test(n)),shoulder.join(', '));
+  // "Už nebolí" and a memory with no pain change nothing.
+  assert.equal(painfulExercises(['Koleno už nebolí','Rád dřepuji']).avoid.size,0);
+  assert.ok(painfulExercises(['knee hurts']).avoid.has('Barbell back squat'));
 });
