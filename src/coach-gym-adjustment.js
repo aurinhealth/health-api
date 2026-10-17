@@ -1,7 +1,7 @@
 import { L } from './lang.js';
 import { parseStrengthPlan } from './strength-history.js';
-import { EXERCISES, fitsEquipment } from './strength-generator.js';
-import { findExerciseAlternatives } from './strength-intelligence.js';
+import { EXERCISES, fitsEquipment, painfulExercises } from './strength-generator.js';
+import { findExerciseAlternatives, resolveLoad } from './strength-intelligence.js';
 import { gymLoadEstimate } from './gym-catalog.js';
 import { availableAt } from './gym-equipment.js';
 
@@ -9,28 +9,32 @@ import { availableAt } from './gym-equipment.js';
 // default gym's only when it is unknown.
 const fits=(name,gym)=>gym?.equipment?fitsEquipment(name,gym.equipment):availableAt(name);
 
-export function todayGymContext(gym,date){
+export function todayGymContext(gym,date,memories=[]){
+  const painful=painfulExercises(memories).avoid;
   if(!gym?.values?.length)return null;
   const parsed=parseStrengthPlan(gym.values);
   if(parsed.date!==date)return null;
   const work=parsed.rows.filter(r=>r.type==='WORK'),names=[...new Set(work.map(r=>r.exercise))];
   return {date,exercises:names.map(name=>({name,muscle:EXERCISES[name]?.muscle,pattern:EXERCISES[name]?.pattern,
     sets:work.filter(r=>r.exercise===name).map(r=>({set:r.setNo,kg:r.plannedKg,reps:r.plannedReps,completed:r.completed,actualKg:r.actualKg,actualReps:r.actualReps,rpe:r.rpe,toFailure:r.toFailure,superset:r.superset})),
-    alternatives:findExerciseAlternatives(name).filter(a=>EXERCISES[a.name]&&fits(a.name,gym)&&!names.includes(a.name)).slice(0,4).map(a=>({name:a.name,muscle:a.muscle,pattern:a.pattern,reps:EXERCISES[a.name].reps}))}))};
+    alternatives:findExerciseAlternatives(name).filter(a=>EXERCISES[a.name]&&fits(a.name,gym)&&!painful.has(a.name)&&!names.includes(a.name)).slice(0,4).map(a=>({name:a.name,muscle:a.muscle,pattern:a.pattern,reps:EXERCISES[a.name].reps}))}))};
 }
 
-export function prepareGymSwap(gym,fromExercise,toExercise,reason){
+// A replacement loading a part the coach remembers as painful is refused (Revize 2026-10-16, nález 24).
+export function prepareGymSwap(gym,fromExercise,toExercise,reason,memories=[]){
   const parsed=parseStrengthPlan(gym.values),source=parsed.rows.filter(r=>r.exercise===fromExercise),def=EXERCISES[toExercise];
   if(!source.length||!def||!fits(toExercise,gym)||fromExercise===toExercise)throw new Error(L('Cvik není v aktuálním plánu nebo katalogu.', 'The exercise isn\'t in the current plan or catalog.'));
   if(def.muscle!==EXERCISES[fromExercise]?.muscle)throw new Error(L('Náhrada musí zachovat cílovou partii.', 'The replacement must keep the target muscle group.'));
   if(parsed.rows.some(r=>r.exercise===toExercise))throw new Error(L('Náhradní cvik už v plánu je.', 'The replacement exercise is already in the plan.'));
+  if(painfulExercises(memories).avoid.has(toExercise))throw new Error(L('Náhrada zatěžuje partii, která tě podle paměti trenéra bolí.', 'The replacement loads a body part that hurts, as the coach remembers.'));
   if(source.some(r=>r.completed||r.actualKg!=null||r.actualReps!=null||r.rpe!=null))throw new Error(L('Rozcvičený nebo rozepsaný cvik nelze nahradit.', 'An exercise that\'s warmed up or partly logged can\'t be replaced.'));
   const work=source.filter(r=>r.type==='WORK');if(!work.length)throw new Error(L('Cvik nemá pracovní série.', 'The exercise has no work sets.'));
   // The generator's estimate: own history, a similar exercise, or the catalogue's start.
   const estimate=gymLoadEstimate(toExercise,gym.history||[])||{kg:null};
   const kg=estimate.kg??'',video='https://www.youtube.com/results?search_query='+encodeURIComponent(toExercise+' exercise technique');
   const rows=[];
-  if(def.warmup){for(const [i,factor,reps] of [[1,.4,'8'],[2,.65,'5'],[3,.8,'3']])rows.push(['WARMUP',toExercise,String(i),kg===''?'':String(Math.round(kg*factor*2)/2),reps,'','','','FALSE','[WARMUP]',video,'FALSE','']);}
+  // Warm-ups at the equipment's step (a bar 17,5 kg, not 17; Revize 2026-10-16, nález 28).
+  if(def.warmup){for(const [i,factor,reps] of [[1,.4,'8'],[2,.65,'5'],[3,.8,'3']])rows.push(['WARMUP',toExercise,String(i),kg===''?'':String(resolveLoad(toExercise,kg*factor)),reps,'','','','FALSE','[WARMUP]',video,'FALSE','']);}
   for(const [i,set] of work.entries())rows.push(['WORK',toExercise,String(i+1),String(kg),def.reps,'','','','FALSE',set.note,video,set.toFailure?'TRUE':'FALSE',set.superset]);
   return {type:'gym_swap',date:parsed.date,fromExercise,toExercise,reason,sets:work.length,reps:def.reps,kg:estimate.kg,
     sourceSnapshot:source.map(r=>gym.values[r.planRow-1]),replacementRows:rows};

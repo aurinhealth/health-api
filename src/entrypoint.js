@@ -1559,7 +1559,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
             if(!fresh?.workout?.id||fresh.replaced||base(fresh.workout.id)!==base(preview.workout.id))throw new Error(L('Od návrhu se změnila tvoje připravenost nebo zátěž a tenhle trénink by dnes kouč nenavrhl. Požádej o nový návrh.', 'Your readiness or load has changed since the proposal and the coach wouldn\'t propose this workout now. Ask for a new proposal.'));
             preview=fresh;
           }
-          if(a.sport==='gym'){
+          if(a.sport==='gym'&&a.trim){
+            assertTrainingAllowed(await getAthleteState(env.DB));
+            const saved=await env.DB.prepare('UPDATE gym_plans SET values_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND workout_date=? AND values_json=?').bind(JSON.stringify(a.trim.values),env.USER_ID,a.date,JSON.stringify(a.trim.source)).run();
+            if(saved.meta?.changes!==1)throw new Error(L('Plán se mezitím změnil. Požádej o nový návrh.', 'The plan has changed in the meantime. Ask for a new proposal.'));
+            result={status:'ok',date:a.date,values:a.trim.values,preview};
+          }else if(a.sport==='gym'){
             if(!preview.draftId)throw new Error(L('Gym plán se nepodařilo připravit. Požádej o nový návrh.', 'The gym plan couldn\'t be prepared. Ask for a new proposal.'));
             const confirmUrl=new URL('https://internal/app/api/gym/confirm'),saved=await handleDashboardApi(new Request(confirmUrl,{method:'POST',headers:{Origin:confirmUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({draftId:preview.draftId})}),env,ctx,confirmUrl,{signedIn:true});
             const savedBody=await saved.json().catch(()=>({}));if(!saved.ok)throw new Error(savedBody.message||L('Gym plán se nepodařilo uložit.', 'The gym plan couldn\'t be saved.'));
@@ -2176,10 +2181,15 @@ async function pickDetails(env,ctx,ranked,date,gymPlan){
   return out;
 }
 async function workoutPreview(env,ctx,a){
+  // The day's own plan shortened (coach-actions.js): its rows as they will be saved.
+  if(a.sport==='gym'&&a.trim){
+    const rows=a.trim.values.slice(a.trim.values.findIndex(r=>r?.[0]==='Typ'&&r?.[1]==='Cvik')+1).filter(r=>r?.[1]);
+    return {status:'ok',plan:{planName:a.workoutName,rationale:a.trim.removed.length?L('Vynechávám: ','Leaving out: ')+a.trim.removed.join(', '):null,rows},muscles:Object.fromEntries([...new Set(rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]))};
+  }
   const path=a.sport==='gym'?'/app/api/gym/generate':'/app/api/workouts/generate';
   // The library workout named in the answer, at the proposed length; without one
   // the kind the answer recommends, and only without that the coach picks.
-  const exact=a.workoutId&&a.sport!=='gym'?{workoutId:a.workoutId,resizeTo:a.minutes}:a.sport!=='gym'&&FOCUS_OF[a.kind]?{focus:FOCUS_OF[a.kind]}:{};
+  const exact=a.workoutId&&a.sport!=='gym'?{workoutId:a.workoutId,resizeTo:a.minutes}:a.sport!=='gym'&&FOCUS_OF[a.kind]?{focus:FOCUS_OF[a.kind]}:a.sport==='gym'&&a.gymFocus?{focus:a.gymFocus}:{};
   const internalUrl=new URL('https://internal'+path),response=await handleDashboardApi(new Request(internalUrl,{method:'POST',headers:{Origin:internalUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({date:a.date,sport:a.sport,durationMinutes:a.minutes,availabilityMinutes:a.minutes,environment:'auto',preview:true,userInitiated:true,...exact})}),env,ctx,internalUrl,{signedIn:true});
   const result=await response.json();if(!response.ok||result.status!=='ok')throw new Error(result.message||L('Trénink se nepodařilo připravit.', 'The workout couldn\'t be prepared.'));
   if(a.sport==='gym'&&result.plan?.rows)result.muscles=Object.fromEntries([...new Set(result.plan.rows.map(r=>r?.[1]).filter(Boolean))].map(name=>[name,exerciseMuscles(name)]));

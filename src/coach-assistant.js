@@ -245,7 +245,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     ...(performance?{performance}:{}),
     gym:strengthSets.map(r=>compactObject({date:r.workout_date,exercise:r.exercise,set:num(r.set_no),...strengthSet(r),toFailure:r.toFailure||null})),
     strengthProgress:strengthProgress(gym?.history,date),
-    todayGym:todayGymContext(gym,date),
+    todayGym:todayGymContext(gym,date,athleteState?.memories),
     strengthCoverage:strengthCoverage({date,strength:{recentCompletedSets:strengthSets}},EXERCISES),
     capabilities,
     // The athlete's own words after workouts and the coach's notes on them.

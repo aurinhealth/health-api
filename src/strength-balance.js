@@ -16,7 +16,9 @@ export function sportMuscleLoad(context){
     const minutes=Number(a.durationHours)*60||Number(a.durationMinutes)||Number(a.moving_time)/60||0;
     // Cycling is concentric work with little muscle damage; it counts at 70 %.
     const concentric=/ride|cycl|bike|kolo/.test(type)&&!/run|beh|hike|walk/.test(type)?.7:1;
-    const dose=Math.min(2,Math.max(Number(a.tss)/80||0,minutes/90))*(days<=1?1:.5)*concentric;
+    // A walk loads the legs far less than a run: 90 minutes is about a third of a dose (Revize 2026-10-16, nález 28).
+    const walking=/walk|chuz|prochaz/.test(type)&&!/run|beh|hike|ride|cycl|bike|kolo/.test(type)?.35:1;
+    const dose=Math.min(2,Math.max(Number(a.tss)/80||0,minutes/90))*(days<=1?1:.5)*concentric*walking;
     for(const muscle of muscles)load.set(muscle,Math.min(3,(load.get(muscle)||0)+dose));
   }
   return load;

@@ -53,3 +53,22 @@ test('after an AI change the old "+2,5 kg" goes, the session fits its minutes an
   await adjustGymPlan({}, { rows: original, request: 'víc zad', equipment: name => name === 'Low row', ask: async (_e, req) => { seen = JSON.parse(req.input); return { text: JSON.stringify({ answer: 'Přidal jsem low row.', exercises: [{ name: 'Low row', sets: [{ type: 'WORK', kg: 40, reps: '10' }] }] }) }; } });
   assert.deepEqual(seen.catalog.map(e => e.name).sort(), ['Lat pulldown', 'Low row']);
 });
+
+test('the AI adjustment sees readiness, status and legs, and its weights follow the equipment step (Revize 2026-10-16, nález 27)', async () => {
+  const { adjustGymPlan } = await import('../src/gym-adjust.js');
+  const { gymDayFacts } = await import('../src/strength-generator.js');
+  const context = { date: '2026-09-28', cycling: { recentActivities: [], nextRide: { start_date_local: '2026-09-29T08:00:00', name: 'VO2max 5x4', intensity: true, durationHours: 1.2 } }, adaptive: { recovery: { zone: 'amber', score: 62, flags: ['hrv_low'] } }, athleteState: { status: 'active' } };
+  const day = gymDayFacts(context);
+  assert.deepEqual(day.readiness, { zone: 'amber', score: 62, flags: ['hrv_low'] });
+  assert.equal(day.athleteStatus, 'active');
+  assert.equal(day.legs.protect, true);
+  assert.match(day.legs.reason, /VO2max/);
+  const original = [['WORK', 'Barbell back squat', '1', '60', '5', '', '', '', 'FALSE', '', '', 'FALSE', ''], ['WORK', 'DB curl', '1', '10', '10', '', '', '', 'FALSE', '', '', 'FALSE', '']];
+  let seen = null;
+  const { rows } = await adjustGymPlan({}, { rows: original, request: 'lehčeji', day, ask: async (_e, req) => { seen = JSON.parse(req.input); return { text: JSON.stringify({ answer: 'Ubral jsem.', exercises: [{ name: 'Barbell back squat', sets: [{ type: 'WARMUP', kg: 17, reps: '8' }, { type: 'WORK', kg: 51, reps: '5' }] }, { name: 'DB curl', sets: [{ type: 'WORK', kg: 11, reps: '10' }] }] }) }; } });
+  assert.deepEqual(seen.readiness.zone, 'amber');
+  assert.equal(seen.legs.protect, true);
+  assert.equal(seen.athleteStatus, 'active');
+  // A bar by 2,5 kg (17 → 17,5, 51 → 50), dumbbells by 2,5 kg (11 → 10).
+  assert.deepEqual(rows.map(r => [r[1], r[3]]), [['Barbell back squat', '17,5'], ['Barbell back squat', '50'], ['DB curl', '10']]);
+});
