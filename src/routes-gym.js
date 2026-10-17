@@ -43,13 +43,14 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   if(url.pathname==='/app/api/gym/preferences'){
     // The goal "auto" follows the main sport (profile, else the training history).
     const sport=async training=>{const { loadEffectiveProfile }=await import('./profile-suggestions.js');const profile=await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null);return profile?.mainSport&&profile.mainSport!=='auto'?profile.mainSport:training.history?.mainSport||'';};
-    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.history?.experience||'beginner',warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false,extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false})},{headers:{'Cache-Control':'no-store'}});
+    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.experienceBySport?.strength?.autoLevel||'beginner',experienceBySport:training.experienceBySport,warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false,extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false})},{headers:{'Cache-Control':'no-store'}});
     if(request.method==='GET')return reply(await trainingSetup(env.DB));
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       const body=await request.json().catch(()=>({})),input={};
       if(body.goal!=null)input.goal=String(body.goal);
       if(body.experience!=null)input.experience=String(body.experience);
+      if(body.experienceBySport&&typeof body.experienceBySport==='object')input.experienceBySport=Object.fromEntries(['strength','ride','run'].filter(k=>body.experienceBySport[k]!=null).map(k=>[k,String(body.experienceBySport[k])]));
       if(typeof body.stretching==='boolean')input.stretching=body.stretching;
       if(typeof body.warmup==='boolean')input.warmup=body.warmup;
       if(typeof body.warmupCardio==='boolean')input.warmupCardio=body.warmupCardio;

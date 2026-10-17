@@ -58,6 +58,8 @@ struct ProfileSettingsView: View {
                 SettingsField(title: "Výška", text: $height, unit: Units.lengthUnit, keyboard: Units.imperial ? .decimalPad : .numberPad)
             }
 
+            ExperienceGroup()
+
             if !email.isEmpty {
                 SettingsGroup {
                     Button {
