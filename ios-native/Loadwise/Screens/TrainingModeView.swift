@@ -92,6 +92,10 @@ struct TrainingModeView: View {
                                         }
                                     }
                                 }
+                                // Before Začít trénink: what comes at the end too.
+                                if !started, let stretching = day.stretching {
+                                    StretchingCard(stretching: stretching, date: date, compact: true).padding(.top, 10)
+                                }
                                 if let restEnd {
                                     rest(day, exercise, until: restEnd)
                                 } else {
