@@ -154,3 +154,10 @@ test("a machine's weight carries over to no other exercise, and an estimate stay
     assert.equal(e.kg,20,exercise);
   }
 });
+
+test("the chat's exercise swap keeps an estimate from another exercise near the catalogue",async()=>{
+  const {gymLoadEstimate}=await import("../src/gym-catalog.js");
+  const squat=[{exercise:"Barbell back squat",actual_kg:150,actual_reps:8,rpe:8,completed:1,workout_date:"2026-10-14",type:"WORK",set_no:1}];
+  assert.ok(gymLoadEstimate("Pendulum squat",squat).kg<=70);
+  assert.equal(gymLoadEstimate("Goblet squat",[{...squat[0],exercise:"Pivot leg press"}]),null);
+});
