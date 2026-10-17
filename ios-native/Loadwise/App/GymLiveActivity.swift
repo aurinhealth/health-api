@@ -58,14 +58,14 @@ enum GymLiveActivity {
         let exercise = list[index]
         guard let set = exercise.sets.first(where: { !$0.done }) else { return nil }
         let following = open.first { $0 > index } ?? open.first { $0 != index }
-        let then: String? = following.flatMap { i in list[i].sets.first { !$0.done }.map { list[i].name + " · " + load($0) } }
+        let then: String? = following.flatMap { i in list[i].sets.first { !$0.done }.map { list[i].name + " · " + load($0, in: list[i]) } }
         let resting = restEnd.map { $0 > now } ?? false
         let live = LiveWorkout.shared
         return .init(
             header: L10n.tr("Posilovna") + " · " + exercisesLine(index + 1, of: list.count),
             exercise: exercise.name,
             setLabel: set.warmup ? L10n.tr("rozcvička") : setLine(set, of: exercise.workCount),
-            load: load(set),
+            load: load(set, in: exercise),
             then: then,
             row: set.row,
             segments: list.map { e in e.sets.isEmpty ? 0 : Double(e.sets.filter(\.done).count) / Double(e.sets.count) },
@@ -76,10 +76,11 @@ enum GymLiveActivity {
             restEnd: resting ? restEnd : nil)
     }
 
-    /// "80 kg × 8".
-    static func load(_ set: GymSet) -> String {
-        let weight: String = LiftWeight.shown(set.plannedKg ?? set.kg).map { $0 + " " + Units.weightUnit + " × " } ?? ""
-        return weight + (set.plannedReps ?? set.reps ?? "")
+    /// "80 kg × 8": what the set before was done with, else the plan.
+    static func load(_ set: GymSet, in exercise: GymExercise) -> String {
+        let carry = GymSessionMath.carried(set, in: exercise)
+        let weight: String = LiftWeight.shown(carry?.kg ?? set.plannedKg ?? set.kg).map { $0 + " " + Units.weightUnit + " × " } ?? ""
+        return weight + (carry?.reps ?? set.plannedReps ?? set.reps ?? "")
     }
 
     /// "3 z 5 cviků", "exercise 3 of 5".

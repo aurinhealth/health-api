@@ -12,6 +12,14 @@ enum GymSessionMath {
         }
     }
 
+    /// The weight and reps of the work set done just before this one (on the
+    /// same side by sides): the next set starts from them, as typed. Warm-ups
+    /// keep their own plan.
+    static func carried(_ set: GymSet, in exercise: GymExercise) -> (kg: String?, reps: String?)? {
+        guard !set.warmup, let before = exercise.sets.last(where: { !$0.warmup && $0.done && $0.row < set.row && $0.side == set.side }) else { return nil }
+        return (before.kg?.nilIfBlank, before.reps?.nilIfBlank)
+    }
+
     /// "8,4" (tonnes) or "18,5" (thousands of pounds), with its unit.
     static func volumeText(_ kg: Double) -> (value: String, unit: String) {
         Units.imperial ? (Fmt.decimal(Units.weight(kg) / 1000), "k lb") : (Fmt.decimal(kg / 1000), "t")
@@ -72,7 +80,9 @@ enum GymSessionMath {
                 done[muscle, default: 0] += Double(exercise.doneCount)
             }
         }
-        let top = planned.sorted { $0.value > $1.value }.prefix(4)
+        // Ties by name: the dictionaries' order differs on every call, and the
+        // rest's timer redraws the card each second.
+        let top = planned.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.prefix(4)
         return top.map { (id: $0.key, done: Int(min(done[$0.key] ?? 0, $0.value)), planned: Int($0.value)) }
     }
 
@@ -107,6 +117,8 @@ struct GymSetRow: View {
     let state: Phase
     var kgText: Binding<String>? = nil
     var repsText: Binding<String>? = nil
+    /// The planned reps ("5–8") shown in the empty field of the set at hand.
+    var repsHint: String? = nil
     /// A ticked set's weight and reps changed afterwards (shown kg, reps).
     var onEdit: ((String, String) -> Void)? = nil
     var toggle: () -> Void = {}
@@ -129,7 +141,7 @@ struct GymSetRow: View {
             Text(lastTime ?? "—").font(.footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
             field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg)
-            field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps).frame(width: 52)
+            field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps, hint: repsHint).frame(width: 52)
             Button(action: toggle) {
                 Group {
                     if state == .done {
@@ -162,7 +174,7 @@ struct GymSetRow: View {
     }
 
     @ViewBuilder
-    private func field(_ value: String, _ binding: Binding<String>?, keyboard: UIKeyboardType, edit: Binding<String>, field: Field) -> some View {
+    private func field(_ value: String, _ binding: Binding<String>?, keyboard: UIKeyboardType, edit: Binding<String>, field: Field, hint: String? = nil) -> some View {
         if state == .done, onEdit != nil {
             // A ticked set stays editable: tap the number to fix it.
             TextField("–", text: edit)
@@ -174,7 +186,7 @@ struct GymSetRow: View {
                 .frame(width: 64, height: 34)
                 .background(focus == field ? Palette.card : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else if let binding, state == .current {
-            TextField("–", text: binding)
+            TextField("–", text: binding, prompt: Text(verbatim: hint?.nilIfBlank ?? "–").foregroundStyle(Palette.faint))
                 .keyboardType(keyboard)
                 .multilineTextAlignment(.center)
                 .font(Typo.number(22))
@@ -358,14 +370,18 @@ struct HeartSourceButton: View {
 
     var body: some View {
         let measuring = live.heartRate != nil || sensor.liveBpm != nil
+        // A paired sensor connected before Začít trénink counts too.
+        let on = measuring || sensor.connected
         Button(action: action) {
-            Image(systemName: measuring ? "heart.fill" : "heart.slash")
+            Image(systemName: on ? "heart.fill" : "heart.slash")
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(measuring ? Palette.rust : Palette.faint)
+                .foregroundStyle(on ? Palette.rust : Palette.faint)
                 .frame(width: 36, height: 36)
+                // The whole circle takes the tap, not only the heart's outline.
+                .contentShape(Circle())
                 .overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
                 .overlay(alignment: .topTrailing) {
-                    if measuring {
+                    if measuring || sensor.connected {
                         Circle().fill(Palette.green).frame(width: 9, height: 9)
                             .overlay(Circle().stroke(Palette.background, lineWidth: 2))
                             .offset(x: -1, y: 1)

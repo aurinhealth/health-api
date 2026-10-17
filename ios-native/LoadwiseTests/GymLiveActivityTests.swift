@@ -37,6 +37,20 @@ final class GymLiveActivityTests: XCTestCase {
         XCTAssertNil(over.restStart)
     }
 
+    func testTheNextSetTakesWhatTheSetBeforeWasDoneWith() throws {
+        var sheet = day()
+        let sets = sheet.exercises[0].sets
+        sheet.complete(row: sets[0].row, kg: "40", reps: "10", rpe: "")
+        // The first work set still shows its plan; the warm-up isn't carried.
+        XCTAssertEqual(try XCTUnwrap(GymLiveActivity.state(sheet, focus: nil, restStart: nil, restEnd: nil)).load, "85 kg × 6")
+        sheet.complete(row: sets[1].row, kg: "90", reps: "5", rpe: "8")
+        let state = try XCTUnwrap(GymLiveActivity.state(sheet, focus: nil, restStart: nil, restEnd: nil))
+        XCTAssertEqual(state.load, "90 kg × 5")
+        let next = try XCTUnwrap(sheet.exercises[0].sets.first { !$0.done })
+        XCTAssertEqual(GymSessionMath.carried(next, in: sheet.exercises[0])?.kg, "90")
+        XCTAssertNil(GymSessionMath.carried(sets[0], in: sheet.exercises[0]))
+    }
+
     func testFocusAndAllDone() throws {
         var sheet = day()
         let focused = try XCTUnwrap(GymLiveActivity.state(sheet, focus: 1, restStart: nil, restEnd: nil))
