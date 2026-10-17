@@ -52,7 +52,7 @@ export async function handleStrengthAutomation(request, env, ctx) {
     const internalRequest = new Request(new URL("/strength/generate-plan", request.url), {
       method: "POST",
       headers: { ...internalHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ date, preview: true, action: "generate" })
+      body: JSON.stringify({ date, preview: true, diagnostic: true, action: "generate" })
     });
     const response = await app.fetch(internalRequest, env, ctx);
     const result = await response.clone().json().catch(() => null);

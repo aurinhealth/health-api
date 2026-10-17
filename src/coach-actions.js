@@ -80,8 +80,15 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
   const events=new Map((context.week||[]).flatMap(d=>(d.planned||[]).map(a=>[String(a.id),{date:d.date,...a}])));
   // A planned session on the proposed day itself is the one it replaces (a
   // workout on a planned day passes only when the athlete asked for it).
-  const hard=(context.week||[]).flatMap(d=>[...(d.planned||[]).filter(isHardSession).map(()=>({date:d.date,planned:true})),...(d.completed||[]).filter(isHardSession).map(()=>({date:d.date}))]).filter(h=>validDay(h.date));
-  return (Array.isArray(actions)?actions:[]).slice(0,3).flatMap(a=>{
+  let hard=(context.week||[]).flatMap(d=>[...(d.planned||[]).filter(isHardSession).map(a=>({date:d.date,planned:true,id:String(a.id)})),...(d.completed||[]).filter(isHardSession).map(()=>({date:d.date}))]).filter(h=>validDay(h.date));
+  // A rest or move in the same answer takes its planned session away first, so
+  // "rest today, VO2max on Tuesday" counts without today's VO2max (Revize
+  // doporučování tréninků 2026-10-16, S15); the cards keep their order.
+  const list=(Array.isArray(actions)?actions:[]).slice(0,3),first=a=>['move','rest'].includes(a?.type)?0:1;
+  const out=new Array(list.length);
+  for(const i of [...list.keys()].sort((i,j)=>first(list[i])-first(list[j])||i-j))out[i]=check(list[i]);
+  return out.flat();
+  function check(a){
     const reason=String(a.reason||'').trim().slice(0,500);if(!reason)return [];
     if(a.type==='gym_swap'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&context.gymPlan?.values?.length){
       try{const swap=prepareGymSwap(context.gymPlan,a.fromExercise,a.toExercise,reason,context.preferenceMemory);return swap.date===a.date?[swap]:[];}catch{return [];}
@@ -127,6 +134,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       if(a.type==='move'&&(!validDay(a.date)||a.date<today))return [];
       const budget=context.availabilityByDate?.[a.date]?.minutes;
       if(!userInitiated&&a.type==='move'&&budget!=null&&Number(event.durationHours)*60>budget)return [];
+      hard=hard.flatMap(h=>h.id!==String(a.eventId)?[h]:a.type==='move'?[{...h,date:a.date}]:[]);
       return [{type:a.type,eventId:String(a.eventId),date:a.type==='move'?a.date:event.date,reason,eventSnapshot:{name:event.name,date:event.date,durationHours:event.durationHours}}];
     }
     if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:30)&&a.minutes<=360){
@@ -139,6 +147,8 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       if(intense&&a.date===today&&holdBackToday(context))return [];
       if(intense){if(hardDayConflict(a.date,hard.filter(h=>!(h.planned&&h.date===a.date)).map(h=>h.date)))return [];hard.push({date:a.date});}
       if(a.sport==='gym'){
+        // No gym today on a red morning or with signs of illness, not even shortened (S20).
+        if(a.date===today&&holdBackToday(context))return [];
         // A day that already has a gym plan gets that plan shortened, never a
         // second one (it could not be saved next to it).
         let planDate=null;try{planDate=context.gymPlan?.values?.length?parseStrengthPlan(context.gymPlan.values).date:null;}catch{}
@@ -152,5 +162,5 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       return [{type:'workout',date:a.date,sport:a.sport,minutes:a.minutes,reason,...kind,...(library&&a.sport!=='gym'?{workoutId:String(library.id),workoutName:library.name}:{})}];
     }
     return [];
-  });
+  }
 }
