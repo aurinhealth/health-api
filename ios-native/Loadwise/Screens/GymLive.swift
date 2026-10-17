@@ -32,8 +32,6 @@ struct LiveGymView: View {
     @State private var loaded = false
     @State private var error: String?
     @State private var saveTask: Task<Void, Never>?
-    /// The day as it was before this screen (Zahodit trénink puts it back).
-    @State private var original: GymDay?
     @State private var confirmClose = false
     @State private var discarded = false
     @AppStorage("restSets") private var restSets = 90
@@ -321,7 +319,6 @@ struct LiveGymView: View {
         loaded = true
         var sheet = GymDay(date: date, values: [], cancelled: nil)
         if !model.demo, let stored = try? await model.gymDay(date: date) { sheet = stored }
-        original = sheet
         sheet.ensureHeader(date: date)
         let fresh = sheet.startedAt == nil
         if fresh { sheet.markStarted(Date()) }
@@ -454,21 +451,22 @@ struct LiveGymView: View {
         }
     }
 
-    /// Zahodit trénink: the day goes back to how it was before this screen
-    /// (a day without a plan is left empty), the sets of today are not kept.
+    /// Zahodit trénink: the workout leaves the day with its plan, the sets of
+    /// today are not kept.
     private func discard() async {
         discarded = true
         saveTask?.cancel()
         restEnd = nil
         if !model.demo {
             do {
-                try await model.saveGym(original ?? GymDay(date: date, values: [], cancelled: nil), date: date)
+                try await model.api.discardGym(date: date)
             } catch {
                 discarded = false
                 self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
                 return
             }
             await model.refreshTraining()
+            await model.refresh()
         }
         dismiss()
     }

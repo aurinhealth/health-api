@@ -152,7 +152,7 @@ struct TrainingModeView: View {
         .confirmationDialog("Zahodit trénink?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
         } message: {
-            Text("Smažou se zapsané série i trénink uložený do Apple Zdraví.")
+            Text("Trénink zmizí z plánu dne, smažou se zapsané série i trénink uložený do Apple Zdraví.")
         }
         .sheet(isPresented: $picking) {
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? [])) { name in
@@ -1015,19 +1015,19 @@ struct TrainingModeView: View {
         }
     }
 
-    /// Zahodit trénink: the day goes back to how it was before this screen,
-    /// the clock stops without a workout in Apple Health (one saved by
-    /// Dokončit is deleted again), once "Zpět" had its 6 s.
+    /// Zahodit trénink: the workout leaves the day (its plan, the logged sets
+    /// and the Intervals.icu event), the clock stops without a workout in
+    /// Apple Health (one saved by Dokončit is deleted again), once "Zpět" had its 6 s.
     private func discard() async {
         restEnd = nil
         let model = model, live = live, date = date
-        let back = original ?? GymDay(date: date, values: [], cancelled: nil)
         let workout = live.takeSaved()
         live.reset()
         model.deleteLater(L10n.tr("Trénink zahozen")) {
             if !model.demo {
-                do { try await model.saveGym(back, date: date) } catch { model.notice = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription) }
+                do { try await model.api.discardGym(date: date) } catch { model.notice = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription) }
                 await model.refreshTraining()
+                await model.refresh()
             }
             if let workout { await live.delete(workout) }
         }

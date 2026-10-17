@@ -38,6 +38,15 @@ export async function cancelGymPlan(db, date, event = null) {
   await db.prepare("INSERT INTO gym_plan_cancellations(user_id,workout_date,event_json) VALUES(?,?,?) ON CONFLICT(user_id,workout_date) DO UPDATE SET event_json=COALESCE(excluded.event_json,gym_plan_cancellations.event_json),cancelled_at=CURRENT_TIMESTAMP").bind(db.userId, date, event ? JSON.stringify(event) : null).run();
 }
 
+// Zahodit trénink: the day's plan goes with its cancellation and its
+// completed sets, so the day is as if the workout was never planned.
+export async function discardGymPlan(db, date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error(L("Neplatné datum.", "Invalid date."));
+  await ensureGymPlans(db);
+  await db.prepare("DELETE FROM gym_plans WHERE user_id=? AND workout_date=?").bind(db.userId, date).run();
+  await db.prepare("DELETE FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?").bind(db.userId, date).run();
+}
+
 export async function restoreGymPlan(db, date) {
   await ensureGymPlans(db);
   await db.prepare("DELETE FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?").bind(db.userId, date).run();

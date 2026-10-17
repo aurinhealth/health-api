@@ -15,7 +15,7 @@ import { isStrengthEvent, deletePlannedEvent } from "./planned-events.js";
 import { exerciseMuscles } from "./fitness-insights.js";
 import { EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { cleanGymRows, catalogNames, adjustGymPlan } from "./gym-adjust.js";
-import { readGymPlan, moveGymPlan, cancelGymPlan, restoreGymPlan } from "./gym-plan-store.js";
+import { readGymPlan, moveGymPlan, cancelGymPlan, restoreGymPlan, discardGymPlan } from "./gym-plan-store.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
 import { saveOwnExerciseVideo, techniqueFor, ownExerciseVideo, storedTechnique, exerciseInUse, generateTechnique } from "./exercise-technique.js";
 import { L } from "./lang.js";
@@ -150,9 +150,23 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
         if(!moved.moved)return Response.json({message:L('Gym se nepodařilo přesunout: cílový den už má gym plán, nebo jsou v tréninku zapsané série.', 'The gym session couldn\'t be moved: the target day already has a gym plan, or the workout has logged sets.')},{status:409});
         return Response.json({status:'ok',date:to,message:L('Gym je přesunutý.', 'The gym session has been moved.')},{headers:{'Cache-Control':'no-store'}});
       }
-      if(body.action==='cancel'){
+      // The day's strength events (Intervals.icu and the app's own copy).
+      const deleteStrengthEvents=async()=>{
         const rows=(await env.DB.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(env.USER_ID,date,shiftDate(date,1)).all()).results||[];
         for(const row of rows){let event;try{event=JSON.parse(row.payload_json)}catch{continue}if(isStrengthEvent(event))await deletePlannedEvent(env,{eventId:row.external_id});}
+      };
+      // Zahodit trénink: the workout leaves the day with its plan, its
+      // Intervals.icu event and the sets logged in it (cancel keeps them).
+      if(body.action==='discard'){
+        const stored=await readGymPlan(env.DB,date,{includeCancelled:true});
+        const logged=stored.stored?stored.values.slice(7).filter(r=>r?.[1]&&/^(WARMUP|WORK)$/.test(String(r?.[0]||"WORK").toUpperCase())&&["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??""))).length:0;
+        await deleteStrengthEvents();
+        await discardGymPlan(env.DB,date);
+        if(logged)await removeManualSets(env.DB,date,0,logged);
+        return Response.json({status:'ok',date,discarded:true,message:L('Trénink je zahozený.', 'The workout is discarded.')},{headers:{'Cache-Control':'no-store'}});
+      }
+      if(body.action==='cancel'){
+        await deleteStrengthEvents();
         await cancelGymPlan(env.DB,date);
         return Response.json({status:'ok',date,cancelled:true,message:L('Posilovna je zrušená. Původní plán a výsledky zůstaly uložené.', 'The gym session is cancelled. The original plan and results stay saved.')},{headers:{'Cache-Control':'no-store'}});
       }
