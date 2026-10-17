@@ -202,3 +202,11 @@ test('run 10: the card shows the kind the coach named, intervals before the long
   assert.ok(at('S21', vo2, 'Zítra VO2max 5×3 min.').includes('quality:upozorní na dlouhou jízdu den po intervalech'));
   assert.ok(!at('S21', vo2, 'Zítra VO2max 5×3 min; v pondělí máš dlouhou jízdu, klidně je dej až v úterý.').includes('quality:upozorní na dlouhou jízdu den po intervalech'));
 });
+
+test('run 11: the day before the long ride is marked for the coach, "nesnažil shodit" discourages', () => {
+  const { ctx } = scenarioContext(scenarioById('S21'), date);
+  const before = ctx.week.find(d => d.beforeLong);
+  assert.equal(before?.beforeLong, 'Long ride');
+  assert.equal(ctx.week.indexOf(before) + 1, ctx.week.findIndex(d => d.planned?.some(p => p.name === 'Long ride')));
+  assert.ok(!failed('S05', { answer: '**6 kg za 3 týdny bych se nesnažil shodit.** Drž se 2 050 kcal.', kept: [] }).includes('quality:odradí od tempa hubnutí'));
+});
