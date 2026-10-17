@@ -2,7 +2,7 @@
 // session the app works with: times, minutes asleep, stages, the NSF quality
 // indicators and whether Google marks it a nap. Shared by /health/sleep and the
 // coaches' recovery inputs.
-import { localDate } from "./user-time.js";
+import { localDate, localDateTime } from "./user-time.js";
 const finiteOrNull = v => v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v);
 function hoursBetween(start, end) {
   if (!start || !end) return null;
@@ -51,4 +51,52 @@ export function sleepSessionFromRow(row) {
     wasoMin: (() => { const awake = finiteOrNull(sleep.summary?.minutesAwake) ?? (stageMinutes.AWAKE != null ? Math.round(stageMinutes.AWAKE) : null); if (awake == null) return null; return Math.max(0, Math.round(awake - (finiteOrNull(sleep.summary?.minutesToFallAsleep) || 0) - (finiteOrNull(sleep.summary?.minutesAfterWakeUp) || 0))); })(),
     nap: sleep.metadata?.nap === true
   };
+}
+
+// Up in the morning for a while and asleep again: Google and Apple keep the
+// second sleep as its own session (Google flags it a nap), so the night ended
+// at the first wake-up and the rest of it lowered the next night's need as a
+// nap. A sleep from the same source that begins at most 3 h after a night ends
+// and before noon is the rest of that night: one night with the asleep minutes
+// and the time in bed of both, the time up between them left out.
+const JOIN_GAP_MIN = 180;
+export function joinSplitNights(sessions) {
+  const out = [], open = new Map();
+  const at = s => Date.parse(s.startTime || "") || 0;
+  for (const s of [...(sessions || [])].filter(Boolean).sort((a, b) => at(a) - at(b))) {
+    if (!s.startTime || !s.endTime || s.source === "intervals") { out.push(s); continue; }
+    const key = s.source || "", i = open.get(key), prev = i == null ? null : out[i];
+    const gap = prev ? (Date.parse(s.startTime) - Date.parse(prev.endTime)) / 60000 : NaN;
+    if (prev && !prev.nap && gap >= 0 && gap <= JOIN_GAP_MIN && localDateTime(s.startTime).slice(11, 13) < "12") {
+      out[i] = joinTwo(prev, s, gap);
+      continue;
+    }
+    open.set(key, out.push(s) - 1);
+  }
+  return out;
+}
+
+function joinTwo(a, b, gap) {
+  const add = (x, y) => (x == null && y == null ? null : (Number(x) || 0) + (Number(y) || 0));
+  const stages = { ...(a.stages || {}) };
+  for (const [k, v] of Object.entries(b.stages || {})) stages[k] = (stages[k] || 0) + v;
+  const out = {
+    ...a,
+    date: localDate(b.endTime) || b.date || a.date,
+    endTime: b.endTime,
+    timeInBedMin: add(a.timeInBedMin, b.timeInBedMin),
+    durationMin: add(a.durationMin, b.durationMin),
+    stages,
+    minutesAfterWakeup: b.minutesAfterWakeup ?? null,
+    wasoMin: a.wasoMin == null && b.wasoMin == null ? null : add(a.wasoMin, b.wasoMin),
+    nap: false,
+    // Minutes up between the parts of the night.
+    upMin: add(a.upMin, Math.round(gap))
+  };
+  // The night's own timeline (night-detail.js): the time up is awake.
+  if (a.payload && b.payload) {
+    const list = p => p.stages || p.sleepStages || [];
+    out.payload = { ...a.payload, stages: [...list(a.payload), { type: "AWAKE", startTime: a.endTime, endTime: b.startTime }, ...list(b.payload)] };
+  }
+  return out;
 }

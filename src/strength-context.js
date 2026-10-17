@@ -244,12 +244,12 @@ export async function buildStrengthContext(env, requestedDate = null) {
   // naps) with the Intervals.icu nights they miss, as Today has them: the
   // recovery score's sleep part and the sleep need.
   try {
-    const { sleepSessionFromRow } = await import("./sleep-sessions.js"), { mergeIntervalsSleep } = await import("./intervals-sleep.js");
+    const { sleepSessionFromRow, joinSplitNights } = await import("./sleep-sessions.js"), { mergeIntervalsSleep } = await import("./intervals-sleep.js");
     const since = new Date(Date.parse(date + "T12:00:00Z") - 30 * 86400000).toISOString().slice(0, 10), until = new Date(Date.parse(date + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
-    const rows = (await env.DB.prepare("SELECT external_id,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop') AND (record_role IS NULL OR record_role != 'duplicate') AND COALESCE(end_time,start_time) >= ? ORDER BY COALESCE(end_time,start_time) DESC LIMIT 200").bind(env.USER_ID, since).all()).results || [];
+    const rows = (await env.DB.prepare("SELECT external_id,source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id = ? AND data_type = 'sleep' AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop') AND (record_role IS NULL OR record_role != 'duplicate') AND COALESCE(end_time,start_time) >= ? ORDER BY COALESCE(end_time,start_time) DESC LIMIT 200").bind(env.USER_ID, since).all()).results || [];
     const seen = new Set();
     const own = rows.map(sleepSessionFromRow).filter(s => { const k = s.startTime + "|" + s.endTime; if (seen.has(k)) return false; seen.add(k); return s.durationMin > 0; });
-    context.sleepSessions = mergeIntervalsSleep(own, intervalsWellness, { start: since, end: until });
+    context.sleepSessions = mergeIntervalsSleep(joinSplitNights(own), intervalsWellness, { start: since, end: until });
   } catch { context.sleepSessions = []; }
   const athleteState=await getAthleteState(env.DB);
   context.athleteState={status:athleteState.status,note:athleteState.note};
