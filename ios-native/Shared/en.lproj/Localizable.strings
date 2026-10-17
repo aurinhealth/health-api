@@ -2554,3 +2554,8 @@
 "Usínáš obvykle mezi %@ a %@." = "You usually fall asleep between %@ and %@.";
 "V obvyklém čase" = "In your usual time";
 "Dřív nebo později než obvykle" = "Earlier or later than usual";
+"Začátečník" = "Beginner";
+"Mírně pokročilý" = "Intermediate";
+"Pokročilý" = "Advanced";
+"Auto · %@" = "Auto · %@";
+"Auto vychází z tréninků za poslední dva roky. Pauza kvůli nemoci nebo zranění úroveň nesníží." = "Auto is based on your training over the last two years. A break for illness or injury won't lower the level.";

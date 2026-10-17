@@ -41,7 +41,7 @@ test('imports update experience and Plan budgets while sport focus stays general
  const {raw,a}=db(),env={DB:a,USER_ID:1};await completeOnboarding(env);
  assert.equal((await loadEffectiveProfile(a,1)).mainSport,'general');
  for(let week=0;week<12;week++)for(let day=1;day<=4;day++)activity(raw,{days:week*7+day});
- assert.equal((await loadEffectiveProfile(a,1)).mainSport,'general');assert.equal((await trainingSetup(a)).experience,'experienced');assert.equal((await getWeekPlan(a)).automatic.source,'history');
+ assert.equal((await loadEffectiveProfile(a,1)).mainSport,'general');assert.equal((await trainingSetup(a)).history.experience,'experienced');assert.equal((await trainingSetup(a)).experience,'regular','rides raise the gym one step');assert.equal((await getWeekPlan(a)).automatic.source,'history');
  await completeOnboarding(env,{profile:{mainSport:'running'},training:{experience:'regular'}});
  assert.equal((await loadEffectiveProfile(a,1)).mainSport,'running');assert.equal((await trainingSetup(a)).experience,'regular');
  await saveWeekPlan(a,{availability:Array.from({length:7},()=>({minutes:20}))});
