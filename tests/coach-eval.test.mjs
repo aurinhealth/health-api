@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, handleCoachEval, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS } from '../src/coach-eval.js';
-import { coachInstructionsFor } from '../src/coach-assistant.js';
+import { coachInstructionsFor, assistantTask } from '../src/coach-assistant.js';
 import { isPublicPath } from '../src/dashboard-auth.js';
 import { lang } from '../src/lang.js';
 
@@ -10,7 +10,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply).filter(c => !c
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), Array.from({ length: 24 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')));
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 24 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'L01', 'L02', 'L03']);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -73,7 +73,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 24);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 27);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -211,4 +211,14 @@ test('run 11: the day before the long ride is marked for the coach, "nesnažil s
   assert.ok(!failed('S05', { answer: '**6 kg za 3 týdny bych se nesnažil shodit.** Drž se 2 050 kcal.', kept: [] }).includes('quality:odradí od tempa hubnutí'));
   assert.ok(!failed('S05', { answer: 'To je **přes 10 %** hmotnosti, drž se 2 050 kcal.', kept: [] }).includes('quality:odradí od tempa hubnutí'));
   assert.ok(!failed('S05', { answer: 'Bylo by to **ne**bezpečné, drž se 2 050 kcal.', kept: [] }).includes('quality:odradí od tempa hubnutí'));
+});
+
+test('Luna: three quick questions go to the light model and name the athlete\'s numbers', () => {
+  for (const id of ['L01', 'L02', 'L03']) assert.equal(scenarioById(id) && assistantTask(scenarioById(id).message, { view: 'today' }, []), 'quick', id);
+  const at = (id, answer, model = 'gpt-6-luna') => checkReply(scenarioById(id), { answer, kept: [], proposed: [], model }, now, date).filter(c => !c.ok).map(c => c.name);
+  assert.deepEqual(at('L01', 'Tvoje FTP je **265 W**, nastavené z Intervals.icu.'), []);
+  assert.deepEqual(at('L02', 'Dnes máš v plánu VO2max 5x4 (75 min).'), []);
+  assert.deepEqual(at('L03', 'Včera jsi spal 7 h 25 min.'), []);
+  assert.ok(at('L01', 'Tvoje FTP je 265 W, nastavené z Intervals.icu.', 'gpt-6-sol').includes('odpovídá lehký model (Luna)'));
+  assert.ok(at('L03', 'Spal jsi dobře.').includes('řekne 7 h 25 min'));
 });
