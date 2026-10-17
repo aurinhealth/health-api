@@ -151,6 +151,14 @@ export async function pickState(db, userId, date) {
   return { chosen: chosen?.kind || null, declines };
 }
 
+// The day's activity once taken: the athlete's choice, or a workout already
+// in the day's plan that the athlete made (a gym plan they generated, a ride
+// or run in the calendar). Aktivita dne then stays hidden like after "Dát na
+// dnes" and never shows the athlete's own workout as the coach's proposal.
+export function dayChoice({ chosen = null, planned = [] } = {}) {
+  return chosen || planned[0] || null;
+}
+
 // What an option without a workout puts into Plán dne (recovery-plan.js):
 // the day off is a walk and stretching. A ride or run is in the calendar and
 // the gym in its plan already (the app saves those before the choice).
