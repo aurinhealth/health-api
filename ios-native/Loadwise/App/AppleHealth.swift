@@ -196,8 +196,11 @@ final class AppleHealth {
     /// back in to this one reads it again (resume).
     func pause(account email: String?) {
         let wasOn = enabled
+        let waiting = UserDefaults.standard.string(forKey: Self.resumeKey)
         disconnect()
+        // Off already (a second sign-out): the account that read it still gets it back.
         if wasOn, let email { UserDefaults.standard.set(Self.fingerprint(email), forKey: Self.resumeKey) }
+        else if let waiting { UserDefaults.standard.set(waiting, forKey: Self.resumeKey) }
     }
 
     /// After a sign-in to the account that read Apple Health before signing
