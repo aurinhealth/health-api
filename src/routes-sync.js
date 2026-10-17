@@ -6,6 +6,7 @@ import { L } from "./lang.js";
 import { activityTypes, changeActivityType } from "./activity-type.js";
 import { setActivityKcal, deleteActivity, deleteOptions } from "./activity-edits.js";
 import { bumpCacheVersion } from "./api-cache.js";
+import { mergeWorkouts, keepWorkoutsApart } from "./workout-merge.js";
 
 export async function handleSyncApi(request,env,ctx,url,session,internalAuth){
   // Synchronizace (sync-destinations.js): where the user sends data, and the
@@ -46,6 +47,16 @@ export async function handleSyncApi(request,env,ctx,url,session,internalAuth){
     try{
       const body=await request.json().catch(()=>({}));
       const result=url.pathname.endsWith('/kcal')?await setActivityKcal(env,body):await deleteActivity(env,{id:body.id,everywhere:body.everywhere===true});
+      await bumpCacheVersion(env.DB);
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:error.status||400});}
+  }
+  // Two devices' records of one workout: merged, or kept apart (workout-merge.js).
+  if(url.pathname==='/app/api/activity/merge'&&request.method==='POST'){
+    if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const body=await request.json().catch(()=>({}));
+      const result=body.separate===true?await keepWorkoutsApart(env,{ids:body.ids}):await mergeWorkouts(env,{ids:body.ids,energy:body.energy,span:body.span});
       await bumpCacheVersion(env.DB);
       return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:error.status||400});}
