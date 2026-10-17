@@ -221,4 +221,7 @@ test('Luna: three quick questions go to the light model and name the athlete\'s 
   assert.deepEqual(at('L03', 'Včera jsi spal 7 h 25 min.'), []);
   assert.ok(at('L01', 'Tvoje FTP je 265 W, nastavené z Intervals.icu.', 'gpt-6-sol').includes('odpovídá lehký model (Luna)'));
   assert.ok(at('L03', 'Spal jsi dobře.').includes('řekne 7 h 25 min'));
+  // Run 12: the words, and an easy card for today after the 48 h rule.
+  assert.deepEqual(at('L03', 'Včera, 16. října, jsi spal 7 hodin a 25 minut.'), []);
+  assert.ok(!checkReply(scenarioById('L02'), { answer: 'Dnes máš v plánu „VO₂max 5×4“, ale jel bych lehce.', kept: [{ type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance', card: 'endurance' }], proposed: [], model: 'gpt-6-luna' }, now, date).some(c => !c.ok));
 });

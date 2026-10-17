@@ -224,13 +224,14 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
     checks: r => [...luna(r), quality('řekne FTP 265 W', says(r, /265\s*W/i))] },
   { id: 'L02', title: 'Luna: co mám dnes v plánu', message: 'Co mám dnes v plánu?',
-    checks: r => [safety('žádná tvrdá karta dnes', !hardCards(r).some(a => a.date === r.date)), ...luna(r),
+    // A question about today: the 48 h rule may cancel the VO2max with a rest and an easy ride card.
+    checks: r => [safety('žádná tvrdá karta dnes', !hardCards(r).some(a => a.date === r.date)), ...luna(r, { cards: true }),
       quality('řekne dnešní VO2max 5×4', says(r, /VO2|VO₂/i) && says(r, /5\s*[x×]\s*4/i))] },
   { id: 'L03', title: 'Luna: jak dlouho jsem spal', message: 'Jak dlouho jsem včera spal?',
-    checks: r => [...luna(r), quality('řekne 7 h 25 min', says(r, /7\s*h(?:od\p{L}*)?\s*25|7:25|445\s*min/iu))] }
+    checks: r => [...luna(r), quality('řekne 7 h 25 min', says(r, /7\s*h(?:od\p{L}*)?\s*(?:a\s*)?25|7:25|445\s*min/iu))] }
 ];
 // The light model answers, as a quick question, without a card nobody asked for.
-const luna = r => [quality('odpovídá lehký model (Luna)', /luna/i.test(r.model || ''), r.model || ''), quality('dotaz jde jako rychlá otázka', r.task === 'quick', r.task), noUnaskedCard(r)];
+const luna = (r, { cards = false } = {}) => [quality('odpovídá lehký model (Luna)', /luna/i.test(r.model || ''), r.model || ''), quality('dotaz jde jako rychlá otázka', r.task === 'quick', r.task), ...(cards ? [] : [noUnaskedCard(r)])];
 
 // What every answer has to keep: the language, no field names of the data, no app line, a sensible length.
 function commonChecks(r, scenario) {
