@@ -377,7 +377,12 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   let kind="endurance";
   const planText=txt(plannedToday?.name)+" "+txt(goal?.focus);
   const KIND_OF={recovery:"recovery",endurance:"endurance",tempo:"tempo",sweet_spot:"sweet_spot",threshold:"threshold",vo2max:"vo2"};
-  if(plannedInfo?.system){
+  // A kind asked for (a chat card, the generator's chosen kind, a library
+  // workout) is what the card shows, over the day's plan in Intervals.icu; the
+  // checks below still ease it (Revize doporučování tréninků 2026-10-16, běh 10).
+  const askedKind=goal?.asked?{...KIND_OF,long_endurance:"long_endurance"}[txt(goal.focus)]||null:null;
+  if(askedKind&&!["race","openers"].includes(phase)) kind=askedKind;
+  else if(plannedInfo?.system){
     kind=KIND_OF[plannedInfo.system]||"endurance";
     const info=plannedInfo.minutes?" ("+plannedInfo.minutes+" min"+(plannedInfo.intensityFactor?", IF "+plannedInfo.intensityFactor.toFixed(2):"")+")":"";
     rationale.push(L("V Intervals.icu máš na tento den naplánováno „"+(plannedToday.name||"trénink")+"“"+info+" – doporučení se drží plánu.","You have “"+(plannedToday.name||"a workout")+"” planned for this day in Intervals.icu"+info+" – the recommendation follows the plan."));
@@ -437,8 +442,9 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // break, 48 h after a hard day of either sport, two quality days a week,
   // legs after the gym, a recovery week). Only the race and its openers keep
   // their kind.
-  if(requestedMinutes<(sport==="run"?45:55)&&kind==="long_endurance"){kind="tempo";adaptations.push(L("trénink zhuštěn do dostupného času","workout condensed into the available time"));}
-  if(requestedMinutes<(sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push(L("krátké časové okno","short time window"));}
+  // An asked kind keeps its kind in a short window (2×10 min sweet spot fits 45 min).
+  if(requestedMinutes<(sport==="run"?45:55)&&kind==="long_endurance"){kind=askedKind?"endurance":"tempo";adaptations.push(L("trénink zhuštěn do dostupného času","workout condensed into the available time"));}
+  if(!askedKind&&requestedMinutes<(sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push(L("krátké časové okno","short time window"));}
   const QUALITY=["tempo","sweet_spot","threshold","vo2"],quality=()=>QUALITY.includes(kind);
   // The longest session the day allows (red, illness, a break), applied with the length below.
   let cap=null;const capAt=(minutes,text)=>{if(!cap||minutes<cap.minutes)cap={minutes,text};};

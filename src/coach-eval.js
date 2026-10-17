@@ -204,7 +204,9 @@ export const COACH_EVAL_SCENARIOS = [
     checks: r => { const ask = libraryAsk(S21, r.date), card = r.kept.find(a => a.type === 'workout' && a.sport !== 'gym' && a.date === shift(r.date, 1)) || r.kept.find(a => a.type === 'workout' && a.sport !== 'gym' && a.date !== r.date);
       return [safety('tvrdé dny 48 h od sebe, nejvýš 2 za 7 dní', !stackedHardDays(r, hardCards(r)).length, stackedHardDays(r, hardCards(r)).join(', ')),
         quality('knihovna hledá pro zítřek kolem 45 min', ask.date === shift(r.date, 1) && Math.abs(ask.query.durationMinutes - 45) <= 5, ask.date + ' ' + ask.query.durationMinutes + ' min'),
-        quality('karta na zítřek, 35–55 min', card && card.date === shift(r.date, 1) && card.minutes >= 35 && card.minutes <= 55, card ? card.date + ' ' + card.minutes + ' min' : 'bez karty')]; } },
+        quality('karta na zítřek, 35–55 min', card && card.date === shift(r.date, 1) && card.minutes >= 35 && card.minutes <= 55, card ? card.date + ' ' + card.minutes + ' min' : 'bez karty'),
+        // The long ride is planned the day after tomorrow: intervals the day before it are said or moved.
+        quality('upozorní na dlouhou jízdu den po intervalech', !hardCards(r).some(a => a.date === shift(r.date, 1)) || says(r, /dlouh|long ride/i))]; } },
   { id: 'S22', title: 'Silná menstruace s křečemi, plán VO2max', message: 'Co mám dnes dělat?', athlete: CYCLE,
     checks: r => { const kind = vo2Today(r.date, CYCLE);
       return [safety('aplikace dnes z VO2max udělá lehký trénink', ['recovery', 'endurance'].includes(kind), kind), safety('žádná tvrdá karta dnes', !hardCards(r).some(a => a.date === r.date)),
@@ -226,8 +228,17 @@ function commonChecks(r, scenario) {
     quality('bez názvů polí z dat', !/\b(?:cyclingCoachV2|todayParts|todayZone|preferenceMemory|appContext|workoutLibraryRecommendations|userInitiated|athleteState|recoveryTime)\b/.test(r.answer)),
     quality('bez řádku [Návrhy]', !/\[(?:Návrhy|Proposals):/.test(r.answer)),
     quality('nejvýš 180 slov', words(r.answer) <= 180, String(words(r.answer))),
-    quality('text neslibuje kartu, kterou aplikace zahodila', !droppedCards(r).length, droppedCards(r).join(', '))
+    quality('text neslibuje kartu, kterou aplikace zahodila', !droppedCards(r).length, droppedCards(r).join(', ')),
+    quality('karta ukazuje druh tréninku z odpovědi', !otherCards(r).length, otherCards(r).join(', '))
   ];
+}
+
+// Kept rides and runs whose card the app prepares as another kind than the
+// coach named (recovery shown as endurance, sweet spot as tempo).
+const CARD_KIND = { vo2: 'vo2max', long_endurance: 'long' };
+function otherCards(r) {
+  return r.kept.filter(a => a.type === 'workout' && a.sport !== 'gym' && !a.workoutId && a.kind && a.card && (CARD_KIND[a.card] || a.card) !== a.kind)
+    .map(a => a.date + ' ' + a.kind + ' → ' + (CARD_KIND[a.card] || a.card));
 }
 
 // Proposed cards the app's check did not keep (a rest or move by its planned
@@ -265,7 +276,7 @@ export function cardKind(athlete, action, library = []) {
   const focus = lib ? (/sprint/.test(String(lib.system)) ? 'vo2max' : FOCUS_OF[kindOfSystem(lib.system)]) : FOCUS_OF[action.kind] || null;
   const day = athlete.week.days.find(d => d.date === action.date)?.daily || athlete.daily;
   const inputs = { date: action.date, daily: day, week: athlete.week, fitness: athlete.fitness, health: athlete.health, gym: athlete.gym, preferences: athlete.preferences, profile: athlete.profile, recoveryTime: athlete.recoveryTime || null, sport: action.sport, availabilityMinutes: action.minutes };
-  let coach = buildCyclingCoachV2({ ...inputs, goal: focus ? { focus } : null });
+  let coach = buildCyclingCoachV2({ ...inputs, goal: focus ? { focus, asked: true } : null });
   if (focus && !['recovery', 'endurance', 'long_endurance'].includes(focus) && coach.readiness?.status === 'red') coach = buildCyclingCoachV2(inputs);
   return coach.recommendation?.session?.kind || null;
 }
