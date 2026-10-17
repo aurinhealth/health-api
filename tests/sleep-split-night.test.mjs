@@ -52,3 +52,13 @@ test('a Fitbit night that starts awake takes those minutes as the time to fall a
   sleep.summary.minutesToFallAsleep = '9';
   assert.equal(sleepSessionFromRow({ external_id: 'x', payload_json: JSON.stringify({ sleep }) }).latencyMin, 9);
 });
+
+test('Today lists the afternoon nap, not the night or the rest of it', async () => {
+  const { napsOn } = await import('../src/app-today.js');
+  const joined = joinSplitNights([night, rest]);
+  const nap = { id: 'p', source: 'google-wearables', startTime: '2026-10-17T13:05:00Z', endTime: '2026-10-17T14:43:00Z', durationMin: 92, nap: true };
+  const naps = napsOn([...joined, nap], '2026-10-17', joined[0]);
+  assert.equal(naps.length, 1);
+  assert.equal(naps[0].minutes, 92);
+  assert.match(naps[0].start, /^15:05$/);
+});
