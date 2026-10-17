@@ -94,3 +94,29 @@ test("a failed answer is not kept and other hosts pass through", async () => {
   assert.equal(intervalsKinds(new URL("https://intervals.icu/api/v1/athlete/0/sport-settings/123"))[0], "settings");
   assert.equal(intervalsKinds(new URL("https://intervals.icu/api/v1/disconnect-app")), null);
 });
+
+test("an Intervals.icu read is given up after a time limit, writes and other hosts keep theirs", async () => {
+  const seen = [];
+  const fetchImpl = async (url, init = {}) => { seen.push([String(url), init.signal]); return Response.json({}); };
+  for (const key of ["personal-key", "Bearer tok"]) {
+    seen.length = 0;
+    const reads = intervalsReads({ INTERVALS_API_KEY: key, USER_ID: 1, DB: fakeDb() }, null, { fetchImpl, store: fakeStore() });
+    await reads("https://intervals.icu/api/v1/athlete/0");
+    await reads("https://intervals.icu/api/v1/athlete/0/wellness/2026-10-16", { method: "PUT", body: "{}" });
+    await reads("https://example.com/x");
+    const own = new AbortController().signal;
+    await reads("https://intervals.icu/api/v1/athlete/0/events", { signal: own });
+    assert.ok(seen[0][1] instanceof AbortSignal, key);
+    assert.equal(seen[1][1], undefined);
+    assert.equal(seen[2][1], undefined);
+    assert.equal(seen[3][1], own);
+  }
+  const slow = intervalsReads({ INTERVALS_API_KEY: "personal-key" }, null, {
+    timeoutMs: 20,
+    fetchImpl: (url, init) => new Promise((_, reject) => init.signal.addEventListener("abort", () => reject(init.signal.reason)))
+  });
+  // AbortSignal.timeout does not keep Node's event loop alive on its own.
+  const alive = setTimeout(() => {}, 1000);
+  await assert.rejects(slow("https://intervals.icu/api/v1/athlete/0"), { name: "TimeoutError" });
+  clearTimeout(alive);
+});

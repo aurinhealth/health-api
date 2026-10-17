@@ -395,15 +395,15 @@ final class AppModel {
         await sendOutbox()
         let health = AppleHealth.shared
         // Until a late-morning sync, last night and the morning's HRV from the
-        // watch go out before Today is computed. Later in the day Today loads
-        // alongside the sync and again only when it brought something new.
-        var sync: Task<AppleHealth.SyncOutcome, Never>?
+        // watch go out before Today is computed, waiting at most 8 s. Later in
+        // the day (or after those 8 s) Today loads alongside the sync and again
+        // only when it brought something new.
+        let client = api
+        var sync: Task<AppleHealth.SyncOutcome, Never>? = Task { await health.run(api: client) }
         var changed = false
-        if health.hasMorningData {
-            let api = api
-            sync = Task { await health.run(api: api) }
-        } else {
-            changed = await health.run(api: api).changed
+        if !health.hasMorningData, let task = sync, let outcome = await Self.outcome(of: task, within: 8) {
+            changed = outcome.changed
+            sync = nil
         }
         do {
             try await loadToday()
@@ -443,6 +443,22 @@ final class AppModel {
             }
             // "Bez připojení" alone hides that a Wi-Fi wants a sign-in: say so.
             if lost, (error as? URLError)?.code == .secureConnectionFailed { notice = error.localizedDescription }
+        }
+    }
+
+    /// What the sync did if it ends within `seconds`; nil when it takes longer
+    /// (it goes on, only this wait ends).
+    private static func outcome(of task: Task<AppleHealth.SyncOutcome, Never>, within seconds: Double) async -> AppleHealth.SyncOutcome? {
+        let once = FirstAnswer()
+        return await withCheckedContinuation { continuation in
+            Task { @MainActor in
+                let value = await task.value
+                if once.take() { continuation.resume(returning: value) }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(seconds))
+                if once.take() { continuation.resume(returning: nil) }
+            }
         }
     }
 
@@ -1307,5 +1323,16 @@ final class AppModel {
         fetched = [:]
         athleteStatus = nil
         phase = .signedOut
+    }
+}
+
+/// The first of two racing waits answers; the other one finds it taken.
+@MainActor
+private final class FirstAnswer {
+    private var taken = false
+    func take() -> Bool {
+        guard !taken else { return false }
+        taken = true
+        return true
     }
 }

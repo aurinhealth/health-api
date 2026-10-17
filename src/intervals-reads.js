@@ -68,8 +68,23 @@ function wellnessWindow(url, now) {
   return { whole, oldest, newest };
 }
 
+// A slow Intervals.icu read is given up after this long instead of holding up
+// the screen that waits for it (Today reads it on every load). Writes keep
+// their own limits: one cut short may still have happened there.
+export const INTERVALS_TIMEOUT_MS = 8000;
+
+function withTimeout(fetchImpl, timeoutMs) {
+  return (input, init = {}) => {
+    const url = typeof input === "string" ? input : input?.url;
+    const read = ["GET", "HEAD"].includes(String(init.method || input?.method || "GET").toUpperCase());
+    if (init.signal || !read || !/^https:\/\/intervals\.icu\//.test(String(url || ""))) return fetchImpl(input, init);
+    return fetchImpl(input, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+  };
+}
+
 // A fetch for Intervals.icu requests made for env's user.
-export function intervalsReads(env, ctx, { fetchImpl = fetch, store = globalThis.caches?.default, now = () => Date.now() } = {}) {
+export function intervalsReads(env, ctx, { fetchImpl: rawFetch = fetch, store = globalThis.caches?.default, now = () => Date.now(), timeoutMs = INTERVALS_TIMEOUT_MS } = {}) {
+  const fetchImpl = withTimeout(rawFetch, timeoutMs);
   if (!intervalsOAuth(env) || !env.DB || env.USER_ID == null) return fetchImpl;
   let gens = null, scope = null;
   // The token is part of the key: connecting again (maybe as another athlete) starts empty.

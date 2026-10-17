@@ -2535,21 +2535,32 @@ async function healthActivities(env) {
   });
 }
 
+// Two days before a YYYY-MM-DD start; anything else reads every night.
+function sleepSince(start) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return "";
+  const d = new Date(start + "T00:00:00Z");
+  if (Number.isNaN(d.getTime())) return "";
+  d.setUTCDate(d.getUTCDate() - 2);
+  return d.toISOString().slice(0, 10);
+}
+
 async function healthSleep(env, url) {
   const start = url.searchParams.get("start") || dateDaysAgo(30);
   const end = url.searchParams.get("end") || dateDaysFromNow(1);
   // Older Google Health imports may have null DB timestamps because the
-  // session interval is nested inside payload_json. Read recent sleep rows first,
-  // then normalize/filter using the nested interval as well.
+  // session interval is nested inside payload_json. Only nights that started
+  // two days before the range or later (a night counts for the day it ends)
+  // and those rows come from the database; the nested interval filters them.
   const rows = await env.DB.prepare(`
     SELECT external_id, source_family, start_time, end_time, payload_json
     FROM health_datapoints
     WHERE user_id = ? AND data_type = 'sleep'
       AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop')
       AND (record_role IS NULL OR record_role != 'duplicate')
+      AND (start_time >= ? OR start_time IS NULL)
     ORDER BY COALESCE(start_time, end_time) DESC, id DESC
     LIMIT 5000
-  `).bind(env.USER_ID).all();
+  `).bind(env.USER_ID, sleepSince(start)).all();
 
   const sessions = (rows.results || []).map(sleepSessionFromRow);
 

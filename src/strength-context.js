@@ -101,7 +101,7 @@ async function intervalsGet(env, path) {
     }).filter(Boolean);
   }
   if(!env.INTERVALS_API_KEY)return [];
-  const response = await fetch("https://intervals.icu/api/v1" + path, { headers: { Authorization: intervalsAuth(env), Accept: "application/json" } });
+  const response = await fetch("https://intervals.icu/api/v1" + path, { headers: { Authorization: intervalsAuth(env), Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
   const text = await response.text(); let data; try { data = JSON.parse(text); } catch { data = text; }
   if (!response.ok) throw new Error(`Intervals.icu HTTP ${response.status}: ${JSON.stringify(data)}`);
   return data;

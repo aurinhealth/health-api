@@ -717,11 +717,14 @@ final class HealthReader: @unchecked Sendable {
     /// 10:00. Without them the average SDNN Apple Health shows.
     private func dailyHRV(from: Date, to: Date) async -> [AppleRecord] {
         let unit = HKUnit.secondUnit(with: .milli)
-        let sdnn = await samples(HKQuantityType(.heartRateVariabilitySDNN), from: from, to: to).compactMap { $0 as? HKQuantitySample }
-        let beats = await samples(HKSeriesType.heartbeat(), from: from, to: to).compactMap { $0 as? HKHeartbeatSeriesSample }
+        async let sdnnRead = samples(HKQuantityType(.heartRateVariabilitySDNN), from: from, to: to)
+        async let beatsRead = samples(HKSeriesType.heartbeat(), from: from, to: to)
+        let sdnn = await sdnnRead.compactMap { $0 as? HKQuantitySample }
+        let beats = await beatsRead.compactMap { $0 as? HKHeartbeatSeriesSample }.filter { calendar.component(.hour, from: $0.startDate) < 10 }
         var rmssd: [String: [Double]] = [:]
-        for series in beats where calendar.component(.hour, from: series.startDate) < 10 {
-            if let value = await rmssdOf(series) { rmssd[day(series.startDate), default: []].append(value) }
+        let values = await concurrently(beats) { await self.rmssdOf($0) }
+        for (series, value) in zip(beats, values) {
+            if let value { rmssd[day(series.startDate), default: []].append(value) }
         }
         var bySdnn: [String: [Double]] = [:]
         for s in sdnn {
@@ -930,10 +933,42 @@ final class HealthReader: @unchecked Sendable {
             record.elevationGain = elevation
             record.avgPower = average(.cyclingPower, .watt()) ?? average(.runningPower, .watt())
             record.avgCadence = average(.cyclingCadence, bpm)
-            record.heartRate = await heartRateSeries(from: w.startDate, to: w.endDate)
             out.append(record)
         }
+        let spans = list.map { (start: $0.startDate, end: $0.endDate) }
+        let series = await concurrently(spans) { await self.heartRateSeries(from: $0.start, to: $0.end) }
+        for i in out.indices { out[i].heartRate = series[i] }
         return out
+    }
+
+    /// The work for each item, at most `limit` at a time (HealthKit answers
+    /// each query on its own queue), in the items' order.
+    private func concurrently<T, R: Sendable>(_ items: [T], limit: Int = 4, _ work: @escaping @Sendable (T) async -> R) async -> [R] {
+        let box = Items(items)
+        return await withTaskGroup(of: (Int, R).self) { group in
+            var results = [R?](repeating: nil, count: items.count)
+            var next = 0
+            while next < min(limit, items.count) {
+                let i = next
+                group.addTask { (i, await work(box.items[i])) }
+                next += 1
+            }
+            while let (i, value) = await group.next() {
+                results[i] = value
+                if next < items.count {
+                    let j = next
+                    group.addTask { (j, await work(box.items[j])) }
+                    next += 1
+                }
+            }
+            return results.map { $0! }
+        }
+    }
+
+    /// HealthKit objects handed to the queries above; they are read only.
+    private struct Items<T>: @unchecked Sendable {
+        let items: [T]
+        init(_ items: [T]) { self.items = items }
     }
 
     /// Heart rate through a workout as [seconds from the start, bpm], averaged
