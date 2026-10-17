@@ -1549,7 +1549,16 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           // The workout the chat showed is the one that gets planned: the ride
           // or run goes to the calendar (and Intervals.icu), the gym draft is saved.
           if(!validTrainingDay(a.date)||a.date<localToday())throw new Error(L('Do minulého dne už nelze přidat trénink.', 'You can\'t add a workout to a past day.'));
-          const preview=a.preview||await workoutPreview(env,ctx,a);
+          let preview=a.preview||await workoutPreview(env,ctx,a);
+          // A hard ride or run proposed earlier is checked again for the day as
+          // it is now (a red morning, signs of illness, a hard day since): the
+          // coach's check gives the same workout, or the proposal is out of date.
+          const intense=['vo2max','threshold','tempo','sweet_spot','anaerobic','sprint'];
+          if(a.sport!=='gym'&&a.preview&&intense.includes(preview.workout?.primary_system)){
+            const fresh=await workoutPreview(env,ctx,a).catch(()=>null),base=id=>String(id||'').replace(/~\d+$/,'');
+            if(!fresh?.workout?.id||fresh.replaced||base(fresh.workout.id)!==base(preview.workout.id))throw new Error(L('Od návrhu se změnila tvoje připravenost nebo zátěž a tenhle trénink by dnes kouč nenavrhl. Požádej o nový návrh.', 'Your readiness or load has changed since the proposal and the coach wouldn\'t propose this workout now. Ask for a new proposal.'));
+            preview=fresh;
+          }
           if(a.sport==='gym'){
             if(!preview.draftId)throw new Error(L('Gym plán se nepodařilo připravit. Požádej o nový návrh.', 'The gym plan couldn\'t be prepared. Ask for a new proposal.'));
             const confirmUrl=new URL('https://internal/app/api/gym/confirm'),saved=await handleDashboardApi(new Request(confirmUrl,{method:'POST',headers:{Origin:confirmUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({draftId:preview.draftId})}),env,ctx,confirmUrl,{signedIn:true});
@@ -2245,8 +2254,15 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // The training plan's session for the day (training-plans.js), unless the
       // athlete picked a workout or asked for another option.
       // A kind the athlete or the AI week asked for ("Plán týdne", week-ai.js) wins over the plan's and the role's.
-      const askedFocus=Object.values(FOCUS_OF).includes(body.focus)?body.focus:null;
-      const planned=!body.workoutId&&!(Number(body.variant)>0)&&!askedFocus?chip?.plan||null:null;
+      // A library workout (the chat's workoutId, "Změnit délku") passes the coach's
+      // check for the day like an asked kind: a hard one on a day the coach keeps
+      // easy (red, signs of illness, 48 h, a break…) gives way to the coach's own
+      // session (Revize doporučování tréninků 2026-10-16, nález 2).
+      let workoutId=body.workoutId?String(body.workoutId).slice(0,120):null;
+      const askedWorkout=workoutId?await getWorkout(env.DB,workoutId.replace(/~\d+$/,'')).catch(()=>null):null;
+      const libraryFocus=askedWorkout?(/sprint/.test(String(askedWorkout.primary_system))?'vo2max':FOCUS_OF[kindOfSystem(askedWorkout.primary_system)]||null):null;
+      const askedFocus=Object.values(FOCUS_OF).includes(body.focus)?body.focus:libraryFocus;
+      const planned=!workoutId&&!(Number(body.variant)>0)&&!askedFocus?chip?.plan||null:null;
       if(weekTarget?.minutes)availabilityMinutes=weekTarget.minutes;
       availabilityMinutes=trainingBudget(prefs,date,availabilityMinutes,{userInitiated});
       if(availabilityMinutes!=null&&availabilityMinutes<(genSport==='run'?20:30))throw new Error(L('V tento den nemáš dost času na tento trénink.', 'You don\'t have enough time for this workout on this day.'));
@@ -2274,6 +2290,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // easy, and then the coach's own easy session stands), an easy one
       // anything but recovery. Tests and the race are the plan's whatever.
       const coachKind=coach.recommendation?.session?.kind,hardDay=['tempo','sweet_spot','threshold','vo2','vo2max','anaerobic','sprint'].includes(coachKind);
+      if(workoutId&&['tempo','sweet_spot','threshold','vo2max'].includes(libraryFocus)&&!hardDay)workoutId=null;
       const keeps=planned&&(planned.kind==='race'||planned.kind==='test'?true:planned.kind==='quality'?hardDay:coachKind!=='recovery'||planned.kind==='recovery');
       let planWorkout=null;
       if(keeps){
@@ -2282,11 +2299,11 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
         const base=id?await getWorkout(env.DB,String(id).replace(/~\d+$/,'')):null;
         if(base)planWorkout={id:base.id,minutes:planned.kind==='race'||planned.kind==='test'?base.duration_minutes:(minutes||base.duration_minutes)};
       }
-      let generated=planWorkout?await generateWorkout(env.DB,{sport:genSport,environment,date,coach,thresholds,workoutId:planWorkout.id,resizeTo:planWorkout.minutes}):await generateWorkout(env.DB,{sport:genSport,environment,date,coach,availabilityMinutes:resizeTo??sessionMinutes,variant:body.variant,thresholds,workoutId:body.workoutId?String(body.workoutId).slice(0,120):null,resizeTo});
+      let generated=planWorkout?await generateWorkout(env.DB,{sport:genSport,environment,date,coach,thresholds,workoutId:planWorkout.id,resizeTo:planWorkout.minutes}):await generateWorkout(env.DB,{sport:genSport,environment,date,coach,availabilityMinutes:resizeTo??sessionMinutes,variant:body.variant,thresholds,workoutId,resizeTo});
       if(!planWorkout&&sessionMinutes&&resizeTo==null&&generated.workout?.duration_minutes>sessionMinutes)generated=await generateWorkout(env.DB,{sport:genSport,environment,date,coach,thresholds,workoutId:generated.workout.id,resizeTo:sessionMinutes});
       // Today's proposal in the library: the AI picks among the rules' safe
       // candidates for the morning and says why (ai-workout-pick.js).
-      if(body.ai===true&&date===localToday()&&!planWorkout&&!body.workoutId&&!(Number(body.variant)>0)&&resizeTo==null&&generated.status==='ok'){
+      if(body.ai===true&&date===localToday()&&!planWorkout&&!workoutId&&!(Number(body.variant)>0)&&resizeTo==null&&generated.status==='ok'){
         const before=generated.workout?.id,today={score:coach.readiness?.score,zone:coach.readiness?.status,feeling:await readinessCheckin(env.DB,date).catch(()=>null),sleep:coach.readiness?.sleepMinutes!=null?{minutes:coach.readiness.sleepMinutes}:null,ratings:await recentWorkoutRatings(env.DB,{sport:genSport,since:shiftDate(date,-42)})};
         // Nothing in the library fits the day well: the AI writes its own (ai-workout-compose.js).
         const own=poorFit(generated.workout,{sport:genSport,kind:coachKind})?await composeWorkout(env,{sport:genSport,kind:coachKind,minutes:sessionMinutes||generated.durationMinutes,coach,today,focus:coachInputs.focus}):null;
@@ -2298,7 +2315,10 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
         const head=planInfo.name+L(' · týden ',' · week ')+planInfo.week+'/'+planInfo.weeks;
         generated.explanation.why=[planWorkout?head+(planned.kind==='quality'?L(': klíčový trénink týdne.',': the key session of the week.'):planned.kind==='test'?L(': test na začátku a na konci plánu.',': the test at the start and end of the plan.'):planned.kind==='race'?L(': závod.',': race day.'):'.'):head+L(': klíčový trénink dnes nahrazuje lehčí, podle tvé připravenosti.',': today the key session gives way to an easier one, from your readiness.'),...generated.explanation.why];
       }
-      return Response.json({...generated,weekRole,weekTarget,plan:planInfo,environmentReason:suggestedEnvironment.reason},{headers:{'Cache-Control':'no-store'}});
+      // The library workout that gave way, so the chat can say the card differs.
+      const replaced=askedWorkout&&!workoutId?{id:askedWorkout.id,name:askedWorkout.name,why:coach.recommendation?.adaptations||[]}:null;
+      if(replaced&&generated.explanation?.why)generated.explanation.why=[L('„'+askedWorkout.name+'“ dnes nahrazuje lehčí trénink: ','Today “'+askedWorkout.name+'” gives way to an easier session: ')+(replaced.why.join(', ')||L('podle připravenosti a zátěže','from your readiness and load'))+'.',...generated.explanation.why];
+      return Response.json({...generated,weekRole,weekTarget,plan:planInfo,environmentReason:suggestedEnvironment.reason,...(replaced?{replaced}:{})},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/feedback'&&request.method==='POST'){
       // Completion comes from the activity paired in Intervals.icu; the athlete adds RPE (and a note).
