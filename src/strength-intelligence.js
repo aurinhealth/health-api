@@ -305,6 +305,9 @@ export function progressionDecision(rows, exercise, targetReps, loadFactor = 1, 
     const easy = maxRpe != null && maxRpe <= 6.5 && (!range || minReps >= range.max);
     kg = topKg + Math.max(step, stepDown(topKg * (easy ? 0.05 : 0.025), step));
   }
+  // Body weight alone progresses by reps, not by a 2,5 kg the athlete may not
+  // have; added weight (a belt) still steps up (Revize 2026-10-16, nález 25).
+  if (decision === "increase" && meta?.loadUnit === LOAD_UNITS.BODYWEIGHT && topKg === 0) { decision = "hold"; kg = 0; }
   // A poor recovery day keeps the load instead of adding to it.
   if (decision === "increase" && loadFactor < 0.9) { decision = "hold"; kg = topKg; }
   // After three weeks without the exercise, start a little lighter.

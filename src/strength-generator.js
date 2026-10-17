@@ -538,6 +538,9 @@ function choosePlan(context, options = {}) {
     traps: ["DB shrug", "Smith machine shrug", "Cable upright row", "Barbell shrug"]
   };
 
+  // Bodyweight work last in its pattern, and in its movement group like the rest: a
+  // leg day yesterday counts against a bodyweight squat too (Revize 2026-10-16, nález 25).
+  candidatesByPattern.horizontalPush.push('Push-up');candidatesByPattern.quad.push('Bodyweight squat');candidatesByPattern.hinge.push('Glute bridge');candidatesByPattern.core.push('Dead bug');
   const groupOf = {}, lastGroupDate = new Map();
   for (const [group, list] of Object.entries(candidatesByPattern)) for (const ex of list) groupOf[ex] ??= group;
   for (const [ex, d] of lastExerciseDate) { const group = groupOf[ex]; if (group && (!lastGroupDate.has(group) || d > lastGroupDate.get(group))) lastGroupDate.set(group, d); }
@@ -554,7 +557,6 @@ function choosePlan(context, options = {}) {
     .sort((a, b) => a.sets - b.sets || a.order - b.order).map(x => x.group);
 
   // An exercise actually done in the last two days is left out entirely.
-  candidatesByPattern.horizontalPush.push('Push-up');candidatesByPattern.quad.push('Bodyweight squat');candidatesByPattern.hinge.push('Glute bridge');candidatesByPattern.core.push('Dead bug');
   const used = new Set((options.excludeExercises || []).map(normalizeExerciseName));
   for (const row of context?.strength?.recentCompletedSets || []) {
     const ex = normalizeExerciseName(row.exercise);

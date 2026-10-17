@@ -161,3 +161,18 @@ test("the chat's exercise swap keeps an estimate from another exercise near the 
   assert.ok(gymLoadEstimate("Pendulum squat",squat).kg<=70);
   assert.equal(gymLoadEstimate("Goblet squat",[{...squat[0],exercise:"Pivot leg press"}]),null);
 });
+
+test("bodyweight work takes its turn like the rest and progresses by reps (Revize 2026-10-16, nález 25)",()=>{
+  // A leg day three days ago counts against a glute bridge or bodyweight squat as against the machines.
+  const set=(exercise,kg)=>({exercise,workout_date:"2026-09-25",type:"WORK",set_no:1,actual_kg:kg,actual_reps:10,rpe:8,completed:1});
+  const legDay=["Pivot leg press","Pendulum squat","DB Romanian deadlift","Prone leg curl Prime","DB Bulgarian split squat","Hip thrust"].map(e=>set(e,40));
+  const ctx={date:"2026-09-28",cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:legDay}};
+  const names=generateStrengthPlan(ctx,{durationMinutes:75}).rows.filter(r=>r[0]==="WORK").map(r=>r[1]);
+  assert.ok(!names.some(n=>["Glute bridge","Bodyweight squat","Push-up"].includes(n)),names.join(", "));
+  // Push-ups 2× 20 at body weight: more reps next time, not +2,5 kg; a belt's weight still steps up.
+  const push=[1,2].map(n=>({exercise:"Push-up",workout_date:"2026-09-25",type:"WORK",set_no:n,actual_kg:0,actual_reps:20,rpe:7,completed:1}));
+  const e=estimateStartingLoad({exercise:"Push-up",history:push,targetReps:"6–12",fallbackKg:0,today:"2026-09-28"});
+  assert.deepEqual([e.kg,e.progression],[0,"hold"]);
+  const dips=[1,2].map(n=>({exercise:"Dips",workout_date:"2026-09-25",type:"WORK",set_no:n,actual_kg:10,actual_reps:12,rpe:7,completed:1}));
+  assert.equal(estimateStartingLoad({exercise:"Dips",history:dips,targetReps:"6–10",fallbackKg:0,today:"2026-09-28"}).progression,"increase");
+});
