@@ -288,7 +288,7 @@ export function cardKind(athlete, action, library = []) {
   const lib = action.workoutId ? library.find(w => String(w.id) === String(action.workoutId)) : null;
   const focus = lib ? (/sprint/.test(String(lib.system)) ? 'vo2max' : FOCUS_OF[kindOfSystem(lib.system)]) : FOCUS_OF[action.kind] || null;
   const day = athlete.week.days.find(d => d.date === action.date)?.daily || athlete.daily;
-  const inputs = { date: action.date, daily: day, week: athlete.week, fitness: athlete.fitness, health: athlete.health, gym: athlete.gym, preferences: athlete.preferences, profile: athlete.profile, recoveryTime: athlete.recoveryTime || null, sport: action.sport, availabilityMinutes: action.minutes };
+  const inputs = { date: action.date, daily: day, week: athlete.week, fitness: athlete.fitness, health: athlete.health, gym: athlete.gym, preferences: athlete.preferences, profile: athlete.profile, recoveryTime: athlete.recoveryTime || null, today: athlete.date || null, sport: action.sport, availabilityMinutes: action.minutes };
   let coach = buildCyclingCoachV2({ ...inputs, goal: focus ? { focus, asked: true } : null });
   if (focus && !['recovery', 'endurance', 'long_endurance'].includes(focus) && coach.readiness?.status === 'red') coach = buildCyclingCoachV2(inputs);
   return coach.recommendation?.session?.kind || null;

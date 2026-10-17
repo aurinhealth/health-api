@@ -13,6 +13,7 @@ import { daySessions, deviceEnergyExtra } from "./app-training.js";
 import { recoveryToday } from "./recovery-today.js";
 import { cycleState, askPeriodToday, cycleTrainingCaution } from "./cycle-model.js";
 import { qualityDomain } from "./session-intensity.js";
+import { sessionLoad } from "./training-load.js";
 
 const STEP_GOAL = 10000;
 
@@ -42,6 +43,28 @@ export function activeMinutes(rows, date) {
   const week = rows.filter(r => r.id >= monday && r.id <= date);
   if (!week.some(r => r.hrZoneMinutes)) return null;
   return { today: Math.round(counted(rows.find(r => r.id === date))), week: Math.round(week.reduce((s, r) => s + counted(r), 0)), target: 150 };
+}
+
+// A watch workout without a TSS (a gym session, Apple Health, Google) gets
+// one from its average heart rate, so the strain detail can split the day
+// between training and movement (StrainDetailView). Resting HR is the median
+// of the last 30 days, max HR the profile's or from age (Tanaka).
+export function withHeartRateLoad(training, wellness, profile, date) {
+  const completed = Array.isArray(training?.completed) ? training.completed : [];
+  const rest = (Array.isArray(wellness) ? wellness : []).filter(r => r && r.id <= date && r.id >= shift(date, -30)).map(r => num(r.restingHR)).filter(v => v > 0).sort((a, b) => a - b);
+  const age = num(profile?.age);
+  const athlete = { restHr: num(profile?.restHr) || (rest.length ? rest[Math.floor(rest.length / 2)] : null), maxHr: num(profile?.maxHr) || (age ? Math.round(208 - 0.7 * age) : null), sex: profile?.sex || null };
+  if (!athlete.restHr || !athlete.maxHr || !completed.some(a => num(a?.tss) == null)) return training;
+  return {
+    ...training,
+    completed: completed.map(a => {
+      if (!a || num(a.tss) != null) return a;
+      const avgHr = num(a.averageHeartRate ?? a.payload?.average_heartrate), minutes = (num(a.durationHours) || 0) * 60;
+      if (!(avgHr > 0) || !(minutes > 0)) return a;
+      const tss = sessionLoad({ minutes, avgHr, kind: /weight|strength|gym/i.test(String(a.type || "")) ? "strength" : "other" }, athlete);
+      return tss != null ? { ...a, tss, tssFromHeartRate: true } : a;
+    })
+  };
 }
 
 export function dayStrain(rows, date) {
@@ -164,7 +187,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   const debtNow = sleepDebtMinutes(sessions.filter(x => (x.date || String(x.endTime || "").slice(0, 10)) <= date), date, sleepNeedMinutes({ age, goal: sleepSet.goal }));
 
   // Training: planned and completed sessions of the day.
-  const training = daily.training || {};
+  const training = withHeartRateLoad(daily.training || {}, google, profile, date);
   const planned = Array.isArray(training.planned) ? training.planned : [];
   const plannedTss = planned.reduce((s, w) => s + (num(w.tss) || 0), 0);
 
