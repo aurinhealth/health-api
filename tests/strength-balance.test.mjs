@@ -81,3 +81,12 @@ test('a hard or long run tomorrow spares the legs like a key ride, and says it i
   context.running.nextRun=context.running.plannedWorkouts[0]={date:'2026-10-05',type:'Run',name:'Klidný běh',intensity:false,durationHours:.75};
   assert.equal(generateStrengthPlan(context,{durationMinutes:60}).protectedLegs,false);
 });
+
+test('a 90-minute walk loads the legs far less than a run (Revize 2026-10-16, nález 28)',()=>{
+  const load=type=>{const context=base();context.sports={recentActivities:[{id:type,date:'2026-10-03',type,durationHours:1.5}]};return sportMuscleLoad(context).get('quads');};
+  assert.equal(load('Run'),1);
+  assert.ok(load('Walk')<.5,String(load('Walk')));
+  // So a walk yesterday leaves the legs their full dose.
+  const context=base();context.sports={recentActivities:[{id:'walk',date:'2026-10-03',type:'Walk',durationHours:1.5}]};
+  assert.ok(!generateStrengthPlan(context,{maxExercises:8}).loadEstimates.some(x=>x.reducedDose||x.moderated));
+});

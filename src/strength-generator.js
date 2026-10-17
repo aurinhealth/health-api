@@ -4,7 +4,7 @@
 // The whole gym ("gym", also the default) is METAGYM Kutná Hora; exercises for
 // the equipment of other gyms need the athlete's own stations.
 export function fitsEquipment(name,setup){const equipment=typeof setup==='string'?setup:setup?.equipment;if(!equipment||equipment==='gym')return availableInGym(name);const allowed=(equipment==='custom'||equipment==='home')&&Array.isArray(setup?.stations)&&setup.stations.length?[...setup.stations,'floor_mats']:equipment==='dumbbells'?['dumbbells','adjustable_bench','floor_mats']:['floor_mats'];return EXERCISE_STATIONS[name]?.every(id=>allowed.includes(id))===true;}
-import { L } from './lang.js';
+import { L, isImperial, kgToLb } from './lang.js';
 import { estimateStartingLoad, resolveLoad, progressionDecision, EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { withoutDisliked } from './exercise-feedback.js';
@@ -269,6 +269,17 @@ for (const [name, def] of Object.entries(EXERCISES)) { const cs = def.note; Obje
 for (const [id, group] of Object.entries(FOCUS_GROUPS)) { const cs = group.label; Object.defineProperty(group, 'label', { get: () => L(cs, GROUP_EN[id] || cs), enumerable: true }); }
 
 
+// The session's focus: "legs", "lower body" or "nohy" is the lower body,
+// "upper body" or "vršek" the upper, "full body" none; anything else is refused
+// instead of quietly giving a full-body plan (Revize 2026-10-16, nález 28).
+export function normalizeGymFocus(value){
+  if(value==null||value==='')return undefined;
+  const v=String(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/[\s_-]+/g,' ');
+  if(/^(?:lower(?: body)?|legs?|leg day|nohy|dolni cast tela)$/.test(v))return 'lower';
+  if(/^(?:upper(?: body)?|horni cast tela|vrsek)$/.test(v))return 'upper';
+  if(/^(?:full(?: ?body)?|cele telo)$/.test(v))return undefined;
+  throw new Error(L('Neznámé zaměření tréninku: '+String(value).slice(0,40)+'. Vyber horní nebo dolní část těla, nebo celé tělo.','Unknown workout focus: '+String(value).slice(0,40)+'. Choose upper body, lower body or full body.'));
+}
 export function validateFocusMuscles(value){
   if(!Array.isArray(value)||value.length<1||value.length>5)return null;
   const unique=[...new Set(value.map(String))];
@@ -666,10 +677,12 @@ const kgText = x => L(String(x).replace(".", ","), String(x));
 // What the load is based on, in one short line next to the exercise.
 function progressionNote(estimate) {
   if (estimate.source !== "own-history") return "";
-  const last = L("minule ", "last time ") + (estimate.referenceSets > 1 ? estimate.referenceSets + "× " : "") + estimate.referenceReps + L(" op. @ ", " reps @ ") + kgText(estimate.referenceKg) + " kg" + (estimate.referenceRpe != null ? ", RPE " + kgText(estimate.referenceRpe) : "");
-  const diff = Math.round((estimate.kg - estimate.referenceKg) * 100) / 100, signed = (diff > 0 ? "+" : "") + kgText(diff);
-  if (estimate.progression === "increase") return "↑ " + last + " → " + signed + " kg";
-  if (estimate.progression === "decrease") return "↓ " + last + " → " + signed + L(" kg, ať udržíš rozsah opakování", " kg to stay in the rep range");
+  // An imperial athlete reads the load in lb, the plan's numbers stay kg (Revize 2026-10-16, nález 28).
+  const load = kg => isImperial() ? kgText(Math.round(kgToLb(kg) * 10) / 10) + " lb" : kgText(kg) + " kg";
+  const last = L("minule ", "last time ") + (estimate.referenceSets > 1 ? estimate.referenceSets + "× " : "") + estimate.referenceReps + L(" op. @ ", " reps @ ") + load(estimate.referenceKg) + (estimate.referenceRpe != null ? ", RPE " + kgText(estimate.referenceRpe) : "");
+  const diff = Math.round((estimate.kg - estimate.referenceKg) * 100) / 100, signed = (diff > 0 ? "+" : "") + load(diff);
+  if (estimate.progression === "increase") return "↑ " + last + " → " + signed;
+  if (estimate.progression === "decrease") return "↓ " + last + " → " + signed + L(", ať udržíš rozsah opakování", " to stay in the rep range");
   if (estimate.progression === "return") return L("po delší pauze lehčeji (", "lighter after a longer break (") + last + ")";
   if (estimate.stalled) return "= " + last + L(" – 3× bez posunu: přidej opakování, jinak příště vyměníme cvik", " – 3× without progress: add a rep, otherwise we'll swap the exercise next time");
   return "= " + last + L(" – cíl: o opakování víc", " – goal: one more rep");
@@ -826,6 +839,7 @@ export function generateStrengthPlan(context, options = {}) {
   // (Revize doporučování tréninků 2026-10-16, nález 22).
   const today=context?.adaptive?.recovery,ill=(today?.flags||[]).some(f=>/^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))||context?.checkin==='sick';
   if(!options.diagnosticPreview&&(today?.zone==='red'||ill))throw new Error(ill?L('Dech nebo teplota ve spánku jsou vyšší než obvykle, může jít o začátek nemoci. Posilovnu dnes vynech, nanejvýš lehké protažení.','Your breathing or temperature in sleep is higher than usual, which may be an oncoming illness. Skip the gym today, at most some easy stretching.'):L('Připravenost je dnes nízká (červená zóna). Posilovnu dnes vynech, nanejvýš lehké protažení.','Readiness is low today (red zone). Skip the gym today, at most some easy stretching.'));
+  options = { ...options, focus: normalizeGymFocus(options.focus) };
   const pain = painfulExercises(context?.athleteState?.memories);
   if (pain.avoid.size) options = { ...options, excludeExercises: [...(options.excludeExercises || []), ...pain.avoid] };
   // The shared recovery week decides when it is known; four solid gym weeks

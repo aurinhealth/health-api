@@ -1,7 +1,7 @@
 import { L } from './lang.js';
 import { parseStrengthPlan } from './strength-history.js';
 import { EXERCISES, fitsEquipment, painfulExercises } from './strength-generator.js';
-import { findExerciseAlternatives } from './strength-intelligence.js';
+import { findExerciseAlternatives, resolveLoad } from './strength-intelligence.js';
 import { gymLoadEstimate } from './gym-catalog.js';
 import { availableAt } from './gym-equipment.js';
 
@@ -33,7 +33,8 @@ export function prepareGymSwap(gym,fromExercise,toExercise,reason,memories=[]){
   const estimate=gymLoadEstimate(toExercise,gym.history||[])||{kg:null};
   const kg=estimate.kg??'',video='https://www.youtube.com/results?search_query='+encodeURIComponent(toExercise+' exercise technique');
   const rows=[];
-  if(def.warmup){for(const [i,factor,reps] of [[1,.4,'8'],[2,.65,'5'],[3,.8,'3']])rows.push(['WARMUP',toExercise,String(i),kg===''?'':String(Math.round(kg*factor*2)/2),reps,'','','','FALSE','[WARMUP]',video,'FALSE','']);}
+  // Warm-ups at the equipment's step (a bar 17,5 kg, not 17; Revize 2026-10-16, nález 28).
+  if(def.warmup){for(const [i,factor,reps] of [[1,.4,'8'],[2,.65,'5'],[3,.8,'3']])rows.push(['WARMUP',toExercise,String(i),kg===''?'':String(resolveLoad(toExercise,kg*factor)),reps,'','','','FALSE','[WARMUP]',video,'FALSE','']);}
   for(const [i,set] of work.entries())rows.push(['WORK',toExercise,String(i+1),String(kg),def.reps,'','','','FALSE',set.note,video,set.toFailure?'TRUE':'FALSE',set.superset]);
   return {type:'gym_swap',date:parsed.date,fromExercise,toExercise,reason,sets:work.length,reps:def.reps,kg:estimate.kg,
     sourceSnapshot:source.map(r=>gym.values[r.planRow-1]),replacementRows:rows};
