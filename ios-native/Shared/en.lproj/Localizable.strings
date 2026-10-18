@@ -1191,7 +1191,7 @@
 "Co se povedlo a co příště jinak." = "What went well and what to change next time.";
 "Vyfoť talíř nebo etiketu, hodnoty doplní AI." = "Snap a plate or a label, AI fills in the values.";
 "Jídlo vlastními slovy" = "Food in your own words";
-"Napiš, co jsi snědl, a najde se i to, co katalog nezná." = "Write what you ate, even what the catalog doesn't know.";
+"Napiš, co máš na talíři, a najde se i to, co katalog nezná." = "Write what's on your plate, even what the catalog doesn't know.";
 "Technika každého cviku" = "Technique for every exercise";
 "Popis provedení i pro cviky mimo katalog." = "How to do it, also for exercises outside the catalog.";
 "Regenerace a spánek" = "Recovery and sleep";
@@ -1404,6 +1404,7 @@
 "Widgety" = "Widgets";
 "Zatím bez dat" = "No data yet";
 "Odebrat %@" = "Remove %@";
+"Odebrat widget" = "Remove widget";
 "Makroživiny" = "Macros";
 "Týdně" = "Per week";
 "Regenerace na dnes" = "Recovery for today";
@@ -2558,6 +2559,9 @@
 "Tep se měří" = "Heart rate measured";
 "Tep se neměří" = "No heart rate";
 "připojeno, zatím neposílá tep" = "connected, no heart rate yet";
+"Teď měří" = "Measuring now";
+"snímač tepu" = "heart rate sensor";
+"přes Apple Zdraví" = "via Apple Health";
 "Skrýt trénink" = "Hide workout";
 "Skrýt série" = "Hide sets";
 "Ukázat série" = "Show sets";
@@ -2635,3 +2639,40 @@
 "%@ cviky" = "%@ exercises";
 "%@ cviků" = "%@ exercises";
 "+ %@ min kardio" = "+ %@ min cardio";
+
+/* Weekly allowance of coach messages (CoachAllowance) */
+"zbývá %@ zpráva" = "%@ message left";
+"zbývají %@ zprávy" = "%@ messages left";
+"zbývá %@ zpráv" = "%@ messages left";
+"Tento týden ti zbývá %@ zpráva koučovi." = "You have %@ coach message left this week.";
+"Tento týden ti zbývají %@ zprávy koučovi." = "You have %@ coach messages left this week.";
+"Tento týden ti zbývá %@ zpráv koučovi." = "You have %@ coach messages left this week.";
+"Tento týden zbývá %@ zpráva koučovi." = "%@ coach message left this week.";
+"Tento týden zbývají %@ zprávy koučovi." = "%@ coach messages left this week.";
+"Tento týden zbývá %@ zpráv koučovi." = "%@ coach messages left this week.";
+"Obnoví se zítra." = "They renew tomorrow.";
+"Obnoví se v pondělí." = "They renew on Monday.";
+"Zprávy koučovi na tento týden jsou vyčerpané." = "Your coach messages for this week are used up.";
+"Další přibudou zítra." = "More come tomorrow.";
+"Další přibudou v pondělí." = "More come on Monday.";
+"Další zprávy zítra" = "More messages tomorrow";
+"Další zprávy v pondělí" = "More messages on Monday";
+"Technika: %@" = "Technique: %@";
+"rozcvičovací série" = "warm-up";
+"rozcvičovacích sérií" = "warm-ups";
+"Snadná" = "Easy";
+"Těžká" = "High";
+"Osobní rekord" = "Personal record";
+"Dropset" = "Drop set";
+"dropset" = "drop set";
+"Minimální úsilí" = "Minimal effort";
+"Soustředění na techniku" = "Focus on form";
+"Mírné úsilí, čistá opakování" = "Mild effort, clean reps";
+"Náročné, drž soustředění" = "Challenging, stay focused";
+"Velmi těžké, blízko limitu" = "Very hard, near the limit";
+"Ani jedno opakování navíc" = "Not one more rep";
+"Víc než kdykoli předtím" = "More than ever before";
+"Lehčí váha hned bez pauzy" = "Lighter weight, no rest";
+"Bez hodnocení" = "Not rated";
+"Jak těžká série byla" = "How hard the set was";
+"Odebrat dropset" = "Remove drop set";

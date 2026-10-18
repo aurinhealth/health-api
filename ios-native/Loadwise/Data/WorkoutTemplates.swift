@@ -108,7 +108,7 @@ struct WorkoutTemplate: Codable, Hashable {
     static func from(_ day: GymDay, minutes: Int?) -> WorkoutTemplate {
         WorkoutTemplate(name: day.planName ?? L10n.tr("Silový trénink"), minutes: minutes,
                         exercises: day.exercises.filter { $0.workCount > 0 }.map { e in
-                            TemplateExercise(name: e.name, sets: min(e.workCount, 10), reps: cleanReps(reps(e.sets.first { !$0.warmup })))
+                            TemplateExercise(name: e.name, sets: min(e.workCount, 10), reps: cleanReps(reps(e.sets.first(where: \.work))))
                         })
     }
 

@@ -84,6 +84,7 @@ struct AppleHealthCategoryList: View {
         case .steps, .workouts: return Palette.green
         case .energy, .food: return Palette.amber
         case .body: return Palette.brown
+        case .journal: return Palette.pink
         }
     }
 }

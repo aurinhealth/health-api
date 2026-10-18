@@ -1,9 +1,10 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-// Editing a panel's widgets like the iPhone home screen: "Upravit" makes the
-// cards wiggle with a minus to remove them, they move by dragging, "+" opens
-// the gallery and a size is picked by swiping before "Přidat widget".
+// Editing a panel's widgets like the iPhone home screen: "Upravit", holding a
+// finger on an empty spot or the widget's own menu makes the cards wiggle with
+// a minus to remove them, they move by dragging, "+" opens the gallery and a
+// size is picked by swiping before "Přidat widget".
 
 /// A panel's widgets: the saved layout, and while editing the edit controls.
 struct WidgetBoard: View {
@@ -17,6 +18,9 @@ struct WidgetBoard: View {
     @AppStorage private var stored: String
     @State private var dragging: WidgetKind?
     @State private var gallery = false
+    /// How far "+" and "Hotovo" come down so they stay on screen while the page scrolls.
+    @State private var pinned: CGFloat = 0
+    @Environment(\.widgetEditingReport) private var report
 
     init(panel: WidgetPanel, data: WidgetData, editing: Binding<Bool>, editTitle: String? = "Upravit widgety") {
         self.panel = panel
@@ -37,6 +41,7 @@ struct WidgetBoard: View {
             if editing {
                 editHeader
                     .padding(.bottom, 22)
+                    .zIndex(1)
             }
             VStack(spacing: 12) {
                 ForEach(WidgetLayoutStore.rows(shown)) { row in
@@ -44,12 +49,14 @@ struct WidgetBoard: View {
                 }
             }
             if !editing, let title = editTitle {
-                WidgetEditButton(title: title) {
-                    withAnimation(.easeInOut(duration: 0.25)) { editing = true }
-                }
+                WidgetEditButton(title: title, action: startEditing)
                 .padding(.top, shown.isEmpty ? 0 : 28)
             }
         }
+        .widgetEditHold($editing)
+        .sensoryFeedback(.impact(weight: .medium), trigger: editing) { _, now in now }
+        .onChange(of: editing, initial: true) { _, now in report?(now) }
+        .onDisappear { if editing { report?(false) } }
         .task { await loadMissing(items.map(\.kind)) }
         .sheet(isPresented: $gallery) {
             WidgetGallery(panel: panel, data: data, placed: Set(items.map(\.kind))) { kind, size in
@@ -64,6 +71,8 @@ struct WidgetBoard: View {
         editing ? items : items.filter { data.hasData($0.kind) }
     }
 
+    /// The panel's name, and "+" and "Hotovo", which stay at the top of the
+    /// screen wherever the page is scrolled, as on the home screen.
     private var editHeader: some View {
         ZStack {
             SectionLabel(text: panel.title)
@@ -91,8 +100,12 @@ struct WidgetBoard: View {
                 }
                 .buttonStyle(.plain)
             }
+            .offset(y: pinned)
         }
         .frame(height: 36)
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named("pageScroll")).minY } action: { top in
+            pinned = max(0, 8 - top)
+        }
     }
 
     @ViewBuilder private func rowView(_ row: WidgetLayoutRow) -> some View {
@@ -118,8 +131,22 @@ struct WidgetBoard: View {
                 }
                 .onDrop(of: [UTType.text], delegate: WidgetDropDelegate(target: item.kind, items: itemsBinding, dragging: $dragging))
         } else {
+            // Held like a home screen widget: its menu.
             PanelWidget(item: item, data: data)
+                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .contextMenu {
+                    Button(action: startEditing) {
+                        Label(L10n.tr(editTitle ?? "Upravit widgety"), systemImage: "slider.horizontal.3")
+                    }
+                    Button(role: .destructive) { remove(item.kind) } label: {
+                        Label("Odebrat widget", systemImage: "minus.circle")
+                    }
+                }
         }
+    }
+
+    private func startEditing() {
+        withAnimation(.easeInOut(duration: 0.25)) { editing = true }
     }
 
     private func save(_ list: [PlacedWidget]) {
@@ -159,6 +186,24 @@ struct WidgetBoard: View {
         }
         for tab in tabs {
             await model.refreshIfStale(tab)
+        }
+    }
+}
+
+extension View {
+    /// The gaps between the widgets: a finger held there starts editing them,
+    /// as on the home screen. Not behind the header, whose plain buttons
+    /// (the avatar) would lose their taps to it.
+    func widgetEditHold(_ editing: Binding<Bool>) -> some View {
+        background {
+            if !editing.wrappedValue {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onLongPressGesture(minimumDuration: 0.5) {
+                        withAnimation(.easeInOut(duration: 0.25)) { editing.wrappedValue = true }
+                    }
+                    .accessibilityHidden(true)
+            }
         }
     }
 }
@@ -227,21 +272,23 @@ struct EditableWidget: View {
     }
 }
 
-/// The home screen's jiggle: a small rotation back and forth.
+/// The home screen's jiggle: a small rotation back and forth. Drawn from the
+/// clock, so the card coming in with an animation cannot stop it.
 struct Wiggle: ViewModifier {
     let amplitude: Double
     let seed: Int
-    @State private var tilted = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        content
-            .rotationEffect(.degrees(reduceMotion ? 0 : (tilted ? amplitude : -amplitude)))
-            .onAppear {
-                guard !reduceMotion else { return }
-                let duration = 0.13 + Double(seed % 4) * 0.015
-                withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: true)) { tilted = true }
-            }
+        TimelineView(.animation(minimumInterval: nil, paused: reduceMotion)) { context in
+            content.rotationEffect(.degrees(reduceMotion ? 0 : angle(at: context.date)))
+        }
+    }
+
+    private func angle(at date: Date) -> Double {
+        let period = 0.26 + Double(seed % 4) * 0.03
+        let phase = Double(seed % 3) * 0.7
+        return amplitude * sin(date.timeIntervalSinceReferenceDate * 2 * .pi / period + phase)
     }
 }
 

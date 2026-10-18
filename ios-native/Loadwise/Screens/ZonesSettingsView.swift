@@ -153,7 +153,7 @@ struct ZonesSettingsView: View {
 
     // MARK: Values
 
-    static func pace(_ seconds: Double) -> String {
+    nonisolated static func pace(_ seconds: Double) -> String {
         let s = Int(seconds.rounded())
         return "\(s / 60):" + String(format: "%02d", s % 60)
     }

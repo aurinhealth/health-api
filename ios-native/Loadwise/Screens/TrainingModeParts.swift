@@ -16,7 +16,7 @@ enum GymSessionMath {
     /// same side by sides): the next set starts from them, as typed. Warm-ups
     /// keep their own plan.
     static func carried(_ set: GymSet, in exercise: GymExercise) -> (kg: String?, reps: String?)? {
-        guard !set.warmup, let before = exercise.sets.last(where: { !$0.warmup && $0.done && $0.row < set.row && $0.side == set.side }) else { return nil }
+        guard set.work, let before = exercise.sets.last(where: { $0.work && $0.done && $0.row < set.row && $0.side == set.side }) else { return nil }
         return (before.kg?.nilIfBlank, before.reps?.nilIfBlank)
     }
 
@@ -27,8 +27,8 @@ enum GymSessionMath {
 
     /// The work set of the same number last time: "77,5 × 8".
     static func lastTime(_ set: GymSet, in exercise: GymExercise, last: GymHistory.Session?) -> String? {
-        guard !set.warmup, let last else { return nil }
-        let work = exercise.sets.filter { !$0.warmup }
+        guard set.work, let last else { return nil }
+        let work = exercise.sets.filter(\.work)
         guard let position = work.firstIndex(where: { $0.row == set.row }), last.sets.indices.contains(position) else { return nil }
         return lift(last.sets[position])
     }
@@ -53,7 +53,7 @@ enum GymSessionMath {
     }
 
     static func lifts(_ exercise: GymExercise) -> [GymHistory.Lift] {
-        exercise.sets.filter { $0.done && !$0.warmup }.map { set in
+        exercise.sets.filter { $0.done && $0.work }.map { set in
             GymHistory.Lift(kg: set.kg.flatMap(LiftWeight.number), reps: set.reps.flatMap(LiftWeight.number), target: nil, rpe: nil)
         }
     }
@@ -119,6 +119,13 @@ struct GymSetRow: View {
     var repsText: Binding<String>? = nil
     /// The planned reps ("5–8") shown in the empty field of the set at hand.
     var repsHint: String? = nil
+    /// A drop set: "↳" under the set it follows.
+    var drop = false
+    /// W T E M H F PR D (GymIntensity.swift); planned: still the plan's.
+    var intensity: String? = nil
+    var planned = false
+    /// The letter tapped: its sheet. Nil shows no letter column.
+    var onIntensity: (() -> Void)? = nil
     /// A ticked set's weight and reps changed afterwards (shown kg, reps).
     var onEdit: ((String, String) -> Void)? = nil
     var toggle: () -> Void = {}
@@ -132,7 +139,7 @@ struct GymSetRow: View {
         HStack(spacing: 8) {
             HStack(spacing: 6) {
                 Text(label).font(.subheadline.weight(.semibold))
-                    .foregroundStyle(state == .current ? Palette.amber : state == .next ? Palette.faint : Palette.secondary)
+                    .foregroundStyle(drop ? GymIntensity.color("D") : state == .current ? Palette.amber : state == .next ? Palette.faint : Palette.secondary)
                     .frame(width: side == nil ? 26 : 16, alignment: .leading)
                 if let side {
                     Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side)).frame(width: 12)
@@ -142,6 +149,17 @@ struct GymSetRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg)
             field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps, hint: repsHint).frame(width: 52)
+            if let onIntensity {
+                Button(action: onIntensity) {
+                    IntensityPill(letter: intensity, planned: planned)
+                        .opacity(state == .next ? 0.6 : 1)
+                        .frame(width: 40, height: 40)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(intensity.map { GymIntensity.name($0) } ?? L10n.tr("Bez hodnocení"))
+                .accessibilityHint(L10n.tr("Jak těžká série byla"))
+            }
             Button(action: toggle) {
                 Group {
                     if state == .done {
@@ -485,7 +503,7 @@ struct RestSetsList: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        let editable: Int? = onWeight == nil ? nil : exercise.sets.first { !$0.done && !$0.warmup }?.row
+        let editable: Int? = onWeight == nil ? nil : exercise.sets.first { !$0.done && $0.work }?.row
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Text("Série").frame(width: 40, alignment: .leading)
@@ -502,7 +520,7 @@ struct RestSetsList: View {
                 Rectangle().fill(Palette.hairline).frame(height: 1)
                 HStack(spacing: 8) {
                     HStack(spacing: 4) {
-                        Text(s.warmup ? "W" : s.side == "P" ? "" : s.number)
+                        Text(s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number)
                         if let side = s.side { Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side)) }
                         if s.done { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.green) }
                     }
@@ -533,5 +551,59 @@ struct RestSetsList: View {
             guard was, !now, let onWeight, !typed.trimmingCharacters(in: .whitespaces).isEmpty else { return }
             onWeight(typed)
         }
+    }
+}
+
+/// A set row swiped left: Smazat shows behind it, a long swipe deletes at once.
+/// Off for sets already done (those go back with the tick first).
+struct SwipeToDelete: ViewModifier {
+    let enabled: Bool
+    let onDelete: () -> Void
+    @State private var offset: CGFloat = 0
+    /// Where the row was when the drag began: closed or open on Smazat.
+    @State private var base: CGFloat?
+    private let width: CGFloat = 84
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: offset)
+            .background(alignment: .trailing) {
+                if offset < 0 {
+                    Button { delete() } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: "trash").font(.system(size: 15, weight: .semibold))
+                            Text("Smazat").font(Typo.caption.weight(.semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(width: -offset).frame(maxHeight: .infinity)
+                        .background(Palette.red, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            // Clipped only while open: the amber frame of the set at hand stays whole.
+            .clipShape(Rectangle().inset(by: offset < 0 ? 0 : -4))
+            .simultaneousGesture(enabled ? DragGesture(minimumDistance: 16).onChanged { drag in
+                let dx = drag.translation.width
+                if base == nil {
+                    guard abs(dx) > abs(drag.translation.height) else { return }
+                    base = offset
+                }
+                offset = min(0, (base ?? 0) + dx)
+            }.onEnded { drag in
+                let dx = drag.translation.width
+                guard base != nil else { return }
+                base = nil
+                withAnimation(.snappy) {
+                    if offset < -width * 2.4 { offset = 0; onDelete() }
+                    else { offset = offset < -width / 2 && dx < 0 ? -width : 0 }
+                }
+            } : nil)
+            .onChange(of: enabled) { _, on in if !on { offset = 0 } }
+    }
+
+    private func delete() {
+        withAnimation(.snappy) { offset = 0 }
+        onDelete()
     }
 }

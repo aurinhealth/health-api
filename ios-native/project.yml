@@ -12,6 +12,9 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+    # Swift concurrency checks, as warnings in Swift 5 mode: every place two
+    # threads could touch the same data. ios-native.yml counts them per file.
+    SWIFT_STRICT_CONCURRENCY: complete
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""
@@ -90,7 +93,7 @@ targets:
         NSCameraUsageDescription: Aurin čte čárové kódy na obalech potravin, aby je mohl zapsat do jídelníčku.
         NSPhotoLibraryUsageDescription: Aurin načte fotku jídla nebo posilovny, kterou vybereš.
         NSLocationWhenInUseUsageDescription: Aurin vezme polohu jen když o to požádáš, aby ukázal počasí a kouč poradil trénink venku nebo uvnitř.
-        NSHealthShareUsageDescription: Aurin čte z Apple Health spánek, tréninky, tep, HRV, teplotu zápěstí, kroky, váhu, jídlo a pití z jiných aplikací a se zapnutým sledováním cyklu i menstruaci, ovulační testy a antikoncepci, aby spočítal regeneraci, zátěž a kalorický cíl.
+        NSHealthShareUsageDescription: Aurin čte z Apple Health spánek, tréninky, tep, HRV, teplotu zápěstí, kroky, váhu, jídlo a pití z jiných aplikací, pro deník všímavost, čas na denním světle, hluk ve spánku, příznaky a sexuální aktivitu a se zapnutým sledováním cyklu i menstruaci, ovulační testy a antikoncepci, aby spočítal regeneraci, zátěž a kalorický cíl a vyplnil deník.
         # Settings → Synchronizace → Apple Zdraví writes workouts, weight, food and water (App/AppleHealthExport.swift).
         NSHealthUpdateUsageDescription: Aurin do Apple Health zapíše jen to, co v aplikaci sám zaznamenáš a v Synchronizaci zapneš, například tréninky, váhu, jídlo a pití.
         # Nastavení → Snímač tepu: a Bluetooth chest strap or band for Režim tréninku (App/HeartRateSensor.swift).

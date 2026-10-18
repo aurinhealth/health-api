@@ -10,9 +10,11 @@
 // drinks (Pití), the food diary and the activities; the athlete's own answer
 // wins over them.
 import { CATALOG, DEFAULT_PINNED, catalogItem, normalizeCustomItem } from "./journal-catalog.js";
-import { drinkFromFoodEntry } from "./fluids.js";
+import { drinkFromFoodEntry, hydrationMl, hydrationTarget } from "./fluids.js";
+import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { localDateTime } from "./user-time.js";
+import { JOURNAL } from "./apple-health.js";
 import { L } from "./lang.js";
 
 export const MOOD = "mood";
@@ -236,7 +238,7 @@ export async function autoDays(db, from, to) {
     if (time) (drinkTimes[date] ||= []).push(time);
     if (alcohol) { const a = at(date, "alcohol"); a.amount = (a.amount || 0) + alcoholDrinks(kind, ml, name); a.time = later(a.time, time); return; }
     const water = (days[date] ||= {}).__water || 0;
-    days[date].__water = water + Math.max(0, Number(ml) || 0);
+    days[date].__water = water + Math.max(0, hydrationMl(ml, kind));
     if (/energ|red bull|monster|\bburn\b|rockstar/i.test(String(name || ""))) set(date, "energy_drink", true);
     if (kind === "coffee" || (kind === "food" && /espresso|ristretto|lungo|káv|kav|coffee|latte|cappucc|kafe|americano|flat white/i.test(String(name || "")))) {
       const c = at(date, "coffee_cups"); c.amount = (c.amount || 0) + 1; c.time = later(c.time, time);
@@ -249,7 +251,7 @@ export async function autoDays(db, from, to) {
   const read = async (sql, ...args) => {
     try { return (await db.prepare(sql).bind(db.userId, ...args).all()).results || []; } catch (error) { if (missingTable(error)) return []; throw error; }
   };
-  const [fluids, food, activities, nights] = await Promise.all([
+  const [fluids, food, activities, nights, weights, profile, health] = await Promise.all([
     read("SELECT date,consumed_at,ml,kind FROM fluid_log WHERE user_id=? AND date>=? AND date<=?", from, to),
     read("SELECT id,consumed_date,consumed_at,recipe_title,note,kcal FROM food_logs WHERE user_id=? AND consumed_date>=? AND consumed_date<=? AND (status IS NULL OR status='eaten')", from, to),
     read(`SELECT data_type,source_family,start_time,end_time,payload_json FROM health_datapoints
@@ -257,7 +259,13 @@ export async function autoDays(db, from, to) {
         AND (record_role IS NULL OR record_role!='duplicate')`, shift(from, -1), shift(to, 1) + "T23:59"),
     read(`SELECT start_time,end_time,payload_json FROM health_datapoints
       WHERE user_id=? AND data_type='sleep' AND start_time>=? AND start_time<?
-        AND (record_role IS NULL OR record_role!='duplicate')`, shift(from, -16), shift(to, 2))
+        AND (record_role IS NULL OR record_role!='duplicate')`, shift(from, -16), shift(to, 2)),
+    read(`SELECT COALESCE(sample_time,start_time,end_time) AS at,value_numeric FROM health_datapoints
+      WHERE user_id=? AND data_type='weight' AND value_numeric IS NOT NULL AND COALESCE(sample_time,start_time,end_time)<=?
+      ORDER BY at`, to + "T23:59:59"),
+    loadEffectiveProfile(db, db.userId).catch(() => null),
+    read(`SELECT data_type,sample_time,value_numeric FROM health_datapoints
+      WHERE user_id=? AND data_type IN (SELECT value FROM json_each(?)) AND sample_time>=? AND sample_time<=?`, JSON.stringify(Object.keys(JOURNAL)), from, shift(to, 1))
   ]);
   for (const f of fluids) drink(f.date, clockOf(f.consumed_at), f.kind, f.ml, "", f.kind === "beer" || f.kind === "wine");
   const dinner = {};
@@ -269,11 +277,13 @@ export async function autoDays(db, from, to) {
     if (time) { const m = at(row.consumed_date, "late_meal"); m.time = later(m.time, time); }
     if (time && time >= "18:00") dinner[row.consumed_date] = (dinner[row.consumed_date] || 0) + (Number(row.kcal) || 0);
   }
-  const trained = new Set(), measured = new Set();
+  const trained = new Set(), measured = new Set(), hours = {};
   for (const a of dedupeActivities(activities.map(activityFromRow))) {
     if (!a || a.date < from || a.date > to) continue;
     measured.add(a.date);
     const minutes = Number(a.minutes) || 0;
+    const h = hours[a.date] ||= { trainingHours: 0, walkHours: 0 };
+    h[a.kind === "walk" ? "walkHours" : "trainingHours"] += minutes / 60;
     if (a.kind === "walk") {
       if (minutes >= 60) set(a.date, "long_walk", true);
     } else {
@@ -322,9 +332,30 @@ export async function autoDays(db, from, to) {
   for (const date of logged) {
     if (date < from || date > to) continue;
     const day = days[date] ||= {};
-    if (day.__water != null) set(date, "little_water", day.__water < 1500);
+    // Too little: under the day's drinks target (body weight and training), as in Pití.
+    if (day.__water != null) {
+      const weight = weights.filter(w => String(w.at).slice(0, 10) <= date).at(-1)?.value_numeric;
+      set(date, "little_water", day.__water < hydrationTarget({ weightKg: weight, sex: profile?.sex, ...hours[date] }).ml);
+    }
     if (!day.energy_drink) set(date, "energy_drink", false);
     set(date, "heavy_dinner", (dinner[date] || 0) >= 900);
+  }
+  // From Apple Health (apple-health.js JOURNAL), one value a day.
+  const SYMPTOMS = { "daily-symptom-headache": "headache", "daily-symptom-runny-nose": "runny_nose", "daily-symptom-body-ache": "sore_muscles", "daily-symptom-stomach": "stomach" };
+  for (const h of health) {
+    const value = Number(h.value_numeric), type = h.data_type;
+    // The night's noise is on the day of waking up; the night belongs to the evening before.
+    const date = type === "daily-night-noise" ? shift(h.sample_time, -1) : String(h.sample_time).slice(0, 10);
+    if (!Number.isFinite(value) || date < from || date > to) continue;
+    if (type === "daily-mindful-minutes" && value > 0) set(date, "meditation", true);
+    else if (type === "daily-daylight-minutes") set(date, "outdoors", value >= 30);
+    else if (type === "daily-morning-daylight-minutes") set(date, "morning_light", value >= 10);
+    else if (type === "daily-night-noise") set(date, "night_noise", value >= 50);
+    else if (SYMPTOMS[type] && value > 0) set(date, SYMPTOMS[type], true);
+    else if (type === "daily-sexual-activity" && value > 0) set(date, "sex", true);
+    else if (type === "daily-yoga-minutes" && value > 0) set(date, "yoga", true);
+    else if (type === "daily-stretching-minutes" && value > 0) set(date, "stretching", true);
+    else if (type === "daily-time-zone-change" && value !== 0) set(date, "time_zone", true);
   }
   for (const date of measured) if (!trained.has(date) && !days[date]?.evening_training) set(date, "rest_day", true);
   for (const date of trained) set(date, "rest_day", false);

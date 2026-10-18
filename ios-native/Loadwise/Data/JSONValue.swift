@@ -2,7 +2,7 @@ import Foundation
 
 /// Any JSON value. Settings forms read a server object, change a few keys and
 /// send the whole object back, so keys the app does not know are kept as they are.
-enum JSONValue: Codable, Equatable {
+enum JSONValue: Codable, Equatable, Sendable {
     case null
     case bool(Bool)
     case number(Double)

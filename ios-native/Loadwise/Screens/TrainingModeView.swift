@@ -17,7 +17,10 @@ struct TrainingModeView: View {
     @State private var index = 0
     @State private var kg = ""
     @State private var reps = ""
-    @State private var rpe = 8
+    /// The set whose letter is being chosen (IntensitySheet).
+    @State private var intensityFor: SetRef?
+    /// Sets whose letter was chosen here: shown solid, not as the plan's.
+    @State private var picked: Set<Int> = []
     @AppStorage("restSets") private var restSets = 90
     @AppStorage("restExercises") private var restExercises = 120
     @State private var restEnd: Date?
@@ -54,6 +57,9 @@ struct TrainingModeView: View {
     @State private var startTapped = false
     /// Hidden with the arrow: the workout goes on, only the screen closes.
     @State private var minimizing = false
+    /// Where the set table is, so a swipe on a set row deletes the set
+    /// instead of turning to another exercise.
+    @State private var tableFrame: CGRect = .zero
     /// Teď ("now") or Další ("next") with its sets unfolded in the rest.
     @State private var unfolded: Set<String> = []
     /// The warm-up's stretches ticked (StretchingCard): all of them done, the
@@ -181,6 +187,14 @@ struct TrainingModeView: View {
                 Task { await add(name) }
             }
         }
+        .sheet(item: $intensityFor) { ref in
+            let set: GymSet? = day?.exercises.flatMap(\.sets).first(where: { $0.row == ref.id })
+            let remove: (() -> Void)? = set?.drop == true && set?.done == false ? { Task { await removeDrop(ref.id) } } : nil
+            IntensitySheet(title: set.map { $0.drop ? L10n.tr("Dropset") : $0.warmup ? L10n.tr("Rozcvička") : L10n.f("Série %@", $0.number) } ?? "",
+                           selected: set?.intensity, onRemoveDrop: remove) { letter in
+                Task { await pickIntensity(ref.id, letter) }
+            }
+        }
         .sheet(isPresented: $sensors) {
             NavigationStack { HeartRateSensorView() }
                 .presentationDetents([.medium, .large])
@@ -261,7 +275,6 @@ struct TrainingModeView: View {
             if let note = GymSides.note(exercise) { CoachNote(text: note).padding(.top, 12) }
 
             if let set {
-                effort.padding(.top, 14)
                 if started {
                     PrimaryButton(title: saving ? "Ukládám…" : "Série hotová", systemImage: "checkmark", busy: saving) {
                         Task { await complete(set) }
@@ -285,9 +298,10 @@ struct TrainingModeView: View {
         .onAppear { prefill(set, in: exercise) }
         // A swipe sideways goes to the next or the previous exercise.
         .contentShape(Rectangle())
-        .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { drag in
+        .coordinateSpace(name: "session")
+        .simultaneousGesture(DragGesture(minimumDistance: 30, coordinateSpace: .named("session")).onEnded { drag in
             let dx = drag.translation.width, dy = drag.translation.height
-            guard abs(dx) > 70, abs(dx) > abs(dy) * 2 else { return }
+            guard abs(dx) > 70, abs(dx) > abs(dy) * 2, !tableFrame.contains(drag.startLocation) else { return }
             withAnimation(.snappy) { move(dx < 0 ? 1 : -1) }
         })
         .task(id: exercise.name) { await loadMuscles(day) }
@@ -324,11 +338,16 @@ struct TrainingModeView: View {
     private func setTable(_ exercise: GymExercise, _ set: GymSet?, _ last: GymHistory.Session?) -> some View {
         VStack(spacing: 2) {
             tableHeader
-            ForEach(exercise.sets) { s in setRow(s, exercise, current: set, last: last) }
+            ForEach(exercise.sets) { s in
+                // Swiped left: a set not done yet (a warm-up too) goes away.
+                setRow(s, exercise, current: set, last: last)
+                    .modifier(SwipeToDelete(enabled: !s.done && !saving) { Task { await deleteSet(s) } })
+            }
             tableActions(exercise, set)
         }
         .padding(.vertical, 12).padding(.horizontal, 4)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("session")) } action: { tableFrame = $0 }
         .padding(.top, 14)
     }
 
@@ -338,6 +357,7 @@ struct TrainingModeView: View {
             Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
             Text(Units.weightUnit).frame(width: 64)
             Text("Opak.").frame(width: 52)
+            Color.clear.frame(width: 40, height: 1)
             Color.clear.frame(width: 34, height: 1)
         }
         .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
@@ -351,10 +371,13 @@ struct TrainingModeView: View {
         let shownKg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg) ?? ""
         let shownReps: String = (s.done ? s.reps : carry?.reps ?? s.plannedReps) ?? ""
         // By sides the number shows on the L row only.
-        return GymSetRow(label: s.warmup ? "W" : s.side == "P" ? "" : s.number, side: s.side,
+        let letter = s.intensity ?? (s.done ? GymIntensity.from(rpe: s.rpe) : nil)
+        return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
                          kgText: $kg, repsText: $reps, repsHint: s.plannedReps,
+                         drop: s.drop, intensity: letter, planned: !s.done && !picked.contains(s.row),
+                         onIntensity: { intensityFor = SetRef(id: s.row) },
                          onEdit: s.done ? { k, r in Task { await editDone(s, kg: k, reps: r) } } : nil) {
             switch phase {
             case .done: Task { await undo(s) }
@@ -469,7 +492,7 @@ struct TrainingModeView: View {
     private func nextLoad(_ next: GymExercise) -> String {
         let left: Int = next.workCount - next.doneCount
         let count: String = L10n.f("%@ %@", String(left), Fmt.plural(left, "série", "série", "sérií"))
-        guard let set = next.sets.first(where: { !$0.done && !$0.warmup }) else { return count }
+        guard let set = next.sets.first(where: { !$0.done && $0.work }) else { return count }
         return GymLiveActivity.load(set, in: next) + " · " + count
     }
 
@@ -488,7 +511,7 @@ struct TrainingModeView: View {
     /// A weight typed under Další: all its sets still to do take it.
     private func setWeight(_ kg: String, of exercise: GymExercise) async {
         guard !kg.isEmpty, var next = day else { return }
-        for set in exercise.sets where !set.done && !set.warmup { next.set(row: set.row, column: 3, kg) }
+        for set in exercise.sets where !set.done && set.work { next.set(row: set.row, column: 3, kg) }
         guard next != day else { return }
         day = next
         guard !model.demo else { return }
@@ -564,7 +587,7 @@ struct TrainingModeView: View {
     }
 
     private func nowLine(_ exercise: GymExercise, _ set: GymSet) -> String {
-        let which: String = set.warmup ? L10n.tr("rozcvička") : L10n.f("série %@", set.number)
+        let which: String = set.warmup ? L10n.tr("rozcvička") : set.drop ? L10n.tr("dropset") : L10n.f("série %@", set.number)
         return exercise.name + " · " + which
     }
 
@@ -784,44 +807,6 @@ struct TrainingModeView: View {
 
     // MARK: Parts
 
-    /// How hard the set was, in words (stored as RPE 6–10 for the next plan).
-    struct Effort {
-        let rpe: Int
-        let label: String
-        let hint: String
-    }
-
-    static let efforts: [Effort] = [
-        Effort(rpe: 6, label: "Lehké", hint: "zbývaly 4 a víc"), Effort(rpe: 7, label: "Akorát", hint: "zbývala 3"),
-        Effort(rpe: 8, label: "Těžké", hint: "zbývala 2"), Effort(rpe: 9, label: "Na hraně", hint: "zbývalo 1"),
-        Effort(rpe: 10, label: "Selhání", hint: "už ani jedno")
-    ]
-
-    /// "V zásobě zbývala 2 opakování · RPE 8".
-    static func reserve(_ e: Effort) -> String {
-        let reps = e.rpe == 10 ? "" : " opakování"
-        return L10n.tr("V zásobě " + e.hint + reps) + " · RPE \(e.rpe)"
-    }
-
-    private var effort: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Jak to šlo?").font(Typo.caption).foregroundStyle(Palette.muted)
-            HStack(spacing: 6) {
-                ForEach(Self.efforts, id: \.rpe) { e in
-                    Button { rpe = e.rpe } label: {
-                        Text(e.label).font(.footnote.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
-                            .foregroundStyle(rpe == e.rpe ? Palette.onButton : Palette.ink)
-                            .frame(maxWidth: .infinity).frame(height: 40)
-                            .background(rpe == e.rpe ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint(L10n.tr(e.hint + " opakování"))
-                    .accessibilityAddTraits(rpe == e.rpe ? .isSelected : [])
-                }
-            }
-        }
-    }
-
     private func uses(_ exercise: GymExercise, _ station: String) -> Bool {
         catalog.first { $0.name == exercise.name }?.stations?.contains(station) == true
     }
@@ -985,10 +970,12 @@ struct TrainingModeView: View {
     }
 
     /// The plan as changed in "Upravit plán": saved, and back on the first
-    /// exercise with a set left.
+    /// exercise with a set left. A rest under way goes on (looking at the
+    /// plan or changing it is no reason to cut it short), unless nothing is
+    /// left to do after it.
     private func saveEdited(_ edited: GymDay, focus: String? = nil) async {
         day = edited
-        restEnd = nil
+        if !edited.exercises.contains(where: { $0.sets.contains { !$0.done } }) { restEnd = nil }
         startAtFirstOpen()
         // "Přejít na cvik": that one, whatever is left before it.
         if let focus, let at = edited.exercises.firstIndex(where: { $0.id == focus }) { index = at }
@@ -1208,6 +1195,53 @@ struct TrainingModeView: View {
         }
     }
 
+    /// A set not done yet swiped away (with its drop sets). The fields follow
+    /// the set now at hand.
+    private func deleteSet(_ set: GymSet) async {
+        guard var next = day else { return }
+        let gone = next.deleteSet(row: set.row)
+        picked = Set(picked.compactMap { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count })
+        if !next.exercises.isEmpty {
+            index = min(index, next.exercises.count - 1)
+            if !next.exercises[index].sets.contains(where: { !$0.done }) {
+                index = next.exercises.firstIndex { $0.sets.contains { !$0.done } } ?? 0
+            }
+        }
+        await saveDay(next)
+    }
+
+    /// A letter chosen for a set; D adds a drop set after it.
+    private func pickIntensity(_ row: Int, _ letter: String) async {
+        guard var next = day else { return }
+        if letter == "D" {
+            next.addDrop(after: row)
+        } else if next.exercises.flatMap(\.sets).first(where: { $0.row == row })?.drop != true {
+            next.setIntensity(row: row, letter)
+        }
+        // Rows after an added drop set move one down.
+        picked = Set(picked.map { $0 > row && letter == "D" ? $0 + 1 : $0 }).union([row])
+        await saveDay(next)
+    }
+
+    private func removeDrop(_ row: Int) async {
+        guard var next = day else { return }
+        next.removeDrop(row: row)
+        picked = Set(picked.compactMap { $0 == row ? nil : $0 > row ? $0 - 1 : $0 })
+        await saveDay(next)
+    }
+
+    private func saveDay(_ next: GymDay) async {
+        guard next != day else { return }
+        day = next
+        guard !model.demo else { return }
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
+        }
+    }
+
     /// A ticked set back to not done (tapped by mistake).
     private func undo(_ set: GymSet) async {
         guard var next = day else { return }
@@ -1229,7 +1263,8 @@ struct TrainingModeView: View {
         let r = reps.trimmingCharacters(in: .whitespaces)
         // Nothing typed in reps: the plan's lower number ("5" of "5–8").
         let planned: String = GymCoach.firstNumber(set.plannedReps).map { String($0) } ?? (set.plannedReps ?? "")
-        next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? planned : r, rpe: String(rpe))
+        // The letter in the set (the plan's, or the one chosen) goes with it.
+        next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.drop ? "" : planned) : r, rpe: "")
         // The start in the sheet: after iOS closes the app the clock goes on from it.
         if next.startedAt == nil { next.markStarted(live.start ?? Date()) }
         day = next
@@ -1239,7 +1274,11 @@ struct TrainingModeView: View {
         // The last set of the exercise: on to the next one after a longer rest.
         var rest = set.warmup ? 60 : restSets
         let otherSide = set.side == "L" && next.exercises[safe: index]?.sets.contains { $0.number == set.number && $0.side == "P" && !$0.done } == true
-        if otherSide {
+        // A drop set after it: straight on with the lighter weight.
+        let intoDrop = next.exercises[safe: index]?.sets.first(where: { $0.row > set.row && !$0.done })?.drop == true
+        if intoDrop {
+            rest = 0
+        } else if otherSide {
             // Left done: the right side straight after, no rest.
             rest = 0
         } else if !set.warmup, let turn = Self.supersetTurn(next.exercises, from: index) {
@@ -1275,6 +1314,9 @@ struct TrainingModeView: View {
         }
     }
 }
+
+/// A set by its row, for the sheet of its letter.
+struct SetRef: Identifiable { let id: Int }
 
 struct TrailingIcon: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {

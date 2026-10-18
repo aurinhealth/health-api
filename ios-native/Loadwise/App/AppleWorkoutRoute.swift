@@ -46,12 +46,19 @@ enum AppleWorkoutRoute {
 
     private static func locations(of route: HKWorkoutRoute) async -> [CLLocation] {
         await withCheckedContinuation { continuation in
-            var all: [CLLocation] = []
+            // HealthKit hands the batches over one after another on its queue;
+            // the box holds them until the last one.
+            let all = LocationBatches()
             let query = HKWorkoutRouteQuery(route: route) { _, batch, done, error in
-                all.append(contentsOf: batch ?? [])
-                if done || error != nil { continuation.resume(returning: all) }
+                all.items.append(contentsOf: batch ?? [])
+                if done || error != nil { continuation.resume(returning: all.items) }
             }
             store.execute(query)
         }
     }
+}
+
+/// The route's points as HealthKit hands them over, batch by batch, on one queue.
+private final class LocationBatches: @unchecked Sendable {
+    var items: [CLLocation] = []
 }

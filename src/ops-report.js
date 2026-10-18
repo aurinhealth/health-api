@@ -6,7 +6,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { emailConfigured, sendEmail } from "./email-sender.js";
 import { accountCapacity } from "./tenancy.js";
-import { aiMonthlyLimitUsd } from "./ai-usage.js";
+import { aiMonthlyLimitUsd, ensureAiUsage } from "./ai-usage.js";
 
 const scope = new AsyncLocalStorage();
 const day = (date = new Date()) => date.toISOString().slice(0, 10);
@@ -63,7 +63,8 @@ const FEATURE_NAMES = {
 };
 const usd = value => `${(Number(value) || 0).toFixed(2)} $`;
 
-// rows: one per user and feature for yesterday ({email, feature, calls, cost});
+// rows: one per user and feature for yesterday ({email, feature, calls, cost,
+// input, cached}: input tokens and the part of them OpenAI had cached);
 // month: one per user since the 1st ({email, cost}).
 export function aiReport(rows, month, limit) {
   if (!rows.length) return null;
@@ -74,12 +75,14 @@ export function aiReport(rows, month, limit) {
     users.set(row.email, user);
   }
   const total = [...users.values()].reduce((sum, u) => sum + u.cost, 0), calls = [...users.values()].reduce((sum, u) => sum + u.calls, 0);
+  const sum = key => rows.reduce((acc, row) => acc + (Number(row[key]) || 0), 0), input = sum("input");
+  const cache = input > 0 ? ` · z cache ${Math.round(sum("cached") / input * 100)} % vstupu` : "";
   const lines = [...users.entries()].sort((a, b) => b[1].cost - a[1].cost).map(([email, u]) => {
     const top = u.features.sort((a, b) => b.cost - a.cost).slice(0, 3).map(f => `${FEATURE_NAMES[f.feature] || f.feature || "jiné"} ${usd(f.cost)}`).join(", ");
     return `- ${email}: ${usd(u.cost)} (${u.calls} dotazů) · ${top}`;
   });
   const monthLines = month.sort((a, b) => b.cost - a.cost).map(m => `- ${m.email}: ${usd(m.cost)}${limit ? ` z ${usd(limit)} (${Math.round(m.cost / limit * 100)} %)` : ""}`);
-  return `Útrata AI včera: ${usd(total)}, ${calls} dotazů\n${lines.join("\n")}\n\nOd začátku měsíce${limit ? ` (strop ${usd(limit)} na účet)` : ""}\n${monthLines.join("\n")}`;
+  return `Útrata AI včera: ${usd(total)}, ${calls} dotazů${cache}\n${lines.join("\n")}\n\nOd začátku měsíce${limit ? ` (strop ${usd(limit)} na účet)` : ""}\n${monthLines.join("\n")}`;
 }
 
 export function opsReport(rows, capacity, date, ai = null) {
@@ -118,7 +121,8 @@ export async function sendDailyOpsReport(env, now = new Date()) {
 async function aiSection(env, date) {
   const exists = await env.DB.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_usage'").first();
   if (!exists) return null;
-  const rows = (await env.DB.prepare(`SELECT COALESCE(u.email, '#' || a.user_id) AS email, a.feature, COUNT(*) AS calls, SUM(a.cost_usd) AS cost
+  await ensureAiUsage(env.DB);
+  const rows = (await env.DB.prepare(`SELECT COALESCE(u.email, '#' || a.user_id) AS email, a.feature, COUNT(*) AS calls, SUM(a.cost_usd) AS cost, SUM(a.input_tokens) AS input, SUM(a.cached_tokens) AS cached
     FROM ai_usage a LEFT JOIN users u ON u.id = a.user_id WHERE a.day = ? AND a.model != 'pending' GROUP BY a.user_id, a.feature`).bind(date).all()).results || [];
   const month = (await env.DB.prepare(`SELECT COALESCE(u.email, '#' || a.user_id) AS email, SUM(a.cost_usd) AS cost
     FROM ai_usage a LEFT JOIN users u ON u.id = a.user_id WHERE a.day >= ? AND a.day <= ? AND a.model != 'pending' GROUP BY a.user_id`).bind(date.slice(0, 8) + "01", date).all()).results || [];

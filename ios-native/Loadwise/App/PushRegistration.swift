@@ -1,5 +1,5 @@
 import UIKit
-import UserNotifications
+@preconcurrency import UserNotifications
 
 // The morning readiness push ("Připravenost 72 · dnes klidně intervaly"),
 // sent by the server (src/push.js) once a day after the night's data arrives,
@@ -53,7 +53,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     /// In the app the pill reminder shows as a banner; the others stay quiet
     /// as before.
-    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         let content = notification.request.content
         if content.categoryIdentifier == Reminders.pillCategory { return [.banner, .sound, .list] }
         // The coach's message, also while the app is open.
@@ -62,7 +62,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     /// "Vzato" logs the pill of the reminder's day at this time; "Za 30
     /// minut" asks again later.
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let content = response.notification.request.content
         if content.categoryIdentifier == CoachPush.categoryID {
             await CoachPush.answer(response, api: api)

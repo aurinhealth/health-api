@@ -17,7 +17,7 @@ enum GymSides {
     /// The last pair of the exercise with both sides done, when they differ:
     /// "Pravá strana dala o 2 opakování míň. Levou dělej jen tolik co pravou…"
     static func note(_ exercise: GymExercise) -> String? {
-        let done = exercise.sets.filter { $0.done && !$0.warmup && $0.side != nil }
+        let done = exercise.sets.filter { $0.done && $0.work && $0.side != nil }
         let numbers = Set(done.map(\.number))
         guard let number = exercise.sets.map(\.number).filter({ numbers.contains($0) }).last(where: { n in
             done.contains { $0.number == n && $0.side == "L" } && done.contains { $0.number == n && $0.side == "P" }

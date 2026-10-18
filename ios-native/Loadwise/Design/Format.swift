@@ -181,7 +181,8 @@ enum Fmt {
 /// change of language asks for another locale, so it gets new ones.
 enum DateFormatters {
     private static let lock = NSLock()
-    private static var made: [String: DateFormatter] = [:]
+    // Guarded by lock.
+    nonisolated(unsafe) private static var made: [String: DateFormatter] = [:]
 
     static func make(_ format: String, locale: Locale = Locale(identifier: "en_US_POSIX"), timeZone: TimeZone = .current) -> DateFormatter {
         let key = format + "|" + locale.identifier + "|" + timeZone.identifier

@@ -24,6 +24,9 @@ final class LiveWorkout: NSObject {
     private(set) var start: Date?
     private(set) var kcal: Double?
     private(set) var heartRate: Double?
+    /// What measures the heart rate shown: the paired sensor's name, or the
+    /// device Apple Health has the beat from (AirPods, a watch). Nil: not known.
+    private(set) var heartSource: String?
     private(set) var avgHeartRate: Double?
     private(set) var maxHeartRate: Double?
     /// Every heart rate seen, for the rest's recovery line and the zones.
@@ -172,7 +175,7 @@ final class LiveWorkout: NSObject {
         if let weightKg, weightKg > 30 { self.weightKg = weightKg }
         savedToHealth = false
         savedWorkout = nil
-        kcal = nil; heartRate = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
+        kcal = nil; heartRate = nil; heartSource = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
         sensorBeats = []
         trail = []
         paused = carried?.pause.duration ?? 0
@@ -305,12 +308,20 @@ final class LiveWorkout: NSObject {
             // Strength training about 5 MET, 4 above rest: active kcal = 4 × kg × hours.
             kcal = 4.0 * weightKg * Date().timeIntervalSince(start) / 3600
         }
-        if builder == nil, sensor.liveBpm == nil, let bpm = await latestHeartRate(since: Date().addingTimeInterval(-120)) { note(bpm) }
+        if sensor.liveBpm == nil, let latest = await latestHeartRate(since: Date().addingTimeInterval(-120)) {
+            if builder == nil { note(latest.bpm) }
+            // The live session's beats come from a device iOS reads (AirPods, the watch).
+            if heartRate != nil { heartSource = latest.source }
+        }
+        // Nothing has measured the heart for a minute (AirPods or the watch taken
+        // off, the strap out of range): no number rather than the last one forever.
+        if heartRate != nil, let last = trail.last?.date, Date().timeIntervalSince(last) > 60 { heartRate = nil }
     }
 
     private func sensorBeat(_ bpm: Double) {
         guard start != nil else { return }
         note(bpm)
+        heartSource = sensor.savedName
         if let last = sensorBeats.last?.0, Date().timeIntervalSince(last) < 5 { return }
         sensorBeats.append((Date(), bpm))
     }
@@ -344,13 +355,19 @@ final class LiveWorkout: NSObject {
         maxHeartRate = max(maxHeartRate ?? 0, bpm)
     }
 
-    private func latestHeartRate(since: Date) async -> Double? {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Double?, Never>) in
+    /// The newest beat in Apple Health and what measured it (the device's name,
+    /// else the app that wrote it).
+    private func latestHeartRate(since: Date) async -> (bpm: Double, source: String?)? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<(bpm: Double, source: String?)?, Never>) in
             let predicate = HKQuery.predicateForSamples(withStart: since, end: nil)
             let query = HKSampleQuery(sampleType: HKQuantityType(.heartRate), predicate: predicate, limit: 1,
                                       sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]) { _, samples, _ in
-                let bpm = (samples?.first as? HKQuantitySample)?.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
-                continuation.resume(returning: bpm)
+                guard let sample = samples?.first as? HKQuantitySample else { continuation.resume(returning: nil); return }
+                let bpm = sample.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
+                // The live session writes the beats as this app: then only the device says what measured.
+                let app = sample.sourceRevision.source.bundleIdentifier == Bundle.main.bundleIdentifier ? nil : sample.sourceRevision.source.name
+                let name = [sample.device?.name, app].compactMap { $0 }.first { !$0.isEmpty }
+                continuation.resume(returning: (bpm, name))
             }
             store.execute(query)
         }
@@ -425,7 +442,7 @@ final class LiveWorkout: NSObject {
         start = builder.startDate ?? recovered.startDate ?? Date()
         savedToHealth = false
         savedWorkout = nil
-        heartRate = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
+        heartRate = nil; heartSource = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
         sensorBeats = []
         trail = []
         paused = 0

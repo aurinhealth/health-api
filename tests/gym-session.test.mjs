@@ -7,7 +7,7 @@ const row = (type, name, n, kg, reps, akg = '', areps = '', done = 'FALSE') => [
 
 test('the AI answer becomes plan rows only from the catalog, keeping each exercise\'s notes', () => {
   const original = [row('WARMUP', 'Bench', 1, '20', '8'), ['WORK', 'Bench', '1', '40', '8-10', '', '', '', 'FALSE', 'Hrudník [Pauza 90 s]', '', 'TRUE', 'A']];
-  assert.deepEqual(planForModel(original), [{ name: 'Bench', sets: [{ type: 'WARMUP', kg: 20, reps: '8' }, { type: 'WORK', kg: 40, reps: '8-10' }] }]);
+  assert.deepEqual(planForModel(original), [{ name: 'Bench', sets: [{ type: 'WARMUP', kg: 20, reps: '8', intensity: '' }, { type: 'WORK', kg: 40, reps: '8-10', intensity: '' }] }]);
   const rows = rowsFromModel([
     { name: 'Bench', sets: [{ type: 'WORK', kg: 41.2, reps: '8' }, { type: 'WORK', kg: 41, reps: '8' }] },
     { name: 'DB curl', sets: [{ type: 'WORK', kg: null, reps: '10' }] },
@@ -19,7 +19,7 @@ test('the AI answer becomes plan rows only from the catalog, keeping each exerci
 
 test('a confirmed proposal keeps only planning columns of known exercises', () => {
   const rows = cleanGymRows([row('WORK', 'Bench', 1, '40.3', '8', '45', '8', 'TRUE'), row('WORK', 'Mystery', 1, '1', '1'), ['STRETCH', 'Bench']], new Set(['Bench']));
-  assert.deepEqual(rows, [['WORK', 'Bench', '1', '40,5', '8', '', '', '', 'FALSE', '', '', 'FALSE', '', '']]);
+  assert.deepEqual(rows, [['WORK', 'Bench', '1', '40,5', '8', '', '', '', 'FALSE', '', '', 'FALSE', '', '', '']]);
   assert.throws(() => cleanGymRows([row('WORK', 'Mystery', 1, '1', '1')], new Set(['Bench'])), /aspoň jeden cvik/);
 });
 

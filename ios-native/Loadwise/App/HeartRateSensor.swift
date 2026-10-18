@@ -170,23 +170,29 @@ final class HeartRateSensor: NSObject {
 
 extension HeartRateSensor: CBCentralManagerDelegate, CBPeripheralDelegate {
     nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        // CoreBluetooth calls on the main queue.
+        nonisolated(unsafe) let central = central
         MainActor.assumeIsolated { stateChanged(central) }
     }
 
     nonisolated func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         let name = advertisementData[CBAdvertisementDataLocalNameKey] as? String
+        nonisolated(unsafe) let peripheral = peripheral
         MainActor.assumeIsolated { discovered(peripheral, name: name) }
     }
 
     nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        nonisolated(unsafe) let peripheral = peripheral
         MainActor.assumeIsolated { didConnect(peripheral) }
     }
 
     nonisolated func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        nonisolated(unsafe) let peripheral = peripheral
         MainActor.assumeIsolated { didDisconnect(peripheral) }
     }
 
     nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        nonisolated(unsafe) let peripheral = peripheral
         MainActor.assumeIsolated { didDisconnect(peripheral) }
     }
 

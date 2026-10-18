@@ -707,6 +707,8 @@ struct EquipmentView: View {
     static let homeGym: [String] = ["dumbbells", "adjustable_bench", "resistance_bands", "floor_mats"]
     /// Set once the places of the new picker were added on this phone.
     static let seededKey = "gymPlacesSeeded"
+    /// Set once Velké fitko, Malé fitko and Doma were offered to an account that had places already.
+    static let presetsKey = "gymPresetsSeeded"
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Kde cvičíš?") {
@@ -828,30 +830,43 @@ struct EquipmentView: View {
 
     /// The places of the picker: a big gym, a small one, home and the body
     /// weight for a new account; an account with places keeps them and gets
-    /// the body weight once, when it has no such place.
-    static func seeded(_ saved: [GymPlace], active: String, all: [String], firstTime: Bool) -> Draft {
+    /// the body weight once, when it has no such place, and once the three
+    /// ready-made ones it has no place of that name for (deleted, they stay away).
+    static func seeded(_ saved: [GymPlace], active: String, all: [String], firstTime: Bool, presetsFirstTime: Bool = false) -> Draft {
         func place(_ id: String, _ kind: String, _ name: String, _ stations: [String]) -> GymPlace {
             GymPlace(id: id, kind: kind, name: L10n.tr(name), stations: stations, url: "", dumbbellWeights: [])
         }
         let known = Set(all)
         let keep: ([String]) -> [String] = { known.isEmpty ? $0 : $0.filter(known.contains) }
+        let presets = [place("place-1", "gym", "Velké fitko", all.isEmpty ? smallGym : all),
+                       place("place-2", "gym", "Malé fitko", keep(smallGym)),
+                       place("place-3", "home", "Doma", keep(homeGym))]
+        let body = place("place-4", "home", "Vlastní váha", ["floor_mats"])
         if saved.isEmpty {
-            let list = [place("place-1", "gym", "Velké fitko", all.isEmpty ? smallGym : all),
-                        place("place-2", "gym", "Malé fitko", keep(smallGym)),
-                        place("place-3", "home", "Doma", keep(homeGym)),
-                        place("place-4", "home", "Vlastní váha", ["floor_mats"])]
-            return Draft(places: list, active: active == "bodyweight" ? "place-4" : active)
+            return Draft(places: presets + [body], active: active == "bodyweight" ? "place-4" : active)
         }
-        guard firstTime, saved.count < maxPlaces, !saved.contains(where: \.bodyweightOnly) else { return Draft(places: saved, active: active) }
-        var n = saved.count + 1
-        while saved.contains(where: { $0.id == "place-\(n)" }) { n += 1 }
-        let body = place("place-\(n)", "home", "Vlastní váha", ["floor_mats"])
-        return Draft(places: saved + [body], active: active == "bodyweight" ? body.id : active)
+        var list = saved
+        var active = active
+        func append(_ item: GymPlace) -> String? {
+            guard list.count < maxPlaces else { return nil }
+            var n = list.count + 1
+            while list.contains(where: { $0.id == "place-\(n)" }) { n += 1 }
+            var item = item
+            item.id = "place-\(n)"
+            list.append(item)
+            return item.id
+        }
+        if presetsFirstTime {
+            for preset in presets where !list.contains(where: { $0.name == preset.name }) { _ = append(preset) }
+        }
+        if firstTime, !list.contains(where: \.bodyweightOnly), let id = append(body), active == "bodyweight" { active = id }
+        return Draft(places: list, active: active)
     }
 
     private func load() async {
         guard data == nil else { return }
         let firstTime = !UserDefaults.standard.bool(forKey: Self.seededKey)
+        let presetsFirstTime = !UserDefaults.standard.bool(forKey: Self.presetsKey)
         if model.demo {
             let d = Self.seeded([], active: "place-1", all: [], firstTime: true)
             places = d.places; active = d.active
@@ -864,10 +879,11 @@ struct EquipmentView: View {
             data = d
             let saved = d.places ?? [], savedActive = d.activePlace ?? "bodyweight"
             stored = Draft(places: saved, active: savedActive)
-            let next = Self.seeded(saved, active: savedActive, all: (d.stations ?? []).map(\.id), firstTime: firstTime)
+            let next = Self.seeded(saved, active: savedActive, all: (d.stations ?? []).map(\.id), firstTime: firstTime, presetsFirstTime: presetsFirstTime)
             places = next.places
             active = next.active
             UserDefaults.standard.set(true, forKey: Self.seededKey)
+            UserDefaults.standard.set(true, forKey: Self.presetsKey)
             catalog = (try? await exercises) ?? []
         } catch {
             self.error = error.localizedDescription
