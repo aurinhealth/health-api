@@ -12,7 +12,7 @@ import { callOpenAI } from "../src/coach-assistant.js";
 
 const ORIGIN = "https://petrfitnessdata.eu";
 const REVIEW = { APP_REVIEW_EMAIL: "Review@Example.com", APP_REVIEW_CODE: "246810" };
-const MIGRATION = ["0014_passkeys_email_codes.sql", "0026_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
+const MIGRATION = ["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
 test("the fixed review code works until the end of APP_REVIEW_UNTIL (UTC) and never without it", () => {
   const env = { ...REVIEW, APP_REVIEW_UNTIL: "2026-11-30" };

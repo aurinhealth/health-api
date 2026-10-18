@@ -7,7 +7,7 @@ import { ensureTenancy, inviteUser, signInEmailUser, signInGoogleUser, findUser,
 import { resolvePrincipal, sessionMatchesUser } from "../src/dashboard-auth.js";
 
 const ORIGIN = "https://petrfitnessdata.eu";
-const MIGRATION = ["0014_passkeys_email_codes.sql", "0026_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
+const MIGRATION = ["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
 async function setup() {
   _resetTenancyForTest();
