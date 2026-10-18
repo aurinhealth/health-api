@@ -38,7 +38,7 @@ struct ProFeature: Identifiable {
         ProFeature(symbol: "calendar.badge.clock", color: Palette.rust, title: "Plán vlastními slovy", subtitle: "Řekni, co se změnilo, a týden se přizpůsobí."),
         ProFeature(symbol: "chart.line.uptrend.xyaxis", color: Palette.green, title: "Hodnocení tréninků a dne", subtitle: "Co se povedlo a co příště jinak."),
         ProFeature(symbol: "camera.fill", color: Palette.amberBar, title: "Jídlo z fotky", subtitle: "Vyfoť talíř nebo etiketu, hodnoty doplní AI."),
-        ProFeature(symbol: "text.bubble.fill", color: Palette.blue, title: "Jídlo vlastními slovy", subtitle: "Napiš, co jsi snědl, a najde se i to, co katalog nezná."),
+        ProFeature(symbol: "text.bubble.fill", color: Palette.blue, title: "Jídlo vlastními slovy", subtitle: "Napiš, co máš na talíři, a najde se i to, co katalog nezná."),
         ProFeature(symbol: "figure.strengthtraining.traditional", color: Palette.brown, title: "Technika každého cviku", subtitle: "Popis provedení i pro cviky mimo katalog.")
     ]
     static let included: [ProFeature] = [
@@ -102,6 +102,11 @@ struct SubscriptionView: View {
                         .foregroundStyle(hasPro ? AurinMark.goldTop : Palette.secondary)
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background((hasPro ? AurinMark.goldTop : Palette.ink).opacity(0.12), in: Capsule())
+                }
+                // The week's coach messages: nothing under 75 %, then one line.
+                if let line = status?.coachAllowance?.settingsLine {
+                    Text(line).font(Typo.small).foregroundStyle(Palette.muted)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
                 }
             }
             .frame(maxWidth: .infinity)

@@ -219,6 +219,14 @@ test('earlier turns go to the model as messages with the data first and the ques
     assert.deepEqual(body.input.map(m=>m.role),['user','user','assistant','user']);
     assert.match(body.input[0].content,/^Kontext aplikace/);assert.doesNotMatch(body.input[0].content,/conversation/);assert.equal(body.input.at(-1).content,'Požadavek: A co zítra?');
   }finally{globalThis.fetch=original;}
+  // The time and the open screen go after the earlier turns, so the long context stays cacheable.
+  try{
+    globalThis.fetch=async(url,init)=>{body=JSON.parse(init.body);return Response.json({model:'gpt-6-sol',output:[{content:[{type:'output_text',text:'ok'}]}]});};
+    await askCoach({OPENAI_API_KEY:'test'},'A co zítra?',{date:today,now:today+'T10:57',week:[],appContext:{screen:'today'},conversation:[{role:'user',content:'Mám dnes jet?'},{role:'assistant',content:'Ano.'}]},{task:'planning'});
+    assert.deepEqual(body.input.map(m=>m.role),['user','user','assistant','user','user']);
+    assert.doesNotMatch(body.input[0].content,/"now"|appContext/);assert.match(body.input[0].content,/"week"/);
+    assert.match(body.input[3].content,/^Kontext aplikace.*"now":".*T10:57".*"appContext"/);assert.equal(body.input.at(-1).content,'Požadavek: A co zítra?');
+  }finally{globalThis.fetch=original;}
   const move={type:'move',eventId:'planned:7',date:'2026-10-08',reason:'x',eventSnapshot:{name:'Long ride',date:'2026-10-06'}};
   assert.equal(actionsNote([move,{type:'status',status:'sick',statusUntil:'2026-10-09'}]),'[Návrhy: Přesunout Long ride na čt 8. 10.; Stav Nemoc (znovu Aktivní od pá 9. 10.)]');assert.equal(actionsNote([]),'');
 });

@@ -45,6 +45,22 @@ const DAILY = {
   // Hours of the day Apple Watch measured heart rate in, i.e. was worn (source-priority.js).
   "daily-wear-hours": ["dailyWearHours", "hours", "h", 0, 24]
 };
+// One value a day for Deník (journal-store.js autoDays); the night's noise
+// on the day of waking up, the time-zone change in hours (+ east, − west).
+export const JOURNAL = {
+  "daily-mindful-minutes": ["dailyMindfulMinutes", "minutes", "min", 0, 1440],
+  "daily-daylight-minutes": ["dailyDaylightMinutes", "minutes", "min", 0, 1440],
+  "daily-morning-daylight-minutes": ["dailyMorningDaylightMinutes", "minutes", "min", 0, 1440],
+  "daily-night-noise": ["dailyNightNoise", "decibels", "dBA", 0, 140],
+  "daily-symptom-headache": ["dailySymptom", "count", "count", 0, 100],
+  "daily-symptom-runny-nose": ["dailySymptom", "count", "count", 0, 100],
+  "daily-symptom-body-ache": ["dailySymptom", "count", "count", 0, 100],
+  "daily-symptom-stomach": ["dailySymptom", "count", "count", 0, 100],
+  "daily-sexual-activity": ["dailySexualActivity", "count", "count", 0, 100],
+  "daily-yoga-minutes": ["dailyYogaMinutes", "minutes", "min", 0, 1440],
+  "daily-stretching-minutes": ["dailyStretchingMinutes", "minutes", "min", 0, 1440],
+  "daily-time-zone-change": ["dailyTimeZoneChange", "hours", "h", -26, 26]
+};
 const INTERVAL = {
   steps: ["steps", "count", "count", 0, 100000],
   "active-energy-burned": ["activeEnergyBurned", "kcal", "kcal", 0, 20000],
@@ -84,8 +100,8 @@ export function appleRow(r, now = Date.now()) {
   const type = String(r.type || ""), id = cleanId(r.id);
   if (!id) return null;
   const row = { data_type: type, external_id: "apple:" + id, sample_time: null, start_time: null, end_time: null, value_numeric: null, value_unit: null, payload: null };
-  if (DAILY[type]) {
-    const [key, field, unit, lo, hi] = DAILY[type], value = num(r.value, lo, hi), date = day(r.date, now);
+  if (DAILY[type] || JOURNAL[type]) {
+    const [key, field, unit, lo, hi] = DAILY[type] || JOURNAL[type], value = num(r.value, lo, hi), date = day(r.date, now);
     if (value == null || !date) return null;
     const body = { date: dateParts(date), [field]: value };
     if (type === "daily-heart-rate-variability" && ["rmssd", "sdnn"].includes(r.metric)) body.metric = r.metric;
@@ -260,7 +276,8 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   // Only the rows accepted above set how far back Google's copies are replaced.
   const types = [...new Set(rows.map(r => r.data_type))];
   const oldest = rows.map(r => String(r.sample_time || r.end_time || r.start_time || "").slice(0, 10)).filter(Boolean).sort()[0];
-  const other = types.filter(t => !MANAGED_TYPES.includes(t));
+  // Deník's values come only from Apple Health: nothing of Google's to replace.
+  const other = types.filter(t => !MANAGED_TYPES.includes(t) && !JOURNAL[t]);
   let replaced = other.length && oldest ? await replaceGoogleWithApple(db, userId, other, oldest) : 0;
   // Nights, steps and energy several devices measure (and the hours worn that
   // decide between them) go by source-priority.js; a night ends a day later in UTC.

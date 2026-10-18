@@ -104,8 +104,24 @@ struct GymDay: Decodable, Equatable {
     }
 
     /// The warm-up before and the stretching after the session (src/stretching.js), nil without them.
-    var warmup: GymStretching? { GymStretching.routines(values)?.warmup }
+    /// An older plan's warm-up began with easy cardio: that is the opening cardio now.
+    var warmup: GymStretching? {
+        guard let all = GymStretching.routines(values)?.warmup else { return nil }
+        let cardio = all.items.filter { $0.id == "cardio" }
+        guard !cardio.isEmpty else { return all }
+        let moves = all.items.filter { $0.id != "cardio" }
+        guard !moves.isEmpty else { return nil }
+        let seconds = cardio.reduce(0) { $0 + $1.seconds }
+        return GymStretching(minutes: max(1, all.minutes - Int((Double(seconds) / 60).rounded())), items: moves)
+    }
     var stretching: GymStretching? { GymStretching.routines(values)?.stretching }
+    /// The cardio at the start and at the end (an older plan: its warm-up's easy cardio).
+    var cardio: GymStretching.Cardio? {
+        let routines = GymStretching.routines(values)
+        if let cardio = routines?.cardio { return cardio }
+        guard let old = routines?.warmup?.items.first(where: { $0.id == "cardio" }) else { return nil }
+        return GymStretching.Cardio(type: "exercise_bike", start: max(1, Int((Double(old.seconds) / 60).rounded())), end: nil)
+    }
 
     /// The sets grouped by exercise, in the plan's order.
     var exercises: [GymExercise] {
@@ -370,6 +386,8 @@ struct GymTechnique: Decodable, Equatable {
     struct Video: Decodable, Equatable {
         let id: String?
         let title: String?
+        /// The video shows a close variant, not this exact exercise.
+        let similar: Bool?
     }
 }
 

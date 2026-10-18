@@ -16,6 +16,8 @@ struct GymSessionView: View {
     @State private var technique: String?
     @State private var alternativesFor: String?
     @State private var minutes = 60
+    /// The day's parts as changed in Dnešní trénink (GymDayParts).
+    @AppStorage(GymDayParts.storageKey) private var dayParts = ""
     @State private var muscles: [String: [String: Double]] = [:]
     @State private var changing = false
     @State private var rating = false
@@ -155,8 +157,11 @@ struct GymSessionView: View {
             } else if let day, !day.exercises.isEmpty {
                 Text(day.planName ?? "Silový trénink").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
                 progress(day)
-                if let planned = day.plannedMinutes, day.warmup != nil || day.stretching != nil {
-                    GymTimeCard(minutes: planned, warmup: day.warmup?.minutes ?? 0, stretching: day.stretching?.minutes ?? 0)
+                let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
+                let before = parts.before(day).reduce(0) { $0 + parts.minutes($1, day: day) }
+                let after = parts.after(day).reduce(0) { $0 + parts.minutes($1, day: day) }
+                if let planned = day.plannedMinutes, before + after > 0 {
+                    GymTimeCard(minutes: planned, warmup: before, stretching: after)
                         .padding(.top, 14)
                 }
                 if !muscles.isEmpty {
@@ -169,19 +174,25 @@ struct GymSessionView: View {
                 if let note = Self.withoutMuscleList(day.note) {
                     Text(note).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
                 }
+                SectionLabel(text: "Dnešní trénink").padding(.top, 18)
+                GymPartsCard(day: day, date: date).padding(.top, 8)
                 NavigationLink(value: AppRoute.trainingMode(date)) {
                     Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 16)
-                if let warmup = day.warmup {
-                    StretchingCard(stretching: warmup, date: date, kind: .warmup).padding(.top, 20)
+                ForEach(parts.before(day)) { part in
+                    if let routine = parts.routine(part, day: day) {
+                        StretchingCard(stretching: routine, date: date, kind: part.kind).padding(.top, 16)
+                    }
                 }
                 exerciseCards(day)
                     .padding(.top, 20)
-                if let stretching = day.stretching {
-                    StretchingCard(stretching: stretching, date: date).padding(.top, 16)
+                ForEach(parts.after(day)) { part in
+                    if let routine = parts.routine(part, day: day) {
+                        StretchingCard(stretching: routine, date: date, kind: part.kind).padding(.top, 16)
+                    }
                 }
                 PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: finishing) {
                     Task { await finish() }
@@ -201,9 +212,10 @@ struct GymSessionView: View {
                 .pickerStyle(.segmented)
                 .padding(.top, 18)
                 .task { if !model.demo, extra == nil { extra = (try? await model.api.gymPreferences())?.extraMinutes } }
-                if let added = extra?[String(minutes)], added.warmup + added.stretching > 0 {
+                if let added = extra?[String(minutes)], added.warmup + (added.cardio ?? 0) + added.stretching > 0 {
                     HStack(spacing: 8) {
                         if added.warmup > 0 { ExtraMinutesPill(text: L10n.f("+ %@ min rozcvička", String(added.warmup)), color: Palette.amber) }
+                        if let cardio = added.cardio, cardio > 0 { ExtraMinutesPill(text: L10n.f("+ %@ min kardio", String(cardio)), color: Palette.rust) }
                         if added.stretching > 0 { ExtraMinutesPill(text: L10n.f("+ %@ min protažení", String(added.stretching)), color: Palette.indigo) }
                     }
                     .padding(.top, 10)
@@ -571,6 +583,9 @@ struct TechniqueSheet: View {
                 YouTubePlayer(id: id)
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                if technique?.video?.similar == true {
+                    Text("Podobný cvik").font(Typo.small.weight(.semibold)).foregroundStyle(Palette.muted)
+                }
                 if let title = technique?.video?.title, !title.isEmpty {
                     Text(verbatim: title).font(Typo.small).foregroundStyle(Palette.muted)
                 }

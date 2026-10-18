@@ -1188,7 +1188,7 @@
 "Co se povedlo a co příště jinak." = "What went well and what to change next time.";
 "Vyfoť talíř nebo etiketu, hodnoty doplní AI." = "Snap a plate or a label, AI fills in the values.";
 "Jídlo vlastními slovy" = "Food in your own words";
-"Napiš, co jsi snědl, a najde se i to, co katalog nezná." = "Write what you ate, even what the catalog doesn't know.";
+"Napiš, co máš na talíři, a najde se i to, co katalog nezná." = "Write what's on your plate, even what the catalog doesn't know.";
 "Technika každého cviku" = "Technique for every exercise";
 "Popis provedení i pro cviky mimo katalog." = "How to do it, also for exercises outside the catalog.";
 "Regenerace a spánek" = "Recovery and sleep";
@@ -1328,6 +1328,7 @@
 "čerstvý" = "fresh";
 "Video" = "Video";
 "Otevřít v YouTube" = "Open in YouTube";
+"Podobný cvik" = "Similar exercise";
 "K tomuhle cviku zatím video nemáme." = "There's no video for this exercise yet.";
 "Přidat sérii" = "Add set";
 "Odebrat sérii" = "Remove set";
@@ -1400,6 +1401,7 @@
 "Widgety" = "Widgets";
 "Zatím bez dat" = "No data yet";
 "Odebrat %@" = "Remove %@";
+"Odebrat widget" = "Remove widget";
 "Makroživiny" = "Macros";
 "Týdně" = "Per week";
 "Regenerace na dnes" = "Recovery for today";
@@ -1934,8 +1936,6 @@
 "Rozcvička hotová" = "Warm-up done";
 "Cvič" = "Go";
 "Rozcvička" = "Warm-up";
-"s kardiem" = "with cardio";
-"bez kardia" = "without cardio";
 "+%@ min navíc" = "+%@ min extra";
 "Celkem %@ min" = "%@ min in total";
 "%@ + %@ navíc" = "%@ + %@ extra";
@@ -2617,3 +2617,37 @@
 "zhruba %@ na den" = "about %@ a day";
 "do dneška %@" = "by today %@";
 "Snězeno %@ z %@ kcal" = "Eaten %@ of %@ kcal";
+"Kardio" = "Cardio";
+"Obojí" = "Both";
+"Druh kardia" = "Cardio type";
+"Rotoped" = "Exercise bike";
+"Běžecký pás" = "Treadmill";
+"Veslo" = "Rowing machine";
+"Eliptický trenažér" = "Elliptical";
+"Schody" = "Stair climber";
+"Švihadlo" = "Jump rope";
+"Kardio hotové" = "Cardio done";
+"Tempo, při kterém ještě zvládneš mluvit." = "A pace at which you can still talk.";
+"Podržením a tažením změníš pořadí." = "Touch and hold, then drag to change the order.";
+"%@ cvik" = "%@ exercise";
+"%@ cviky" = "%@ exercises";
+"%@ cviků" = "%@ exercises";
+"+ %@ min kardio" = "+ %@ min cardio";
+
+/* Weekly allowance of coach messages (CoachAllowance) */
+"zbývá %@ zpráva" = "%@ message left";
+"zbývají %@ zprávy" = "%@ messages left";
+"zbývá %@ zpráv" = "%@ messages left";
+"Tento týden ti zbývá %@ zpráva koučovi." = "You have %@ coach message left this week.";
+"Tento týden ti zbývají %@ zprávy koučovi." = "You have %@ coach messages left this week.";
+"Tento týden ti zbývá %@ zpráv koučovi." = "You have %@ coach messages left this week.";
+"Tento týden zbývá %@ zpráva koučovi." = "%@ coach message left this week.";
+"Tento týden zbývají %@ zprávy koučovi." = "%@ coach messages left this week.";
+"Tento týden zbývá %@ zpráv koučovi." = "%@ coach messages left this week.";
+"Obnoví se zítra." = "They renew tomorrow.";
+"Obnoví se v pondělí." = "They renew on Monday.";
+"Zprávy koučovi na tento týden jsou vyčerpané." = "Your coach messages for this week are used up.";
+"Další přibudou zítra." = "More come tomorrow.";
+"Další přibudou v pondělí." = "More come on Monday.";
+"Další zprávy zítra" = "More messages tomorrow";
+"Další zprávy v pondělí" = "More messages on Monday";

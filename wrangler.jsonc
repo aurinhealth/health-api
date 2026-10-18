@@ -80,8 +80,17 @@
     // Anyone may create an account while shard capacity lasts (src/tenancy.js accountCapacity);
     // when it is full, new e-mails land in signup_waitlist.
     "OPEN_SIGNUP": "true",
-    // AI spend cap per account and month (src/ai-usage.js), the one planned for Pro.
-    "AI_MONTHLY_LIMIT_USD": "4",
+    // Emergency brake on an account's AI spending per month (src/ai-usage.js);
+    // audit/aurin-pro-ai-limity-plan-2026-10-18.md.
+    "AI_MONTHLY_LIMIT_USD": "10",
+    // A daily guard against abuse on the AI around the coach (food, plans, reviews); the coach chat is not in it.
+    "AI_DAILY_LIMIT_USD": "1",
+    // The weekly allowance of messages to the coach (src/coach-allowance.js): per week,
+    // extra ones to finish a conversation, and how many messages of a conversation
+    // after a workout count as one. The trial will use 15 a week.
+    "COACH_WEEKLY_MESSAGES": "30",
+    "COACH_EXTRA_MESSAGES": "2",
+    "COACH_WORKOUT_CHAT_MESSAGES": "5",
     // Strava app (src/strava.js); public. STRAVA_CLIENT_SECRET is a Worker secret.
     "STRAVA_CLIENT_ID": "183664",
     // Ultrahuman app (src/ultrahuman.js); public. ULTRAHUMAN_CLIENT_SECRET is a Worker secret.
@@ -137,7 +146,11 @@
         "USER_DATA_SHARD_COUNT": "2",
         "OWNER_EMAIL": "chelseafc.czsk@gmail.com",
         "OPEN_SIGNUP": "true",
-        "AI_MONTHLY_LIMIT_USD": "4",
+        "AI_MONTHLY_LIMIT_USD": "10",
+        "AI_DAILY_LIMIT_USD": "1",
+        "COACH_WEEKLY_MESSAGES": "30",
+        "COACH_EXTRA_MESSAGES": "2",
+        "COACH_WORKOUT_CHAT_MESSAGES": "5",
         "STRAVA_CLIENT_ID": "183664",
         "ULTRAHUMAN_CLIENT_ID": "Aiv97cWQZNA3tShnPydr8NtxZXSVv4LCafZE89WBnP4",
         "WHOOP_CLIENT_ID": "0c14cf2e-d6d3-4c7c-8c0d-758b0b20a8aa",

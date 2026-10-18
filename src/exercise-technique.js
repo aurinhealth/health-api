@@ -36,7 +36,7 @@ export function techniqueFor(name, own = null, stored = null) {
   if (!t && !def) return null;
   const query = t?.query || exercise + ' exercise proper form';
   const ownId = youtubeId(own?.url);
-  const video = ownId ? { id: ownId, source: 'own' } : t?.video?.id && YOUTUBE_ID.test(t.video.id) ? { id: t.video.id, title: t.video.title || '', source: 'library' } : null;
+  const video = ownId ? { id: ownId, source: 'own' } : t?.video?.id && YOUTUBE_ID.test(t.video.id) ? { id: t.video.id, title: t.video.title || '', source: 'library', similar: t.video.similar === true } : null;
   return {
     exercise,
     muscles: Object.values(FOCUS_GROUPS).filter(g => g.exercises.includes(exercise)).map(g => g.label),

@@ -7,7 +7,7 @@ import UIKit
 /// What Loadwise may read from Apple Health, chosen in Zdroje dat. iOS then
 /// asks once more for each type (and the user can untick any there too).
 enum HealthCategory: String, CaseIterable, Identifiable {
-    case sleep, heart, hrv, resting, breathing, steps, energy, workouts, body, food, water
+    case sleep, heart, hrv, resting, breathing, steps, energy, workouts, body, food, water, journal
 
     var id: String { rawValue }
 
@@ -24,6 +24,7 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .body: return "Váha a tělo"
         case .food: return "Jídlo"
         case .water: return "Pití"
+        case .journal: return "Deník"
         }
     }
 
@@ -40,6 +41,7 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .body: return "scalemass"
         case .food: return "fork.knife"
         case .water: return "drop"
+        case .journal: return "book"
         }
     }
 
@@ -81,6 +83,8 @@ enum HealthCategory: String, CaseIterable, Identifiable {
             return Set(HealthReader.foodTypes.map { HKQuantityType($0) as HKObjectType })
         case .water:
             return [HKQuantityType(.dietaryWater)]
+        case .journal:
+            return HealthReader.journalTypes
         }
     }
 
@@ -98,6 +102,7 @@ enum HealthCategory: String, CaseIterable, Identifiable {
         case .body: return [HKQuantityType(.bodyMass)]
         case .food: return [HKQuantityType(.dietaryEnergyConsumed)]
         case .water: return [HKQuantityType(.dietaryWater)]
+        case .journal: return []
         }
     }
 }
@@ -142,6 +147,7 @@ final class AppleHealth {
 
     private static let enabledKey = "appleHealth.enabled"
     private static let categoriesKey = "appleHealth.categories"
+    private static let journalAddedKey = "appleHealth.journalAdded"
     /// Each server has its own last sync, so the days spent on the other one
     /// (Nastavení → Testování → Server) are sent again after switching back.
     private static var lastSyncKey: String { ServerChoice.current == .live ? "appleHealth.lastSync" : "appleHealth.lastSync.staging" }
@@ -152,7 +158,15 @@ final class AppleHealth {
         let defaults = UserDefaults.standard
         enabled = defaults.bool(forKey: Self.enabledKey)
         let saved = (defaults.string(forKey: Self.categoriesKey) ?? "").split(separator: ",").flatMap { HealthCategory.saved(String($0)) }
-        categories = saved.isEmpty ? Set(HealthCategory.allCases) : Set(saved)
+        var chosen = saved.isEmpty ? Set(HealthCategory.allCases) : Set(saved)
+        // Deník came in an update: on once for everyone who reads Apple Health,
+        // iOS asks for its types in the app (askNewTypes) and they can untick it.
+        if !saved.isEmpty, !defaults.bool(forKey: Self.journalAddedKey) {
+            chosen.insert(.journal)
+            defaults.set(chosen.map(\.rawValue).sorted().joined(separator: ","), forKey: Self.categoriesKey)
+        }
+        defaults.set(true, forKey: Self.journalAddedKey)
+        categories = chosen
         lastSync = defaults.object(forKey: Self.lastSyncKey) as? Date
     }
 
@@ -515,6 +529,7 @@ final class HealthReader: @unchecked Sendable {
         async let heartRecords = categories.contains(.heart) ? heart(from: from90, recent: from30, to: now) : nothing
         async let breathingRecords = categories.contains(.breathing) ? breathing(from: from90, to: now) : nothing
         async let bodyRecords = categories.contains(.body) ? body(from: from365, to: now) : nothing
+        async let journalRecords = categories.contains(.journal) ? journal(from: from90, to: now) : nothing
         let readFood = categories.contains(.food) || categories.contains(.water)
         async let foodRead: AppleHealthUpload.Food? = readFood
             ? foodUpload(from: from30, to: now, meals: categories.contains(.food), drinks: categories.contains(.water)) : nil
@@ -531,6 +546,7 @@ final class HealthReader: @unchecked Sendable {
         rest += await restingRecords + hrvRecords
         rest += await heartRecords + breathingRecords
         rest += await bodyRecords
+        rest += await journalRecords
         let food = await foodRead
 
         if closed.get() { return nil }
@@ -544,6 +560,99 @@ final class HealthReader: @unchecked Sendable {
             uploads.append(AppleHealthUpload(records: Array(rest[i..<min(i + 1500, rest.count)]), categories: names))
         }
         return uploads
+    }
+
+    // MARK: Deník
+
+    /// What fills in journal items (src/journal-store.js autoDays): mindful
+    /// minutes, time in daylight, noise in sleep, symptoms, sexual activity and
+    /// yoga or stretching workouts.
+    static let symptoms: [(HKCategoryTypeIdentifier, String)] = [
+        (.headache, "headache"), (.runnyNose, "runny-nose"), (.generalizedBodyAche, "body-ache"),
+        (.abdominalCramps, "stomach"), (.nausea, "stomach"), (.diarrhea, "stomach"), (.vomiting, "stomach"), (.bloating, "stomach"), (.heartburn, "stomach")
+    ]
+
+    static var journalTypes: Set<HKObjectType> {
+        var out: Set<HKObjectType> = [HKCategoryType(.mindfulSession), HKQuantityType(.timeInDaylight), HKQuantityType(.environmentalAudioExposure),
+                                      HKCategoryType(.sleepAnalysis), HKCategoryType(.sexualActivity), HKObjectType.workoutType()]
+        for (id, _) in symptoms { out.insert(HKCategoryType(id)) }
+        return out
+    }
+
+    /// One value a day per kind: daily-mindful-minutes, daily-daylight-minutes
+    /// (and before 10:00), daily-night-noise (the loudest reading while asleep,
+    /// on the day of waking up), daily-symptom-*, daily-sexual-activity,
+    /// daily-yoga-minutes, daily-stretching-minutes and daily-time-zone-change.
+    private func journal(from: Date, to: Date) async -> [AppleRecord] {
+        var sums: [String: [String: Double]] = [:]
+        func add(_ type: String, _ date: String, _ value: Double) { sums[type, default: [:]][date, default: 0] += value }
+
+        async let mindfulRead = samples(HKCategoryType(.mindfulSession), from: from, to: to)
+        async let daylightRead = samples(HKQuantityType(.timeInDaylight), from: from, to: to)
+        async let sexRead = samples(HKCategoryType(.sexualActivity), from: from, to: to)
+        async let workoutRead = samples(HKObjectType.workoutType(), from: from, to: to, predicate: notOurs)
+        async let sleepRead = samples(HKCategoryType(.sleepAnalysis), from: from.addingTimeInterval(-9 * 3600), to: to)
+        async let noiseRead = samples(HKQuantityType(.environmentalAudioExposure), from: from.addingTimeInterval(-9 * 3600), to: to)
+
+        for s in await mindfulRead { add("daily-mindful-minutes", day(s.startDate), s.endDate.timeIntervalSince(s.startDate) / 60) }
+        for s in await daylightRead.compactMap({ $0 as? HKQuantitySample }) {
+            let minutes = s.quantity.doubleValue(for: .minute()), date = day(s.startDate)
+            add("daily-daylight-minutes", date, minutes)
+            add("daily-morning-daylight-minutes", date, calendar.component(.hour, from: s.startDate) < 10 ? minutes : 0)
+        }
+        for s in await sexRead { add("daily-sexual-activity", day(s.startDate), 1) }
+        for w in await workoutRead.compactMap({ $0 as? HKWorkout }) {
+            switch w.workoutActivityType {
+            case .yoga, .mindAndBody: add("daily-yoga-minutes", day(w.startDate), w.duration / 60)
+            case .flexibility, .cooldown, .preparationAndRecovery: add("daily-stretching-minutes", day(w.startDate), w.duration / 60)
+            default: break
+            }
+        }
+        for (id, name) in Self.symptoms {
+            let present = await samples(HKCategoryType(id), from: from, to: to).compactMap { $0 as? HKCategorySample }
+                .filter { $0.value != HKCategoryValueSeverity.notPresent.rawValue }
+            for s in present { add("daily-symptom-" + name, day(s.startDate), 1) }
+        }
+        // Noise in sleep: readings that overlap the time asleep (not naps
+        // between 10:00 and 19:00), the loudest one a night.
+        let asleepValues = Set(HKCategoryValueSleepAnalysis.allAsleepValues.map(\.rawValue))
+        let asleep = await sleepRead.compactMap { $0 as? HKCategorySample }.filter { s in
+            let hour = calendar.component(.hour, from: s.startDate)
+            return asleepValues.contains(s.value) && !(10..<19).contains(hour)
+        }
+        var noise: [String: Double] = [:]
+        for q in await noiseRead.compactMap({ $0 as? HKQuantitySample }) where asleep.contains(where: { $0.startDate < q.endDate && $0.endDate > q.startDate }) {
+            let date = wakeDay(q.startDate)
+            noise[date] = max(noise[date] ?? 0, q.quantity.doubleValue(for: .decibelAWeightedSoundPressureLevel()))
+        }
+        if !noise.isEmpty { sums["daily-night-noise"] = noise }
+        for (date, hours) in timeZoneChanges(now: to) { sums["daily-time-zone-change", default: [:]][date] = hours }
+
+        let last = day(to)
+        return sums.flatMap { type, byDay in
+            byDay.compactMap { date, value -> AppleRecord? in
+                guard date <= last else { return nil }
+                return AppleRecord(type: type, id: "journal:" + type.replacingOccurrences(of: "daily-", with: "") + ":" + date, date: date, value: (value * 10).rounded() / 10)
+            }
+        }
+    }
+
+    /// The days the iPhone moved to a time zone with another offset (a flight,
+    /// not the change to summer time) and by how many hours, noticed at each
+    /// sync and kept here for 60 days.
+    private func timeZoneChanges(now: Date) -> [String: Double] {
+        let defaults = UserDefaults.standard, zoneKey = "journal.timeZone", shiftsKey = "journal.timeZoneShifts"
+        var shifts = defaults.dictionary(forKey: shiftsKey) as? [String: Double] ?? [:]
+        let zone = TimeZone.current, today = day(now)
+        if let previous = defaults.string(forKey: zoneKey), previous != zone.identifier, let old = TimeZone(identifier: previous) {
+            let hours = Double(zone.secondsFromGMT(for: now) - old.secondsFromGMT(for: now)) / 3600
+            if hours != 0 { shifts[today] = (shifts[today] ?? 0) + hours }
+        }
+        defaults.set(zone.identifier, forKey: zoneKey)
+        let cutoff = day(calendar.date(byAdding: .day, value: -60, to: now) ?? now)
+        shifts = shifts.filter { $0.key >= cutoff && $0.value != 0 }
+        defaults.set(shifts, forKey: shiftsKey)
+        return shifts
     }
 
     // MARK: Food and water from other apps

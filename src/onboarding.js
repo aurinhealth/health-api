@@ -1,4 +1,5 @@
 import {METAGYM_KUTNA_HORA,OTHER_STATION_IDS} from './gym-equipment.js';
+import {cardioMode} from './stretching.js';
 import {normalizeProfile,energyBaseline,effectiveProfile} from './energy-profile.js';
 import {readSuggestions} from './profile-suggestions.js';
 import {normalizeAvailability} from './training-availability.js';
@@ -103,8 +104,11 @@ export function normalizeTraining(input={}){
   const activePlace=input.activePlace==='bodyweight'||places.some(p=>p.id===input.activePlace)?String(input.activePlace):places[0]?.id||'bodyweight';
   // The gym goal (strength-generator.js goalReps), the warm-up and the stretching (on unless turned off).
   const goal=['strength','strength_muscle','muscle','muscle_fitness','fitness'].includes(input.goal)?input.goal:'auto';
-  const stretching=input.stretching!==false,warmup=input.warmup!==false,warmupCardio=input.warmupCardio!==false;
-  return {experience,experienceBySport,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights,places,activePlace,goal,warmup,warmupCardio,stretching};
+  const stretching=input.stretching!==false,warmup=input.warmup!==false;
+  // Cardio: none / start / end / both (older setups: warmupCardio false → none), and the machine.
+  const cardio=cardioMode(input),warmupCardio=cardio==='start'||cardio==='both';
+  const cardioType=String(input.cardioType||'').trim().slice(0,40)||'exercise_bike';
+  return {experience,experienceBySport,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights,places,activePlace,goal,warmup,warmupCardio,cardio,cardioType,stretching};
 }
 export async function updateTrainingSetup(db,input={}){
   await ensureOnboarding(db);
