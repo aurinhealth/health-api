@@ -77,9 +77,28 @@ jobs:
           TEST_RUNNER_SNAPSHOT_DIR: ${{ github.workspace }}/screens
         run: |
           mkdir -p "$GITHUB_WORKSPACE/screens"
+          set -o pipefail
           xcodebuild -project Loadwise.xcodeproj -scheme Loadwise -configuration Debug \
             -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO test
+            CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # The Swift concurrency warnings the compiler found (SWIFT_STRICT_CONCURRENCY
+      # in project.yml), counted per file, so each round of fixes shows what is left.
+      - name: Count concurrency warnings
+        if: always()
+        run: |
+          log="$RUNNER_TEMP/build.log"
+          [ -f "$log" ] || exit 0
+          grep -E '\.swift:[0-9]+:[0-9]+: warning: ' "$log" | grep -iE 'sendable|actor|isolat|concurren|data race|nonisolated' | sort -u > "$RUNNER_TEMP/concurrency.txt" || true
+          total=$(wc -l < "$RUNNER_TEMP/concurrency.txt" | tr -d ' ')
+          {
+            echo "### Concurrency warnings: $total"
+            echo '```'
+            sed -E 's#^.*/(ios-native/)?([^:]+\.swift):.*#\2#' "$RUNNER_TEMP/concurrency.txt" | sort | uniq -c | sort -rn | head -40
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Concurrency warnings: $total"
+          sed -E 's#^.*/(Loadwise|Shared|LoadwiseWidgets|LoadwiseTests)/#\1/#' "$RUNNER_TEMP/concurrency.txt" | head -300
 
       # The real app on the simulator with sample data, as the phone shows it.
       # The app follows the phone's language, so the English simulator is told Czech.

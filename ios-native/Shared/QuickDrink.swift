@@ -63,8 +63,8 @@ enum PendingDrinks {
 /// The widget's water buttons, and "Zapsat vodu" in Siri and Shortcuts
 /// (AurinShortcuts), where the amount may be left out for the user's glass.
 struct AddWaterIntent: AppIntent {
-    static var title: LocalizedStringResource = "Zapsat vodu"
-    static var description = IntentDescription("Zapíše vodu do dnešního pití.")
+    static let title: LocalizedStringResource = "Zapsat vodu"
+    static let description = IntentDescription("Zapíše vodu do dnešního pití.")
 
     /// Millilitres; the title names no unit because an intent's texts are fixed at build time.
     @Parameter(title: "Množství")

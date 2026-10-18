@@ -19,7 +19,7 @@ struct WorkoutProfile: View {
     var compact = false
     @State private var cursor: Double?
 
-    static func segments(_ blocks: [PlannedWorkout.Block]) -> [Segment] {
+    nonisolated static func segments(_ blocks: [PlannedWorkout.Block]) -> [Segment] {
         var out: [Segment] = [], t = 0.0
         for block in blocks {
             for _ in 0..<max(1, block.repeats ?? 1) {

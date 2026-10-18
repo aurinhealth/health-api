@@ -422,8 +422,9 @@ struct AddGymSheet: View {
                     }
                     .padding(.horizontal, 12).frame(height: 44)
                     .background(Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    let photoCount = photos.count
                     PhotosPicker(selection: $photos, maxSelectionCount: 8, matching: .images) {
-                        Label(photos.isEmpty ? L10n.tr("Přidat fotky") : L10n.f("Přidat fotky (%@)", String(photos.count)), systemImage: "camera")
+                        Label(photoCount == 0 ? L10n.tr("Přidat fotky") : L10n.f("Přidat fotky (%@)", String(photoCount)), systemImage: "camera")
                             .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                             .frame(maxWidth: .infinity).frame(height: 44)
                             .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
