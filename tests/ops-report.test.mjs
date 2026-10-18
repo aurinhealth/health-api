@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { recordOpsEvent, withOpsScope, sendDailyOpsReport, opsReport, aiReport, routeName } from "../src/ops-report.js";
+import { recordOpsEvent, withOpsScope, sendDailyOpsReport, opsReport, aiReport, routeName, stuckAccountDeletions } from "../src/ops-report.js";
 
 test("errors a sync job logs and swallows are counted for its service", async () => {
   const db = createD1();
@@ -52,4 +52,19 @@ test("the AI section lists yesterday's cost per user with the costliest features
   assert.ok(text.indexOf("a@x.cz") < text.indexOf("b@x.cz"));
   assert.equal(aiReport([], [], 4), null);
   assert.match(opsReport([], null, "2026-10-15", text).text, /Útrata AI včera/);
+});
+
+test("account deletions that keep failing are in the morning e-mail", async () => {
+  const db = createD1();
+  assert.deepEqual(await stuckAccountDeletions(db), []);
+  db.sqlite.exec("CREATE TABLE account_deletions (user_id INTEGER PRIMARY KEY, requested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)");
+  assert.deepEqual(await stuckAccountDeletions(db), []);
+  db.sqlite.exec("ALTER TABLE account_deletions ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0; ALTER TABLE account_deletions ADD COLUMN last_error TEXT; ALTER TABLE account_deletions ADD COLUMN retry_after TEXT;");
+  db.sqlite.exec("INSERT INTO account_deletions (user_id, requested_at, attempts, last_error) VALUES (5, '2026-10-10 08:00:00', 4, 'User data database is offline'), (6, '2026-10-11 08:00:00', 1, 'timeout')");
+  const stuck = await stuckAccountDeletions(db);
+  assert.deepEqual(stuck.map(r => r.user_id), [5]);
+  const text = opsReport([], null, "2026-10-15", null, stuck).text;
+  assert.match(text, /Nedokončená smazání účtů/);
+  assert.match(text, /- účet #5 smazaný 2026-10-10: 4× selhalo \(naposledy: User data database is offline\)/);
+  assert.equal(opsReport([], null, "2026-10-15", null, []), null);
 });

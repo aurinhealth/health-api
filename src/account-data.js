@@ -8,6 +8,7 @@ import { revokeApple } from "./apple-login.js";
 import { revokeWhoop } from "./whoop.js";
 import { revokeUltrahuman } from "./ultrahuman.js";
 import { revokeWahoo } from "./wahoo.js";
+import { revokeIntervals } from "./intervals-oauth.js";
 
 // Sign-in keys of the connected services are never exported.
 const SECRET_TABLES = new Set(["connection_credentials"]);
@@ -75,8 +76,6 @@ export function exportAccountStream(env, user, { now = new Date(), pageRows = EX
 
 // Google keeps a granted consent until it is revoked; the app gives it back
 // before forgetting the key (here and on disconnecting Google Health).
-// Intervals.icu has no revoke call: its key or token is deleted here and the
-// user can remove the app at intervals.icu/settings.
 export async function revokeGoogle(env, fetchImpl = fetch) {
   if (!env.GOOGLE_REFRESH_TOKEN) return "none";
   try {
@@ -109,7 +108,7 @@ export async function purgeUserData(db, userId, { deadline = Date.now() + REQUES
   let chunks = 0;
   for (const table of DELETE_ORDER) {
     for (;;) {
-      if (chunks > 0 && (chunks >= maxChunks || Date.now() >= deadline)) return { done: false, deleted };
+      if (chunks > 0 && (chunks >= maxChunks || Date.now() >= deadline)) return { done: false, deleted, chunks };
       let changes;
       try {
         changes = (await db.prepare(`DELETE FROM ${table} WHERE rowid IN (SELECT rowid FROM ${table} WHERE user_id = ? LIMIT ?)`).bind(Number(userId), chunkRows).run())?.meta?.changes || 0;
@@ -121,7 +120,7 @@ export async function purgeUserData(db, userId, { deadline = Date.now() + REQUES
       if (changes < chunkRows) break;
     }
   }
-  return { done: true, deleted };
+  return { done: true, deleted, chunks };
 }
 
 export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = REQUEST_BUDGET_MS, chunkRows = DELETE_CHUNK_ROWS } = {}) {
@@ -129,8 +128,9 @@ export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = R
   if (user.isOwner) throw new Error(L("Účet správce nejde smazat: patří k němu data a nastavení aplikace.", "The admin account can't be deleted: the app's data and settings belong to it."));
   const google = await revokeGoogle(env, fetchImpl);
   const apple = await revokeApple(env, fetchImpl);
-  // WHOOP, Ultrahuman and Wahoo would keep Aurin among the allowed apps.
-  const [whoop, ultrahuman, wahoo] = await Promise.all([revokeWhoop(env, fetchImpl), revokeUltrahuman(env, fetchImpl), revokeWahoo(env, fetchImpl)]);
+  // WHOOP, Ultrahuman, Wahoo and Intervals.icu (OAuth) would keep Aurin among
+  // the allowed apps. A personal Intervals.icu API key is only deleted here.
+  const [whoop, ultrahuman, wahoo, intervals] = await Promise.all([revokeWhoop(env, fetchImpl), revokeUltrahuman(env, fetchImpl), revokeWahoo(env, fetchImpl), revokeIntervals(env, fetchImpl)]);
   // The account row goes first, together with the note that its data is to be
   // removed: the session no longer signs anyone in, signing in again needs a
   // new invitation (and gets a new id), and the cron finishes the data if this
@@ -144,12 +144,12 @@ export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = R
     purge = await purgeUserData(env.DB, env.USER_ID, { deadline: Date.now() + budgetMs, chunkRows });
   } catch (error) {
     console.error("Account data deletion continues in the cron", error.message);
-    return { status: "ok", google, apple, whoop, ultrahuman, wahoo, deleted: {}, pending: true };
+    return { status: "ok", google, apple, whoop, ultrahuman, wahoo, intervals, deleted: {}, pending: true };
   }
   if (purge.done) {
     await completeDeletion(env.DB, env.USER_ID, env.USER_DATA_ROUTING === 'true');
   }
-  return { status: "ok", google, apple, whoop, ultrahuman, wahoo, deleted: purge.deleted, pending: !purge.done };
+  return { status: "ok", google, apple, whoop, ultrahuman, wahoo, intervals, deleted: purge.deleted, pending: !purge.done };
 }
 
 async function completeDeletion(db, userId, routed) {
@@ -160,28 +160,66 @@ async function completeDeletion(db, userId, routed) {
   await db.batch(statements);
 }
 
-// Every minute: removes the rest of the data of one deleted account. An entry
-// whose account still exists is dropped untouched (ids are never reused).
-export async function finishAccountDeletions(db, { budgetMs = CRON_BUDGET_MS, chunkRows = DELETE_CHUNK_ROWS, maxChunks = MAX_CHUNKS, databaseForUser = null } = {}) {
-  let next;
-  try {
-    next = await db.prepare("SELECT user_id FROM account_deletions ORDER BY requested_at, user_id LIMIT 1").first();
-  } catch (error) {
-    if (missingTable(error)) return null;
-    throw error;
+// Every minute: removes the rest of the data of deleted accounts, oldest
+// first. An entry whose account still exists is dropped untouched (ids are
+// never reused). An account whose deletion fails (its data database offline or
+// unbound, a statement that keeps failing) is put back with the error and
+// tried again later, waiting longer after each attempt, and the run goes on
+// with the next account, so one stuck deletion never holds up the others. The
+// daily ops report lists the ones that keep failing (ops-report.js). One run
+// handles at most MAX_ACCOUNTS_PER_RUN accounts, which share the time and
+// chunk budget (an account costs a query per table besides its chunks).
+// Returns what happened to each account, or null when none was due.
+const MAX_ACCOUNTS_PER_RUN = 3;
+const DELETION_RETRY_MINUTES = attempts => Math.min(5 * 2 ** Math.max(0, attempts - 1), 6 * 60);
+const sqlTime = date => date.toISOString().slice(0, 19).replace("T", " ");
+const errorText = error => String(error?.message ?? error ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+
+export async function finishAccountDeletions(db, { budgetMs = CRON_BUDGET_MS, chunkRows = DELETE_CHUNK_ROWS, maxChunks = MAX_CHUNKS, maxAccounts = MAX_ACCOUNTS_PER_RUN, databaseForUser = null, now = () => new Date() } = {}) {
+  const deadline = Date.now() + budgetMs;
+  const results = [];
+  let chunksLeft = maxChunks;
+  while (results.length < maxAccounts && chunksLeft > 0 && (!results.length || Date.now() < deadline)) {
+    let next;
+    try {
+      next = await db.prepare("SELECT user_id, attempts FROM account_deletions WHERE retry_after IS NULL OR retry_after <= ? ORDER BY requested_at, user_id LIMIT 1").bind(sqlTime(now())).first();
+    } catch (error) {
+      if (missingTable(error)) return null;
+      throw error;
+    }
+    if (!next) break;
+    const userId = Number(next.user_id);
+    let result;
+    try {
+      result = await finishOne(db, userId, { deadline, chunkRows, maxChunks: chunksLeft, databaseForUser });
+    } catch (error) {
+      const attempts = Number(next.attempts || 0) + 1;
+      const retryAfter = new Date(now().getTime() + DELETION_RETRY_MINUTES(attempts) * 60000);
+      console.error("Account deletion failed", userId, `attempt ${attempts}`, errorText(error));
+      await db.prepare("UPDATE account_deletions SET attempts = ?, last_error = ?, retry_after = ? WHERE user_id = ?").bind(attempts, errorText(error), sqlTime(retryAfter), userId).run();
+      results.push({ userId, done: false, failed: errorText(error), attempts });
+      continue;
+    }
+    chunksLeft -= result.chunks || 0;
+    delete result.chunks;
+    results.push(result);
+    // Out of time or chunks: this account goes on in the next run.
+    if (!result.done && !result.skipped) break;
   }
-  if (!next) return null;
-  const userId = Number(next.user_id);
+  return results.length ? results : null;
+}
+
+async function finishOne(db, userId, { deadline, chunkRows, maxChunks, databaseForUser }) {
   if (await db.prepare("SELECT 1 AS present FROM users WHERE id = ?").bind(userId).first()) {
     await db.prepare("DELETE FROM account_deletions WHERE user_id = ?").bind(userId).run();
     return { userId, done: false, skipped: "account exists" };
   }
   const data = databaseForUser ? await databaseForUser(userId) : db;
-  const { done, deleted } = await purgeUserData(data, userId, { deadline: Date.now() + budgetMs, chunkRows, maxChunks });
+  const { done, deleted, chunks } = await purgeUserData(data, userId, { deadline, chunkRows, maxChunks });
   if (done) {
     await completeDeletion(db, userId, Boolean(databaseForUser));
   }
-  return { userId, done, deleted: Object.values(deleted).reduce((sum, n) => sum + n, 0) };
+  return { userId, done, deleted: Object.values(deleted).reduce((sum, n) => sum + n, 0), chunks };
 }
 
 // Storage limitation (privacy policy): an account nobody has signed in to for
