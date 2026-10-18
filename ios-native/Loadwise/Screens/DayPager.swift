@@ -60,7 +60,8 @@ private struct DaySwipe: ViewModifier {
     @State private var page: DayPage?
     /// Off while a picked day slides in.
     @State private var showsNeighbour = true
-    /// After a swipe: the day coming, as empty cards until it is here.
+    /// After a swipe: the day coming, as it was drawn beside (or as empty
+    /// cards) until it is here.
     @State private var coming: String?
 
     private var waiting: Bool { coming != nil && coming != date }
@@ -78,7 +79,7 @@ private struct DaySwipe: ViewModifier {
     private func paged(_ content: Content) -> some View {
         content
             .opacity(waiting ? 0 : 1)
-            .overlay(alignment: .top) { if waiting { DayPlaceholder() } }
+            .overlay(alignment: .top) { if waiting { comingDay } }
             .offset(x: drag)
             .background(alignment: .top) {
                 if showsNeighbour, drag != 0, let page {
@@ -110,6 +111,19 @@ private struct DaySwipe: ViewModifier {
                 }
                 withAnimation(.snappy(duration: 0.3)) { drag = 0 } completion: { showsNeighbour = true }
             }
+    }
+
+    /// The swiped-to day stays where the finger left it, not empty cards for
+    /// the moment until the screen shows it.
+    @ViewBuilder private var comingDay: some View {
+        if let page, page.date == coming, let view = neighbour(page) {
+            view
+                .environment(\.dayPage, page)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else {
+            DayPlaceholder()
+        }
     }
 
     private func follow(_ moved: CGFloat) {

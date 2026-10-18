@@ -15,6 +15,9 @@ struct RootView: View {
     @State private var quickActions = QuickActions.shared
     /// Scrolled down: the tab bar is only the open section's icon and "+".
     @State private var compactBar = false
+    /// Opened with a tap while the page still glides: it stays open until the
+    /// page is dragged again, so the glide does not fold it under the finger.
+    @State private var barHeld = false
     @State private var tabTaps = 0
     /// Tabs opened since sign-in, kept built (screens) and whether each is scrolled down.
     @State private var visited: Set<AppTab> = []
@@ -87,7 +90,11 @@ struct RootView: View {
                                     if compact { scrolledTabs.insert(tab) } else { scrolledTabs.remove(tab) }
                                 }
                                 guard tab == model.tab else { return }
-                                if compact != compactBar { withAnimation(.snappy) { compactBar = compact } }
+                                if !compact { barHeld = false }
+                                if compact != compactBar, !barHeld { withAnimation(.snappy) { compactBar = compact } }
+                            })
+                            .environment(\.scrollDragReport, {
+                                if tab == model.tab { barHeld = false }
                             })
                     }
                 }
@@ -156,7 +163,10 @@ struct RootView: View {
                         // Details have no tab bar; a hidden workout stays reachable there.
                         if !barHidden {
                             TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
-                                   onExpand: { withAnimation(.snappy) { compactBar = false } }, onAdd: { showAdd = true })
+                                   onExpand: {
+                                       barHeld = true
+                                       withAnimation(.snappy) { compactBar = false }
+                                   }, onAdd: { showAdd = true })
                                 .padding(.horizontal, 20)
                                 .padding(.bottom, 8)
                                 .dynamicTypeSize(Self.textSizes)
@@ -284,6 +294,7 @@ struct RootView: View {
     private func select(_ tab: AppTab) {
         // A tab kept from before shows where it was scrolled.
         let compact = model.tab != tab && scrolledTabs.contains(tab) && (model.paths[tab] ?? []).isEmpty
+        if model.tab != tab { barHeld = false }
         withAnimation(.snappy) { compactBar = compact }
         if model.tab == tab {
             model.paths[tab] = []

@@ -448,7 +448,7 @@ final class AppModel {
                 async let cycle: Void = loadCycle()
                 await Reminders.reschedule(from: today)
                 WidgetBridge.update(today)
-                prefetchYesterday()
+                prefetchAround(Self.localDate(Date()))
                 await cycle
             }
             if let status = await status { athleteStatus = status }
@@ -1232,6 +1232,7 @@ final class AppModel {
         guard let failure else {
             errorMessage = nil
             _ = noteConnection(nil)
+            prefetchAround(date)
             return
         }
         if (failure as? APIError) == .unauthorized { signOut(expired: true); return }
@@ -1245,14 +1246,28 @@ final class AppModel {
         do { return .success(try await body()) } catch { return .failure(error) }
     }
 
-    /// Yesterday's Today kept on the phone in advance (at most once an hour),
-    /// so the first step back opens at once.
-    private func prefetchYesterday() {
-        guard let yesterday = Self.shift(Self.localDate(Date()), by: -1) else { return }
-        if let saved = SnapshotCache.data(key: SnapshotCache.dayKey("today", yesterday)),
-           Date().timeIntervalSince(saved.savedAt) < 3600 { return }
+    /// The days before and after the one on screen kept on the phone in
+    /// advance (each at most once an hour), with Food and Health when they
+    /// were opened, so the next swipe or arrow opens at once.
+    private func prefetchAround(_ date: String) {
+        let todayDate = Self.localDate(Date())
+        let wantFood = food != nil, wantHealth = health != nil
         let api = api
-        Task(priority: .utility) { _ = try? await api.todayData(date: yesterday) }
+        for offset in [-1, 1] {
+            // Today itself is always loaded; later days have no Today or Health.
+            guard let day = Self.shift(date, by: offset), day < todayDate else { continue }
+            func stale(_ screen: String) -> Bool {
+                guard let saved = SnapshotCache.savedAt(key: SnapshotCache.dayKey(screen, day)) else { return true }
+                return Date().timeIntervalSince(saved) >= 3600
+            }
+            let today = stale("today"), food = wantFood && stale("food"), health = wantHealth && stale("health")
+            guard today || food || health else { continue }
+            Task(priority: .utility) {
+                if today { _ = try? await api.todayData(date: day) }
+                if food { _ = try? await api.foodData(date: day) }
+                if health { _ = try? await api.health(date: day) }
+            }
+        }
     }
 
     nonisolated static func localDate(_ date: Date) -> String {

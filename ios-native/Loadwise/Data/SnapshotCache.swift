@@ -31,6 +31,12 @@ enum SnapshotCache {
         return (data, saved)
     }
 
+    /// When the value was saved, without reading it.
+    static func savedAt(key: String) -> Date? {
+        let url = directory.appending(path: key + ".json")
+        return try? FileManager.default.attributesOfItem(atPath: url.path)[.modificationDate] as? Date
+    }
+
     static func remove(key: String) {
         try? FileManager.default.removeItem(at: directory.appending(path: key + ".json"))
     }
