@@ -54,14 +54,14 @@ test('every reply keeps its language, no data field names and no app line', () =
 
 test('a situation runs through the coach and the app checks its actions', async () => {
   let asked = null;
-  const ask = async (env, message, ctx, options) => { asked = { message, ctx, options }; return { status: 'ok', answer: czech, visuals: [], model: 'm', usage: { input_tokens: 10, output_tokens: 5 },
+  const ask = async (env, message, ctx, options) => { asked = { message, ctx, options }; return { status: 'ok', answer: czech, visuals: [], model: 'm', usage: { input_tokens: 10, input_tokens_details: { cached_tokens: 4 }, output_tokens: 5 },
     actions: [{ type: 'workout', sport: 'ride', date, minutes: 75, kind: 'vo2max', reason: 'Chce to' }, { type: 'move', eventId: 'planned:9001', date: '2026-10-18', reason: 'Až po zotavení' }] }; };
   const result = await runScenario({}, scenarioById('S02'), { ask, date, now });
   assert.equal(asked.options.actions, true);assert.equal(asked.options.task, 'planning');assert.equal(asked.options.focus.sport, 'cycling');
   // The app's action checks drop a VO2max for today on a red day; the move stays.
   assert.deepEqual(result.kept.map(a => a.type), ['move']);
   assert.equal(result.passed, true);
-  assert.deepEqual(result.usage, { input: 10, output: 5 });
+  assert.deepEqual(result.usage, { input: 10, cached: 4, output: 5 });
   const unavailable = await runScenario({}, scenarioById('S01'), { ask: async () => ({ status: 'unavailable', message: 'AI není' }), date, now });
   assert.equal(unavailable.status, 'unavailable');
 });
@@ -224,4 +224,16 @@ test('Luna: three quick questions go to the light model and name the athlete\'s 
   // Run 12: the words, and an easy card for today after the 48 h rule.
   assert.deepEqual(at('L03', 'Včera, 16. října, jsi spal 7 hodin a 25 minut.'), []);
   assert.ok(!checkReply(scenarioById('L02'), { answer: 'Dnes máš v plánu „VO₂max 5×4“, ale jel bych lehce.', kept: [{ type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance', card: 'endurance' }], proposed: [], model: 'gpt-6-luna' }, now, date).some(c => !c.ok));
+});
+
+test('every answer is in Latin letters and the coach speaks of itself in the masculine', () => {
+  const check = (answer, id = 'S22') => Object.fromEntries(checkReply(scenarioById(id), { answer, kept: [], proposed: [] }).map(c => [c.name, c.ok]));
+  // Coach evaluation run 14: S08 "ubrал" with a Russian letter, S22 "dnes bych dala přednost".
+  assert.equal(check('Dnes bych ubrал intenzitu, jeď lehce.')['jen latinka'], false);
+  assert.equal(check('Dnes bych dala přednost volnu.')['kouč o sobě v mužském rodě'], false);
+  assert.equal(check('Držela bych se lehké jízdy.')['kouč o sobě v mužském rodě'], false);
+  const fine = check('Dnes bych dal přednost volnu. Spala jsi 7 h, VO₂max 5×4 nech na zítra, kola nech v garáži.');
+  assert.equal(fine['jen latinka'], true);
+  assert.equal(fine['kouč o sobě v mužském rodě'], true);
+  assert.equal('kouč o sobě v mužském rodě' in check('I would rather rest today.', 'S10'), false);
 });
