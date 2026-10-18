@@ -2,6 +2,7 @@ import Foundation
 
 // "Nahlásit problém" (src/support-report.js): the user's description, an
 // optional screenshot and the app's diagnostics go to the operator.
+// "Navrhnout funkci" sends the same way with kind "idea".
 
 struct SupportReportResponse: Decodable {
     let status: String?
@@ -17,5 +18,10 @@ extension APIClient {
         if let screenshot { body["screenshot"] = .string(screenshot.base64EncodedString()) }
         if let diagnostics { body["diagnostics"] = .object(diagnostics) }
         return try await send("/app/api/support/report", method: "POST", body: body)
+    }
+
+    /// "Navrhnout funkci": the idea and the app version, nothing else.
+    func suggestFeature(message: String, app: JSONObject) async throws -> SupportReportResponse {
+        try await send("/app/api/support/report", method: "POST", body: ["kind": .string("idea"), "message": .string(message), "diagnostics": .object(app)])
     }
 }

@@ -141,6 +141,10 @@ struct SettingsMenu: View {
                     SettingsRow(icon: SettingsIcon(systemImage: "ladybug", color: Palette.rust), title: "Nahlásit problém")
                 }
                 SettingsDivider()
+                NavigationLink { SuggestFeatureView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "lightbulb", color: Palette.amber), title: "Navrhnout funkci")
+                }
+                SettingsDivider()
                 Button(action: contact) {
                     SettingsRow(icon: SettingsIcon(systemImage: "envelope", color: Palette.indigo), title: "Kontaktovat nás", chevron: false)
                         .overlay(alignment: .trailing) {

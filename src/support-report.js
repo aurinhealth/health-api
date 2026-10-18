@@ -4,6 +4,8 @@
 // for the user (serverSnapshot). Stored per user (migrations/0016_support_reports.sql)
 // and e-mailed to the operator (CONTACT_EMAIL, else OWNER_EMAIL) when e-mail
 // is set up, led by the findings worth a look (reportFindings).
+// "Navrhnout funkci" goes the same way with kind "idea": just the text and the
+// app version, no screenshot and no server snapshot; it shares the daily limit.
 import { L } from "./lang.js";
 import { emailConfigured, sendEmail } from "./email-sender.js";
 
@@ -31,11 +33,12 @@ const fail = (message, status = 400) => Object.assign(new Error(message), { stat
 
 // The checked report, or an error with its HTTP status.
 export function validateReport(body) {
+  const idea = body?.kind === "idea";
   const message = typeof body?.message === "string" ? body.message.trim() : "";
-  if (message.length < 3) throw fail(L("Popiš, co se stalo.", "Describe what happened."));
+  if (message.length < 3) throw fail(idea ? L("Napiš svůj nápad.", "Describe your idea.") : L("Popiš, co se stalo.", "Describe what happened."));
   if (message.length > MAX_MESSAGE) throw fail(L("Popis je příliš dlouhý.", "The description is too long."));
   let screenshot = null;
-  if (body.screenshot != null && body.screenshot !== "") {
+  if (!idea && body.screenshot != null && body.screenshot !== "") {
     if (typeof body.screenshot !== "string") throw fail(L("Snímek obrazovky není platný obrázek.", "The screenshot isn't a valid image."));
     screenshot = body.screenshot.replace(/^data:image\/jpeg;base64,/i, "").replace(/\s+/g, "");
     if (screenshot.length > MAX_SCREENSHOT_BASE64) throw fail(L("Snímek je příliš velký. Vyber menší obrázek.", "The image is too large. Choose a smaller one."), 413);
@@ -48,14 +51,16 @@ export function validateReport(body) {
     diagnostics = JSON.stringify(body.diagnostics);
     if (diagnostics.length > MAX_DIAGNOSTICS) throw fail(L("Diagnostika je příliš velká.", "The diagnostics are too large."), 413);
   }
-  return { message, screenshot, diagnostics };
+  // The kind is kept with the diagnostics, so the table needs no new column.
+  if (idea) diagnostics = JSON.stringify({ ...(diagnostics ? JSON.parse(diagnostics) : {}), kind: "idea" });
+  return { message, screenshot, diagnostics, idea };
 }
 
 // A few reports a day per user, not two in a row.
-async function assertAllowed(db) {
+async function assertAllowed(db, idea) {
   const row = await db.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN created_at>=datetime('now',?) THEN 1 ELSE 0 END) AS recent FROM support_reports WHERE user_id=? AND created_at>=datetime('now','-1 day')").bind(`-${MIN_GAP_SECONDS} seconds`, db.userId).first();
   if (Number(row?.n || 0) >= DAILY_REPORTS) throw fail(L("Dnešní limit hlášení je vyčerpaný. Zkus to zítra, nebo napiš na podporu e-mailem.", "You've reached today's report limit. Try again tomorrow, or email support."), 429);
-  if (Number(row?.recent || 0) > 0) throw fail(L("Před chvílí odešlo hlášení. Další pošli za pár sekund.", "A report was sent a moment ago. Send another in a few seconds."), 429);
+  if (Number(row?.recent || 0) > 0) throw fail(idea ? L("Před chvílí odešel návrh. Další pošli za pár sekund.", "An idea was sent a moment ago. Send another in a few seconds.") : L("Před chvílí odešlo hlášení. Další pošli za pár sekund.", "A report was sent a moment ago. Send another in a few seconds."), 429);
 }
 
 const cut = (value, length = 300) => value == null ? null : String(value).slice(0, length);
@@ -107,14 +112,23 @@ export function reportFindings(diagnostics, server, now = Date.now()) {
   return out.map(line => cut(line, 400));
 }
 
-function reportEmail(env, { id, message, diagnostics, screenshot }) {
+const escape = value => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+function ideaEmail(env, { id, message, parsed, who }) {
+  const app = [parsed?.app && `Aurin ${parsed.app}`, parsed?.ios && `iOS ${parsed.ios}`, parsed?.language].filter(Boolean).map(v => cut(v, 40)).join(", ");
+  const text = [`Aurin feature idea #${id}`, `From: ${who}`, ...(app ? [`App: ${app}`] : []), "", message].join("\n");
+  const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif"><p><strong>Aurin feature idea #${id}</strong><br>From: ${escape(who)}${app ? `<br>App: ${escape(app)}` : ""}</p><p style="white-space:pre-wrap">${escape(message)}</p></body></html>`;
+  return { subject: `Aurin: feature idea #${id} from ${env.USER_EMAIL || "user " + (env.USER_ID ?? "")}`, text, html };
+}
+
+function reportEmail(env, { id, message, diagnostics, screenshot, idea }) {
   let parsed = null;
   try { parsed = diagnostics ? JSON.parse(diagnostics) : null; } catch {}
+  const who = `${env.USER_EMAIL || "?"} (user ${env.USER_ID ?? env.DB?.userId})`;
+  if (idea) return ideaEmail(env, { id, message, parsed, who });
   const pretty = parsed ? JSON.stringify(parsed, null, 2) : diagnostics || "";
   const findings = reportFindings(parsed, parsed?.server);
-  const who = `${env.USER_EMAIL || "?"} (user ${env.USER_ID ?? env.DB?.userId})`;
   const text = [`Aurin problem report #${id}`, `From: ${who}`, "", message, "", findings.length ? ["Worth a look:", ...findings.map(f => `- ${f}`)].join("\n") : "Nothing stands out in the diagnostics.", "", screenshot ? `Screenshot: stored with the report (${Math.round(screenshot.length * 0.75 / 1024)} kB, support_reports #${id}).` : "Screenshot: none.", "", "Diagnostics:", pretty || "none"].join("\n");
-  const escape = value => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif"><p><strong>Aurin problem report #${id}</strong><br>From: ${escape(who)}</p><p style="white-space:pre-wrap">${escape(message)}</p>`
     + (findings.length ? `<p><strong>Worth a look:</strong></p><ul>${findings.map(f => `<li>${escape(f)}</li>`).join("")}</ul>` : "<p>Nothing stands out in the diagnostics.</p>")
     + (screenshot ? `<p><img alt="Screenshot" style="max-width:360px;border:1px solid #ddd" src="data:image/jpeg;base64,${screenshot}"></p>` : "")
@@ -131,9 +145,9 @@ export function supportAddress(env) {
 export async function saveSupportReport(env, body) {
   const report = validateReport(body);
   await ensure(env.DB);
-  await assertAllowed(env.DB);
+  await assertAllowed(env.DB, report.idea);
   // The server's side goes with the app's, so the stored report is whole.
-  const server = await serverSnapshot(env.DB).catch(() => null);
+  const server = report.idea ? null : await serverSnapshot(env.DB).catch(() => null);
   if (server) report.diagnostics = JSON.stringify({ ...(report.diagnostics ? JSON.parse(report.diagnostics) : {}), server });
   const result = await env.DB.prepare("INSERT INTO support_reports(user_id,message,screenshot_base64,diagnostics_json) VALUES(?,?,?,?)").bind(env.DB.userId, report.message, report.screenshot, report.diagnostics).run();
   const id = Number(result?.meta?.last_row_id) || null;
@@ -159,7 +173,8 @@ export async function handleSupportReport(request, env, { signedIn, origin }) {
     const body = await request.json().catch(() => null);
     if (!body || typeof body !== "object") return Response.json({ message: L("Neplatné hlášení.", "Invalid report.") }, { status: 400 });
     const saved = await saveSupportReport(env, body);
-    return Response.json({ status: "ok", ...saved, message: L("Díky, hlášení odešlo.", "Thanks, the report has been sent.") }, { headers: { "Cache-Control": "no-store" } });
+    const idea = body.kind === "idea";
+    return Response.json({ status: "ok", ...saved, message: idea ? L("Díky, návrh odešel.", "Thanks, your idea has been sent.") : L("Díky, hlášení odešlo.", "Thanks, the report has been sent.") }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error.status) return Response.json({ status: "error", message: error.message }, { status: error.status });
     console.error("Support report failed", error.message);
