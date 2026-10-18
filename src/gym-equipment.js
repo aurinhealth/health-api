@@ -222,3 +222,85 @@ export function hasKnownStations(exercise) {
   const stations = EXERCISE_STATIONS[exercise];
   return Boolean(stations?.length) && stations.every(knownStation);
 }
+
+// The equipment picker (app: Kde cvičíš? → a place): body parts and kinds of
+// equipment on the left, the stations of the chosen one on the right. A station
+// can be under several (a pull-up bar under the back and the core); ticking it
+// once ticks it everywhere. Each has one line on what it is.
+export const STATION_SECTIONS = [
+  { id: "chest", label: "Hrudník", en: "Chest" },
+  { id: "back", label: "Záda", en: "Back" },
+  { id: "shoulders", label: "Ramena", en: "Shoulders" },
+  { id: "arms", label: "Ruce", en: "Arms" },
+  { id: "legs", label: "Nohy a hýždě", en: "Legs and glutes" },
+  { id: "core", label: "Břicho a trup", en: "Abs and core" },
+  { id: "free_weights", label: "Volné váhy", en: "Free weights" },
+  { id: "accessories", label: "Gumy a doplňky", en: "Bands and extras" },
+  { id: "cables", label: "Kladky", en: "Cables" },
+  { id: "cardio", label: "Kardio", en: "Cardio" }
+];
+export const STATION_SECTION_IDS = STATION_SECTIONS.map(s => s.id);
+
+// id → [sections, Czech line, English line].
+export const STATION_PICKER = {
+  dumbbells: [["free_weights", "arms", "shoulders"], "Jednoručky v řadě vah, na tlaky, přítahy i bicepsy.", "Dumbbells in a range of weights for presses, rows and curls."],
+  adjustable_bench: [["free_weights", "chest"], "Lavice se sklopným opěradlem, rovně i šikmo.", "A bench with a back rest you can tilt, flat or inclined."],
+  bench_press: [["chest", "free_weights"], "Rovná lavice se stojany na osu.", "A flat bench with uprights for the barbell."],
+  barbells: [["free_weights", "legs", "back"], "Rovná osa s kotouči na mrtvé tahy, přítahy a tlaky.", "A straight bar with plates for deadlifts, rows and presses."],
+  squat_rack: [["legs", "free_weights", "shoulders"], "Klec s háky a pojistkami na dřepy s osou.", "A cage with hooks and safeties for barbell squats."],
+  smith_machine: [["free_weights", "legs", "chest"], "Osa vedená v kolejnicích, jistí pohyb nahoru a dolů.", "A bar guided on rails, so it only moves up and down."],
+  floor_mats: [["core", "accessories"], "Podložka na cviky vleže a s vlastní vahou.", "A mat for floor and bodyweight exercises."],
+  pendulum_squat: [["legs"], "Dřep na kyvadlovém stroji, záda opřená.", "A squat on a swinging machine with your back supported."],
+  hip_thrust: [["legs"], "Stroj na zvedání pánve vsedě opřený o záda.", "A machine for hip thrusts with your back on a pad."],
+  pivot_leg_press: [["legs"], "Tlačíš plošinu nohama vsedě nebo vleže.", "You push a platform away with your legs."],
+  leg_extension: [["legs"], "Vsedě propínáš nohy v kolenou proti válci.", "Seated, you straighten your knees against a pad."],
+  prone_leg_curl: [["legs"], "Vleže pokrčuješ nohy proti válci u pat.", "Lying face down, you bend your knees against a pad."],
+  calf_raise: [["legs"], "Vestoje se zvedáš na špičky s váhou na ramenou.", "Standing, you rise onto your toes with the load on your shoulders."],
+  adduction_abduction: [["legs"], "Vsedě stahuješ nebo roztahuješ kolena.", "Seated, you squeeze your knees in or push them out."],
+  lat_pulldown_low_row: [["back"], "Stahuješ tyč shora k hrudníku nebo přitahuješ madlo vsedě.", "You pull a bar down to your chest or a handle to your belly."],
+  standing_row: [["back"], "Vestoje přitahuješ madla k tělu.", "Standing, you pull the handles towards you."],
+  shoulder_press: [["shoulders"], "Vsedě tlačíš madla nad hlavu.", "Seated, you press the handles overhead."],
+  multi_flight: [["shoulders"], "Vestoje upažuješ nebo tlačíš proti stroji.", "Standing, you raise your arms out to the sides."],
+  pec_deck: [["chest", "shoulders"], "Vsedě stahuješ paže před sebe, obráceně na zadní ramena.", "Seated, you bring your arms together; facing in, it works the rear delts."],
+  chest_press: [["chest"], "Vsedě tlačíš madla před sebe.", "Seated, you press the handles forward."],
+  cables: [["cables", "arms", "shoulders", "chest"], "Kladky s nastavitelnou výškou a různými madly.", "Pulleys at any height with different handles."],
+  abs_bench: [["core"], "Šikmá lavice na zkracovačky a zvedání nohou.", "An inclined bench for crunches and leg raises."],
+  roman_chair: [["back", "core", "legs"], "Opora boků, ze které se předkláníš a zvedáš trup.", "A hip pad you bend over and lift your torso from."],
+  treadmill: [["cardio"], "Pás na chůzi a běh, i do kopce.", "A belt for walking and running, uphill too."],
+  stairmaster: [["cardio"], "Nekonečné schody na stoupání.", "Endless stairs to climb."],
+  pullup_bar: [["back", "core"], "Tyč nad hlavou. Visíš na ní a přitahuješ se nahoru.", "A bar overhead. You hang from it and pull yourself up."],
+  dip_bars: [["chest", "arms"], "Dvě rovnoběžné žerdě na kliky na bradlech.", "Two parallel bars for dips."],
+  kettlebells: [["free_weights", "accessories"], "Koule s uchem na švihy a dřepy.", "A ball with a handle for swings and squats."],
+  ez_bar: [["arms", "free_weights"], "Krátká lomená osa, šetří zápěstí u bicepsů.", "A short bent bar that spares your wrists in curls."],
+  incline_bench_press: [["chest"], "Šikmá lavice se stojany na osu.", "An inclined bench with uprights for the barbell."],
+  preacher_bench: [["arms"], "Opěrka pod paže na bicepsový zdvih.", "A pad under your arms for curls."],
+  trap_bar: [["legs", "free_weights"], "Šestihranná osa, stojíš uvnitř a zvedáš.", "A hexagonal bar you stand inside to lift."],
+  landmine: [["free_weights", "shoulders"], "Ukotvený konec osy na tlaky a přítahy.", "A bar anchored at one end for presses and rows."],
+  plyo_box: [["accessories", "legs"], "Pevná bedna na výstupy a skoky.", "A sturdy box for step-ups and jumps."],
+  medicine_ball: [["accessories", "core"], "Těžký míč na hody a údery o zem.", "A heavy ball to throw and slam."],
+  resistance_bands: [["accessories"], "Gumy různé síly, dají se uchytit kamkoli.", "Bands of different strength you can anchor anywhere."],
+  suspension_trainer: [["accessories", "back"], "Popruhy zavěšené nahoře, cvičíš s vlastní vahou.", "Straps hung overhead for bodyweight exercises."],
+  assisted_pullup_dip: [["back", "arms"], "Protiváha ti pomáhá při shybech a bradlech.", "A counterweight helps you with pull-ups and dips."],
+  t_bar_row: [["back"], "V předklonu přitahuješ ukotvenou osu.", "Bent over, you row an anchored bar."],
+  chest_supported_row: [["back"], "Hrudník opřený, přitahuješ madla k tělu.", "Chest on a pad, you row the handles towards you."],
+  hack_squat: [["legs"], "Dřep na šikmých saních se zády opřenými.", "A squat on an angled sled with your back supported."],
+  seated_leg_curl: [["legs"], "Vsedě pokrčuješ nohy proti válci.", "Seated, you bend your knees against a pad."],
+  glute_kickback_machine: [["legs"], "Zanožuješ nohu proti odporu stroje.", "You push one leg back against the machine."],
+  seated_calf_raise: [["legs"], "Vsedě zvedáš paty s váhou na kolenou.", "Seated, you lift your heels with the load on your knees."],
+  sled: [["cardio", "legs"], "Saně s kotouči, tlačíš je nebo táhneš.", "A sled with plates to push or pull."],
+  battle_ropes: [["cardio"], "Těžká lana, kterými vlníš.", "Heavy ropes you whip in waves."],
+  rowing_ergometer: [["cardio"], "Veslovací trenažér na celé tělo.", "A rowing machine for the whole body."],
+  ski_erg: [["cardio"], "Stahuješ madla shora jako při běžkách.", "You pull the handles down like on cross-country skis."],
+  exercise_bike: [["cardio"], "Rotoped na šlapání.", "A stationary bike."],
+  air_bike: [["cardio"], "Rotoped s pohyblivými madly a větrníkem.", "A fan bike with moving handles."],
+  elliptical: [["cardio"], "Šlapání v elipse bez nárazů.", "Smooth strides with no impact."]
+};
+
+// What the picker shows of a station: its sections and its line.
+export function stationPicker(id) {
+  const [sections = [], cs = "", en = ""] = STATION_PICKER[id] || [];
+  return { sections, description: L(cs, en) };
+}
+export function stationSections() {
+  return STATION_SECTIONS.map(s => ({ id: s.id, label: L(s.label, s.en) }));
+}

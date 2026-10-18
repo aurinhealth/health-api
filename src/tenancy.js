@@ -59,6 +59,8 @@ export const PERSONAL_TABLES = {
   // Thumbs up/down on exercises and ratings of generated workouts (exercise-feedback.js).
   exercise_preferences: {},
   workout_ratings: {},
+  // Exercises pinned to the top of Rekordy (pinned-exercises.js).
+  pinned_exercises: { pk: ["user_id", "exercise"] },
   // Synchronizace: where the user sends data and what each send did (sync-destinations.js).
   sync_preferences: {},
   sync_sends: {},
