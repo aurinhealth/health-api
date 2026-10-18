@@ -187,7 +187,7 @@ test('status proposals accept common words for illness and injury, with an optio
 test('passing remarks are not remembered and preferences are saved after the answer',()=>{
   for(const m of ['Nechci dnes nohy','Nechci zítra běhat','Nechci tento týden kolo','Nechci teď posilovat','Nechci běhat?'])assert.equal(explicitPreference(m),null,m);
   assert.equal(explicitPreference('Nechci běhat po asfaltu'),'Nechci běhat po asfaltu');assert.equal(explicitPreference('Nemám rád intervaly na trenažéru'),'Nemám rád intervaly na trenažéru');
-  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8'),start=entry.indexOf("url.pathname==='/app/api/assistant'&&request.method==='POST'"),block=entry.slice(start,entry.indexOf("if(body.stream)return assistantStreamResponse(reply);",start));
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8'),start=entry.indexOf("url.pathname==='/app/api/assistant'&&request.method==='POST'"),block=entry.slice(start,entry.indexOf("if(body.stream)return assistantStreamResponse(reply",start));
   assert.ok(block.lastIndexOf('await saveMemory();')>block.indexOf('await askCoach(env,message,coachCtx'));
   assert.doesNotMatch(block,/updateAthleteState\(env\.DB,\{memory\}\):await getAthleteState/);assert.doesNotMatch(block,/turn:\[/);
 });

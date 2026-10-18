@@ -9,7 +9,7 @@ import { readOpenAIStream,partialCoachAnswer } from './assistant-stream.js';
 import { resolveStrengthPerformance } from './strength-history.js';
 import { rideFtpFor } from './intervals-athlete.js';
 import { aiLanguageNote, L, lang } from './lang.js';
-import { assertAiAllowance, claimAiSlot, estimateAiCostUsd, recordAiUsage } from './ai-usage.js';
+import { assertAiAllowance, claimAiSlot, estimateAiCostUsd, keepAiReservation, recordAiUsage } from './ai-usage.js';
 import { trendFacts } from './trend-facts.js';
 import { localDateTime } from './user-time.js';
 import { sleepNeedFor, sleepDebtMinutes, sleepNeedMinutes } from './recovery-model.js';
@@ -387,6 +387,8 @@ const retryWait=(ms,signal)=>new Promise((resolve,reject)=>{
 
 async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs, slotId }) {
   const chosenModel=model || env.OPENAI_MODEL || 'gpt-6-sol';
+  // Sent but broken off with no usage: the call counts at its reservation.
+  const broken=async error=>{await keepAiReservation(env,slotId,{feature,model:chosenModel});throw error;};
   const response = await fetchOpenAI(env, {
     signal:AbortSignal.timeout(timeoutMs||timeoutFor(maxOutputTokens)),
     body:JSON.stringify({
@@ -400,13 +402,13 @@ async function openAIResponse(env, { instructions, input, maxOutputTokens, tools
       ...(tools ? {tools} : {}),
       ...(format ? {text:{format}} : {})
     })
-  });
+  }).catch(broken);
   if(!response.ok){const error=await response.json().catch(()=>({})),failure=new Error('OpenAI '+response.status+': '+(error.error?.message||L('AI služba není dostupná.', 'The AI service isn\'t available.')));failure.ai=true;throw failure;}
   let data;
   // A stream that fails after generation started still cost tokens (A8a): the
   // usage the failure event carried is recorded before the error goes on.
   try{data=onText?await readOpenAIStream(response,onText):await response.json();}
-  catch(error){if(error?.usage)await recordAiUsage(env,{feature,model:error.model||chosenModel,usage:error.usage,webSearches:0,slotId}).catch(()=>{});throw error;}
+  catch(error){if(!error?.usage)return broken(error);await recordAiUsage(env,{feature,model:error.model||chosenModel,usage:error.usage,webSearches:0,slotId}).catch(()=>{});throw error;}
   // Web searches are billed per call; a failed one is not.
   const webSearches=(data.output||[]).filter(item=>item.type==='web_search_call'&&item.status!=='failed').length;
   await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage,webSearches,slotId});
