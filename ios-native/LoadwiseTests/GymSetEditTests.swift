@@ -36,6 +36,16 @@ final class GymSetEditTests: XCTestCase {
         XCTAssertEqual(d.exercises[0].sets.map(\.side), ["L", "P"])
     }
 
+    func testASetTakesItsDropSetsAlong() {
+        var d = day([row("WORK", "Curl", "1", "14"), row("DROP", "Curl", "1", "10"), row("WORK", "Curl", "2", "14"), row("DROP", "Curl", "2", "10")])
+        let gone = d.deleteSet(row: d.exercises[0].sets[0].row)
+        XCTAssertEqual(gone.count, 2)
+        XCTAssertEqual(d.exercises[0].sets.map(\.number), ["1", "1"])
+        XCTAssertEqual(d.exercises[0].sets.map(\.drop), [false, true])
+        d.deleteSet(row: d.exercises[0].sets[1].row)
+        XCTAssertEqual(d.exercises[0].sets.count, 1)
+    }
+
     func testTheLastSetGoneTakesTheExercise() {
         var d = day([row("WORK", "Curl", "1", "10"), row("WORK", "Row", "1", "40")])
         d.deleteSet(row: d.exercises[0].sets[0].row)

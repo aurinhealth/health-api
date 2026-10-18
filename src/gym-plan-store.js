@@ -4,10 +4,11 @@
 import { L } from './lang.js';
 import { parseStrengthPlan, importStrengthHistory, getStrengthHistory } from "./strength-history.js";
 import { strengthSetOptions } from './gym-set-options.js';
+import { intensityOf } from './gym-intensity.js';
 import { splitSides, sideBalance, lastSideChoice } from './gym-sides.js';
 import { routinesRow } from './stretching.js';
 
-export const GYM_PLAN_COLUMNS = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie", "Strana"];
+export const GYM_PLAN_COLUMNS = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie", "Strana", "Intenzita"];
 const MAX_ROWS = 100;
 const DONE = new Set(["TRUE", "true", "1", "ANO", "ano", "✓", "☑"]);
 
@@ -101,7 +102,8 @@ export function planValues(body = {}) {
   const sets = rows.map(row => {
     const r = Array.from({ length: GYM_PLAN_COLUMNS.length }, (_, i) => row?.[i] == null ? "" : row[i]);
     const options=strengthSetOptions({toFailure:r[11],superset:r[12],side:r[13]});
-    r[11]=options.toFailure?'TRUE':'FALSE';r[12]=options.superset;r[13]=options.side;
+    r[11]=options.toFailure?'TRUE':'FALSE';r[12]=options.superset;r[13]=options.side;r[14]=intensityOf(r[14]);
+    if (String(r[0]).toUpperCase() === 'DROP') r[0] = 'DROP';
     // Sheet-era hyperlink formulas and placeholders become a plain link; only
     // http(s), so a javascript: link never reaches the Video button.
     if (!/^https?:\/\//i.test(String(r[10])) && r[1]) {
@@ -129,7 +131,7 @@ export async function writeStrengthPlanToDb(db, body) {
 export async function syncGymPlanHistory(db, values) {
   const parsed = parseStrengthPlan(values);
   if (!parsed.date) return { status: "ok", completedRows: 0, parsed };
-  const sets = parsed.rows.filter(r => r.completed || DONE.has(String(r.completed))).map(r => ({ type: r.type, exercise: r.exercise, setNo: r.setNo, plannedKg: r.plannedKg, plannedReps: r.plannedReps, actualKg: r.actualKg, actualReps: r.actualReps, rpe: r.rpe, completed: true, note: r.note,toFailure:r.toFailure,superset:r.superset,side:r.side }));
+  const sets = parsed.rows.filter(r => r.completed || DONE.has(String(r.completed))).map(r => ({ type: r.type, exercise: r.exercise, setNo: r.setNo, plannedKg: r.plannedKg, plannedReps: r.plannedReps, actualKg: r.actualKg, actualReps: r.actualReps, rpe: r.rpe, completed: true, note: r.note,toFailure:r.toFailure,superset:r.superset,side:r.side,intensity:r.intensity }));
   if (sets.length) await importStrengthHistory(db, { date: parsed.date, sets });
   return { status: "ok", completedRows: sets.length, parsed };
 }

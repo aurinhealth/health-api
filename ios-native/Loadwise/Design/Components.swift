@@ -270,6 +270,7 @@ struct FloatingBackButton: View {
 
 private struct FloatingBackKey: EnvironmentKey { static let defaultValue = false }
 private struct ScrollReportKey: EnvironmentKey { nonisolated(unsafe) static let defaultValue: ((CGFloat) -> Void)? = nil }
+private struct ScrollDragReportKey: EnvironmentKey { nonisolated(unsafe) static let defaultValue: (() -> Void)? = nil }
 private struct WidgetEditingReportKey: EnvironmentKey { nonisolated(unsafe) static let defaultValue: ((Bool) -> Void)? = nil }
 
 extension EnvironmentValues {
@@ -284,6 +285,13 @@ extension EnvironmentValues {
     var scrollReport: ((CGFloat) -> Void)? {
         get { self[ScrollReportKey.self] }
         set { self[ScrollReportKey.self] = newValue }
+    }
+
+    /// A finger started dragging the page (PageScroll): the tab bar opened
+    /// with a tap may shrink again (RootView).
+    var scrollDragReport: (() -> Void)? {
+        get { self[ScrollDragReportKey.self] }
+        set { self[ScrollDragReportKey.self] = newValue }
     }
 
     /// The widgets below are being edited (WidgetBoard): the pinned top bar
@@ -451,6 +459,7 @@ struct WidgetRow<Left: View, Right: View>: View {
 struct PageScroll<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.scrollReport) private var report
+    @Environment(\.scrollDragReport) private var dragReport
 
     var body: some View {
         ScrollView(.vertical) {
@@ -460,5 +469,20 @@ struct PageScroll<Content: View>: View {
         .coordinateSpace(.named("pageScroll"))
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .scrollDismissesKeyboard(.interactively)
+        .reportingDrags(dragReport)
+    }
+}
+
+private extension View {
+    /// On iOS 17 there is no scroll phase: the tab bar opened with a tap
+    /// stays open until the page is back at the top.
+    @ViewBuilder func reportingDrags(_ report: (() -> Void)?) -> some View {
+        if #available(iOS 18, *) {
+            onScrollPhaseChange { _, phase in
+                if phase == .interacting { report?() }
+            }
+        } else {
+            self
+        }
     }
 }

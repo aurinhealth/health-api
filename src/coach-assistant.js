@@ -208,7 +208,7 @@ export function recoveryForCoach(r) {
 
 export function coachContext({date, daily, week, fitness, health, gym, preferences={}, availabilityMinutes=null, goal=null, manualReadiness=null, capabilities={}, athleteFeedback=[], coachNotes=[],athleteState=null,thresholds=null,profile=null,focus=null,sport=null,now=null,availabilityByDate=null,checkin=null,upcomingTest=null,cycle=null,performance=null,fluids=null,workoutRatings=[],recoveryTime=null,journal=null}) {
   const strengthSince=shiftDay(date,-14);
-  const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&String(r.type||'WORK').toUpperCase()==='WORK').sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
+  const strengthSets=(gym?.history||[]).filter(r=>r.workout_date>=strengthSince&&r.workout_date<=date&&/^(WORK|DROP)$/.test(String(r.type||'WORK').toUpperCase())).sort((a,b)=>String(b.workout_date).localeCompare(String(a.workout_date))).slice(0,120);
   const days = week?.days?.map(row => ({
     date: row.date, weekday: weekdayOf(row.date),
     ...(availabilityByDate?{availabilityMinutes:availabilityByDate[row.date]?.minutes??null}:{}),
@@ -247,7 +247,7 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     ...coachTrends({date,fitness,health,profile}),
     // Runs and rides over 6 weeks (performance-trends.js).
     ...(performance?{performance}:{}),
-    gym:strengthSets.map(r=>compactObject({date:r.workout_date,exercise:r.exercise,set:num(r.set_no),...strengthSet(r),toFailure:r.toFailure||null})),
+    gym:strengthSets.map(r=>compactObject({date:r.workout_date,exercise:r.exercise,set:num(r.set_no),...strengthSet(r),toFailure:r.toFailure||null,intensity:r.intensity||null,drop:String(r.type).toUpperCase()==='DROP'||null})),
     strengthProgress:strengthProgress(gym?.history,date),
     todayGym:todayGymContext(gym,date,athleteState?.memories),
     strengthCoverage:strengthCoverage({date,strength:{recentCompletedSets:strengthSets}},EXERCISES),

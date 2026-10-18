@@ -158,9 +158,12 @@ struct TodayContent: View {
             ThresholdCheckCard().padding(.top, 12)
         }
 
-        CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation, live: selectedDate == nil,
-                      tip: RecoveryTipRows.hasTip(today, selectedDate: selectedDate) ? AnyView(RecoveryTipRows(today: today)) : nil)
-            .padding(.top, 32)
+        // An earlier day shows only its data: the coach speaks about today.
+        if selectedDate == nil {
+            CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
+                          tip: RecoveryTipRows.hasTip(today, selectedDate: selectedDate) ? AnyView(RecoveryTipRows(today: today)) : nil)
+                .padding(.top, 32)
+        }
     }
 }
 

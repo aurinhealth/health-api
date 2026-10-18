@@ -333,7 +333,7 @@ export async function loadTrainingDoses(db, { now = Date.now() } = {}) {
   // The source and type lists first, so the read stays on the index
   // (user_id, source_family, data_type, start_time).
   const [setRows, activityRows] = await Promise.all([
-    db.prepare("SELECT workout_date,exercise,rpe,updated_at FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' AND workout_date>=? AND workout_date<=?").bind(db.userId, history, today).all().catch(() => ({ results: [] })),
+    db.prepare("SELECT workout_date,exercise,rpe,updated_at FROM strength_sets WHERE user_id=? AND completed=1 AND type IN ('WORK','DROP') AND workout_date>=? AND workout_date<=?").bind(db.userId, history, today).all().catch(() => ({ results: [] })),
     db.prepare("SELECT source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local','google-wearables','apple-health') AND data_type IN ('activity','exercise') AND start_time>=? AND ((source_family IN ('intervals','local') AND data_type='activity') OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND (record_role IS NULL OR record_role!='duplicate')").bind(db.userId, since).all().catch(() => ({ results: [] }))
   ]);
   const activities = storedActivities(activityRows.results || [], { keepRow: true }).map(({ row, ...a }) => {

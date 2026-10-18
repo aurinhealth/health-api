@@ -64,7 +64,7 @@ enum GymLiveActivity {
         return .init(
             header: L10n.tr("Posilovna") + " · " + exercisesLine(index + 1, of: list.count),
             exercise: exercise.name,
-            setLabel: set.warmup ? L10n.tr("rozcvička") : setLine(set, of: exercise.workCount),
+            setLabel: set.warmup ? L10n.tr("rozcvička") : set.drop ? L10n.tr("dropset") : setLine(set, of: exercise.workCount),
             load: load(set, in: exercise),
             then: then,
             row: set.row,

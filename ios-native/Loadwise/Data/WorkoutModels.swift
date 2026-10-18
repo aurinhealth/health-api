@@ -78,13 +78,15 @@ struct PlannedChange: Decodable {
 /// the plan name in column 3), sets start at row 7 with the columns
 /// Typ, Cvik, Série, Plán kg, Plán reps, Skutečně kg, Skutečně reps, RPE,
 /// Hotovo, Poznámka, Video, Do selhání, Supersérie, Strana (L or P of a
-/// one-sided exercise, GymSides.swift).
+/// one-sided exercise, GymSides.swift), Intenzita (W T E M H F PR D,
+/// GymIntensity.swift). Typ DROP is a drop set: lighter, straight after the
+/// set above it, no rest.
 struct GymDay: Decodable, Equatable {
     let date: String?
     var values: [[JSONValue]]
     let cancelled: Bool?
 
-    static let columns = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie", "Strana"]
+    static let columns = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie", "Strana", "Intenzita"]
     static let firstSetRow = 7
 
     var planName: String? {
@@ -129,8 +131,9 @@ struct GymDay: Decodable, Equatable {
         for index in values.indices where index >= Self.firstSetRow {
             let row = values[index]
             guard let name = cell(row, 1), !name.isEmpty else { continue }
+            let type = (cell(row, 0) ?? "WORK").uppercased()
             let set = GymSet(row: index,
-                             warmup: (cell(row, 0) ?? "WORK").uppercased() == "WARMUP",
+                             warmup: type == "WARMUP",
                              number: cell(row, 2) ?? "",
                              plannedKg: cell(row, 3),
                              plannedReps: cell(row, 4),
@@ -139,7 +142,9 @@ struct GymDay: Decodable, Equatable {
                              rpe: cell(row, 7),
                              done: Self.isDone(cell(row, 8)),
                              note: cell(row, 9),
-                             side: cell(row, 13).flatMap { $0 == "L" || $0 == "P" ? $0 : nil })
+                             side: cell(row, 13).flatMap { $0 == "L" || $0 == "P" ? $0 : nil },
+                             drop: type == "DROP",
+                             intensity: GymIntensity.letter(cell(row, 14)))
             if let last = out.indices.last, out[last].name == name {
                 out[last].sets.append(set)
             } else {
@@ -164,13 +169,55 @@ struct GymDay: Decodable, Equatable {
         values[row][column] = .string(value)
     }
 
-    /// Records a set as the web does (dashboard-client.js saveGymSet).
-    mutating func complete(row: Int, kg: String, reps: String, rpe: String) {
+    /// Records a set as the web does (dashboard-client.js saveGymSet). The
+    /// letter: the one given, else from the RPE given, else the plan's; its
+    /// RPE goes to the RPE column when none was given.
+    mutating func complete(row: Int, kg: String, reps: String, rpe: String, intensity: String? = nil) {
+        guard row < values.count else { return }
+        let letter = GymIntensity.letter(intensity) ?? (rpe.isEmpty ? GymIntensity.letter(cell(values[row], 14)) : GymIntensity.from(rpe: rpe))
+        let effort = rpe.isEmpty ? (letter.flatMap(GymIntensity.rpe) ?? "") : rpe
         set(row: row, column: 5, kg)
         set(row: row, column: 6, reps)
-        set(row: row, column: 7, rpe)
+        set(row: row, column: 7, effort)
         set(row: row, column: 8, "TRUE")
-        set(row: row, column: 11, rpe == "10" ? "TRUE" : "FALSE")
+        set(row: row, column: 11, (letter.map { $0 == "F" } ?? (effort == "10")) ? "TRUE" : "FALSE")
+        if let letter { set(row: row, column: 14, letter) }
+    }
+
+    /// The letter of a set; W makes a work set a warm-up. A done set's RPE
+    /// and failure follow it.
+    mutating func setIntensity(row: Int, _ letter: String) {
+        guard row < values.count, let letter = GymIntensity.letter(letter) else { return }
+        set(row: row, column: 14, letter)
+        let type = (cell(values[row], 0) ?? "WORK").uppercased()
+        if letter == "W", type == "WORK" { set(row: row, column: 0, "WARMUP") }
+        if letter != "W", type == "WARMUP" { set(row: row, column: 0, "WORK") }
+        guard Self.isDone(cell(values[row], 8)) else { return }
+        set(row: row, column: 7, GymIntensity.rpe(letter) ?? "")
+        set(row: row, column: 11, letter == "F" ? "TRUE" : "FALSE")
+    }
+
+    /// D on a set: a drop set row after it (and after its drop sets so far),
+    /// about a fifth lighter than the row before, reps as many as clean. The
+    /// set it follows goes to failure. Returns the new row.
+    @discardableResult
+    mutating func addDrop(after row: Int) -> Int? {
+        guard row >= Self.firstSetRow, row < values.count, let name = cell(values[row], 1) else { return nil }
+        var at = row
+        while at + 1 < values.count, cell(values[at + 1], 1) == name, (cell(values[at + 1], 0) ?? "").uppercased() == "DROP" { at += 1 }
+        let before = values[at]
+        let kg = cell(before, 5)?.nilIfBlank ?? cell(before, 3)
+        var drop = ["DROP", name, cell(values[row], 2) ?? "", GymIntensity.dropKg(kg), "max", "", "", "", "FALSE", "", "", "FALSE", "", cell(values[row], 13) ?? "", "D"].map { JSONValue.string($0) }
+        while drop.count < Self.columns.count { drop.append(.string("")) }
+        if (cell(values[row], 0) ?? "WORK").uppercased() == "WORK" { setIntensity(row: row, "F") }
+        values.insert(drop, at: at + 1)
+        return at + 1
+    }
+
+    /// Takes a drop set row out (not done yet).
+    mutating func removeDrop(row: Int) {
+        guard row >= Self.firstSetRow, row < values.count, (cell(values[row], 0) ?? "").uppercased() == "DROP", !Self.isDone(cell(values[row], 8)) else { return }
+        values.remove(at: row)
     }
 
     mutating func undo(row: Int) {
@@ -233,14 +280,16 @@ struct GymDay: Decodable, Equatable {
     /// One more set like the last one of the exercise (by sides: an L and a P).
     mutating func addSet(at offset: Int) {
         var (list, rest) = blocks
-        guard list.indices.contains(offset), var row = list[offset].last(where: { (cell($0, 0) ?? "WORK").uppercased() != "WARMUP" }) ?? list[offset].last else { return }
+        guard list.indices.contains(offset), var row = list[offset].last(where: { (cell($0, 0) ?? "WORK").uppercased() == "WORK" }) ?? list[offset].last else { return }
         while row.count < Self.columns.count { row.append(.string("")) }
-        let work = Set(list[offset].filter { (cell($0, 0) ?? "WORK").uppercased() != "WARMUP" }.compactMap { cell($0, 2) }).count
+        let work = Set(list[offset].filter { (cell($0, 0) ?? "WORK").uppercased() == "WORK" }.compactMap { cell($0, 2) }).count
         row[0] = .string("WORK")
         row[2] = .string(String(work + 1))
         for column in [5, 6, 7] { row[column] = .string("") }
         row[8] = .string("FALSE")
         row[11] = .string("FALSE")
+        // The plan's letter of the set it copies, not what was chosen in it.
+        if GymIntensity.letter(cell(row, 14)) == "F" || GymIntensity.letter(cell(row, 14)) == "PR" { row[14] = .string("H") }
         if sided(list[offset]) {
             row[13] = .string("L"); list[offset].append(row)
             row[13] = .string("P"); list[offset].append(row)
@@ -264,34 +313,49 @@ struct GymDay: Decodable, Equatable {
     }
 
     /// A set not done yet taken out by its row (swiped away in Režim tréninku),
-    /// by sides both of its rows; the sets of the exercise are numbered again.
-    /// The last set gone, the exercise leaves the plan.
-    mutating func deleteSet(row: Int) {
+    /// by sides both of its rows, with the drop sets right after it; the sets
+    /// of the exercise are numbered again (a drop set keeps the number of the
+    /// set above). The last set gone, the exercise leaves the plan. Returns
+    /// the rows taken out, as they were numbered before.
+    @discardableResult
+    mutating func deleteSet(row: Int) -> [Int] {
         guard row >= Self.firstSetRow, row < values.count, !Self.isDone(cell(values[row], 8)),
-              let name = cell(values[row], 1), !name.isEmpty else { return }
+              let name = cell(values[row], 1), !name.isEmpty else { return [] }
         var start = row, end = row
         while start - 1 >= Self.firstSetRow, cell(values[start - 1], 1) == name { start -= 1 }
         while end + 1 < values.count, cell(values[end + 1], 1) == name { end += 1 }
         var drop = [row]
-        if !Self.isWarmupRow(values[row]), ["L", "P"].contains(cell(values[row], 13) ?? "") {
+        if Self.rowType(values[row]) == "WORK" {
             let number = cell(values[row], 2)
-            drop += (start...end).filter { $0 != row && !Self.isWarmupRow(values[$0]) && cell(values[$0], 2) == number && !Self.isDone(cell(values[$0], 8)) }
+            if ["L", "P"].contains(cell(values[row], 13) ?? "") {
+                drop += (start...end).filter { $0 != row && Self.rowType(values[$0]) == "WORK" && cell(values[$0], 2) == number && !Self.isDone(cell(values[$0], 8)) }
+            }
+            // Its drop sets go with it.
+            for at in drop.sorted() {
+                var next = at + 1
+                while next <= end, Self.rowType(values[next]) == "DROP", !Self.isDone(cell(values[next], 8)) { drop.append(next); next += 1 }
+            }
         }
-        for i in drop.sorted(by: >) { values.remove(at: i) }
+        drop = Array(Set(drop)).sorted()
+        for i in drop.reversed() { values.remove(at: i) }
         end -= drop.count
-        guard end >= start else { return }
+        guard end >= start else { return drop }
         var warmups = 0, work = 0, last: String?
         for i in start...end {
-            if Self.isWarmupRow(values[i]) {
+            switch Self.rowType(values[i]) {
+            case "WARMUP":
                 warmups += 1
                 set(row: i, column: 2, String(warmups))
-            } else {
+            case "DROP":
+                set(row: i, column: 2, String(max(work, 1)))
+            default:
                 let number = cell(values[i], 2)
                 if number != last || last == nil { work += 1 }
                 last = number
                 set(row: i, column: 2, String(work))
             }
         }
+        return drop
     }
 
     /// The warm-up sets follow the order (src/strength-generator.js
@@ -325,9 +389,10 @@ struct GymDay: Decodable, Equatable {
         write(list, rest)
     }
 
-    static func isWarmupRow(_ row: [JSONValue]) -> Bool {
-        (row.first?.string ?? "WORK").uppercased() == "WARMUP"
-    }
+    static func isWarmupRow(_ row: [JSONValue]) -> Bool { rowType(row) == "WARMUP" }
+
+    /// WORK, WARMUP or DROP.
+    static func rowType(_ row: [JSONValue]) -> String { (row.first?.string ?? "WORK").uppercased() }
 
     /// A warm-up weight: at least 2 kg, to whole kilos under 20 kg, else to 2.5 kg.
     static func warmupKg(_ kg: Double) -> String {
@@ -415,12 +480,12 @@ struct GymExercise: Equatable, Identifiable {
     var id: String { name + "|" + String(sets.first?.row ?? 0) }
     /// By sides a set is its L and P rows together.
     var doneCount: Int {
-        let work = sets.filter { !$0.warmup }
+        let work = sets.filter(\.work)
         guard bySides else { return work.filter(\.done).count }
         return Set(work.map(\.number)).filter { n in work.filter { $0.number == n }.allSatisfy(\.done) }.count
     }
     var workCount: Int {
-        let work = sets.filter { !$0.warmup }
+        let work = sets.filter(\.work)
         return bySides ? Set(work.map(\.number)).count : work.count
     }
     /// Done by sides (L and P rows).
@@ -440,7 +505,13 @@ struct GymSet: Equatable, Identifiable {
     let note: String?
     /// "L" or "P" on a one-sided exercise done by sides.
     var side: String? = nil
+    /// A drop set (Typ DROP): lighter, straight after the set above it.
+    var drop = false
+    /// W T E M H F PR D (GymIntensity.swift): the plan's, or as it was done.
+    var intensity: String? = nil
     var id: Int { row }
+    /// A work set: not a warm-up nor a drop set (counts, progression, history).
+    var work: Bool { !warmup && !drop }
 }
 
 struct GymTechnique: Decodable, Equatable {
