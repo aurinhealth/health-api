@@ -1,8 +1,8 @@
 // What went wrong on the server, counted per day in the central database
 // (ops_events), and a morning e-mail to the owner that summarises yesterday:
 // failed syncs per service, connections that broke, server errors, and how
-// full the account capacity is, and what AI cost per user and feature. No
-// e-mail when there is nothing to report.
+// full the account capacity is, what AI cost per user and feature, and account
+// deletions that keep failing. No e-mail when there is nothing to report.
 import { AsyncLocalStorage } from "node:async_hooks";
 import { emailConfigured, sendEmail } from "./email-sender.js";
 import { accountCapacity } from "./tenancy.js";
@@ -85,7 +85,20 @@ export function aiReport(rows, month, limit) {
   return `Útrata AI včera: ${usd(total)}, ${calls} dotazů${cache}\n${lines.join("\n")}\n\nOd začátku měsíce${limit ? ` (strop ${usd(limit)} na účet)` : ""}\n${monthLines.join("\n")}`;
 }
 
-export function opsReport(rows, capacity, date, ai = null) {
+// Account deletions the cron has failed at least this many times in a row
+// (account-data.js finishAccountDeletions); [] before the migration that
+// counts attempts.
+export const STUCK_DELETION_ATTEMPTS = 3;
+export async function stuckAccountDeletions(db, { minAttempts = STUCK_DELETION_ATTEMPTS, limit = 10 } = {}) {
+  try {
+    return (await db.prepare("SELECT user_id, requested_at, attempts, last_error FROM account_deletions WHERE attempts >= ? ORDER BY requested_at, user_id LIMIT ?").bind(minAttempts, limit).all()).results || [];
+  } catch (error) {
+    if (/no such (table|column)/i.test(String(error?.message || error))) return [];
+    throw error;
+  }
+}
+
+export function opsReport(rows, capacity, date, ai = null, stuckDeletions = []) {
   const of = kind => rows.filter(row => row.kind === kind).sort((a, b) => b.count - a.count);
   const sections = [];
   const list = items => items.map(row => `- ${label(row.service)}: ${row.count}×${row.last_message ? ` (naposledy: ${row.last_message})` : ""}`).join("\n");
@@ -93,6 +106,7 @@ export function opsReport(rows, capacity, date, ai = null) {
   if (of("broken").length) sections.push(`Rozbitá propojení (uživatel musí znovu připojit)\n${list(of("broken"))}`);
   if (of("server").length) sections.push(`Chyby serveru\n${list(of("server"))}`);
   if (capacity?.places && capacity.used / capacity.places >= 0.8) sections.push(`Místo pro účty\n- Obsazeno ${capacity.used} z ${capacity.places} (${Math.round(capacity.used / capacity.places * 100)} %). Nové registrace se po zaplnění řadí do čekací listiny.`);
+  if (stuckDeletions?.length) sections.push(`Nedokončená smazání účtů (cron je opakuje, data zatím zůstávají)\n${stuckDeletions.map(row => `- účet #${row.user_id} smazaný ${String(row.requested_at || "").slice(0, 10)}: ${row.attempts}× selhalo${row.last_error ? ` (naposledy: ${row.last_error})` : ""}`).join("\n")}`);
   if (ai) sections.push(ai);
   if (!sections.length) return null;
   return {
@@ -110,7 +124,9 @@ export async function sendDailyOpsReport(env, now = new Date()) {
   if (await env.DB.prepare("SELECT 1 FROM ops_events WHERE day=? AND kind='report'").bind(today).first()) return { sent: false, already: true };
   const rows = (await env.DB.prepare("SELECT kind,service,count,last_message FROM ops_events WHERE day=? AND kind!='report'").bind(yesterday).all()).results || [];
   const capacity = await accountCapacity(env.DB, env).catch(() => null);
-  const report = opsReport(rows, capacity, yesterday, await aiSection(env, yesterday).catch(error => { console.warn("AI usage report failed", error?.message || error); return null; }));
+  const ai = await aiSection(env, yesterday).catch(error => { console.warn("AI usage report failed", error?.message || error); return null; });
+  const stuck = await stuckAccountDeletions(env.DB).catch(error => { console.warn("Stuck account deletions read failed", error?.message || error); return []; });
+  const report = opsReport(rows, capacity, yesterday, ai, stuck);
   const to = String(env.OWNER_EMAIL || "").trim();
   if (report && to && emailConfigured(env)) await sendEmail(env, { to, subject: report.subject, text: report.text });
   await env.DB.prepare("INSERT INTO ops_events(day,kind,service,count) VALUES(?,'report','-',1) ON CONFLICT(day,kind,service) DO NOTHING").bind(today).run();

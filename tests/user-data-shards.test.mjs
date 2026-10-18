@@ -18,7 +18,7 @@ const read = path => readFileSync(new URL('../' + path, import.meta.url), 'utf8'
 function db() {
   const raw = createD1();
   raw.sqlite.exec(read('staging/schema.sql'));
-  for (const name of ['0009_account_workflow.sql','0011_account_deletions.sql','0012_user_time_zone.sql','0013_cookbook_and_consents.sql','0014_passkeys_email_codes.sql','0016_support_reports.sql','0020_request_limits.sql','0021_session_epoch.sql']) raw.sqlite.exec(read('migrations/' + name));
+  for (const name of ['0009_account_workflow.sql','0011_account_deletions.sql','0012_user_time_zone.sql','0013_cookbook_and_consents.sql','0014_passkeys_email_codes.sql','0016_support_reports.sql','0020_request_limits.sql','0021_session_epoch.sql','0026_account_deletion_retries.sql']) raw.sqlite.exec(read('migrations/' + name));
   const prepare = raw.prepare.bind(raw);
   // D1 returns the database's size in meta.size_after on a query.
   raw.prepare = sql => { const statement = prepare(sql), all = statement.all; statement.all = async () => ({ ...await all(), meta: { size_after: raw.size ?? 100000 } }); return statement; };
@@ -143,6 +143,35 @@ test('account export and resumable deletion find both central and shard records'
   assert.equal(rows(core, 'user_data_routes', 3).length, 0);
   assert.equal(rows(core, 'account_deletions', 3).length, 0);
   assert.equal(rows(shards[1], 'health_datapoints', 4)[0].value_numeric, 80);
+});
+
+test('a deletion whose shard is offline waits; the deletions after it still complete', async () => {
+  const { core, env, shards } = setup(2, 1); addUser(core, 5); addUser(core, 6);
+  const a = await userDataEnvironment(env, user(5)), b = await userDataEnvironment(env, user(6));
+  await point(a.DB, 5, 70); await point(b.DB, 6, 80);
+  for (const id of ['x1', 'x2', 'x3']) shards[0].sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,value_numeric,payload_json) VALUES(5,'manual','weight',?,70,'{}')").run(id);
+  await deleteAccount(a, user(5), { budgetMs: 0, chunkRows: 1 });
+  await deleteAccount(b, user(6), { budgetMs: 0, chunkRows: 1 });
+  core.sqlite.exec("UPDATE account_deletions SET requested_at = CASE user_id WHEN 5 THEN '2026-10-01 08:00:00' ELSE '2026-10-02 08:00:00' END");
+  core.sqlite.exec("UPDATE user_data_shards SET state='offline' WHERE shard_key='data-001'");
+  const now = () => new Date('2026-10-18T10:00:00Z');
+  const results = await finishAccountDeletions(core, { databaseForUser: id => deletionDatabase(env, id), now });
+  assert.deepEqual(results.map(r => [r.userId, r.done]), [[5, false], [6, true]]);
+  assert.equal(rows(shards[1], 'health_datapoints', 6).length, 0);
+  assert.equal(rows(core, 'user_data_routes', 6).length, 0);
+  assert.equal(rows(core, 'account_deletions', 6).length, 0);
+  const [stuck] = rows(core, 'account_deletions', 5);
+  assert.equal(stuck.attempts, 1);
+  assert.ok(stuck.last_error && stuck.retry_after > '2026-10-18 10:00:00');
+  // The shard and the route stay until the deletion can finish.
+  assert.ok(rows(shards[0], 'health_datapoints', 5).length > 0);
+  assert.equal(rows(core, 'user_data_routes', 5).length, 1);
+  core.sqlite.exec("UPDATE user_data_shards SET state='ready' WHERE shard_key='data-001'");
+  assert.equal(await finishAccountDeletions(core, { databaseForUser: id => deletionDatabase(env, id), now }), null);
+  const later = () => new Date('2026-10-18T10:05:00Z');
+  assert.deepEqual((await finishAccountDeletions(core, { databaseForUser: id => deletionDatabase(env, id), now: later })).map(r => [r.userId, r.done]), [[5, true]]);
+  assert.equal(rows(shards[0], 'health_datapoints', 5).length, 0);
+  assert.equal(rows(core, 'account_deletions', 5).length, 0);
 });
 
 test('cache entries cannot cross staging/production or a user data shard', async () => {

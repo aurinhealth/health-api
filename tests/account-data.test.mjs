@@ -14,6 +14,7 @@ function database() {
   db.sqlite.exec(readFileSync(new URL("../staging/schema.sql", import.meta.url), "utf8"));
   db.sqlite.exec(readFileSync(new URL("../migrations/0011_account_deletions.sql", import.meta.url), "utf8"));
   db.sqlite.exec(readFileSync(new URL("../migrations/0021_session_epoch.sql", import.meta.url), "utf8"));
+  db.sqlite.exec(readFileSync(new URL("../migrations/0026_account_deletion_retries.sql", import.meta.url), "utf8"));
   for (const [id, email] of [[3, "a@example.com"], [4, "b@example.com"]]) {
     db.sqlite.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(id, email);
     db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (?, 'manual', 'weight', 'w', '2026-10-01T07:00:00Z', 70, '{}')").run(id);
@@ -121,6 +122,28 @@ test("deleting the account also revokes WHOOP, Ultrahuman and Wahoo", async () =
   assert.equal(count(db, "users", 3), 0);
 });
 
+test("deleting the account gives the Intervals.icu OAuth access back; a personal API key is only deleted", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => { calls.push([String(url), init.method, init.headers?.Authorization]); return new Response(null, { status: 204 }); };
+  const oauth = await deleteAccount({ DB: scopedDb(database(), 3), USER_ID: 3, INTERVALS_API_KEY: "Bearer tok-3" }, user, { fetchImpl });
+  assert.equal(oauth.intervals, "revoked");
+  assert.deepEqual(calls, [["https://intervals.icu/api/v1/disconnect-app", "DELETE", "Bearer tok-3"]]);
+
+  calls.length = 0;
+  const db = database();
+  const key = await deleteAccount({ DB: scopedDb(db, 3), USER_ID: 3, INTERVALS_API_KEY: "personal-key" }, user, { fetchImpl });
+  assert.equal(key.intervals, "none");
+  assert.deepEqual(calls, []);
+  assert.equal(count(db, "connection_credentials", 3), 0);
+  assert.equal(count(db, "connection_credentials", 4), 1);
+
+  // Intervals.icu refusing or offline does not stop the deletion.
+  const refused = await deleteAccount({ DB: scopedDb(database(), 3), USER_ID: 3, INTERVALS_API_KEY: "Bearer tok-3" }, user, { fetchImpl: async () => new Response(null, { status: 500 }) });
+  assert.deepEqual([refused.intervals, refused.pending], ["failed", false]);
+  const offline = await deleteAccount({ DB: scopedDb(database(), 3), USER_ID: 3, INTERVALS_API_KEY: "Bearer tok-3" }, user, { fetchImpl: async () => { throw new Error("offline"); } });
+  assert.deepEqual([offline.intervals, offline.pending], ["failed", false]);
+});
+
 test("the owner's account cannot be deleted, and deleting needs the typed confirmation", async () => {
   const db = database();
   await assert.rejects(deleteAccount({ DB: scopedDb(db, 3), USER_ID: 3 }, { ...user, isOwner: true }), /správce/);
@@ -181,7 +204,7 @@ test("what the request has no time for, the cron finishes; the account is gone a
 
   let runs = 0;
   for (let run; (run = await finishAccountDeletions(db, { chunkRows: 5, maxChunks: 3 })); runs++) {
-    assert.equal(run.userId, 3);
+    assert.deepEqual(run.map(r => r.userId), [3]);
     assert.ok(runs < 10, "the cron makes progress on every run");
   }
   assert.ok(runs > 1);
@@ -200,17 +223,64 @@ test("a failure halfway still deletes the account and leaves the rest to the cro
   assert.equal(result.pending, true);
   assert.equal(count(db, "users", 3), 0);
   db.prepare = prepare;
-  assert.equal((await finishAccountDeletions(db)).done, true);
+  assert.equal((await finishAccountDeletions(db))[0].done, true);
   assert.equal(count(db, "health_datapoints", 3), 0);
 });
 
 test("the cron never touches the data of an account that still exists", async () => {
   const db = database();
   db.sqlite.prepare("INSERT INTO account_deletions (user_id) VALUES (4)").run();
-  assert.deepEqual(await finishAccountDeletions(db), { userId: 4, done: false, skipped: "account exists" });
+  assert.deepEqual(await finishAccountDeletions(db), [{ userId: 4, done: false, skipped: "account exists" }]);
   assert.equal(count(db, "health_datapoints", 4), 1);
   assert.equal(count(db, "dashboard_profile", 4), 1);
   assert.equal(await finishAccountDeletions(db), null);
+});
+
+test("a deletion that keeps failing waits and does not hold up the ones after it", async () => {
+  const db = database();
+  for (const id of [5, 6]) {
+    db.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (?, 'manual', 'weight', 'w', '2026-10-01T07:00:00Z', 70, '{}')").run(id);
+    db.sqlite.prepare("INSERT INTO account_deletions (user_id, requested_at) VALUES (?, ?)").run(id, id === 5 ? "2026-10-01 08:00:00" : "2026-10-02 08:00:00");
+  }
+  // With routing on, a finished deletion also removes the account's route.
+  db.sqlite.exec("CREATE TABLE user_data_routes (user_id INTEGER PRIMARY KEY, shard_key TEXT NOT NULL)");
+  let offline = true;
+  const databaseForUser = async id => { if (id === 5 && offline) throw new Error("User data database is offline"); return db; };
+  let now = new Date("2026-10-18T10:00:00Z");
+  const run = () => finishAccountDeletions(db, { databaseForUser, now: () => now });
+
+  // User 5's data database is unavailable; user 6's deletion still completes in the same run.
+  // (tests/user-data-shards.test.mjs does the same with a shard marked offline.)
+  const first = await run();
+  assert.deepEqual(first.map(r => [r.userId, r.done]), [[5, false], [6, true]]);
+  assert.match(first[0].failed, /offline/);
+  assert.equal(count(db, "health_datapoints", 6), 0);
+  assert.equal(count(db, "health_datapoints", 5), 1);
+  assert.deepEqual({ ...db.sqlite.prepare("SELECT user_id, attempts, last_error, retry_after FROM account_deletions").get() }, { user_id: 5, attempts: 1, last_error: "User data database is offline", retry_after: "2026-10-18 10:05:00" });
+
+  // Not tried again until its time; then each failure waits longer.
+  assert.equal(await run(), null);
+  now = new Date("2026-10-18T10:05:00Z");
+  assert.equal((await run())[0].attempts, 2);
+  assert.equal(db.sqlite.prepare("SELECT retry_after FROM account_deletions").get().retry_after, "2026-10-18 10:15:00");
+
+  // Back online: the next due run finishes it.
+  offline = false;
+  now = new Date("2026-10-18T10:15:00Z");
+  assert.deepEqual((await run()).map(r => [r.userId, r.done]), [[5, true]]);
+  assert.equal(count(db, "health_datapoints", 5), 0);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM account_deletions").get().n, 0);
+});
+
+test("a failing purge is put back too, and one run handles a bounded number of accounts", async () => {
+  const db = database();
+  for (const id of [5, 6, 7, 8, 9]) db.sqlite.prepare("INSERT INTO account_deletions (user_id, requested_at) VALUES (?, ?)").run(id, `2026-10-0${id - 4} 08:00:00`);
+  const prepare = db.prepare;
+  db.prepare = sql => ({ ...prepare(sql), bind: (...args) => { const bound = prepare(sql).bind(...args); return /^DELETE FROM health_datapoints/.test(sql) && args[0] === 5 ? { ...bound, run: async () => { throw new Error("D1_ERROR: timeout"); } } : bound; } });
+  const results = await finishAccountDeletions(db, { now: () => new Date("2026-10-18T10:00:00Z") });
+  assert.deepEqual(results.map(r => [r.userId, r.done]), [[5, false], [6, true], [7, true]]);
+  assert.match(results[0].failed, /timeout/);
+  assert.deepEqual(db.sqlite.prepare("SELECT user_id, attempts FROM account_deletions ORDER BY user_id").all().map(r => [r.user_id, r.attempts]), [[5, 1], [8, 0], [9, 0]]);
 });
 
 test("the every-minute cron finishes deleted accounts", () => {
