@@ -57,6 +57,8 @@ export const PERSONAL_TABLES = {
   // Problems reported from the app (support-report.js) and replayed offline
   // writes (idempotency.js).
   support_reports: {},
+  // Corrections of catalogue foods waiting for the owner (food-suggestions.js).
+  food_suggestions: {},
   client_requests: {},
   // Thumbs up/down on exercises and ratings of generated workouts (exercise-feedback.js).
   exercise_preferences: {},

@@ -22,7 +22,9 @@ export async function savePersonalFood(db,input,{used=false}={}){
   // Values the AI looked up or estimated stay the user's own: they never enter
   // the common catalogue, where the next scan of the barcode would show them
   // as if read from the label. Editing the food later keeps that origin.
-  const origin=['ai','ai-estimate'].includes(input.source)?input.source:['ai','ai-estimate'].includes(input.origin)?input.origin:(()=>{try{return JSON.parse(existing?.product_json||'{}').origin||null;}catch{return null;}})();
+  // A catalogue food the user corrected ('edited') stays theirs as well: it
+  // reaches everyone only as a suggestion the owner approves (food-suggestions.js).
+  const origin=['ai','ai-estimate'].includes(input.source)?input.source:['ai','ai-estimate','edited'].includes(input.origin)?input.origin:(()=>{try{return JSON.parse(existing?.product_json||'{}').origin||null;}catch{return null;}})();
   if(!p?.name||p.name.length>180||!['g','ml','portion'].includes(p.nutrition_basis)||['calories_100g','protein_100g','carbs_100g','fat_100g'].some(k=>p[k]==null||p[k]<0||p[k]>(k==='calories_100g'?(portion?10000:1000):(portion?1000:100))))throw new Error(L('Doplň název, jednotku a platné nutriční hodnoty.', 'Fill in the name, the unit and valid nutrition values.'));
   await ensure(db);const product={...p,quantity:String(input.quantity||'').slice(0,100),source:'personal',confidence:'user',...(origin?{origin}:{})};
   await db.prepare('INSERT INTO personal_foods(user_id,food_key,product_json,use_count) VALUES(?,?,?,?) ON CONFLICT(user_id,food_key) DO UPDATE SET product_json=excluded.product_json,updated_at=CURRENT_TIMESTAMP,use_count=personal_foods.use_count+excluded.use_count').bind(db.userId,input.id?String(input.id):foodKey(product.name)+'|'+foodKey(product.brand),JSON.stringify(product),used?1:0).run();

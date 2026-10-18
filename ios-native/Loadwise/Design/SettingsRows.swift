@@ -58,6 +58,8 @@ struct SettingsRow: View {
     var value: String? = nil
     var chevron = true
     var titleColor: Color = Palette.ink
+    /// A count waiting to be looked at, in an amber capsule.
+    var badge: Int? = nil
 
     var body: some View {
         HStack(spacing: 14) {
@@ -72,6 +74,11 @@ struct SettingsRow: View {
             Spacer(minLength: 8)
             if let value {
                 Text(value).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1)
+            }
+            if let badge, badge > 0 {
+                Text(verbatim: String(badge)).font(.footnote.weight(.bold)).foregroundStyle(Palette.onButton)
+                    .padding(.horizontal, 7).frame(minWidth: 22, minHeight: 22)
+                    .background(Palette.amber, in: Capsule())
             }
             if chevron {
                 Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)

@@ -2673,3 +2673,31 @@
 "Bez hodnocení" = "Not rated";
 "Jak těžká série byla" = "How hard the set was";
 "Odebrat dropset" = "Remove drop set";
+
+/* Barcode scanner: light, servings on a wheel, editing a product; the owner's food corrections */
+"Rozsvítit světlo" = "Turn on the light";
+"Zhasnout světlo" = "Turn off the light";
+"Upravit produkt" = "Edit product";
+"Porce" = "Servings";
+"Gramy" = "Grams";
+"Mililitry" = "Millilitres";
+"1 %@ = %@ %@ · %@ kcal" = "1 %@ = %@ %@ · %@ kcal";
+"1 porce = %@ %@" = "1 serving = %@ %@";
+"Nastavit porci" = "Set a serving";
+"Název porce" = "Serving name";
+"Váha jedné porce" = "One serving weighs";
+"Navrhnout opravu pro všechny" = "Suggest the fix for everyone";
+"Správa" = "Admin";
+"Návrhy oprav potravin" = "Food corrections";
+"Návrhy oprav" = "Corrections";
+"Schválené" = "Approved";
+"Zamítnuté" = "Rejected";
+"Nic nečeká." = "Nothing is waiting.";
+"Zatím nic." = "Nothing yet.";
+"Čeká %d" = "Waiting %d";
+"Změny" = "Changes";
+"Beze změny" = "Unchanged";
+"Uživatel %d" = "User %d";
+"návrhy %d, schválené %d" = "%d sent, %d approved";
+"Zamítnout" = "Reject";
+"Schválit" = "Approve";
