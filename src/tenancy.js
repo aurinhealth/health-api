@@ -367,14 +367,21 @@ export async function signInGoogleUser(db, env, { sub, email, name }) {
 // Who may get a sign-in code by e-mail: an active user, an invited address or the owner
 // (anyone, with OPEN_SIGNUP).
 export async function mayGetEmailCode(db, env, email) {
+  return Boolean(await emailCodeAccess(db, env, email));
+}
+
+// Why an address may get a sign-in code: "known" (an active user, an invited address or
+// the owner), "open" (only because of OPEN_SIGNUP, so any address typed in), or null.
+export async function emailCodeAccess(db, env, email) {
   const address = normalizeEmail(email);
-  if (!address) return false;
+  if (!address) return null;
   const [user, invite] = await Promise.all([
     db.prepare("SELECT disabled FROM users WHERE email=?").bind(address).first(),
     db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first()
   ]);
-  if (user) return !user.disabled;
-  return Boolean(invite) || address === ownerEmail(env) || openSignup(env);
+  if (user) return user.disabled ? null : "known";
+  if (invite || address === ownerEmail(env)) return "known";
+  return openSignup(env) ? "open" : null;
 }
 
 // OPEN_SIGNUP=true (a Worker variable): anyone who signs in gets an account, as an App Store
