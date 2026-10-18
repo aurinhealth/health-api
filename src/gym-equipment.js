@@ -79,7 +79,9 @@ export const OTHER_STATIONS = {
   belt_squat: { group: "Nohy a hýždě", label: "Belt squat (dřep s opaskem)", en: "Belt squat" },
   ab_crunch_machine: { group: "Střed těla", label: "Stroj na břicho", en: "Ab crunch machine" },
   captains_chair: { group: "Střed těla", label: "Kapitánská židle", en: "Captain's chair" },
-  torso_rotation_machine: { group: "Střed těla", label: "Stroj na rotace trupu", en: "Torso rotation machine" }
+  torso_rotation_machine: { group: "Střed těla", label: "Stroj na rotace trupu", en: "Torso rotation machine" },
+  incline_chest_press_machine: { group: "Prsa a kladky", label: "Šikmý tlak na hrudník (stroj)", en: "Incline chest press machine" },
+  decline_chest_press_machine: { group: "Prsa a kladky", label: "Negativní tlak na hrudník (stroj)", en: "Decline chest press machine" }
 };
 export const OTHER_STATION_IDS = Object.keys(OTHER_STATIONS);
 
@@ -250,8 +252,8 @@ export const EXERCISE_STATIONS = {
   "Cable Single Leg Laying Leg Curl": ["cables", "adjustable_bench"],
   "Cable Single Arm Underhand Grip Row": ["cables"],
   "Straight Bar Bench Mid Rows": ["cables", "adjustable_bench"],
-  "Decline Machine Chest Press": ["chest_press"],
-  "Incline Machine Chest Press": ["chest_press"],
+  "Decline Machine Chest Press": ["decline_chest_press_machine"],
+  "Incline Machine Chest Press": ["incline_chest_press_machine"],
   "Neutral-Grip Lat Pulldown": ["lat_pulldown_low_row"],
   "Single-Arm Lat Pulldown": ["lat_pulldown_low_row"],
   "Wide-Grip Lat Pulldown": ["lat_pulldown_low_row"],
@@ -378,7 +380,9 @@ export const STATION_PICKER = {
   belt_squat: [["legs"], "Dřepuješ se závažím na opasku kolem boků.", "You squat with the load on a belt around your hips."],
   ab_crunch_machine: [["core"], "Vsedě se zakulacuješ dopředu proti odporu.", "Seated, you curl forward against the resistance."],
   captains_chair: [["core"], "Opora předloktí, ze které zvedáš kolena.", "Forearm supports you hang from to raise your knees."],
-  torso_rotation_machine: [["core"], "Vsedě otáčíš trup proti odporu stroje.", "Seated, you turn your torso against the machine."]
+  torso_rotation_machine: [["core"], "Vsedě otáčíš trup proti odporu stroje.", "Seated, you turn your torso against the machine."],
+  incline_chest_press_machine: [["chest"], "Vsedě tlačíš madla šikmo vzhůru, na horní hrudník.", "Seated, you press the handles up at an angle for the upper chest."],
+  decline_chest_press_machine: [["chest"], "Vsedě tlačíš madla dopředu a dolů, na spodní hrudník.", "Seated, you press the handles forward and down for the lower chest."]
 };
 
 // What the picker shows of a station: its sections and its line.

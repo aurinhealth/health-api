@@ -17,7 +17,7 @@ const ADDED = ["Smith Machine Bench Press", "Smith Machine Decline Bench Press",
   "Cable Single Arm Rope Pushdown", "Machine Cable V Bar Push Downs", "Cable Standing Low To High Wood Chopper", "Cable Bench Straight Leg Kickback", "Cable 30 Degree Shrug", "Cable Wrist Curl", "Cable Bar Face Pull", "Cable Rope Kneeling Face Pull", "Cable Seated Rope Face Pull", "Cable Single Leg Laying Leg Curl", "Cable Single Arm Underhand Grip Row", "Straight Bar Bench Mid Rows",
   "Decline Machine Chest Press", "Incline Machine Chest Press", "Neutral-Grip Lat Pulldown", "Single-Arm Lat Pulldown", "Wide-Grip Lat Pulldown", "Calf Press", "Single-Leg Press", "Reverse Hack Squat",
   "Machine Underhand Row", "Hammer Strength High Row", "Hammer Strength Iso-Lateral Row", "Machine Lat Pullover", "Machine Back Extension", "Reverse Hyperextension", "Machine Preacher Curl", "Machine Tricep Extension", "Belt Squat", "Machine Crunch", "Captain's Chair Knee Raise", "Selectorized Torso Rotation Machine"];
-const NEW_STATIONS = ["plate_loaded_row", "pullover_machine", "back_extension_machine", "reverse_hyper", "biceps_curl_machine", "triceps_machine", "belt_squat", "ab_crunch_machine", "captains_chair", "torso_rotation_machine"];
+const NEW_STATIONS = ["plate_loaded_row", "pullover_machine", "back_extension_machine", "reverse_hyper", "biceps_curl_machine", "triceps_machine", "belt_squat", "ab_crunch_machine", "captains_chair", "torso_rotation_machine", "incline_chest_press_machine", "decline_chest_press_machine"];
 // The catalog before these were added: names stay, so stored history keeps its exercise.
 const EXISTING = ["Dead bug", "Push-up", "DB bench press", "Low row", "Pivot leg press", "Lat pulldown", "Cable triceps extension", "Face pull", "Single-arm cable row", "Standing calf raise", "DB shrug", "Prone leg curl Prime", "Cable woodchop", "Cable glute kickback", "DB wrist curl", "Box step-up"];
 const PATTERNS = new Set(Object.entries(EXERCISES).filter(([n]) => !ADDED.includes(n)).map(([, d]) => d.pattern));
@@ -61,6 +61,7 @@ test("variants point to an existing main exercise and stay out of the pick lists
 
 test("existing exercises and station ids are unchanged", () => {
   for (const name of EXISTING) { assert.ok(EXERCISES[name], name); assert.equal(EXERCISES[name].variantOf, undefined, name); }
+  for (const name of ["Incline Machine Chest Press", "Decline Machine Chest Press"]) assert.ok(!EXERCISE_STATIONS[name].includes("chest_press"), name + " is not on the flat chest press");
   for (const id of NEW_STATIONS) { assert.ok(OTHER_STATIONS[id]?.label && OTHER_STATIONS[id].en, id); assert.ok(STATION_PICKER[id], id); }
 });
 
