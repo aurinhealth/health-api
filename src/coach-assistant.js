@@ -344,7 +344,7 @@ const timeoutFor=maxOutputTokens=>maxOutputTokens>TASK_LIMITS.planning?TASK_TIME
 export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null }) {
   await assertAIAccess(env);
   if (!env.OPENAI_API_KEY) throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
-  await assertAiAllowance(env);
+  await assertAiAllowance(env,feature);
   const release=await claimAiSlot(env);
   try{return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs});}
   finally{await release();}

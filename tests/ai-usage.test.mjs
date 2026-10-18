@@ -69,9 +69,9 @@ test("the limit messages name no amount", async () => {
   await withOpenAI(async () => {
     const env = envFor(db, { AI_DAILY_LIMIT_USD: "0.5" });
     await callOpenAI(env, { instructions: "x", input: "y" });
-    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => /Dnes už bylo s AI práce hodně/.test(error.message) && !/\$|USD|\d/.test(error.message));
+    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => /Pro dnešek toho bylo s AI hodně/.test(error.message) && !/\$|USD|\d/.test(error.message));
     db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (8, ?, 10)").run(localToday());
-    await assert.rejects(callOpenAI({ ...env, DB: scopedDb(db, 8), USER_ID: 8, AI_DAILY_LIMIT_USD: "" }, { instructions: "x", input: "y" }), error => /Měsíční limit AI/.test(error.message) && !/\$|USD|\d/.test(error.message));
+    await assert.rejects(callOpenAI({ ...env, DB: scopedDb(db, 8), USER_ID: 8, AI_DAILY_LIMIT_USD: "" }, { instructions: "x", input: "y" }), error => /pozastavená/.test(error.message) && !/\$|USD|\d/.test(error.message));
   });
 });
 
@@ -81,7 +81,7 @@ test("a daily limit, when set, stops the next call once it is spent; the owner h
     const env = envFor(db, { AI_DAILY_LIMIT_USD: "1" });
     await callOpenAI(env, { instructions: "x", input: "y" });
     await callOpenAI(env, { instructions: "x", input: "y" });
-    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && error.status === 429 && /Dnes už bylo s AI práce hodně/.test(error.message));
+    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && error.status === 429 && /Pro dnešek toho bylo s AI hodně/.test(error.message));
     assert.equal(calls(), 2);
     // Another user has their own budget.
     await callOpenAI({ ...env, DB: scopedDb(db, 8), USER_ID: 8 }, { instructions: "x", input: "y" });
@@ -90,6 +90,23 @@ test("a daily limit, when set, stops the next call once it is spent; the owner h
     await callOpenAI(owner, { instructions: "x", input: "y" });
     assert.equal(calls(), 4);
     assert.equal(aiDailyLimitUsd(owner), null);
+  });
+});
+
+test("the daily guard leaves the coach chat out: it neither counts nor stops it", async () => {
+  const db = grantAiConsent(createD1(), 7, 8);
+  await withOpenAI(async calls => {
+    const env = envFor(db, { AI_DAILY_LIMIT_USD: "1" });
+    // Two coach answers (1.40 USD) are over the daily guard but not in it.
+    await callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" });
+    await callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" });
+    assert.equal((await aiAllowance(env)).spentUsd, 0);
+    await callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" });
+    await callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" });
+    await assert.rejects(callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" }), /Pro dnešek/);
+    // The coach still answers; only the monthly brake would stop it.
+    await callOpenAI(env, { feature: "assistant", instructions: "x", input: "y" });
+    assert.equal(calls(), 5);
   });
 });
 
@@ -102,7 +119,7 @@ test("the monthly limit stops AI for the rest of the month and counts only this 
     // Earlier this month and last month: only this month counts.
     db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (7, ?, 4.5), (7, '2000-01-15', 50)").run(month + "-01");
     assert.deepEqual(await aiAllowance(env), { spentUsd: localToday().endsWith("-01") ? 5.2 : 0.7, limitUsd: 100, monthSpentUsd: 5.2, monthLimitUsd: 5 });
-    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && /Měsíční limit AI/.test(error.message));
+    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && /pozastavená/.test(error.message));
     assert.equal(calls(), 1);
   });
   assert.equal(aiMonthlyLimitUsd({ AI_MONTHLY_LIMIT_USD: "12" }), 12);

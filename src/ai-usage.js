@@ -2,9 +2,10 @@
 // Every model call goes through callOpenAI (coach-assistant.js), which checks
 // the limit before asking and records the cost after. The monthly limit is the
 // user's AI budget and the lever a paid tier would raise: AI_MONTHLY_LIMIT_USD
-// (default 5 USD a month). AI_DAILY_LIMIT_USD is a guard against abuse (a
-// script, a loop) that a person using the app never reaches. 0 in either turns
-// AI off for everyone but the owner. The owner is never limited. The App Review
+// (default 5 USD a month), set high as an emergency brake. AI_DAILY_LIMIT_USD
+// guards the AI around the coach (food, plans, reviews) against abuse (a script,
+// a loop); the coach chat is not in it, its messages get their own allowance.
+// 0 in either turns AI off for everyone but the owner. The owner is never limited. The App Review
 // account (APP_REVIEW_EMAIL) never gets more than REVIEW_AI_MONTHLY_LIMIT_USD.
 // The messages name no amount: the user is told when it resets, not what it costs.
 import { L } from './lang.js';
@@ -50,10 +51,14 @@ export async function ensureAiUsage(db) {
   if (!withCachedColumn.has(db)) { await db.prepare("ALTER TABLE ai_usage ADD COLUMN cached_tokens INTEGER").run().catch(() => { /* already there */ }); withCachedColumn.add(db); }
 }
 
+// The coach chat, which the daily guard does not cover.
+export const COACH_CHAT_FEATURE = "assistant";
+
+// Today's spending under the daily guard: everything but the coach chat.
 export async function aiSpentToday(env) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ?").bind(env.USER_ID, localToday()).first();
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') != ?").bind(env.USER_ID, localToday(), COACH_CHAT_FEATURE).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
@@ -70,17 +75,18 @@ export async function aiAllowance(env) {
   return { spentUsd, limitUsd: aiDailyLimitUsd(env), monthSpentUsd, monthLimitUsd: aiMonthlyLimitUsd(env) };
 }
 
-// Throws before a model call once this month's or today's spending reached its limit.
-export async function assertAiAllowance(env) {
+// Throws before a model call once this month's or today's spending reached its
+// limit; the daily one does not stop the coach chat.
+export async function assertAiAllowance(env, feature = null) {
   if (!tracked(env)) return;
-  const monthLimit = aiMonthlyLimitUsd(env), dayLimit = aiDailyLimitUsd(env);
+  const monthLimit = aiMonthlyLimitUsd(env), dayLimit = feature === COACH_CHAT_FEATURE ? null : aiDailyLimitUsd(env);
   if (monthLimit == null && dayLimit == null) return;
   if (monthLimit === 0 || dayLimit === 0) throw limitError(L("AI funkce nejsou pro tento účet zapnuté.", "AI features aren't enabled for this account."));
   // A failed read of the log does not cost the user the answer.
   const failed = error => { console.error("AI usage read failed", error?.message || error); return 0; };
   const [monthSpent, daySpent] = await Promise.all([monthLimit == null ? 0 : aiSpentThisMonth(env).catch(failed), dayLimit == null ? 0 : aiSpentToday(env).catch(failed)]);
-  if (monthLimit != null && monthSpent >= monthLimit) throw limitError(L("Měsíční limit AI je vyčerpaný. Obnoví se prvního dne příštího měsíce.", "This month's AI limit is used up. It resets on the first day of next month."));
-  if (dayLimit != null && daySpent >= dayLimit) throw limitError(L("Dnes už bylo s AI práce hodně, pokračovat můžeš zítra.", "That's a lot of AI for one day. You can carry on tomorrow."));
+  if (monthLimit != null && monthSpent >= monthLimit) throw limitError(L("AI je teď pro tvůj účet pozastavená. Ozvi se nám na podporu.", "AI is paused for your account for now. Please contact support."));
+  if (dayLimit != null && daySpent >= dayLimit) throw limitError(L("Pro dnešek toho bylo s AI hodně. Pokračovat můžeš zítra.", "That's a lot of AI for today. You can carry on tomorrow."));
 }
 
 // Limits are checked before a call and its cost recorded after it, so parallel
