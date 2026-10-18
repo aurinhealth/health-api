@@ -30,6 +30,9 @@ const MAX_RECORDS = 5000;
 export const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const MAX_HEART_RATE_POINTS = 720;
 const MAX_SLEEP_STAGES = 400;
+// More rows than this a window would delete, and more than half of what it
+// holds, are kept: a sync that read only part of Apple Health (saveAppleHealth).
+const MAX_WINDOW_DELETES = 5;
 const PAST_MS = 400 * 86400000, FUTURE_MS = 86400000;
 
 const DAILY = {
@@ -245,6 +248,8 @@ export const appleBodyTooLarge = request => Number(request.headers.get("Content-
 // POST body: { records: [...], windows: { exercise: {from, to}, sleep: {from, to} }, categories: [...] }.
 // A window says the app sent every workout (or night) starting in it: the
 // Apple rows of that type in the window it did not send were deleted on the phone.
+// A window with none of its type sent, or one that would delete most of what
+// it holds, deletes nothing.
 export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() } = {}) {
   const input = Array.isArray(body.records) ? body.records : [];
   if (input.length > MAX_RECORDS) return { status: "error", code: 413, message: "Too many records in one request." };
@@ -266,10 +271,27 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
     const from = instant(w?.from, now) || (Date.parse(String(w?.from || "")) < now - PAST_MS ? floor : null);
     if (!from || !to || to <= from) continue;
     const keep = rows.filter(r => r.data_type === type).map(r => r.external_id);
+    // None of the type sent: HealthKit answers a type the user denied (or Health
+    // still restoring from iCloud) with nothing, not an error, so the window
+    // says nothing about what was deleted on the phone.
+    if (!keep.length) continue;
+    const ids = JSON.stringify(keep);
+    // A few nights or workouts go when deleted on the phone; most of the window
+    // at once is a partial read (a restore in progress), not a deletion.
+    const count = await db.prepare(
+      `SELECT COUNT(*) AS stored, COALESCE(SUM(CASE WHEN external_id NOT IN (SELECT value FROM json_each(?)) THEN 1 ELSE 0 END), 0) AS gone
+       FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}' AND data_type = ? AND start_time >= ? AND start_time < ?`
+    ).bind(ids, userId, type, from, to).first();
+    const gone = Number(count?.gone || 0);
+    if (!gone) continue;
+    if (gone > MAX_WINDOW_DELETES && gone * 2 > Number(count?.stored || 0)) {
+      console.warn("Apple Health: kept " + type + " rows a window would have deleted", { gone, stored: Number(count?.stored || 0), sent: keep.length });
+      continue;
+    }
     const result = await db.prepare(
       `DELETE FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}' AND data_type = ? AND start_time >= ? AND start_time < ?
-       ${keep.length ? `AND external_id NOT IN (SELECT value FROM json_each(?))` : ""}`
-    ).bind(...[userId, type, from, to, ...(keep.length ? [JSON.stringify(keep)] : [])]).run();
+       AND external_id NOT IN (SELECT value FROM json_each(?))`
+    ).bind(userId, type, from, to, ids).run();
     removed += Number(result?.meta?.changes || 0);
   }
 

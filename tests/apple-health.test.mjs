@@ -150,7 +150,44 @@ test("a workout deleted on the phone is removed inside the window it sent", asyn
   assert.equal(result.removed, 2);
   assert.deepEqual(rows(raw, "data_type='exercise'").map(r => r.external_id), ["apple:W1"]);
   const none = await saveAppleHealth(db, 1, { records: [], windows: { exercise: { from: "2026-10-01T00:00:00Z", to: "2026-10-06T00:00:00Z" } } });
-  assert.equal(none.removed, 1);
+  assert.equal(none.removed, 0, "a window with no workouts sent deletes nothing");
+  assert.deepEqual(rows(raw, "data_type='exercise'").map(r => r.external_id), ["apple:W1"]);
+});
+
+const night = d => ({ type: "sleep", id: "sleep:2026-" + d + "T21:00:00Z", start: "2026-" + d + "T21:00:00Z", end: new Date(Date.parse("2026-" + d + "T21:00:00Z") + 8 * 3600000).toISOString(),
+  stages: [{ type: "CORE", start: "2026-" + d + "T21:00:00Z", end: new Date(Date.parse("2026-" + d + "T21:00:00Z") + 8 * 3600000).toISOString() }] });
+const nights = n => Array.from({ length: n }, (_, i) => night("09-" + String(i + 1).padStart(2, "0")));
+const sleepWindow = { sleep: { from: "2026-08-31T12:00:00Z", to: "2026-10-12T00:00:00Z" } };
+
+test("an empty sleep read (access denied, Health restoring) keeps the nights a window covers", async () => {
+  const { raw, db } = setup();
+  await saveAppleHealth(db, 1, { records: nights(20), windows: sleepWindow }, { now: NOW });
+  assert.equal(rows(raw, "data_type='sleep'").length, 20);
+  const empty = await saveAppleHealth(db, 1, { records: [], windows: sleepWindow, categories: ["sleep"] }, { now: NOW });
+  assert.equal(empty.removed, 0);
+  assert.equal(rows(raw, "data_type='sleep'").length, 20);
+  // Records of other types do not make an empty sleep window count either.
+  const steps = { type: "steps", id: "steps:2026-10-10T08", start: "2026-10-10T08:00:00Z", end: "2026-10-10T09:00:00Z", value: 300 };
+  assert.equal((await saveAppleHealth(db, 1, { records: [steps], windows: sleepWindow }, { now: NOW })).removed, 0);
+  assert.equal(rows(raw, "data_type='sleep'").length, 20);
+});
+
+test("a night deleted on the phone goes; most of the window missing at once is kept", async () => {
+  const { raw, db } = setup();
+  const all = nights(20);
+  await saveAppleHealth(db, 1, { records: all, windows: sleepWindow }, { now: NOW });
+  const one = await saveAppleHealth(db, 1, { records: all.filter((_, i) => i !== 4), windows: sleepWindow }, { now: NOW });
+  assert.equal(one.removed, 1);
+  assert.equal(rows(raw, "data_type='sleep'").length, 19);
+  assert.equal(rows(raw, `external_id='apple:${all[4].id}'`).length, 0);
+  // A partial read (three nights of nineteen) deletes nothing.
+  const partial = await saveAppleHealth(db, 1, { records: all.slice(0, 3), windows: sleepWindow }, { now: NOW });
+  assert.equal(partial.removed, 0);
+  assert.equal(rows(raw, "data_type='sleep'").length, 19);
+  // Up to five at once still go, even when that is most of a short window.
+  const short = await saveAppleHealth(db, 1, { records: all.slice(0, 1), windows: { sleep: { from: "2026-08-31T12:00:00Z", to: "2026-09-07T12:00:00Z" } } }, { now: NOW });
+  assert.equal(short.removed, 4);
+  assert.equal(rows(raw, "data_type='sleep'").length, 15);
 });
 
 test("profile suggestions take Apple's resting heart rate", async () => {
@@ -212,9 +249,10 @@ test("only accepted rows set how far back Google is replaced, and a window never
   const w = { type: "exercise", id: "W1", activity: "running", start: "2026-10-01T06:00:00Z", end: "2026-10-01T07:00:00Z" };
   await saveAppleHealth(db, 1, { records: [w], windows: { exercise: { from: "2024-01-01T00:00:00Z", to: "2026-10-12T00:00:00Z" } } }, { now: NOW });
   assert.deepEqual(rows(raw, "data_type='exercise'").map(r => r.external_id), ["apple:W0", "apple:W1"]);
-  const gone = await saveAppleHealth(db, 1, { records: [], windows: { exercise: { from: "2024-01-01T00:00:00Z", to: "2026-10-12T00:00:00Z" } } }, { now: NOW });
+  const w2 = { ...w, id: "W2", start: "2026-10-02T06:00:00Z", end: "2026-10-02T07:00:00Z" };
+  const gone = await saveAppleHealth(db, 1, { records: [w2], windows: { exercise: { from: "2024-01-01T00:00:00Z", to: "2026-10-12T00:00:00Z" } } }, { now: NOW });
   assert.equal(gone.removed, 1, "inside the range the window still deletes what the phone no longer has");
-  assert.deepEqual(rows(raw, "data_type='exercise'").map(r => r.external_id), ["apple:W0"]);
+  assert.deepEqual(rows(raw, "data_type='exercise'").map(r => r.external_id), ["apple:W0", "apple:W2"]);
 });
 
 test("a request declared over 4 MB is refused before it is read", () => {

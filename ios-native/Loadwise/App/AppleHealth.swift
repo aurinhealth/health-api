@@ -534,14 +534,19 @@ final class HealthReader: @unchecked Sendable {
         async let foodRead: AppleHealthUpload.Food? = readFood
             ? foodUpload(from: from30, to: now, meals: categories.contains(.food), drinks: categories.contains(.water)) : nil
 
-        if categories.contains(.sleep) {
+        let nightRecords = await sleepRecords
+        let exerciseRecords = await workoutRecords
+        // A window only over what was read: HealthKit answers a type the user
+        // denied (or Health still restoring from iCloud) with nothing, not an
+        // error, and an empty window would delete the history on the server.
+        if !nightRecords.isEmpty {
             // From noon the day before, so the first night is whole.
             windows["sleep"] = .init(from: stamp(sleepStart), to: stamp(now.addingTimeInterval(3600)))
         }
-        if categories.contains(.workouts) {
+        if !exerciseRecords.isEmpty {
             windows["exercise"] = .init(from: stamp(workoutStart), to: stamp(now.addingTimeInterval(3600)))
         }
-        let first = await sleepRecords + workoutRecords
+        let first = nightRecords + exerciseRecords
         var rest = await stepRecords + energyRecords
         rest += await restingRecords + hrvRecords
         rest += await heartRecords + breathingRecords
