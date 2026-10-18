@@ -31,6 +31,7 @@ import { buildShareWeek, mondayOf } from './share-week.js';
 import { buildShareMilestones, intervalsRecord } from './share-milestone.js';
 import {buildHealth} from './app-health.js';
 import {buildFood} from './app-food.js';
+import {buildFoodWeek} from './app-food-week.js';
 import {normalizeProfile} from './energy-profile.js';
 import {athleteFocus} from './athlete-focus.js';
 import { loadProfiles, refreshSuggestions } from './profile-suggestions.js';
@@ -1738,6 +1739,29 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [pro,favorites]=await Promise.all([isPro(env),nutrientFavorites(env.DB,env.USER_ID??env.DB.userId)]);
       if(pro&&favorites.length){const items=buildNutrients({days:[{date,food}],profile,kcalTarget:numOrNull(daily?.nutrition?.calorieTarget),pro}).items;built.nutrients=favorites.map(k=>items.find(i=>i.key===k)).filter(Boolean);}
       return Response.json(built,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:500})}
+  }
+
+  // Týdenní kalorie (app-food-week.js): Monday to Sunday of the given day's
+  // week, each day with the Food screen's own target and what was eaten.
+  if(url.pathname==='/app/api/food/week'&&request.method==='GET'){
+    try{
+      const requested=url.searchParams.get('date'),today=localToday(),start=mondayOfDate(validTrainingDay(requested)?requested:today);
+      const dates=Array.from({length:7},(_,i)=>shiftDate(start,i));
+      const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      // One Google Health read covers the week, as on /app/api/week; today the
+      // same read as the Food screen, so today's target matches it.
+      const [profile,health,healthToday]=await Promise.all([dashboardProfile(env).catch(()=>null),googleHealthFor(env,ctx,dates[6]).catch(()=>null),
+        dates.includes(today)?googleHealthFor(env,ctx,today).catch(()=>null):null]);
+      const day=async date=>{
+        const [daily,food]=await Promise.all([read('/analysis/daily?date='+date),read('/food/log?date='+date)]);
+        applyEnergyBudget(daily,profile,date===today?healthToday:{today:health?.wellness?.find(w=>w.id===date)||{}});
+        const {kcal,target,trainingBonus}=buildFood({date,daily,food});
+        return {date,kcal,target,trainingBonus};
+      };
+      // Days gone by are cached until the user changes something (the cache version).
+      const days=await mapLimit(dates,3,date=>date<today?cached(env,ctx,'food-week-day:'+date,()=>day(date),{ttl:600}):day(date));
+      return Response.json(buildFoodWeek({today,days}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 

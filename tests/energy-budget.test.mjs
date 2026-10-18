@@ -27,11 +27,12 @@ test("without a profile or the day's active calories the legacy target stays", (
 
 test("day view, week view and coaches all apply the same energy budget", () => {
   const source = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  // Day view, each day of the week view, the coach inputs and the app's Today and Food.
-  assert.equal(source.match(/applyEnergyBudget\(/g).length, 5);
+  // Day view, each day of the week view, the coach inputs, the app's Today and Food and Týdenní kalorie.
+  assert.equal(source.match(/applyEnergyBudget\(/g).length, 6);
   assert.match(source, /applyEnergyBudget\(daily,profile,health\);\n\s*return Response\.json\((withRecoveryTime\()?buildToday/);
   assert.match(source, /applyEnergyBudget\(daily,profile,health\);\n\s*const built=buildFood/);
   assert.match(source, /daily: applyEnergyBudget\(daily, profile,/);
+  assert.match(source, /applyEnergyBudget\(daily,profile,date===today\?healthToday:.*\n\s*const \{kcal,target,trainingBonus\}=buildFood/);
 });
 
 test("early in the day the expected day from the profile is the floor of the target", () => {
