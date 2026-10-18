@@ -28,6 +28,11 @@ enum DemoData {
     }()
 
     static var food: FoodSnapshot { L10n.isEnglish ? foodEnglish : foodCzech }
+
+    /// The sample day's week for Týdenní kalorie (src/app-food-week.js with the
+    /// day's 2650 kcal target and 1380 kcal eaten on Thursday).
+    static let foodWeek = FoodWeek(start: "2026-10-05", end: "2026-10-11", today: "2026-10-08", target: 18720, base: 16100, exercise: 2620,
+                                   eaten: 9130, byToday: 10620, left: 9590, over: 0, perDay: 2400)
     private static let foodCzech: FoodSnapshot = decode(foodJSON)
     private static let foodEnglish: FoodSnapshot = decode(inEnglish(foodJSON))
 

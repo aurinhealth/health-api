@@ -38,6 +38,8 @@ enum Palette {
     static let pink = Color(light: 0xB83A6E, dark: 0xF0A0C0)
     static let pinkSoft = Color(light: 0xF6DCE6, dark: 0x4A2A38)
     static let rust = Color(light: 0xB4532F, dark: 0xF0907A)
+    /// Past a limit (Týdenní kalorie over the week's target): redder than rust.
+    static let red = Color(light: 0xC2362B, dark: 0xFF6B5B)
     static let blue = Color(light: 0x1D6FA3, dark: 0x7CC3F0)
     static let coffee = Color(light: 0x8A5A3B, dark: 0xD2A07E)
     static let brown = Color(light: 0x8A6D3B, dark: 0xCFB07A)
