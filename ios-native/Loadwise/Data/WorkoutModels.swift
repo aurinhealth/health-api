@@ -214,6 +214,7 @@ struct GymDay: Decodable, Equatable {
         let block = list.remove(at: source)
         list.insert(block, at: min(max(0, destination > source ? destination - 1 : destination), list.count))
         write(list, rest)
+        balanceWarmups()
     }
 
     /// Takes an exercise out of the plan. Sets already done stay recorded.
@@ -260,6 +261,78 @@ struct GymDay: Decodable, Equatable {
         guard list[offset].count > drop.count else { removeExercise(at: offset); return }
         for i in drop.reversed() { list[offset].remove(at: i) }
         write(list, rest)
+    }
+
+    /// A set not done yet taken out by its row (swiped away in Režim tréninku),
+    /// by sides both of its rows; the sets of the exercise are numbered again.
+    /// The last set gone, the exercise leaves the plan.
+    mutating func deleteSet(row: Int) {
+        guard row >= Self.firstSetRow, row < values.count, !Self.isDone(cell(values[row], 8)),
+              let name = cell(values[row], 1), !name.isEmpty else { return }
+        var start = row, end = row
+        while start - 1 >= Self.firstSetRow, cell(values[start - 1], 1) == name { start -= 1 }
+        while end + 1 < values.count, cell(values[end + 1], 1) == name { end += 1 }
+        var drop = [row]
+        if !Self.isWarmupRow(values[row]), ["L", "P"].contains(cell(values[row], 13) ?? "") {
+            let number = cell(values[row], 2)
+            drop += (start...end).filter { $0 != row && !Self.isWarmupRow(values[$0]) && cell(values[$0], 2) == number && !Self.isDone(cell(values[$0], 8)) }
+        }
+        for i in drop.sorted(by: >) { values.remove(at: i) }
+        end -= drop.count
+        guard end >= start else { return }
+        var warmups = 0, work = 0, last: String?
+        for i in start...end {
+            if Self.isWarmupRow(values[i]) {
+                warmups += 1
+                set(row: i, column: 2, String(warmups))
+            } else {
+                let number = cell(values[i], 2)
+                if number != last || last == nil { work += 1 }
+                last = number
+                set(row: i, column: 2, String(work))
+            }
+        }
+    }
+
+    /// The warm-up sets follow the order (src/strength-generator.js
+    /// warmupRows): of the exercises that have them, the first gets three
+    /// ramp-up sets (40, 65 and 80 % of its weight), every later one a single
+    /// set at 65 %. An exercise whose warm-up has begun keeps it as it is.
+    mutating func balanceWarmups() {
+        var (list, rest) = blocks
+        let main = list.indices.filter { list[$0].contains(where: Self.isWarmupRow) }
+        guard !main.isEmpty else { return }
+        for (position, i) in main.enumerated() {
+            let warms = list[i].filter(Self.isWarmupRow)
+            let ramp: [(Double, String)] = position == 0 ? [(0.4, "8"), (0.65, "5"), (0.8, "3")] : [(0.65, "5")]
+            guard warms.count != ramp.count, !warms.contains(where: { Self.isDone(cell($0, 8)) }),
+                  let work = list[i].first(where: { !Self.isWarmupRow($0) }), let kg = LiftWeight.number(cell(work, 3) ?? "") else { continue }
+            var template = warms[0]
+            while template.count < Self.columns.count { template.append(.string("")) }
+            let rows: [[JSONValue]] = ramp.enumerated().map { n, step in
+                var row = template
+                row[2] = .string(String(n + 1))
+                row[3] = .string(Self.warmupKg(kg * step.0))
+                row[4] = .string(step.1)
+                for column in [5, 6, 7] { row[column] = .string("") }
+                row[8] = .string("FALSE")
+                row[11] = .string("FALSE")
+                if n > 0 { row[10] = .string("") }
+                return row
+            }
+            list[i] = rows + list[i].filter { !Self.isWarmupRow($0) }
+        }
+        write(list, rest)
+    }
+
+    static func isWarmupRow(_ row: [JSONValue]) -> Bool {
+        (row.first?.string ?? "WORK").uppercased() == "WARMUP"
+    }
+
+    /// A warm-up weight: at least 2 kg, to whole kilos under 20 kg, else to 2.5 kg.
+    static func warmupKg(_ kg: Double) -> String {
+        let value = max(2, kg < 20 ? kg.rounded() : (kg / 2.5).rounded() * 2.5)
+        return value.rounded() == value ? String(Int(value)) : String(value).replacingOccurrences(of: ".", with: ",")
     }
 
     /// "Každá strana zvlášť": the work sets not done yet become an L and a P

@@ -223,6 +223,8 @@ struct StationSheet: View {
     @Binding var place: GymPlace
     @Binding var catalog: [GymCatalogExercise]
     @State private var error: String?
+    /// The exercise whose "i" was tapped: what it is and how it's done.
+    @State private var technique: String?
 
     private var exercises: [GymCatalogExercise] {
         catalog.filter { ($0.stations ?? []).contains(station.id) }
@@ -276,6 +278,7 @@ struct StationSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Palette.background)
+        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
     }
 
     private func row(_ ex: GymCatalogExercise) -> some View {
@@ -285,6 +288,12 @@ struct StationSheet: View {
                 if let muscle = ex.muscle?.nilIfBlank { Text(muscle).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1) }
             }
             Spacer(minLength: 8)
+            Button { technique = ex.name } label: {
+                Image(systemName: "info.circle").font(.system(size: 19)).foregroundStyle(Palette.muted)
+                    .frame(width: 34, height: 40).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.f("Technika: %@", ex.name))
             thumb(ex, up: true)
             thumb(ex, up: false)
         }

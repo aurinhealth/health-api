@@ -535,3 +535,57 @@ struct RestSetsList: View {
         }
     }
 }
+
+/// A set row swiped left: Smazat shows behind it, a long swipe deletes at once.
+/// Off for sets already done (those go back with the tick first).
+struct SwipeToDelete: ViewModifier {
+    let enabled: Bool
+    let onDelete: () -> Void
+    @State private var offset: CGFloat = 0
+    /// Where the row was when the drag began: closed or open on Smazat.
+    @State private var base: CGFloat?
+    private let width: CGFloat = 84
+
+    func body(content: Content) -> some View {
+        content
+            .offset(x: offset)
+            .background(alignment: .trailing) {
+                if offset < 0 {
+                    Button { delete() } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: "trash").font(.system(size: 15, weight: .semibold))
+                            Text("Smazat").font(Typo.caption.weight(.semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .frame(width: -offset).frame(maxHeight: .infinity)
+                        .background(Palette.red, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            // Clipped only while open: the amber frame of the set at hand stays whole.
+            .clipShape(Rectangle().inset(by: offset < 0 ? 0 : -4))
+            .simultaneousGesture(enabled ? DragGesture(minimumDistance: 16).onChanged { drag in
+                let dx = drag.translation.width
+                if base == nil {
+                    guard abs(dx) > abs(drag.translation.height) else { return }
+                    base = offset
+                }
+                offset = min(0, (base ?? 0) + dx)
+            }.onEnded { drag in
+                let dx = drag.translation.width
+                guard base != nil else { return }
+                base = nil
+                withAnimation(.snappy) {
+                    if offset < -width * 2.4 { offset = 0; onDelete() }
+                    else { offset = offset < -width / 2 && dx < 0 ? -width : 0 }
+                }
+            } : nil)
+            .onChange(of: enabled) { _, on in if !on { offset = 0 } }
+    }
+
+    private func delete() {
+        withAnimation(.snappy) { offset = 0 }
+        onDelete()
+    }
+}

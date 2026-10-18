@@ -54,6 +54,9 @@ struct TrainingModeView: View {
     @State private var startTapped = false
     /// Hidden with the arrow: the workout goes on, only the screen closes.
     @State private var minimizing = false
+    /// Where the set table is, so a swipe on a set row deletes the set
+    /// instead of turning to another exercise.
+    @State private var tableFrame: CGRect = .zero
     /// Teď ("now") or Další ("next") with its sets unfolded in the rest.
     @State private var unfolded: Set<String> = []
     /// The warm-up's stretches ticked (StretchingCard): all of them done, the
@@ -285,9 +288,10 @@ struct TrainingModeView: View {
         .onAppear { prefill(set, in: exercise) }
         // A swipe sideways goes to the next or the previous exercise.
         .contentShape(Rectangle())
-        .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { drag in
+        .coordinateSpace(name: "session")
+        .simultaneousGesture(DragGesture(minimumDistance: 30, coordinateSpace: .named("session")).onEnded { drag in
             let dx = drag.translation.width, dy = drag.translation.height
-            guard abs(dx) > 70, abs(dx) > abs(dy) * 2 else { return }
+            guard abs(dx) > 70, abs(dx) > abs(dy) * 2, !tableFrame.contains(drag.startLocation) else { return }
             withAnimation(.snappy) { move(dx < 0 ? 1 : -1) }
         })
         .task(id: exercise.name) { await loadMuscles(day) }
@@ -324,11 +328,16 @@ struct TrainingModeView: View {
     private func setTable(_ exercise: GymExercise, _ set: GymSet?, _ last: GymHistory.Session?) -> some View {
         VStack(spacing: 2) {
             tableHeader
-            ForEach(exercise.sets) { s in setRow(s, exercise, current: set, last: last) }
+            ForEach(exercise.sets) { s in
+                // Swiped left: a set not done yet (a warm-up too) goes away.
+                setRow(s, exercise, current: set, last: last)
+                    .modifier(SwipeToDelete(enabled: !s.done && !saving) { Task { await deleteSet(s) } })
+            }
             tableActions(exercise, set)
         }
         .padding(.vertical, 12).padding(.horizontal, 4)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("session")) } action: { tableFrame = $0 }
         .padding(.top, 14)
     }
 
@@ -1207,6 +1216,24 @@ struct TrainingModeView: View {
             error = nil
         } catch {
             self.error = L10n.f("Trénink se nepodařilo uložit: %@", error.localizedDescription)
+        }
+    }
+
+    /// A set not done yet swiped away. The fields follow the set now at hand.
+    private func deleteSet(_ set: GymSet) async {
+        guard var next = day else { return }
+        next.deleteSet(row: set.row)
+        day = next
+        if let list = day?.exercises, !list.isEmpty {
+            index = min(index, list.count - 1)
+            if !list[index].sets.contains(where: { !$0.done }) { startAtFirstOpen() }
+        }
+        guard !model.demo else { return }
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Sérii se nepodařilo uložit: %@", error.localizedDescription)
         }
     }
 
