@@ -69,7 +69,7 @@ struct DrinkFigure: View {
 
 /// Draws in a 110 × 110 box, scaled to the frame. The level animates between
 /// two values (Animatable), the phase moves the waves and the goal effect.
-struct DrinkFigureCanvas: View, Animatable {
+struct DrinkFigureCanvas: View, @preconcurrency Animatable {
     let kind: DrinkFigureKind
     var fraction: Double
     var phase: Double

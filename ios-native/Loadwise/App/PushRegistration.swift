@@ -1,5 +1,5 @@
 import UIKit
-import UserNotifications
+@preconcurrency import UserNotifications
 
 // The morning readiness push ("Připravenost 72 · dnes klidně intervaly"),
 // sent by the server (src/push.js) once a day after the night's data arrives,

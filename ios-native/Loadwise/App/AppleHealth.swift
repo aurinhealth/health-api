@@ -254,6 +254,8 @@ final class AppleHealth {
         for type in types {
             let query = HKObserverQuery(sampleType: type, predicate: nil) { _, completion, error in
                 guard error == nil else { completion(); return }
+                // HealthKit's handler may be called from any thread.
+                nonisolated(unsafe) let completion = completion
                 Task { @MainActor in
                     if let api = AppleHealth.shared.api {
                         // Woken in the background: the widgets follow the new data.

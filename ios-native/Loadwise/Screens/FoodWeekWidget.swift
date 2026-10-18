@@ -90,7 +90,7 @@ struct FoodWeekWidget: View {
     }
 
     /// "13.–19. 10.", "Oct 13–19".
-    static func range(_ week: FoodWeek) -> String? {
+    nonisolated static func range(_ week: FoodWeek) -> String? {
         guard let start = week.start, let end = week.end else { return nil }
         let part = { (iso: String) -> (Int, Int)? in
             let bits = iso.split(separator: "-").compactMap { Int($0) }

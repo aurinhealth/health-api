@@ -84,10 +84,11 @@ struct AvatarEditor: View {
 
     var body: some View {
         VStack(spacing: 10) {
+            let photoSet = hasPhoto
             PhotosPicker(selection: $item, matching: .images) {
                 VStack(spacing: 8) {
                     AvatarView(size: 96)
-                    Text(hasPhoto ? L10n.tr("Změnit fotku") : L10n.tr("Přidat fotku")).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                    Text(photoSet ? L10n.tr("Změnit fotku") : L10n.tr("Přidat fotku")).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
                 }
             }
             .buttonStyle(.plain)

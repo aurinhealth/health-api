@@ -4,8 +4,8 @@ import Foundation
 /// tests and "Prohlédnout ukázku" on the sign-in screen.
 enum DemoData {
     static var today: TodaySnapshot { L10n.isEnglish ? todayEnglish : todayCzech }
-    nonisolated(unsafe) private static let todayCzech: TodaySnapshot = decode(json)
-    nonisolated(unsafe) private static let todayEnglish: TodaySnapshot = decode(inEnglish(json))
+    private static let todayCzech: TodaySnapshot = decode(json)
+    private static let todayEnglish: TodaySnapshot = decode(inEnglish(json))
 
     /// Sample profile and sources for Settings in the demo.
     static var profile: JSONObject { [
@@ -52,8 +52,8 @@ enum DemoData {
 
     /// Sample gym session in the shape of GET /app/api/gym.
     static var gym: GymDay { L10n.isEnglish ? gymEnglish : gymCzech }
-    nonisolated(unsafe) private static let gymCzech: GymDay = decode(gymJSON)
-    nonisolated(unsafe) private static let gymEnglish: GymDay = decode(inEnglish(gymJSON))
+    private static let gymCzech: GymDay = decode(gymJSON)
+    private static let gymEnglish: GymDay = decode(inEnglish(gymJSON))
 
     private static let gymJSON = #"""
 {"date": "2026-10-08", "values": [["ADAPTIVNÍ SILOVÝ TRÉNINK"], ["Celé tělo  •  08. 10. 2026"], ["Datum", "2026-10-08", "Plán", "Celé tělo", "Nohy", "NORMÁLNĚ", "Load", "0,95"], ["Poznámka", "Nohy od pondělí v klidu, v sobotu delší běh: dřep ve střední zátěži."], [], [], ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie"], ["WARMUP", "Dřep", "1", "40", "8", "40", "8", "", "TRUE", "", "", "FALSE", ""], ["WORK", "Dřep", "1", "80", "6-8", "80", "8", "7", "TRUE", "", "", "FALSE", ""], ["WORK", "Dřep", "2", "80", "6-8", "", "", "", "FALSE", "", "", "FALSE", ""], ["WORK", "Dřep", "3", "80", "6-8", "", "", "", "FALSE", "", "", "FALSE", ""], ["WORK", "Tlak na lavici", "1", "62,5", "8-10", "", "", "", "FALSE", "", "", "FALSE", "A"], ["WORK", "Tlak na lavici", "2", "62,5", "8-10", "", "", "", "FALSE", "", "", "FALSE", "A"], ["WORK", "Přítahy v předklonu", "1", "50", "10", "", "", "", "FALSE", "", "", "FALSE", "A"], ["WORK", "Přítahy v předklonu", "2", "50", "10", "", "", "", "FALSE", "", "", "FALSE", "A"]]}

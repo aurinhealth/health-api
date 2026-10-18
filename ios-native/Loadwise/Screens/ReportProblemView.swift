@@ -67,8 +67,9 @@ struct ReportProblemView: View {
                 .padding(12)
                 SettingsDivider()
             }
+            let hasPreview = preview != nil
             PhotosPicker(selection: $photo, matching: .images) {
-                SettingsRow(icon: SettingsIcon(systemImage: "photo", color: Palette.blue), title: preview == nil ? "Vybrat z fotek" : "Vybrat jiný")
+                SettingsRow(icon: SettingsIcon(systemImage: "photo", color: Palette.blue), title: !hasPreview ? "Vybrat z fotek" : "Vybrat jiný")
             }
             .buttonStyle(.plain)
         }
