@@ -25,7 +25,6 @@ import { manualPairs } from "./manual-pairs.js";
 import { matchPlannedWorkouts } from "./plan-match.js";
 export { matchPlannedWorkouts };
 import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByLoadwise } from "./sync-destinations.js";
-import { syncStravaWeight } from "./strava.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -203,12 +202,7 @@ async function appWeight(env, request) {
     try { await writeIntervalsWeight(env, date, value); intervals = "ok"; }
     catch (error) { console.error("Intervals weight write failed", error.message); intervals = "error"; }
   }
-  // Strava too, when connected and weight is sent there; the hourly job retries.
-  let strava = null;
-  if (env.STRAVA_TOKEN && healthAllowed(await readSyncPrefs(env.DB, env.USER_ID, "strava"), "weight")) {
-    strava = await syncStravaWeight(env).then(() => "ok").catch(error => { console.error("Strava weight write failed", error.message); return "error"; });
-  }
-  return Response.json({status:"ok",date,kg:value,google,intervals,strava});
+  return Response.json({status:"ok",date,kg:value,google,intervals});
 }
 
 // ======================================================
@@ -1611,6 +1605,28 @@ export function heartRateFromSamples(activity, samples) {
   return values.length >= 3 ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null;
 }
 
+// The same mean computed by the database, one window ({start, end}) each: Google
+// stores ~50,000 samples a day, so a capped read of the day's rows would keep only
+// the newest hours. The bpm comes from value_numeric or the payload, as above.
+const SAMPLE_BPM = `COALESCE(value_numeric, CASE WHEN json_valid(payload_json) THEN CAST(COALESCE(json_extract(payload_json, '$.heartRate.beatsPerMinute'), json_extract(payload_json, '$.heartRate.bpm')) AS REAL) END)`;
+const utcSecond = ms => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+export async function heartRateInWindows(db, userId, windows) {
+  const spans = windows.map(w => [Date.parse(w.start), Date.parse(w.end)]);
+  const asked = spans.map((s, i) => [s, i]).filter(([[start, end]]) => Number.isFinite(start) && Number.isFinite(end) && end > start);
+  const out = windows.map(() => null);
+  if (!asked.length) return out;
+  const one = `SELECT ? AS i, AVG(bpm) AS bpm, COUNT(*) AS n FROM (SELECT ${SAMPLE_BPM} AS bpm FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', 'heart-rate-5min') AND sample_time >= ? AND sample_time <= ?) WHERE bpm BETWEEN 30 AND 240`;
+  // Stored times are RFC 3339 UTC without milliseconds; they compare as text.
+  // D1 binds at most 100 values a statement: 20 windows (80) per query.
+  for (let k = 0; k < asked.length; k += 20) {
+    const part = asked.slice(k, k + 20);
+    const rows = (await db.prepare(part.map(() => one).join(" UNION ALL "))
+      .bind(...part.flatMap(([[start, end], i]) => [i, userId, utcSecond(start), utcSecond(end)])).all()).results || [];
+    for (const r of rows) if (Number(r.n) >= 3) out[Number(r.i)] = Math.round(Number(r.bpm));
+  }
+  return out;
+}
+
 export function googleExerciseActivity(row) {
   const payload = JSON.parse(row.payload_json || "{}");
   const exercise = payload.exercise || {};
@@ -1838,18 +1854,12 @@ async function energyForDate(env, date) {
   const googleAll = googleExercises.results.map(googleExerciseActivity);
   const copies = new Set(pairSessions([...intervalsCompleted, ...googleAll]).map(pair => pair.drop));
   const googleCompleted = googleAll.filter(activity => !copies.has(activity));
-  if (googleCompleted.some(a => a.averageHeartRate == null)) {
+  // Each workout's mean from the samples in its own window (one query for all).
+  const withoutHr = googleCompleted.filter(a => a.averageHeartRate == null);
+  if (withoutHr.length) {
     try {
-      const samples = (await env.DB.prepare(`
-        SELECT sample_time, value_numeric, payload_json FROM health_datapoints
-        WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', 'heart-rate-5min')
-          AND sample_time >= ? AND sample_time < ?
-        LIMIT 5000
-      `).bind(env.USER_ID, dayStart, dayEnd).all()).results || [];
-      for (const a of googleCompleted) if (a.averageHeartRate == null) {
-        const bpm = heartRateFromSamples(a, samples);
-        if (bpm != null) { a.averageHeartRate = bpm; a.payload.average_heartrate = bpm; a.heartRateSource = "samples"; }
-      }
+      const bpms = await heartRateInWindows(env.DB, env.USER_ID, withoutHr);
+      withoutHr.forEach((a, i) => { const bpm = bpms[i]; if (bpm != null) { a.averageHeartRate = bpm; a.payload.average_heartrate = bpm; a.heartRateSource = "samples"; } });
     } catch (error) { console.error("Heart-rate samples read failed", error.message); }
   }
 

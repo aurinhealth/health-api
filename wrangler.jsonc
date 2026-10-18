@@ -91,8 +91,6 @@
     "COACH_WEEKLY_MESSAGES": "30",
     "COACH_EXTRA_MESSAGES": "2",
     "COACH_WORKOUT_CHAT_MESSAGES": "5",
-    // Strava app (src/strava.js); public. STRAVA_CLIENT_SECRET is a Worker secret.
-    "STRAVA_CLIENT_ID": "183664",
     // Ultrahuman app (src/ultrahuman.js); public. ULTRAHUMAN_CLIENT_SECRET is a Worker secret.
     "ULTRAHUMAN_CLIENT_ID": "Aiv97cWQZNA3tShnPydr8NtxZXSVv4LCafZE89WBnP4",
     "WHOOP_CLIENT_ID": "0c14cf2e-d6d3-4c7c-8c0d-758b0b20a8aa",
@@ -151,7 +149,6 @@
         "COACH_WEEKLY_MESSAGES": "30",
         "COACH_EXTRA_MESSAGES": "2",
         "COACH_WORKOUT_CHAT_MESSAGES": "5",
-        "STRAVA_CLIENT_ID": "183664",
         "ULTRAHUMAN_CLIENT_ID": "Aiv97cWQZNA3tShnPydr8NtxZXSVv4LCafZE89WBnP4",
         "WHOOP_CLIENT_ID": "0c14cf2e-d6d3-4c7c-8c0d-758b0b20a8aa",
         "WAHOO_CLIENT_ID": "W-nkdGNWUzPdr3a1rN2Z5Wvm7IOXPv_bjdGGmfbToFs",

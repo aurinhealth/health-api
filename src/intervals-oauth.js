@@ -58,11 +58,19 @@ export async function handleIntervalsOAuth(request, env, pathname, fetchImpl = f
   return back(connectReturnUrl(to, "intervals"));
 }
 
-// "Odpojit" for an OAuth connection: Intervals.icu forgets the app's access
-// and stops its webhooks. A personal API key has nothing to give back.
-export async function disconnectIntervalsApp(env, fetchImpl = fetch) {
+// "Odpojit" for an OAuth connection, and deleting the account: Intervals.icu
+// forgets the app's access and stops its webhooks. A personal API key has
+// nothing to give back ("none"); it is only deleted here, and the user can
+// remove it at intervals.icu/settings.
+export async function revokeIntervals(env, fetchImpl = fetch) {
   const credential = String(env.INTERVALS_API_KEY || "");
-  if (!credential.startsWith(INTERVALS_TOKEN_PREFIX)) return;
-  await fetchImpl("https://intervals.icu/api/v1/disconnect-app", { method: "DELETE", headers: { Authorization: credential }, signal: AbortSignal.timeout(10000) })
-    .catch(error => console.error("Intervals.icu disconnect failed", error.message));
+  if (!credential.startsWith(INTERVALS_TOKEN_PREFIX)) return "none";
+  const response = await fetchImpl("https://intervals.icu/api/v1/disconnect-app", { method: "DELETE", headers: { Authorization: credential }, signal: AbortSignal.timeout(10000) })
+    .catch(error => { console.error("Intervals.icu disconnect failed", error.message); return null; });
+  if (response && !response.ok) console.error("Intervals.icu disconnect failed", response.status);
+  return response?.ok ? "revoked" : "failed";
+}
+
+export async function disconnectIntervalsApp(env, fetchImpl = fetch) {
+  await revokeIntervals(env, fetchImpl);
 }

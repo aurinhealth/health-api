@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { handleIntervalsWebhook, webhookWork } from "../src/intervals-webhook.js";
-import { disconnectIntervalsApp } from "../src/intervals-oauth.js";
+import { disconnectIntervalsApp, revokeIntervals } from "../src/intervals-oauth.js";
 import { serverSource } from "./helpers/server-source.mjs";
 
 const post = (body, headers = {}) => new Request("https://aurin.health/webhooks/intervals", { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
@@ -45,6 +45,11 @@ test("disconnecting an OAuth connection gives the access back to Intervals.icu; 
   assert.equal(calls.length, 0);
   await disconnectIntervalsApp({ INTERVALS_API_KEY: "Bearer tok" }, fetchImpl);
   assert.deepEqual(calls, [["https://intervals.icu/api/v1/disconnect-app", "DELETE", "Bearer tok"]]);
+  assert.equal(await revokeIntervals({}, fetchImpl), "none");
+  assert.equal(await revokeIntervals({ INTERVALS_API_KEY: "personal-key" }, fetchImpl), "none");
+  assert.equal(await revokeIntervals({ INTERVALS_API_KEY: "Bearer tok" }, fetchImpl), "revoked");
+  assert.equal(await revokeIntervals({ INTERVALS_API_KEY: "Bearer tok" }, async () => new Response(null, { status: 401 })), "failed");
+  assert.equal(await revokeIntervals({ INTERVALS_API_KEY: "Bearer tok" }, async () => { throw new Error("offline"); }), "failed");
 });
 
 test("an OAuth connection is not imported every 5 minutes; the webhook route is wired", () => {

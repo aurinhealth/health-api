@@ -6,7 +6,7 @@ import { storeLocalEvent, syncLocalWorkout, ensureLocalWorkouts } from './local-
 // rows in workout_library), per-user capability progression, ranking, "generate a
 // workout for this day" and scheduling to the user's Intervals.icu calendar.
 // Every query on personal tables filters by db.userId (see tenancy.js).
-import { renderForEnvironment, buildWorkout, totalMinutes, step, n, clamp } from "./workout-model.js";
+import { renderForEnvironment, buildWorkout, totalMinutes, step, n, clamp, zoneOf, zonesFor } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { getTestWorkout } from "./threshold-check.js";
@@ -247,8 +247,13 @@ export async function generateWorkout(db, { sport = "ride", environment = "indoo
 
 // ---- Changing the length of a workout --------------------------------------
 // The main set stays; the aerobic part around it grows or shrinks. Only when
-// that is not enough are repetitions removed, then warm-up and cool-down trimmed.
+// that is not enough are warm-up and cool-down trimmed, then repetitions
+// removed and, last, the efforts shortened (see MIN_EFFORT).
 const EASY_BELOW = { ride: 76, run: 89 };
+// The shortest continuous effort, in minutes, that still trains its zone; in an
+// easy ride or run the Z2 parts can shrink too. VO₂max and harder efforts keep
+// their length (fewer of them instead), as do the parts of over-unders and surges.
+const MIN_EFFORT = { ride: { tempo: 10, sweet_spot: 8, threshold: 5 }, run: { tempo: 8, threshold: 5 } };
 export function resizeStructure(structure = [], target, { sport = "ride", system = "endurance" } = {}) {
   const run = sport === "run", s = JSON.parse(JSON.stringify(structure)), notes = [];
   const easy = b => !b.steps && n(b.power, 0) < EASY_BELOW[run ? "run" : "ride"] && !b.free;
@@ -304,6 +309,30 @@ export function resizeStructure(structure = [], target, { sport = "ride", system
       repsFrom ??= b.repeats; b.repeats -= 1; repsTo = b.repeats; cut -= per;
     }
     if (repsFrom != null) notes.push(L("méně opakování (", "fewer repeats (") + repsFrom + " → " + repsTo + ")");
+    // One long block, or no repetition left to drop: the efforts themselves get
+    // shorter at the same intensity, never below a sensible length for their zone;
+    // last, the recoveries inside the sets, to half and at least 2 min.
+    const shorten = (pick, note) => {
+      if (cut <= .5) return;
+      const parts = [];
+      s.forEach((b, i) => {
+        for (const x of b.steps || (i > 0 && i < s.length - 1 ? [b] : [])) {
+          const d = n(x.durationMinutes, 0), min = x.free ? null : pick(x, d, Boolean(b.steps));
+          if (min != null && d > min) parts.push({ x, d, min, times: n(b.repeats, 1) || 1 });
+        }
+      });
+      const room = parts.reduce((a, w) => a + (w.d - w.min) * w.times, 0);
+      if (!room) return;
+      const share = Math.min(1, cut / room), roundPart = x => x >= 5 ? Math.round(x) : Math.round(x * 2) / 2;
+      for (const w of parts) w.x.durationMinutes = Math.max(w.min, roundPart(w.d - (w.d - w.min) * share));
+      const longest = parts.reduce((a, w) => w.d > a.d ? w : a);
+      const num = x => L(String(round1(x)).replace(".", ","), String(round1(x)));
+      if (longest.x.durationMinutes < longest.d) notes.push(note + num(longest.d) + " → " + num(longest.x.durationMinutes) + " min)");
+      cut = totalMinutes(s) - target;
+    };
+    const mins = { ...MIN_EFFORT[sport], ...(wholeEasy ? { endurance: 5 } : {}) }, zones = zonesFor(sport);
+    shorten(x => mins[zoneOf(n(x.power, 0), zones)] ?? null, L("kratší úseky (", "shorter efforts ("));
+    shorten((x, d, inSet) => inSet && easy(x) ? Math.max(2, d / 2) : null, L("kratší pauzy (", "shorter recoveries ("));
     // Removing a repetition can overshoot: give the rest back as easy riding.
     if (cut < -.5) s.splice(s.length - 1, 0, step(round1(-cut), aerobic, null, run ? L("volný klus", "easy jog") : L("aerobní dojezd", "aerobic finish")));
   }
@@ -312,14 +341,37 @@ export function resizeStructure(structure = [], target, { sport = "ride", system
 
 // The same workout at another length. A library sibling (same family and
 // main set) is used when it has the length already; otherwise the structure
-// is resized and the workout gets the id "<id>~<minutes>".
+// is resized and the workout gets the id "<id>~<minutes>". When even the
+// shortest sensible main set does not fit, a shorter level of the same family
+// from the library is resized instead.
 export function resizeWorkout(base, minutes) {
   const sport = sportOf(base.sport), run = sport === "run";
   const target = Math.round(clamp(n(minutes, n(base.duration_minutes, 60)), run ? 20 : 30, run ? 240 : 360));
   if (Math.abs(target - n(base.duration_minutes, 0)) <= 1) return base;
+  const fits = w => Math.abs(n(w.duration_minutes, 0) - target) <= 2;
+  const library = builtIn()[sport] || [];
   const prefix = String(base.id).replace(/-\d+$/, "");
-  const sibling = (builtIn()[sport] || []).find(w => w.family === base.family && w.id !== base.id && String(w.id).replace(/-\d+$/, "") === prefix && Math.abs(n(w.duration_minutes, 0) - target) <= 2);
+  const sibling = library.find(w => w.family === base.family && w.id !== base.id && String(w.id).replace(/-\d+$/, "") === prefix && fits(w));
   if (sibling) return { ...sibling, resize_notes: [(["recovery", "endurance"].includes(base.primary_system) ? L("stejný typ jízdy", "same type of ride") : L("stejná hlavní série", "same main set")) + L(" v délce ", " at ") + sibling.duration_minutes + L(" min z knihovny", " min from the library")] };
+  const resized = resizeOwn(base, target);
+  if (fits(resized) || !base.family || n(resized.duration_minutes, 0) < target) return resized;
+  // The most work that fits, from the same family's other levels; when none
+  // fits, the one closest to the length.
+  const off = w => Math.abs(n(w.duration_minutes, 0) - target);
+  let best = null, closest = resized;
+  for (const w of library) {
+    if (w.family !== base.family || w.id === base.id || n(w.work_minutes, 0) > n(base.work_minutes, 0)) continue;
+    const r = fits(w) ? w : resizeOwn(w, target);
+    if (fits(r) && (!best || n(r.work_minutes, 0) > n(best.work_minutes, 0) || n(r.work_minutes, 0) === n(best.work_minutes, 0) && off(r) < off(best))) best = r;
+    if (off(r) < off(closest)) closest = r;
+  }
+  best ??= closest;
+  if (best === resized) return resized;
+  const name = String(best.name).replace(/ · \d+ min$/, "");
+  return { ...best, resized_from: base.id, resize_notes: [...(best.resize_notes || []), L("kratší varianta z knihovny: ", "shorter variant from the library: ") + name] };
+}
+function resizeOwn(base, target) {
+  const sport = sportOf(base.sport);
   let structure = [];
   try { structure = JSON.parse(base.structure_json || "[]"); } catch {}
   const resized = resizeStructure(structure, target, { sport, system: base.primary_system });
@@ -340,9 +392,10 @@ async function resizeGenerated(db, { sport, environment, date, coach, thresholds
   const base = await getWorkout(db, String(workoutId).replace(/~\d+$/, ""));
   if (!base) return { status: "empty", message: L("Původní trénink jsem nenašel – vygeneruj nový.", "I couldn't find the original workout – generate a new one.") };
   let resized = resizeWorkout(base, resizeTo);
-  // Outdoor rendering can lengthen the warm-up; correct once so the ridden length matches.
-  const drift = renderForEnvironment(resized, environmentOf(environment)).duration_minutes - Math.round(resizeTo);
-  if (Math.abs(drift) >= 2) resized = resizeWorkout(base, Math.round(resizeTo) - drift);
+  // Outdoor rendering can lengthen the warm-up; correct once so the ridden length
+  // matches, unless the correction lands further away.
+  const ridden = w => renderForEnvironment(w, environmentOf(environment)).duration_minutes, drift = ridden(resized) - Math.round(resizeTo);
+  if (Math.abs(drift) >= 2) { const corrected = resizeWorkout(base, Math.round(resizeTo) - drift); if (Math.abs(ridden(corrected) - Math.round(resizeTo)) < Math.abs(drift)) resized = corrected; }
   const context = { readiness: coach.readiness?.status || "green", hardBikeDaysRolling7d: coach.load?.hardBikeDaysRolling7d ?? 0, targetDifficulty: coach.recommendation?.progression?.targetDifficulty };
   const capabilities = await getCapabilities(db, sport);
   const [ranked] = rankWorkoutCandidates([resized], { environment: environmentOf(environment) }, context, capabilities);

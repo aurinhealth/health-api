@@ -44,9 +44,9 @@ export async function connectionEnvironment(env){
     let plain;
     try{plain=await decryptSecret(env,uid,row.provider,row.encrypted);}
     catch(error){console.error('Connection key unreadable',uid,row.provider,error.message);continue;}
-    if(row.provider==='google')resolved.GOOGLE_REFRESH_TOKEN=plain;if(row.provider==='intervals')resolved.INTERVALS_API_KEY=plain;if(row.provider==='intervals_athlete')resolved.INTERVALS_ATHLETE_ID=plain;if(row.provider==='google_scopes')resolved.GOOGLE_SCOPES=plain.split(/\s+/).filter(Boolean);if(row.provider==='strava')resolved.STRAVA_TOKEN=plain;if(row.provider==='apple')resolved.APPLE_REFRESH_TOKEN=plain;if(row.provider==='ultrahuman')resolved.ULTRAHUMAN_TOKEN=plain;if(row.provider==='whoop')resolved.WHOOP_TOKEN=plain;if(row.provider==='wahoo')resolved.WAHOO_TOKEN=plain;
+    if(row.provider==='google')resolved.GOOGLE_REFRESH_TOKEN=plain;if(row.provider==='intervals')resolved.INTERVALS_API_KEY=plain;if(row.provider==='intervals_athlete')resolved.INTERVALS_ATHLETE_ID=plain;if(row.provider==='google_scopes')resolved.GOOGLE_SCOPES=plain.split(/\s+/).filter(Boolean);if(row.provider==='apple')resolved.APPLE_REFRESH_TOKEN=plain;if(row.provider==='ultrahuman')resolved.ULTRAHUMAN_TOKEN=plain;if(row.provider==='whoop')resolved.WHOOP_TOKEN=plain;if(row.provider==='wahoo')resolved.WAHOO_TOKEN=plain;
   }
-  if(resolved.GOOGLE_REFRESH_TOKEN)resolved.CONNECTED_PROVIDERS.push('google');if(resolved.INTERVALS_API_KEY)resolved.CONNECTED_PROVIDERS.push('intervals');if(resolved.STRAVA_TOKEN)resolved.CONNECTED_PROVIDERS.push('strava');if(resolved.ULTRAHUMAN_TOKEN)resolved.CONNECTED_PROVIDERS.push('ultrahuman');if(resolved.WHOOP_TOKEN)resolved.CONNECTED_PROVIDERS.push('whoop');if(resolved.WAHOO_TOKEN)resolved.CONNECTED_PROVIDERS.push('wahoo');return resolved;
+  if(resolved.GOOGLE_REFRESH_TOKEN)resolved.CONNECTED_PROVIDERS.push('google');if(resolved.INTERVALS_API_KEY)resolved.CONNECTED_PROVIDERS.push('intervals');if(resolved.ULTRAHUMAN_TOKEN)resolved.CONNECTED_PROVIDERS.push('ultrahuman');if(resolved.WHOOP_TOKEN)resolved.CONNECTED_PROVIDERS.push('whoop');if(resolved.WAHOO_TOKEN)resolved.CONNECTED_PROVIDERS.push('wahoo');return resolved;
 }
 // Cron: re-encrypts the rows saved before CONNECTION_KEY with it (all users,
 // so env.DB is the whole database). A row saved again in the meantime is left

@@ -4,6 +4,7 @@ import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { loadSeries, dailyLoads, sessionsFrom, gymSessions, watchOnly } from "./training-load.js";
 import { athleteThresholds } from "./intervals-athlete.js";
 import { shiftDate, dashboardProfile } from "./dashboard-shared.js";
+import { localToday, dayStartUtc } from "./user-time.js";
 
 // CTL, ATL and TSB from the athlete's own workouts when Intervals.icu is not
 // connected. 120 days before `from` warm the averages up, so CTL is close to
@@ -27,8 +28,11 @@ export async function ownFitness(env,from,to){
   return loadSeries(dailyLoads(sessionsFrom(kept,byActivity,gymSessions(sets,dayRpe)),athlete),{from,to,warmup});
 }
 // Workouts of the watch and Intervals.icu from `start` to `to` (duplicates marked by the sync left out).
+// Intervals.icu stores local times, the watch UTC: the end is the later of the
+// day after `to` and its midnight in UTC (a New York evening is the next UTC day).
 export function loadActivityRows(env,start,to){
-  return env.DB.prepare("SELECT start_time,end_time,source_family,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,start,shiftDate(to,1)).all().then(r=>r.results||[]).catch(()=>[]);
+  const end=shiftDate(to,1),utcEnd=dayStartUtc(end);
+  return env.DB.prepare("SELECT start_time,end_time,source_family,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,start,utcEnd>end?utcEnd:end).all().then(r=>r.results||[]).catch(()=>[]);
 }
 // FTP, LTHR, heart-rate range and sex for the load of a session (training-load.js).
 export async function loadAthlete(env,to,ctx=null){
@@ -53,3 +57,5 @@ export async function watchOnlyFitness(env,ctx,from,to){
   if(!extra.length)return null;
   return loadSeries(dailyLoads(sessionsFrom(extra,byActivity,[]),await loadAthlete(env,to,ctx)),{from,to,warmup});
 }
+// The days /app/api/fitness covers: `days` back to the user's today, both included.
+export function fitnessDays(days,at=new Date()){const to=localToday(at);return{from:shiftDate(to,-days),to};}

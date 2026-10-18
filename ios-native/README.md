@@ -56,7 +56,7 @@ web app (`/app/api/today` for the Today screen), so the numbers match.
     (HealthKit) with the areas it may read (App/AppleHealth.swift);
   - Tréninkové zóny: run and bike separately, thresholds, presets and zones;
   - Synchronizace: where Loadwise sends data (Apple Zdraví, Google Health,
-    Intervals.icu, Strava): planned workouts, done activities and the chosen
+    Intervals.icu, Wahoo): planned workouts, done activities and the chosen
     health data; after a done activity a toast says where it went
     (Screens/SyncViews.swift, App/AppleHealthExport.swift);
   - Vzhled (automatic, light, dark), Jednotky, signing out.
