@@ -22,6 +22,7 @@ extension APIClient {
 
     /// "Navrhnout funkci": the idea and the app version, nothing else.
     func suggestFeature(message: String, app: JSONObject) async throws -> SupportReportResponse {
-        try await send("/app/api/support/report", method: "POST", body: ["kind": .string("idea"), "message": .string(message), "diagnostics": .object(app)])
+        let body: JSONObject = ["kind": .string("idea"), "message": .string(message), "diagnostics": .object(app)]
+        return try await send("/app/api/support/report", method: "POST", body: body)
     }
 }
