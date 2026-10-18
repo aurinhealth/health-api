@@ -10,6 +10,7 @@ import { journalDay, journalCard, journalCatalog, thresholdText, waitingText, va
 import { exportPages } from "../src/account-data.js";
 import { localToday } from "../src/user-time.js";
 import { coachContext } from "../src/coach-assistant.js";
+import { appleRow } from "../src/apple-health.js";
 
 const today = "2026-10-15";
 const days = (n, fn) => Array.from({ length: n }, (_, i) => fn(shiftDay(today, -(i + 1)), i));
@@ -402,4 +403,33 @@ test("journal: too little water is measured against the day's drinks target", as
   weight.run(userId, "apple", "weight", e + "T07:00:00", 80);
   const auto = await autoDays(db, d, e);
   assert.deepEqual([auto[d].little_water, auto[e].little_water], [{ yes: false }, { yes: true }]);
+});
+
+test("journal: Apple Health fills in mindfulness, daylight, noise in sleep, symptoms, sex, yoga, stretching and a time-zone change", async () => {
+  const { raw, db, userId } = dataDb();
+  const d = "2026-10-14", e = "2026-10-15", now = Date.parse("2026-10-16T12:00:00Z");
+  const insert = raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,sample_time,value_numeric) VALUES(?,?,?,?,?,?)");
+  const put = (type, date, value) => {
+    const row = appleRow({ type, id: "journal:" + type + ":" + date, date, value }, now);
+    insert.run(userId, "apple-health", row.data_type, row.external_id, row.sample_time, row.value_numeric);
+  };
+  put("daily-mindful-minutes", d, 12);
+  put("daily-daylight-minutes", d, 45); put("daily-morning-daylight-minutes", d, 15);
+  put("daily-daylight-minutes", e, 10); put("daily-morning-daylight-minutes", e, 0);
+  // The loudest reading in the night to the 15th belongs to the 14th's "Dnešní noc".
+  put("daily-night-noise", e, 62); put("daily-night-noise", "2026-10-16", 38);
+  put("daily-symptom-headache", d, 1); put("daily-symptom-body-ache", e, 1); put("daily-symptom-stomach", e, 2); put("daily-symptom-runny-nose", d, 1);
+  put("daily-sexual-activity", e, 1);
+  put("daily-yoga-minutes", d, 30); put("daily-stretching-minutes", e, 15);
+  put("daily-time-zone-change", e, -6);
+  const auto = await autoDays(db, d, e);
+  const yes = date => Object.entries(auto[date]).filter(([, v]) => v.yes === true).map(([k]) => k).sort();
+  assert.deepEqual(yes(d), ["headache", "meditation", "morning_light", "night_noise", "outdoors", "runny_nose", "yoga"]);
+  assert.deepEqual(yes(e), ["sex", "sore_muscles", "stomach", "stretching", "time_zone"]);
+  // Measured and below the line: ✕ rather than nothing.
+  assert.deepEqual([auto[e].outdoors, auto[e].morning_light, auto[e].night_noise], [{ yes: false }, { yes: false }, { yes: false }]);
+  // Out of range or the wrong kind of value: not stored.
+  assert.equal(appleRow({ type: "daily-night-noise", id: "x", date: d, value: 200 }, now), null);
+  assert.equal(appleRow({ type: "daily-time-zone-change", id: "y", date: d, value: -6 }, now).value_numeric, -6);
+  assert.ok(CATALOG.filter(i => ["meditation", "night_noise", "sex", "time_zone", "stomach"].includes(i.key)).every(i => itemView(i).auto));
 });
