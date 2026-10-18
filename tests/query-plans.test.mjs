@@ -4,6 +4,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { googleDashboard } from "../src/google-dashboard.js";
 import { loadFitnessInsights } from "../src/fitness-insights.js";
 import { loadMuscleFatigue } from "../src/muscle-fatigue.js";
+import { heartRateInWindows } from "../src/index.js";
 
 // health_datapoints holds about a million heart-rate rows per user: a read
 // that SQLite can't serve from an index reads all of them (0.3 s and more).
@@ -60,4 +61,12 @@ test("Trénink → Svaly reads the last week's activities through an index", asy
   await loadMuscleFatigue(db, { now: Date.parse("2026-10-08T08:00:00Z") });
   assert.equal(plans.length, 1);
   assert.deepEqual(scans(plans), []);
+});
+
+test("a workout's or night's heart rate reads only its own window through the index", async () => {
+  const { db, plans } = datapoints();
+  await heartRateInWindows(db, 1, [{ start: "2026-10-08T05:00:00Z", end: "2026-10-08T06:00:00Z" }, { start: "2026-10-07T22:00:00Z", end: "2026-10-08T06:00:00Z" }]);
+  assert.equal(plans.length, 1);
+  assert.deepEqual(scans(plans), []);
+  assert.ok(plans[0].plan.filter(d => /data_type=\? AND sample_time>\? AND sample_time<\?/.test(d)).length === 2, plans[0].plan.join("; "));
 });

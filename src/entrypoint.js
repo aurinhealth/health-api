@@ -134,7 +134,7 @@ import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, planForWeek, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor } from "./coach-ride-reviews.js";
-import { ownFitness, watchOnlyFitness } from "./own-fitness.js";
+import { ownFitness, watchOnlyFitness, fitnessDays } from "./own-fitness.js";
 import { handleStrengthAutomation, handleAdminApi } from "./routes-admin.js";
 import { handleAccountApi } from "./routes-account.js";
 import { handleSyncApi } from "./routes-sync.js";
@@ -2021,20 +2021,19 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if (url.pathname === "/app/api/fitness" && request.method === "GET") {
     try {
       const days = Math.max(42, Math.min(180, Number(url.searchParams.get("days") || 90)));
-      const newest = new Date();
-      const oldest = new Date(newest.getTime() - days * 86400000);
-      const isoDate = d => d.toISOString().slice(0,10);
+      // Up to the user's today (in Sydney or after midnight in Prague, UTC is still yesterday).
+      const {from,to} = fitnessDays(days);
       const apiKey = String(env.INTERVALS_API_KEY || "");
       // Without Intervals.icu the load comes from the watch's workouts and the gym (training-load.js).
-      if (!apiKey) return Response.json({status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness(env,isoDate(oldest),isoDate(newest))},{headers:{"Cache-Control":"no-store"}});
+      if (!apiKey) return Response.json({status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness(env,from,to)},{headers:{"Cache-Control":"no-store"}});
       const auth = intervalsAuthorization(apiKey);
-      const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(isoDate(oldest))+"&newest="+encodeURIComponent(isoDate(newest));
+      const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(from)+"&newest="+encodeURIComponent(to);
       const response = await intervalsReads(env,ctx)(target,{headers:{Authorization:auth,Accept:"application/json"}});
       const data = await response.json().catch(()=>[]);
       if (!response.ok) return Response.json({status:"error",message:"Intervals wellness HTTP "+response.status,data},{status:response.status});
       const intervalsRows = (Array.isArray(data)?data:[]).map(x=>({...x,tsb:Number.isFinite(Number(x.ctl))&&Number.isFinite(Number(x.atl))?Number(x.ctl)-Number(x.atl):null})).filter(x=>x.id).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
       // Workouts only the watch recorded (not in Intervals.icu) count into CTL too.
-      const watchExtra = await watchOnlyFitness(env,ctx,isoDate(oldest),isoDate(newest)).catch(error=>{console.error('Watch-only load',error.message);return null;});
+      const watchExtra = await watchOnlyFitness(env,ctx,from,to).catch(error=>{console.error('Watch-only load',error.message);return null;});
       const wellness = watchExtra ? addLoads(intervalsRows,watchExtra) : intervalsRows;
       return Response.json({status:"ok",source:"intervals.icu",days,wellness},{headers:{"Cache-Control":"no-store"}});
     } catch (error) {
