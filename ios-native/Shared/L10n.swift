@@ -9,10 +9,29 @@ enum L10n {
 
     /// "cs" or "en". Kept in the App Group too, so the widgets speak the same language.
     /// Until Settings → Jazyk is chosen, the app (and the widgets) follow the phone.
+    /// Every translated text asks, so the app reads it once and keeps it
+    /// (setLanguage changes it). The widgets run in a process of their own,
+    /// where the app's choice comes from outside: they read it each time.
     static var language: String {
+        guard keepsLanguage else { return stored }
+        lock.lock()
+        defer { lock.unlock() }
+        if let kept { return kept }
+        let value = stored
+        kept = value
+        return value
+    }
+
+    private static var stored: String {
         UserDefaults(suiteName: WidgetSnapshot.group)?.string(forKey: key)
             ?? UserDefaults.standard.string(forKey: key) ?? defaultLanguage
     }
+
+    /// The app itself, not the widget extension.
+    private static let keepsLanguage = !Bundle.main.bundlePath.hasSuffix(".appex")
+    private static let lock = NSLock()
+    // Guarded by lock.
+    nonisolated(unsafe) private static var kept: String?
 
     /// The language before anyone chose one: the phone's. Czech and Slovak phones
     /// get Czech, every other phone English.
@@ -25,11 +44,16 @@ enum L10n {
 
     static var isEnglish: Bool { language == "en" }
 
-    static var locale: Locale { Locale(identifier: isEnglish ? "en_US" : "cs_CZ") }
+    static var locale: Locale { isEnglish ? englishLocale : czechLocale }
+    private static let englishLocale = Locale(identifier: "en_US")
+    private static let czechLocale = Locale(identifier: "cs_CZ")
 
     static func setLanguage(_ value: String) {
         UserDefaults.standard.set(value, forKey: key)
         UserDefaults(suiteName: WidgetSnapshot.group)?.set(value, forKey: key)
+        lock.lock()
+        kept = value
+        lock.unlock()
         // The next launch also loads system texts (buttons, dialogs) in this language.
         UserDefaults.standard.set([value], forKey: "AppleLanguages")
     }

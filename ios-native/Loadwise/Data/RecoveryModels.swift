@@ -89,12 +89,20 @@ struct RecoveryTime: Decodable, Equatable {
     var legsTired: Bool { causes.first.map { $0.kind != "gym" || ($0.title ?? "").contains("nohy") || ($0.title ?? "").contains("legs") } ?? false }
 
     static func date(_ iso: String) -> Date? {
+        fractional.date(from: iso) ?? whole.date(from: iso)
+    }
+
+    // ISO8601DateFormatter is thread-safe; made once, as the card draws.
+    nonisolated(unsafe) private static let fractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = f.date(from: iso) { return d }
+        return f
+    }()
+    nonisolated(unsafe) private static let whole: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
-        return f.date(from: iso)
-    }
+        return f
+    }()
 
     /// The day it counts for: after 22:00 the next morning's. Regenerace
     /// shows days only, never a clock time (Petr, 2026-10-15).
@@ -103,11 +111,7 @@ struct RecoveryTime: Decodable, Equatable {
     }
 
     private static func format(_ date: Date, _ pattern: String) -> String {
-        let f = DateFormatter()
-        f.locale = L10n.locale
-        f.timeZone = .current
-        f.dateFormat = pattern
-        return f.string(from: date)
+        DateFormatters.make(pattern, locale: L10n.locale, timeZone: .current).string(from: date)
     }
 
     /// "dnes", "pátek" / "today", "Friday".
@@ -134,16 +138,9 @@ struct RecoveryTime: Decodable, Equatable {
     static func dayName(_ iso: String, today: String) -> String {
         if iso == today { return L10n.tr("dnes") }
         if Fmt.relativeDay(iso, today: today) == L10n.tr("včera") { return L10n.tr("včera") }
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.timeZone = TimeZone(identifier: "UTC")
-        parser.dateFormat = "yyyy-MM-dd"
-        guard let date = parser.date(from: iso) else { return iso }
-        let out = DateFormatter()
-        out.locale = L10n.locale
-        out.timeZone = TimeZone(identifier: "UTC")
-        out.dateFormat = "EEEE"
-        return out.string(from: date)
+        let utc = TimeZone(identifier: "UTC")!
+        guard let date = DateFormatters.iso(timeZone: utc).date(from: iso) else { return iso }
+        return DateFormatters.make("EEEE", locale: L10n.locale, timeZone: utc).string(from: date)
     }
 }
 

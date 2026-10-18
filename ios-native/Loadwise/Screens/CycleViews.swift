@@ -480,29 +480,18 @@ struct CycleCalendarView: View {
     private var blanks: Int {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = calendar.timeZone
-        f.dateFormat = "yyyy-MM-dd"
-        guard let first = f.date(from: month + "-01") else { return 0 }
+        guard let first = DateFormatters.iso(timeZone: calendar.timeZone).date(from: month + "-01") else { return 0 }
         return (calendar.component(.weekday, from: first) + 5) % 7
     }
 
     private var monthTitle: String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM"
-        guard let date = f.date(from: month) else { return month }
-        let out = DateFormatter()
-        out.locale = Fmt.locale
-        out.dateFormat = month.prefix(4) == today.prefix(4) ? "LLLL" : "LLLL yyyy"
+        guard let date = DateFormatters.make("yyyy-MM").date(from: month) else { return month }
+        let out = DateFormatters.make(month.prefix(4) == today.prefix(4) ? "LLLL" : "LLLL yyyy", locale: Fmt.locale)
         return Fmt.capitalized(out.string(from: date))
     }
 
     private func shift(_ by: Int) {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM"
+        let f = DateFormatters.make("yyyy-MM")
         guard let date = f.date(from: month), let next = Calendar(identifier: .gregorian).date(byAdding: .month, value: by, to: date) else { return }
         month = f.string(from: next)
     }

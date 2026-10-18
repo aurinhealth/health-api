@@ -11,16 +11,33 @@ struct DayPage {
     var today: TodaySnapshot?
     var health: HealthSnapshot?
     var food: FoodSnapshot?
+    /// Today's and Food's JSON as saved: once the swipe lands, the screens take
+    /// the page as it is (AppModel.showSaved) instead of reading it again.
+    var todayData: Data?
+    var foodData: Data?
+
+    var hasSaved: Bool { today != nil || health != nil || food != nil }
 
     /// What the phone has saved for the day.
     static func saved(_ date: String) -> DayPage {
         let key = date == AppModel.localDate(Date()) ? nil : date
-        func load<T: Decodable>(_ type: T.Type, _ screen: String) -> T? {
-            SnapshotCache.load(type, key: SnapshotCache.dayKey(screen, key))?.value
+        let decoder = JSONDecoder()
+        func read(_ screen: String) -> Data? {
+            SnapshotCache.data(key: SnapshotCache.dayKey(screen, key))?.data
         }
-        return DayPage(date: date, selectedDate: key, today: load(TodaySnapshot.self, "today"),
-                       health: load(HealthSnapshot.self, "health"), food: load(FoodSnapshot.self, "food"))
+        let todayData = read("today"), foodData = read("food")
+        return DayPage(date: date, selectedDate: key,
+                       today: todayData.flatMap { try? decoder.decode(TodaySnapshot.self, from: $0) },
+                       health: read("health").flatMap { try? decoder.decode(HealthSnapshot.self, from: $0) },
+                       food: foodData.flatMap { try? decoder.decode(FoodSnapshot.self, from: $0) },
+                       todayData: todayData, foodData: foodData)
     }
+}
+
+/// The days beside, read off the main thread (DaySwipe); read once, then handed over.
+private final class SavedDays: @unchecked Sendable {
+    let pages: [DayPage]
+    init(_ pages: [DayPage]) { self.pages = pages }
 }
 
 private struct DayPageKey: EnvironmentKey { static let defaultValue: DayPage? = nil }
@@ -58,6 +75,9 @@ private struct DaySwipe: ViewModifier {
     @State private var width: CGFloat = 390
     /// The day beside, loaded once per direction.
     @State private var page: DayPage?
+    /// Both days beside, read off the main thread once a day is on screen, so
+    /// the first frame of a swipe does not wait for the disk.
+    @State private var nearby: [DayPage] = []
     /// Off while a picked day slides in.
     @State private var showsNeighbour = true
     /// After a swipe: the day coming, as it was drawn beside (or as empty
@@ -111,6 +131,16 @@ private struct DaySwipe: ViewModifier {
                 }
                 withAnimation(.snappy(duration: 0.3)) { drag = 0 } completion: { showsNeighbour = true }
             }
+            .task(id: date) { await preload() }
+    }
+
+    private func preload() async {
+        guard !model.demo else { return }
+        nearby = []
+        let days = [AppModel.shift(shown, by: -1), canGoForward ? AppModel.shift(shown, by: 1) : nil].compactMap { $0 }
+        let read = await Task.detached(priority: .utility) { SavedDays(days.map { DayPage.saved($0) }) }.value
+        guard !Task.isCancelled else { return }
+        nearby = read.pages
     }
 
     /// The swiped-to day stays where the finger left it, not empty cards for
@@ -131,7 +161,12 @@ private struct DaySwipe: ViewModifier {
         // Less give where there is no day to go to.
         guard !forward || canGoForward else { drag = moved * 0.15; return }
         if let target = AppModel.shift(shown, by: forward ? 1 : -1), page?.date != target {
-            page = DayPage.saved(target)
+            // Read here only when nothing was saved for it then (it may have loaded since).
+            if let ready = nearby.first(where: { $0.date == target }), ready.hasSaved {
+                page = ready
+            } else {
+                page = DayPage.saved(target)
+            }
         }
         drag = moved
     }
@@ -139,17 +174,19 @@ private struct DaySwipe: ViewModifier {
     private func settle(_ moved: CGFloat, _ speed: CGFloat) {
         let forward = moved < 0
         let far = abs(moved) > width / 3 || (abs(speed) > 600 && (speed < 0) == forward)
-        guard moved != 0, far, !model.loading, !forward || canGoForward,
+        guard moved != 0, far, !model.dayLocked, !forward || canGoForward,
               let target = AppModel.shift(shown, by: forward ? 1 : -1) else {
             withAnimation(.snappy(duration: 0.25)) { drag = 0 }
             return
         }
+        // The day drawn beside goes on screen as it is, not read from the disk again.
+        let landing = page?.date == target ? page : nil
         withAnimation(.snappy(duration: 0.22)) { drag = (forward ? -1 : 1) * width } completion: {
             coming = target
             var instant = Transaction()
             instant.disablesAnimations = true
             withTransaction(instant) { drag = 0 }
-            Task { await model.showDay(offset: forward ? 1 : -1, ahead: ahead) }
+            Task { await model.showDay(offset: forward ? 1 : -1, ahead: ahead, saved: landing) }
             // An answer that never comes: the old day back.
             Task {
                 try? await Task.sleep(for: .seconds(8))

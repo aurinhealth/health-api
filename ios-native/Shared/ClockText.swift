@@ -38,13 +38,40 @@ enum ClockText {
 
     private static let utc = TimeZone(identifier: "UTC")!
 
-    /// Made on each use, so a change of the 12/24-hour setting shows at once.
+    /// One formatter per time zone, made again after a change of the
+    /// 12/24-hour setting, the region or the time zone (the screens format
+    /// every clock as they draw, the day's timeline each minute).
     private static func formatter(timeZone: TimeZone) -> DateFormatter {
+        _ = watching
+        let key = timeZone.identifier
+        lock.lock()
+        defer { lock.unlock() }
+        if let formatter = made[key] { return formatter }
         let f = DateFormatter()
         f.locale = .autoupdatingCurrent
         f.timeZone = timeZone
         f.dateStyle = .none
         f.timeStyle = .short
+        made[key] = f
         return f
+    }
+
+    private static let lock = NSLock()
+    // Guarded by lock.
+    nonisolated(unsafe) private static var made: [String: DateFormatter] = [:]
+
+    /// Empties `made` when the phone's settings change; set up on first use.
+    private static let watching: Bool = {
+        let changes: [Notification.Name] = [NSLocale.currentLocaleDidChangeNotification, .NSSystemTimeZoneDidChange]
+        for name in changes {
+            _ = NotificationCenter.default.addObserver(forName: name, object: nil, queue: nil) { _ in ClockText.forget() }
+        }
+        return true
+    }()
+
+    private static func forget() {
+        lock.lock()
+        made = [:]
+        lock.unlock()
     }
 }
