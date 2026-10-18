@@ -82,8 +82,7 @@ struct PlanEditorSheet: View {
             status(offset, exercise)
             VStack(alignment: .leading, spacing: 2) {
                 Text(exercise.name).font(.body.weight(.medium)).foregroundStyle(left ? Palette.ink : Palette.muted)
-                Text(Self.summary(sets: work.count, reps: reps, done: exercise.doneCount))
-                    .font(Typo.caption).foregroundStyle(Palette.muted)
+                summaryLine(exercise, work: work.count, reps: reps)
             }
             Spacer(minLength: 6)
             Menu {
@@ -130,6 +129,18 @@ struct PlanEditorSheet: View {
         } else {
             Circle().stroke(Palette.hairline, lineWidth: 1.5).frame(width: 28, height: 28)
         }
+    }
+
+    /// The summary, then the warm-ups not done yet in amber: they follow the
+    /// order (GymDay.balanceWarmups), so a move shows what changed.
+    private func summaryLine(_ exercise: GymExercise, work: Int, reps: String?) -> some View {
+        let warmups = exercise.sets.filter { $0.warmup && !$0.done }.count
+        var line = Text(Self.summary(sets: work, reps: reps, done: exercise.doneCount)).foregroundStyle(Palette.muted)
+        if warmups > 0 {
+            line = line + Text(verbatim: " · ").foregroundStyle(Palette.muted)
+                + Text(L10n.f("%@ %@", String(warmups), Fmt.plural(warmups, "rozcvičovací série", "rozcvičovací série", "rozcvičovacích sérií"))).foregroundStyle(Palette.amber)
+        }
+        return line.font(Typo.caption)
     }
 
     /// "3 série × 8-12 · hotovo 1".

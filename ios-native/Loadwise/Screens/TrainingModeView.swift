@@ -57,6 +57,9 @@ struct TrainingModeView: View {
     @State private var startTapped = false
     /// Hidden with the arrow: the workout goes on, only the screen closes.
     @State private var minimizing = false
+    /// Where the set table is, so a swipe on a set row deletes the set
+    /// instead of turning to another exercise.
+    @State private var tableFrame: CGRect = .zero
     /// Teď ("now") or Další ("next") with its sets unfolded in the rest.
     @State private var unfolded: Set<String> = []
     /// The warm-up's stretches ticked (StretchingCard): all of them done, the
@@ -295,9 +298,10 @@ struct TrainingModeView: View {
         .onAppear { prefill(set, in: exercise) }
         // A swipe sideways goes to the next or the previous exercise.
         .contentShape(Rectangle())
-        .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { drag in
+        .coordinateSpace(name: "session")
+        .simultaneousGesture(DragGesture(minimumDistance: 30, coordinateSpace: .named("session")).onEnded { drag in
             let dx = drag.translation.width, dy = drag.translation.height
-            guard abs(dx) > 70, abs(dx) > abs(dy) * 2 else { return }
+            guard abs(dx) > 70, abs(dx) > abs(dy) * 2, !tableFrame.contains(drag.startLocation) else { return }
             withAnimation(.snappy) { move(dx < 0 ? 1 : -1) }
         })
         .task(id: exercise.name) { await loadMuscles(day) }
@@ -334,11 +338,16 @@ struct TrainingModeView: View {
     private func setTable(_ exercise: GymExercise, _ set: GymSet?, _ last: GymHistory.Session?) -> some View {
         VStack(spacing: 2) {
             tableHeader
-            ForEach(exercise.sets) { s in setRow(s, exercise, current: set, last: last) }
+            ForEach(exercise.sets) { s in
+                // Swiped left: a set not done yet (a warm-up too) goes away.
+                setRow(s, exercise, current: set, last: last)
+                    .modifier(SwipeToDelete(enabled: !s.done && !saving) { Task { await deleteSet(s) } })
+            }
             tableActions(exercise, set)
         }
         .padding(.vertical, 12).padding(.horizontal, 4)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("session")) } action: { tableFrame = $0 }
         .padding(.top, 14)
     }
 
@@ -961,10 +970,12 @@ struct TrainingModeView: View {
     }
 
     /// The plan as changed in "Upravit plán": saved, and back on the first
-    /// exercise with a set left.
+    /// exercise with a set left. A rest under way goes on (looking at the
+    /// plan or changing it is no reason to cut it short), unless nothing is
+    /// left to do after it.
     private func saveEdited(_ edited: GymDay, focus: String? = nil) async {
         day = edited
-        restEnd = nil
+        if !edited.exercises.contains(where: { $0.sets.contains { !$0.done } }) { restEnd = nil }
         startAtFirstOpen()
         // "Přejít na cvik": that one, whatever is left before it.
         if let focus, let at = edited.exercises.firstIndex(where: { $0.id == focus }) { index = at }
@@ -1182,6 +1193,21 @@ struct TrainingModeView: View {
         } catch {
             self.error = L10n.f("Trénink se nepodařilo uložit: %@", error.localizedDescription)
         }
+    }
+
+    /// A set not done yet swiped away (with its drop sets). The fields follow
+    /// the set now at hand.
+    private func deleteSet(_ set: GymSet) async {
+        guard var next = day else { return }
+        let gone = next.deleteSet(row: set.row)
+        picked = Set(picked.compactMap { row in gone.contains(row) ? nil : row - gone.filter { $0 < row }.count })
+        if !next.exercises.isEmpty {
+            index = min(index, next.exercises.count - 1)
+            if !next.exercises[index].sets.contains(where: { !$0.done }) {
+                index = next.exercises.firstIndex { $0.sets.contains { !$0.done } } ?? 0
+            }
+        }
+        await saveDay(next)
     }
 
     /// A letter chosen for a set; D adds a drop set after it.
