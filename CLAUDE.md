@@ -9,7 +9,7 @@ availability) updates the overview in the same pull request. The site is in Engl
 
 - Each section of the overview matches a part of the app. Its phones show the app's own screens: the
   English, light-mode screenshots of the sample day that CI takes (`ios-native.yml`, `screens/site/` in
-  the Loadwise-native-screens artifact), saved as `public/site/app/*.webp`. The hero shows Today; the
+  the Aurin-screens artifact), saved as `public/site/app/*.webp`. The hero shows Today; the
   story below it has one chapter per app area, and its phone shows that area's screen. When a screen
   they show changes, take them again; the numbers around the hero phone follow the sample day
   (`DemoData.swift`, `tests/site-pages.test.mjs`).
