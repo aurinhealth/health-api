@@ -16,6 +16,7 @@ export const METAGYM_KUTNA_HORA = {
     squat_rack: { label: "Klec na dřepy (power rack)", zone: "Volné váhy a lavice" },
     smith_machine: { label: "Smith stroj", zone: "Volné váhy a lavice" },
     floor_mats: { label: "Podložky na zem", zone: "Volné váhy a lavice" },
+    weight_plates: { label: "Kotouče", zone: "Volné váhy a lavice" },
     pendulum_squat: { label: "Pendulum squat", zone: "Nohy a hýždě" },
     hip_thrust: { label: "Hip thrust", zone: "Nohy a hýždě" },
     pivot_leg_press: { label: "Pivot leg press", zone: "Nohy a hýždě" },
