@@ -113,6 +113,7 @@ struct FoodContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+        .widgetEditHold($editing)
         .daySwipe(date: food.date, ahead: true, enabled: !editing) { page in page.food.map { AnyView(FoodContent(food: $0)) } }
     }
 

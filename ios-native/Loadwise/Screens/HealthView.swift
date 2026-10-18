@@ -88,6 +88,7 @@ struct HealthContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+        .widgetEditHold($editing)
         .daySwipe(date: health.date, enabled: !editing) { page in page.health.map { AnyView(HealthContent(health: $0)) } }
         .task { if model.cycle == nil { await model.loadCycle() } }
     }
