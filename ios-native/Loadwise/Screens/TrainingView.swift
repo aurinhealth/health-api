@@ -125,7 +125,6 @@ struct TrainingContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
-        .widgetEditHold($editing)
         .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
     }
 }

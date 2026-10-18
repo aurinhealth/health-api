@@ -53,6 +53,7 @@ struct WidgetBoard: View {
                 .padding(.top, shown.isEmpty ? 0 : 28)
             }
         }
+        .widgetEditHold($editing)
         .sensoryFeedback(.impact(weight: .medium), trigger: editing) { _, now in now }
         .onChange(of: editing, initial: true) { _, now in report?(now) }
         .onDisappear { if editing { report?(false) } }
@@ -190,8 +191,9 @@ struct WidgetBoard: View {
 }
 
 extension View {
-    /// The screen around the widgets: a finger held on an empty spot starts
-    /// editing them, as on the home screen.
+    /// The gaps between the widgets: a finger held there starts editing them,
+    /// as on the home screen. Not behind the header, whose plain buttons
+    /// (the avatar) would lose their taps to it.
     func widgetEditHold(_ editing: Binding<Bool>) -> some View {
         background {
             if !editing.wrappedValue {

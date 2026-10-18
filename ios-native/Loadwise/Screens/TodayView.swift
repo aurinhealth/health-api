@@ -83,7 +83,6 @@ struct TodayContent: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
-        .widgetEditHold($editing)
         .daySwipe(date: today.date, enabled: !editing) { page in page.today.map { AnyView(TodayContent(today: $0)) } }
     }
 
