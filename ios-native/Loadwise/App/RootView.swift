@@ -16,6 +16,10 @@ struct RootView: View {
     /// Scrolled down: the tab bar is only the open section's icon and "+".
     @State private var compactBar = false
     @State private var tabTaps = 0
+    /// Tabs opened since sign-in, kept built (screens) and whether each is scrolled down.
+    @State private var visited: Set<AppTab> = []
+    @State private var scrolledTabs: Set<AppTab> = []
+    private static let tabs: [AppTab] = [.today, .training, .food, .health]
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -52,25 +56,52 @@ struct RootView: View {
         }
     }
 
+    @ViewBuilder private func tabScreen(_ tab: AppTab) -> some View {
+        switch tab {
+        case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true })
+        case .training: TrainingView()
+        case .food: FoodView()
+        case .health: HealthView()
+        }
+    }
+
     @ViewBuilder private var screens: some View {
         switch model.phase {
         case .signedOut:
             LoginView().dynamicTypeSize(Self.textSizes)
         case .signedIn:
             ZStack(alignment: .bottom) {
-                Group {
-                    switch model.tab {
-                    case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true })
-                    case .training: TrainingView()
-                    case .food: FoodView()
-                    case .health: HealthView()
+                // A tab once opened stays built behind the open one, so coming
+                // back does not lay out its whole screen again.
+                ZStack {
+                    ForEach(Self.tabs.filter { $0 == model.tab || visited.contains($0) }, id: \.self) { tab in
+                        let open = tab == model.tab
+                        tabScreen(tab)
+                            .opacity(open ? 1 : 0)
+                            .allowsHitTesting(open)
+                            .accessibilityHidden(!open)
+                            .zIndex(open ? 1 : 0)
+                            .environment(\.scrollReport, { (offset: CGFloat) in
+                                let compact = offset > 60
+                                if compact != scrolledTabs.contains(tab) {
+                                    if compact { scrolledTabs.insert(tab) } else { scrolledTabs.remove(tab) }
+                                }
+                                guard tab == model.tab else { return }
+                                if compact != compactBar { withAnimation(.snappy) { compactBar = compact } }
+                            })
                     }
                 }
                 .dynamicTypeSize(Self.textSizes)
-                .environment(\.scrollReport, { (offset: CGFloat) in
-                    let compact = offset > 60
-                    if compact != compactBar { withAnimation(.snappy) { compactBar = compact } }
-                })
+                .onDisappear { visited = []; scrolledTabs = [] }
+                .onChange(of: model.tab) { old, tab in
+                    visited.insert(old)
+                    // A tab built earlier: only its data is checked, like on its first visit.
+                    guard visited.contains(tab) else { return }
+                    Task {
+                        await model.refreshIfStale(tab)
+                        if tab == .today { await DeviceLocation.refreshIfFollowing(model) }
+                    }
+                }
                 if model.offline || !model.outbox.isEmpty || model.outboxNote != nil || model.notice != nil || model.syncStatus != nil {
                     VStack(spacing: 6) {
                         if let status = model.syncStatus, !model.offline {
@@ -182,7 +213,9 @@ struct RootView: View {
             .fullScreenCover(isPresented: Binding(get: { model.needsSetup && !model.passkeyOffer }, set: { model.needsSetup = $0 })) { SetupFlowView().dynamicTypeSize(Self.textSizes) }
             .task {
                 if !model.demo { AppleHealth.shared.start(api: model.api) }
-                await model.checkSetup(); await model.loadAccountInitial()
+                async let setup: Void = model.checkSetup()
+                async let account: Void = model.loadAccountInitial()
+                _ = await (setup, account)
             }
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.
@@ -249,7 +282,9 @@ struct RootView: View {
 
     /// The tab again: back to its first screen.
     private func select(_ tab: AppTab) {
-        withAnimation(.snappy) { compactBar = false }
+        // A tab kept from before shows where it was scrolled.
+        let compact = model.tab != tab && scrolledTabs.contains(tab) && (model.paths[tab] ?? []).isEmpty
+        withAnimation(.snappy) { compactBar = compact }
         if model.tab == tab {
             model.paths[tab] = []
         } else {

@@ -22,7 +22,7 @@ import { watchDetail, withWatch } from './watch-detail.js';
 import { useCookbookDatabase } from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
-import {buildToday} from './app-today.js';
+import {buildToday,todayUnavailable} from './app-today.js';
 import {withIdempotency} from './idempotency.js';
 import {buildTraining, weekStart} from './app-training.js';
 import {buildCalendar} from './app-calendar.js';
@@ -31,6 +31,7 @@ import { buildShareWeek, mondayOf } from './share-week.js';
 import { buildShareMilestones, intervalsRecord } from './share-milestone.js';
 import {buildHealth} from './app-health.js';
 import {buildFood} from './app-food.js';
+import {buildFoodWeek} from './app-food-week.js';
 import {normalizeProfile} from './energy-profile.js';
 import {athleteFocus} from './athlete-focus.js';
 import { loadProfiles, refreshSuggestions } from './profile-suggestions.js';
@@ -794,6 +795,16 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const start=monday(date),weeks=[shiftDate(start,-7),start,shiftDate(start,7)];
   const internal=path=>handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));
   const json=r=>r.json().catch(()=>({}));
+  // The three weeks are the heavy part (every day's analysis, food and
+  // recommendations). One week at a time, cached and shared by every day of
+  // that week, so the database is never asked for all of them at once; the
+  // rest loads alongside them.
+  const weeksLoading=(async()=>{const out=[];for(const w of weeks)out.push(await cached(env,ctx,'week:'+w,()=>internal('/app/api/week?start='+w).then(json)));return out;})();
+  // Drinks of the day, for the coach's food advice (coach-assistant.js nutritionContext).
+  const extras=Promise.all([dashboardProfile(env),internal('/app/api/fluids?date='+date).then(json).catch(()=>null),readinessCheckin(env.DB,date).catch(()=>null),
+    date===localToday()?loadTrainingDoses(env.DB).catch(()=>null):null]);
+  // Awaited below; a failure before that is not left unhandled.
+  weeksLoading.catch(()=>{});extras.catch(()=>{});
   const [dailyResponse,fitnessResponse,gymResponse,sleepResponse,health]=await Promise.all([
     app.fetch(new Request('https://internal/analysis/daily?date='+date,{headers:internalAuth}),env,ctx),
     cached(env,ctx,'fitness:90',()=>internal('/app/api/fitness?days=90').then(json)).then(d=>Response.json(d)),internal('/app/api/gym?date='+date),
@@ -801,17 +812,9 @@ async function loadCoachInputsFresh(env,ctx,internalAuth,date){
     app.fetch(new Request('https://internal/health/sleep?start='+shiftDate(date,-30)+'&end='+shiftDate(date,1),{headers:internalAuth}),env,ctx).then(r=>r.json()).catch(()=>({})).then(d=>intervalsSleep(env,ctx,d,shiftDate(date,-30),shiftDate(date,1))).then(d=>Response.json(d)),
     googleHealthFor(env,ctx,date).catch(()=>({}))
   ]);
-  // The three weeks are the heavy part (every day's analysis, food and
-  // recommendations). One week at a time, cached and shared by every day of
-  // that week, so the database is never asked for all of them at once.
-  const weekData=[];
-  for(const w of weeks)weekData.push(await cached(env,ctx,'week:'+w,()=>internal('/app/api/week?start='+w).then(json)));
-  // Drinks of the day, for the coach's food advice (coach-assistant.js nutritionContext).
-  const [daily,fitness,gym,sleep,profile,fluids]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),dashboardProfile(env),internal('/app/api/fluids?date='+date).then(json).catch(()=>null)]);
+  const [daily,fitness,gym,sleep,[profile,fluids,checkin,training],weekData]=await Promise.all([json(dailyResponse),json(fitnessResponse),json(gymResponse),json(sleepResponse),extras,weeksLoading]);
   applyEnergyBudget(daily,profile,health);
-  const checkin=await readinessCheckin(env.DB,date).catch(()=>null);
   // Regenerace of today, as Today shows it (recovery-time.js).
-  const training=date===localToday()?await loadTrainingDoses(env.DB).catch(()=>null):null;
   const regeneration=training?withRecoveryTime(buildToday({date,hour:localHour(),health,fitness,sleep,profile:profile||{},checkin}),training).recoveryTime:null;
   return {date,daily,fitness,gym,fluids,health:{...health,sleep:sleep.sessions||[]},week:{status:'ok',days:weekData.flatMap(w=>w.days||[])},focus:athleteFocus(profile,date),profile:profile?{sex:profile.sex,age:profile.age,height:profile.height,sleepGoal:profile.sleepGoal,cycle:profile.cycle||null,...(profile.readinessLocks?{readinessLocks:profile.readinessLocks}:{}),training:await trainingSetup(env.DB)}:null,athleteState:await getAthleteState(env.DB),cycle:profile?.cycle?cycleForCoach({...profile.cycle,date}):null,checkin,recoveryTime:regeneration,journal:await journalForCoach(env.DB,date).catch(()=>null),upcomingTest:await getChecks(env.DB).then(c=>upcomingTest(c,date)).catch(()=>null),performance:await coachPerformance(env,ctx,date)};
 }
@@ -1688,8 +1691,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/today'&&request.method==='GET'){
     try{
       const requested=url.searchParams.get('date'),date=validTrainingDay(requested)&&requested<=localToday()?requested:localToday();
-      const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
-      const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      // A part that fails leaves its card empty; the log says which one and why.
+      // The app marks the card of a part that failed instead of showing it empty (unavailable).
+      const failed=new Set();
+      const missing=(path,why)=>{const part=path.split('?')[0];failed.add(part);console.warn(JSON.stringify({today_part_failed:part,why:String(why).slice(0,200)}));return {};};
+      const answer=(path,r)=>r.ok?r.json():missing(path,'HTTP '+r.status);
+      const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>answer(path,r)).catch(error=>missing(path,error?.message||error));
+      const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>answer(path,r)).catch(error=>missing(path,error?.message||error));
       const from=shiftDate(date,-30),to=shiftDate(date,1),isToday=date===localToday();
       // The active training plan, today's plan proposal and the connection check start with the rest.
       const syncing=syncedPlans(env).catch(()=>({}));
@@ -1716,7 +1724,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
       applyEnergyBudget(daily,profile,health);
       return Response.json(withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
-        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess}}),training),{headers:{'Cache-Control':'no-store'}});
+        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess},unavailable:todayUnavailable(failed)}),training),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
@@ -1738,6 +1746,29 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [pro,favorites]=await Promise.all([isPro(env),nutrientFavorites(env.DB,env.USER_ID??env.DB.userId)]);
       if(pro&&favorites.length){const items=buildNutrients({days:[{date,food}],profile,kcalTarget:numOrNull(daily?.nutrition?.calorieTarget),pro}).items;built.nutrients=favorites.map(k=>items.find(i=>i.key===k)).filter(Boolean);}
       return Response.json(built,{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:500})}
+  }
+
+  // Týdenní kalorie (app-food-week.js): Monday to Sunday of the given day's
+  // week, each day with the Food screen's own target and what was eaten.
+  if(url.pathname==='/app/api/food/week'&&request.method==='GET'){
+    try{
+      const requested=url.searchParams.get('date'),today=localToday(),start=mondayOfDate(validTrainingDay(requested)?requested:today);
+      const dates=Array.from({length:7},(_,i)=>shiftDate(start,i));
+      const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
+      // One Google Health read covers the week, as on /app/api/week; today the
+      // same read as the Food screen, so today's target matches it.
+      const [profile,health,healthToday]=await Promise.all([dashboardProfile(env).catch(()=>null),googleHealthFor(env,ctx,dates[6]).catch(()=>null),
+        dates.includes(today)?googleHealthFor(env,ctx,today).catch(()=>null):null]);
+      const day=async date=>{
+        const [daily,food]=await Promise.all([read('/analysis/daily?date='+date),read('/food/log?date='+date)]);
+        applyEnergyBudget(daily,profile,date===today?healthToday:{today:health?.wellness?.find(w=>w.id===date)||{}});
+        const {kcal,target,trainingBonus}=buildFood({date,daily,food});
+        return {date,kcal,target,trainingBonus};
+      };
+      // Days gone by are cached until the user changes something (the cache version).
+      const days=await mapLimit(dates,3,date=>date<today?cached(env,ctx,'food-week-day:'+date,()=>day(date),{ttl:600}):day(date));
+      return Response.json(buildFoodWeek({today,days}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 

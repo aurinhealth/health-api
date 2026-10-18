@@ -30,14 +30,8 @@ enum Fmt {
 
     /// "ČTVRTEK 8. ŘÍJNA" for 2026-10-08.
     static func dayHeading(_ isoDate: String) -> String {
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.dateFormat = "yyyy-MM-dd"
-        guard let date = parser.date(from: isoDate) else { return isoDate }
-        let out = DateFormatter()
-        out.locale = locale
-        out.dateFormat = L10n.isEnglish ? "EEEE, MMMM d" : "EEEE d. MMMM"
-        return out.string(from: date).uppercased(with: locale)
+        guard let date = DateFormatters.iso().date(from: isoDate) else { return isoDate }
+        return DateFormatters.make(L10n.isEnglish ? "EEEE, MMMM d" : "EEEE d. MMMM", locale: locale).string(from: date).uppercased(with: locale)
     }
 
     /// The day's title on Dnes, Zdraví and Jídlo: "Dnes", "Včera", "Zítra" or
@@ -75,25 +69,16 @@ enum Fmt {
     }
 
     private static func isoDay(_ isoDate: String) -> Date? {
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.dateFormat = "yyyy-MM-dd"
-        return parser.date(from: isoDate)
+        DateFormatters.iso().date(from: isoDate)
     }
 
     private static func formatted(_ date: Date, _ format: String) -> String {
-        let out = DateFormatter()
-        out.locale = locale
-        out.dateFormat = format
-        return out.string(from: date)
+        DateFormatters.make(format, locale: locale).string(from: date)
     }
 
     /// One-letter Czech weekday for a chart label: "P", "Ú", "S", "Č", "P", "S", "N".
     static func weekdayInitial(_ isoDate: String) -> String {
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.dateFormat = "yyyy-MM-dd"
-        guard let date = parser.date(from: isoDate) else { return "" }
+        guard let date = DateFormatters.iso().date(from: isoDate) else { return "" }
         let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
         return (L10n.isEnglish ? ["S", "M", "T", "W", "T", "F", "S"] : ["N", "P", "Ú", "S", "Č", "P", "S"])[weekday - 1]
     }
@@ -101,22 +86,14 @@ enum Fmt {
     /// "1. listopadu" for 2026-11-01.
     static func dayMonth(_ isoDate: String) -> String {
         guard let date = parse(isoDate) else { return isoDate }
-        let out = DateFormatter()
-        out.locale = locale
-        out.timeZone = utc
-        out.dateFormat = L10n.isEnglish ? "MMMM d" : "d. MMMM"
-        return out.string(from: date)
+        return DateFormatters.make(L10n.isEnglish ? "MMMM d" : "d. MMMM", locale: locale, timeZone: utc).string(from: date)
     }
 
     /// Two-letter Czech weekday: "Po", "Út", "St", "Čt", "Pá", "So", "Ne".
     /// "Říjen", "October": the month of Today's week strip.
     static func monthTitle(_ isoDate: String) -> String {
         guard let date = parse(isoDate) else { return "" }
-        let out = DateFormatter()
-        out.locale = locale
-        out.timeZone = utc
-        out.dateFormat = "LLLL"
-        let text = out.string(from: date)
+        let text = DateFormatters.make("LLLL", locale: locale, timeZone: utc).string(from: date)
         return text.prefix(1).uppercased(with: locale) + text.dropFirst()
     }
 
@@ -195,10 +172,32 @@ enum Fmt {
     }
 
     private static func parse(_ isoDate: String) -> Date? {
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.timeZone = utc
-        parser.dateFormat = "yyyy-MM-dd"
-        return parser.date(from: isoDate)
+        DateFormatters.iso(timeZone: utc).date(from: isoDate)
+    }
+}
+
+/// Date formatters made once for each format, locale and time zone: making one
+/// costs far more than using it, and the screens format dates as they draw. A
+/// change of language asks for another locale, so it gets new ones.
+enum DateFormatters {
+    private static let lock = NSLock()
+    private static var made: [String: DateFormatter] = [:]
+
+    static func make(_ format: String, locale: Locale = Locale(identifier: "en_US_POSIX"), timeZone: TimeZone = .current) -> DateFormatter {
+        let key = format + "|" + locale.identifier + "|" + timeZone.identifier
+        lock.lock()
+        defer { lock.unlock() }
+        if let formatter = made[key] { return formatter }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        formatter.dateFormat = format
+        made[key] = formatter
+        return formatter
+    }
+
+    /// "2026-10-08" in the given time zone (the phone's by default).
+    static func iso(timeZone: TimeZone = .current) -> DateFormatter {
+        make("yyyy-MM-dd", timeZone: timeZone)
     }
 }

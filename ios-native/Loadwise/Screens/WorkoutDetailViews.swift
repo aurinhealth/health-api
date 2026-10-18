@@ -413,12 +413,24 @@ enum ActivityDetailMemory {
 struct ActivityDetailContent: View {
     let detail: ActivityDetail
     /// What Aurin counts, when it differs from the source's number, and why.
-    var kcal: Double? = nil
-    var kcalNote: String? = nil
+    var kcal: Double?
+    var kcalNote: String?
     /// "Jak to šlo?" right under the numbers.
-    var rating: AnyView? = nil
+    var rating: AnyView?
     /// The minute the finger is on, shared by the power and heart-rate charts.
     @State private var cursor: Double?
+    /// The charts' points, made once: dragging the cursor redraws the body every frame.
+    private let watts: [StreamChart.Sample]
+    private let hr: [StreamChart.Sample]
+
+    init(detail: ActivityDetail, kcal: Double? = nil, kcalNote: String? = nil, rating: AnyView? = nil) {
+        self.detail = detail
+        self.kcal = kcal
+        self.kcalNote = kcalNote
+        self.rating = rating
+        watts = Self.samples("watts", in: detail)
+        hr = Self.samples("heartrate", in: detail)
+    }
 
     var body: some View {
         let a = detail.activity
@@ -444,7 +456,6 @@ struct ActivityDetailContent: View {
             .padding(.top, 22)
             if let rating { rating.padding(.top, 18) }
 
-            let watts = samples("watts"), hr = samples("heartrate")
             let span = max(watts.last?.minute ?? 0, hr.last?.minute ?? 0, 1)
             if watts.count > 10 {
                 StreamChart(title: "Výkon", unit: "W", color: Palette.amberBar, samples: watts, span: span, floorZero: true, cursor: $cursor)
@@ -540,7 +551,7 @@ struct ActivityDetailContent: View {
     }
 
     /// About 240 averaged points with their minute, enough for a phone-wide line.
-    private func samples(_ type: String) -> [StreamChart.Sample] {
+    private static func samples(_ type: String, in detail: ActivityDetail) -> [StreamChart.Sample] {
         let points = (detail.streams?.first { $0.type == type }?.points ?? []).filter { $0.v != nil }
         let step = max(1, points.count / 240)
         return stride(from: 0, to: points.count, by: step).map { i in

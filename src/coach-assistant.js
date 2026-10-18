@@ -350,11 +350,38 @@ export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5
   finally{await release();}
 }
 
+// A busy or briefly failing OpenAI (429, 5xx, a dropped connection) is asked
+// again twice after a short wait, within the same overall timeout. An
+// exhausted quota and a request that ran out of time are not.
+export const AI_RETRY_DELAYS_MS=[700,2000];
+const AI_RETRY_STATUSES=new Set([429,500,502,503,504]);
+async function fetchOpenAI(env,{signal,body}){
+  for(let attempt=0;;attempt++){
+    const last=attempt>=AI_RETRY_DELAYS_MS.length;
+    let response;
+    try{
+      response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},signal,body});
+    }catch(error){
+      if(last||signal.aborted||error?.name==='AbortError'||error?.name==='TimeoutError')throw error;
+      await retryWait(AI_RETRY_DELAYS_MS[attempt],signal);continue;
+    }
+    if(response.ok||last||!AI_RETRY_STATUSES.has(response.status))return response;
+    const error=await response.clone().json().catch(()=>({}));
+    if(error.error?.code==='insufficient_quota')return response;
+    const after=Number(response.headers.get('retry-after'))*1000;
+    await response.body?.cancel().catch(()=>{});
+    console.warn(JSON.stringify({ai_retry:response.status,attempt:attempt+1}));
+    await retryWait(after>0&&after<=5000?after:AI_RETRY_DELAYS_MS[attempt],signal);
+  }
+}
+const retryWait=(ms,signal)=>new Promise((resolve,reject)=>{
+  const timer=setTimeout(resolve,ms);
+  signal.addEventListener('abort',()=>{clearTimeout(timer);reject(signal.reason);},{once:true});
+});
+
 async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs }) {
   const chosenModel=model || env.OPENAI_MODEL || 'gpt-6-sol';
-  const response = await fetch('https://api.openai.com/v1/responses', {
-    method:'POST',
-    headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`, 'Content-Type':'application/json'},
+  const response = await fetchOpenAI(env, {
     signal:AbortSignal.timeout(timeoutMs||timeoutFor(maxOutputTokens)),
     body:JSON.stringify({
       model:chosenModel,

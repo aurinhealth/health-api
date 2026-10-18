@@ -265,7 +265,11 @@ final class AppleHealth {
             }
             reader.store.execute(query)
             observers.append(query)
-            reader.store.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in }
+            // Steps come in all day: waking for each hour of them costs battery
+            // and brings nothing the next open would not. Once a day is enough;
+            // nights, workouts and the rest still wake the app within the hour.
+            let often: HKUpdateFrequency = type == HKQuantityType(.stepCount) ? .daily : .hourly
+            reader.store.enableBackgroundDelivery(for: type, frequency: often) { _, _ in }
         }
     }
 

@@ -62,7 +62,7 @@ enum WidgetPanel: String {
         case .today: return [.sleep, .vo2max, .drinks, .form, .activeCalories, .thisWeek, .sleepDebt, .oxygen]
         case .health: return [.steps, .vo2max, .form, .drinks, .food, .activeCalories]
         case .training: return [.musclesFigure, .musclesGlance, .sleep, .hrv, .restingHR, .steps, .food, .weight]
-        case .food: return [.food, .macros, .weight, .steps, .activeCalories, .sleep]
+        case .food: return [.weekCalories, .food, .macros, .weight, .steps, .activeCalories, .sleep]
         }
     }
 }
@@ -114,6 +114,8 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     /// Svaly (MuscleViews.swift): with the figure, or in short with the rings.
     case musclesFigure, musclesGlance
     case food, drinks, macros
+    /// Týdenní kalorie (FoodWeekWidget.swift): off until added; loads its week itself.
+    case weekCalories
     case sleep, sleepDebt, bedtime
     case steps, activeCalories
     case weight, bodyFat, muscle
@@ -140,6 +142,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .food: return "Jídlo a pití"
         case .drinks: return "Pití a hydratace"
         case .macros: return "Makroživiny"
+        case .weekCalories: return "Týdenní kalorie"
         case .sleep: return "Spánek"
         case .sleepDebt: return "Spánkový dluh"
         case .bedtime: return "Dnešní noc"
@@ -156,7 +159,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         switch self {
         case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen, .journal: return .health
         case .form, .thisWeek, .sessions, .plan, .zones, .musclesFigure, .musclesGlance: return .training
-        case .food, .drinks, .macros: return .food
+        case .food, .drinks, .macros, .weekCalories: return .food
         case .sleep, .sleepDebt, .bedtime: return .sleep
         case .steps, .activeCalories: return .movement
         case .weight, .bodyFat, .muscle: return .body
@@ -170,7 +173,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
             return [.small, .medium, .large]
         case .respiration, .skinTemp, .oxygen, .zones, .food, .drinks, .sleepDebt, .muscle, .musclesGlance:
             return [.small, .medium]
-        case .sessions, .plan, .macros, .bedtime, .journal:
+        case .sessions, .plan, .macros, .bedtime, .journal, .weekCalories:
             return [.medium]
         }
     }
@@ -189,7 +192,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .respiration, .skinTemp, .oxygen, .sleep, .sleepDebt, .bedtime, .bodyFat: return .health
         case .vo2max, .form, .thisWeek, .sessions, .zones, .activeCalories: return .training
         case .drinks, .macros: return .food
-        case .muscle, .musclesFigure, .musclesGlance, .journal: return nil
+        case .muscle, .musclesFigure, .musclesGlance, .journal, .weekCalories: return nil
         }
     }
 }
@@ -348,7 +351,7 @@ struct WidgetData {
         // it waits in the widget gallery.
         case .muscle: return health?.weight?.muscle != nil
         // The widget loads the muscles itself.
-        case .musclesFigure, .musclesGlance: return true
+        case .musclesFigure, .musclesGlance, .weekCalories: return true
         // On unless turned off in Nastavení → Deník or its ··· menu.
         case .journal: return JournalSwitch.isOn
         case .form: return training?.form != nil
@@ -523,7 +526,7 @@ struct PanelWidget: View {
         case .zones:
             if let value = data.training?.zones { ZonesWidget(zones: value, size: item.size) }
         case .food:
-            if let t = data.today { FoodWidget(nutrition: t.nutrition, size: item.size) }
+            if let t = data.today { FoodWidget(nutrition: t.nutrition, size: item.size, waterFailed: t.unavailable?.contains("fluids") == true) }
         case .drinks:
             if let f = data.food { DrinksCard(water: f.water, size: item.size) }
         case .macros:
@@ -556,6 +559,8 @@ struct PanelWidget: View {
             if let value = data.health?.weight?.bodyFat { BodyFatWidget(fat: value, size: item.size) }
         case .journal:
             JournalHealthCard().allowsHitTesting(linked)
+        case .weekCalories:
+            FoodWeekWidget()
         }
     }
 
