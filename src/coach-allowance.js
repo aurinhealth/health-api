@@ -75,30 +75,64 @@ async function nextKind(env, chatId, today, now) {
   return { chat: null, kind: end !== null && now - end <= WORKOUT_CHAT_HOURS * 3600000 ? 'workout' : 'message' };
 }
 
-// Before the coach is asked: whether this message may go and how it will
-// count. Throws (status 429, coachAllowance) when the week's messages are used up.
-export async function claimCoachMessage(env, chatId, { today = localToday(), now = Date.now() } = {}) {
+// Whether the next message may go and how it will count, without taking it.
+// Throws (status 429, coachAllowance) when the week's messages are used up.
+export async function checkCoachMessage(env, chatId, { today = localToday(), now = Date.now() } = {}) {
   const allowance = await coachAllowance(env, today);
   if (!allowance) return null;
   const { chat, kind } = await nextKind(env, chatId, today, now);
-  if (kind === 'workout-free' || allowance.left > 0) return { kind };
-  if (chat && chat.last > now - RUNNING_MINUTES * 60000 && chat.extras < coachExtraMessages(env)) return { kind: 'extra' };
+  if (kind === 'workout-free' || allowance.left > 0) return { kind, before: allowance };
+  if (chat && chat.last > now - RUNNING_MINUTES * 60000 && chat.extras < coachExtraMessages(env)) return { kind: 'extra', before: allowance };
   const error = new Error(L('Zprávy koučovi na tento týden jsou vyčerpané.', 'Your coach messages for this week are used up.'));
   Object.assign(error, { limit: true, status: 429, coachAllowance: { ...allowance, exhausted: true } });
   throw error;
 }
 
-// After the coach answered: the message is logged. Returns the allowance to
-// show, with `notice` on the message that crossed into the last quarter and
-// `more: false` once not even this conversation can go on (the app then
-// shows the used-up card instead of waiting for a refused message).
+const storedKind = kind => kind === 'workout-free' ? 'workout' : kind;
+const countedKind = kind => kind === 'message' || kind === 'workout' ? 1 : 0;
+
+// Before the coach is asked: the message is taken from the allowance in one
+// statement whose condition is the limit itself, so messages sent at once
+// cannot all pass a count none of them is in yet. A row whose answer failed is
+// given back (releaseCoachMessage); one left by a Worker that died stays.
+export async function claimCoachMessage(env, chatId, { today = localToday(), now = Date.now() } = {}) {
+  const week = mondayOfDate(today), chat = Number(chatId) > 0 ? Number(chatId) : null;
+  for (let attempt = 0; ; attempt++) {
+    const claim = await checkCoachMessage(env, chatId, { today, now });
+    if (!claim) return null;
+    const kind = storedKind(claim.kind), counted = countedKind(claim.kind);
+    const [condition, ...values] = counted
+      ? ['SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND counted = 1', env.USER_ID, week, coachWeeklyMessages(env)]
+      : claim.kind === 'extra'
+        ? ["SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND chat_id = ? AND kind = 'extra'", env.USER_ID, week, chat, coachExtraMessages(env)]
+        : ['SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND chat_id = ?', env.USER_ID, week, chat, coachWorkoutChatMessages(env)];
+    const row = await env.DB.prepare(`INSERT INTO coach_messages (user_id, week, chat_id, kind, counted) SELECT ?, ?, ?, ?, ? WHERE (${condition}) < ? RETURNING id`)
+      .bind(env.USER_ID, week, chat, kind, counted, ...values).first();
+    if (row?.id) return { ...claim, id: row.id };
+    // Another message took the last one in between: ask again how this one counts.
+    if (attempt >= 2) throw Object.assign(new Error(L('Zprávy koučovi na tento týden jsou vyčerpané.', 'Your coach messages for this week are used up.')), { limit: true, status: 429, coachAllowance: { ...await coachAllowance(env, today), exhausted: true } });
+  }
+}
+
+// The answer failed before it was logged: the message is not counted.
+export async function releaseCoachMessage(env, claim) {
+  if (!tracked(env) || !claim?.id || claim.recorded) return;
+  await env.DB.prepare('DELETE FROM coach_messages WHERE id = ? AND user_id = ?').bind(claim.id, env.USER_ID).run();
+}
+
+// After the coach answered: the message is logged under its chat. Returns the
+// allowance to show, with `notice` on the message that crossed into the last
+// quarter and `more: false` once not even this conversation can go on (the
+// app then shows the used-up card instead of waiting for a refused message).
 export async function recordCoachMessage(env, chatId, claim, { today = localToday(), now = Date.now() } = {}) {
   if (!tracked(env) || !claim) return null;
-  const before = await coachAllowance(env, today);
-  const kind = claim.kind === 'workout-free' ? 'workout' : claim.kind, counted = claim.kind === 'message' || claim.kind === 'workout' ? 1 : 0;
-  await env.DB.prepare('INSERT INTO coach_messages (user_id, week, chat_id, kind, counted) VALUES (?, ?, ?, ?, ?)')
-    .bind(env.USER_ID, mondayOfDate(today), Number(chatId) > 0 ? Number(chatId) : null, kind, counted).run();
+  const before = claim.before || await coachAllowance(env, today), chat = Number(chatId) > 0 ? Number(chatId) : null;
+  // A claim without a row (its read failed) is logged here, as before.
+  if (claim.id) await env.DB.prepare('UPDATE coach_messages SET chat_id = ?, created_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(chat, claim.id, env.USER_ID).run();
+  else await env.DB.prepare('INSERT INTO coach_messages (user_id, week, chat_id, kind, counted) VALUES (?, ?, ?, ?, ?)')
+    .bind(env.USER_ID, mondayOfDate(today), chat, storedKind(claim.kind), countedKind(claim.kind)).run();
+  claim.recorded = true;
   const after = await coachAllowance(env, today);
-  const more = await claimCoachMessage(env, chatId, { today, now }).then(() => true, () => false);
+  const more = await checkCoachMessage(env, chatId, { today, now }).then(() => true, () => false);
   return { ...after, notice: !before.near && after.near, more };
 }

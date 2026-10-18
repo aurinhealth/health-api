@@ -9,7 +9,7 @@ import { readOpenAIStream,partialCoachAnswer } from './assistant-stream.js';
 import { resolveStrengthPerformance } from './strength-history.js';
 import { rideFtpFor } from './intervals-athlete.js';
 import { aiLanguageNote, L, lang } from './lang.js';
-import { assertAiAllowance, claimAiSlot, recordAiUsage } from './ai-usage.js';
+import { assertAiAllowance, claimAiSlot, estimateAiCostUsd, recordAiUsage } from './ai-usage.js';
 import { trendFacts } from './trend-facts.js';
 import { localDateTime } from './user-time.js';
 import { sleepNeedFor, sleepDebtMinutes, sleepNeedMinutes } from './recovery-model.js';
@@ -344,9 +344,15 @@ const timeoutFor=maxOutputTokens=>maxOutputTokens>TASK_LIMITS.planning?TASK_TIME
 export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null }) {
   await assertAIAccess(env);
   if (!env.OPENAI_API_KEY) throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
+  // Refused at once when the limit is already spent, then checked again with
+  // the slot held: the calls running beside this one count at their reservation.
   await assertAiAllowance(env,feature);
-  const release=await claimAiSlot(env);
-  try{return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs});}
+  const reserveUsd=estimateAiCostUsd(model||env.OPENAI_MODEL||'gpt-6-sol',{instructions,input,maxOutputTokens,tools});
+  const release=await claimAiSlot(env,{feature,reserveUsd});
+  try{
+    await assertAiAllowance(env,feature,{exceptId:release.id});
+    return await openAIResponse(env,{instructions,input,maxOutputTokens,tools,format,model,reasoningEffort,onText,feature,timeoutMs,slotId:release.id});
+  }
   finally{await release();}
 }
 
@@ -379,7 +385,7 @@ const retryWait=(ms,signal)=>new Promise((resolve,reject)=>{
   signal.addEventListener('abort',()=>{clearTimeout(timer);reject(signal.reason);},{once:true});
 });
 
-async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs }) {
+async function openAIResponse(env, { instructions, input, maxOutputTokens, tools, format, model, reasoningEffort, onText, feature, timeoutMs, slotId }) {
   const chosenModel=model || env.OPENAI_MODEL || 'gpt-6-sol';
   const response = await fetchOpenAI(env, {
     signal:AbortSignal.timeout(timeoutMs||timeoutFor(maxOutputTokens)),
@@ -400,10 +406,10 @@ async function openAIResponse(env, { instructions, input, maxOutputTokens, tools
   // A stream that fails after generation started still cost tokens (A8a): the
   // usage the failure event carried is recorded before the error goes on.
   try{data=onText?await readOpenAIStream(response,onText):await response.json();}
-  catch(error){if(error?.usage)await recordAiUsage(env,{feature,model:error.model||chosenModel,usage:error.usage,webSearches:0}).catch(()=>{});throw error;}
+  catch(error){if(error?.usage)await recordAiUsage(env,{feature,model:error.model||chosenModel,usage:error.usage,webSearches:0,slotId}).catch(()=>{});throw error;}
   // Web searches are billed per call; a failed one is not.
   const webSearches=(data.output||[]).filter(item=>item.type==='web_search_call'&&item.status!=='failed').length;
-  await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage,webSearches});
+  await recordAiUsage(env,{feature,model:data.model||chosenModel,usage:data.usage,webSearches,slotId});
   const incomplete=data.status==='incomplete';
   const text = data.output?.flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n') || data.output_text || data.streamedText;
   if (!text) throw new Error(incomplete?L('Odpověď AI byla moc dlouhá a nedokončila se. Zkus zadání zúžit.', 'The AI answer ran too long and was cut off. Try a narrower request.'):L('AI nevrátila odpověď.', 'The AI didn\'t return an answer.'));
