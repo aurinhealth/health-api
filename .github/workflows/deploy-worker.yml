@@ -336,6 +336,32 @@ jobs:
           fi
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok","status="+str(d.get("status")); assert d.get("data_type")=="nutrition-log","data_type="+str(d.get("data_type"))' <<< "$body"
 
+      # The app's main screen as the owner's account sees it (the deploy token
+      # acts as the owner, like the nutrition check). The logs are public: only
+      # the status, the time and the server's short message, never the data.
+      # A failure stops the release; a slow answer only warns, since the live
+      # server's time varies (a cold start, Intervals).
+      - name: Smoke test Today
+        if: env.TARGET == 'production'
+        env:
+          OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$(curl -sS -o "$RUNNER_TEMP/today.json" -w '%{http_code} %{time_total}' -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/today")"
+          code="${result%% *}"
+          seconds="${result##* }"
+          echo "HTTP $code in ${seconds} s"
+          if [ "$code" != "200" ]; then
+            python -c 'import json,sys; print(str((json.load(open(sys.argv[1])) or {}).get("message",""))[:300])' "$RUNNER_TEMP/today.json" || true
+            exit 1
+          fi
+          python -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("status")=="ok","status="+str(d.get("status")); assert d.get("date"),"no date"; assert isinstance(d.get("readiness"),dict),"no readiness"' "$RUNNER_TEMP/today.json"
+          rm -f "$RUNNER_TEMP/today.json"
+          if python -c 'import sys; sys.exit(0 if float(sys.argv[1]) > 6 else 1)' "$seconds"; then
+            echo "::warning::Today took ${seconds} s (over 6 s)"
+          fi
+
       - name: Smoke test shared food catalogue
         if: env.TARGET == 'production'
         env:
