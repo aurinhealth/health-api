@@ -5,7 +5,9 @@ name: iOS TestFlight
 # Xcode signs in the cloud with an App Store Connect API key (Admin role)
 # and creates the App Store profiles itself (-allowProvisioningUpdates).
 #
-# Repository secrets (Settings → Secrets and variables → Actions):
+# Secrets of the testflight environment (main only), and of testflight-pr for
+# a pull request's run, which waits for the owner's approval (Settings →
+# Environments; docs/test-server-and-releases.md):
 # - APPLE_TEAM_ID: the 10-character Team ID (developer.apple.com → Membership)
 # - ASC_KEY_ID: the API key's Key ID
 # - ASC_ISSUER_ID: the Issuer ID above the list of keys
@@ -31,7 +33,8 @@ on:
     paths:
       - "ios-native/**"
       - ".github/workflows/ios-testflight.yml"
-  # A change to this pipeline is tried on its pull request, upload included.
+  # A change to this pipeline is tried on its pull request, upload included,
+  # once the owner approves it (testflight-pr).
   pull_request:
     paths:
       - ".github/workflows/ios-testflight.yml"
@@ -45,6 +48,7 @@ jobs:
   testflight:
     runs-on: macos-15
     timeout-minutes: 40
+    environment: ${{ github.event_name == 'pull_request' && 'testflight-pr' || 'testflight' }}
     # One upload at a time; the notes job below doesn't hold the next one up.
     concurrency:
       group: ios-testflight
@@ -166,6 +170,7 @@ jobs:
     if: needs.testflight.outputs.uploaded == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    environment: ${{ github.event_name == 'pull_request' && 'testflight-pr' || 'testflight' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6

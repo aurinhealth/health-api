@@ -31,7 +31,8 @@ Merges reach the internal TestFlight group (every build, with its pull request's
 server. `vydat.yml`, run by hand:
 
 1. picks the newest build uploaded from main, or the number typed in;
-2. deploys the newest main to the live server (migrations, shards, smoke tests). Production only
+2. deploys the newest main to the live server (migrations, shards, smoke tests) once the owner
+   approves the deploy (the `production` environment, see "Who can deploy"). Production only
    ever takes commits on main (deploy-worker.yml refuses others), so a release never puts back an
    older server than a hand-started deploy left there. Without a typed build number it stops when
    main has app changes the newest build lacks;
@@ -40,6 +41,59 @@ server. `vydat.yml`, run by hand:
    variable when there is more than one) and submits it to Apple's beta review.
 
 A server-only fix goes live with `deploy-worker.yml`, target production, without a release.
+
+## Who can deploy
+
+The keys to the live data are secrets of GitHub environments, not of the repository. A job gets an
+environment's secrets only when it names the environment and the environment's rules let the run
+through, so a workflow edited on a branch gets none of them:
+
+| Environment | Secrets | Jobs | Rules |
+| --- | --- | --- | --- |
+| `production` | `CLOUDFLARE_API_TOKEN` | `deploy-worker.yml` deploy with target production (also from Vydat), `food-micros.yml` | the owner approves; main only |
+| `staging` | `CLOUDFLARE_API_TOKEN` | `deploy-worker.yml` deploy to the test server (every push to main) | main only |
+| `backup` | `CLOUDFLARE_API_TOKEN` | `db-backup.yml` (Sunday nights) | main only, no approval: the night run would wait for it while holding `production-deploy` and block every deploy |
+| `testflight` | `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` | `ios-testflight.yml` on main and by hand, Vydat's pick and release | main only |
+| `testflight-pr` | the same four | `ios-testflight.yml` on a pull request that changes it | the owner approves; any branch |
+
+`PROMPTS_REPO_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` stay repository secrets: the pull requests' tests need
+the prompts on every branch, and the account ID opens nothing. The prompts token should be a fine-grained
+token that can only read `shaarkyn/aurin-prompts`.
+
+A Vydat run asks for one approval (the deploy). A pull request that changes `ios-testflight.yml` asks twice,
+for the upload and, once it is done, for "What to Test"; rejecting skips the upload. An approval not given
+within 30 days fails the job.
+
+Until the environments are set up, GitHub creates each one at its first run, without rules or secrets, and
+the jobs read the repository secrets as before.
+
+### Setting them up (once, the owner)
+
+In Settings → Environments:
+
+- [ ] `production`: Required reviewers `shaarkyn`, "Prevent self-review" off (the owner starts the deploys
+      and is the only reviewer; with it on nobody could approve them). Deployment branches and tags:
+      Selected branches and tags, `main`. Secret `CLOUDFLARE_API_TOKEN`.
+- [ ] `staging` and `backup`: no reviewers; deployment branches `main`; secret `CLOUDFLARE_API_TOKEN`.
+- [ ] `testflight`: no reviewers; deployment branches `main`; the four Apple secrets.
+- [ ] `testflight-pr`: Required reviewers `shaarkyn`, "Prevent self-review" off; no branch rule (it runs
+      on the pull request's branch); the four Apple secrets.
+- [ ] Settings → Secrets and variables → Actions: delete the repository secrets `CLOUDFLARE_API_TOKEN`,
+      `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8`. Until they are gone, a workflow
+      without `environment:` still reads them on any branch.
+- [ ] Settings → Rules → Rulesets: a ruleset for main that blocks force pushes and deletion and requires
+      a pull request, with the owner on the bypass list. "main only" protects only as long as nobody else
+      can push to main.
+
+Optional: a separate Cloudflare token for each environment, so one can be revoked alone; the backup
+needs only D1 and R2, not Workers Scripts. Cloudflare's Workers and D1 permissions cover the whole
+account, so a staging token can still change the live Worker; only a separate Cloudflare account for the
+test server would really split them. For the same reason, `deploy-worker.yml` run by hand from main with
+target staging and a typed commit runs that commit's scripts with the staging token.
+
+Required reviewers and branch rules cost nothing on a public repository like this one. On a private
+repository GitHub's docs ask for GitHub Pro, Team or Enterprise for environments, their secrets and branch
+rules, and for Enterprise for required reviewers; check before making the repository private.
 
 ## Coach evaluation
 

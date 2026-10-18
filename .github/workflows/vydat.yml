@@ -16,7 +16,9 @@ name: Vydat
 # Every merge before that only reaches the test server and the internal
 # testers, who switch the app to the test server (Nastavení → Testování → Server).
 #
-# Repository secrets: the ones of deploy-worker.yml and ios-testflight.yml.
+# Secrets: the App Store Connect key of the testflight environment (pick,
+# release) and the Cloudflare token of the production environment (deploy,
+# which waits for the owner's approval); docs/test-server-and-releases.md.
 # EXTERNAL_GROUP (a repository variable) names the external group when there
 # is more than one.
 
@@ -43,6 +45,7 @@ jobs:
   pick:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: testflight
     permissions:
       contents: read
       actions: read
@@ -141,6 +144,8 @@ jobs:
     needs: [pick, deploy]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Runs only after the approved production deploy above.
+    environment: testflight
     permissions:
       contents: read
     steps:
