@@ -268,7 +268,7 @@ enum GymCoach {
 
     /// The done work sets of an exercise as one line.
     static func setsLine(_ sets: [GymSet]) -> String {
-        setsLine(sets.filter { $0.done && !$0.warmup }.map { lift($0) })
+        setsLine(sets.filter { $0.done && $0.work }.map { lift($0) })
     }
 
     static func lift(_ set: GymSet) -> GymHistory.Lift {
@@ -403,7 +403,7 @@ enum GymCoach {
     /// try next time.
     static func summaryLine(_ day: GymDay, history: GymHistory, date: String) -> String {
         for exercise in day.exercises {
-            let done = exercise.sets.filter { $0.done && !$0.warmup }
+            let done = exercise.sets.filter { $0.done && $0.work }
             let kgs: [Double] = done.compactMap { $0.kg.flatMap(LiftWeight.number) }
             guard let now = kgs.max(), now > 0, let last = history.last(exercise.name, before: date), let before = topKg(last) else { continue }
             let goal = done.compactMap { firstNumber($0.plannedReps) }.min() ?? Self.target(last)
@@ -583,7 +583,7 @@ extension GymDay {
     /// One more work set for the exercise whose sets include `row`, like its last one.
     mutating func addSet(after row: Int) {
         guard let exercise = exercises.first(where: { $0.sets.contains { $0.row == row } }), let last = exercise.sets.last else { return }
-        let work = exercise.sets.filter { !$0.warmup }
+        let work = exercise.sets.filter(\.work)
         let template = work.last ?? last
         let kg = template.kg ?? template.plannedKg ?? ""
         let reps = template.reps ?? template.plannedReps ?? ""

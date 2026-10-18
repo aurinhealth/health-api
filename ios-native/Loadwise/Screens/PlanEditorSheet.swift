@@ -75,7 +75,7 @@ struct PlanEditorSheet: View {
     }
 
     private func row(_ offset: Int, _ exercise: GymExercise) -> some View {
-        let work = exercise.sets.filter { !$0.warmup }
+        let work = exercise.sets.filter(\.work)
         let reps = work.first?.plannedReps?.nilIfBlank
         let left = exercise.sets.contains { !$0.done }
         return HStack(spacing: 10) {

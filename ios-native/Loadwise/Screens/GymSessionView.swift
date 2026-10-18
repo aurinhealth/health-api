@@ -438,7 +438,7 @@ struct SetRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(set.warmup ? "R" : set.number).font(Typo.number(17)).foregroundStyle(set.warmup ? Palette.faint : failure ? Palette.rust : Palette.muted)
+            Text(set.warmup ? "R" : set.drop ? "↳" : set.number).font(Typo.number(17)).foregroundStyle(set.warmup ? Palette.faint : failure ? Palette.rust : Palette.muted)
                 .frame(width: 22, alignment: .leading)
                 .overlay(alignment: .topTrailing) {
                     if failure { Image(systemName: "flame.fill").font(.system(size: 9)).foregroundStyle(Palette.rust).offset(x: -2, y: -1) }

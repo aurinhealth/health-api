@@ -145,7 +145,7 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       try { const plan=await readGymPlan(env.DB,date); data={status:"ok",date,values:plan.stored?plan.values:[],videoLinks:[],stored:plan.stored,cancelled:plan.cancelled,recoverable:plan.recoverable}; }
       catch(error) { console.error("Gym plan read failed",error); data={status:"partial",values:[],videoLinks:[],message:L("Plán se nepodařilo načíst.", "The plan couldn't be loaded.")}; }
       let history=[];
-      try { history=await getStrengthHistory(env.DB,500); } catch(error) { console.error("Gym history read failed",error); }
+      try { history=await getStrengthHistory(env.DB,500,{drops:true}); } catch(error) { console.error("Gym history read failed",error); }
       // Muscles each exercise of the day loads (plan and saved sets), for the body figure.
       const names=new Set([...(data.values||[]).slice(7).map(r=>r?.[1]),...history.filter(r=>String(r.workout_date||'').slice(0,10)===date).map(r=>r.exercise)].filter(Boolean));
       const muscles=Object.fromEntries([...names].map(name=>[name,exerciseMuscles(name)]));
@@ -175,7 +175,7 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       // Intervals.icu event and the sets logged in it (cancel keeps them).
       if(body.action==='discard'){
         const stored=await readGymPlan(env.DB,date,{includeCancelled:true});
-        const logged=stored.stored?stored.values.slice(7).filter(r=>r?.[1]&&/^(WARMUP|WORK)$/.test(String(r?.[0]||"WORK").toUpperCase())&&["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??""))).length:0;
+        const logged=stored.stored?stored.values.slice(7).filter(r=>r?.[1]&&/^(WARMUP|WORK|DROP)$/.test(String(r?.[0]||"WORK").toUpperCase())&&["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??""))).length:0;
         await deleteStrengthEvents();
         await discardGymPlan(env.DB,date);
         if(logged)await removeManualSets(env.DB,date,0,logged);
@@ -218,8 +218,8 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       const completedSets = rows => rows.map((r,i)=>({
         type:String(r?.[0]||"WORK").toUpperCase(), exercise:r?.[1]||"", setNo:r?.[2],
         plannedKg:r?.[3], plannedReps:r?.[4], actualKg:r?.[5], actualReps:r?.[6],
-        rpe:r?.[7], completed:["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??"")), note:r?.[9]||"",toFailure:r?.[11]||false,superset:r?.[12]||''
-      })).filter(x=>x.exercise && /^(WARMUP|WORK)$/.test(x.type) && x.completed);
+        rpe:r?.[7], completed:["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??"")), note:r?.[9]||"",toFailure:r?.[11]||false,superset:r?.[12]||'',side:r?.[13]||'',intensity:r?.[14]||''
+      })).filter(x=>x.exercise && /^(WARMUP|WORK|DROP)$/.test(x.type) && x.completed);
       const sets = completedSets(values);
       let historyResult=null;
       if(sets.length) historyResult=await importStrengthHistory(env.DB,{date,sets});
