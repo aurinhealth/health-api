@@ -49,3 +49,9 @@ export function exercisePhotos(exercise) {
 }
 
 export const PHOTO_IDS = PHOTOS;
+
+// Without a Free Exercise DB photo, two stills from the exercise's YouTube
+// video (one early, one late in it) stand in for the start and end position.
+export function videoStills(videoId) {
+  return /^[A-Za-z0-9_-]{11}$/.test(videoId || '') ? ['hq1', 'hq3'].map(f => 'https://i.ytimg.com/vi/' + videoId + '/' + f + '.jpg') : [];
+}

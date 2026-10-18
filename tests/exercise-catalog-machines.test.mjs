@@ -8,6 +8,7 @@ import { TECHNIQUE_EN } from "../src/exercise-technique-data-en.js";
 import { FEEL } from "../src/exercise-feel.js";
 import { FEEL_EN } from "../src/exercise-feel-en.js";
 import { PHOTO_IDS } from "../src/exercise-photos.js";
+import { techniqueFor } from "../src/exercise-technique.js";
 
 // Machines and cables from the MoveKit audit (2026-10-17), part 1.
 const ADDED = ["Smith Machine Bench Press", "Smith Machine Decline Bench Press", "Inverted Row", "Smith Machine Bent-Over Row", "Smith Machine Overhead Press", "Smith Machine Seated Overhead Press", "Smith Machine Close Grip Bench Press", "Smith Machine Front Squat", "Smith Machine Sumo Romanian Deadlift", "Smith Machine Calf Raise",
@@ -91,4 +92,16 @@ test("the generator keeps one variant for five weeks, then moves on", () => {
   const plan = generateStrengthPlan({ date: "2026-10-18", cycling: { recentActivities: [], plannedWorkouts: [], recentRideTss: 0 }, strength: { recentCompletedSets: [], plannedSessions: [] } }, { focusMuscles: ["rear_delts"], durationMinutes: 60 });
   const names = new Set(plan.rows.filter(r => r[0] === "WORK").map(r => r[1]));
   assert.ok([...names].filter(n => family.includes(n)).length <= 1, [...names].join());
+});
+
+test("every new machine and cable exercise has a video and start and end photos", () => {
+  for (const name of ADDED) {
+    assert.match(TECHNIQUE[name]?.video?.id || "", /^[A-Za-z0-9_-]{11}$/, name + " video");
+    assert.ok(TECHNIQUE[name].video.title, name + " video title");
+    const t = techniqueFor(name);
+    assert.equal(t.video.id, TECHNIQUE[name].video.id, name);
+    assert.equal(t.photos.length, 2, name + " photos");
+    assert.equal(new Set(t.photos).size, 2, name + " two different photos");
+    for (const url of t.photos) assert.match(url, /^https:\/\//, name);
+  }
 });

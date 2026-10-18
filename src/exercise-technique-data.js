@@ -2372,6 +2372,10 @@ export const TECHNIQUE = {
    "Vstávání s nezajištěnou osou."
   ],
   "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "bRpqOk8SVl4",
+   "title": "Smith Machine Decline Bench Press"
+  },
   "query": "smith machine decline bench press"
  },
  "Inverted Row": {
@@ -2515,6 +2519,10 @@ export const TECHNIQUE = {
    "Kolena padají dovnitř."
   ],
   "breathing": "Nádech při předklonu, výdech při narovnání.",
+  "video": {
+   "id": "WssO7uXo7VU",
+   "title": "Sumo Smith Machine Deadlift"
+  },
   "query": "smith machine sumo romanian deadlift"
  },
  "Smith Machine Calf Raise": {
@@ -2532,6 +2540,10 @@ export const TECHNIQUE = {
    "Ohýbání kolen."
   ],
   "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "avO_qtvHJAg",
+   "title": "Smith Machine Calf Raise"
+  },
   "query": "smith machine calf raise"
  },
  "Cable Bench Chest Fly": {
@@ -2549,6 +2561,10 @@ export const TECHNIQUE = {
    "Moc hluboko za úroveň ramen."
   ],
   "breathing": "Nádech při rozpažení, výdech při stažení.",
+  "video": {
+   "id": "gV2QSjD3Cs0",
+   "title": "How To Do A FLAT BENCH CABLE FLY"
+  },
   "query": "cable bench chest fly"
  },
  "Cable Bench Press": {
@@ -2566,6 +2582,10 @@ export const TECHNIQUE = {
    "Zvedání hlavy a ramen z lavice."
   ],
   "breathing": "Výdech při tlaku, nádech při návratu.",
+  "video": {
+   "id": "eCv7UIkiVY0",
+   "title": "Cable Bench Press"
+  },
   "query": "cable bench press"
  },
  "Cable Chest Press": {
@@ -2583,6 +2603,10 @@ export const TECHNIQUE = {
    "Ramena jdou k uším."
   ],
   "breathing": "Výdech při tlaku, nádech při návratu.",
+  "video": {
+   "id": "_VM-RHaZ7M0",
+   "title": "Cable Chest Press - HASfit Chest Exercise Demonstration"
+  },
   "query": "standing cable chest press"
  },
  "Cable Decline Bench Press": {
@@ -2600,6 +2624,10 @@ export const TECHNIQUE = {
    "Lokty roztažené do stran."
   ],
   "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "lxHdVzwO98A",
+   "title": "How To Do Decline Cable Press"
+  },
   "query": "cable decline bench press"
  },
  "Cable High-to-Low Fly": {
@@ -2638,6 +2666,10 @@ export const TECHNIQUE = {
    "Ztráta napětí dole."
   ],
   "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "WA2gBTtEnDw",
+   "title": "Incline Cable Bench Press"
+  },
   "query": "cable incline bench press"
  },
  "Cable Standing Single Arm Chest Press": {
@@ -2655,6 +2687,10 @@ export const TECHNIQUE = {
    "Ramena jdou k uším."
   ],
   "breathing": "Výdech při tlaku, nádech při návratu.",
+  "video": {
+   "id": "jIEyzYfpSiI",
+   "title": "Standing 1 Arm Cable Chest Press"
+  },
   "query": "single arm standing cable chest press"
  },
  "Single-Arm Cable Fly": {
@@ -2693,6 +2729,10 @@ export const TECHNIQUE = {
    "Ramena jdou nahoru."
   ],
   "breathing": "Výdech při přitahování, nádech při návratu.",
+  "video": {
+   "id": "Y7BUGpgFw7s",
+   "title": "How To: Standing Cable Row"
+  },
   "query": "standing cable row straight bar"
  },
  "Cable Supinating Row": {
@@ -2710,6 +2750,10 @@ export const TECHNIQUE = {
    "Tah jen předloktím."
   ],
   "breathing": "Výdech při přitahování, nádech při návratu.",
+  "video": {
+   "id": "yOjR1XSUWB4",
+   "title": "Supinated Standing Cable Row"
+  },
   "query": "cable supinating row"
  },
  "Straight-Arm Lat Pulldown": {
@@ -2748,6 +2792,10 @@ export const TECHNIQUE = {
    "Krčení loktů."
   ],
   "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "EurcOa-r9r4",
+   "title": "Straight Arm Rope Pulldown"
+  },
   "query": "straight arm rope pulldown"
  },
  "Cable External Rotation": {
@@ -2807,6 +2855,10 @@ export const TECHNIQUE = {
    "Lokty moc vzadu."
   ],
   "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "Zy1dc-20Uik",
+   "title": "How To Do Cable Shoulder Press"
+  },
   "query": "cable overhead press"
  },
  "Cable Single Arm Rear Delt Row": {
@@ -2824,6 +2876,10 @@ export const TECHNIQUE = {
    "Otáčení trupem."
   ],
   "breathing": "Výdech při přitahování, nádech při návratu.",
+  "video": {
+   "id": "VojbcTcl7II",
+   "title": "Single Arm Cable Rear Delt Row"
+  },
   "query": "single arm cable rear delt row"
  },
  "Leaning Cable Lateral Raise": {
@@ -2862,6 +2918,10 @@ export const TECHNIQUE = {
    "Tlačení vahou těla."
   ],
   "breathing": "Výdech při stlačení, nádech nahoru.",
+  "video": {
+   "id": "uETqbbqoUKM",
+   "title": "Cable Straight Bar Pushdowns"
+  },
   "query": "straight bar cable pushdown"
  },
  "Cable Overhead Straight Bar Extensions": {
@@ -2879,6 +2939,10 @@ export const TECHNIQUE = {
    "Prohnutí v bedrech."
   ],
   "breathing": "Výdech při propnutí, nádech zpět.",
+  "video": {
+   "id": "yIbKJLQ7zog",
+   "title": "Overhead Straight Bar Tricep Extension"
+  },
   "query": "cable overhead straight bar triceps extension"
  },
  "Cross-Body Cable Tricep Extension": {
@@ -2896,6 +2960,10 @@ export const TECHNIQUE = {
    "Otáčení trupem."
   ],
   "breathing": "Výdech při propnutí, nádech zpět.",
+  "video": {
+   "id": "W46e949ym3o",
+   "title": "Cross body cable tricep extension"
+  },
   "query": "cross body cable triceps extension"
  },
  "Reverse-Grip Tricep Pushdown": {
@@ -2976,6 +3044,10 @@ export const TECHNIQUE = {
    "Pomoc ramenem."
   ],
   "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "9x-OnFp9RE0",
+   "title": "Single-Arm Rope Tricep Pushdown"
+  },
   "query": "single arm rope pushdown"
  },
  "Machine Cable V Bar Push Downs": {
@@ -2993,6 +3065,10 @@ export const TECHNIQUE = {
    "Krčení zápěstí."
   ],
   "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "0BM4wiBLv4Y",
+   "title": "How To: Cable V-Bar Pushdown"
+  },
   "query": "v bar triceps pushdown"
  },
  "Cable Standing Low To High Wood Chopper": {
@@ -3010,6 +3086,10 @@ export const TECHNIQUE = {
    "Kulatá záda dole."
   ],
   "breathing": "Výdech při tahu nahoru, nádech dolů.",
+  "video": {
+   "id": "_mjGPy0KXvU",
+   "title": "Low To High Cable Wood Chopper (Tutorial + Tips)"
+  },
   "query": "low to high cable wood chop"
  },
  "Cable Bench Straight Leg Kickback": {
@@ -3027,6 +3107,10 @@ export const TECHNIQUE = {
    "Švih nohou."
   ],
   "breathing": "Výdech při zanožení, nádech zpět.",
+  "video": {
+   "id": "6GFC3oMqWSw",
+   "title": "How To: Bench Supported Cable Kickback"
+  },
   "query": "cable straight leg kickback bench"
  },
  "Cable 30 Degree Shrug": {
@@ -3044,6 +3128,10 @@ export const TECHNIQUE = {
    "Krčení loktů."
   ],
   "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "quh6n4ZmJjA",
+   "title": "How To Do: Cable Shrug"
+  },
   "query": "cable 30 degree shrug"
  },
  "Cable Wrist Curl": {
@@ -3061,6 +3149,10 @@ export const TECHNIQUE = {
    "Moc těžká váha."
   ],
   "breathing": "Dýchej plynule.",
+  "video": {
+   "id": "1-55N7Qlu_U",
+   "title": "Cable Wrist Curl (Exercises.com.au)"
+  },
   "query": "cable wrist curl"
  },
  "Cable Bar Face Pull": {
@@ -3078,6 +3170,10 @@ export const TECHNIQUE = {
    "Záklon trupu."
   ],
   "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "-APA09J3PWw",
+   "title": "Straight Bar Cable Face Pulls"
+  },
   "query": "cable bar face pull"
  },
  "Cable Rope Kneeling Face Pull": {
@@ -3095,6 +3191,10 @@ export const TECHNIQUE = {
    "Tah jen rukama."
   ],
   "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "8GSYAoyt84s",
+   "title": "How To Do Kneeling Face Pulls"
+  },
   "query": "kneeling rope face pull"
  },
  "Cable Seated Rope Face Pull": {
@@ -3112,6 +3212,10 @@ export const TECHNIQUE = {
    "Lokty padají."
   ],
   "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "1wW8UV7hjAc",
+   "title": "How To: Seated Cable Rope Face Pull"
+  },
   "query": "seated rope face pull"
  },
  "Cable Single Leg Laying Leg Curl": {
@@ -3129,6 +3233,10 @@ export const TECHNIQUE = {
    "Rychlé spouštění."
   ],
   "breathing": "Výdech při pokrčení, nádech zpět.",
+  "video": {
+   "id": "Atl5qhOfJpQ",
+   "title": "Lying Cable Hamstring Curl: How To"
+  },
   "query": "cable lying leg curl single leg"
  },
  "Cable Single Arm Underhand Grip Row": {
@@ -3146,6 +3254,10 @@ export const TECHNIQUE = {
    "Tah předloktím."
   ],
   "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "eQTrn_6W7Oo",
+   "title": "Single Arm Cable Row Supinated Grip"
+  },
   "query": "single arm underhand cable row"
  },
  "Straight Bar Bench Mid Rows": {
@@ -3163,6 +3275,10 @@ export const TECHNIQUE = {
    "Ramena k uším."
   ],
   "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "uw48GA0KrlA",
+   "title": "Seated Straight Bar Cable Row"
+  },
   "query": "seated straight bar cable row bench"
  },
  "Decline Machine Chest Press": {
@@ -3180,6 +3296,10 @@ export const TECHNIQUE = {
    "Odraz ze spodní polohy."
   ],
   "breathing": "Výdech při tlaku, nádech zpět.",
+  "video": {
+   "id": "_DsWm45BCqg",
+   "title": "How To Do A MACHINE DECLINE CHEST PRESS"
+  },
   "query": "decline machine chest press"
  },
  "Incline Machine Chest Press": {
@@ -3302,6 +3422,10 @@ export const TECHNIQUE = {
    "Moc velká váha z oboustranného leg pressu."
   ],
   "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "ZYDTJaAM-gE",
+   "title": "SINGLE LEG PRESS"
+  },
   "query": "single leg press"
  },
  "Reverse Hack Squat": {
@@ -3340,6 +3464,10 @@ export const TECHNIQUE = {
    "Švih."
   ],
   "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "bxI-0tHUoUA",
+   "title": "DY Rows Reverse Grip Row Machine"
+  },
   "query": "machine underhand row"
  },
  "Hammer Strength High Row": {
@@ -3420,6 +3548,10 @@ export const TECHNIQUE = {
    "Moc velká váha a škubání."
   ],
   "breathing": "Výdech při záklonu, nádech při předklonu.",
+  "video": {
+   "id": "zFxTRJTAqlo",
+   "title": "How to Use the Life Fitness Back Extension Machine Correctly (Full Walkthrough)"
+  },
   "query": "seated back extension machine"
  },
  "Reverse Hyperextension": {
@@ -3479,6 +3611,10 @@ export const TECHNIQUE = {
    "Švih trupem."
   ],
   "breathing": "Výdech při propnutí, nádech zpět.",
+  "video": {
+   "id": "dLi01TSjcVY",
+   "title": "MACHINE TRICEP EXTENSION (How To)"
+  },
   "query": "seated triceps extension machine"
  },
  "Belt Squat": {
@@ -3559,6 +3695,10 @@ export const TECHNIQUE = {
    "Otáčení pánví místo trupem."
   ],
   "breathing": "Výdech při otočení, nádech zpět.",
+  "video": {
+   "id": "V6K9bt4zbjc",
+   "title": "How To Use The TORSO ROTATION MACHINE (Life Fitness)"
+  },
   "query": "torso rotation machine"
  }
 };
