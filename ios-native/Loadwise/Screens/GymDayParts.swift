@@ -210,7 +210,7 @@ struct GymPartsCard: View {
                 .background(color(part).opacity(0.14), in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
-                Text(title(part)).font(.body).foregroundStyle(Palette.ink)
+                Text(title(part)).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
                 Text(verbatim: subtitle(part)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
             Spacer(minLength: 6)
@@ -226,10 +226,10 @@ struct GymPartsCard: View {
             if part != .exercises {
                 Toggle(isOn: Binding(get: { on }, set: { value in
                     update { p in p.off.removeAll { $0 == part }; if !value { p.off.append(part) } }
-                })) { Text(title(part)) }
-                    .labelsHidden()
+                })) { EmptyView() }
                     .toggleStyle(LoadwiseToggleStyle())
                     .fixedSize()
+                    .accessibilityLabel(Text(title(part)))
             }
         }
         .padding(.horizontal, 8)

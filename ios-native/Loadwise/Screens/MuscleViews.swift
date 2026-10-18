@@ -336,7 +336,7 @@ struct MusclesView: View {
     private func readyOn(_ data: MuscleFatigue, days: Int) -> String? {
         let names = (data.groups ?? []).filter { g in
             g.state != "rested" && g.readyDate.map { MuscleFatigue.days(from: data.date, to: $0) == days } == true
-        }.map { $0.label.lowercased() }
+        }.map { L10n.tr($0.label).lowercased() }
         guard !names.isEmpty else { return nil }
         return names.count == 1 ? names[0] : L10n.f("%@ a %@", names.dropLast().joined(separator: ", "), names.last!)
     }
