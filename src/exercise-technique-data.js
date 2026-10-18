@@ -2335,5 +2335,4552 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech při výstupu, nádech při sestupu.",
   "query": "box step up proper form"
+ },
+ "Smith Machine Bench Press": {
+  "setup": [
+   "Lavici postav pod osu tak, aby osa klesala na spodní část hrudníku.",
+   "Lopatky stáhni k sobě a dolů, chodidla pevně na zemi."
+  ],
+  "steps": [
+   "Odjisti osu otočením zápěstí a drž ji nad hrudníkem.",
+   "Spouštěj 2–3 s ke spodní části hrudníku, lokty asi 45° od těla.",
+   "Vytlač nahoru, lokty nahoře nezamykej, a po sérii osu zajisti na hácích."
+  ],
+  "mistakes": [
+   "Odraz osy od hrudníku.",
+   "Lokty roztažené do pravého úhlu od těla."
+  ],
+  "breathing": "Nádech při spouštění, výdech při tlaku.",
+  "video": {
+   "id": "KJSgqUDFe00",
+   "title": "How to perform a Smith Machine Bench Press"
+  },
+  "query": "smith machine bench press form"
+ },
+ "Smith Machine Decline Bench Press": {
+  "setup": [
+   "Lavici nastav mírně hlavou dolů a nohy zaklesni pod opěrky.",
+   "Osa nad spodní částí hrudníku, lopatky stažené."
+  ],
+  "steps": [
+   "Odjisti osu a drž ji nad spodní částí hrudníku.",
+   "Spouštěj pomalu ke spodní hraně prsních svalů.",
+   "Vytlač nahoru a po sérii osu zajisti dřív, než se posadíš."
+  ],
+  "mistakes": [
+   "Příliš velký sklon lavice.",
+   "Vstávání s nezajištěnou osou."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "bRpqOk8SVl4",
+   "title": "Smith Machine Decline Bench Press"
+  },
+  "query": "smith machine decline bench press"
+ },
+ "Inverted Row": {
+  "setup": [
+   "Osu Smithu zajisti zhruba ve výšce pasu.",
+   "Lehni si pod ni, chyť ji nadhmatem o něco šíř než ramena, paty na zemi."
+  ],
+  "steps": [
+   "Zpevni břicho a hýždě, tělo v jedné linii.",
+   "Přitáhni hrudník k ose, lokty jdou šikmo dozadu.",
+   "Nahoře stáhni lopatky a pomalu se spusť do natažení paží."
+  ],
+  "mistakes": [
+   "Pánev padá dolů.",
+   "Tah jen rukama bez stažení lopatek."
+  ],
+  "breathing": "Výdech při přitahování, nádech při spouštění.",
+  "video": {
+   "id": "I640fMJC80s",
+   "title": "Exercise How To: Smith Machine Inverted Row"
+  },
+  "query": "inverted row smith machine form"
+ },
+ "Smith Machine Bent-Over Row": {
+  "setup": [
+   "Osu nastav na háky pod úrovní kolen, postav se těsně k ní.",
+   "Chyť ji nadhmatem na šíři ramen, předkloň se s rovnými zády asi do 45°."
+  ],
+  "steps": [
+   "Odjisti osu a nech paže viset.",
+   "Přitáhni osu k pupku, lokty podél těla dozadu.",
+   "Nahoře krátce stáhni lopatky a pomalu spusť."
+  ],
+  "mistakes": [
+   "Kulatá záda.",
+   "Napřimování trupu při každém opakování."
+  ],
+  "breathing": "Výdech při přitahování, nádech při spouštění.",
+  "video": {
+   "id": "sTuwq4Vcvag",
+   "title": "How To: Smith Machine Bent Over Row"
+  },
+  "query": "smith machine bent over row"
+ },
+ "Smith Machine Overhead Press": {
+  "setup": [
+   "Háky nastav do výšky horní části hrudníku.",
+   "Stoupni si pod osu, úchop o něco širší než ramena, břicho a hýždě zpevněné."
+  ],
+  "steps": [
+   "Odjisti osu a drž ji před klíčními kostmi.",
+   "Tlač nahoru, hlavu nech lehce ustoupit dozadu, ať osa projde.",
+   "Nahoře propni paže bez zakleslých loktů a pomalu spusť."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Osa klesá za hlavu."
+  ],
+  "breathing": "Nádech dole, výdech při tlaku.",
+  "video": {
+   "id": "hTpGeVc8n6U",
+   "title": "SMITH MACHINE OVERHEAD PRESS (How To)"
+  },
+  "query": "smith machine overhead press standing"
+ },
+ "Smith Machine Seated Overhead Press": {
+  "setup": [
+   "Lavici nastav skoro kolmo a posuň ji tak, aby osa klesala před obličejem.",
+   "Sedni si, záda opřená, úchop o něco širší než ramena."
+  ],
+  "steps": [
+   "Odjisti osu ve výšce brady.",
+   "Tlač nahoru do propnutí paží.",
+   "Pomalu spouštěj k bradě a hned znovu tlač."
+  ],
+  "mistakes": [
+   "Zadek se zvedá z lavice.",
+   "Moc hluboko za hlavu."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "NNQ1JjmgUAU",
+   "title": "Smith Machine Seated Overhead Shoulder Press."
+  },
+  "query": "smith machine seated overhead press"
+ },
+ "Smith Machine Close Grip Bench Press": {
+  "setup": [
+   "Rovná lavice pod osou Smithu, osa nad spodní částí hrudníku.",
+   "Úchop na šíři ramen, lopatky stažené."
+  ],
+  "steps": [
+   "Odjisti osu.",
+   "Spouštěj ke spodní části hrudníku, lokty těsně u těla.",
+   "Vytlač nahoru do propnutí loktů a osu po sérii zajisti."
+  ],
+  "mistakes": [
+   "Příliš úzký úchop.",
+   "Lokty ujíždějí do stran."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "z8UWdGwtzRM",
+   "title": "Exercise Tutorial: Close Grip Smith Machine Bench Press"
+  },
+  "query": "smith machine close grip bench press"
+ },
+ "Smith Machine Front Squat": {
+  "setup": [
+   "Háky nastav do výšky ramen, osu polož na přední část ramen.",
+   "Lokty zvedni dopředu, ruce osu jen přidržují, chodidla na šíři boků."
+  ],
+  "steps": [
+   "Odjisti osu a zpevni břicho.",
+   "Klesej dolů s rovným trupem, kolena jdou dopředu nad špičky.",
+   "Z dolní pozice se vytlač celými chodidly do stoje."
+  ],
+  "mistakes": [
+   "Lokty padají dolů a trup se předklání.",
+   "Paty se zvedají."
+  ],
+  "breathing": "Nádech nahoře před sestupem, výdech při zvedání.",
+  "video": {
+   "id": "uIXkPdgaTss",
+   "title": "How To Do A SMITH MACHINE FRONT SQUAT"
+  },
+  "query": "smith machine front squat"
+ },
+ "Smith Machine Sumo Romanian Deadlift": {
+  "setup": [
+   "Háky nastav do výšky stehen, postav se široce, špičky mírně ven.",
+   "Chyť osu úzce mezi koleny, záda rovná."
+  ],
+  "steps": [
+   "Odjisti osu a postav se rovně.",
+   "Posouvej boky dozadu, osa jede těsně podél stehen, kolena jen lehce pokrčená.",
+   "V protažení zadních stehen se vrať do stoje stažením hýždí."
+  ],
+  "mistakes": [
+   "Kulatá záda.",
+   "Kolena padají dovnitř."
+  ],
+  "breathing": "Nádech při předklonu, výdech při narovnání.",
+  "video": {
+   "similar": true,
+   "id": "WssO7uXo7VU",
+   "title": "Sumo Smith Machine Deadlift"
+  },
+  "query": "smith machine sumo romanian deadlift"
+ },
+ "Smith Machine Calf Raise": {
+  "setup": [
+   "Pod osu dej kotouč nebo nízký stupínek, osu polož na horní část zad.",
+   "Na stupínek stoupni špičkami, paty volně dole."
+  ],
+  "steps": [
+   "Odjisti osu a stůj rovně.",
+   "Zvedni se co nejvýš na špičky a vteřinu vydrž.",
+   "Pomalu spusť paty pod úroveň stupínku."
+  ],
+  "mistakes": [
+   "Krátký rozsah s odrazem.",
+   "Ohýbání kolen."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "avO_qtvHJAg",
+   "title": "Smith Machine Calf Raise"
+  },
+  "query": "smith machine calf raise"
+ },
+ "Cable Bench Chest Fly": {
+  "setup": [
+   "Lavici postav mezi dvě spodní kladky, připni madla.",
+   "Lehni si, madla drž nad hrudníkem, lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Rozpažuj do stran obloukem, dokud necítíš protažení prsou.",
+   "Stejným obloukem stáhni madla zpět nad hrudník.",
+   "Nahoře krátce stiskni prsa, madla neťukej o sebe."
+  ],
+  "mistakes": [
+   "Propínání a krčení loktů jako u tlaku.",
+   "Moc hluboko za úroveň ramen."
+  ],
+  "breathing": "Nádech při rozpažení, výdech při stažení.",
+  "video": {
+   "id": "gV2QSjD3Cs0",
+   "title": "How To Do A FLAT BENCH CABLE FLY"
+  },
+  "query": "cable bench chest fly"
+ },
+ "Cable Bench Press": {
+  "setup": [
+   "Lavici postav mezi spodní kladky, připni madla.",
+   "Lehni si s madly u hrudníku, lopatky stažené, chodidla na zemi."
+  ],
+  "steps": [
+   "Vytlač madla nahoru nad hrudník.",
+   "Nahoře je lehce přibliž k sobě.",
+   "Pomalu se vrať k hrudníku, lokty asi 45° od těla."
+  ],
+  "mistakes": [
+   "Ztráta napětí dole.",
+   "Zvedání hlavy a ramen z lavice."
+  ],
+  "breathing": "Výdech při tlaku, nádech při návratu.",
+  "video": {
+   "id": "eCv7UIkiVY0",
+   "title": "Cable Bench Press"
+  },
+  "query": "cable bench press"
+ },
+ "Cable Chest Press": {
+  "setup": [
+   "Kladky nastav do výšky hrudníku, chyť madla a vykroč krok dopředu.",
+   "Stůj ve výpadovém postoji, madla u hrudníku, břicho zpevněné."
+  ],
+  "steps": [
+   "Tlač madla dopředu před sebe.",
+   "Na konci je lehce přibliž k sobě.",
+   "Pomalu se vrať do výchozí polohy."
+  ],
+  "mistakes": [
+   "Tlačení trupem místo paží.",
+   "Ramena jdou k uším."
+  ],
+  "breathing": "Výdech při tlaku, nádech při návratu.",
+  "video": {
+   "id": "_VM-RHaZ7M0",
+   "title": "Cable Chest Press - HASfit Chest Exercise Demonstration"
+  },
+  "query": "standing cable chest press"
+ },
+ "Cable Decline Bench Press": {
+  "setup": [
+   "Lavici nastav mírně hlavou dolů mezi spodní kladky.",
+   "Lehni si s madly u spodní části hrudníku, lopatky stažené."
+  ],
+  "steps": [
+   "Vytlač madla nahoru nad spodní část hrudníku.",
+   "Nahoře je lehce přibliž k sobě.",
+   "Pomalu se vrať dolů."
+  ],
+  "mistakes": [
+   "Příliš velký sklon.",
+   "Lokty roztažené do stran."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "lxHdVzwO98A",
+   "title": "How To Do Decline Cable Press"
+  },
+  "query": "cable decline bench press"
+ },
+ "Cable High-to-Low Fly": {
+  "setup": [
+   "Obě kladky nastav nahoru, chyť madla a vykroč dopředu.",
+   "Mírný předklon, lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Táhni madla obloukem šikmo dolů před boky.",
+   "Dole je přibliž k sobě a stiskni prsa.",
+   "Pomalu se vrať obloukem nahoru do protažení."
+  ],
+  "mistakes": [
+   "Krčení loktů jako u stahování.",
+   "Švih trupem."
+  ],
+  "breathing": "Výdech při stažení, nádech při návratu.",
+  "video": {
+   "id": "8Um35Es-ROE",
+   "title": "How To: Cable Fly (High-To-Low) || 3 GOLDEN RULES"
+  },
+  "query": "cable high to low fly"
+ },
+ "Cable Incline Bench Press": {
+  "setup": [
+   "Lavici nastav na 30° mezi spodní kladky, připni madla.",
+   "Lehni si, madla u horní části hrudníku."
+  ],
+  "steps": [
+   "Vytlač madla nahoru nad ramena.",
+   "Nahoře je lehce přibliž k sobě.",
+   "Pomalu se vrať dolů."
+  ],
+  "mistakes": [
+   "Moc strmá lavice, cvik přebírají ramena.",
+   "Ztráta napětí dole."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "WA2gBTtEnDw",
+   "title": "Incline Cable Bench Press"
+  },
+  "query": "cable incline bench press"
+ },
+ "Cable Standing Single Arm Chest Press": {
+  "setup": [
+   "Kladku nastav do výšky hrudníku, otoč se k ní zády a chyť madlo jednou rukou.",
+   "Vykroč, opačná noha vpředu, břicho zpevněné."
+  ],
+  "steps": [
+   "Tlač madlo dopředu před hrudník.",
+   "Trup drž čelem dopředu, neotáčej se.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Rotace trupu.",
+   "Ramena jdou k uším."
+  ],
+  "breathing": "Výdech při tlaku, nádech při návratu.",
+  "video": {
+   "id": "jIEyzYfpSiI",
+   "title": "Standing 1 Arm Cable Chest Press"
+  },
+  "query": "single arm standing cable chest press"
+ },
+ "Single-Arm Cable Fly": {
+  "setup": [
+   "Kladku nastav do výšky ramen, postav se bokem a chyť madlo vzdálenější rukou.",
+   "Krok od stroje, aby byla paže natažená do strany."
+  ],
+  "steps": [
+   "Táhni madlo obloukem před tělo až za střed hrudníku.",
+   "Krátce stiskni prsa.",
+   "Pomalu se vrať do protažení."
+  ],
+  "mistakes": [
+   "Otáčení trupem.",
+   "Krčení lokte."
+  ],
+  "breathing": "Výdech při stažení, nádech při návratu.",
+  "video": {
+   "id": "t4hUKxXI9J0",
+   "title": "Exercise Tutorial: One Arm Cable Fly"
+  },
+  "query": "single arm cable fly"
+ },
+ "Cable Row Bar Standing Row": {
+  "setup": [
+   "Kladku nastav do výšky pasu, připni rovnou tyč.",
+   "Chyť ji nadhmatem, odstup a lehce pokrč kolena, trup vzpřímený."
+  ],
+  "steps": [
+   "Přitáhni tyč k pupku, lokty dozadu podél těla.",
+   "Na konci stáhni lopatky.",
+   "Pomalu natáhni paže a nech lopatky jít dopředu."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Ramena jdou nahoru."
+  ],
+  "breathing": "Výdech při přitahování, nádech při návratu.",
+  "video": {
+   "id": "Y7BUGpgFw7s",
+   "title": "How To: Standing Cable Row"
+  },
+  "query": "standing cable row straight bar"
+ },
+ "Cable Supinating Row": {
+  "setup": [
+   "Kladku nastav do výšky hrudníku nebo níž, madlo do jedné ruky.",
+   "Dlaň na začátku směřuje dolů, trup pevně."
+  ],
+  "steps": [
+   "Přitahuj loket dozadu k boku.",
+   "Během tahu vytoč dlaň nahoru.",
+   "Pomalu se vrať a dlaň otoč zpět."
+  ],
+  "mistakes": [
+   "Rotace celým trupem.",
+   "Tah jen předloktím."
+  ],
+  "breathing": "Výdech při přitahování, nádech při návratu.",
+  "video": {
+   "similar": true,
+   "id": "yOjR1XSUWB4",
+   "title": "Supinated Standing Cable Row"
+  },
+  "query": "cable supinating row"
+ },
+ "Straight-Arm Lat Pulldown": {
+  "setup": [
+   "Horní kladka s rovnou tyčí, chyť ji nadhmatem na šíři ramen.",
+   "Odstup, mírný předklon v kyčlích, lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Táhni tyč obloukem dolů ke stehnům, paže zůstávají skoro natažené.",
+   "Dole stáhni lopatky dolů.",
+   "Pomalu se vrať nahoru do protažení."
+  ],
+  "mistakes": [
+   "Krčení loktů, cvik se mění na stahování tricepsu.",
+   "Švih trupem."
+  ],
+  "breathing": "Výdech při stahování, nádech nahoru.",
+  "video": {
+   "id": "fu6R_SlWMPQ",
+   "title": "Straight-Arm Lat Pulldown"
+  },
+  "query": "straight arm lat pulldown"
+ },
+ "Straight Arm Rope Pulldown (Light)": {
+  "setup": [
+   "Horní kladka s lanem, chyť konce lana.",
+   "Odstup a mírně se předkloň v kyčlích."
+  ],
+  "steps": [
+   "Stahuj lano obloukem k bokům s téměř napnutými pažemi.",
+   "Dole konce lana lehce roztáhni a stáhni lopatky.",
+   "Pomalu se vrať nahoru."
+  ],
+  "mistakes": [
+   "Moc těžká váha a švih.",
+   "Krčení loktů."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "EurcOa-r9r4",
+   "title": "Straight Arm Rope Pulldown"
+  },
+  "query": "straight arm rope pulldown"
+ },
+ "Cable External Rotation": {
+  "setup": [
+   "Kladku nastav do výšky lokte, postav se bokem a madlo chyť vzdálenější rukou.",
+   "Loket pokrč do pravého úhlu a přitiskni k boku, můžeš si dát pod něj ručník."
+  ],
+  "steps": [
+   "Vytáčej předloktí ven od těla, loket zůstává u boku.",
+   "Krátce vydrž na konci pohodlného rozsahu.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Loket se odlepuje od těla.",
+   "Moc těžká váha."
+  ],
+  "breathing": "Výdech při vytočení, nádech při návratu.",
+  "video": {
+   "id": "LpNgc6Vx4iY",
+   "title": "How To Do A Cable External Rotation"
+  },
+  "query": "cable external rotation"
+ },
+ "Cable Front Raise": {
+  "setup": [
+   "Spodní kladka s rovnou tyčí nebo lanem, postav se zády ke stroji.",
+   "Kladka mezi nohama, paže dole, lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Zvedni paže před sebe do výšky ramen.",
+   "Krátce vydrž.",
+   "Pomalu spusť dolů."
+  ],
+  "mistakes": [
+   "Švih trupem.",
+   "Zvedání nad hlavu."
+  ],
+  "breathing": "Výdech při zvedání, nádech dolů.",
+  "video": {
+   "id": "vtH93qBItdk",
+   "title": "How To Do A Cable Front Raise"
+  },
+  "query": "cable front raise"
+ },
+ "Cable Overhead Press": {
+  "setup": [
+   "Obě spodní kladky s madly, postav se mezi ně nebo si sedni na lavici.",
+   "Madla u ramen, dlaně dopředu, břicho zpevněné."
+  ],
+  "steps": [
+   "Tlač madla nahoru nad hlavu.",
+   "Nahoře je lehce přibliž k sobě.",
+   "Pomalu se vrať k ramenům."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Lokty moc vzadu."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "Zy1dc-20Uik",
+   "title": "How To Do Cable Shoulder Press"
+  },
+  "query": "cable overhead press"
+ },
+ "Cable Single Arm Rear Delt Row": {
+  "setup": [
+   "Kladku nastav do výšky ramen, madlo do jedné ruky.",
+   "Postav se čelem ke stroji, paže natažená před tebou."
+  ],
+  "steps": [
+   "Táhni loket dozadu a do strany ve výšce ramen.",
+   "Na konci krátce vydrž.",
+   "Pomalu natáhni paži zpět."
+  ],
+  "mistakes": [
+   "Loket padá dolů k tělu.",
+   "Otáčení trupem."
+  ],
+  "breathing": "Výdech při přitahování, nádech při návratu.",
+  "video": {
+   "id": "VojbcTcl7II",
+   "title": "Single Arm Cable Rear Delt Row"
+  },
+  "query": "single arm cable rear delt row"
+ },
+ "Leaning Cable Lateral Raise": {
+  "setup": [
+   "Spodní kladka, postav se bokem a druhou rukou se drž stroje.",
+   "Nakloň se od stroje, madlo ve vzdálenější ruce před tělem."
+  ],
+  "steps": [
+   "Upažuj do strany do výšky ramen, loket lehce pokrčený.",
+   "Nahoře krátce vydrž.",
+   "Pomalu spusť přes tělo do protažení."
+  ],
+  "mistakes": [
+   "Švih trupem.",
+   "Zvedání nad úroveň ramen."
+  ],
+  "breathing": "Výdech při zvedání, nádech dolů.",
+  "video": {
+   "id": "uiv2KhTT99Y",
+   "title": "How to do the Cable Leaning Lateral Raise"
+  },
+  "query": "leaning cable lateral raise"
+ },
+ "Cable Bar Pushdown": {
+  "setup": [
+   "Horní kladka s rovnou tyčí, chyť ji nadhmatem na šíři ramen.",
+   "Lokty přitiskni k bokům, mírný předklon."
+  ],
+  "steps": [
+   "Stlač tyč dolů do propnutí loktů.",
+   "Dole krátce vydrž.",
+   "Pomalu povol do pravého úhlu v loktech."
+  ],
+  "mistakes": [
+   "Lokty jdou dopředu a dozadu.",
+   "Tlačení vahou těla."
+  ],
+  "breathing": "Výdech při stlačení, nádech nahoru.",
+  "video": {
+   "id": "uETqbbqoUKM",
+   "title": "Cable Straight Bar Pushdowns"
+  },
+  "query": "straight bar cable pushdown"
+ },
+ "Cable Overhead Straight Bar Extensions": {
+  "setup": [
+   "Spodní nebo střední kladka s rovnou tyčí, otoč se zády ke stroji.",
+   "Tyč za hlavou, lokty u hlavy směřují dopředu, vykročení."
+  ],
+  "steps": [
+   "Propni lokty a vytlač tyč dopředu nad hlavu.",
+   "Krátce vydrž.",
+   "Pomalu povol za hlavu do protažení."
+  ],
+  "mistakes": [
+   "Lokty se roztahují do stran.",
+   "Prohnutí v bedrech."
+  ],
+  "breathing": "Výdech při propnutí, nádech zpět.",
+  "video": {
+   "id": "yIbKJLQ7zog",
+   "title": "Overhead Straight Bar Tricep Extension"
+  },
+  "query": "cable overhead straight bar triceps extension"
+ },
+ "Cross-Body Cable Tricep Extension": {
+  "setup": [
+   "Kladku nastav do výšky ramen, bez madla chyť přímo lanko nebo madlo vzdálenější rukou.",
+   "Postav se bokem, loket pokrčený před tělem."
+  ],
+  "steps": [
+   "Propni loket do strany od těla.",
+   "Na konci krátce vydrž.",
+   "Pomalu povol zpět."
+  ],
+  "mistakes": [
+   "Pohyb z ramene místo z lokte.",
+   "Otáčení trupem."
+  ],
+  "breathing": "Výdech při propnutí, nádech zpět.",
+  "video": {
+   "id": "W46e949ym3o",
+   "title": "Cross body cable tricep extension"
+  },
+  "query": "cross body cable triceps extension"
+ },
+ "Reverse-Grip Tricep Pushdown": {
+  "setup": [
+   "Horní kladka s rovnou tyčí nebo EZ tyčí, chyť ji podhmatem.",
+   "Lokty u boků, trup vzpřímený."
+  ],
+  "steps": [
+   "Stlač tyč dolů do propnutí loktů.",
+   "Dole krátce vydrž.",
+   "Pomalu povol do pravého úhlu."
+  ],
+  "mistakes": [
+   "Lokty se zvedají dopředu.",
+   "Moc těžká váha."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "573yzQkprl8",
+   "title": "How To Do Reverse Grip Triceps Pushdown"
+  },
+  "query": "reverse grip triceps pushdown"
+ },
+ "Single-Arm Overhead Cable Extension": {
+  "setup": [
+   "Spodní kladka s madlem, postav se zády ke stroji.",
+   "Madlo drž za hlavou, loket míří nahoru."
+  ],
+  "steps": [
+   "Propni loket nad hlavu.",
+   "Nahoře krátce vydrž.",
+   "Pomalu povol za hlavu."
+  ],
+  "mistakes": [
+   "Loket uhýbá do strany.",
+   "Prohnutí v bedrech."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "w3iAESGWK6M",
+   "title": "Exercise Tutorial: Single Arm Cable Overhead Tricep Extension"
+  },
+  "query": "single arm overhead cable triceps extension"
+ },
+ "Cable Side Bend": {
+  "setup": [
+   "Spodní kladka s madlem, postav se bokem a madlo chyť bližší rukou.",
+   "Chodidla na šíři boků, druhá ruka na boku."
+  ],
+  "steps": [
+   "Ukloň se ke kladce.",
+   "Stažením boku na druhé straně se narovnej a ukloň mírně od kladky.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Předklon nebo záklon místo úklonu.",
+   "Rychlý švih."
+  ],
+  "breathing": "Výdech při narovnání, nádech při úklonu.",
+  "video": {
+   "id": "nwPL5_lpUbQ",
+   "title": "How To Do: Cable Side Bend"
+  },
+  "query": "cable side bend"
+ },
+ "Cable Single Arm Rope Pushdown": {
+  "setup": [
+   "Horní kladka s lanem, chyť jeden konec lana.",
+   "Loket u boku, mírný předklon."
+  ],
+  "steps": [
+   "Stlač lano dolů a na konci vytoč dlaň dolů.",
+   "Krátce vydrž v propnutí.",
+   "Pomalu povol nahoru."
+  ],
+  "mistakes": [
+   "Loket se odlepuje od těla.",
+   "Pomoc ramenem."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "9x-OnFp9RE0",
+   "title": "Single-Arm Rope Tricep Pushdown"
+  },
+  "query": "single arm rope pushdown"
+ },
+ "Machine Cable V Bar Push Downs": {
+  "setup": [
+   "Horní kladka s V-tyčí, chyť ji oběma rukama.",
+   "Lokty u boků, trup vzpřímený."
+  ],
+  "steps": [
+   "Stlač tyč dolů do propnutí.",
+   "Krátce vydrž.",
+   "Pomalu povol do pravého úhlu."
+  ],
+  "mistakes": [
+   "Lokty jdou dopředu.",
+   "Krčení zápěstí."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "0BM4wiBLv4Y",
+   "title": "How To: Cable V-Bar Pushdown"
+  },
+  "query": "v bar triceps pushdown"
+ },
+ "Cable Standing Low To High Wood Chopper": {
+  "setup": [
+   "Spodní kladka s madlem, postav se bokem a chyť madlo oběma rukama u kotníku.",
+   "Chodidla šíře než boky, kolena pokrčená."
+  ],
+  "steps": [
+   "Otoč trup a táhni madlo šikmo nahoru přes tělo nad opačné rameno.",
+   "Paže zůstávají skoro natažené, zadní noha se vytočí.",
+   "Pomalu se vrať dolů."
+  ],
+  "mistakes": [
+   "Tah jen rukama.",
+   "Kulatá záda dole."
+  ],
+  "breathing": "Výdech při tahu nahoru, nádech dolů.",
+  "video": {
+   "id": "_mjGPy0KXvU",
+   "title": "Low To High Cable Wood Chopper (Tutorial + Tips)"
+  },
+  "query": "low to high cable wood chop"
+ },
+ "Cable Bench Straight Leg Kickback": {
+  "setup": [
+   "Lavici postav před spodní kladku, manžetu dej na kotník.",
+   "Opři se trupem nebo předloktími o lavici, pracující noha napnutá."
+  ],
+  "steps": [
+   "Zanož napnutou nohu dozadu a nahoru.",
+   "Nahoře stiskni hýždě.",
+   "Pomalu spusť dolů."
+  ],
+  "mistakes": [
+   "Prohnutí v bedrech.",
+   "Švih nohou."
+  ],
+  "breathing": "Výdech při zanožení, nádech zpět.",
+  "video": {
+   "id": "6GFC3oMqWSw",
+   "title": "How To: Bench Supported Cable Kickback"
+  },
+  "query": "cable straight leg kickback bench"
+ },
+ "Cable 30 Degree Shrug": {
+  "setup": [
+   "Obě spodní kladky s madly, postav se mezi ně.",
+   "Paže dole, mírně do stran asi o 30°."
+  ],
+  "steps": [
+   "Zvedni ramena šikmo nahoru k uším.",
+   "Nahoře vteřinu vydrž.",
+   "Pomalu spusť."
+  ],
+  "mistakes": [
+   "Krouživý pohyb ramen.",
+   "Krčení loktů."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "similar": true,
+   "id": "quh6n4ZmJjA",
+   "title": "How To Do: Cable Shrug"
+  },
+  "query": "cable 30 degree shrug"
+ },
+ "Cable Wrist Curl": {
+  "setup": [
+   "Lavici postav před spodní kladku s rovnou tyčí.",
+   "Klekni nebo sedni, předloktí polož na lavici, zápěstí přes okraj, dlaně nahoru."
+  ],
+  "steps": [
+   "Nech tyč klesnout do prstů.",
+   "Zatni prsty a ohni zápěstí nahoru.",
+   "Pomalu spusť."
+  ],
+  "mistakes": [
+   "Zvedání předloktí z lavice.",
+   "Moc těžká váha."
+  ],
+  "breathing": "Dýchej plynule.",
+  "video": {
+   "id": "1-55N7Qlu_U",
+   "title": "Cable Wrist Curl (Exercises.com.au)"
+  },
+  "query": "cable wrist curl"
+ },
+ "Cable Bar Face Pull": {
+  "setup": [
+   "Kladku nastav do výšky obličeje s rovnou tyčí.",
+   "Chyť ji nadhmatem šíř než ramena, odstup."
+  ],
+  "steps": [
+   "Táhni tyč k čelu, lokty vysoko do stran.",
+   "Stáhni lopatky a krátce vydrž.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Lokty padají dolů.",
+   "Záklon trupu."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "-APA09J3PWw",
+   "title": "Straight Bar Cable Face Pulls"
+  },
+  "query": "cable bar face pull"
+ },
+ "Cable Rope Kneeling Face Pull": {
+  "setup": [
+   "Kladku nastav nad úroveň hlavy v kleku, připni lano.",
+   "Klekni čelem ke stroji, trup vzpřímený, hýždě zpevněné."
+  ],
+  "steps": [
+   "Táhni lano k obličeji, konce od sebe.",
+   "Lokty vysoko, na konci krátce vydrž.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Tah jen rukama."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "8GSYAoyt84s",
+   "title": "How To Do Kneeling Face Pulls"
+  },
+  "query": "kneeling rope face pull"
+ },
+ "Cable Seated Rope Face Pull": {
+  "setup": [
+   "Lavici postav před kladku, kladku nastav do výšky obličeje vsedě.",
+   "Sedni si, chyť lano, paže natažené."
+  ],
+  "steps": [
+   "Táhni lano k obličeji, lokty vysoko.",
+   "Konce lana roztáhni a krátce vydrž.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Lokty padají."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "1wW8UV7hjAc",
+   "title": "How To: Seated Cable Rope Face Pull"
+  },
+  "query": "seated rope face pull"
+ },
+ "Cable Single Leg Laying Leg Curl": {
+  "setup": [
+   "Lavici postav kousek před spodní kladku, manžetu dej na kotník.",
+   "Lehni si na břicho, kolena za okraj lavice."
+  ],
+  "steps": [
+   "Pokrč koleno a přitáhni patu k hýždi.",
+   "Nahoře krátce vydrž.",
+   "Pomalu natáhni nohu."
+  ],
+  "mistakes": [
+   "Zvedání pánve.",
+   "Rychlé spouštění."
+  ],
+  "breathing": "Výdech při pokrčení, nádech zpět.",
+  "video": {
+   "similar": true,
+   "id": "Atl5qhOfJpQ",
+   "title": "Lying Cable Hamstring Curl: How To"
+  },
+  "query": "cable lying leg curl single leg"
+ },
+ "Cable Single Arm Underhand Grip Row": {
+  "setup": [
+   "Kladka ve výšce pasu, madlo chyť podhmatem.",
+   "Postav se nebo sedni čelem ke stroji, trup pevně."
+  ],
+  "steps": [
+   "Přitáhni loket podél těla k boku.",
+   "Stáhni lopatku.",
+   "Pomalu natáhni paži."
+  ],
+  "mistakes": [
+   "Rotace trupu.",
+   "Tah předloktím."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "eQTrn_6W7Oo",
+   "title": "Single Arm Cable Row Supinated Grip"
+  },
+  "query": "single arm underhand cable row"
+ },
+ "Straight Bar Bench Mid Rows": {
+  "setup": [
+   "Lavici postav před spodní kladku s rovnou tyčí.",
+   "Sedni si, chodidla opřená, chyť tyč nadhmatem."
+  ],
+  "steps": [
+   "Přitáhni tyč ke spodní části hrudníku.",
+   "Stáhni lopatky.",
+   "Pomalu natáhni paže."
+  ],
+  "mistakes": [
+   "Houpání trupem.",
+   "Ramena k uším."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "similar": true,
+   "id": "uw48GA0KrlA",
+   "title": "Seated Straight Bar Cable Row"
+  },
+  "query": "seated straight bar cable row bench"
+ },
+ "Decline Machine Chest Press": {
+  "setup": [
+   "Sedák nastav tak, aby madla byla u spodní části hrudníku.",
+   "Záda opřená, lopatky stažené."
+  ],
+  "steps": [
+   "Tlač madla dopředu a mírně dolů.",
+   "Lokty nahoře nezamykej.",
+   "Pomalu se vrať do protažení."
+  ],
+  "mistakes": [
+   "Ramena jdou dopředu.",
+   "Odraz ze spodní polohy."
+  ],
+  "breathing": "Výdech při tlaku, nádech zpět.",
+  "video": {
+   "id": "_DsWm45BCqg",
+   "title": "How To Do A MACHINE DECLINE CHEST PRESS"
+  },
+  "query": "decline machine chest press"
+ },
+ "Incline Machine Chest Press": {
+  "setup": [
+   "Sedák nastav tak, aby madla byla v úrovni horní části hrudníku.",
+   "Záda opřená, chodidla na zemi."
+  ],
+  "steps": [
+   "Tlač madla šikmo nahoru.",
+   "Nahoře lokty nezamykej.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Zvedání zadku ze sedáku.",
+   "Krátký rozsah."
+  ],
+  "breathing": "Výdech při tlaku, nádech zpět.",
+  "video": {
+   "id": "LiDArz1R2NU",
+   "title": "Incline Machine Chest Press"
+  },
+  "query": "incline machine chest press"
+ },
+ "Neutral-Grip Lat Pulldown": {
+  "setup": [
+   "Na kladku dej madlo s rovnoběžnými úchopy na šíři ramen.",
+   "Sedni si, stehna pod opěrkou, chyť madlo dlaněmi k sobě."
+  ],
+  "steps": [
+   "Stáhni madlo k horní části hrudníku, lokty dolů a dozadu.",
+   "Dole stáhni lopatky.",
+   "Pomalu povol nahoru do natažení paží."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Tah jen rukama."
+  ],
+  "breathing": "Výdech při stahování, nádech nahoru.",
+  "video": {
+   "id": "fR_Pw6PxLz4",
+   "title": "How To: Neutral Grip Lat Pulldown"
+  },
+  "query": "neutral grip lat pulldown"
+ },
+ "Single-Arm Lat Pulldown": {
+  "setup": [
+   "Na kladku připni jedno madlo, sedni si pod ni.",
+   "Madlo chyť jednou rukou, paže natažená nahoře."
+  ],
+  "steps": [
+   "Stáhni loket dolů k boku.",
+   "Dole krátce vydrž.",
+   "Pomalu povol nahoru do protažení."
+  ],
+  "mistakes": [
+   "Úklon trupu.",
+   "Rotace ramene dopředu."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "eM162KNncD8",
+   "title": "Single Arm Lat Pulldown Exercise Tutorial"
+  },
+  "query": "single arm lat pulldown"
+ },
+ "Wide-Grip Lat Pulldown": {
+  "setup": [
+   "Dlouhou tyč chyť nadhmatem zhruba o dvě dlaně šíř než ramena.",
+   "Sedni si, stehna pod opěrkou, hrudník lehce nahoru."
+  ],
+  "steps": [
+   "Stáhni tyč k horní části hrudníku, lokty dolů do stran.",
+   "Dole stáhni lopatky.",
+   "Pomalu povol nahoru."
+  ],
+  "mistakes": [
+   "Stahování za hlavu.",
+   "Velký záklon a švih."
+  ],
+  "breathing": "Výdech při stahování, nádech nahoru.",
+  "video": {
+   "id": "7JnP8dFbS14",
+   "title": "How To Do A Wide Grip Lat Pulldown"
+  },
+  "query": "wide grip lat pulldown"
+ },
+ "Calf Press": {
+  "setup": [
+   "Sedni si do leg pressu, špičky dej na spodní okraj plošiny, paty volně.",
+   "Nohy skoro natažené, kolena lehce povolená, pojistky nech zajištěné, pokud to stroj dovolí."
+  ],
+  "steps": [
+   "Tlač plošinu špičkami co nejdál.",
+   "Nahoře vteřinu vydrž.",
+   "Pomalu povol paty do protažení."
+  ],
+  "mistakes": [
+   "Pohyb z kolen místo z kotníků.",
+   "Krátký rozsah."
+  ],
+  "breathing": "Výdech při tlaku, nádech zpět.",
+  "video": {
+   "id": "IrxfRHGiGE0",
+   "title": "Calf Press Leg Press Machine"
+  },
+  "query": "calf press on leg press"
+ },
+ "Single-Leg Press": {
+  "setup": [
+   "Jedno chodidlo dej doprostřed plošiny, druhou nohu polož stranou na zem nebo rám.",
+   "Záda a pánev opřené."
+  ],
+  "steps": [
+   "Spouštěj plošinu, koleno jde ve směru špičky.",
+   "Dole zastav, než se pánev odlepí.",
+   "Vytlač celým chodidlem nahoru."
+  ],
+  "mistakes": [
+   "Koleno padá dovnitř.",
+   "Moc velká váha z oboustranného leg pressu."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "ZYDTJaAM-gE",
+   "title": "SINGLE LEG PRESS"
+  },
+  "query": "single leg press"
+ },
+ "Reverse Hack Squat": {
+  "setup": [
+   "Postav se do hack stroje obráceně, hrudníkem k opěrce, ramena pod polštáři.",
+   "Chodidla na šíři boků doprostřed plošiny."
+  ],
+  "steps": [
+   "Odjisti stroj a klesej, boky jdou dozadu.",
+   "Dolů jdi, dokud máš záda rovná.",
+   "Vytlač se nahoru a nahoře stiskni hýždě."
+  ],
+  "mistakes": [
+   "Kulatá záda dole.",
+   "Paty se zvedají."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "3Kopway1dyg",
+   "title": "How To Do Reverse Hack Squat"
+  },
+  "query": "reverse hack squat"
+ },
+ "Machine Underhand Row": {
+  "setup": [
+   "Sedák nastav tak, aby madla byla ve výšce spodní části hrudníku.",
+   "Hrudník opři o opěrku, madla chyť podhmatem."
+  ],
+  "steps": [
+   "Přitahuj lokty dozadu podél těla.",
+   "Na konci stáhni lopatky.",
+   "Pomalu natáhni paže."
+  ],
+  "mistakes": [
+   "Odlepení hrudníku od opěrky.",
+   "Švih."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "similar": true,
+   "id": "bxI-0tHUoUA",
+   "title": "DY Rows Reverse Grip Row Machine"
+  },
+  "query": "machine underhand row"
+ },
+ "Hammer Strength High Row": {
+  "setup": [
+   "Sedák nastav tak, aby madla byla nad hlavou na dosah natažených paží.",
+   "Stehna pod opěrkou, hrudník lehce nahoru."
+  ],
+  "steps": [
+   "Táhni madla dolů a dozadu k hrudníku.",
+   "Dole stáhni lopatky.",
+   "Pomalu povol nahoru."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Tah jen rukama."
+  ],
+  "breathing": "Výdech při tahu, nádech nahoru.",
+  "video": {
+   "id": "wWLSErG8qGk",
+   "title": "Hammer Strength Plate-Loaded High Row Instructions"
+  },
+  "query": "hammer strength high row"
+ },
+ "Hammer Strength Iso-Lateral Row": {
+  "setup": [
+   "Sedák nastav tak, aby madla byla ve výšce ramen nebo níž.",
+   "Hrudník opři o opěrku, chyť madla."
+  ],
+  "steps": [
+   "Přitáhni madlo jednou rukou nebo oběma, lokty dozadu.",
+   "Na konci stáhni lopatku.",
+   "Pomalu natáhni paži."
+  ],
+  "mistakes": [
+   "Odlepování hrudníku.",
+   "Rotace trupu."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "th169-164Gk",
+   "title": "Hammer Strength Iso-Lateral Row Tutorial"
+  },
+  "query": "hammer strength iso lateral row"
+ },
+ "Machine Lat Pullover": {
+  "setup": [
+   "Sedák nastav tak, aby ramena byla v úrovni osy otáčení stroje.",
+   "Lokty nebo předloktí opři o polštáře, záda opřená, pás zapnutý, pokud ho stroj má."
+  ],
+  "steps": [
+   "Táhni paže obloukem dolů k bokům.",
+   "Dole stáhni laty.",
+   "Pomalu se vrať nahoru do protažení."
+  ],
+  "mistakes": [
+   "Prohýbání v bedrech.",
+   "Tlačení rukama místo tahu lokty."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "dc08-oCTUa8",
+   "title": "Machine Lat Pullovers"
+  },
+  "query": "machine lat pullover"
+ },
+ "Machine Back Extension": {
+  "setup": [
+   "Sedák a opěrku nastav tak, aby polštář byl na lopatkách.",
+   "Chodidla opři, pás přes stehna, pokud je."
+  ],
+  "steps": [
+   "Z mírného předklonu zatlač zády do opěrky až do vzpřímeného sedu.",
+   "Krátce vydrž.",
+   "Pomalu se vrať do předklonu."
+  ],
+  "mistakes": [
+   "Prudký záklon přes vzpřímenou polohu.",
+   "Moc velká váha a škubání."
+  ],
+  "breathing": "Výdech při záklonu, nádech při předklonu.",
+  "video": {
+   "id": "zFxTRJTAqlo",
+   "title": "How to Use the Life Fitness Back Extension Machine Correctly (Full Walkthrough)"
+  },
+  "query": "seated back extension machine"
+ },
+ "Reverse Hyperextension": {
+  "setup": [
+   "Lehni si na břicho tak, aby boky byly na kraji podložky, nohy visí dolů.",
+   "Chyť madla, popruh kyvadla dej za kotníky."
+  ],
+  "steps": [
+   "Zvedni nohy dozadu do vodorovné polohy stažením hýždí.",
+   "Nahoře krátce vydrž.",
+   "Pomalu spusť dolů, kyvadlo nenech švihnout."
+  ],
+  "mistakes": [
+   "Švih a odraz kyvadla.",
+   "Prohnutí nad vodorovnou polohu."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "uQqR1NHfsSU",
+   "title": "Reverse Hyperextensions Tutorial"
+  },
+  "query": "reverse hyperextension machine"
+ },
+ "Machine Preacher Curl": {
+  "setup": [
+   "Sedák nastav tak, aby podpaží leželo na horním okraji opěrky a lokty u osy stroje.",
+   "Chyť madla podhmatem."
+  ],
+  "steps": [
+   "Pokrč lokty a přitáhni madla k ramenům.",
+   "Nahoře stiskni biceps.",
+   "Pomalu povol do skoro natažených paží."
+  ],
+  "mistakes": [
+   "Zvedání loktů z opěrky.",
+   "Prudký pád dolů."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "to3m8zws1n8",
+   "title": "Machine Bicep Preacher Curl: How To"
+  },
+  "query": "machine preacher curl"
+ },
+ "Machine Tricep Extension": {
+  "setup": [
+   "Sedák nastav tak, aby lokty ležely na opěrce v úrovni osy stroje.",
+   "Chyť madla, záda opřená."
+  ],
+  "steps": [
+   "Propni lokty a zatlač madla dolů.",
+   "Dole krátce vydrž.",
+   "Pomalu povol zpět."
+  ],
+  "mistakes": [
+   "Zvedání loktů.",
+   "Švih trupem."
+  ],
+  "breathing": "Výdech při propnutí, nádech zpět.",
+  "video": {
+   "id": "dLi01TSjcVY",
+   "title": "MACHINE TRICEP EXTENSION (How To)"
+  },
+  "query": "seated triceps extension machine"
+ },
+ "Belt Squat": {
+  "setup": [
+   "Opasek si zapni kolem boků a připni k řetězu stroje.",
+   "Postav se na plošinu, chodidla na šíři ramen, drž se madel."
+  ],
+  "steps": [
+   "Odjisti stroj a dřepni co nejhlouběji s rovnými zády.",
+   "Kolena jdou ve směru špiček.",
+   "Vytlač se celými chodidly nahoru."
+  ],
+  "mistakes": [
+   "Paty se zvedají.",
+   "Kolena padají dovnitř."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "FCIZZvIM-I0",
+   "title": "Exercise Tutorial - How to use a belt squat"
+  },
+  "query": "belt squat machine"
+ },
+ "Machine Crunch": {
+  "setup": [
+   "Sedák nastav tak, aby polštáře byly na horní části hrudníku nebo madla u hlavy.",
+   "Nohy zaklesni, záda opřená."
+  ],
+  "steps": [
+   "Zakulať trup dolů, jako bys přibližoval žebra k pánvi.",
+   "Dole krátce vydrž.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Tah rukama místo břichem.",
+   "Rychlé houpání."
+  ],
+  "breathing": "Výdech při sklapnutí, nádech zpět.",
+  "video": {
+   "id": "0kLWho-pEdQ",
+   "title": "Machine Ab Crunch: How To"
+  },
+  "query": "ab crunch machine"
+ },
+ "Captain's Chair Knee Raise": {
+  "setup": [
+   "Předloktí opři o polstrování, chyť madla, záda opřená.",
+   "Nohy volně visí, ramena stlač dolů."
+  ],
+  "steps": [
+   "Zvedni kolena k hrudníku a lehce podsaď pánev.",
+   "Nahoře krátce vydrž.",
+   "Pomalu spusť nohy bez švihu."
+  ],
+  "mistakes": [
+   "Švih nohou.",
+   "Prohnutí zad."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "7KDDZtaUaxw",
+   "title": "How To Do A CAPTAIN'S CHAIR KNEE RAISE"
+  },
+  "query": "captains chair knee raise"
+ },
+ "Selectorized Torso Rotation Machine": {
+  "setup": [
+   "Sedák nastav a rozsah otáčení nastav na pohodlnou míru.",
+   "Sedni si, nohy zaklesni, hrudník k opěrce nebo madla u hrudníku."
+  ],
+  "steps": [
+   "Otoč trup na stranu proti odporu.",
+   "Krátce vydrž.",
+   "Pomalu se vrať do středu a po sérii vystřídej stranu."
+  ],
+  "mistakes": [
+   "Švih a velký rozsah.",
+   "Otáčení pánví místo trupem."
+  ],
+  "breathing": "Výdech při otočení, nádech zpět.",
+  "video": {
+   "id": "V6K9bt4zbjc",
+   "title": "How To Use The TORSO ROTATION MACHINE (Life Fitness)"
+  },
+  "query": "torso rotation machine"
+ },
+ "Dumbbell Chest Fly": {
+  "setup": [
+   "Lehni si na rovnou lavici, jednoručky drž nad hrudníkem dlaněmi k sobě.",
+   "Lopatky stáhni k sobě, chodidla pevně na zemi."
+  ],
+  "steps": [
+   "Lokty lehce pokrč a v tomto úhlu je drž celou dobu.",
+   "Obloukem spouštěj paže do stran, dokud necítíš protažení hrudníku.",
+   "Stejným obloukem paže stáhni zpět nad hrudník."
+  ],
+  "mistakes": [
+   "Propínání nebo ohýbání loktů během pohybu (z rozpažování se stane tlak).",
+   "Spouštění paží hluboko pod úroveň lavice."
+  ],
+  "breathing": "Nádech při spouštění, výdech při stahování.",
+  "video": {
+   "id": "UFASlayaWaE",
+   "title": "How To: Dumbbell Chest Fly"
+  },
+  "query": "dumbbell chest fly"
+ },
+ "Dumbbell Incline Chest Fly": {
+  "setup": [
+   "Opěradlo nastav na 30–45°, jednoručky drž nad horním hrudníkem.",
+   "Lopatky stažené, hýždě na sedáku."
+  ],
+  "steps": [
+   "Lokty lehce pokrč a zafixuj.",
+   "Paže spouštěj obloukem do stran do mírného protažení.",
+   "Stáhni je zpět nad hrudník, jako bys objímal sud."
+  ],
+  "mistakes": [
+   "Příliš strmá lavice, práci převezmou ramena.",
+   "Ruce se nahoře o sebe tlučou a ztratí napětí."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "JSDpq14vCZ8",
+   "title": "How To Do An Incline Dumbbell Fly"
+  },
+  "query": "incline dumbbell fly"
+ },
+ "Dumbbell Neutral High Incline Bench Press": {
+  "setup": [
+   "Opěradlo nastav na 45–60°, jednoručky drž u ramen dlaněmi k sobě.",
+   "Lopatky stáhni dolů a k sobě."
+  ],
+  "steps": [
+   "Tlač jednoručky nahoru nad bradu, lokty blízko těla.",
+   "Nahoře je nech jen lehce sblížit.",
+   "Pomalu spusť zpět k ramenům."
+  ],
+  "mistakes": [
+   "Lokty roztažené do stran.",
+   "Zvedání hýždí ze sedáku."
+  ],
+  "breathing": "Výdech při tlaku, nádech při spouštění.",
+  "video": {
+   "id": "rivOtuZyGVw",
+   "title": "How To Do An Neutral Grip Incline Dumbbell Bench Press",
+   "similar": true
+  },
+  "query": "neutral grip high incline dumbbell press"
+ },
+ "Neutral-Grip Dumbbell Bench Press": {
+  "setup": [
+   "Lehni si na rovnou lavici, jednoručky drž nad hrudníkem dlaněmi k sobě.",
+   "Lopatky stažené, chodidla na zemi."
+  ],
+  "steps": [
+   "Spouštěj jednoručky ke středu hrudníku, lokty asi 30° od těla.",
+   "Dole se zastav, když jsou jednoručky u hrudníku.",
+   "Vytlač je zpět nahoru."
+  ],
+  "mistakes": [
+   "Lokty kolmo do stran.",
+   "Odrážení jednoruček od hrudníku."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "Lj57a6xk7l0",
+   "title": "How To: Neutral-Grip Dumbbell Bench Press"
+  },
+  "query": "neutral grip dumbbell bench press"
+ },
+ "One Arm Dumbbell Bench Press": {
+  "setup": [
+   "Lehni si na rovnou lavici s jednou jednoručkou nad hrudníkem.",
+   "Volnou rukou se chyť lavice, chodidla široce na zemi."
+  ],
+  "steps": [
+   "Zpevni břicho, aby se trup nenakláněl k jednoručce.",
+   "Spusť jednoručku k hrudníku, loket asi 45° od těla.",
+   "Vytlač ji nahoru a po sérii vyměň ruku."
+  ],
+  "mistakes": [
+   "Přetáčení trupu za jednoručkou.",
+   "Rychlé spouštění bez kontroly."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "oOjwzG45HeA",
+   "title": "1-Arm Dumbbell Bench Press—How To Do It Properly"
+  },
+  "query": "one arm dumbbell bench press"
+ },
+ "Chest-Supported Dumbbell Row": {
+  "setup": [
+   "Opěradlo nastav na 30–45°, lehni si na něj hrudníkem, jednoručky visí dolů.",
+   "Chodidla opři o zem, brada v prodloužení páteře."
+  ],
+  "steps": [
+   "Přitáhni jednoručky k bokům, lokty jdou dozadu.",
+   "Nahoře stáhni lopatky k sobě.",
+   "Pomalu paže propni dolů."
+  ],
+  "mistakes": [
+   "Zvedání hrudníku z lavice a švih.",
+   "Krčení ramen k uším."
+  ],
+  "breathing": "Výdech při přitahování, nádech dolů.",
+  "video": {
+   "id": "ro2vfHfD0DQ",
+   "title": "How To Do A Chest Supported Dumbbell Row Correctly"
+  },
+  "query": "chest supported dumbbell row"
+ },
+ "Dumbbell Back Extension": {
+  "setup": [
+   "Polštář nastav pod kyčle, chodidla zaklesni.",
+   "Jednoručku drž oběma rukama u hrudníku."
+  ],
+  "steps": [
+   "Předkloň se v kyčlích s rovnými zády.",
+   "Zvedni trup do roviny s nohama.",
+   "Krátce vydrž a pomalu se vrať dolů."
+  ],
+  "mistakes": [
+   "Záklon nad rovinu těla.",
+   "Trhavý švih trupu."
+  ],
+  "breathing": "Výdech při zvedání, nádech dolů.",
+  "video": {
+   "id": "pNIvf3CwFlc",
+   "title": "Dumbbell Back Extension"
+  },
+  "query": "dumbbell back extension"
+ },
+ "Dumbbell Pullover": {
+  "setup": [
+   "Lehni si na rovnou lavici, jednu jednoručku drž oběma rukama nad hrudníkem.",
+   "Lokty lehce pokrčené, chodidla na zemi."
+  ],
+  "steps": [
+   "Spouštěj jednoručku obloukem za hlavu do protažení.",
+   "Bedra drž u lavice, žebra se nezvedají.",
+   "Stejným obloukem ji přitáhni zpět nad hrudník."
+  ],
+  "mistakes": [
+   "Ohýbání loktů, z pulloveru se stane triceps.",
+   "Prohnutí beder při spouštění."
+  ],
+  "breathing": "Nádech při spouštění, výdech při přitahování.",
+  "video": {
+   "id": "l0YnKjgikm0",
+   "title": "How to Do Dumbbell Pullovers (Step-by-Step)"
+  },
+  "query": "dumbbell pullover"
+ },
+ "Cuban Press": {
+  "setup": [
+   "Stůj rovně, lehké jednoručky drž nadhmatem před stehny.",
+   "Zpevni břicho a hýždě."
+  ],
+  "steps": [
+   "Přitáhni jednoručky do výšky ramen, lokty do stran a v pravém úhlu.",
+   "Předloktí vytoč nahoru, lokty zůstávají na místě.",
+   "Vytlač jednoručky nad hlavu a stejnou cestou se vrať."
+  ],
+  "mistakes": [
+   "Příliš těžké jednoručky.",
+   "Lokty klesají při vytáčení."
+  ],
+  "breathing": "Výdech při tlaku nahoru, nádech zpět.",
+  "video": {
+   "id": "CtBqRu3nyFc",
+   "title": "How To: Dumbbell Cuban Press"
+  },
+  "query": "dumbbell cuban press"
+ },
+ "Dumbbell Front Raise": {
+  "setup": [
+   "Stůj rovně, jednoručky drž před stehny nadhmatem.",
+   "Lokty lehce pokrčené, břicho zpevněné."
+  ],
+  "steps": [
+   "Zvedni paže před sebe do výšky ramen.",
+   "Nahoře krátce vydrž.",
+   "Pomalu je spusť dolů."
+  ],
+  "mistakes": [
+   "Záklon a švih trupem.",
+   "Zvedání nad úroveň očí."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "zkP0MsTcIVU",
+   "title": "How To Do A Dumbbell Front Raise"
+  },
+  "query": "dumbbell front raise"
+ },
+ "Dumbbell Incline Front Raise": {
+  "setup": [
+   "Opěradlo nastav asi na 45°, opři se o něj zády.",
+   "Jednoručky visí podél těla dlaněmi dolů."
+  ],
+  "steps": [
+   "Zvedni paže před sebe do výšky ramen.",
+   "Lokty jen lehce pokrčené.",
+   "Pomalu je vrať do protažení."
+  ],
+  "mistakes": [
+   "Odlepení zad od opěradla.",
+   "Příliš těžká váha a trhání."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "0_b43RbenY8",
+   "title": "How to Do an Incline Front Raise"
+  },
+  "query": "incline dumbbell front raise"
+ },
+ "Dumbbell Push Press": {
+  "setup": [
+   "Stůj na šíři boků, jednoručky drž na ramenou dlaněmi k sobě.",
+   "Zpevni břicho a hýždě."
+  ],
+  "steps": [
+   "Udělej krátký rychlý podřep v kolenou, trup zůstává svislý.",
+   "Odraz se z nohou a vytlač jednoručky nad hlavu.",
+   "Spusť je pod kontrolou zpět na ramena."
+  ],
+  "mistakes": [
+   "Hluboký dřep místo krátkého podřepu.",
+   "Záklon v bedrech nahoře."
+  ],
+  "breathing": "Nádech před podřepem, výdech při tlaku.",
+  "video": {
+   "id": "vuaYVK8xyqo",
+   "title": "How to do a Dumbbell Push Press"
+  },
+  "query": "dumbbell push press"
+ },
+ "Dumbbell Seated Lateral Raises": {
+  "setup": [
+   "Sedni si na lavici se vzpřímeným opěradlem, jednoručky drž podél těla.",
+   "Lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Zvedni paže do stran do výšky ramen.",
+   "Vedou lokty, malíček lehce výš než palec.",
+   "Pomalu je spusť dolů."
+  ],
+  "mistakes": [
+   "Krčení ramen k uším.",
+   "Zvedání nad výšku ramen."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "xDrYB81QXmY",
+   "title": "How To Do A Seated Lateral Raise"
+  },
+  "query": "seated dumbbell lateral raise"
+ },
+ "Dumbbell Seated Rear Delt Fly": {
+  "setup": [
+   "Sedni si na kraj lavice a předkloň se, hrudník nad stehny.",
+   "Jednoručky visí pod koleny dlaněmi k sobě."
+  ],
+  "steps": [
+   "Rozpaž obloukem do stran, lokty lehce pokrčené.",
+   "Nahoře krátce vydrž.",
+   "Pomalu paže spusť zpět."
+  ],
+  "mistakes": [
+   "Narovnávání trupu během opakování.",
+   "Stahování lopatek místo práce ramen."
+  ],
+  "breathing": "Výdech při rozpažení, nádech dolů.",
+  "video": {
+   "id": "zDMoZTf-1BQ",
+   "title": "How To Do A Dumbbell Seated Rear Delt Fly"
+  },
+  "query": "seated dumbbell rear delt fly"
+ },
+ "Dumbbell Upright Row": {
+  "setup": [
+   "Stůj rovně, jednoručky drž nadhmatem před stehny.",
+   "Břicho zpevněné, ramena dole."
+  ],
+  "steps": [
+   "Táhni jednoručky nahoru podél těla, vedou lokty.",
+   "Zastav ve výšce spodní části hrudníku.",
+   "Pomalu je spusť dolů."
+  ],
+  "mistakes": [
+   "Tahání až k bradě, které dráždí ramena.",
+   "Švih trupem."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "ciTcnS0pfmA",
+   "title": "How To Do A Standing Dumbbell Upright Row"
+  },
+  "query": "dumbbell upright row"
+ },
+ "Side Plank Lateral Raise": {
+  "setup": [
+   "Lehni si na bok, opři se o předloktí, loket pod ramenem.",
+   "Zvedni boky do bočního vzporu, lehkou jednoručku drž v horní ruce u stehna."
+  ],
+  "steps": [
+   "Udrž tělo v jedné přímce od hlavy k patám.",
+   "Zvedni horní paži do strany do výšky ramen.",
+   "Pomalu ji spusť; po sérii vyměň strany."
+  ],
+  "mistakes": [
+   "Propadání boků k zemi.",
+   "Příliš těžká jednoručka a švih."
+  ],
+  "breathing": "Klidně dýchej, výdech při zvedání paže.",
+  "video": {
+   "id": "4rP57Y97iYM",
+   "title": "Side Plank Lateral Raise"
+  },
+  "query": "side plank lateral raise"
+ },
+ "Single-Arm Dumbbell Overhead Press": {
+  "setup": [
+   "Stůj na šíři boků, jednoručku drž u ramene, loket pod ní.",
+   "Volnou ruku dej v bok, zpevni břicho a hýždě."
+  ],
+  "steps": [
+   "Vytlač jednoručku přímo nad rameno.",
+   "Trup drž svisle, neuklánět se.",
+   "Pomalu ji spusť k rameni; po sérii vyměň ruku."
+  ],
+  "mistakes": [
+   "Úklon trupu na opačnou stranu.",
+   "Záklon v bedrech."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "FAU4WE9m5cQ",
+   "title": "How To Do A Dumbbell Single Arm Overhead Press"
+  },
+  "query": "single arm dumbbell overhead press"
+ },
+ "Standing Dumbbell Press": {
+  "setup": [
+   "Stůj na šíři boků, jednoručky drž u ramen.",
+   "Zpevni břicho a hýždě, žebra dolů."
+  ],
+  "steps": [
+   "Vytlač jednoručky nad hlavu, dlaně dopředu nebo k sobě.",
+   "Nahoře je měj nad rameny, ne před hlavou.",
+   "Pomalu je spusť k ramenům."
+  ],
+  "mistakes": [
+   "Záklon v bedrech, aby šla váha nahoru.",
+   "Pomoc odrazem z kolen."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "e_f5oodNEcI",
+   "title": "How To Do A Standing Dumbbell Shoulder Press"
+  },
+  "query": "standing dumbbell shoulder press"
+ },
+ "Bayesian Curl": {
+  "setup": [
+   "Kladku nastav dolů s jedním madlem, postav se zády ke kladce a udělej krok vpřed.",
+   "Paže je natažená mírně za tělem, dlaň dopředu."
+  ],
+  "steps": [
+   "Ohni loket a přitáhni madlo k rameni.",
+   "Loket zůstává na místě, za tělem.",
+   "Pomalu paži propni zpět do protažení."
+  ],
+  "mistakes": [
+   "Loket putuje dopředu, z cviku se stane obyčejný zdvih.",
+   "Předklon trupu."
+  ],
+  "breathing": "Výdech při zdvihu, nádech dolů.",
+  "video": {
+   "id": "S6HnE1fDlaI",
+   "title": "How To Do A Bayesian Curl (Cable)"
+  },
+  "query": "bayesian cable curl"
+ },
+ "Close-Grip Push-Up off a Dumbbell": {
+  "setup": [
+   "Polož jednoručku na zem a obě dlaně dej na její konce.",
+   "Tělo v jedné přímce od hlavy k patám."
+  ],
+  "steps": [
+   "Spouštěj hrudník k jednoručce, lokty těsně u těla.",
+   "Dole se hrudník skoro dotkne jednoručky.",
+   "Vytlač se zpět nahoru."
+  ],
+  "mistakes": [
+   "Lokty roztažené do stran.",
+   "Propadlé nebo vystrčené boky."
+  ],
+  "breathing": "Nádech dolů, výdech při vytlačení.",
+  "video": {
+   "id": "jR65wQWPLs0",
+   "title": "How To Do Close Grip Push Up Off Of A Dumbbell"
+  },
+  "query": "close grip push up off dumbbell"
+ },
+ "Cross-Body Hammer Curl": {
+  "setup": [
+   "Stůj rovně, jednoručky drž podél těla dlaněmi k sobě.",
+   "Lokty u boků."
+  ],
+  "steps": [
+   "Zvedni jednu jednoručku šikmo přes tělo k opačnému rameni.",
+   "Dlaň zůstává otočená k tělu.",
+   "Pomalu ji spusť a střídej ruce."
+  ],
+  "mistakes": [
+   "Švih trupem.",
+   "Lokty odjíždějí od těla."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "ZcOXJzF62tE",
+   "title": "How to do a Cross Body Hammer Curl"
+  },
+  "query": "cross body hammer curl"
+ },
+ "Dumbbell Concentration Curl": {
+  "setup": [
+   "Sedni si na lavici, nohy rozkročené, loket opři o vnitřní stranu stehna.",
+   "Paže visí s jednoručkou dolů, dlaň od stehna."
+  ],
+  "steps": [
+   "Ohni loket a zvedni jednoručku k rameni.",
+   "Nahoře biceps stáhni.",
+   "Pomalu paži propni dolů; po sérii vyměň ruku."
+  ],
+  "mistakes": [
+   "Zvedání lokte ze stehna.",
+   "Pomoc trupem."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "IX3d5lTPais",
+   "title": "Dumbbell Concentration Curl"
+  },
+  "query": "dumbbell concentration curl"
+ },
+ "Dumbbell Preacher Curl": {
+  "setup": [
+   "Sedák nastav tak, aby podpaží bylo na horní hraně opěrky.",
+   "Jednoručky drž podhmatem, paže na opěrce."
+  ],
+  "steps": [
+   "Zvedni jednoručky k ramenům.",
+   "Nahoře stáhni biceps.",
+   "Pomalu je spusť skoro do propnutí."
+  ],
+  "mistakes": [
+   "Rychlé spouštění a odraz dole.",
+   "Zvedání loktů z opěrky."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "lLmYH1bOIz4",
+   "title": "How To: Preacher Dumbbell Curl (Bicep)"
+  },
+  "query": "dumbbell preacher curl"
+ },
+ "Dumbbell Skullcrusher": {
+  "setup": [
+   "Lehni si na rovnou lavici, jednoručky drž nad rameny dlaněmi k sobě.",
+   "Paže svisle, lopatky na lavici."
+  ],
+  "steps": [
+   "Ohni lokty a spouštěj jednoručky vedle hlavy.",
+   "Nadloktí zůstává na místě.",
+   "Propni lokty zpět nahoru."
+  ],
+  "mistakes": [
+   "Lokty se rozjíždějí do stran.",
+   "Pohyb v ramenou místo v loktech."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "8ncEJDm7Cig",
+   "title": "Dumbbell Skull Crusher Tutorial"
+  },
+  "query": "dumbbell skull crusher"
+ },
+ "Dumbbell Tricep Kickback": {
+  "setup": [
+   "Jednu ruku a koleno opři o lavici, záda rovná.",
+   "Nadloktí s jednoručkou drž u těla rovnoběžně se zemí."
+  ],
+  "steps": [
+   "Propni loket a posuň jednoručku dozadu.",
+   "Nahoře krátce vydrž.",
+   "Pomalu ohni loket zpět; po sérii vyměň ruku."
+  ],
+  "mistakes": [
+   "Švih paží z ramene.",
+   "Nadloktí klesá dolů."
+  ],
+  "breathing": "Výdech při propnutí, nádech zpět.",
+  "video": {
+   "id": "Kuw99lFTIQs",
+   "title": "How To Do A Dumbbell Tricep Kickback"
+  },
+  "query": "dumbbell tricep kickback"
+ },
+ "Zottman Curl": {
+  "setup": [
+   "Stůj rovně, jednoručky drž podél těla dlaněmi dopředu.",
+   "Lokty u boků."
+  ],
+  "steps": [
+   "Zvedni jednoručky k ramenům jako běžný zdvih.",
+   "Nahoře otoč dlaně dolů.",
+   "Pomalu spouštěj nadhmatem, dole dlaně otoč zpět."
+  ],
+  "mistakes": [
+   "Rychlé spouštění, které ubere práci předloktí.",
+   "Švih trupem."
+  ],
+  "breathing": "Výdech nahoru, nádech při spouštění.",
+  "video": {
+   "id": "HkCxX3mQlVg",
+   "title": "How to do the Zottman Curl Exercise"
+  },
+  "query": "zottman curl"
+ },
+ "Dumbbell Cossack Squat": {
+  "setup": [
+   "Stoj široce, špičky lehce ven, jednoručku drž svisle u hrudníku.",
+   "Hrudník vzpřímený, břicho zpevněné."
+  ],
+  "steps": [
+   "Přenes váhu na jednu nohu a sedej do hlubokého dřepu na ní.",
+   "Druhá noha zůstává natažená, špička míří nahoru.",
+   "Odraz se zpět do středu a pokračuj na druhou stranu."
+  ],
+  "mistakes": [
+   "Zvedání paty pokrčené nohy.",
+   "Kulatá záda a hrudník padá dopředu."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "PO2j3cbV0SY",
+   "title": "Cossack Squat With Dumbbell"
+  },
+  "query": "dumbbell cossack squat"
+ },
+ "Dumbbell Cross Body Romanian Deadlift": {
+  "setup": [
+   "Stůj na jedné noze, koleno lehce pokrčené.",
+   "Jednoručku drž v ruce na straně zvednuté nohy."
+  ],
+  "steps": [
+   "Předkloň se v kyčli, volná noha jde dozadu.",
+   "Jednoručku veď šikmo dolů k chodidlu stojné nohy.",
+   "Zatlač patou a narovnej se; po sérii vyměň nohu."
+  ],
+  "mistakes": [
+   "Otevírání pánve do strany.",
+   "Kulatá záda místo pohybu v kyčli."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "qKD4K2sXKwc",
+   "title": "Dumbbell Cross Body Romanian Deadlift"
+  },
+  "query": "dumbbell cross body romanian deadlift"
+ },
+ "Dumbbell Deadlift": {
+  "setup": [
+   "Postav se mezi dvě jednoručky na zemi, chodidla na šíři boků.",
+   "Pokrč kolena, chyť jednoručky, záda rovná."
+  ],
+  "steps": [
+   "Zpevni břicho a postav se tlakem nohou do země.",
+   "Nahoře propni kyčle bez záklonu.",
+   "Pod kontrolou je spusť zpět na zem."
+  ],
+  "mistakes": [
+   "Kulatá záda při zvedání.",
+   "Trhnutí místo plynulého tahu."
+  ],
+  "breathing": "Nádech a zpevnění dole, výdech nahoře.",
+  "video": {
+   "id": "HMcXQyEqJ7A",
+   "title": "How to Dumbbell Deadlift"
+  },
+  "query": "dumbbell deadlift"
+ },
+ "Dumbbell Feet Elevated Glute Bridge": {
+  "setup": [
+   "Lehni si na záda, paty polož na lavici.",
+   "Jednoručku drž oběma rukama na pánvi."
+  ],
+  "steps": [
+   "Zatlač patami do lavice a zvedni boky.",
+   "Nahoře stáhni hýždě, tělo v přímce od ramen ke kolenům.",
+   "Pomalu boky spusť skoro k zemi."
+  ],
+  "mistakes": [
+   "Záklon v bedrech místo práce hýždí.",
+   "Odrážení boků od země."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "JZwPjtr4pCU",
+   "title": "Dumbbell-Resisted Feet Elevated Glute Bridge Raise"
+  },
+  "query": "feet elevated dumbbell glute bridge"
+ },
+ "Dumbbell Front Squat": {
+  "setup": [
+   "Stůj na šíři ramen, jednoručky opři jedním koncem o ramena.",
+   "Lokty vpředu, hrudník nahoře."
+  ],
+  "steps": [
+   "Sedej do dřepu, kolena jdou ve směru špiček.",
+   "Jdi tak hluboko, jak udržíš rovná záda.",
+   "Zatlač do země a postav se."
+  ],
+  "mistakes": [
+   "Lokty padají a jednoručky sjíždějí dopředu.",
+   "Kolena padají dovnitř."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "YF3FAHS2j1M",
+   "title": "Dumbbell Front Squat (2 DB's): Proper Form"
+  },
+  "query": "dumbbell front squat"
+ },
+ "Dumbbell Goblet Alternating Curtsy Lunge": {
+  "setup": [
+   "Stůj rovně, jednoručku drž svisle u hrudníku.",
+   "Chodidla na šíři boků."
+  ],
+  "steps": [
+   "Ukroč jednou nohou šikmo dozadu za druhou nohu.",
+   "Klesni, až je přední stehno skoro rovnoběžné se zemí.",
+   "Odraz se zpět a vystřídej nohy."
+  ],
+  "mistakes": [
+   "Přetáčení pánve do strany.",
+   "Přední koleno padá dovnitř."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "oXjrmyY5Zo4",
+   "title": "P360: Goblet Curtsy Lunge"
+  },
+  "query": "goblet curtsy lunge"
+ },
+ "Dumbbell Goblet Bulgarian Split Squat": {
+  "setup": [
+   "Zadní nohu polož nártem na lavici, přední chodidlo dost vpředu.",
+   "Jednoručku drž svisle u hrudníku."
+  ],
+  "steps": [
+   "Klesej rovně dolů, zadní koleno míří k zemi.",
+   "Dole je přední stehno zhruba rovnoběžné se zemí.",
+   "Zatlač přední nohou a vrať se nahoru; po sérii vyměň nohy."
+  ],
+  "mistakes": [
+   "Přední chodidlo moc blízko lavice.",
+   "Odrážení zadní nohou."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "iANV_6_2N_o",
+   "title": "Goblet Bulgarian Split Squat (Exercise Library)"
+  },
+  "query": "goblet bulgarian split squat"
+ },
+ "Dumbbell Goblet Split Squat": {
+  "setup": [
+   "Udělej dlouhý krok, zadní pata zvednutá.",
+   "Jednoručku drž svisle u hrudníku."
+  ],
+  "steps": [
+   "Klesej rovně dolů, dokud zadní koleno skoro nesáhne na zem.",
+   "Přední koleno jde ve směru špičky.",
+   "Zatlač přední nohou nahoru; po sérii vyměň nohy."
+  ],
+  "mistakes": [
+   "Moc krátký krok, koleno jde daleko přes špičku.",
+   "Předklon trupu."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "6P9S7flcKds",
+   "title": "Goblet Split Squat (Exercise Library)"
+  },
+  "query": "goblet split squat"
+ },
+ "Dumbbell Lateral Lunge": {
+  "setup": [
+   "Stůj rovně, jednoručku drž u hrudníku.",
+   "Chodidla u sebe."
+  ],
+  "steps": [
+   "Udělej široký krok do strany a sedni na tuto nohu.",
+   "Druhá noha zůstává natažená.",
+   "Odraz se zpět do stoje; střídej strany nebo dokonči sérii na jedné."
+  ],
+  "mistakes": [
+   "Koleno padá dovnitř.",
+   "Kulatá záda v hlubokém sedu."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "eV9F6LrlWhA",
+   "title": "Dumbbell Lateral Lunge"
+  },
+  "query": "dumbbell lateral lunge"
+ },
+ "Dumbbell Overhead Squat": {
+  "setup": [
+   "Lehkou jednoručku vytlač nad hlavu jednou rukou.",
+   "Stoj na šíři ramen, pohled vpřed."
+  ],
+  "steps": [
+   "Sedej do dřepu, paže zůstává svisle nad ramenem.",
+   "Jdi jen tak hluboko, jak udržíš paži nad hlavou.",
+   "Postav se a po sérii vyměň ruku."
+  ],
+  "mistakes": [
+   "Paže padá dopředu.",
+   "Příliš těžká jednoručka."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "oGV21KvorfM",
+   "title": "Dumbbell OverHead Squat - How To"
+  },
+  "query": "dumbbell overhead squat"
+ },
+ "Dumbbell Single Leg Hip Thrust": {
+  "setup": [
+   "Opři lopatky o kraj lavice, jedno chodidlo na zemi, druhá noha zvednutá.",
+   "Jednoručku drž na pánvi na straně stojné nohy."
+  ],
+  "steps": [
+   "Zatlač patou a zvedni boky do roviny.",
+   "Nahoře stáhni hýždě.",
+   "Pomalu boky spusť; po sérii vyměň nohu."
+  ],
+  "mistakes": [
+   "Pánev se naklání ke zvednuté noze.",
+   "Záklon hlavy a beder."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "9eTO67ydcrY",
+   "title": "How To: Single Leg Dumbbell Hip Thrust"
+  },
+  "query": "single leg dumbbell hip thrust"
+ },
+ "Dumbbell Squat": {
+  "setup": [
+   "Stůj na šíři ramen, jednoručky drž podél těla.",
+   "Hrudník nahoře, břicho zpevněné."
+  ],
+  "steps": [
+   "Sedej do dřepu, jednoručky visí svisle.",
+   "Kolena jdou ve směru špiček.",
+   "Zatlač do země a postav se."
+  ],
+  "mistakes": [
+   "Paty se zvedají.",
+   "Kolena padají dovnitř."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "ZXwvmRSRRxY",
+   "title": "Exercise Tutorial: Dumbbell Squat"
+  },
+  "query": "dumbbell squat"
+ },
+ "Dumbbell Thruster": {
+  "setup": [
+   "Stůj na šíři ramen, jednoručky na ramenou.",
+   "Lokty vpředu, břicho zpevněné."
+  ],
+  "steps": [
+   "Sedni do dřepu s jednoručkami na ramenou.",
+   "Ze dna se dynamicky postav a stejnou energií vytlač jednoručky nad hlavu.",
+   "Spusť je na ramena a navaž dalším dřepem."
+  ],
+  "mistakes": [
+   "Tlak paží až po dostání se do stoje (dvě oddělené části).",
+   "Záklon nahoře."
+  ],
+  "breathing": "Nádech dole, výdech při tlaku.",
+  "video": {
+   "id": "LA885CMp1yw",
+   "title": "Dumbbell Thruster Tutorial"
+  },
+  "query": "dumbbell thruster"
+ },
+ "Dumbbell Tibialis Raise": {
+  "setup": [
+   "Sedni si na kraj lavice, nohy visí, jednoručku sevři mezi chodidly za nárty.",
+   "Ruce se drží lavice."
+  ],
+  "steps": [
+   "Přitáhni špičky nahoru k holeni.",
+   "Nahoře krátce vydrž.",
+   "Pomalu špičky spusť dolů."
+  ],
+  "mistakes": [
+   "Jednoručka volně v chodidlech, hrozí pád.",
+   "Malý rozsah s cuknutím."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "xs7wTPl28CE",
+   "title": "How To: Seated Dumbbell Tibialis Raise"
+  },
+  "query": "dumbbell tibialis raise"
+ },
+ "Dumbbell Walking Lunges": {
+  "setup": [
+   "Stůj rovně s jednoručkami podél těla.",
+   "Před sebou měj volný prostor na kroky."
+  ],
+  "steps": [
+   "Udělej dlouhý krok vpřed a klesni, zadní koleno nad zemí.",
+   "Odraz se přední nohou a přenes zadní nohu dopředu do dalšího výpadu.",
+   "Pokračuj střídavě, každá noha má stejný počet."
+  ],
+  "mistakes": [
+   "Krátké kroky a koleno daleko přes špičku.",
+   "Předklon trupu."
+  ],
+  "breathing": "Nádech dolů, výdech při zvedání.",
+  "video": {
+   "id": "qJ--a4eVsXY",
+   "title": "How To: Dumbbell Walking Lunges"
+  },
+  "query": "dumbbell walking lunge"
+ },
+ "Heel Elevated Dumbbell Front Squat": {
+  "setup": [
+   "Postav paty na kotouč nebo klín, jednoručky opři o ramena.",
+   "Chodidla na šíři boků."
+  ],
+  "steps": [
+   "Klesej do hlubokého dřepu s trupem vzpřímeným.",
+   "Kolena se mohou posunout přes špičky.",
+   "Zatlač do země a postav se."
+  ],
+  "mistakes": [
+   "Moc vysoká podložka a ztráta rovnováhy.",
+   "Lokty padají dolů."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "pNtd_2r-1dc",
+   "title": "Heel Elevated Dumbbell Front Squat"
+  },
+  "query": "heel elevated dumbbell front squat"
+ },
+ "Dumbbell Russian Twist": {
+  "setup": [
+   "Sedni si na podložku, kolena pokrčená, trup lehce zakloň.",
+   "Jednoručku drž oběma rukama před hrudníkem."
+  ],
+  "steps": [
+   "Otoč trup a dej jednoručku k jednomu boku.",
+   "Vrať se středem a otoč na druhou stranu.",
+   "Počítej opakování na stranu, pohyb drž klidný."
+  ],
+  "mistakes": [
+   "Kulatá záda a propadlý hrudník.",
+   "Hýbání jen rukama bez otočení trupu."
+  ],
+  "breathing": "Výdech při otočení, nádech ve středu.",
+  "video": {
+   "id": "yTtc5wfjMK0",
+   "title": "How To Dumbbell Russian Twist"
+  },
+  "query": "dumbbell russian twist"
+ },
+ "Dumbbell Side Bend": {
+  "setup": [
+   "Stůj rovně, jednoručku drž v jedné ruce podél těla.",
+   "Volnou ruku dej v bok."
+  ],
+  "steps": [
+   "Ukloň se k jednoručce, jen do strany.",
+   "Narovnej se zpět tahem šikmých břišních svalů opačné strany.",
+   "Po sérii vyměň ruku."
+  ],
+  "mistakes": [
+   "Předklon nebo otáčení trupu.",
+   "Jednoručky v obou rukou (vyruší se navzájem)."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "SAc_r42va6g",
+   "title": "How to Do Dumbbell Side Bends Correctly"
+  },
+  "query": "dumbbell side bend"
+ },
+ "Dumbbell Single Arm Clean And Press": {
+  "setup": [
+   "Jednoručku polož mezi chodidla, stoj na šíři boků.",
+   "Pokrč kolena a chyť ji jednou rukou, záda rovná."
+  ],
+  "steps": [
+   "Prudce propni kyčle a nahoď jednoručku na rameno, loket pod ní.",
+   "Z ramene ji vytlač nad hlavu.",
+   "Spusť ji na rameno a pak pod kontrolou na zem; po sérii vyměň ruku."
+  ],
+  "mistakes": [
+   "Tah jen paží bez práce kyčlí.",
+   "Kulatá záda dole."
+  ],
+  "breathing": "Výdech při nadhozu i tlaku, nádech mezi nimi.",
+  "video": {
+   "id": "Ge4gINlUbLw",
+   "title": "How To Do A Single Arm Dumbbell Clean and Press"
+  },
+  "query": "dumbbell single arm clean and press"
+ },
+ "Dumbbell Superman": {
+  "setup": [
+   "Lehni si na břicho, paže natažené před sebou s lehkými jednoručkami.",
+   "Nohy natažené, pohled do podložky."
+  ],
+  "steps": [
+   "Zvedni současně paže, hrudník a nohy kousek od země.",
+   "Nahoře 1–2 s vydrž.",
+   "Pomalu se vrať dolů."
+  ],
+  "mistakes": [
+   "Záklon hlavy.",
+   "Příliš vysoký švih nahoru."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "A6RXOJ3FxUA",
+   "title": "Dumbbell superman"
+  },
+  "query": "dumbbell superman"
+ },
+ "Dumbbell Windmill": {
+  "setup": [
+   "Lehkou jednoručku vytlač nad hlavu, chodidla na šíři ramen, špičky vytočené od ní.",
+   "Pohled na jednoručku."
+  ],
+  "steps": [
+   "Posuň boky na stranu jednoručky a předkloň se volnou rukou ke spodnímu chodidlu.",
+   "Paže s jednoručkou zůstává svislá nad ramenem.",
+   "Pomalu se narovnej; po sérii vyměň strany."
+  ],
+  "mistakes": [
+   "Ohýbání lokte s jednoručkou.",
+   "Kulatá záda místo pohybu v kyčli."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "07O9TudA3Z8",
+   "title": "How To: Dumbbell Windmill"
+  },
+  "query": "dumbbell windmill"
+ },
+ "Bench Dips": {
+  "setup": [
+   "Sedni si na kraj lavice, dlaně vedle boků, prsty dopředu.",
+   "Sjeď hýžděmi z lavice, nohy pokrčené nebo natažené."
+  ],
+  "steps": [
+   "Ohni lokty a spouštěj se, dokud nadloktí není zhruba vodorovně.",
+   "Lokty míří dozadu, ne do stran.",
+   "Propni lokty a vytlač se nahoru."
+  ],
+  "mistakes": [
+   "Příliš hluboký sed, který přetěžuje rameno.",
+   "Ramena padají k uším."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "IExSaQUjyIw",
+   "title": "Bench Triceps Dips"
+  },
+  "query": "bench dips"
+ },
+ "Barbell Floor Press": {
+  "setup": [
+   "Lehni si na zem pod osu v kleci, háky nastav nízko.",
+   "Úchop o trochu širší než ramena, lopatky stažené."
+  ],
+  "steps": [
+   "Sundej osu a drž ji nad hrudníkem.",
+   "Spouštěj ji, dokud se nadloktí nedotkne země.",
+   "Krátce se zastav a vytlač osu nahoru."
+  ],
+  "mistakes": [
+   "Odrážení loktů od země.",
+   "Lokty kolmo do stran."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "QQQKtER1khI",
+   "title": "How To: Barbell Floor Press"
+  },
+  "query": "barbell floor press"
+ },
+ "Barbell Deadlift": {
+  "setup": [
+   "Postav se k ose, ta je nad středem chodidel, chodidla na šíři boků.",
+   "Chyť osu těsně vně kolen, holeně se jí dotknou, záda rovná."
+  ],
+  "steps": [
+   "Nadechni se, zpevni břicho a zatlač nohama do země.",
+   "Osa jede těsně podél nohou, kyčle a ramena stoupají spolu.",
+   "Nahoře propni kyčle, pak osu pod kontrolou spusť stejnou cestou."
+  ],
+  "mistakes": [
+   "Kulatá záda.",
+   "Osa daleko od těla."
+  ],
+  "breathing": "Nádech a zpevnění před tahem, výdech nahoře.",
+  "video": {
+   "id": "Ymr0AIcnaJ8",
+   "title": "How To: Conventional Deadlift"
+  },
+  "query": "barbell deadlift"
+ },
+ "Barbell Pullover": {
+  "setup": [
+   "Lehni si na rovnou lavici, lehkou osu drž nad hrudníkem úzkým úchopem.",
+   "Lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Spouštěj osu obloukem za hlavu do protažení.",
+   "Úhel loktů se nemění.",
+   "Přitáhni osu zpět nad hrudník."
+  ],
+  "mistakes": [
+   "Příliš těžká osa a ohýbání loktů.",
+   "Prohnutí beder."
+  ],
+  "breathing": "Nádech při spouštění, výdech při přitahování.",
+  "video": {
+   "id": "E4NQ5DfqwbU",
+   "title": "Barbell Pullover"
+  },
+  "query": "barbell pullover"
+ },
+ "Barbell Rack Pull": {
+  "setup": [
+   "Pojistky v kleci nastav těsně nad nebo pod kolena, osu na ně polož.",
+   "Postav se k ose, úchop na šíři ramen, záda rovná."
+  ],
+  "steps": [
+   "Zpevni břicho a táhni osu nahoru podél stehen.",
+   "Nahoře propni kyčle a stáhni lopatky.",
+   "Pod kontrolou osu vrať na pojistky."
+  ],
+  "mistakes": [
+   "Záklon nahoře.",
+   "Pouštění osy na pojistky."
+  ],
+  "breathing": "Nádech a zpevnění před tahem, výdech nahoře.",
+  "video": {
+   "id": "jKMB4sAUsa8",
+   "title": "Barbell Rack Pull Tutorial"
+  },
+  "query": "barbell rack pull"
+ },
+ "Pendlay Row": {
+  "setup": [
+   "Osa leží na zemi, předkloň se s rovnými zády, trup skoro vodorovně.",
+   "Úchop o něco širší než ramena."
+  ],
+  "steps": [
+   "Prudce přitáhni osu ke spodní části hrudníku.",
+   "Nahoře stáhni lopatky.",
+   "Polož osu zpět na zem a z klidu začni další opakování."
+  ],
+  "mistakes": [
+   "Zvedání trupu při každém tahu.",
+   "Kulatá záda."
+  ],
+  "breathing": "Výdech při přitahování, nádech dole.",
+  "video": {
+   "id": "2xJ7FG7_T7c",
+   "title": "How To: Pendlay Row"
+  },
+  "query": "pendlay row"
+ },
+ "Seal Row": {
+  "setup": [
+   "Lavici podlož, aby osa visela pod ní s propnutými pažemi; lehni si na ni břichem.",
+   "Osu chyť úchopem na šíři ramen."
+  ],
+  "steps": [
+   "Přitáhni osu ke spodní straně lavice.",
+   "Nahoře stáhni lopatky.",
+   "Pomalu paže propni dolů."
+  ],
+  "mistakes": [
+   "Zvedání hrudníku z lavice.",
+   "Trhání a odrážení."
+  ],
+  "breathing": "Výdech při přitahování, nádech dolů.",
+  "video": {
+   "id": "-f-GK3PNfwc",
+   "title": "Barbell Seal Row"
+  },
+  "query": "barbell seal row"
+ },
+ "Barbell Rear Delt Row": {
+  "setup": [
+   "Předkloň se s rovnými zády, osu drž širokým nadhmatem.",
+   "Kolena lehce pokrčená."
+  ],
+  "steps": [
+   "Přitáhni osu k hornímu hrudníku, lokty jdou do stran.",
+   "Nahoře krátce vydrž.",
+   "Pomalu osu spusť."
+  ],
+  "mistakes": [
+   "Lokty u těla (z cviku se stane obyčejný přítah).",
+   "Švih trupem."
+  ],
+  "breathing": "Výdech při přitahování, nádech dolů.",
+  "video": {
+   "id": "rTbb70P8_BI",
+   "title": "How To Do Barbell Rear Delt Row"
+  },
+  "query": "barbell rear delt row"
+ },
+ "Barbell Upright Row": {
+  "setup": [
+   "Stůj rovně, osu drž nadhmatem na šíři ramen nebo o něco širším.",
+   "Břicho zpevněné."
+  ],
+  "steps": [
+   "Táhni osu nahoru podél těla, vedou lokty.",
+   "Zastav ve výšce spodního hrudníku.",
+   "Pomalu osu spusť."
+  ],
+  "mistakes": [
+   "Úzký úchop a tahání až k bradě.",
+   "Švih trupem."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "nIJGvsdNtFE",
+   "title": "How to Do Upright Barbell Rows"
+  },
+  "query": "barbell upright row"
+ },
+ "Seated Barbell Military Press": {
+  "setup": [
+   "Lavici se svislým opěradlem dej do klece, háky ve výšce brady.",
+   "Úchop o něco širší než ramena."
+  ],
+  "steps": [
+   "Sundej osu a drž ji u horního hrudníku.",
+   "Vytlač ji nad hlavu, hlava jde lehce dozadu a pak pod osu.",
+   "Pomalu ji spusť k hrudníku."
+  ],
+  "mistakes": [
+   "Záklon a odlepení zad od opěradla.",
+   "Spouštění za hlavu."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "OoE0pJm4Z_4",
+   "title": "How to: Seated Barbell Shoulder Press (Military Press)"
+  },
+  "query": "seated barbell military press"
+ },
+ "Barbell Curl": {
+  "setup": [
+   "Stůj rovně, osu drž podhmatem na šíři ramen.",
+   "Lokty u boků."
+  ],
+  "steps": [
+   "Zvedni osu k ramenům, lokty zůstávají na místě.",
+   "Nahoře biceps stáhni.",
+   "Pomalu osu spusť do propnutí."
+  ],
+  "mistakes": [
+   "Švih trupem.",
+   "Lokty jdou dopředu."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "QZEqB6wUPxQ",
+   "title": "How To: Barbell Bicep Curl"
+  },
+  "query": "barbell curl"
+ },
+ "Barbell Drag Curl": {
+  "setup": [
+   "Stůj rovně, osu drž podhmatem na šíři ramen u stehen.",
+   "Břicho zpevněné."
+  ],
+  "steps": [
+   "Táhni osu nahoru těsně po těle, lokty jdou dozadu.",
+   "Zastav pod hrudníkem a stáhni biceps.",
+   "Stejnou cestou osu spusť."
+  ],
+  "mistakes": [
+   "Osa odjíždí od těla.",
+   "Krčení ramen."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "BGapWc0SCDY",
+   "title": "How to: Barbell Drag Curl"
+  },
+  "query": "barbell drag curl"
+ },
+ "Barbell Skullcrusher": {
+  "setup": [
+   "Lehni si na rovnou lavici, osu drž úzkým nadhmatem nad rameny.",
+   "Paže svisle."
+  ],
+  "steps": [
+   "Ohni lokty a spouštěj osu k čelu nebo těsně za hlavu.",
+   "Nadloktí zůstává na místě.",
+   "Propni lokty zpět nahoru."
+  ],
+  "mistakes": [
+   "Lokty do stran.",
+   "Rychlé spouštění k obličeji."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "p4kYa7ZLdQk",
+   "title": "How to do a Barbell skull crusher"
+  },
+  "query": "barbell skull crusher"
+ },
+ "Reverse Grip Barbell Curl": {
+  "setup": [
+   "Stůj rovně, osu drž nadhmatem na šíři ramen.",
+   "Lokty u boků."
+  ],
+  "steps": [
+   "Zvedni osu k ramenům, zápěstí rovná.",
+   "Nahoře krátce vydrž.",
+   "Pomalu osu spusť."
+  ],
+  "mistakes": [
+   "Ohýbání zápěstí dolů.",
+   "Příliš těžká osa a švih."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "YO98hq3vX7g",
+   "title": "Reverse Grip Barbell Curl (How To)"
+  },
+  "query": "reverse grip barbell curl"
+ },
+ "Spider Curl": {
+  "setup": [
+   "Opěradlo nastav na 45°, lehni si na něj hrudníkem.",
+   "Osu drž podhmatem, paže visí svisle."
+  ],
+  "steps": [
+   "Zvedni osu k ramenům, nadloktí zůstává svisle.",
+   "Nahoře biceps stáhni.",
+   "Pomalu osu spusť."
+  ],
+  "mistakes": [
+   "Švih nadloktím dopředu.",
+   "Zvedání hrudníku z lavice."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "M61eMsycpfs",
+   "title": "Barbell Spider Curls"
+  },
+  "query": "barbell spider curl"
+ },
+ "Barbell Banded Back Squat": {
+  "setup": [
+   "Gumy uvaž k dolní části klece a navlékni na konce osy.",
+   "Osu dej na horní záda, krok z háků."
+  ],
+  "steps": [
+   "Sedej do dřepu pod kontrolou.",
+   "Ze dna se rychle postav proti rostoucímu odporu.",
+   "Nahoře propni kyčle a pokračuj dalším opakováním."
+  ],
+  "mistakes": [
+   "Gumy nestejně napnuté na obou stranách.",
+   "Kolena padají dovnitř."
+  ],
+  "breathing": "Nádech a zpevnění nahoře, výdech po průchodu nejtěžším místem.",
+  "video": {
+   "id": "vpCec7gqDxE",
+   "title": "How To Do A Banded Barbell Back Squat"
+  },
+  "query": "banded barbell back squat"
+ },
+ "Barbell Glute Bridge": {
+  "setup": [
+   "Lehni si na záda, osu s podložkou přetoč přes stehna na pánev.",
+   "Chodidla blízko hýždí, na šíři boků."
+  ],
+  "steps": [
+   "Zatlač patami a zvedni boky.",
+   "Nahoře stáhni hýždě, žebra dolů.",
+   "Pomalu boky spusť k zemi."
+  ],
+  "mistakes": [
+   "Záklon v bedrech.",
+   "Chodidla moc daleko, práci přebírají zadní stehna."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "YUD9QkJUWWk",
+   "title": "Barbell Glute Bridge - How to Perform Properly"
+  },
+  "query": "barbell glute bridge"
+ },
+ "Barbell Split Squat": {
+  "setup": [
+   "Osu dej na horní záda a vyjdi z klece.",
+   "Udělej dlouhý krok, zadní pata zvednutá."
+  ],
+  "steps": [
+   "Klesej rovně dolů, zadní koleno k zemi.",
+   "Přední koleno jde ve směru špičky.",
+   "Zatlač přední nohou nahoru; po sérii vyměň nohy."
+  ],
+  "mistakes": [
+   "Úzký postoj, kdy chodidla stojí v jedné linii a padáš do stran.",
+   "Předklon trupu."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "r1jukGZPnZI",
+   "title": "How to Do a Barbell Split Squat - Men's Health"
+  },
+  "query": "barbell split squat"
+ },
+ "Barbell Thruster": {
+  "setup": [
+   "Osu dej na přední ramena, úchop o něco širší než ramena.",
+   "Lokty vpředu."
+  ],
+  "steps": [
+   "Sedni do předního dřepu.",
+   "Ze dna se dynamicky postav a stejnou energií vytlač osu nad hlavu.",
+   "Spusť ji na ramena a navaž dalším dřepem."
+  ],
+  "mistakes": [
+   "Lokty padají a osa sjíždí dopředu.",
+   "Záklon nahoře."
+  ],
+  "breathing": "Nádech dole, výdech při tlaku.",
+  "video": {
+   "id": "TH9LJsYIbx8",
+   "title": "Barbell Thruster - CrossFit Exercise Guide"
+  },
+  "query": "barbell thruster"
+ },
+ "Deficit Deadlift": {
+  "setup": [
+   "Postav se na stabilní kotouč nebo nízkou plošinu (2–5 cm), osa nad středem chodidel.",
+   "Chyť osu, holeně u ní, záda rovná."
+  ],
+  "steps": [
+   "Zpevni břicho a zatlač nohama do plošiny.",
+   "Osa jede těsně podél nohou.",
+   "Nahoře propni kyčle a osu pod kontrolou vrať na zem."
+  ],
+  "mistakes": [
+   "Příliš vysoká plošina a kulatá záda.",
+   "Kyčle vystřelí nahoru dřív než ramena."
+  ],
+  "breathing": "Nádech a zpevnění před tahem, výdech nahoře.",
+  "video": {
+   "id": "hnuPZZfeRzs",
+   "title": "How to Perform a Deficit Deadlift"
+  },
+  "query": "deficit deadlift"
+ },
+ "Pause Squat": {
+  "setup": [
+   "Osu dej na horní záda a vyjdi z klece.",
+   "Chodidla na šíři ramen."
+  ],
+  "steps": [
+   "Sedni do dřepu a dole 2 s vydrž bez povolení.",
+   "Z klidu se postav, bez odrazu.",
+   "Nahoře se nadechni a pokračuj."
+  ],
+  "mistakes": [
+   "Povolení břicha v pauze.",
+   "Pauza vysoko nad paralelou."
+  ],
+  "breathing": "Nádech nahoře, zadrž v pauze, výdech nahoře.",
+  "video": {
+   "id": "t8PljCQC-II",
+   "title": "How to Pause Back Squat"
+  },
+  "query": "pause squat"
+ },
+ "Sumo Deadlift": {
+  "setup": [
+   "Stoj široce, špičky ven, osa nad středem chodidel.",
+   "Chyť osu na šíři ramen mezi koleny, hrudník nahoře."
+  ],
+  "steps": [
+   "Zatlač kolena ven a chodidly roztlač zem.",
+   "Postav se, osa jede těsně u těla.",
+   "Nahoře propni kyčle a osu pod kontrolou spusť."
+  ],
+  "mistakes": [
+   "Kolena padají dovnitř.",
+   "Kyčle vyletí nahoru a tah dokončí záda."
+  ],
+  "breathing": "Nádech a zpevnění před tahem, výdech nahoře.",
+  "video": {
+   "id": "JbY72Him34Q",
+   "title": "How To Correctly Perform A Sumo Deadlift"
+  },
+  "query": "sumo deadlift"
+ },
+ "Kettlebell Gorilla Row": {
+  "setup": [
+   "Stoj širší než boky, dva kettlebelly mezi chodidly.",
+   "Předkloň se s rovnými zády a chyť oba."
+  ],
+  "steps": [
+   "Přitáhni jeden kettlebell k boku, druhou rukou se opírej o ten na zemi.",
+   "Polož ho a přitáhni druhý.",
+   "Střídej strany, trup zůstává nízko a rovně."
+  ],
+  "mistakes": [
+   "Přetáčení trupu za tahem.",
+   "Kulatá záda."
+  ],
+  "breathing": "Výdech při přitahování, nádech při pokládání.",
+  "video": {
+   "id": "UsxcaALqr2c",
+   "title": "The Kettlebell Gorilla Row"
+  },
+  "query": "kettlebell gorilla row"
+ },
+ "Kettlebell Renegade Rows": {
+  "setup": [
+   "Dva kettlebelly polož na šíři ramen a opři se o ně ve vzporu.",
+   "Chodidla široce pro stabilitu."
+  ],
+  "steps": [
+   "Přitáhni jeden kettlebell k boku, druhou rukou tlač do země.",
+   "Polož ho pod kontrolou.",
+   "Vystřídej strany, boky drž v klidu."
+  ],
+  "mistakes": [
+   "Přetáčení boků.",
+   "Chodidla u sebe a ztráta rovnováhy."
+  ],
+  "breathing": "Výdech při přitahování, nádech dole.",
+  "video": {
+   "id": "JGDdzQdRZns",
+   "title": "Exercise Tutorial: KB Renegade Row"
+  },
+  "query": "kettlebell renegade row"
+ },
+ "Kettlebell Single Arm Row": {
+  "setup": [
+   "Jednu ruku a koleno opři o lavici, záda rovná.",
+   "Kettlebell drž v druhé ruce pod ramenem."
+  ],
+  "steps": [
+   "Přitáhni kettlebell k boku, loket jde dozadu.",
+   "Nahoře stáhni lopatku.",
+   "Pomalu paži propni; po sérii vyměň ruku."
+  ],
+  "mistakes": [
+   "Přetáčení trupu.",
+   "Tah jen předloktím."
+  ],
+  "breathing": "Výdech při přitahování, nádech dolů.",
+  "video": {
+   "id": "l5qelXL5nfs",
+   "title": "Single Arm Kettlebell Row"
+  },
+  "query": "kettlebell single arm row"
+ },
+ "Kettlebell Clean & Press (Double)": {
+  "setup": [
+   "Dva kettlebelly polož mezi chodidla, stoj na šíři boků.",
+   "Předkloň se s rovnými zády a chyť je."
+  ],
+  "steps": [
+   "Švihni je mezi nohy a prudkým propnutím kyčlí je nahoď na ramena, zápěstí rovná.",
+   "Z ramen je vytlač nad hlavu.",
+   "Spusť na ramena, pak švihem dolů do dalšího opakování."
+  ],
+  "mistakes": [
+   "Kettlebelly se přetáčejí a bouchají do předloktí.",
+   "Záklon při tlaku."
+  ],
+  "breathing": "Výdech při nadhozu a tlaku.",
+  "video": {
+   "id": "aPB-oOUbe8Y",
+   "title": "How to: Double Kettlebell Clean and Press"
+  },
+  "query": "double kettlebell clean and press"
+ },
+ "Kettlebell Push Press": {
+  "setup": [
+   "Kettlebelly drž v pozici na ramenou, lokty u těla.",
+   "Stoj na šíři boků."
+  ],
+  "steps": [
+   "Udělej krátký rychlý podřep, trup svislý.",
+   "Odraz se z nohou a vytlač kettlebelly nad hlavu.",
+   "Spusť je pod kontrolou zpět na ramena."
+  ],
+  "mistakes": [
+   "Hluboký dřep místo podřepu.",
+   "Záklon nahoře."
+  ],
+  "breathing": "Nádech před podřepem, výdech při tlaku.",
+  "video": {
+   "id": "lhtYZAkjkcc",
+   "title": "How to: Kettlebell Push Press"
+  },
+  "query": "double kettlebell push press"
+ },
+ "One-Arm Kettlebell Military Press To Side": {
+  "setup": [
+   "Kettlebell drž na rameni, loket u těla.",
+   "Stoj na šíři boků, volná paže do strany."
+  ],
+  "steps": [
+   "Lehce se ukloň od kettlebellu.",
+   "Vytlač ho nad rameno, dlaň dopředu.",
+   "Spusť ho na rameno a narovnej se; po sérii vyměň ruku."
+  ],
+  "mistakes": [
+   "Velký úklon a ztráta zpevnění.",
+   "Záklon v bedrech."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "IlMFcqpg1T8",
+   "title": "The One-Arm Kettlebell Military Press",
+   "similar": true
+  },
+  "query": "one arm kettlebell military press to the side"
+ },
+ "Two-Arm Kettlebell Military Press": {
+  "setup": [
+   "Kettlebelly drž na ramenou, lokty u těla, zápěstí rovná.",
+   "Zpevni břicho a hýždě."
+  ],
+  "steps": [
+   "Vytlač kettlebelly nad hlavu, dlaně se otočí dopředu.",
+   "Nahoře jsou nad rameny.",
+   "Pomalu je spusť zpět na ramena."
+  ],
+  "mistakes": [
+   "Záklon v bedrech.",
+   "Ohnutá zápěstí."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "ioD3Q6d9PSk",
+   "title": "Two-Arm Kettlebell Military Press"
+  },
+  "query": "two arm kettlebell military press"
+ },
+ "Kettlebell Goblet Curl": {
+  "setup": [
+   "Kettlebell drž oběma rukama za rohy před stehny.",
+   "Lokty u boků."
+  ],
+  "steps": [
+   "Zvedni kettlebell k hrudníku.",
+   "Nahoře biceps stáhni.",
+   "Pomalu ho spusť do propnutí."
+  ],
+  "mistakes": [
+   "Švih trupem.",
+   "Lokty jdou dopředu."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "qmGmQ9T2pRg",
+   "title": "How to do Bicep Goblet Curls"
+  },
+  "query": "kettlebell goblet curl"
+ },
+ "Kettlebell Romanian Deadlift": {
+  "setup": [
+   "Stůj na šíři boků, kettlebell nebo dva drž před stehny.",
+   "Kolena lehce pokrčená."
+  ],
+  "steps": [
+   "Posouvej boky dozadu a kettlebelly veď podél nohou dolů.",
+   "Zastav, když cítíš protažení zadních stehen.",
+   "Zatlač boky dopředu a narovnej se."
+  ],
+  "mistakes": [
+   "Kulatá záda.",
+   "Ohýbání kolen do dřepu."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "c0xqtlLMGTE",
+   "title": "Kettlebell Romanian Deadlift"
+  },
+  "query": "kettlebell romanian deadlift"
+ },
+ "Kettlebell Sumo Deadlift": {
+  "setup": [
+   "Stoj široce, špičky ven, kettlebell mezi chodidly.",
+   "Pokrč kolena a chyť ho za ucho, záda rovná."
+  ],
+  "steps": [
+   "Zatlač nohama a postav se.",
+   "Nahoře propni kyčle.",
+   "Pod kontrolou ho spusť zpět na zem."
+  ],
+  "mistakes": [
+   "Kolena padají dovnitř.",
+   "Tah zády."
+  ],
+  "breathing": "Nádech dole, výdech nahoru.",
+  "video": {
+   "id": "CQ4Jkm-yKnw",
+   "title": "Kettlebell Sumo Deadlift for Beginners"
+  },
+  "query": "kettlebell sumo deadlift"
+ },
+ "Kettlebell Thruster": {
+  "setup": [
+   "Kettlebelly drž na ramenou, lokty u těla.",
+   "Stoj na šíři ramen."
+  ],
+  "steps": [
+   "Sedni do dřepu.",
+   "Ze dna se postav a energií z nohou vytlač kettlebelly nad hlavu.",
+   "Spusť je na ramena a navaž dalším dřepem."
+  ],
+  "mistakes": [
+   "Tlak až ve stoje.",
+   "Záklon nahoře."
+  ],
+  "breathing": "Nádech dole, výdech při tlaku.",
+  "video": {
+   "id": "KYmAsdjO0XI",
+   "title": "Thruster Tutorial with Kettlebell"
+  },
+  "query": "kettlebell thruster"
+ },
+ "Kettlebell Windmill": {
+  "setup": [
+   "Lehký kettlebell vytlač nad hlavu, špičky vytočené od něj.",
+   "Pohled na kettlebell."
+  ],
+  "steps": [
+   "Posuň boky na stranu kettlebellu a volnou rukou sjeď po noze dolů.",
+   "Paže nad hlavou se nehýbe.",
+   "Narovnej se; po sérii vyměň strany."
+  ],
+  "mistakes": [
+   "Ohnutý loket nahoře.",
+   "Kulatá záda."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "ZT9whcLgLR4",
+   "title": "Kettlebell Windmill Tutorial: Learn How to do a Kettlebell Windmill Correctly"
+  },
+  "query": "kettlebell windmill"
+ },
+ "Turkish Get-Up": {
+  "setup": [
+   "Lehni si na záda, kettlebell drž propnutou paží nad ramenem.",
+   "Noha na straně kettlebellu pokrčená, druhá natažená."
+  ],
+  "steps": [
+   "Vzepři se na loket a pak na dlaň, zvedni boky a protáhni nataženou nohu pod tělem do kleku.",
+   "Z kleku se postav, pohled stále na kettlebell.",
+   "Stejnými kroky se vrať do lehu; po sérii vyměň strany."
+  ],
+  "mistakes": [
+   "Spěch a vynechávání kroků.",
+   "Paže s kettlebellem padá do strany."
+  ],
+  "breathing": "Klidně dýchej, výdech při každém zvednutí.",
+  "video": {
+   "id": "XYjj6pnhdYk",
+   "title": "How To: Turkish Get Up"
+  },
+  "query": "kettlebell turkish get up"
+ },
+ "Band Kneeling Pulldown": {
+  "setup": [
+   "Gumu ukotvi vysoko (hrazda, kotva ve dveřích), klekni si pod ni.",
+   "Chyť konce gumy, paže natažené nahoru."
+  ],
+  "steps": [
+   "Stáhni lopatky dolů a táhni lokty k bokům.",
+   "Dole stáhni záda.",
+   "Pomalu paže vrať nahoru."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Tah jen rukama."
+  ],
+  "breathing": "Výdech při stahování, nádech nahoru.",
+  "video": {
+   "id": "SkT4rqrmH-M",
+   "title": "How To Do A Kneeling Resistance Band Pulldown"
+  },
+  "query": "band kneeling lat pulldown"
+ },
+ "Band Pullover": {
+  "setup": [
+   "Gumu ukotvi vysoko, postav se čelem k ní a lehce se předkloň.",
+   "Chyť gumu nataženými pažemi ve výšce očí."
+  ],
+  "steps": [
+   "Stáhni paže obloukem dolů k bokům.",
+   "Dole krátce vydrž.",
+   "Pomalu paže vrať nahoru."
+  ],
+  "mistakes": [
+   "Ohýbání loktů.",
+   "Krčení ramen."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "I3b8FyV9vZQ",
+   "title": "Pullover with a Resistance Band"
+  },
+  "query": "band pullover"
+ },
+ "Band Row": {
+  "setup": [
+   "Gumu ukotvi ve výšce pasu nebo ji obtoč kolem chodidel vsedě.",
+   "Chyť konce, paže natažené, záda rovná."
+  ],
+  "steps": [
+   "Přitáhni lokty dozadu k bokům.",
+   "Vzadu stáhni lopatky.",
+   "Pomalu paže propni dopředu."
+  ],
+  "mistakes": [
+   "Záklon trupu místo tahu zády.",
+   "Krčení ramen."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "LSkyinhmA8k",
+   "title": "How To Do A Resistance Band Row"
+  },
+  "query": "resistance band row"
+ },
+ "Band Seated Pulldown": {
+  "setup": [
+   "Gumu ukotvi vysoko, sedni si pod ni na lavici nebo zem.",
+   "Chyť konce gumy, paže nahoře."
+  ],
+  "steps": [
+   "Táhni lokty dolů k bokům.",
+   "Dole stáhni záda.",
+   "Pomalu paže vrať nahoru."
+  ],
+  "mistakes": [
+   "Záklon.",
+   "Trhavý tah."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "NyZvcjgNpEg",
+   "title": "Resistance Band Seated Lat Pulldown"
+  },
+  "query": "band seated lat pulldown"
+ },
+ "Band Straight Arm Pulldown": {
+  "setup": [
+   "Gumu ukotvi vysoko, postav se čelem k ní, lehký předklon.",
+   "Chyť gumu nataženými pažemi."
+  ],
+  "steps": [
+   "Stáhni paže ke stehnům.",
+   "Dole vydrž a stáhni laty.",
+   "Pomalu paže vrať do výšky očí."
+  ],
+  "mistakes": [
+   "Ohýbání loktů.",
+   "Předklon a tah trupem."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "HrX5fm9XWJ8",
+   "title": "Band Straight Arm Pulldown"
+  },
+  "query": "band straight arm pulldown"
+ },
+ "Band External Rotation": {
+  "setup": [
+   "Gumu ukotvi ve výšce lokte, postav se bokem.",
+   "Loket u boku pokrčený v pravém úhlu, předloktí přes břicho."
+  ],
+  "steps": [
+   "Vytoč předloktí ven od těla.",
+   "Krátce vydrž.",
+   "Pomalu se vrať; po sérii vyměň strany."
+  ],
+  "mistakes": [
+   "Loket odjíždí od těla.",
+   "Otáčení trupem."
+  ],
+  "breathing": "Výdech ven, nádech zpět.",
+  "video": {
+   "id": "4HqMXMn3FBk",
+   "title": "Band External Rotation Exercise"
+  },
+  "query": "band external rotation"
+ },
+ "Band High Face Pull": {
+  "setup": [
+   "Gumu ukotvi nad hlavou, chyť ji nadhmatem.",
+   "Ustup, aby guma byla napnutá."
+  ],
+  "steps": [
+   "Přitáhni gumu k čelu, lokty vysoko a do stran.",
+   "Na konci vytoč ruce vzad.",
+   "Pomalu paže propni."
+  ],
+  "mistakes": [
+   "Lokty klesají.",
+   "Záklon trupu."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "PYj77in44ms",
+   "title": "Band Face Pulls (Exercise Library)"
+  },
+  "query": "band face pull"
+ },
+ "Band Lateral Raise": {
+  "setup": [
+   "Stoupni si na gumu, konce drž u boků.",
+   "Lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Zvedni paže do stran do výšky ramen.",
+   "Krátce vydrž.",
+   "Pomalu je spusť."
+  ],
+  "mistakes": [
+   "Krčení ramen.",
+   "Švih trupem."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "gfEyrmxbCbw",
+   "title": "How To: Resistance Band Lateral Raise"
+  },
+  "query": "band lateral raise"
+ },
+ "Band Overhead Press": {
+  "setup": [
+   "Stoupni si na gumu, konce drž u ramen.",
+   "Zpevni břicho a hýždě."
+  ],
+  "steps": [
+   "Vytlač ruce nad hlavu.",
+   "Nahoře propni lokty.",
+   "Pomalu se vrať k ramenům."
+  ],
+  "mistakes": [
+   "Záklon v bedrech.",
+   "Guma klouže pod chodidly."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "_E94vW5y_Lw",
+   "title": "How to Do the Resistance Band Standing Overhead Press"
+  },
+  "query": "band overhead press"
+ },
+ "Band Single Arm Lateral Raise": {
+  "setup": [
+   "Stoupni si na konec gumy, druhý konec drž v opačné ruce.",
+   "Volnou ruku dej v bok."
+  ],
+  "steps": [
+   "Zvedni paži do strany do výšky ramen.",
+   "Krátce vydrž.",
+   "Pomalu ji spusť; po sérii vyměň strany."
+  ],
+  "mistakes": [
+   "Úklon trupu.",
+   "Krčení ramene."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "XIsUtTp1eNc",
+   "title": "How to Do the Band Single-Arm Lateral Raise"
+  },
+  "query": "single arm band lateral raise"
+ },
+ "Band Curl": {
+  "setup": [
+   "Stoupni si na gumu, konce drž podhmatem.",
+   "Lokty u boků."
+  ],
+  "steps": [
+   "Zvedni ruce k ramenům.",
+   "Nahoře biceps stáhni.",
+   "Pomalu je spusť."
+  ],
+  "mistakes": [
+   "Lokty jdou dopředu.",
+   "Záklon."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "RyWX9e7imhc",
+   "title": "How to Do Bicep Curls with Resistance Bands"
+  },
+  "query": "resistance band curl"
+ },
+ "Band Tricep Kickbacks": {
+  "setup": [
+   "Stoupni si na gumu, předkloň se s rovnými zády.",
+   "Nadloktí drž u těla, lokty pokrčené."
+  ],
+  "steps": [
+   "Propni lokty dozadu.",
+   "Krátce vydrž.",
+   "Pomalu lokty ohni zpět."
+  ],
+  "mistakes": [
+   "Švih z ramen.",
+   "Nadloktí klesá."
+  ],
+  "breathing": "Výdech při propnutí, nádech zpět.",
+  "video": {
+   "id": "TOfl8Gwj010",
+   "title": "Tricep Kickbacks (Band)"
+  },
+  "query": "band tricep kickback"
+ },
+ "Band Glute Bridge": {
+  "setup": [
+   "Minigumu dej nad kolena, lehni si na záda.",
+   "Chodidla na šíři boků blízko hýždí."
+  ],
+  "steps": [
+   "Zatlač kolena ven do gumy a zvedni boky.",
+   "Nahoře stáhni hýždě.",
+   "Pomalu boky spusť."
+  ],
+  "mistakes": [
+   "Kolena padají k sobě.",
+   "Záklon v bedrech."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "gOOo1nmydeA",
+   "title": "Exercise Tutorial: Resisted Glute Bridge With Band"
+  },
+  "query": "banded glute bridge"
+ },
+ "Band Good Morning": {
+  "setup": [
+   "Stoupni si na gumu, druhý konec si dej přes horní záda.",
+   "Kolena lehce pokrčená."
+  ],
+  "steps": [
+   "Předkloň se v kyčlích s rovnými zády.",
+   "Zastav při protažení zadních stehen.",
+   "Zatlač boky dopředu a narovnej se."
+  ],
+  "mistakes": [
+   "Kulatá záda.",
+   "Guma na krku místo na zádech."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "jKBQUap7zMo",
+   "title": "How To: Resistance Band Good Morning"
+  },
+  "query": "band good morning"
+ },
+ "Band Leg Curl": {
+  "setup": [
+   "Gumu ukotvi nízko, lehni si na břicho nohama k ní a smyčku dej za kotník.",
+   "Nebo vsedě s gumou kolem kotníku."
+  ],
+  "steps": [
+   "Přitáhni patu k hýždi.",
+   "Krátce vydrž.",
+   "Pomalu nohu propni; po sérii vyměň nohu."
+  ],
+  "mistakes": [
+   "Zvedání boků od země.",
+   "Rychlé povolení."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "Bm4vc7n8Rsw",
+   "title": "How To Do Lying Leg Curls with Resistance Bands At Home!"
+  },
+  "query": "resistance band leg curl"
+ },
+ "Band Pull-Through": {
+  "setup": [
+   "Gumu ukotvi nízko za sebou, chyť ji mezi nohama.",
+   "Ustup, aby byla napnutá, stoj na šíři ramen."
+  ],
+  "steps": [
+   "Posuň boky dozadu, ruce jdou mezi nohy.",
+   "Zatlač boky dopředu a stáhni hýždě.",
+   "Nahoře se nezakláněj."
+  ],
+  "mistakes": [
+   "Tah pažemi.",
+   "Záklon nahoře."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "GXo6A68YgK0",
+   "title": "Band Pull-Through Exercise"
+  },
+  "query": "band pull through"
+ },
+ "Band Romanian Deadlift": {
+  "setup": [
+   "Stoupni si na gumu na šíři boků, konce drž před stehny.",
+   "Kolena lehce pokrčená."
+  ],
+  "steps": [
+   "Posouvej boky dozadu a ruce veď podél nohou dolů.",
+   "Zastav při protažení zadních stehen.",
+   "Zatlač boky dopředu a narovnej se."
+  ],
+  "mistakes": [
+   "Kulatá záda.",
+   "Dřep místo předklonu."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "CA7_orMSiFY",
+   "title": "Romanian deadlift (RDL) with Resistance Band"
+  },
+  "query": "band romanian deadlift"
+ },
+ "Band Squat": {
+  "setup": [
+   "Stoupni si na gumu na šíři ramen, konce drž u ramen.",
+   "Hrudník nahoře."
+  ],
+  "steps": [
+   "Sedni do dřepu.",
+   "Postav se proti odporu gumy.",
+   "Nahoře propni kyčle."
+  ],
+  "mistakes": [
+   "Kolena padají dovnitř.",
+   "Paty se zvedají."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "5l8bDoRIyxc",
+   "title": "Beginner Resistance Band Squats - How To Do Squats With A Resistance Band"
+  },
+  "query": "resistance band squat"
+ },
+ "Banded Eccentric Tibialis Raise": {
+  "setup": [
+   "Sedni si na zem, gumu ukotvi před sebou a smyčku dej přes nárt.",
+   "Noha natažená, pata na zemi."
+  ],
+  "steps": [
+   "Přitáhni špičku k sobě proti gumě.",
+   "Nahoře krátce vydrž.",
+   "Pomalu, 3 s, špičku povol dopředu; po sérii vyměň nohu."
+  ],
+  "mistakes": [
+   "Rychlé povolení.",
+   "Pohyb celou nohou místo kotníku."
+  ],
+  "breathing": "Výdech při přitažení, nádech při povolení.",
+  "video": {
+   "id": "CkN3sya3KiQ",
+   "title": "Banded Tibia Raises",
+   "similar": true
+  },
+  "query": "banded tibialis raise"
+ },
+ "Band Hip Abduction": {
+  "setup": [
+   "Minigumu dej nad kolena, postav se v lehkém podřepu nebo si sedni.",
+   "Chodidla na šíři boků."
+  ],
+  "steps": [
+   "Zatlač kolena od sebe proti gumě.",
+   "Krátce vydrž.",
+   "Pomalu je vrať, guma zůstává napnutá."
+  ],
+  "mistakes": [
+   "Kývání trupem.",
+   "Povolení gumy úplně."
+  ],
+  "breathing": "Výdech ven, nádech zpět.",
+  "video": {
+   "id": "5jO53ZZu7JE",
+   "title": "Seated Mini Band Abduction"
+  },
+  "query": "mini band hip abduction"
+ },
+ "Banded Clamshell": {
+  "setup": [
+   "Lehni si na bok, kolena pokrčená, minigumu dej nad kolena.",
+   "Paty u sebe, hlava na paži."
+  ],
+  "steps": [
+   "Otevři horní koleno, paty zůstávají u sebe.",
+   "Krátce vydrž.",
+   "Pomalu koleno zavři; po sérii vyměň strany."
+  ],
+  "mistakes": [
+   "Přetáčení pánve dozadu.",
+   "Rychlé tempo."
+  ],
+  "breathing": "Výdech při otevření, nádech zpět.",
+  "video": {
+   "id": "hQupQ9mJZFw",
+   "title": "How to Guide: Banded Clamshell"
+  },
+  "query": "banded clamshell"
+ },
+ "Plate Front Raise": {
+  "setup": [
+   "Stůj rovně, kotouč drž oběma rukama za okraje před stehny.",
+   "Lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Zvedni kotouč před sebe do výšky očí.",
+   "Krátce vydrž.",
+   "Pomalu ho spusť."
+  ],
+  "mistakes": [
+   "Záklon a švih.",
+   "Příliš těžký kotouč."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "xd1J8R74n-Q",
+   "title": "Front Plate Raise Tutorial"
+  },
+  "query": "plate front raise"
+ },
+ "Wrist Roller": {
+  "setup": [
+   "Kotouč přivaž na provázek navíjecí tyčky.",
+   "Tyčku drž nadhmatem s pažemi nataženými před sebou."
+  ],
+  "steps": [
+   "Střídavě otáčej zápěstími a navíjej provázek, až je kotouč nahoře.",
+   "Stejně pomalu ho odviň dolů.",
+   "Opakuj, paže neklesají."
+  ],
+  "mistakes": [
+   "Spouštění paží.",
+   "Volné pouštění kotouče dolů."
+  ],
+  "breathing": "Klidně dýchej.",
+  "video": {
+   "id": "VPFQSgAiXco",
+   "title": "How To Do The Wrist Roller Exercise"
+  },
+  "query": "wrist roller"
+ },
+ "Plate Forward Lunge": {
+  "setup": [
+   "Stůj rovně, kotouč drž oběma rukama u hrudníku.",
+   "Chodidla na šíři boků."
+  ],
+  "steps": [
+   "Udělej dlouhý krok vpřed a klesni.",
+   "Odraz se přední nohou zpět do stoje.",
+   "Střídej nohy."
+  ],
+  "mistakes": [
+   "Krátký krok.",
+   "Přední koleno padá dovnitř."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "40mfH6VZrfg",
+   "title": "Lunges with plate"
+  },
+  "query": "plate forward lunge"
+ },
+ "EZ Bar Reverse Preacher Curl": {
+  "setup": [
+   "Podpaží dej na horní hranu opěrky Scottovy lavice.",
+   "EZ osu drž nadhmatem."
+  ],
+  "steps": [
+   "Zvedni osu k ramenům, zápěstí rovná.",
+   "Nahoře krátce vydrž.",
+   "Pomalu osu spusť."
+  ],
+  "mistakes": [
+   "Ohýbání zápěstí.",
+   "Rychlé spouštění."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "cezjVm6x3x0",
+   "title": "How To: Reverse Grip EZ Bar Preacher Curls For Huge Arms"
+  },
+  "query": "ez bar reverse preacher curl"
+ },
+ "Barbell Landmine Row": {
+  "setup": [
+   "Osu ukotvi v landminu, postav se obkročmo nad ní u volného konce.",
+   "Předkloň se s rovnými zády a chyť osu za kotouči oběma rukama."
+  ],
+  "steps": [
+   "Přitáhni konec osy k hrudníku.",
+   "Nahoře stáhni lopatky.",
+   "Pomalu paže propni."
+  ],
+  "mistakes": [
+   "Zvedání trupu.",
+   "Kulatá záda."
+  ],
+  "breathing": "Výdech při přitahování, nádech dolů.",
+  "video": {
+   "id": "7b4P74Rm_mM",
+   "title": "Landmine bent over row - two arms"
+  },
+  "query": "landmine row"
+ },
+ "Meadows Row": {
+  "setup": [
+   "Postav se bokem ke konci osy v landminu, přední noha blíž k ose.",
+   "Předkloň se a chyť osu za kotouči nadhmatem, předloktí opři o stehno."
+  ],
+  "steps": [
+   "Přitáhni osu k boku, loket jde vysoko dozadu.",
+   "Nahoře stáhni záda.",
+   "Pomalu paži propni; po sérii vyměň strany."
+  ],
+  "mistakes": [
+   "Přetáčení trupu.",
+   "Tah bicepsem."
+  ],
+  "breathing": "Výdech při přitahování, nádech dolů.",
+  "video": {
+   "id": "9ZBsRLRBBdU",
+   "title": "Meadows Row Tutorial"
+  },
+  "query": "meadows row"
+ },
+ "TRX Squat": {
+  "setup": [
+   "Chyť úchyty TRX, ustup, aby popruhy byly napnuté.",
+   "Chodidla na šíři ramen."
+  ],
+  "steps": [
+   "Sedni do hlubokého dřepu, paže natažené.",
+   "Trup drž vzpřímeně.",
+   "Postav se tlakem nohou, paže jen lehce pomáhají."
+  ],
+  "mistakes": [
+   "Tahání pažemi.",
+   "Kolena padají dovnitř."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "NM-Mqg4fZ3o",
+   "title": "How To TRX Squat"
+  },
+  "query": "trx squat"
+ },
+ "Bodyweight Knee Push Ups": {
+  "setup": [
+   "Klekni si, dlaně o něco šířeji než ramena.",
+   "Tělo v přímce od kolen k hlavě."
+  ],
+  "steps": [
+   "Spusť hrudník k zemi, lokty asi 45° od těla.",
+   "Dole se hrudník skoro dotkne země.",
+   "Vytlač se nahoru."
+  ],
+  "mistakes": [
+   "Vystrčené hýždě.",
+   "Lokty kolmo do stran."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "EgIMk-PZwo0",
+   "title": "How to: Knee push ups"
+  },
+  "query": "knee push up"
+ },
+ "Decline Push Up": {
+  "setup": [
+   "Chodidla dej na lavici, dlaně na zem o něco šířeji než ramena.",
+   "Tělo v přímce, břicho zpevněné."
+  ],
+  "steps": [
+   "Spusť hrudník k zemi.",
+   "Lokty asi 45° od těla.",
+   "Vytlač se nahoru."
+  ],
+  "mistakes": [
+   "Propadlá bedra.",
+   "Hlava padá dopředu."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "SKPab2YC8BE",
+   "title": "How To: Decline Push-Up"
+  },
+  "query": "decline push up"
+ },
+ "Incline Push Up": {
+  "setup": [
+   "Dlaně dej na kraj lavice o něco šířeji než ramena.",
+   "Ustup nohama, tělo v přímce."
+  ],
+  "steps": [
+   "Spusť hrudník k lavici.",
+   "Lokty asi 45° od těla.",
+   "Vytlač se zpět."
+  ],
+  "mistakes": [
+   "Propadlé boky.",
+   "Krátký rozsah."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "-9S9gdRwwak",
+   "title": "Incline Push ups (Exercise Library)"
+  },
+  "query": "incline push up"
+ },
+ "B-stance Back Extension": {
+  "setup": [
+   "Polštář pod kyčle, jedno chodidlo vpředu na plošině, druhé posunuté dozadu jen na špičce.",
+   "Ruce na hrudníku."
+  ],
+  "steps": [
+   "Předkloň se v kyčlích s rovnými zády.",
+   "Zvedni trup tahem hýždě přední nohy do roviny.",
+   "Pomalu dolů; po sérii vyměň nohy."
+  ],
+  "mistakes": [
+   "Záklon nad rovinu.",
+   "Odraz zadní nohou."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "WJm88qItjeE",
+   "title": "How to Target Glutes on the Back Extension Machine (Glute Focused Hyperextensions)",
+   "similar": true
+  },
+  "query": "b stance back extension"
+ },
+ "Prone Y-T Raises": {
+  "setup": [
+   "Lehni si na břicho na podložku nebo šikmou lavici.",
+   "Paže natažené, palce nahoru."
+  ],
+  "steps": [
+   "Zvedni paže šikmo nad hlavu do Y a vydrž 2 s.",
+   "Spusť je, pak je zvedni do stran do T a vydrž 2 s.",
+   "Jedno Y a jedno T je jedno opakování."
+  ],
+  "mistakes": [
+   "Záklon hlavy.",
+   "Švih místo kontroly."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "egcK49J5Q-Y",
+   "title": "Prone I-Y-T-W Raise",
+   "similar": true
+  },
+  "query": "prone y t raise"
+ },
+ "Diamond Push Ups": {
+  "setup": [
+   "Dlaně dej pod hrudník, palce a ukazováčky tvoří kosočtverec.",
+   "Tělo v přímce."
+  ],
+  "steps": [
+   "Spusť hrudník k rukám, lokty u těla.",
+   "Dole se hrudník skoro dotkne rukou.",
+   "Vytlač se nahoru."
+  ],
+  "mistakes": [
+   "Lokty roztažené.",
+   "Propadlé boky."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "8FMQh0JCl6E",
+   "title": "How to: Diamond Push Ups"
+  },
+  "query": "diamond push up"
+ },
+ "Bent-Knee Soleus Raise": {
+  "setup": [
+   "Stůj na jedné noze u zdi, koleno pokrčené asi 30°.",
+   "Rukou se lehce opři o zeď."
+  ],
+  "steps": [
+   "Zvedni se na špičku, koleno zůstává pokrčené.",
+   "Nahoře vydrž.",
+   "Pomalu patu spusť; po sérii vyměň nohu."
+  ],
+  "mistakes": [
+   "Propínání kolena.",
+   "Rychlé odrážení."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "QAMHnR4zw_0",
+   "title": "Bent-Knee Soleus Calf Raises"
+  },
+  "query": "bent knee soleus raise"
+ },
+ "Bodyweight Alternating Lateral Lunge": {
+  "setup": [
+   "Stůj rovně, chodidla u sebe.",
+   "Ruce před hrudníkem."
+  ],
+  "steps": [
+   "Ukroč široce do strany a sedni na tuto nohu.",
+   "Druhá noha zůstává natažená.",
+   "Vrať se do stoje a jdi na druhou stranu."
+  ],
+  "mistakes": [
+   "Koleno padá dovnitř.",
+   "Kulatá záda."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "urgvwNBjvBc",
+   "title": "Bodyweight Alternating Lateral Lunge"
+  },
+  "query": "bodyweight lateral lunge"
+ },
+ "Bodyweight Box Squat": {
+  "setup": [
+   "Postav se před lavici, chodidla na šíři ramen.",
+   "Ruce před sebou."
+  ],
+  "steps": [
+   "Posuň boky dozadu a sedni, až se lavice lehce dotkneš.",
+   "Nepovoluj se na ní.",
+   "Postav se tlakem do země."
+  ],
+  "mistakes": [
+   "Plné dosednutí a zhoupnutí.",
+   "Kolena padají dovnitř."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "AVOS2JYsgrs",
+   "title": "Instructional: Bodyweight Box Squat"
+  },
+  "query": "bodyweight box squat"
+ },
+ "Bodyweight Hip Abduction": {
+  "setup": [
+   "Lehni si na bok, spodní noha pokrčená, horní natažená.",
+   "Hlava na paži."
+  ],
+  "steps": [
+   "Zvedni horní nohu asi o 30–40°.",
+   "Nahoře krátce vydrž.",
+   "Pomalu ji spusť; po sérii vyměň strany."
+  ],
+  "mistakes": [
+   "Přetáčení pánve dozadu.",
+   "Švih nohou."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "bGtZQovM--Q",
+   "title": "How To Do A Side Lying Hip Abduction"
+  },
+  "query": "side lying hip abduction"
+ },
+ "Bulgarian Split Squat": {
+  "setup": [
+   "Zadní nohu polož nártem na lavici.",
+   "Přední chodidlo dost vpředu."
+  ],
+  "steps": [
+   "Klesej rovně dolů.",
+   "Dole je přední stehno zhruba vodorovně.",
+   "Zatlač přední nohou nahoru; po sérii vyměň nohy."
+  ],
+  "mistakes": [
+   "Přední chodidlo moc blízko.",
+   "Odraz zadní nohou."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "4-qkLYDckys",
+   "title": "How To Do A Bodyweight Bulgarian Split Squat"
+  },
+  "query": "bodyweight bulgarian split squat"
+ },
+ "Cossack Squat": {
+  "setup": [
+   "Stoj široce, špičky lehce ven.",
+   "Ruce před hrudníkem."
+  ],
+  "steps": [
+   "Sedni do hlubokého dřepu na jednu nohu.",
+   "Druhá noha natažená, špička nahoru.",
+   "Přejdi středem na druhou stranu."
+  ],
+  "mistakes": [
+   "Zvednutá pata.",
+   "Kulatá záda."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "eqIkFLAG3Cc",
+   "title": "Bodyweight Cossack Squats"
+  },
+  "query": "cossack squat"
+ },
+ "Eccentric Calf Lowers": {
+  "setup": [
+   "Stoupni si špičkami na schod, paty přesahují.",
+   "Rukou se drž zábradlí."
+  ],
+  "steps": [
+   "Zvedni se na špičky na obou nohou.",
+   "Jednu nohu zvedni a druhou spouštěj 3–4 s pod úroveň schodu.",
+   "Vrať se nahoru na obou; po sérii vyměň nohu."
+  ],
+  "mistakes": [
+   "Rychlé spouštění.",
+   "Odraz z kolene."
+  ],
+  "breathing": "Výdech nahoru, nádech při spouštění.",
+  "video": {
+   "id": "d7ZsskaHtfg",
+   "title": "Eccentric Heel Drop"
+  },
+  "query": "eccentric calf raise"
+ },
+ "Fire Hydrants": {
+  "setup": [
+   "Klekni si do vzporu, ruce pod rameny, kolena pod kyčlemi.",
+   "Záda rovná."
+  ],
+  "steps": [
+   "Zvedni pokrčenou nohu do strany do výšky boku.",
+   "Krátce vydrž.",
+   "Pomalu ji spusť; po sérii vyměň strany."
+  ],
+  "mistakes": [
+   "Přenášení váhy do strany a naklonění trupu.",
+   "Prohnutá bedra."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "W2PNcNCfIF4",
+   "title": "How To Do The Fire Hydrant Exercise"
+  },
+  "query": "fire hydrant exercise"
+ },
+ "Forward Lunge": {
+  "setup": [
+   "Stůj rovně, ruce v bok.",
+   "Chodidla na šíři boků."
+  ],
+  "steps": [
+   "Udělej dlouhý krok vpřed a klesni.",
+   "Zadní koleno nad zemí.",
+   "Odraz se přední nohou zpět; střídej nohy."
+  ],
+  "mistakes": [
+   "Krátký krok.",
+   "Koleno padá dovnitř."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "B7VQJiVv3xw",
+   "title": "How To Do A Forward Lunge"
+  },
+  "query": "forward lunge"
+ },
+ "Frog Pump": {
+  "setup": [
+   "Lehni si na záda, chodidla k sobě, kolena do stran.",
+   "Paty blízko hýždí."
+  ],
+  "steps": [
+   "Zvedni boky stažením hýždí.",
+   "Nahoře 1 s vydrž.",
+   "Spusť a hned pokračuj."
+  ],
+  "mistakes": [
+   "Záklon v bedrech.",
+   "Pomalé tempo bez stažení."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "mTvsEr1YVTE",
+   "title": "Frog Pump Tutorial"
+  },
+  "query": "frog pump"
+ },
+ "Front-Foot-Elevated Split Squat": {
+  "setup": [
+   "Přední chodidlo postav na kotouč nebo nízký schod.",
+   "Dlouhý krok, zadní pata zvednutá."
+  ],
+  "steps": [
+   "Klesej rovně dolů hlouběji než obvykle.",
+   "Přední koleno jde ve směru špičky.",
+   "Zatlač přední nohou nahoru; po sérii vyměň nohy."
+  ],
+  "mistakes": [
+   "Předklon trupu.",
+   "Moc vysoká podložka."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "GfSPDkvevlU",
+   "title": "Front Foot Elevated Split Squat (Exercise Library)"
+  },
+  "query": "front foot elevated split squat"
+ },
+ "Nordic Hamstring Curl": {
+  "setup": [
+   "Klekni si na měkkou podložku, paty zaklesni pod pevnou oporu nebo je drží partner.",
+   "Tělo v přímce od kolen k hlavě."
+  ],
+  "steps": [
+   "Pomalu padej dopředu, jak dlouho to vydržíš.",
+   "Dole se zachyť rukama.",
+   "Odraz se rukama a zadními stehny se vrať nahoru."
+  ],
+  "mistakes": [
+   "Lámání v kyčlích.",
+   "Rychlý pád bez brzdění."
+  ],
+  "breathing": "Nádech nahoře, výdech při spouštění.",
+  "video": {
+   "id": "_e9vFU9-tkc",
+   "title": "How to Set Up, Perform, & Program Nordic Hamstring Curls (Progressions)"
+  },
+  "query": "nordic hamstring curl"
+ },
+ "Single Leg Glute Bridge": {
+  "setup": [
+   "Lehni si na záda, jedno chodidlo na zemi, druhou nohu zvedni.",
+   "Ruce podél těla."
+  ],
+  "steps": [
+   "Zatlač patou a zvedni boky.",
+   "Nahoře stáhni hýždě.",
+   "Pomalu spusť; po sérii vyměň nohu."
+  ],
+  "mistakes": [
+   "Pánev padá na stranu zvednuté nohy.",
+   "Záklon v bedrech."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "sVfp4LN9niA",
+   "title": "How To Do A Single Leg Glute Bridge"
+  },
+  "query": "single leg glute bridge"
+ },
+ "Single-Leg Step-Down": {
+  "setup": [
+   "Postav se jednou nohou na nízký schod nebo lavici bokem k hraně.",
+   "Druhá noha visí volně."
+  ],
+  "steps": [
+   "Pomalu ohni stojné koleno a spouštěj volnou patu k zemi.",
+   "Jen se dotkni a nepřenášej váhu.",
+   "Propni koleno zpět nahoru; po sérii vyměň nohy."
+  ],
+  "mistakes": [
+   "Koleno padá dovnitř.",
+   "Pánev klesá na stranu."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "Q40a5jeIXrM",
+   "title": "Single Leg Step Down (Exercise Library)"
+  },
+  "query": "single leg step down"
+ },
+ "Tibialis Raise": {
+  "setup": [
+   "Opři se zády o zeď, chodidla asi stopu před ní.",
+   "Kolena propnutá."
+  ],
+  "steps": [
+   "Zvedni špičky co nejvýš.",
+   "Nahoře krátce vydrž.",
+   "Pomalu je spusť, bez plácnutí."
+  ],
+  "mistakes": [
+   "Ohýbání kolen.",
+   "Malý rozsah."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "dnxy5DhY0Ks",
+   "title": "Tibialis Raise (Against Wall)"
+  },
+  "query": "tibialis raise wall"
+ },
+ "Walking Lunge": {
+  "setup": [
+   "Stůj rovně, ruce v bok.",
+   "Volný prostor před sebou."
+  ],
+  "steps": [
+   "Udělej dlouhý krok a klesni.",
+   "Odraz se a přenes zadní nohu do dalšího výpadu.",
+   "Pokračuj střídavě."
+  ],
+  "mistakes": [
+   "Krátké kroky.",
+   "Předklon trupu."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "Pbmj6xPo-Hw",
+   "title": "Walking Lunges Exercise Tutorial"
+  },
+  "query": "bodyweight walking lunge"
+ },
+ "Bicycle Crunches": {
+  "setup": [
+   "Lehni si na záda, ruce lehce za hlavou.",
+   "Nohy zvedni, kolena nad kyčlemi."
+  ],
+  "steps": [
+   "Přitáhni jedno koleno a otoč k němu opačný loket, druhou nohu natáhni.",
+   "Vyměň strany plynulým pohybem.",
+   "Počítej opakování na stranu."
+  ],
+  "mistakes": [
+   "Tahání za hlavu.",
+   "Rychlé kmitání bez otočení trupu."
+  ],
+  "breathing": "Výdech při otočení.",
+  "video": {
+   "id": "1we3bh9uhqY",
+   "title": "How to do a Bicycle Crunch"
+  },
+  "query": "bicycle crunch"
+ },
+ "Bird Dog": {
+  "setup": [
+   "Klekni si do vzporu, ruce pod rameny, kolena pod kyčlemi.",
+   "Záda rovná, pohled do země."
+  ],
+  "steps": [
+   "Natáhni jednu ruku dopředu a opačnou nohu dozadu.",
+   "Vydrž 2 s, boky rovně.",
+   "Vrať se a vystřídej strany."
+  ],
+  "mistakes": [
+   "Zvedání nohy nad úroveň boků.",
+   "Přetáčení pánve."
+  ],
+  "breathing": "Výdech při natažení, nádech zpět.",
+  "video": {
+   "id": "ZdAHe9_HeEw",
+   "title": "How to do a Bird Dog"
+  },
+  "query": "bird dog exercise"
+ },
+ "Crunches": {
+  "setup": [
+   "Lehni si na záda, kolena pokrčená, chodidla na zemi.",
+   "Ruce na hrudníku nebo lehce u spánků."
+  ],
+  "steps": [
+   "Sroluj horní záda od země, žebra k pánvi.",
+   "Nahoře krátce vydrž.",
+   "Pomalu se vrať dolů."
+  ],
+  "mistakes": [
+   "Tahání za hlavu.",
+   "Švih celým trupem."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "M6yAoJJQvGY",
+   "title": "How to Do a Crunch Correctly, Ab Exercise, Fit How To"
+  },
+  "query": "crunches"
+ },
+ "Decline Sit-Up": {
+  "setup": [
+   "Zaklesni nohy na šikmé lavici na břicho.",
+   "Ruce na hrudníku."
+  ],
+  "steps": [
+   "Sroluj trup nahoru až do sedu.",
+   "Nahoře krátce vydrž.",
+   "Pomalu se sroluj zpět dolů."
+  ],
+  "mistakes": [
+   "Švih a odraz zády.",
+   "Ruce za hlavou a tahání."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "N7hf1_vcX5w",
+   "title": "How To Do Decline Sit Ups"
+  },
+  "query": "decline sit up"
+ },
+ "Reverse Crunch": {
+  "setup": [
+   "Lehni si na záda, ruce podél těla, kolena pokrčená nad kyčlemi.",
+   "Bedra u země."
+  ],
+  "steps": [
+   "Přitáhni kolena k hrudníku a zvedni pánev od země.",
+   "Nahoře krátce vydrž.",
+   "Pomalu pánev spusť."
+  ],
+  "mistakes": [
+   "Švih nohou.",
+   "Odrážení rukama."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "XY8KzdDcMFg",
+   "title": "How To Do A Reverse Crunch"
+  },
+  "query": "reverse crunch"
+ },
+ "Supermans": {
+  "setup": [
+   "Lehni si na břicho, paže natažené před sebou.",
+   "Pohled do podložky."
+  ],
+  "steps": [
+   "Zvedni paže, hrudník a nohy kousek od země.",
+   "Nahoře 1–2 s vydrž.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Záklon hlavy.",
+   "Švih."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "z6PJMT2y8GQ",
+   "title": "Exercise Tutorial - Superman"
+  },
+  "query": "superman exercise"
+ },
+ "V-Up": {
+  "setup": [
+   "Lehni si na záda, paže natažené za hlavou, nohy natažené.",
+   "Bedra přitlač k zemi."
+  ],
+  "steps": [
+   "Současně zvedni nohy a trup, ruce sahají ke špičkám.",
+   "Nahoře balancuj na hýždích.",
+   "Pomalu se vrať do lehu."
+  ],
+  "mistakes": [
+   "Plácnutí zpět na zem.",
+   "Pokrčené nohy a švih."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "iP2fjvG0g3w",
+   "title": "Exercise Tutorial - V-Up"
+  },
+  "query": "v up exercise"
+ },
+ "Stability Ball Leg Curl": {
+  "setup": [
+   "Lehni si na záda, paty polož na gymball.",
+   "Zvedni boky do mostu, ruce podél těla."
+  ],
+  "steps": [
+   "Přitáhni paty a míč k hýždím, boky zůstávají nahoře.",
+   "Krátce vydrž.",
+   "Pomalu nohy natáhni zpět."
+  ],
+  "mistakes": [
+   "Boky padají při natahování.",
+   "Míč ujíždí do strany."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "zkzi1klvHps",
+   "title": "Stability Ball Leg Curl (Exercise Library)"
+  },
+  "query": "stability ball hamstring curl"
+ },
+ "Slider Leg Curl": {
+  "setup": [
+   "Lehni si na záda na hladkou podlahu, paty na klouzačky.",
+   "Zvedni boky do mostu."
+  ],
+  "steps": [
+   "Pomalu nohy natahuj, boky drž nahoře.",
+   "Pak přitáhni paty zpět k hýždím.",
+   "Když boky klesají, zkrať rozsah."
+  ],
+  "mistakes": [
+   "Rychlé ujetí nohou.",
+   "Propadlé boky."
+  ],
+  "breathing": "Nádech při natahování, výdech při přitahování.",
+  "video": {
+   "id": "WpeK7Widf6I",
+   "title": "Floor Slider Leg Curls (Exercise Library)"
+  },
+  "query": "slider hamstring curl"
+ },
+ "Barbell Close Grip Bench Press": {
+  "setup": [
+   "Lehni si na lavici, osu chyť na šíři ramen.",
+   "Lopatky stažené, chodidla na zemi."
+  ],
+  "steps": [
+   "Sundej osu a spouštěj ji ke spodní části hrudníku, lokty u těla.",
+   "Lehce se dotkni hrudníku.",
+   "Vytlač osu nahoru do propnutí."
+  ],
+  "mistakes": [
+   "Moc úzký úchop, který přetěžuje zápěstí.",
+   "Lokty do stran."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "DzA2xZhDGeo",
+   "title": "How To Do A Close Grip Barbell Bench Press"
+  },
+  "query": "close grip barbell bench press"
+ },
+ "Reverse-Grip Barbell Bench Press": {
+  "setup": [
+   "Lehni si na lavici, osu chyť podhmatem na šíři ramen, palce kolem osy.",
+   "Měj u sebe dopomoc, sundání osy je nezvyklé."
+  ],
+  "steps": [
+   "Spouštěj osu ke spodní části hrudníku, lokty u těla.",
+   "Lehce se dotkni hrudníku.",
+   "Vytlač osu nahoru a lehce k obličeji."
+  ],
+  "mistakes": [
+   "Palce mimo osu (osa může vyklouznout).",
+   "Trhavé spouštění."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "CO5vcfdMSWM",
+   "title": "How to perform the reverse grip barbell bench press"
+  },
+  "query": "reverse grip bench press"
+ },
+ "Wide-Grip Barbell Bench Press": {
+  "setup": [
+   "Lehni si na lavici, osu chyť širším úchopem, předloktí dole svisle.",
+   "Lopatky stažené, hrudník nahoru."
+  ],
+  "steps": [
+   "Spouštěj osu ke středu hrudníku.",
+   "Lehce se dotkni hrudníku.",
+   "Vytlač osu nahoru."
+  ],
+  "mistakes": [
+   "Příliš široký úchop a bolest ramen.",
+   "Odrážení osy od hrudníku."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "iFheDEgOhhc",
+   "title": "Exercise Tutorial: Wide Grip Bench Press"
+  },
+  "query": "wide grip bench press"
+ },
+ "Barbell High Incline Bench Press": {
+  "setup": [
+   "Opěradlo nastav na 45–60°, osu chyť o něco šířeji než ramena.",
+   "Lopatky stažené."
+  ],
+  "steps": [
+   "Spouštěj osu k hornímu hrudníku pod klíčními kostmi.",
+   "Lehce se dotkni hrudníku.",
+   "Vytlač osu nahoru nad bradu."
+  ],
+  "mistakes": [
+   "Zvedání hýždí ze sedáku.",
+   "Lokty kolmo do stran."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "6OcHZYJxW70",
+   "title": "High Incline Barbell Press"
+  },
+  "query": "high incline barbell bench press"
+ },
+ "Decline Barbell Bench Press": {
+  "setup": [
+   "Nohy zaklesni na negativní lavici, lehni si.",
+   "Osu chyť o něco šířeji než ramena, sundej s dopomocí."
+  ],
+  "steps": [
+   "Spouštěj osu ke spodní části hrudníku.",
+   "Lehce se dotkni hrudníku.",
+   "Vytlač osu nahoru."
+  ],
+  "mistakes": [
+   "Osa jde k hrudní kosti nebo krku.",
+   "Cvičení bez dopomoci."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "iVh4B5bJ5OI",
+   "title": "Decline Barbell Bench Press - Chest Exercise"
+  },
+  "query": "decline barbell bench press"
+ },
+ "Dumbbell Decline Bench Press": {
+  "setup": [
+   "Nohy zaklesni na negativní lavici, jednoručky drž na stehnech.",
+   "Opatrně si lehni a jednoručky dej nad hrudník."
+  ],
+  "steps": [
+   "Spouštěj jednoručky ke spodní části hrudníku.",
+   "Lokty asi 45° od těla.",
+   "Vytlač je nahoru."
+  ],
+  "mistakes": [
+   "Lokty kolmo do stran.",
+   "Pouštění jednoruček na zem z lehu."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "4R_GwRhG0rY",
+   "title": "How To Decline Dumbbell Press"
+  },
+  "query": "decline dumbbell bench press"
+ },
+ "Band Assisted Pull-Up": {
+  "setup": [
+   "Gumu přehoď přes hrazdu a provlékni ji, aby visela smyčka.",
+   "Chyť hrazdu a dej koleno nebo chodidlo do smyčky."
+  ],
+  "steps": [
+   "Stáhni lopatky dolů a přitáhni se, až je brada nad hrazdou.",
+   "Nahoře krátce vydrž.",
+   "Pomalu se spusť do propnutí."
+  ],
+  "mistakes": [
+   "Houpání a odraz gumou.",
+   "Krátký rozsah."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "4yE-XGDWJPg",
+   "title": "How to do Banded Assisted Pull-Ups"
+  },
+  "query": "band assisted pull up"
+ },
+ "Neutral-Grip Pull-Up": {
+  "setup": [
+   "Chyť paralelní madla na hrazdě, dlaně proti sobě.",
+   "Vis s propnutými pažemi, břicho zpevněné."
+  ],
+  "steps": [
+   "Stáhni lopatky a přitáhni se k madlům.",
+   "Brada nad madla.",
+   "Pomalu se spusť."
+  ],
+  "mistakes": [
+   "Houpání.",
+   "Nedotažený rozsah dole."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "fGv2Sxw9SDQ",
+   "title": "How To Do Neutral Grip Pull Ups"
+  },
+  "query": "neutral grip pull up"
+ },
+ "Weighted Pull Ups": {
+  "setup": [
+   "Zátěž připni na opasek nebo sevři jednoručku mezi chodidly.",
+   "Chyť hrazdu nadhmatem o něco šířeji než ramena."
+  ],
+  "steps": [
+   "Přitáhni se, až je brada nad hrazdou.",
+   "Nahoře krátce vydrž.",
+   "Pomalu se spusť do propnutí."
+  ],
+  "mistakes": [
+   "Houpání zátěže.",
+   "Přidání váhy dřív, než zvládneš 10 čistých shybů."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "eNlU8weQpak",
+   "title": "How To Start Doing Weighted Pull Ups"
+  },
+  "query": "weighted pull up"
+ },
+ "Wide-Grip Pull-Up": {
+  "setup": [
+   "Chyť hrazdu nadhmatem asi o dlaň šířeji na každé straně než u běžného shybu.",
+   "Vis s propnutými pažemi."
+  ],
+  "steps": [
+   "Přitáhni hrudník k hrazdě, lokty jdou dolů a do stran.",
+   "Brada nad hrazdu.",
+   "Pomalu se spusť."
+  ],
+  "mistakes": [
+   "Příliš široký úchop a malý rozsah.",
+   "Kopání nohama."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "9A6NPVPzkqQ",
+   "title": "How to Do Wide Grip Pullups"
+  },
+  "query": "wide grip pull up"
  }
 };

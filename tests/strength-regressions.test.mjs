@@ -24,7 +24,7 @@ test('focused gym only generates exercises for selected groups', () => {
   for(const group of ['chest','upper_back','abs'])assert.ok(work.some(name=>FOCUS_GROUPS[group].exercises.includes(name)),group);
   assert.deepEqual(plan.focusMuscles,['chest','upper_back','abs']);
   assert.equal(plan.adaptive.volumeModifier,.9);
-  for(const exercise of work)assert.ok(['chest','upper_back','abs'].some(group=>FOCUS_GROUPS[group].exercises.includes(exercise)));
+  for(const exercise of work)assert.ok(['chest','upper_back','abs'].some(group=>FOCUS_GROUPS[group].exercises.includes(EXERCISES[exercise].variantOf??exercise)),exercise);
   assert.ok(plan.planName.includes('Cílený trénink'));
 });
 
@@ -168,7 +168,7 @@ test("the plan says what each load is based on", () => {
   const plan = generateStrengthPlan({
     date: "2026-09-25", cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {},
     strength: { recentCompletedSets: [1, 2, 3].map(n => ({ workout_date: "2026-09-21", exercise: "DB bench press", type: "WORK", completed: 1, actual_kg: 20, actual_reps: 10, rpe: 8, set_no: n })) }
-  }, { focusMuscles: ["chest"], durationMinutes: 45, excludeExercises: ["Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press"] });
+  }, { focusMuscles: ["chest"], durationMinutes: 45, excludeExercises: ["Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press", "Smith Machine Bench Press", "Cable Bench Chest Fly", "Cable Bench Press", "Cable Chest Press", "Cable Decline Bench Press", "Cable High-to-Low Fly", "Cable Incline Bench Press", "Cable Standing Single Arm Chest Press", "Single-Arm Cable Fly", "Decline Machine Chest Press", "Incline Machine Chest Press", "Dumbbell Chest Fly", "Dumbbell Incline Chest Fly", "Dumbbell Neutral High Incline Bench Press", "Neutral-Grip Dumbbell Bench Press", "One Arm Dumbbell Bench Press", "Dumbbell Decline Bench Press", "Barbell Floor Press", "Reverse-Grip Barbell Bench Press", "Wide-Grip Barbell Bench Press", "Barbell High Incline Bench Press", "Decline Barbell Bench Press"] });
   const work = plan.rows.filter(r => r[0] === "WORK");
   assert.equal(work[0][1], "DB bench press"); assert.equal(work[0][3], "22,5");
   assert.match(work[0][9], /↑ minule 3× 10 op\. @ 20 kg, RPE 8 → \+2,5 kg/);
@@ -244,7 +244,7 @@ test("lower-body plan includes a unilateral movement when fresh", () => {
     recovery: {},
     strength: { recentCompletedSets: [] }
   }, { focus: "lower", maxExercises: 4 });
-  assert.ok(plan.rows.some(row => row[0] === "WORK" && row[1] === "DB Bulgarian split squat"));
+  assert.ok(plan.rows.some(row => row[0] === "WORK" && (EXERCISES[row[1]].variantOf ?? row[1]) === "DB Bulgarian split squat"));
 });
 
 test("generated plan survives sheet serialization round-trip", () => {
@@ -444,7 +444,7 @@ test("an exercise three sessions without progress makes way for another variant,
   // The machine press was done three days ago, so without the stall the bench press would be next.
   const machine = [1, 2].map(n => ({ workout_date: "2026-09-22", exercise: "Chest flat press Prime", type: "WORK", completed: 1, actual_kg: 40, actual_reps: 10, rpe: 8, set_no: n }));
   const context = { date: "2026-09-25", cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: [...machine, ...stuck] } };
-  const others = ["Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press"];
+  const others = ["Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press", "Smith Machine Bench Press", "Cable Bench Chest Fly", "Cable Bench Press", "Cable Chest Press", "Cable Decline Bench Press", "Cable High-to-Low Fly", "Cable Incline Bench Press", "Cable Standing Single Arm Chest Press", "Single-Arm Cable Fly", "Decline Machine Chest Press", "Incline Machine Chest Press", "Dumbbell Chest Fly", "Dumbbell Incline Chest Fly", "Dumbbell Neutral High Incline Bench Press", "Neutral-Grip Dumbbell Bench Press", "One Arm Dumbbell Bench Press", "Dumbbell Decline Bench Press", "Barbell Floor Press", "Reverse-Grip Barbell Bench Press", "Wide-Grip Barbell Bench Press", "Barbell High Incline Bench Press", "Decline Barbell Bench Press"];
   const plan = generateStrengthPlan(context, { focusMuscles: ["chest"], durationMinutes: 45, excludeExercises: others });
   const work = plan.rows.filter(r => r[0] === "WORK");
   assert.equal(work[0][1], "Chest flat press Prime");

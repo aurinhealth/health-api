@@ -59,6 +59,8 @@ struct TrainingModeView: View {
     /// The warm-up's stretches ticked (StretchingCard): all of them done, the
     /// card makes way for the first exercise.
     @AppStorage("gym.stretching.done") private var stretchesDone = ""
+    /// The day's parts, their order and switches (GymDayParts).
+    @AppStorage(GymDayParts.storageKey) private var dayParts = ""
     @Environment(\.scenePhase) private var scenePhase
     private var live: LiveWorkout { LiveWorkout.shared }
     /// The clock, heart rate and recording run only after "Začít trénink" (or
@@ -83,18 +85,22 @@ struct TrainingModeView: View {
                                 if live.running {
                                     LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
                                 }
-                                // The warm-up until the first set is done.
-                                if let warmup = day.warmup, restEnd == nil, !warmupDone(warmup), !day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
-                                    // Also gone once its minutes passed after Začít trénink.
-                                    TimelineView(.periodic(from: .now, by: 10)) { context in
-                                        if !warmupOver(warmup, at: context.date) {
-                                            StretchingCard(stretching: warmup, date: date, kind: .warmup, compact: true).padding(.top, 14)
+                                let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
+                                // The parts before the exercises, in the day's order, until the first set is done.
+                                if restEnd == nil, !day.exercises.contains(where: { $0.sets.contains(where: \.done) }) {
+                                    ForEach(parts.before(day)) { part in
+                                        if let routine = parts.routine(part, day: day), !routineDone(routine, kind: part.kind) {
+                                            StretchingCard(stretching: routine, date: date, kind: part.kind, compact: true).padding(.top, 14)
                                         }
                                     }
                                 }
                                 // Before Začít trénink: what comes at the end too.
-                                if !started, let stretching = day.stretching {
-                                    StretchingCard(stretching: stretching, date: date, compact: true).padding(.top, 10)
+                                if !started {
+                                    ForEach(parts.after(day)) { part in
+                                        if let routine = parts.routine(part, day: day) {
+                                            StretchingCard(stretching: routine, date: date, kind: part.kind, compact: true).padding(.top, 10)
+                                        }
+                                    }
                                 }
                                 if let restEnd {
                                     rest(day, exercise, until: restEnd)
@@ -545,16 +551,10 @@ struct TrainingModeView: View {
         }
     }
 
-    /// The warm-up's minutes have passed since the clock started.
-    private func warmupOver(_ warmup: GymStretching, at now: Date) -> Bool {
-        guard let start = live.clockStart else { return false }
-        return now.timeIntervalSince(start) >= Double(max(1, warmup.minutes) * 60)
-    }
-
-    /// Every stretch of the warm-up ticked (by hand or by its timer).
-    private func warmupDone(_ warmup: GymStretching) -> Bool {
+    /// Every move of a part ticked (by hand or by its timer).
+    private func routineDone(_ routine: GymStretching, kind: GymRoutineKind) -> Bool {
         let done = StretchingCard.done(stretchesDone, date: date)
-        return !warmup.items.isEmpty && warmup.items.allSatisfy { done.contains(GymRoutineKind.warmup.key + $0.id) }
+        return !routine.items.isEmpty && routine.items.allSatisfy { done.contains(kind.key + $0.id) }
     }
 
     private func recoveryPoints() -> [Double] {
@@ -592,8 +592,13 @@ struct TrainingModeView: View {
             if totals?.saved == true { healthCard }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             if !finishedSession { addExerciseButton }
-            // Stretching before the session is closed (src/stretching.js).
-            if !finishedSession, let stretching = day.stretching { StretchingCard(stretching: stretching, date: date) }
+            // What comes after the exercises, before the session is closed (GymDayParts).
+            if !finishedSession {
+                let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
+                ForEach(parts.after(day)) { part in
+                    if let routine = parts.routine(part, day: day) { StretchingCard(stretching: routine, date: date, kind: part.kind) }
+                }
+            }
             if finishedSession {
                 PrimaryButton(title: L10n.tr("Ohodnotit"), systemImage: "hand.thumbsup") { rating = true }
                 // Dokončit by mistake: back to the workout, the clock from its start.

@@ -98,28 +98,54 @@ test('each stretch has steps, two photos and two rounds for the muscles worked m
   assert.ok(plan.stretching.minutes >= 5 && plan.stretching.minutes <= 9);
 });
 
-test('the warm-up starts with easy cardio and moves for the muscles of the session', () => {
+test('the warm-up moves fit the session and the cardio is its own part', () => {
   const upper = generateStrengthPlan(context(), { durationMinutes: 60, focus: 'upper' });
   const lower = generateStrengthPlan(context(), { durationMinutes: 60, focus: 'lower' });
-  assert.equal(upper.warmup.items[0].id, 'cardio');
-  assert.equal(upper.warmup.items.length, 4);
+  assert.ok(upper.warmup.items.every(x => x.id !== 'cardio'));
+  assert.equal(upper.warmup.items.length, 3);
   const short = generateStrengthPlan(context(), { durationMinutes: 30 });
   assert.ok(short.warmup.minutes + short.stretching.minutes <= 8);
-  assert.ok(upper.warmup.items.some(x => ['arm_circles', 'chest_openers', 'band_pull_apart'].includes(x.id)));
-  assert.ok(lower.warmup.items.some(x => ['worlds_greatest', 'squat', 'leg_swings', 'hip_circles', 'bridge'].includes(x.id)));
-  assert.ok(upper.warmup.minutes >= 4 && upper.warmup.minutes <= 8);
+  assert.ok(upper.warmup.items.some(x => ['arm_circles', 'chest_openers', 'band_pull_apart', 'stick_pass_through', 'open_book', 'quadruped_rotation'].includes(x.id)));
+  assert.ok(lower.warmup.items.some(x => ['worlds_greatest', 'squat', 'leg_swings', 'hip_circles', 'bridge', 'squat_to_stand', 'spiderman', 'hip_flexor_rock'].includes(x.id)));
+  assert.ok(upper.warmup.minutes >= 1 && upper.warmup.minutes <= 8);
   assert.equal(warmupFor([], () => null), null);
-  const noCardio = generateStrengthPlan(context({ warmupCardio: false }), { durationMinutes: 60, focus: 'upper' });
-  assert.ok(noCardio.warmup.items.every(x => x.id !== 'cardio') && noCardio.warmup.items.length === 3);
-  assert.equal(normalizeTraining({ warmupCardio: false }).warmupCardio, false);
+  assert.deepEqual(upper.cardio, { type: 'exercise_bike', start: 10, end: null });
+  assert.equal(generateStrengthPlan(context({ warmupCardio: false }), { durationMinutes: 60, focus: 'upper' }).cardio, null);
+  assert.deepEqual(generateStrengthPlan(context({ cardio: 'both', cardioType: 'treadmill', stations: ['treadmill'] }), { durationMinutes: 60 }).cardio, { type: 'treadmill', start: 10, end: 10 });
+  assert.equal(normalizeTraining({ warmupCardio: false }).cardio, 'none');
+  assert.equal(normalizeTraining({}).cardio, 'start');
+  assert.equal(normalizeTraining({ cardio: 'end' }).warmupCardio, false);
+});
+
+test('warm-up and stretching moves that need a station only come with it', () => {
+  const rows = ['back', 'shoulders', 'traps', 'chest'].map(m => ['WORK', m]);
+  const ids = (stations, fn) => fn(rows, n => n, { count: 20, stations }).items.map(x => x.id);
+  assert.ok(!ids(undefined, warmupFor).includes('scapular_pullup'));
+  assert.ok(!ids([], warmupFor).includes('dumbbell_halo'));
+  assert.ok(ids(['pullup_bar', 'dumbbells'], warmupFor).includes('scapular_pullup'));
+  assert.ok(ids(['foam_roller'], stretchingFor).includes('foam_roller_thoracic'));
+  assert.ok(!ids([], stretchingFor).includes('dead_hang'));
+  const item = warmupFor(rows, n => n, { count: 20 }).items.find(x => x.id === 'open_book');
+  assert.match(item.video, /^[\w-]{11}$/);
+});
+
+test('cardio options follow the place, the jump rope always fits', async () => {
+  const { cardioOptions, cardioType, cardioFor, routinesRow, readRoutines: read } = await import('../src/stretching.js');
+  assert.deepEqual(cardioOptions([]).map(o => o.id), ['jump_rope']);
+  assert.deepEqual(cardioOptions(['treadmill', 'exercise_bike']).map(o => o.id), ['exercise_bike', 'treadmill', 'jump_rope']);
+  assert.equal(cardioType({ cardioType: 'rowing_ergometer', stations: ['treadmill'] }), 'treadmill');
+  assert.equal(cardioFor({ cardio: 'none' }), null);
+  const row = routinesRow({ cardio: { type: 'treadmill', start: null, end: 10 } });
+  assert.deepEqual(read([[], [], [], [], [], row]).cardio, { type: 'treadmill', start: null, end: 10 });
 });
 
 test('typical extra minutes follow the session length and the switches', async () => {
   const { typicalExtraMinutes } = await import('../src/stretching.js');
   const all = typicalExtraMinutes();
-  assert.ok(all[60].warmup > 0 && all[60].stretching > 0);
+  assert.ok(all[60].warmup > 0 && all[60].stretching > 0 && all[60].cardio > 0);
   assert.ok(all[30].warmup <= all[90].warmup);
-  assert.ok(typicalExtraMinutes({ warmupCardio: false })[60].warmup < all[60].warmup);
-  const off = typicalExtraMinutes({ warmup: false, stretching: false });
-  assert.deepEqual(off[60], { warmup: 0, stretching: 0 });
+  assert.equal(typicalExtraMinutes({ warmupCardio: false })[60].cardio, 0);
+  assert.ok(typicalExtraMinutes({ cardio: 'both' })[60].cardio > all[60].cardio);
+  const off = typicalExtraMinutes({ warmup: false, stretching: false, cardio: 'none' });
+  assert.deepEqual(off[60], { warmup: 0, cardio: 0, stretching: 0 });
 });

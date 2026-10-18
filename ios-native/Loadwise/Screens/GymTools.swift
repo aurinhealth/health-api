@@ -703,7 +703,7 @@ struct EquipmentView: View {
     /// The usual dumbbells, kg per hand.
     static let weightOptions: [Double] = [1, 2, 2.5, 3, 4, 5, 6, 7, 7.5, 8, 9, 10, 12, 12.5, 14, 15, 16, 17.5, 18, 20, 22, 22.5, 24, 25, 26, 27.5, 28, 30, 32, 32.5, 34, 35, 36, 38, 40, 42, 44, 45, 46, 48, 50]
     static let smallGym: [String] = ["dumbbells", "adjustable_bench", "barbells", "squat_rack", "cables", "lat_pulldown_low_row",
-                                     "pivot_leg_press", "pullup_bar", "kettlebells", "resistance_bands", "floor_mats", "treadmill"]
+                                     "pivot_leg_press", "pullup_bar", "weight_plates", "kettlebells", "resistance_bands", "floor_mats", "treadmill"]
     static let homeGym: [String] = ["dumbbells", "adjustable_bench", "resistance_bands", "floor_mats"]
     /// Set once the places of the new picker were added on this phone.
     static let seededKey = "gymPlacesSeeded"

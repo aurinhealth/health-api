@@ -1328,6 +1328,7 @@
 "čerstvý" = "fresh";
 "Video" = "Video";
 "Otevřít v YouTube" = "Open in YouTube";
+"Podobný cvik" = "Similar exercise";
 "K tomuhle cviku zatím video nemáme." = "There's no video for this exercise yet.";
 "Přidat sérii" = "Add set";
 "Odebrat sérii" = "Remove set";
@@ -1934,8 +1935,6 @@
 "Rozcvička hotová" = "Warm-up done";
 "Cvič" = "Go";
 "Rozcvička" = "Warm-up";
-"s kardiem" = "with cardio";
-"bez kardia" = "without cardio";
 "+%@ min navíc" = "+%@ min extra";
 "Celkem %@ min" = "%@ min in total";
 "%@ + %@ navíc" = "%@ + %@ extra";
@@ -2617,3 +2616,19 @@
 "zhruba %@ na den" = "about %@ a day";
 "do dneška %@" = "by today %@";
 "Snězeno %@ z %@ kcal" = "Eaten %@ of %@ kcal";
+"Kardio" = "Cardio";
+"Obojí" = "Both";
+"Druh kardia" = "Cardio type";
+"Rotoped" = "Exercise bike";
+"Běžecký pás" = "Treadmill";
+"Veslo" = "Rowing machine";
+"Eliptický trenažér" = "Elliptical";
+"Schody" = "Stair climber";
+"Švihadlo" = "Jump rope";
+"Kardio hotové" = "Cardio done";
+"Tempo, při kterém ještě zvládneš mluvit." = "A pace at which you can still talk.";
+"Podržením a tažením změníš pořadí." = "Touch and hold, then drag to change the order.";
+"%@ cvik" = "%@ exercise";
+"%@ cviky" = "%@ exercises";
+"%@ cviků" = "%@ exercises";
+"+ %@ min kardio" = "+ %@ min cardio";

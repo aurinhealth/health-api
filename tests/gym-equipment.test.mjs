@@ -13,7 +13,9 @@ import { exerciseMuscles } from "../src/fitness-insights.js";
 import { withLang } from "../src/lang.js";
 
 // The exercises for the equipment of other gyms and home gyms (added 2026-10-11).
-const OTHER_GYM_EXERCISES = ["Pull-up", "Chin-up", "Assisted pull-up", "Hanging leg raise", "Dips", "Assisted dip", "Kettlebell swing", "EZ bar curl", "EZ bar skull crusher", "Preacher curl", "Band pull-apart", "Hack squat", "Seated leg curl", "Glute kickback machine", "Seated calf raise", "T-bar row", "Chest-supported row", "TRX row", "Barbell incline bench press", "Trap bar deadlift", "Landmine press", "Medicine ball slam", "Box step-up"];
+const OTHER_GYM_EXERCISES = ["Pull-up", "Chin-up", "Assisted pull-up", "Hanging leg raise", "Dips", "Assisted dip", "Kettlebell swing", "EZ bar curl", "EZ bar skull crusher", "Preacher curl", "Band pull-apart", "Hack squat", "Seated leg curl", "Glute kickback machine", "Seated calf raise", "T-bar row", "Chest-supported row", "TRX row", "Barbell incline bench press", "Trap bar deadlift", "Landmine press", "Medicine ball slam", "Box step-up", "Reverse Hack Squat", "Machine Underhand Row", "Hammer Strength High Row", "Hammer Strength Iso-Lateral Row", "Machine Lat Pullover", "Machine Back Extension", "Reverse Hyperextension", "Machine Preacher Curl", "Machine Tricep Extension", "Belt Squat", "Machine Crunch", "Captain's Chair Knee Raise", "Selectorized Torso Rotation Machine", "Incline Machine Chest Press", "Decline Machine Chest Press",
+  // Library part 2 (2026-10-18): kettlebells, bands, plates, landmine, TRX, gym ball, sliders, a decline bench, a pull-up bar.
+  "Dumbbell Preacher Curl", "Barbell Banded Back Squat", "Kettlebell Gorilla Row", "Kettlebell Renegade Rows", "Kettlebell Single Arm Row", "Kettlebell Clean & Press (Double)", "Kettlebell Push Press", "One-Arm Kettlebell Military Press To Side", "Two-Arm Kettlebell Military Press", "Kettlebell Goblet Curl", "Kettlebell Romanian Deadlift", "Kettlebell Sumo Deadlift", "Kettlebell Thruster", "Kettlebell Windmill", "Turkish Get-Up", "Band Kneeling Pulldown", "Band Pullover", "Band Row", "Band Seated Pulldown", "Band Straight Arm Pulldown", "Band External Rotation", "Band High Face Pull", "Band Lateral Raise", "Band Overhead Press", "Band Single Arm Lateral Raise", "Band Curl", "Band Tricep Kickbacks", "Band Glute Bridge", "Band Good Morning", "Band Leg Curl", "Band Pull-Through", "Band Romanian Deadlift", "Band Squat", "Banded Eccentric Tibialis Raise", "Band Hip Abduction", "Banded Clamshell", "EZ Bar Reverse Preacher Curl", "Barbell Landmine Row", "Meadows Row", "TRX Squat", "Stability Ball Leg Curl", "Slider Leg Curl", "Barbell High Incline Bench Press", "Decline Barbell Bench Press", "Dumbbell Decline Bench Press", "Band Assisted Pull-Up", "Neutral-Grip Pull-Up", "Weighted Pull Ups", "Wide-Grip Pull-Up"];
 
 test("every catalog exercise needs only known stations; the original ones are all at METAGYM Kutná Hora", () => {
   assert.equal(METAGYM_KUTNA_HORA.url, "https://metagym.cz/kutnahora");
@@ -43,7 +45,7 @@ test("other gyms' equipment is listed and its exercises are complete", () => {
     for (const part of ["setup", "steps", "mistakes"]) assert.equal(TECHNIQUE_EN[name]?.[part]?.length, TECHNIQUE[name][part].length, name + " " + part + " in English");
     assert.equal(FEEL[name]?.length, 2, name + " feel");
     assert.equal(FEEL_EN[name]?.length, 2, name + " feel in English");
-    assert.ok(Object.values(FOCUS_GROUPS).some(g => g.exercises.includes(name)), name + " has a muscle group");
+    assert.ok(Object.values(FOCUS_GROUPS).some(g => g.exercises.includes(EXERCISES[name].variantOf ?? name)), name + " has a muscle group");
     assert.ok(Object.keys(exerciseMuscles(name)).length, name + " loads a muscle");
     assert.ok(stationLabel(name), name + " station name");
   }
@@ -69,15 +71,17 @@ test("exercises for other equipment are chosen only when the athlete has it", ()
   const home = { equipment: "home", stations: ["pullup_bar", "dip_bars", "ez_bar", "adjustable_bench"] };
   const lats = generateStrengthPlan(context(home), { focusMuscles: ["lats", "triceps", "biceps"] });
   const picked = lats.rows.filter(r => r[0] === "WORK").map(r => r[1]);
-  assert.ok(["Pull-up", "Chin-up"].includes(picked[0]), picked[0]);
+  assert.ok(["Pull-up", "Chin-up"].includes(EXERCISES[picked[0]].variantOf ?? picked[0]), picked[0]);
   assert.ok(["Dips", "EZ bar skull crusher"].includes(picked.find(n => EXERCISES[n].muscle === "triceps")), picked.join());
   assert.equal(picked.find(n => EXERCISES[n].muscle === "biceps"), "EZ bar curl");
   for (const n of names(generateStrengthPlan(context(home), { durationMinutes: 90 }))) assert.ok(EXERCISE_STATIONS[n].every(id => [...home.stations, "floor_mats"].includes(id)), n);
   // Without the station: never (a hack squat machine is not a leg press).
+  // (Bodyweight work on the floor mat fits every gym.)
+  const withStation = n => !EXERCISE_STATIONS[n].every(id => id === "floor_mats");
   const legs = generateStrengthPlan(context({ equipment: "custom", stations: ["pivot_leg_press", "prone_leg_curl"] }), { focusMuscles: ["quads", "hamstrings"] });
-  assert.deepEqual(legs.rows.filter(r => r[0] === "WORK").map(r => r[1]).filter((n, i, a) => a.indexOf(n) === i), ["Pivot leg press", "Prone leg curl Prime"]);
+  assert.deepEqual(legs.rows.filter(r => r[0] === "WORK").map(r => r[1]).filter((n, i, a) => a.indexOf(n) === i).filter(withStation), ["Pivot leg press", "Prone leg curl Prime"]);
   const hack = generateStrengthPlan(context({ equipment: "custom", stations: ["hack_squat", "seated_leg_curl"] }), { focusMuscles: ["quads", "hamstrings"] });
-  assert.deepEqual(hack.rows.filter(r => r[0] === "WORK").map(r => r[1]).filter((n, i, a) => a.indexOf(n) === i), ["Hack squat", "Seated leg curl"]);
+  assert.deepEqual(hack.rows.filter(r => r[0] === "WORK").map(r => r[1]).filter((n, i, a) => a.indexOf(n) === i).filter(withStation), ["Hack squat", "Seated leg curl"]);
   // The picker lists every exercise with its stations, and which are at Kutná Hora.
   const catalog = gymExerciseCatalog();
   assert.equal(catalog.find(x => x.name === "Pull-up").standardGym, false);

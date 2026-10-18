@@ -12,7 +12,8 @@ import {saveRecipe,listRecipes,deleteRecipe,searchRecipes} from '../src/personal
 import {scheduleWorkoutInIntervals,getScheduledWorkouts} from '../src/workout-library.js';
 import {movePlannedEvent,deletePlannedEvent,setPlannedEnvironment} from '../src/planned-events.js';
 import {retryWorkoutExports,importedEventIsLocal,completeLocalWorkout} from '../src/local-workouts.js';
-import {generateStrengthPlan} from '../src/strength-generator.js';
+import {EXERCISES,generateStrengthPlan} from '../src/strength-generator.js';
+import {EXERCISE_STATIONS} from '../src/gym-equipment.js';
 import {dashboardSyncStatus,startDashboardSync} from '../src/dashboard-sync.js';
 const schema=readFileSync(new URL('../staging/schema.sql',import.meta.url),'utf8');
 function setup(){const raw=createD1();raw.sqlite.exec(schema);const a=scopedDb(raw,1),b=scopedDb(raw,2);return {raw,a,b,env:{DB:a,USER_ID:1,CONNECTED_PROVIDERS:[]}};}
@@ -76,7 +77,7 @@ test('an export outage preserves the app plan; retry is idempotent, import does 
 });
 test('bodyweight plans never contain equipment-dependent exercises and beginners get at most two work sets per exercise',()=>{
  const context={date:'2026-10-12',strength:{recentCompletedSets:[]},cycling:{recentActivities:[],plannedWorkouts:[]},trainingSetup:{equipment:'bodyweight',experience:'beginner'}};
- const plan=generateStrengthPlan(context,{durationMinutes:45});const work=plan.rows.filter(r=>r[0]==='WORK');assert.ok(work.length>0);assert.ok(work.every(r=>['Push-up','Bodyweight squat','Glute bridge','Dead bug'].includes(r[1])));
+ const plan=generateStrengthPlan(context,{durationMinutes:45});const work=plan.rows.filter(r=>r[0]==='WORK');assert.ok(work.length>0);assert.ok(work.every(r=>EXERCISES[r[1]]&&EXERCISE_STATIONS[r[1]].every(id=>id==='floor_mats')),work.map(r=>r[1]).join());
  for(const name of new Set(work.map(r=>r[1])))assert.ok(work.filter(r=>r[1]===name).length<=2);
 });
 test('two initial providers start independently and status stays running while Google batches run',async()=>{
