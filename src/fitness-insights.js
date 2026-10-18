@@ -39,7 +39,9 @@ const CARDIO = {
 // Which body-map groups an exercise loads, with weights.
 export function exerciseMuscles(name) {
   const ex = normalizeExerciseName(name), def = EXERCISES[ex], out = {};
-  const focus = Object.entries(FOCUS_GROUPS).filter(([, g]) => g.exercises.includes(ex)).map(([id]) => id);
+  // A variant (variantOf) works the groups of its main exercise.
+  const groupsOf = n => Object.entries(FOCUS_GROUPS).filter(([, g]) => g.exercises.includes(n)).map(([id]) => id);
+  const focus = groupsOf(ex).length || !def?.variantOf ? groupsOf(ex) : groupsOf(def.variantOf);
   const primary = focus.length ? focus : PRIMARY[def?.muscle] || [];
   primary.forEach(id => { out[id] = 1 / Math.max(1, primary.length > 1 && !focus.length ? primary.length * .75 : 1); });
   for (const [id, w] of Object.entries(SECONDARY[def?.pattern] || {})) if (!out[id]) out[id] = w;
