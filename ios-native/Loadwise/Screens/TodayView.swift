@@ -227,10 +227,7 @@ struct DataAgePill: View {
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(last, inSameDayAs: yesterday) {
             return L10n.f("data ze včera %@", time)
         }
-        let day = DateFormatter()
-        day.locale = Fmt.locale
-        day.timeZone = calendar.timeZone
-        day.dateFormat = L10n.isEnglish ? "MMM d" : "d. M."
+        let day = DateFormatters.make(L10n.isEnglish ? "MMM d" : "d. M.", locale: Fmt.locale, timeZone: calendar.timeZone)
         return L10n.f("data z %@", day.string(from: last) + " " + time)
     }
 }
@@ -250,10 +247,7 @@ struct WeekStrip: View {
         if let week, week.count == 7 { return week }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.timeZone = calendar.timeZone
-        parser.dateFormat = "yyyy-MM-dd"
+        let parser = DateFormatters.iso(timeZone: calendar.timeZone)
         let weekday = parser.date(from: date).map { (calendar.component(.weekday, from: $0) + 5) % 7 } ?? 0
         let monday = AppModel.shift(date, by: -weekday) ?? date
         return (0..<7).map { TodaySnapshot.WeekDay(date: AppModel.shift(monday, by: $0) ?? monday, zone: nil) }

@@ -28,8 +28,11 @@
       "enabled": true,
       "invocation_logs": true
     },
+    // One request in ten traced (D1, fetch to Intervals and the AI, R2), so
+    // a slow screen shows where its time went in the Cloudflare dashboard.
     "traces": {
-      "enabled": false
+      "enabled": true,
+      "head_sampling_rate": 0.1
     }
   },
   "triggers": {
