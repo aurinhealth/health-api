@@ -56,7 +56,7 @@ test("the review account is the APP_REVIEW_EMAIL user, never the owner", () => {
 
 test("the review account cannot start a connection or send data out; the rest of the app works", async () => {
   const reviewer = { id: 9, email: "review@example.com" }, friend = { id: 3, email: "friend@example.com" };
-  const blocked = [["GET", "/oauth/intervals"], ["GET", "/oauth/intervals/callback"], ["GET", "/oauth/google"], ["GET", "/oauth/strava"],
+  const blocked = [["GET", "/oauth/intervals"], ["GET", "/oauth/intervals/callback"], ["GET", "/oauth/google"],
     ["POST", "/app/api/connect/start"], ["POST", "/auth/app/connect"], ["POST", "/app/api/connections"], ["POST", "/app/api/sync/activity"], ["POST", "/app/api/sync/retry"], ["POST", "/app/api/workouts/export"]];
   for (const [method, path] of blocked) {
     const refused = reviewRefusal(REVIEW, reviewer, method, path);

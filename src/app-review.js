@@ -1,7 +1,7 @@
 // Apple App Review account. APP_REVIEW_EMAIL signs in with the fixed code
 // APP_REVIEW_CODE (email-login.js) only until the end of APP_REVIEW_UNTIL
 // (YYYY-MM-DD, UTC); without that date the fixed code is off. The account is a
-// demo: it cannot connect third-party services (Google, Intervals.icu, Strava)
+// demo: it cannot connect third-party services (Google, Intervals.icu)
 // or send anything to them, and its AI budget is a small fixed one. Apple
 // Health upload and the rest of the app work as for anyone.
 import { L } from "./lang.js";
@@ -31,7 +31,7 @@ export function reviewCodeActive(env, now = Date.now()) {
 }
 
 // Starting a connection to a third-party service, or sending data out to one.
-const CONNECT_PREFIXES = ["/oauth/google", "/oauth/intervals", "/oauth/strava"];
+const CONNECT_PREFIXES = ["/oauth/google", "/oauth/intervals"];
 const OUTBOUND_POSTS = new Set(["/app/api/connect/start", "/app/api/connections", "/app/api/sync/activity", "/app/api/sync/retry", "/app/api/workouts/export", "/auth/app/connect"]);
 
 export function reviewBlocked(method, pathname) {

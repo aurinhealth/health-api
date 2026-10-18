@@ -36,8 +36,8 @@ test("the app gets a ticket link only when signed in, from its own origin, for a
   assert.equal((await start({ provider: "google" }, { signedIn: false })).status, 401);
   assert.equal((await start({ provider: "google" }, { from: "https://evil.example" })).status, 403);
   assert.equal((await start({ provider: "garmin" })).status, 400);
-  // Strava (Synchronizace) and the optional Google scopes have their own tickets.
-  assert.equal((await start({ provider: "strava" })).status, 200);
+  // Strava is gone (Synchronizace sends to it no more); the optional Google scopes have their own ticket.
+  assert.equal((await start({ provider: "strava" })).status, 400);
   assert.equal((await start({ provider: "google-extra" })).status, 200);
 });
 

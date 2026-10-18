@@ -2,7 +2,7 @@ import SwiftUI
 
 // Settings → Synchronizace: where Loadwise sends what the user records.
 // A list of the apps it can send to (Apple Zdraví, Google Health,
-// Intervals.icu, Strava), each with its page: Posílat (planned workouts, done
+// Intervals.icu, Wahoo), each with its page: Posílat (planned workouts, done
 // activities, health data) and Stahovat (done activities). After a done
 // activity a toast says where it went; its sheet shows each app's state.
 // Server side: src/sync-destinations.js; Apple Health: AppleHealthExport.swift.
@@ -123,9 +123,6 @@ struct SyncAppIcon: View {
             switch id {
             case "apple", "google", "intervals", "wahoo":
                 IntegrationIcon(id: id, size: size)
-            case "strava":
-                shape.fill(Color(light: 0xFC4C02, dark: 0xFC4C02))
-                Image(systemName: "chevron.up").font(.system(size: size * 0.42, weight: .black)).foregroundStyle(.white)
             default:
                 shape.fill(Palette.indigo)
                 Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(.white)
@@ -213,7 +210,6 @@ struct SyncDestinationView: View {
     let store: SettingsStore
     @State private var connecting = false
     @State private var note: String?
-    @State private var confirmDisconnect = false
 
     private var destination: SyncDestination? { sync.destination(id) }
 
@@ -238,21 +234,8 @@ struct SyncDestinationView: View {
                 } else {
                     if let missing = destination.missingScopes, !missing.isEmpty { googlePermission(missing) }
                     sections(destination)
-                    if id == "strava" {
-                        Text("Ze Stravy Aurin nic nečte, jen do ní posílá.")
-                            .font(Typo.caption).foregroundStyle(Palette.muted)
-                        SettingsGroup {
-                            Button { confirmDisconnect = true } label: {
-                                SettingsRow(title: "Odpojit Stravu", chevron: false, titleColor: Palette.rust)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
                 }
             }
-        }
-        .confirmationDialog("Odpojit Stravu?", isPresented: $confirmDisconnect, titleVisibility: .visible) {
-            Button("Odpojit", role: .destructive) { Task { await disconnectStrava() } }
         }
     }
 
@@ -327,51 +310,18 @@ struct SyncDestinationView: View {
     private func connect(_ destination: SyncDestination) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(L10n.f("%@ zatím není připojené.", SyncApp.name(id))).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-            Text(id == "strava" ? "Aurin do Stravy posílá hotové aktivity a váhu. Nic z ní nečte." : "Připoj ho a vyber, co do něj Aurin posílá.")
+            Text("Připoj ho a vyber, co do něj Aurin posílá.")
                 .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-            if id == "strava" {
-                PrimaryButton(title: L10n.tr("Připojit Stravu"), busy: connecting) { Task { await connectStrava() } }
-                    .disabled(connecting)
-            } else {
-                NavigationLink { SourcesSettingsView(store: store) } label: {
-                    Text("Připojit ve Zdrojích dat").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                        .frame(maxWidth: .infinity).frame(height: 50)
-                        .background(Palette.button, in: Capsule())
-                }
-                .buttonStyle(.plain)
+            NavigationLink { SourcesSettingsView(store: store) } label: {
+                Text("Připojit ve Zdrojích dat").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    .frame(maxWidth: .infinity).frame(height: 50)
+                    .background(Palette.button, in: Capsule())
             }
+            .buttonStyle(.plain)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-
-    private func connectStrava() async {
-        connecting = true
-        defer { connecting = false }
-        do {
-            guard let event = try await model.connect(provider: "strava") else { return }
-            switch event {
-            case "strava": note = L10n.tr("Strava je připojená.")
-            case "strava-full": note = L10n.tr("Aurin u Stravy vyčerpal limit uživatelů, další zatím připojit nejde.")
-            case "strava-cancelled": note = L10n.tr("Připojení Stravy bylo zrušeno.")
-            case "expired": note = L10n.tr("Odkaz vypršel. Zkus to znovu.")
-            default: note = L10n.tr("Stravu se nepodařilo připojit. Zkus to znovu.")
-            }
-            await sync.load()
-        } catch {
-            note = error.localizedDescription
-        }
-    }
-
-    private func disconnectStrava() async {
-        do {
-            try await model.api.disconnect(provider: "strava")
-            note = L10n.tr("Odpojeno.")
-            await sync.load()
-        } catch {
-            note = error.localizedDescription
-        }
     }
 
     // MARK: Google permissions
@@ -456,7 +406,6 @@ struct SyncHealthView: View {
         case "apple": return "Do Apple Zdraví jde jen to, co v Aurinu sám zapíšeš."
         case "google": return "Váhu a jídlo zapsané v Aurinu."
         case "intervals": return "Z Google Health a Apple Zdraví do wellness v Intervals.icu. Co tam už je odjinud, Aurin nepřepíše."
-        case "strava": return "Poslední váhu, když se změní."
         default: return nil
         }
     }

@@ -14,7 +14,7 @@ import {L} from './lang.js';
 const shiftDate=(date,days)=>new Date(Date.parse(date+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);
 
 export async function initialImport(env,ctx,{provider:onlyProvider,force=false}={}){
-  // Strava only receives, and Ultrahuman imported its history when it was connected (ultrahuman.js).
+  // Ultrahuman imported its history when it was connected (ultrahuman.js).
   const providers=(env.CONNECTED_PROVIDERS||[]).filter(provider=>['google','intervals'].includes(provider)&&(!onlyProvider||provider===onlyProvider));if(!providers.length)return {status:'idle'};
   const runs=[];
   // Separate claims prevent a second connector from being lost during the first import.
