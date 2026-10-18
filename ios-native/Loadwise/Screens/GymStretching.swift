@@ -451,9 +451,9 @@ struct GymPreferencesGroup: View {
         }
         .task { await load() }
         .onChange(of: goal) { _, value in goalChanged(value) }
-        .onChange(of: warmup) { _, value in save(["warmup": .bool(value)], unchanged: (prefs?.warmup != false) == value) }
-        .onChange(of: cardio) { _, value in save(["cardio": .string(value)], unchanged: prefs?.cardioMode == value) }
-        .onChange(of: cardioType) { _, value in save(["cardioType": .string(value)], unchanged: prefs?.cardioType == value) }
+        .onChange(of: warmup) { _, value in warmupChanged(value) }
+        .onChange(of: cardio) { _, value in cardioChanged(value) }
+        .onChange(of: cardioType) { _, value in cardioTypeChanged(value) }
         .onChange(of: stretching) { _, value in stretchingChanged(value) }
     }
 
@@ -469,7 +469,7 @@ struct GymPreferencesGroup: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Kardio").font(.body).foregroundStyle(Palette.ink)
                 Picker("Kardio", selection: $cardio) {
-                    ForEach(Self.cardioModes.indices, id: \.self) { i in Text(LocalizedStringKey(Self.cardioModes[i].1)).tag(Self.cardioModes[i].0) }
+                    ForEach(Self.cardioModes, id: \.0) { mode in Text(LocalizedStringKey(mode.1)).tag(mode.0) }
                 }
                 .pickerStyle(.segmented)
             }
@@ -492,6 +492,21 @@ struct GymPreferencesGroup: View {
     private var cardioOptions: [(String, String)] {
         let options = prefs?.cardioOptions ?? GymCardio.all.map { GymPreferences.CardioOption(id: $0, name: GymCardio.name($0)) }
         return options.map { ($0.id, $0.name) }
+    }
+
+    private func warmupChanged(_ value: Bool) {
+        let saved: Bool = prefs?.warmup != false
+        save(["warmup": .bool(value)], unchanged: saved == value)
+    }
+
+    private func cardioChanged(_ value: String) {
+        let saved: String? = prefs?.cardioMode
+        save(["cardio": .string(value)], unchanged: saved == value)
+    }
+
+    private func cardioTypeChanged(_ value: String) {
+        let saved: String? = prefs?.cardioType
+        save(["cardioType": .string(value)], unchanged: saved == value)
     }
 
     private func stretchingChanged(_ value: Bool) {
