@@ -4,15 +4,15 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { grantAiConsent } from "./helpers/consent.mjs";
 import { isReviewAccount, reviewCodeActive, reviewRefusal, REVIEW_AI_MONTHLY_LIMIT_USD } from "../src/app-review.js";
-import { handleEmailLogin, reviewCode } from "../src/email-login.js";
-import { ensureTenancy, inviteUser, scopedDb, _resetTenancyForTest } from "../src/tenancy.js";
+import { handleEmailLogin, reviewCode, sendCode } from "../src/email-login.js";
+import { ensureTenancy, inviteUser, signInEmailUser, scopedDb, _resetTenancyForTest } from "../src/tenancy.js";
 import { aiAllowance, aiMonthlyLimitUsd } from "../src/ai-usage.js";
 import { localToday } from "../src/user-time.js";
 import { callOpenAI } from "../src/coach-assistant.js";
 
 const ORIGIN = "https://petrfitnessdata.eu";
 const REVIEW = { APP_REVIEW_EMAIL: "Review@Example.com", APP_REVIEW_CODE: "246810" };
-const MIGRATION = readFileSync(new URL("../migrations/0014_passkeys_email_codes.sql", import.meta.url), "utf8");
+const MIGRATION = ["0014_passkeys_email_codes.sql", "0026_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
 test("the fixed review code works until the end of APP_REVIEW_UNTIL (UTC) and never without it", () => {
   const env = { ...REVIEW, APP_REVIEW_UNTIL: "2026-11-30" };
@@ -26,13 +26,18 @@ test("the fixed review code works until the end of APP_REVIEW_UNTIL (UTC) and ne
   for (const until of ["", "2026-11-31", "30.11.2026", "2026-11-30T23:00", "tomorrow"]) assert.equal(reviewCodeActive({ APP_REVIEW_UNTIL: until }, 0), false, until);
 });
 
-async function sentCode(extra) {
+async function reviewSetup(extra) {
   _resetTenancyForTest();
   const sent = [];
   const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" }; } }, EMAIL_FROM: "noreply@petrfitnessdata.eu", ...REVIEW, ...extra };
   await ensureTenancy(env.DB, env);
   env.DB.sqlite.exec(MIGRATION);
   await inviteUser(env.DB, "review@example.com", 1);
+  return { env, sent };
+}
+
+async function sentCode(extra) {
+  const { env, sent } = await reviewSetup(extra);
   const pending = [];
   await handleEmailLogin(new Request(ORIGIN + "/auth/email/start", { method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json" }, body: JSON.stringify({ email: "review@example.com" }) }), env, "/auth/email/start", { waitUntil: p => pending.push(p) });
   await Promise.all(pending);
@@ -43,6 +48,45 @@ test("sign-in: the review address gets a random code once APP_REVIEW_UNTIL is mi
   assert.equal(await sentCode({ APP_REVIEW_UNTIL: "2999-12-31" }), "246810");
   assert.notEqual(await sentCode({}), "246810");
   assert.notEqual(await sentCode({ APP_REVIEW_UNTIL: "2000-01-01" }), "246810");
+});
+
+let caller = 0;
+async function tryCode(env, code, time) {
+  const real = Date.now;
+  Date.now = () => time;
+  try {
+    const request = new Request(ORIGIN + "/auth/email/verify", { method: "POST", headers: { Origin: ORIGIN, "Content-Type": "application/json", "CF-Connecting-IP": "198.51.100." + (++caller % 250) }, body: JSON.stringify({ email: "review@example.com", code }) });
+    return (await handleEmailLogin(request, env, "/auth/email/verify")).status;
+  } finally { Date.now = real; }
+}
+
+test("the fixed review code stops working after twenty wrong tries in all, however many days they take", async () => {
+  const { env } = await reviewSetup({ APP_REVIEW_UNTIL: "2999-12-31" });
+  // Ten wrong tries a day stay under the daily lock of an address, but add up.
+  for (const day of ["2026-10-07", "2026-10-08"]) {
+    for (let round = 0; round < 2; round++) {
+      const time = Date.parse(day + "T08:00:00Z") + round * 61_000;
+      assert.equal(await sendCode(env, "review@example.com", "en", { now: time }), true);
+      for (let i = 0; i < 5; i++) assert.equal(await tryCode(env, "135790", time + 1000), 400);
+    }
+  }
+  const later = Date.parse("2026-10-09T08:00:00Z");
+  assert.equal(await sendCode(env, "review@example.com", "en", { now: later }), true);
+  assert.equal(await tryCode(env, "246810", later + 1000), 429, "the right code no longer signs in");
+  // A new APP_REVIEW_CODE starts over.
+  const renewed = { ...env, APP_REVIEW_CODE: "975310" };
+  assert.equal(await sendCode(renewed, "review@example.com", "en", { now: later + 61_000 }), true);
+  assert.equal(await tryCode(renewed, "975310", later + 62_000), 200);
+});
+
+test("the fixed review code is never for the owner or an admin", async () => {
+  const active = { ...REVIEW, APP_REVIEW_UNTIL: "2999-12-31" };
+  assert.equal(reviewCode({ ...active, OWNER_EMAIL: " REVIEW@example.com" }, "review@example.com"), null, "the owner");
+  const { env, sent } = await reviewSetup({ APP_REVIEW_UNTIL: "2999-12-31" });
+  await signInEmailUser(env.DB, env, "review@example.com");
+  env.DB.sqlite.exec("UPDATE users SET role = 'admin' WHERE email = 'review@example.com'");
+  assert.equal(await sendCode(env, "review@example.com", "en"), true);
+  assert.notEqual(sent[0].text.match(/\b(\d{6})\b/)[1], "246810", "an admin gets a random code");
 });
 
 test("the review account is the APP_REVIEW_EMAIL user, never the owner", () => {

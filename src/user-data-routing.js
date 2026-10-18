@@ -17,7 +17,7 @@ const CENTRAL_TABLES = new Set([
   ...CENTRAL_PERSONAL_TABLES, 'users', 'user_invites', 'schema_meta',
   'account_deletions', 'user_data_routes', 'user_data_shards',
   'shared_foods', 'shared_recipes', 'workout_library', 'exercise_techniques',
-  'cookbook', 'auth_challenges', 'email_login_codes', 'request_limits', 'd1_migrations'
+  'cookbook', 'auth_challenges', 'email_login_codes', 'review_code_failures', 'request_limits', 'd1_migrations'
 ]);
 const TARGET = Symbol('database target');
 const STATEMENT = Symbol('database statement');

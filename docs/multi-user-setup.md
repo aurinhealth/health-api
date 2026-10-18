@@ -39,7 +39,7 @@ Fungují hned, nic se nenastavuje (`src/passkeys.js`, ověřování v `src/webau
 
 ## Přihlášení kódem z e-mailu (volitelné)
 
-Pro pozvané bez účtu Google: zadají e-mail a přijde jim šestimístný kód (platí 10 minut, 5 pokusů, nejvýš 1 kód za minutu a 10 denně na adresu; `src/email-login.js`). Kód dostanou jen aktivní uživatelé, pozvané adresy a správce, ostatním aplikace odpoví stejně, ale nic nepošle. E-maily posílá Cloudflare Email Service přes binding `EMAIL` ve `wrangler.jsonc` (v plánu Workers Paid je 3 000 e-mailů měsíčně v ceně). Zapnutí:
+Pro pozvané bez účtu Google: zadají e-mail a přijde jim šestimístný kód (platí 10 minut, 5 pokusů, nejvýš 1 kód za minutu a 10 denně na adresu, po 20 špatných kódech za den je adresa zamčená do půlnoci UTC; jeden volající, tedy IPv4 adresa nebo celá IPv6 /64, si řekne nejvýš o 50 kódů a ověří nejvýš 100 kódů denně; z denního rozpočtu `EMAIL_CODES_PER_DAY` (500) smí adresy, které kód dostanou jen díky `OPEN_SIGNUP`, použít nejvýš čtyři pětiny; `src/email-login.js`). Kód dostanou jen aktivní uživatelé, pozvané adresy a správce, ostatním aplikace odpoví stejně, ale nic nepošle. E-maily posílá Cloudflare Email Service přes binding `EMAIL` ve `wrangler.jsonc` (v plánu Workers Paid je 3 000 e-mailů měsíčně v ceně). Zapnutí:
 
 1. **Cloudflare → Compute → Email Service → Email Sending → Onboard Domain**: vyber `aurin.health` a nech Cloudflare přidat DNS záznamy (SPF, DKIM, DMARC a MX `cf-bounce`). Záznamy jsou na `cf-bounce.aurin.health`, takže se nepletou s poštou iCloud+ na hlavní doméně (MX, SPF a DKIM `sig1`). Email Routing na `aurin.health` nezapínej, přepsal by MX iCloudu.
 2. Worker `health-api` → **Settings → Variables and Secrets**: secret `EMAIL_FROM` = `noreply@aurin.health`.

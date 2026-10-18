@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { allowRequest, allowClient, clientKey, CLIENT_LIMITS } from "../src/ip-rate-limit.js";
+import { allowRequest, allowClient, clientKey, callerNetwork, CLIENT_LIMITS } from "../src/ip-rate-limit.js";
 
 const MIGRATION = readFileSync(new URL("../migrations/0020_request_limits.sql", import.meta.url), "utf8");
 const T0 = Date.parse("2026-10-07T08:00:00Z");
@@ -55,4 +55,25 @@ test("one caller gets five starts a minute and thirty an hour per purpose", asyn
   let allowed = 0;
   for (let minute = 1; minute <= 7; minute++) for (let i = 0; i < 5; i++) if (await allowClient(db, from("203.0.113.5"), "s", "email", T0 + minute * 60_000 + i)) allowed++;
   assert.equal(allowed, 25, "thirty an hour in all");
+});
+
+test("an IPv6 caller is its /64, written one way; IPv4 and IPv4-mapped addresses are the same caller", async () => {
+  assert.equal(callerNetwork("2001:DB8:1:2::5"), "2001:db8:1:2::/64");
+  assert.equal(callerNetwork("2001:0db8:0001:0002:aaaa:bbbb:cccc:dddd"), "2001:db8:1:2::/64");
+  assert.equal(callerNetwork("2001:db8::"), "2001:db8:0:0::/64");
+  assert.equal(callerNetwork("fe80::1%eth0"), "fe80:0:0:0::/64");
+  assert.equal(callerNetwork("::ffff:203.0.113.5"), "203.0.113.5");
+  assert.equal(callerNetwork("::ffff:cb00:7105"), "203.0.113.5");
+  assert.equal(callerNetwork(" 203.0.113.5 "), "203.0.113.5");
+  assert.equal(callerNetwork(""), "none");
+  assert.equal(callerNetwork("2001:db8::1::2"), "2001:db8::1::2", "not an address: kept as it came");
+  assert.equal(await clientKey(from("2001:db8:1:2::5"), "s"), await clientKey(from("2001:db8:1:2:ffff:ffff:ffff:ffff"), "s"));
+  assert.notEqual(await clientKey(from("2001:db8:1:2::5"), "s"), await clientKey(from("2001:db8:1:3::5"), "s"));
+  assert.equal(await clientKey(from("::ffff:203.0.113.5"), "s"), await clientKey(from("203.0.113.5"), "s"));
+});
+
+test("a caller's limits can include a day", async () => {
+  const db = createD1();
+  for (let i = 0; i < 3; i++) assert.equal(await allowClient(db, from("203.0.113.5"), "s", "email", T0 + i * 3_600_000, { day: 3 }), true);
+  assert.equal(await allowClient(db, from("203.0.113.5"), "s", "email", T0 + 3 * 3_600_000, { day: 3 }), false);
 });

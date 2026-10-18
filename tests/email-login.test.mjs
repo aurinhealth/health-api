@@ -2,13 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { handleEmailLogin, sendCode, codesPerDay } from "../src/email-login.js";
+import { handleEmailLogin, sendCode, codesPerDay, openCodesPerDay } from "../src/email-login.js";
 import { emailConfigured, emailSender, signInCodeEmail, passkeyAddedEmail } from "../src/email-sender.js";
 import { ensureTenancy, inviteUser, signInEmailUser, setUserDisabled, _resetTenancyForTest } from "../src/tenancy.js";
 import { resolvePrincipal } from "../src/dashboard-auth.js";
 
 const ORIGIN = "https://petrfitnessdata.eu";
-const MIGRATION = readFileSync(new URL("../migrations/0014_passkeys_email_codes.sql", import.meta.url), "utf8");
+const MIGRATION = ["0014_passkeys_email_codes.sql", "0026_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
 async function setup(extra = {}) {
   _resetTenancyForTest();
@@ -27,6 +27,17 @@ async function start(env, email, options) {
 }
 const verify = (env, email, code, options) => handleEmailLogin(request("/auth/email/verify", { email, code }, options), env, "/auth/email/verify");
 const codeIn = message => message.text.match(/\b(\d{6})\b/)[1];
+// Runs `work` as if the clock showed `time` (the handlers read Date.now()).
+async function at(time, work) {
+  const real = Date.now;
+  Date.now = () => time;
+  try { return await work(); } finally { Date.now = real; }
+}
+async function quietly(work) {
+  const original = console.warn;
+  console.warn = () => {};
+  try { return await work(); } finally { console.warn = original; }
+}
 
 test("e-mail sign-in stays off until the binding and the sender address exist", async () => {
   assert.equal(emailConfigured({}), false);
@@ -185,7 +196,8 @@ test("all codes together stay under the day's budget (EMAIL_CODES_PER_DAY, 500 b
   assert.equal(codesPerDay({}), 500);
   assert.equal(codesPerDay({ EMAIL_CODES_PER_DAY: "20" }), 20);
   assert.equal(codesPerDay({ EMAIL_CODES_PER_DAY: "nonsense" }), 500);
-  const { env, sent } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "2" });
+  const { env, sent } = await setup({ EMAIL_CODES_PER_DAY: "2" });
+  for (const email of ["a@example.com", "b@example.com", "c@example.com"]) await inviteUser(env.DB, email, 1);
   const now = Date.parse("2026-10-07T08:00:00Z");
   assert.equal(await sendCode(env, "a@example.com", "cs", { now }), true);
   assert.equal(await sendCode(env, "b@example.com", "cs", { now }), true);
@@ -198,4 +210,113 @@ test("all codes together stay under the day's budget (EMAIL_CODES_PER_DAY, 500 b
   // The next day the budget is back.
   assert.equal(await sendCode(env, "c@example.com", "cs", { now: Date.parse("2026-10-08T00:01:00Z") }), true);
   assert.equal(sent.length, 3);
+});
+
+test("one caller starts at most fifty sign-ins a day, and an IPv6 caller is its whole /64", async () => {
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true" });
+  const t0 = Date.parse("2026-10-07T00:00:00Z"), answers = [];
+  // 24 an hour, under the minute and hour limits.
+  for (let i = 0; i < 51; i++) answers.push((await at(t0 + i * 150_000, () => start(env, "p" + i + "@example.com", { ip: "203.0.113.5" }))).status);
+  assert.deepEqual(answers.slice(0, 50), Array(50).fill(200));
+  assert.equal(answers[50], 429, "the fifty-first of the day");
+  assert.equal(sent.length, 50);
+  assert.equal((await at(Date.parse("2026-10-08T00:00:30Z"), () => start(env, "p51@example.com", { ip: "203.0.113.5" }))).status, 200, "a new day");
+  for (let i = 0; i < 5; i++) assert.equal((await at(t0, () => start(env, "v" + i + "@example.com", { ip: "2001:db8:1:2::" + (i + 1) }))).status, 200);
+  assert.equal((await at(t0, () => start(env, "v5@example.com", { ip: "2001:0DB8:0001:0002:ffff:1:2:3" }))).status, 429, "another address of the same /64");
+  assert.equal((await at(t0, () => start(env, "v6@example.com", { ip: "2001:db8:1:3::1" }))).status, 200, "the next /64");
+});
+
+test("addresses that get a code only through OPEN_SIGNUP use at most four fifths of the day's budget", async () => {
+  assert.equal(openCodesPerDay({}), 400);
+  assert.equal(openCodesPerDay({ EMAIL_CODES_PER_DAY: "5" }), 4);
+  assert.equal(openCodesPerDay({ EMAIL_CODES_PER_DAY: "1" }), 0);
+  const { env, sent } = await setup({ OPEN_SIGNUP: "true", EMAIL_CODES_PER_DAY: "5" });
+  await inviteUser(env.DB, "member@example.com", 1);
+  await signInEmailUser(env.DB, env, "member@example.com");
+  const now = Date.parse("2026-10-07T08:00:00Z");
+  for (let i = 0; i < 4; i++) assert.equal(await sendCode(env, "junk" + i + "@example.com", "cs", { now }), true);
+  assert.equal(await quietly(() => sendCode(env, "junk4@example.com", "cs", { now })), false, "the open share is used up");
+  assert.equal(await sendCode(env, "member@example.com", "cs", { now }), true, "an account still gets its code");
+  assert.equal(await quietly(() => sendCode(env, "owner@example.com", "cs", { now })), false, "then the whole budget is used");
+  assert.equal(sent.length, 5);
+  // The page answers the same either way.
+  assert.deepEqual(await (await quietly(() => start(env, "junk5@example.com"))).json(), { status: "ok" });
+});
+
+test("a send that is refused leaves the address's pending code as it was", async () => {
+  const { env, sent } = await setup({ EMAIL_CODES_PER_DAY: "1" });
+  const now = Date.parse("2026-10-07T08:00:00Z");
+  assert.equal(await sendCode(env, "owner@example.com", "cs", { now }), true);
+  assert.equal(await quietly(() => sendCode(env, "owner@example.com", "cs", { now: now + 61_000 })), false, "the day's budget is used up");
+  assert.equal(env.DB.sqlite.prepare("SELECT day_count FROM email_login_codes").get().day_count, 1, "nor is it counted for the address");
+  assert.equal((await at(now + 120_000, () => verify(env, "owner@example.com", codeIn(sent[0])))).status, 200);
+});
+
+test("when the e-mail with a new code fails, the code before it still works", async () => {
+  const sent = [];
+  let down = false;
+  const { env } = await setup({ EMAIL: { send: async message => { if (down) throw new Error("down"); sent.push(message); return { messageId: "m" }; } } });
+  const now = Date.parse("2026-10-07T08:00:00Z");
+  assert.equal(await sendCode(env, "owner@example.com", "cs", { now }), true);
+  const wrong = codeIn(sent[0]) === "000000" ? "111111" : "000000";
+  assert.equal((await at(now + 10_000, () => verify(env, "owner@example.com", wrong))).status, 400);
+  down = true;
+  await assert.rejects(sendCode(env, "owner@example.com", "cs", { now: now + 61_000 }), /down/);
+  assert.equal(env.DB.sqlite.prepare("SELECT attempts FROM email_login_codes").get().attempts, 1, "its tries so far still count");
+  assert.equal((await at(now + 120_000, () => verify(env, "owner@example.com", codeIn(sent[0])))).status, 200);
+});
+
+test("one caller checks at most ten codes a minute, thirty an hour and a hundred a day", async () => {
+  const { env } = await setup();
+  const t0 = Date.parse("2026-10-07T00:00:00Z"), ip = "203.0.113.7";
+  for (let i = 0; i < 10; i++) assert.equal((await at(t0, () => verify(env, "x" + i + "@example.com", "123456", { ip }))).status, 400);
+  const refused = await at(t0, () => verify(env, "x10@example.com", "123456", { ip }));
+  assert.equal(refused.status, 429);
+  assert.deepEqual(await refused.json(), { message: "Příliš mnoho pokusů o přihlášení. Zkus to za chvíli." });
+  assert.equal((await at(t0, () => verify(env, "x10@example.com", "123456", { ip: "2001:db8::1" }))).status, 400, "another caller");
+  // One every 100 seconds: the thirty-first of the hour is refused.
+  const hourly = [];
+  for (let i = 0; i < 31; i++) hourly.push((await at(t0 + i * 100_000, () => verify(env, "h" + i + "@example.com", "123456", { ip: "203.0.113.8" }))).status);
+  assert.deepEqual(hourly, [...Array(30).fill(400), 429]);
+  // From the next hour on, 27 an hour: ninety more, then the day's limit.
+  const answers = [];
+  for (let i = 0; i < 100; i++) answers.push((await at(t0 + 3_600_000 + i * 130_000, () => verify(env, "y" + i + "@example.com", "123456", { ip }))).status);
+  assert.deepEqual(answers, [...Array(90).fill(400), ...Array(10).fill(429)], "a hundred a day in all");
+});
+
+test("after twenty wrong codes in a day an address is locked until midnight (UTC)", async () => {
+  const { env, sent } = await setup();
+  const t0 = Date.parse("2026-10-07T08:00:00Z");
+  let caller = 0;
+  const guess = (code, time) => at(time, () => verify(env, "owner@example.com", code, { ip: "198.51.100." + (++caller) }));
+  // Five codes with four wrong tries each: each code alone would still allow a fifth.
+  for (let round = 0; round < 5; round++) {
+    const time = t0 + round * 61_000;
+    assert.equal(await sendCode(env, "owner@example.com", "cs", { now: time }), true);
+    const wrong = codeIn(sent.at(-1)) === "000000" ? "111111" : "000000";
+    for (let i = 0; i < 4; i++) assert.equal((await guess(wrong, time + 1000)).status, 400);
+  }
+  const locked = await guess(codeIn(sent.at(-1)), t0 + 5 * 61_000);
+  assert.equal(locked.status, 429, "even the right code");
+  assert.deepEqual(await locked.json(), { message: "Na tenhle e-mail bylo zadáno příliš mnoho špatných kódů. Zkus to zítra." });
+  assert.equal(await sendCode(env, "owner@example.com", "cs", { now: t0 + 6 * 61_000 }), false, "no code goes out while it is locked");
+  assert.equal(sent.length, 5);
+  const tomorrow = Date.parse("2026-10-08T00:01:00Z");
+  assert.equal(await sendCode(env, "owner@example.com", "cs", { now: tomorrow }), true);
+  assert.equal((await guess(codeIn(sent.at(-1)), tomorrow + 1000)).status, 200, "a new day");
+});
+
+test("a right code is no failure: nineteen wrong ones and a sign-in leave nineteen", async () => {
+  const { env, sent } = await setup();
+  const t0 = Date.parse("2026-10-07T08:00:00Z");
+  let caller = 0;
+  const guess = (code, time) => at(time, () => verify(env, "owner@example.com", code, { ip: "198.51.100." + (++caller) }));
+  for (let round = 0; round < 5; round++) {
+    const time = t0 + round * 61_000;
+    await sendCode(env, "owner@example.com", "cs", { now: time });
+    const wrong = codeIn(sent.at(-1)) === "000000" ? "111111" : "000000";
+    for (let i = 0; i < (round === 4 ? 3 : 4); i++) await guess(wrong, time + 1000);
+  }
+  assert.equal((await guess(codeIn(sent.at(-1)), t0 + 5 * 61_000)).status, 200);
+  assert.equal(env.DB.sqlite.prepare("SELECT fail_count FROM email_login_codes").get().fail_count, 19);
 });
