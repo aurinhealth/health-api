@@ -19,6 +19,9 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # Its own environment: main only, but no approval, so the night run never
+    # waits for a click while it holds production-deploy.
+    environment: backup
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6

@@ -6,6 +6,8 @@ name: Deploy Cloudflare Worker
 # - production (health-api, https://aurin.health): only the "Vydat" workflow
 #   (vydat.yml) deploys it, with the newest main. Run this by hand with target
 #   production for a server-only fix. Production only takes commits on main.
+# The Cloudflare token is a secret of the job's GitHub environment, production
+# or staging (docs/test-server-and-releases.md, "Who can deploy").
 on:
   workflow_dispatch:
     inputs:
@@ -90,6 +92,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Production waits for the owner's approval; both take runs from main only.
+    environment: ${{ inputs.target == 'production' && 'production' || 'staging' }}
     # One deploy per server at a time; staging never waits for production.
     concurrency:
       group: ${{ inputs.target == 'production' && 'production-deploy' || 'staging-deploy' }}

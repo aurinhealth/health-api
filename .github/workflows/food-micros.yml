@@ -8,6 +8,8 @@ name: Food micronutrients
 # kept as an artifact. To upload, run the workflow by hand with "upload", or,
 # while the workflow exists only on the branch (workflow_dispatch needs it on
 # the default branch), push a commit whose message contains [upload].
+# Once the production environment takes main only, runs on the branch get no
+# Cloudflare token: the build then runs by hand from main.
 # Uploading only adds micros/<version>/ objects and micros/current.json; the
 # catalogue's own files are never touched.
 
@@ -37,6 +39,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # The world catalogue is read by both servers: the token comes from the
+    # production environment (main only, after the owner's approval).
+    environment: production
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
