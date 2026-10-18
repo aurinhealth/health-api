@@ -55,7 +55,7 @@ test("watch workouts carry their heart rate and power; gym days without a workou
 
 test("/app/api/fitness falls back to the athlete's own load without Intervals.icu", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  assert.match(entry, /if \(!apiKey\) return Response\.json\(\{status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness\(env,isoDate\(oldest\),isoDate\(newest\)\)\}/);
+  assert.match(entry, /if \(!apiKey\) return Response\.json\(\{status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness\(env,from,to\)\}/);
 });
 
 test("a gym session's load follows its RPE and length from the logged sets, not a fixed 36", async () => {
@@ -125,6 +125,6 @@ test("watch-only workouts are added to the Intervals.icu CTL without counting a 
   assert.ok(d2.ctl > 49 && d2.watchLoad === 0);
   assert.equal(addLoads(base, []), base);
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  assert.match(entry, /const watchExtra = await watchOnlyFitness\(env,ctx,isoDate\(oldest\),isoDate\(newest\)\)/);
+  assert.match(entry, /const watchExtra = await watchOnlyFitness\(env,ctx,from,to\)/);
   assert.match(entry, /const wellness = watchExtra \? addLoads\(intervalsRows,watchExtra\) : intervalsRows;/);
 });

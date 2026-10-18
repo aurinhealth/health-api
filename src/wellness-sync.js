@@ -10,7 +10,7 @@
 // Settings → Synchronizace → Intervals.icu → Zdravotní data limits the fields
 // (sync-destinations.js); without a choice everything goes, as before.
 
-import { heartRateFromSamples } from "./index.js";
+import { heartRateInWindows } from "./index.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { healthPointJson } from './health-point-json.js';
 import { localDate } from "./user-time.js";
@@ -31,8 +31,6 @@ const DAILY = {
 const ROUND = { restingHR: 0, hrv: 1, spO2: 1, respiration: 1, vo2max: 1, bodyFat: 1, steps: 0, sleepSecs: 0, avgSleepingHR: 0 };
 const TOLERANCE = { steps: 1, sleepSecs: 60 };
 
-// Google sample times are stored as RFC 3339 UTC without milliseconds.
-const utc = iso => new Date(iso).toISOString().replace(/\.\d{3}Z$/, "Z");
 const round = (field, v) => { const m = 10 ** ROUND[field]; return Math.round(Number(v) * m) / m; };
 const same = (field, a, b) => a != null && b != null && Math.abs(Number(a) - Number(b)) <= (TOLERANCE[field] ?? 0.05);
 
@@ -57,13 +55,12 @@ export async function googleWellness(db, userId, oldest, sleepSessions = []) {
   // WHOOP and Ultrahuman nights stay in Aurin: their terms and our privacy
   // policy do not let us pass them on, so only Google and Apple sleep is sent.
   for (const s of sleepSessions) if (!PRIVATE_SLEEP.has(s.source) && s.date >= oldest && Number(s.durationMin) > 0 && Number(s.durationMin) > Number(longest[s.date]?.durationMin || 0)) longest[s.date] = s;
-  for (const [d, s] of Object.entries(longest)) {
-    put(d, "sleepSecs", Number(s.durationMin) * 60);
-    if (!s.startTime || !s.endTime) continue;
-    const samples = (await db.prepare(`SELECT sample_time, value_numeric, payload_json FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', 'heart-rate-5min')
-      AND sample_time >= ? AND sample_time <= ? LIMIT 5000`).bind(userId, utc(s.startTime), utc(s.endTime)).all()).results || [];
-    put(d, "avgSleepingHR", heartRateFromSamples({ start: s.startTime, end: s.endTime }, samples));
-  }
+  const nights = Object.entries(longest);
+  for (const [d, s] of nights) put(d, "sleepSecs", Number(s.durationMin) * 60);
+  // The mean over every sample of the night, computed by the database (one query for all nights).
+  const timed = nights.filter(([, s]) => s.startTime && s.endTime);
+  if (timed.length) (await heartRateInWindows(db, userId, timed.map(([, s]) => ({ start: s.startTime, end: s.endTime }))))
+    .forEach((bpm, i) => put(timed[i][0], "avgSleepingHR", bpm));
   return days;
 }
 
