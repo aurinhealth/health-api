@@ -127,6 +127,71 @@ export const EXERCISE_INTELLIGENCE = {
   "Landmine press": { muscle: "shoulders", pattern: "landmine_press", equipment: "landmine", unilateral: true, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.7, variants: [] },
   "Medicine ball slam": { muscle: "core", pattern: "slam", equipment: "medicine_ball", unilateral: false, loadUnit: LOAD_UNITS.MEDICINE_BALL_KG, fatigue: 0.45, variants: [] },
   "Box step-up": { muscle: "glutes", pattern: "lunge", equipment: "bodyweight", unilateral: true, loadUnit: LOAD_UNITS.BODYWEIGHT, fatigue: 0.7, variants: ["DB step-up", "DB reverse lunge"] },
+  "Smith Machine Bench Press": { muscle: "chest", pattern: "horizontal_push", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1, variants: ["Barbell bench press","Chest flat press Prime"] },
+  "Smith Machine Decline Bench Press": { muscle: "chest", pattern: "horizontal_push", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1, variants: ["Smith Machine Bench Press"], variantOf: "Smith Machine Bench Press" },
+  "Inverted Row": { muscle: "back", pattern: "horizontal_pull", equipment: "bodyweight", unilateral: false, loadUnit: LOAD_UNITS.BODYWEIGHT, fatigue: 0.6, variants: ["TRX row"] },
+  "Smith Machine Bent-Over Row": { muscle: "back", pattern: "horizontal_pull", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.95, variants: ["Barbell row"] },
+  "Smith Machine Overhead Press": { muscle: "shoulders", pattern: "vertical_push", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.95, variants: ["Barbell overhead press","Shoulder press Prime"] },
+  "Smith Machine Seated Overhead Press": { muscle: "shoulders", pattern: "vertical_push", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.9, variants: ["Smith Machine Overhead Press"], variantOf: "Smith Machine Overhead Press" },
+  "Smith Machine Close Grip Bench Press": { muscle: "triceps", pattern: "elbow_extension", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.8, variants: ["Smith Machine Bench Press"] },
+  "Smith Machine Front Squat": { muscle: "quads", pattern: "knee_dominant", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1.2, variants: ["Smith machine squat","Barbell front squat"] },
+  "Smith Machine Sumo Romanian Deadlift": { muscle: "hamstrings", pattern: "hip_hinge", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 1, variants: ["Barbell Romanian deadlift"] },
+  "Smith Machine Calf Raise": { muscle: "calves", pattern: "plantar_flexion", equipment: "smith", unilateral: false, loadUnit: LOAD_UNITS.BARBELL_KG, fatigue: 0.45, variants: ["Standing calf raise"], variantOf: "Standing calf raise" },
+  "Cable Bench Chest Fly": { muscle: "chest", pattern: "horizontal_adduction", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.5, variants: ["Cable fly","Pec deck"] },
+  "Cable Bench Press": { muscle: "chest", pattern: "horizontal_push", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.8, variants: ["DB bench press"] },
+  "Cable Chest Press": { muscle: "chest", pattern: "horizontal_push", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.7, variants: ["Cable fly","Chest flat press Prime"] },
+  "Cable Decline Bench Press": { muscle: "chest", pattern: "horizontal_push", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.8, variants: ["Cable Bench Press"] },
+  "Cable High-to-Low Fly": { muscle: "chest", pattern: "horizontal_adduction", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.45, variants: ["Cable fly","Low-to-high cable fly"] },
+  "Cable Incline Bench Press": { muscle: "chest", pattern: "incline_push", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.8, variants: ["DB incline press"] },
+  "Cable Standing Single Arm Chest Press": { muscle: "chest", pattern: "horizontal_push", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.6, variants: ["Cable Chest Press"] },
+  "Single-Arm Cable Fly": { muscle: "chest", pattern: "horizontal_adduction", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.4, variants: ["Cable fly"] },
+  "Cable Row Bar Standing Row": { muscle: "back", pattern: "horizontal_pull", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.6, variants: ["Single-arm cable row","Low row"] },
+  "Cable Supinating Row": { muscle: "back", pattern: "horizontal_pull", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.55, variants: ["Single-arm cable row"] },
+  "Straight-Arm Lat Pulldown": { muscle: "back", pattern: "vertical_pull", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.45, variants: ["Cable pullover","Lat pulldown"] },
+  "Straight Arm Rope Pulldown (Light)": { muscle: "back", pattern: "vertical_pull", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.4, variants: ["Straight-Arm Lat Pulldown"], variantOf: "Straight-Arm Lat Pulldown" },
+  "Cable External Rotation": { muscle: "rear_delts", pattern: "external_rotation", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.2, variants: ["Face pull"] },
+  "Cable Front Raise": { muscle: "shoulders", pattern: "front_raise", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Cable lateral raise"] },
+  "Cable Overhead Press": { muscle: "shoulders", pattern: "vertical_push", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.7, variants: ["DB shoulder press"] },
+  "Cable Single Arm Rear Delt Row": { muscle: "rear_delts", pattern: "horizontal_abduction", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Cable rear delt fly","Face pull"] },
+  "Leaning Cable Lateral Raise": { muscle: "side_delts", pattern: "lateral_raise", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Cable lateral raise"] },
+  "Cable Bar Pushdown": { muscle: "triceps", pattern: "elbow_extension", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.45, variants: ["Cable triceps extension"] },
+  "Cable Overhead Straight Bar Extensions": { muscle: "triceps", pattern: "elbow_extension", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.45, variants: ["Cable overhead triceps extension"] },
+  "Cross-Body Cable Tricep Extension": { muscle: "triceps", pattern: "elbow_extension", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Cable triceps extension"] },
+  "Reverse-Grip Tricep Pushdown": { muscle: "triceps", pattern: "elbow_extension", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.4, variants: ["Cable triceps extension"] },
+  "Single-Arm Overhead Cable Extension": { muscle: "triceps", pattern: "elbow_extension", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Cable overhead triceps extension"] },
+  "Cable Side Bend": { muscle: "core", pattern: "lateral_flexion", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.3, variants: ["Cable woodchop"] },
+  "Cable Single Arm Rope Pushdown": { muscle: "triceps", pattern: "elbow_extension", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Cable triceps extension"], variantOf: "Cable triceps extension" },
+  "Machine Cable V Bar Push Downs": { muscle: "triceps", pattern: "elbow_extension", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.45, variants: ["Cable triceps extension"], variantOf: "Cable triceps extension" },
+  "Cable Standing Low To High Wood Chopper": { muscle: "core", pattern: "rotation", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.3, variants: ["Cable woodchop"], variantOf: "Cable woodchop" },
+  "Cable Bench Straight Leg Kickback": { muscle: "glutes", pattern: "glute_kickback", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Cable glute kickback"], variantOf: "Cable glute kickback" },
+  "Cable 30 Degree Shrug": { muscle: "traps", pattern: "shrug", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.3, variants: ["DB shrug"], variantOf: "DB shrug" },
+  "Cable Wrist Curl": { muscle: "forearms", pattern: "wrist_flexion", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.2, variants: ["DB wrist curl"], variantOf: "DB wrist curl" },
+  "Cable Bar Face Pull": { muscle: "rear_delts", pattern: "horizontal_abduction", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.35, variants: ["Face pull"], variantOf: "Face pull" },
+  "Cable Rope Kneeling Face Pull": { muscle: "rear_delts", pattern: "horizontal_abduction", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.3, variants: ["Face pull"], variantOf: "Face pull" },
+  "Cable Seated Rope Face Pull": { muscle: "rear_delts", pattern: "horizontal_abduction", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.3, variants: ["Face pull"], variantOf: "Face pull" },
+  "Cable Single Leg Laying Leg Curl": { muscle: "hamstrings", pattern: "knee_flexion", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.5, variants: ["Prone leg curl Prime"], variantOf: "Prone leg curl Prime" },
+  "Cable Single Arm Underhand Grip Row": { muscle: "back", pattern: "horizontal_pull", equipment: "cable", unilateral: true, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.6, variants: ["Single-arm cable row"], variantOf: "Single-arm cable row" },
+  "Straight Bar Bench Mid Rows": { muscle: "back", pattern: "horizontal_pull", equipment: "cable", unilateral: false, loadUnit: LOAD_UNITS.CABLE_STACK_KG, fatigue: 0.65, variants: ["Single-arm cable row","Low row"], variantOf: "Single-arm cable row" },
+  "Decline Machine Chest Press": { muscle: "chest", pattern: "horizontal_push", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.9, variants: ["Chest flat press Prime"] },
+  "Incline Machine Chest Press": { muscle: "chest", pattern: "incline_push", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.9, variants: ["Chest flat press Prime"] },
+  "Neutral-Grip Lat Pulldown": { muscle: "back", pattern: "vertical_pull", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.85, variants: ["Lat pulldown","Close-grip lat pulldown"] },
+  "Single-Arm Lat Pulldown": { muscle: "back", pattern: "vertical_pull", equipment: "machine", unilateral: true, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.6, variants: ["Lat pulldown"] },
+  "Wide-Grip Lat Pulldown": { muscle: "back", pattern: "vertical_pull", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.85, variants: ["Lat pulldown"] },
+  "Calf Press": { muscle: "calves", pattern: "plantar_flexion", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.45, variants: ["Standing calf raise"] },
+  "Single-Leg Press": { muscle: "quads", pattern: "knee_dominant", equipment: "machine", unilateral: true, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 1, variants: ["Pivot leg press"], variantOf: "Pivot leg press" },
+  "Reverse Hack Squat": { muscle: "glutes", pattern: "hip_hinge", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 1.1, variants: ["Hack squat"] },
+  "Machine Underhand Row": { muscle: "back", pattern: "horizontal_pull", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.8, variants: ["Chest-supported row"] },
+  "Hammer Strength High Row": { muscle: "back", pattern: "vertical_pull", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_PER_SIDE_KG, fatigue: 0.8, variants: ["Lat pulldown"] },
+  "Hammer Strength Iso-Lateral Row": { muscle: "back", pattern: "horizontal_pull", equipment: "machine", unilateral: true, loadUnit: LOAD_UNITS.MACHINE_PER_SIDE_KG, fatigue: 0.85, variants: ["Low row","Chest-supported row"] },
+  "Machine Lat Pullover": { muscle: "back", pattern: "vertical_pull", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.5, variants: ["Cable pullover"] },
+  "Machine Back Extension": { muscle: "lower_back", pattern: "trunk_extension", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.4, variants: ["Roman chair"] },
+  "Reverse Hyperextension": { muscle: "glutes", pattern: "hip_extension", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.5, variants: ["Glute hyperextension"] },
+  "Machine Preacher Curl": { muscle: "biceps", pattern: "elbow_flexion", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.4, variants: ["Preacher curl"] },
+  "Machine Tricep Extension": { muscle: "triceps", pattern: "elbow_extension", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.45, variants: ["Cable triceps extension"] },
+  "Belt Squat": { muscle: "quads", pattern: "knee_dominant", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 1.1, variants: ["Hack squat","Pendulum squat"] },
+  "Machine Crunch": { muscle: "core", pattern: "trunk_flexion", equipment: "machine", unilateral: false, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.35, variants: ["Cable crunch","Abs bench crunch"] },
+  "Captain's Chair Knee Raise": { muscle: "core", pattern: "trunk_flexion", equipment: "bodyweight", unilateral: false, loadUnit: LOAD_UNITS.BODYWEIGHT, fatigue: 0.35, variants: ["Hanging leg raise"] },
+  "Selectorized Torso Rotation Machine": { muscle: "core", pattern: "rotation", equipment: "machine", unilateral: true, loadUnit: LOAD_UNITS.MACHINE_TOTAL_KG, fatigue: 0.3, variants: ["Cable woodchop"] }
 
 };
 
@@ -337,15 +402,26 @@ function estimateFromOwnHistory(own, exercise, targetReps, loadFactor, today = n
   };
 }
 
+// A variant (variantOf) and its main exercise keep one weight history: the
+// sets of the main exercise and of all its variants measured the same way
+// (a cable variant of a dumbbell shrug has its own numbers).
+export function historyFamily(exercise) {
+  const meta = EXERCISE_INTELLIGENCE[exercise];
+  if (!meta) return [exercise];
+  const root = meta.variantOf || exercise;
+  return [exercise, ...Object.keys(EXERCISE_INTELLIGENCE).filter(name => name !== exercise && (name === root || EXERCISE_INTELLIGENCE[name].variantOf === root) && EXERCISE_INTELLIGENCE[name].loadUnit === meta.loadUnit)];
+}
+
 export function estimateStartingLoad({ exercise, history = [], targetReps = "8–15", fallbackKg = null, loadFactor = 1, today = null }) {
   exercise = normalizeExerciseName(exercise);
   const def = EXERCISE_INTELLIGENCE[exercise];
   if (!def) return { kg: fallbackKg, source: fallbackKg == null ? "unknown" : "fallback", confidence: fallbackKg == null ? 0 : 0.2 };
-  const ownEstimate = estimateFromOwnHistory(completedRowsForExercise(history, exercise), exercise, targetReps, loadFactor, today);
+  const family = historyFamily(exercise);
+  const ownEstimate = estimateFromOwnHistory(family.flatMap(name => completedRowsForExercise(history, name)), exercise, targetReps, loadFactor, today);
   if (ownEstimate) return ownEstimate;
   const candidates = [];
   for (const name of Object.keys(EXERCISE_INTELLIGENCE)) {
-    if (name === exercise) continue;
+    if (family.includes(name)) continue;
     const rows = completedRowsForExercise(history, name);
     const ref = selectReference(rows, targetReps);
     if (!ref) continue;

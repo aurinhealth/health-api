@@ -571,6 +571,9 @@ struct TechniqueSheet: View {
                 YouTubePlayer(id: id)
                     .aspectRatio(16 / 9, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                if technique?.video?.similar == true {
+                    Text("Podobný cvik").font(Typo.small.weight(.semibold)).foregroundStyle(Palette.muted)
+                }
                 if let title = technique?.video?.title, !title.isEmpty {
                     Text(verbatim: title).font(Typo.small).foregroundStyle(Palette.muted)
                 }

@@ -370,6 +370,8 @@ struct GymTechnique: Decodable, Equatable {
     struct Video: Decodable, Equatable {
         let id: String?
         let title: String?
+        /// The video shows a close variant, not this exact exercise.
+        let similar: Bool?
     }
 }
 

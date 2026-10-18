@@ -132,28 +132,95 @@ const EXERCISES = {
   "Trap bar deadlift": { pattern: "hinge", muscle: "glutes", unilateral: false, sets: 3, reps: "5–8", baseKg: 60, warmup: true, note: "Hýždě, stehna a záda; mrtvý tah s trap barem, rovná záda, kg = osa s kotouči", fatigue: 1.35 },
   "Landmine press": { pattern: "push_vertical", muscle: "shoulders", unilateral: true, sets: 3, reps: "8–12", baseKg: 10, warmup: false, note: "Ramena a horní hrudník; jednoruč šikmo vzhůru, k ramenům šetrnější, kg = kotouče na konci osy", fatigue: 0.7 },
   "Medicine ball slam": { pattern: "slam", muscle: "core", unilateral: false, sets: 3, reps: "8–12", baseKg: 6, warmup: false, note: "Střed těla a výbušnost; medicinbal, který neskáče, kg = medicinbal", fatigue: 0.45 },
-  "Box step-up": { pattern: "lunge", muscle: "glutes", unilateral: true, sets: 3, reps: "8–12", baseKg: 0, warmup: false, note: "Hýždě a stehna; výstupy na bednu do výšky kolena, kg = jednoručka v každé ruce (0 = vlastní váha)", fatigue: 0.7 }
+  "Box step-up": { pattern: "lunge", muscle: "glutes", unilateral: true, sets: 3, reps: "8–12", baseKg: 0, warmup: false, note: "Hýždě a stehna; výstupy na bednu do výšky kolena, kg = jednoručka v každé ruce (0 = vlastní váha)", fatigue: 0.7 },
+  // Machines and cables (MoveKit names, own texts; added 2026-10-18). variantOf:
+  // the same movement on another tool, one weight history with the main exercise.
+  "Smith Machine Bench Press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "6–10", baseKg: 40, warmup: true, note: "Hrudník; rovná lavice pod osou Smithu, kg = kotouče + osa", fatigue: 1 },
+  "Smith Machine Decline Bench Press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "6–10", baseKg: 40, warmup: true, note: "Spodní hrudník; lavice hlavou dolů pod Smithem, kg = kotouče + osa", fatigue: 1, variantOf: "Smith Machine Bench Press" },
+  "Inverted Row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "6–12", baseKg: 0, warmup: false, note: "Záda; přítahy vlastní vahy k ose Smithu, čím níž osa, tím těžší, kg = přidaná zátěž", fatigue: 0.6 },
+  "Smith Machine Bent-Over Row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 40, warmup: false, note: "Záda; přítah osy Smithu v předklonu, kg = kotouče + osa", fatigue: 0.95 },
+  "Smith Machine Overhead Press": { pattern: "push_vertical", muscle: "shoulders", unilateral: false, sets: 3, reps: "6–10", baseKg: 30, warmup: true, note: "Ramena; tlak osy Smithu nad hlavu ve stoje, kg = kotouče + osa", fatigue: 0.95 },
+  "Smith Machine Seated Overhead Press": { pattern: "push_vertical", muscle: "shoulders", unilateral: false, sets: 3, reps: "8–12", baseKg: 30, warmup: true, note: "Ramena; vsedě na lavici pod Smithem, kg = kotouče + osa", fatigue: 0.9, variantOf: "Smith Machine Overhead Press" },
+  "Smith Machine Close Grip Bench Press": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "6–10", baseKg: 35, warmup: false, note: "Triceps; úzký úchop pod Smithem, kg = kotouče + osa", fatigue: 0.8 },
+  "Smith Machine Front Squat": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "6–10", baseKg: 40, warmup: true, note: "Kvadricepsy; osa Smithu vpředu na ramenou, kg = kotouče + osa", fatigue: 1.2 },
+  "Smith Machine Sumo Romanian Deadlift": { pattern: "hinge", muscle: "hamstrings", unilateral: false, sets: 3, reps: "8–12", baseKg: 40, warmup: true, note: "Zadní stehna, hýždě a vnitřní stehna; široký postoj u osy Smithu, kg = kotouče + osa", fatigue: 1 },
+  "Smith Machine Calf Raise": { pattern: "plantar_flexion", muscle: "calves", unilateral: false, sets: 3, reps: "10–15", baseKg: 40, warmup: false, note: "Lýtka; výpony s osou Smithu na zádech, špičky na kotouči, kg = kotouče + osa", fatigue: 0.45, variantOf: "Standing calf raise" },
+  "Cable Bench Chest Fly": { pattern: "horizontal_push", muscle: "chest", unilateral: false, sets: 3, reps: "10–15", baseKg: 7.5, warmup: false, note: "Hrudník; rozpažování vleže na lavici mezi kladkami, kg = jedna strana", fatigue: 0.5 },
+  "Cable Bench Press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "8–12", baseKg: 15, warmup: false, note: "Hrudník; tlak vleže na lavici s madly ze spodních kladek, kg = jedna strana", fatigue: 0.8 },
+  "Cable Chest Press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "10–15", baseKg: 15, warmup: false, note: "Hrudník; tlak ve stoje od kladek ve výšce hrudníku, kg = jedna strana", fatigue: 0.7 },
+  "Cable Decline Bench Press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "8–12", baseKg: 15, warmup: false, note: "Spodní hrudník; tlak na lavici hlavou dolů s madly z kladek, kg = jedna strana", fatigue: 0.8 },
+  "Cable High-to-Low Fly": { pattern: "horizontal_push", muscle: "chest", unilateral: false, sets: 3, reps: "12–15", baseKg: 7.5, warmup: false, note: "Spodní hrudník; kladky nahoře, tah šikmo dolů před boky, kg = jedna strana", fatigue: 0.45 },
+  "Cable Incline Bench Press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "8–12", baseKg: 12.5, warmup: false, note: "Horní hrudník; šikmá lavice mezi spodními kladkami, kg = jedna strana", fatigue: 0.8 },
+  "Cable Standing Single Arm Chest Press": { pattern: "push", muscle: "chest", unilateral: true, sets: 3, reps: "10–12", baseKg: 10, warmup: false, note: "Hrudník a střed těla; tlak jednou rukou ve stoje, kg = váha na kladce", fatigue: 0.6 },
+  "Single-Arm Cable Fly": { pattern: "horizontal_push", muscle: "chest", unilateral: true, sets: 3, reps: "12–15", baseKg: 7.5, warmup: false, note: "Hrudník; rozpažování jednou rukou na kladce, kg = váha na kladce", fatigue: 0.4 },
+  "Cable Row Bar Standing Row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "10–12", baseKg: 25, warmup: false, note: "Záda; přítah rovné tyče ve stoje od kladky ve výšce pasu, kg = váha na kladce", fatigue: 0.6 },
+  "Cable Supinating Row": { pattern: "pull", muscle: "back", unilateral: true, sets: 3, reps: "10–12", baseKg: 15, warmup: false, note: "Záda a biceps; přítah jednoruč s vytočením dlaně nahoru, kg = váha na kladce", fatigue: 0.55 },
+  "Straight-Arm Lat Pulldown": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "12–15", baseKg: 20, warmup: false, note: "Široký sval zádový; tyč z horní kladky dolů k boků s napnutými pažemi, kg = váha na kladce", fatigue: 0.45 },
+  "Straight Arm Rope Pulldown (Light)": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 2, reps: "12–15", baseKg: 15, warmup: false, note: "Široký sval zádový; lehké stahování lana napnutými pažemi, kg = váha na kladce", fatigue: 0.4, variantOf: "Straight-Arm Lat Pulldown" },
+  "Cable External Rotation": { pattern: "rear_delt", muscle: "rear_delts", unilateral: true, sets: 2, reps: "12–15", baseKg: 2.5, warmup: false, note: "Rotátorová manžeta a zadní rameno; vytáčení předloktí ven, loket u boku, kg = váha na kladce", fatigue: 0.2 },
+  "Cable Front Raise": { pattern: "lateral_raise", muscle: "shoulders", unilateral: false, sets: 2, reps: "12–15", baseKg: 7.5, warmup: false, note: "Přední ramena; předpažování od spodní kladky, kg = váha na kladce", fatigue: 0.35 },
+  "Cable Overhead Press": { pattern: "push_vertical", muscle: "shoulders", unilateral: false, sets: 3, reps: "10–12", baseKg: 10, warmup: false, note: "Ramena; tlak nad hlavu s madly ze spodních kladek, kg = jedna strana", fatigue: 0.7 },
+  "Cable Single Arm Rear Delt Row": { pattern: "rear_delt", muscle: "rear_delts", unilateral: true, sets: 3, reps: "12–15", baseKg: 7.5, warmup: false, note: "Zadní ramena; přítah jednoruč s loktem vysoko do strany, kg = váha na kladce", fatigue: 0.35 },
+  "Leaning Cable Lateral Raise": { pattern: "lateral_raise", muscle: "side_delts", unilateral: true, sets: 3, reps: "12–15", baseKg: 5, warmup: false, note: "Boční ramena; v náklonu od stroje, delší rozsah, kg = váha na kladce", fatigue: 0.35 },
+  "Cable Bar Pushdown": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "10–15", baseKg: 20, warmup: false, note: "Triceps; stahování rovné tyče z horní kladky, kg = váha na kladce", fatigue: 0.45 },
+  "Cable Overhead Straight Bar Extensions": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "10–15", baseKg: 15, warmup: false, note: "Triceps (dlouhá hlava); tyč za hlavou, zády ke kladce, kg = váha na kladce", fatigue: 0.45 },
+  "Cross-Body Cable Tricep Extension": { pattern: "triceps", muscle: "triceps", unilateral: true, sets: 3, reps: "12–15", baseKg: 5, warmup: false, note: "Triceps; jednoruč přes tělo od kladky ve výšce ramen, kg = váha na kladce", fatigue: 0.35 },
+  "Reverse-Grip Tricep Pushdown": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "12–15", baseKg: 12.5, warmup: false, note: "Triceps; stahování tyče podhmatem, kg = váha na kladce", fatigue: 0.4 },
+  "Single-Arm Overhead Cable Extension": { pattern: "triceps", muscle: "triceps", unilateral: true, sets: 3, reps: "12–15", baseKg: 5, warmup: false, note: "Triceps (dlouhá hlava); jednoruč za hlavou od spodní kladky, kg = váha na kladce", fatigue: 0.35 },
+  "Cable Side Bend": { pattern: "core", muscle: "core", unilateral: true, sets: 2, reps: "10–15", baseKg: 15, warmup: false, note: "Šikmé břišní svaly; úklon trupu od spodní kladky, kg = váha na kladce", fatigue: 0.3 },
+  "Cable Single Arm Rope Pushdown": { pattern: "triceps", muscle: "triceps", unilateral: true, sets: 3, reps: "12–15", baseKg: 7.5, warmup: false, note: "Triceps; stahování jednou rukou za konec lana, kg = váha na kladce", fatigue: 0.35, variantOf: "Cable triceps extension" },
+  "Machine Cable V Bar Push Downs": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "10–15", baseKg: 20, warmup: false, note: "Triceps; stahování V-tyče z horní kladky, kg = váha na kladce", fatigue: 0.45, variantOf: "Cable triceps extension" },
+  "Cable Standing Low To High Wood Chopper": { pattern: "rotation", muscle: "core", unilateral: true, sets: 2, reps: "8–12", baseKg: 15, warmup: false, note: "Rotace; tah od spodní kladky šikmo nahoru přes tělo, kg = váha na kladce", fatigue: 0.3, variantOf: "Cable woodchop" },
+  "Cable Bench Straight Leg Kickback": { pattern: "glute_kickback", muscle: "glutes", unilateral: true, sets: 3, reps: "12–15", baseKg: 7.5, warmup: false, note: "Hýždě; zanožování napnuté nohy s oporou o lavici, kg = váha na kladce", fatigue: 0.35, variantOf: "Cable glute kickback" },
+  "Cable 30 Degree Shrug": { pattern: "shrug", muscle: "traps", unilateral: false, sets: 3, reps: "12–15", baseKg: 20, warmup: false, note: "Trapézy; krčení ramen šikmo nahoru od spodních kladek, kg = jedna strana", fatigue: 0.3, variantOf: "DB shrug" },
+  "Cable Wrist Curl": { pattern: "wrist_flexion", muscle: "forearms", unilateral: false, sets: 3, reps: "15–20", baseKg: 10, warmup: false, note: "Předloktí (flexory); předloktí na lavici, tyč ze spodní kladky, dlaně nahoru, kg = váha na kladce", fatigue: 0.2, variantOf: "DB wrist curl" },
+  "Cable Bar Face Pull": { pattern: "rear_delt", muscle: "rear_delts", unilateral: false, sets: 3, reps: "12–15", baseKg: 20, warmup: false, note: "Zadní ramena; face pull s rovnou tyčí místo lana, kg = váha na kladce", fatigue: 0.35, variantOf: "Face pull" },
+  "Cable Rope Kneeling Face Pull": { pattern: "rear_delt", muscle: "rear_delts", unilateral: false, sets: 3, reps: "12–15", baseKg: 15, warmup: false, note: "Zadní ramena; face pull v kleku, bez pomoci nohou, kg = váha na kladce", fatigue: 0.3, variantOf: "Face pull" },
+  "Cable Seated Rope Face Pull": { pattern: "rear_delt", muscle: "rear_delts", unilateral: false, sets: 3, reps: "12–15", baseKg: 15, warmup: false, note: "Zadní ramena; face pull vsedě na lavici, kg = váha na kladce", fatigue: 0.3, variantOf: "Face pull" },
+  "Cable Single Leg Laying Leg Curl": { pattern: "hamstring", muscle: "hamstrings", unilateral: true, sets: 3, reps: "10–15", baseKg: 7.5, warmup: false, note: "Zadní stehna; zakopávání vleže na lavici s manžetou na kotníku, kg = váha na kladce", fatigue: 0.5, variantOf: "Prone leg curl Prime" },
+  "Cable Single Arm Underhand Grip Row": { pattern: "pull", muscle: "back", unilateral: true, sets: 3, reps: "10–12", baseKg: 20, warmup: false, note: "Záda; přítah jednoruč podhmatem, loket těsně u těla, kg = váha na kladce", fatigue: 0.6, variantOf: "Single-arm cable row" },
+  "Straight Bar Bench Mid Rows": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "10–12", baseKg: 30, warmup: false, note: "Střed zad; přítah rovné tyče vsedě na lavici před spodní kladkou, kg = váha na kladce", fatigue: 0.65, variantOf: "Single-arm cable row" },
+  "Decline Machine Chest Press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "8–12", baseKg: 40, warmup: true, note: "Spodní hrudník; madla stroje níž u hrudníku, kg = celková zátěž stroje", fatigue: 0.9 },
+  "Incline Machine Chest Press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "8–12", baseKg: 35, warmup: true, note: "Horní hrudník; tlak šikmo vzhůru na stroji, kg = celková zátěž stroje", fatigue: 0.9 },
+  "Neutral-Grip Lat Pulldown": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 45, warmup: false, note: "Laty; stahování s neutrálním úchopem (dlaně proti sobě) na šíři ramen", fatigue: 0.85 },
+  "Single-Arm Lat Pulldown": { pattern: "pull_vertical", muscle: "back", unilateral: true, sets: 3, reps: "10–12", baseKg: 20, warmup: false, note: "Laty; stahování jednou rukou s madlem, kg = celková zátěž stroje", fatigue: 0.6 },
+  "Wide-Grip Lat Pulldown": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 40, warmup: false, note: "Laty a horní záda; široký nadhmat na dlouhé tyči", fatigue: 0.85 },
+  "Calf Press": { pattern: "plantar_flexion", muscle: "calves", unilateral: false, sets: 3, reps: "12–20", baseKg: 100, warmup: false, note: "Lýtka; výpony špičkami na spodním okraji plošiny leg pressu, kg = celková zátěž stroje", fatigue: 0.45 },
+  "Single-Leg Press": { pattern: "quad", muscle: "quads", unilateral: true, sets: 3, reps: "8–12", baseKg: 60, warmup: false, note: "Kvadricepsy a hýždě; leg press jednou nohou, kg = celková zátěž stroje", fatigue: 1, variantOf: "Pivot leg press" },
+  "Reverse Hack Squat": { pattern: "hinge", muscle: "glutes", unilateral: false, sets: 3, reps: "8–12", baseKg: 30, warmup: false, note: "Hýždě a zadní stehna; čelem k opěrce hack stroje, boky jdou dozadu, kg = kotouče na stroji", fatigue: 1.1 },
+  "Machine Underhand Row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 35, warmup: false, note: "Záda a biceps; přítahy podhmatem s oporou hrudníku, kg = celková zátěž stroje", fatigue: 0.8 },
+  "Hammer Strength High Row": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 20, warmup: false, note: "Laty a horní záda; tah shora šikmo dolů na stroji na kotouče, kg = kotouče na jednu stranu", fatigue: 0.8 },
+  "Hammer Strength Iso-Lateral Row": { pattern: "pull", muscle: "back", unilateral: true, sets: 3, reps: "8–12", baseKg: 20, warmup: false, note: "Záda; přítah každou rukou zvlášť na stroji na kotouče, kg = kotouče na jednu stranu", fatigue: 0.85 },
+  "Machine Lat Pullover": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "10–15", baseKg: 30, warmup: false, note: "Široký sval zádový; stroj na pullover vsedě, kg = celková zátěž stroje", fatigue: 0.5 },
+  "Machine Back Extension": { pattern: "trunk_extension", muscle: "lower_back", unilateral: false, sets: 3, reps: "10–15", baseKg: 30, warmup: false, note: "Spodní záda; záklon vsedě proti opěrce, kg = celková zátěž stroje", fatigue: 0.4 },
+  "Reverse Hyperextension": { pattern: "hip_extension", muscle: "glutes", unilateral: false, sets: 3, reps: "10–15", baseKg: 10, warmup: false, note: "Hýždě a spodní záda; zanožování obou nohou vleže na břiše, kg = zátěž kyvadla", fatigue: 0.5 },
+  "Machine Preacher Curl": { pattern: "biceps", muscle: "biceps", unilateral: false, sets: 3, reps: "10–12", baseKg: 20, warmup: false, note: "Biceps; bicepsový stroj s oporou paží, kg = celková zátěž stroje", fatigue: 0.4 },
+  "Machine Tricep Extension": { pattern: "triceps", muscle: "triceps", unilateral: false, sets: 3, reps: "10–15", baseKg: 25, warmup: false, note: "Triceps; tricepsový stroj vsedě, kg = celková zátěž stroje", fatigue: 0.45 },
+  "Belt Squat": { pattern: "quad", muscle: "quads", unilateral: false, sets: 3, reps: "8–12", baseKg: 40, warmup: true, note: "Stehna a hýždě; dřep se závažím na opasku, páteř bez zátěže, kg = zátěž stroje", fatigue: 1.1 },
+  "Machine Crunch": { pattern: "trunk_flexion", muscle: "core", unilateral: false, sets: 3, reps: "10–15", baseKg: 30, warmup: false, note: "Břicho; sklapovačky vsedě na stroji, kg = celková zátěž stroje", fatigue: 0.35 },
+  "Captain's Chair Knee Raise": { pattern: "trunk_flexion", muscle: "core", unilateral: false, sets: 3, reps: "10–15", baseKg: 0, warmup: false, note: "Břicho; zvedání kolen s oporou předloktí, kg = přidaná zátěž", fatigue: 0.35 },
+  "Selectorized Torso Rotation Machine": { pattern: "rotation", muscle: "core", unilateral: true, sets: 2, reps: "10–15", baseKg: 25, warmup: false, note: "Šikmé břišní svaly; otáčení trupu vsedě na stroji, kg = celková zátěž stroje", fatigue: 0.3 }
 
 };
 
 export const FOCUS_GROUPS = {
-  chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck','Cable fly','Low-to-high cable fly','Smith machine incline press','Barbell incline bench press']},
-  upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row','Single-arm cable row','Wide-grip low row','Barbell row','T-bar row','Chest-supported row','TRX row']},
-  lats: {label:'Široký sval zádový', exercises:['Lat pulldown','Cable pullover','Close-grip lat pulldown','Pull-up','Assisted pull-up','Chin-up']},
-  front_delts: {label:'Přední ramena', exercises:['DB shoulder press','Shoulder press Prime','DB Arnold press','Barbell overhead press','Landmine press']},
-  side_delts: {label:'Boční ramena', exercises:['Standing multi flight','Cable lateral raise','DB lateral raise']},
-  rear_delts: {label:'Zadní ramena', exercises:['Rear delt pec deck','Cable rear delt fly','Face pull','DB rear delt fly','Band pull-apart']},
-  biceps: {label:'Biceps', exercises:['Cable curl','DB curl','Hammer curl','DB incline curl','Cable rope hammer curl','EZ bar curl','Preacher curl']},
-  triceps: {label:'Triceps', exercises:['Cable triceps extension','Cable overhead triceps extension','Cable triceps kickback','DB overhead triceps extension','EZ bar skull crusher','Dips','Assisted dip']},
-  abs: {label:'Břišní svaly', exercises:['Abs bench crunch','Cable crunch','Hanging leg raise','Medicine ball slam']},
-  obliques: {label:'Šikmé břišní svaly', exercises:['Pallof press','Cable woodchop']},
-  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat','DB sumo squat','Barbell back squat','Barbell front squat','Smith machine squat','Hack squat']},
-  hamstrings: {label:'Zadní stehna', exercises:['Prone leg curl Prime','DB Romanian deadlift','Barbell Romanian deadlift','DB single-leg Romanian deadlift','Seated leg curl','Trap bar deadlift']},
-  hips: {label:'Hýždě a kyčle', exercises:['Hip thrust','Abduction machine','Adduction machine','Barbell hip thrust','Leg press high feet','Cable glute kickback','Glute hyperextension','Cable pull-through','Abduction machine forward lean','Cable hip abduction','DB reverse lunge','DB step-up','DB sumo squat','Smith machine hip thrust','Smith machine split squat','Glute kickback machine','Trap bar deadlift','Kettlebell swing','Box step-up']},
-  calves: {label:'Lýtka', exercises:['Standing calf raise','Single-leg calf raise','Seated calf raise']},
+  chest: {label:'Hrudník', exercises:['DB bench press','Chest flat press Prime','Barbell bench press','DB incline press','Pec deck','Cable fly','Low-to-high cable fly','Smith machine incline press','Barbell incline bench press','Smith Machine Bench Press','Cable Bench Chest Fly','Cable Bench Press','Cable Chest Press','Cable Decline Bench Press','Cable High-to-Low Fly','Cable Incline Bench Press','Cable Standing Single Arm Chest Press','Single-Arm Cable Fly','Decline Machine Chest Press','Incline Machine Chest Press']},
+  upper_back: {label:'Horní záda', exercises:['Low row','Standing rowing machine','One-arm DB row','Single-arm cable row','Wide-grip low row','Barbell row','T-bar row','Chest-supported row','TRX row','Inverted Row','Smith Machine Bent-Over Row','Cable Row Bar Standing Row','Cable Supinating Row','Machine Underhand Row','Hammer Strength Iso-Lateral Row']},
+  lats: {label:'Široký sval zádový', exercises:['Lat pulldown','Cable pullover','Close-grip lat pulldown','Pull-up','Assisted pull-up','Chin-up','Straight-Arm Lat Pulldown','Neutral-Grip Lat Pulldown','Single-Arm Lat Pulldown','Wide-Grip Lat Pulldown','Hammer Strength High Row','Machine Lat Pullover']},
+  front_delts: {label:'Přední ramena', exercises:['DB shoulder press','Shoulder press Prime','DB Arnold press','Barbell overhead press','Landmine press','Smith Machine Overhead Press','Cable Front Raise','Cable Overhead Press']},
+  side_delts: {label:'Boční ramena', exercises:['Standing multi flight','Cable lateral raise','DB lateral raise','Leaning Cable Lateral Raise']},
+  rear_delts: {label:'Zadní ramena', exercises:['Rear delt pec deck','Cable rear delt fly','Face pull','DB rear delt fly','Band pull-apart','Cable External Rotation','Cable Single Arm Rear Delt Row']},
+  biceps: {label:'Biceps', exercises:['Cable curl','DB curl','Hammer curl','DB incline curl','Cable rope hammer curl','EZ bar curl','Preacher curl','Machine Preacher Curl']},
+  triceps: {label:'Triceps', exercises:['Cable triceps extension','Cable overhead triceps extension','Cable triceps kickback','DB overhead triceps extension','EZ bar skull crusher','Dips','Assisted dip','Smith Machine Close Grip Bench Press','Cable Bar Pushdown','Cable Overhead Straight Bar Extensions','Cross-Body Cable Tricep Extension','Reverse-Grip Tricep Pushdown','Single-Arm Overhead Cable Extension','Machine Tricep Extension']},
+  abs: {label:'Břišní svaly', exercises:['Abs bench crunch','Cable crunch','Hanging leg raise','Medicine ball slam','Machine Crunch',"Captain's Chair Knee Raise"]},
+  obliques: {label:'Šikmé břišní svaly', exercises:['Pallof press','Cable woodchop','Cable Side Bend','Selectorized Torso Rotation Machine']},
+  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat','DB sumo squat','Barbell back squat','Barbell front squat','Smith machine squat','Hack squat','Smith Machine Front Squat','Belt Squat']},
+  hamstrings: {label:'Zadní stehna', exercises:['Prone leg curl Prime','DB Romanian deadlift','Barbell Romanian deadlift','DB single-leg Romanian deadlift','Seated leg curl','Trap bar deadlift','Smith Machine Sumo Romanian Deadlift']},
+  hips: {label:'Hýždě a kyčle', exercises:['Hip thrust','Abduction machine','Adduction machine','Barbell hip thrust','Leg press high feet','Cable glute kickback','Glute hyperextension','Cable pull-through','Abduction machine forward lean','Cable hip abduction','DB reverse lunge','DB step-up','DB sumo squat','Smith machine hip thrust','Smith machine split squat','Glute kickback machine','Trap bar deadlift','Kettlebell swing','Box step-up','Reverse Hack Squat','Reverse Hyperextension']},
+  calves: {label:'Lýtka', exercises:['Standing calf raise','Single-leg calf raise','Seated calf raise','Calf Press']},
   forearms: {label:'Předloktí', exercises:['DB wrist curl','DB reverse wrist curl','Cable reverse curl']},
   traps: {label:'Trapézy', exercises:['DB shrug','Barbell shrug','Smith machine shrug','Cable upright row']},
-  lower_back: {label:'Spodní záda', exercises:['Roman chair','Barbell good morning']}
+  lower_back: {label:'Spodní záda', exercises:['Roman chair','Barbell good morning','Machine Back Extension']}
 };// English exercise notes and muscle group labels: `note` and `label` follow the
 // app language (lang.js).
 const NOTE_EN = {
@@ -262,7 +329,72 @@ const NOTE_EN = {
  "Trap bar deadlift": "Glutes, thighs and back; trap bar deadlift, flat back, kg = bar with plates",
  "Landmine press": "Shoulders and upper chest; one arm, pressing up at an angle, easier on the shoulders, kg = plates on the end of the bar",
  "Medicine ball slam": "Core and power; a non-bouncing medicine ball, kg = ball",
- "Box step-up": "Glutes and thighs; step-ups onto a knee-high box, kg = one dumbbell in each hand (0 = bodyweight)"
+ "Box step-up": "Glutes and thighs; step-ups onto a knee-high box, kg = one dumbbell in each hand (0 = bodyweight)",
+ "Smith Machine Bench Press": "Chest; flat bench under the Smith bar, kg = plates + bar",
+ "Smith Machine Decline Bench Press": "Lower chest; head-down bench under the Smith bar, kg = plates + bar",
+ "Inverted Row": "Back; bodyweight rows to the Smith bar, the lower the bar, the harder, kg = added weight",
+ "Smith Machine Bent-Over Row": "Back; bent-over row with the Smith bar, kg = plates + bar",
+ "Smith Machine Overhead Press": "Shoulders; standing Smith bar overhead press, kg = plates + bar",
+ "Smith Machine Seated Overhead Press": "Shoulders; seated on a bench under the Smith bar, kg = plates + bar",
+ "Smith Machine Close Grip Bench Press": "Triceps; close grip under the Smith bar, kg = plates + bar",
+ "Smith Machine Front Squat": "Quads; Smith bar on the front of your shoulders, kg = plates + bar",
+ "Smith Machine Sumo Romanian Deadlift": "Hamstrings, glutes and adductors; wide stance at the Smith bar, kg = plates + bar",
+ "Smith Machine Calf Raise": "Calves; calf raises with the Smith bar on your back, toes on a plate, kg = plates + bar",
+ "Cable Bench Chest Fly": "Chest; lying flyes on a bench between the cables, kg = one side",
+ "Cable Bench Press": "Chest; bench press with handles from the low pulleys, kg = one side",
+ "Cable Chest Press": "Chest; standing press from pulleys at chest height, kg = one side",
+ "Cable Decline Bench Press": "Lower chest; head-down bench press with cable handles, kg = one side",
+ "Cable High-to-Low Fly": "Lower chest; pulleys high, pull down at an angle in front of your hips, kg = one side",
+ "Cable Incline Bench Press": "Upper chest; incline bench between the low pulleys, kg = one side",
+ "Cable Standing Single Arm Chest Press": "Chest and core; one-arm standing press, kg = cable stack weight",
+ "Single-Arm Cable Fly": "Chest; one-arm cable fly, kg = cable stack weight",
+ "Cable Row Bar Standing Row": "Back; standing straight-bar row from a pulley at waist height, kg = cable stack weight",
+ "Cable Supinating Row": "Back and biceps; one-arm row turning the palm up, kg = cable stack weight",
+ "Straight-Arm Lat Pulldown": "Lats; straight-arm pulldown of a bar from the high pulley to your hips, kg = cable stack weight",
+ "Straight Arm Rope Pulldown (Light)": "Lats; light straight-arm pulldown with a rope, kg = cable stack weight",
+ "Cable External Rotation": "Rotator cuff and rear delt; rotate your forearm out, elbow at your side, kg = cable stack weight",
+ "Cable Front Raise": "Front delts; front raise from the low pulley, kg = cable stack weight",
+ "Cable Overhead Press": "Shoulders; overhead press with handles from the low pulleys, kg = one side",
+ "Cable Single Arm Rear Delt Row": "Rear delts; one-arm row with the elbow high and out, kg = cable stack weight",
+ "Leaning Cable Lateral Raise": "Side delts; leaning away from the machine for a longer range, kg = cable stack weight",
+ "Cable Bar Pushdown": "Triceps; straight-bar pushdown from the high pulley, kg = cable stack weight",
+ "Cable Overhead Straight Bar Extensions": "Triceps (long head); bar behind your head, back to the pulley, kg = cable stack weight",
+ "Cross-Body Cable Tricep Extension": "Triceps; one arm across the body from a pulley at shoulder height, kg = cable stack weight",
+ "Reverse-Grip Tricep Pushdown": "Triceps; underhand-grip pushdown, kg = cable stack weight",
+ "Single-Arm Overhead Cable Extension": "Triceps (long head); one arm overhead from the low pulley, kg = cable stack weight",
+ "Cable Side Bend": "Obliques; side bend away from the low pulley, kg = cable stack weight",
+ "Cable Single Arm Rope Pushdown": "Triceps; one-arm pushdown holding one end of the rope, kg = cable stack weight",
+ "Machine Cable V Bar Push Downs": "Triceps; V-bar pushdown from the high pulley, kg = cable stack weight",
+ "Cable Standing Low To High Wood Chopper": "Rotation; pull from the low pulley diagonally up across the body, kg = cable stack weight",
+ "Cable Bench Straight Leg Kickback": "Glutes; straight-leg kickback supported on a bench, kg = cable stack weight",
+ "Cable 30 Degree Shrug": "Traps; shrugs angled up and out from the low pulleys, kg = one side",
+ "Cable Wrist Curl": "Forearms (flexors); forearms on a bench, bar from the low pulley, palms up, kg = cable stack weight",
+ "Cable Bar Face Pull": "Rear delts; face pull with a straight bar instead of a rope, kg = cable stack weight",
+ "Cable Rope Kneeling Face Pull": "Rear delts; kneeling face pull without help from the legs, kg = cable stack weight",
+ "Cable Seated Rope Face Pull": "Rear delts; seated face pull on a bench, kg = cable stack weight",
+ "Cable Single Leg Laying Leg Curl": "Hamstrings; lying leg curl on a bench with a cuff on your ankle, kg = cable stack weight",
+ "Cable Single Arm Underhand Grip Row": "Back; one-arm underhand row, elbow close to your body, kg = cable stack weight",
+ "Straight Bar Bench Mid Rows": "Mid back; seated straight-bar row on a bench at the low pulley, kg = cable stack weight",
+ "Decline Machine Chest Press": "Lower chest; machine handles lower on your chest, kg = total machine load",
+ "Incline Machine Chest Press": "Upper chest; inclined machine press, kg = total machine load",
+ "Neutral-Grip Lat Pulldown": "Lats; pulldown with a neutral grip (palms facing) at shoulder width",
+ "Single-Arm Lat Pulldown": "Lats; one-arm pulldown with a handle, kg = total machine load",
+ "Wide-Grip Lat Pulldown": "Lats and upper back; wide overhand grip on the long bar",
+ "Calf Press": "Calves; calf presses with the balls of your feet on the bottom edge of the leg press platform, kg = total machine load",
+ "Single-Leg Press": "Quads and glutes; one-leg leg press, kg = total machine load",
+ "Reverse Hack Squat": "Glutes and hamstrings; facing the pad of the hack squat, hips go back, kg = plates on the machine",
+ "Machine Underhand Row": "Back and biceps; underhand rows with chest support, kg = total machine load",
+ "Hammer Strength High Row": "Lats and upper back; high row down at an angle on a plate-loaded machine, kg = plates per side",
+ "Hammer Strength Iso-Lateral Row": "Back; rows with each arm separately on a plate-loaded machine, kg = plates per side",
+ "Machine Lat Pullover": "Lats; seated pullover machine, kg = total machine load",
+ "Machine Back Extension": "Lower back; seated extension against the pad, kg = total machine load",
+ "Reverse Hyperextension": "Glutes and lower back; lying face down, lift both legs back, kg = pendulum load",
+ "Machine Preacher Curl": "Biceps; biceps machine with arm support, kg = total machine load",
+ "Machine Tricep Extension": "Triceps; seated triceps machine, kg = total machine load",
+ "Belt Squat": "Quads and glutes; squat with the load on a belt, no load on the spine, kg = machine load",
+ "Machine Crunch": "Abs; seated crunch machine, kg = total machine load",
+ "Captain's Chair Knee Raise": "Abs; knee raises supported on your forearms, kg = added weight",
+ "Selectorized Torso Rotation Machine": "Obliques; seated torso rotation machine, kg = total machine load"
 };
 const GROUP_EN = {"chest": "Chest", "upper_back": "Upper back", "lats": "Lats", "front_delts": "Front delts", "side_delts": "Side delts", "rear_delts": "Rear delts", "biceps": "Biceps", "triceps": "Triceps", "abs": "Abs", "obliques": "Obliques", "quads": "Quads", "hamstrings": "Hamstrings", "hips": "Glutes and hips", "calves": "Calves", "forearms": "Forearms", "traps": "Traps", "lower_back": "Lower back"};
 for (const [name, def] of Object.entries(EXERCISES)) { const cs = def.note; Object.defineProperty(def, 'note', { get: () => L(cs, NOTE_EN[name] || cs), enumerable: true }); }
@@ -293,7 +425,7 @@ export function validateFocusMuscles(value){
 const PAIN = /(?<!ne)bol[ií]|bolest|zran|nat[áa]h|podvrt|v[ýy]ron|natekl|hurt|pain|sore|injur|sprain|strain|ache/i;
 const PAIN_AREAS = [
   { part: /kolen|knee/i, exercises: /squat|lunge|leg press|step-up|leg extension/i, label: ['kolena', 'knee'] },
-  { part: /ramen|shoulder/i, exercises: /shoulder press|overhead press|arnold|landmine press|bench press|incline press|chest flat press|^dips$|assisted dip/i, label: ['ramene', 'shoulder'] },
+  { part: /ramen|shoulder/i, exercises: /shoulder press|overhead press|arnold|landmine press|bench press|incline press|chest flat press|chest press|^dips$|assisted dip/i, label: ['ramene', 'shoulder'] },
   { part: /z[aá]d(?:a|ech|ou)(?!\p{L})|bedr|k[řr][íi][žz]|p[áa]te[řr]|plot[ée]nk|(?<!\p{L})back(?!\p{L})|lumbar/iu, exercises: /deadlift|good morning/i, label: ['zad', 'lower back'] }
 ];
 export function painfulExercises(memories) {
@@ -470,6 +602,19 @@ export function startingLoadScale(muscle, sex) {
   return LEG_MUSCLES.has(muscle) ? 0.7 : 0.55;
 }
 // Exercises stuck at the same load for three sessions without more reps.
+// The variants of each main exercise, in catalog order.
+const VARIANTS = {};
+for (const [name, def] of Object.entries(EXERCISES)) if (def.variantOf) (VARIANTS[def.variantOf] ||= []).push(name);
+export const variantsOf = name => VARIANTS[name] || [];
+// The member of a main exercise's family (it and its variants) for the date:
+// blocks of five ISO weeks (Monday to Sunday) take turns, so a variant stays
+// 4–6 weeks of training before the next one. Variants that do not fit are skipped.
+export function variantFor(name, date, fits = () => true) {
+  const family = [name, ...variantsOf(name).filter(fits)];
+  const day = Math.floor(Date.parse(dateKey(date) + "T12:00:00Z") / 86400000);
+  if (family.length < 2 || !Number.isFinite(day)) return name;
+  return family[Math.floor(Math.floor((day + 3) / 7) / 5) % family.length];
+}
 export function stalledExercises(rows, date) {
   const byExercise = new Map();
   for (const r of rows || []) {
@@ -536,20 +681,20 @@ function choosePlan(context, options = {}) {
   const recovery=recoverySignals(context),acuteRecovery=(context?.adaptive?.recovery?.score??100)<55||recovery.sleepMin!=null&&recovery.sleepMin<330;
 
   const candidatesByPattern = {
-    horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press", "Barbell incline bench press"],
-    horizontalPull: ["Low row", "Standing rowing machine", "One-arm DB row", "Single-arm cable row", "Wide-grip low row", "Barbell row", "Chest-supported row", "T-bar row", "TRX row"],
-    verticalPush: ["DB shoulder press", "Shoulder press Prime", "DB Arnold press", "Barbell overhead press", "Landmine press"],
-    verticalPull: ["Lat pulldown", "Cable pullover", "Close-grip lat pulldown", "Pull-up", "Assisted pull-up", "Chin-up"],
-    lateralRaise: ["Cable lateral raise", "Standing multi flight", "DB lateral raise"],
-    biceps: ["DB curl", "Hammer curl", "Cable curl", "DB incline curl", "Cable rope hammer curl", "EZ bar curl", "Preacher curl"],
-    triceps: ["Cable triceps extension", "Cable overhead triceps extension", "Cable triceps kickback", "DB overhead triceps extension", "EZ bar skull crusher", "Dips", "Assisted dip"],
-    rearDelts: ["Rear delt pec deck", "Cable rear delt fly", "Face pull", "DB rear delt fly", "Band pull-apart"],
-    core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair", "Hanging leg raise", "Medicine ball slam"],
-    quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime", "Goblet squat", "DB sumo squat", "Barbell back squat", "Smith machine squat", "Barbell front squat", "Hack squat"],
-    hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust", "Barbell hip thrust", "Cable pull-through", "DB single-leg Romanian deadlift", "Trap bar deadlift", "Kettlebell swing", "Glute kickback machine"],
+    horizontalPush: ["DB bench press", "Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press", "Barbell incline bench press", "Smith Machine Bench Press", "Cable Bench Chest Fly", "Cable Bench Press", "Cable Chest Press", "Cable Decline Bench Press", "Cable High-to-Low Fly", "Cable Incline Bench Press", "Cable Standing Single Arm Chest Press", "Single-Arm Cable Fly", "Decline Machine Chest Press", "Incline Machine Chest Press"],
+    horizontalPull: ["Low row", "Standing rowing machine", "One-arm DB row", "Single-arm cable row", "Wide-grip low row", "Barbell row", "Chest-supported row", "T-bar row", "TRX row", "Inverted Row", "Smith Machine Bent-Over Row", "Cable Row Bar Standing Row", "Cable Supinating Row", "Machine Underhand Row", "Hammer Strength Iso-Lateral Row"],
+    verticalPush: ["DB shoulder press", "Shoulder press Prime", "DB Arnold press", "Barbell overhead press", "Landmine press", "Smith Machine Overhead Press", "Cable Overhead Press"],
+    verticalPull: ["Lat pulldown", "Cable pullover", "Close-grip lat pulldown", "Pull-up", "Assisted pull-up", "Chin-up", "Straight-Arm Lat Pulldown", "Neutral-Grip Lat Pulldown", "Single-Arm Lat Pulldown", "Wide-Grip Lat Pulldown", "Hammer Strength High Row", "Machine Lat Pullover"],
+    lateralRaise: ["Cable lateral raise", "Standing multi flight", "DB lateral raise", "Leaning Cable Lateral Raise"],
+    biceps: ["DB curl", "Hammer curl", "Cable curl", "DB incline curl", "Cable rope hammer curl", "EZ bar curl", "Preacher curl", "Machine Preacher Curl"],
+    triceps: ["Cable triceps extension", "Cable overhead triceps extension", "Cable triceps kickback", "DB overhead triceps extension", "EZ bar skull crusher", "Dips", "Assisted dip", "Smith Machine Close Grip Bench Press", "Cable Bar Pushdown", "Cable Overhead Straight Bar Extensions", "Cross-Body Cable Tricep Extension", "Reverse-Grip Tricep Pushdown", "Single-Arm Overhead Cable Extension", "Machine Tricep Extension"],
+    rearDelts: ["Rear delt pec deck", "Cable rear delt fly", "Face pull", "DB rear delt fly", "Band pull-apart", "Cable External Rotation", "Cable Single Arm Rear Delt Row"],
+    core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair", "Hanging leg raise", "Medicine ball slam", "Cable Side Bend", "Machine Back Extension", "Machine Crunch", "Captain's Chair Knee Raise", "Selectorized Torso Rotation Machine"],
+    quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime", "Goblet squat", "DB sumo squat", "Barbell back squat", "Smith machine squat", "Barbell front squat", "Hack squat", "Smith Machine Front Squat", "Belt Squat"],
+    hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust", "Barbell hip thrust", "Cable pull-through", "DB single-leg Romanian deadlift", "Trap bar deadlift", "Kettlebell swing", "Glute kickback machine", "Smith Machine Sumo Romanian Deadlift", "Reverse Hack Squat", "Reverse Hyperextension"],
     unilateral: ["DB Bulgarian split squat", "DB reverse lunge", "DB step-up", "Smith machine split squat", "Box step-up"],
     posterior: ["Prone leg curl Prime", "Seated leg curl"],
-    calves: ["Standing calf raise", "Single-leg calf raise", "Seated calf raise"],
+    calves: ["Standing calf raise", "Single-leg calf raise", "Seated calf raise", "Calf Press"],
     // Grip and upper traps help posture on the bike and in daily life; they
     // are not a priority, so they take a turn about every second week.
     forearms: ["DB wrist curl", "Cable reverse curl", "DB reverse wrist curl"],
@@ -904,6 +1049,11 @@ export function generateStrengthPlan(context, options = {}) {
   } else {
     exercises = chosen.exercises.filter(ex => !excluded.has(ex)&&fitsEquipment(ex,context.trainingSetup)).slice(0, maxExercises);
   }
+
+  // A main exercise with variants (variantOf): the same one for five weeks,
+  // then the next one the athlete's equipment allows.
+  const fits = name => availableAt(name) && fitsEquipment(name, context.trainingSetup) && !excluded.has(name) && !disliked.has(name);
+  exercises = [...new Set(exercises.map(ex => variantFor(ex, context.date, fits)))];
 
   // Warm-up exercises must be the first exercises of the session. Keep the
   // relative order otherwise, so each exercise's warm-up sets stay immediately
