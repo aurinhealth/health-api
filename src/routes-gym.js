@@ -3,7 +3,7 @@
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
 import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts } from "./strength-generator.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { routineSize, stretchingFor, typicalExtraMinutes, warmupFor } from "./stretching.js";
+import { cardioFor, cardioMode, cardioOptions, cardioType, routineSize, stretchingFor, typicalExtraMinutes, warmupFor } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
@@ -44,7 +44,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   if(url.pathname==='/app/api/gym/preferences'){
     // The goal "auto" follows the main sport (profile, else the training history).
     const sport=async training=>{const { loadEffectiveProfile }=await import('./profile-suggestions.js');const profile=await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null);return profile?.mainSport&&profile.mainSport!=='auto'?profile.mainSport:training.history?.mainSport||'';};
-    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.experienceBySport?.strength?.autoLevel||'beginner',experienceBySport:training.experienceBySport,warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false,extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false})},{headers:{'Cache-Control':'no-store'}});
+    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.experienceBySport?.strength?.autoLevel||'beginner',experienceBySport:training.experienceBySport,warmup:training.warmup!==false,warmupCardio:['start','both'].includes(cardioMode(training)),cardio:cardioMode(training),cardioType:cardioType(training),cardioOptions:cardioOptions(training.stations),stretching:training.stretching!==false,extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,cardio:cardioMode(training),stretching:training.stretching!==false})},{headers:{'Cache-Control':'no-store'}});
     if(request.method==='GET')return reply(await trainingSetup(env.DB));
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -54,7 +54,9 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       if(body.experienceBySport&&typeof body.experienceBySport==='object')input.experienceBySport=Object.fromEntries(['strength','ride','run'].filter(k=>body.experienceBySport[k]!=null).map(k=>[k,String(body.experienceBySport[k])]));
       if(typeof body.stretching==='boolean')input.stretching=body.stretching;
       if(typeof body.warmup==='boolean')input.warmup=body.warmup;
-      if(typeof body.warmupCardio==='boolean')input.warmupCardio=body.warmupCardio;
+      if(typeof body.warmupCardio==='boolean'){input.warmupCardio=body.warmupCardio;if(body.cardio==null)input.cardio=body.warmupCardio?'start':'none';}
+      if(['none','start','end','both'].includes(body.cardio))input.cardio=body.cardio;
+      if(typeof body.cardioType==='string'&&body.cardioType.trim())input.cardioType=body.cardioType.trim().slice(0,40);
       const training=await updateTrainingSetup(env.DB,input);await bumpCacheVersion(env.DB);
       return reply(training);
     }
@@ -257,8 +259,9 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       // With the size and the cardio choice the proposal had, not the defaults.
       if(Array.isArray(body.rows)){
         const size=routineSize(Number(draft.minutes)||60),setup=await trainingSetup(env.DB).catch(()=>null);
-        if(plan.warmup)plan.warmup=warmupFor(plan.rows,muscleOf,{...size.warmup,cardio:setup?.warmupCardio!==false})||plan.warmup;
-        if(plan.stretching)plan.stretching=stretchingFor(plan.rows,muscleOf,size.stretching)||plan.stretching;
+        if(plan.warmup)plan.warmup=warmupFor(plan.rows,muscleOf,{...size.warmup,stations:setup?.stations})||plan.warmup;
+        if(plan.stretching)plan.stretching=stretchingFor(plan.rows,muscleOf,{...size.stretching,stations:setup?.stations})||plan.stretching;
+        if(setup)plan.cardio=cardioFor(setup,size.cardio);
       }
       if((await readGymPlan(env.DB,plan.date)).stored)throw new Error(L('Na tento den již existuje gym plán. Otevři jej a uprav ho.', 'A gym plan already exists for this day. Open it and edit it.'));
       const r=await app.fetch(new Request('https://internal/strength/write-plan',{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify(plan)}),env,ctx);
