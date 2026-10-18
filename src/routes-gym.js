@@ -8,7 +8,7 @@ import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
 import { gymExerciseCatalog, gymAlternatives } from "./gym-catalog.js";
-import { EXERCISE_STATIONS } from "./gym-equipment.js";
+import { EXERCISE_STATIONS, stationSections } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
 import { getStrengthHistory, strengthSessions, importStrengthHistory, removeManualSets } from "./strength-history.js";
 import { assertTrainingAllowed, getAthleteState } from "./athlete-state.js";
@@ -30,7 +30,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   // The athlete's gym: the stations it has (equipment "custom"), and AI that
   // picks them from a photo of the gym or its web page (nothing is saved there).
   if(url.pathname==='/app/api/gym/equipment'){
-    if(request.method==='GET'){const training=await trainingSetup(env.DB);return Response.json({status:'ok',stations:equipmentCatalog(),equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||'',dumbbellWeights:training.dumbbellWeights||[],places:training.places||[],activePlace:training.activePlace||'bodyweight'},{headers:{'Cache-Control':'no-store'}});}
+    if(request.method==='GET'){const training=await trainingSetup(env.DB);return Response.json({status:'ok',stations:equipmentCatalog(),sections:stationSections(),equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||'',dumbbellWeights:training.dumbbellWeights||[],places:training.places||[],activePlace:training.activePlace||'bodyweight'},{headers:{'Cache-Control':'no-store'}});}
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       // Places (several gyms, home) with the active one; or the flat fields of older clients.

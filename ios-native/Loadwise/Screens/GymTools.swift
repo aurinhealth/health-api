@@ -677,41 +677,36 @@ struct GymBuilderView: View {
 
 // MARK: - Equipment
 
-/// Where the athlete trains: the saved gyms and home gyms, each with its own
-/// stations (a gym starts with all of them until the athlete unticks what it
-/// lacks, or AI picks them from photos or the gym's web page), or the body
-/// weight only. The plan follows the chosen place. With dumbbells, the weights
-/// there are, so the plan asks for one of them.
+/// Where the athlete trains: the saved places (a big gym, a small one, home,
+/// the body weight; all of them renamed, starred or deleted as the athlete
+/// likes), each with its own stations. The plan follows the chosen one. A
+/// place opens to its stations by body part (GymPlaceView).
 struct EquipmentView: View {
     @Environment(AppModel.self) private var model
     @State private var data: GymEquipment?
     @State private var places: [GymPlace] = []
     @State private var active = "bodyweight"
-    // The active place as edited, written back into `places` on a switch and on saving.
-    @State private var kind = "bodyweight"
-    @State private var selected: Set<String> = []
-    @State private var weights: Set<Double> = []
-    @State private var gymName = ""
-    @State private var gymUrl = ""
-    @State private var customWeight = ""
-    @State private var photos: [PhotosPickerItem] = []
-    @State private var busy: String?
-    @State private var note: String?
+    @State private var catalog: [GymCatalogExercise] = []
+    /// What the server has, so only a change is saved.
+    @State private var stored: Draft?
+    @State private var open: String?
+    @State private var adding = false
     @State private var error: String?
-    @State private var saved = false
-    @State private var confirmDelete = false
 
-    /// The first setup asks only roughly; the stations are set here later.
-    static let setupKinds: [(String, String, String)] = [
-        ("gym", "Posilovna", "Stroje, kladky a volné váhy"),
-        ("dumbbells", "Domácí posilovna", "Jednoručky, lavice a podložka"),
-        ("bodyweight", "Vlastní váha", "Bez vybavení")
-    ]
+    struct Draft: Equatable {
+        var places: [GymPlace]
+        var active: String
+    }
 
     static let homeDefault: Set<String> = ["dumbbells", "adjustable_bench", "floor_mats"]
     static let maxPlaces = 10
     /// The usual dumbbells, kg per hand.
     static let weightOptions: [Double] = [1, 2, 2.5, 3, 4, 5, 6, 7, 7.5, 8, 9, 10, 12, 12.5, 14, 15, 16, 17.5, 18, 20, 22, 22.5, 24, 25, 26, 27.5, 28, 30, 32, 32.5, 34, 35, 36, 38, 40, 42, 44, 45, 46, 48, 50]
+    static let smallGym: [String] = ["dumbbells", "adjustable_bench", "barbells", "squat_rack", "cables", "lat_pulldown_low_row",
+                                     "pivot_leg_press", "pullup_bar", "kettlebells", "resistance_bands", "floor_mats", "treadmill"]
+    static let homeGym: [String] = ["dumbbells", "adjustable_bench", "resistance_bands", "floor_mats"]
+    /// Set once the places of the new picker were added on this phone.
+    static let seededKey = "gymPlacesSeeded"
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Kde cvičíš?") {
@@ -720,312 +715,186 @@ struct EquipmentView: View {
                 Text("Kde cvičíš?").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
 
                 VStack(spacing: 10) {
-                    ForEach(places) { place in
-                        ChoiceCard(title: place.id == active ? (gymName.nilIfBlank ?? place.name) : place.name,
-                                   subtitle: placeLine(place),
-                                   systemImage: place.kind == "home" ? "house" : "dumbbell",
-                                   selected: active == place.id) { switchTo(place.id) }
-                    }
-                    ChoiceCard(title: "Vlastní váha", subtitle: L10n.tr("Bez vybavení"), systemImage: "figure.cooldown",
-                               selected: active == "bodyweight") { switchTo("bodyweight") }
+                    ForEach(sorted) { place in placeRow(place) }
                 }
                 .padding(.top, 18)
 
-                HStack(spacing: 10) {
-                    SecondaryButton(title: "Posilovna", systemImage: "plus") { add("gym") }
-                    SecondaryButton(title: "Domácí", systemImage: "plus") { add("home") }
-                }
-                .disabled(places.count >= Self.maxPlaces || busy != nil || data == nil)
-                .padding(.top, 12)
-
-                if kind != "bodyweight" {
-                    SettingsGroup(title: "Název") {
-                        SettingsField(title: kind == "home" ? "Místo" : "Posilovna", text: $gymName, keyboard: .default,
-                                      placeholder: L10n.tr(kind == "home" ? "třeba Doma nebo Chata" : "třeba Fitko u nádraží"))
-                    }
-                    .padding(.top, 22)
-                    if kind == "custom" { detection }
-                    if selected.contains("dumbbells") { dumbbells }
-                    stations
-                    Button(role: .destructive) { confirmDelete = true } label: {
-                        Label("Smazat toto místo", systemImage: "trash").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
-                            .frame(maxWidth: .infinity).frame(height: 44)
-                    }
-                    .padding(.top, 18)
-                    .confirmationDialog(L10n.f("Smazat %@?", gymName.nilIfBlank ?? L10n.tr("místo")), isPresented: $confirmDelete, titleVisibility: .visible) {
-                        Button("Smazat", role: .destructive) { deleteActive() }
-                    }
-                }
+                SecondaryButton(title: "Přidat posilovnu", systemImage: "plus") { adding = true }
+                    .disabled(places.count >= Self.maxPlaces || (data == nil && !model.demo))
+                    .padding(.top, 12)
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
-                if saved { Label("Uloženo", systemImage: "checkmark.circle.fill").font(Typo.bodyStrong).foregroundStyle(Palette.green).padding(.top, 14) }
-                PrimaryButton(title: busy == "save" ? "Ukládám…" : "Uložit vybavení", busy: busy == "save") { Task { await save() } }
-                    .disabled(busy != nil || model.demo || data == nil || (kind != "bodyweight" && selected.isEmpty))
-                    .padding(.top, 22)
             }
         }
         .task { await load() }
-        .onChange(of: photos) { _, items in if !items.isEmpty { Task { await detect(items) } } }
+        .task(id: Draft(places: places, active: active)) { await autosave() }
+        .navigationDestination(isPresented: Binding(get: { open != nil }, set: { if !$0 { open = nil } })) {
+            if let id = open {
+                GymPlaceView(place: binding(id), stations: data?.stations ?? [], sections: data?.pickerSections ?? [],
+                             catalog: $catalog, onDelete: { delete(id) })
+            }
+        }
+        .sheet(isPresented: $adding) {
+            AddGymSheet { name, stations, url in create(name: name, stations: stations, url: url) }
+        }
     }
 
-    /// "14 věcí · web" under a place; the one being edited counts live.
-    private func placeLine(_ place: GymPlace) -> String {
-        let count = place.id == active ? selected.count : place.stations.count
-        let kindText = L10n.tr(place.kind == "home" ? "Domácí posilovna" : "Posilovna")
-        return kindText + " · " + L10n.f("%@ %@", String(count), Fmt.plural(count, "věc", "věci", "věcí"))
+    /// Starred first, otherwise as they were added.
+    private var sorted: [GymPlace] {
+        places.filter { $0.favorite == true } + places.filter { $0.favorite != true }
     }
 
-    private var detection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: "Poznat z fotky nebo webu").padding(.top, 26)
-            Card {
-                PhotosPicker(selection: $photos, maxSelectionCount: 8, matching: .images) {
-                    Label(L10n.tr(busy == "photo" ? "Čtu fotky…" : "Vybrat fotky posilovny"), systemImage: "photo.on.rectangle.angled")
-                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        .frame(maxWidth: .infinity).frame(height: 44)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
-                }
-                .disabled(busy != nil || model.demo)
-                HStack(spacing: 8) {
-                    TextField("https://posilovna.cz", text: $gymUrl)
-                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        .padding(.horizontal, 12).frame(height: 42)
-                        .background(Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    Button { Task { await detectWeb() } } label: {
-                        Group { if busy == "web" { ProgressView() } else { Text("Načíst") } }
-                            .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                            .padding(.horizontal, 14).frame(height: 42)
-                            .background(Palette.button, in: Capsule())
+    private func placeRow(_ place: GymPlace) -> some View {
+        let on = place.id == active
+        return HStack(spacing: 12) {
+            Button {
+                active = place.id
+                open = place.id
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: Self.icon(place))
+                        .font(.system(size: 16)).foregroundStyle(on ? Palette.green : Palette.muted)
+                        .frame(width: 36, height: 36)
+                        .background(Palette.track, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(place.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
+                        Text(Self.countLine(place)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                     }
-                    .disabled(busy != nil || model.demo || !gymUrl.hasPrefix("http"))
+                    Spacer(minLength: 8)
                 }
-                if let note { Text(note).font(Typo.caption).foregroundStyle(Palette.green).fixedSize(horizontal: false, vertical: true) }
+                .contentShape(Rectangle())
             }
-            .padding(.top, 10)
+            .buttonStyle(.plain)
+            Button { toggleFavorite(place.id) } label: {
+                Image(systemName: place.favorite == true ? "star.fill" : "star")
+                    .font(.system(size: 18)).foregroundStyle(place.favorite == true ? Palette.amber : Palette.faint)
+                    .frame(width: 40, height: 40).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.tr("Oblíbené"))
+            .accessibilityAddTraits(place.favorite == true ? .isSelected : [])
         }
+        .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 10)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? Palette.green : .clear, lineWidth: 1.5))
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
-    /// The dumbbells there are: tap the weights, or add an odd one.
-    private var dumbbells: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: "Jednoručky")
-                Spacer()
-                Text(weights.isEmpty ? L10n.tr("plán navrhne jakoukoli váhu") : L10n.f("%@ %@", String(weights.count), Fmt.plural(weights.count, "váha", "váhy", "vah")))
-                    .font(Typo.caption).foregroundStyle(Palette.muted)
-            }
-            HStack(spacing: 8) {
-                if Units.imperial {
-                    preset(L10n.f("%@ po %@", "5–50 lb", "5")) { weights = Set(stride(from: 5.0, through: 50, by: 5).map(Self.kgFromPounds)) }
-                    preset(L10n.f("%@ po %@", "10–100 lb", "10")) { weights = Set(stride(from: 10.0, through: 100, by: 10).map(Self.kgFromPounds)) }
-                } else {
-                    preset("2–40 po 2") { weights = Set(stride(from: 2.0, through: 40, by: 2)) }
-                    preset("2,5–25 po 2,5") { weights = Set(stride(from: 2.5, through: 25, by: 2.5)) }
-                }
-                preset(L10n.isEnglish ? "Clear" : "Zrušit") { weights = [] }
-            }
-            ChipFlow(items: Array(Set(Self.shownOptions).union(weights)).sorted(), label: { Self.kg($0) },
-                     isOn: { weights.contains($0) },
-                     toggle: { w in if weights.contains(w) { weights.remove(w) } else { weights.insert(w) }; saved = false })
-            HStack(spacing: 8) {
-                TextField(L10n.f("Jiná váha, %@", Units.weightUnit), text: $customWeight)
-                    .keyboardType(.decimalPad)
-                    .padding(.horizontal, 12).frame(height: 40)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                Button("Přidat") {
-                    if let shown = Double(customWeight.replacingOccurrences(of: ",", with: ".")), shown > 0, Units.kg(shown) <= 100 {
-                        let kg = Units.kg(shown)
-                        weights.insert(Units.imperial ? (kg * 100).rounded() / 100 : (kg * 4).rounded() / 4)
-                        customWeight = ""
-                        saved = false
-                    }
-                }
-                .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                .disabled(customWeight.isEmpty)
-            }
-        }
-        .padding(.top, 26)
+    static func icon(_ place: GymPlace) -> String {
+        if place.bodyweightOnly { return "figure.cooldown" }
+        return place.kind == "home" ? "house" : "dumbbell"
     }
 
-    private func preset(_ title: String, _ action: @escaping () -> Void) -> some View {
-        Button { action(); saved = false } label: {
-            Text(title).font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
-                .padding(.horizontal, 12).frame(height: 30)
-                .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
+    /// "45 věcí", or "Bez vybavení" for the floor only.
+    static func countLine(_ place: GymPlace) -> String {
+        if place.bodyweightOnly { return L10n.tr("Bez vybavení") }
+        let n = place.stations.count
+        return L10n.f("%@ %@", String(n), Fmt.plural(n, "věc", "věci", "věcí"))
     }
 
-    private var stations: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                SectionLabel(text: L10n.tr(kind == "home" ? "Co máš doma" : "Co tam je"))
-                Spacer()
-                Button(L10n.tr(selected.count == (data?.stations?.count ?? 0) ? "Odebrat vše" : "Vybrat vše")) {
-                    selected = selected.count == (data?.stations?.count ?? 0) ? [] : Set((data?.stations ?? []).map(\.id))
-                    saved = false
-                }
-                .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-            }
-            .padding(.top, 26)
-            ForEach(groups, id: \.self) { group in
-                SettingsGroup(title: group) {
-                    let items = (data?.stations ?? []).filter { $0.group == group }
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, station in
-                        if index > 0 { SettingsDivider() }
-                        Button { toggle(station.id) } label: {
-                            HStack {
-                                Text(station.label).font(.body).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
-                                Spacer(minLength: 8)
-                                Image(systemName: selected.contains(station.id) ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 22)).foregroundStyle(selected.contains(station.id) ? Palette.green : Palette.faint)
-                            }
-                            .padding(.horizontal, 16).frame(minHeight: 48).contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(selected.contains(station.id) ? .isSelected : [])
-                    }
-                }
-                .padding(.top, 14)
-            }
-        }
+    private func binding(_ id: String) -> Binding<GymPlace> {
+        Binding(get: { places.first(where: { $0.id == id }) ?? GymPlace(id: id, kind: "gym", name: "", stations: [], url: "", dumbbellWeights: []) },
+                set: { value in if let i = places.firstIndex(where: { $0.id == id }) { places[i] = value } })
     }
 
-    private var groups: [String] {
-        var out: [String] = []
-        for s in data?.stations ?? [] where !out.contains(s.group) { out.append(s.group) }
-        return out
+    private func toggleFavorite(_ id: String) {
+        guard let i = places.firstIndex(where: { $0.id == id }) else { return }
+        places[i].favorite = places[i].favorite == true ? nil : true
     }
 
-    /// Puts what is being edited back into its place.
-    private func commit() {
-        guard let i = places.firstIndex(where: { $0.id == active }) else { return }
-        places[i].stations = selected.sorted()
-        places[i].name = gymName.trimmingCharacters(in: .whitespaces).nilIfBlank ?? places[i].name
-        places[i].url = kind == "custom" ? gymUrl.trimmingCharacters(in: .whitespaces) : ""
-        places[i].dumbbellWeights = selected.contains("dumbbells") ? weights.sorted() : []
-    }
-
-    /// Shows the active place's stations, name and weights for editing.
-    private func edit() {
-        if let p = places.first(where: { $0.id == active }) {
-            kind = p.kind == "home" ? "home" : "custom"
-            selected = Set(p.stations)
-            weights = Set(p.dumbbellWeights)
-            gymName = p.name
-            gymUrl = p.url
-        } else {
-            kind = "bodyweight"; selected = []; weights = []; gymName = ""; gymUrl = ""
-        }
-        note = nil
-    }
-
-    private func switchTo(_ id: String) {
-        guard id != active else { return }
-        commit()
-        active = id
-        edit()
-        saved = false
-    }
-
-    /// A new gym starts with everything a gym usually has, a home gym with
-    /// dumbbells, a bench and a mat.
-    private func add(_ placeKind: String) {
-        commit()
-        let all = Set((data?.stations ?? []).map(\.id))
+    private func nextId() -> String {
         var n = places.count + 1
         while places.contains(where: { $0.id == "place-\(n)" }) { n += 1 }
-        let base = L10n.tr(placeKind == "home" ? "Domácí posilovna" : "Posilovna")
-        let same = places.filter { $0.kind == placeKind }.count
-        places.append(GymPlace(id: "place-\(n)", kind: placeKind, name: same == 0 ? base : base + " \(same + 1)",
-                               stations: placeKind == "home" ? Self.homeDefault.intersection(all.isEmpty ? Self.homeDefault : all).sorted() : all.sorted(),
-                               url: "", dumbbellWeights: []))
-        active = "place-\(n)"
-        edit()
-        saved = false
+        return "place-\(n)"
     }
 
-    private func deleteActive() {
-        places.removeAll { $0.id == active }
-        active = places.first?.id ?? "bodyweight"
-        edit()
-        saved = false
+    /// A new gym: what AI found, or an empty list to tick.
+    private func create(name: String?, stations: [String], url: String) {
+        guard places.count < Self.maxPlaces else { return }
+        let id = nextId()
+        let same = places.filter { $0.kind == "gym" }.count
+        let base = L10n.tr("Posilovna")
+        places.append(GymPlace(id: id, kind: "gym", name: name?.nilIfBlank ?? (same == 0 ? base : base + " \(same + 1)"),
+                               stations: stations, url: url, dumbbellWeights: []))
+        active = id
+        open = id
     }
 
-    private func toggle(_ id: String) {
-        if selected.contains(id) { selected.remove(id) } else { selected.insert(id) }
-        saved = false
+    private func delete(_ id: String) {
+        open = nil
+        places.removeAll { $0.id == id }
+        if active == id { active = sorted.first?.id ?? "bodyweight" }
+    }
+
+    /// The places of the picker: a big gym, a small one, home and the body
+    /// weight for a new account; an account with places keeps them and gets
+    /// the body weight once, when it has no such place.
+    static func seeded(_ saved: [GymPlace], active: String, all: [String], firstTime: Bool) -> Draft {
+        func place(_ id: String, _ kind: String, _ name: String, _ stations: [String]) -> GymPlace {
+            GymPlace(id: id, kind: kind, name: L10n.tr(name), stations: stations, url: "", dumbbellWeights: [])
+        }
+        let known = Set(all)
+        let keep: ([String]) -> [String] = { known.isEmpty ? $0 : $0.filter(known.contains) }
+        if saved.isEmpty {
+            let list = [place("place-1", "gym", "Velké fitko", all.isEmpty ? smallGym : all),
+                        place("place-2", "gym", "Malé fitko", keep(smallGym)),
+                        place("place-3", "home", "Doma", keep(homeGym)),
+                        place("place-4", "home", "Vlastní váha", ["floor_mats"])]
+            return Draft(places: list, active: active == "bodyweight" ? "place-4" : active)
+        }
+        guard firstTime, saved.count < maxPlaces, !saved.contains(where: \.bodyweightOnly) else { return Draft(places: saved, active: active) }
+        var n = saved.count + 1
+        while saved.contains(where: { $0.id == "place-\(n)" }) { n += 1 }
+        let body = place("place-\(n)", "home", "Vlastní váha", ["floor_mats"])
+        return Draft(places: saved + [body], active: active == "bodyweight" ? body.id : active)
     }
 
     private func load() async {
-        guard data == nil, !model.demo else { return }
+        guard data == nil else { return }
+        let firstTime = !UserDefaults.standard.bool(forKey: Self.seededKey)
+        if model.demo {
+            let d = Self.seeded([], active: "place-1", all: [], firstTime: true)
+            places = d.places; active = d.active
+            return
+        }
         do {
-            let d = try await model.api.gymEquipment()
+            async let equipment = model.api.gymEquipment()
+            async let exercises = model.api.gymExercises()
+            let d = try await equipment
             data = d
-            places = d.places ?? []
-            active = d.activePlace ?? "bodyweight"
-            edit()
+            let saved = d.places ?? [], savedActive = d.activePlace ?? "bodyweight"
+            stored = Draft(places: saved, active: savedActive)
+            let next = Self.seeded(saved, active: savedActive, all: (d.stations ?? []).map(\.id), firstTime: firstTime)
+            places = next.places
+            active = next.active
+            UserDefaults.standard.set(true, forKey: Self.seededKey)
+            catalog = (try? await exercises) ?? []
         } catch {
             self.error = error.localizedDescription
         }
     }
 
-    private func save() async {
-        busy = "save"
-        defer { busy = nil }
-        commit()
+    /// Changes are saved a moment after the last one.
+    private func autosave() async {
+        guard let stored, !model.demo, data != nil else { return }
+        let draft = Draft(places: places, active: active)
+        guard draft != stored else { return }
+        try? await Task.sleep(for: .milliseconds(700))
+        guard !Task.isCancelled else { return }
         do {
-            let r = try await model.api.saveGymPlaces(places, active: active)
+            let r = try await model.api.saveGymPlaces(draft.places, active: draft.active)
             data?.equipment = r.equipment
             data?.selected = r.selected
             data?.dumbbellWeights = r.dumbbellWeights
             data?.gymName = r.gymName
-            if let stored = r.places { places = stored; active = r.activePlace ?? "bodyweight"; edit() }
-            saved = true
+            self.stored = draft
             error = nil
+        } catch is CancellationError {
+        } catch let failure as URLError where failure.code == .cancelled {
         } catch {
             self.error = error.localizedDescription
         }
     }
-
-    private func detect(_ items: [PhotosPickerItem]) async {
-        busy = "photo"
-        defer { busy = nil; photos = [] }
-        var jpegs: [Data] = []
-        for item in items {
-            if let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw), let jpeg = image.jpegForUpload(side: 1400) {
-                jpegs.append(jpeg)
-            }
-        }
-        guard !jpegs.isEmpty else { error = "Fotky se nepodařilo načíst."; return }
-        await apply { try await model.api.detectGymEquipment(photos: jpegs, url: "") }
-    }
-
-    private func detectWeb() async {
-        busy = "web"
-        defer { busy = nil }
-        await apply { try await model.api.detectGymEquipment(photos: [], url: gymUrl.trimmingCharacters(in: .whitespaces)) }
-    }
-
-    /// What AI saw replaces the list: the stations it found, the floor and
-    /// the dumbbells kept when they were ticked.
-    private func apply(_ work: () async throws -> GymDetectResult) async {
-        do {
-            let r = try await work()
-            if r.found == true, let found = r.stations {
-                selected = Set(found).union(selected.intersection(["floor_mats"]))
-                if gymName.isEmpty, let name = r.gymName?.nilIfBlank { gymName = name }
-                note = L10n.f("Našel jsem %@ %@. Zkontroluj seznam a ulož.", String(found.count), Fmt.plural(found.count, "stroj", "stroje", "strojů")) + (r.note?.nilIfBlank.map { " " + $0 } ?? "")
-                error = nil
-                saved = false
-            } else {
-                error = r.message ?? "Vybavení se nepodařilo poznat."
-            }
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-
     static func kg(_ value: Double) -> String {
         if Units.imperial {
             let lb = (Units.weight(value) * 10).rounded() / 10
