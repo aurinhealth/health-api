@@ -23,7 +23,7 @@ struct DayPage {
     }
 }
 
-private struct DayPageKey: EnvironmentKey { static let defaultValue: DayPage? = nil }
+private struct DayPageKey: EnvironmentKey { nonisolated(unsafe) static let defaultValue: DayPage? = nil }
 
 extension EnvironmentValues {
     /// Set on a neighbouring day drawn during a swipe; nil on the real screen.

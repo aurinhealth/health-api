@@ -269,7 +269,7 @@ struct FloatingBackButton: View {
 }
 
 private struct FloatingBackKey: EnvironmentKey { static let defaultValue = false }
-private struct ScrollReportKey: EnvironmentKey { static let defaultValue: ((CGFloat) -> Void)? = nil }
+private struct ScrollReportKey: EnvironmentKey { nonisolated(unsafe) static let defaultValue: ((CGFloat) -> Void)? = nil }
 
 extension EnvironmentValues {
     /// The page pins its back button (FloatingBackButton); the inline one keeps only its place.

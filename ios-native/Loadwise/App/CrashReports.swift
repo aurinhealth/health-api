@@ -6,7 +6,8 @@ import MetricKit
 /// (ReportProblemView). iOS hands them over at most once a day, on a launch
 /// after the crash. Only the kind of crash, the app and iOS versions and the
 /// top frames of the crashed thread (binary and offset): no personal or health data.
-final class CrashReports: NSObject, MXMetricManagerSubscriber {
+// Its stored list is read and written under lock.
+final class CrashReports: NSObject, MXMetricManagerSubscriber, @unchecked Sendable {
     static let shared = CrashReports()
 
     struct Crash: Codable {

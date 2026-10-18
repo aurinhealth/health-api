@@ -463,7 +463,8 @@ extension GymDay {
     /// Row 5 of the header: "Odcvičeno", start and end (ISO 8601).
     static let timeRow = 5
 
-    private static let iso: ISO8601DateFormatter = ISO8601DateFormatter()
+    // ISO8601DateFormatter is thread-safe.
+    nonisolated(unsafe) private static let iso: ISO8601DateFormatter = ISO8601DateFormatter()
 
     private func text(_ row: Int, _ column: Int) -> String? {
         guard row < values.count, column < values[row].count else { return nil }

@@ -100,8 +100,8 @@ enum SiriData {
 
 /// "Připravenost dnes": the number and its word from Today, read aloud.
 struct ReadinessTodayIntent: AppIntent {
-    static var title: LocalizedStringResource = "Připravenost dnes"
-    static var description = IntentDescription("Řekne dnešní připravenost a co s ní dnes dělat.")
+    static let title: LocalizedStringResource = "Připravenost dnes"
+    static let description = IntentDescription("Řekne dnešní připravenost a co s ní dnes dělat.")
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -118,8 +118,8 @@ struct ReadinessTodayIntent: AppIntent {
 
 /// "Trénink dnes": the day's planned workouts from Dnes, else Aktivita dne.
 struct WorkoutTodayIntent: AppIntent {
-    static var title: LocalizedStringResource = "Trénink dnes"
-    static var description = IntentDescription("Řekne, jaký trénink máš dnes v plánu.")
+    static let title: LocalizedStringResource = "Trénink dnes"
+    static let description = IntentDescription("Řekne, jaký trénink máš dnes v plánu.")
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -132,8 +132,8 @@ struct WorkoutTodayIntent: AppIntent {
 
 /// "Aktivita dne": the coach's pick for today, as on the Dnes card.
 struct ActivityOfTheDayIntent: AppIntent {
-    static var title: LocalizedStringResource = "Aktivita dne"
-    static var description = IntentDescription("Řekne, co ti kouč na dnes doporučuje.")
+    static let title: LocalizedStringResource = "Aktivita dne"
+    static let description = IntentDescription("Řekne, co ti kouč na dnes doporučuje.")
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -146,8 +146,8 @@ struct ActivityOfTheDayIntent: AppIntent {
 
 /// "Spánek dnes": last night as Dnes shows it.
 struct SleepLastNightIntent: AppIntent {
-    static var title: LocalizedStringResource = "Spánek dnes"
-    static var description = IntentDescription("Řekne, jak dlouho a jak dobře se ti dnes v noci spalo.")
+    static let title: LocalizedStringResource = "Spánek dnes"
+    static let description = IntentDescription("Řekne, jak dlouho a jak dobře se ti dnes v noci spalo.")
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -161,8 +161,8 @@ struct SleepLastNightIntent: AppIntent {
 /// "Zeptat se kouče": the question to the AI coach, its answer read aloud. A
 /// proposal it makes waits in the coach's chat for a tap.
 struct AskCoachIntent: AppIntent {
-    static var title: LocalizedStringResource = "Zeptat se kouče"
-    static var description = IntentDescription("Zeptá se AI kouče a přečte odpověď.")
+    static let title: LocalizedStringResource = "Zeptat se kouče"
+    static let description = IntentDescription("Zeptá se AI kouče a přečte odpověď.")
 
     @Parameter(title: "Otázka", requestValueDialog: IntentDialog("Na co se chceš zeptat?"))
     var question: String
@@ -199,8 +199,8 @@ struct AskCoachIntent: AppIntent {
 
 /// "Zbývá sníst": what is left of today's kcal, protein and water.
 struct FoodLeftIntent: AppIntent {
-    static var title: LocalizedStringResource = "Zbývá sníst"
-    static var description = IntentDescription("Řekne, kolik kalorií, bílkovin a vody ti dnes zbývá.")
+    static let title: LocalizedStringResource = "Zbývá sníst"
+    static let description = IntentDescription("Řekne, kolik kalorií, bílkovin a vody ti dnes zbývá.")
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -213,9 +213,9 @@ struct FoodLeftIntent: AppIntent {
 /// "Začít trénink": the app opens in today's workout, the gym live, as the
 /// icon's menu "Dnes: …" does (QuickActions); Aktivita dne without a plan.
 struct StartWorkoutIntent: AppIntent {
-    static var title: LocalizedStringResource = "Začít trénink"
-    static var description = IntentDescription("Otevře dnešní trénink.")
-    static var openAppWhenRun = true
+    static let title: LocalizedStringResource = "Začít trénink"
+    static let description = IntentDescription("Otevře dnešní trénink.")
+    static let openAppWhenRun = true
 
     @MainActor
     func perform() async throws -> some IntentResult {
@@ -229,8 +229,8 @@ struct StartWorkoutIntent: AppIntent {
 enum SiriMetric: String, AppEnum {
     case readiness, sleep, kcalLeft, strain, steps, hrv, restingHR
 
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Hodnota"
-    static var caseDisplayRepresentations: [SiriMetric: DisplayRepresentation] = [
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Hodnota"
+    static let caseDisplayRepresentations: [SiriMetric: DisplayRepresentation] = [
         .readiness: "Připravenost", .sleep: "Spánek v minutách", .kcalLeft: "Zbývající kalorie",
         .strain: "Zátěž dne", .steps: "Kroky", .hrv: "HRV", .restingHR: "Klidový tep"
     ]
@@ -253,8 +253,8 @@ enum SiriMetric: String, AppEnum {
 /// "Hodnota z Aurinu": a number of today for Shortcuts automations (no voice
 /// phrase), e.g. readiness under 50 → a later alarm.
 struct TodayValueIntent: AppIntent {
-    static var title: LocalizedStringResource = "Hodnota z Aurinu"
-    static var description = IntentDescription("Vrátí dnešní číslo z Aurinu pro automatizace ve Zkratkách.")
+    static let title: LocalizedStringResource = "Hodnota z Aurinu"
+    static let description = IntentDescription("Vrátí dnešní číslo z Aurinu pro automatizace ve Zkratkách.")
 
     @Parameter(title: "Hodnota", default: .readiness)
     var metric: SiriMetric
@@ -285,8 +285,8 @@ struct SiriFailure: Error, CustomLocalizedStringResourceConvertible {
 enum SiriDrink: String, AppEnum {
     case water, tea, coffee, juice, milk, sport, soda, beer, wine, other
 
-    static var typeDisplayRepresentation: TypeDisplayRepresentation = "Pití"
-    static var caseDisplayRepresentations: [SiriDrink: DisplayRepresentation] = [
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Pití"
+    static let caseDisplayRepresentations: [SiriDrink: DisplayRepresentation] = [
         .water: "Voda", .tea: "Čaj", .coffee: "Káva", .juice: "Džus", .milk: "Mléko",
         .sport: "Ionťák", .soda: "Limonáda", .beer: "Pivo", .wine: "Víno", .other: "Jiné"
     ]
@@ -297,8 +297,8 @@ enum SiriDrink: String, AppEnum {
 /// "Zapsat pití": any drink in any unit Siri understands (ml, l, fl oz…),
 /// today, the way Jídlo → Pití saves it.
 struct LogDrinkIntent: AppIntent {
-    static var title: LocalizedStringResource = "Zapsat pití"
-    static var description = IntentDescription("Zapíše pití do dnešního dne.")
+    static let title: LocalizedStringResource = "Zapsat pití"
+    static let description = IntentDescription("Zapíše pití do dnešního dne.")
 
     /// What one drink may be, in ml.
     static let range: ClosedRange<Int> = 10...3000
@@ -339,8 +339,8 @@ struct LogDrinkIntent: AppIntent {
 /// without signal, Apple Health when switched on in Synchronizace). The number
 /// is in the app's units, kg or lb, like the sheet there.
 struct LogWeightIntent: AppIntent {
-    static var title: LocalizedStringResource = "Zapsat váhu"
-    static var description = IntentDescription("Zapíše dnešní váhu.")
+    static let title: LocalizedStringResource = "Zapsat váhu"
+    static let description = IntentDescription("Zapíše dnešní váhu.")
 
     /// What Zdraví → Váha accepts, in kg.
     static let range: ClosedRange<Double> = 30...300
