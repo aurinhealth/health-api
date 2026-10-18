@@ -152,6 +152,8 @@ import { setActivityKcal } from "./activity-edits.js";
 import { hideActivity, mergeActivities, setActivityTime, undoActivityChange } from "./activity-chat-edits.js";
 import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals } from "./performance-trends.js";
+// The largest request body the coach route reads (POST /app/api/assistant).
+const ASSISTANT_REQUEST_CHARS=64000;
 const numOrNull=v=>v!=null&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
 const isPro=env=>subscriptionStatus(env).then(s=>s.plan==='ai').catch(()=>false);
 
@@ -1406,7 +1408,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   if(url.pathname==='/app/api/assistant'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-    const body=await request.json().catch(()=>({})),message=String(body.message||'').trim();
+    // What the request carries reaches the coach's prompt, so its size is capped
+    // (a message of 4000 characters, the app's context and a chat id fit many times).
+    const raw=await request.text().catch(()=>'');
+    if(raw.length>ASSISTANT_REQUEST_CHARS)return Response.json({message:L('Požadavek je moc velký.', 'The request is too large.')},{status:413});
+    let body;try{body=JSON.parse(raw)||{};}catch{body={};}
+    const message=String(body.message||'').trim();
     if(!message||message.length>4000)return Response.json({message:L('Zadej požadavek do 4000 znaků.', 'Enter a request of up to 4,000 characters.')},{status:400});
     // A lasting preference is saved only once the request has been answered.
     const memory=explicitPreference(message),athleteState=await getAthleteState(env.DB);
@@ -1428,8 +1435,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const task=assistantTask(message,body.appContext?appContext:null,conversation),started=Date.now();
     const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))?Number(body.availabilityMinutes):null;
     const manualReadiness=Number.isFinite(Number(body.manualReadiness))?Number(body.manualReadiness):null;
-    const goal=body.goal&&typeof body.goal==='object'?body.goal:null;
-    const preferences=body.preferences&&typeof body.preferences==='object'?body.preferences:{};
+    // The goal and the preferences are the athlete's saved ones: the request
+    // cannot replace them (they would reach the prompt word for word).
+    const goal=null,preferences={};
     const reply=async (onAnswer,onProgress=()=>{})=>{
       let inputs={},coachCtx={date,now:localNow()},selected=null,focus=null;
       onProgress(L('Trenér připravuje odpověď…', 'The coach is preparing an answer…'));
@@ -1445,7 +1453,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const internalJson=async path=>{const response=await handleDashboardApi(new Request('https://internal'+path),env,ctx,new URL('https://internal'+path));if(!response.ok)throw new Error(L('Vybraný trénink se nepodařilo načíst.', 'The selected workout couldn\'t be loaded.'));return response.json();};
         selected=await selectedAssistantContext(appContext,loaded,{loadGym:date=>internalJson('/app/api/gym?date='+date),loadWeek:start=>internalJson('/app/api/week?start='+start),loadPrefs:start=>getWeekPlan(env.DB,start)});
         loaded.week=selected.week;
-        inputs=loaded;focus=loaded.focus;Object.assign(preferences,{...prefs,...preferences});
+        inputs=loaded;focus=loaded.focus;Object.assign(preferences,prefs);
         // Each day's time budget comes from its own week's plan.
         const thisWeek=mondayOfDate(date),mondays=[...new Set(selected.week.days.filter(d=>d.date>=date).map(d=>mondayOfDate(d.date)))];
         const plans=new Map(await Promise.all(mondays.map(async w=>[w,w===thisWeek?prefs:await getWeekPlan(env.DB,w).catch(()=>null)])));
