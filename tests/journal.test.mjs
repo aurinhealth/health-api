@@ -391,3 +391,15 @@ test("journal: what happened in the night up to the wake-up has its own part, as
   assert.equal(usualPart(catalogItem("late_bed")), "night");
   assert.equal(usualPart(catalogItem("morning_light")), "morning");
 });
+
+test("journal: too little water is measured against the day's drinks target", async () => {
+  const { raw, db, fluid, userId } = dataDb();
+  const d = "2026-10-14", e = "2026-10-15";
+  // 2 l of water and 1 l of wine (wine does not count): enough for 60 kg (1.8 l), too little for 80 kg (2.4 l).
+  for (const day of [d, e]) { fluid.run(userId, day, day + "T10:00", 2000, "water"); fluid.run(userId, day, day + "T20:00", 1000, "wine"); }
+  const weight = raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,sample_time,value_numeric) VALUES(?,?,?,?,?)");
+  weight.run(userId, "apple", "weight", d + "T07:00:00", 60);
+  weight.run(userId, "apple", "weight", e + "T07:00:00", 80);
+  const auto = await autoDays(db, d, e);
+  assert.deepEqual([auto[d].little_water, auto[e].little_water], [{ yes: false }, { yes: true }]);
+});
