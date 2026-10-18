@@ -26,8 +26,8 @@ test("every AI answer is recorded with its feature, tokens and cost", async () =
   await withOpenAI(async () => {
     const env = envFor(db);
     await callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" });
-    const row = db.sqlite.prepare("SELECT user_id, feature, model, input_tokens, output_tokens, cost_usd FROM ai_usage").get();
-    assert.deepEqual({ ...row }, { user_id: 7, feature: "food-lookup", model: "gpt-6-sol", input_tokens: 100000, output_tokens: 50000, cost_usd: 0.7 });
+    const row = db.sqlite.prepare("SELECT user_id, feature, model, input_tokens, output_tokens, cost_usd, cached_tokens FROM ai_usage").get();
+    assert.deepEqual({ ...row }, { user_id: 7, feature: "food-lookup", model: "gpt-6-sol", input_tokens: 100000, output_tokens: 50000, cost_usd: 0.7, cached_tokens: 0 });
     assert.deepEqual(await aiAllowance(env), { spentUsd: 0.7, limitUsd: null, monthSpentUsd: 0.7, monthLimitUsd: 5 });
   });
 });
@@ -44,13 +44,44 @@ test("web searches are counted on top of the tokens, failed ones are not", async
   assert.equal(usageCost("gpt-6-luna", { input_tokens: 10000, output_tokens: 1000 }), 0.0015);
 });
 
+test("cached input is billed at the cached price and kept in the log", async () => {
+  // 20k input of which 15k cached, 1k output of gpt-6-sol: 5k × 2 + 15k × 0.2 + 1k × 10 per 1M = 0.023 USD.
+  const usage = { input_tokens: 20000, input_tokens_details: { cached_tokens: 15000 }, output_tokens: 1000 };
+  assert.equal(usageCost("gpt-6-sol", usage), 0.023);
+  assert.equal(usageCost("gpt-6-sol", { input_tokens: 20000, output_tokens: 1000 }), 0.05);
+  // A cached count above the input never makes the cost negative.
+  assert.equal(usageCost("gpt-6-luna", { input_tokens: 100, input_tokens_details: { cached_tokens: 500 } }), 0);
+  const db = grantAiConsent(createD1(), 7, 8), realFetch = globalThis.fetch;
+  globalThis.fetch = async () => answer(usage);
+  try { await callOpenAI(envFor(db), { feature: "assistant", instructions: "x", input: "y" }); } finally { globalThis.fetch = realFetch; }
+  assert.deepEqual({ ...db.sqlite.prepare("SELECT cached_tokens, cost_usd FROM ai_usage").get() }, { cached_tokens: 15000, cost_usd: 0.023 });
+});
+
+test("a table from before the cached column gets it", async () => {
+  const db = grantAiConsent(createD1(), 7, 8);
+  db.sqlite.exec("CREATE TABLE ai_usage (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, day TEXT NOT NULL, feature TEXT, model TEXT, input_tokens INTEGER, output_tokens INTEGER, cost_usd REAL)");
+  await withOpenAI(async () => { await callOpenAI(envFor(db), { instructions: "x", input: "y" }); });
+  assert.equal(db.sqlite.prepare("SELECT cached_tokens FROM ai_usage WHERE model != 'pending'").get().cached_tokens, 0);
+});
+
+test("the limit messages name no amount", async () => {
+  const db = grantAiConsent(createD1(), 7, 8);
+  await withOpenAI(async () => {
+    const env = envFor(db, { AI_DAILY_LIMIT_USD: "0.5" });
+    await callOpenAI(env, { instructions: "x", input: "y" });
+    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => /Dnes už bylo s AI práce hodně/.test(error.message) && !/\$|USD|\d/.test(error.message));
+    db.sqlite.prepare("INSERT INTO ai_usage (user_id, day, cost_usd) VALUES (8, ?, 10)").run(localToday());
+    await assert.rejects(callOpenAI({ ...env, DB: scopedDb(db, 8), USER_ID: 8, AI_DAILY_LIMIT_USD: "" }, { instructions: "x", input: "y" }), error => /Měsíční limit AI/.test(error.message) && !/\$|USD|\d/.test(error.message));
+  });
+});
+
 test("a daily limit, when set, stops the next call once it is spent; the owner has none", async () => {
   const db = grantAiConsent(createD1(), 7, 8);
   await withOpenAI(async calls => {
     const env = envFor(db, { AI_DAILY_LIMIT_USD: "1" });
     await callOpenAI(env, { instructions: "x", input: "y" });
     await callOpenAI(env, { instructions: "x", input: "y" });
-    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && error.status === 429 && /Denní limit AI/.test(error.message));
+    await assert.rejects(callOpenAI(env, { instructions: "x", input: "y" }), error => error.limit === true && error.status === 429 && /Dnes už bylo s AI práce hodně/.test(error.message));
     assert.equal(calls(), 2);
     // Another user has their own budget.
     await callOpenAI({ ...env, DB: scopedDb(db, 8), USER_ID: 8 }, { instructions: "x", input: "y" });

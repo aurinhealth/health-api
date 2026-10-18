@@ -82,6 +82,8 @@
     "OPEN_SIGNUP": "true",
     // AI spend cap per account and month (src/ai-usage.js), the one planned for Pro.
     "AI_MONTHLY_LIMIT_USD": "4",
+    // A guard against abuse (a script, a loop): a person's costliest day so far was 0.49 USD.
+    "AI_DAILY_LIMIT_USD": "1.5",
     // Strava app (src/strava.js); public. STRAVA_CLIENT_SECRET is a Worker secret.
     "STRAVA_CLIENT_ID": "183664",
     // Ultrahuman app (src/ultrahuman.js); public. ULTRAHUMAN_CLIENT_SECRET is a Worker secret.
@@ -138,6 +140,7 @@
         "OWNER_EMAIL": "chelseafc.czsk@gmail.com",
         "OPEN_SIGNUP": "true",
         "AI_MONTHLY_LIMIT_USD": "4",
+        "AI_DAILY_LIMIT_USD": "1.5",
         "STRAVA_CLIENT_ID": "183664",
         "ULTRAHUMAN_CLIENT_ID": "Aiv97cWQZNA3tShnPydr8NtxZXSVv4LCafZE89WBnP4",
         "WHOOP_CLIENT_ID": "0c14cf2e-d6d3-4c7c-8c0d-758b0b20a8aa",
