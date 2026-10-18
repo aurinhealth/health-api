@@ -25,7 +25,6 @@ import { manualPairs } from "./manual-pairs.js";
 import { matchPlannedWorkouts } from "./plan-match.js";
 export { matchPlannedWorkouts };
 import { readSyncPrefs, healthAllowed, sentIntervalsIds, sentByLoadwise } from "./sync-destinations.js";
-import { syncStravaWeight } from "./strava.js";
 
 export default {
   async scheduled(event, env, ctx) {
@@ -203,12 +202,7 @@ async function appWeight(env, request) {
     try { await writeIntervalsWeight(env, date, value); intervals = "ok"; }
     catch (error) { console.error("Intervals weight write failed", error.message); intervals = "error"; }
   }
-  // Strava too, when connected and weight is sent there; the hourly job retries.
-  let strava = null;
-  if (env.STRAVA_TOKEN && healthAllowed(await readSyncPrefs(env.DB, env.USER_ID, "strava"), "weight")) {
-    strava = await syncStravaWeight(env).then(() => "ok").catch(error => { console.error("Strava weight write failed", error.message); return "error"; });
-  }
-  return Response.json({status:"ok",date,kg:value,google,intervals,strava});
+  return Response.json({status:"ok",date,kg:value,google,intervals});
 }
 
 // ======================================================

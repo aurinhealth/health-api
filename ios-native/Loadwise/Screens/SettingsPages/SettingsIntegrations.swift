@@ -77,9 +77,6 @@ struct IntegrationIcon: View {
             case "ultrahuman":
                 shape.fill(Color(light: 0x000000, dark: 0x000000))
                 logo("UltrahumanMark").frame(width: size * 0.56)
-            case "strava":
-                shape.fill(Color(light: 0xFC4C02, dark: 0xFC4C02))
-                Image(systemName: "chevron.up").font(.system(size: size * 0.42, weight: .black)).foregroundStyle(.white)
             default:
                 shape.fill(Palette.indigo)
                 Image(systemName: "watch.analog").font(.system(size: size * 0.45, weight: .semibold)).foregroundStyle(.white)

@@ -885,7 +885,7 @@ final class AppModel {
     // MARK: - Synchronizace
 
     /// The server destinations a done activity goes to (Google Health,
-    /// Intervals.icu, Strava), as last seen in Synchronizace: the toast lists
+    /// Intervals.icu), as last seen in Synchronizace: the toast lists
     /// them as "odešle se" while there is no signal.
     static let activityDestinationsKey = "sync.activityDestinations"
 

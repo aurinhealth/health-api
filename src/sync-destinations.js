@@ -2,12 +2,11 @@ import { L } from './lang.js';
 import { intervalsAuthorization } from './intervals-auth.js';
 import { localDateTime } from './user-time.js';
 import { grantedExtras, hasGoogleScope, HEALTH_PERMISSIONS } from './google-scopes.js';
-import { stravaConfigured, stravaSendActivity, readStravaTokens } from './strava.js';
 // Synchronizace: where Loadwise sends what the user records, chosen per
 // destination in the app (Settings → Synchronizace): Apple Health (written by
 // the iPhone, which keeps its part of the preferences here too), Google
-// Health, Intervals.icu and Strava (sent from here). Only destinations the
-// app can really send to are listed; Strava only when its app is configured.
+// Health, Intervals.icu and Wahoo (sent from here). Only destinations the
+// app can really send to are listed; Wahoo only when its app is configured.
 //
 // Preferences per user and destination (sync_preferences): send planned
 // workouts, send done activities, download done activities and which health
@@ -21,24 +20,22 @@ import { stravaConfigured, stravaSendActivity, readStravaTokens } from './strava
 // A send is never made twice by accident. A first send that got no answer
 // (timeout, network) may well have gone through, so its row becomes 'unknown'
 // instead of 'pending': the next try asks Intervals.icu for the day's activity
-// with our external_id and updates it, Strava refuses a repeated external_id
-// (409) and that counts as sent, and Google Health, which cannot be asked, is
-// sent again only by hand ("Zkusit znovu").
+// with our external_id and updates it, and Google Health, which cannot be
+// asked, is sent again only by hand ("Zkusit znovu").
 
-export const DESTINATIONS = ['apple', 'google', 'intervals', 'strava', 'wahoo'];
+export const DESTINATIONS = ['apple', 'google', 'intervals', 'wahoo'];
 // Sent from the server; Apple Health is written by the iPhone.
-const SERVER_DESTINATIONS = ['google', 'intervals', 'strava', 'wahoo'];
+const SERVER_DESTINATIONS = ['google', 'intervals', 'wahoo'];
 
 // The health data each destination accepts. Intervals.icu: what
 // wellness-sync.js (and weight-sync.js for weight) really writes there.
 // Apple Health: what the iPhone writes from the app's own entries. Google
 // Health: weight (weight-sync.js, with the weight-writing permission) and
-// the food log (food-google-sync.js). Strava takes only the weight.
+// the food log (food-google-sync.js).
 export const HEALTH_TYPES = {
   apple: ['weight', 'nutrition', 'water'],
   google: ['weight', 'nutrition'],
   intervals: ['weight', 'bodyFat', 'restingHR', 'hrv', 'sleep', 'steps', 'spO2', 'respiration', 'vo2max'],
-  strava: ['weight'],
   wahoo: []
 };
 
@@ -48,8 +45,6 @@ export const SUPPORTS = {
   // Apple Health has no planned workouts; downloading is the HealthKit reading in Zdroje dat.
   apple: { pushPlanned: false, pushActivities: true, pullActivities: true, health: true },
   google: { pushPlanned: false, pushActivities: true, pullActivities: true, health: true },
-  // Never read from Strava: its API agreement forbids its data in AI and analytics.
-  strava: { pushPlanned: false, pushActivities: true, pullActivities: false, health: true },
   // Wahoo (wahoo.js): plans to the ELEMNT and KICKR, done workouts back. No health data.
   wahoo: { pushPlanned: true, pushActivities: false, pullActivities: true, health: false }
 };
@@ -59,12 +54,11 @@ export const SUPPORTS = {
 // ("pošle do Intervals.icu"). Google Health got the food log and, with the
 // permission, the weight, and its workouts came in; writing workouts there
 // needs a permission nobody has yet, so it starts off. Apple Health got
-// nothing. Strava is new: whoever connects it wants activities and weight there.
+// nothing.
 const DEFAULTS = {
   apple: { pushPlanned: false, pushActivities: false, pullActivities: false, health: [] },
   google: { pushPlanned: false, pushActivities: false, pullActivities: true, health: 'all' },
   intervals: { pushPlanned: true, pushActivities: true, pullActivities: true, health: 'all' },
-  strava: { pushPlanned: false, pushActivities: true, pullActivities: false, health: 'all' },
   // Whoever connects Wahoo wants the plan on the head unit and the rides back.
   wahoo: { pushPlanned: true, pushActivities: false, pullActivities: true, health: [] }
 };
@@ -153,13 +147,12 @@ export function googleMissingScopes(env, prefs) {
 export function destinationConnected(env, id) {
   if (id === 'intervals') return Boolean(env.INTERVALS_API_KEY);
   if (id === 'google') return Boolean(env.GOOGLE_REFRESH_TOKEN);
-  if (id === 'strava') return Boolean(readStravaTokens(env));
   if (id === 'wahoo') return Boolean(env.WAHOO_TOKEN);
   return null; // Apple Health is connected on the iPhone; the server cannot tell.
 }
 
-// Strava and Wahoo are offered only with their apps configured (CLIENT_ID/SECRET).
-const offered = (env, id) => id === 'strava' ? stravaConfigured(env) : id === 'wahoo' ? Boolean(String(env.WAHOO_CLIENT_ID || '').trim() && String(env.WAHOO_CLIENT_SECRET || '').trim()) || Boolean(env.WAHOO_TOKEN) : true;
+// Wahoo is offered only with its app configured (CLIENT_ID/SECRET).
+const offered = (env, id) => id === 'wahoo' ? Boolean(String(env.WAHOO_CLIENT_ID || '').trim() && String(env.WAHOO_CLIENT_SECRET || '').trim()) || Boolean(env.WAHOO_TOKEN) : true;
 
 // GET /app/api/sync/prefs: every destination with its state and preferences.
 export async function syncOverview(env) {
@@ -278,12 +271,8 @@ async function pushGoogle(env, row, { fetchImpl, googleToken }) {
   return String(data.response?.name || data.name || row.remote_id || 'accepted');
 }
 
-async function pushStrava(env, row, { fetchImpl }) {
-  return stravaSendActivity(env, JSON.parse(row.payload_json || '{}'), row.remote_id || null, { fetchImpl });
-}
-
-const NAMES = { google: 'Google Health', intervals: 'Intervals.icu', strava: 'Strava' };
-const PUSH = { google: pushGoogle, intervals: pushIntervals, strava: pushStrava };
+const NAMES = { google: 'Google Health', intervals: 'Intervals.icu' };
+const PUSH = { google: pushGoogle, intervals: pushIntervals };
 
 function failure(destination, error) {
   if (error.scope) return L('Povol Aurinu zápis tréninků do Google Health (Rozšířit oprávnění Google).', 'Allow Aurin to write workouts to Google Health (Extend Google permissions).');
@@ -371,12 +360,12 @@ export async function retrySend(env, key, destination, { fetchImpl = fetch, goog
 }
 
 // Cron: sends that never started, failed only a few times or got no answer
-// where a second try is safe (Intervals.icu looks the activity up first,
-// Strava refuses a repeated external_id). Google Health waits for the user.
+// where a second try is safe (Intervals.icu looks the activity up first).
+// Google Health waits for the user.
 export async function retrySyncSends(env, { fetchImpl = fetch, googleToken = null, limit = 10 } = {}) {
   let rows = [];
   try {
-    rows = (await env.DB.prepare("SELECT * FROM sync_sends WHERE user_id = ? AND destination IN ('google', 'intervals', 'strava') AND status IN ('pending', 'error', 'unknown') AND NOT (destination = 'google' AND status = 'unknown') AND attempts < 3 AND updated_at < datetime('now', '-5 minutes') ORDER BY updated_at LIMIT ?").bind(env.USER_ID, limit).all()).results || [];
+    rows = (await env.DB.prepare("SELECT * FROM sync_sends WHERE user_id = ? AND destination IN ('google', 'intervals') AND status IN ('pending', 'error', 'unknown') AND NOT (destination = 'google' AND status = 'unknown') AND attempts < 3 AND updated_at < datetime('now', '-5 minutes') ORDER BY updated_at LIMIT ?").bind(env.USER_ID, limit).all()).results || [];
   } catch (error) {
     if (/no such table/i.test(error.message)) return [];
     throw error;

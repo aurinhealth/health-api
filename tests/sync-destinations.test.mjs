@@ -7,7 +7,6 @@ import {
   normalizeActivity, googleExercise, googleMissingScopes, retrySyncSends, sentByLoadwise
 } from "../src/sync-destinations.js";
 import { EXTRA_SCOPES, HEALTH_SCOPES } from "../src/google-scopes.js";
-import { handleStravaOAuth, syncStravaWeight, stravaAccessToken } from "../src/strava.js";
 import { storeLocalEvent, syncLocalWorkout } from "../src/local-workouts.js";
 
 const migration = readFileSync(new URL("../migrations/0019_sync_destinations.sql", import.meta.url), "utf8");
@@ -40,11 +39,11 @@ test("preferences are saved per user and destination, cleaned up", async () => {
   assert.equal((await readSyncPrefs(d, 8, "intervals")).health, "all");
   // A partial update keeps the rest; "all" again.
   assert.deepEqual(await saveSyncPrefs(d, 7, "intervals", { health: "all" }), { ...saved, health: "all" });
-  // Strava is never read: its download switch stays off; Apple Health has no plans.
-  assert.equal(normalizeSyncPrefs("strava", { pullActivities: true }).pullActivities, false);
+  // Apple Health has no plans.
   assert.equal(normalizeSyncPrefs("apple", { pushPlanned: true }).pushPlanned, false);
-  assert.deepEqual(normalizeSyncPrefs("strava", { health: ["weight", "hrv"] }).health, ["weight"]);
   await assert.rejects(saveSyncPrefs(d, 7, "garmin", {}), /Neznámá|Unknown/);
+  // Strava is no destination any more.
+  await assert.rejects(saveSyncPrefs(d, 7, "strava", {}), /Neznámá|Unknown/);
 });
 
 test("the wellness push sends only the chosen health data", () => {
@@ -54,7 +53,7 @@ test("the wellness push sends only the chosen health data", () => {
   assert.deepEqual(allowedWellness(updates, { health: [] }), {});
 });
 
-test("the overview lists the destinations the app can send to; Strava only when configured", async () => {
+test("the overview lists the destinations the app can send to; never Strava", async () => {
   const d = db();
   const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k", GOOGLE_REFRESH_TOKEN: "r", GOOGLE_SCOPES: HEALTH_SCOPES };
   let overview = await syncOverview(env);
@@ -63,9 +62,8 @@ test("the overview lists the destinations the app can send to; Strava only when 
   // Weight writing is the extra Google permission not given yet.
   assert.deepEqual(google.missingScopes, ["weightWrite"]);
   assert.deepEqual(google.healthTypes, ["weight", "nutrition"]);
-  overview = await syncOverview({ ...env, STRAVA_CLIENT_ID: "183664", STRAVA_CLIENT_SECRET: "s" });
-  const strava = overview.destinations.find(x => x.id === "strava");
-  assert.deepEqual([strava.connected, strava.supports.pullActivities, strava.healthTypes], [false, false, ["weight"]]);
+  overview = await syncOverview({ ...env, STRAVA_CLIENT_ID: "183664", STRAVA_CLIENT_SECRET: "s", STRAVA_TOKEN: "{}" });
+  assert.deepEqual(overview.destinations.map(x => x.id), ["apple", "google", "intervals"]);
   assert.deepEqual(googleMissingScopes({ GOOGLE_SCOPES: [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite] }, { pushActivities: true, health: "all" }), ["activityWrite"]);
 });
 
@@ -163,46 +161,6 @@ test("Google Health: workouts only with the workout-writing permission, as an ex
   assert.deepEqual([calls[1].method, calls[1].url], ["PATCH", "https://health.googleapis.com/v4/users/me/dataTypes/exercise/dataPoints/abc"]);
 });
 
-const strava = (tokens, extra = {}) => ({ STRAVA_CLIENT_ID: "183664", STRAVA_CLIENT_SECRET: "s", STRAVA_TOKEN: JSON.stringify(tokens), CONNECTION_KEY: "x".repeat(32), ...extra });
-
-test("Strava: a manual activity, with the access token refreshed when it ran out", async () => {
-  const d = db();
-  const env = { DB: d, USER_ID: 7, ...strava({ access_token: "old", refresh_token: "r1", expires_at: 1 }) };
-  const { calls, fetchImpl } = recorder(url => url.endsWith("/oauth/token") ? Response.json({ access_token: "new", refresh_token: "r2", expires_at: 9e9 }) : Response.json({ id: 123 }));
-  const result = await sendActivity(env, activity, { fetchImpl });
-  assert.deepEqual(result.sends, [{ destination: "strava", status: "sent", remoteId: "123" }]);
-  assert.equal(calls[0].url, "https://www.strava.com/oauth/token");
-  assert.match(calls[0].body, /grant_type=refresh_token/);
-  assert.deepEqual(calls[1].body, { name: "Push", sport_type: "WeightTraining", start_date_local: "2026-10-10T18:05:00", elapsed_time: 3720, external_id: "loadwise:7:gym:2026-10-10", description: "Bench 4 × 8" });
-  assert.equal(JSON.parse(env.STRAVA_TOKEN).refresh_token, "r2");
-  // The refreshed token is good: no second refresh.
-  assert.equal(await stravaAccessToken(env, { fetchImpl }), "new");
-  assert.equal(calls.length, 2);
-  // An edit updates the known activity; the external_id is set once, on creation.
-  await sendActivity(env, { ...activity, name: "Push B" }, { fetchImpl });
-  assert.deepEqual([calls[2].method, calls[2].url, calls[2].body], ["PUT", "https://www.strava.com/api/v3/activities/123", { name: "Push B", sport_type: "WeightTraining", description: "Bench 4 × 8" }]);
-});
-
-test("Strava: a first send without an answer is 'unknown'; the retry's repeated external_id counts as sent", async () => {
-  const d = db();
-  const env = { DB: d, USER_ID: 7, ...strava({ access_token: "a", refresh_token: "r", expires_at: 9e9 }) };
-  const lost = recorder(() => timeout());
-  const result = await sendActivity(env, activity, { fetchImpl: lost.fetchImpl });
-  assert.deepEqual([result.sends[0].status, lost.calls.length], ["unknown", 1]);
-  d.sqlite.exec("UPDATE sync_sends SET updated_at = datetime('now', '-10 minutes')");
-  // Strava already has it: 409 with the activity named.
-  const named = recorder(() => Response.json({ message: "Resource Already Exists", id: 555 }, { status: 409 }));
-  assert.deepEqual(await retrySyncSends(env, { fetchImpl: named.fetchImpl }), [{ destination: "strava", status: "sent", remoteId: "555" }]);
-  assert.deepEqual(named.calls.map(c => [c.method, c.body.external_id]), [["POST", "loadwise:7:gym:2026-10-10"]]);
-  // 409 without an id: sent, with no id to update later.
-  const d2 = db(), env2 = { ...env, DB: d2 };
-  await sendActivity(env2, activity, { fetchImpl: lost.fetchImpl });
-  d2.sqlite.exec("UPDATE sync_sends SET updated_at = datetime('now', '-10 minutes')");
-  const nameless = recorder(() => Response.json({ message: "Resource Already Exists", errors: [{ resource: "Activity", field: "external_id", code: "already exists" }] }, { status: 409 }));
-  assert.deepEqual(await retrySyncSends(env2, { fetchImpl: nameless.fetchImpl }), [{ destination: "strava", status: "sent", remoteId: null }]);
-  assert.deepEqual((await activitySends(env2, activity.key)).map(s => [s.status, s.remoteId]), [["sent", null]]);
-});
-
 test("Google Health: a first send without an answer is sent again only by hand", async () => {
   const d = db();
   await saveSyncPrefs(d, 7, "google", { pushActivities: true });
@@ -223,32 +181,6 @@ test("Google Health: a first send without an answer is sent again only by hand",
   assert.deepEqual(ok.calls.map(c => c.method), ["POST"]);
   await sendActivity(env, { ...activity, name: "Push C" }, { fetchImpl: ok.fetchImpl, googleToken });
   assert.deepEqual(ok.calls.map(c => c.method), ["POST", "PATCH"]);
-});
-
-test("Strava: the latest weight once, again only when it changes", async () => {
-  const d = db();
-  const env = { DB: d, USER_ID: 7, ...strava({ access_token: "a", refresh_token: "r", expires_at: 9e9 }) };
-  d.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric) VALUES (7, 'manual', 'weight', 'w1', datetime('now'), 82.46)").run();
-  const { calls, fetchImpl } = recorder(() => Response.json({}));
-  assert.deepEqual(await syncStravaWeight(env, { fetchImpl }), { status: "ok", written: 82.5 });
-  assert.deepEqual([calls[0].method, calls[0].url], ["PUT", "https://www.strava.com/api/v3/athlete?weight=82.5"]);
-  assert.deepEqual(await syncStravaWeight(env, { fetchImpl }), { status: "ok", written: null });
-  assert.equal((await syncStravaWeight(env, { fetchImpl, allowed: false })).status, "skipped");
-  assert.equal(calls.length, 1);
-});
-
-test("Strava OAuth asks only to write; a full Strava app says so", async () => {
-  const env = { ...strava({}), APP_ORIGIN: "https://petrfitnessdata.eu" };
-  const start = await handleStravaOAuth(new Request("https://petrfitnessdata.eu/oauth/strava?return=native"), env, "/oauth/strava");
-  const to = new URL(start.headers.get("Location"));
-  assert.equal(to.searchParams.get("scope"), "activity:write,profile:write");
-  const cookie = start.headers.get("Set-Cookie").split(";")[0];
-  const state = to.searchParams.get("state");
-  const callback = new Request("https://petrfitnessdata.eu/oauth/strava/callback?code=c&state=" + state, { headers: { Cookie: cookie } });
-  const full = await handleStravaOAuth(callback, env, "/oauth/strava/callback", async () => Response.json({ message: "Limit of connected athletes exceeded" }, { status: 403 }));
-  assert.equal(full.headers.get("Location"), "loadwise://connected?event=strava-full");
-  // Without the app registered nothing is offered.
-  assert.match((await handleStravaOAuth(new Request("https://petrfitnessdata.eu/oauth/strava?return=native"), {}, "/oauth/strava")).headers.get("Location"), /strava-failed/);
 });
 
 test("the cron retries only what failed a few times", async () => {

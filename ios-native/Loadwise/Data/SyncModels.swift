@@ -59,7 +59,7 @@ struct SyncSupports: Codable, Equatable {
 }
 
 struct SyncDestination: Decodable, Equatable, Identifiable {
-    /// apple, google, intervals or strava.
+    /// apple, google, intervals or wahoo.
     let id: String
     /// nil for Apple Health: it is connected on the iPhone.
     let connected: Bool?
@@ -101,14 +101,13 @@ struct ManualWorkoutResult: Decodable {
 
 /// The destinations as the app shows them: name, the tile, the health data names.
 enum SyncApp {
-    static let order = ["apple", "google", "intervals", "wahoo", "strava"]
+    static let order = ["apple", "google", "intervals", "wahoo"]
 
     static func name(_ id: String) -> String {
         switch id {
         case "apple": return L10n.tr("Apple Zdraví")
         case "google": return "Google Health"
         case "intervals": return "Intervals.icu"
-        case "strava": return "Strava"
         case "wahoo": return "Wahoo"
         default: return id
         }

@@ -108,7 +108,6 @@ import { deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts }
 import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.js";
 import { handleIntervalsWebhook } from "./intervals-webhook.js";
 import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
-import { handleStravaOAuth, disconnectStrava, syncStravaWeight } from "./strava.js";
 import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman, FIRST_IMPORT_DAYS } from "./ultrahuman.js";
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, readWahooTokens, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
@@ -231,8 +230,8 @@ const USER_JOBS = [
   } },
   { name: "google-food", providers: ["google"], due: every5, run: async scoped => { await backfillFoodGoogle(scoped.DB); await processFoodGoogle(scoped, { token: googleToken }); } },
   { name: "intervals-exports", providers: ["intervals"], due: every5, run: scoped => retryWorkoutExports(scoped) },
-  // Done activities whose send to Google Health, Intervals.icu or Strava did not go through (sync-destinations.js).
-  { name: "sync-sends", providers: ["google", "intervals", "strava"], due: every5, run: scoped => retrySyncSends(scoped, { googleToken }) },
+  // Done activities whose send to Google Health or Intervals.icu did not go through (sync-destinations.js).
+  { name: "sync-sends", providers: ["google", "intervals"], due: every5, run: scoped => retrySyncSends(scoped, { googleToken }) },
   // Every hour at :20: the ring's last three days from Ultrahuman (the night lands in the morning).
   { name: "ultrahuman", providers: ["ultrahuman"], due: (cron, now) => minute(cron, now, m => m === 20), run: async scoped => { const r = await syncUltrahuman(scoped, { days: 3 }); if (r.saved) await bumpCacheVersion(scoped.DB); } },
   // Wahoo: plans not sent yet every five minutes; done workouts come by the webhook, and every
@@ -240,8 +239,6 @@ const USER_JOBS = [
   { name: "wahoo-exports", providers: ["wahoo"], due: every5, run: scoped => retryWahooExports(scoped) },
   { name: "wahoo", providers: ["wahoo"], due: (cron, now) => minute(cron, now, (m, h) => m === 35 && h % 3 === 0), run: async scoped => { const r = await syncWahoo(scoped, { days: 2, maxPages: 1 }); if (r.saved) { await matchActivities(scoped, { days: 3 }).catch(() => null); await bumpCacheVersion(scoped.DB); } } },
   { name: "whoop", providers: ["whoop"], due: (cron, now) => minute(cron, now, m => m === 25), run: async scoped => { const r = await syncWhoop(scoped, { days: 3 }); if (r.saved) await bumpCacheVersion(scoped.DB); } },
-  // Hourly: the latest weight to Strava when it changed and the user sends it there.
-  { name: "strava-weight", providers: ["strava"], due: (cron, now) => minute(cron, now, m => m === 30), run: async scoped => syncStravaWeight(scoped, { allowed: healthAllowed(await readSyncPrefs(scoped.DB, scoped.USER_ID, "strava"), "weight") }) },
   // Every 5 minutes for a personal API key; an OAuth connection gets
   // webhooks (/webhooks/intervals), so only a look every 6 hours in case
   // one was lost (an OAuth app has 100 requests per athlete a day).
@@ -452,15 +449,12 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     const demoRefusal = reviewRefusal(rawEnv, user, request.method, url.pathname);
     if (demoRefusal) return demoRefusal;
     // Only if Apple asks for it when the Services ID is set up: the file's content as a secret.
-    if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals') || url.pathname.startsWith('/oauth/strava') || url.pathname.startsWith('/oauth/ultrahuman') || url.pathname.startsWith('/oauth/whoop') || url.pathname.startsWith('/oauth/wahoo')) && !signedIn) return new Response(L('Připojení se nepodařilo ověřit. Zavři okno a zkus to v aplikaci znovu.', 'Couldn\'t verify the connection. Close this window and try again in the app.'),{status:401});
+    if ((url.pathname.startsWith('/oauth/google') || url.pathname.startsWith('/oauth/intervals') || url.pathname.startsWith('/oauth/ultrahuman') || url.pathname.startsWith('/oauth/whoop') || url.pathname.startsWith('/oauth/wahoo')) && !signedIn) return new Response(L('Připojení se nepodařilo ověřit. Zavři okno a zkus to v aplikaci znovu.', 'Couldn\'t verify the connection. Close this window and try again in the app.'),{status:401});
     const googleOAuth = await handleGoogleOAuth(request, env, url.pathname);
     if (googleOAuth) {if(url.pathname==="/oauth/google/callback"&&googleOAuth.status===302){await clearConnectionHealth(env,'google');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_google'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return googleOAuth;}
     const intervalsOAuth = await handleIntervalsOAuth(request, env, url.pathname);
     // A new Intervals.icu connection imports its history, the same as a pasted key.
     if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&intervalsOAuth.status===302){await clearConnectionHealth(env,'intervals');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_intervals'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return intervalsOAuth;}
-    // Strava is only a destination (Synchronizace): nothing to import after connecting.
-    const stravaOAuth = await handleStravaOAuth(request, env, url.pathname);
-    if (stravaOAuth) return stravaOAuth;
     // A new Ultrahuman connection imports the ring's last two months (readiness's baseline).
     const ultrahumanOAuth = await handleUltrahumanOAuth(request, env, url.pathname);
     if (ultrahumanOAuth) {if(url.pathname==="/oauth/ultrahuman/callback"&&env.ULTRAHUMAN_TOKEN)ctx.waitUntil(syncUltrahuman(env,{days:FIRST_IMPORT_DAYS}).then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error("Ultrahuman first import failed",error.message)));return ultrahumanOAuth;}
@@ -1662,7 +1656,6 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(body.provider==='wahoo'){await disconnectWahoo(env);await bumpCacheVersion(env.DB);return Response.json({status:'ok',message:L('Připojení je odebrané a aktivity z Wahoo smazané.', 'The connection has been removed and the Wahoo activities deleted.')},{headers:{'Cache-Control':'no-store'}});}
       if(body.provider==='whoop'){await disconnectWhoop(env);await bumpCacheVersion(env.DB);return Response.json({status:'ok',message:L('Připojení je odebrané a data z WHOOPu smazaná.', 'The connection has been removed and the WHOOP data deleted.')},{headers:{'Cache-Control':'no-store'}});}
       if(body.provider==='ultrahuman'){await disconnectUltrahuman(env);await bumpCacheVersion(env.DB);return Response.json({status:'ok',message:L('Připojení je odebrané a data z prstenu smazaná.', 'The connection has been removed and the ring\'s data deleted.')},{headers:{'Cache-Control':'no-store'}});}
-      if(body.provider==='strava'){await disconnectStrava(env);return Response.json({status:'ok',message:L('Připojení je odebrané.', 'The connection has been removed.')},{headers:{'Cache-Control':'no-store'}});}
       if(!['google','intervals'].includes(body.provider)) return Response.json({message:L('Neznámé připojení.', 'Unknown connection.')},{status:400});
       // Loadwise also gives up its access at Google. The owner's token can be the shared Worker secret, which stays.
       if(body.provider==='google'&&!env.USER_IS_OWNER) await revokeGoogle(env);
