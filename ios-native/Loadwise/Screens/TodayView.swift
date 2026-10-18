@@ -158,11 +158,12 @@ struct TodayContent: View {
             ThresholdCheckCard().padding(.top, 12)
         }
 
-        // An earlier day: what it was, without the advice for a day that is over.
-        CoachTextCard(screen: "today", fallbackText: today.summary?.text,
-                      fallbackAdvice: selectedDate == nil ? today.summary?.recommendation : nil, live: selectedDate == nil,
-                      tip: RecoveryTipRows.hasTip(today, selectedDate: selectedDate) ? AnyView(RecoveryTipRows(today: today)) : nil)
-            .padding(.top, 32)
+        // An earlier day shows only its data: the coach speaks about today.
+        if selectedDate == nil {
+            CoachTextCard(screen: "today", fallbackText: today.summary?.text, fallbackAdvice: today.summary?.recommendation,
+                          tip: RecoveryTipRows.hasTip(today, selectedDate: selectedDate) ? AnyView(RecoveryTipRows(today: today)) : nil)
+                .padding(.top, 32)
+        }
     }
 }
 

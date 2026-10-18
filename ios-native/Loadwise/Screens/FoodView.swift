@@ -137,7 +137,11 @@ struct FoodContent: View {
             }
         }
         .padding(.top, 34)
-        CoachTextCard(screen: "food", fallbackText: food.sentence, live: (page.map(\.selectedDate) ?? model.selectedDate) == nil).padding(.top, 16)
+        // An earlier day shows only its data; a day ahead keeps its sentence.
+        let day = page.map(\.selectedDate) ?? model.selectedDate
+        if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {
+            CoachTextCard(screen: "food", fallbackText: food.sentence, live: day == nil).padding(.top, 16)
+        }
 
         MacroCells(macros: food.macros).padding(.top, 26)
         // Pro: the nutrients picked under Živiny → Upravit; the rest is one tap away.
