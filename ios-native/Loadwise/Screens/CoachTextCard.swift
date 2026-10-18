@@ -123,6 +123,9 @@ struct CoachTextCard: View {
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        // Another day: its text at once, not faded over the one before (inside
+        // the animation below, so it wins over it).
+        .transaction(value: live) { $0.animation = nil }
         .animation(.easeInOut(duration: 0.25), value: ai?.text)
     }
 
