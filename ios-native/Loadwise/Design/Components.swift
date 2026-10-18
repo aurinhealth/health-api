@@ -270,6 +270,7 @@ struct FloatingBackButton: View {
 
 private struct FloatingBackKey: EnvironmentKey { static let defaultValue = false }
 private struct ScrollReportKey: EnvironmentKey { static let defaultValue: ((CGFloat) -> Void)? = nil }
+private struct WidgetEditingReportKey: EnvironmentKey { static let defaultValue: ((Bool) -> Void)? = nil }
 
 extension EnvironmentValues {
     /// The page pins its back button (FloatingBackButton); the inline one keeps only its place.
@@ -283,6 +284,13 @@ extension EnvironmentValues {
     var scrollReport: ((CGFloat) -> Void)? {
         get { self[ScrollReportKey.self] }
         set { self[ScrollReportKey.self] = newValue }
+    }
+
+    /// The widgets below are being edited (WidgetBoard): the pinned top bar
+    /// steps aside for their "+" and "Hotovo".
+    var widgetEditingReport: ((Bool) -> Void)? {
+        get { self[WidgetEditingReportKey.self] }
+        set { self[WidgetEditingReportKey.self] = newValue }
     }
 }
 
@@ -373,6 +381,7 @@ private struct TabTopBar<Bar: View>: ViewModifier {
     let bar: Bar
     @Environment(\.scrollReport) private var parent
     @State private var scrolled = false
+    @State private var editingWidgets = false
 
     func body(content: Content) -> some View {
         content
@@ -381,8 +390,11 @@ private struct TabTopBar<Bar: View>: ViewModifier {
                 let now = offset > 56
                 if now != scrolled { withAnimation(.easeOut(duration: 0.2)) { scrolled = now } }
             })
+            .environment(\.widgetEditingReport, { (editing: Bool) in
+                if editing != editingWidgets { withAnimation(.easeOut(duration: 0.2)) { editingWidgets = editing } }
+            })
             .overlay(alignment: .top) {
-                if scrolled {
+                if scrolled && !editingWidgets {
                     HStack(spacing: 10) { bar }
                         .padding(.horizontal, 18)
                         .padding(.top, 6)
