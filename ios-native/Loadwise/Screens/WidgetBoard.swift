@@ -18,6 +18,9 @@ struct WidgetBoard: View {
     @AppStorage private var stored: String
     @State private var dragging: WidgetKind?
     @State private var gallery = false
+    /// How far "+" and "Hotovo" come down so they stay on screen while the page scrolls.
+    @State private var pinned: CGFloat = 0
+    @Environment(\.widgetEditingReport) private var report
 
     init(panel: WidgetPanel, data: WidgetData, editing: Binding<Bool>, editTitle: String? = "Upravit widgety") {
         self.panel = panel
@@ -38,6 +41,7 @@ struct WidgetBoard: View {
             if editing {
                 editHeader
                     .padding(.bottom, 22)
+                    .zIndex(1)
             }
             VStack(spacing: 12) {
                 ForEach(WidgetLayoutStore.rows(shown)) { row in
@@ -50,6 +54,8 @@ struct WidgetBoard: View {
             }
         }
         .sensoryFeedback(.impact(weight: .medium), trigger: editing) { _, now in now }
+        .onChange(of: editing, initial: true) { _, now in report?(now) }
+        .onDisappear { if editing { report?(false) } }
         .task { await loadMissing(items.map(\.kind)) }
         .sheet(isPresented: $gallery) {
             WidgetGallery(panel: panel, data: data, placed: Set(items.map(\.kind))) { kind, size in
@@ -64,6 +70,8 @@ struct WidgetBoard: View {
         editing ? items : items.filter { data.hasData($0.kind) }
     }
 
+    /// The panel's name, and "+" and "Hotovo", which stay at the top of the
+    /// screen wherever the page is scrolled, as on the home screen.
     private var editHeader: some View {
         ZStack {
             SectionLabel(text: panel.title)
@@ -91,8 +99,12 @@ struct WidgetBoard: View {
                 }
                 .buttonStyle(.plain)
             }
+            .offset(y: pinned)
         }
         .frame(height: 36)
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named("pageScroll")).minY } action: { top in
+            pinned = max(0, 8 - top)
+        }
     }
 
     @ViewBuilder private func rowView(_ row: WidgetLayoutRow) -> some View {
