@@ -1495,9 +1495,14 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       delete answer.memory;
       return {...answer,chatId,actions:proposals,coachAllowance,memorySaved:memory,memoryChanges:{saved:memory||null,...changes},costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
-    // A message whose answer failed goes back to the allowance.
-    const reply=(onAnswer,onProgress)=>answerMessage(onAnswer,onProgress).catch(async error=>{await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));throw error;});
-    if(body.stream)return assistantStreamResponse(reply);
+    // A message whose answer failed goes back to the allowance, unless part of
+    // the answer already reached the chat.
+    const reply=(onAnswer,onProgress)=>{
+      let shown=false;
+      const show=onAnswer&&(text=>{if(text)shown=true;onAnswer(text);});
+      return answerMessage(show,onProgress).catch(async error=>{if(!shown)await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));throw error;});
+    };
+    if(body.stream)return assistantStreamResponse(reply,{waitUntil:promise=>ctx.waitUntil(promise)});
     try{return Response.json(await reply(null),{headers:{'Cache-Control':'no-store'}});}
     catch(error){if(error.limit)return Response.json({message:error.message},{status:error.status||429});console.error('Assistant request failed',error);return Response.json({message:L('AI odpověď se nepodařilo připravit.', 'The AI answer couldn\'t be prepared.')},{status:502});}
   }

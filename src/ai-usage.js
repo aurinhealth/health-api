@@ -153,6 +153,15 @@ function limitError(message) {
   return error;
 }
 
+// A call that broke off after it was sent (a stream cut short, a timeout, a
+// lost connection) leaves no usage, yet the model may have worked on it:
+// its reservation stays as its cost. Best effort, as recordAiUsage.
+export async function keepAiReservation(env, slotId, { feature = null, model = null } = {}) {
+  if (!tracked(env) || !slotId) return;
+  await env.DB.prepare("UPDATE ai_usage SET feature = ?, model = ? WHERE id = ? AND user_id = ? AND model = 'pending'")
+    .bind(feature, model || "unknown", slotId, env.USER_ID).run().catch(error => console.error("AI reservation not kept", error?.message || error));
+}
+
 // Best effort: a failed write never costs the user the answer. slotId: the
 // call's pending row (claimAiSlot), which becomes the record.
 export async function recordAiUsage(env, { feature = null, model = null, usage = null, webSearches = 0, slotId = null } = {}) {
