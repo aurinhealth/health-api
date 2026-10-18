@@ -13,6 +13,7 @@ import { daySessions, deviceEnergyExtra } from "./app-training.js";
 import { recoveryToday } from "./recovery-today.js";
 import { cycleState, askPeriodToday, cycleTrainingCaution } from "./cycle-model.js";
 import { qualityDomain } from "./session-intensity.js";
+import { sessionLoad } from "./training-load.js";
 
 const STEP_GOAL = 10000;
 
@@ -42,6 +43,28 @@ export function activeMinutes(rows, date) {
   const week = rows.filter(r => r.id >= monday && r.id <= date);
   if (!week.some(r => r.hrZoneMinutes)) return null;
   return { today: Math.round(counted(rows.find(r => r.id === date))), week: Math.round(week.reduce((s, r) => s + counted(r), 0)), target: 150 };
+}
+
+// A watch workout without a TSS (a gym session, Apple Health, Google) gets
+// one from its average heart rate, so the strain detail can split the day
+// between training and movement (StrainDetailView). Resting HR is the median
+// of the last 30 days, max HR the profile's or from age (Tanaka).
+export function withHeartRateLoad(training, wellness, profile, date) {
+  const completed = Array.isArray(training?.completed) ? training.completed : [];
+  const rest = (Array.isArray(wellness) ? wellness : []).filter(r => r && r.id <= date && r.id >= shift(date, -30)).map(r => num(r.restingHR)).filter(v => v > 0).sort((a, b) => a - b);
+  const age = num(profile?.age);
+  const athlete = { restHr: num(profile?.restHr) || (rest.length ? rest[Math.floor(rest.length / 2)] : null), maxHr: num(profile?.maxHr) || (age ? Math.round(208 - 0.7 * age) : null), sex: profile?.sex || null };
+  if (!athlete.restHr || !athlete.maxHr || !completed.some(a => num(a?.tss) == null)) return training;
+  return {
+    ...training,
+    completed: completed.map(a => {
+      if (!a || num(a.tss) != null) return a;
+      const avgHr = num(a.averageHeartRate ?? a.payload?.average_heartrate), minutes = (num(a.durationHours) || 0) * 60;
+      if (!(avgHr > 0) || !(minutes > 0)) return a;
+      const tss = sessionLoad({ minutes, avgHr, kind: /weight|strength|gym/i.test(String(a.type || "")) ? "strength" : "other" }, athlete);
+      return tss != null ? { ...a, tss, tssFromHeartRate: true } : a;
+    })
+  };
 }
 
 export function dayStrain(rows, date) {
@@ -121,7 +144,23 @@ export function readinessSummary(summary, readiness = {}, checkin = null, hasPla
   return { ...(summary || { text: null }), headline: sick || readiness?.zone === "red" ? L("Den na odpočinek", "A day to recover") : L("Dnes opatrně", "Take care today"), recommendation };
 }
 
-export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null }) {
+// Sleep that began on `date` other than the night, in the order of the day.
+export function napsOn(sessions, date, night) {
+  return (sessions || [])
+    .filter(s => s && s !== night && s.startTime && s.endTime && localDateTime(s.startTime).slice(0, 10) === date && num(s.durationMin) >= 10
+      && (!night?.endTime || Date.parse(s.startTime) >= Date.parse(night.endTime)))
+    .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime))
+    .map(s => ({ start: clockOf(s.startTime), end: clockOf(s.endTime), minutes: Math.round(num(s.durationMin)) }));
+}
+
+// The parts of Today that failed (their paths), by the card they feed: the
+// nights (Spánek) and the drinks (Voda in Jídlo a pití).
+const TODAY_PARTS = { "/health/sleep": "sleep", "/app/api/fluids": "fluids" };
+export function todayUnavailable(failed) {
+  return [...new Set([...failed].map(path => TODAY_PARTS[path]).filter(Boolean))];
+}
+
+export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
   const nights = primaryNights(sessions);
@@ -155,7 +194,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   const debtNow = sleepDebtMinutes(sessions.filter(x => (x.date || String(x.endTime || "").slice(0, 10)) <= date), date, sleepNeedMinutes({ age, goal: sleepSet.goal }));
 
   // Training: planned and completed sessions of the day.
-  const training = daily.training || {};
+  const training = withHeartRateLoad(daily.training || {}, google, profile, date);
   const planned = Array.isArray(training.planned) ? training.planned : [];
   const plannedTss = planned.reduce((s, w) => s + (num(w.tss) || 0), 0);
 
@@ -261,19 +300,22 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     ...recoveryItems,
     ...pillItems
   ];
-  // Done first in the order of the day, then what is still open, then bedtime.
+  // Done first in the order of the day, then what is still open, then bedtime
+  // with the planned wake time (Den draws the night ahead dashed to it).
   const ordered = [...planItems.filter(i => i.done).sort(byTime), ...planItems.filter(i => !i.done),
-    ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), title: L("Do postele", "Bedtime"), detail: (choice.chosen != null ? L("spánek ", "sleep ") : L("potřeba spánku ", "sleep need ")) + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
+    ...(plan ? [{ kind: "bedtime", time: clock(plan.bed), end: clock(plan.wake), title: L("Do postele", "Bedtime"), detail: (choice.chosen != null ? L("spánek ", "sleep ") : L("potřeba spánku ", "sleep need ")) + Math.floor(tonightNeed / 60) + " h " + String(tonightNeed % 60).padStart(2, "0") + " min", done: false }] : [])
   ];
 
   return {
     status: "ok",
     date,
+    // Parts that could not be read this time (entrypoint.js todayUnavailable): their card says so.
+    unavailable: Array.isArray(unavailable) ? unavailable : [],
     // Connected services that need the user (connection-health.js), shown at the top.
     connectionProblems: Array.isArray(connectionProblems) ? connectionProblems : [],
     // provisional: the baseline is carried over from another source until the
     // new one has 14 days of its own (recovery-model.js sourceBaseline).
-    readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional },
+    readiness: { score: readiness.score, zone: readiness.zone, missing: readiness.missing || [], flags: readiness.flags || [], provisional: !!readiness.provisional, provisionalDays: readiness.provisional ? readiness.provisionalDays ?? null : null },
     week,
     // The morning check-in: fresh, normal, tired, sick or null (not answered).
     checkin: checkin || null,
@@ -286,6 +328,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       start: clockOf(night.startTime),
       end: clockOf(night.endTime)
     } : null,
+    // The day's naps for Dnes → Den: each sleep that began today after the night.
+    naps: napsOn(sessions, date, night),
     strain: { score: strainNow, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: !daySession.length }), rest: !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || null } },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
     // Today's HRV shows even before its source has the 14 days a baseline needs.

@@ -2,11 +2,13 @@ import { classifyPlannedWorkout } from "./planned-workout.js";
 import { trainingStatus } from './training-status.js';
 import { qualityDomain } from './session-intensity.js';
 import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
-import { localToday } from "./user-time.js";
+import { localToday, localDateTime } from "./user-time.js";
+import { cycleState, cycleTrainingCaution } from "./cycle-model.js";
 import { L, plural as pluralWord } from "./lang.js";
 import { readinessFor } from "./readiness.js";
 import { manualReadinessFor } from "./morning-checkin.js";
 import { readinessParts } from "./app-health.js";
+import { sessionLoad } from "./training-load.js";
 
 const n=(v,d=null)=>v===null||v===undefined||v===""?d:Number.isFinite(Number(v))?Number(v):d;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -48,6 +50,23 @@ function allWeekActivities(week){
     for(const a of row?.daily?.training?.planned||[]) out.push({...a,date:a.date||row.date,planned:true});
   }
   return out;
+}
+// FTP-free load of a watch workout: resting HR (median of 30 days), max HR
+// from age (Tanaka) and sex, as own-fitness.js loadAthlete has them.
+function hrAthlete(health,profile,date){
+  const rest=(Array.isArray(health?.wellness)?health.wellness:[]).filter(r=>{const age=diffDays(date,r.id);return age!=null&&age>=0&&age<=30;}).map(r=>n(r.restingHR)).filter(v=>v>0).sort((a,b)=>a-b);
+  const age=n(profile?.age);
+  return {restHr:rest.length?rest[Math.floor(rest.length/2)]:null,maxHr:age?Math.round(208-0.7*age):null,sex:profile?.sex||null};
+}
+function withHeartRateLoad(activities,athlete){
+  if(!athlete.restHr||!athlete.maxHr)return activities;
+  return activities.map(a=>{
+    if(!a.completed||n(a.tss)!=null||!(isRide(a)||isRun(a)))return a;
+    const avgHr=n(a.averageHeartRate??a.payload?.average_heartrate),minutes=n(a.durationHours,0)*60;
+    if(!(avgHr>0)||!(minutes>0))return a;
+    const tss=sessionLoad({minutes,avgHr,kind:isRun(a)?"run":"ride"},athlete);
+    return tss!=null?{...a,tss,tssFromHeartRate:true}:a;
+  });
 }
 function latestWellness(fitness,date){
   const rows=Array.isArray(fitness?.wellness)?fitness.wellness:[];
@@ -212,12 +231,14 @@ const WORDS_EN={
 };
 
 
-export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null}={}){
+export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferences={},availabilityMinutes=null,goal=null,manualReadiness=null,capabilities={},sport="ride",athleteState=null,focus=null,profile=null,checkin=null,upcomingTest=null,recoveryTime=null,today=null}={}){
   const policy=trainingStatus(athleteState);
   sport=sport==="run"?"run":"ride";
   const W=L(WORDS_CS,WORDS_EN)[sport],isSport=sport==="run"?isRun:isRide,hardOf=sport==="run"?isHardRun:isHard,run=sport==="run";
   const targetDate=isoDate(date)||localToday();
-  const weekActivities=allWeekActivities(week);
+  // Workouts only the watch recorded have no TSS: their heart-rate load
+  // (hrTSS, training-load.js) lets hardOf see a hard session from the watch.
+  const weekActivities=withHeartRateLoad(allWeekActivities(week),hrAthlete(health,profile,targetDate));
   const completedAll=weekActivities.filter(a=>a.completed&&isSport(a));
   const completed=completedAll.filter(a=>{const d=diffDays(targetDate,a.date);return d!=null&&d>=0&&d<=6;});
   const planned=weekActivities.filter(a=>{if(!a.planned||!isSport(a))return false;const d=diffDays(a.date,targetDate);return d!=null&&d>=0&&d<=14;});
@@ -226,7 +247,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // on by the training load alone, as recovery by then is not known yet.
   // Missing data no longer makes it yellow: every hard session planned for the
   // day after tomorrow used to be eased that way (Petr, 2026-10-14).
-  const now=localToday(),bodyDate=targetDate>now?now:targetDate,daysAhead=Math.max(0,diffDays(targetDate,now)??0),farAhead=daysAhead>=2,signalDate=farAhead?targetDate:bodyDate;
+  // `today`: the day the caller sees as today (coach evaluation), else the user's.
+  const now=isoDate(today)||localToday(),bodyDate=targetDate>now?now:targetDate,daysAhead=Math.max(0,diffDays(targetDate,now)??0),farAhead=daysAhead>=2,signalDate=farAhead?targetDate:bodyDate;
   const wellness=latestWellness(fitness,bodyDate);
   const ctl=n(wellness.ctl),atl=n(wellness.atl),tsb=n(wellness.tsb,ctl!=null&&atl!=null?ctl-atl:null),ramp=n(wellness.rampRate??wellness.ramp_rate);
   const wellnessSleep=(Array.isArray(fitness?.wellness)?fitness.wellness:[]).filter(r=>{const age=diffDays(signalDate,r.id);return age!=null&&age>=0&&age<=1&&n(r.sleepSecs)>7200;}).sort((a,b)=>String(b.id).localeCompare(String(a.id)))[0];
@@ -346,11 +368,22 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
 
   const lastRide=completedAll.map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
   const lastHard=completedAll.filter(hardOf).map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0).sort((a,b)=>a-b)[0];
-  const qualityOk=!novice&&(lastHard==null||lastHard>=2)&&!(lastRide!=null&&lastRide>=7);
+  // The other sport tires the same legs and heart: a hard run counts before a
+  // hard ride (and the other way round) for the 48 h rule and the week's quality.
+  const otherIs=run?isRide:isRun,otherHardOf=run?isHard:isHardRun;
+  const otherHardDays=weekActivities.filter(a=>a.completed&&otherIs(a)&&otherHardOf(a)).map(a=>diffDays(targetDate,a.date)).filter(d=>d!=null&&d>=0&&d<=6);
+  const lastOtherHard=otherHardDays.length?Math.min(...otherHardDays):null;
+  const otherRecent=lastOtherHard!=null&&lastOtherHard<2,hardAll7=hard7+otherHardDays.length;
+  const qualityOk=!novice&&(lastHard==null||lastHard>=2)&&!otherRecent&&hardAll7<3&&!(lastRide!=null&&lastRide>=7);
   let kind="endurance";
   const planText=txt(plannedToday?.name)+" "+txt(goal?.focus);
   const KIND_OF={recovery:"recovery",endurance:"endurance",tempo:"tempo",sweet_spot:"sweet_spot",threshold:"threshold",vo2max:"vo2"};
-  if(plannedInfo?.system){
+  // A kind asked for (a chat card, the generator's chosen kind, a library
+  // workout) is what the card shows, over the day's plan in Intervals.icu; the
+  // checks below still ease it (Revize doporučování tréninků 2026-10-16, běh 10).
+  const askedKind=goal?.asked?{...KIND_OF,long_endurance:"long_endurance"}[txt(goal.focus)]||null:null;
+  if(askedKind&&!["race","openers"].includes(phase)) kind=askedKind;
+  else if(plannedInfo?.system){
     kind=KIND_OF[plannedInfo.system]||"endurance";
     const info=plannedInfo.minutes?" ("+plannedInfo.minutes+" min"+(plannedInfo.intensityFactor?", IF "+plannedInfo.intensityFactor.toFixed(2):"")+")":"";
     rationale.push(L("V Intervals.icu máš na tento den naplánováno „"+(plannedToday.name||"trénink")+"“"+info+" – doporučení se drží plánu.","You have “"+(plannedToday.name||"a workout")+"” planned for this day in Intervals.icu"+info+" – the recommendation follows the plan."));
@@ -374,13 +407,19 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     if(lastRide==null||lastRide>=7){
       kind="endurance";returning=true;
       rationale.push(lastRide==null?W.none:W.off(lastRide));
-    } else if(phase==="taper"){
-      // One short, sharp session keeps the form; everything else is easy and shorter.
-      if(readiness==="green"&&hard7===0&&eventDays>=3){kind="vo2";rationale.push(L("Krátká ostrá intenzita udrží formu, objem je nižší.","Short, sharp intensity keeps your form while the volume is lower."));}
-      else kind="endurance";
     } else if(novice){
       kind="endurance";
       rationale.push(W.novice);
+    } else if(otherRecent||hardAll7>=3){
+      kind="endurance";
+      rationale.push(otherRecent
+        ?(run?L("Tvrdá jízda byla "+(lastOtherHard===0?"dnes":"včera")+" – běh dnes lehce, nohy potřebují 48 h.","A hard ride was "+(lastOtherHard===0?"today":"yesterday")+" – an easy run today, the legs need 48 h."):L("Tvrdý běh byl "+(lastOtherHard===0?"dnes":"včera")+" – jízda dnes lehce, nohy potřebují 48 h.","A hard run was "+(lastOtherHard===0?"today":"yesterday")+" – an easy ride today, the legs need 48 h."))
+        :L("Za posledních 7 dní byly už 3 tvrdé tréninky kola a běhu dohromady – dnes lehce.","There have already been 3 hard rides and runs together in the last 7 days – easy today."));
+    } else if(phase==="taper"){
+      // After the beginner and the other sport's hard day (Revize 2026-10-16).
+      // One short, sharp session keeps the form; everything else is easy and shorter.
+      if(readiness==="green"&&hard7===0&&eventDays>=3){kind="vo2";rationale.push(L("Krátká ostrá intenzita udrží formu, objem je nižší.","Short, sharp intensity keeps your form while the volume is lower."));}
+      else kind="endurance";
     } else if(readiness==="green"&&hard7===0){
       // The quality system trained longest ago (by feedback), in phase order.
       const order=sport==="run"?(phase==="build"?["threshold","vo2max","tempo"]:["threshold","tempo","vo2max"]):phase==="build"?["threshold","vo2max","sweet_spot"]:["sweet_spot","threshold","vo2max"];
@@ -397,18 +436,60 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   }
 
   const adaptations=[];
+  // One check for every session, whatever chose it (the plan in Intervals.icu,
+  // a kind asked for in the chat or the week plan, the phase, the coach's own
+  // pick): the condensed kinds first, so the checks see what is ridden, then
+  // the body (red, signs of illness, yellow), then the load (beginner, a
+  // break, 48 h after a hard day of either sport, two quality days a week,
+  // legs after the gym, a recovery week). Only the race and its openers keep
+  // their kind.
+  // An asked kind keeps its kind in a short window (2×10 min sweet spot fits 45 min).
+  if(requestedMinutes<(sport==="run"?45:55)&&kind==="long_endurance"){kind=askedKind?"endurance":"tempo";adaptations.push(L("trénink zhuštěn do dostupného času","workout condensed into the available time"));}
+  if(!askedKind&&requestedMinutes<(sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push(L("krátké časové okno","short time window"));}
+  const QUALITY=["tempo","sweet_spot","threshold","vo2"],quality=()=>QUALITY.includes(kind);
+  // The longest session the day allows (red, illness, a break), applied with the length below.
+  let cap=null;const capAt=(minutes,text)=>{if(!cap||minutes<cap.minutes)cap={minutes,text};};
+  // Breathing or temperature in sleep well above the athlete's own, or a sick
+  // morning check-in: no intensity and short, as Today says.
+  const illness=(body.flags||[]).some(f=>/^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))||checkin==="sick";
+  // The cycle (cycle-model.js) as Today eases it: a bleeding day with heavy
+  // flow, cramps or fatigue makes a hard ride or run easy, unless the athlete
+  // kept the plan that day (Revize doporučování tréninků 2026-10-16, nález 11).
+  const cycleIn=profile?.cycle||null,cycleDay=cycleIn?.days?.find?.(d=>d.date===targetDate);
+  const cycleEase=Boolean(cycleIn&&!cycleDay?.keepPlan&&cycleTrainingCaution(cycleState({settings:cycleIn.settings,days:cycleIn.days,date:targetDate})));
+  // Regenerace (recovery-time.js): hard training waits until hardFrom, not
+  // only two calendar days; a day it does not reach by 18:00 stays easy
+  // (Revize doporučování tréninků 2026-10-16, nález 12).
+  const hardFrom=recoveryTime?.readyAt?localDateTime(recoveryTime.readyAt):null,notRecovered=Boolean(hardFrom&&hardFrom>targetDate+"T18:00");
+  // No ride in the data at all with a known fitness says nothing about a break.
+  const offBreak=lastRide!=null&&lastRide>=7;
   if(["race","openers"].includes(kind)){
     if(readiness==="red")adaptations.push(L("nízká připravenost před závodem: aktivaci zkrať a hlavně odpočívej","low readiness before the race: shorten the openers and above all rest"));
-  } else if(readiness==="red"){
-    // A planned easy day stays easy; anything harder drops to endurance or recovery.
-    if(kind!=="recovery")kind=(score!=null&&score<20)||(tsb!=null&&tsb<=-30)?"recovery":"endurance";
-    adaptations.push(L("nízká připravenost: bez intenzity","low readiness: no intensity"));
-  } else if(readiness==="yellow"&&["vo2","threshold","sweet_spot"].includes(kind)){
-    kind=requestedMinutes<=75?"endurance":"tempo";
-    adaptations.push(L("střední readiness: snížit intenzitu nebo objem kvality","moderate readiness: lower the intensity or volume of the quality work"));
-  }
-  if(hard7>=2&&["vo2","threshold","sweet_spot"].includes(kind)){
-    kind="endurance"; adaptations.push(L("dodržen limit kvalitních dnů","quality-day limit respected"));
+  } else {
+    if(readiness==="red"){
+      // Red is rest or a short, easy spin, whatever the plan or the free time.
+      kind="recovery";capAt(run?30:45,L("nízká připravenost","low readiness"));
+      adaptations.push(L("nízká připravenost: jen krátká regenerace","low readiness: only a short recovery session"));
+    } else if(illness){
+      if(quality()||kind==="long_endurance")kind="endurance";
+      capAt(run?40:60,L("možný začátek nemoci","possible oncoming illness"));
+      adaptations.push(L("dech nebo teplota ve spánku jsou vyšší, může jít o začátek nemoci: bez intenzity a krátce","breathing or temperature in sleep are raised, which may be an oncoming illness: no intensity and short"));
+    } else if(cycleEase&&(quality()||kind==="long_endurance")){
+      kind="endurance";capAt(run?30:45,L("menstruace","period"));
+      adaptations.push(L("menstruace se silným krvácením, křečemi nebo únavou: dnes lehce a krátce","period with heavy flow, cramps or fatigue: easy and short today"));
+    } else if(readiness==="yellow"&&quality()){
+      kind="endurance";
+      adaptations.push(L("střední připravenost: bez intenzity","moderate readiness: no intensity"));
+    }
+    if(quality()){
+      const why=novice?W.novice:offBreak?W.off(lastRide):lastHard!=null&&lastHard<2?W.recent:notRecovered?L("regenerace po posledních trénincích potrvá do "+hardFrom.slice(8,10).replace(/^0/,"")+". "+hardFrom.slice(5,7).replace(/^0/,"")+". "+hardFrom.slice(11,16),"recovery from the last sessions lasts until "+hardFrom.slice(0,10)+" "+hardFrom.slice(11,16)):otherRecent?L("tvrdý trénink druhého sportu byl před méně než 48 h","a hard session of the other sport was less than 48 h ago"):hard7>=2||hardAll7>=3?L("dodržen limit kvalitních dnů","quality-day limit respected"):lowerGym.length?W.gym:recoveryWeek&&!plannedInfo?.system?L("regenerační týden: bez intenzity","recovery week: no intensity"):null;
+      if(why){kind=recoveryWeek&&!plannedInfo?.system&&!novice&&!offBreak&&requestedMinutes<=75?"recovery":"endurance";adaptations.push(why);}
+    }
+    if(offBreak&&!novice){
+      returning=true;
+      if(kind==="long_endurance")kind="endurance";
+      capAt(run?45:90,L("návrat po pauze","returning after a break"));
+    }
   }
   // A threshold test the athlete planned (threshold-check.js): the two days
   // before it stay without intensity, the day before short and easy.
@@ -417,13 +498,17 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     if(["vo2","threshold","sweet_spot","tempo","long_endurance"].includes(kind)&&!plannedInfo?.system)kind=testDays===1?"recovery":"endurance";
     adaptations.push(testDays===1?L("zítra je test: dnes jen lehce a krátce","test tomorrow: just short and easy today"):L("pozítří je test: bez intenzity","test in two days: no intensity"));
   }
-  if(lowerGym.length&&["vo2","threshold"].includes(kind)){
-    kind="endurance"; adaptations.push(W.gym);
-  }
-  if(recoveryWeek&&["vo2","threshold","sweet_spot","tempo"].includes(kind)&&!plannedInfo?.system){kind=requestedMinutes<=75?"recovery":"endurance";adaptations.push(L("regenerační týden: bez intenzity","recovery week: no intensity"));}
-  if(requestedMinutes<(sport==="run"?45:55)&&kind==="long_endurance"){kind="tempo";adaptations.push(L("trénink zhuštěn do dostupného času","workout condensed into the available time"));}
-  if(requestedMinutes<(sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push(L("krátké časové okno","short time window"));}
 
+  // Back from Nemoc (athlete-state.js recoveredAt): the first three days stay
+  // easy and shorter, the first one only recovery, whatever was planned.
+  const sinceIll=!policy.paused&&athleteState?.recoveredAt?diffDays(targetDate,athleteState.recoveredAt):null;
+  if(sinceIll!=null&&sinceIll>=0&&sinceIll<=2&&!["race","openers"].includes(kind)){
+    const easy=sinceIll===0?"recovery":"endurance";
+    if(kind!=="recovery"&&kind!==easy)kind=easy;
+    returning=true;
+    capAt(sinceIll===0?(run?30:45):(run?40:75),L("návrat po nemoci","back after being ill"));
+    adaptations.push(sinceIll===0?L("první den po nemoci: jen lehce a krátce","first day after being ill: just short and easy"):L("návrat po nemoci: "+(sinceIll===1?"druhý":"třetí")+" den bez intenzity","back after being ill: day "+(sinceIll+1)+" without intensity"));
+  }
   // A beginner's ride grows like a run: at most 10 % over the longest ride of
   // the last two weeks, never below an hour.
   const noviceRideLimit=(()=>{
@@ -452,6 +537,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
     if(noviceRideLimit&&requestedMinutes>noviceRideLimit.minutes){rationale.push(L("Délka "+noviceRideLimit.minutes+" min z dostupných "+requestedMinutes+" min: ","Duration "+noviceRideLimit.minutes+" of the available "+requestedMinutes+" min: ")+noviceRideLimit.reason+".");requestedMinutes=noviceRideLimit.minutes;}
   }
   if(noviceRideLimit&&kind==="long_endurance"&&requestedMinutes<longMinutes)kind="endurance";
+  if(cap&&requestedMinutes>cap.minutes){rationale.push(L("Délka "+cap.minutes+" min z "+requestedMinutes+" min: "+cap.text+".","Duration "+cap.minutes+" of "+requestedMinutes+" min: "+cap.text+"."));requestedMinutes=cap.minutes;}
   // Running load grows slowly: tendons and joints adapt later than the heart
   // and lungs. Without a race, no run is more than 10 % longer than the
   // longest one of the last two weeks (30 min after a break).

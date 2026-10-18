@@ -44,7 +44,7 @@ enum WidgetPanel: String {
             // weight) are on Health.
             return [.init(kind: .food, size: .medium), .init(kind: .plan, size: .medium), .init(kind: .steps, size: .medium)]
         case .health:
-            return [.init(kind: .sleep, size: .medium), .init(kind: .sleepDebt, size: .small), .init(kind: .oxygen, size: .small),
+            return [.init(kind: .journal, size: .medium), .init(kind: .sleep, size: .medium), .init(kind: .sleepDebt, size: .small), .init(kind: .oxygen, size: .small),
                     .init(kind: .respiration, size: .small), .init(kind: .skinTemp, size: .small), .init(kind: .bedtime, size: .medium),
                     .init(kind: .hrv, size: .medium), .init(kind: .restingHR, size: .small),
                     .init(kind: .weight, size: .medium), .init(kind: .bodyFat, size: .medium), .init(kind: .muscle, size: .medium)]
@@ -62,7 +62,7 @@ enum WidgetPanel: String {
         case .today: return [.sleep, .vo2max, .drinks, .form, .activeCalories, .thisWeek, .sleepDebt, .oxygen]
         case .health: return [.steps, .vo2max, .form, .drinks, .food, .activeCalories]
         case .training: return [.musclesFigure, .musclesGlance, .sleep, .hrv, .restingHR, .steps, .food, .weight]
-        case .food: return [.food, .macros, .weight, .steps, .activeCalories, .sleep]
+        case .food: return [.weekCalories, .food, .macros, .weight, .steps, .activeCalories, .sleep]
         }
     }
 }
@@ -114,9 +114,13 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     /// Svaly (MuscleViews.swift): with the figure, or in short with the rings.
     case musclesFigure, musclesGlance
     case food, drinks, macros
+    /// Týdenní kalorie (FoodWeekWidget.swift): off until added; loads its week itself.
+    case weekCalories
     case sleep, sleepDebt, bedtime
     case steps, activeCalories
     case weight, bodyFat, muscle
+    /// Deník (JournalViews.swift): yesterday's open questions and the biggest effects.
+    case journal
 
     var id: String { rawValue }
 
@@ -138,6 +142,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .food: return "Jídlo a pití"
         case .drinks: return "Pití a hydratace"
         case .macros: return "Makroživiny"
+        case .weekCalories: return "Týdenní kalorie"
         case .sleep: return "Spánek"
         case .sleepDebt: return "Spánkový dluh"
         case .bedtime: return "Dnešní noc"
@@ -146,14 +151,15 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .weight: return "Váha"
         case .bodyFat: return "Tělesný tuk"
         case .muscle: return "Svalová hmota"
+        case .journal: return "Deník"
         }
     }
 
     var section: WidgetSection {
         switch self {
-        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen: return .health
+        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen, .journal: return .health
         case .form, .thisWeek, .sessions, .plan, .zones, .musclesFigure, .musclesGlance: return .training
-        case .food, .drinks, .macros: return .food
+        case .food, .drinks, .macros, .weekCalories: return .food
         case .sleep, .sleepDebt, .bedtime: return .sleep
         case .steps, .activeCalories: return .movement
         case .weight, .bodyFat, .muscle: return .body
@@ -167,7 +173,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
             return [.small, .medium, .large]
         case .respiration, .skinTemp, .oxygen, .zones, .food, .drinks, .sleepDebt, .muscle, .musclesGlance:
             return [.small, .medium]
-        case .sessions, .plan, .macros, .bedtime:
+        case .sessions, .plan, .macros, .bedtime, .journal, .weekCalories:
             return [.medium]
         }
     }
@@ -186,7 +192,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .respiration, .skinTemp, .oxygen, .sleep, .sleepDebt, .bedtime, .bodyFat: return .health
         case .vo2max, .form, .thisWeek, .sessions, .zones, .activeCalories: return .training
         case .drinks, .macros: return .food
-        case .muscle, .musclesFigure, .musclesGlance: return nil
+        case .muscle, .musclesFigure, .musclesGlance, .journal, .weekCalories: return nil
         }
     }
 }
@@ -231,8 +237,15 @@ enum WidgetLayoutStore {
             seen.insert(kind)
             out.append(PlacedWidget(kind: kind, size: size))
         }
+        // Deník came to Zdraví after the layouts were saved: on top, until removed.
+        if panel == .health, !seen.contains(.journal), !UserDefaults.standard.bool(forKey: journalRemovedKey) {
+            out.insert(PlacedWidget(kind: .journal, size: .medium), at: 0)
+        }
         return out
     }
+
+    /// Set when the athlete takes Deník off Zdraví, so it doesn't come back.
+    static let journalRemovedKey = "widgets.journalRemoved"
 
     static func encode(_ items: [PlacedWidget]) -> String {
         let stored = items.map { Stored(kind: $0.kind.rawValue, size: $0.size.rawValue) }
@@ -338,7 +351,9 @@ struct WidgetData {
         // it waits in the widget gallery.
         case .muscle: return health?.weight?.muscle != nil
         // The widget loads the muscles itself.
-        case .musclesFigure, .musclesGlance: return true
+        case .musclesFigure, .musclesGlance, .weekCalories: return true
+        // On unless turned off in Nastavení → Deník or its ··· menu.
+        case .journal: return JournalSwitch.isOn
         case .form: return training?.form != nil
         case .thisWeek: return training != nil
         case .sessions: return !(training?.sessions ?? []).isEmpty
@@ -426,15 +441,21 @@ struct PanelWidget: View {
 
     private var route: AppRoute? {
         switch item.kind {
-        case .restingHR, .hrv: return .heart
+        case .hrv: return .metric(.hrv)
+        case .restingHR: return .metric(.restingHR)
+        case .respiration: return .metric(.respiration)
+        case .skinTemp: return .metric(.temperature)
+        case .oxygen: return .metric(.oxygen)
         case .vo2max: return .vo2max
-        case .respiration, .skinTemp, .oxygen, .sleep, .sleepDebt: return .sleep
+        case .sleep, .sleepDebt: return .sleep
         case .bedtime: return .sleepSettings
         case .form: return .form
         case .zones: return .zones
         case .activeCalories: return .activeEnergy
         case .steps: return .steps
-        case .weight, .bodyFat: return .weight
+        case .weight: return .weight
+        case .bodyFat: return .metric(.bodyFat)
+        case .muscle: return .metric(.muscle)
         // The large one has its own button; the card itself opens Svaly (content).
         case .musclesFigure: return item.size == .large ? nil : .muscles
         case .musclesGlance: return .muscles
@@ -505,7 +526,7 @@ struct PanelWidget: View {
         case .zones:
             if let value = data.training?.zones { ZonesWidget(zones: value, size: item.size) }
         case .food:
-            if let t = data.today { FoodWidget(nutrition: t.nutrition, size: item.size) }
+            if let t = data.today { FoodWidget(nutrition: t.nutrition, size: item.size, waterFailed: t.unavailable?.contains("fluids") == true) }
         case .drinks:
             if let f = data.food { DrinksCard(water: f.water, size: item.size) }
         case .macros:
@@ -536,6 +557,10 @@ struct PanelWidget: View {
             }
         case .bodyFat:
             if let value = data.health?.weight?.bodyFat { BodyFatWidget(fat: value, size: item.size) }
+        case .journal:
+            JournalHealthCard().allowsHitTesting(linked)
+        case .weekCalories:
+            FoodWeekWidget()
         }
     }
 

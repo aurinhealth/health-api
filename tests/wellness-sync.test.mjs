@@ -29,6 +29,12 @@ test("Google wellness per day: daily values, summed steps, the night's main slee
   assert.equal(days["2026-09-01"], undefined);
 });
 
+test("WHOOP and Ultrahuman nights are never sent to Intervals.icu", async () => {
+  const days = await googleWellness(db(), 7, "2026-09-25", [{ ...sleep[0], source: "whoop", durationMin: 480 }, { ...sleep[0], date: "2026-10-02", source: "ultrahuman" }, { ...sleep[0], source: "apple-health" }]);
+  assert.equal(days["2026-10-01"].sleepSecs, 412 * 60);
+  assert.equal(days["2026-10-02"], undefined);
+});
+
 test("only empty fields or values this sync wrote are written", () => {
   const google = { d: { restingHR: 51, hrv: 64, steps: 9000 } };
   // HRV comes from a Garmin in Intervals.icu: left alone. Steps were ours: updated.
@@ -53,8 +59,9 @@ test("one pass writes to Intervals.icu, remembers, and does not repeat", async (
   puts.length = 0;
   await syncWellnessToIntervals(env, deps);
   assert.deepEqual(puts, []);
-  // Needs both services.
-  assert.equal((await syncWellnessToIntervals({ ...env, CONNECTED_PROVIDERS: ["intervals"] }, deps)).status, "skipped");
+  // Needs Intervals.icu; Apple Health days go without Google Health.
+  assert.equal((await syncWellnessToIntervals({ ...env, CONNECTED_PROVIDERS: ["google"] }, deps)).status, "skipped");
+  assert.equal((await syncWellnessToIntervals({ ...env, CONNECTED_PROVIDERS: ["intervals"] }, deps)).status, "ok");
 });
 
 test("Synchronizace: only the chosen health data goes to Intervals.icu", async () => {

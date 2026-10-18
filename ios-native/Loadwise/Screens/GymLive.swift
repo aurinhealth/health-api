@@ -26,14 +26,13 @@ struct LiveGymView: View {
     @State private var restNext: String?
     @State private var picking = false
     @State private var historyFor: String?
+    @State private var technique: String?
     @State private var summary = false
     @State private var rating = false
     @State private var saving = false
     @State private var loaded = false
     @State private var error: String?
     @State private var saveTask: Task<Void, Never>?
-    /// The day as it was before this screen (Zahodit trénink puts it back).
-    @State private var original: GymDay?
     @State private var confirmClose = false
     @State private var discarded = false
     @AppStorage("restSets") private var restSets = 90
@@ -61,9 +60,18 @@ struct LiveGymView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .task { await load() }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) } }
-        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) } }
+        .onAppear {
+            UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true
+            GymActivityInbox.handler = { activityAction($0) }
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false; model.immersive = false; Task { await Reminders.restEnds(at: nil) }
+            GymActivityInbox.handler = nil
+            GymLiveActivity.end()
+        }
+        .onChange(of: restEnd) { _, end in Task { await Reminders.restEnds(at: end) }; syncActivity() }
+        .onChange(of: day) { _, _ in syncActivity() }
+        .onChange(of: summary) { _, _ in syncActivity() }
         .confirmationDialog("Ukončit trénink?", isPresented: $confirmClose, titleVisibility: .visible) {
             Button("Pokračovat později") { dismiss() }
             Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
@@ -74,6 +82,7 @@ struct LiveGymView: View {
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
             ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
         }
+        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
         // After Dokončit, as after a planned session: thumbs for each exercise.
         .sheet(isPresented: $rating, onDismiss: { dismiss() }) {
             GymRatingSheet(date: date, exercises: day?.exerciseNames ?? [])
@@ -154,7 +163,8 @@ struct LiveGymView: View {
                              onEdit: { set, kg, reps in edit(set, kg: kg, reps: reps) },
                              onAddSet: { addSet(exercise) },
                              onRemove: { set in remove(set) },
-                             onHistory: { historyFor = exercise.name })
+                             onHistory: { historyFor = exercise.name },
+                             onTechnique: { technique = exercise.name })
         } else {
             Button { expanded.insert(exercise.id) } label: { collapsed(exercise) }
                 .buttonStyle(.plain)
@@ -312,7 +322,6 @@ struct LiveGymView: View {
         loaded = true
         var sheet = GymDay(date: date, values: [], cancelled: nil)
         if !model.demo, let stored = try? await model.gymDay(date: date) { sheet = stored }
-        original = sheet
         sheet.ensureHeader(date: date)
         let fresh = sheet.startedAt == nil
         if fresh { sheet.markStarted(Date()) }
@@ -381,6 +390,29 @@ struct LiveGymView: View {
         persist()
     }
 
+    // MARK: Live Activity
+
+    /// The lock screen and Dynamic Island follow the sheet (GymLiveActivity).
+    private func syncActivity() {
+        GymLiveActivity.sync(day: summary || discarded ? nil : day, restStart: nil, restEnd: restEnd)
+    }
+
+    /// +30 s, Přeskočit pauzu and Série hotová from the lock screen.
+    private func activityAction(_ action: GymActivityAction) {
+        switch action {
+        case .extend:
+            if let end = restEnd { restEnd = max(end, Date()).addingTimeInterval(30) }
+        case .skip:
+            restEnd = nil
+        case .complete(let row):
+            restEnd = nil
+            if let set = day?.exercises.flatMap(\.sets).first(where: { $0.row == row && !$0.done }) {
+                toggle(set, kg: "", reps: "")
+            }
+        }
+        syncActivity()
+    }
+
     /// "další 82,5 × 6".
     static func describe(_ set: GymSet) -> String {
         let kg = LiftWeight.shown(set.plannedKg).map { $0 + " × " } ?? ""
@@ -422,21 +454,22 @@ struct LiveGymView: View {
         }
     }
 
-    /// Zahodit trénink: the day goes back to how it was before this screen
-    /// (a day without a plan is left empty), the sets of today are not kept.
+    /// Zahodit trénink: the workout leaves the day with its plan, the sets of
+    /// today are not kept.
     private func discard() async {
         discarded = true
         saveTask?.cancel()
         restEnd = nil
         if !model.demo {
             do {
-                try await model.saveGym(original ?? GymDay(date: date, values: [], cancelled: nil), date: date)
+                try await model.api.discardGym(date: date)
             } catch {
                 discarded = false
                 self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
                 return
             }
             await model.refreshTraining()
+            await model.refresh()
         }
         dismiss()
     }
@@ -487,13 +520,7 @@ struct LiveGymView: View {
                 return
             }
             // A session with sets goes to the apps chosen in Synchronizace.
-            if !names.isEmpty, let start = next.startedAt {
-                let minutes = max(1, next.loggedMinutes ?? Int((Date().timeIntervalSince(start) / 60).rounded()))
-                let sets = next.exercises.filter { $0.doneCount > 0 }.map { $0.name + ": " + GymCoach.setsLine($0.sets) }.joined(separator: "\n")
-                let activity = ActivityToSync(key: "gym:" + date, sport: "gym", name: next.planName ?? L10n.tr("Silový trénink"), date: date,
-                                              start: start, minutes: minutes, notes: sets)
-                await model.shareActivity(activity)
-            }
+            await model.shareGym(next, date: date)
             await model.refreshTraining()
             if !names.isEmpty { rating = true; return }
         }

@@ -5,9 +5,13 @@ name: iOS native app
 # Artifacts (Actions → this run → Artifacts):
 # - Loadwise-native-unsigned.ipa: install with Sideloadly (free Apple ID,
 #   valid for 7 days, then install again). It sits next to the Capacitor app.
+#   Built on main and by hand only: on a pull request the Release build took
+#   about 12 of the run's 28 minutes, and after the merge the TestFlight
+#   archive (ios-testflight.yml) builds Release again anyway.
 # - Loadwise-native-screens: whole-screen snapshots in light and dark mode
 #   from the sample data, plus simulator screenshots of the running app
-#   (site/: the English, light-mode shots the website uses).
+#   (site/: the English, light-mode shots the website uses; smoke/: each step
+#   of the smoke test Vydat relies on).
 
 on:
   workflow_dispatch:
@@ -34,7 +38,7 @@ concurrency:
 jobs:
   build:
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: ios-native
@@ -118,8 +122,22 @@ jobs:
             xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/${route%%/*}.png"
           done
 
+      # Before a release (Vydat checks this run): the app tapped through like a
+      # person would, from a new phone's sign-in into the sample data and across
+      # the main screens (LoadwiseUITests/SmokeTests.swift). Fails on a crash or a
+      # missing screen; a screenshot of each step goes to smoke/.
+      - name: Smoke test of the main screens
+        env:
+          TEST_RUNNER_SMOKE_DIR: ${{ github.workspace }}/screens/smoke
+        run: |
+          xcrun simctl uninstall "${{ steps.sim.outputs.udid }}" eu.petrfitnessdata.loadwise.native || true
+          xcodebuild -project Loadwise.xcodeproj -scheme LoadwiseSmoke -configuration Debug \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO test
+
       # Unsigned: Sideloadly signs it with the user's Apple ID.
       - name: Build for iPhone
+        if: github.event_name != 'pull_request'
         run: |
           xcodebuild -project Loadwise.xcodeproj -scheme Loadwise -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
@@ -134,6 +152,7 @@ jobs:
           (cd ipa && zip -qry "$GITHUB_WORKSPACE/Loadwise-native-unsigned.ipa" Payload)
 
       - name: Upload the app
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Loadwise-native-ios

@@ -1,4 +1,4 @@
-// Copies Google Health wellness into Intervals.icu: sleep, average sleeping
+// Copies Google Health and Apple Health wellness into Intervals.icu: sleep, average sleeping
 // heart rate, steps, resting heart rate, HRV, SpO2, respiration, VO2max and
 // body fat, per day.
 //
@@ -15,6 +15,7 @@ import { intervalsAuthorization } from "./intervals-auth.js";
 import { healthPointJson } from './health-point-json.js';
 import { localDate } from "./user-time.js";
 import { readSyncPrefs, allowedWellness } from "./sync-destinations.js";
+import { intervalsReads } from "./intervals-reads.js";
 
 export const WELLNESS_SYNC_DAYS = 14;
 
@@ -35,6 +36,7 @@ const utc = iso => new Date(iso).toISOString().replace(/\.\d{3}Z$/, "Z");
 const round = (field, v) => { const m = 10 ** ROUND[field]; return Math.round(Number(v) * m) / m; };
 const same = (field, a, b) => a != null && b != null && Math.abs(Number(a) - Number(b)) <= (TOLERANCE[field] ?? 0.05);
 
+const PRIVATE_SLEEP = new Set(['whoop', 'ultrahuman']);
 // Google Health values per day: { "2026-10-01": { restingHR: 52, steps: 8400, … } }.
 export async function googleWellness(db, userId, oldest, sleepSessions = []) {
   const days = {};
@@ -52,7 +54,9 @@ export async function googleWellness(db, userId, oldest, sleepSessions = []) {
   // The night's main sleep: the longest session ending that day. Its average
   // heart rate comes from Google Health's heart-rate samples in that window.
   const longest = {};
-  for (const s of sleepSessions) if (s.date >= oldest && Number(s.durationMin) > 0 && Number(s.durationMin) > Number(longest[s.date]?.durationMin || 0)) longest[s.date] = s;
+  // WHOOP and Ultrahuman nights stay in Aurin: their terms and our privacy
+  // policy do not let us pass them on, so only Google and Apple sleep is sent.
+  for (const s of sleepSessions) if (!PRIVATE_SLEEP.has(s.source) && s.date >= oldest && Number(s.durationMin) > 0 && Number(s.durationMin) > Number(longest[s.date]?.durationMin || 0)) longest[s.date] = s;
   for (const [d, s] of Object.entries(longest)) {
     put(d, "sleepSecs", Number(s.durationMin) * 60);
     if (!s.startTime || !s.endTime) continue;
@@ -93,10 +97,11 @@ async function remember(db, userId, date, fields) {
 
 const auth = env => ({ Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: "application/json", "Content-Type": "application/json" });
 
-// One pass for one user with both Google Health and Intervals.icu connected.
-export async function syncWellnessToIntervals(env, { sleepSessions = async () => [], fetchImpl = fetch, now = Date.now() } = {}) {
-  const providers = env.CONNECTED_PROVIDERS || [];
-  if (!providers.includes("google") || !providers.includes("intervals")) return { status: "skipped" };
+// One pass for one user with Intervals.icu connected. Apple Health comes from
+// the iPhone, so it is not a connection here: without Google Health the
+// Apple Health days still go.
+export async function syncWellnessToIntervals(env, { sleepSessions = async () => [], fetchImpl = intervalsReads(env), now = Date.now() } = {}) {
+  if (!(env.CONNECTED_PROVIDERS || []).includes("intervals")) return { status: "skipped" };
   const prefs = await readSyncPrefs(env.DB, env.USER_ID, "intervals");
   if (prefs.health !== "all" && !prefs.health.some(type => type !== "weight")) return { status: "skipped", reason: "off" };
   const newest = localDate(new Date(now).toISOString()), oldest = localDate(new Date(now - (WELLNESS_SYNC_DAYS - 1) * 86400000).toISOString());

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createD1 } from './helpers/d1.mjs';
 import { scopedDb } from '../src/tenancy.js';
 import { parseTimeWindow, normalizeAvailability, trainingBudget, validDay } from '../src/training-availability.js';
-import { getWeekPlan, saveWeekPlan, resetWeekPlan, sanitizeWeekPlan, nightlyGymSkip } from '../src/week-planner.js';
+import { getWeekPlan, saveWeekPlan, resetWeekPlan, sanitizeWeekPlan } from '../src/week-planner.js';
 import { getAthleteState, updateAthleteState, proactiveAdvice, explicitPreference } from '../src/athlete-state.js';
 import { capWeekTargets, weekProposal, environmentFor, activityHistoryEstimate } from '../src/adaptive-week.js';
 import { askCoach, assistantTask } from '../src/coach-assistant.js';
@@ -81,7 +81,6 @@ test('state, preference memory and conversations belong to one user',async()=>{
   assert.equal((await getAthleteState(a)).status,'injured');
   assert.equal((await getAthleteState(b)).status,'active');
   assert.deepEqual((await getAthleteState(b)).memories,[]);
-  assert.match(await nightlyGymSkip(a,'2026-10-05'),/pozastavuje/);
   await updateAthleteState(a,{forget:m});assert.deepEqual((await getAthleteState(a)).memories,[]);
 });
 test('multiple recent recovery signals suggest a break, never diagnose sickness',()=>{
@@ -90,6 +89,14 @@ test('multiple recent recovery signals suggest a break, never diagnose sickness'
   assert.equal(proactiveAdvice({...input,health:{sleep:[]}}),null);
   assert.equal(proactiveAdvice({...input,state:{status:'active',dismissed:[a.id]}}),null);
   assert.equal(proactiveAdvice({...input,state:{status:'sick'}}),null);
+});
+test('without Intervals.icu the break advice reads HRV and resting HR from the watch',()=>{
+  const day=k=>new Date(Date.UTC(2026,9,5-k)).toISOString().slice(0,10);
+  const watch=Array.from({length:15},(_,k)=>({id:day(k),hrv:k===0?40:60,restingHR:k===0?60:52}));
+  const input={date:'2026-10-05',fitness:{wellness:[{id:'2026-10-05',ctl:40,atl:42,tsb:-2}]},health:{wellness:watch,sleep:[]},state:{status:'active'}};
+  const a=proactiveAdvice(input);
+  assert.equal(a?.status,'on_break');
+  assert.equal(proactiveAdvice({...input,health:{wellness:[],sleep:[]}}),null);
 });
 test('scheduling respects a pause and a clock window before external writes',async()=>{
   const raw=createD1(),db=scopedDb(raw,1);
@@ -164,4 +171,29 @@ test('a replacement can be saved before deleting the original even with a 150 mi
     const longer=CYCLING_WORKOUTS.find(w=>w.duration_minutes===180&&w.primary_system==='endurance');
     assert.equal((await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:longer.id,date:'2026-10-05',confirm:true})).status,'ok');
   }finally{globalThis.fetch=original;}
+});
+test('switching Nemoc back to Aktivní, or its end date passing, remembers the day of return',async()=>{
+  const a=scopedDb(createD1(),1);
+  await updateAthleteState(a,{status:'sick'},{date:'2026-10-10'});
+  await updateAthleteState(a,{status:'active'},{date:'2026-10-12'});
+  assert.equal((await getAthleteState(a,{date:'2026-10-12'})).recoveredAt,'2026-10-12');
+  const b=scopedDb(createD1(),2);
+  await updateAthleteState(b,{status:'sick',statusUntil:'2026-10-14'},{date:'2026-10-10'});
+  const later=await getAthleteState(b,{date:'2026-10-15'});
+  assert.equal(later.status,'active');assert.equal(later.recoveredAt,'2026-10-14');
+  // An injury ending is not an illness: no easy days added.
+  const c=scopedDb(createD1(),3);
+  await updateAthleteState(c,{status:'injured'},{date:'2026-10-10'});await updateAthleteState(c,{status:'active'},{date:'2026-10-12'});
+  assert.equal((await getAthleteState(c,{date:'2026-10-12'})).recoveredAt,undefined);
+});
+
+test('sessions cancelled for an illness are kept for the coach, at most 21 days',async()=>{
+  const db=scopedDb(createD1(),1);
+  await updateAthleteState(db,{status:'sick'},{date:'2026-10-01'});
+  await updateAthleteState(db,{cancelled:[{date:'2026-10-02',name:'VO2max 5×4',type:'Ride',minutes:75}]},{date:'2026-10-01'});
+  let s=await getAthleteState(db,{date:'2026-10-02'});
+  assert.deepEqual(s.cancelled.map(c=>c.name),['VO2max 5×4']);
+  await updateAthleteState(db,{cancelled:[{date:'2026-10-25',name:'Long ride'}]},{date:'2026-10-24'});
+  s=await getAthleteState(db,{date:'2026-10-24'});
+  assert.deepEqual(s.cancelled.map(c=>c.name),['Long ride']);
 });

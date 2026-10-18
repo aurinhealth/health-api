@@ -158,7 +158,11 @@ export async function deleteActivity(env, { id, everywhere = false } = {}, { fet
       return { status: 'ok', id: row.external_id, removed: ['aurin', 'intervals'] };
     }
   }
-  await hide(env, row).run();
+  // Merged with another device's record (workout-merge.js): that one goes too.
+  const merged = typeof payload.loadwiseMerge?.with === 'string' ? payload.loadwiseMerge.with : null;
+  const at = merged ? merged.indexOf(':') : -1;
+  await env.DB.batch([hide(env, row), ...(at > 0 ? [env.DB.prepare(`UPDATE health_datapoints SET record_role = 'duplicate', matched_activity_id = ?, match_confidence = NULL, updated_at = CURRENT_TIMESTAMP
+    WHERE user_id = ? AND source_family = ? AND data_type = 'exercise' AND external_id = ?`).bind(DELETED, env.USER_ID, merged.slice(0, at), merged.slice(at + 1))] : [])]);
   return { status: 'ok', id: row.external_id, removed: ['aurin'] };
 }
 

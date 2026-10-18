@@ -80,9 +80,8 @@ struct MuscleFatigue: Decodable {
         let estimated: Bool?
     }
 
-    /// The screen's name. Not L10n.tr("Svaly"): that key is the training goal
-    /// "Muscle" (Síla, Svaly, Kondice).
-    static var title: String { L10n.isEnglish ? "Muscles" : "Svaly" }
+    /// The screen's and the widget's name.
+    static var title: String { L10n.tr("Únava svalů") }
 
     /// The muscles that are not rested yet, the most tired first.
     var tired: [Muscle] { (muscles ?? []).filter { $0.state != "rested" } }
@@ -173,6 +172,13 @@ extension MuscleFatigue.Muscle {
         case "recovering": return Palette.amber
         default: return Palette.green
         }
+    }
+
+    /// "odpočaté", or "odpočaté na 40 % · pozítří" (the muscle's detail and the 3D figure's bubble).
+    func stateText(today: String) -> String {
+        guard state != "rested" else { return L10n.tr("odpočaté") }
+        let percent = max(5, Int(((1 - (level ?? 0)) * 100).rounded()))
+        return L10n.f("odpočaté na %@ %%", String(percent)) + " · " + readyText(today: today)
     }
 
     /// Coarse on purpose: "odpočaté", "dnes", "zítra", "pozítří", "za 3 dny";

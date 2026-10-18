@@ -18,8 +18,10 @@ struct GymStretching: Decodable, Equatable {
         var rounds: Int = 1
         var steps: [String] = []
         var photos: [String] = []
+        /// The YouTube id of a demonstration.
+        var video: String? = nil
 
-        enum CodingKeys: String, CodingKey { case id, name, seconds, sides, rounds, steps, photos }
+        enum CodingKeys: String, CodingKey { case id, name, seconds, sides, rounds, steps, photos, video }
 
         init(id: String, name: String, seconds: Int, sides: Bool, rounds: Int = 1, steps: [String] = [], photos: [String] = []) {
             self.id = id; self.name = name; self.seconds = seconds; self.sides = sides
@@ -35,6 +37,7 @@ struct GymStretching: Decodable, Equatable {
             rounds = max(1, try c.decodeIfPresent(Int.self, forKey: .rounds) ?? 1)
             steps = try c.decodeIfPresent([String].self, forKey: .steps) ?? []
             photos = try c.decodeIfPresent([String].self, forKey: .photos) ?? []
+            video = try c.decodeIfPresent(String.self, forKey: .video).flatMap { $0.isEmpty ? nil : $0 }
         }
 
         /// "2 × 30 s na stranu", "45 s", "3 min".
@@ -52,6 +55,14 @@ struct GymStretching: Decodable, Equatable {
     struct Routines: Decodable {
         let warmup: GymStretching?
         let stretching: GymStretching?
+        var cardio: Cardio? = nil
+    }
+
+    /// The day's cardio: the machine and the minutes at the start and at the end (nil when off).
+    struct Cardio: Decodable, Equatable {
+        let type: String
+        let start: Int?
+        let end: Int?
     }
 
     static func routines(_ values: [[JSONValue]]) -> Routines? {
@@ -84,14 +95,44 @@ struct GymStretching: Decodable, Equatable {
 }
 
 enum GymRoutineKind {
-    case warmup, stretching
+    case warmup, stretching, cardio
 
-    var title: String { self == .warmup ? "Rozcvička" : "Protažení" }
-    var symbol: String { self == .warmup ? "figure.run" : "figure.flexibility" }
-    var color: Color { self == .warmup ? Palette.amber : Palette.indigo }
-    var doneTitle: String { self == .warmup ? "Rozcvička hotová" : "Protažení hotovo" }
+    var title: String {
+        switch self {
+        case .warmup: return "Rozcvička"
+        case .stretching: return "Protažení"
+        case .cardio: return "Kardio"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .warmup: return "figure.run"
+        case .stretching: return "figure.flexibility"
+        case .cardio: return "figure.indoor.cycle"
+        }
+    }
+    var color: Color {
+        switch self {
+        case .warmup: return Palette.amber
+        case .stretching: return Palette.indigo
+        case .cardio: return Palette.rust
+        }
+    }
+    var doneTitle: String {
+        switch self {
+        case .warmup: return "Rozcvička hotová"
+        case .stretching: return "Protažení hotovo"
+        case .cardio: return "Kardio hotové"
+        }
+    }
     /// Ticks kept apart: the warm-up and the stretching can share a move.
-    var key: String { self == .warmup ? "w-" : "" }
+    var key: String {
+        switch self {
+        case .warmup: return "w-"
+        case .stretching: return ""
+        case .cardio: return "c-"
+        }
+    }
 }
 
 /// Rozcvička or Protažení: the moves in order, each ticked when done, with
@@ -148,7 +189,7 @@ struct StretchingCard: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityAddTraits(isDone(item) ? .isSelected : [])
-                        if !item.steps.isEmpty || !item.photos.isEmpty {
+                        if !item.steps.isEmpty || !item.photos.isEmpty || item.video != nil {
                             ExerciseInfoButton(name: item.name) { info = item }
                         }
                     }
@@ -210,7 +251,12 @@ struct StretchInfoSheet: View {
                             }
                         }
                     }
-                    if item.id != "cardio" {
+                    if let video = item.video {
+                        YouTubePlayer(id: video)
+                            .aspectRatio(16 / 9, contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                    if !item.id.hasPrefix("cardio") {
                         Text("Pohyb dělej v klidu a bez bolesti, má táhnout, ne bolet.")
                             .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
@@ -274,7 +320,7 @@ struct StretchTimerView: View {
                         .animation(.linear(duration: 1), value: left)
                     VStack(spacing: 2) {
                         Text(verbatim: "\(left)").font(Typo.number(54)).foregroundStyle(Palette.ink).monospacedDigit()
-                        Text(moving ? "Připrav se" : kind == .warmup ? "Cvič" : "Drž").font(Typo.caption).foregroundStyle(Palette.muted)
+                        Text(moving ? "Připrav se" : kind == .stretching ? "Drž" : "Cvič").font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
                 .frame(width: 170, height: 170)
@@ -342,20 +388,36 @@ struct GymPreferences: Decodable, Equatable {
     var goal: String
     /// What "auto" follows: the goal for the main sport ("auto" without one).
     var recommendedGoal: String?
-    /// "auto" or the chosen beginner / regular / experienced.
+    /// "auto" or the chosen beginner / regular / experienced (the gym's).
     var experience: String
     /// What the training history says while the experience is "auto".
     var autoExperience: String?
+    /// strength, ride and run: auto or chosen, the level in use and the automatic one.
+    var experienceBySport: [String: SportExperience]?
     var warmup: Bool?
     var warmupCardio: Bool?
+    /// none / start / end / both, and the machine (an id of cardioOptions).
+    var cardio: String?
+    var cardioType: String?
+    /// The cardio machines of the active place, and the jump rope.
+    var cardioOptions: [CardioOption]?
     var stretching: Bool
     /// Typical minutes the routines add to each session length ("60" → warm-up and stretching).
     var extraMinutes: [String: Extra]?
 
     struct Extra: Decodable, Equatable {
         let warmup: Int
+        var cardio: Int? = nil
         let stretching: Int
     }
+
+    struct CardioOption: Decodable, Equatable, Identifiable {
+        let id: String
+        let name: String
+    }
+
+    /// The cardio mode, also from an older server that only knows warmupCardio.
+    var cardioMode: String { cardio ?? (warmupCardio == false ? "none" : "start") }
 }
 
 extension APIClient {
@@ -368,22 +430,19 @@ extension APIClient {
     }
 }
 
-/// Cíl, Zkušenost and Protažení na konci: each saved as soon as it changes.
+/// Cíl, Zkušenost, Rozcvička, Kardio, Druh kardia and Protažení: each saved as soon as it changes.
 struct GymPreferencesGroup: View {
     @Environment(AppModel.self) private var model
     @State private var prefs: GymPreferences?
     @State private var goal = "auto"
-    @State private var experience = "auto"
-    @State private var warmupMode = "cardio"
+    @State private var warmup = true
+    @State private var cardio = "start"
+    @State private var cardioType = "exercise_bike"
     @State private var stretching = true
     @State private var error: String?
 
     static let goals = [("strength", "Síla"), ("strength_muscle", "Síla a svaly"), ("muscle", "Svaly"), ("muscle_fitness", "Svaly a kondice"), ("fitness", "Kondice")]
-    static let warmupModes = [("cardio", "s kardiem"), ("moves", "bez kardia"), ("off", "vypnutá")]
-    static func warmupMode(_ prefs: GymPreferences) -> String {
-        prefs.warmup == false ? "off" : prefs.warmupCardio == false ? "moves" : "cardio"
-    }
-    static let levels = [("beginner", "začátečník"), ("regular", "pravidelně"), ("experienced", "zkušený")]
+    static let cardioModes = [("none", "Ne"), ("start", "Začátek"), ("end", "Konec"), ("both", "Obojí")]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -392,8 +451,9 @@ struct GymPreferencesGroup: View {
         }
         .task { await load() }
         .onChange(of: goal) { _, value in goalChanged(value) }
-        .onChange(of: experience) { _, value in experienceChanged(value) }
-        .onChange(of: warmupMode) { _, value in warmupChanged(value) }
+        .onChange(of: warmup) { _, value in warmupChanged(value) }
+        .onChange(of: cardio) { _, value in cardioChanged(value) }
+        .onChange(of: cardioType) { _, value in cardioTypeChanged(value) }
         .onChange(of: stretching) { _, value in stretchingChanged(value) }
     }
 
@@ -401,11 +461,25 @@ struct GymPreferencesGroup: View {
         SettingsGroup(title: "Trénink na míru") {
             SettingsPicker(title: "Cíl", selection: $goal, options: goalOptions)
             SettingsDivider()
-            SettingsPicker(title: "Zkušenost", selection: $experience, options: experienceOptions)
+            NavigationLink { ExperienceSettingsView() } label: { SettingsRow(title: "Zkušenost", value: experienceValue) }
+                .buttonStyle(.plain)
             SettingsDivider()
-            SettingsPicker(title: "Rozcvička", selection: $warmupMode, options: Self.warmupModes)
+            SettingsToggle(title: "Rozcvička", isOn: $warmup)
             SettingsDivider()
-            SettingsToggle(title: "Protažení na konci", isOn: $stretching)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Kardio").font(.body).foregroundStyle(Palette.ink)
+                Picker("Kardio", selection: $cardio) {
+                    ForEach(Self.cardioModes, id: \.0) { mode in Text(LocalizedStringKey(mode.1)).tag(mode.0) }
+                }
+                .pickerStyle(.segmented)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            SettingsDivider()
+            SettingsPicker(title: "Druh kardia", selection: $cardioType, options: cardioOptions)
+                .disabled(cardio == "none")
+            SettingsDivider()
+            SettingsToggle(title: "Protažení", isOn: $stretching)
         }
         .disabled(prefs == nil && !model.demo)
     }
@@ -414,15 +488,25 @@ struct GymPreferencesGroup: View {
         save(["goal": .string(value)], unchanged: prefs?.goal == value)
     }
 
-    private func experienceChanged(_ value: String) {
-        save(["experience": .string(value)], unchanged: prefs?.experience == value)
+    /// The active place's cardio machines (the sample day: all of them).
+    private var cardioOptions: [(String, String)] {
+        let options = prefs?.cardioOptions ?? GymCardio.all.map { GymPreferences.CardioOption(id: $0, name: GymCardio.name($0)) }
+        return options.map { ($0.id, $0.name) }
     }
 
-    private func warmupChanged(_ value: String) {
-        var current: String?
-        if let prefs { current = Self.warmupMode(prefs) }
-        let change: JSONObject = ["warmup": .bool(value != "off"), "warmupCardio": .bool(value == "cardio")]
-        save(change, unchanged: current == value)
+    private func warmupChanged(_ value: Bool) {
+        let saved: Bool = prefs?.warmup != false
+        save(["warmup": .bool(value)], unchanged: saved == value)
+    }
+
+    private func cardioChanged(_ value: String) {
+        let saved: String? = prefs?.cardioMode
+        save(["cardio": .string(value)], unchanged: saved == value)
+    }
+
+    private func cardioTypeChanged(_ value: String) {
+        let saved: String? = prefs?.cardioType
+        save(["cardioType": .string(value)], unchanged: saved == value)
     }
 
     private func stretchingChanged(_ value: Bool) {
@@ -436,23 +520,24 @@ struct GymPreferencesGroup: View {
         return [("auto", auto)] + Self.goals
     }
 
-    /// "automaticky · pravidelně": the level Aurin reads from the training history.
-    private var experienceOptions: [(String, String)] {
-        let guess = prefs?.autoExperience.flatMap { id in Self.levels.first { $0.0 == id }?.1 }
-        let auto = guess.map { L10n.tr("automaticky") + " · " + L10n.tr($0) } ?? L10n.tr("automaticky")
-        return [("auto", auto)] + Self.levels
+    /// "Auto · Mírně pokročilý" or the chosen level: the gym's experience (set in Profil).
+    private var experienceValue: String? {
+        guard let gym = prefs?.experienceBySport?["strength"] else { return nil }
+        return gym.mode == "auto" ? L10n.f("Auto · %@", ExperienceGroup.name(gym.autoLevel)) : ExperienceGroup.name(gym.level)
     }
 
     private func load() async {
-        guard !model.demo, prefs == nil else { return }
+        guard !model.demo else { return }
+        // Again on every return: the experience may have changed in Profil.
         do { apply(try await model.api.gymPreferences()) } catch { self.error = error.localizedDescription }
     }
 
     private func apply(_ value: GymPreferences) {
         prefs = value
         goal = value.goal
-        experience = value.experience
-        warmupMode = Self.warmupMode(value)
+        warmup = value.warmup != false
+        cardio = value.cardioMode
+        cardioType = value.cardioType ?? value.cardioOptions?.first?.id ?? "exercise_bike"
         stretching = value.stretching
     }
 

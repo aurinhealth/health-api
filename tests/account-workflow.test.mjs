@@ -12,7 +12,8 @@ import {saveRecipe,listRecipes,deleteRecipe,searchRecipes} from '../src/personal
 import {scheduleWorkoutInIntervals,getScheduledWorkouts} from '../src/workout-library.js';
 import {movePlannedEvent,deletePlannedEvent,setPlannedEnvironment} from '../src/planned-events.js';
 import {retryWorkoutExports,importedEventIsLocal,completeLocalWorkout} from '../src/local-workouts.js';
-import {generateStrengthPlan} from '../src/strength-generator.js';
+import {EXERCISES,generateStrengthPlan} from '../src/strength-generator.js';
+import {EXERCISE_STATIONS} from '../src/gym-equipment.js';
 import {dashboardSyncStatus,startDashboardSync} from '../src/dashboard-sync.js';
 const schema=readFileSync(new URL('../staging/schema.sql',import.meta.url),'utf8');
 function setup(){const raw=createD1();raw.sqlite.exec(schema);const a=scopedDb(raw,1),b=scopedDb(raw,2);return {raw,a,b,env:{DB:a,USER_ID:1,CONNECTED_PROVIDERS:[]}};}
@@ -66,6 +67,9 @@ test('an export outage preserves the app plan; retry is idempotent, import does 
  try{
   globalThis.fetch=async()=>new Response('',{status:503});const scheduled=await scheduleWorkoutInIntervals({...env,INTERVALS_API_KEY:'test'},a,{workoutId:'pfd-vo2-5x4x112-90',date:'2026-10-12',confirm:true});assert.equal(scheduled.sync.status,'error');assert.equal((await getScheduledWorkouts(a)).length,1);
   globalThis.fetch=async(_,options)=>{calls++;assert.equal(JSON.parse(options.body)[0].external_id.startsWith('loadwise:1:local-'),true);return Response.json([{id:777,category:'WORKOUT'}]);};
+  // A failed export waits before the next try (export-retry.js), then goes once.
+  await retryWorkoutExports({...env,INTERVALS_API_KEY:'test'});assert.equal(calls,0);
+  await a.prepare("UPDATE workout_exports SET updated_at=datetime('now','-1 hour') WHERE user_id=?").bind(1).run();
   await retryWorkoutExports({...env,INTERVALS_API_KEY:'test'});await retryWorkoutExports({...env,INTERVALS_API_KEY:'test'});assert.equal(calls,1);assert.equal(await importedEventIsLocal(a,{id:777}),true);
   await deletePlannedEvent(env,{eventId:scheduled.eventId});assert.equal((await getScheduledWorkouts(a)).length,0);
   globalThis.fetch=async(_,options)=>{calls++;assert.equal(options.method,'DELETE');return new Response('',{status:200});};await retryWorkoutExports({...env,INTERVALS_API_KEY:'test'});assert.equal(calls,2);
@@ -73,7 +77,7 @@ test('an export outage preserves the app plan; retry is idempotent, import does 
 });
 test('bodyweight plans never contain equipment-dependent exercises and beginners get at most two work sets per exercise',()=>{
  const context={date:'2026-10-12',strength:{recentCompletedSets:[]},cycling:{recentActivities:[],plannedWorkouts:[]},trainingSetup:{equipment:'bodyweight',experience:'beginner'}};
- const plan=generateStrengthPlan(context,{durationMinutes:45});const work=plan.rows.filter(r=>r[0]==='WORK');assert.ok(work.length>0);assert.ok(work.every(r=>['Push-up','Bodyweight squat','Glute bridge','Dead bug'].includes(r[1])));
+ const plan=generateStrengthPlan(context,{durationMinutes:45});const work=plan.rows.filter(r=>r[0]==='WORK');assert.ok(work.length>0);assert.ok(work.every(r=>EXERCISES[r[1]]&&EXERCISE_STATIONS[r[1]].every(id=>id==='floor_mats')),work.map(r=>r[1]).join());
  for(const name of new Set(work.map(r=>r[1])))assert.ok(work.filter(r=>r[1]===name).length<=2);
 });
 test('two initial providers start independently and status stays running while Google batches run',async()=>{

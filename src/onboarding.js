@@ -1,9 +1,10 @@
 import {METAGYM_KUTNA_HORA,OTHER_STATION_IDS} from './gym-equipment.js';
+import {cardioMode} from './stretching.js';
 import {normalizeProfile,energyBaseline,effectiveProfile} from './energy-profile.js';
 import {readSuggestions} from './profile-suggestions.js';
 import {normalizeAvailability} from './training-availability.js';
 import { localToday } from "./user-time.js";
-import {trainingHistory,starterPlan} from './training-history.js';
+import {trainingHistory,starterPlan,EXPERIENCE_LEVELS,EXPERIENCE_SPORTS} from './training-history.js';
 import {latestStoredWeight} from './athlete-weight.js';
 export async function ensureOnboarding(db){
   await db.prepare('CREATE TABLE IF NOT EXISTS user_setup (user_id INTEGER PRIMARY KEY,completed_at TEXT,training_json TEXT NOT NULL DEFAULT \'{}\')').run();
@@ -14,7 +15,23 @@ export async function trainingSetup(db){
   let saved={};try{saved=JSON.parse(row?.training_json||'{}');}catch{}
   const history=await trainingHistory(db);
   const places=Array.isArray(saved.places)&&saved.places.length?{places:saved.places,activePlace:saved.activePlace}:legacyPlaces(saved);
-  return {...saved,...places,experience:!saved.experience||saved.experience==='auto'?history.experience:saved.experience,experienceMode:!saved.experience||saved.experience==='auto'?'auto':'manual',equipment:saved.equipment||'bodyweight',history};
+  // Experience per sport, auto unless chosen. The single "experience" of older
+  // versions was set in the gym settings: it is the gym's manual level.
+  const chosen=experienceChoices(saved),auto=history.sportExperience||{};
+  const experienceBySport=Object.fromEntries(EXPERIENCE_SPORTS.map(s=>{const autoLevel=auto[s]||'beginner';return [s,{mode:chosen[s]==='auto'?'auto':'manual',level:chosen[s]==='auto'?autoLevel:chosen[s],autoLevel}];}));
+  return {...saved,...places,experience:experienceBySport.strength.level,experienceMode:experienceBySport.strength.mode,experienceBySport,equipment:saved.equipment||'bodyweight',history};
+}
+// Merges a saved setup with a change: a partial experienceBySport keeps the other
+// sports, and a lone "experience" (older clients, the setup) changes the gym only.
+export function mergeExperience(old={},input={}){
+  if(input.experience==null&&input.experienceBySport==null)return {};
+  const bySport={...experienceChoices(old),...(input.experience!=null?{strength:input.experience}:{}),...(input.experienceBySport&&typeof input.experienceBySport==='object'?input.experienceBySport:{})};
+  return {experienceBySport:bySport,experience:bySport.strength};
+}
+export function experienceChoices(saved={}){
+  const raw=saved.experienceBySport&&typeof saved.experienceBySport==='object'?saved.experienceBySport:{};
+  const pick=v=>EXPERIENCE_LEVELS.includes(v)?v:'auto';
+  return {strength:pick(raw.strength??saved.experience),ride:pick(raw.ride),run:pick(raw.run)};
 }
 
 // Places to train: several gyms and a home gym, each with its own stations,
@@ -34,7 +51,7 @@ export function normalizePlaces(input){
     while(seen.has(id))id+='-'+i;seen.add(id);
     const kind=PLACE_KINDS.includes(p?.kind)?p.kind:'gym';
     return {id,kind,name:String(p?.name||'').trim().slice(0,80)||(kind==='home'?'Domácí posilovna':'Posilovna'),
-      stations:[...new Set((Array.isArray(p?.stations)?p.stations:[]).map(String).filter(validStation))],url:cleanUrl(p?.url),dumbbellWeights:cleanWeights(p?.dumbbellWeights)};
+      stations:[...new Set((Array.isArray(p?.stations)?p.stations:[]).map(String).filter(validStation))],url:cleanUrl(p?.url),dumbbellWeights:cleanWeights(p?.dumbbellWeights),...(p?.favorite===true?{favorite:true}:{})};
   });
 }
 // Accounts saved before places: their one gym or home gym becomes the first place.
@@ -69,7 +86,11 @@ export async function onboardingStatus(env){
   return {status:'ok',completed:Boolean(row?.completed_at),completedAt:row?.completed_at||null,profile,savedProfile,suggestions,weightKg:weight?.value_numeric||null,baseline,training,history,automaticPlan:starterPlan(history,training.experience),activityTracked:tracked,connectedProviders:env.CONNECTED_PROVIDERS||[]};
 }
 export function normalizeTraining(input={}){
-  const experience=['beginner','regular','experienced'].includes(input.experience)?input.experience:'auto';
+  // experienceBySport wins; a lone "experience" (older clients, the setup) is the gym's.
+  const bySport=input.experienceBySport&&typeof input.experienceBySport==='object'?{...input.experienceBySport}:{};
+  if(input.experience!=null&&bySport.strength==null)bySport.strength=input.experience;
+  const experienceBySport=experienceChoices({experienceBySport:bySport});
+  const experience=experienceBySport.strength;
   const equipment=['gym','custom','home','dumbbells','bodyweight'].includes(input.equipment)?input.equipment:'bodyweight';
   const limitations=String(input.limitations||'').trim().slice(0,500);
   const availability=normalizeAvailability(input.availability);
@@ -83,8 +104,11 @@ export function normalizeTraining(input={}){
   const activePlace=input.activePlace==='bodyweight'||places.some(p=>p.id===input.activePlace)?String(input.activePlace):places[0]?.id||'bodyweight';
   // The gym goal (strength-generator.js goalReps), the warm-up and the stretching (on unless turned off).
   const goal=['strength','strength_muscle','muscle','muscle_fitness','fitness'].includes(input.goal)?input.goal:'auto';
-  const stretching=input.stretching!==false,warmup=input.warmup!==false,warmupCardio=input.warmupCardio!==false;
-  return {experience,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights,places,activePlace,goal,warmup,warmupCardio,stretching};
+  const stretching=input.stretching!==false,warmup=input.warmup!==false;
+  // Cardio: none / start / end / both (older setups: warmupCardio false → none), and the machine.
+  const cardio=cardioMode(input),warmupCardio=cardio==='start'||cardio==='both';
+  const cardioType=String(input.cardioType||'').trim().slice(0,40)||'exercise_bike';
+  return {experience,experienceBySport,equipment:kind,limitations,availability,stations,gymName,gymUrl,dumbbellWeights,places,activePlace,goal,warmup,warmupCardio,cardio,cardioType,stretching};
 }
 export async function updateTrainingSetup(db,input={}){
   await ensureOnboarding(db);
@@ -92,7 +116,7 @@ export async function updateTrainingSetup(db,input={}){
   const old=JSON.parse(row?.training_json||'{}');
   // Saving places: the flat fields follow the active place. Saving the flat
   // fields (the setup, the web): they go into the active place too.
-  const merged={...old,...(Array.isArray(old.places)&&old.places.length?{}:legacyPlaces(old)),...input};
+  const merged={...old,...(Array.isArray(old.places)&&old.places.length?{}:legacyPlaces(old)),...input,...mergeExperience(old,input)};
   const usesPlaces=Array.isArray(input.places)||input.activePlace!=null;
   const training=normalizeTraining(usesPlaces?mirrorActivePlace(merged):intoActivePlace(merged));
   await db.prepare("INSERT INTO user_setup(user_id,training_json) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET training_json=excluded.training_json").bind(db.userId,JSON.stringify(training)).run();
@@ -113,7 +137,7 @@ export async function completeOnboarding(env,input={}){
   const oldProfile=await db.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(db.userId).first();
   const previous=JSON.parse(oldProfile?.profile_json||'{}');
   const oldTraining=await db.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(db.userId).first();
-  const profile=normalizeProfile({...previous,...input.profile,goal:input.profile?.goal||previous.goal||'maintain'}),training=normalizeTraining({...JSON.parse(oldTraining?.training_json||'{}'),...input.training});
+  const profile=normalizeProfile({...previous,...input.profile,goal:input.profile?.goal||previous.goal||'maintain'}),oldSaved=JSON.parse(oldTraining?.training_json||'{}'),training=normalizeTraining({...oldSaved,...input.training,...mergeExperience(oldSaved,input.training||{})});
   const supplied=input.weightKg!=null&&input.weightKg!=='';
   const previousWeight=await latestStoredWeight(db);
   const weight=supplied?Number(input.weightKg):previousWeight?.value_numeric;

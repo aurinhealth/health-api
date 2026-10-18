@@ -17,11 +17,33 @@ struct GymEquipment: Decodable, Equatable {
     /// follows the active one ("bodyweight": none).
     var places: [GymPlace]? = nil
     var activePlace: String? = nil
+    /// The picker's body parts and kinds of equipment, in order (nil from an older server).
+    var sections: [Section]? = nil
 
     struct Station: Decodable, Equatable, Identifiable, Hashable {
         let id: String
         let group: String
         let label: String
+        /// The picker sections it is under (src/gym-equipment.js STATION_PICKER).
+        var sections: [String]? = nil
+        /// One line on what it is.
+        var description: String? = nil
+
+        /// Its sections; an older server has only the group.
+        var sectionIds: [String] { (sections ?? []).isEmpty ? [group] : sections ?? [] }
+    }
+
+    struct Section: Decodable, Equatable, Identifiable, Hashable {
+        let id: String
+        let label: String
+    }
+
+    /// The picker's sections; from an older server, the groups.
+    var pickerSections: [Section] {
+        if let sections, !sections.isEmpty { return sections }
+        var out: [Section] = []
+        for s in stations ?? [] where !out.contains(where: { $0.id == s.group }) { out.append(Section(id: s.group, label: s.group)) }
+        return out
     }
 }
 
@@ -34,12 +56,19 @@ struct GymPlace: Decodable, Equatable, Identifiable {
     var stations: [String]
     var url: String
     var dumbbellWeights: [Double]
+    /// Starred: listed first.
+    var favorite: Bool? = nil
 
     var json: JSONValue {
-        .object(["id": .string(id), "kind": .string(kind), "name": .string(name),
-                 "stations": .array(stations.map { .string($0) }), "url": .string(url),
-                 "dumbbellWeights": .array(dumbbellWeights.map { .number($0) })])
+        var o: JSONObject = ["id": .string(id), "kind": .string(kind), "name": .string(name),
+                             "stations": .array(stations.map { .string($0) }), "url": .string(url),
+                             "dumbbellWeights": .array(dumbbellWeights.map { .number($0) })]
+        if favorite == true { o["favorite"] = .bool(true) }
+        return .object(o)
     }
+
+    /// Only the floor: a place for bodyweight exercises.
+    var bodyweightOnly: Bool { Set(stations).isSubset(of: ["floor_mats"]) }
 }
 
 /// POST /app/api/gym/equipment/detect: the stations AI saw on the photos or the web.
@@ -176,7 +205,7 @@ struct GymPreviewResponse: Decodable {
     let muscles: [String: [String: Double]]?
     let message: String?
 
-    struct Plan: Decodable {
+    struct Plan: Decodable, Equatable {
         let planName: String?
         let rationale: String?
         let rows: [[JSONValue]]

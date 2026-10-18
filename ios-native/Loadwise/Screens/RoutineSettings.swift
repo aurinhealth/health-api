@@ -120,7 +120,14 @@ struct HeartRateSensorView: View {
                 SettingsGroup(title: "Spárováno") {
                     HStack(spacing: 12) {
                         SettingsIcon(systemImage: "heart.fill", color: Palette.rust)
-                        Text(name).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(name).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
+                            // Connected but silent: the band doesn't broadcast its beat.
+                            if sensor.liveBpm == nil {
+                                Text(sensor.connected ? "připojeno, zatím neposílá tep" : "nepřipojeno")
+                                    .font(Typo.caption).foregroundStyle(Palette.muted)
+                            }
+                        }
                         Spacer(minLength: 8)
                         if let bpm = sensor.liveBpm {
                             Text("\(Fmt.int(bpm)) bpm").font(.subheadline).foregroundStyle(Palette.muted)

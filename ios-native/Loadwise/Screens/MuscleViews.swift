@@ -178,7 +178,7 @@ struct MusclesWidget: View {
     // M with the rings.
     private func mediumRings(_ data: MuscleFatigue) -> some View {
         Card {
-            WidgetHeader(title: L10n.tr("Svaly · odpočaté na %"), color: Palette.amberBar)
+            WidgetHeader(title: L10n.tr("Únava svalů · odpočaté na %"), color: Palette.amberBar)
             MuscleRingsRow(data: data)
         }
     }
@@ -221,6 +221,7 @@ struct MusclesView: View {
     @Environment(AppModel.self) private var model
     @State private var error: String?
     @State private var tab = 0
+    @State private var explaining = false
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: MuscleFatigue.title) {
@@ -247,7 +248,9 @@ struct MusclesView: View {
             }
         }
         .task { await load() }
+        .task { if !model.demo { await MuscleModelStore.shared.load(api: model.api) } }
         .refreshable { await load() }
+        .sheet(isPresented: $explaining) { MuscleFatigueInfoSheet() }
     }
 
     private func load() async {
@@ -262,8 +265,12 @@ struct MusclesView: View {
     @ViewBuilder private func rest(_ data: MuscleFatigue) -> some View {
         let muscles = data.muscles ?? []
         Card {
-            MuscleFigurePair(colors: data.figureColors, spacing: 8) { id in model.push(.muscle(id)) }
-                .frame(height: 300).frame(maxWidth: .infinity)
+            if let figure = MuscleModelStore.shared.figure {
+                MuscleFigureSpinner(figure: figure, data: data).frame(height: 410).frame(maxWidth: .infinity)
+            } else {
+                MuscleFigurePair(colors: data.figureColors, spacing: 8) { id in model.push(.muscle(id)) }
+                    .frame(height: 300).frame(maxWidth: .infinity)
+            }
             HStack(alignment: .top) {
                 stat(L10n.f("%@ z %@", String(muscles.count - data.tired.count), String(muscles.count)), L10n.tr("odpočatých"), Palette.ink)
                 if let names = readyOn(data, days: 1) { stat(L10n.tr("zítra"), names, Palette.amber) }
@@ -290,7 +297,12 @@ struct MusclesView: View {
         }
 
         if !data.tired.isEmpty {
-            SectionLabel(text: "Unavené svaly").padding(.top, 22)
+            HStack {
+                SectionLabel(text: "Unavené svaly")
+                Spacer()
+                SmallInfoButton(label: "Co znamenají procenta") { explaining = true }
+            }
+            .padding(.top, 14)
             Card {
                 ForEach(Array(data.tired.enumerated()), id: \.element.id) { index, muscle in
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
@@ -421,6 +433,69 @@ struct MusclesView: View {
     }
 }
 
+// MARK: - 3D figure
+
+/// Svaly → Odpočinek with the 3D figure: drag sideways to turn it, tap a muscle to see how
+/// rested it is, tap that bubble and the camera moves in before the muscle's detail opens.
+struct MuscleFigureSpinner: View {
+    @Environment(AppModel.self) private var model
+    let figure: MuscleFigure3D
+    let data: MuscleFatigue
+    @State private var selected: String?
+    @State private var point: CGPoint = .zero
+    @State private var focus: String?
+
+    var body: some View {
+        GeometryReader { geo in
+            Muscle3DView(figure: figure, colors: data.figureColors, selected: selected, focus: focus) { id, at in
+                withAnimation(.snappy(duration: 0.25)) {
+                    selected = id
+                    point = at
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                if focus == nil, let id = selected, let muscle = data.muscle(id) {
+                    bubble(muscle)
+                        .fixedSize()
+                        .position(x: min(max(point.x, 115), geo.size.width - 115), y: max(32, point.y - 58))
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.tr("Postava se svaly"))
+    }
+
+    private func bubble(_ muscle: MuscleFatigue.Muscle) -> some View {
+        Button { open(muscle.id) } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: L10n.tr(muscle.label)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Text(verbatim: muscle.stateText(today: data.date)).font(Typo.caption).foregroundStyle(muscle.textColor)
+                }
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.muted)
+            }
+            .padding(.vertical, 10).padding(.leading, 14).padding(.trailing, 12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
+            .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The camera moves in on the muscle, then its detail opens; back on Svaly the whole figure shows again.
+    private func open(_ id: String) {
+        withAnimation(.easeOut(duration: 0.15)) { focus = id }
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            model.push(.muscle(id))
+            try? await Task.sleep(for: .milliseconds(700))
+            focus = nil
+            selected = nil
+        }
+    }
+}
+
 // MARK: - One muscle
 
 /// One muscle: how rested, whether it is getting stronger (Síla), how often
@@ -460,6 +535,7 @@ struct MuscleDetailView: View {
             }
         }
         .task { await load() }
+        .task { if !model.demo { await MuscleModelStore.shared.load(api: model.api) } }
     }
 
     private func load() async {
@@ -468,25 +544,42 @@ struct MuscleDetailView: View {
         do { detail = try await model.api.muscleDetail(id: id) } catch { self.error = error.localizedDescription }
     }
 
-    private var header: some View {
+    @ViewBuilder private var header: some View {
+        if let figure = MuscleModelStore.shared.figure {
+            // The 3D figure close on this muscle, turned to the side it is on.
+            Muscle3DView(figure: figure, colors: [id: muscle?.figureColor ?? Palette.green], selected: id, focus: id, yaw: MuscleFigure3D.facing(id))
+                .frame(height: 220).frame(maxWidth: .infinity)
+                .background(Palette.card)
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .accessibilityHidden(true)
+                .padding(.top, 20)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(verbatim: muscle?.label ?? detail?.label ?? "").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let muscle {
+                    Text(verbatim: muscle.stateText(today: today)).font(Typo.small).foregroundStyle(muscle.textColor)
+                }
+            }
+            .padding(.top, 18)
+        } else {
+            flatHeader
+        }
+    }
+
+    private var flatHeader: some View {
         HStack(spacing: 14) {
             MuscleFigurePair(colors: [id: muscle?.figureColor ?? Palette.green], selected: id, spacing: 2).frame(height: 104)
             VStack(alignment: .leading, spacing: 4) {
                 Text(verbatim: muscle?.label ?? detail?.label ?? "").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if let muscle {
-                    Text(verbatim: state(muscle)).font(Typo.small).foregroundStyle(muscle.textColor)
+                    Text(verbatim: muscle.stateText(today: today)).font(Typo.small).foregroundStyle(muscle.textColor)
                 }
             }
         }
         .padding(.top, 20)
     }
 
-    private func state(_ m: MuscleFatigue.Muscle) -> String {
-        guard m.state != "rested" else { return L10n.tr("odpočaté") }
-        let percent = max(5, Int(((1 - (m.level ?? 0)) * 100).rounded()))
-        return L10n.f("odpočaté na %@ %%", String(percent)) + " · " + m.readyText(today: today)
-    }
 
     // MARK: Síla
 
@@ -628,5 +721,35 @@ struct MuscleDetailView: View {
             }
             .padding(.top, 10)
         }
+    }
+}
+
+/// "i" of Unavené svaly: what the percentages and the days mean.
+struct MuscleFatigueInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private let lines = [
+        "Procento říká, jak moc je sval už odpočatý. 100 % je plně připravený, 5 % je hned po tvrdém tréninku.",
+        "Čím nižší číslo, tím déle se sval ještě zotavuje. Sval na 5 % bude odpočatý třeba za 4 dny, sval na 30 % už zítra.",
+        "Velké svaly (stehna, hýždě, záda) se po těžkých cvicích zotavují až 3 dny, malé svaly paží a ramen kolem 2 dnů. Série do selhání prodlouží zotavení.",
+        "Počítá se z tvých sérií v posilovně za posledních 7 dní a z běhu, kola a chůze, které zatěžují nohy.",
+    ]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(lines, id: \.self) { line in
+                        Text(L10n.tr(line)).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(20)
+            }
+            .background(Palette.background)
+            .navigationTitle(L10n.tr("Únava svalů"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { dismiss() } } }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

@@ -12,6 +12,14 @@ enum GymSessionMath {
         }
     }
 
+    /// The weight and reps of the work set done just before this one (on the
+    /// same side by sides): the next set starts from them, as typed. Warm-ups
+    /// keep their own plan.
+    static func carried(_ set: GymSet, in exercise: GymExercise) -> (kg: String?, reps: String?)? {
+        guard !set.warmup, let before = exercise.sets.last(where: { !$0.warmup && $0.done && $0.row < set.row && $0.side == set.side }) else { return nil }
+        return (before.kg?.nilIfBlank, before.reps?.nilIfBlank)
+    }
+
     /// "8,4" (tonnes) or "18,5" (thousands of pounds), with its unit.
     static func volumeText(_ kg: Double) -> (value: String, unit: String) {
         Units.imperial ? (Fmt.decimal(Units.weight(kg) / 1000), "k lb") : (Fmt.decimal(kg / 1000), "t")
@@ -63,7 +71,7 @@ enum GymSessionMath {
     }
 
     /// The plan's main muscles and how much of their sets is done (0…1).
-    static func muscleProgress(_ exercises: [GymExercise], muscles: [String: [String: Double]]) -> [(id: String, share: Double)] {
+    static func muscleProgress(_ exercises: [GymExercise], muscles: [String: [String: Double]]) -> [(id: String, done: Int, planned: Int)] {
         var planned: [String: Double] = [:], done: [String: Double] = [:]
         for exercise in exercises {
             guard let map = muscles[exercise.name] else { continue }
@@ -72,13 +80,10 @@ enum GymSessionMath {
                 done[muscle, default: 0] += Double(exercise.doneCount)
             }
         }
-        let top = planned.sorted { $0.value > $1.value }.prefix(4)
-        var out: [(id: String, share: Double)] = []
-        for (muscle, count) in top {
-            let share: Double = min(1, (done[muscle] ?? 0) / max(1, count))
-            out.append((id: muscle, share: share))
-        }
-        return out
+        // Ties by name: the dictionaries' order differs on every call, and the
+        // rest's timer redraws the card each second.
+        let top = planned.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.prefix(4)
+        return top.map { (id: $0.key, done: Int(min(done[$0.key] ?? 0, $0.value)), planned: Int($0.value)) }
     }
 
     /// Today against last time: "+2,5 kg", "+1 op." or "=".
@@ -112,7 +117,16 @@ struct GymSetRow: View {
     let state: Phase
     var kgText: Binding<String>? = nil
     var repsText: Binding<String>? = nil
+    /// The planned reps ("5–8") shown in the empty field of the set at hand.
+    var repsHint: String? = nil
+    /// A ticked set's weight and reps changed afterwards (shown kg, reps).
+    var onEdit: ((String, String) -> Void)? = nil
     var toggle: () -> Void = {}
+
+    private enum Field { case kg, reps }
+    @FocusState private var focus: Field?
+    @State private var editKg = ""
+    @State private var editReps = ""
 
     var body: some View {
         HStack(spacing: 8) {
@@ -126,8 +140,8 @@ struct GymSetRow: View {
             }
             Text(lastTime ?? "—").font(.footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            field(kg, kgText, keyboard: .decimalPad)
-            field(reps, repsText, keyboard: .numberPad).frame(width: 52)
+            field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg)
+            field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps, hint: repsHint).frame(width: 52)
             Button(action: toggle) {
                 Group {
                     if state == .done {
@@ -149,12 +163,30 @@ struct GymSetRow: View {
         .padding(.vertical, 5)
         .background(state == .current ? Palette.track : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(state == .current ? Palette.amber.opacity(0.55) : .clear, lineWidth: 1.5))
+        .onAppear { editKg = kg; editReps = reps }
+        .onChange(of: kg) { _, value in if focus == nil { editKg = value } }
+        .onChange(of: reps) { _, value in if focus == nil { editReps = value } }
+        // Leaving the field keeps what was typed.
+        .onChange(of: focus) { old, now in
+            guard old != nil, now == nil, let onEdit, editKg != kg || editReps != reps else { return }
+            onEdit(editKg, editReps)
+        }
     }
 
     @ViewBuilder
-    private func field(_ value: String, _ binding: Binding<String>?, keyboard: UIKeyboardType) -> some View {
-        if let binding, state == .current {
-            TextField("–", text: binding)
+    private func field(_ value: String, _ binding: Binding<String>?, keyboard: UIKeyboardType, edit: Binding<String>, field: Field, hint: String? = nil) -> some View {
+        if state == .done, onEdit != nil {
+            // A ticked set stays editable: tap the number to fix it.
+            TextField("–", text: edit)
+                .keyboardType(keyboard)
+                .multilineTextAlignment(.center)
+                .font(Typo.number(22))
+                .foregroundStyle(Palette.ink)
+                .focused($focus, equals: field)
+                .frame(width: 64, height: 34)
+                .background(focus == field ? Palette.card : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else if let binding, state == .current {
+            TextField("–", text: binding, prompt: Text(verbatim: hint?.nilIfBlank ?? "–").foregroundStyle(Palette.faint))
                 .keyboardType(keyboard)
                 .multilineTextAlignment(.center)
                 .font(Typo.number(22))
@@ -236,45 +268,67 @@ struct HeartRecoveryCard: View {
     }
 }
 
-/// "Celkem dnes": the plan's main muscles, each as a filled circle.
+/// "Celkem dnes": the plan's main muscles lit on the figure (begun amber,
+/// done green, still to come light grey) and their sets done of planned.
 struct MuscleProgressCard: View {
-    let items: [(id: String, share: Double)]
+    let items: [(id: String, done: Int, planned: Int)]
+    /// "1 z 23 sérií" of the whole workout.
+    let total: (done: Int, planned: Int)
+    private var store: MuscleModelStore { MuscleModelStore.shared }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Celkem dnes").font(Typo.small).foregroundStyle(Palette.muted)
             HStack {
-                ForEach(items, id: \.id) { item in
-                    VStack(spacing: 6) {
-                        ZStack {
-                            Circle().fill(Palette.track)
-                            PieSlice(share: item.share).fill(Palette.amber)
+                Text("Celkem dnes").font(Typo.small).foregroundStyle(Palette.muted)
+                Spacer()
+                Text(verbatim: L10n.f("%@ z %@", String(total.done), String(total.planned)) + " " + Fmt.plural(total.planned, "série", "série", "sérií"))
+                    .font(Typo.small).foregroundStyle(Palette.muted).monospacedDigit()
+            }
+            HStack(spacing: 10) {
+                if let figure = store.figure {
+                    MuscleFigureFixedPair(figure: figure, colors: MuscleFigureFixedPair.colors(colors), labels: false)
+                        .frame(width: 150, height: 180)
+                        .allowsHitTesting(false)
+                }
+                VStack(alignment: .leading, spacing: 9) {
+                    ForEach(items, id: \.id) { item in
+                        HStack {
+                            Text(BodyFigure.label(item.id)).font(Typo.small.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                            Spacer(minLength: 6)
+                            Text(verbatim: "\(item.done)/\(item.planned)").font(Typo.small.weight(.medium))
+                                .foregroundStyle(item.done >= item.planned ? Palette.green : item.done > 0 ? Palette.amber : Palette.muted).monospacedDigit()
                         }
-                        .frame(width: 44, height: 44)
-                        Text(BodyFigure.label(item.id)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.7)
+                        .accessibilityElement(children: .combine)
                     }
-                    .frame(maxWidth: .infinity)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityValue(Text(verbatim: Fmt.int(item.share * 100) + " %"))
+                }
+                .frame(maxWidth: .infinity)
+            }
+            if store.figure != nil {
+                HStack(spacing: 14) {
+                    key("rozjeté", Palette.amber)
+                    key("v plánu", Self.planned)
+                    key("hotové", Palette.green)
                 }
             }
         }
         .padding(16)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
-}
 
-struct PieSlice: Shape {
-    let share: Double
+    /// The light grey of a muscle still to come today.
+    static let planned = Color(light: 0x8E8880, dark: 0x9AA3A8)
 
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        guard share > 0 else { return path }
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        path.move(to: center)
-        path.addArc(center: center, radius: min(rect.width, rect.height) / 2, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * min(1, share)), clockwise: false)
-        path.closeSubpath()
-        return path
+    private var colors: [String: Color] {
+        Dictionary(uniqueKeysWithValues: items.map { item in
+            (item.id, item.done >= item.planned ? Palette.green : item.done > 0 ? Palette.amber : Self.planned)
+        })
+    }
+
+    private func key(_ title: String, _ color: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted)
+        }
     }
 }
 
@@ -303,5 +357,181 @@ struct ZoneMinutesCard: View {
         }
         .padding(16)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+}
+
+/// The heart in the workout's header: crossed out while nothing measures the
+/// heart rate, red with a green dot when a beat comes in. A tap opens the
+/// sensors (Nastavení → Snímač tepu) over the workout.
+struct HeartSourceButton: View {
+    let live: LiveWorkout
+    var action: () -> Void
+    private var sensor: HeartRateSensor { HeartRateSensor.shared }
+
+    var body: some View {
+        let measuring = live.heartRate != nil || sensor.liveBpm != nil
+        // A paired sensor connected before Začít trénink counts too.
+        let on = measuring || sensor.connected
+        Button(action: action) {
+            Image(systemName: on ? "heart.fill" : "heart.slash")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(on ? Palette.rust : Palette.faint)
+                .frame(width: 36, height: 36)
+                // The whole circle takes the tap, not only the heart's outline.
+                .contentShape(Circle())
+                .overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                .overlay(alignment: .topTrailing) {
+                    if measuring || sensor.connected {
+                        Circle().fill(Palette.green).frame(width: 9, height: 9)
+                            .overlay(Circle().stroke(Palette.background, lineWidth: 2))
+                            .offset(x: -1, y: 1)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr(measuring ? "Tep se měří" : "Tep se neměří"))
+    }
+}
+
+/// The small "i" beside an exercise in the rest: how it is done.
+struct SmallInfoButton: View {
+    var label = "Technika"
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "info").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink)
+                .frame(width: 30, height: 30).background(Palette.track, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr(label))
+    }
+}
+
+/// Režim tréninku hidden with the arrow: where it was, so it opens the same
+/// (the exercise, the rest), and the lock-screen taps made meanwhile.
+struct MinimizedGym {
+    let date: String
+    let title: String
+    var day: GymDay
+    var index: Int
+    var restStart: Date?
+    var restEnd: Date?
+    var restTotal: Int
+    let next: String?
+    let startTapped: Bool
+    var pending: [GymActivityAction] = []
+}
+
+/// The bar over the tab bar while the workout is hidden: its time, the rest
+/// and the exercise; a tap opens it again.
+struct MinimizedGymBar: View {
+    let gym: MinimizedGym
+    let live: LiveWorkout
+    var open: () -> Void
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: 12) {
+                Image(systemName: "dumbbell.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.rust)
+                    .frame(width: 38, height: 38).background(Palette.track, in: Circle())
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 8) {
+                            Text(verbatim: gym.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                            Text(verbatim: elapsed(at: context.date)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).monospacedDigit()
+                        }
+                        if let line = line(at: context.date) {
+                            Text(verbatim: line).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                        }
+                    }
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.up").font(.footnote.weight(.semibold)).foregroundStyle(Palette.muted)
+            }
+            .padding(.leading, 10).padding(.trailing, 16).padding(.vertical, 9)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr("Zpět do tréninku"))
+    }
+
+    private func elapsed(at now: Date) -> String {
+        guard let start = live.clockStart else { return "" }
+        let s = max(0, Int(now.timeIntervalSince(start)))
+        return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
+    }
+
+    /// "Pauza 0:40 · další Dřep", or the exercise.
+    private func line(at now: Date) -> String? {
+        if let end = gym.restEnd, end > now {
+            let s = Int(end.timeIntervalSince(now).rounded(.up))
+            let rest = L10n.tr("Pauza") + " " + String(format: "%d:%02d", s / 60, s % 60)
+            return gym.next.map { rest + " · " + L10n.f("další %@", $0) } ?? rest
+        }
+        return gym.next
+    }
+}
+
+/// The sets of Teď or Další in the rest, unfolded with the arrow: the done
+/// ones ticked, the rest with the weight and reps to come. In Další the first
+/// set's weight can be changed and goes to all its sets still to do.
+struct RestSetsList: View {
+    let exercise: GymExercise
+    let last: GymHistory.Session?
+    var onWeight: ((String) -> Void)? = nil
+    @State private var typed = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let editable: Int? = onWeight == nil ? nil : exercise.sets.first { !$0.done && !$0.warmup }?.row
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("Série").frame(width: 40, alignment: .leading)
+                Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
+                Text(Units.weightUnit).frame(width: 64)
+                Text("Opak.").frame(width: 52)
+            }
+            .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
+            .padding(.top, 12).padding(.bottom, 4)
+            ForEach(exercise.sets) { s in
+                let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise)
+                let kg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg) ?? "–"
+                let reps: String = (s.done ? s.reps : carry?.reps ?? s.plannedReps)?.nilIfBlank ?? "–"
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                HStack(spacing: 8) {
+                    HStack(spacing: 4) {
+                        Text(s.warmup ? "W" : s.side == "P" ? "" : s.number)
+                        if let side = s.side { Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side)) }
+                        if s.done { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.green) }
+                    }
+                    .font(Typo.number(18)).foregroundStyle(s.done ? Palette.secondary : Palette.faint)
+                    .frame(width: 40, alignment: .leading)
+                    Text(GymSessionMath.lastTime(s, in: exercise, last: last) ?? "—").font(.footnote).foregroundStyle(Palette.faint)
+                        .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    if s.row == editable {
+                        TextField(kg, text: $typed)
+                            .keyboardType(.decimalPad).multilineTextAlignment(.center)
+                            .font(Typo.number(20)).foregroundStyle(Palette.ink)
+                            .focused($focused)
+                            .frame(width: 64, height: 32)
+                            .background(Palette.track, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(focused ? Palette.amber : .clear, lineWidth: 1.5))
+                            .onAppear { typed = kg == "–" ? "" : kg }
+                    } else {
+                        Text(kg).font(Typo.number(20)).foregroundStyle(s.done ? Palette.ink : Palette.faint).frame(width: 64)
+                    }
+                    Text(reps).font(Typo.number(20)).foregroundStyle(s.done ? Palette.ink : Palette.faint)
+                        .lineLimit(1).minimumScaleFactor(0.7).frame(width: 52)
+                }
+                .padding(.vertical, 7)
+            }
+        }
+        // Leaving the field: the weight goes to all the sets still to do.
+        .onChange(of: focused) { was, now in
+            guard was, !now, let onWeight, !typed.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+            onWeight(typed)
+        }
     }
 }

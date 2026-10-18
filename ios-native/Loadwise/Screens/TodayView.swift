@@ -13,6 +13,7 @@ struct TodayView: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .appRoutes()
         }
+        .journalMorningPrompt()
     }
 
     private var screen: some View {
@@ -133,11 +134,11 @@ struct TodayContent: View {
             .padding(.top, selectedDate == nil ? 12 : 28)
 
         // Cycle tracking under the numbers it explains: the morning question,
-        // the day's bleeding, or perimenopause and menopause symptoms.
-        if selectedDate == nil, let cycle = today.cycle, TodayCycleCard.shows(cycle) {
-            TodayCycleCard(cycle: cycle, date: today.date).padding(.top, 12)
+        // the day's bleeding, or perimenopause and menopause symptoms; on a
+        // past day what was logged that day, tap to change it.
+        if let cycle = today.cycle, TodayCycleCard.shows(cycle, past: selectedDate != nil) {
+            TodayCycleCard(cycle: cycle, date: today.date, past: selectedDate != nil).padding(.top, 12)
         }
-
         // Aktivita dne: the day's activity from anything (CoachPick.swift).
         if selectedDate == nil { CoachPickCard().padding(.top, 16) }
 
@@ -226,10 +227,7 @@ struct DataAgePill: View {
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(last, inSameDayAs: yesterday) {
             return L10n.f("data ze včera %@", time)
         }
-        let day = DateFormatter()
-        day.locale = Fmt.locale
-        day.timeZone = calendar.timeZone
-        day.dateFormat = L10n.isEnglish ? "MMM d" : "d. M."
+        let day = DateFormatters.make(L10n.isEnglish ? "MMM d" : "d. M.", locale: Fmt.locale, timeZone: calendar.timeZone)
         return L10n.f("data z %@", day.string(from: last) + " " + time)
     }
 }
@@ -249,10 +247,7 @@ struct WeekStrip: View {
         if let week, week.count == 7 { return week }
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.timeZone = calendar.timeZone
-        parser.dateFormat = "yyyy-MM-dd"
+        let parser = DateFormatters.iso(timeZone: calendar.timeZone)
         let weekday = parser.date(from: date).map { (calendar.component(.weekday, from: $0) + 5) % 7 } ?? 0
         let monday = AppModel.shift(date, by: -weekday) ?? date
         return (0..<7).map { TodaySnapshot.WeekDay(date: AppModel.shift(monday, by: $0) ?? monday, zone: nil) }
@@ -431,6 +426,10 @@ struct ReadinessHero: View {
                         Pill(text: pill.text, foreground: pill.fg, background: pill.bg)
                     }
                 }
+                if readiness.provisional == true {
+                    Text(provisionalLine)
+                        .font(Typo.small).foregroundStyle(Palette.muted)
+                }
             } else {
                 Text(nightMissing && isToday ? "Čeká na dnešní noc" : "Zatím bez čísla")
                     .font(Typo.sentence(34, relativeTo: .largeTitle))
@@ -443,6 +442,14 @@ struct ReadinessHero: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// Why the number may still move: a new data source without 14 days of its own.
+    private var provisionalLine: String {
+        if let days = readiness.provisionalDays, days > 0 {
+            return L10n.f("Orientační: nový zdroj dat, zpřesní se za %@.", String(days) + " " + Fmt.plural(days, "den", "dny", "dní"))
+        }
+        return L10n.tr("Orientační: nový zdroj dat, číslo se ještě zpřesní.")
     }
 
     private var pill: (text: String, fg: Color, bg: Color)? {
@@ -557,17 +564,26 @@ struct KeyNumbers: View {
     let today: TodaySnapshot
 
     var body: some View {
-        HStack(spacing: 0) {
-            RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), nil, sleep) }
-            Divider().overlay(Palette.hairline)
-            RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
-            Divider().overlay(Palette.hairline)
-            RouteLink(route: .heart) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                RouteLink(route: .sleep) { cell("Spánek", sleepFailed ? "–" : Fmt.hoursMinutes(today.sleep?.minutes), nil, sleepFailed ? Gauge(note: nil, color: Palette.indigo) : sleep) }
+                Divider().overlay(Palette.hairline)
+                RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
+                Divider().overlay(Palette.hairline)
+                RouteLink(route: .metric(.hrv)) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            if sleepFailed {
+                Divider().overlay(Palette.hairline)
+                PartUnavailableNote(text: "Spánek se teď nepodařilo načíst")
+            }
         }
-        .fixedSize(horizontal: false, vertical: true)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
     }
+
+    /// The server could not read the nights this time (not: no night yet).
+    private var sleepFailed: Bool { today.unavailable?.contains("sleep") == true && today.sleep?.minutes == nil }
 
     /// A cell's bar (when it has a range) and the line under it.
     struct Gauge {
@@ -627,6 +643,28 @@ struct KeyNumbers: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// One line at the foot of a Today card whose part the server could not load
+/// this time, with a new try; the card keeps its place.
+struct PartUnavailableNote: View {
+    @Environment(AppModel.self) private var model
+    let text: LocalizedStringKey
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(text).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+            Button {
+                Task { await model.refresh() }
+            } label: {
+                Label("Zkusit znovu", systemImage: "arrow.clockwise").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+            }
+            .buttonStyle(.plain)
+            .disabled(model.loading)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
     }
 }
 

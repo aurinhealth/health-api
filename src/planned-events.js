@@ -5,6 +5,7 @@ import {editLocalWorkout} from './local-workouts.js';
 
 import { cancelGymPlan, moveGymPlan } from './gym-plan-store.js';
 import { intervalsAuthorization } from "./intervals-auth.js";
+import { intervalsReads } from "./intervals-reads.js";
 
 const BASE = "https://intervals.icu/api/v1/athlete/0/events/";
 export const isStrengthEvent = event => /^(WeightTraining|Strength|Gym)$/i.test(String(event?.type || ''));
@@ -34,7 +35,7 @@ async function plannedRow(db, eventId) {
 
 // A move keeps the time of day, unless the app sends one: "HH:MM", or null
 // for the day without a time (midnight, as Intervals.icu shows it).
-export async function movePlannedEvent(env, { eventId, date, time }, fetchImpl = fetch) {
+export async function movePlannedEvent(env, { eventId, date, time }, fetchImpl = intervalsReads(env)) {
   const id = eventIdOf(eventId);
   if (!id) throw new Error(L("Neplatný plánovaný trénink.", "Invalid planned workout."));
   if (!validDate(date)) throw new Error(L("Neplatné datum.", "Invalid date."));
@@ -59,7 +60,7 @@ export async function movePlannedEvent(env, { eventId, date, time }, fetchImpl =
 // Outdoors or on the trainer: Intervals.icu tells them apart by the event type
 // (Ride / VirtualRide, Run / VirtualRun). A workout scheduled from the library
 // keeps the environment on its link, so its steps are drawn for that place.
-export async function setPlannedEnvironment(env, { eventId, environment }, fetchImpl = fetch) {
+export async function setPlannedEnvironment(env, { eventId, environment }, fetchImpl = intervalsReads(env)) {
   const id = eventIdOf(eventId);
   if (!id) throw new Error(L("Neplatný plánovaný trénink.", "Invalid planned workout."));
   if (!["indoor", "outdoor"].includes(environment)) throw new Error(L("Vyber venku, nebo uvnitř.", "Choose outdoor or indoor."));
@@ -78,12 +79,14 @@ export async function setPlannedEnvironment(env, { eventId, environment }, fetch
   return { status: "ok", eventId: id, environment, type: event.type, name: event.name || null };
 }
 
-export async function deletePlannedEvent(env, { eventId }, fetchImpl = fetch) {
+export async function deletePlannedEvent(env, { eventId }, fetchImpl = intervalsReads(env)) {
   const id = eventIdOf(eventId);
   if (!id) throw new Error(L("Neplatný plánovaný trénink.", "Invalid planned workout."));
   const row = await plannedRow(env.DB, id);
   let event = {}; try { event = JSON.parse(row?.payload_json || '{}'); } catch {}
-  if(id.startsWith('local-')){if(isStrengthEvent(event))await cancelGymPlan(env.DB,eventDate(event),event);return editLocalWorkout(env,id,{deleted:true},fetchImpl);}
+  // What went, so the coach can put it back after an illness (athlete-state.js cancelled).
+  const gone = { date: eventDate(event) || String(row?.start_time || "").slice(0, 10) || null, name: event.name || null, type: event.type || null, minutes: Number(event.moving_time) > 0 ? Math.round(Number(event.moving_time) / 60) : null };
+  if(id.startsWith('local-')){if(isStrengthEvent(event))await cancelGymPlan(env.DB,eventDate(event),event);return {...await editLocalWorkout(env,id,{deleted:true},fetchImpl),cancelled:gone};}
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "DELETE", headers: auth(env) });
   // Already gone in Intervals.icu: still remove the local copy.
   if (!response.ok && response.status !== 404) throw new Error(L("Intervals.icu smazání odmítlo (HTTP ", "Intervals.icu rejected the deletion (HTTP ") + response.status + ").");
@@ -95,7 +98,7 @@ export async function deletePlannedEvent(env, { eventId }, fetchImpl = fetch) {
   }
   await env.DB.prepare("DELETE FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(env.DB.userId, "planned:" + id).run();
   await env.DB.prepare("DELETE FROM workout_schedule_links WHERE user_id=? AND intervals_event_id=?").bind(env.DB.userId, id).run().catch(() => {});
-  return { status: "ok", eventId: id };
+  return { status: "ok", eventId: id, cancelled: gone };
 }
 
 // Also honor cancellations made directly in Intervals. Only disappearance of

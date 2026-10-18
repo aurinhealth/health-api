@@ -16,6 +16,10 @@ struct RootView: View {
     /// Scrolled down: the tab bar is only the open section's icon and "+".
     @State private var compactBar = false
     @State private var tabTaps = 0
+    /// Tabs opened since sign-in, kept built (screens) and whether each is scrolled down.
+    @State private var visited: Set<AppTab> = []
+    @State private var scrolledTabs: Set<AppTab> = []
+    private static let tabs: [AppTab] = [.today, .training, .food, .health]
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -26,8 +30,40 @@ struct RootView: View {
         }
     }
 
+    /// No tab bar in a full-screen flow nor on a detail: the detail has its
+    /// back button and the edge swipe, and the bar would lie over its last rows.
+    private var barHidden: Bool {
+        model.immersive || !(model.paths[model.tab] ?? []).isEmpty
+    }
+
+    /// Toasts sit above the tab bar and the hidden-workout bar, whichever show.
+    private var toastInset: CGFloat {
+        if model.immersive { return 16 }
+        return (barHidden ? 16 : 88) + (model.minimizedGym == nil ? 0 : 64)
+    }
+
     /// The tabs, the tab bar and the sheets grow with the text size up to a cap.
     private static let textSizes: PartialRangeThrough<DynamicTypeSize> = ...DynamicTypeSize.screenCap
+
+    /// The open tab as the coach's screen (src/assistant-app-context.js), so
+    /// "tenhle trénink" means the day and section the athlete is looking at.
+    private var coachView: String {
+        switch model.tab {
+        case .today: "today"
+        case .training: "training"
+        case .food: "nutrition"
+        case .health: "health"
+        }
+    }
+
+    @ViewBuilder private func tabScreen(_ tab: AppTab) -> some View {
+        switch tab {
+        case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true })
+        case .training: TrainingView()
+        case .food: FoodView()
+        case .health: HealthView()
+        }
+    }
 
     @ViewBuilder private var screens: some View {
         switch model.phase {
@@ -35,19 +71,37 @@ struct RootView: View {
             LoginView().dynamicTypeSize(Self.textSizes)
         case .signedIn:
             ZStack(alignment: .bottom) {
-                Group {
-                    switch model.tab {
-                    case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true })
-                    case .training: TrainingView()
-                    case .food: FoodView()
-                    case .health: HealthView()
+                // A tab once opened stays built behind the open one, so coming
+                // back does not lay out its whole screen again.
+                ZStack {
+                    ForEach(Self.tabs.filter { $0 == model.tab || visited.contains($0) }, id: \.self) { tab in
+                        let open = tab == model.tab
+                        tabScreen(tab)
+                            .opacity(open ? 1 : 0)
+                            .allowsHitTesting(open)
+                            .accessibilityHidden(!open)
+                            .zIndex(open ? 1 : 0)
+                            .environment(\.scrollReport, { (offset: CGFloat) in
+                                let compact = offset > 60
+                                if compact != scrolledTabs.contains(tab) {
+                                    if compact { scrolledTabs.insert(tab) } else { scrolledTabs.remove(tab) }
+                                }
+                                guard tab == model.tab else { return }
+                                if compact != compactBar { withAnimation(.snappy) { compactBar = compact } }
+                            })
                     }
                 }
                 .dynamicTypeSize(Self.textSizes)
-                .environment(\.scrollReport, { (offset: CGFloat) in
-                    let compact = offset > 60
-                    if compact != compactBar { withAnimation(.snappy) { compactBar = compact } }
-                })
+                .onDisappear { visited = []; scrolledTabs = [] }
+                .onChange(of: model.tab) { old, tab in
+                    visited.insert(old)
+                    // A tab built earlier: only its data is checked, like on its first visit.
+                    guard visited.contains(tab) else { return }
+                    Task {
+                        await model.refreshIfStale(tab)
+                        if tab == .today { await DeviceLocation.refreshIfFollowing(model) }
+                    }
+                }
                 if model.offline || !model.outbox.isEmpty || model.outboxNote != nil || model.notice != nil || model.syncStatus != nil {
                     VStack(spacing: 6) {
                         if let status = model.syncStatus, !model.offline {
@@ -75,7 +129,7 @@ struct RootView: View {
                 if let report = model.syncReport, !showSyncStatus {
                     SyncToastView(report: report) { showSyncStatus = true }
                         .padding(.horizontal, 16)
-                        .padding(.bottom, model.immersive ? 16 : 88)
+                        .padding(.bottom, toastInset)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
@@ -86,18 +140,32 @@ struct RootView: View {
                         if let undo = toast.settle(undo: true) { Task { await undo() } }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, model.immersive ? 16 : 88)
+                    .padding(.bottom, toastInset)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
                 }
                 if !model.immersive {
-                    TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
-                           onExpand: { withAnimation(.snappy) { compactBar = false } }, onAdd: { showAdd = true })
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 8)
-                        .dynamicTypeSize(Self.textSizes)
-                        .sensoryFeedback(.impact(weight: .light), trigger: tabTaps)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    VStack(spacing: 8) {
+                        // A workout hidden with its arrow (TrainingModeView): back to it.
+                        if let gym = model.minimizedGym {
+                            MinimizedGymBar(gym: gym, live: LiveWorkout.shared) { model.open(.trainingMode(gym.date)) }
+                                .padding(.horizontal, 28)
+                                .dynamicTypeSize(Self.textSizes)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        // Details have no tab bar; a hidden workout stays reachable there.
+                        if !barHidden {
+                            TabBar(tab: Binding(get: { model.tab }, set: { select($0) }), compact: compactBar,
+                                   onExpand: { withAnimation(.snappy) { compactBar = false } }, onAdd: { showAdd = true })
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 8)
+                                .dynamicTypeSize(Self.textSizes)
+                                .sensoryFeedback(.impact(weight: .light), trigger: tabTaps)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.snappy, value: model.minimizedGym == nil)
                 }
             }
             .sheet(isPresented: $showAdd) {
@@ -109,7 +177,7 @@ struct RootView: View {
                 .dynamicTypeSize(Self.textSizes)
             }
             .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
-            .sheet(isPresented: $showCoach) { CoachView().dynamicTypeSize(Self.textSizes) }
+            .sheet(isPresented: $showCoach) { CoachView(view: coachView, date: model.selectedDate).dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet().dynamicTypeSize(Self.textSizes) }
             .sheet(item: $quickFood) { start in
                 AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start)
@@ -125,6 +193,7 @@ struct RootView: View {
             }
             .animation(.snappy, value: model.syncReport?.id)
             .animation(.snappy, value: model.undoToast?.id)
+            .animation(.snappy, value: barHidden)
             // Without "Zpět" in 6 s the deletion goes through; also when another
             // toast took its place.
             .task(id: model.undoToast?.id) {
@@ -144,7 +213,9 @@ struct RootView: View {
             .fullScreenCover(isPresented: Binding(get: { model.needsSetup && !model.passkeyOffer }, set: { model.needsSetup = $0 })) { SetupFlowView().dynamicTypeSize(Self.textSizes) }
             .task {
                 if !model.demo { AppleHealth.shared.start(api: model.api) }
-                await model.checkSetup(); await model.loadAccountInitial()
+                async let setup: Void = model.checkSetup()
+                async let account: Void = model.loadAccountInitial()
+                _ = await (setup, account)
             }
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.
@@ -153,6 +224,9 @@ struct RootView: View {
                 // The icon's menu in the language and order of the moment.
                 if phase == .background { QuickActions.update(model.today) }
                 guard phase == .active else { return }
+                // Mid-workout (a look at the lock screen, another app between
+                // sets) the screen stays as it is; the workout's end refreshes.
+                guard !model.immersive, !LiveWorkout.shared.running else { return }
                 Task {
                     if model.today != nil || !model.outbox.isEmpty { await model.refresh(announce: true) }
                     // The open tab too, so Health or Food are not a day behind Today.
@@ -208,7 +282,9 @@ struct RootView: View {
 
     /// The tab again: back to its first screen.
     private func select(_ tab: AppTab) {
-        withAnimation(.snappy) { compactBar = false }
+        // A tab kept from before shows where it was scrolled.
+        let compact = model.tab != tab && scrolledTabs.contains(tab) && (model.paths[tab] ?? []).isEmpty
+        withAnimation(.snappy) { compactBar = compact }
         if model.tab == tab {
             model.paths[tab] = []
         } else {

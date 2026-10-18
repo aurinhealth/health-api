@@ -145,7 +145,11 @@ struct PillCard: View {
     private func take() {
         saving = true
         Task {
-            try? await model.takePill(on: date)
+            do {
+                try await model.takePill(on: date)
+            } catch {
+                model.notice = error.localizedDescription
+            }
             saving = false
         }
     }
@@ -183,21 +187,25 @@ struct TodayCycleCard: View {
     @Environment(AppModel.self) private var model
     let cycle: TodayCycle
     let date: String
+    /// A past day picked in the week strip: its log only, without the
+    /// morning question or today's note.
+    let past: Bool
     @State private var logging = false
     @State private var saving = false
 
-    init(cycle: TodayCycle, date: String) {
+    init(cycle: TodayCycle, date: String, past: Bool = false) {
         self.cycle = cycle
         self.date = date
+        self.past = past
     }
 
-    static func shows(_ cycle: TodayCycle) -> Bool {
-        cycle.ask || cycle.flow > 0 || (cycle.stage != "regular" && !cycle.symptoms.isEmpty)
+    static func shows(_ cycle: TodayCycle, past: Bool = false) -> Bool {
+        (cycle.ask && !past) || cycle.flow > 0 || (cycle.stage != "regular" && !cycle.symptoms.isEmpty)
     }
 
     var body: some View {
         Group {
-            if cycle.ask {
+            if cycle.ask && !past {
                 Card {
                     WidgetHeader(title: "Cyklus", color: Palette.pink)
                     Text("Začala menstruace?").font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
@@ -215,12 +223,12 @@ struct TodayCycleCard: View {
                     }
                     .buttonStyle(.plain)
                 }
-            } else if Self.shows(cycle) {
+            } else if Self.shows(cycle, past: past) {
                 Button { logging = true } label: {
                     Card {
                         WidgetHeader(title: "Cyklus", color: Palette.pink)
                         Text(verbatim: summary).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        if let note = cycle.note {
+                        if !past, let note = cycle.note {
                             Text(note).font(Typo.sentence(18)).foregroundStyle(Palette.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -247,7 +255,11 @@ struct TodayCycleCard: View {
     private func notYet() {
         saving = true
         Task {
-            try? await model.logCycleDay(date, ["noPeriod": .bool(true)])
+            do {
+                try await model.logCycleDay(date, ["noPeriod": .bool(true)])
+            } catch {
+                model.notice = error.localizedDescription
+            }
             saving = false
         }
     }

@@ -88,8 +88,8 @@ test("sessions read Intervals.icu and watch payloads", () => {
 
 test("the coach keeps the two days before a test easy", () => {
   const week = { days: [] };
-  const coach = (date, testDate) => buildCyclingCoachV2({ date, week, fitness: { wellness: [{ id: date, ctl: 60, atl: 55 }] }, health: { sleep: [] }, goal: { focus: "threshold" }, upcomingTest: testDate ? { sport: "ride", testDate, status: "scheduled" } : null });
-  assert.ok(["tempo", "threshold"].includes(coach("2026-10-13", null).recommendation.session.kind));
+  const coach = (date, testDate) => buildCyclingCoachV2({ date, week, fitness: { wellness: [{ id: date, ctl: 60, atl: 55 }] }, health: { sleep: [{ type: "sleep", durationMin: 480, endTime: date + "T06:30:00" }] }, goal: { focus: "threshold" }, upcomingTest: testDate ? { sport: "ride", testDate, status: "scheduled" } : null });
+  assert.equal(coach("2026-10-13", null).recommendation.session.kind, "threshold");
   assert.equal(coach("2026-10-13", "2026-10-14").recommendation.session.kind, "recovery");
   assert.equal(coach("2026-10-13", "2026-10-15").recommendation.session.kind, "endurance");
   assert.equal(upcomingTest({ ride: { status: "scheduled", testDate: "2026-10-14" }, run: { status: "dismissed", testDate: "2026-10-12" } }, "2026-10-13").testDate, "2026-10-14");

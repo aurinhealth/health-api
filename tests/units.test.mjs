@@ -100,3 +100,14 @@ test("the gym review shows loads in pounds for an imperial athlete", () => {
   const metric = withLang("en", () => buildGymReview({ values, history, date }));
   assert.deepEqual(metric.table.rows[0], ["DB bench press", "3× 24 kg × 8-10", "24×10, 24×10, 24×10", "8"]);
 });
+
+test("an imperial athlete's progression note is in lb (Revize 2026-10-16, nález 28)", async () => {
+  const { generateStrengthPlan } = await import("../src/strength-generator.js");
+  const history = [1, 2, 3].map(n => ({ exercise: "Lat pulldown", workout_date: "2026-09-20", type: "WORK", set_no: n, actual_kg: 45, actual_reps: 12, rpe: 7, completed: 1 }));
+  const context = { date: "2026-09-28", cycling: { recentRideTss: 100, recentRideHours: 2, recentActivities: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: history } };
+  const note = () => generateStrengthPlan(context, { focusMuscles: ["lats"], durationMinutes: 30 }).rows.find(r => r[0] === "WORK" && r[1] === "Lat pulldown")?.[9] || "";
+  const imperial = withLang("en", () => withUnits("imperial", note)), metric = withLang("en", note);
+  assert.match(imperial, /last time 3× 12 reps @ 99\.2 lb, RPE 7 → \+5\.5 lb/);
+  assert.doesNotMatch(imperial, / kg/);
+  assert.match(metric, /@ 45 kg, RPE 7 → \+2\.5 kg/);
+});

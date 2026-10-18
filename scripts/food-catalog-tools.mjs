@@ -31,7 +31,7 @@ export function cloudflareD1({accountId,token,fetchImpl=fetch}) {
 }
 
 export function foodPlan(config,environment='') {
-  if (environment !== '') throw new Error('Unsupported environment');
+  if (!['','staging'].includes(environment)) throw new Error('Unsupported environment');
   const selected = environment?config.env?.[environment]:config;
   const core = selected?.d1_databases?.find(d=>d.binding==='DB');
   if (core?.database_name !== (environment?'health-data-staging':'health-data')) throw new Error('Unexpected central database');

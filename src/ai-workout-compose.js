@@ -13,7 +13,8 @@ import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
 import { zonesFor, buildWorkout } from "./workout-model.js";
 import { cleanEnduranceTemplate, enduranceStructure, enduranceSystem } from "./endurance-templates.js";
-import { workoutLoadCheck, HARD_CAP } from "./ai-workout-pick.js";
+import { workoutLoadCheck, hardCapFor } from "./ai-workout-pick.js";
+import { instructions } from './private/ai-workout-compose.js';
 
 // Under this suitability (% of the reachable score) the library pick is a poor fit.
 export const COMPOSE_BELOW = 80;
@@ -58,18 +59,6 @@ const SCHEMA = { type: "json_schema", name: "own_workout", strict: true, schema:
   blocks: { type: "array", items: { type: "object", additionalProperties: false, required: ["repeats", "steps"], properties: { repeats: { type: "integer" }, steps: { type: "array", items: STEP } } } }
 } } };
 
-function instructions(sport) {
-  const zones = zonesFor(sport).map(([z, lo, hi]) => z + " " + lo + "–" + Math.min(hi, 200) + " %").join(", ");
-  return [
-    L("Jsi trenér vytrvalostního sportu. Knihovna pro dnešek nemá dobře sedící trénink, sestav proto vlastní.", "You are an endurance coach. The library has no well-fitting workout for today, so build one."),
-    sport === "run" ? "Sport: running; intensity is % of threshold pace speed." : "Sport: cycling; intensity is % of FTP.",
-    "Training type, total length and the most minutes at threshold and above are given in the data and are hard limits: the workout must be of that type (most minutes above easy riding or running in that zone), last the length within 5 minutes, and stay under the hard-minute cap.",
-    "Zones: " + zones + ". Recoveries between efforts sit in recovery. Add a warm-up and a cool-down.",
-    "Return blocks in order. A block is a section (repeats 1, one step) or a repeat (repeats 2–30, 1–6 steps done in turn). Each step has a short label in the athlete's language, a length in seconds and an intensity range low–high in %.",
-    "The name is short, like a workout title (\"Tempo 3×12\"), in the athlete's language. In reason write one or two short sentences in the athlete's language on why this workout fits today, with a specific number from the data. No intro.",
-    "recentRatings says how the last workouts of this sport fitted the athlete: do not build one like a workout that did not fit."
-  ].join("\n");
-}
 
 // The AI's workout for the day, saved, or null (no consent, no key, a failed
 // call or a workout that breaks the limits).
@@ -79,7 +68,7 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
   if (!env.OPENAI_API_KEY || !env.DB?.userId || !(length >= 20)) return null;
   const consent = await consentStatus(env).catch(() => ({ aiAllowed: false }));
   if (!consent.aiAllowed) return null;
-  const zone = String(coach.readiness?.status || today.zone || "green").toLowerCase(), cap = HARD_CAP[zone] ?? HARD_CAP.green;
+  const zone = String(coach.readiness?.status || today.zone || "green").toLowerCase(), cap = hardCapFor(coach, today);
   const facts = {
     sport, language: L("cs", "en"), type, minutes: length, hardMinutesCap: cap,
     readiness: { score: today.score ?? coach.readiness?.score ?? null, zone, feeling: today.feeling || null },

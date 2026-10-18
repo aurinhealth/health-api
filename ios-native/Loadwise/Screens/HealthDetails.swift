@@ -73,11 +73,13 @@ struct SleepDetailContent: View {
             }
             VStack(spacing: 0) {
                 if let stats = detail?.night?.stats, let hrv = stats.hrv {
-                    StatRow(title: "HRV v noci", value: Fmt.int(hrv), unit: "ms" + (stats.hrvLow.map { " · " + Fmt.int($0) + "–" + Fmt.int(stats.hrvHigh) } ?? ""))
+                    MetricRow(metric: .hrv, title: "HRV v noci", value: Fmt.int(hrv), unit: "ms" + (stats.hrvLow.map { " · " + Fmt.int($0) + "–" + Fmt.int(stats.hrvHigh) } ?? ""))
                 }
-                if let r = health.respiration { StatRow(title: "Dechová frekvence", value: Fmt.decimal(r.value), unit: "/ min") }
-                if let t = health.skinTemp { StatRow(title: "Teplota zápěstí", value: Fmt.signed(Units.temperatureChange(t.deviation), digits: 1), unit: L10n.f("%@ od normy", Units.temperatureUnit)) }
-                if let o = health.oxygen { StatRow(title: "Kyslík v krvi", value: Fmt.decimal(o.value, digits: o.value.rounded() == o.value ? 0 : 1), unit: "%") }
+                if let r = health.respiration { MetricRow(metric: .respiration, title: "Dechová frekvence", value: Fmt.decimal(r.value), unit: "/ min") }
+                if let d = health.wristTemp?.deviation ?? health.skinTemp?.deviation {
+                    MetricRow(metric: .temperature, title: "Teplota zápěstí", value: Fmt.signed(Units.temperatureChange(d), digits: 1), unit: L10n.f("%@ od normy", Units.temperatureUnit))
+                }
+                if let o = health.oxygen { MetricRow(metric: .oxygen, title: "Kyslík v krvi", value: Fmt.decimal(o.value, digits: o.value.rounded() == o.value ? 0 : 1), unit: "%") }
             }
             .padding(.top, 14)
 
@@ -107,19 +109,12 @@ struct SleepDetailContent: View {
             }
             .padding(.top, 14)
 
-            if let reg = sleep.regularity {
+            if let reg = sleep.regularity, !reg.nights.isEmpty {
+                let usual = RegularityChart.usual(reg.nights)
                 SectionLabel(text: L10n.f("Pravidelnost · %@ nocí", String(reg.nights.count))).padding(.top, 32)
-                Text(L10n.f("Usínáš obvykle ve %@, odchylka ± %@ min.", ClockText.format(reg.bedtime), String(reg.spread)))
+                Text(L10n.f("Usínáš obvykle mezi %@ a %@.", RegularityChart.clock(usual - RegularityChart.band), RegularityChart.clock(usual + RegularityChart.band)))
                     .font(Typo.sentence(18)).foregroundStyle(Palette.secondary).padding(.top, 10)
-                // Later bedtime = lower bar, so a late night stands out.
-                let late: Double = reg.nights.map(\.value).max() ?? 0
-                let usual: Double = reg.nights.map(\.value).reduce(0, +) / Double(max(reg.nights.count, 1))
-                BarChart(values: reg.nights.map { late + 60 - $0.value },
-                         styles: reg.nights.map { BarStyle(fill: abs($0.value - usual) > 45 ? Palette.amberBar.opacity(0.6) : Palette.lilac) },
-                         labels: reg.nights.map { Fmt.weekdayInitial($0.date) },
-                         highlighted: reg.nights.count - 1,
-                         height: 80)
-                    .padding(.top, 14)
+                Card { RegularityChart(nights: reg.nights) }.padding(.top, 14)
             }
             if let night = sleep.night {
                 VStack(spacing: 0) {
@@ -283,93 +278,6 @@ struct StageTotals: View {
     }
 }
 
-// MARK: - Heart
-
-struct HeartDetailContent: View {
-    let health: HealthSnapshot
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SectionLabel(text: "HRV a klidový tep").padding(.top, 24)
-            if let hrv = health.hrv {
-                Text("Variabilita srdečního tepu v noci").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 24)
-                HStack(alignment: .lastTextBaseline, spacing: 10) {
-                    Text(Fmt.int(hrv.value ?? hrv.series.last?.value)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
-                    Text("ms").font(Typo.small).foregroundStyle(Palette.faint)
-                    if let s = status(hrv) { Pill(text: s.0, foreground: s.1, background: s.2) }
-                }
-                if let value = hrv.value, let low = hrv.low, let high = hrv.high, high > low {
-                    DetailRange(value: value, low: low, high: high, label: L10n.f("tvůj normál %@", Fmt.int(low) + "–" + Fmt.int(high) + " ms"))
-                        .padding(.top, 14)
-                }
-                Card {
-                    WidgetHeader(title: "HRV po nocích", color: Palette.green)
-                    TrendChart(points: hrv.series, color: Palette.green, unit: "ms",
-                               band: Self.range(hrv.low, hrv.high), bandLabel: Self.normLabel(hrv.low, hrv.high), worse: .below)
-                }
-                .padding(.top, 20)
-                ThreeCells(cells: [("7 dní", Fmt.int(hrv.week)), ("Norma (60 dní)", Fmt.int(hrv.baseline)), ("Trend", trend(hrv.trend))])
-                    .padding(.top, 20)
-            }
-            if let rhr = health.restingHR {
-                SectionLabel(text: "Klidový tep").padding(.top, 32)
-                HStack(alignment: .lastTextBaseline, spacing: 8) {
-                    Text(Fmt.int(rhr.value)).font(Typo.number(56)).foregroundStyle(Palette.ink)
-                    Text("bpm" + (rhr.baseline.map { " · " + L10n.f("norma %@", Fmt.decimal($0)) } ?? "")).font(Typo.small).foregroundStyle(Palette.faint)
-                }
-                .padding(.top, 8)
-                if let value = rhr.value, let base = rhr.baseline {
-                    DetailRange(value: value, low: base - 2, high: base + 2,
-                                label: L10n.f("tvůj normál %@", Fmt.int(base - 2) + "–" + Fmt.int(base + 2) + " bpm"), worseAbove: true)
-                        .padding(.top, 12)
-                }
-                Card {
-                    WidgetHeader(title: "Klidový tep po dnech", color: Palette.rust)
-                    TrendChart(points: rhr.series, color: Palette.rust, unit: "bpm",
-                               band: rhr.baseline.map { ($0 - 2)...($0 + 2) },
-                               bandLabel: L10n.tr("norma ± 2 bpm"), height: 160, worse: .above)
-                }
-                .padding(.top, 12)
-            }
-            if health.hrRecovery != nil || health.walkingHR != nil {
-                SectionLabel(text: "Srdce a návyky").padding(.top, 32)
-                VStack(spacing: 0) {
-                    if let r = health.hrRecovery { StatRow(title: "Zotavení tepu po tréninku", value: Fmt.int(r.value), unit: "bpm") }
-                    if let w = health.walkingHR { StatRow(title: "Tep při chůzi", value: Fmt.int(w.value), unit: "bpm") }
-                }
-                .padding(.top, 8)
-            }
-        }
-    }
-
-    /// "norma 56–66 ms".
-    static func normLabel(_ low: Double?, _ high: Double?) -> String {
-        guard let low, let high else { return L10n.tr("tvoje norma") }
-        return L10n.f("norma %@–%@ ms", Fmt.int(low), Fmt.int(high))
-    }
-
-    static func range(_ low: Double?, _ high: Double?) -> ClosedRange<Double>? {
-        guard let low, let high, high > low else { return nil }
-        return low...high
-    }
-
-    private func status(_ hrv: HealthSnapshot.HRV) -> (String, Color, Color)? {
-        guard let v = hrv.value, let low = hrv.low, let high = hrv.high else { return nil }
-        if v > high { return ("nad normou", Palette.green, Palette.greenSoft) }
-        if v < low { return ("pod normou", Palette.rust, Palette.rust.opacity(0.14)) }
-        return ("v normě", Palette.green, Palette.greenSoft)
-    }
-
-    private func trend(_ t: String?) -> String {
-        switch t {
-        case "up": return "↑ stoupá"
-        case "down": return "↓ klesá"
-        case "stable": return "stabilní"
-        default: return "–"
-        }
-    }
-}
-
 // MARK: - Weight
 
 struct WeightDetailView: View {
@@ -412,10 +320,10 @@ struct WeightDetailContent: View {
                     SectionLabel(text: "Složení těla").padding(.top, 32)
                     VStack(spacing: 0) {
                         if let fat = w.bodyFat {
-                            StatRow(title: "Tělesný tuk", value: Fmt.decimal(fat.value), unit: "%" + (fat.change.map { " · " + ($0 < 0 ? "↓ " : "↑ ") + Fmt.decimal(abs($0)) } ?? ""))
+                            MetricRow(metric: .bodyFat, title: "Tělesný tuk", value: Fmt.decimal(fat.value), unit: "%" + (fat.change.map { " · " + ($0 < 0 ? "↓ " : "↑ ") + Fmt.decimal(abs($0)) } ?? ""))
                         }
                         if let muscle = w.muscle {
-                            StatRow(title: "Svalová hmota", value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)
+                            MetricRow(metric: .muscle, title: "Svalová hmota", value: Fmt.decimal(Units.weight(muscle.value)), unit: Units.weightUnit)
                         }
                     }
                     .padding(.top, 8)
@@ -480,7 +388,7 @@ struct WeightEntrySheet: View {
     private var value: Double? {
         guard let shown = Double(text.replacingOccurrences(of: ",", with: ".")) else { return nil }
         let v = Units.kg(shown)
-        guard v >= 30, v <= 300 else { return nil }
+        guard LogWeightIntent.range.contains(v) else { return nil }
         return v
     }
 
@@ -495,6 +403,145 @@ struct WeightEntrySheet: View {
             dismiss()
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+/// Pravidelnost (Petr's design of 2026-10-17): one row per night with a dot
+/// at the time of falling asleep on an hourly axis; the band is the usual
+/// time ± 30 min. A dot in the band is indigo, outside it amber, earlier or
+/// later alike. Sliding a finger over the chart shows the exact time there.
+struct RegularityChart: View {
+    /// Bedtime as minutes after 18:00 (src/app-health.js regularity).
+    let nights: [Point]
+    @State private var scrub: Double?
+
+    static let band: Double = 30
+    private static let rowHeight: CGFloat = 30
+    private static let dayWidth: CGFloat = 30
+    private static let timeWidth: CGFloat = 70
+    /// Room above the rows for the time under the finger.
+    private static let bubble: CGFloat = 30
+
+    static func usual(_ nights: [Point]) -> Double {
+        nights.map(\.value).reduce(0, +) / Double(max(nights.count, 1))
+    }
+    /// Minutes after 18:00 → the phone's clock.
+    static func clock(_ minutes: Double) -> String { ClockText.format(minutes: Int(minutes.rounded()) + 18 * 60) }
+
+    /// Where a time sits across the plot.
+    private struct Scale {
+        let lo: Double
+        let hi: Double
+        let x0: CGFloat
+        let width: CGFloat
+        func x(_ minutes: Double) -> CGFloat { x0 + CGFloat((minutes - lo) / (hi - lo)) * width }
+        func minutes(_ x: CGFloat) -> Double { lo + Double((x - x0) / width) * (hi - lo) }
+    }
+
+    private var usual: Double { Self.usual(nights) }
+    private var plotHeight: CGFloat { Self.rowHeight * CGFloat(nights.count) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            GeometryReader { geo in
+                plot(scale(geo.size.width), width: geo.size.width)
+            }
+            .frame(height: Self.bubble + plotHeight + 26)
+            VStack(alignment: .leading, spacing: 7) {
+                legend(Palette.indigo, "V obvyklém čase")
+                legend(Palette.amber, "Dřív nebo později než obvykle")
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.f("Usínáš obvykle mezi %@ a %@.", Self.clock(usual - Self.band), Self.clock(usual + Self.band)))
+    }
+
+    private func scale(_ width: CGFloat) -> Scale {
+        let values = nights.map(\.value) + [usual - Self.band, usual + Self.band]
+        let lo = ((values.min() ?? 0) / 60).rounded(.down) * 60
+        let hi = max(lo + 120, ((values.max() ?? 0) / 60).rounded(.up) * 60)
+        return Scale(lo: lo, hi: hi, x0: Self.dayWidth + 8, width: max(1, width - Self.dayWidth - Self.timeWidth - 16))
+    }
+
+    private func plot(_ scale: Scale, width: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(Array(stride(from: scale.lo, through: scale.hi, by: 60)), id: \.self) { hour in
+                hourLine(hour, scale)
+            }
+            ForEach(Array(nights.enumerated()), id: \.offset) { index, night in
+                nightRow(night, y: Self.bubble + Self.rowHeight * (CGFloat(index) + 0.5), scale: scale, width: width)
+            }
+            if let scrub { scrubMark(scrub, scale) }
+        }
+        .frame(width: width, height: Self.bubble + plotHeight + 26, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .simultaneousGesture(DragGesture(minimumDistance: 0)
+            .onChanged { drag in
+                let m = min(max(scale.minutes(drag.location.x), scale.lo), scale.hi)
+                scrub = (m / 5).rounded() * 5
+            }
+            .onEnded { _ in scrub = nil })
+    }
+
+    private func hourLine(_ hour: Double, _ scale: Scale) -> some View {
+        let x = scale.x(hour)
+        return ZStack(alignment: .topLeading) {
+            Path { p in
+                p.move(to: CGPoint(x: x, y: Self.bubble))
+                p.addLine(to: CGPoint(x: x, y: Self.bubble + plotHeight))
+            }
+            .stroke(Palette.hairline, style: StrokeStyle(lineWidth: 1, dash: [2, 3]))
+            Text(ClockText.format(minutes: Int(hour) + 18 * 60)).font(.caption2).foregroundStyle(Palette.faint)
+                .fixedSize()
+                .position(x: x, y: Self.bubble + plotHeight + 12)
+        }
+    }
+
+    private func nightRow(_ night: Point, y: CGFloat, scale: Scale, width: CGFloat) -> some View {
+        let inside = abs(night.value - usual) <= Self.band
+        let left = scale.x(usual - Self.band), right = scale.x(usual + Self.band)
+        return ZStack(alignment: .topLeading) {
+            Rectangle().fill(Palette.lilac.opacity(0.6))
+                .frame(width: right - left, height: Self.rowHeight - 6)
+                .position(x: (left + right) / 2, y: y)
+            Path { p in
+                p.move(to: CGPoint(x: scale.x0, y: y))
+                p.addLine(to: CGPoint(x: scale.x0 + scale.width, y: y))
+            }
+            .stroke(Palette.hairline, lineWidth: 1)
+            Text(Fmt.weekdayShort(night.date)).font(Typo.caption).foregroundStyle(Palette.muted)
+                .frame(width: Self.dayWidth, alignment: .leading)
+                .position(x: Self.dayWidth / 2, y: y)
+            Circle().fill(inside ? Palette.indigo : Palette.amber).frame(width: 12, height: 12)
+                .position(x: scale.x(night.value), y: y)
+            Text(Self.clock(night.value)).font(Typo.small).foregroundStyle(inside ? Palette.secondary : Palette.amber)
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .frame(width: Self.timeWidth, alignment: .trailing)
+                .position(x: width - Self.timeWidth / 2, y: y)
+        }
+    }
+
+    private func scrubMark(_ minutes: Double, _ scale: Scale) -> some View {
+        let x = scale.x(minutes)
+        return ZStack(alignment: .topLeading) {
+            Path { p in
+                p.move(to: CGPoint(x: x, y: Self.bubble - 2))
+                p.addLine(to: CGPoint(x: x, y: Self.bubble + plotHeight))
+            }
+            .stroke(Palette.ink.opacity(0.85), lineWidth: 1.5)
+            Text(Self.clock(minutes)).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.card)
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(Palette.ink, in: Capsule())
+                .fixedSize()
+                .position(x: min(max(x, scale.x0 + 34), scale.x0 + scale.width - 34), y: Self.bubble / 2 - 2)
+        }
+    }
+
+    private func legend(_ color: Color, _ text: String) -> some View {
+        HStack(spacing: 8) {
+            Circle().fill(color).frame(width: 10, height: 10)
+            Text(L10n.tr(text)).font(Typo.caption).foregroundStyle(Palette.muted)
         }
     }
 }

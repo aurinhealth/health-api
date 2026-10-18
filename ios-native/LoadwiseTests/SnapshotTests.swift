@@ -49,6 +49,16 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(DayTimelineRows.stats(today.plan[0].session).map(\.label), ["Vzdálenost", "Délka", "Energie"])
     }
 
+    /// A nap sits among what was done in the order of the day.
+    func testDayTimelineNap() {
+        var today = DemoData.today
+        today.naps = [TodaySnapshot.Nap(start: "14:05", end: "15:43", minutes: 92)]
+        let rows = DayTimelineRows.make(today, now: 17 * 60)
+        XCTAssertEqual(rows.map(\.id), ["sleep", "readiness", today.plan[0].id, "strain", "nap-14:05", "steps", "now", today.plan[1].id, today.plan[2].id])
+        today.naps = [TodaySnapshot.Nap(start: "06:00", end: "07:00", minutes: 60)]
+        XCTAssertEqual(DayTimelineRows.make(today, now: nil)[2].id, "nap-06:00")
+    }
+
     func testDayTimelineCard() throws {
         try render("today-den", height: 760) { DayTimeline(today: DemoData.today).padding(24).environment(AppModel(demo: true)) }
     }
@@ -74,7 +84,9 @@ final class SnapshotTests: XCTestCase {
         try render("health", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: health) }.padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
         try render("health-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30) }
         try render("health-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: nil).padding(24).padding(.top, 30) }
-        try render("health-heart", glow: Palette.Glow.health) { HeartDetailContent(health: health).padding(24).padding(.top, 30) }
+        for metric in HealthMetric.allCases {
+            try render("health-" + metric.rawValue, glow: Palette.Glow.health) { MetricDetailContent(metric: metric, health: health).padding(24).padding(.top, 30) }
+        }
         try render("health-weight", glow: Palette.Glow.health) { WeightDetailContent(health: health).padding(24).padding(.top, 30) }
     }
 
@@ -90,13 +102,20 @@ final class SnapshotTests: XCTestCase {
 
     func testFoodScreens() throws {
         try render("food", glow: Palette.Glow.food) { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
+        var pinned = DemoData.food
+        pinned.nutrients = DemoData.pinnedNutrients
+        try render("food-nutrients-pinned", glow: Palette.Glow.food) { FoodContent(food: pinned).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
+        try render("nutrients", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Živiny", back: {}) { Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted) }; NutrientsContent(page: DemoData.nutrients, week: .constant(false), date: "2026-10-08").padding(.top, 20) }.padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
+        try render("nutrients-free", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Živiny", back: {}); NutrientsContent(page: DemoData.nutrientsFree, week: .constant(false), date: "2026-10-08").padding(.top, 20) }.padding(24).padding(.top, 30).environment(AppModel(demo: true)) }
+        try render("nutrient-detail", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: DemoData.nutrientDetail.name, back: {}); NutrientDetailContent(detail: DemoData.nutrientDetail) }.padding(24).padding(.top, 30) }
+        try render("nutrient-favorites", glow: Palette.Glow.food) { VStack(spacing: 0) { NutrientsTopBar(title: "Na obrazovce Jídlo", back: {}); NutrientFavoritesList(items: DemoData.nutrients.items, chosen: .constant(DemoData.nutrients.favorites)).padding(.top, 24) }.padding(24).padding(.top, 30) }
         try render("food-amount", height: 700) { NavigationStack { FoodAmountView(product: DemoData.foods[0], meal: "snack_pm") }.environment(AppModel(demo: true)) }
     }
 
     func testHealthAndFoodDecode() throws {
         let h = DemoData.health
         XCTAssertEqual(h.readiness.score, 78, "the same morning as Today")
-        XCTAssertEqual(h.readiness.parts.map(\.key), ["hrv", "restingHR", "sleep"])
+        XCTAssertEqual(h.readiness.parts.map(\.key), ["sleep", "restingHR", "hrv"])
         XCTAssertEqual(h.sleep.night?.stages?.deep, 83)
         let f = DemoData.food
         XCTAssertEqual(f.meals.map(\.type), ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"])
@@ -340,6 +359,9 @@ final class SnapshotTests: XCTestCase {
 
     func testDeepLinks() {
         XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/sleep")!), .sleep)
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/heart")!), .metric(.hrv))
+        XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/metric/temperature")!), .metric(.temperature))
+        XCTAssertNil(AppRoute(url: URL(string: "loadwise://open/metric/nope")!))
         XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/gym/2026-10-08")!), .gym("2026-10-08"))
         XCTAssertNil(AppRoute(url: URL(string: "loadwise://open/food")!))
         XCTAssertNil(AppRoute(url: URL(string: "https://open/sleep")!))

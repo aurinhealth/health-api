@@ -34,6 +34,18 @@ struct TodaySnapshot: Decodable, Equatable {
     /// The week strip above Dnes: Monday to Sunday of the day's week, each
     /// day up to it with its readiness zone (src/app-today.js readinessWeek).
     var week: [WeekDay]? = nil
+    /// The day's naps for Dnes → Den, each from its start to its end
+    /// (src/app-today.js napsOn); nil from an older server.
+    var naps: [Nap]? = nil
+    /// Parts the server could not load this time ("sleep", "fluids"): their
+    /// place says so instead of looking empty; nil from an older server.
+    var unavailable: [String]? = nil
+
+    struct Nap: Decodable, Equatable {
+        let start: String?
+        let end: String?
+        let minutes: Int
+    }
 
     struct WeekDay: Decodable, Equatable {
         let date: String
@@ -72,6 +84,10 @@ struct TodaySnapshot: Decodable, Equatable {
     struct Readiness: Decodable, Equatable {
         let score: Int?
         let zone: String?
+        /// The baseline is carried over from an earlier data source until the
+        /// new one has 14 days of its own; `provisionalDays` is how many are left.
+        var provisional: Bool? = nil
+        var provisionalDays: Int? = nil
     }
 
     struct Sleep: Decodable, Equatable {
@@ -165,6 +181,8 @@ struct TodaySnapshot: Decodable, Equatable {
         var recoveryId: Int? = nil
         /// A done workout: what it added to the day's strain (Den: "+5,1 tréninkem").
         var strain: Double? = nil
+        /// Bedtime: the planned wake time, the end of the dashed night ahead.
+        var end: String? = nil
 
         struct Eased: Decodable, Equatable {
             let title: String

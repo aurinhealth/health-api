@@ -104,10 +104,15 @@ targets:
           - CFBundleURLName: eu.petrfitnessdata.loadwise.native
             CFBundleURLSchemes:
               - loadwise
+        # Posilovna naživo and Režim tréninku on the lock screen and in the Dynamic Island (App/GymLiveActivity.swift).
+        NSSupportsLiveActivities: true
         # Syncing without the app being opened (App/BackgroundRefresh.swift):
         # iOS runs the refresh task a few times a day when it chooses.
+        # bluetooth-central: the paired heart rate strap (App/HeartRateSensor.swift)
+        # keeps sending beats while the phone is locked during Režim tréninku.
         UIBackgroundModes:
           - fetch
+          - bluetooth-central
         BGTaskSchedulerPermittedIdentifiers:
           - eu.petrfitnessdata.loadwise.native.refresh
         # Sdílet → Instagram Stories (ShareExport.instagram) with the Meta app ID.
@@ -130,6 +135,9 @@ targets:
     sources:
       - path: LoadwiseWidgets
       - path: Shared
+        # Siri phrases belong to the app's AurinShortcuts only.
+        excludes:
+          - "en.lproj/AppShortcuts.strings"
       - path: Privacy/Widgets/PrivacyInfo.xcprivacy
         buildPhase: resources
     entitlements:
@@ -162,6 +170,19 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: eu.petrfitnessdata.loadwise.native.tests
+  # The smoke test before a release: the app tapped through on the simulator (ios-native.yml).
+  LoadwiseUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: LoadwiseUITests
+    dependencies:
+      - target: Loadwise
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: eu.petrfitnessdata.loadwise.native.uitests
+        TEST_TARGET_NAME: Loadwise
 schemes:
   Loadwise:
     build:
@@ -172,4 +193,14 @@ schemes:
       targets:
         - LoadwiseTests
       # The tests check the Czech source texts; the simulator itself speaks English.
+      language: cs
+  # Its own scheme, so the unit tests and screen renders run as before.
+  LoadwiseSmoke:
+    build:
+      targets:
+        Loadwise: all
+        LoadwiseUITests: [test]
+    test:
+      targets:
+        - LoadwiseUITests
       language: cs

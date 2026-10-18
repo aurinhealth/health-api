@@ -102,7 +102,10 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
     const duration = body?.preview === true ? body?.durationMinutes : trainingBudget(prefs, context.date, body?.durationMinutes == null ? 60 : Number(body.durationMinutes), { userInitiated: body?.userInitiated === true });
     if (body?.preview !== true && duration < 30) throw new Error(L('Na posilovnu nezbývá alespoň 30 minut.', 'There aren\'t at least 30 minutes left for the gym.'));
     const options = {
-      diagnosticPreview: body?.preview === true,
+      // Only the deployment check (routes-admin.js) skips the athlete's status
+      // and the red-morning check; the app's previews (the gym builder, the
+      // coach's card, the week) obey them (Revize 2026-10-16, S20).
+      diagnosticPreview: body?.preview === true && body?.diagnostic === true,
       focus: body?.focus ? String(body.focus) : undefined,
       focusSource: body?.focusSource === "week" ? "week" : undefined,
       forceProtectLegs: body?.forceProtectLegs === true,

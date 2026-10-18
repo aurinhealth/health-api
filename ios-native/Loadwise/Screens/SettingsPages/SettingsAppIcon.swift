@@ -55,11 +55,33 @@ struct AppIconChoice: Identifiable, Equatable {
         alternate == "AppIcon-auto" ? nil : alternate
     }
 
-    /// Odznak, Zlatý odznak, Dráha, Zlatá dráha of one sport.
-    static func sport(_ key: String, base: Rule, gold: Rule) -> [AppIconChoice] {
-        [AppIconChoice(id: "badge-\(key)", name: "Odznak", rule: base), AppIconChoice(id: "badge-\(key)-gold", name: "Zlatý odznak", rule: gold),
-         AppIconChoice(id: "track-\(key)", name: "Dráha", rule: base), AppIconChoice(id: "track-\(key)-gold", name: "Zlatá dráha", rule: gold)]
+    /// One look of the icons: every style has the same sport, season and reward icons.
+    struct Style {
+        let key: String
+        let name: String
+        let gold: String
     }
+
+    /// Odznak and Dráha; one row each in a section. Záře and Prstenec are kept for
+    /// later in ios-native/IconsLater, outside the app.
+    static let styles: [Style] = [
+        Style(key: "badge", name: "Odznak", gold: "Zlatý odznak"),
+        Style(key: "track", name: "Dráha", gold: "Zlatá dráha")
+    ]
+
+    /// Odznak, Zlatý odznak, Dráha, Zlatá dráha, … of one sport.
+    static func sport(_ key: String, base: Rule, gold: Rule) -> [AppIconChoice] {
+        styles.flatMap { style -> [AppIconChoice] in
+            [AppIconChoice(id: style.key + "-" + key, name: style.name, rule: base),
+             AppIconChoice(id: style.key + "-" + key + "-gold", name: style.gold, rule: gold)]
+        }
+    }
+
+    /// The Aurin Pro icons from launch. The 13 later ones (Monochrom, Retro, Saturn, …)
+    /// are kept in ios-native/IconsLater, outside the app.
+    static let proIcons: [(id: String, name: String)] = [
+        ("aurora", "Polární záře"), ("midnight", "Půlnoc"), ("eclipse", "Zatmění"), ("porcelain", "Porcelán"), ("sky", "Nebe")
+    ]
 
     /// Spring 0, summer 1, autumn 2, winter 3 (northern seasons by month).
     static func season(of date: Date = .now) -> Int {
@@ -84,12 +106,11 @@ struct AppIconChoice: Identifiable, Equatable {
         Section(title: "Běh", icons: sport("run", base: .runKm(100), gold: .runKm(2500))),
         Section(title: "Kolo", icons: sport("ride", base: .rideKm(1000), gold: .rideKm(10000))),
         Section(title: "Posilovna", icons: sport("gym", base: .gym(50), gold: .gym(500))),
-        Section(title: "Roční období", icons: ["badge", "track"].flatMap { style in
-            seasonKeys.indices.map { AppIconChoice(id: "\(style)-\(seasonKeys[$0])", name: seasonNames[$0], rule: .season($0)) }
+        Section(title: "Roční období", icons: styles.flatMap { style -> [AppIconChoice] in
+            seasonKeys.indices.map { AppIconChoice(id: style.key + "-" + seasonKeys[$0], name: seasonNames[$0], rule: .season($0)) }
         }),
-        Section(title: "Odměna", icons: [AppIconChoice(id: "badge-streak", name: "Odznak", rule: .streak(30)), AppIconChoice(id: "track-streak", name: "Dráha", rule: .streak(30))]),
-        Section(title: "Speciální · Aurin Pro", icons: [("aurora", "Polární záře"), ("midnight", "Půlnoc"), ("eclipse", "Zatmění"), ("porcelain", "Porcelán"), ("sky", "Nebe")]
-            .map { AppIconChoice(id: "pro-" + $0.0, name: $0.1, rule: .pro) })
+        Section(title: "Odměna", icons: styles.map { AppIconChoice(id: $0.key + "-streak", name: $0.name, rule: .streak(30)) }),
+        Section(title: "Speciální · Aurin Pro", icons: proIcons.map { AppIconChoice(id: "pro-" + $0.id, name: $0.name, rule: .pro) })
     ]
 }
 
@@ -178,7 +199,7 @@ struct AppIconSettingsView: View {
     }
 
     private func grid(_ icons: [AppIconChoice]) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 4), alignment: .center, spacing: 16) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4, alignment: .top), count: 4), alignment: .center, spacing: 16) {
             ForEach(icons) { icon in cell(icon) }
         }
         .padding(.horizontal, 6).padding(.vertical, 16)
@@ -205,8 +226,9 @@ struct AppIconSettingsView: View {
                                 .offset(x: 6, y: -7)
                         }
                     }
+                // Long Pro names ("Rýsovací deska bílá") wrap; the row stays aligned at the top.
                 Text(icon.name).font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.ink)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.8)
                 if !open && icon.rule != .pro {
                     HStack(spacing: 2) {
                         Image(systemName: "lock.fill").font(.system(size: 8))

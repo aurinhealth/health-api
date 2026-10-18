@@ -2,10 +2,11 @@ import SwiftUI
 
 /// Dnes → Den (Petr's design of 2026-10-15): the day on one line, in place of
 /// Plán dne. What already happened sits above "teď": the night, the readiness,
-/// done workouts and the strain they added, the steps so far. Below it, with
+/// done workouts and the strain they added, naps, the steps so far. Below it, with
 /// dashed dots, what is still planned: a workout with Začít, stretching, the
-/// pill and bedtime, which moves later as the day's strain raises tonight's
-/// sleep need (src/app-today.js). The line starts at the first dot.
+/// pill and the night ahead, dashed from bedtime to the planned wake time;
+/// bedtime moves later as the day's strain raises tonight's sleep need
+/// (src/app-today.js). The line starts at the first dot.
 struct DayTimeline: View {
     @Environment(AppModel.self) private var model
     let today: TodaySnapshot
@@ -55,6 +56,15 @@ struct DayTimeline: View {
             RouteLink(route: .sleep) {
                 DaySpanRow(color: Palette.indigo, start: sleep.start.map { ClockText.format($0) }, end: sleep.end.map { ClockText.format($0) }, first: first, last: last) {
                     sleepContent(sleep)
+                }
+            }
+        case .nap(let nap):
+            RouteLink(route: .sleep) {
+                DaySpanRow(color: Palette.indigo, start: nap.start.map { ClockText.format($0) }, end: nap.end.map { ClockText.format($0) }, first: first, last: last) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Šlofík").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text(Fmt.hoursMinutes(Double(nap.minutes))).font(Typo.number(26)).foregroundStyle(Palette.ink)
+                    }
                 }
             }
         case .readiness(let score, let zone):
@@ -201,30 +211,45 @@ struct DayTimeline: View {
         case "pill": Palette.pink
         default: Palette.indigo
         }
-        let line = DayPointRow(color: color, time: item.time.map { ClockText.format($0) }, future: !item.done, first: first, last: last) {
-            HStack(alignment: .center, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.ink : Palette.secondary).lineLimit(2)
-                    if let detail = item.detail {
-                        Text(detail).font(Typo.caption).foregroundStyle(Palette.faint)
+        if item.kind == "bedtime" {
+            // The night ahead, dashed from bedtime to the planned wake time.
+            NavigationLink(value: AppRoute.sleepSettings) {
+                if let end = item.end {
+                    DaySpanRow(color: color, start: item.time.map { ClockText.format($0) }, end: ClockText.format(end), future: true, first: first, last: last) {
+                        itemContent(item)
+                    }
+                } else {
+                    DayPointRow(color: color, time: item.time.map { ClockText.format($0) }, future: true, first: first, last: last) {
+                        itemContent(item)
                     }
                 }
-                Spacer(minLength: 8)
-                if item.kind == "pill" {
-                    PillButton(taken: item.done ? (item.time ?? "taken") : nil, saving: busy) { act { try await model.takePill(on: day) } }
-                } else if item.kind == "bedtime" {
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
-                        .accessibilityHidden(true)
-                } else if item.done {
-                    Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
-                        .accessibilityLabel("Hotovo")
-                }
+            }
+            .buttonStyle(.plain)
+        } else {
+            DayPointRow(color: color, time: item.time.map { ClockText.format($0) }, future: !item.done, first: first, last: last) {
+                itemContent(item)
             }
         }
-        if item.kind == "bedtime" {
-            NavigationLink(value: AppRoute.sleepSettings) { line }.buttonStyle(.plain)
-        } else {
-            line
+    }
+
+    private func itemContent(_ item: TodaySnapshot.PlanItem) -> some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.done ? Palette.ink : Palette.secondary).lineLimit(2)
+                if let detail = item.detail {
+                    Text(detail).font(Typo.caption).foregroundStyle(Palette.faint)
+                }
+            }
+            Spacer(minLength: 8)
+            if item.kind == "pill" {
+                PillButton(taken: item.done ? (item.time ?? "taken") : nil, saving: busy) { act { try await model.takePill(on: day) } }
+            } else if item.kind == "bedtime" {
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                    .accessibilityHidden(true)
+            } else if item.done {
+                Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
+                    .accessibilityLabel("Hotovo")
+            }
         }
     }
 
@@ -298,6 +323,7 @@ struct PlanRowMenu: ViewModifier {
 enum DayTimelineRows {
     enum Entry: Identifiable {
         case sleep(TodaySnapshot.Sleep)
+        case nap(TodaySnapshot.Nap)
         case readiness(Int, String?)
         case workout(TodaySnapshot.PlanItem)
         /// The day's strain after the last done workout: its end, the score
@@ -310,6 +336,7 @@ enum DayTimelineRows {
         var id: String {
             switch self {
             case .sleep: return "sleep"
+            case .nap(let nap): return "nap-" + (nap.start ?? "")
             case .readiness: return "readiness"
             case .workout(let item), .item(let item): return item.id
             case .strain: return "strain"
@@ -339,6 +366,19 @@ enum DayTimelineRows {
             let added = workouts.compactMap(\.strain).reduce(0, +)
             let end = minutes(lastWorkout.time).map { $0 + (lastWorkout.session?.minutes ?? 0) }
             rows.insert(.strain(end, score, added > 0 ? min(added, score) : nil), at: index + 1)
+        }
+
+        // Naps among what was done, in the order of the day.
+        for nap in today.naps ?? [] {
+            let start = minutes(nap.start) ?? 0
+            let after = rows.firstIndex { entry in
+                switch entry {
+                case .workout(let item), .item(let item): return (minutes(item.time ?? item.session?.time) ?? 0) > start
+                case .strain(let end, _, _): return (end ?? 0) > start
+                default: return false
+                }
+            }
+            rows.insert(.nap(nap), at: after ?? rows.count)
         }
 
         if let steps = today.steps.today, steps > 0 { rows.append(.steps(steps, stepsTime)) }

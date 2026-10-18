@@ -28,9 +28,20 @@ section instead.
       Needs ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH, BUNDLE_ID,
       MARKETING_VERSION and BUILD_NUMBER in the environment.
 
+  testflight_notes.py release NOTES_FILE
+      "Vydat": sets the notes on build BUILD_NUMBER (already in TestFlight),
+      adds it to the external testers' group (EXTERNAL_GROUP, or the only
+      external group) and sends it to Apple's beta review. Same environment
+      as upload, without MARKETING_VERSION. With RELEASE_ALL=1, write takes
+      every pull request since BASE_SHA, not only the ones touching ios-native/.
+
+  testflight_notes.py released
+      Prints the number of the newest build the external testers already
+      have (empty when none): where the next release's summary starts.
+
 Standard library only (the JWT is signed with the openssl command).
 """
-import base64, json, os, re, subprocess, sys, time, urllib.error, urllib.request
+import base64, json, os, re, subprocess, sys, time, unicodedata, urllib.error, urllib.request
 
 LIMIT = 4000  # App Store Connect's limit for whatsNew
 API = "https://api.appstoreconnect.apple.com/v1"
@@ -83,6 +94,13 @@ def pull_request(number):
         return None
 
 
+def plain(line):
+    """App Store Connect refuses symbols such as ✓, ✕ or emoji in whatsNew
+    (build 86); arrows and punctuation pass."""
+    line = "".join(c for c in line if unicodedata.category(c) != "So")
+    return re.sub(r"\s+([,.;:])", r"\1", re.sub(r"\s{2,}", " ", line)).strip()
+
+
 def render(entries):
     """entries: (title, section) per pull request, newest first."""
     new, test, untold = [], [], False
@@ -90,8 +108,8 @@ def render(entries):
         if sec is None:
             untold = True
         else:
-            new += sec[0]
-            test += sec[1]
+            new += [plain(l) for l in sec[0]]
+            test += [plain(l) for l in sec[1]]
     if untold:
         # A pull request without the section (from before it existed): its
         # title is often English, so it is only counted, never quoted.
@@ -114,7 +132,8 @@ def notes_since(base):
         pr = pull_request(os.environ["PR_NUMBER"]) or {}
         return render([(pr.get("title", ""), section(pr.get("body")))])
     rev = f"{base}..HEAD" if base else "-15"
-    log = git("log", "--no-merges", "--format=%s", rev, "--", "ios-native")
+    paths = [] if os.environ.get("RELEASE_ALL") == "1" else ["--", "ios-native"]
+    log = git("log", "--no-merges", "--format=%s", rev, *paths)
     entries = []
     for subject in filter(None, log.splitlines()):
         m = re.search(r"\(#(\d+)\)\s*$", subject)
@@ -135,6 +154,9 @@ def check():
         sys.exit("::error::Sekce TestFlight má být česky (Co je nového / Co otestovat).")
     if sec[0] and not sec[1]:
         sys.exit(f"::error::Sekce TestFlight potřebuje i „{TEST}“: konkrétní kroky v aplikaci.")
+    symbols = sorted({c for c in " ".join(lines) if unicodedata.category(c) == "So"})
+    if symbols:
+        sys.exit("::error::App Store Connect v sekci TestFlight nepřijme znaky " + " ".join(symbols) + ", napiš je slovy.")
     print(render([("", sec)]))
 
 
@@ -164,7 +186,8 @@ def token():
     return f"{signing}.{b64(der_to_raw(der))}"
 
 
-def call(method, path, body=None):
+def call(method, path, body=None, allow=()):
+    """allow: HTTP codes that are an answer, not a failure (returned as {"status": code})."""
     req = urllib.request.Request(API + path, method=method,
                                  data=json.dumps(body).encode() if body else None,
                                  headers={"Authorization": "Bearer " + token(), "Content-Type": "application/json"})
@@ -172,28 +195,20 @@ def call(method, path, body=None):
         with urllib.request.urlopen(req) as res:
             return json.load(res) if res.status != 204 else {}
     except urllib.error.HTTPError as err:
+        if err.code in allow:
+            return {"status": err.code}
         sys.exit(f"{method} {path} → {err.code}: {err.read().decode()[:500]}")
 
 
-def upload(notes_file):
-    notes = open(notes_file, encoding="utf-8").read().strip()[:LIMIT]
-    env = os.environ
-    apps = call("GET", f"/apps?filter[bundleId]={env['BUNDLE_ID']}")["data"]
+def app_id():
+    bundle = os.environ["BUNDLE_ID"]
+    apps = call("GET", f"/apps?filter[bundleId]={bundle}")["data"]
     if not apps:
-        sys.exit(f"No app with bundle ID {env['BUNDLE_ID']} in App Store Connect")
-    app = apps[0]["id"]
-    query = (f"/builds?filter[app]={app}&filter[version]={env['BUILD_NUMBER']}"
-             f"&filter[preReleaseVersion.version]={env['MARKETING_VERSION']}")
-    # The build shows up after the upload, while Apple processes it; that has
-    # taken over 20 minutes (build 58), so this waits up to an hour.
-    for _ in range(120):
-        builds = call("GET", query)["data"]
-        if builds:
-            break
-        time.sleep(30)
-    else:
-        sys.exit("The build did not appear in App Store Connect within an hour")
-    build = builds[0]["id"]
+        sys.exit(f"No app with bundle ID {bundle} in App Store Connect")
+    return apps[0]["id"]
+
+
+def set_notes(app, build, notes):
     locales = {loc["attributes"]["locale"] for loc in call("GET", f"/apps/{app}/betaAppLocalizations")["data"]} or {"cs"}
     existing = {loc["attributes"]["locale"]: loc["id"] for loc in call("GET", f"/builds/{build}/betaBuildLocalizations")["data"]}
     for locale in sorted(locales):
@@ -207,6 +222,72 @@ def upload(notes_file):
         print(f"What to Test set for {locale}")
 
 
+def external_group(groups, name=""):
+    """The external testers' group: the one called name, else the only one."""
+    external = [g for g in groups if not g["attributes"].get("isInternalGroup")]
+    if name:
+        external = [g for g in external if g["attributes"].get("name") == name]
+    if len(external) != 1:
+        found = ", ".join(g["attributes"].get("name", "?") for g in groups if not g["attributes"].get("isInternalGroup")) or "žádná"
+        sys.exit(f"::error::Nenašel jsem jednu externí skupinu testerů{' „' + name + '“' if name else ''} (externí skupiny: {found}). "
+                 "Založ ji v App Store Connect → TestFlight → External Testing, nebo nastav EXTERNAL_GROUP.")
+    return external[0]
+
+
+def released():
+    app = app_id()
+    group = external_group(call("GET", f"/apps/{app}/betaGroups?limit=200")["data"], os.environ.get("EXTERNAL_GROUP", ""))
+    numbers = [int(b["attributes"]["version"]) for b in call("GET", f"/betaGroups/{group['id']}/builds?limit=200")["data"]
+               if str(b["attributes"].get("version", "")).isdigit()]
+    print(max(numbers) if numbers else "")
+
+
+def release(notes_file):
+    notes = open(notes_file, encoding="utf-8").read().strip()[:LIMIT]
+    env = os.environ
+    app = app_id()
+    builds = call("GET", f"/builds?filter[app]={app}&filter[version]={env['BUILD_NUMBER']}")["data"]
+    if not builds:
+        sys.exit(f"::error::Build {env['BUILD_NUMBER']} v App Store Connectu není.")
+    build = builds[0]
+    state = build["attributes"].get("processingState")
+    if state != "VALID":
+        sys.exit(f"::error::Build {env['BUILD_NUMBER']} není připravený (stav {state}).")
+    if build["attributes"].get("expired"):
+        sys.exit(f"::error::Build {env['BUILD_NUMBER']} v TestFlightu vypršel.")
+    set_notes(app, build["id"], notes)
+    group = external_group(call("GET", f"/apps/{app}/betaGroups?limit=200")["data"], env.get("EXTERNAL_GROUP", ""))
+    call("POST", f"/betaGroups/{group['id']}/relationships/builds", {"data": [{"type": "builds", "id": build["id"]}]})
+    print(f"Build {env['BUILD_NUMBER']} added to {group['attributes'].get('name')}")
+    # Apple reviews the first build of a version for external testers; a build
+    # already sent (or approved) answers 409, which is fine.
+    review = call("POST", "/betaAppReviewSubmissions",
+                  {"data": {"type": "betaAppReviewSubmissions",
+                            "relationships": {"build": {"data": {"type": "builds", "id": build["id"]}}}}}, allow=(409,))
+    if review.get("status") == 409:
+        print("Beta review: already submitted or not needed")
+    else:
+        print("Beta review: submitted")
+
+
+def upload(notes_file):
+    notes = open(notes_file, encoding="utf-8").read().strip()[:LIMIT]
+    env = os.environ
+    app = app_id()
+    query = (f"/builds?filter[app]={app}&filter[version]={env['BUILD_NUMBER']}"
+             f"&filter[preReleaseVersion.version]={env['MARKETING_VERSION']}")
+    # The build shows up after the upload, while Apple processes it; that has
+    # taken over 20 minutes (build 58), so this waits up to an hour.
+    for _ in range(120):
+        builds = call("GET", query)["data"]
+        if builds:
+            break
+        time.sleep(30)
+    else:
+        sys.exit("The build did not appear in App Store Connect within an hour")
+    set_notes(app, builds[0]["id"], notes)
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "check":
         check()
@@ -215,5 +296,9 @@ if __name__ == "__main__":
             out.write(notes_since(sys.argv[2]) + "\n")
     elif sys.argv[1] == "upload":
         upload(sys.argv[2])
+    elif sys.argv[1] == "release":
+        release(sys.argv[2])
+    elif sys.argv[1] == "released":
+        released()
     else:
         sys.exit(__doc__)

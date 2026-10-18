@@ -1,8 +1,6 @@
 import { L, bilingual } from './lang.js';
-import { readGymPlan } from "./gym-plan-store.js";
 import { personalBaseline } from "./recovery-model.js";
 import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } from './training-availability.js';
-import { getAthleteState } from './athlete-state.js';
 import {trainingHistory,starterPlan} from './training-history.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
@@ -51,8 +49,10 @@ export function sanitizeWeekPlan(input = {}) {
   const lat = Number(loc.latitude), lon = Number(loc.longitude);
   const source = LOCATION_SOURCES.includes(loc.source) ? loc.source : null;
   const oldDefault = !source && lat === OLD_DEFAULT.latitude && lon === OLD_DEFAULT.longitude;
+  // The phone's own location is kept only to about 1 km (two decimals), as the privacy policy says.
+  const scale = source === "device" ? 1e2 : 1e4;
   const location = Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 && !oldDefault
-    ? { name: String(loc.name || "").trim().slice(0, 80) || L("Moje poloha", "My location"), latitude: Math.round(lat * 1e4) / 1e4, longitude: Math.round(lon * 1e4) / 1e4, ...(source ? { source } : {}) }
+    ? { name: String(loc.name || "").trim().slice(0, 80) || L("Moje poloha", "My location"), latitude: Math.round(lat * scale) / scale, longitude: Math.round(lon * scale) / scale, ...(source ? { source } : {}) }
     : null;
   const count = input.weeklyActivities == null || input.weeklyActivities === '' ? null : Number(input.weeklyActivities);
   if (count != null && (!Number.isInteger(count) || count < 0 || count > 14)) throw new Error(L('Počet aktivit musí být 0 až 14.', 'The number of activities must be 0 to 14.'));
@@ -94,21 +94,6 @@ export async function getWeekPlan(db, date = null) {
   await ensureWeekOverrides(db);
   const override = await db.prepare('SELECT prefs_json FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).first();
   return override ? { ...sanitizeWeekPlan({ ...defaults, ...JSON.parse(override.prefs_json) }), source: 'week' } : { ...defaults, source: 'default' };
-}
-
-// Why the nightly gym plan is not made for `date`, or null to make it: the
-// week plan has no gym that day (an empty week plan does not decide), or a
-// plan made or edited by the athlete is already stored.
-export async function nightlyGymSkip(db, date) {
-  if ((await getAthleteState(db)).status !== 'active') return L('Aktuální stav pozastavuje tréninky.', 'Your current status pauses training.');
-  const prefs = await getWeekPlan(db, date);
-  const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
-  if (prefs.availability[weekday].minutes === 0) return L('Tento den nemáš čas na aktivitu.', 'You don\'t have time for an activity on this day.');
-  if (prefs.days.some(d => d.length) && !prefs.days[weekday].includes("gym")) return L("Podle týdenního plánu není tento den gym.", "The week plan has no gym on this day.");
-  const gym = await readGymPlan(db, date);
-  if (gym.cancelled) return L("Gym na tento den je zrušený.", "You cancelled the gym for this day.");
-  if (gym.stored) return L("Na tento den už gym plán je.", "There's already a gym plan for this day.");
-  return null;
 }
 
 export async function saveWeekPlan(db, input, date = null) {
@@ -256,7 +241,8 @@ export function hrvSourceRows(intervals = [], health = [], weekStart) {
   return candidates.reduce((best, rows) => mornings(rows) > mornings(best) ? rows : best);
 }
 // Training load of the three weeks before `weekStart` from Intervals.icu
-// wellness rows (last week first); a week with too few rows ends the series.
+// wellness rows, or the app's own rows without it (own-fitness.js `load`);
+// last week first; a week with too few rows ends the series.
 export function weekLoadsBefore(wellness, weekStart) {
   const shift = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
   const rows = (wellness || []).filter(r => r?.id && r.id < weekStart);
@@ -264,7 +250,7 @@ export function weekLoadsBefore(wellness, weekStart) {
   for (let k = 1; k <= 3; k++) {
     const from = shift(weekStart, -7 * k), to = shift(weekStart, -7 * k + 7), week = rows.filter(r => r.id >= from && r.id < to);
     if (week.length < 5) break;
-    loads.push(Math.round(week.reduce((sum, r) => sum + (Number(r.ctlLoad ?? r.atlLoad) || 0), 0)));
+    loads.push(Math.round(week.reduce((sum, r) => sum + (Number(r.ctlLoad ?? r.atlLoad ?? r.load) || 0), 0)));
   }
   return loads;
 }
@@ -289,7 +275,17 @@ const round5 = v => Math.round(v / 5) * 5;
 // `plan` (training-plans.js planLoad) replaces the usual +5 % with the plan's
 // week: { load, light }. The safety rules still win: a recovery week the data
 // calls stays one, and a ramp above 8 a week only holds.
-export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null, plan = null } = {}) {
+// The main race (athlete-focus.js) shapes the days before it: race day has no
+// other chips, the day before only an easy session without the gym, and up
+// to 3 days before the gym keeps a reserve and a long day becomes endurance.
+export function raceDayRole(x, date, eventDate) {
+  const left = eventDate ? Math.round((Date.parse(eventDate + "T12:00:00Z") - Date.parse(date + "T12:00:00Z")) / 86400000) : null;
+  if (left == null || left < 0 || left > 3) return x;
+  if (left === 0 || (left === 1 && x.sport === "gym")) return null;
+  const role = left === 1 ? "recovery" : x.sport === "gym" ? "gym_upper" : x.role === "long" ? "endurance" : x.role;
+  return role === x.role ? x : { ...x, role, label: ROLE_LABELS[role], share: SHARE[role], ...(x.sport === "gym" ? {} : { focus: ROLE_FOCUS[role] }) };
+}
+export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null, plan = null, eventDate = null } = {}) {
   const fitness = Number(ctl) > 0 ? Number(ctl) : null;
   if (!fitness) return { status: "no_fitness", items: [] };
   const base = Math.round(fitness * 7);
@@ -309,7 +305,7 @@ export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoad
   roles.forEach((day, i) => {
     const date = dateOf(i); if (date < today) return;
     const covered = sport => (info(date).sports || []).filter(s => s === sport).length;
-    for (const x of day.items || []) if ((x.slot || 0) >= covered(x.sport)) open.push({ date, ...x });
+    for (const item of day.items || []) { const x = raceDayRole(item, date, eventDate); if (x && (x.slot || 0) >= covered(x.sport)) open.push({ date, ...x }); }
   });
   let remaining = Math.max(0, target - committed - open.filter(x => x.sport === "gym").reduce((s, x) => s + (GYM_TSS[x.role] || 30), 0));
   const endurance = open.filter(x => x.sport !== "gym"), shares = endurance.reduce((s, x) => s + (x.share || 1), 0);

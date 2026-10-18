@@ -210,7 +210,7 @@ struct StrainDial: View {
     }
 
     private var subtitle: String {
-        let head: String? = target.map { L10n.f("cíl %@–%@", Fmt.decimal($0.low), Fmt.decimal($0.high)) } ?? planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }
+        let head: String? = target.map { L10n.f("cíl %@–%@", Fmt.int($0.low), Fmt.int($0.high)) } ?? planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }
         return (head.map { $0 + " · " } ?? "") + L10n.f("z %@", "21")
     }
 }

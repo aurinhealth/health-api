@@ -31,6 +31,11 @@ final class LiveWorkout: NSObject {
     /// The session saved its own workout to Apple Health.
     private(set) var savedToHealth = false
     var running: Bool { start != nil }
+    /// Seconds the workout stood between Dokončit and Pokračovat v tréninku:
+    /// not counted on the clock nor in Apple Health (a pause in the workout).
+    private(set) var paused: TimeInterval = 0
+    /// Where the clock counts from: the start moved by the pause.
+    var clockStart: Date? { start.map { $0.addingTimeInterval(paused) } }
 
     @ObservationIgnored private let store = HKHealthStore()
     @ObservationIgnored private var weightKg: Double = 80
@@ -45,9 +50,119 @@ final class LiveWorkout: NSObject {
     @ObservationIgnored private var savedWorkout: HKWorkout?
     /// Beats from the Bluetooth sensor, one per 5 s, saved with the workout.
     @ObservationIgnored private var sensorBeats: [(Date, Double)] = []
+    /// Pokračovat v tréninku: the pause and the samples of the workout saved
+    /// before it, carried into the one recorded now.
+    @ObservationIgnored private var carried: (pause: DateInterval, samples: [HKQuantitySample])?
     private var sensor: HeartRateSensor { HeartRateSensor.shared }
 
     /// Starts once per session; `since` is when the gym sheet started.
+    /// Pokračovat v tréninku after Dokončit: the workout saved then goes, and
+    /// one workout from the first start is recorded on, with the time between
+    /// as a pause and the calories and heart rate already measured in it.
+    func resume(saved: HKWorkout?, since: Date, pausedAt: Date, weightKg: Double?) async {
+        var workout = saved
+        if workout == nil { workout = await savedWorkout(since: since) }
+        var samples: [HKQuantitySample] = []
+        if let workout {
+            samples = await copies(of: workout)
+            await delete(workout)
+        }
+        reset()
+        let now = Date()
+        carried = (DateInterval(start: min(pausedAt, now), end: now), samples)
+        await begin(since: since, weightKg: weightKg)
+    }
+
+    /// After iOS closed the app mid-workout (an update, low memory): the same
+    /// workout goes on, one workout in Apple Health. On iOS 26 HealthKit hands
+    /// back the session that was running with all it measured; without it the
+    /// clock and the estimated calories count from the workout's start.
+    func continueWorkout(since: Date?, weightKg: Double?) async {
+        guard start == nil else { return }
+        // What the app kept every 15 s: the start, calories, heart rate.
+        let saved = Checkpoint.load().flatMap { Date().timeIntervalSince($0.start) < 4 * 3600 ? $0 : nil }
+        if #available(iOS 26.0, *), await recoverSession(weightKg: weightKg) {
+            if let saved { restore(saved, kcal: false) }
+            return
+        }
+        // A start from hours ago is a workout left unfinished: it starts now.
+        let recent = saved?.start ?? since.flatMap { Date().timeIntervalSince($0) < 4 * 3600 ? $0 : nil }
+        if let saved, #available(iOS 26.0, *) {
+            // The new session takes in the calories measured before: the ones
+            // the closed session left in Apple Health (moved in, so they count
+            // once), else the number kept.
+            var samples = await ownEnergy(from: saved.start, to: Date())
+            if samples.isEmpty, saved.kcal > 0 {
+                samples = [HKQuantitySample(type: HKQuantityType(.activeEnergyBurned), quantity: HKQuantity(unit: .kilocalorie(), doubleValue: saved.kcal),
+                                            start: saved.start, end: max(saved.start.addingTimeInterval(1), saved.at))]
+            }
+            carried = (DateInterval(start: saved.at, duration: 0), samples)
+        }
+        await begin(since: recent, weightKg: weightKg)
+        if let saved { restore(saved, kcal: false); paused = saved.paused }
+    }
+
+    /// The workout as it stood, kept on the phone while it runs, so a workout
+    /// closed by iOS goes on with its time, calories and heart rate.
+    struct Checkpoint: Codable {
+        var start: Date
+        var at: Date
+        var paused: TimeInterval
+        var kcal: Double
+        var hrSum: Double
+        var hrCount: Int
+        var maxHr: Double?
+        var trail: [[Double]]
+        var beats: [[Double]]
+
+        static let key = "liveWorkout.checkpoint"
+        static func load() -> Checkpoint? {
+            UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(Checkpoint.self, from: $0) }
+        }
+        static func clear() { UserDefaults.standard.removeObject(forKey: key) }
+    }
+
+    private func keep() {
+        guard let start else { return }
+        let point = Checkpoint(start: start, at: Date(), paused: paused, kcal: kcal ?? 0, hrSum: hrSum, hrCount: hrCount, maxHr: maxHeartRate,
+                               trail: trail.suffix(600).map { [$0.date.timeIntervalSince1970, $0.bpm] },
+                               beats: sensorBeats.map { [$0.0.timeIntervalSince1970, $0.1] })
+        if let data = try? JSONEncoder().encode(point) { UserDefaults.standard.set(data, forKey: Checkpoint.key) }
+    }
+
+    /// The heart rate seen before the app closed (and on older iOS the
+    /// calories, which the estimate counts from the start anyway).
+    private func restore(_ point: Checkpoint, kcal: Bool) {
+        let before = point.trail.compactMap { $0.count == 2 ? (date: Date(timeIntervalSince1970: $0[0]), bpm: $0[1]) : nil }
+        trail = before + trail
+        hrSum += point.hrSum; hrCount += point.hrCount
+        if hrCount > 0 { avgHeartRate = hrSum / Double(hrCount) }
+        if let max = point.maxHr { maxHeartRate = Swift.max(maxHeartRate ?? 0, max) }
+        sensorBeats = point.beats.compactMap { $0.count == 2 ? (Date(timeIntervalSince1970: $0[0]), $0[1]) : nil } + sensorBeats
+        if kcal, point.kcal > 0 { self.kcal = Swift.max(self.kcal ?? 0, point.kcal) }
+    }
+
+    /// Active calories this app saved in Apple Health between two times (a
+    /// session closed by iOS leaves them there), as copies; the originals go.
+    private func ownEnergy(from: Date, to: Date) async -> [HKQuantitySample] {
+        guard HKHealthStore.isHealthDataAvailable() else { return [] }
+        let type = HKQuantityType(.activeEnergyBurned)
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForSamples(withStart: from, end: to),
+            HKQuery.predicateForObjects(from: .default())
+        ])
+        let found: [HKQuantitySample] = await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+                continuation.resume(returning: (samples as? [HKQuantitySample]) ?? [])
+            }
+            store.execute(query)
+        }
+        guard !found.isEmpty else { return [] }
+        let copies = found.map { HKQuantitySample(type: type, quantity: $0.quantity, start: $0.startDate, end: $0.endDate) }
+        _ = try? await store.deleteObjects(of: type, predicate: predicate)
+        return copies
+    }
+
     func begin(since: Date?, weightKg: Double?) async {
         // A session left running from another day (never finished) starts over.
         if let start, Date().timeIntervalSince(start) > 4 * 3600 { reset() }
@@ -60,6 +175,12 @@ final class LiveWorkout: NSObject {
         kcal = nil; heartRate = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
         sensorBeats = []
         trail = []
+        paused = carried?.pause.duration ?? 0
+        let unit = HKUnit.count().unitDivided(by: .minute())
+        let beats = (carried?.samples ?? []).filter { $0.quantityType == HKQuantityType(.heartRate) }.sorted { $0.startDate < $1.startDate }
+        for sample in beats { note(sample.quantity.doubleValue(for: unit), at: sample.startDate) }
+        // The beat shown is a live one, not the last one before the pause.
+        heartRate = nil
         sensor.onBeat = { [weak self] bpm in self?.sensorBeat(bpm) }
         sensor.connectSaved()
         guard HKHealthStore.isHealthDataAvailable() else { tick(); return }
@@ -100,14 +221,53 @@ final class LiveWorkout: NSObject {
         try? await store.delete(workout)
     }
 
+    /// The strength workout this app saved from `start` on (Dokončit before
+    /// the app was closed), to be replaced when the workout goes on.
+    private func savedWorkout(since start: Date) async -> HKWorkout? {
+        guard HKHealthStore.isHealthDataAvailable() else { return nil }
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForSamples(withStart: start.addingTimeInterval(-120), end: nil),
+            HKQuery.predicateForObjects(from: .default()),
+            HKQuery.predicateForWorkouts(with: .traditionalStrengthTraining)
+        ])
+        return await withCheckedContinuation { (continuation: CheckedContinuation<HKWorkout?, Never>) in
+            let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: 1,
+                                      sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]) { _, samples, _ in
+                continuation.resume(returning: samples?.first as? HKWorkout)
+            }
+            store.execute(query)
+        }
+    }
+
+    /// A workout session iOS kept running after the app was closed (killed, or
+    /// updated from TestFlight) has nobody to end it: it would record for
+    /// hours and land in Apple Health as one long strength workout. At launch
+    /// it is ended without saving; Režim tréninku starts a new one with the
+    /// next ticked set.
+    func endOrphanedSession() {
+        guard #available(iOS 26.0, *), HKHealthStore.isHealthDataAvailable(), start == nil else { return }
+        store.recoverActiveWorkoutSession { session, _ in
+            guard let session else { return }
+            session.associatedWorkoutBuilder().discardWorkout()
+            session.end()
+        }
+    }
+
     /// Clears everything after the summary was shown (or the screen left early).
     func reset() {
         poll?.cancel(); poll = nil
         stopSensor()
         sensorBeats = []
-        if #available(iOS 26.0, *), let session = session as? HKWorkoutSession, session.state == .running { session.end() }
+        // Stopped without Dokončit: nothing goes to Apple Health.
+        if #available(iOS 26.0, *), let session = session as? HKWorkoutSession, session.state == .running {
+            (builder as? HKLiveWorkoutBuilder)?.discardWorkout()
+            session.end()
+        }
         session = nil; builder = nil; liveKcal = false
         start = nil
+        paused = 0
+        carried = nil
+        Checkpoint.clear()
     }
 
     /// Minutes per heart rate zone: `lows` are the zones' lower bounds (bpm),
@@ -124,7 +284,7 @@ final class LiveWorkout: NSObject {
         return out
     }
 
-    var minutes: Int { start.map { max(1, Int((Date().timeIntervalSince($0) / 60).rounded())) } ?? 0 }
+    var minutes: Int { clockStart.map { max(1, Int((Date().timeIntervalSince($0) / 60).rounded())) } ?? 0 }
 
     // MARK: Without a live builder
 
@@ -139,12 +299,13 @@ final class LiveWorkout: NSObject {
     }
 
     private func update() async {
-        guard let start else { return }
+        guard let start = clockStart else { return }
+        defer { keep() }
         if !liveKcal {
             // Strength training about 5 MET, 4 above rest: active kcal = 4 × kg × hours.
             kcal = 4.0 * weightKg * Date().timeIntervalSince(start) / 3600
         }
-        if builder == nil, !sensor.connected, let bpm = await latestHeartRate(since: Date().addingTimeInterval(-120)) { note(bpm) }
+        if builder == nil, sensor.liveBpm == nil, let bpm = await latestHeartRate(since: Date().addingTimeInterval(-120)) { note(bpm) }
     }
 
     private func sensorBeat(_ bpm: Double) {
@@ -175,9 +336,9 @@ final class LiveWorkout: NSObject {
         }
     }
 
-    private func note(_ bpm: Double) {
+    private func note(_ bpm: Double, at date: Date = Date()) {
         heartRate = bpm
-        trail.append((Date(), bpm))
+        trail.append((date, bpm))
         hrSum += bpm; hrCount += 1
         avgHeartRate = hrSum / Double(hrCount)
         maxHeartRate = max(maxHeartRate ?? 0, bpm)
@@ -212,6 +373,8 @@ final class LiveWorkout: NSObject {
             await add([sample], to: builder)
         }
         await add(beatSamples(), to: builder)
+        // The estimate already covers the time before a pause.
+        await addCarried(to: builder, kcal: false)
         builder.addMetadata([HKMetadataKeyWorkoutBrandName: "Aurin"]) { _, _ in }
         let ended: Bool = await withCheckedContinuation { continuation in
             builder.endCollection(withEnd: end) { ok, _ in continuation.resume(returning: ok) }
@@ -242,6 +405,67 @@ final class LiveWorkout: NSObject {
         guard started else { session.end(); return }
         self.session = session
         self.builder = builder
+        await addCarried(to: builder, kcal: true)
+    }
+
+    /// The session left running when the app was closed, with its builder,
+    /// its start and the calories so far.
+    @available(iOS 26.0, *)
+    private func recoverSession(weightKg: Double?) async -> Bool {
+        guard HKHealthStore.isHealthDataAvailable() else { return false }
+        let recovered: HKWorkoutSession? = await withCheckedContinuation { continuation in
+            store.recoverActiveWorkoutSession { session, _ in continuation.resume(returning: session) }
+        }
+        guard let recovered, recovered.state == .running || recovered.state == .paused else { return false }
+        let builder = recovered.associatedWorkoutBuilder()
+        builder.dataSource = HKLiveWorkoutDataSource(healthStore: store, workoutConfiguration: recovered.workoutConfiguration)
+        builder.delegate = self
+        if recovered.state == .paused { recovered.resume() }
+        if let weightKg, weightKg > 30 { self.weightKg = weightKg }
+        start = builder.startDate ?? recovered.startDate ?? Date()
+        savedToHealth = false
+        savedWorkout = nil
+        heartRate = nil; avgHeartRate = nil; maxHeartRate = nil; hrSum = 0; hrCount = 0
+        sensorBeats = []
+        trail = []
+        paused = 0
+        let energy = builder.statistics(for: HKQuantityType(.activeEnergyBurned))?.sumQuantity()?.doubleValue(for: .kilocalorie())
+        if let energy, energy > 0 { kcal = energy; liveKcal = true } else { kcal = nil }
+        session = recovered
+        self.builder = builder
+        sensor.onBeat = { [weak self] bpm in self?.sensorBeat(bpm) }
+        sensor.connectSaved()
+        tick()
+        return true
+    }
+
+    /// The samples and the pause of the workout before Pokračovat v tréninku.
+    private func addCarried(to builder: HKWorkoutBuilder, kcal: Bool) async {
+        guard let carried else { return }
+        let energy = HKQuantityType(.activeEnergyBurned)
+        await add(carried.samples.filter { kcal || $0.quantityType != energy }, to: builder)
+        guard carried.pause.duration > 0 else { return }
+        let events = [HKWorkoutEvent(type: .pause, dateInterval: DateInterval(start: carried.pause.start, duration: 0), metadata: nil),
+                      HKWorkoutEvent(type: .resume, dateInterval: DateInterval(start: carried.pause.end, duration: 0), metadata: nil)]
+        _ = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            builder.addWorkoutEvents(events) { ok, _ in continuation.resume(returning: ok) }
+        }
+    }
+
+    /// New samples like the calories and heart rate saved with a workout.
+    private func copies(of workout: HKWorkout) async -> [HKQuantitySample] {
+        var out: [HKQuantitySample] = []
+        for type in [HKQuantityType(.activeEnergyBurned), HKQuantityType(.heartRate)] {
+            let found: [HKQuantitySample] = await withCheckedContinuation { continuation in
+                let query = HKSampleQuery(sampleType: type, predicate: HKQuery.predicateForObjects(from: workout), limit: HKObjectQueryNoLimit,
+                                          sortDescriptors: nil) { _, samples, _ in
+                    continuation.resume(returning: (samples as? [HKQuantitySample]) ?? [])
+                }
+                store.execute(query)
+            }
+            out += found.map { HKQuantitySample(type: $0.quantityType, quantity: $0.quantity, start: $0.startDate, end: $0.endDate) }
+        }
+        return out
     }
 
     @available(iOS 26.0, *)
@@ -266,7 +490,8 @@ final class LiveWorkout: NSObject {
 
     fileprivate func collected(energy: Double?, bpm: Double?) {
         if let energy, energy > 0 { kcal = energy; liveKcal = true }
-        if let bpm, bpm > 0, !sensor.connected { note(bpm) }
+        // A sensor that connected but sends nothing doesn't hide the others.
+        if let bpm, bpm > 0, sensor.liveBpm == nil { note(bpm) }
     }
 }
 
@@ -329,7 +554,7 @@ struct LiveWorkoutStrip: View {
     private var divider: some View { Rectangle().fill(Palette.hairline).frame(width: 1) }
 
     private func clock(at now: Date) -> String {
-        guard let start = live.start else { return "0:00" }
+        guard let start = live.clockStart else { return "0:00" }
         let s = max(0, Int(now.timeIntervalSince(start)))
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
     }

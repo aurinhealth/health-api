@@ -4,7 +4,7 @@ import UIKit
 
 /// "Nahlásit problém": what went wrong in the user's words, an optional
 /// screenshot from the photo library and the app's diagnostics (versions,
-/// connections, the last sync and the last error messages), sent to the
+/// connections, the last sync, the last error messages and crashes), sent to the
 /// operator (src/support-report.js).
 struct ReportProblemView: View {
     @Environment(AppModel.self) private var model
@@ -172,6 +172,18 @@ struct ReportProblemView: View {
             if let count = entry.count { o["count"] = .number(Double(count)) }
             return .object(o)
         })
+        // The app's latest crashes, as iOS reported them (CrashReports).
+        let crashes = CrashReports.shared.entries
+        if !crashes.isEmpty {
+            d["crashes"] = .array(crashes.map { crash -> JSONValue in
+                var o: JSONObject = ["at": .string(stamp.string(from: crash.at)), "app": .string(crash.app), "ios": .string(crash.ios),
+                                     "frames": .array(crash.frames.map { JSONValue.string($0) })]
+                if let exception = crash.exception { o["exception"] = .string(exception) }
+                if let signal = crash.signal { o["signal"] = .number(Double(signal)) }
+                if let reason = crash.reason { o["reason"] = .string(reason) }
+                return .object(o)
+            })
+        }
         var errors: JSONObject = [:]
         if let e = model.errorMessage { errors["today"] = .string(e) }
         if let e = model.trainingError { errors["training"] = .string(e) }

@@ -1,0 +1,192 @@
+name: Vydat
+
+# Releases one tested build to the external testers, with the server it was
+# tested against:
+# 1. picks the build (the newest one uploaded from main, or the number typed in)
+#    and checks that the smoke test of its app passed (ios-native.yml on main),
+# 2. deploys the newest main to the live server (deploy-worker.yml, production);
+#    production only ever runs main commits, so this never goes back to an
+#    older server than a hand-started deploy left there, and server-only
+#    pull requests merged after the build go out too,
+# 3. sets "What to Test" to a summary of every pull request since the last
+#    release, adds the build to the external TestFlight group and sends it to
+#    Apple's beta review,
+# The previous release is the newest build the external group already has.
+#
+# Every merge before that only reaches the test server and the internal
+# testers, who switch the app to the test server (Nastavení → Testování → Server).
+#
+# Repository secrets: the ones of deploy-worker.yml and ios-testflight.yml.
+# EXTERNAL_GROUP (a repository variable) names the external group when there
+# is more than one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Build number (empty: the newest build from main)"
+        required: false
+        default: ""
+      what_to_test:
+        description: "What to Test for the testers (empty: summary of the pull requests since the last release)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vydat
+  cancel-in-progress: false
+
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      build: ${{ steps.pick.outputs.build }}
+      sha: ${{ steps.pick.outputs.sha }}
+      server: ${{ steps.pick.outputs.server }}
+      base: ${{ steps.pick.outputs.base }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Pick the build and the last release
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD: ${{ inputs.build }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          BUNDLE_ID: eu.petrfitnessdata.loadwise.native
+          EXTERNAL_GROUP: ${{ vars.EXTERNAL_GROUP }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+          trap 'rm -f "$ASC_KEY_PATH"' EXIT
+          # Builds come from ios-testflight.yml runs on main; the build number is the run number.
+          runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ios-testflight.yml --branch main \
+            --status success --limit 100 --json number,headSha,databaseId)"
+          if [ -n "$BUILD" ]; then
+            run="$(jq -c --argjson n "$BUILD" 'map(select(.number == $n))[0] // empty' <<< "$runs")"
+          else
+            run="$(jq -c '.[0] // empty' <<< "$runs")"
+          fi
+          [ -n "$run" ] || { echo "::error::Build ${BUILD:-z main} mezi úspěšnými TestFlight buildy není."; exit 1; }
+          build="$(jq -r .number <<< "$run")"; sha="$(jq -r .headSha <<< "$run")"; id="$(jq -r .databaseId <<< "$run")"
+          # A run without the signing secrets stays green but uploads nothing; then its notes job is skipped.
+          notes="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs" --jq '.jobs[] | select(.name == "notes") | .conclusion')"
+          [ "$notes" = "success" ] || { echo "::error::Build $build se do TestFlightu nenahrál (notes: ${notes:-chybí})."; exit 1; }
+          git cat-file -e "$sha^{commit}" || { echo "::error::Commit $sha buildu $build v main není."; exit 1; }
+          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::Build $build není z main."; exit 1; }
+          server="$(git rev-parse origin/main)"
+          # The newest build must hold every app change on main, else the testers
+          # would read about changes their build lacks.
+          if [ -z "$BUILD" ] && [ -n "$(git diff --name-only "$sha" "$server" -- ios-native)" ]; then
+            echo "::error::Build ze změn aplikace v main se do TestFlightu ještě nenahrál. Počkej na TestFlight build a spusť Vydat znovu."; exit 1
+          fi
+          # The smoke test (ios-native.yml) must have passed on the app the build holds:
+          # the newest iOS run on main whose commit has the build's app, without later app changes.
+          checks="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ios-native.yml --branch main \
+            --status completed --limit 50 --json headSha,conclusion,databaseId)"
+          check=""
+          while read -r row; do
+            csha="$(jq -r .headSha <<< "$row")"
+            if git cat-file -e "$csha^{commit}" 2>/dev/null && git merge-base --is-ancestor "$csha" "$sha" \
+              && [ -z "$(git diff --name-only "$csha" "$sha" -- ios-native)" ]; then check="$row"; break; fi
+          done < <(jq -c '.[]' <<< "$checks")
+          [ -n "$check" ] || { echo "::error::Pro build $build chybí kontrola aplikace (iOS native app na main). Spusť ji na main a pak Vydat znovu."; exit 1; }
+          check_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$(jq -r .databaseId <<< "$check")"
+          [ "$(jq -r .conclusion <<< "$check")" = "success" ] || { echo "::error::Kontrola aplikace pro build $build neprošla: $check_url"; exit 1; }
+          last="$(python3 .github/scripts/testflight_notes.py released)"
+          base=""
+          if [ -n "$last" ]; then
+            [ "$last" -lt "$build" ] || { echo "::error::Testeři už mají build $last, novější nebo stejný jako $build."; exit 1; }
+            base="$(jq -r --argjson n "$last" 'map(select(.number == $n))[0].headSha // ""' <<< "$runs")"
+            # Older than the last 100 runs: the summary takes the latest pull requests instead.
+            if [ -n "$base" ] && ! git merge-base --is-ancestor "$base" "$sha"; then base=""; fi
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "server=$server" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "Vydání buildu $build (${sha::7}), server ${server::7}, minulé vydání: ${last:-žádné}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Kontrola aplikace prošla, snímky obrazovek (Loadwise-native-screens → smoke): $check_url" >> "$GITHUB_STEP_SUMMARY"
+
+  # The live server first: the build the testers get talks to it. The newest
+  # main contains the build's commit, so the server is never older than the app.
+  deploy:
+    needs: pick
+    permissions:
+      contents: read
+      deployments: write
+      id-token: write
+    uses: ./.github/workflows/deploy-worker.yml
+    with:
+      target: production
+      ref: ${{ needs.pick.outputs.server }}
+    secrets: inherit
+
+  release:
+    needs: [pick, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the released server commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.pick.outputs.server }}
+          fetch-depth: 0
+
+      # Every pull request since the last release, server changes included.
+      - name: Write What to Test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TYPED: ${{ inputs.what_to_test }}
+          BASE: ${{ needs.pick.outputs.base }}
+          RELEASE_ALL: "1"
+        run: |
+          mkdir -p build
+          if [ -n "$TYPED" ]; then
+            printf '%s\n' "$TYPED" > build/WhatToTest.txt
+          else
+            python3 .github/scripts/testflight_notes.py write "$BASE" build/WhatToTest.txt
+          fi
+          { echo "### What to Test"; echo; cat build/WhatToTest.txt; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Send the build to the external testers
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+          BUNDLE_ID: eu.petrfitnessdata.loadwise.native
+          BUILD_NUMBER: ${{ needs.pick.outputs.build }}
+          EXTERNAL_GROUP: ${{ vars.EXTERNAL_GROUP }}
+        run: |
+          printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+          python3 .github/scripts/testflight_notes.py release build/WhatToTest.txt
+
+      - name: Remove the API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+
+      - name: Summary
+        env:
+          BUILD: ${{ needs.pick.outputs.build }}
+          SERVER: ${{ needs.pick.outputs.server }}
+        run: |
+          echo "Vydáno: build $BUILD, server ${SERVER::7}" >> "$GITHUB_STEP_SUMMARY"

@@ -1,7 +1,7 @@
 // Last night in detail for the morning card: the stage timeline (hypnogram),
 // heart rate in 5-minute buckets with its spikes, HRV through the night and
 // the previous nights for comparison. Reads only the signed-in user's rows.
-import { sleepSessionFromRow } from "./sleep-sessions.js";
+import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { localDateTime } from "./user-time.js";
 
 const n = v => v != null && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null;
@@ -52,17 +52,19 @@ export function nightStats(segments, hr = [], hrv = []) {
 }
 
 export async function nightDetail(db, { date }) {
-  const rows = (await db.prepare(`SELECT external_id, start_time, end_time, payload_json FROM health_datapoints
+  const rows = (await db.prepare(`SELECT external_id, source_family, start_time, end_time, payload_json FROM health_datapoints
     WHERE user_id=? AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop') AND data_type='sleep' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')
     ORDER BY start_time DESC LIMIT 60`).bind(db.userId, shift(date, -9), date + "T23:59:59Z").all()).results || [];
-  const seen = new Set(), nights = [];
+  const seen = new Set(), sessions = [];
   for (const row of rows) {
     const s = sleepSessionFromRow(row), key = s.startTime + "|" + s.endTime;
-    if (!s.startTime || !s.endTime || seen.has(key) || s.nap || n(s.durationMin) < 180) continue;
+    if (!s.startTime || !s.endTime || seen.has(key)) continue;
     seen.add(key);
-    const p = parsePayload(row), offset = offsetMin(p.interval?.startUtcOffset);
-    nights.push({ ...s, offset, payload: p });
+    sessions.push({ ...s, payload: parsePayload(row) });
   }
+  // The rest of a night after a wake-up in the morning belongs to it.
+  const nights = joinSplitNights(sessions).filter(s => !s.nap && n(s.durationMin) >= 180)
+    .map(s => ({ ...s, offset: offsetMin(s.payload.interval?.startUtcOffset) }));
   // One main night per day: the longest.
   const byDay = new Map();
   for (const x of nights) if (!byDay.has(x.date) || x.durationMin > byDay.get(x.date).durationMin) byDay.set(x.date, x);

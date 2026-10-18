@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { rankOptions, doneSentence, setLess, lessKinds, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "../src/coach-pick.js";
+import { rankOptions, dayChoice, doneSentence, setLess, lessKinds, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "../src/coach-pick.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 
@@ -47,7 +47,7 @@ test("the reason speaks of quality only when the pick is a hard session", () => 
 test("Doporučení trenéra builds the ride and run like the library's proposal (plan, role, free time, abilities)", async () => {
   const src = (await import("node:fs")).readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
   const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
-  assert.match(route, /defaultDayCoach\(env,inputs,date,'ride',week\)/);
+  assert.match(route, /defaultDayCoach\(env,\{\.\.\.inputs,athleteState:athlete\},date,'ride',week\)/);
   const helper = src.slice(src.indexOf("async function defaultDayCoach"), src.indexOf("// The athlete's ratings since a day"));
   for (const part of [/targetFor\(targets,date,sport\)/, /roleFor\(prefs,date,sport/, /trainingBudget\(prefs,date/, /getCapabilities\(env\.DB,sport\)/]) assert.match(helper, part);
 });
@@ -115,4 +115,25 @@ test("a choice without a workout goes into the day's plan, and a changed mind ta
   assert.deepEqual(await kinds(), ["swim", "walk"]);
   await savePick(db, 7, { date, kind: "ride", top: "ride" });
   assert.deepEqual(await kinds(), ["walk"]);
+});
+
+test("Nemoc, Zranění or Pauza leave only rest; signs of an illness drop the sauna", () => {
+  const sick = rankOptions({ ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"], athleteStatus: "sick" });
+  assert.deepEqual(sick.options.map(o => o.kind), ["rest"]);
+  assert.equal(sick.options[0].best, true);
+  assert.match(sick.options[0].reason, /^Máš nastavenou Nemoc/);
+  assert.deepEqual(rankOptions({ ride: coach("green"), run: coach("green"), athleteStatus: "injured" }).options.map(o => o.kind), ["rest"]);
+  assert.deepEqual(rankOptions({ ride: coach("green"), run: coach("green"), athleteStatus: "on_break" }).options.map(o => o.kind), ["rest", "sauna"]);
+  const signs = rankOptions({ ride: coach("red", "recovery"), run: coach("red", "recovery"), mainSport: "cycling", sports: ["ride"], illness: true });
+  assert.ok(!signs.options.some(o => o.kind === "sauna"));
+  assert.equal(signs.options[0].title, "Volno");
+});
+
+test("a workout the athlete planned for today takes Aktivita dne like a choice", async () => {
+  assert.equal(dayChoice({ chosen: null, planned: [] }), null);
+  assert.equal(dayChoice({ chosen: null, planned: ["gym"] }), "gym");
+  assert.equal(dayChoice({ chosen: "sauna", planned: ["gym"] }), "sauna");
+  const src = (await import("node:fs")).readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  const route = src.slice(src.indexOf("if(url.pathname==='/app/api/coach/pick')"), src.indexOf("if(url.pathname==='/app/api/coach/check-in'"));
+  assert.match(route, /chosen:dayChoice\(\{chosen:state\.chosen,planned\}\)/);
 });

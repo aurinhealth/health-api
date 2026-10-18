@@ -7,7 +7,7 @@ import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { reconcileCancelledGymPlans } from './planned-events.js';
 import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck} from './activity-energy-check.js';
 import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
-import { sleepSessionFromRow } from "./sleep-sessions.js";
+import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
 import { d1WeightTrend } from "./strength-context.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
@@ -16,6 +16,7 @@ import { latestStoredWeight } from './athlete-weight.js';
 import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, skippedForPermission } from "./google-scopes.js";
 import { importGoogleFood } from "./google-food.js";
 import { pairSessions } from "./activity-match.js";
+import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
 import { afterGoogleSync } from "./apple-health.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
@@ -66,7 +67,7 @@ export default {
         return await googleSyncStatus(env);
       }
       if(url.pathname==='/sync/google/recent'&&request.method==='POST')return Response.json(await syncGoogleRecent(env));
-      if(url.pathname==='/sync/intervals/recent'&&request.method==='POST')return syncIntervals(env,{activityDays:3});
+      if(url.pathname==='/sync/intervals/recent'&&request.method==='POST')return syncIntervals(env,{activityDays:3,parts:url.searchParams.get('parts')});
       if(url.pathname==='/sync/match'&&request.method==='POST')return Response.json(await matchActivities(env));
 
       // Starting a sync changes data, so it takes POST only: a link or an image
@@ -1305,17 +1306,21 @@ async function syncIntervalsEvents(env) {
 // ======================================================
 // INTERVALS SYNC
 // ======================================================
+// options.parts ("activities,planned"): only those, for an Intervals.icu
+// webhook that says what changed (intervals-webhook.js).
 async function syncIntervals(env,options={}) {
-  const names = ['activities', 'planned', 'weight'];
-  const settled = await Promise.allSettled([
-    syncIntervalsActivities(env,options), syncIntervalsEvents(env),
-    importIntervalsWeights(env,{days:options.activityDays ? CONFIG.weightDays : CONFIG.activityDays})
-  ]);
+  const jobs = {
+    activities: () => syncIntervalsActivities(env,options), planned: () => syncIntervalsEvents(env),
+    weight: () => importIntervalsWeights(env,{days:options.activityDays ? CONFIG.weightDays : CONFIG.activityDays})
+  };
+  const wanted = String(options.parts || '').split(',').filter(name => jobs[name]);
+  const names = wanted.length ? wanted : Object.keys(jobs);
+  const settled = await Promise.allSettled(names.map(name => jobs[name]()));
   const parts = Object.fromEntries(settled.map((result,i) => [names[i], result.status === 'fulfilled'
     ? result.value : {status:'error',message:result.reason?.message || 'Import failed'}]));
   const failures = settled.filter(r => r.status === 'rejected').length;
   // The new activities against the watch's Google exercises (and back).
-  if (settled[0].status === 'fulfilled') await matchActivities(env, { days: 14 }).catch(error => console.error('Activity matching failed', error.message));
+  if (names.includes('activities') && settled[names.indexOf('activities')].status === 'fulfilled') await matchActivities(env, { days: 14 }).catch(error => console.error('Activity matching failed', error.message));
   return Response.json({status:failures === names.length ? 'error' : failures ? 'partial' : 'ok',source:'intervals.icu',...parts});
 }
 
@@ -1357,6 +1362,14 @@ export async function matchActivities(env, { days = null } = {}) {
     held.add(row); held.add(copy);
     wanted.set(copy, { role: "duplicate", matched: key(row) });
     wanted.set(row, { role: "primary", matched: watch });
+  }
+  // Two watch records merged in the app (workout-merge.js): the one dropped
+  // stays a copy of the kept one, which pairs on like any other.
+  for (const [dropped, kept] of heldMerges(rows)) {
+    const copy = byKey.get(dropped);
+    if (!copy || held.has(copy) || !byKey.has(kept)) continue;
+    held.add(copy);
+    wanted.set(copy, { role: "duplicate", matched: kept });
   }
   const pairs = pairSessions(rows.filter(row => !held.has(row)));
   for (const { keep, drop, inside } of pairs) {
@@ -1620,9 +1633,11 @@ export function googleExerciseActivity(row) {
   };
   const type = typeMap[exerciseType] || exerciseType;
   const name = exercise.displayName || type;
-  const activeSeconds = String(exercise.activeDuration || "").match(/([0-9.]+)s/i);
+  // Merged with another device's record (workout-merge.js): the time chosen then.
+  const span = mergedSpan(payload);
+  const activeSeconds = span ? null : String(exercise.activeDuration || "").match(/([0-9.]+)s/i);
   const activeHours = activeSeconds ? Number(activeSeconds[1]) / 3600 : null;
-  const durationHours = activeHours || hoursBetween(row.start_time, row.end_time);
+  const durationHours = activeHours || hoursBetween(span?.start || row.start_time, span?.end || row.end_time);
   const averageHeartRate = googleExerciseHeartRate(metrics);
   // The dashboard reads the Intervals field name for every activity.
   if (averageHeartRate != null && payload.average_heartrate == null) payload.average_heartrate = averageHeartRate;
@@ -1634,11 +1649,13 @@ export function googleExerciseActivity(row) {
     averageHeartRate,
     type,
     calories: Number(metrics.caloriesKcal || 0),
-    start: row.start_time,
-    end: row.end_time,
+    start: span?.start || row.start_time,
+    end: span?.end || row.end_time,
     durationHours: durationHours || 0,
     pairedEventId: null,
     name,
+    // Who recorded it (Aurin, Apple Watch), for the row and the gym detail.
+    sources: sourcesOf(row, payload),
     payload
   };
 }
@@ -2518,21 +2535,32 @@ async function healthActivities(env) {
   });
 }
 
+// Two days before a YYYY-MM-DD start; anything else reads every night.
+function sleepSince(start) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) return "";
+  const d = new Date(start + "T00:00:00Z");
+  if (Number.isNaN(d.getTime())) return "";
+  d.setUTCDate(d.getUTCDate() - 2);
+  return d.toISOString().slice(0, 10);
+}
+
 async function healthSleep(env, url) {
   const start = url.searchParams.get("start") || dateDaysAgo(30);
   const end = url.searchParams.get("end") || dateDaysFromNow(1);
   // Older Google Health imports may have null DB timestamps because the
-  // session interval is nested inside payload_json. Read recent sleep rows first,
-  // then normalize/filter using the nested interval as well.
+  // session interval is nested inside payload_json. Only nights that started
+  // two days before the range or later (a night counts for the day it ends)
+  // and those rows come from the database; the nested interval filters them.
   const rows = await env.DB.prepare(`
-    SELECT external_id, start_time, end_time, payload_json
+    SELECT external_id, source_family, start_time, end_time, payload_json
     FROM health_datapoints
     WHERE user_id = ? AND data_type = 'sleep'
       AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop')
       AND (record_role IS NULL OR record_role != 'duplicate')
+      AND (start_time >= ? OR start_time IS NULL)
     ORDER BY COALESCE(start_time, end_time) DESC, id DESC
     LIMIT 5000
-  `).bind(env.USER_ID).all();
+  `).bind(env.USER_ID, sleepSince(start)).all();
 
   const sessions = (rows.results || []).map(sleepSessionFromRow);
 
@@ -2543,7 +2571,7 @@ async function healthSleep(env, url) {
   });
   // Google can expose the same nightly session more than once through different
   // imported records. The dashboard should show one night, not duplicate rows.
-  const uniqueSessions = [];
+  let uniqueSessions = [];
   const seenSessions = new Set();
   for (const session of filteredSessions.sort((a,b)=>new Date(b.endTime||b.startTime||0)-new Date(a.endTime||a.startTime||0))) {
     const key = String(session.startTime||"")+"|"+String(session.endTime||"");
@@ -2551,6 +2579,8 @@ async function healthSleep(env, url) {
     seenSessions.add(key);
     uniqueSessions.push(session);
   }
+  // A night with a wake-up in the morning and more sleep after it is one night.
+  uniqueSessions = joinSplitNights(uniqueSessions).sort((a,b)=>new Date(b.endTime||b.startTime||0)-new Date(a.endTime||a.startTime||0));
 
   const totals = uniqueSessions.reduce((a,s)=>{
     a.durationMin += Number(s.durationMin||0);

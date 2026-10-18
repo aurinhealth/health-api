@@ -485,19 +485,32 @@ extension GymDay {
         set(row: 2, column: 3, name)
     }
 
-    var startedAt: Date? { text(Self.timeRow, 1).flatMap { Self.iso.date(from: $0) } }
-    var finishedAt: Date? { text(Self.timeRow, 2).flatMap { Self.iso.date(from: $0) } }
+    /// The row is also where a generated plan keeps its warm-up and
+    /// stretching ("Rozcvička a protažení", JSON; src/stretching.js): the
+    /// times then go after them, so they stay.
+    private var timeColumn: Int { text(Self.timeRow, 0) == "Rozcvička a protažení" ? 2 : 0 }
+
+    var startedAt: Date? { text(Self.timeRow, timeColumn + 1).flatMap { Self.iso.date(from: $0) } }
+    var finishedAt: Date? { text(Self.timeRow, timeColumn + 2).flatMap { Self.iso.date(from: $0) } }
 
     mutating func markStarted(_ date: Date) {
         guard values.count > Self.timeRow else { return }
-        set(row: Self.timeRow, column: 0, "Odcvičeno")
-        set(row: Self.timeRow, column: 1, Self.iso.string(from: date))
+        let base = timeColumn
+        if base == 0 { set(row: Self.timeRow, column: 0, "Odcvičeno") }
+        set(row: Self.timeRow, column: base + 1, Self.iso.string(from: date))
     }
 
     mutating func markFinished(_ date: Date) {
         guard values.count > Self.timeRow else { return }
-        set(row: Self.timeRow, column: 0, "Odcvičeno")
-        set(row: Self.timeRow, column: 2, Self.iso.string(from: date))
+        let base = timeColumn
+        if base == 0 { set(row: Self.timeRow, column: 0, "Odcvičeno") }
+        set(row: Self.timeRow, column: base + 2, Self.iso.string(from: date))
+    }
+
+    /// Pokračovat v tréninku: the workout is under way again.
+    mutating func clearFinished() {
+        guard values.count > Self.timeRow else { return }
+        set(row: Self.timeRow, column: timeColumn + 2, "")
     }
 
     /// Minutes from the start to the end of a workout logged in the app.

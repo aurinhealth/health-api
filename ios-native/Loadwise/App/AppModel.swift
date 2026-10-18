@@ -89,6 +89,9 @@ final class AppModel {
     var passkeyOffer = false
     /// A full-screen flow (Režim tréninku) hides the tab bar.
     var immersive = false
+    /// Režim tréninku hidden with its arrow: the workout goes on and a bar
+    /// over the tab bar leads back (MinimizedGymBar).
+    var minimizedGym: MinimizedGym?
     /// Writes made without signal, oldest first (Outbox.swift); the screens
     /// show them meanwhile.
     private(set) var outbox: [OutboxItem] = []
@@ -177,18 +180,39 @@ final class AppModel {
         api.onSubscriptionRequired = { [weak self] in
             Task { @MainActor in if let self { Paywall.present(self) } }
         }
+        if !demo {
+            Self.live = self
+            // Water from Siri or Shortcuts (AddWaterIntent) goes out now, not on the next refresh.
+            drinkObserver = NotificationCenter.default.addObserver(forName: PendingDrinks.added, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in _ = await self?.sendOutbox(reloadToday: true) }
+            }
+        }
     }
+
+    /// The signed-in app's model, for Siri and Shortcuts (SiriShortcuts.swift),
+    /// which run in the app's process but outside its views.
+    static weak var live: AppModel?
+    @ObservationIgnored private var drinkObserver: NSObjectProtocol?
 
     /// The screens as they were last time, until the server answers.
     private func loadSaved() {
         today = SnapshotCache.load(TodaySnapshot.self, key: "today")?.value
-        training = SnapshotCache.load(TrainingSnapshot.self, key: "training")?.value
-        health = SnapshotCache.load(HealthSnapshot.self, key: "health")?.value
         food = SnapshotCache.load(FoodSnapshot.self, key: "food")?.value
         todayBase = OutboxStore.savedSnapshot("today")
         foodBase = OutboxStore.savedSnapshot("food")
         applyOutbox()
-        SnapshotCache.prune(today: Self.localDate(Date()))
+        // Training and Health are not on the first screen: read off the main
+        // thread, and only where the server has not answered meanwhile.
+        Task {
+            let saved = await Task.detached(priority: .userInitiated) {
+                SavedScreens(training: SnapshotCache.load(TrainingSnapshot.self, key: "training")?.value,
+                             health: SnapshotCache.load(HealthSnapshot.self, key: "health")?.value)
+            }.value
+            guard phase == .signedIn else { return }
+            if training == nil { training = saved.training }
+            if health == nil { health = saved.health }
+        }
+        Task.detached(priority: .utility) { SnapshotCache.prune(today: AppModel.localDate(Date())) }
     }
 
     /// Notes whether a refresh reached the server; true when the error was a
@@ -258,8 +282,12 @@ final class AppModel {
 
     /// The account's name and e-mail for Profil, and the first letter of the
     /// name for the settings button while there is no photo.
-    func loadAccountInitial() async {
-        guard !demo, phase == .signedIn, let account = try? await api.account() else { return }
+    /// account: already fetched (signing in), so it is not asked for twice.
+    func loadAccountInitial(_ known: (name: String?, email: String?)? = nil) async {
+        guard !demo, phase == .signedIn else { return }
+        var account = known
+        if account == nil { account = try? await api.account() }
+        guard let account else { return }
         let defaults = UserDefaults.standard
         defaults.set(account.name, forKey: AvatarStore.nameKey)
         defaults.set(account.email, forKey: AvatarStore.emailKey)
@@ -310,7 +338,7 @@ final class AppModel {
     /// the app then offers a passkey ("Příště přes Face ID", RootView).
     func signIn(email: String, code: String) async throws {
         try await api.verifyEmailLogin(email: email, code: code)
-        if !PasskeyService.mayHaveOne { passkeyOffer = true }
+        if ServerChoice.current.passkeys && !PasskeyService.mayHaveOne { passkeyOffer = true }
         await signedIn()
         await refresh()
     }
@@ -338,7 +366,8 @@ final class AppModel {
         phase = .signedIn
         errorMessage = nil
         let defaults = UserDefaults.standard
-        if let previous = defaults.string(forKey: AvatarStore.emailKey), let account = try? await api.account(), account.email != previous {
+        let account = try? await api.account()
+        if let previous = defaults.string(forKey: AvatarStore.emailKey), let account, account.email != previous {
             outbox = []
             OutboxStore.save([])
             AvatarStore.remove()
@@ -347,7 +376,7 @@ final class AppModel {
             today = nil; training = nil; health = nil; food = nil
             calendar = [:]
         }
-        await loadAccountInitial()
+        await loadAccountInitial(account)
         // Back in the account that read Apple Health before signing out.
         await AppleHealth.shared.resume(account: defaults.string(forKey: AvatarStore.emailKey), api: api)
         await checkSetup()
@@ -374,26 +403,46 @@ final class AppModel {
     /// announce: the app was opened or pulled down, so the pill says it syncs.
     func refresh(announce: Bool = false) async {
         guard !demo, phase == .signedIn else { return }
+        // The app opened or pulled down while a refresh runs (the app came
+        // back as Today first loaded): that one brings the same data. A write
+        // (refresh() without announce) still loads again after it.
+        guard announce else { return await performRefresh(announce: false) }
+        if let running = announcedRefresh { return await running.value }
+        let task = Task { await performRefresh(announce: true) }
+        announcedRefresh = task
+        await task.value
+        if announcedRefresh == task { announcedRefresh = nil }
+    }
+    @ObservationIgnored private var announcedRefresh: Task<Void, Never>?
+
+    private func performRefresh(announce: Bool) async {
         loading = true
         defer { loading = false }
         if announce { syncStatus = .syncing }
         await sendOutbox()
         let health = AppleHealth.shared
         // Until a late-morning sync, last night and the morning's HRV from the
-        // watch go out before Today is computed. Later in the day Today loads
-        // alongside the sync and again only when it brought something new.
-        var sync: Task<AppleHealth.SyncOutcome, Never>?
-        if health.hasMorningData {
-            let api = api
-            sync = Task { await health.run(api: api) }
-        } else {
-            _ = await health.run(api: api)
+        // watch go out before Today is computed, waiting at most 8 s. Later in
+        // the day (or after those 8 s) Today loads alongside the sync and again
+        // only when it brought something new.
+        let client = api
+        var sync: Task<AppleHealth.SyncOutcome, Never>? = Task { await health.run(api: client) }
+        var changed = false
+        if !health.hasMorningData, let task = sync, let outcome = await Self.outcome(of: task, within: 8) {
+            changed = outcome.changed
+            sync = nil
         }
         do {
             try await loadToday()
             // The day is on screen: the arrows and swipes work again.
             loading = false
-            if let sync, await sync.value.changed { try? await loadToday() }
+            if let sync, await sync.value.changed { changed = true; try? await loadToday() }
+            // New nights or workouts reach the Health snapshot too: the sleep
+            // detail opened from Today shows it.
+            if changed {
+                fetched[.health] = nil
+                if self.health != nil { Task { await self.refreshHealth() } }
+            }
             async let status = try? api.athleteStatus()
             if selectedDate == nil, let today {
                 async let cycle: Void = loadCycle()
@@ -421,6 +470,22 @@ final class AppModel {
             }
             // "Bez připojení" alone hides that a Wi-Fi wants a sign-in: say so.
             if lost, (error as? URLError)?.code == .secureConnectionFailed { notice = error.localizedDescription }
+        }
+    }
+
+    /// What the sync did if it ends within `seconds`; nil when it takes longer
+    /// (it goes on, only this wait ends).
+    private static func outcome(of task: Task<AppleHealth.SyncOutcome, Never>, within seconds: Double) async -> AppleHealth.SyncOutcome? {
+        let once = FirstAnswer()
+        return await withCheckedContinuation { continuation in
+            Task { @MainActor in
+                let value = await task.value
+                if once.take() { continuation.resume(returning: value) }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(seconds))
+                if once.take() { continuation.resume(returning: nil) }
+            }
         }
     }
 
@@ -495,10 +560,12 @@ final class AppModel {
     }
     @ObservationIgnored private var refreshing: Set<AppTab> = []
 
-    /// The morning check-in on Today. It lowers the readiness, so Today loads again.
+    /// The morning check-in on Today. It lowers the readiness, so Today loads
+    /// again; without signal the answer waits in the outbox (a newer one
+    /// replaces it) and Today follows once it went out.
     func setMorningCheckin(_ feeling: String?) async throws {
         guard !demo, let today else { return }
-        try await api.setMorningCheckin(feeling, date: today.date)
+        guard try await deliver(APIClient.morningCheckinItem(feeling, date: today.date)) else { return }
         await refresh()
         if health != nil { await refreshHealth() }
     }
@@ -599,12 +666,18 @@ final class AppModel {
     @discardableResult
     func addDrink(ml: Int, kind: String) async -> Bool {
         guard !demo else { return true }
-        write(drinkItem(ml: ml, kind: kind, date: writeDay))
+        write(Self.drinkItem(ml: ml, kind: kind, date: writeDay))
         return true
     }
 
+    /// A drink from Siri or Shortcuts: always today, whatever day the app shows.
+    func addDrinkToday(ml: Int, kind: String) {
+        guard !demo else { return }
+        write(Self.drinkItem(ml: ml, kind: kind, date: Self.localDate(Date())))
+    }
+
     /// POST /app/api/fluids with the time it was drunk, so a later send keeps it.
-    private func drinkItem(ml: Int, kind: String, date: String, at: Date = Date()) -> OutboxItem {
+    static func drinkItem(ml: Int, kind: String, date: String, at: Date = Date()) -> OutboxItem {
         let localId = Outbox.localId()
         var body: JSONObject = ["ml": .number(Double(ml)), "kind": .string(kind), "date": .string(date),
                                 "requestId": .string(UUID().uuidString)]
@@ -678,7 +751,7 @@ final class AppModel {
     private func takeWidgetDrinks() {
         let drinks = PendingDrinks.take()
         guard !drinks.isEmpty else { return }
-        outbox += drinks.map { drinkItem(ml: $0.ml, kind: "water", date: $0.date) }
+        outbox += drinks.map { Self.drinkItem(ml: $0.ml, kind: "water", date: $0.date) }
         saveOutbox()
     }
 
@@ -784,19 +857,29 @@ final class AppModel {
         if food != nil { await refreshFood() }
     }
 
-    /// A weigh-in (kg); waits for signal when there is none. Throws the server's refusal.
-    func addWeight(kg: Double) async throws {
-        guard !demo else { return }
+    /// A weigh-in (kg); waits for signal when there is none. Throws the server's
+    /// refusal. True when it went out now. reload: false for Siri, which waits
+    /// for the answer and needs no screens loaded.
+    @discardableResult
+    func addWeight(kg: Double, reload: Bool = true) async throws -> Bool {
+        guard !demo else { return true }
         let date = Self.localDate(Date())
-        let body: JSONObject = ["kg": .number(kg), "date": .string(date), "requestId": .string(UUID().uuidString)]
-        let item = OutboxItem(path: "/app/api/weight", method: "POST", body: OutboxItem.json(body), label: L10n.tr("Váha"),
-                              overlay: OutboxOverlay(kind: .weight, date: date, kg: kg))
+        let item = Self.weightItem(kg: kg, date: date)
         // Apple Health gets it too when weight is switched on in Synchronizace.
         Task { await AppleHealthExport.shared.saveWeight(kg: kg, date: date) }
-        if try await deliver(item) {
+        let sent = try await deliver(item)
+        if sent && reload {
             await refreshHealth()
             await refresh()
         }
+        return sent
+    }
+
+    /// POST /app/api/weight; the requestId keeps one weigh-in when it goes out twice.
+    nonisolated static func weightItem(kg: Double, date: String) -> OutboxItem {
+        let body: JSONObject = ["kg": .number(kg), "date": .string(date), "requestId": .string(UUID().uuidString)]
+        return OutboxItem(path: "/app/api/weight", method: "POST", body: OutboxItem.json(body), label: L10n.tr("Váha"),
+                          overlay: OutboxOverlay(kind: .weight, date: date, kg: kg))
     }
 
     // MARK: - Synchronizace
@@ -806,10 +889,23 @@ final class AppModel {
     /// them as "odešle se" while there is no signal.
     static let activityDestinationsKey = "sync.activityDestinations"
 
+    /// A finished gym session (Posilovna or Režim tréninku) to those apps, under
+    /// the day's key, so finishing it again updates the same activity.
+    /// `appleSaved`: the live workout is in Apple Health already.
+    func shareGym(_ day: GymDay, date: String, start: Date? = nil, minutes: Int? = nil, appleSaved: Bool = false) async {
+        let done = day.exercises.filter { $0.doneCount > 0 }
+        guard !done.isEmpty, let start = day.startedAt ?? start else { return }
+        let length = max(1, minutes ?? day.loggedMinutes ?? Int((Date().timeIntervalSince(start) / 60).rounded()))
+        let sets = done.map { $0.name + ": " + GymCoach.setsLine($0.sets) }.joined(separator: "\n")
+        await shareActivity(ActivityToSync(key: "gym:" + date, sport: "gym", name: day.planName ?? L10n.tr("Silový trénink"), date: date,
+                                           start: start, minutes: length, notes: sets), apple: !appleSaved)
+    }
+
     /// A done activity (a gym session, a workout typed in) to the apps chosen
     /// in Synchronizace; `sends` when the server already sent it (a manual
     /// workout). Shows the toast when it went anywhere.
-    func shareActivity(_ activity: ActivityToSync, sends: [SyncSend]? = nil) async {
+    /// `toApple` false when the workout is in Apple Health already.
+    func shareActivity(_ activity: ActivityToSync, sends: [SyncSend]? = nil, apple toApple: Bool = true) async {
         guard !demo else { return }
         var rows: [SyncReport.Row] = []
         if let sends {
@@ -830,7 +926,7 @@ final class AppModel {
             }
         }
         let apple = AppleHealthExport.shared
-        if apple.prefs.pushActivities {
+        if toApple && apple.prefs.pushActivities {
             let failed = await apple.saveWorkout(activity)
             rows.insert(SyncReport.Row(destination: "apple", status: failed == nil ? .sent : .error, message: failed), at: 0)
         }
@@ -925,8 +1021,16 @@ final class AppModel {
         let days = ISODay.range(start, end)
         guard force || days.contains(where: { calendar[$0] == nil }) else { return }
         if demo { return }
-        guard phase == .signedIn, let result = try? await api.trainingCalendar(start: start, end: end) else { return }
-        for day in result.days { calendar[day.date] = day }
+        guard phase == .signedIn else { return }
+        do {
+            let result = try await api.trainingCalendar(start: start, end: end)
+            for day in result.days { calendar[day.date] = day }
+        } catch {
+            // Without signal the days already here stay; anything else is said,
+            // not left as an empty calendar (the request is in ErrorLog).
+            if Self.isCancellation(error) || Outbox.isNoConnection(error) || (error as? APIError) == .unauthorized { return }
+            notice = error.localizedDescription
+        }
     }
 
     func updateDrink(id: Int, ml: Int, kind: String) async -> Bool {
@@ -1152,19 +1256,12 @@ final class AppModel {
     }
 
     nonisolated static func localDate(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
+        DateFormatters.iso().string(from: date)
     }
 
     nonisolated static func shift(_ isoDate: String, by days: Int) -> String? {
         let utc = TimeZone(identifier: "UTC")!
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = utc
-        f.dateFormat = "yyyy-MM-dd"
+        let f = DateFormatters.iso(timeZone: utc)
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = utc
         guard let d = f.date(from: isoDate), let moved = calendar.date(byAdding: .day, value: days, to: d) else { return nil }
@@ -1186,6 +1283,30 @@ final class AppModel {
     /// sign-in shows whether it is the same account (signedIn()).
     func signOut(expired: Bool = false) {
         api.signOut()
+        clearLocal(expired: expired)
+    }
+
+    /// Nastavení → Testování → Server: the other server, with its own account
+    /// data and sign-in. What the screens and the outbox hold belongs to the
+    /// old server; both sessions stay, so switching back needs no sign-in.
+    /// Apple Health stays as it is on this iPhone and reads into the chosen
+    /// server, each with its own last sync (AppleHealth.serverChanged). It
+    /// used to pause like a sign-out, and the way back switched it off for good.
+    func switchServer(to choice: ServerChoice) async {
+        guard !demo, choice != ServerChoice.current else { return }
+        if phase == .signedIn { await PushRegistration.unregister(api: api) }
+        ServerChoice.current = choice
+        AppleHealth.shared.serverChanged()
+        clearLocal(expired: true)
+        outbox = []
+        OutboxStore.save([])
+        if api.hasSession {
+            await signedIn()
+            await refresh()
+        }
+    }
+
+    private func clearLocal(expired: Bool) {
         SnapshotCache.clear()
         GymDayCache.clear()
         CoachTextMemory.values = [:]
@@ -1230,5 +1351,27 @@ final class AppModel {
         fetched = [:]
         athleteStatus = nil
         phase = .signedOut
+    }
+}
+
+/// The first of two racing waits answers; the other one finds it taken.
+@MainActor
+private final class FirstAnswer {
+    private var taken = false
+    func take() -> Bool {
+        guard !taken else { return false }
+        taken = true
+        return true
+    }
+}
+
+/// Training and Health read from disk off the main thread (AppModel.loadSaved);
+/// read once, then handed over.
+private final class SavedScreens: @unchecked Sendable {
+    let training: TrainingSnapshot?
+    let health: HealthSnapshot?
+    init(training: TrainingSnapshot?, health: HealthSnapshot?) {
+        self.training = training
+        self.health = health
     }
 }

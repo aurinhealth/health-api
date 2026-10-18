@@ -59,6 +59,10 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     var adherence: String? = nil
     /// With "off": why, in one line ("kratší než plán (1 h 30)").
     var adherenceReason: String? = nil
+    /// Who recorded a done session (Aurin, Apple Watch): two after merging
+    /// them (src/workout-merge.js), and whose calories and heart rate count.
+    var sources: [ActivityDetail.Origin]? = nil
+    var mergeEnergy: String? = nil
 }
 
 /// The answer to POST /app/api/planned/move (src/planned-events.js).
@@ -100,8 +104,24 @@ struct GymDay: Decodable, Equatable {
     }
 
     /// The warm-up before and the stretching after the session (src/stretching.js), nil without them.
-    var warmup: GymStretching? { GymStretching.routines(values)?.warmup }
+    /// An older plan's warm-up began with easy cardio: that is the opening cardio now.
+    var warmup: GymStretching? {
+        guard let all = GymStretching.routines(values)?.warmup else { return nil }
+        let cardio = all.items.filter { $0.id == "cardio" }
+        guard !cardio.isEmpty else { return all }
+        let moves = all.items.filter { $0.id != "cardio" }
+        guard !moves.isEmpty else { return nil }
+        let seconds = cardio.reduce(0) { $0 + $1.seconds }
+        return GymStretching(minutes: max(1, all.minutes - Int((Double(seconds) / 60).rounded())), items: moves)
+    }
     var stretching: GymStretching? { GymStretching.routines(values)?.stretching }
+    /// The cardio at the start and at the end (an older plan: its warm-up's easy cardio).
+    var cardio: GymStretching.Cardio? {
+        let routines = GymStretching.routines(values)
+        if let cardio = routines?.cardio { return cardio }
+        guard let old = routines?.warmup?.items.first(where: { $0.id == "cardio" }) else { return nil }
+        return GymStretching.Cardio(type: "exercise_bike", start: max(1, Int((Double(old.seconds) / 60).rounded())), end: nil)
+    }
 
     /// The sets grouped by exercise, in the plan's order.
     var exercises: [GymExercise] {
@@ -366,6 +386,8 @@ struct GymTechnique: Decodable, Equatable {
     struct Video: Decodable, Equatable {
         let id: String?
         let title: String?
+        /// The video shows a close variant, not this exact exercise.
+        let similar: Bool?
     }
 }
 
@@ -412,7 +434,7 @@ struct ActivityDetail: Decodable, Equatable {
     /// (src/activity-origin.js).
     var origin: Origin? = nil
 
-    struct Origin: Decodable, Equatable {
+    struct Origin: Decodable, Hashable {
         let name: String
         /// IntegrationIcon's id; nil: the name alone.
         let logo: String?
@@ -536,9 +558,12 @@ struct PlannedWorkout: Decodable, Equatable {
         let paceFast: Double?
         let cadence: JSONValue?
         let note: String?
+        /// Without FTP or threshold pace: the heart-rate zone of the step (bpm).
+        let hrLow: Double?
+        let hrHigh: Double?
 
         enum CodingKeys: String, CodingKey {
-            case durationSeconds, percentLow, percentHigh, wattsLow, wattsHigh, paceSlow, paceFast, cadence, note
+            case durationSeconds, percentLow, percentHigh, wattsLow, wattsHigh, paceSlow, paceFast, cadence, note, hrLow, hrHigh
         }
 
         /// Lenient: the library sends paces as "4:35" text, the plan as seconds.
@@ -561,6 +586,8 @@ struct PlannedWorkout: Decodable, Equatable {
             paceFast = pace(.paceFast)
             cadence = value(.cadence)
             note = value(.note)?.string
+            hrLow = value(.hrLow)?.number
+            hrHigh = value(.hrHigh)?.number
         }
     }
 

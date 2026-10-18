@@ -10,7 +10,7 @@ test("the server routes, cache and Settings know the passkeys", () => {
   assert.match(entry, /handleEmailLogin\(request, rawEnv, url\.pathname, ctx\)/);
   assert.match(entry, /handlePasskeyApi\(request, env, url, session, ctx\)/);
   assert.match(entry, /passkeys\$\|passkeys\\\/options\$\)\/;/);
-  assert.match(entry, /apple,passkeys,emailLogin:emailConfigured\(env\)\}/);
+  assert.match(entry, /apple,passkeys,emailLogin:emailConfigured\(env\)[,}]/);
   assert.match(entry, /privacyPage\(request, \{ apple: true, email: emailConfigured\(env\), open: openSignup\(env\) \}\)/);
 });
 

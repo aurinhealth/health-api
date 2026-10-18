@@ -142,7 +142,9 @@ final class AppleHealth {
 
     private static let enabledKey = "appleHealth.enabled"
     private static let categoriesKey = "appleHealth.categories"
-    private static let lastSyncKey = "appleHealth.lastSync"
+    /// Each server has its own last sync, so the days spent on the other one
+    /// (Nastavení → Testování → Server) are sent again after switching back.
+    private static var lastSyncKey: String { ServerChoice.current == .live ? "appleHealth.lastSync" : "appleHealth.lastSync.staging" }
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -177,6 +179,11 @@ final class AppleHealth {
         return await sync(api: api, force: true)
     }
 
+    /// After switching the server: that server's last sync.
+    func serverChanged() {
+        lastSync = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
+    }
+
     /// Stops reading. The server keeps what it already has.
     func disconnect() {
         enabled = false
@@ -189,8 +196,11 @@ final class AppleHealth {
     /// back in to this one reads it again (resume).
     func pause(account email: String?) {
         let wasOn = enabled
+        let waiting = UserDefaults.standard.string(forKey: Self.resumeKey)
         disconnect()
+        // Off already (a second sign-out): the account that read it still gets it back.
         if wasOn, let email { UserDefaults.standard.set(Self.fingerprint(email), forKey: Self.resumeKey) }
+        else if let waiting { UserDefaults.standard.set(waiting, forKey: Self.resumeKey) }
     }
 
     /// After a sign-in to the account that read Apple Health before signing
@@ -255,7 +265,11 @@ final class AppleHealth {
             }
             reader.store.execute(query)
             observers.append(query)
-            reader.store.enableBackgroundDelivery(for: type, frequency: .hourly) { _, _ in }
+            // Steps come in all day: waking for each hour of them costs battery
+            // and brings nothing the next open would not. Once a day is enough;
+            // nights, workouts and the rest still wake the app within the hour.
+            let often: HKUpdateFrequency = type == HKQuantityType(.stepCount) ? .daily : .hourly
+            reader.store.enableBackgroundDelivery(for: type, frequency: often) { _, _ in }
         }
     }
 
@@ -707,11 +721,14 @@ final class HealthReader: @unchecked Sendable {
     /// 10:00. Without them the average SDNN Apple Health shows.
     private func dailyHRV(from: Date, to: Date) async -> [AppleRecord] {
         let unit = HKUnit.secondUnit(with: .milli)
-        let sdnn = await samples(HKQuantityType(.heartRateVariabilitySDNN), from: from, to: to).compactMap { $0 as? HKQuantitySample }
-        let beats = await samples(HKSeriesType.heartbeat(), from: from, to: to).compactMap { $0 as? HKHeartbeatSeriesSample }
+        async let sdnnRead = samples(HKQuantityType(.heartRateVariabilitySDNN), from: from, to: to)
+        async let beatsRead = samples(HKSeriesType.heartbeat(), from: from, to: to)
+        let sdnn = await sdnnRead.compactMap { $0 as? HKQuantitySample }
+        let beats = await beatsRead.compactMap { $0 as? HKHeartbeatSeriesSample }.filter { calendar.component(.hour, from: $0.startDate) < 10 }
         var rmssd: [String: [Double]] = [:]
-        for series in beats where calendar.component(.hour, from: series.startDate) < 10 {
-            if let value = await rmssdOf(series) { rmssd[day(series.startDate), default: []].append(value) }
+        let values = await concurrently(beats) { await self.rmssdOf($0) }
+        for (series, value) in zip(beats, values) {
+            if let value { rmssd[day(series.startDate), default: []].append(value) }
         }
         var bySdnn: [String: [Double]] = [:]
         for s in sdnn {
@@ -920,10 +937,42 @@ final class HealthReader: @unchecked Sendable {
             record.elevationGain = elevation
             record.avgPower = average(.cyclingPower, .watt()) ?? average(.runningPower, .watt())
             record.avgCadence = average(.cyclingCadence, bpm)
-            record.heartRate = await heartRateSeries(from: w.startDate, to: w.endDate)
             out.append(record)
         }
+        let spans = list.map { (start: $0.startDate, end: $0.endDate) }
+        let series = await concurrently(spans) { await self.heartRateSeries(from: $0.start, to: $0.end) }
+        for i in out.indices { out[i].heartRate = series[i] }
         return out
+    }
+
+    /// The work for each item, at most `limit` at a time (HealthKit answers
+    /// each query on its own queue), in the items' order.
+    private func concurrently<T, R: Sendable>(_ items: [T], limit: Int = 4, _ work: @escaping @Sendable (T) async -> R) async -> [R] {
+        let box = Items(items)
+        return await withTaskGroup(of: (Int, R).self) { group in
+            var results = [R?](repeating: nil, count: items.count)
+            var next = 0
+            while next < min(limit, items.count) {
+                let i = next
+                group.addTask { (i, await work(box.items[i])) }
+                next += 1
+            }
+            while let (i, value) = await group.next() {
+                results[i] = value
+                if next < items.count {
+                    let j = next
+                    group.addTask { (j, await work(box.items[j])) }
+                    next += 1
+                }
+            }
+            return results.map { $0! }
+        }
+    }
+
+    /// HealthKit objects handed to the queries above; they are read only.
+    private struct Items<T>: @unchecked Sendable {
+        let items: [T]
+        init(_ items: [T]) { self.items = items }
     }
 
     /// Heart rate through a workout as [seconds from the start, bpm], averaged

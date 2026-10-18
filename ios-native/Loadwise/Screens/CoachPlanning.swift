@@ -16,6 +16,7 @@ struct CoachCheckInCard: View {
     @State private var illnessSessions: [CoachCheckIn.Advice.Session] = []
     /// After switching to Nemoc: until when, and how many sessions went.
     @State private var switched: (until: String?, cancelled: Int)?
+    @State private var swapError: String?
 
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
@@ -55,7 +56,23 @@ struct CoachCheckInCard: View {
                     if let message = advice.message {
                         Text(message).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
-                    if advice.kind == "memory_check", let memory = advice.memory {
+                    if advice.kind == "swap", let from = advice.from, let to = advice.to {
+                        // "VO2max 5×4 · 75 min → Lehká jízda · 45 min", as the push offered it.
+                        HStack(spacing: 8) {
+                            Text(verbatim: from).strikethrough().foregroundStyle(Palette.muted)
+                            Image(systemName: "arrow.right").font(.caption.weight(.semibold)).foregroundStyle(Palette.faint)
+                            Text(verbatim: to).fontWeight(.semibold).foregroundStyle(Palette.ink)
+                        }
+                        .font(Typo.small)
+                        .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 10) {
+                            PrimaryButton(title: L10n.tr("Vyměnit")) { Task { await answerSwap(advice, swap: true) } }
+                            SecondaryButton(title: "Nechat") { Task { await answerSwap(advice, swap: false) } }
+                        }
+                        if let swapError {
+                            Text(swapError).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+                        }
+                    } else if advice.kind == "memory_check", let memory = advice.memory {
                         // A pain or an illness the coach remembers: still true, or forget it.
                         HStack(spacing: 10) {
                             PrimaryButton(title: L10n.tr("Už neplatí")) { Task { await settle(memory, keep: false) } }
@@ -85,6 +102,19 @@ struct CoachCheckInCard: View {
         .task {
             guard !model.demo else { return }
             advice = try? await model.api.coachCheckIn()
+        }
+    }
+
+    /// Vyměnit puts the easier session in the plan, Nechat keeps the plan.
+    private func answerSwap(_ advice: CoachCheckIn.Advice, swap: Bool) async {
+        guard let date = advice.date else { return }
+        swapError = nil
+        do {
+            _ = try await model.api.answerCoachNudge(date: date, decision: swap ? "swap" : "keep")
+            withAnimation { self.advice = nil }
+            if swap { await model.refresh() }
+        } catch {
+            swapError = error.localizedDescription
         }
     }
 
@@ -335,164 +365,5 @@ struct DayReviewView: View {
         loading = true
         defer { loading = false }
         do { review = try await model.api.reviewDay(date: date); error = nil } catch { self.error = error.localizedDescription }
-    }
-}
-
-// MARK: - Records
-
-/// Records and where the cardio went: the longest ride, the best power, the
-/// fastest 5 km, the strongest lifts and the intensity split of the last weeks.
-struct InsightsView: View {
-    @Environment(AppModel.self) private var model
-    @State private var insights: FitnessInsights?
-    @State private var sides: [GymSideBalance.Item] = []
-    @State private var error: String?
-
-    private static let cardio: [(String, String)] = [
-        ("longestRide", "Nejdelší jízda"), ("longestRideTime", "Nejdelší jízda časem"), ("mostElevation", "Nejvíc nastoupáno"),
-        ("bestRidePower", "Nejlepší výkon (20+ min)"), ("longestRun", "Nejdelší běh"), ("fastestRun5k", "Nejrychlejší tempo na 5+ km")
-    ]
-
-    var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: "Rekordy a zaměření") {
-            VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: "Trénink · rekordy").padding(.top, 24)
-                Text("Rekordy a zaměření").font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
-                if let error {
-                    Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
-                } else if let insights {
-                    if !sides.isEmpty { sidesLink.padding(.top, 20) }
-                    content(insights)
-                } else {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
-                }
-            }
-        }
-        .task {
-            guard insights == nil else { return }
-            guard !model.demo else { error = "V ukázce se rekordy nenačítají."; return }
-            do { insights = try await model.api.fitnessInsights() } catch { self.error = error.localizedDescription }
-            sides = (try? await model.api.gymSides())?.sides ?? []
-        }
-    }
-
-    /// One-sided exercises: Levá a pravá strana (GymSides.swift).
-    private var sidesLink: some View {
-        NavigationLink { GymSidesView(items: sides) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "figure.strengthtraining.functional").font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Palette.onAccent).frame(width: 34, height: 34)
-                    .background(Palette.blue, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Text("Levá a pravá strana").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                Spacer(minLength: 4)
-                if let weak = sides.first(where: { $0.weaker != nil }) {
-                    Text(verbatim: weak.exercise).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                }
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
-            }
-            .padding(14)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private func content(_ insights: FitnessInsights) -> some View {
-        if let focus = insights.cardioFocus, let p = focus.percent {
-            SectionLabel(text: L10n.f("Intenzita za %@ dní", String(focus.days ?? 28))).padding(.top, 24)
-            Card {
-                GeometryReader { geo in
-                    let total = max(1, (p.low ?? 0) + (p.high ?? 0) + (p.anaerobic ?? 0))
-                    HStack(spacing: 2) {
-                        Rectangle().fill(Palette.green).frame(width: geo.size.width * (p.low ?? 0) / total)
-                        Rectangle().fill(Palette.amberBar).frame(width: geo.size.width * (p.high ?? 0) / total)
-                        Rectangle().fill(Palette.rust).frame(width: geo.size.width * (p.anaerobic ?? 0) / total)
-                    }
-                    .clipShape(Capsule())
-                }
-                .frame(height: 10)
-                HStack {
-                    legend("Nízká", p.low, Palette.green)
-                    Spacer()
-                    legend("Vysoká", p.high, Palette.amberBar)
-                    Spacer()
-                    legend("Anaerobní", p.anaerobic, Palette.rust)
-                }
-                if let minutes = focus.minutes, let count = focus.activities {
-                    Text("\(count) " + Fmt.plural(count, "aktivita", "aktivity", "aktivit") + " · " + Fmt.duration(minutes))
-                        .font(Typo.caption).foregroundStyle(Palette.muted)
-                }
-            }
-            .padding(.top, 8)
-        }
-
-        let cardio = cardioRecords(insights)
-        if !cardio.isEmpty {
-            SectionLabel(text: "Vytrvalost za rok").padding(.top, 24)
-            Card {
-                ForEach(Array(cardio.enumerated()), id: \.offset) { index, item in
-                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                    recordRow(item.0, value: Self.format(item.1), detail: item.1.date.map { Fmt.dayHeading($0) })
-                }
-            }
-            .padding(.top, 8)
-        }
-
-        let lifts = (insights.records?.strength ?? []).filter { $0.e1rm != nil || $0.heaviest != nil }.prefix(8)
-        if !lifts.isEmpty {
-            SectionLabel(text: "Síla").padding(.top, 24)
-            Card {
-                ForEach(Array(lifts.enumerated()), id: \.element.id) { index, lift in
-                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                    let best = lift.heaviest
-                    recordRow(Fmt.capitalized(lift.exercise),
-                              value: best?.value.map { Units.weightText($0) } ?? "–",
-                              detail: lift.e1rm?.value.map { L10n.f("odhad 1RM %@", Units.weightText($0, digits: 0)) },
-                              fresh: !(lift.recent ?? []).isEmpty)
-                }
-            }
-            .padding(.top, 8)
-        }
-    }
-
-    private func cardioRecords(_ insights: FitnessInsights) -> [(String, FitnessInsights.Record)] {
-        guard let map = insights.records?.cardio else { return [] }
-        return Self.cardio.compactMap { key, title in
-            guard let value = map[key], let record = value else { return nil }
-            return (title, record)
-        }
-    }
-
-    private func legend(_ title: String, _ value: Double?, _ color: Color) -> some View {
-        HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 7, height: 7)
-            Text(verbatim: L10n.tr(title) + " " + Fmt.int(value) + " %").font(Typo.caption).foregroundStyle(Palette.secondary)
-        }
-    }
-
-    private func recordRow(_ title: String, value: String, detail: String?, fresh: Bool = false) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(title).font(Typo.body).foregroundStyle(Palette.ink)
-                    if fresh { Pill(text: "nový", foreground: Palette.green, background: Palette.greenSoft) }
-                }
-                if let detail { Text(detail).font(Typo.caption).foregroundStyle(Palette.muted) }
-            }
-            Spacer(minLength: 8)
-            Text(value).font(Typo.number(20)).foregroundStyle(Palette.ink)
-        }
-        .padding(.vertical, 4)
-    }
-
-    private static func format(_ record: FitnessInsights.Record) -> String {
-        guard let value = record.value else { return "–" }
-        switch record.unit {
-        case "s/km": return Units.paceText(value)
-        case "km": return Units.distanceText(value)
-        case "h": return Fmt.duration(Int(value * 60))
-        case let unit?: return Fmt.decimal(value, digits: value.rounded() == value ? 0 : 1) + " " + unit
-        case nil: return Fmt.decimal(value)
-        }
     }
 }

@@ -1,13 +1,15 @@
 // Gym routes of the dashboard API: equipment, exercises, history and loads, the
 // day's plan, its confirmation and exercise technique.
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
-import { fitsEquipment, EXERCISES, recommendedGoal } from "./strength-generator.js";
-import { routineSize, stretchingFor, typicalExtraMinutes, warmupFor } from "./stretching.js";
+import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts } from "./strength-generator.js";
+import { buildStrengthContext } from "./strength-context.js";
+import { cardioFor, cardioMode, cardioOptions, cardioType, routineSize, stretchingFor, typicalExtraMinutes, warmupFor } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
+import { pinnedExercises, savePinnedExercises } from "./pinned-exercises.js";
 import { gymExerciseCatalog, gymAlternatives } from "./gym-catalog.js";
-import { EXERCISE_STATIONS } from "./gym-equipment.js";
+import { EXERCISE_STATIONS, stationSections } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
 import { getStrengthHistory, strengthSessions, importStrengthHistory, removeManualSets } from "./strength-history.js";
 import { assertTrainingAllowed, getAthleteState } from "./athlete-state.js";
@@ -15,7 +17,7 @@ import { isStrengthEvent, deletePlannedEvent } from "./planned-events.js";
 import { exerciseMuscles } from "./fitness-insights.js";
 import { EXERCISE_INTELLIGENCE } from "./strength-intelligence.js";
 import { cleanGymRows, catalogNames, adjustGymPlan } from "./gym-adjust.js";
-import { readGymPlan, moveGymPlan, cancelGymPlan, restoreGymPlan } from "./gym-plan-store.js";
+import { readGymPlan, moveGymPlan, cancelGymPlan, restoreGymPlan, discardGymPlan } from "./gym-plan-store.js";
 import { writeStrengthPlanToIntervals } from "./intervals-strength.js";
 import { saveOwnExerciseVideo, techniqueFor, ownExerciseVideo, storedTechnique, exerciseInUse, generateTechnique } from "./exercise-technique.js";
 import { L } from "./lang.js";
@@ -29,7 +31,7 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   // The athlete's gym: the stations it has (equipment "custom"), and AI that
   // picks them from a photo of the gym or its web page (nothing is saved there).
   if(url.pathname==='/app/api/gym/equipment'){
-    if(request.method==='GET'){const training=await trainingSetup(env.DB);return Response.json({status:'ok',stations:equipmentCatalog(),equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||'',dumbbellWeights:training.dumbbellWeights||[],places:training.places||[],activePlace:training.activePlace||'bodyweight'},{headers:{'Cache-Control':'no-store'}});}
+    if(request.method==='GET'){const training=await trainingSetup(env.DB);return Response.json({status:'ok',stations:equipmentCatalog(),sections:stationSections(),equipment:training.equipment,selected:training.stations||[],gymName:training.gymName||'',gymUrl:training.gymUrl||'',dumbbellWeights:training.dumbbellWeights||[],places:training.places||[],activePlace:training.activePlace||'bodyweight'},{headers:{'Cache-Control':'no-store'}});}
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       // Places (several gyms, home) with the active one; or the flat fields of older clients.
@@ -42,16 +44,19 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   if(url.pathname==='/app/api/gym/preferences'){
     // The goal "auto" follows the main sport (profile, else the training history).
     const sport=async training=>{const { loadEffectiveProfile }=await import('./profile-suggestions.js');const profile=await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null);return profile?.mainSport&&profile.mainSport!=='auto'?profile.mainSport:training.history?.mainSport||'';};
-    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.history?.experience||'beginner',warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false,extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,warmupCardio:training.warmupCardio!==false,stretching:training.stretching!==false})},{headers:{'Cache-Control':'no-store'}});
+    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.experienceBySport?.strength?.autoLevel||'beginner',experienceBySport:training.experienceBySport,warmup:training.warmup!==false,warmupCardio:['start','both'].includes(cardioMode(training)),cardio:cardioMode(training),cardioType:cardioType(training),cardioOptions:cardioOptions(training.stations),stretching:training.stretching!==false,extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,cardio:cardioMode(training),stretching:training.stretching!==false})},{headers:{'Cache-Control':'no-store'}});
     if(request.method==='GET')return reply(await trainingSetup(env.DB));
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       const body=await request.json().catch(()=>({})),input={};
       if(body.goal!=null)input.goal=String(body.goal);
       if(body.experience!=null)input.experience=String(body.experience);
+      if(body.experienceBySport&&typeof body.experienceBySport==='object')input.experienceBySport=Object.fromEntries(['strength','ride','run'].filter(k=>body.experienceBySport[k]!=null).map(k=>[k,String(body.experienceBySport[k])]));
       if(typeof body.stretching==='boolean')input.stretching=body.stretching;
       if(typeof body.warmup==='boolean')input.warmup=body.warmup;
-      if(typeof body.warmupCardio==='boolean')input.warmupCardio=body.warmupCardio;
+      if(typeof body.warmupCardio==='boolean'){input.warmupCardio=body.warmupCardio;if(body.cardio==null)input.cardio=body.warmupCardio?'start':'none';}
+      if(['none','start','end','both'].includes(body.cardio))input.cardio=body.cardio;
+      if(typeof body.cardioType==='string'&&body.cardioType.trim())input.cardioType=body.cardioType.trim().slice(0,40);
       const training=await updateTrainingSetup(env.DB,input);await bumpCacheVersion(env.DB);
       return reply(training);
     }
@@ -86,6 +91,15 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     const exercises=await strengthSessions(env.DB,{days:url.searchParams.get('days')||180,today:localToday()}).catch(error=>{console.error('Gym history read failed',error);return [];});
     return Response.json({status:'ok',exercises},{headers:{'Cache-Control':'no-store'}});
   }
+  // Rekordy: the exercises pinned to the top (at most five).
+  if(url.pathname==='/app/api/gym/pinned'&&request.method==='GET'){
+    return Response.json({status:'ok',pinned:await pinnedExercises(env.DB)},{headers:{'Cache-Control':'no-store'}});
+  }
+  if(url.pathname==='/app/api/gym/pinned'&&request.method==='PUT'){
+    let body;try{body=await request.json();}catch{return Response.json({status:'error',error:L('Neplatný požadavek.','Invalid request.')},{status:400});}
+    try{return Response.json(await savePinnedExercises(env.DB,body));}
+    catch(error){return Response.json({status:'error',error:error.message},{status:400});}
+  }
   // Levá a pravá strana: one-sided exercises, the last session's sides.
   if(url.pathname==='/app/api/gym/sides'&&request.method==='GET'){
     const history=await getStrengthHistory(env.DB,500).catch(()=>[]);
@@ -112,7 +126,9 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       // and the lasting wishes the chat remembered ("no squats").
       const [history,taste,setup,ratings,state]=await Promise.all([getStrengthHistory(env.DB,300).catch(()=>[]),exercisePreferences(env.DB),trainingSetup(env.DB).catch(()=>null),recentWorkoutRatings(env.DB,{sport:'strength',since:shiftDate(localToday(),-28)}),getAthleteState(env.DB).catch(()=>({}))]);
       const minutes=Number(body.minutes)>0&&Number(body.minutes)<=240?Number(body.minutes):null;
-      const result=await adjustGymPlan(env,{rows,request:text,history,taste:{...taste,memories:state.memories||[]},ratings,equipment:setup?name=>fitsEquipment(name,setup):null,dumbbells:setup?.dumbbellWeights||null,minutes});
+      // Today's readiness, status and leg load, as the generator has them (Revize 2026-10-16, nález 27).
+      const day=await buildStrengthContext(env,localToday()).then(gymDayFacts).catch(()=>null);
+      const result=await adjustGymPlan(env,{rows,request:text,history,taste:{...taste,memories:state.memories||[]},ratings,equipment:setup?name=>fitsEquipment(name,setup):null,dumbbells:setup?.dumbbellWeights||null,minutes,day});
       const muscles=Object.fromEntries([...new Set(result.rows.map(r=>r[1]))].map(name=>[name,exerciseMuscles(name)]));
       return Response.json({status:'ok',...result,muscles},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.limit?error.message:error.ai?L('AI úprava se nepovedla: ', 'The AI edit failed: ')+error.message:error.message},{status:error.limit?(error.status||429):error.ai?502:400})}
@@ -150,9 +166,23 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
         if(!moved.moved)return Response.json({message:L('Gym se nepodařilo přesunout: cílový den už má gym plán, nebo jsou v tréninku zapsané série.', 'The gym session couldn\'t be moved: the target day already has a gym plan, or the workout has logged sets.')},{status:409});
         return Response.json({status:'ok',date:to,message:L('Gym je přesunutý.', 'The gym session has been moved.')},{headers:{'Cache-Control':'no-store'}});
       }
-      if(body.action==='cancel'){
+      // The day's strength events (Intervals.icu and the app's own copy).
+      const deleteStrengthEvents=async()=>{
         const rows=(await env.DB.prepare("SELECT external_id,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND start_time>=? AND start_time<?").bind(env.USER_ID,date,shiftDate(date,1)).all()).results||[];
         for(const row of rows){let event;try{event=JSON.parse(row.payload_json)}catch{continue}if(isStrengthEvent(event))await deletePlannedEvent(env,{eventId:row.external_id});}
+      };
+      // Zahodit trénink: the workout leaves the day with its plan, its
+      // Intervals.icu event and the sets logged in it (cancel keeps them).
+      if(body.action==='discard'){
+        const stored=await readGymPlan(env.DB,date,{includeCancelled:true});
+        const logged=stored.stored?stored.values.slice(7).filter(r=>r?.[1]&&/^(WARMUP|WORK)$/.test(String(r?.[0]||"WORK").toUpperCase())&&["TRUE","true","1","ANO","ano","✓","☑"].includes(String(r?.[8]??""))).length:0;
+        await deleteStrengthEvents();
+        await discardGymPlan(env.DB,date);
+        if(logged)await removeManualSets(env.DB,date,0,logged);
+        return Response.json({status:'ok',date,discarded:true,message:L('Trénink je zahozený.', 'The workout is discarded.')},{headers:{'Cache-Control':'no-store'}});
+      }
+      if(body.action==='cancel'){
+        await deleteStrengthEvents();
         await cancelGymPlan(env.DB,date);
         return Response.json({status:'ok',date,cancelled:true,message:L('Posilovna je zrušená. Původní plán a výsledky zůstaly uložené.', 'The gym session is cancelled. The original plan and results stay saved.')},{headers:{'Cache-Control':'no-store'}});
       }
@@ -229,8 +259,9 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       // With the size and the cardio choice the proposal had, not the defaults.
       if(Array.isArray(body.rows)){
         const size=routineSize(Number(draft.minutes)||60),setup=await trainingSetup(env.DB).catch(()=>null);
-        if(plan.warmup)plan.warmup=warmupFor(plan.rows,muscleOf,{...size.warmup,cardio:setup?.warmupCardio!==false})||plan.warmup;
-        if(plan.stretching)plan.stretching=stretchingFor(plan.rows,muscleOf,size.stretching)||plan.stretching;
+        if(plan.warmup)plan.warmup=warmupFor(plan.rows,muscleOf,{...size.warmup,stations:setup?.stations})||plan.warmup;
+        if(plan.stretching)plan.stretching=stretchingFor(plan.rows,muscleOf,{...size.stretching,stations:setup?.stations})||plan.stretching;
+        if(setup)plan.cardio=cardioFor(setup,size.cardio);
       }
       if((await readGymPlan(env.DB,plan.date)).stored)throw new Error(L('Na tento den již existuje gym plán. Otevři jej a uprav ho.', 'A gym plan already exists for this day. Open it and edit it.'));
       const r=await app.fetch(new Request('https://internal/strength/write-plan',{method:'POST',headers:{...internalAuth,'Content-Type':'application/json'},body:JSON.stringify(plan)}),env,ctx);

@@ -1,7 +1,31 @@
 name: Deploy Cloudflare Worker
 
+# Two servers run the same code with separate data:
+# - staging (health-api-staging, https://staging.aurin.health): every merge to
+#   main lands here first; internal testers switch the app to it.
+# - production (health-api, https://aurin.health): only the "Vydat" workflow
+#   (vydat.yml) deploys it, with the newest main. Run this by hand with target
+#   production for a server-only fix. Production only takes commits on main.
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Server"
+        type: choice
+        options: [staging, production]
+        default: staging
+      ref:
+        description: "Commit to deploy (empty: the newest main)"
+        required: false
+        default: ""
+  workflow_call:
+    inputs:
+      target:
+        type: string
+        required: true
+      ref:
+        type: string
+        required: true
   push:
     branches:
       - main
@@ -22,9 +46,10 @@ permissions:
   deployments: write
   id-token: write
 
-concurrency:
-  group: production-deploy
-  cancel-in-progress: false
+env:
+  # A push to main deploys staging.
+  TARGET: ${{ inputs.target || 'staging' }}
+  REF: ${{ inputs.ref || github.sha }}
 
 jobs:
   # A red test suite never reaches production (or the D1 migrations).
@@ -36,6 +61,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.REF }}
+
+      - name: Check out the private AI prompts
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: shaarkyn/aurin-prompts
+          token: ${{ secrets.PROMPTS_REPO_TOKEN }}
+          path: src/private
 
       # The tenancy tests use node:sqlite, available from Node 22.
       - name: Set up Node
@@ -56,18 +90,53 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # One deploy per server at a time; staging never waits for production.
+    concurrency:
+      group: ${{ inputs.target == 'production' && 'production-deploy' || 'staging-deploy' }}
+      cancel-in-progress: false
+    env:
+      WORKER: ${{ inputs.target == 'production' && 'health-api' || 'health-api-staging' }}
+      DATABASE: ${{ inputs.target == 'production' && 'health-data' || 'health-data-staging' }}
+      HOST: ${{ inputs.target == 'production' && 'petrfitnessdata.eu' || 'staging.aurin.health' }}
+      ENV_ARGS: ${{ inputs.target == 'production' && ' ' || '--env staging' }}
+      STAGING_FLAG: ${{ inputs.target == 'production' && ' ' || '--staging' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ env.REF }}
+
+      - name: Check out the private AI prompts
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: shaarkyn/aurin-prompts
+          token: ${{ secrets.PROMPTS_REPO_TOKEN }}
+          path: src/private
 
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
 
+      # Only main reaches the live server: a branch commit would be overwritten
+      # by the next release, and Vydat relies on production being part of main.
+      - name: Check the commit is on main
+        if: env.TARGET == 'production'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$REF" --jq .status)"
+          case "$status" in
+            identical|behind) ;;
+            *) echo "::error::Commit ${REF::7} není v main ($status), na ostrý server jde jen main."; exit 1 ;;
+          esac
+
       # Sign-ins are signed with SESSION_SECRET only (src/dashboard-auth.js).
       # Without it nobody could sign in, so nothing is deployed.
       - name: Check Worker secrets
+        if: env.TARGET == 'production'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -76,29 +145,40 @@ jobs:
           set -euo pipefail
           npx --yes wrangler@4 secret list | node scripts/require-secrets.mjs SESSION_SECRET
 
+      # The test server's own database starts empty: the tables that predate
+      # the migrations first (a no-op once they exist).
+      - name: Prepare the test server database
+        if: env.TARGET == 'staging'
+        uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute health-data-staging --remote --env staging --file staging/schema.sql
+
       - name: Apply D1 migrations
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply health-data --remote
+          command: d1 migrations apply ${{ env.DATABASE }} --remote ${{ env.ENV_ARGS }}
 
       - name: Prepare isolated user data databases
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/provision-user-shards.mjs
+        run: node scripts/provision-user-shards.mjs ${{ env.STAGING_FLAG }}
 
       - name: Prepare independent food catalogue
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/provision-food-catalog.mjs
+        run: node scripts/provision-food-catalog.mjs ${{ env.STAGING_FLAG }}
 
       # A secret saved in the Cloudflare dashboard marks the Worker as last
       # deployed from the dashboard. Wrangler then downloads the dashboard
       # config before every deploy, and that call times out for this Worker.
       # Saving a harmless secret through Wrangler first clears the mark.
+      # The test server's first deploy creates its Worker, so there is no mark yet.
       - name: Clear the dashboard deploy mark
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -106,15 +186,35 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf 'wrangler' | npx --yes wrangler@4 secret put DEPLOY_SOURCE --name health-api
+          code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$WORKER/settings")"
+          if [ "$code" = "404" ]; then echo "$WORKER does not exist yet"; exit 0; fi
+          printf 'wrangler' | npx --yes wrangler@4 secret put DEPLOY_SOURCE --name "$WORKER"
 
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.runtime.jsonc
+          command: deploy --config wrangler.runtime.jsonc ${{ env.ENV_ARGS }}
           workingDirectory: .
+
+      # Keys the test server makes for itself: session signing and the
+      # encryption of connected services' keys. Generated once, never shown,
+      # and different from the live server's, so a live session never works there.
+      - name: Generate the test server's own keys
+        if: env.TARGET == 'staging'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          names="$(npx --yes wrangler@4 secret list --name "$WORKER")"
+          for name in SESSION_SECRET CONNECTION_KEY; do
+            if grep -q "\"name\": *\"$name\"" <<< "$names"; then continue; fi
+            openssl rand -base64 48 | tr -d '\n' | npx --yes wrangler@4 secret put "$name" --name "$WORKER" > /dev/null
+            echo "Generated $name"
+          done
 
       # The first requests after a deploy may finish a database upgrade in
       # chunks; the API answers 503 until it is done.
@@ -126,7 +226,7 @@ jobs:
             # Anonymous /app/api/me answers 401 only once the new version is
             # live and the upgrade is done (503 while upgrading; the previous
             # version may still answer for a few seconds after the deploy).
-            code="$(curl -sS -D "$RUNNER_TEMP/routing-headers" -o /dev/null -w '%{http_code}' "https://petrfitnessdata.eu/app/api/me" || true)"
+            code="$(curl -sS -D "$RUNNER_TEMP/routing-headers" -o /dev/null -w '%{http_code}' "https://$HOST/app/api/me" || true)"
             if [ "$code" = "401" ] && grep -qiE '^x-storage-routing: 1' "$RUNNER_TEMP/routing-headers" && grep -qiE '^x-food-catalog-routing: 1' "$RUNNER_TEMP/routing-headers"; then echo "API ready"; exit 0; fi
             echo "Waiting for the new version and database upgrade (HTTP $code, attempt $attempt)"; sleep 10
           done
@@ -136,23 +236,24 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/verify-user-shards.mjs
+        run: node scripts/verify-user-shards.mjs ${{ env.STAGING_FLAG }}
 
       - name: Activate user data routing
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/provision-user-shards.mjs --activate
+        run: node scripts/provision-user-shards.mjs ${{ env.STAGING_FLAG }} --activate
 
       - name: Migrate and verify food catalogue
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/provision-food-catalog.mjs --migrate
+        run: node scripts/provision-food-catalog.mjs ${{ env.STAGING_FLAG }} --migrate
 
       # Live Worker events during the smoke tests, so a platform error (for
       # example 1102, resource limits) shows its outcome and exceptions.
       - name: Start Worker tail
+        if: env.TARGET == 'production'
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -162,6 +263,7 @@ jobs:
           sleep 15
 
       - name: Request GitHub OIDC token for strength smoke test
+        if: env.TARGET == 'production'
         id: oidc_strength
         shell: bash
         run: |
@@ -178,6 +280,7 @@ jobs:
           echo "token=$token" >> "$GITHUB_OUTPUT"
 
       - name: Live strength generation smoke test
+        if: env.TARGET == 'production'
         env:
           OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
         shell: bash
@@ -216,15 +319,51 @@ jobs:
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", "status="+str(d.get("status")); assert d.get("preview") is True, "not a preview"; p=d.get("plan") or {}; assert p.get("rows"), "plan has no rows"; assert p.get("loadEstimates") is not None, "plan has no load estimates"' <<< "$body"
 
       - name: Smoke test Google Health nutrition
+        if: env.TARGET == 'production'
         env:
           OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
         shell: bash
         run: |
           set -euo pipefail
-          body="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/health/nutrition")"
+          response="$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/health/nutrition")"
+          code="${response##*$'\n'}"
+          body="${response%$'\n'*}"
+          if [ "$code" != "200" ]; then
+            # Only the server's short message (Google's error code), never the records.
+            echo "HTTP $code"
+            python -c 'import json,sys; print(str((json.load(sys.stdin) or {}).get("message",""))[:300])' <<< "$body" || true
+            exit 1
+          fi
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok","status="+str(d.get("status")); assert d.get("data_type")=="nutrition-log","data_type="+str(d.get("data_type"))' <<< "$body"
 
+      # The app's main screen as the owner's account sees it (the deploy token
+      # acts as the owner, like the nutrition check). The logs are public: only
+      # the status, the time and the server's short message, never the data.
+      # A failure stops the release; a slow answer only warns, since the live
+      # server's time varies (a cold start, Intervals).
+      - name: Smoke test Today
+        if: env.TARGET == 'production'
+        env:
+          OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$(curl -sS -o "$RUNNER_TEMP/today.json" -w '%{http_code} %{time_total}' -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/today")"
+          code="${result%% *}"
+          seconds="${result##* }"
+          echo "HTTP $code in ${seconds} s"
+          if [ "$code" != "200" ]; then
+            python -c 'import json,sys; print(str((json.load(open(sys.argv[1])) or {}).get("message",""))[:300])' "$RUNNER_TEMP/today.json" || true
+            exit 1
+          fi
+          python -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("status")=="ok","status="+str(d.get("status")); assert d.get("date"),"no date"; assert isinstance(d.get("readiness"),dict),"no readiness"' "$RUNNER_TEMP/today.json"
+          rm -f "$RUNNER_TEMP/today.json"
+          if python -c 'import sys; sys.exit(0 if float(sys.argv[1]) > 6 else 1)' "$seconds"; then
+            echo "::warning::Today took ${seconds} s (over 6 s)"
+          fi
+
       - name: Smoke test shared food catalogue
+        if: env.TARGET == 'production'
         env:
           OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -232,6 +371,7 @@ jobs:
         run: node scripts/smoke-food-catalog.mjs
 
       - name: Smoke test the server
+        if: env.TARGET == 'production'
         env:
           OIDC_TOKEN: ${{ steps.oidc_strength.outputs.token }}
         shell: bash
@@ -260,3 +400,17 @@ jobs:
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "activities" in d' <<< "$activities"
           week="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/week?start=$(TZ=Europe/Prague date -d 'monday this week' +%F)")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert len(d.get("days",[]))==7,"days="+str(len(d.get("days",[])))' <<< "$week"
+
+      # The test server has no data of its own until a tester signs in, so it
+      # gets the checks that need no account.
+      - name: Smoke test the test server
+        if: env.TARGET == 'staging'
+        shell: bash
+        run: |
+          set -euo pipefail
+          anonymous="$(curl -sS -o /dev/null -w '%{http_code}' "https://$HOST/app/api/daily")"
+          [ "$anonymous" = "401" ] || { echo "API must reject anonymous requests, got HTTP $anonymous"; exit 1; }
+          home="$(curl -fsS -D "$RUNNER_TEMP/home-headers" "https://$HOST/")"
+          grep -q "TEST · staging" <<< "$home" || { echo "The test server's badge is missing"; exit 1; }
+          grep -qiE '^x-robots-tag: noindex' "$RUNNER_TEMP/home-headers" || { echo "The test server must stay out of search engines"; exit 1; }
+          echo "Test server: https://$HOST (${REF::7})" >> "$GITHUB_STEP_SUMMARY"

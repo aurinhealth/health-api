@@ -6,7 +6,8 @@ import SwiftUI
 enum AppRoute: Hashable {
     case readiness
     case sleep
-    case heart
+    /// A value of Zdraví with its own detail (MetricDetails.swift).
+    case metric(HealthMetric)
     case weight
     case form
     case vo2max
@@ -55,12 +56,16 @@ enum AppRoute: Hashable {
     case sharedWorkout(String)
     /// A saved or received workout planned for a day with the athlete's own weights.
     case planTemplate(TemplatePlanRequest)
+    /// Deník for a day (Today's card), Co na tebe působí, and one item's detail (key, metric).
+    case journal(String)
+    case journalImpact
+    case journalItem(String, String)
 
     /// The tab a deep link (loadwise://open/sleep) opens the route on.
     var tab: AppTab {
         switch self {
-        case .readiness, .sleep, .heart, .weight, .cycle: return .health
-        case .sleepSettings, .dayReview, .steps, .strain, .recoveryTime, .coachPick: return .today
+        case .readiness, .sleep, .metric, .weight, .cycle: return .health
+        case .sleepSettings, .dayReview, .steps, .strain, .recoveryTime, .coachPick, .journal, .journalImpact, .journalItem: return .today
         default: return .training
         }
     }
@@ -90,7 +95,8 @@ enum AppRoute: Hashable {
         switch parts.first {
         case "readiness": self = .readiness
         case "sleep": self = .sleep
-        case "heart": self = .heart
+        case "heart", "hrv": self = .metric(.hrv)
+        case "metric" where parts.count > 1: guard let metric = HealthMetric(rawValue: parts[1]) else { return nil }; self = .metric(metric)
         case "weight": self = .weight
         case "form": self = .form
         case "vo2max": self = .vo2max
@@ -108,6 +114,7 @@ enum AppRoute: Hashable {
         case "records": self = .insights
         case "muscles": self = .muscles
         case "cycle": self = .cycle
+        case "journal": self = .journal(parts.count > 1 ? parts[1] : AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))
         case "my-workouts": self = .myWorkouts
         case "friend-workouts": self = .friendWorkouts
         case "share" where parts.count > 1 && Self.isShareId(parts[1]): self = .sharedWorkout(parts[1])
@@ -148,7 +155,7 @@ struct RouteScreen: View {
 
     var body: some View {
         switch route {
-        case .readiness, .sleep, .heart, .weight:
+        case .readiness, .sleep, .metric, .weight:
             HealthRoute(route: route)
         case .form:
             if let training = model.training { FormDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
@@ -184,6 +191,9 @@ struct RouteScreen: View {
         case .friendWorkouts: MyWorkoutsView(friends: true)
         case .sharedWorkout(let id): SharedWorkoutView(id: id)
         case .planTemplate(let request): GymBuilderView(date: request.date ?? AppModel.localDate(Date()), template: request)
+        case .journal(let date): JournalView(date: date)
+        case .journalImpact: JournalImpactView()
+        case .journalItem(let key, let metric): JournalItemView(key: key, metric: metric)
         }
     }
 }
@@ -195,6 +205,13 @@ struct HealthRoute: View {
     let route: AppRoute
 
     var body: some View {
+        content
+            // The saved copy shows at once; a stale one loads again (a detail
+            // opened from Today before the Health screen was visited).
+            .task { await model.refreshIfStale(.health) }
+    }
+
+    @ViewBuilder private var content: some View {
         if let health = model.health {
             switch route {
             case .readiness:
@@ -202,7 +219,7 @@ struct HealthRoute: View {
                 DetailScreen(glow: Palette.Glow.health, title: "Připravenost") {
                     ReadinessDetailContent(health: health)
                 }
-            case .heart: DetailScreen(glow: Palette.Glow.health, title: "Srdce") { HeartDetailContent(health: health) }
+            case .metric(let metric): MetricDetailView(metric: metric, health: health)
             case .weight: WeightDetailView(health: health)
             default: SleepDetailView(health: health)
             }
@@ -242,6 +259,8 @@ struct RouteLink<Label: View>: View {
     var body: some View {
         NavigationLink(value: route) { label }
             .buttonStyle(PressableCardStyle())
+            // The smoke test (LoadwiseUITests) finds a card by its route: "open.readiness".
+            .accessibilityIdentifier("open.\(route)")
     }
 }
 

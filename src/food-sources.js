@@ -1,6 +1,7 @@
 // Food values the user enters: a package label, a saved personal food
 // (personal-foods.js) or a cookbook recipe. Search also lists the read-only
 // world catalogue in R2 (world-foods.js) in the same product shape.
+import { cleanMicros } from "./micronutrients.js";
 const num = (v) => v!==null&&v!==undefined&&v!==""&&Number.isFinite(Number(v)) ? Number(v) : null;
 const str = (v) => v == null ? "" : String(v).trim();
 
@@ -34,6 +35,8 @@ export function productFromLabel(input = {}) {
     sugars_100g: num(input.sugars_100g ?? input.sugar_g),
     fiber_100g: num(input.fiber_100g ?? input.fiber_g),
     salt_100g: num(input.salt_100g ?? input.salt_g),
+    ...(cleanMicros(input.micros_100g) ? { micros_100g: cleanMicros(input.micros_100g) } : {}),
+    ...(typeof input.catalog_key === "string" && input.catalog_key.length <= 80 ? { catalog_key: input.catalog_key } : {}),
     source: "package_label",
     source_url: null,
     confidence: "highest",

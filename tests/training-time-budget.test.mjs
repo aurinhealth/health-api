@@ -8,9 +8,9 @@ import { availabilityOn, trainingBudget, parseTimeWindow, validDay, weekStartOf 
 import { getWeekPlan, saveWeekPlan, roleFor, targetFor } from '../src/week-planner.js';
 import { getAthleteState, assertTrainingAllowed } from '../src/athlete-state.js';
 import { environmentFor, indoorMinutes } from '../src/adaptive-week.js';
-import { FOCUS_OF } from '../src/week-ai.js';
+import { FOCUS_OF, kindOfSystem } from '../src/week-ai.js';
 import { buildCyclingCoachV2 } from '../src/cycling-coach-v2.js';
-import { CYCLING_WORKOUTS, generateWorkout, getCapabilities, scheduleWorkoutInIntervals } from '../src/workout-library.js';
+import { CYCLING_WORKOUTS, generateWorkout, getCapabilities, getWorkout, scheduleWorkoutInIntervals } from '../src/workout-library.js';
 import { storeLocalEvent, syncLocalWorkout, completeLocalWorkout } from '../src/local-workouts.js';
 import { generateStrengthPlan } from '../src/strength-generator.js';
 import { readGymPlan, writeStrengthPlanToDb } from '../src/gym-plan-store.js';
@@ -25,7 +25,7 @@ const today = '2026-10-07';
 const source = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
 const coachInbox = readFileSync(new URL('../src/coach-inbox.js', import.meta.url), 'utf8');
 // The dashboard API's route modules, called from handleDashboardApi in order.
-const routeModules = ['routes-account.js', 'routes-sync.js', 'routes-gym.js', 'routes-training.js', 'routes-food.js', 'routes-cycle.js']
+const routeModules = ['routes-account.js', 'routes-sync.js', 'routes-gym.js', 'routes-training.js', 'routes-food.js', 'routes-cycle.js', 'routes-journal.js']
   .map(file => readFileSync(new URL('../src/' + file, import.meta.url), 'utf8'));
 const gateway = readFileSync(new URL('../src/strength-gateway.js', import.meta.url), 'utf8');
 const slice = (text, from, to) => text.slice(text.indexOf(from), text.indexOf(to));
@@ -42,7 +42,7 @@ async function api(minutes) {
     getWeekPlan, availabilityOn, trainingBudget, parseTimeWindow, roleFor, targetFor,
     validTrainingDay: validDay, mondayOfDate: weekStartOf, localToday: () => today,
     getAthleteState, assertTrainingAllowed, environmentFor, indoorMinutes,
-    buildCyclingCoachV2, FOCUS_OF, generateWorkout, getCapabilities, scheduleWorkoutInIntervals,
+    buildCyclingCoachV2, FOCUS_OF, kindOfSystem, generateWorkout, getCapabilities, getWorkout, scheduleWorkoutInIntervals,
     storeLocalEvent, syncLocalWorkout, completeLocalWorkout, generateStrengthPlan,
     readGymPlan, writeStrengthPlanToDb, writeStrengthPlanToIntervals, exerciseMuscles, exercisePreferences,
     weekWeather: async () => ({}), computeWeekTargets: async () => ({ items: [] }), planForWeek: async () => ({ plan: null, pw: null, roles: {}, load: null, apply: t => t }), activePlan: async () => null, gymPhaseFor: () => null,

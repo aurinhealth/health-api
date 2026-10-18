@@ -247,7 +247,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const split = Array.isArray(insights.cardioFocus?.weeks) ? insights.cardioFocus.weeks : [];
   const weeks = Array.from({ length: 8 }, (_, i) => {
     const from = shift(start, (i - 7) * 7), to = shift(from, 6);
-    const load = intervals.filter(r => r.id >= from && r.id <= to).reduce((s, r) => s + (num(r.ctlLoad ?? r.atlLoad) || 0), 0);
+    const load = intervals.filter(r => r.id >= from && r.id <= to).reduce((s, r) => s + (num(r.ctlLoad ?? r.atlLoad ?? r.load) || 0), 0);
     return { start: from, week: isoWeek(from), load: Math.round(load), planned: i === 7 ? Math.round(plannedTss) : null };
   });
   const intensity = insights.cardioFocus?.points > 0 ? {
@@ -340,7 +340,10 @@ function sessionOf(w, date, status) {
     ...(done && ["google-wearables", "apple-health"].includes(w.family) && w.id ? { watch: { source: w.family, id: String(w.id) } }
       : done && /^(google-wearables|apple-health):./.test(String(w.payload?.pairedWith || "")) ? { watch: { source: w.payload.pairedWith.slice(0, w.payload.pairedWith.indexOf(":")), id: w.payload.pairedWith.slice(w.payload.pairedWith.indexOf(":") + 1) } } : {}),
     ...(done ? energyOf(w) : {}),
-    ...(done ? distanceAndPower(w) : {})
+    ...(done ? distanceAndPower(w) : {}),
+    // Who recorded a watch workout (workout-merge.js sourcesOf): two after a merge.
+    ...(done && Array.isArray(w.sources) && w.sources.length ? { sources: w.sources } : {}),
+    ...(done && w.payload?.loadwiseMerge?.energy ? { mergeEnergy: String(w.payload.loadwiseMerge.energy) } : {})
   };
 }
 

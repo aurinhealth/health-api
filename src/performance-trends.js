@@ -6,6 +6,7 @@
 // loadThresholdSessions (threshold-check-state.js).
 import { estimateRideFtp, estimateRunPace } from "./threshold-check.js";
 import { L } from "./lang.js";
+import { intervalsReads } from "./intervals-reads.js";
 
 const shift = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 const round = (v, d = 0) => (v == null || !Number.isFinite(v) ? null : Math.round(v * 10 ** d) / 10 ** d);
@@ -137,7 +138,7 @@ export function paceCurvePoints(body) {
   }
   return Object.keys(out).length ? out : null;
 }
-export async function intervalsCurves(env, authorization, fetchImpl = fetch) {
+export async function intervalsCurves(env, authorization, fetchImpl = intervalsReads(env)) {
   if (!env.INTERVALS_API_KEY) return null;
   const get = path => fetchImpl("https://intervals.icu/api/v1/athlete/0/" + path, { headers: { Authorization: authorization, Accept: "application/json" }, signal: AbortSignal.timeout(8000) })
     .then(r => (r.ok ? r.json() : null)).catch(() => null);

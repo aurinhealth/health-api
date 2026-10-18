@@ -47,11 +47,10 @@ final class SourceActions {
     }()
 }
 
-/// The sheets of connecting (the service's connect screen, the Intervals.icu
-/// key) and the disconnect question, each view with its own.
+/// The sheets of connecting (the service's connect screen) and the
+/// disconnect question, each view with its own.
 struct ConnectFlowState {
     var connecting: ConnectTarget?
-    var intervalsKey = false
     var disconnecting: ConnectionsResponse.Provider?
 
     /// Every service first shows what Aurin reads and writes (ServiceConnectSheet).
@@ -60,10 +59,9 @@ struct ConnectFlowState {
     }
 }
 
-/// The service a connect screen is for; withKey opens Intervals.icu's API key straight away.
+/// The service a connect screen is for.
 struct ConnectTarget: Identifiable {
     let id: String
-    var withKey = false
 }
 
 extension View {
@@ -83,9 +81,6 @@ struct ConnectFlowSheets: ViewModifier {
         content
             .sheet(item: $flow.connecting) { target in
                 ServiceConnectSheet(target: target) { await store.load() }
-            }
-            .sheet(isPresented: $flow.intervalsKey) {
-                IntervalsKeySheet { await store.load(); actions.message = L10n.tr("Intervals.icu je připojené.") }
             }
             .confirmationDialog(L10n.f("Odpojit %@?", flow.disconnecting?.name ?? ""),
                                 isPresented: Binding(get: { flow.disconnecting != nil }, set: { if !$0 { flow.disconnecting = nil } }),
@@ -120,7 +115,7 @@ struct ServiceConnectSheet: View {
     @State private var busy = false
     @State private var error: String?
 
-    enum Phase { case intro, key, done }
+    enum Phase { case intro, done }
 
     struct Service {
         let name: String
@@ -139,7 +134,7 @@ struct ServiceConnectSheet: View {
         case "intervals":
             return Service(name: "Intervals.icu",
                            reads: L10n.tr("Tréninky, plán, zóny a váhu."),
-                           writes: L10n.tr("Tréninky naplánované v Aurinu, kalorický cíl, váhu a denní hodnoty z Google Health."))
+                           writes: L10n.tr("Tréninky naplánované i odcvičené v Aurinu, kalorický cíl, váhu a denní hodnoty z Apple Zdraví a Google Health."))
         case "whoop":
             return Service(name: "WHOOP",
                            reads: L10n.tr("Spánek a jeho fáze, klidový tep, HRV, dech a okysličení krve."),
@@ -164,8 +159,6 @@ struct ServiceConnectSheet: View {
             Group {
                 switch phase {
                 case .intro: intro
-                case .key:
-                    ScrollView { IntervalsKeyForm { await finished() }.padding(24) }
                 case .done: done
                 }
             }
@@ -180,7 +173,6 @@ struct ServiceConnectSheet: View {
             }
         }
         .interactiveDismissDisabled(busy)
-        .onAppear { if target.withKey { phase = .key } }
     }
 
     private func pair(connected: Bool = false) -> some View {
@@ -284,7 +276,6 @@ struct ServiceConnectSheet: View {
             guard let event = try await model.connect(provider: target.id) else { return }
             if event == target.id { await finished(); return }
             switch event {
-            case "intervals-failed": phase = .key
             case "expired": error = L10n.tr("Odkaz vypršel. Zkus to znovu.")
             case let cancelled where cancelled.hasSuffix("-cancelled"): break
             default: error = L10n.tr("Připojení se nedokončilo. Zkus to znovu.")
@@ -316,54 +307,5 @@ private struct DownloadBar: View {
         .frame(height: 6)
         .onAppear { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { moving = true } }
         .accessibilityHidden(true)
-    }
-}
-
-/// Intervals.icu by its personal API key (Settings → Developer Settings there),
-/// when its sign-in is not set up for the app.
-struct IntervalsKeySheet: View {
-    @Environment(\.dismiss) private var dismiss
-    var saved: () async -> Void
-
-    var body: some View {
-        NavigationStack {
-            VStack { IntervalsKeyForm { await saved(); dismiss() }; Spacer() }
-                .padding(24)
-                .background(Palette.settingsBackground)
-                .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } } }
-        }
-    }
-}
-
-/// The key field and "Připojit", in its own sheet or on a service's connect screen.
-struct IntervalsKeyForm: View {
-    @Environment(AppModel.self) private var model
-    var saved: () async -> Void
-    @State private var key = ""
-    @State private var saving = false
-    @State private var error: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("API klíč Intervals.icu").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
-            Text("Najdeš ho v Intervals.icu v Settings → Developer Settings.").font(Typo.small).foregroundStyle(Palette.muted)
-            SecureField("API klíč", text: $key)
-                .textInputAutocapitalization(.never).autocorrectionDisabled()
-                .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-            PrimaryButton(title: saving ? "Ověřuji…" : "Připojit", systemImage: "link", busy: saving) { Task { await save() } }
-                .disabled(saving || key.trimmingCharacters(in: .whitespaces).count < 8)
-        }
-    }
-
-    private func save() async {
-        saving = true
-        defer { saving = false }
-        do {
-            try await model.api.connectIntervalsKey(key.trimmingCharacters(in: .whitespacesAndNewlines))
-            await saved()
-        } catch {
-            self.error = error.localizedDescription
-        }
     }
 }

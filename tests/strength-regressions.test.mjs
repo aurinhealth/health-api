@@ -5,7 +5,7 @@ import { isIntensity } from "../src/strength-context.js";
 import { normalizeExerciseName } from "../src/strength-normalization.js";
 import { parseStrengthPlan } from "../src/strength-history.js";
 import { estimateStartingLoad } from "../src/strength-intelligence.js";
-import { FOCUS_GROUPS, generateStrengthPlan, validateFocusMuscles } from "../src/strength-generator.js";
+import { EXERCISES, FOCUS_GROUPS, generateStrengthPlan, validateFocusMuscles, painfulExercises, normalizeGymFocus } from "../src/strength-generator.js";
 
 test('focused gym validates the selected groups', () => {
   assert.deepEqual(validateFocusMuscles(['chest', 'upper_back']), ['chest', 'upper_back']);
@@ -24,7 +24,7 @@ test('focused gym only generates exercises for selected groups', () => {
   for(const group of ['chest','upper_back','abs'])assert.ok(work.some(name=>FOCUS_GROUPS[group].exercises.includes(name)),group);
   assert.deepEqual(plan.focusMuscles,['chest','upper_back','abs']);
   assert.equal(plan.adaptive.volumeModifier,.9);
-  for(const exercise of work)assert.ok(['chest','upper_back','abs'].some(group=>FOCUS_GROUPS[group].exercises.includes(exercise)));
+  for(const exercise of work)assert.ok(['chest','upper_back','abs'].some(group=>FOCUS_GROUPS[group].exercises.includes(EXERCISES[exercise].variantOf??exercise)),exercise);
   assert.ok(plan.planName.includes('Cílený trénink'));
 });
 
@@ -168,7 +168,7 @@ test("the plan says what each load is based on", () => {
   const plan = generateStrengthPlan({
     date: "2026-09-25", cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {},
     strength: { recentCompletedSets: [1, 2, 3].map(n => ({ workout_date: "2026-09-21", exercise: "DB bench press", type: "WORK", completed: 1, actual_kg: 20, actual_reps: 10, rpe: 8, set_no: n })) }
-  }, { focusMuscles: ["chest"], durationMinutes: 45, excludeExercises: ["Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press"] });
+  }, { focusMuscles: ["chest"], durationMinutes: 45, excludeExercises: ["Chest flat press Prime", "Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press", "Smith Machine Bench Press", "Cable Bench Chest Fly", "Cable Bench Press", "Cable Chest Press", "Cable Decline Bench Press", "Cable High-to-Low Fly", "Cable Incline Bench Press", "Cable Standing Single Arm Chest Press", "Single-Arm Cable Fly", "Decline Machine Chest Press", "Incline Machine Chest Press", "Dumbbell Chest Fly", "Dumbbell Incline Chest Fly", "Dumbbell Neutral High Incline Bench Press", "Neutral-Grip Dumbbell Bench Press", "One Arm Dumbbell Bench Press", "Dumbbell Decline Bench Press", "Barbell Floor Press", "Reverse-Grip Barbell Bench Press", "Wide-Grip Barbell Bench Press", "Barbell High Incline Bench Press", "Decline Barbell Bench Press"] });
   const work = plan.rows.filter(r => r[0] === "WORK");
   assert.equal(work[0][1], "DB bench press"); assert.equal(work[0][3], "22,5");
   assert.match(work[0][9], /↑ minule 3× 10 op\. @ 20 kg, RPE 8 → \+2,5 kg/);
@@ -244,7 +244,7 @@ test("lower-body plan includes a unilateral movement when fresh", () => {
     recovery: {},
     strength: { recentCompletedSets: [] }
   }, { focus: "lower", maxExercises: 4 });
-  assert.ok(plan.rows.some(row => row[0] === "WORK" && row[1] === "DB Bulgarian split squat"));
+  assert.ok(plan.rows.some(row => row[0] === "WORK" && (EXERCISES[row[1]].variantOf ?? row[1]) === "DB Bulgarian split squat"));
 });
 
 test("generated plan survives sheet serialization round-trip", () => {
@@ -444,7 +444,7 @@ test("an exercise three sessions without progress makes way for another variant,
   // The machine press was done three days ago, so without the stall the bench press would be next.
   const machine = [1, 2].map(n => ({ workout_date: "2026-09-22", exercise: "Chest flat press Prime", type: "WORK", completed: 1, actual_kg: 40, actual_reps: 10, rpe: 8, set_no: n }));
   const context = { date: "2026-09-25", cycling: { recentRideHours: 0, recentRideTss: 0, recentActivities: [], plannedWorkouts: [], nextRide: null }, recovery: {}, strength: { recentCompletedSets: [...machine, ...stuck] } };
-  const others = ["Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press"];
+  const others = ["Barbell bench press", "DB incline press", "Pec deck", "Cable fly", "Low-to-high cable fly", "Smith machine incline press", "Smith Machine Bench Press", "Cable Bench Chest Fly", "Cable Bench Press", "Cable Chest Press", "Cable Decline Bench Press", "Cable High-to-Low Fly", "Cable Incline Bench Press", "Cable Standing Single Arm Chest Press", "Single-Arm Cable Fly", "Decline Machine Chest Press", "Incline Machine Chest Press", "Dumbbell Chest Fly", "Dumbbell Incline Chest Fly", "Dumbbell Neutral High Incline Bench Press", "Neutral-Grip Dumbbell Bench Press", "One Arm Dumbbell Bench Press", "Dumbbell Decline Bench Press", "Barbell Floor Press", "Reverse-Grip Barbell Bench Press", "Wide-Grip Barbell Bench Press", "Barbell High Incline Bench Press", "Decline Barbell Bench Press"];
   const plan = generateStrengthPlan(context, { focusMuscles: ["chest"], durationMinutes: 45, excludeExercises: others });
   const work = plan.rows.filter(r => r[0] === "WORK");
   assert.equal(work[0][1], "Chest flat press Prime");
@@ -481,4 +481,53 @@ test("a variant of a lifted exercise gets a load, an unrelated new one does not"
   // A leg press is not a heavier squat, and a never-trained muscle has nothing to go by.
   assert.equal(gymLoadEstimate("Pivot leg press", history), null);
   assert.equal(gymLoadEstimate("Hip thrust", history), null);
+});
+
+test('a pain the coach remembers leaves out the exercises that load it (Revize 2026-10-16, nález 24)', () => {
+  const ctx=memories=>({date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]},athleteState:{status:'active',memories}});
+  const names=plan=>[...new Set(plan.rows.filter(r=>r[0]==='WORK').map(r=>r[1]))];
+  const knee=names(generateStrengthPlan(ctx(['Koleno bolí při dřepech']),{focus:'lower',durationMinutes:75}));
+  assert.ok(knee.length,'some lower-body work stays');
+  assert.ok(!knee.some(n=>/squat|lunge|leg press|step-up|leg extension/i.test(n)),knee.join(', '));
+  const back=generateStrengthPlan(ctx(['Lower back pain after deadlifts']),{focus:'lower',durationMinutes:75});
+  assert.ok(!names(back).some(n=>/deadlift|good morning/i.test(n)),names(back).join(', '));
+  assert.match(back.rationale,/bolest|pain/);
+  const shoulder=names(generateStrengthPlan(ctx(['Bolí mě pravé rameno']),{focus:'upper',durationMinutes:75}));
+  assert.ok(!shoulder.some(n=>/press|dip/i.test(n)&&!/pallof/i.test(n)),shoulder.join(', '));
+  // "Už nebolí" and a memory with no pain change nothing.
+  assert.equal(painfulExercises(['Koleno už nebolí','Rád dřepuji']).avoid.size,0);
+  assert.ok(painfulExercises(['knee hurts']).avoid.has('Barbell back squat'));
+});
+
+test('legs spared for a key session hold the load and keep at most 2 sets (Revize 2026-10-16, nález 26)', () => {
+  const set=(exercise,kg,n)=>({exercise,workout_date:'2026-09-21',type:'WORK',set_no:n,actual_kg:kg,actual_reps:8,rpe:7,completed:1});
+  const legMuscles=new Set(['quads','hamstrings','glutes','adductors','abductors','calves']);
+  const history=[1,2,3].flatMap(n=>[set('Prone leg curl Prime',40,n),set('Barbell hip thrust',80,n)]);
+  const ctx={date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:history},trainingSetup:{goal:'strength',experience:'experienced'}};
+  for(const [keep,kg] of [['Prone leg curl Prime','40'],['Barbell hip thrust','80']]){
+    const plan=generateStrengthPlan(ctx,{durationMinutes:90,focus:'upper',focusSource:'week',excludeExercises:Object.keys(EXERCISES).filter(n=>legMuscles.has(EXERCISES[n].muscle)&&n!==keep)});
+    const work=plan.rows.filter(r=>r[0]==='WORK'&&r[1]===keep);
+    assert.equal(plan.protectedLegs,true);
+    assert.ok(work.length>=1&&work.length<=2,keep+': '+work.length+' sets');
+    for(const r of work)assert.deepEqual([r[3],r[4]],[kg,'8–12'],keep);
+    assert.doesNotMatch(work[0][9],/↑|\+2,5 kg/,keep);
+  }
+});
+
+test('a swap\'s warm-ups follow the equipment step and the focus understands "legs" (Revize 2026-10-16, nález 28)', async () => {
+  const { prepareGymSwap } = await import('../src/coach-gym-adjustment.js');
+  const { planValues } = await import('../src/gym-plan-store.js');
+  const date='2026-10-04',row=['WORK','Goblet squat','1','20','8–12','','','','FALSE','Pozn','','FALSE',''];
+  const gym={values:planValues({date,rows:[row]}),history:[{exercise:'Barbell back squat',workout_date:'2026-09-30',type:'WORK',set_no:1,actual_kg:42.5,actual_reps:6,rpe:8,completed:1}]};
+  // 40 % of 42,5 kg on a bar is 17,5 kg, not 17.
+  assert.deepEqual(prepareGymSwap(gym,'Goblet squat','Barbell back squat','x').replacementRows.map(r=>r[0]+' '+r[3]),['WARMUP 17.5','WARMUP 27.5','WARMUP 35','WORK 42.5']);
+  assert.equal(normalizeGymFocus('legs'),'lower');
+  assert.equal(normalizeGymFocus('Upper body'),'upper');
+  assert.equal(normalizeGymFocus('Nohy'),'lower');
+  assert.equal(normalizeGymFocus('full_body'),undefined);
+  assert.equal(normalizeGymFocus(undefined),undefined);
+  assert.throws(()=>normalizeGymFocus('brain'),/zaměření|focus/);
+  const context={date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]}};
+  assert.equal(generateStrengthPlan(context,{focus:'legs',durationMinutes:60}).planName,'Lower Body');
+  assert.throws(()=>generateStrengthPlan(context,{focus:'brain',durationMinutes:60}),/zaměření|focus/);
 });

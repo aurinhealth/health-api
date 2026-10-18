@@ -39,7 +39,9 @@ const CARDIO = {
 // Which body-map groups an exercise loads, with weights.
 export function exerciseMuscles(name) {
   const ex = normalizeExerciseName(name), def = EXERCISES[ex], out = {};
-  const focus = Object.entries(FOCUS_GROUPS).filter(([, g]) => g.exercises.includes(ex)).map(([id]) => id);
+  // A variant (variantOf) works the groups of its main exercise.
+  const groupsOf = n => Object.entries(FOCUS_GROUPS).filter(([, g]) => g.exercises.includes(n)).map(([id]) => id);
+  const focus = groupsOf(ex).length || !def?.variantOf ? groupsOf(ex) : groupsOf(def.variantOf);
   const primary = focus.length ? focus : PRIMARY[def?.muscle] || [];
   primary.forEach(id => { out[id] = 1 / Math.max(1, primary.length > 1 && !focus.length ? primary.length * .75 : 1); });
   for (const [id, w] of Object.entries(SECONDARY[def?.pattern] || {})) if (!out[id]) out[id] = w;
@@ -171,7 +173,8 @@ export function strengthRecords(sets, today, recentDays = 14) {
   }
   const list = [...by.values()].map(r => {
     let best = null; for (const [date, v] of r.sessions) if (v > 0 && (!best || v > best.value)) best = { value: Math.round(v), date };
-    const out = { exercise: r.exercise, e1rm: r.e1rm || null, heaviest: r.heaviest || null, setVolume: r.setVolume || null, sessionVolume: best, setReps: r.setReps ? { ...r.setReps, value: Math.floor(r.setReps.value) } : null };
+    const last = [...r.sessions.keys()].sort().at(-1) || null;
+    const out = { exercise: r.exercise, last, e1rm: r.e1rm || null, heaviest: r.heaviest || null, setVolume: r.setVolume || null, sessionVolume: best, setReps: r.setReps ? { ...r.setReps, value: Math.floor(r.setReps.value) } : null };
     out.recent = ["e1rm", "heaviest", "setVolume", "sessionVolume", "setReps"].filter(k => out[k] && daysBetween(out[k].date, today) >= 0 && daysBetween(out[k].date, today) < recentDays);
     return out;
   });
@@ -249,7 +252,9 @@ export function recordTrends({ sets = [], activities = [], today }) {
     ftp: ftpPoints.length ? { unit: "W", change: each(p => settingChange(ftpPoints, p)) } : null,
     runPace: metric(series(runs.filter(a => field(a, "distance") >= 5000), a => Math.round(field(a, "moving_time") / (field(a, "distance") / 1000))), "s/km", lower),
     longestRide: metric(series(rides, a => round(field(a, "distance") / 1000, 1)), "km", higher),
+    longestRideTime: metric(series(rides, a => Math.round(field(a, "moving_time") / 60)), "min", higher),
     mostElevation: metric(series(rides, a => Math.round(field(a, "total_elevation_gain"))), "m", higher),
+    bestRidePower: metric(series(rides.filter(a => field(a, "moving_time") >= 1200), a => Math.round(field(a, "icu_weighted_avg_watts"))), "W", higher),
     longestRun: metric(series(runs, a => round(field(a, "distance") / 1000, 1)), "km", higher)
   };
   return { periods, defaultPeriod: "1m", strength, cardio };

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildToday, activeMinutes } from "../src/app-today.js";
+import { buildToday, activeMinutes, withHeartRateLoad } from "../src/app-today.js";
 import { googleHealthSummary } from "../src/google-dashboard.js";
 import { serverSource } from "./helpers/server-source.mjs";
 
@@ -83,6 +83,7 @@ test("Today's plan lists workouts and tonight's bedtime in time order", () => {
   assert.match(t.plan[1].time, /^\d{2}:\d{2}$/);
   assert.equal(t.tonight.wake, "07:02", "the usual wake time");
   assert.equal(t.tonight.bedtime, t.plan[1].time);
+  assert.equal(t.plan[1].end, t.tonight.wake, "the night ahead ends at the planned wake time");
 });
 
 test("Tonight's own length and wake time from Spánek move the bedtime row on Today", () => {
@@ -94,6 +95,7 @@ test("Tonight's own length and wake time from Spánek move the bedtime row on To
   assert.equal(row.time, t.tonight.bedtime);
   assert.notEqual(row.time, plain.tonight.bedtime);
   assert.equal(row.detail, "spánek 7 h 00 min");
+  assert.equal(row.end, "06:00", "the dashed night ends at the chosen wake time");
 });
 
 test("Today's plan shows what was done at its time, then the plan, a gym session outside the plan too", () => {
@@ -290,4 +292,19 @@ test("the week strip: Monday to Sunday of the day's week, the day's own zone, no
   assert.equal(week[0].zone, null, "no readiness without data");
   assert.ok(week.slice(3).every(d => d.zone === null));
   assert.equal(readinessWeek({ date: "2026-10-18", readiness: { score: null, zone: null, rows: [] } })[0].date, "2026-10-12", "Sunday belongs to its Monday");
+});
+
+test("a watch gym session without TSS gets one from its heart rate, so the strain detail can split the day", () => {
+  const wellness = Array.from({ length: 20 }, (_, i) => ({ id: `2026-10-${String(i + 1).padStart(2, "0")}`, restingHR: 56 }));
+  const training = { completed: [
+    { id: "gym", type: "WeightTraining", averageHeartRate: 115, durationHours: 1.1 },
+    { id: "ride", type: "Ride", tss: 40 },
+    { id: "nohr", type: "WeightTraining", durationHours: 1 }
+  ] };
+  const out = withHeartRateLoad(training, wellness, { age: 35 }, "2026-10-17").completed;
+  assert.ok(out[0].tss > 0 && out[0].tssFromHeartRate);
+  assert.equal(out[1].tss, 40);
+  assert.equal(out[2].tss, undefined);
+  // Without a resting or max heart rate nothing is guessed.
+  assert.equal(withHeartRateLoad(training, [], {}, "2026-10-17"), training);
 });

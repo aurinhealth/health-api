@@ -19,6 +19,7 @@ struct GymDoneDetail: View {
     @State private var history: GymHistory = .empty
     @State private var catalog: [GymCatalogExercise] = []
     @State private var historyFor: String?
+    @State private var technique: String?
     @State private var picking = false
     @State private var saveTask: Task<Void, Never>?
     @State private var coach: [String: String] = [:]
@@ -32,6 +33,8 @@ struct GymDoneDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 12)
+            // Who recorded it, and after a merge whose heart rate and calories count.
+            if let line = SourceLine.gym(session) { line.padding(.top, 10) }
             stats.padding(.top, 18)
             if let session, session.kcal != nil, session.kcalEstimate?.value != nil {
                 KcalCheck(session: session, date: date)
@@ -49,7 +52,8 @@ struct GymDoneDetail: View {
                                      onEdit: { set, kg, reps in edit(set, kg: kg, reps: reps) },
                                      onAddSet: { addSet(exercise) },
                                      onRemove: { set in remove(set) },
-                                     onHistory: { historyFor = exercise.name })
+                                     onHistory: { historyFor = exercise.name },
+                                     onTechnique: { technique = exercise.name })
                 }
             }
             .padding(.top, 18)
@@ -72,6 +76,7 @@ struct GymDoneDetail: View {
         .sheet(item: Binding(get: { historyFor.map { Named(name: $0) } }, set: { historyFor = $0?.name })) { item in
             ExerciseHistorySheet(name: item.name, exercise: history.exercise(item.name), today: date)
         }
+        .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { TechniqueSheet(exercise: $0.name) }
     }
 
     // MARK: Stats
@@ -360,10 +365,12 @@ struct GymExerciseTable: View {
     var onAddSet: (() -> Void)? = nil
     var onRemove: ((GymSet) -> Void)? = nil
     var onHistory: (() -> Void)? = nil
+    /// The "i": how the exercise is done (TechniqueSheet).
+    var onTechnique: (() -> Void)? = nil
 
     var body: some View {
         Card {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center, spacing: 10) {
                 Text(exercise.name).font(.headline).foregroundStyle(Palette.ink)
                 Spacer(minLength: 8)
                 if let onHistory {
@@ -374,6 +381,7 @@ struct GymExerciseTable: View {
                     .foregroundStyle(Palette.amber)
                     .buttonStyle(.borderless)
                 }
+                if let onTechnique { SmallInfoButton(action: onTechnique) }
             }
             if let coachLine { GymCoachLine(text: coachLine) }
             HStack(spacing: 10) {
@@ -408,7 +416,7 @@ struct GymExerciseTable: View {
             }
             if missingNote, let missing = exercise.sets.first(where: { !$0.done }) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(L10n.f("Série %@ není vyplněná: doplň opakování, nebo ji smaž.", missing.warmup ? "R" : missing.number))
+                    Text(L10n.f("Série %@ není vyplněná: doplň opakování, nebo ji smaž.", missing.warmup ? "W" : missing.number))
                         .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     if let onRemove {
@@ -625,6 +633,8 @@ struct ExerciseHistorySheet: View {
     let name: String
     let exercise: GymHistory.Exercise?
     let today: String
+    /// Rekordy: the star that pins the exercise to the top.
+    var pinned: Binding<Bool>? = nil
 
     var body: some View {
         PageScroll {
@@ -632,6 +642,15 @@ struct ExerciseHistorySheet: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(name).font(.title2.weight(.semibold)).foregroundStyle(Palette.ink)
                     Spacer()
+                    if let pinned {
+                        Button { pinned.wrappedValue.toggle() } label: {
+                            Image(systemName: pinned.wrappedValue ? "star.fill" : "star")
+                                .font(.system(size: 17)).foregroundStyle(pinned.wrappedValue ? Palette.amber : Palette.faint)
+                                .frame(width: 32, height: 32).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.tr(pinned.wrappedValue ? "Odepnout" : "Připnout nahoru"))
+                    }
                     Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }
                 if let exercise, !exercise.sessions.isEmpty {
