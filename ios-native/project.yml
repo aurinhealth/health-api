@@ -12,10 +12,9 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    # Swift concurrency checks as warnings, step one ("targeted"): code that
-    # already uses Sendable, actors or async. "complete" follows once these
-    # are fixed (counted by ios-native.yml).
-    SWIFT_STRICT_CONCURRENCY: targeted
+    # Swift concurrency checks, as warnings in Swift 5 mode: every place two
+    # threads could touch the same data. ios-native.yml counts them per file.
+    SWIFT_STRICT_CONCURRENCY: complete
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""

@@ -486,9 +486,12 @@ final class HealthReader: @unchecked Sendable {
     func collect(_ categories: Set<HealthCategory>, days: Int?, now: Date) async -> [AppleHealthUpload]? {
         closed.set(false)
         let names = categories.map(\.rawValue).sorted()
+        // The window starts, worked out before the reads begin at the same time.
+        let calendar = calendar
         func from(_ fullDays: Int) -> Date {
             calendar.startOfDay(for: calendar.date(byAdding: .day, value: -((days ?? fullDays) - 1), to: now) ?? now)
         }
+        let from30 = from(30), from90 = from(90), from365 = from(365)
         var windows: [String: AppleHealthUpload.Window] = [:]
         let nothing: [AppleRecord] = []
         // The categories are read at the same time (HealthKit answers each on its
@@ -497,18 +500,18 @@ final class HealthReader: @unchecked Sendable {
         async let sleepRecords = categories.contains(.sleep) ? nights(from: sleepStart, to: now) : nothing
         async let workoutRecords = categories.contains(.workouts) ? workouts(from: workoutStart, to: now) : nothing
         async let stepRecords = categories.contains(.steps)
-            ? hourly(.stepCount, unit: .count(), type: "steps", prefix: "steps", from: from(30), to: now) : nothing
+            ? hourly(.stepCount, unit: .count(), type: "steps", prefix: "steps", from: from30, to: now) : nothing
         async let energyRecords = categories.contains(.energy)
-            ? hourly(.activeEnergyBurned, unit: .kilocalorie(), type: "active-energy-burned", prefix: "kcal", from: from(30), to: now) : nothing
+            ? hourly(.activeEnergyBurned, unit: .kilocalorie(), type: "active-energy-burned", prefix: "kcal", from: from30, to: now) : nothing
         async let restingRecords = categories.contains(.resting)
-            ? daily(.restingHeartRate, unit: .count().unitDivided(by: .minute()), type: "daily-resting-heart-rate", prefix: "rhr", from: from(90), to: now) : nothing
-        async let hrvRecords = categories.contains(.hrv) ? dailyHRV(from: from(90), to: now) : nothing
-        async let heartRecords = categories.contains(.heart) ? heart(from: from(90), recent: from(30), to: now) : nothing
-        async let breathingRecords = categories.contains(.breathing) ? breathing(from: from(90), to: now) : nothing
-        async let bodyRecords = categories.contains(.body) ? body(from: from(365), to: now) : nothing
+            ? daily(.restingHeartRate, unit: .count().unitDivided(by: .minute()), type: "daily-resting-heart-rate", prefix: "rhr", from: from90, to: now) : nothing
+        async let hrvRecords = categories.contains(.hrv) ? dailyHRV(from: from90, to: now) : nothing
+        async let heartRecords = categories.contains(.heart) ? heart(from: from90, recent: from30, to: now) : nothing
+        async let breathingRecords = categories.contains(.breathing) ? breathing(from: from90, to: now) : nothing
+        async let bodyRecords = categories.contains(.body) ? body(from: from365, to: now) : nothing
         let readFood = categories.contains(.food) || categories.contains(.water)
         async let foodRead: AppleHealthUpload.Food? = readFood
-            ? foodUpload(from: from(30), to: now, meals: categories.contains(.food), drinks: categories.contains(.water)) : nil
+            ? foodUpload(from: from30, to: now, meals: categories.contains(.food), drinks: categories.contains(.water)) : nil
 
         if categories.contains(.sleep) {
             // From noon the day before, so the first night is whole.
