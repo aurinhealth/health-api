@@ -1954,5 +1954,1045 @@ export const TECHNIQUE_EN = {
    "A box that is too high."
   ],
   breathing: "Exhale as you step up, inhale as you step down."
+ },
+ "Smith Machine Bench Press": {
+  setup: [
+   "Place the bench so the bar comes down to your lower chest.",
+   "Pull your shoulder blades back and down, feet firmly on the floor."
+  ],
+  steps: [
+   "Unhook the bar by turning your wrists and hold it over your chest.",
+   "Lower it over 2–3 s to your lower chest, elbows about 45° from your body.",
+   "Press up without locking your elbows, and hook the bar after the set."
+  ],
+  mistakes: [
+   "Bouncing the bar off your chest.",
+   "Flaring your elbows out to 90°."
+  ],
+  breathing: "Inhale on the way down, exhale as you press."
+ },
+ "Smith Machine Decline Bench Press": {
+  setup: [
+   "Set the bench slightly head-down and hook your feet under the pads.",
+   "Bar over your lower chest, shoulder blades pulled back."
+  ],
+  steps: [
+   "Unhook the bar and hold it over your lower chest.",
+   "Lower it slowly to the bottom edge of your chest.",
+   "Press up and hook the bar before you sit up."
+  ],
+  mistakes: [
+   "Too steep a decline.",
+   "Getting up before the bar is hooked."
+  ],
+  breathing: "Inhale on the way down, exhale as you press."
+ },
+ "Inverted Row": {
+  setup: [
+   "Lock the Smith bar at about waist height.",
+   "Lie under it, grip it overhand slightly wider than your shoulders, heels on the floor."
+  ],
+  steps: [
+   "Brace your abs and glutes, body in one line.",
+   "Pull your chest to the bar, elbows going back at an angle.",
+   "Squeeze your shoulder blades at the top and lower slowly until your arms are straight."
+  ],
+  mistakes: [
+   "Hips sagging.",
+   "Pulling only with the arms without squeezing the shoulder blades."
+  ],
+  breathing: "Exhale as you pull, inhale on the way down."
+ },
+ "Smith Machine Bent-Over Row": {
+  setup: [
+   "Set the hooks below knee height and stand close to the bar.",
+   "Grip it overhand at shoulder width and hinge forward with a flat back to about 45°."
+  ],
+  steps: [
+   "Unhook the bar and let your arms hang.",
+   "Row the bar to your belly button, elbows going back along your body.",
+   "Squeeze your shoulder blades briefly and lower slowly."
+  ],
+  mistakes: [
+   "Rounded back.",
+   "Standing up more with every rep."
+  ],
+  breathing: "Exhale as you pull, inhale as you lower."
+ },
+ "Smith Machine Overhead Press": {
+  setup: [
+   "Set the hooks at upper chest height.",
+   "Stand under the bar, grip slightly wider than shoulders, abs and glutes braced."
+  ],
+  steps: [
+   "Unhook the bar and hold it in front of your collarbones.",
+   "Press up, letting your head move back slightly so the bar passes.",
+   "Straighten your arms at the top without locking hard and lower slowly."
+  ],
+  mistakes: [
+   "Leaning back.",
+   "Lowering the bar behind your head."
+  ],
+  breathing: "Inhale at the bottom, exhale as you press."
+ },
+ "Smith Machine Seated Overhead Press": {
+  setup: [
+   "Set the bench almost upright and move it so the bar comes down in front of your face.",
+   "Sit with your back on the pad, grip slightly wider than shoulders."
+  ],
+  steps: [
+   "Unhook the bar at chin height.",
+   "Press up until your arms are straight.",
+   "Lower slowly to your chin and press again."
+  ],
+  mistakes: [
+   "Lifting your hips off the bench.",
+   "Going too deep behind your head."
+  ],
+  breathing: "Exhale as you press, inhale on the way down."
+ },
+ "Smith Machine Close Grip Bench Press": {
+  setup: [
+   "Flat bench under the Smith bar, bar over your lower chest.",
+   "Grip at shoulder width, shoulder blades pulled back."
+  ],
+  steps: [
+   "Unhook the bar.",
+   "Lower it to your lower chest, elbows close to your body.",
+   "Press up until your elbows are straight and hook the bar after the set."
+  ],
+  mistakes: [
+   "A grip that is too narrow.",
+   "Elbows drifting out to the sides."
+  ],
+  breathing: "Inhale on the way down, exhale as you press."
+ },
+ "Smith Machine Front Squat": {
+  setup: [
+   "Set the hooks at shoulder height and rest the bar on the front of your shoulders.",
+   "Lift your elbows forward, hands only steadying the bar, feet hip width."
+  ],
+  steps: [
+   "Unhook the bar and brace your abs.",
+   "Sit down with an upright torso, knees moving forward over your toes.",
+   "Drive up through your whole feet to standing."
+  ],
+  mistakes: [
+   "Elbows dropping and the torso tipping forward.",
+   "Heels lifting."
+  ],
+  breathing: "Inhale at the top before you descend, exhale on the way up."
+ },
+ "Smith Machine Sumo Romanian Deadlift": {
+  setup: [
+   "Set the hooks at thigh height, stand wide with toes slightly out.",
+   "Grip the bar narrow between your knees, back flat."
+  ],
+  steps: [
+   "Unhook the bar and stand tall.",
+   "Push your hips back, the bar sliding close along your thighs, knees only slightly bent.",
+   "At a stretch in your hamstrings, stand up by squeezing your glutes."
+  ],
+  mistakes: [
+   "Rounded back.",
+   "Knees caving in."
+  ],
+  breathing: "Inhale as you hinge, exhale as you stand."
+ },
+ "Smith Machine Calf Raise": {
+  setup: [
+   "Put a plate or a low step under the bar and rest the bar on your upper back.",
+   "Stand on the step with the balls of your feet, heels free."
+  ],
+  steps: [
+   "Unhook the bar and stand tall.",
+   "Rise as high as you can onto your toes and hold for a second.",
+   "Lower your heels slowly below the step."
+  ],
+  mistakes: [
+   "Short bouncing reps.",
+   "Bending your knees."
+  ],
+  breathing: "Exhale on the way up, inhale on the way down."
+ },
+ "Cable Bench Chest Fly": {
+  setup: [
+   "Put the bench between two low pulleys with handles attached.",
+   "Lie down holding the handles over your chest, elbows slightly bent."
+  ],
+  steps: [
+   "Open your arms out in an arc until you feel a stretch in your chest.",
+   "Bring the handles back over your chest along the same arc.",
+   "Squeeze your chest briefly at the top without clanking the handles."
+  ],
+  mistakes: [
+   "Bending and straightening the elbows like a press.",
+   "Going too deep below shoulder level."
+  ],
+  breathing: "Inhale as you open, exhale as you bring them together."
+ },
+ "Cable Bench Press": {
+  setup: [
+   "Put the bench between the low pulleys with handles attached.",
+   "Lie down with the handles by your chest, shoulder blades back, feet on the floor."
+  ],
+  steps: [
+   "Press the handles up over your chest.",
+   "Bring them slightly together at the top.",
+   "Return slowly to your chest, elbows about 45° from your body."
+  ],
+  mistakes: [
+   "Losing tension at the bottom.",
+   "Lifting your head and shoulders off the bench."
+  ],
+  breathing: "Exhale as you press, inhale on the way back."
+ },
+ "Cable Chest Press": {
+  setup: [
+   "Set the pulleys at chest height, take the handles and step forward.",
+   "Stand in a split stance, handles by your chest, abs braced."
+  ],
+  steps: [
+   "Press the handles forward in front of you.",
+   "Bring them slightly together at the end.",
+   "Return slowly to the start."
+  ],
+  mistakes: [
+   "Pushing with your torso instead of your arms.",
+   "Shrugging your shoulders."
+  ],
+  breathing: "Exhale as you press, inhale on the way back."
+ },
+ "Cable Decline Bench Press": {
+  setup: [
+   "Set the bench slightly head-down between the low pulleys.",
+   "Lie down with the handles by your lower chest, shoulder blades back."
+  ],
+  steps: [
+   "Press the handles up over your lower chest.",
+   "Bring them slightly together at the top.",
+   "Lower slowly."
+  ],
+  mistakes: [
+   "Too steep a decline.",
+   "Elbows flared out."
+  ],
+  breathing: "Exhale as you press, inhale on the way down."
+ },
+ "Cable High-to-Low Fly": {
+  setup: [
+   "Set both pulleys high, take the handles and step forward.",
+   "Lean forward slightly, elbows slightly bent."
+  ],
+  steps: [
+   "Pull the handles in an arc down in front of your hips.",
+   "Bring them together and squeeze your chest.",
+   "Return slowly along the arc into the stretch."
+  ],
+  mistakes: [
+   "Bending the elbows like a pushdown.",
+   "Swinging your torso."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Cable Incline Bench Press": {
+  setup: [
+   "Set the bench at 30° between the low pulleys with handles attached.",
+   "Lie back with the handles by your upper chest."
+  ],
+  steps: [
+   "Press the handles up over your shoulders.",
+   "Bring them slightly together at the top.",
+   "Lower slowly."
+  ],
+  mistakes: [
+   "A bench too steep, so the shoulders take over.",
+   "Losing tension at the bottom."
+  ],
+  breathing: "Exhale as you press, inhale on the way down."
+ },
+ "Cable Standing Single Arm Chest Press": {
+  setup: [
+   "Set the pulley at chest height, face away and take the handle in one hand.",
+   "Step forward with the opposite foot, abs braced."
+  ],
+  steps: [
+   "Press the handle forward in front of your chest.",
+   "Keep your torso facing forward without twisting.",
+   "Return slowly."
+  ],
+  mistakes: [
+   "Twisting your torso.",
+   "Shrugging your shoulders."
+  ],
+  breathing: "Exhale as you press, inhale on the way back."
+ },
+ "Single-Arm Cable Fly": {
+  setup: [
+   "Set the pulley at shoulder height, stand side-on and take the handle in the far hand.",
+   "Step away so the arm is stretched out to the side."
+  ],
+  steps: [
+   "Pull the handle in an arc across your body past the middle of your chest.",
+   "Squeeze your chest briefly.",
+   "Return slowly into the stretch."
+  ],
+  mistakes: [
+   "Twisting your torso.",
+   "Bending the elbow."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Cable Row Bar Standing Row": {
+  setup: [
+   "Set the pulley at waist height with a straight bar.",
+   "Grip it overhand, step back and bend your knees slightly, torso upright."
+  ],
+  steps: [
+   "Row the bar to your belly button, elbows going back along your body.",
+   "Squeeze your shoulder blades at the end.",
+   "Straighten your arms slowly, letting your shoulder blades move forward."
+  ],
+  mistakes: [
+   "Leaning back.",
+   "Shrugging your shoulders."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Cable Supinating Row": {
+  setup: [
+   "Set the pulley at chest height or lower, handle in one hand.",
+   "Palm faces down at the start, torso firm."
+  ],
+  steps: [
+   "Pull your elbow back towards your hip.",
+   "Turn your palm up as you pull.",
+   "Return slowly and turn the palm back."
+  ],
+  mistakes: [
+   "Twisting your whole torso.",
+   "Pulling only with the forearm."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Straight-Arm Lat Pulldown": {
+  setup: [
+   "High pulley with a straight bar, grip it overhand at shoulder width.",
+   "Step back, hinge slightly at the hips, elbows slightly bent."
+  ],
+  steps: [
+   "Pull the bar in an arc down to your thighs, arms staying almost straight.",
+   "Pull your shoulder blades down at the bottom.",
+   "Return slowly up into the stretch."
+  ],
+  mistakes: [
+   "Bending the elbows so it turns into a triceps pushdown.",
+   "Swinging your torso."
+  ],
+  breathing: "Exhale as you pull down, inhale on the way up."
+ },
+ "Straight Arm Rope Pulldown (Light)": {
+  setup: [
+   "High pulley with a rope, hold its ends.",
+   "Step back and hinge slightly at the hips."
+  ],
+  steps: [
+   "Pull the rope in an arc to your hips with almost straight arms.",
+   "Spread the rope ends slightly and pull your shoulder blades down.",
+   "Return slowly up."
+  ],
+  mistakes: [
+   "Too much weight and swinging.",
+   "Bending the elbows."
+  ],
+  breathing: "Exhale on the way down, inhale on the way up."
+ },
+ "Cable External Rotation": {
+  setup: [
+   "Set the pulley at elbow height, stand side-on and take the handle in the far hand.",
+   "Bend your elbow to 90° and press it to your side; a towel under it helps."
+  ],
+  steps: [
+   "Rotate your forearm out away from your body, elbow staying at your side.",
+   "Hold briefly at the end of a comfortable range.",
+   "Return slowly."
+  ],
+  mistakes: [
+   "Elbow leaving your side.",
+   "Too much weight."
+  ],
+  breathing: "Exhale as you rotate out, inhale on the way back."
+ },
+ "Cable Front Raise": {
+  setup: [
+   "Low pulley with a straight bar or rope, stand with your back to the machine.",
+   "Cable between your legs, arms down, elbows slightly bent."
+  ],
+  steps: [
+   "Raise your arms in front of you to shoulder height.",
+   "Hold briefly.",
+   "Lower slowly."
+  ],
+  mistakes: [
+   "Swinging your torso.",
+   "Raising above your head."
+  ],
+  breathing: "Exhale as you raise, inhale on the way down."
+ },
+ "Cable Overhead Press": {
+  setup: [
+   "Both low pulleys with handles; stand between them or sit on a bench.",
+   "Handles at your shoulders, palms forward, abs braced."
+  ],
+  steps: [
+   "Press the handles overhead.",
+   "Bring them slightly together at the top.",
+   "Return slowly to your shoulders."
+  ],
+  mistakes: [
+   "Leaning back.",
+   "Elbows too far back."
+  ],
+  breathing: "Exhale as you press, inhale on the way down."
+ },
+ "Cable Single Arm Rear Delt Row": {
+  setup: [
+   "Set the pulley at shoulder height, handle in one hand.",
+   "Face the machine, arm stretched out in front of you."
+  ],
+  steps: [
+   "Pull your elbow back and out at shoulder height.",
+   "Hold briefly at the end.",
+   "Straighten your arm slowly."
+  ],
+  mistakes: [
+   "Elbow dropping to your side.",
+   "Turning your torso."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Leaning Cable Lateral Raise": {
+  setup: [
+   "Low pulley; stand side-on and hold the machine with your free hand.",
+   "Lean away from the machine, handle in the far hand in front of your body."
+  ],
+  steps: [
+   "Raise your arm out to shoulder height, elbow slightly bent.",
+   "Hold briefly at the top.",
+   "Lower slowly across your body into the stretch."
+  ],
+  mistakes: [
+   "Swinging your torso.",
+   "Raising above shoulder level."
+  ],
+  breathing: "Exhale as you raise, inhale on the way down."
+ },
+ "Cable Bar Pushdown": {
+  setup: [
+   "High pulley with a straight bar, grip it overhand at shoulder width.",
+   "Press your elbows to your sides, lean forward slightly."
+  ],
+  steps: [
+   "Push the bar down until your elbows are straight.",
+   "Hold briefly at the bottom.",
+   "Let it rise slowly to 90° at the elbows."
+  ],
+  mistakes: [
+   "Elbows moving forward and back.",
+   "Pushing with your body weight."
+  ],
+  breathing: "Exhale as you push down, inhale on the way up."
+ },
+ "Cable Overhead Straight Bar Extensions": {
+  setup: [
+   "Low or mid pulley with a straight bar, turn your back to the machine.",
+   "Bar behind your head, elbows by your head pointing forward, split stance."
+  ],
+  steps: [
+   "Straighten your elbows and push the bar forward overhead.",
+   "Hold briefly.",
+   "Let it come back slowly behind your head into the stretch."
+  ],
+  mistakes: [
+   "Elbows flaring out.",
+   "Arching your lower back."
+  ],
+  breathing: "Exhale as you extend, inhale on the way back."
+ },
+ "Cross-Body Cable Tricep Extension": {
+  setup: [
+   "Set the pulley at shoulder height and take the cable or a handle in the far hand.",
+   "Stand side-on, elbow bent in front of your body."
+  ],
+  steps: [
+   "Straighten your elbow out to the side.",
+   "Hold briefly at the end.",
+   "Let it come back slowly."
+  ],
+  mistakes: [
+   "Moving from the shoulder instead of the elbow.",
+   "Twisting your torso."
+  ],
+  breathing: "Exhale as you extend, inhale on the way back."
+ },
+ "Reverse-Grip Tricep Pushdown": {
+  setup: [
+   "High pulley with a straight or EZ bar, grip it underhand.",
+   "Elbows at your sides, torso upright."
+  ],
+  steps: [
+   "Push the bar down until your elbows are straight.",
+   "Hold briefly at the bottom.",
+   "Let it rise slowly to 90°."
+  ],
+  mistakes: [
+   "Elbows drifting forward.",
+   "Too much weight."
+  ],
+  breathing: "Exhale on the way down, inhale on the way up."
+ },
+ "Single-Arm Overhead Cable Extension": {
+  setup: [
+   "Low pulley with a handle, stand with your back to the machine.",
+   "Hold the handle behind your head, elbow pointing up."
+  ],
+  steps: [
+   "Straighten your elbow overhead.",
+   "Hold briefly at the top.",
+   "Let it come back slowly behind your head."
+  ],
+  mistakes: [
+   "Elbow drifting out.",
+   "Arching your lower back."
+  ],
+  breathing: "Exhale on the way up, inhale on the way down."
+ },
+ "Cable Side Bend": {
+  setup: [
+   "Low pulley with a handle, stand side-on and take it in the near hand.",
+   "Feet hip width, other hand on your hip."
+  ],
+  steps: [
+   "Bend sideways toward the pulley.",
+   "Straighten up by contracting the other side and bend slightly away.",
+   "Return slowly."
+  ],
+  mistakes: [
+   "Bending forward or back instead of sideways.",
+   "Fast swinging."
+  ],
+  breathing: "Exhale as you straighten, inhale as you bend."
+ },
+ "Cable Single Arm Rope Pushdown": {
+  setup: [
+   "High pulley with a rope, hold one end of it.",
+   "Elbow at your side, lean forward slightly."
+  ],
+  steps: [
+   "Push the rope down and turn your palm down at the end.",
+   "Hold briefly at full extension.",
+   "Let it rise slowly."
+  ],
+  mistakes: [
+   "Elbow leaving your side.",
+   "Helping with the shoulder."
+  ],
+  breathing: "Exhale on the way down, inhale on the way up."
+ },
+ "Machine Cable V Bar Push Downs": {
+  setup: [
+   "High pulley with a V-bar, hold it with both hands.",
+   "Elbows at your sides, torso upright."
+  ],
+  steps: [
+   "Push the bar down to full extension.",
+   "Hold briefly.",
+   "Let it rise slowly to 90°."
+  ],
+  mistakes: [
+   "Elbows moving forward.",
+   "Bending your wrists."
+  ],
+  breathing: "Exhale on the way down, inhale on the way up."
+ },
+ "Cable Standing Low To High Wood Chopper": {
+  setup: [
+   "Low pulley with a handle; stand side-on and hold it with both hands by your ankle.",
+   "Feet wider than hips, knees bent."
+  ],
+  steps: [
+   "Turn your torso and pull the handle diagonally up across your body over the opposite shoulder.",
+   "Arms stay almost straight, the back foot pivots.",
+   "Return slowly down."
+  ],
+  mistakes: [
+   "Pulling only with the arms.",
+   "Rounded back at the bottom."
+  ],
+  breathing: "Exhale as you pull up, inhale on the way down."
+ },
+ "Cable Bench Straight Leg Kickback": {
+  setup: [
+   "Put a bench in front of the low pulley and the cuff on your ankle.",
+   "Rest your torso or forearms on the bench, working leg straight."
+  ],
+  steps: [
+   "Kick the straight leg back and up.",
+   "Squeeze your glutes at the top.",
+   "Lower slowly."
+  ],
+  mistakes: [
+   "Arching your lower back.",
+   "Swinging the leg."
+  ],
+  breathing: "Exhale as you kick back, inhale on the way back."
+ },
+ "Cable 30 Degree Shrug": {
+  setup: [
+   "Both low pulleys with handles, stand between them.",
+   "Arms down, slightly out to the sides at about 30°."
+  ],
+  steps: [
+   "Lift your shoulders up and out towards your ears.",
+   "Hold for a second at the top.",
+   "Lower slowly."
+  ],
+  mistakes: [
+   "Rolling your shoulders.",
+   "Bending your elbows."
+  ],
+  breathing: "Exhale on the way up, inhale on the way down."
+ },
+ "Cable Wrist Curl": {
+  setup: [
+   "Put a bench in front of the low pulley with a straight bar.",
+   "Kneel or sit with your forearms on the bench, wrists over the edge, palms up."
+  ],
+  steps: [
+   "Let the bar roll into your fingers.",
+   "Close your fingers and curl your wrists up.",
+   "Lower slowly."
+  ],
+  mistakes: [
+   "Lifting your forearms off the bench.",
+   "Too much weight."
+  ],
+  breathing: "Breathe steadily."
+ },
+ "Cable Bar Face Pull": {
+  setup: [
+   "Set the pulley at face height with a straight bar.",
+   "Grip it overhand wider than your shoulders and step back."
+  ],
+  steps: [
+   "Pull the bar to your forehead, elbows high and out.",
+   "Squeeze your shoulder blades and hold briefly.",
+   "Return slowly."
+  ],
+  mistakes: [
+   "Elbows dropping.",
+   "Leaning back."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Cable Rope Kneeling Face Pull": {
+  setup: [
+   "Set the pulley above head height for kneeling, rope attached.",
+   "Kneel facing the machine, torso upright, glutes braced."
+  ],
+  steps: [
+   "Pull the rope to your face, ends apart.",
+   "Elbows high, hold briefly at the end.",
+   "Return slowly."
+  ],
+  mistakes: [
+   "Leaning back.",
+   "Pulling only with the arms."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Cable Seated Rope Face Pull": {
+  setup: [
+   "Put a bench in front of the pulley set at seated face height.",
+   "Sit down and take the rope, arms straight."
+  ],
+  steps: [
+   "Pull the rope to your face, elbows high.",
+   "Spread the ends and hold briefly.",
+   "Return slowly."
+  ],
+  mistakes: [
+   "Leaning back.",
+   "Elbows dropping."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Cable Single Leg Laying Leg Curl": {
+  setup: [
+   "Put the bench a little in front of the low pulley and the cuff on your ankle.",
+   "Lie face down with your knees past the end of the bench."
+  ],
+  steps: [
+   "Bend your knee and pull your heel to your glute.",
+   "Hold briefly at the top.",
+   "Straighten the leg slowly."
+  ],
+  mistakes: [
+   "Lifting your hips.",
+   "Lowering fast."
+  ],
+  breathing: "Exhale as you curl, inhale on the way back."
+ },
+ "Cable Single Arm Underhand Grip Row": {
+  setup: [
+   "Pulley at waist height, take the handle underhand.",
+   "Stand or sit facing the machine, torso firm."
+  ],
+  steps: [
+   "Pull your elbow along your body to your hip.",
+   "Squeeze your shoulder blade.",
+   "Straighten your arm slowly."
+  ],
+  mistakes: [
+   "Twisting your torso.",
+   "Pulling with the forearm."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Straight Bar Bench Mid Rows": {
+  setup: [
+   "Put a bench in front of the low pulley with a straight bar.",
+   "Sit with your feet braced and grip the bar overhand."
+  ],
+  steps: [
+   "Row the bar to your lower chest.",
+   "Squeeze your shoulder blades.",
+   "Straighten your arms slowly."
+  ],
+  mistakes: [
+   "Rocking your torso.",
+   "Shrugging."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Decline Machine Chest Press": {
+  setup: [
+   "Set the seat so the handles are at your lower chest.",
+   "Back on the pad, shoulder blades pulled back."
+  ],
+  steps: [
+   "Press the handles forward and slightly down.",
+   "Do not lock your elbows.",
+   "Return slowly into the stretch."
+  ],
+  mistakes: [
+   "Shoulders rolling forward.",
+   "Bouncing out of the bottom."
+  ],
+  breathing: "Exhale as you press, inhale on the way back."
+ },
+ "Incline Machine Chest Press": {
+  setup: [
+   "Set the seat so the handles are level with your upper chest.",
+   "Back on the pad, feet on the floor."
+  ],
+  steps: [
+   "Press the handles up at an angle.",
+   "Do not lock your elbows at the top.",
+   "Return slowly."
+  ],
+  mistakes: [
+   "Lifting your hips off the seat.",
+   "A short range."
+  ],
+  breathing: "Exhale as you press, inhale on the way back."
+ },
+ "Neutral-Grip Lat Pulldown": {
+  setup: [
+   "Attach a handle with parallel grips at shoulder width.",
+   "Sit with your thighs under the pad and take the handles, palms facing."
+  ],
+  steps: [
+   "Pull the handle to your upper chest, elbows down and back.",
+   "Squeeze your shoulder blades down at the bottom.",
+   "Let it up slowly until your arms are straight."
+  ],
+  mistakes: [
+   "Leaning back.",
+   "Pulling only with the arms."
+  ],
+  breathing: "Exhale as you pull down, inhale on the way up."
+ },
+ "Single-Arm Lat Pulldown": {
+  setup: [
+   "Attach a single handle and sit under it.",
+   "Take the handle in one hand, arm straight overhead."
+  ],
+  steps: [
+   "Pull your elbow down to your side.",
+   "Hold briefly at the bottom.",
+   "Let it up slowly into the stretch."
+  ],
+  mistakes: [
+   "Leaning sideways.",
+   "Rolling the shoulder forward."
+  ],
+  breathing: "Exhale on the way down, inhale on the way up."
+ },
+ "Wide-Grip Lat Pulldown": {
+  setup: [
+   "Grip the long bar overhand about two hand widths wider than your shoulders.",
+   "Sit with your thighs under the pad, chest slightly up."
+  ],
+  steps: [
+   "Pull the bar to your upper chest, elbows down and out.",
+   "Squeeze your shoulder blades at the bottom.",
+   "Let it up slowly."
+  ],
+  mistakes: [
+   "Pulling behind your head.",
+   "Leaning far back and swinging."
+  ],
+  breathing: "Exhale as you pull down, inhale on the way up."
+ },
+ "Calf Press": {
+  setup: [
+   "Sit in the leg press with the balls of your feet on the bottom edge of the platform, heels free.",
+   "Legs almost straight, knees soft; keep the safeties locked if the machine allows."
+  ],
+  steps: [
+   "Push the platform away with your toes as far as you can.",
+   "Hold for a second at the top.",
+   "Let your heels come back slowly into the stretch."
+  ],
+  mistakes: [
+   "Moving from the knees instead of the ankles.",
+   "A short range."
+  ],
+  breathing: "Exhale as you push, inhale on the way back."
+ },
+ "Single-Leg Press": {
+  setup: [
+   "Put one foot in the middle of the platform and the other leg aside on the floor or frame.",
+   "Back and hips on the pad."
+  ],
+  steps: [
+   "Lower the platform, knee tracking over the toes.",
+   "Stop before your hips lift off.",
+   "Push up through your whole foot."
+  ],
+  mistakes: [
+   "Knee caving in.",
+   "Using your two-leg weight."
+  ],
+  breathing: "Inhale on the way down, exhale as you push."
+ },
+ "Reverse Hack Squat": {
+  setup: [
+   "Stand in the hack squat facing the pad, shoulders under the pads.",
+   "Feet hip width in the middle of the platform."
+  ],
+  steps: [
+   "Release the machine and descend, hips going back.",
+   "Go down as far as your back stays flat.",
+   "Drive up and squeeze your glutes at the top."
+  ],
+  mistakes: [
+   "Rounded back at the bottom.",
+   "Heels lifting."
+  ],
+  breathing: "Inhale on the way down, exhale on the way up."
+ },
+ "Machine Underhand Row": {
+  setup: [
+   "Set the seat so the handles are at lower chest height.",
+   "Chest on the pad, take the handles underhand."
+  ],
+  steps: [
+   "Pull your elbows back along your body.",
+   "Squeeze your shoulder blades at the end.",
+   "Straighten your arms slowly."
+  ],
+  mistakes: [
+   "Chest leaving the pad.",
+   "Swinging."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Hammer Strength High Row": {
+  setup: [
+   "Set the seat so the handles are overhead within reach of straight arms.",
+   "Thighs under the pad, chest slightly up."
+  ],
+  steps: [
+   "Pull the handles down and back to your chest.",
+   "Squeeze your shoulder blades at the bottom.",
+   "Let them up slowly."
+  ],
+  mistakes: [
+   "Leaning back.",
+   "Pulling only with the arms."
+  ],
+  breathing: "Exhale as you pull, inhale on the way up."
+ },
+ "Hammer Strength Iso-Lateral Row": {
+  setup: [
+   "Set the seat so the handles are at shoulder height or lower.",
+   "Chest on the pad, take the handles."
+  ],
+  steps: [
+   "Row one handle or both, elbows going back.",
+   "Squeeze your shoulder blade at the end.",
+   "Straighten your arm slowly."
+  ],
+  mistakes: [
+   "Chest leaving the pad.",
+   "Twisting your torso."
+  ],
+  breathing: "Exhale as you pull, inhale on the way back."
+ },
+ "Machine Lat Pullover": {
+  setup: [
+   "Set the seat so your shoulders line up with the machine pivot.",
+   "Elbows or forearms on the pads, back on the pad, belt on if there is one."
+  ],
+  steps: [
+   "Pull your arms in an arc down to your sides.",
+   "Squeeze your lats at the bottom.",
+   "Return slowly up into the stretch."
+  ],
+  mistakes: [
+   "Arching your lower back.",
+   "Pushing with your hands instead of driving with the elbows."
+  ],
+  breathing: "Exhale on the way down, inhale on the way up."
+ },
+ "Machine Back Extension": {
+  setup: [
+   "Set the seat and pad so the pad is on your shoulder blades.",
+   "Feet braced, belt over your thighs if there is one."
+  ],
+  steps: [
+   "From a slight forward lean, push back into the pad until you sit upright.",
+   "Hold briefly.",
+   "Return slowly forward."
+  ],
+  mistakes: [
+   "Leaning back hard past upright.",
+   "Too much weight and jerking."
+  ],
+  breathing: "Exhale as you extend, inhale as you lean forward."
+ },
+ "Reverse Hyperextension": {
+  setup: [
+   "Lie face down with your hips at the edge of the pad, legs hanging down.",
+   "Hold the handles and put the pendulum strap behind your ankles."
+  ],
+  steps: [
+   "Lift your legs back to horizontal by squeezing your glutes.",
+   "Hold briefly at the top.",
+   "Lower slowly without letting the pendulum swing."
+  ],
+  mistakes: [
+   "Swinging and bouncing the pendulum.",
+   "Arching above horizontal."
+  ],
+  breathing: "Exhale on the way up, inhale on the way down."
+ },
+ "Machine Preacher Curl": {
+  setup: [
+   "Set the seat so your armpits rest on the top edge of the pad and your elbows line up with the pivot.",
+   "Take the handles underhand."
+  ],
+  steps: [
+   "Bend your elbows and bring the handles towards your shoulders.",
+   "Squeeze your biceps at the top.",
+   "Lower slowly until your arms are almost straight."
+  ],
+  mistakes: [
+   "Lifting your elbows off the pad.",
+   "Dropping fast."
+  ],
+  breathing: "Exhale on the way up, inhale on the way down."
+ },
+ "Machine Tricep Extension": {
+  setup: [
+   "Set the seat so your elbows rest on the pad level with the pivot.",
+   "Take the handles, back on the pad."
+  ],
+  steps: [
+   "Straighten your elbows and push the handles down.",
+   "Hold briefly at the bottom.",
+   "Let them back slowly."
+  ],
+  mistakes: [
+   "Lifting your elbows.",
+   "Swinging your torso."
+  ],
+  breathing: "Exhale as you extend, inhale on the way back."
+ },
+ "Belt Squat": {
+  setup: [
+   "Buckle the belt around your hips and clip it to the machine chain.",
+   "Stand on the platform, feet shoulder width, holding the handles."
+  ],
+  steps: [
+   "Release the machine and squat as deep as you can with a flat back.",
+   "Knees track over your toes.",
+   "Drive up through your whole feet."
+  ],
+  mistakes: [
+   "Heels lifting.",
+   "Knees caving in."
+  ],
+  breathing: "Inhale on the way down, exhale on the way up."
+ },
+ "Machine Crunch": {
+  setup: [
+   "Set the seat so the pads sit on your upper chest or the handles by your head.",
+   "Hook your feet, back on the pad."
+  ],
+  steps: [
+   "Curl your torso down as if bringing your ribs to your pelvis.",
+   "Hold briefly at the bottom.",
+   "Return slowly."
+  ],
+  mistakes: [
+   "Pulling with the arms instead of the abs.",
+   "Fast rocking."
+  ],
+  breathing: "Exhale as you crunch, inhale on the way back."
+ },
+ "Captain's Chair Knee Raise": {
+  setup: [
+   "Forearms on the pads, hands on the grips, back on the pad.",
+   "Legs hang free, shoulders pushed down."
+  ],
+  steps: [
+   "Raise your knees to your chest and tuck your pelvis slightly.",
+   "Hold briefly at the top.",
+   "Lower your legs slowly without swinging."
+  ],
+  mistakes: [
+   "Swinging the legs.",
+   "Arching your back."
+  ],
+  breathing: "Exhale on the way up, inhale on the way down."
+ },
+ "Selectorized Torso Rotation Machine": {
+  setup: [
+   "Adjust the seat and set the range of rotation to a comfortable amount.",
+   "Sit with your feet hooked, chest to the pad or the handles by your chest."
+  ],
+  steps: [
+   "Turn your torso to the side against the resistance.",
+   "Hold briefly.",
+   "Return slowly to the middle; switch sides after the set."
+  ],
+  mistakes: [
+   "Swinging and a big range.",
+   "Turning with the hips instead of the torso."
+  ],
+  breathing: "Exhale as you turn, inhale on the way back."
  }
 };

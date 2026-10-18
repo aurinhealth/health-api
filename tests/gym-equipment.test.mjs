@@ -13,7 +13,7 @@ import { exerciseMuscles } from "../src/fitness-insights.js";
 import { withLang } from "../src/lang.js";
 
 // The exercises for the equipment of other gyms and home gyms (added 2026-10-11).
-const OTHER_GYM_EXERCISES = ["Pull-up", "Chin-up", "Assisted pull-up", "Hanging leg raise", "Dips", "Assisted dip", "Kettlebell swing", "EZ bar curl", "EZ bar skull crusher", "Preacher curl", "Band pull-apart", "Hack squat", "Seated leg curl", "Glute kickback machine", "Seated calf raise", "T-bar row", "Chest-supported row", "TRX row", "Barbell incline bench press", "Trap bar deadlift", "Landmine press", "Medicine ball slam", "Box step-up"];
+const OTHER_GYM_EXERCISES = ["Pull-up", "Chin-up", "Assisted pull-up", "Hanging leg raise", "Dips", "Assisted dip", "Kettlebell swing", "EZ bar curl", "EZ bar skull crusher", "Preacher curl", "Band pull-apart", "Hack squat", "Seated leg curl", "Glute kickback machine", "Seated calf raise", "T-bar row", "Chest-supported row", "TRX row", "Barbell incline bench press", "Trap bar deadlift", "Landmine press", "Medicine ball slam", "Box step-up", "Reverse Hack Squat", "Machine Underhand Row", "Hammer Strength High Row", "Hammer Strength Iso-Lateral Row", "Machine Lat Pullover", "Machine Back Extension", "Reverse Hyperextension", "Machine Preacher Curl", "Machine Tricep Extension", "Belt Squat", "Machine Crunch", "Captain's Chair Knee Raise", "Selectorized Torso Rotation Machine"];
 
 test("every catalog exercise needs only known stations; the original ones are all at METAGYM Kutná Hora", () => {
   assert.equal(METAGYM_KUTNA_HORA.url, "https://metagym.cz/kutnahora");

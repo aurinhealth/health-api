@@ -2335,5 +2335,1230 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech při výstupu, nádech při sestupu.",
   "query": "box step up proper form"
+ },
+ "Smith Machine Bench Press": {
+  "setup": [
+   "Lavici postav pod osu tak, aby osa klesala na spodní část hrudníku.",
+   "Lopatky stáhni k sobě a dolů, chodidla pevně na zemi."
+  ],
+  "steps": [
+   "Odjisti osu otočením zápěstí a drž ji nad hrudníkem.",
+   "Spouštěj 2–3 s ke spodní části hrudníku, lokty asi 45° od těla.",
+   "Vytlač nahoru, lokty nahoře nezamykej, a po sérii osu zajisti na hácích."
+  ],
+  "mistakes": [
+   "Odraz osy od hrudníku.",
+   "Lokty roztažené do pravého úhlu od těla."
+  ],
+  "breathing": "Nádech při spouštění, výdech při tlaku.",
+  "video": {
+   "id": "KJSgqUDFe00",
+   "title": "How to perform a Smith Machine Bench Press"
+  },
+  "query": "smith machine bench press form"
+ },
+ "Smith Machine Decline Bench Press": {
+  "setup": [
+   "Lavici nastav mírně hlavou dolů a nohy zaklesni pod opěrky.",
+   "Osa nad spodní částí hrudníku, lopatky stažené."
+  ],
+  "steps": [
+   "Odjisti osu a drž ji nad spodní částí hrudníku.",
+   "Spouštěj pomalu ke spodní hraně prsních svalů.",
+   "Vytlač nahoru a po sérii osu zajisti dřív, než se posadíš."
+  ],
+  "mistakes": [
+   "Příliš velký sklon lavice.",
+   "Vstávání s nezajištěnou osou."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "query": "smith machine decline bench press"
+ },
+ "Inverted Row": {
+  "setup": [
+   "Osu Smithu zajisti zhruba ve výšce pasu.",
+   "Lehni si pod ni, chyť ji nadhmatem o něco šíř než ramena, paty na zemi."
+  ],
+  "steps": [
+   "Zpevni břicho a hýždě, tělo v jedné linii.",
+   "Přitáhni hrudník k ose, lokty jdou šikmo dozadu.",
+   "Nahoře stáhni lopatky a pomalu se spusť do natažení paží."
+  ],
+  "mistakes": [
+   "Pánev padá dolů.",
+   "Tah jen rukama bez stažení lopatek."
+  ],
+  "breathing": "Výdech při přitahování, nádech při spouštění.",
+  "video": {
+   "id": "I640fMJC80s",
+   "title": "Exercise How To: Smith Machine Inverted Row"
+  },
+  "query": "inverted row smith machine form"
+ },
+ "Smith Machine Bent-Over Row": {
+  "setup": [
+   "Osu nastav na háky pod úrovní kolen, postav se těsně k ní.",
+   "Chyť ji nadhmatem na šíři ramen, předkloň se s rovnými zády asi do 45°."
+  ],
+  "steps": [
+   "Odjisti osu a nech paže viset.",
+   "Přitáhni osu k pupku, lokty podél těla dozadu.",
+   "Nahoře krátce stáhni lopatky a pomalu spusť."
+  ],
+  "mistakes": [
+   "Kulatá záda.",
+   "Napřimování trupu při každém opakování."
+  ],
+  "breathing": "Výdech při přitahování, nádech při spouštění.",
+  "video": {
+   "id": "sTuwq4Vcvag",
+   "title": "How To: Smith Machine Bent Over Row"
+  },
+  "query": "smith machine bent over row"
+ },
+ "Smith Machine Overhead Press": {
+  "setup": [
+   "Háky nastav do výšky horní části hrudníku.",
+   "Stoupni si pod osu, úchop o něco širší než ramena, břicho a hýždě zpevněné."
+  ],
+  "steps": [
+   "Odjisti osu a drž ji před klíčními kostmi.",
+   "Tlač nahoru, hlavu nech lehce ustoupit dozadu, ať osa projde.",
+   "Nahoře propni paže bez zakleslých loktů a pomalu spusť."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Osa klesá za hlavu."
+  ],
+  "breathing": "Nádech dole, výdech při tlaku.",
+  "video": {
+   "id": "hTpGeVc8n6U",
+   "title": "SMITH MACHINE OVERHEAD PRESS (How To)"
+  },
+  "query": "smith machine overhead press standing"
+ },
+ "Smith Machine Seated Overhead Press": {
+  "setup": [
+   "Lavici nastav skoro kolmo a posuň ji tak, aby osa klesala před obličejem.",
+   "Sedni si, záda opřená, úchop o něco širší než ramena."
+  ],
+  "steps": [
+   "Odjisti osu ve výšce brady.",
+   "Tlač nahoru do propnutí paží.",
+   "Pomalu spouštěj k bradě a hned znovu tlač."
+  ],
+  "mistakes": [
+   "Zadek se zvedá z lavice.",
+   "Moc hluboko za hlavu."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "video": {
+   "id": "NNQ1JjmgUAU",
+   "title": "Smith Machine Seated Overhead Shoulder Press."
+  },
+  "query": "smith machine seated overhead press"
+ },
+ "Smith Machine Close Grip Bench Press": {
+  "setup": [
+   "Rovná lavice pod osou Smithu, osa nad spodní částí hrudníku.",
+   "Úchop na šíři ramen, lopatky stažené."
+  ],
+  "steps": [
+   "Odjisti osu.",
+   "Spouštěj ke spodní části hrudníku, lokty těsně u těla.",
+   "Vytlač nahoru do propnutí loktů a osu po sérii zajisti."
+  ],
+  "mistakes": [
+   "Příliš úzký úchop.",
+   "Lokty ujíždějí do stran."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "video": {
+   "id": "z8UWdGwtzRM",
+   "title": "Exercise Tutorial: Close Grip Smith Machine Bench Press"
+  },
+  "query": "smith machine close grip bench press"
+ },
+ "Smith Machine Front Squat": {
+  "setup": [
+   "Háky nastav do výšky ramen, osu polož na přední část ramen.",
+   "Lokty zvedni dopředu, ruce osu jen přidržují, chodidla na šíři boků."
+  ],
+  "steps": [
+   "Odjisti osu a zpevni břicho.",
+   "Klesej dolů s rovným trupem, kolena jdou dopředu nad špičky.",
+   "Z dolní pozice se vytlač celými chodidly do stoje."
+  ],
+  "mistakes": [
+   "Lokty padají dolů a trup se předklání.",
+   "Paty se zvedají."
+  ],
+  "breathing": "Nádech nahoře před sestupem, výdech při zvedání.",
+  "video": {
+   "id": "uIXkPdgaTss",
+   "title": "How To Do A SMITH MACHINE FRONT SQUAT"
+  },
+  "query": "smith machine front squat"
+ },
+ "Smith Machine Sumo Romanian Deadlift": {
+  "setup": [
+   "Háky nastav do výšky stehen, postav se široce, špičky mírně ven.",
+   "Chyť osu úzce mezi koleny, záda rovná."
+  ],
+  "steps": [
+   "Odjisti osu a postav se rovně.",
+   "Posouvej boky dozadu, osa jede těsně podél stehen, kolena jen lehce pokrčená.",
+   "V protažení zadních stehen se vrať do stoje stažením hýždí."
+  ],
+  "mistakes": [
+   "Kulatá záda.",
+   "Kolena padají dovnitř."
+  ],
+  "breathing": "Nádech při předklonu, výdech při narovnání.",
+  "query": "smith machine sumo romanian deadlift"
+ },
+ "Smith Machine Calf Raise": {
+  "setup": [
+   "Pod osu dej kotouč nebo nízký stupínek, osu polož na horní část zad.",
+   "Na stupínek stoupni špičkami, paty volně dole."
+  ],
+  "steps": [
+   "Odjisti osu a stůj rovně.",
+   "Zvedni se co nejvýš na špičky a vteřinu vydrž.",
+   "Pomalu spusť paty pod úroveň stupínku."
+  ],
+  "mistakes": [
+   "Krátký rozsah s odrazem.",
+   "Ohýbání kolen."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "query": "smith machine calf raise"
+ },
+ "Cable Bench Chest Fly": {
+  "setup": [
+   "Lavici postav mezi dvě spodní kladky, připni madla.",
+   "Lehni si, madla drž nad hrudníkem, lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Rozpažuj do stran obloukem, dokud necítíš protažení prsou.",
+   "Stejným obloukem stáhni madla zpět nad hrudník.",
+   "Nahoře krátce stiskni prsa, madla neťukej o sebe."
+  ],
+  "mistakes": [
+   "Propínání a krčení loktů jako u tlaku.",
+   "Moc hluboko za úroveň ramen."
+  ],
+  "breathing": "Nádech při rozpažení, výdech při stažení.",
+  "query": "cable bench chest fly"
+ },
+ "Cable Bench Press": {
+  "setup": [
+   "Lavici postav mezi spodní kladky, připni madla.",
+   "Lehni si s madly u hrudníku, lopatky stažené, chodidla na zemi."
+  ],
+  "steps": [
+   "Vytlač madla nahoru nad hrudník.",
+   "Nahoře je lehce přibliž k sobě.",
+   "Pomalu se vrať k hrudníku, lokty asi 45° od těla."
+  ],
+  "mistakes": [
+   "Ztráta napětí dole.",
+   "Zvedání hlavy a ramen z lavice."
+  ],
+  "breathing": "Výdech při tlaku, nádech při návratu.",
+  "query": "cable bench press"
+ },
+ "Cable Chest Press": {
+  "setup": [
+   "Kladky nastav do výšky hrudníku, chyť madla a vykroč krok dopředu.",
+   "Stůj ve výpadovém postoji, madla u hrudníku, břicho zpevněné."
+  ],
+  "steps": [
+   "Tlač madla dopředu před sebe.",
+   "Na konci je lehce přibliž k sobě.",
+   "Pomalu se vrať do výchozí polohy."
+  ],
+  "mistakes": [
+   "Tlačení trupem místo paží.",
+   "Ramena jdou k uším."
+  ],
+  "breathing": "Výdech při tlaku, nádech při návratu.",
+  "query": "standing cable chest press"
+ },
+ "Cable Decline Bench Press": {
+  "setup": [
+   "Lavici nastav mírně hlavou dolů mezi spodní kladky.",
+   "Lehni si s madly u spodní části hrudníku, lopatky stažené."
+  ],
+  "steps": [
+   "Vytlač madla nahoru nad spodní část hrudníku.",
+   "Nahoře je lehce přibliž k sobě.",
+   "Pomalu se vrať dolů."
+  ],
+  "mistakes": [
+   "Příliš velký sklon.",
+   "Lokty roztažené do stran."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "query": "cable decline bench press"
+ },
+ "Cable High-to-Low Fly": {
+  "setup": [
+   "Obě kladky nastav nahoru, chyť madla a vykroč dopředu.",
+   "Mírný předklon, lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Táhni madla obloukem šikmo dolů před boky.",
+   "Dole je přibliž k sobě a stiskni prsa.",
+   "Pomalu se vrať obloukem nahoru do protažení."
+  ],
+  "mistakes": [
+   "Krčení loktů jako u stahování.",
+   "Švih trupem."
+  ],
+  "breathing": "Výdech při stažení, nádech při návratu.",
+  "video": {
+   "id": "8Um35Es-ROE",
+   "title": "How To: Cable Fly (High-To-Low) || 3 GOLDEN RULES"
+  },
+  "query": "cable high to low fly"
+ },
+ "Cable Incline Bench Press": {
+  "setup": [
+   "Lavici nastav na 30° mezi spodní kladky, připni madla.",
+   "Lehni si, madla u horní části hrudníku."
+  ],
+  "steps": [
+   "Vytlač madla nahoru nad ramena.",
+   "Nahoře je lehce přibliž k sobě.",
+   "Pomalu se vrať dolů."
+  ],
+  "mistakes": [
+   "Moc strmá lavice, cvik přebírají ramena.",
+   "Ztráta napětí dole."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "query": "cable incline bench press"
+ },
+ "Cable Standing Single Arm Chest Press": {
+  "setup": [
+   "Kladku nastav do výšky hrudníku, otoč se k ní zády a chyť madlo jednou rukou.",
+   "Vykroč, opačná noha vpředu, břicho zpevněné."
+  ],
+  "steps": [
+   "Tlač madlo dopředu před hrudník.",
+   "Trup drž čelem dopředu, neotáčej se.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Rotace trupu.",
+   "Ramena jdou k uším."
+  ],
+  "breathing": "Výdech při tlaku, nádech při návratu.",
+  "query": "single arm standing cable chest press"
+ },
+ "Single-Arm Cable Fly": {
+  "setup": [
+   "Kladku nastav do výšky ramen, postav se bokem a chyť madlo vzdálenější rukou.",
+   "Krok od stroje, aby byla paže natažená do strany."
+  ],
+  "steps": [
+   "Táhni madlo obloukem před tělo až za střed hrudníku.",
+   "Krátce stiskni prsa.",
+   "Pomalu se vrať do protažení."
+  ],
+  "mistakes": [
+   "Otáčení trupem.",
+   "Krčení lokte."
+  ],
+  "breathing": "Výdech při stažení, nádech při návratu.",
+  "video": {
+   "id": "t4hUKxXI9J0",
+   "title": "Exercise Tutorial: One Arm Cable Fly"
+  },
+  "query": "single arm cable fly"
+ },
+ "Cable Row Bar Standing Row": {
+  "setup": [
+   "Kladku nastav do výšky pasu, připni rovnou tyč.",
+   "Chyť ji nadhmatem, odstup a lehce pokrč kolena, trup vzpřímený."
+  ],
+  "steps": [
+   "Přitáhni tyč k pupku, lokty dozadu podél těla.",
+   "Na konci stáhni lopatky.",
+   "Pomalu natáhni paže a nech lopatky jít dopředu."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Ramena jdou nahoru."
+  ],
+  "breathing": "Výdech při přitahování, nádech při návratu.",
+  "query": "standing cable row straight bar"
+ },
+ "Cable Supinating Row": {
+  "setup": [
+   "Kladku nastav do výšky hrudníku nebo níž, madlo do jedné ruky.",
+   "Dlaň na začátku směřuje dolů, trup pevně."
+  ],
+  "steps": [
+   "Přitahuj loket dozadu k boku.",
+   "Během tahu vytoč dlaň nahoru.",
+   "Pomalu se vrať a dlaň otoč zpět."
+  ],
+  "mistakes": [
+   "Rotace celým trupem.",
+   "Tah jen předloktím."
+  ],
+  "breathing": "Výdech při přitahování, nádech při návratu.",
+  "query": "cable supinating row"
+ },
+ "Straight-Arm Lat Pulldown": {
+  "setup": [
+   "Horní kladka s rovnou tyčí, chyť ji nadhmatem na šíři ramen.",
+   "Odstup, mírný předklon v kyčlích, lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Táhni tyč obloukem dolů ke stehnům, paže zůstávají skoro natažené.",
+   "Dole stáhni lopatky dolů.",
+   "Pomalu se vrať nahoru do protažení."
+  ],
+  "mistakes": [
+   "Krčení loktů, cvik se mění na stahování tricepsu.",
+   "Švih trupem."
+  ],
+  "breathing": "Výdech při stahování, nádech nahoru.",
+  "video": {
+   "id": "fu6R_SlWMPQ",
+   "title": "Straight-Arm Lat Pulldown"
+  },
+  "query": "straight arm lat pulldown"
+ },
+ "Straight Arm Rope Pulldown (Light)": {
+  "setup": [
+   "Horní kladka s lanem, chyť konce lana.",
+   "Odstup a mírně se předkloň v kyčlích."
+  ],
+  "steps": [
+   "Stahuj lano obloukem k bokům s téměř napnutými pažemi.",
+   "Dole konce lana lehce roztáhni a stáhni lopatky.",
+   "Pomalu se vrať nahoru."
+  ],
+  "mistakes": [
+   "Moc těžká váha a švih.",
+   "Krčení loktů."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "query": "straight arm rope pulldown"
+ },
+ "Cable External Rotation": {
+  "setup": [
+   "Kladku nastav do výšky lokte, postav se bokem a madlo chyť vzdálenější rukou.",
+   "Loket pokrč do pravého úhlu a přitiskni k boku, můžeš si dát pod něj ručník."
+  ],
+  "steps": [
+   "Vytáčej předloktí ven od těla, loket zůstává u boku.",
+   "Krátce vydrž na konci pohodlného rozsahu.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Loket se odlepuje od těla.",
+   "Moc těžká váha."
+  ],
+  "breathing": "Výdech při vytočení, nádech při návratu.",
+  "video": {
+   "id": "LpNgc6Vx4iY",
+   "title": "How To Do A Cable External Rotation"
+  },
+  "query": "cable external rotation"
+ },
+ "Cable Front Raise": {
+  "setup": [
+   "Spodní kladka s rovnou tyčí nebo lanem, postav se zády ke stroji.",
+   "Kladka mezi nohama, paže dole, lokty lehce pokrčené."
+  ],
+  "steps": [
+   "Zvedni paže před sebe do výšky ramen.",
+   "Krátce vydrž.",
+   "Pomalu spusť dolů."
+  ],
+  "mistakes": [
+   "Švih trupem.",
+   "Zvedání nad hlavu."
+  ],
+  "breathing": "Výdech při zvedání, nádech dolů.",
+  "video": {
+   "id": "vtH93qBItdk",
+   "title": "How To Do A Cable Front Raise"
+  },
+  "query": "cable front raise"
+ },
+ "Cable Overhead Press": {
+  "setup": [
+   "Obě spodní kladky s madly, postav se mezi ně nebo si sedni na lavici.",
+   "Madla u ramen, dlaně dopředu, břicho zpevněné."
+  ],
+  "steps": [
+   "Tlač madla nahoru nad hlavu.",
+   "Nahoře je lehce přibliž k sobě.",
+   "Pomalu se vrať k ramenům."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Lokty moc vzadu."
+  ],
+  "breathing": "Výdech při tlaku, nádech dolů.",
+  "query": "cable overhead press"
+ },
+ "Cable Single Arm Rear Delt Row": {
+  "setup": [
+   "Kladku nastav do výšky ramen, madlo do jedné ruky.",
+   "Postav se čelem ke stroji, paže natažená před tebou."
+  ],
+  "steps": [
+   "Táhni loket dozadu a do strany ve výšce ramen.",
+   "Na konci krátce vydrž.",
+   "Pomalu natáhni paži zpět."
+  ],
+  "mistakes": [
+   "Loket padá dolů k tělu.",
+   "Otáčení trupem."
+  ],
+  "breathing": "Výdech při přitahování, nádech při návratu.",
+  "query": "single arm cable rear delt row"
+ },
+ "Leaning Cable Lateral Raise": {
+  "setup": [
+   "Spodní kladka, postav se bokem a druhou rukou se drž stroje.",
+   "Nakloň se od stroje, madlo ve vzdálenější ruce před tělem."
+  ],
+  "steps": [
+   "Upažuj do strany do výšky ramen, loket lehce pokrčený.",
+   "Nahoře krátce vydrž.",
+   "Pomalu spusť přes tělo do protažení."
+  ],
+  "mistakes": [
+   "Švih trupem.",
+   "Zvedání nad úroveň ramen."
+  ],
+  "breathing": "Výdech při zvedání, nádech dolů.",
+  "video": {
+   "id": "uiv2KhTT99Y",
+   "title": "How to do the Cable Leaning Lateral Raise"
+  },
+  "query": "leaning cable lateral raise"
+ },
+ "Cable Bar Pushdown": {
+  "setup": [
+   "Horní kladka s rovnou tyčí, chyť ji nadhmatem na šíři ramen.",
+   "Lokty přitiskni k bokům, mírný předklon."
+  ],
+  "steps": [
+   "Stlač tyč dolů do propnutí loktů.",
+   "Dole krátce vydrž.",
+   "Pomalu povol do pravého úhlu v loktech."
+  ],
+  "mistakes": [
+   "Lokty jdou dopředu a dozadu.",
+   "Tlačení vahou těla."
+  ],
+  "breathing": "Výdech při stlačení, nádech nahoru.",
+  "query": "straight bar cable pushdown"
+ },
+ "Cable Overhead Straight Bar Extensions": {
+  "setup": [
+   "Spodní nebo střední kladka s rovnou tyčí, otoč se zády ke stroji.",
+   "Tyč za hlavou, lokty u hlavy směřují dopředu, vykročení."
+  ],
+  "steps": [
+   "Propni lokty a vytlač tyč dopředu nad hlavu.",
+   "Krátce vydrž.",
+   "Pomalu povol za hlavu do protažení."
+  ],
+  "mistakes": [
+   "Lokty se roztahují do stran.",
+   "Prohnutí v bedrech."
+  ],
+  "breathing": "Výdech při propnutí, nádech zpět.",
+  "query": "cable overhead straight bar triceps extension"
+ },
+ "Cross-Body Cable Tricep Extension": {
+  "setup": [
+   "Kladku nastav do výšky ramen, bez madla chyť přímo lanko nebo madlo vzdálenější rukou.",
+   "Postav se bokem, loket pokrčený před tělem."
+  ],
+  "steps": [
+   "Propni loket do strany od těla.",
+   "Na konci krátce vydrž.",
+   "Pomalu povol zpět."
+  ],
+  "mistakes": [
+   "Pohyb z ramene místo z lokte.",
+   "Otáčení trupem."
+  ],
+  "breathing": "Výdech při propnutí, nádech zpět.",
+  "query": "cross body cable triceps extension"
+ },
+ "Reverse-Grip Tricep Pushdown": {
+  "setup": [
+   "Horní kladka s rovnou tyčí nebo EZ tyčí, chyť ji podhmatem.",
+   "Lokty u boků, trup vzpřímený."
+  ],
+  "steps": [
+   "Stlač tyč dolů do propnutí loktů.",
+   "Dole krátce vydrž.",
+   "Pomalu povol do pravého úhlu."
+  ],
+  "mistakes": [
+   "Lokty se zvedají dopředu.",
+   "Moc těžká váha."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "573yzQkprl8",
+   "title": "How To Do Reverse Grip Triceps Pushdown"
+  },
+  "query": "reverse grip triceps pushdown"
+ },
+ "Single-Arm Overhead Cable Extension": {
+  "setup": [
+   "Spodní kladka s madlem, postav se zády ke stroji.",
+   "Madlo drž za hlavou, loket míří nahoru."
+  ],
+  "steps": [
+   "Propni loket nad hlavu.",
+   "Nahoře krátce vydrž.",
+   "Pomalu povol za hlavu."
+  ],
+  "mistakes": [
+   "Loket uhýbá do strany.",
+   "Prohnutí v bedrech."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "w3iAESGWK6M",
+   "title": "Exercise Tutorial: Single Arm Cable Overhead Tricep Extension"
+  },
+  "query": "single arm overhead cable triceps extension"
+ },
+ "Cable Side Bend": {
+  "setup": [
+   "Spodní kladka s madlem, postav se bokem a madlo chyť bližší rukou.",
+   "Chodidla na šíři boků, druhá ruka na boku."
+  ],
+  "steps": [
+   "Ukloň se ke kladce.",
+   "Stažením boku na druhé straně se narovnej a ukloň mírně od kladky.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Předklon nebo záklon místo úklonu.",
+   "Rychlý švih."
+  ],
+  "breathing": "Výdech při narovnání, nádech při úklonu.",
+  "video": {
+   "id": "nwPL5_lpUbQ",
+   "title": "How To Do: Cable Side Bend"
+  },
+  "query": "cable side bend"
+ },
+ "Cable Single Arm Rope Pushdown": {
+  "setup": [
+   "Horní kladka s lanem, chyť jeden konec lana.",
+   "Loket u boku, mírný předklon."
+  ],
+  "steps": [
+   "Stlač lano dolů a na konci vytoč dlaň dolů.",
+   "Krátce vydrž v propnutí.",
+   "Pomalu povol nahoru."
+  ],
+  "mistakes": [
+   "Loket se odlepuje od těla.",
+   "Pomoc ramenem."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "query": "single arm rope pushdown"
+ },
+ "Machine Cable V Bar Push Downs": {
+  "setup": [
+   "Horní kladka s V-tyčí, chyť ji oběma rukama.",
+   "Lokty u boků, trup vzpřímený."
+  ],
+  "steps": [
+   "Stlač tyč dolů do propnutí.",
+   "Krátce vydrž.",
+   "Pomalu povol do pravého úhlu."
+  ],
+  "mistakes": [
+   "Lokty jdou dopředu.",
+   "Krčení zápěstí."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "query": "v bar triceps pushdown"
+ },
+ "Cable Standing Low To High Wood Chopper": {
+  "setup": [
+   "Spodní kladka s madlem, postav se bokem a chyť madlo oběma rukama u kotníku.",
+   "Chodidla šíře než boky, kolena pokrčená."
+  ],
+  "steps": [
+   "Otoč trup a táhni madlo šikmo nahoru přes tělo nad opačné rameno.",
+   "Paže zůstávají skoro natažené, zadní noha se vytočí.",
+   "Pomalu se vrať dolů."
+  ],
+  "mistakes": [
+   "Tah jen rukama.",
+   "Kulatá záda dole."
+  ],
+  "breathing": "Výdech při tahu nahoru, nádech dolů.",
+  "query": "low to high cable wood chop"
+ },
+ "Cable Bench Straight Leg Kickback": {
+  "setup": [
+   "Lavici postav před spodní kladku, manžetu dej na kotník.",
+   "Opři se trupem nebo předloktími o lavici, pracující noha napnutá."
+  ],
+  "steps": [
+   "Zanož napnutou nohu dozadu a nahoru.",
+   "Nahoře stiskni hýždě.",
+   "Pomalu spusť dolů."
+  ],
+  "mistakes": [
+   "Prohnutí v bedrech.",
+   "Švih nohou."
+  ],
+  "breathing": "Výdech při zanožení, nádech zpět.",
+  "query": "cable straight leg kickback bench"
+ },
+ "Cable 30 Degree Shrug": {
+  "setup": [
+   "Obě spodní kladky s madly, postav se mezi ně.",
+   "Paže dole, mírně do stran asi o 30°."
+  ],
+  "steps": [
+   "Zvedni ramena šikmo nahoru k uším.",
+   "Nahoře vteřinu vydrž.",
+   "Pomalu spusť."
+  ],
+  "mistakes": [
+   "Krouživý pohyb ramen.",
+   "Krčení loktů."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "query": "cable 30 degree shrug"
+ },
+ "Cable Wrist Curl": {
+  "setup": [
+   "Lavici postav před spodní kladku s rovnou tyčí.",
+   "Klekni nebo sedni, předloktí polož na lavici, zápěstí přes okraj, dlaně nahoru."
+  ],
+  "steps": [
+   "Nech tyč klesnout do prstů.",
+   "Zatni prsty a ohni zápěstí nahoru.",
+   "Pomalu spusť."
+  ],
+  "mistakes": [
+   "Zvedání předloktí z lavice.",
+   "Moc těžká váha."
+  ],
+  "breathing": "Dýchej plynule.",
+  "query": "cable wrist curl"
+ },
+ "Cable Bar Face Pull": {
+  "setup": [
+   "Kladku nastav do výšky obličeje s rovnou tyčí.",
+   "Chyť ji nadhmatem šíř než ramena, odstup."
+  ],
+  "steps": [
+   "Táhni tyč k čelu, lokty vysoko do stran.",
+   "Stáhni lopatky a krátce vydrž.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Lokty padají dolů.",
+   "Záklon trupu."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "query": "cable bar face pull"
+ },
+ "Cable Rope Kneeling Face Pull": {
+  "setup": [
+   "Kladku nastav nad úroveň hlavy v kleku, připni lano.",
+   "Klekni čelem ke stroji, trup vzpřímený, hýždě zpevněné."
+  ],
+  "steps": [
+   "Táhni lano k obličeji, konce od sebe.",
+   "Lokty vysoko, na konci krátce vydrž.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Tah jen rukama."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "query": "kneeling rope face pull"
+ },
+ "Cable Seated Rope Face Pull": {
+  "setup": [
+   "Lavici postav před kladku, kladku nastav do výšky obličeje vsedě.",
+   "Sedni si, chyť lano, paže natažené."
+  ],
+  "steps": [
+   "Táhni lano k obličeji, lokty vysoko.",
+   "Konce lana roztáhni a krátce vydrž.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Lokty padají."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "query": "seated rope face pull"
+ },
+ "Cable Single Leg Laying Leg Curl": {
+  "setup": [
+   "Lavici postav kousek před spodní kladku, manžetu dej na kotník.",
+   "Lehni si na břicho, kolena za okraj lavice."
+  ],
+  "steps": [
+   "Pokrč koleno a přitáhni patu k hýždi.",
+   "Nahoře krátce vydrž.",
+   "Pomalu natáhni nohu."
+  ],
+  "mistakes": [
+   "Zvedání pánve.",
+   "Rychlé spouštění."
+  ],
+  "breathing": "Výdech při pokrčení, nádech zpět.",
+  "query": "cable lying leg curl single leg"
+ },
+ "Cable Single Arm Underhand Grip Row": {
+  "setup": [
+   "Kladka ve výšce pasu, madlo chyť podhmatem.",
+   "Postav se nebo sedni čelem ke stroji, trup pevně."
+  ],
+  "steps": [
+   "Přitáhni loket podél těla k boku.",
+   "Stáhni lopatku.",
+   "Pomalu natáhni paži."
+  ],
+  "mistakes": [
+   "Rotace trupu.",
+   "Tah předloktím."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "query": "single arm underhand cable row"
+ },
+ "Straight Bar Bench Mid Rows": {
+  "setup": [
+   "Lavici postav před spodní kladku s rovnou tyčí.",
+   "Sedni si, chodidla opřená, chyť tyč nadhmatem."
+  ],
+  "steps": [
+   "Přitáhni tyč ke spodní části hrudníku.",
+   "Stáhni lopatky.",
+   "Pomalu natáhni paže."
+  ],
+  "mistakes": [
+   "Houpání trupem.",
+   "Ramena k uším."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "query": "seated straight bar cable row bench"
+ },
+ "Decline Machine Chest Press": {
+  "setup": [
+   "Sedák nastav tak, aby madla byla u spodní části hrudníku.",
+   "Záda opřená, lopatky stažené."
+  ],
+  "steps": [
+   "Tlač madla dopředu a mírně dolů.",
+   "Lokty nahoře nezamykej.",
+   "Pomalu se vrať do protažení."
+  ],
+  "mistakes": [
+   "Ramena jdou dopředu.",
+   "Odraz ze spodní polohy."
+  ],
+  "breathing": "Výdech při tlaku, nádech zpět.",
+  "query": "decline machine chest press"
+ },
+ "Incline Machine Chest Press": {
+  "setup": [
+   "Sedák nastav tak, aby madla byla v úrovni horní části hrudníku.",
+   "Záda opřená, chodidla na zemi."
+  ],
+  "steps": [
+   "Tlač madla šikmo nahoru.",
+   "Nahoře lokty nezamykej.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Zvedání zadku ze sedáku.",
+   "Krátký rozsah."
+  ],
+  "breathing": "Výdech při tlaku, nádech zpět.",
+  "video": {
+   "id": "LiDArz1R2NU",
+   "title": "Incline Machine Chest Press"
+  },
+  "query": "incline machine chest press"
+ },
+ "Neutral-Grip Lat Pulldown": {
+  "setup": [
+   "Na kladku dej madlo s rovnoběžnými úchopy na šíři ramen.",
+   "Sedni si, stehna pod opěrkou, chyť madlo dlaněmi k sobě."
+  ],
+  "steps": [
+   "Stáhni madlo k horní části hrudníku, lokty dolů a dozadu.",
+   "Dole stáhni lopatky.",
+   "Pomalu povol nahoru do natažení paží."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Tah jen rukama."
+  ],
+  "breathing": "Výdech při stahování, nádech nahoru.",
+  "video": {
+   "id": "fR_Pw6PxLz4",
+   "title": "How To: Neutral Grip Lat Pulldown"
+  },
+  "query": "neutral grip lat pulldown"
+ },
+ "Single-Arm Lat Pulldown": {
+  "setup": [
+   "Na kladku připni jedno madlo, sedni si pod ni.",
+   "Madlo chyť jednou rukou, paže natažená nahoře."
+  ],
+  "steps": [
+   "Stáhni loket dolů k boku.",
+   "Dole krátce vydrž.",
+   "Pomalu povol nahoru do protažení."
+  ],
+  "mistakes": [
+   "Úklon trupu.",
+   "Rotace ramene dopředu."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "eM162KNncD8",
+   "title": "Single Arm Lat Pulldown Exercise Tutorial"
+  },
+  "query": "single arm lat pulldown"
+ },
+ "Wide-Grip Lat Pulldown": {
+  "setup": [
+   "Dlouhou tyč chyť nadhmatem zhruba o dvě dlaně šíř než ramena.",
+   "Sedni si, stehna pod opěrkou, hrudník lehce nahoru."
+  ],
+  "steps": [
+   "Stáhni tyč k horní části hrudníku, lokty dolů do stran.",
+   "Dole stáhni lopatky.",
+   "Pomalu povol nahoru."
+  ],
+  "mistakes": [
+   "Stahování za hlavu.",
+   "Velký záklon a švih."
+  ],
+  "breathing": "Výdech při stahování, nádech nahoru.",
+  "video": {
+   "id": "7JnP8dFbS14",
+   "title": "How To Do A Wide Grip Lat Pulldown"
+  },
+  "query": "wide grip lat pulldown"
+ },
+ "Calf Press": {
+  "setup": [
+   "Sedni si do leg pressu, špičky dej na spodní okraj plošiny, paty volně.",
+   "Nohy skoro natažené, kolena lehce povolená, pojistky nech zajištěné, pokud to stroj dovolí."
+  ],
+  "steps": [
+   "Tlač plošinu špičkami co nejdál.",
+   "Nahoře vteřinu vydrž.",
+   "Pomalu povol paty do protažení."
+  ],
+  "mistakes": [
+   "Pohyb z kolen místo z kotníků.",
+   "Krátký rozsah."
+  ],
+  "breathing": "Výdech při tlaku, nádech zpět.",
+  "video": {
+   "id": "IrxfRHGiGE0",
+   "title": "Calf Press Leg Press Machine"
+  },
+  "query": "calf press on leg press"
+ },
+ "Single-Leg Press": {
+  "setup": [
+   "Jedno chodidlo dej doprostřed plošiny, druhou nohu polož stranou na zem nebo rám.",
+   "Záda a pánev opřené."
+  ],
+  "steps": [
+   "Spouštěj plošinu, koleno jde ve směru špičky.",
+   "Dole zastav, než se pánev odlepí.",
+   "Vytlač celým chodidlem nahoru."
+  ],
+  "mistakes": [
+   "Koleno padá dovnitř.",
+   "Moc velká váha z oboustranného leg pressu."
+  ],
+  "breathing": "Nádech dolů, výdech při tlaku.",
+  "query": "single leg press"
+ },
+ "Reverse Hack Squat": {
+  "setup": [
+   "Postav se do hack stroje obráceně, hrudníkem k opěrce, ramena pod polštáři.",
+   "Chodidla na šíři boků doprostřed plošiny."
+  ],
+  "steps": [
+   "Odjisti stroj a klesej, boky jdou dozadu.",
+   "Dolů jdi, dokud máš záda rovná.",
+   "Vytlač se nahoru a nahoře stiskni hýždě."
+  ],
+  "mistakes": [
+   "Kulatá záda dole.",
+   "Paty se zvedají."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "3Kopway1dyg",
+   "title": "How To Do Reverse Hack Squat"
+  },
+  "query": "reverse hack squat"
+ },
+ "Machine Underhand Row": {
+  "setup": [
+   "Sedák nastav tak, aby madla byla ve výšce spodní části hrudníku.",
+   "Hrudník opři o opěrku, madla chyť podhmatem."
+  ],
+  "steps": [
+   "Přitahuj lokty dozadu podél těla.",
+   "Na konci stáhni lopatky.",
+   "Pomalu natáhni paže."
+  ],
+  "mistakes": [
+   "Odlepení hrudníku od opěrky.",
+   "Švih."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "query": "machine underhand row"
+ },
+ "Hammer Strength High Row": {
+  "setup": [
+   "Sedák nastav tak, aby madla byla nad hlavou na dosah natažených paží.",
+   "Stehna pod opěrkou, hrudník lehce nahoru."
+  ],
+  "steps": [
+   "Táhni madla dolů a dozadu k hrudníku.",
+   "Dole stáhni lopatky.",
+   "Pomalu povol nahoru."
+  ],
+  "mistakes": [
+   "Záklon trupu.",
+   "Tah jen rukama."
+  ],
+  "breathing": "Výdech při tahu, nádech nahoru.",
+  "video": {
+   "id": "wWLSErG8qGk",
+   "title": "Hammer Strength Plate-Loaded High Row Instructions"
+  },
+  "query": "hammer strength high row"
+ },
+ "Hammer Strength Iso-Lateral Row": {
+  "setup": [
+   "Sedák nastav tak, aby madla byla ve výšce ramen nebo níž.",
+   "Hrudník opři o opěrku, chyť madla."
+  ],
+  "steps": [
+   "Přitáhni madlo jednou rukou nebo oběma, lokty dozadu.",
+   "Na konci stáhni lopatku.",
+   "Pomalu natáhni paži."
+  ],
+  "mistakes": [
+   "Odlepování hrudníku.",
+   "Rotace trupu."
+  ],
+  "breathing": "Výdech při přitahování, nádech zpět.",
+  "video": {
+   "id": "th169-164Gk",
+   "title": "Hammer Strength Iso-Lateral Row Tutorial"
+  },
+  "query": "hammer strength iso lateral row"
+ },
+ "Machine Lat Pullover": {
+  "setup": [
+   "Sedák nastav tak, aby ramena byla v úrovni osy otáčení stroje.",
+   "Lokty nebo předloktí opři o polštáře, záda opřená, pás zapnutý, pokud ho stroj má."
+  ],
+  "steps": [
+   "Táhni paže obloukem dolů k bokům.",
+   "Dole stáhni laty.",
+   "Pomalu se vrať nahoru do protažení."
+  ],
+  "mistakes": [
+   "Prohýbání v bedrech.",
+   "Tlačení rukama místo tahu lokty."
+  ],
+  "breathing": "Výdech dolů, nádech nahoru.",
+  "video": {
+   "id": "dc08-oCTUa8",
+   "title": "Machine Lat Pullovers"
+  },
+  "query": "machine lat pullover"
+ },
+ "Machine Back Extension": {
+  "setup": [
+   "Sedák a opěrku nastav tak, aby polštář byl na lopatkách.",
+   "Chodidla opři, pás přes stehna, pokud je."
+  ],
+  "steps": [
+   "Z mírného předklonu zatlač zády do opěrky až do vzpřímeného sedu.",
+   "Krátce vydrž.",
+   "Pomalu se vrať do předklonu."
+  ],
+  "mistakes": [
+   "Prudký záklon přes vzpřímenou polohu.",
+   "Moc velká váha a škubání."
+  ],
+  "breathing": "Výdech při záklonu, nádech při předklonu.",
+  "query": "seated back extension machine"
+ },
+ "Reverse Hyperextension": {
+  "setup": [
+   "Lehni si na břicho tak, aby boky byly na kraji podložky, nohy visí dolů.",
+   "Chyť madla, popruh kyvadla dej za kotníky."
+  ],
+  "steps": [
+   "Zvedni nohy dozadu do vodorovné polohy stažením hýždí.",
+   "Nahoře krátce vydrž.",
+   "Pomalu spusť dolů, kyvadlo nenech švihnout."
+  ],
+  "mistakes": [
+   "Švih a odraz kyvadla.",
+   "Prohnutí nad vodorovnou polohu."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "uQqR1NHfsSU",
+   "title": "Reverse Hyperextensions Tutorial"
+  },
+  "query": "reverse hyperextension machine"
+ },
+ "Machine Preacher Curl": {
+  "setup": [
+   "Sedák nastav tak, aby podpaží leželo na horním okraji opěrky a lokty u osy stroje.",
+   "Chyť madla podhmatem."
+  ],
+  "steps": [
+   "Pokrč lokty a přitáhni madla k ramenům.",
+   "Nahoře stiskni biceps.",
+   "Pomalu povol do skoro natažených paží."
+  ],
+  "mistakes": [
+   "Zvedání loktů z opěrky.",
+   "Prudký pád dolů."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "to3m8zws1n8",
+   "title": "Machine Bicep Preacher Curl: How To"
+  },
+  "query": "machine preacher curl"
+ },
+ "Machine Tricep Extension": {
+  "setup": [
+   "Sedák nastav tak, aby lokty ležely na opěrce v úrovni osy stroje.",
+   "Chyť madla, záda opřená."
+  ],
+  "steps": [
+   "Propni lokty a zatlač madla dolů.",
+   "Dole krátce vydrž.",
+   "Pomalu povol zpět."
+  ],
+  "mistakes": [
+   "Zvedání loktů.",
+   "Švih trupem."
+  ],
+  "breathing": "Výdech při propnutí, nádech zpět.",
+  "query": "seated triceps extension machine"
+ },
+ "Belt Squat": {
+  "setup": [
+   "Opasek si zapni kolem boků a připni k řetězu stroje.",
+   "Postav se na plošinu, chodidla na šíři ramen, drž se madel."
+  ],
+  "steps": [
+   "Odjisti stroj a dřepni co nejhlouběji s rovnými zády.",
+   "Kolena jdou ve směru špiček.",
+   "Vytlač se celými chodidly nahoru."
+  ],
+  "mistakes": [
+   "Paty se zvedají.",
+   "Kolena padají dovnitř."
+  ],
+  "breathing": "Nádech dolů, výdech nahoru.",
+  "video": {
+   "id": "FCIZZvIM-I0",
+   "title": "Exercise Tutorial - How to use a belt squat"
+  },
+  "query": "belt squat machine"
+ },
+ "Machine Crunch": {
+  "setup": [
+   "Sedák nastav tak, aby polštáře byly na horní části hrudníku nebo madla u hlavy.",
+   "Nohy zaklesni, záda opřená."
+  ],
+  "steps": [
+   "Zakulať trup dolů, jako bys přibližoval žebra k pánvi.",
+   "Dole krátce vydrž.",
+   "Pomalu se vrať."
+  ],
+  "mistakes": [
+   "Tah rukama místo břichem.",
+   "Rychlé houpání."
+  ],
+  "breathing": "Výdech při sklapnutí, nádech zpět.",
+  "video": {
+   "id": "0kLWho-pEdQ",
+   "title": "Machine Ab Crunch: How To"
+  },
+  "query": "ab crunch machine"
+ },
+ "Captain's Chair Knee Raise": {
+  "setup": [
+   "Předloktí opři o polstrování, chyť madla, záda opřená.",
+   "Nohy volně visí, ramena stlač dolů."
+  ],
+  "steps": [
+   "Zvedni kolena k hrudníku a lehce podsaď pánev.",
+   "Nahoře krátce vydrž.",
+   "Pomalu spusť nohy bez švihu."
+  ],
+  "mistakes": [
+   "Švih nohou.",
+   "Prohnutí zad."
+  ],
+  "breathing": "Výdech nahoru, nádech dolů.",
+  "video": {
+   "id": "7KDDZtaUaxw",
+   "title": "How To Do A CAPTAIN'S CHAIR KNEE RAISE"
+  },
+  "query": "captains chair knee raise"
+ },
+ "Selectorized Torso Rotation Machine": {
+  "setup": [
+   "Sedák nastav a rozsah otáčení nastav na pohodlnou míru.",
+   "Sedni si, nohy zaklesni, hrudník k opěrce nebo madla u hrudníku."
+  ],
+  "steps": [
+   "Otoč trup na stranu proti odporu.",
+   "Krátce vydrž.",
+   "Pomalu se vrať do středu a po sérii vystřídej stranu."
+  ],
+  "mistakes": [
+   "Švih a velký rozsah.",
+   "Otáčení pánví místo trupem."
+  ],
+  "breathing": "Výdech při otočení, nádech zpět.",
+  "query": "torso rotation machine"
  }
 };
