@@ -2,7 +2,7 @@ import {initialImport,recentDashboardImport} from './account-sync.js';
 import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
 import { trainingSetup } from './onboarding.js';
 import { subscriptionStatus, assertAIAccess } from './subscription.js';
-import { claimCoachMessage, recordCoachMessage } from './coach-allowance.js';
+import { claimCoachMessage, recordCoachMessage, releaseCoachMessage } from './coach-allowance.js';
 import { buildNutrients, buildNutrientDetail, nutrientFavorites, saveNutrientFavorites, microTop, FREE_KEYS } from './micronutrients.js';
 import { listRecipes, saveRecipe, deleteRecipe } from './personal-recipes.js';
 import {deletePersonalFood} from './personal-foods.js';
@@ -1430,7 +1430,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const manualReadiness=Number.isFinite(Number(body.manualReadiness))?Number(body.manualReadiness):null;
     const goal=body.goal&&typeof body.goal==='object'?body.goal:null;
     const preferences=body.preferences&&typeof body.preferences==='object'?body.preferences:{};
-    const reply=async (onAnswer,onProgress=()=>{})=>{
+    const answerMessage=async (onAnswer,onProgress=()=>{})=>{
       let inputs={},coachCtx={date,now:localNow()},selected=null,focus=null;
       onProgress(L('Trenér připravuje odpověď…', 'The coach is preparing an answer…'));
       if(task!=='simple'){
@@ -1495,6 +1495,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       delete answer.memory;
       return {...answer,chatId,actions:proposals,coachAllowance,memorySaved:memory,memoryChanges:{saved:memory||null,...changes},costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
+    // A message whose answer failed goes back to the allowance.
+    const reply=(onAnswer,onProgress)=>answerMessage(onAnswer,onProgress).catch(async error=>{await releaseCoachMessage(env,claim).catch(e=>console.error('Coach message not released',e.message));throw error;});
     if(body.stream)return assistantStreamResponse(reply);
     try{return Response.json(await reply(null),{headers:{'Cache-Control':'no-store'}});}
     catch(error){if(error.limit)return Response.json({message:error.message},{status:error.status||429});console.error('Assistant request failed',error);return Response.json({message:L('AI odpověď se nepodařilo připravit.', 'The AI answer couldn\'t be prepared.')},{status:502});}
