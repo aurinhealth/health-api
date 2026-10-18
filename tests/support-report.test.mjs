@@ -107,3 +107,18 @@ test("nothing to flag says so", () => {
   assert.deepEqual(reportFindings({ connections: [{ id: "google", connected: true, lastSuccessAt: new Date().toISOString() }], lastErrors: {} }, { syncs: [{ name: "connection_google", status: "ok" }], failedSends: [] }), []);
   assert.deepEqual(reportFindings(null, null), []);
 });
+
+test("a feature idea is stored without a screenshot or server snapshot and e-mailed as an idea", async () => {
+  const { raw, env, sent } = setup();
+  const response = await handleSupportReport(post({ kind: "idea", message: "Tempo na stejné trase v čase", screenshot: JPEG, diagnostics: { app: "1.2 (34)", ios: "26.0", language: "cs" } }), env, { signedIn: true, origin: "https://x.test" });
+  assert.equal(response.status, 200);
+  assert.match((await response.json()).message, /návrh odešel|idea has been sent/);
+  const row = raw.sqlite.prepare("SELECT * FROM support_reports").get();
+  assert.equal(row.screenshot_base64, null);
+  assert.deepEqual(JSON.parse(row.diagnostics_json), { app: "1.2 (34)", ios: "26.0", language: "cs", kind: "idea" });
+  assert.match(sent[0].subject, /^Aurin: feature idea #1 from a@b\.cz$/);
+  assert.match(sent[0].text, /Tempo na stejné trase v čase/);
+  assert.match(sent[0].text, /App: Aurin 1\.2 \(34\), iOS 26\.0, cs/);
+  assert.doesNotMatch(sent[0].text, /Diagnostics|Worth a look/);
+  assert.throws(() => validateReport({ kind: "idea", message: " " }), e => e.status === 400 && /nápad|idea/.test(e.message));
+});

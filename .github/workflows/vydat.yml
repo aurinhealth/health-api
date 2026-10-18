@@ -124,7 +124,7 @@ jobs:
           echo "server=$server" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "Vydání buildu $build (${sha::7}), server ${server::7}, minulé vydání: ${last:-žádné}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Kontrola aplikace prošla, snímky obrazovek (Loadwise-native-screens → smoke): $check_url" >> "$GITHUB_STEP_SUMMARY"
+          echo "Kontrola aplikace prošla, snímky obrazovek (Aurin-screens → smoke): $check_url" >> "$GITHUB_STEP_SUMMARY"
 
   # The live server first: the build the testers get talks to it. The newest
   # main contains the build's commit, so the server is never older than the app.

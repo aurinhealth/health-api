@@ -3,12 +3,12 @@ name: iOS native app
 # Builds the native SwiftUI app in ios-native/ without a Mac or an Apple
 # Developer account. The Xcode project is generated from project.yml.
 # Artifacts (Actions → this run → Artifacts):
-# - Loadwise-native-unsigned.ipa: install with Sideloadly (free Apple ID,
+# - Aurin-unsigned.ipa: install with Sideloadly (free Apple ID,
 #   valid for 7 days, then install again). It sits next to the Capacitor app.
 #   Built on main and by hand only: on a pull request the Release build took
 #   about 12 of the run's 28 minutes, and after the merge the TestFlight
 #   archive (ios-testflight.yml) builds Release again anyway.
-# - Loadwise-native-screens: whole-screen snapshots in light and dark mode
+# - Aurin-screens: whole-screen snapshots in light and dark mode
 #   from the sample data, plus simulator screenshots of the running app
 #   (site/: the English, light-mode shots the website uses; smoke/: each step
 #   of the smoke test Vydat relies on).
@@ -168,21 +168,21 @@ jobs:
           app=ipa/Payload/Loadwise.app
           codesign --force --sign - --entitlements LoadwiseWidgets/LoadwiseWidgets.entitlements "$app/PlugIns/LoadwiseWidgets.appex"
           codesign --force --sign - --entitlements Loadwise/Loadwise.entitlements "$app"
-          (cd ipa && zip -qry "$GITHUB_WORKSPACE/Loadwise-native-unsigned.ipa" Payload)
+          (cd ipa && zip -qry "$GITHUB_WORKSPACE/Aurin-unsigned.ipa" Payload)
 
       - name: Upload the app
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Loadwise-native-ios
-          path: Loadwise-native-unsigned.ipa
+          name: Aurin-ios
+          path: Aurin-unsigned.ipa
           retention-days: 30
 
       - name: Upload the screens
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Loadwise-native-screens
+          name: Aurin-screens
           path: screens
           if-no-files-found: ignore
           retention-days: 30

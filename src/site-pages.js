@@ -153,7 +153,6 @@ p{margin:0}
 .privacy .big{font:400 clamp(36px,5.2vw,72px)/1.08 Newsreader,"New York",Georgia,serif;letter-spacing:-.02em}
 .privacy .big span{transition:opacity .25s}
 .js .privacy .big span:not(.lit){opacity:.16}
-.privacy .more{margin-top:30px;font-size:18px;font-weight:600}
 .card{background:var(--panel);border-radius:28px;padding:24px;box-shadow:0 1px 2px rgba(60,45,20,.05)}
 .disclosure{max-width:680px;margin:56px auto 0;padding:24px 26px;text-align:left}
 .disclosure h3{font-size:16px;font-weight:600;margin-bottom:10px}
@@ -368,7 +367,7 @@ function pageLang(request, czech = false) {
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '16. října 2026', en: '16 October 2026'};
+const UPDATED = {cs: '18. října 2026', en: '18 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -378,6 +377,18 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // The overview follows the app: Today in the hero, then a story with one phone whose screen follows
 // the chapters (readiness, strain, the plan, the gym, food, the coach), the connections, privacy and
 // questions. The numbers are one believable morning, the same everywhere.
+// Google's app verification reads this disclosure on the homepage. Petr took it off the overview
+// to keep the page clean (2026-10-15); before asking Google to verify the app, set this to true.
+// The text stays word for word (tests/site-pages.test.mjs).
+export const GOOGLE_DISCLOSURE_ON_HOME = false;
+export const googleDisclosure = () => `<div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
+<p>Aurin (Petr Fitness Data) is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
+<p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
+<p style="margin:0">The service can process training and fitness data from connected services, including Google Health data that the account owner has authorized, in order to provide these requested workflows.</p>
+<p style="margin:12px 0 0">Two optional permissions are requested separately: adding weight records to Google Health (weight you log in Aurin or Intervals.icu) and reading your date of birth from your Google Account to fill in your age.</p>
+<p style="margin:12px 0 0">Aurin’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="${API_POLICY}">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+<p style="margin:12px 0 0">The use of information received from Google Health API and/or Developer Tools will adhere to the <a href="${HEALTH_POLICY}">Google Health API Developer and User Data Policy</a>, including the Limited Use requirements.</p></div>`;
+
 export function overviewPage(request) {
   const {lang, origin} = pageLang(request);
   // A screen of the app: a screenshot taken in CI from the sample data (public/site/app/).
@@ -389,7 +400,7 @@ export function overviewPage(request) {
     ['trenink', 'Training', 'A plan that adapts.', 'An activity for every day, picked for how you recovered and ready in advance. Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu.', 'glow-training', 'training'],
     ['posilovna', 'Gym', 'Sets, weights and muscle recovery.', 'Turn a 3D figure and tap a muscle to see how tired it is from the gym and your runs. Every set carries a letter for how hard to go, from warm-up to failure and drop sets, and you mark how it really went. Supersets, left and right side, warm-up, cardio and stretching in the order you pick, and a rest timer between sets that stays on your lock screen.', 'glow-health', 'gym'],
     ['vyziva', 'Nutrition', 'Food that follows your training.', 'Snap a photo, scan a barcode or just tell the coach what you ate. Your target moves with the day’s load, food from other apps comes in too, and fibre, sugar and salt are always counted. Aurin Pro adds vitamins and minerals.', 'glow-food', 'food'],
-    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers. It also speaks up on its own, at most once a day.<span class="free">Free for everyone.</span>', 'glow-today', 'coach']];
+    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers. It also speaks up on its own, at most once a day.<span class="free">Free for everyone, with a fair weekly limit.</span>', 'glow-today', 'coach']];
   const steps = chapters.map(([id, eyebrow, h, p, glow]) => `<section id="${id}" class="step" data-glow="${glow}"><div class="wrap"><div class="text"><div class="eyebrow">${eyebrow}</div><h2>${h}</h2>${p.split('<span class="free">').map((t, j) => `<p${j ? ' class="free"' : ''}>${t.replace('</span>', '')}</p>`).join('')}</div></div></section>`).join('\n');
 
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
@@ -448,12 +459,13 @@ export function overviewPage(request) {
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
-    ['What does it cost?', 'Aurin is free, the AI coach included. If paid features come later, you will see the price before you buy, and they will be sold only through the App Store.'],
+    ['What does it cost?', 'Aurin is free, the AI coach included. The coach has a weekly limit on messages that covers everyday use, and the app shows when you are close to it. If paid features come later, you will see the price before you buy, and they will be sold only through the App Store.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
     ['Can I delete my data?', 'Yes. In Settings → Privacy &amp; data you can download all your data or delete your account with everything in it.'],
     ['Is Aurin a medical device?', 'No. Aurin helps you plan training, food and rest. It does not diagnose or treat anything, so if you feel unwell, see a doctor.'],
-    ['Something doesn’t work. What now?', `In the app, open Settings → Help → Report a problem and send it with diagnostics attached, or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.`]]
+    ['Something doesn’t work. What now?', `In the app, open Settings → Help → Report a problem and send it with diagnostics attached, or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.`],
+    ['I’m missing something in Aurin. Can I suggest it?', 'Yes. In the app, open Settings → Help → Suggest a feature, write what would help you and send it.']]
     .map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('\n');
   const headline = 'Train for how you feel today.';
   const aurora = '<div class="aurora" aria-hidden="true"><i class="a"></i><i class="b"></i><i class="c"></i></div>';
@@ -499,15 +511,8 @@ ${lines}
 </div></section>
 
 <section id="soukromi" class="privacy"><div class="wrap">
-<div class="say">${LOCK}<p class="big">${'Your data works only for you. Aurin reads only what you allow, never sells it or uses it for ads, and you can delete all of it in Settings at any time.'.split(' ').map(w => `<span>${w}</span>`).join(' ')}</p>
-<p class="more"><a href="/privacy">Full privacy policy</a></p></div>
-<div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
-<p>Aurin (Petr Fitness Data) is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
-<p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
-<p style="margin:0">The service can process training and fitness data from connected services, including Google Health data that the account owner has authorized, in order to provide these requested workflows.</p>
-<p style="margin:12px 0 0">Two optional permissions are requested separately: adding weight records to Google Health (weight you log in Aurin or Intervals.icu) and reading your date of birth from your Google Account to fill in your age.</p>
-<p style="margin:12px 0 0">Aurin’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="${API_POLICY}">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
-<p style="margin:12px 0 0">The use of information received from Google Health API and/or Developer Tools will adhere to the <a href="${HEALTH_POLICY}">Google Health API Developer and User Data Policy</a>, including the Limited Use requirements.</p></div>
+<div class="say">${LOCK}<p class="big">${'Your data works only for you. Aurin reads only what you allow, never sells it or uses it for ads, and you can delete all of it in Settings at any time.'.split(' ').map(w => `<span>${w}</span>`).join(' ')}</p></div>
+${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
 </div></section>
 
 <section id="faq"><div class="wrap faq reveal">
@@ -554,7 +559,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <p><strong>Codes sent by email.</strong> When you ask for a sign-in code, we send a six-digit code to the address you entered, if it has access to Aurin. We keep only a keyed hash of the code for 10 minutes, and counters that limit how many codes and attempts an address gets; these counters are deleted two days after the last code. A code sent to a new address also confirms changing your account’s email in Settings → Account; the old address then gets a notice of the change.</p>` : ''}
 <p><strong>Google Health</strong>, only if you connect it and allow it on Google’s consent screen:</p>
 <ul>
-<li>activity and fitness: steps, distance, floors, active minutes, active zone minutes, active energy burned, time in heart rate zones, sedentary periods and exercise sessions;</li>
+<li>activity and fitness: steps, distance, floors, active minutes, active zone minutes, active energy burned, time in heart rate zones, sedentary periods and exercise sessions, including the GPS route of a workout recorded with GPS, kept to show its map;</li>
 <li>health metrics and measurements: heart rate, resting heart rate, heart rate variability, oxygen saturation, respiratory rate, VO2 max, weight, height and body fat;</li>
 <li>sleep: sleep sessions and sleep stages;</li>
 <li>nutrition: food and drink logs.</li>
@@ -564,7 +569,8 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <p><strong>Ultrahuman</strong>, only if you connect your Ultrahuman Ring: your sleep and its stages, heart rate variability, resting heart rate, skin temperature deviation and VO2max, to work out your readiness. Aurin only reads this data, never passes it on to other services, and deletes it when you disconnect the ring.</p>
 <p><strong>WHOOP</strong>, only if you connect your WHOOP account: your sleep and its stages, resting heart rate, heart rate variability, breathing rate and blood oxygen, to work out your readiness. Aurin only reads this data, never passes it on to other services, and deletes it when you disconnect WHOOP.</p>
 <p><strong>Wahoo</strong>, only if you connect your Wahoo account: your finished rides and runs (start, duration, distance, climbing, power, training load, heart rate, cadence and calories), to count them in your training load. Aurin deletes them when you disconnect Wahoo.</p>
-<p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training), food and drinks, workouts and how they went, notes, your journal answers (such as alcohol, caffeine, sauna or how you felt), and your conversations with the assistant.</p>
+<p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training), food and drinks, workouts and how they went, notes, your journal answers (such as alcohol, caffeine, sauna or how you felt), and your conversations with the assistant. We count the messages you send the coach each week, to keep to the weekly number of messages.</p>
+<p><strong>What you send us from Settings → Help:</strong> a problem report with what you write, a screenshot if you add one and, if you leave it on, the app’s diagnostics (app and iOS version, your connections and their last errors, failed requests and crashes, never your health data), or a feature idea with the app version. We keep them to answer you and fix the problem, and they are deleted with your account.</p>
 <p><strong>On your device:</strong> a sign-in cookie valid for up to 30 days, a short-lived cookie that protects signing in, cookies with your theme and language and, in the browser’s storage, a copy of the last loaded day and a few display settings so the app opens instantly, and, once you add or use a passkey, your email with the passkey’s identifier, so this device signs you in with it instead of sending a code. We use no advertising or tracking cookies.</p>
 <p><strong>Technical logs:</strong> our hosting provider records technical details of requests (such as time, IP address, page and errors) to keep the service running and secure. These logs are kept for a few days.</p>
 <h2>How we use your data</h2>
@@ -652,7 +658,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <p><strong>Kódy e-mailem.</strong> Když si řekneš o kód pro přihlášení, pošleme šestimístný kód na zadanou adresu, pokud má do Aurinu přístup. Uchováváme jen jeho otisk vytvořený tajným klíčem, a to 10 minut, a počítadla, která omezují, kolik kódů a pokusů adresa dostane; ta se smažou dva dny po posledním kódu. Kód poslaný na novou adresu potvrzuje i změnu e-mailu účtu v Nastavení → Účet; na starou adresu pak přijde upozornění.</p>` : ''}
 <p><strong>Google Health</strong>, jen když ho připojíš a povolíš na obrazovce souhlasu Google:</p>
 <ul>
-<li>aktivita a kondice: kroky, vzdálenost, patra, aktivní minuty, minuty v aktivních zónách, aktivní energie, čas v tepových zónách, období nečinnosti a tréninky;</li>
+<li>aktivita a kondice: kroky, vzdálenost, patra, aktivní minuty, minuty v aktivních zónách, aktivní energie, čas v tepových zónách, období nečinnosti a tréninky, u tréninku s GPS i jeho trasa, kterou uchováváme, abychom ukázali mapu;</li>
 <li>zdravotní měření: tep, klidový tep, variabilita srdečního tepu (HRV), okysličení krve, dechová frekvence, VO₂max, váha, výška a tělesný tuk;</li>
 <li>spánek: spánky a spánkové fáze;</li>
 <li>výživa: záznamy jídla a pití.</li>
@@ -662,7 +668,8 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <p><strong>Ultrahuman</strong>, jen když připojíš prsten Ultrahuman: tvůj spánek a jeho fáze, variabilitu srdečního tepu, klidový tep, odchylku teploty kůže a VO2max, z nichž počítáme připravenost. Aurin tato data jen čte, nikomu dalšímu je nepředává a po odpojení prstenu je smaže.</p>
 <p><strong>WHOOP</strong>, jen když připojíš účet WHOOP: tvůj spánek a jeho fáze, klidový tep, variabilitu srdečního tepu, dechovou frekvenci a okysličení krve, z nichž počítáme připravenost. Aurin tato data jen čte, nikomu dalšímu je nepředává a po odpojení WHOOPu je smaže.</p>
 <p><strong>Wahoo</strong>, jen když připojíš účet Wahoo: tvoje dokončené jízdy a běhy (začátek, délku, vzdálenost, převýšení, výkon, tréninkovou zátěž, tep, kadenci a kalorie), aby se započítaly do tréninkové zátěže. Aurin je po odpojení Wahoo smaže.</p>
-<p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink), jídlo a pití, tréninky a jejich hodnocení, poznámky, odpovědi v deníku (třeba alkohol, kofein, sauna nebo jak ti bylo) a konverzace s asistentem.</p>
+<p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink), jídlo a pití, tréninky a jejich hodnocení, poznámky, odpovědi v deníku (třeba alkohol, kofein, sauna nebo jak ti bylo) a konverzace s asistentem. Počítáme, kolik zpráv koučovi za týden pošleš, abychom dodrželi týdenní počet zpráv.</p>
+<p><strong>Co nám pošleš z Nastavení → Pomoc:</strong> hlášení problému s tím, co napíšeš, snímkem obrazovky, když ho přidáš, a pokud ji necháš zapnutou, diagnostikou aplikace (verze aplikace a iOS, propojení a jejich poslední chyby, nepovedené požadavky a pády, nikdy tvoje zdravotní data), nebo návrh funkce s verzí aplikace. Uchováváme je, abychom ti odpověděli a problém opravili, a smažou se s tvým účtem.</p>
 <p><strong>Ve tvém zařízení:</strong> cookie přihlášení s platností nejvýš 30 dní, krátkodobá cookie, která chrání přihlašování, cookies s vybraným vzhledem a jazykem a v úložišti prohlížeče kopie naposledy načteného dne a několik nastavení zobrazení, aby se aplikace otevřela hned, a když si přidáš nebo použiješ přístupový klíč, tvůj e-mail s označením klíče, aby tě zařízení přihlásilo jím a nemuselo posílat kód. Reklamní ani sledovací cookies nepoužíváme.</p>
 <p><strong>Technické záznamy:</strong> náš poskytovatel hostingu zaznamenává technické údaje o požadavcích (třeba čas, IP adresu, stránku a chyby), aby služba fungovala a byla bezpečná. Tyto záznamy se uchovávají několik dní.</p>
 <h2>K čemu data používáme</h2>
@@ -741,7 +748,7 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
 }
 
 // Terms of Use. The English text is the reference version; the Czech one says the same.
-const TERMS_UPDATED = {cs: '14. října 2026', en: '14 October 2026'};
+const TERMS_UPDATED = {cs: '18. října 2026', en: '18 October 2026'};
 const APPLE_EULA = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 export function termsPage(request) {
@@ -780,6 +787,7 @@ export function termsPage(request) {
 <h2>AI features</h2>
 <ul>
 <li>The coach, reading food photos and looking up foods use artificial intelligence and work only with your consent, which you can withdraw in <strong>Settings → Privacy &amp; data → AI features</strong>. The rest of Aurin works without them.</li>
+<li>AI features have limits on how much you can use them, such as a number of coach messages each week. The app shows how many you have left and when more come.</li>
 <li>AI answers are generated automatically and can be incomplete or wrong, including nutrition values and ingredients. Check them before you rely on them, especially if you have an allergy or follow a medical diet.</li>
 </ul>
 <h2>Price</h2>
@@ -846,6 +854,7 @@ export function termsPage(request) {
 <h2>AI funkce</h2>
 <ul>
 <li>Kouč, čtení fotek jídla a dohledání potravin používají umělou inteligenci a fungují jen s tvým souhlasem, který odvoláš v <strong>Nastavení → Soukromí a data → AI funkce</strong>. Zbytek Aurinu funguje i bez nich.</li>
+<li>AI funkce mají limity, kolik je můžeš používat, třeba počet zpráv koučovi za týden. Aplikace ukáže, kolik ti jich zbývá a kdy přibudou další.</li>
 <li>Odpovědi AI vznikají automaticky a můžou být neúplné nebo chybné, včetně nutričních hodnot a složení. Než se na ně spolehneš, zkontroluj je, hlavně když máš alergii nebo držíš léčebnou dietu.</li>
 </ul>
 <h2>Cena</h2>
@@ -893,6 +902,8 @@ export function supportPage(request, {apple = false, email = false, open = false
 <li>Choose <strong>Send</strong>.</li>
 </ol>
 <p>If you cannot open the app, e-mail <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> what went wrong, roughly when, the error message the app showed and your iPhone model and iOS version. For anything else, <strong>Settings → Help → Contact us</strong> opens an e-mail with your app version already filled in.</p>
+<h2 id="idea">Suggesting a feature</h2>
+<p>Missing something? Open <strong>Settings → Help → Suggest a feature</strong>, write what would help you and choose <strong>Send</strong>. Only your text and the app version are sent.</p>
 <h2>Signing in</h2>
 <p>In the iPhone app, choose ${apple ? '<strong>Continue with Apple</strong>, ' : ''}<strong>Continue with Google</strong>${email ? ' or <strong>Continue with e-mail</strong>: you get a six-digit code that is valid for 10 minutes' : ''}. Use the same way each time, so you land in the same account.${open ? '' : ' If the app says your account is not invited, ask the operator to invite the address you use.'}</p>
 <h2>Passkeys</h2>
