@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
-import { coachAllowance, claimCoachMessage, recordCoachMessage, nearAt, lastWorkoutEnd } from "../src/coach-allowance.js";
+import { coachAllowance, checkCoachMessage, claimCoachMessage, recordCoachMessage, releaseCoachMessage, nearAt, lastWorkoutEnd } from "../src/coach-allowance.js";
 
 // Sunday 2026-10-18; the week started on Monday 2026-10-12.
 const TODAY = "2026-10-18";
@@ -50,7 +51,7 @@ test("used up: a conversation going on gets 2 more, a new one is refused", async
   const env = envOf({ COACH_WEEKLY_MESSAGES: "3" });
   for (let i = 0; i < 3; i++) await send(env, 1);
   assert.equal((await coachAllowance(env, TODAY)).left, 0);
-  assert.deepEqual(await claimCoachMessage(env, 1, { today: TODAY }), { kind: "extra" });
+  assert.equal((await checkCoachMessage(env, 1, { today: TODAY })).kind, "extra");
   assert.equal((await send(env, 1)).more, true);
   assert.equal((await send(env, 1)).more, false, "after the 2 extra ones the app shows the used-up card");
   await assert.rejects(claimCoachMessage(env, 1, { today: TODAY }), error => error.status === 429 && error.coachAllowance.exhausted === true && /vyčerpané|used up/.test(error.message));
@@ -94,4 +95,29 @@ test("the owner has no allowance", async () => {
   assert.equal(await coachAllowance(env, TODAY), null);
   assert.equal(await claimCoachMessage(env, 1, { today: TODAY }), null);
   assert.equal(await recordCoachMessage(env, 1, null, { today: TODAY }), null);
+});
+
+test("messages sent at once take the last one only once, and a failed answer gives its message back", async () => {
+  const env = envOf();
+  for (let i = 1; i <= 29; i++) await send(env, i);
+  // Before, 20 messages at once with 1 left all went (49 of 30).
+  const claims = await Promise.allSettled(Array.from({ length: 20 }, () => claimCoachMessage(env, null, { today: TODAY })));
+  assert.equal(claims.filter(c => c.status === "fulfilled").length, 1);
+  assert.ok(claims.filter(c => c.status === "rejected").every(c => c.reason.status === 429 && c.reason.coachAllowance?.exhausted === true));
+  assert.equal((await coachAllowance(env, TODAY)).used, 30);
+  // That answer failed: the message is not counted and can be sent again.
+  await releaseCoachMessage(env, claims.find(c => c.status === "fulfilled").value);
+  assert.equal((await coachAllowance(env, TODAY)).used, 29);
+  const last = await send(env, 30);
+  assert.deepEqual([last.used, last.left, last.more], [30, 0, true]);
+  // A recorded message stays counted.
+  const claim = await claimCoachMessage(env, 30, { today: TODAY });
+  await recordCoachMessage(env, 30, claim, { today: TODAY });
+  await releaseCoachMessage(env, claim);
+  assert.equal(env.DB.sqlite.prepare("SELECT COUNT(*) AS n FROM coach_messages WHERE kind = 'extra'").get().n, 1);
+});
+
+test("the coach route gives a message back when its answer fails", () => {
+  const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
+  assert.match(entry, /return answerMessage\(show,onProgress\)\.catch\(async error=>\{if\(!shown\)await releaseCoachMessage\(env,claim\)/);
 });

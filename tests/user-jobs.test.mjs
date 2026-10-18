@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { dueUserJobs, fanOutUserJobs } from "../src/entrypoint.js";
+import { dueUserJobs, fanOutUserJobs, runUserJobsInvocation } from "../src/entrypoint.js";
 
 const at = (h, m) => new Date(Date.UTC(2026, 9, 15, h, m));
 
@@ -46,4 +46,60 @@ test("a broken binding before any user went through falls back to running the jo
     assert.equal(result.users, 2);
   } finally { console.error = original; }
   assert.equal(errors.filter(e => /User jobs invocation failed/.test(e)).length, 1);
+});
+
+// The cron run's environment; scoping a user to run their jobs here copies it,
+// which `here` counts.
+function cronEnv(count, USER_JOBS) {
+  let copies = 0;
+  const env = { DB: database(count), OWNER_EMAIL: "owner@example.com", ...(USER_JOBS ? { USER_JOBS } : {}), get COPIED() { copies++; return undefined; } };
+  return { env, here: () => copies };
+}
+async function quietly(work) {
+  const errors = [], original = console.error;
+  console.error = (...args) => errors.push(args.join(" "));
+  try { return { result: await work(), errors }; } finally { console.error = original; }
+}
+const minuteRun = { cron: "* * * * *", scheduledTime: at(10, 1).getTime() };
+
+test("one user's jobs failing in their invocation leave every other user on the binding, none run here", async () => {
+  const healthy = cronEnv(40, { run: async () => ({ ok: true }) });
+  await fanOutUserJobs(healthy.env, {}, minuteRun);
+  for (const fail of [async () => ({ ok: false, error: "User data unavailable" }), async () => { throw new Error("Exceeded CPU limit"); }]) {
+    const sent = [];
+    const run = cronEnv(40, { run: async message => {
+      sent.push(message.user.id);
+      if (message.user.id === 3) return fail();
+      await new Promise(r => setTimeout(r, 2));
+      return { ok: true };
+    } });
+    const { result, errors } = await quietly(() => fanOutUserJobs(run.env, {}, minuteRun));
+    assert.equal(result.users, 40);
+    assert.deepEqual(sent.sort((a, b) => a - b), Array.from({ length: 40 }, (_, i) => i + 1));
+    assert.equal(run.here(), healthy.here());
+    assert.equal(errors.length, 1);
+    assert.match(errors[0], /^User jobs (invocation )?failed 3 /);
+  }
+});
+
+test("without the binding, or when no call of the first batch goes through, every user runs here", async () => {
+  const healthy = cronEnv(12, { run: async () => ({ ok: true }) });
+  await fanOutUserJobs(healthy.env, {}, minuteRun);
+  const missing = cronEnv(12);
+  await quietly(() => fanOutUserJobs(missing.env, {}, minuteRun));
+  assert.ok(missing.here() >= healthy.here() + 12, `${missing.here()} vs ${healthy.here()}`);
+  let calls = 0;
+  const broken = cronEnv(12, { run: async () => { calls++; throw new Error("Service binding unavailable"); } });
+  const { errors } = await quietly(() => fanOutUserJobs(broken.env, {}, minuteRun));
+  assert.equal(calls, 10);
+  assert.equal(errors.filter(e => /User jobs invocation failed/.test(e)).length, 10);
+  assert.equal(broken.here(), missing.here());
+});
+
+test("an invocation answers a failure of the user's own setup instead of rejecting", async () => {
+  const unavailable = () => { throw new Error("User data unavailable"); };
+  const DB = { prepare: unavailable, batch: async () => unavailable(), exec: async () => unavailable() };
+  const { result, errors } = await quietly(() => runUserJobsInvocation({ DB, OWNER_EMAIL: "owner@example.com" }, {}, { user: { id: 7 }, names: ["sync"], ...minuteRun }));
+  assert.deepEqual(result, { ok: false, error: "User data unavailable" });
+  assert.match(errors.join("\n"), /User jobs failed 7 User data unavailable/);
 });

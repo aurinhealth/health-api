@@ -1,6 +1,7 @@
 // What every AI answer cost, per user and day, and a monthly limit per user.
-// Every model call goes through callOpenAI (coach-assistant.js), which checks
-// the limit before asking and records the cost after. The monthly limit is the
+// Every model call goes through callOpenAI (coach-assistant.js), which holds
+// a slot with the call's most possible cost while it runs, checks the limit
+// and records the real cost after. The monthly limit is the
 // user's AI budget and the lever a paid tier would raise: AI_MONTHLY_LIMIT_USD
 // (default 5 USD a month), set high as an emergency brake. AI_DAILY_LIMIT_USD
 // guards the AI around the coach (food, plans, reviews) against abuse (a script,
@@ -55,18 +56,20 @@ export async function ensureAiUsage(db) {
 export const COACH_CHAT_FEATURE = "assistant";
 
 // Today's spending under the daily guard: everything but the coach chat.
-export async function aiSpentToday(env) {
+// A running call counts at its reservation (claimAiSlot); exceptId leaves one
+// row out, the call that is asking.
+export async function aiSpentToday(env, { exceptId = 0 } = {}) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') != ?").bind(env.USER_ID, localToday(), COACH_CHAT_FEATURE).first();
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') != ? AND id != ?").bind(env.USER_ID, localToday(), COACH_CHAT_FEATURE, Number(exceptId) || 0).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
-export async function aiSpentThisMonth(env) {
+export async function aiSpentThisMonth(env, { exceptId = 0 } = {}) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
   const month = localToday().slice(0, 7);
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day >= ? AND day <= ?").bind(env.USER_ID, month + "-01", month + "-31").first();
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day >= ? AND day <= ? AND id != ?").bind(env.USER_ID, month + "-01", month + "-31", Number(exceptId) || 0).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
@@ -76,37 +79,43 @@ export async function aiAllowance(env) {
 }
 
 // Throws before a model call once this month's or today's spending reached its
-// limit; the daily one does not stop the coach chat.
-export async function assertAiAllowance(env, feature = null) {
+// limit; the daily one does not stop the coach chat. exceptId: the asking
+// call's own slot, whose reservation does not count against itself.
+export async function assertAiAllowance(env, feature = null, { exceptId = 0 } = {}) {
   if (!tracked(env)) return;
   const monthLimit = aiMonthlyLimitUsd(env), dayLimit = feature === COACH_CHAT_FEATURE ? null : aiDailyLimitUsd(env);
   if (monthLimit == null && dayLimit == null) return;
   if (monthLimit === 0 || dayLimit === 0) throw limitError(L("AI funkce nejsou pro tento účet zapnuté.", "AI features aren't enabled for this account."));
   // A failed read of the log does not cost the user the answer.
   const failed = error => { console.error("AI usage read failed", error?.message || error); return 0; };
-  const [monthSpent, daySpent] = await Promise.all([monthLimit == null ? 0 : aiSpentThisMonth(env).catch(failed), dayLimit == null ? 0 : aiSpentToday(env).catch(failed)]);
+  const [monthSpent, daySpent] = await Promise.all([monthLimit == null ? 0 : aiSpentThisMonth(env, { exceptId }).catch(failed), dayLimit == null ? 0 : aiSpentToday(env, { exceptId }).catch(failed)]);
   if (monthLimit != null && monthSpent >= monthLimit) throw limitError(L("AI je teď pro tvůj účet pozastavená. Ozvi se nám na podporu.", "AI is paused for your account for now. Please contact support."));
   if (dayLimit != null && daySpent >= dayLimit) throw limitError(L("Pro dnešek toho bylo s AI hodně. Pokračovat můžeš zítra.", "That's a lot of AI for today. You can carry on tomorrow."));
 }
 
-// Limits are checked before a call and its cost recorded after it, so parallel
-// requests would all pass the check before the first cost lands. Each limited
-// user therefore has at most AI_PARALLEL_CALLS calls running at once: a running
-// call is a 'pending' row in ai_usage, claimed in one statement (D1 runs them
-// one at a time) and removed when the call ends. A row left by a Worker that
-// died counts for AI_PENDING_MINUTES at most. A call over the limit waits in
-// line for a free slot (five food photos in a row, the coach's texts beside
-// them) and is refused only after AI_SLOT_WAIT_MS.
+// A call's cost is known only after it, so parallel requests would all pass
+// the limit before the first cost lands. Each limited user therefore has at
+// most AI_PARALLEL_CALLS calls running at once: a running call is a 'pending'
+// row in ai_usage, claimed in one statement (D1 runs them one at a time), and
+// the row holds what the call can cost at most (estimateAiCostUsd), so the
+// limit sees the calls still running. The answer's real cost replaces it
+// (recordAiUsage with the slot's id); a call that ends without one removes it.
+// A row left by a Worker that died keeps its slot for AI_PENDING_MINUTES and
+// its reservation for good: the call may well have been billed. A call over
+// the parallel limit waits in line for a free slot (five food photos in a row,
+// the coach's texts beside them) and is refused only after AI_SLOT_WAIT_MS.
+// The returned release function carries the row's id.
 export const AI_PARALLEL_CALLS = 3;
 export const AI_SLOT_WAIT_MS = 90000;
 const AI_PENDING_MINUTES = 5;
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-export async function claimAiSlot(env, { waitMs = AI_SLOT_WAIT_MS, pollMs = 800 } = {}) {
+export async function claimAiSlot(env, { waitMs = AI_SLOT_WAIT_MS, pollMs = 800, feature = null, reserveUsd = 0 } = {}) {
   if (!tracked(env) || (aiMonthlyLimitUsd(env) == null && aiDailyLimitUsd(env) == null)) return async () => {};
   await ensureAiUsage(env.DB);
-  const claim = () => env.DB.prepare(`INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) SELECT ?, ?, 'pending', 'pending', 0
+  const reserve = Math.max(0, n(reserveUsd) || 0);
+  const claim = () => env.DB.prepare(`INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) SELECT ?, ?, ?, 'pending', ?
     WHERE (SELECT COUNT(*) FROM ai_usage WHERE user_id = ? AND model = 'pending' AND created_at > datetime('now', '-${AI_PENDING_MINUTES} minutes')) < ? RETURNING id`)
-    .bind(env.USER_ID, localToday(), env.USER_ID, AI_PARALLEL_CALLS).first();
+    .bind(env.USER_ID, localToday(), feature || 'pending', reserve, env.USER_ID, AI_PARALLEL_CALLS).first();
   const deadline = Date.now() + Math.max(0, waitMs);
   let claimed = await claim();
   while (!claimed && Date.now() < deadline) {
@@ -114,7 +123,26 @@ export async function claimAiSlot(env, { waitMs = AI_SLOT_WAIT_MS, pollMs = 800 
     claimed = await claim();
   }
   if (!claimed) throw limitError(L("Ještě běží jiné dotazy na AI. Zkus to za chvíli.", "Other AI requests are still running. Try again in a moment."));
-  return () => env.DB.prepare("DELETE FROM ai_usage WHERE id = ? AND user_id = ? AND model = 'pending'").bind(claimed.id, env.USER_ID).run().catch(error => console.error("AI slot not released", error?.message || error));
+  const release = () => env.DB.prepare("DELETE FROM ai_usage WHERE id = ? AND user_id = ? AND model = 'pending'").bind(claimed.id, env.USER_ID).run().catch(error => console.error("AI slot not released", error?.message || error));
+  release.id = claimed.id;
+  return release;
+}
+
+// The most a call can cost: its input (about 3 characters a token, an image
+// as IMAGE_TOKENS), all of max_output_tokens and a few web searches, at the
+// model's price (an unknown model at gpt-6-sol's). Held while the call runs.
+const IMAGE_TOKENS = 1600, RESERVED_WEB_SEARCHES = 3;
+export function estimateAiCostUsd(model, { instructions = "", input = "", maxOutputTokens = 0, tools = null } = {}) {
+  let chars = 0, images = 0;
+  const walk = value => {
+    if (typeof value === "string") { if (value.startsWith("data:")) images++; else chars += value.length; }
+    else if (Array.isArray(value)) value.forEach(walk);
+    else if (value && typeof value === "object") Object.values(value).forEach(walk);
+  };
+  walk(instructions); walk(input);
+  const usage = { input_tokens: Math.ceil(chars / 3) + images * IMAGE_TOKENS, output_tokens: Math.max(0, n(maxOutputTokens) || 0) };
+  const searches = Array.isArray(tools) && tools.some(tool => String(tool?.type || "").startsWith("web_search")) ? RESERVED_WEB_SEARCHES : 0;
+  return usageCost(model, usage, searches) ?? usageCost("gpt-6-sol", usage, searches) ?? 0;
 }
 
 function limitError(message) {
@@ -125,15 +153,31 @@ function limitError(message) {
   return error;
 }
 
-// Best effort: a failed write never costs the user the answer.
-export async function recordAiUsage(env, { feature = null, model = null, usage = null, webSearches = 0 } = {}) {
+// A call that broke off after it was sent (a stream cut short, a timeout, a
+// lost connection) leaves no usage, yet the model may have worked on it:
+// its reservation stays as its cost. Best effort, as recordAiUsage.
+export async function keepAiReservation(env, slotId, { feature = null, model = null } = {}) {
+  if (!tracked(env) || !slotId) return;
+  await env.DB.prepare("UPDATE ai_usage SET feature = ?, model = ? WHERE id = ? AND user_id = ? AND model = 'pending'")
+    .bind(feature, model || "unknown", slotId, env.USER_ID).run().catch(error => console.error("AI reservation not kept", error?.message || error));
+}
+
+// Best effort: a failed write never costs the user the answer. slotId: the
+// call's pending row (claimAiSlot), which becomes the record.
+export async function recordAiUsage(env, { feature = null, model = null, usage = null, webSearches = 0, slotId = null } = {}) {
   if (!tracked(env) || !usage) return;
   try {
     await ensureAiUsage(env.DB);
     // An unknown model counts at the default model's price, so it cannot slip past the limit.
     const cost = usageCost(model, usage, webSearches) ?? usageCost("gpt-6-sol", usage, webSearches) ?? 0;
+    const values = [feature, model, n(usage.input_tokens) || 0, n(usage.output_tokens) || 0, cost, cachedTokens(usage)];
+    if (slotId) {
+      const settled = await env.DB.prepare("UPDATE ai_usage SET feature = ?, model = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, cached_tokens = ? WHERE id = ? AND user_id = ? AND model = 'pending'")
+        .bind(...values, slotId, env.USER_ID).run();
+      if (Number(settled?.meta?.changes) > 0) return;
+    }
     await env.DB.prepare("INSERT INTO ai_usage (user_id, day, feature, model, input_tokens, output_tokens, cost_usd, cached_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(env.USER_ID, localToday(), feature, model, n(usage.input_tokens) || 0, n(usage.output_tokens) || 0, cost, cachedTokens(usage)).run();
+      .bind(env.USER_ID, localToday(), ...values).run();
   } catch (error) {
     console.error("AI usage not recorded", error?.message || error);
   }

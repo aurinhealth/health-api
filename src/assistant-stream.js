@@ -44,15 +44,21 @@ export async function readOpenAIStream(response,onText){
 
 // The browser receives readable answer updates; proposed changes are published
 // only in the final event, after server validation and draft persistence.
-export function assistantStreamResponse(work){
+// waitUntil (ctx.waitUntil) keeps the work going when the app hangs up, so the
+// answer is still saved, counted and billed.
+export function assistantStreamResponse(work,{waitUntil=null}={}){
   const encoder=new TextEncoder();let cancelled=false;
   const stream=new ReadableStream({
-    async start(controller){
+    start(controller){
       const send=data=>{if(!cancelled)controller.enqueue(encoder.encode(JSON.stringify(data)+'\n'));};
-      try{send({type:'start'});const result=await work(answer=>send({type:'answer',answer}),message=>send({type:'progress',message}));send({type:'done',result});}
-      catch(error){console.error('Streaming assistant failed',error.message);// What the AI service said is shown (wrong model, key, quota); internal errors are not.
-        send({type:'error',message:error?.limit?error.message:L('AI odpověď se nepodařilo dokončit', 'The AI answer couldn\'t be finished')+(error?.ai?' ('+String(error.message).slice(0,300)+')':'')+L('. Zkus to znovu.', '. Try again.')});}
-      finally{if(!cancelled)controller.close();}
+      const done=(async()=>{
+        try{send({type:'start'});const result=await work(answer=>send({type:'answer',answer}),message=>send({type:'progress',message}));send({type:'done',result});}
+        catch(error){console.error('Streaming assistant failed',error.message);// What the AI service said is shown (wrong model, key, quota); internal errors are not.
+          send({type:'error',message:error?.limit?error.message:L('AI odpověď se nepodařilo dokončit', 'The AI answer couldn\'t be finished')+(error?.ai?' ('+String(error.message).slice(0,300)+')':'')+L('. Zkus to znovu.', '. Try again.')});}
+        finally{if(!cancelled)controller.close();}
+      })();
+      waitUntil?.(done);
+      return done;
     },cancel(){cancelled=true;}
   });
   return new Response(stream,{headers:{'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-store, no-transform','X-Content-Type-Options':'nosniff'}});
