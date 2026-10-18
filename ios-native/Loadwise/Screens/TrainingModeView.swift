@@ -985,10 +985,12 @@ struct TrainingModeView: View {
     }
 
     /// The plan as changed in "Upravit plán": saved, and back on the first
-    /// exercise with a set left.
+    /// exercise with a set left. A rest under way goes on (looking at the
+    /// plan or changing it is no reason to cut it short), unless nothing is
+    /// left to do after it.
     private func saveEdited(_ edited: GymDay, focus: String? = nil) async {
         day = edited
-        restEnd = nil
+        if !edited.exercises.contains(where: { $0.sets.contains { !$0.done } }) { restEnd = nil }
         startAtFirstOpen()
         // "Přejít na cvik": that one, whatever is left before it.
         if let focus, let at = edited.exercises.firstIndex(where: { $0.id == focus }) { index = at }
