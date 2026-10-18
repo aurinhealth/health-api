@@ -62,20 +62,41 @@ const STRETCHES = [
   { id: 'cat', photo: 'Cat_Stretch', muscles: ['core', 'lower_back'], seconds: 30, sides: false,
     cs: 'Kočičí hřbet', en: 'Cat stretch',
     stepsCs: ['Postav se na všechny čtyři, ruce pod rameny, kolena pod boky.', 'Vtáhni břicho a vyhrb záda od beder až po krk.', 'Hlavu nech volně klesnout a dýchej do zad.'],
-    stepsEn: ['Get on all fours, hands under shoulders, knees under hips.', 'Pull your belly in and round your back from the lower back to the neck.', 'Let your head drop and breathe into your back.'] }
+    stepsEn: ['Get on all fours, hands under shoulders, knees under hips.', 'Pull your belly in and round your back from the lower back to the neck.', 'Let your head drop and breathe into your back.'] },
+  // From the MoveKit list (names only; our own texts). `needs`: stations the move needs at the active place.
+  { id: 'adductor_stretch', video: '9Hv2TztJwGI', muscles: ['adductors', 'glutes'], seconds: 30, sides: true,
+    cs: 'Protažení třísel', en: 'Adductor stretch',
+    stepsCs: ['Postav se do širokého stoje, špičky mírně ven.', 'Přenes váhu na jednu nohu a pokrč ji, druhá zůstane natažená.', 'Zastav se, až ucítíš tah na vnitřní straně natažené nohy, záda drž rovná.'],
+    stepsEn: ['Stand with your feet wide, toes turned out a little.', 'Shift your weight onto one leg and bend it, keeping the other straight.', 'Stop when you feel a pull along the inside of the straight leg; keep your back flat.'] },
+  { id: 'abs_stretch', video: 'GKewpymSBjM', muscles: ['core'], seconds: 30, sides: false,
+    cs: 'Protažení břicha', en: 'Abdominal stretch',
+    stepsCs: ['Lehni si na břicho, dlaně polož vedle hrudníku.', 'Pomalu se vytlač do napjatých paží, boky zůstanou na zemi.', 'Ramena drž dole od uší a dýchej do břicha.'],
+    stepsEn: ['Lie on your front with your palms beside your chest.', 'Slowly press up into straight arms while your hips stay on the floor.', 'Keep your shoulders away from your ears and breathe into your belly.'] },
+  { id: 'wall_shoulder_opener', video: '2e4yBgr2pZI', muscles: ['chest', 'shoulders', 'biceps'], seconds: 30, sides: true,
+    cs: 'Otevření ramene u zdi', en: 'Wall shoulder opener',
+    stepsCs: ['Postav se bokem ke zdi a dlaň natažené paže opři o zeď ve výšce ramen.', 'Pomalu otáčej trup od zdi, dokud neucítíš tah v hrudníku a přední části ramene.', 'Rameno drž dole a nepřetahuj, tah má být příjemný.'],
+    stepsEn: ['Stand side-on to a wall and put the palm of your straight arm on it at shoulder height.', 'Slowly turn your torso away until you feel a pull across the chest and the front of the shoulder.', 'Keep the shoulder down and don\'t force it; the pull should feel easy.'] },
+  { id: 'dead_hang', video: '3CEmHJXbNpc', needs: ['pullup_bar'], muscles: ['back', 'shoulders', 'forearms'], seconds: 20, sides: false,
+    cs: 'Vis na hrazdě', en: 'Dead hang',
+    stepsCs: ['Chyť hrazdu nadhmatem o něco šířeji než ramena.', 'Zvedni nohy a nech tělo volně viset na natažených pažích.', 'Dýchej klidně a seskoč dřív, než ti povolí úchop.'],
+    stepsEn: ['Take the bar overhand, a little wider than your shoulders.', 'Lift your feet and let your body hang freely on straight arms.', 'Breathe calmly and step down before your grip gives out.'] },
+  { id: 'foam_roller_thoracic', video: '9Y11Kc0E0og', needs: ['foam_roller'], muscles: ['back', 'traps', 'shoulders'], seconds: 40, sides: false,
+    cs: 'Hrudní páteř na válci', en: 'Thoracic extension on a foam roller',
+    stepsCs: ['Lehni si na záda s válcem napříč pod lopatkami, kolena pokrč.', 'Ruce dej za hlavu a pomalu se zakloň přes válec, bedra zůstanou na místě.', 'Vrať se, posuň válec o kousek výš a opakuj.'],
+    stepsEn: ['Lie on your back with the roller across your shoulder blades and your knees bent.', 'Put your hands behind your head and slowly lean back over the roller without moving your lower back.', 'Come back up, move the roller a little higher and repeat.'] }
 ];
 const FINISH = { id: 'child', photo: 'Childs_Pose', muscles: ['back', 'lower_back'], seconds: 45, sides: false,
   cs: 'Dětská pozice', en: "Child's pose",
   stepsCs: ['Z pozice na všech čtyřech si sedni hýžděmi na paty.', 'Paže nech natažené před sebou na zemi a čelo polož na podložku.', 'Zhluboka dýchej a s každým výdechem povol záda.'],
   stepsEn: ['From all fours, sit your hips back onto your heels.', 'Leave your arms stretched out in front and rest your forehead down.', 'Breathe deeply and let your back relax on every breath out.'] };
-// Warm-up: a few minutes of easy cardio, then dynamic moves for the muscles
-// the session works (moved through, not held).
+// Warm-up: dynamic moves for the muscles
+// the session works (moved through, not held); CARDIO is the older warm-up opener.
 const CARDIO = { id: 'cardio', photo: 'Bicycling_Stationary', muscles: [], seconds: 240, sides: false,
   cs: 'Lehké kardio', en: 'Easy cardio',
   stepsCs: ['Rotoped, veslař nebo rychlá chůze do kopce.', 'Tempo, při kterém ještě zvládneš mluvit.', 'Poslední minutu trochu přidej, ať se zahřeješ.'],
   stepsEn: ['Bike, rower or a brisk uphill walk.', 'A pace at which you can still talk.', 'Pick it up a little in the last minute to get warm.'] };
 const WARMUPS = [
-  { id: 'worlds_greatest', photo: 'Worlds_Greatest_Stretch', muscles: ['quads', 'glutes', 'hamstrings', 'back'], seconds: 30, sides: true,
+  { id: 'worlds_greatest', video: '-CiWQ2IvY34', photo: 'Worlds_Greatest_Stretch', muscles: ['quads', 'glutes', 'hamstrings', 'back'], seconds: 30, sides: true,
     cs: 'Výpad s rotací', en: "World's greatest stretch",
     stepsCs: ['Udělej hluboký výpad a ruce opři vedle přední nohy.', 'Loket stejné strany přibliž k chodidlu, pak paži vytoč ke stropu.', 'Vrať se a pomalu opakuj, pohyb má být plynulý.'],
     stepsEn: ['Step into a deep lunge with your hands beside the front foot.', 'Bring the same-side elbow towards the foot, then rotate that arm to the ceiling.', 'Come back and repeat slowly in one smooth movement.'] },
@@ -83,11 +104,11 @@ const WARMUPS = [
     cs: 'Dřep s vlastní vahou', en: 'Bodyweight squat',
     stepsCs: ['Nohy na šířku ramen, špičky lehce ven.', 'Pomalu do dřepu tak hluboko, jak ti to jde s rovnými zády.', 'Asi 10–12 opakování v klidném tempu.'],
     stepsEn: ['Feet shoulder-width apart, toes slightly out.', 'Squat down slowly as deep as you can with a straight back.', 'About 10–12 reps at an easy pace.'] },
-  { id: 'leg_swings', photo: 'Front_Leg_Raises', muscles: ['hamstrings', 'glutes', 'quads'], seconds: 20, sides: true,
+  { id: 'leg_swings', video: 'ajxRz9Dx4BM', photo: 'Front_Leg_Raises', muscles: ['hamstrings', 'glutes', 'quads'], seconds: 20, sides: true,
     cs: 'Kmihy nohou', en: 'Leg swings',
     stepsCs: ['Postav se bokem k opoře a chyť se jí.', 'Volnou nohu švihej dopředu a dozadu, rozsah zvětšuj postupně.', 'Trup drž rovně, pohyb vychází z kyčle.'],
     stepsEn: ['Stand side-on to a support and hold it.', 'Swing the free leg forward and back, increasing the range bit by bit.', 'Keep the torso still; the movement comes from the hip.'] },
-  { id: 'hip_circles', photo: 'Standing_Hip_Circles', muscles: ['glutes', 'abductors', 'adductors'], seconds: 20, sides: true,
+  { id: 'hip_circles', video: 'aA0VqayOb70', photo: 'Standing_Hip_Circles', muscles: ['glutes', 'abductors', 'adductors'], seconds: 20, sides: true,
     cs: 'Kroužení kyčlí', en: 'Standing hip circles',
     stepsCs: ['Stoupni si na jednu nohu a chyť se opory.', 'Zvedni koleno do pravého úhlu a opisuj s ním velký kruh do strany a zpět.', 'Po polovině času změň směr.'],
     stepsEn: ['Stand on one leg holding a support.', 'Lift the knee to 90 degrees and draw a big circle out to the side and back.', 'Change direction halfway.'] },
@@ -99,7 +120,7 @@ const WARMUPS = [
     cs: 'Housenka', en: 'Inchworm',
     stepsCs: ['Ze stoje se předkloň a dej ruce na zem.', 'Ručkuj dopředu do polohy kliku, pak nohama krátkými kroky za rukama.', 'Zvedni se a opakuj, asi 5×.'],
     stepsEn: ['From standing, bend forward and put your hands on the floor.', 'Walk the hands out to a push-up position, then walk the feet in after them.', 'Stand up and repeat, about 5 times.'] },
-  { id: 'arm_circles', photo: 'Arm_Circles', muscles: ['shoulders', 'side_delts', 'rear_delts', 'chest', 'triceps', 'biceps'], seconds: 30, sides: false,
+  { id: 'arm_circles', video: 'JfJn-e2UYc4', photo: 'Arm_Circles', muscles: ['shoulders', 'side_delts', 'rear_delts', 'chest', 'triceps', 'biceps'], seconds: 30, sides: false,
     cs: 'Kroužení pažemi', en: 'Arm circles',
     stepsCs: ['Upaž do stran ve výšce ramen.', 'Začni malými kruhy a postupně je zvětšuj.', 'Po polovině času toč na druhou stranu.'],
     stepsEn: ['Raise your arms out to the sides at shoulder height.', 'Start with small circles and make them bigger.', 'Reverse halfway.'] },
@@ -111,10 +132,87 @@ const WARMUPS = [
     cs: 'Roztahování gumy', en: 'Band pull-apart',
     stepsCs: ['Chyť gumu na šířku ramen, paže před sebou.', 'Roztáhni ji k hrudníku stažením lopatek.', 'Pomalu povol, asi 15×.'],
     stepsEn: ['Hold a band shoulder-width apart, arms in front of you.', 'Pull it apart to your chest by squeezing the shoulder blades.', 'Return slowly, about 15 times.'] },
-  { id: 'cat_cow', photo: 'Cat_Stretch', muscles: ['core', 'lower_back', 'back'], seconds: 30, sides: false,
+  { id: 'cat_cow', video: '1cs3SKwQZpM', photo: 'Cat_Stretch', muscles: ['core', 'lower_back', 'back'], seconds: 30, sides: false,
     cs: 'Kočka a kráva', en: 'Cat-cow',
     stepsCs: ['Postav se na všechny čtyři.', 'S výdechem vyhrb záda, s nádechem je prohni a hlavu zvedni.', 'Plynule střídej v rytmu dechu.'],
-    stepsEn: ['Get on all fours.', 'Round your back as you breathe out, arch it and lift your head as you breathe in.', 'Alternate smoothly with your breath.'] }
+    stepsEn: ['Get on all fours.', 'Round your back as you breathe out, arch it and lift your head as you breathe in.', 'Alternate smoothly with your breath.'] },
+  // From the MoveKit list (names only; our own texts). `needs`: stations the move needs at the active place.
+  { id: 'dumbbell_halo', video: 'kYo2fBLGpQs', needs: ['dumbbells'], muscles: ['shoulders', 'traps', 'triceps', 'core'], seconds: 30, sides: false,
+    cs: 'Kroužení jednoručkou kolem hlavy', en: 'Dumbbell halo',
+    stepsCs: ['Lehkou jednoručku drž oběma rukama za hlavičku před obličejem.', 'Pomalu s ní obkroužíš hlavu těsně kolem uší a týla.', 'Trup drž zpevněný a po několika kruzích změň směr.'],
+    stepsEn: ['Hold a light dumbbell by its head with both hands in front of your face.', 'Slowly circle it around your head, close to your ears and the back of your head.', 'Keep your trunk braced and change direction after a few circles.'] },
+  { id: 'goblet_prying', video: '28YoUHBMCyA', needs: ['dumbbells'], muscles: ['adductors', 'glutes', 'quads'], seconds: 40, sides: false,
+    cs: 'Výdrž v hlubokém dřepu s jednoručkou', en: 'Goblet squat prying hold',
+    stepsCs: ['Jednoručku drž svisle u hrudníku a sjeď do hlubokého dřepu.', 'Lokty zapři zevnitř o kolena a jemně je roztlačuj.', 'Pomalu přenášej váhu ze strany na stranu, paty zůstanou na zemi.'],
+    stepsEn: ['Hold a dumbbell upright at your chest and sink into a deep squat.', 'Put your elbows inside your knees and gently push them apart.', 'Slowly shift your weight from side to side with your heels down.'] },
+  { id: 'band_dislocates', video: 'riVxa9By-pM', needs: ['resistance_bands'], muscles: ['shoulders', 'chest', 'rear_delts'], seconds: 30, sides: false,
+    cs: 'Přetahování gumy za hlavu', en: 'Band shoulder dislocates',
+    stepsCs: ['Chyť gumu široko před boky, paže natažené.', 'Plynule ji přenes přes hlavu až za záda a zase zpět.', 'Když to drhne, chyť ji šířeji, žebra drž dole.'],
+    stepsEn: ['Hold a band wide in front of your hips with straight arms.', 'Bring it smoothly over your head to behind your back and back again.', 'If it feels stuck, take a wider grip; keep your ribs down.'] },
+  { id: 'band_ankle', video: 'jI1WkcXZde4', needs: ['resistance_bands'], muscles: ['calves', 'quads'], seconds: 30, sides: true,
+    cs: 'Mobilizace kotníku s gumou', en: 'Banded ankle mobilisation',
+    stepsCs: ['Gumu uchyť nízko za sebou a smyčku dej přes přední stranu kotníku.', 'Postav se do mírného výpadu, chodidlo vpředu celé na zemi.', 'Posouvej koleno dopředu nad špičku a zpět, pata zůstane dole.'],
+    stepsEn: ['Anchor a band low behind you and loop it over the front of your ankle.', 'Step into a short lunge with the front foot flat.', 'Move the knee forward over the toes and back; keep the heel down.'] },
+  { id: 'hip_switch_90_90', video: 'HUZimFZJZWU', muscles: ['glutes', 'abductors', 'adductors'], seconds: 40, sides: false,
+    cs: 'Přetáčení kolen 90/90', en: '90/90 hip switches',
+    stepsCs: ['Sedni si s pokrčenými koleny, chodidla na zemi šířeji než boky, ruce opři za sebou.', 'Obě kolena polož na jednu stranu, až budou obě nohy v pravém úhlu.', 'Pomalu je přetoč na druhou stranu a střídej.'],
+    stepsEn: ['Sit with your knees bent, feet wider than your hips and hands behind you.', 'Lower both knees to one side until both legs form right angles.', 'Slowly swing them over to the other side and keep alternating.'] },
+  { id: 'jefferson_curl', video: 'C44fjSS7X5k', muscles: ['hamstrings', 'lower_back'], seconds: 30, sides: false,
+    cs: 'Postupné rolování páteře', en: 'Bodyweight Jefferson curl',
+    stepsCs: ['Stoupni si rovně, bradu přitáhni k hrudníku.', 'Obratel po obratli se sroluj dolů k zemi, kolena jen lehce povol.', 'Stejně pomalu se vyroluj nahoru, bez váhy a jen kam to jde bez bolesti.'],
+    stepsEn: ['Stand tall and tuck your chin to your chest.', 'Roll down one vertebra at a time towards the floor, knees only slightly soft.', 'Roll back up just as slowly, with no weight and only as far as is pain-free.'] },
+  { id: 'squat_to_stand', video: 'G5iP1-kE4-4', muscles: ['hamstrings', 'adductors', 'glutes', 'quads'], seconds: 40, sides: false,
+    cs: 'Z předklonu do dřepu', en: 'Squat to stand',
+    stepsCs: ['Předkloň se a chyť se za špičky.', 'Drž se a sjeď do hlubokého dřepu, lokty mezi koleny, hrudník nahoru.', 'Zvedni boky a natáhni nohy, ruce stále na špičkách, a opakuj.'],
+    stepsEn: ['Bend forward and hold your toes.', 'Keep hold and drop into a deep squat, elbows between the knees and chest up.', 'Lift your hips and straighten your legs with your hands still on your toes, then repeat.'] },
+  { id: 'stick_pass_through', video: 'YW20zO__f_c', muscles: ['shoulders', 'chest', 'rear_delts'], seconds: 30, sides: false,
+    cs: 'Přetahování tyče za hlavu', en: 'Broomstick pass-throughs',
+    stepsCs: ['Tyč nebo násadu drž širokým úchopem před stehny.', 'S napjatými pažemi ji přenes přes hlavu za záda a zpět.', 'Pohyb veď pomalu, žebra drž dole a záda neprohýbej.'],
+    stepsEn: ['Hold a stick or broom handle with a wide grip in front of your thighs.', 'With straight arms bring it over your head to behind your back and back.', 'Move slowly, keep your ribs down and don\'t arch your back.'] },
+  { id: 'frog_rock_back', video: 'iM3EDuJlpDw', muscles: ['adductors', 'glutes'], seconds: 30, sides: false,
+    cs: 'Žába s houpáním', en: 'Frog rock-backs',
+    stepsCs: ['Klekni na předloktí a roztáhni kolena co nejšíř, chodidla ven.', 'Záda drž rovná a pomalu posouvej boky dozadu k patám.', 'Vrať se dopředu a opakuj, tah má být ve vnitřních stehnech.'],
+    stepsEn: ['Kneel on your forearms with your knees as wide as is comfortable, feet out.', 'Keep your back flat and slowly push your hips back towards your heels.', 'Come forward again and repeat; feel it in your inner thighs.'] },
+  { id: 'hip_flexor_rock', video: 'kRw1NX1nfVE', muscles: ['quads', 'glutes'], seconds: 30, sides: true,
+    cs: 'Houpání v kleku na jednom koleni', en: 'Half-kneeling hip flexor rock',
+    stepsCs: ['Klekni na jedno koleno, druhou nohu měj vpředu chodidlem na zemi.', 'Podsaď pánev a zhoupni boky dopředu, až ucítíš tah v kyčli zadní nohy.', 'Vrať se a v klidném rytmu opakuj.'],
+    stepsEn: ['Kneel on one knee with the other foot flat in front.', 'Tuck your pelvis and rock your hips forward until you feel the front of the back hip.', 'Rock back and repeat at an easy pace.'] },
+  { id: 'hip_hinge_drill', video: 'ctMrDzw8LYQ', muscles: ['hamstrings', 'glutes', 'lower_back'], seconds: 30, sides: false,
+    cs: 'Nácvik předklonu z kyčlí', en: 'Hip hinge drill',
+    stepsCs: ['Stoupni si na šířku boků, kolena lehce pokrč, ruce na boky nebo tyč podél zad.', 'Posouvej boky dozadu a trup sklápěj s rovnými zády.', 'Jakmile ucítíš tah pod hýžděmi, vrať se vzpřímeně stisknutím hýždí.'],
+    stepsEn: ['Stand hip-width apart with soft knees, hands on hips or a stick along your back.', 'Push your hips back and tip your torso forward with a flat back.', 'When you feel the backs of your thighs, squeeze your glutes to stand tall.'] },
+  { id: 'open_book', video: 'rDviWORCWEw', muscles: ['back', 'chest', 'shoulders'], seconds: 30, sides: true,
+    cs: 'Otevírání knihy', en: 'Open book rotation',
+    stepsCs: ['Lehni si na bok, kolena pokrč před sebe a paže natáhni před hrudník.', 'Horní paži přenes obloukem na druhou stranu a hlavou ji sleduj.', 'Kolena drž u sebe na zemi a vrať se zpět.'],
+    stepsEn: ['Lie on your side with knees bent in front and arms straight in front of your chest.', 'Sweep the top arm over to the other side and follow it with your eyes.', 'Keep your knees together on the floor and come back.'] },
+  { id: 'quadruped_rotation', video: 'z2zv526I7M8', muscles: ['back', 'shoulders'], seconds: 30, sides: true,
+    cs: 'Rotace na všech čtyřech', en: 'Quadruped thoracic rotation',
+    stepsCs: ['Postav se na všechny čtyři a jednu ruku dej za hlavu.', 'Loket stoč dolů k opačné ruce a pak ho vytoč ke stropu.', 'Pohyb veď z hrudní páteře, boky zůstanou na místě.'],
+    stepsEn: ['Get on all fours and put one hand behind your head.', 'Turn the elbow down towards the other hand, then up towards the ceiling.', 'Move from your upper back; your hips stay still.'] },
+  { id: 'single_leg_balance', video: '-MUBv4YfNX8', muscles: ['calves', 'glutes'], seconds: 30, sides: true,
+    cs: 'Stoj na jedné noze', en: 'Single-leg balance',
+    stepsCs: ['Stoupni si na jednu nohu, koleno lehce povol.', 'Druhou nohu zvedni a drž rovnováhu, pánev drž rovně.', 'Když je to snadné, zavři oči nebo otáčej hlavou.'],
+    stepsEn: ['Stand on one leg with a soft knee.', 'Lift the other foot and hold your balance with your pelvis level.', 'When it gets easy, close your eyes or turn your head.'] },
+  { id: 'single_leg_reach', video: 'TShLyAkKU9c', muscles: ['glutes', 'hamstrings', 'quads'], seconds: 30, sides: true,
+    cs: 'Stoj na jedné noze s dosahem', en: 'Single-leg balance reach',
+    stepsCs: ['Stoupni si na jednu nohu, koleno lehce pokrč.', 'Volnou nohou pomalu sahej dopředu, do strany a dozadu.', 'Koleno stojné nohy drž nad chodidlem, nepadá dovnitř.'],
+    stepsEn: ['Stand on one leg with the knee slightly bent.', 'Slowly reach the free foot forward, out to the side and back.', 'Keep the standing knee over your foot; don\'t let it fall inwards.'] },
+  { id: 'spiderman', video: 'ZGg8cHXgPAY', muscles: ['adductors', 'quads', 'glutes', 'back'], seconds: 30, sides: true,
+    cs: 'Spiderman výpad', en: 'Spiderman stretch',
+    stepsCs: ['Z pozice vzporu přenes jednu nohu vedle ruky na stejné straně.', 'Boky spusť k zemi, zadní noha zůstane natažená.', 'Vrať nohu zpět a vyměň strany.'],
+    stepsEn: ['From a push-up position, step one foot outside the hand on the same side.', 'Lower your hips towards the floor with the back leg straight.', 'Step back and switch sides.'] },
+  { id: 'step_down_balance', video: 'Or4C-UQ63Xc', needs: ['plyo_box'], muscles: ['quads', 'glutes'], seconds: 30, sides: true,
+    cs: 'Sestup z bedny do rovnováhy', en: 'Step-down to balance',
+    stepsCs: ['Stoupni si na nízkou bednu nebo schod.', 'Pomalu spusť jednu nohu k zemi, koleno stojné nohy míří nad špičku.', 'Patou se jen dotkni a vrať se nahoru do stoje na jedné noze.'],
+    stepsEn: ['Stand on a low box or step.', 'Slowly lower one foot towards the floor with the standing knee over your toes.', 'Just touch the heel down and come back up to stand on one leg.'] },
+  { id: 'walking_knee_hugs', video: 'GVU4paANHoE', muscles: ['glutes', 'hamstrings', 'lower_back'], seconds: 30, sides: false,
+    cs: 'Přitahování kolen v chůzi', en: 'Walking knee hugs',
+    stepsCs: ['Při chůzi zvedni koleno a obejmi ho oběma rukama.', 'Přitáhni ho k hrudníku a vytáhni se na špičku stojné nohy.', 'Pusť, udělej krok a vyměň nohy.'],
+    stepsEn: ['As you walk, lift one knee and hug it with both hands.', 'Pull it to your chest and rise onto the toes of the standing leg.', 'Let go, step forward and switch legs.'] },
+  { id: 'scapular_pullup', video: 'iKnjSB9VIGo', needs: ['pullup_bar'], muscles: ['back', 'traps', 'rear_delts'], seconds: 30, sides: false,
+    cs: 'Stahování lopatek ve visu', en: 'Scapular pull-up',
+    stepsCs: ['Zavěs se na hrazdu nadhmatem s nataženými pažemi.', 'Bez pokrčení loktů stáhni lopatky dolů, tělo se trochu zvedne.', 'Pomalu povol zpátky do visu a opakuj.'],
+    stepsEn: ['Hang from the bar overhand with straight arms.', 'Without bending your elbows, pull your shoulder blades down so your body rises a little.', 'Slowly let go back into the hang and repeat.'] }
 ];
 // Moving into the next move, and between the sides.
 const TRANSITION_SECONDS = 5;
@@ -131,6 +229,11 @@ function workedMuscles(rows, muscleOf) {
   }
   return sets;
 }
+// The moves possible at the place: with `stations` (the active place's), a
+// move that needs a station is left out without it.
+const possible = (catalog, stations) => Array.isArray(stations)
+  ? catalog.filter(s => (s.needs || []).every(id => stations.includes(id)))
+  : catalog.filter(s => !s.needs);
 // The catalog's moves that fit the worked muscles best (a move's first muscle counts fully).
 function bestFor(catalog, sets, count) {
   const score = s => s.muscles.reduce((sum, m, i) => sum + (sets.get(m) || 0) * (i ? 0.5 : 1), 0);
@@ -144,24 +247,29 @@ function routine(items) {
     seconds,
     items: items.map(s => ({
       id: s.id, name: L(s.cs, s.en), seconds: s.seconds, sides: s.sides, rounds: s.rounds,
-      steps: L(s.stepsCs, s.stepsEn), photos: [0, 1].map(i => PHOTO_BASE + s.photo + '/' + i + '.jpg')
+      steps: L(s.stepsCs, s.stepsEn), photos: s.photo ? [0, 1].map(i => PHOTO_BASE + s.photo + '/' + i + '.jpg') : [],
+      ...(s.video ? { video: s.video } : {})
     }))
   };
 }
 
 /** Shorter routines for a shorter session, so most of the time stays for the lifting. */
 export function routineSize(minutes) {
-  if (minutes <= 30) return { warmup: { count: 2, cardioSeconds: 60 }, stretching: { count: 2, doubled: 0 } };
-  if (minutes <= 45) return { warmup: { count: 2, cardioSeconds: 120 }, stretching: { count: 2, doubled: 0 } };
-  if (minutes <= 75) return { warmup: { count: 3, cardioSeconds: 180 }, stretching: { count: 3, doubled: 1 } };
-  return { warmup: {}, stretching: {} };
+  if (minutes <= 30) return { warmup: { count: 2, cardioSeconds: 60 }, stretching: { count: 2, doubled: 0 }, cardio: { start: 5, end: 5 } };
+  if (minutes <= 45) return { warmup: { count: 2, cardioSeconds: 120 }, stretching: { count: 2, doubled: 0 }, cardio: { start: 5, end: 10 } };
+  if (minutes <= 75) return { warmup: { count: 3, cardioSeconds: 180 }, stretching: { count: 3, doubled: 1 }, cardio: { start: 10, end: 10 } };
+  return { warmup: {}, stretching: {}, cardio: { start: 10, end: 15 } };
 }
 
-/** The warm-up for a session's work sets: easy cardio (unless `cardio` is false) and `count` dynamic moves. Null without work sets. */
-export function warmupFor(rows, muscleOf, { count = 4, cardioSeconds = CARDIO.seconds, cardio = true } = {}) {
+/**
+ * The warm-up for a session's work sets: `count` dynamic moves (with easy
+ * cardio first only when `cardio` is true; the cardio is its own part now,
+ * see cardioFor). Null without work sets.
+ */
+export function warmupFor(rows, muscleOf, { count = 4, cardioSeconds = CARDIO.seconds, cardio = false, stations } = {}) {
   const sets = workedMuscles(rows, muscleOf);
   if (!sets.size) return null;
-  return routine([...(cardio ? [{ ...CARDIO, seconds: cardioSeconds, rounds: 1 }] : []), ...bestFor(WARMUPS, sets, count).map(s => ({ ...s, rounds: 1 }))]);
+  return routine([...(cardio ? [{ ...CARDIO, seconds: cardioSeconds, rounds: 1 }] : []), ...bestFor(possible(WARMUPS, stations), sets, count).map(s => ({ ...s, rounds: 1 }))]);
 }
 
 /**
@@ -169,41 +277,85 @@ export function warmupFor(rows, muscleOf, { count = 4, cardioSeconds = CARDIO.se
  * main muscle): the muscles with the most sets first, `count` stretches and
  * the child's pose. Null without any work set.
  */
-export function stretchingFor(rows, muscleOf, { count = 4, doubled = 2 } = {}) {
+export function stretchingFor(rows, muscleOf, { count = 4, doubled = 2, stations } = {}) {
   const sets = workedMuscles(rows, muscleOf);
   if (!sets.size) return null;
-  const picked = bestFor(STRETCHES, sets, count).map((s, i) => ({ ...s, rounds: i < doubled ? 2 : 1 }));
+  const picked = bestFor(possible(STRETCHES, stations), sets, count).map((s, i) => ({ ...s, rounds: i < doubled ? 2 : 1 }));
   return routine([...picked, { ...FINISH, rounds: 1 }]);
 }
 
-// The warm-up and the stretching live in the stored plan's sixth row
-// (values[5]), which the older layout left empty:
-// ["Rozcvička a protažení", "{warmup:{minutes,items}, stretching:{minutes,items}}"].
+// Cardio at the start, at the end or both (Nastavení → Posilovna → Kardio). The machines are the active place's cardio stations;
+// the jump rope fits anywhere.
+export const CARDIO_MODES = ['none', 'start', 'end', 'both'];
+const CARDIO_MACHINES = [
+  ['exercise_bike', 'Rotoped', 'Exercise bike'],
+  ['treadmill', 'Běžecký pás', 'Treadmill'],
+  ['rowing_ergometer', 'Veslo', 'Rowing machine'],
+  ['elliptical', 'Eliptický trenažér', 'Elliptical'],
+  ['stairmaster', 'Schody', 'Stair climber'],
+  ['air_bike', 'Air bike', 'Air bike'],
+  ['ski_erg', 'SkiErg', 'SkiErg'],
+  ['jump_rope', 'Švihadlo', 'Jump rope']
+];
+/** The cardio machines to pick from at a place with `stations` (all of them without a list). */
+export function cardioOptions(stations) {
+  return CARDIO_MACHINES.filter(([id]) => id === 'jump_rope' || !Array.isArray(stations) || stations.includes(id))
+    .map(([id, cs, en]) => ({ id, name: L(cs, en) }));
+}
+/** The saved cardio mode; an older setup has only warmupCardio (false → none, else start). */
+export function cardioMode(setup = {}) {
+  if (CARDIO_MODES.includes(setup?.cardio)) return setup.cardio;
+  return setup?.warmupCardio === false ? 'none' : 'start';
+}
+/** The machine in use: the chosen one when the place has it, else the first there is. */
+export function cardioType(setup = {}) {
+  const options = cardioOptions(setup?.stations);
+  return (options.find(o => o.id === setup?.cardioType) || options[0]).id;
+}
+/** The day's cardio parts: {type, start, end} in minutes (null when off), or null for none. */
+export function cardioFor(setup = {}, size = routineSize(60).cardio) {
+  const mode = cardioMode(setup);
+  if (mode === 'none') return null;
+  return { type: cardioType(setup), start: mode === 'start' || mode === 'both' ? size.start : null, end: mode === 'end' || mode === 'both' ? size.end : null };
+}
+
+// The warm-up, the stretching and the cardio live in the stored plan's sixth
+// row (values[5]), which the older layout left empty:
+// ["Rozcvička a protažení", "{warmup:{minutes,items}, stretching:{minutes,items}, cardio:{type,start,end}}"].
 export const ROUTINES_ROW = 5;
 export const ROUTINES_LABEL = 'Rozcvička a protažení';
 const stored = r => r?.items?.length ? { minutes: r.minutes, items: r.items } : null;
-export function routinesRow({ warmup = null, stretching = null } = {}) {
+const storedCardio = c => c && (c.start || c.end) ? { type: String(c.type || 'exercise_bike'), start: Number(c.start) || null, end: Number(c.end) || null } : null;
+export function routinesRow({ warmup = null, stretching = null, cardio = null } = {}) {
   const value = { warmup: stored(warmup), stretching: stored(stretching) };
-  return value.warmup || value.stretching ? [ROUTINES_LABEL, JSON.stringify(value)] : [];
+  const c = storedCardio(cardio);
+  if (c) value.cardio = c;
+  return value.warmup || value.stretching || c ? [ROUTINES_LABEL, JSON.stringify(value)] : [];
 }
 export function readRoutines(values) {
   const row = Array.isArray(values) ? values[ROUTINES_ROW] : null;
   if (!Array.isArray(row) || row[0] !== ROUTINES_LABEL) return { warmup: null, stretching: null };
   try {
     const parsed = JSON.parse(row[1]);
-    return { warmup: parsed?.warmup?.items ? parsed.warmup : null, stretching: parsed?.stretching?.items ? parsed.stretching : null };
+    const out = { warmup: parsed?.warmup?.items ? parsed.warmup : null, stretching: parsed?.stretching?.items ? parsed.stretching : null };
+    const c = storedCardio(parsed?.cardio);
+    return c ? { ...out, cardio: c } : out;
   } catch { return { warmup: null, stretching: null }; }
 }
 
-// Typical minutes the warm-up and stretching add to each session length, for
-// the length picker before a plan exists (a full-body session; 0 when off).
-export function typicalExtraMinutes({ warmup = true, warmupCardio = true, stretching = true } = {}) {
+// Typical minutes the warm-up, the cardio and the stretching add to each
+// session length, for the length picker before a plan exists (a full-body
+// session; 0 when off).
+export function typicalExtraMinutes({ warmup = true, warmupCardio = true, cardio, stretching = true } = {}) {
   const rows = ['chest', 'back', 'quads', 'hamstrings', 'shoulders', 'glutes'].map(m => ['WORK', m]);
   const muscleOf = name => name;
+  const mode = cardioMode({ cardio, warmupCardio });
   return Object.fromEntries([30, 45, 60, 75, 90].map(minutes => {
     const size = routineSize(minutes);
+    const parts = cardioFor({ cardio: mode }, size.cardio);
     return [minutes, {
-      warmup: warmup ? warmupFor(rows, muscleOf, { ...size.warmup, cardio: warmupCardio }).minutes : 0,
+      warmup: warmup ? warmupFor(rows, muscleOf, size.warmup).minutes : 0,
+      cardio: (parts?.start || 0) + (parts?.end || 0),
       stretching: stretching ? stretchingFor(rows, muscleOf, size.stretching).minutes : 0
     }];
   }));
