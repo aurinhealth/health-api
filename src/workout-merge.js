@@ -178,11 +178,29 @@ export async function keepWorkoutsApart(env, { ids } = {}) {
 }
 
 // The merges activity matching keeps: dropped key → kept key.
+//
+// The app that recorded the dropped copy can write it to Apple Health again
+// under a new id (Google Health did, 2026-10-18), and the old one is gone. Its
+// stand-in is a watch workout from the same device, recorded at the same time
+// as the kept one; it is held instead, and `moved` lists the kept rows that
+// now point to it (index.js matchActivities saves that).
 export function heldMerges(rows = []) {
-  const out = new Map();
-  for (const row of rows) {
-    const merged = parse(row.payload_json).loadwiseMerge;
-    if (WATCH.includes(row.source_family) && typeof merged?.with === "string") out.set(merged.with, keyOf(row));
+  const out = new Map(), moved = [];
+  const keys = new Set(rows.map(keyOf));
+  const merges = rows.map(row => ({ row, merged: parse(row.payload_json).loadwiseMerge }))
+    .filter(({ row, merged }) => WATCH.includes(row.source_family) && typeof merged?.with === "string");
+  const taken = new Set(merges.flatMap(({ row, merged }) => [keyOf(row), merged.with]));
+  for (const { row, merged } of merges) {
+    if (keys.has(merged.with)) { out.set(merged.with, keyOf(row)); continue; }
+    const own = recorderOf(row).name;
+    const others = (Array.isArray(merged.sources) ? merged.sources : []).map(s => s?.name).filter(name => name && name !== own);
+    const standIn = rows.find(other => WATCH.includes(other.source_family) && other.data_type === "exercise" && !taken.has(keyOf(other))
+      && !parse(other.payload_json).loadwiseMerge?.with && others.includes(recorderOf(other).name) && overlapShare(row, other) >= MERGE_SHARE);
+    if (!standIn) continue;
+    taken.add(keyOf(standIn));
+    out.set(keyOf(standIn), keyOf(row));
+    moved.push({ row, with: keyOf(standIn) });
   }
+  out.moved = moved;
   return out;
 }

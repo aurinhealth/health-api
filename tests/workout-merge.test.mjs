@@ -108,3 +108,27 @@ test("deleting a merged workout takes the other device's record with it", async 
   await legacy.fetch(new Request("https://internal/sync/match", { method: "POST" }), env, { waitUntil() {} });
   assert.deepEqual(live(), []);
 });
+
+test("a merged copy written to Apple Health again under a new id stays merged (Petr's gym, 2026-10-18)", async () => {
+  const { raw, env, insert, live } = setup();
+  const google = id => ({ ...watch, external_id: id, payload: { ...watch.payload, sourceName: "Google Health", exercise: { ...watch.payload.exercise, metricsSummary: { caloriesKcal: 465 } } } });
+  insert(aurin); insert(google("apple:OLD"));
+  await mergeWorkouts(env, { ids: ["apple:AAA", "apple:OLD"], energy: "apple:AAA", span: "both" }, { fetchImpl: async () => { throw new Error("no send"); } });
+  // Google Health writes the workout again: the old copy goes, a new one comes.
+  raw.sqlite.prepare("DELETE FROM health_datapoints WHERE external_id = 'apple:OLD'").run();
+  insert(google("apple:NEW"));
+  assert.equal(live().length, 2);
+  await legacy.fetch(new Request("https://internal/sync/match", { method: "POST" }), env, { waitUntil() {} });
+  assert.deepEqual(live().map(r => r.external_id), ["apple:AAA"]);
+  const kept = live()[0];
+  assert.equal(JSON.parse(kept.payload_json).loadwiseMerge.with, "apple-health:apple:NEW");
+  // A workout from another device at another time is left alone.
+  insert({ ...google("apple:RUN"), start_time: "2026-10-17T20:06:00Z", end_time: "2026-10-17T20:31:00Z" });
+  await legacy.fetch(new Request("https://internal/sync/match", { method: "POST" }), env, { waitUntil() {} });
+  assert.deepEqual(live().map(r => r.external_id), ["apple:AAA", "apple:RUN"]);
+});
+
+test("a watch workout with only heart-rate samples gets their mean", () => {
+  const row = { ...watch, payload_json: JSON.stringify({ ...watch.payload, exercise: { exerciseType: "RUNNING", metricsSummary: { caloriesKcal: 187 } }, samples: { heartRate: [[0, 100], [20, 104], [40, 98], [60, 110], [80, 108]] } }) };
+  assert.equal(googleExerciseActivity(row).averageHeartRate, 104);
+});

@@ -3,8 +3,9 @@
 // phase of the preparation, form (fitness, fatigue), VO2max, time in heart-rate
 // zones, the weeks' load, the acute:chronic workload ratio and monotony.
 // Pure: GET /app/api/training loads the inputs.
-import { groupOfType } from "./activity-type.js";
-import { mergeWellnessRows, heartRateLoad, strainScore } from "./recovery-model.js";
+import { groupOfType, typeName } from "./activity-type.js";
+import { mergeWellnessRows, strainScore, dayStrainParts } from "./recovery-model.js";
+import { sessionLoad } from "./training-load.js";
 import { athleteFocus } from "./athlete-focus.js";
 import { localDateTime } from "./user-time.js";
 import { L } from "./lang.js";
@@ -30,9 +31,31 @@ export function isoWeek(date) {
 // Planned training on the strain scale 0–21, from TSS (as Today and the web).
 export const plannedStrain = tss => (tss > 0 ? round(21 * (1 - Math.exp(-tss / 90)), 1) : null);
 
-function actualStrain(row) {
-  const load = heartRateLoad(row?.hrZoneMinutes);
-  return load == null ? null : strainScore(load);
+// The day's strain as Today shows it (recovery-model.js dayStrainParts).
+function actualStrain(row, done = []) {
+  return dayStrainParts({ zoneMinutes: row?.hrZoneMinutes, steps: num(row?.steps), sessions: done }).score;
+}
+
+// A watch workout without a TSS (a gym session, Apple Health, Google) gets
+// one from its average heart rate, so the strain detail can split the day
+// between training and movement (StrainDetailView). Resting HR is the median
+// of the last 30 days, max HR the profile's or from age (Tanaka).
+export function withHeartRateLoad(training, wellness, profile, date) {
+  const completed = Array.isArray(training?.completed) ? training.completed : [];
+  const rest = (Array.isArray(wellness) ? wellness : []).filter(r => r && r.id <= date && r.id >= shift(date, -30)).map(r => num(r.restingHR)).filter(v => v > 0).sort((a, b) => a - b);
+  const age = num(profile?.age);
+  const athlete = { restHr: num(profile?.restHr) || (rest.length ? rest[Math.floor(rest.length / 2)] : null), maxHr: num(profile?.maxHr) || (age ? Math.round(208 - 0.7 * age) : null), sex: profile?.sex || null };
+  if (!athlete.restHr || !athlete.maxHr || !completed.some(a => num(a?.tss) == null)) return training;
+  return {
+    ...training,
+    completed: completed.map(a => {
+      if (!a || num(a.tss) != null) return a;
+      const avgHr = num(a.averageHeartRate ?? a.payload?.average_heartrate), minutes = (num(a.durationHours) || 0) * 60;
+      if (!(avgHr > 0) || !(minutes > 0)) return a;
+      const tss = sessionLoad({ minutes, avgHr, kind: /weight|strength|gym/i.test(String(a.type || "")) ? "strength" : "other" }, athlete);
+      return tss != null ? { ...a, tss, tssFromHeartRate: true } : a;
+    })
+  };
 }
 
 // Intervals.icu's form zones (training stress balance = fitness − fatigue).
@@ -174,7 +197,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   let doneCount = 0, plannedCount = 0, doneTss = 0, plannedTss = 0;
   const sessions = [];
   const week = Array.from({ length: 7 }, (_, i) => {
-    const d = shift(start, i), training = byDate.get(d)?.training || {};
+    const d = shift(start, i), training = d <= date ? withHeartRateLoad(byDate.get(d)?.training || {}, google, profile, d) : byDate.get(d)?.training || {};
     const { sessions: daySessionList, planned, completed, gymPlan, gymLogged, pTss, cTss } = daySessions(d, date, training, gym[d]);
     const gymOnly = gymPlan ? 1 : 0;
     // Sessions of the week: the planned ones, and on past days whatever was
@@ -185,7 +208,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     sessions.push(...daySessionList);
     return {
       date: d,
-      strain: d <= date ? actualStrain(google.find(r => r.id === d)) : null,
+      strain: d <= date ? actualStrain(google.find(r => r.id === d), daySessionList.filter(s => s.status === "done")) : null,
       planned: plannedStrain(Math.max(pTss, cTss)) ?? (gymOnly ? plannedStrain(45) : null),
       today: d === date
     };
@@ -330,7 +353,9 @@ function sessionOf(w, date, status) {
     date,
     // A plan at midnight is the day without a time (Intervals.icu's "any time").
     time: !done && clockOf(w.start) === "00:00" ? null : clockOf(w.start),
-    title: String(w.name || w.type || L("Trénink", "Workout")).slice(0, 120),
+    // A watch workout without its own name is named by its type, in words
+    // ("Posilovna", not "WeightTraining").
+    title: String((w.name && w.name !== w.type ? w.name : w.type ? typeName(w.type) : w.name) || L("Trénink", "Workout")).slice(0, 120),
     sport: sportOf(w),
     minutes: num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null,
     tss: round(num(w.tss)),

@@ -390,6 +390,29 @@ export function strainScore(load) {
   return load > 0 ? Math.round(21 * (1 - Math.exp(-load / 225)) * 10) / 10 : 0;
 }
 
+// The day's strain and what it is made of (Námaha → Z čeho je). The heart-rate
+// zones alone missed most of a day when the watch that measured them was not
+// worn all day (Petr, 2026-10-18: a gym hour, a run and 11,616 steps came to
+// 3.6 with movement 0.0). So the day's load is the larger of the zones' load
+// and the done sessions' TSS (× 2.5, as plannedStrain) plus the steps outside
+// them: 6 per 1,000 steps, so 10,000 steps alone ≈ 4.4, as a quiet day of
+// light movement above. A run or walk's own steps (≈ 160 and 110 a minute)
+// are its TSS already.
+const WORKOUT_STEPS_PER_MIN = { run: 160, walk: 110 };
+export function dayStrainParts({ zoneMinutes = null, steps = null, sessions = [] } = {}) {
+  const done = (sessions || []).filter(Boolean);
+  const tss = done.reduce((s, x) => s + (Number(x.tss) > 0 ? Number(x.tss) : 0), 0);
+  const ownSteps = done.reduce((s, x) => s + (WORKOUT_STEPS_PER_MIN[x.sport] || 0) * (Number(x.minutes) || 0), 0);
+  const training = 2.5 * tss;
+  const movement = Math.min(180, 6 * Math.max(0, (Number(steps) || 0) - ownSteps) / 1000);
+  const zones = heartRateLoad(zoneMinutes);
+  if (zones == null && !(training + movement > 0)) return { score: null, training: 0, movement: 0 };
+  const score = strainScore(Math.max(zones || 0, training + movement));
+  // The training's own strain first; the rest of the day is movement.
+  const trainingPart = Math.min(score, strainScore(training));
+  return { score, training: trainingPart, movement: Math.round((score - trainingPart) * 10) / 10 };
+}
+
 // Google Health rows first, Intervals.icu wellness filling the days and fields
 // Google has none of (Apple Watch, Garmin and others sync there), as the
 // dashboard does in vitalWellness. A resting heart rate filled this way is

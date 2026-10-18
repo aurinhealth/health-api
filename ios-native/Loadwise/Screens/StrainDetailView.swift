@@ -47,9 +47,10 @@ struct StrainDetailContent: View {
         let score = today.strain.score ?? 0
         let doneTss = sessions.filter { $0.status == "done" }.compactMap(\.tss).reduce(0, +)
         let openTss = sessions.filter { $0.status == "planned" }.compactMap(\.tss).reduce(0, +)
-        let trainingPart = Swift.min(score, Self.strain(tss: doneTss))
+        let trainingPart = today.strain.training ?? Swift.min(score, Self.strain(tss: doneTss))
+        let movement = today.strain.movement ?? (score - trainingPart)
         let planned = Self.strain(tss: doneTss + openTss) - Self.strain(tss: doneTss)
-        return (trainingPart, Swift.max(0, score - trainingPart), Swift.max(0, planned))
+        return (trainingPart, Swift.max(0, movement), Swift.max(0, planned))
     }
 
     var body: some View {

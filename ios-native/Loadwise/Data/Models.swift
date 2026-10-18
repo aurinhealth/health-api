@@ -101,6 +101,10 @@ struct TodaySnapshot: Decodable, Equatable {
 
     struct Strain: Decodable, Equatable {
         let score: Double?
+        /// The score split into the done training and the rest of the day's
+        /// movement (src/recovery-model.js dayStrainParts).
+        var training: Double? = nil
+        var movement: Double? = nil
         let planned: Double?
         /// The range to aim for today and what set it (src/app-today.js strainTarget).
         var target: Target? = nil

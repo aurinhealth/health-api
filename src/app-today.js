@@ -4,16 +4,16 @@
 // (recovery-model.js), so both show the same readiness, sleep and strain.
 // Pure: GET /app/api/today loads the inputs and passes them in.
 import { environmentFor } from "./adaptive-week.js";
-import { sleepNeedFor, bedtimePlan, heartRateLoad, strainScore, hrvMetric, sleepDebtMinutes, sleepNeedMinutes } from "./recovery-model.js";
+import { sleepNeedFor, bedtimePlan, heartRateLoad, strainScore, dayStrainParts, hrvMetric, sleepDebtMinutes, sleepNeedMinutes } from "./recovery-model.js";
 import { readinessFor, primaryNights, sleepIndexFor } from "./readiness.js";
 import { localDateTime } from "./user-time.js";
 import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { L } from "./lang.js";
-import { daySessions, deviceEnergyExtra } from "./app-training.js";
+import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-training.js";
+export { withHeartRateLoad };
 import { recoveryToday } from "./recovery-today.js";
 import { cycleState, askPeriodToday, cycleTrainingCaution } from "./cycle-model.js";
 import { qualityDomain } from "./session-intensity.js";
-import { sessionLoad } from "./training-load.js";
 
 const STEP_GOAL = 10000;
 
@@ -43,28 +43,6 @@ export function activeMinutes(rows, date) {
   const week = rows.filter(r => r.id >= monday && r.id <= date);
   if (!week.some(r => r.hrZoneMinutes)) return null;
   return { today: Math.round(counted(rows.find(r => r.id === date))), week: Math.round(week.reduce((s, r) => s + counted(r), 0)), target: 150 };
-}
-
-// A watch workout without a TSS (a gym session, Apple Health, Google) gets
-// one from its average heart rate, so the strain detail can split the day
-// between training and movement (StrainDetailView). Resting HR is the median
-// of the last 30 days, max HR the profile's or from age (Tanaka).
-export function withHeartRateLoad(training, wellness, profile, date) {
-  const completed = Array.isArray(training?.completed) ? training.completed : [];
-  const rest = (Array.isArray(wellness) ? wellness : []).filter(r => r && r.id <= date && r.id >= shift(date, -30)).map(r => num(r.restingHR)).filter(v => v > 0).sort((a, b) => a - b);
-  const age = num(profile?.age);
-  const athlete = { restHr: num(profile?.restHr) || (rest.length ? rest[Math.floor(rest.length / 2)] : null), maxHr: num(profile?.maxHr) || (age ? Math.round(208 - 0.7 * age) : null), sex: profile?.sex || null };
-  if (!athlete.restHr || !athlete.maxHr || !completed.some(a => num(a?.tss) == null)) return training;
-  return {
-    ...training,
-    completed: completed.map(a => {
-      if (!a || num(a.tss) != null) return a;
-      const avgHr = num(a.averageHeartRate ?? a.payload?.average_heartrate), minutes = (num(a.durationHours) || 0) * 60;
-      if (!(avgHr > 0) || !(minutes > 0)) return a;
-      const tss = sessionLoad({ minutes, avgHr, kind: /weight|strength|gym/i.test(String(a.type || "")) ? "strength" : "other" }, athlete);
-      return tss != null ? { ...a, tss, tssFromHeartRate: true } : a;
-    })
-  };
 }
 
 export function dayStrain(rows, date) {
@@ -179,9 +157,17 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   // usual wake time. Between midnight and 6:00 without today's night yet the
   // coming night is the one that ends this morning.
   const sleepDay = hour != null && hour < 6 && !nights.get(date) ? shift(date, -1) : date;
-  const strainNow = dayStrain(google, date);
+  // Training: planned and completed sessions of the day, and the day's strain
+  // from the heart-rate zones, the done sessions and the steps (dayStrainParts).
+  const training = withHeartRateLoad(daily.training || {}, google, profile, date);
+  const daySession = daySessions(date, hour == null ? shift(date, 1) : date, training, gym).sessions;
+  const done = daySession.filter(s => s.status === "done");
+  const open = daySession.filter(s => s.status !== "done");
+  const todayRow = google.find(r => r.id === date) || {};
+  const strainParts = dayStrainParts({ zoneMinutes: todayRow.hrZoneMinutes, steps: num(todayRow.steps), sessions: done });
+  const strainNow = strainParts.score;
   // The user's own length or wake time for tonight (Spánek) moves the bedtime.
-  const choice = tonightChoice(sleepSet, sleepDay, sleepNeedFor({ date: shift(sleepDay, 1), age, goal: sleepSet.goal, strain: dayStrain(google, sleepDay), rows, sessions }).need);
+  const choice = tonightChoice(sleepSet, sleepDay, sleepNeedFor({ date: shift(sleepDay, 1), age, goal: sleepSet.goal, strain: sleepDay === date ? strainNow : dayStrain(google, sleepDay), rows, sessions }).need);
   const tonightNeed = choice.need;
   const plan = bedtimePlan({
     date: sleepDay,
@@ -193,8 +179,6 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   // The week's sleep debt up to last night, for the strain target.
   const debtNow = sleepDebtMinutes(sessions.filter(x => (x.date || String(x.endTime || "").slice(0, 10)) <= date), date, sleepNeedMinutes({ age, goal: sleepSet.goal }));
 
-  // Training: planned and completed sessions of the day.
-  const training = withHeartRateLoad(daily.training || {}, google, profile, date);
   const planned = Array.isArray(training.planned) ? training.planned : [];
   const plannedTss = planned.reduce((s, w) => s + (num(w.tss) || 0), 0);
 
@@ -211,7 +195,6 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   const weights = (Array.isArray(weight.records) ? weight.records : [])
     .map(r => ({ date: String(r.sample_time || r.start_time || "").slice(0, 10), value: num(r.value_numeric) }))
     .filter(p => p.date && p.date <= date && p.date > shift(date, -30) && p.value > 0);
-  const todayRow = google.find(r => r.id === date) || {};
   // Steps through the day, and the usual climb: the average running total per
   // hour of the earlier days with steps (up to 14).
   const byHour = health.stepsByHour || {};
@@ -226,10 +209,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   // so a gym session or a watch workout outside the plan shows here too.
   // The watch's calories above the estimate the user chose to count (Plán dne → Kalorie k ověření).
   const watchExtra = deviceEnergyExtra(training.completed);
-  const daySession = daySessions(date, hour == null ? shift(date, 1) : date, training, gym).sessions;
   const detailOf = s => [num(s.minutes) ? Math.round(num(s.minutes)) + " min" : null, num(s.tss) ? Math.round(num(s.tss)) + " TSS" : null].filter(Boolean).join(" · ") || null;
-  const done = daySession.filter(s => s.status === "done");
-  const open = daySession.filter(s => s.status !== "done");
 
   // Recovery (recovery-today.js): the suggestions after a training day, only
   // for today; the stretching and sauna saved for the day join the plan.
@@ -330,7 +310,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     } : null,
     // The day's naps for Dnes → Den: each sleep that began today after the night.
     naps: napsOn(sessions, date, night),
-    strain: { score: strainNow, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: !daySession.length }), rest: !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || null } },
+    strain: { score: strainNow, training: strainParts.training, movement: strainParts.movement, planned: plannedStrain(plannedTss), target: { ...strainTarget({ readiness: readiness.score, zone: readiness.zone, planned: plannedStrain(plannedTss), debt: debtNow?.minutes || 0, rest: !daySession.length }), rest: !daySession.length, readiness: readiness.score ?? null, debt: debtNow?.minutes ?? null, feeling: checkin || null, plan: planned.map(w => String(w.name || "").trim()).filter(Boolean).join(", ").slice(0, 80) || null } },
     // metric: "rmssd" or "sdnn" when the source said how it measures (Apple Health), else null.
     // Today's HRV shows even before its source has the 14 days a baseline needs.
     hrv: hrv ? { value: round(hrv.value), baseline: round(hrv.baseline), low: round(hrv.low), high: round(hrv.high), trend: hrv.trend, metric: hrvMetric(rows.find(r => r.id === date)), series: last(30, "hrv") }
