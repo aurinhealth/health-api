@@ -102,8 +102,8 @@ struct ReportProblemView: View {
             error = L10n.tr("Obrázek se nepodařilo načíst.")
             return
         }
-        var jpeg = image.jpegForUpload(side: 1400)
-        if let data = jpeg, data.count > Self.maxScreenshotBytes { jpeg = image.jpegForUpload(side: 1000) }
+        var jpeg = await image.jpegForUpload(side: 1400)
+        if let data = jpeg, data.count > Self.maxScreenshotBytes { jpeg = await image.jpegForUpload(side: 1000) }
         guard let jpeg, jpeg.count <= Self.maxScreenshotBytes else {
             error = L10n.tr("Obrázek je příliš velký. Vyber menší.")
             return

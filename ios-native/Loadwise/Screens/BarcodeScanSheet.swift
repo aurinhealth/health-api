@@ -289,12 +289,22 @@ struct CameraPicker: UIViewControllerRepresentable {
 }
 
 extension UIImage {
-    /// JPEG at most `side` points on the longer side, small enough for the
-    /// server's 5 MB limit.
-    func jpegForUpload(side: CGFloat = 1600) -> Data? {
-        let scale = min(1, side / max(size.width, size.height))
-        let target = CGSize(width: size.width * scale, height: size.height * scale)
-        let resized = UIGraphicsImageRenderer(size: target).image { _ in draw(in: CGRect(origin: .zero, size: target)) }
+    /// JPEG at most `side` pixels on the longer side, small enough for the
+    /// server's 5 MB limit. Shrunk off the main thread, so the screen does not
+    /// stop while a 12-megapixel photo is drawn again.
+    func jpegForUpload(side: CGFloat = 1600) async -> Data? {
+        await Task.detached(priority: .userInitiated) { self.resizedJPEG(side: side) }.value
+    }
+
+    /// Drawn at scale 1 (as Avatar does): the renderer's default is the
+    /// screen's 3×, which made a 1600 px photo 4800 px.
+    private func resizedJPEG(side: CGFloat) -> Data? {
+        let pixels = CGSize(width: size.width * scale, height: size.height * scale)
+        let factor = min(1, side / max(pixels.width, pixels.height))
+        let target = CGSize(width: max(1, (pixels.width * factor).rounded()), height: max(1, (pixels.height * factor).rounded()))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in draw(in: CGRect(origin: .zero, size: target)) }
         return resized.jpegData(compressionQuality: 0.75)
     }
 }

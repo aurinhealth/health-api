@@ -261,7 +261,7 @@ struct WeekStrip: View {
             ForEach(days, id: \.date) { day in
                 Button { Task { await model.showDate(day.date) } } label: { cell(day) }
                     .buttonStyle(.plain)
-                    .disabled(day.date > today || model.demo || model.loading)
+                    .disabled(day.date > today || model.demo || model.dayLocked)
                     .frame(maxWidth: .infinity)
             }
         }
@@ -341,7 +341,7 @@ struct DayNavigator: View {
                 .foregroundStyle(Palette.muted)
                 .padding(.leading, 34)
         }
-        .disabled(model.demo || model.loading)
+        .disabled(model.demo || model.dayLocked)
     }
 
     static func canGoForward(model: AppModel, date: String, ahead: Bool) -> Bool {
@@ -364,7 +364,7 @@ struct DayBar: View {
                    canGoForward: DayNavigator.canGoForward(model: model, date: date, ahead: ahead),
                    move: { offset in Task { await model.showDay(offset: offset, ahead: ahead) } },
                    showToday: { Task { await model.showToday() } })
-            .disabled(model.demo || model.loading)
+            .disabled(model.demo || model.dayLocked)
     }
 }
 

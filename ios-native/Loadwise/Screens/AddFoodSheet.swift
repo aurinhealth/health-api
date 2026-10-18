@@ -329,9 +329,10 @@ struct AddFoodSheet: View {
 
     /// A photo of a meal or a nutrition label, read by AI on the server.
     private func read(_ image: UIImage, mode: String) async {
-        guard !model.demo, let jpeg = image.jpegForUpload() else { return }
+        guard !model.demo else { return }
         readingPhoto = true
         defer { readingPhoto = false }
+        guard let jpeg = await image.jpegForUpload() else { return }
         do {
             let r = try await model.api.readFoodPhoto(jpeg, mode: mode)
             path.append(.photo(r.product, r.note))

@@ -27,6 +27,9 @@ final class AppModel {
     /// without data).
     var notice: String?
     private(set) var loading = false
+    /// Loading with no day on screen yet: the day arrows and swipes wait. With
+    /// one (saved or loaded) they work while the refresh goes on behind.
+    var dayLocked: Bool { loading && today == nil }
     /// The pill on top while the app syncs after opening (RootView SyncPill):
     /// "Synchronizuji…", "Synchronizováno" for a moment, or a failure to retry.
     private(set) var syncStatus: SyncStatus?
@@ -496,7 +499,8 @@ final class AppModel {
         let (snapshot, data) = try await api.todayData(date: day)
         // Another day was chosen meanwhile: its own load shows it.
         guard selectedDate == day else { return }
-        today = snapshot
+        // The same answer again (back in the app, pulled down): Today is not drawn anew.
+        if today != snapshot { today = snapshot }
         todayBase = data
         todayPatched = false
         settlingToday.removeAll { settled.contains($0.id) }
@@ -548,7 +552,7 @@ final class AppModel {
         // A coming day is Food's only: Today and Health go back to today.
         if tab != .food && tab != .training && showsFutureDay { selectedDate = nil }
         let day = tab == .training ? Self.localDate(Date()) : shownDay
-        if let last = fetched[tab], last.day == day, Date().timeIntervalSince(last.at) < 300 { return }
+        if fresh(tab, day: day) { return }
         refreshing.insert(tab)
         defer { refreshing.remove(tab) }
         switch tab {
@@ -559,6 +563,24 @@ final class AppModel {
         }
     }
     @ObservationIgnored private var refreshing: Set<AppTab> = []
+
+    /// The tab's data came from the server in the last 5 minutes, for this day.
+    private func fresh(_ tab: AppTab, day: String) -> Bool {
+        guard let last = fetched[tab] else { return false }
+        return last.day == day && Date().timeIntervalSince(last.at) < 300
+    }
+
+    /// Back in the app (RootView): Today again by the rule of refreshIfStale,
+    /// and after a time without signal. What waited for signal (and water added
+    /// from the widget) goes out either way.
+    func refreshOnReturn() async {
+        guard !demo, phase == .signedIn else { return }
+        if !offline && fresh(.today, day: shownDay) {
+            await sendOutbox(reloadToday: true)
+        } else {
+            await refresh(announce: true)
+        }
+    }
 
     /// The morning check-in on Today. It lowers the readiness, so Today loads
     /// again; without signal the answer waits in the outbox (a newer one
@@ -742,9 +764,15 @@ final class AppModel {
         // Nothing waiting and nothing shown over the server's answer: no second decode.
         let foodLayers = settlingFood.map({ $0.overlay }) + overlays, todayLayers = settlingToday.map({ $0.overlay }) + overlays
         if let foodBase, !foodLayers.isEmpty || foodPatched,
-           let value = try? JSONDecoder().decode(FoodSnapshot.self, from: OutboxPatch.food(foodBase, foodLayers)) { food = value; foodPatched = !foodLayers.isEmpty }
+           let value = try? JSONDecoder().decode(FoodSnapshot.self, from: OutboxPatch.food(foodBase, foodLayers)) {
+            if food != value { food = value }
+            foodPatched = !foodLayers.isEmpty
+        }
         if let todayBase, !todayLayers.isEmpty || todayPatched,
-           let value = try? JSONDecoder().decode(TodaySnapshot.self, from: OutboxPatch.today(todayBase, todayLayers)) { today = value; todayPatched = !todayLayers.isEmpty }
+           let value = try? JSONDecoder().decode(TodaySnapshot.self, from: OutboxPatch.today(todayBase, todayLayers)) {
+            if today != value { today = value }
+            todayPatched = !todayLayers.isEmpty
+        }
     }
 
     /// Water added from the widget while the app was closed joins the outbox.
@@ -1128,8 +1156,8 @@ final class AppModel {
     }
 
     /// One day back or forward from the day on screen; forward stops at today,
-    /// on Food (ahead) two weeks later.
-    func showDay(offset: Int, ahead: Bool = false) async {
+    /// on Food (ahead) two weeks later. saved: the day as a swipe drew it beside.
+    func showDay(offset: Int, ahead: Bool = false, saved page: DayPage? = nil) async {
         let todayDate = Self.localDate(Date())
         guard !demo, let date = Self.shift(selectedDate ?? todayDate, by: offset) else { return }
         if date > todayDate {
@@ -1139,7 +1167,7 @@ final class AppModel {
             return
         }
         selectedDate = date == todayDate ? nil : date
-        showSaved(selectedDate)
+        showSaved(selectedDate, page: page?.date == date ? page : nil)
         await refreshDay()
     }
 
@@ -1174,7 +1202,21 @@ final class AppModel {
 
     /// The saved copy of a day (SnapshotCache), on screen at once while the
     /// day loads; without one the screens keep the day before until it comes.
-    private func showSaved(_ date: String?) {
+    /// page: the same copy, read already for the swipe (DayPage.saved).
+    private func showSaved(_ date: String?, page: DayPage? = nil) {
+        if let page {
+            if let value = page.today, let data = page.todayData {
+                today = value
+                todayBase = data
+            }
+            if food != nil, let value = page.food, let data = page.foodData {
+                food = value
+                foodBase = data
+            }
+            if health != nil, let value = page.health { health = value }
+            applyOutbox()
+            return
+        }
         let decoder = JSONDecoder()
         if let saved = SnapshotCache.data(key: SnapshotCache.dayKey("today", date)),
            let value = try? decoder.decode(TodaySnapshot.self, from: saved.data) {

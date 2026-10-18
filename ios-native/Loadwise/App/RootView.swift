@@ -238,7 +238,8 @@ struct RootView: View {
                 // sets) the screen stays as it is; the workout's end refreshes.
                 guard !model.immersive, !LiveWorkout.shared.running else { return }
                 Task {
-                    if model.today != nil || !model.outbox.isEmpty { await model.refresh(announce: true) }
+                    // Today loaded a moment ago stays as it is (no sync pill, no redraw).
+                    if model.today != nil || !model.outbox.isEmpty { await model.refreshOnReturn() }
                     // The open tab too, so Health or Food are not a day behind Today.
                     if model.tab != .today { await model.refreshIfStale(model.tab) }
                 }

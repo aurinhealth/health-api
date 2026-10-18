@@ -477,7 +477,7 @@ struct AddGymSheet: View {
         defer { busy = false }
         var jpegs: [Data] = []
         for item in photos {
-            if let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw), let jpeg = image.jpegForUpload(side: 1400) {
+            if let raw = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: raw), let jpeg = await image.jpegForUpload(side: 1400) {
                 jpegs.append(jpeg)
             }
         }
