@@ -306,6 +306,9 @@ final class LiveWorkout: NSObject {
             kcal = 4.0 * weightKg * Date().timeIntervalSince(start) / 3600
         }
         if builder == nil, sensor.liveBpm == nil, let bpm = await latestHeartRate(since: Date().addingTimeInterval(-120)) { note(bpm) }
+        // Nothing has measured the heart for a minute (AirPods or the watch taken
+        // off, the strap out of range): no number rather than the last one forever.
+        if heartRate != nil, let last = trail.last?.date, Date().timeIntervalSince(last) > 60 { heartRate = nil }
     }
 
     private func sensorBeat(_ bpm: Double) {
