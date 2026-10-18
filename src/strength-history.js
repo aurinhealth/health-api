@@ -1,3 +1,4 @@
+import { intensityRpe } from './gym-intensity.js';
 import { normalizeExerciseName } from "./strength-normalization.js";
 import { strengthSetOptions, strengthOptionNote } from './gym-set-options.js';
 
@@ -73,7 +74,8 @@ export function parseStrengthPlan(values) {
     const exercise = normalizeExerciseName(text(r[1]));
     if (!type && !exercise) continue;
     if (!exercise) continue;
-    if (!/^(WARMUP|WORK)$/i.test(type)) continue;
+    // DROP: a drop set, lighter right after the set above it (gym-intensity.js).
+    if (!/^(WARMUP|WORK|DROP)$/i.test(type)) continue;
 
     rows.push({
       planRow: i + 1,
@@ -89,7 +91,7 @@ export function parseStrengthPlan(values) {
       completed: bool(r[8]),
       note: text(r[9]),
       video: text(r[10]),
-      ...strengthSetOptions({toFailure:!header.legacy&&bool(r[11]),superset:header.legacy?'':r[12],side:header.legacy?'':r[13]}),
+      ...strengthSetOptions({toFailure:!header.legacy&&bool(r[11]),superset:header.legacy?'':r[12],side:header.legacy?'':r[13],intensity:header.legacy?'':r[14]}),
       replacement: header.legacy ? text(r[11]) : "",
       execution: header.legacy ? text(r[12]) : ""
     });
@@ -150,12 +152,13 @@ export async function importStrengthHistory(db, workout) {
     const s = sets[i] || {};
     const type = text(s.type || "WORK").toUpperCase();
     const exercise = normalizeExerciseName(text(s.exercise));
-    if (!exercise || !/^(WARMUP|WORK)$/.test(type)) continue;
+    if (!exercise || !/^(WARMUP|WORK|DROP)$/.test(type)) continue;
     const plannedKg = numberOrNull(s.plannedKg ?? s.actualKg);
     const plannedReps = text(s.plannedReps ?? s.actualReps);
     const { actualKg, actualReps } = resolveStrengthPerformance({ ...s, plannedKg, plannedReps });
     const setNo = numberOrNull(s.setNo);
-    const rpe = strengthSetOptions(s).toFailure?10:numberOrNull(s.rpe);
+    const options = strengthSetOptions(s);
+    const rpe = options.toFailure ? 10 : numberOrNull(s.rpe) ?? intensityRpe(options.intensity);
     const note = strengthOptionNote(s);
     const sourceKey = `manual:${date}:${i + 1}`;
 
@@ -202,7 +205,8 @@ export async function removeManualSets(db, date, keep, upTo) {
   return removed;
 }
 
-export async function getStrengthHistory(db, limit = 100) {
+// drops: the drop sets too (type DROP), for the coach; progression reads work sets only.
+export async function getStrengthHistory(db, limit = 100, { drops = false } = {}) {
   await ensureStrengthTable(db);
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
   const result = await db.prepare(`
@@ -210,7 +214,7 @@ export async function getStrengthHistory(db, limit = 100) {
            actual_kg, actual_reps, rpe, completed, note, replacement, execution,
            source, updated_at
     FROM strength_sets
-    WHERE user_id = ? AND completed = 1 AND type = 'WORK'
+    WHERE user_id = ? AND completed = 1 AND type ${drops ? "IN ('WORK', 'DROP')" : "= 'WORK'"}
     ORDER BY workout_date DESC, plan_row ASC
     LIMIT ?
   `).bind(db.userId, safeLimit).all();

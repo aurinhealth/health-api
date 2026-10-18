@@ -1,4 +1,5 @@
 import { L } from './lang.js';
+import { EXERCISE_INTELLIGENCE, resolveLoad } from './strength-intelligence.js';
 // Include both sides of unilateral work, equipment setup, rests and gym delays.
 // Rests are counted between sets of an exercise; moving to the next exercise
 // is a changeover (setting up the station) instead of a full rest.
@@ -11,7 +12,8 @@ export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60) {
     const seconds = Math.max(25, reps * 3.5) * (def.unilateral ? 2 : 1) + 10;
     if (warm) warmupSeconds += seconds; else workSeconds += seconds;
     const last = rows[i + 1]?.[1] !== r[1];
-    const rest = warm ? 45 : Number(String(r[9] || '').match(/\[Pauza (\d+) s\]/)?.[1]) || 90;
+    // Into a drop set straight away: only the time to change the weight.
+    const rest = rows[i + 1]?.[0] === 'DROP' ? 10 : warm ? 45 : Number(String(r[9] || '').match(/\[Pauza (\d+) s\]/)?.[1]) || 90;
     if (r[12] && !warm) { const key = r[12] + ':' + r[2]; groups.set(key, Math.max(groups.get(key) || 0, rest)); }
     else if (!last) restSeconds += rest;
   });
@@ -23,10 +25,13 @@ export function estimateStrengthTiming(rows, catalog, requestedMinutes = 60) {
   return { requestedMinutes, estimatedMinutes: Math.ceil(totalSeconds / 60), totalSeconds, workSeconds: Math.round(workSeconds), warmupSeconds: Math.round(warmupSeconds), restSeconds, setupSeconds, bufferSeconds };
 }
 
+const DROP_GOALS = new Set(['muscle', 'strength_muscle', 'muscle_fitness']);
+
 // Rests by the gym goal: heavy strength sets need the longest, fitness the shortest.
 const GOAL_RESTS = { strength: [180, 180, 120], strength_muscle: [150, 150, 90], muscle: [120, 105, 75], muscle_fitness: [90, 75, 60], fitness: [75, 60, 45] };
 export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoad = new Map(), protectedLegs = false, recoveryScore = null, firstSession = false, goal = 'auto' } = {}) {
   const [heavy, main, other] = GOAL_RESTS[goal] || [150, 120, 75];
+  for (let i = rows.length - 1; i >= 0; i--) if (rows[i][0] === 'DROP') rows.splice(i, 1);
   for (const r of rows) {
     const def = catalog[r[1]] || {}, warm = r[0] === 'WARMUP';
     r[11] = 'FALSE'; r[12] = '';
@@ -54,6 +59,14 @@ export function configureStrengthCoaching(rows, catalog, { factor = 1, muscleLoa
     const name = names.find(n => catalog[n]?.fatigue <= .5 && !catalog[n]?.warmup && (muscleLoad.get(catalog[n]?.muscle) || 0) < 2.5 && !/sportovní zátěž|load from other sports|rezerv|reserve|odhad|estimate/i.test(rows.find(r => r[1] === n)?.[9] || '') && !(protectedLegs && ['quads','hamstrings','glutes','calves'].includes(catalog[n]?.muscle)));
     const last = name && rows.filter(r => r[0] === 'WORK' && r[1] === name).at(-1);
     if (last) { last[11] = 'TRUE'; last[9] += L('; poslední série do technického selhání, jen při čistém provedení', '; last set to technical failure, only with clean technique'); }
+    // For muscle, the set to failure goes on as a drop set: two lighter rows
+    // (about 80 and 60 %), as many reps as clean, no rest between.
+    const kg = Number(String(last?.[3] || '').replace(',', '.'));
+    if (last && DROP_GOALS.has(goal) && !last[12] && kg > 0) {
+      const at = rows.indexOf(last), load = f => { const x = kg * f; return String(EXERCISE_INTELLIGENCE[last[1]] ? resolveLoad(last[1], x) : Math.round(x * 2) / 2).replace('.', ','); };
+      const drops = [.8, .6].map(f => load(f)).filter((v, j, all) => Number(v.replace(',', '.')) > 0 && v !== last[3] && all.indexOf(v) === j);
+      rows.splice(at + 1, 0, ...drops.map(v => ['DROP', last[1], last[2], v, 'max', '', '', '', 'FALSE', L('dropset: hned bez pauzy, co nejvíc čistých opakování', 'drop set: straight away, no rest, as many clean reps as you can'), '', 'FALSE', '', last[13] || '', 'D']));
+    }
   }
   return rows;
 }

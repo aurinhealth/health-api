@@ -372,8 +372,8 @@ struct LiveGymView: View {
         if let exercise = next.exercises.first(where: { $0.sets.contains { $0.row == set.row } }) {
             upcoming = exercise.sets.first(where: { !$0.done && $0.row > set.row })?.row
             // Short of the reps: the next work set 2.5 kg lighter, with a note.
-            if !set.warmup, let goal = GymCoach.firstNumber(set.plannedReps), let got = Int(r), got < goal,
-               let following = exercise.sets.first(where: { !$0.done && !$0.warmup && $0.row > set.row }),
+            if set.work, let goal = GymCoach.firstNumber(set.plannedReps), let got = Int(r), got < goal,
+               let following = exercise.sets.first(where: { !$0.done && $0.work && $0.row > set.row }),
                let lifted = LiftWeight.number(k), lifted > GymCoach.step {
                 let lighter = GymCoach.roundLoad(lifted - GymCoach.step)
                 next.set(row: following.row, column: 3, GymCoach.kgText(lighter))
@@ -381,7 +381,9 @@ struct LiveGymView: View {
             }
         }
         day = next
-        let rest = set.warmup ? 60 : restSets
+        // Into a drop set straight away, no rest.
+        let intoDrop = upcoming.flatMap { row in next.exercises.flatMap(\.sets).first(where: { $0.row == row }) }?.drop == true
+        let rest = intoDrop ? 0 : set.warmup ? 60 : restSets
         if rest > 0 {
             let following: GymSet? = upcoming.flatMap { row in next.exercises.flatMap { $0.sets }.first { $0.row == row } }
             restNext = following.map { Self.describe($0) }

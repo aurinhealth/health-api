@@ -9,6 +9,7 @@ import { GYM_PLAN_COLUMNS } from './gym-plan-store.js';
 import { estimateStrengthTiming } from './strength-timing.js';
 import { EXERCISE_INTELLIGENCE, resolveLoad } from './strength-intelligence.js';
 import { adjustInstructions } from './private/gym-adjust.js';
+import { INTENSITIES, intensityOf, assignIntensities } from './gym-intensity.js';
 
 const MAX_ROWS = 80, MAX_EXERCISES = 14, MAX_SETS = 8;
 // A known exercise's weight goes to its equipment's step (a bar 17,5 kg, not
@@ -20,8 +21,8 @@ const kgText = (v, name = null) => { const x = Number(String(v ?? '').replace(',
 export function cleanGymRows(rows, allowed) {
   if (!Array.isArray(rows)) throw new Error(L('Chybí cviky plánu.', 'The plan\'s exercises are missing.'));
   const out = rows.slice(0, MAX_ROWS).map(row => Array.from({ length: GYM_PLAN_COLUMNS.length }, (_, i) => String(row?.[i] ?? '').trim().slice(0, i === 9 ? 300 : 120)))
-    .filter(r => /^(WARMUP|WORK)$/i.test(r[0]) && allowed.has(r[1]))
-    .map(r => { r[0] = r[0].toUpperCase(); r[3] = kgText(r[3]); r[5] = r[6] = r[7] = ''; r[8] = 'FALSE'; r[11] = /^(true|1)$/i.test(r[11]) ? 'TRUE' : 'FALSE'; r[12] = /^[A-F]$/.test(r[12]) ? r[12] : ''; r[13] = /^[LP]$/.test(r[13]) ? r[13] : ''; return r; });
+    .filter(r => /^(WARMUP|WORK|DROP)$/i.test(r[0]) && allowed.has(r[1]))
+    .map(r => { r[0] = r[0].toUpperCase(); r[3] = kgText(r[3]); r[5] = r[6] = r[7] = ''; r[8] = 'FALSE'; r[11] = /^(true|1)$/i.test(r[11]) ? 'TRUE' : 'FALSE'; r[12] = /^[A-F]$/.test(r[12]) ? r[12] : ''; r[13] = /^[LP]$/.test(r[13]) ? r[13] : ''; r[14] = intensityOf(r[14]); return r; });
   if (!out.length) throw new Error(L('Plán musí mít aspoň jeden cvik.', 'The plan must have at least one exercise.'));
   return out;
 }
@@ -32,7 +33,7 @@ const ADJUST_SCHEMA = { type: 'json_schema', name: 'gym_adjust', strict: true, s
   answer: { type: 'string' },
   exercises: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'sets'], properties: {
     name: { type: 'string' },
-    sets: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'kg', 'reps'], properties: { type: { type: 'string', enum: ['WARMUP', 'WORK'] }, kg: { type: ['number', 'null'] }, reps: { type: 'string' } } } }
+    sets: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['type', 'kg', 'reps', 'intensity'], properties: { type: { type: 'string', enum: ['WARMUP', 'WORK', 'DROP'] }, kg: { type: ['number', 'null'] }, reps: { type: 'string' }, intensity: { type: 'string', enum: INTENSITIES } } } }
   } } }
 } } };
 
@@ -45,7 +46,7 @@ const repsOf = (v, fallback) => { const reps = String(v ?? '').trim().replace(/[
 // keeping each kept exercise's own notes, superset and failure set.
 export function planForModel(rows) {
   const by = new Map();
-  for (const r of rows) { if (!r?.[1]) continue; if (!by.has(r[1])) by.set(r[1], { name: r[1], sets: [] }); by.get(r[1]).sets.push({ type: String(r[0]).toUpperCase() === 'WARMUP' ? 'WARMUP' : 'WORK', kg: r[3] === '' ? null : Number(String(r[3]).replace(',', '.')), reps: String(r[4] || '') }); }
+  for (const r of rows) { if (!r?.[1]) continue; if (!by.has(r[1])) by.set(r[1], { name: r[1], sets: [] }); const type = String(r[0]).toUpperCase(); by.get(r[1]).sets.push({ type: type === 'WARMUP' || type === 'DROP' ? type : 'WORK', kg: r[3] === '' ? null : Number(String(r[3]).replace(',', '.')), reps: String(r[4] || ''), intensity: intensityOf(r[14]) }); }
   return [...by.values()];
 }
 export function rowsFromModel(exercises, original, catalog) {
@@ -54,20 +55,25 @@ export function rowsFromModel(exercises, original, catalog) {
     const name = String(ex?.name || '').trim();
     if (!allowed.has(name) || seen.has(name)) continue;
     seen.add(name);
-    const own = original.filter(r => r[1] === name), work = own.filter(r => String(r[0]).toUpperCase() !== 'WARMUP'), first = work[0] || own[0];
+    const own = original.filter(r => r[1] === name), work = own.filter(r => String(r[0]).toUpperCase() === 'WORK'), first = work[0] || own[0];
     const sets = (ex.sets || []).slice(0, MAX_SETS), lastWork = sets.map(s => s.type).lastIndexOf('WORK');
     sets.forEach((s, i) => {
-      const warm = s.type === 'WARMUP', failure = !warm && i === lastWork && work.some(r => /^(true|1)$/i.test(r[11]));
+      // A drop set needs a work set before it; its reps are "max".
+      if (s.type === 'DROP' && !rows.some(r => r[1] === name && r[0] === 'WORK')) return;
+      const drop = s.type === 'DROP', warm = s.type === 'WARMUP', failure = !warm && !drop && (i === lastWork && work.some(r => /^(true|1)$/i.test(r[11])) || intensityOf(s.intensity) === 'F');
       const planned = (warm ? own.find(r => String(r[0]).toUpperCase() === 'WARMUP') : null) || first;
       // A note's "+2,5 kg" or "= last time" belongs to the old load: it goes when the AI changed the weight.
       const kg = kgText(kgOf(s.kg), name), note = warm ? '[WARMUP]' : first?.[9] != null && first[9] !== '' ? (kg !== first[3] ? withoutProgression(first[9]) : first[9]) : catalog.get(name)?.note || '';
-      rows.push([warm ? 'WARMUP' : 'WORK', name, '', kg, repsOf(s.reps, String(planned?.[4] || '')).slice(0, 12), '', '', '', 'FALSE', note, '', failure ? 'TRUE' : 'FALSE', warm ? '' : first?.[12] || '']);
+      const intensity = warm ? 'W' : drop ? 'D' : intensityOf(s.intensity) === 'W' || intensityOf(s.intensity) === 'D' ? '' : intensityOf(s.intensity);
+      rows.push([warm ? 'WARMUP' : drop ? 'DROP' : 'WORK', name, '', kg, drop ? 'max' : repsOf(s.reps, String(planned?.[4] || '')).slice(0, 12), '', '', '', 'FALSE', drop ? DROP_NOTE() : note, '', failure ? 'TRUE' : 'FALSE', warm || drop ? '' : first?.[12] || '', '', intensity]);
     });
   }
   const seq = new Map();
-  for (const r of rows) { const key = r[0] + '|' + r[1], n = (seq.get(key) || 0) + 1; seq.set(key, n); r[2] = String(n); }
-  return rows;
+  for (const r of rows) { if (r[0] === 'DROP') { r[2] = String(seq.get('WORK|' + r[1]) || 1); continue; } const key = r[0] + '|' + r[1], n = (seq.get(key) || 0) + 1; seq.set(key, n); r[2] = String(n); }
+  return assignIntensities(rows);
 }
+
+const DROP_NOTE = () => L('dropset: hned bez pauzy, co nejvíc čistých opakování', 'drop set: straight away, no rest, as many clean reps as you can');
 
 // The generator's progression part of a note ("↑ minule 3× 10 op. @ 20 kg → +2,5 kg", "= minule …", a return after a break).
 export const withoutProgression = note => String(note || '').replace(/;\s*(?:[↑↓=] |po delší pauze lehčeji \(|lighter after a longer break \()[^;\[]*\)?/g, ' ').replace(/\s+/g, ' ').replace(/ ;/g, ';').trim();

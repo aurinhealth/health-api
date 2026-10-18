@@ -457,7 +457,7 @@ struct GymSetTableRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(set.warmup ? "R" : set.number)
+            Text(set.warmup ? "R" : set.drop ? "↳" : set.number)
                 .font(Typo.number(18))
                 .foregroundStyle(set.warmup ? Palette.faint : Palette.muted)
                 .frame(width: 22, alignment: .leading)
