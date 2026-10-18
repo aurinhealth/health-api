@@ -16,6 +16,8 @@ struct SubscriptionStatus: Decodable, Equatable {
     let checkoutAvailable: Bool?
     let features: [Feature]?
     let terms: String?
+    /// This week's messages to the coach; nil for the owner.
+    var coachAllowance: CoachAllowance? = nil
 
     struct Feature: Decodable, Equatable, Hashable {
         let name: String
@@ -31,6 +33,45 @@ struct SubscriptionStatus: Decodable, Equatable {
                    Feature(name: "Propojení a synchronizace služeb", ai: false), Feature(name: "AI trenér a úpravy plánů vlastními slovy", ai: true),
                    Feature(name: "Rozpoznání jídla a etikety z fotky pomocí AI", ai: true)],
         terms: nil)
+}
+
+/// The weekly allowance of messages to the coach (src/coach-allowance.js).
+/// The app says nothing about it until 75 % is used.
+struct CoachAllowance: Decodable, Equatable {
+    let limit: Int
+    let used: Int
+    let left: Int
+    /// The Monday a new week's messages come, "YYYY-MM-DD".
+    let resetsOn: String?
+    /// 75 % used: the counter and the Settings line show.
+    let near: Bool
+    /// On the answer that crossed into the last quarter: the line in the chat, once.
+    var notice: Bool? = nil
+    /// false once not even the running conversation can go on.
+    var more: Bool? = nil
+
+    var usedUp: Bool { left <= 0 }
+
+    /// The new messages come tomorrow when it is Sunday.
+    static var tomorrow: Bool { Calendar.current.component(.weekday, from: Date()) == 1 }
+
+    /// "zbývají 3 zprávy" by the input.
+    var counter: String {
+        String(format: Fmt.plural(left, "zbývá %@ zpráva", "zbývají %@ zprávy", "zbývá %@ zpráv"), String(left))
+    }
+    /// The one-time line in the chat.
+    var chatNotice: String {
+        String(format: Fmt.plural(left, "Tento týden ti zbývá %@ zpráva koučovi.", "Tento týden ti zbývají %@ zprávy koučovi.", "Tento týden ti zbývá %@ zpráv koučovi."), String(left))
+    }
+    /// Settings → Aurin Pro: nothing under 75 %, then what is left and when it renews.
+    var settingsLine: String? {
+        if usedUp { return L10n.tr("Zprávy koučovi na tento týden jsou vyčerpané.") + "\n" + Self.comesBack }
+        guard near else { return nil }
+        let left = String(format: Fmt.plural(self.left, "Tento týden zbývá %@ zpráva koučovi.", "Tento týden zbývají %@ zprávy koučovi.", "Tento týden zbývá %@ zpráv koučovi."), String(self.left))
+        return left + "\n" + L10n.tr(Self.tomorrow ? "Obnoví se zítra." : "Obnoví se v pondělí.")
+    }
+    static var comesBack: String { L10n.tr(tomorrow ? "Další přibudou zítra." : "Další přibudou v pondělí.") }
+    static var placeholder: String { L10n.tr(tomorrow ? "Další zprávy zítra" : "Další zprávy v pondělí") }
 }
 
 extension APIClient {

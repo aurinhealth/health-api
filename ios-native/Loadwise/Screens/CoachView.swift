@@ -22,6 +22,10 @@ struct CoachView: View {
     @State private var home: CoachesSnapshot?
     @State private var showChats = false
     @State private var showMemory = false
+    /// This week's messages to the coach (src/coach-allowance.js); nil for the owner.
+    @State private var allowance: CoachAllowance?
+    /// Used up and this conversation can't go on: the card and a dimmed field.
+    @State private var usedUp = false
     @FocusState private var focused: Bool
 
     struct Bubble: Identifiable, Equatable {
@@ -38,6 +42,8 @@ struct CoachView: View {
         var food: FoodDraft? = nil
         var logged: String? = nil
         var loggedOK = false
+        /// A quiet line from the app (how many messages are left), not the coach.
+        var note = false
     }
 
     var body: some View {
@@ -61,6 +67,7 @@ struct CoachView: View {
                             }
                             if needsConsent { consentCard }
                             if needsSubscription { AISubscriptionCard { Paywall.present(model) } }
+                            if usedUp { usedUpCard }
                             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                             Color.clear.frame(height: 1).id("end")
                         }
@@ -97,6 +104,8 @@ struct CoachView: View {
         .task {
             guard !model.demo, home == nil else { return }
             home = try? await model.api.coaches(date: AppModel.localDate(Date()))
+            allowance = (try? await model.api.subscription())?.coachAllowance
+            if allowance?.usedUp == true { usedUp = true }
         }
     }
 
@@ -172,20 +181,38 @@ struct CoachView: View {
         }
     }
 
+    /// The week's messages are used up: what happened and when more come.
+    private var usedUpCard: some View {
+        Card {
+            Text("Zprávy koučovi na tento týden jsou vyčerpané.").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(CoachAllowance.comesBack).font(Typo.small).foregroundStyle(Palette.muted)
+        }
+    }
+
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            TextField("Napiš kouči…", text: $input, axis: .vertical)
-                .lineLimit(1...5)
-                .focused($focused)
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField(usedUp ? CoachAllowance.placeholder : L10n.tr("Napiš kouči…"), text: $input, axis: .vertical)
+                    .lineLimit(1...5)
+                    .focused($focused)
+                // From 75 % on: how many are left, until the new week.
+                if let allowance, allowance.near, !allowance.usedUp, !usedUp {
+                    Text(allowance.counter).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).fixedSize()
+                        .padding(.bottom, 2)
+                }
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             Button { Task { await send() } } label: {
                 Image(systemName: "arrow.up").font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.onButton)
                     .frame(width: 40, height: 40).background(Palette.button, in: Circle())
             }
-            .disabled(sending || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.demo)
+            .disabled(sending || usedUp || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.demo)
             .accessibilityLabel("Odeslat")
         }
+        .disabled(usedUp)
+        .opacity(usedUp ? 0.55 : 1)
         .padding(.horizontal, 16).padding(.vertical, 10)
         .background(.ultraThinMaterial)
     }
@@ -195,7 +222,7 @@ struct CoachView: View {
     private func send() async {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         // The demo has no account to ask with.
-        guard !text.isEmpty, !sending, !model.demo else { return }
+        guard !text.isEmpty, !sending, !usedUp, !model.demo else { return }
         input = ""
         error = nil
         let mine = Bubble(mine: true, text: text)
@@ -239,6 +266,12 @@ struct CoachView: View {
                         }
                     }
                     if let chat = result.chatId { chatId = chat }
+                    if let a = result.coachAllowance {
+                        allowance = a
+                        if a.notice == true { messages.append(Bubble(mine: false, text: a.chatNotice, note: true)) }
+                        // The extra messages are gone too: the card now, not a refused message later.
+                        if a.more == false { usedUp = true }
+                    }
                 }
             }
             if let last = unshown { edit(id) { $0.text = last } }
@@ -250,6 +283,12 @@ struct CoachView: View {
         } catch APIError.subscriptionRequired {
             messages.removeAll { $0.id == id }
             needsSubscription = true
+        } catch APIError.coachAllowanceUsed(_, let a) {
+            // The question stays in the field for next week.
+            messages.removeAll { $0.id == id || $0.id == mine.id }
+            input = text
+            if let a { allowance = a }
+            usedUp = true
         } catch {
             messages.removeAll { $0.id == id && $0.text.isEmpty }
             self.error = error.localizedDescription
@@ -335,6 +374,8 @@ struct CoachView: View {
         messages = []
         chatId = nil
         error = nil
+        // A new conversation gets no extra messages.
+        usedUp = allowance?.usedUp == true
     }
 
     /// The server keeps a one-line "[Návrhy: …]" with each answer, so later
@@ -347,6 +388,7 @@ struct CoachView: View {
         do {
             let chat = try await model.api.chat(id: id)
             chatId = chat.id
+            usedUp = allowance?.usedUp == true
             messages = chat.messages.map { Bubble(mine: $0.role == "user", text: $0.role == "user" ? $0.content : Self.withoutProposalNote($0.content)) }
         } catch {
             self.error = error.localizedDescription
@@ -363,7 +405,10 @@ struct BubbleView: View {
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
-            if !bubble.text.isEmpty {
+            if bubble.note {
+                Text(bubble.text).font(Typo.caption).foregroundStyle(Palette.muted)
+                    .multilineTextAlignment(.center).frame(maxWidth: .infinity)
+            } else if !bubble.text.isEmpty {
                 if bubble.mine {
                     Text(bubble.text)
                         .font(.body)
@@ -395,7 +440,7 @@ struct BubbleView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: bubble.mine ? .trailing : .leading)
-        .padding(bubble.mine ? .leading : .trailing, 40)
+        .padding(bubble.mine ? .leading : .trailing, bubble.note ? 0 : 40)
     }
 }
 

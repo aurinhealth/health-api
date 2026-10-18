@@ -9,6 +9,8 @@ enum APIError: LocalizedError, Equatable {
     case updateRequired(String)
     /// The AI feature needs the AI subscription (402 subscription_required).
     case subscriptionRequired(String)
+    /// This week's messages to the coach are used up (429 coach_allowance_used).
+    case coachAllowanceUsed(String, CoachAllowance?)
 
     var errorDescription: String? {
         switch self {
@@ -17,6 +19,7 @@ enum APIError: LocalizedError, Equatable {
         case .aiConsentRequired(let text): return text
         case .updateRequired(let text): return text
         case .subscriptionRequired(let text): return text
+        case .coachAllowanceUsed(let text, _): return text
         }
     }
 }
@@ -734,6 +737,10 @@ final class APIClient: @unchecked Sendable {
             }
             if json?["status"] as? String == "ai_consent_required" {
                 throw APIError.aiConsentRequired(message ?? L10n.tr("AI funkce potřebují tvůj souhlas."))
+            }
+            if json?["status"] as? String == "coach_allowance_used" {
+                struct Used: Decodable { let coachAllowance: CoachAllowance? }
+                throw APIError.coachAllowanceUsed(message ?? L10n.tr("Zprávy koučovi na tento týden jsou vyčerpané."), (try? decoder.decode(Used.self, from: data))?.coachAllowance)
             }
             if http.statusCode == 402 {
                 onSubscriptionRequired?()
