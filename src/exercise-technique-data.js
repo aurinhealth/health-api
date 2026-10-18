@@ -2520,6 +2520,7 @@ export const TECHNIQUE = {
   ],
   "breathing": "Nádech při předklonu, výdech při narovnání.",
   "video": {
+   "similar": true,
    "id": "WssO7uXo7VU",
    "title": "Sumo Smith Machine Deadlift"
   },
@@ -2751,6 +2752,7 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech při přitahování, nádech při návratu.",
   "video": {
+   "similar": true,
    "id": "yOjR1XSUWB4",
    "title": "Supinated Standing Cable Row"
   },
@@ -3129,6 +3131,7 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech nahoru, nádech dolů.",
   "video": {
+   "similar": true,
    "id": "quh6n4ZmJjA",
    "title": "How To Do: Cable Shrug"
   },
@@ -3234,6 +3237,7 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech při pokrčení, nádech zpět.",
   "video": {
+   "similar": true,
    "id": "Atl5qhOfJpQ",
    "title": "Lying Cable Hamstring Curl: How To"
   },
@@ -3276,6 +3280,7 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech při přitahování, nádech zpět.",
   "video": {
+   "similar": true,
    "id": "uw48GA0KrlA",
    "title": "Seated Straight Bar Cable Row"
   },
@@ -3465,6 +3470,7 @@ export const TECHNIQUE = {
   ],
   "breathing": "Výdech při přitahování, nádech zpět.",
   "video": {
+   "similar": true,
    "id": "bxI-0tHUoUA",
    "title": "DY Rows Reverse Grip Row Machine"
   },

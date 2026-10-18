@@ -88,8 +88,5 @@ test('catalog exercises carry start and end photos from the open exercise databa
     'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/Seated_Cable_Rows/1.jpg']);
   const withPhotos=Object.keys(EXERCISES).filter(n=>techniqueFor(n).photos.length===2);
   assert.ok(withPhotos.length>=90,'only '+withPhotos.length+' exercises have photos');
-  // Without a database photo, two stills from the exercise's video.
-  const pendulum=techniqueFor('Pendulum squat');
-  assert.deepEqual(pendulum.photos,['hq1','hq3'].map(f=>'https://i.ytimg.com/vi/'+pendulum.video.id+'/'+f+'.jpg'));
-  assert.deepEqual(techniqueFor('Pendulum squat',{url:'https://youtu.be/dQw4w9WgXcQ'}).photos.length,2);
+  assert.deepEqual(techniqueFor('Pendulum squat').photos,[]);
 });

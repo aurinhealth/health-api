@@ -94,14 +94,18 @@ test("the generator keeps one variant for five weeks, then moves on", () => {
   assert.ok([...names].filter(n => family.includes(n)).length <= 1, [...names].join());
 });
 
-test("every new machine and cable exercise has a video and start and end photos", () => {
+test("every new machine and cable exercise has a video; photos only from the Free Exercise DB", () => {
   for (const name of ADDED) {
     assert.match(TECHNIQUE[name]?.video?.id || "", /^[A-Za-z0-9_-]{11}$/, name + " video");
     assert.ok(TECHNIQUE[name].video.title, name + " video title");
     const t = techniqueFor(name);
     assert.equal(t.video.id, TECHNIQUE[name].video.id, name);
-    assert.equal(t.photos.length, 2, name + " photos");
-    assert.equal(new Set(t.photos).size, 2, name + " two different photos");
-    for (const url of t.photos) assert.match(url, /^https:\/\//, name);
+    assert.equal(t.photos.length, PHOTO_IDS[name] ? 2 : 0, name + " photos");
+    for (const url of t.photos) { assert.match(url, /^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\//, name); assert.doesNotMatch(url, /ytimg/, name); }
   }
+});
+
+test("near-variant videos are marked as a similar exercise", () => {
+  const SIMILAR = ["Cable 30 Degree Shrug", "Smith Machine Sumo Romanian Deadlift", "Straight Bar Bench Mid Rows", "Machine Underhand Row", "Cable Single Leg Laying Leg Curl", "Cable Supinating Row"];
+  for (const name of ADDED) assert.equal(techniqueFor(name).video.similar, SIMILAR.includes(name), name);
 });
