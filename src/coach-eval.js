@@ -240,11 +240,20 @@ function commonChecks(r, scenario) {
     quality('jazyk odpovědi', scenario.lang === 'en' ? !czech : czech),
     quality('bez názvů polí z dat', !/\b(?:cyclingCoachV2|todayParts|todayZone|preferenceMemory|appContext|workoutLibraryRecommendations|userInitiated|athleteState|recoveryTime|beforeLong)\b/.test(r.answer)),
     quality('bez řádku [Návrhy]', !/\[(?:Návrhy|Proposals):/.test(r.answer)),
+    quality('jen latinka', !otherScript(r.answer).length, otherScript(r.answer).join(', ')),
+    ...(scenario.lang === 'en' ? [] : [quality('kouč o sobě v mužském rodě', !feminineSelf(r.answer).length, feminineSelf(r.answer).join(', '))]),
     quality('nejvýš 180 slov', words(r.answer) <= 180, String(words(r.answer))),
     quality('text neslibuje kartu, kterou aplikace zahodila', !droppedCards(r).length, droppedCards(r).join(', ')),
     quality('karta ukazuje druh tréninku z odpovědi', !otherCards(r).length, otherCards(r).join(', '))
   ];
 }
+
+// Words with letters of another script (Cyrillic, Greek, Arabic, Hebrew, CJK):
+// "ubrал" with a Russian "л" (Coach evaluation run 14, S08).
+const otherScript = text => String(text).match(/\S*[\u0370-\u03ff\u0400-\u052f\u0590-\u06ff\u3040-\u30ff\u4e00-\u9fff]\S*/g) || [];
+// The coach's own conditional in the feminine ("dala bych", "bych dala");
+// "-ola"/"-íla" nouns (kola, síla) stay out.
+const feminineSelf = text => String(text).match(/\p{L}+[aeiyěá]la\s+bych\b|\bbych\s+\p{L}+[aeiyěá]la(?!\p{L})/giu) || [];
 
 // Kept rides and runs whose card the app prepares as another kind than the
 // coach named (recovery shown as endurance, sweet spot as tempo).
@@ -304,7 +313,7 @@ export async function runScenario(env, scenario, { ask = askCoach, date = localT
   const keptActions = validateCoachActions(reply.actions, ctx, date, { userInitiated: true }).map(a => { const card = cardKind(athlete, a, ctx.workoutLibraryRecommendations || []); return card ? { ...a, card } : a; });
   const checks = checkReply(scenario, { answer: reply.answer, kept: keptActions, proposed: reply.actions || [], task, model: reply.model }, now, date);
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), message: scenario.message, task, model: reply.model, ms: Date.now() - started,
-    usage: { input: reply.usage?.input_tokens ?? null, output: reply.usage?.output_tokens ?? null }, answer: reply.answer, visuals: reply.visuals, proposed: reply.actions, kept: keptActions, checks,
+    usage: { input: reply.usage?.input_tokens ?? null, cached: reply.usage?.input_tokens_details?.cached_tokens ?? null, output: reply.usage?.output_tokens ?? null }, answer: reply.answer, visuals: reply.visuals, proposed: reply.actions, kept: keptActions, checks,
     passed: checks.every(c => c.ok || c.severity !== 'safety') };
 }
 
