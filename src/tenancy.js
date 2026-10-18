@@ -43,6 +43,8 @@ export const PERSONAL_TABLES = {
   exercise_videos: {},
   api_cache_versions: {},
   ai_usage: {},
+  // The weekly allowance of coach messages (coach-allowance.js).
+  coach_messages: {},
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
   user_language: {}, user_time_zone: {}, recovery_sessions: {}, user_consents: {},

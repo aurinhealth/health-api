@@ -17,6 +17,8 @@ struct AssistantResult: Decodable, Equatable {
     var draft: FoodDraft? = nil
     /// What the coach remembered, forgot or rewrote with this answer.
     var memoryChanges: MemoryChanges? = nil
+    /// This week's messages to the coach after this answer (src/coach-allowance.js).
+    var coachAllowance: CoachAllowance? = nil
 
     struct MemoryChanges: Decodable, Equatable {
         let saved: String?

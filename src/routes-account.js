@@ -3,6 +3,7 @@
 import { initialImport } from "./account-sync.js";
 import { onboardingStatus, completeOnboarding } from "./onboarding.js";
 import { subscriptionStatus } from "./subscription.js";
+import { coachAllowance } from "./coach-allowance.js";
 import { consentStatus, saveConsent } from "./consent.js";
 import { missingProviders, connectionEnvironment, deleteConnectionSecret } from "./connection-secrets.js";
 import { bumpCacheVersion } from "./api-cache.js";
@@ -69,7 +70,8 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
       return Response.json(result,{headers:{'Cache-Control':'no-store','Set-Cookie':handleDashboardLogout().headers.get('Set-Cookie')}});
     }catch(error){return Response.json({message:error.message},{status:400});}
   }
-  if(url.pathname==='/app/api/subscription'&&request.method==='GET')return Response.json(await subscriptionStatus(env),{headers:{'Cache-Control':'no-store'}});
+  // With the week's coach messages, which Settings → Aurin Pro shows from 75 % on (coach-allowance.js).
+  if(url.pathname==='/app/api/subscription'&&request.method==='GET')return Response.json({...await subscriptionStatus(env),coachAllowance:await coachAllowance(env).catch(()=>null)},{headers:{'Cache-Control':'no-store'}});
   if(url.pathname==='/app/api/onboarding'){
     if(request.method==='GET')return Response.json(await onboardingStatus(env),{headers:{'Cache-Control':'no-store'}});
     if(request.method==='POST'){
