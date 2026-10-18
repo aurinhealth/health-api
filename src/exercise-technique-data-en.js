@@ -2994,5 +2994,911 @@ export const TECHNIQUE_EN = {
    "Turning with the hips instead of the torso."
   ],
   breathing: "Exhale as you turn, inhale on the way back."
+ },
+ "Dumbbell Chest Fly": {
+  setup: ["Lie on a flat bench with the dumbbells over your chest, palms facing each other.","Pull your shoulder blades together, feet firmly on the floor."],
+  steps: ["Bend your elbows slightly and keep that angle throughout.","Lower your arms out to the sides in an arc until you feel a stretch in your chest.","Bring them back over your chest along the same arc."],
+  mistakes: ["Straightening or bending the elbows during the rep (the fly turns into a press).","Lowering the arms far below the bench."],
+  breathing: "Inhale on the way down, exhale as you bring the arms together."
+ },
+ "Dumbbell Incline Chest Fly": {
+  setup: ["Set the back rest to 30–45° and hold the dumbbells over your upper chest.","Shoulder blades pulled back, hips on the seat."],
+  steps: ["Bend your elbows slightly and lock that angle.","Lower your arms in an arc out to the sides into a mild stretch.","Bring them back over your chest as if hugging a barrel."],
+  mistakes: ["A bench that is too steep, so the shoulders take over.","Knocking the dumbbells together at the top and losing tension."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Neutral High Incline Bench Press": {
+  setup: ["Set the back rest to 45–60° and hold the dumbbells at your shoulders, palms facing.","Shoulder blades down and back."],
+  steps: ["Press the dumbbells up over your chin, elbows close to your body.","Let them come only slightly together at the top.","Lower slowly back to your shoulders."],
+  mistakes: ["Elbows flared out to the sides.","Lifting your hips off the seat."],
+  breathing: "Exhale as you press, inhale as you lower."
+ },
+ "Neutral-Grip Dumbbell Bench Press": {
+  setup: ["Lie on a flat bench with the dumbbells over your chest, palms facing each other.","Shoulder blades pulled back, feet on the floor."],
+  steps: ["Lower the dumbbells to the middle of your chest, elbows about 30° from your body.","Stop when the dumbbells reach your chest.","Press them back up."],
+  mistakes: ["Elbows straight out to the sides.","Bouncing the dumbbells off your chest."],
+  breathing: "Inhale down, exhale as you press."
+ },
+ "One Arm Dumbbell Bench Press": {
+  setup: ["Lie on a flat bench with one dumbbell over your chest.","Hold the bench with your free hand, feet wide on the floor."],
+  steps: ["Brace your abs so the torso doesn't tilt towards the dumbbell.","Lower the dumbbell to your chest, elbow about 45° from your body.","Press it up and switch arms after the set."],
+  mistakes: ["Rolling the torso after the dumbbell.","Dropping the weight without control."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Chest-Supported Dumbbell Row": {
+  setup: ["Set the back rest to 30–45°, lie on it chest down with the dumbbells hanging.","Feet on the floor, chin in line with your spine."],
+  steps: ["Row the dumbbells to your hips, elbows travelling back.","Squeeze your shoulder blades at the top.","Lower your arms slowly."],
+  mistakes: ["Lifting the chest off the pad and swinging.","Shrugging towards your ears."],
+  breathing: "Exhale as you row, inhale on the way down."
+ },
+ "Dumbbell Back Extension": {
+  setup: ["Set the pad below your hips and hook your feet in.","Hold the dumbbell with both hands at your chest."],
+  steps: ["Bend forward at the hips with a flat back.","Raise your torso in line with your legs.","Hold briefly and lower slowly."],
+  mistakes: ["Leaning back beyond a straight line.","Jerking the torso up."],
+  breathing: "Exhale as you rise, inhale on the way down."
+ },
+ "Dumbbell Pullover": {
+  setup: ["Lie on a flat bench holding one dumbbell with both hands over your chest.","Elbows slightly bent, feet on the floor."],
+  steps: ["Lower the dumbbell in an arc behind your head into a stretch.","Keep your lower back on the bench, ribs down.","Pull it back over your chest along the same arc."],
+  mistakes: ["Bending the elbows so it turns into a triceps exercise.","Arching the lower back on the way down."],
+  breathing: "Inhale as you lower, exhale as you pull."
+ },
+ "Cuban Press": {
+  setup: ["Stand tall with light dumbbells held overhand in front of your thighs.","Brace your abs and glutes."],
+  steps: ["Row the dumbbells to shoulder height, elbows out at a right angle.","Rotate your forearms up while the elbows stay put.","Press the dumbbells overhead and return the same way."],
+  mistakes: ["Dumbbells that are too heavy.","Elbows dropping as you rotate."],
+  breathing: "Exhale as you press, inhale on the way back."
+ },
+ "Dumbbell Front Raise": {
+  setup: ["Stand tall with the dumbbells overhand in front of your thighs.","Elbows slightly bent, abs braced."],
+  steps: ["Raise your arms in front of you to shoulder height.","Hold briefly at the top.","Lower them slowly."],
+  mistakes: ["Leaning back and swinging.","Raising above eye level."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Dumbbell Incline Front Raise": {
+  setup: ["Set the back rest to about 45° and lean back on it.","Dumbbells hang by your sides, palms down."],
+  steps: ["Raise your arms in front of you to shoulder height.","Elbows only slightly bent.","Lower slowly back into the stretch."],
+  mistakes: ["Lifting your back off the pad.","A weight too heavy, jerked up."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Dumbbell Push Press": {
+  setup: ["Stand hip-width apart with the dumbbells on your shoulders, palms facing.","Brace your abs and glutes."],
+  steps: ["Dip quickly at the knees, torso upright.","Drive with your legs and press the dumbbells overhead.","Lower them under control to your shoulders."],
+  mistakes: ["A deep squat instead of a short dip.","Arching the lower back at the top."],
+  breathing: "Inhale before the dip, exhale as you press."
+ },
+ "Dumbbell Seated Lateral Raises": {
+  setup: ["Sit on a bench with an upright back rest, dumbbells by your sides.","Elbows slightly bent."],
+  steps: ["Raise your arms out to the sides to shoulder height.","Lead with the elbows, little finger slightly higher than the thumb.","Lower slowly."],
+  mistakes: ["Shrugging towards your ears.","Raising above shoulder height."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Dumbbell Seated Rear Delt Fly": {
+  setup: ["Sit on the end of a bench and lean forward, chest over your thighs.","Dumbbells hang below your knees, palms facing."],
+  steps: ["Raise your arms out to the sides in an arc, elbows slightly bent.","Hold briefly at the top.","Lower slowly."],
+  mistakes: ["Sitting up during the rep.","Squeezing the shoulder blades instead of using the rear delts."],
+  breathing: "Exhale as you raise, inhale down."
+ },
+ "Dumbbell Upright Row": {
+  setup: ["Stand tall with the dumbbells overhand in front of your thighs.","Abs braced, shoulders down."],
+  steps: ["Pull the dumbbells up along your body, leading with the elbows.","Stop at lower-chest height.","Lower them slowly."],
+  mistakes: ["Pulling all the way to the chin, which irritates the shoulders.","Swinging the torso."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Side Plank Lateral Raise": {
+  setup: ["Lie on your side on your forearm, elbow under your shoulder.","Lift your hips into a side plank with a light dumbbell in your top hand at your thigh."],
+  steps: ["Keep your body in one line from head to heels.","Raise the top arm out to the side to shoulder height.","Lower slowly; switch sides after the set."],
+  mistakes: ["Hips sagging towards the floor.","A dumbbell too heavy, swung up."],
+  breathing: "Breathe steadily, exhale as you raise the arm."
+ },
+ "Single-Arm Dumbbell Overhead Press": {
+  setup: ["Stand hip-width apart with the dumbbell at your shoulder, elbow under it.","Free hand on your hip, abs and glutes braced."],
+  steps: ["Press the dumbbell straight up over your shoulder.","Keep your torso upright without leaning.","Lower it slowly; switch arms after the set."],
+  mistakes: ["Leaning to the opposite side.","Arching the lower back."],
+  breathing: "Exhale as you press, inhale down."
+ },
+ "Standing Dumbbell Press": {
+  setup: ["Stand hip-width apart with the dumbbells at your shoulders.","Brace your abs and glutes, ribs down."],
+  steps: ["Press the dumbbells overhead, palms forward or facing.","At the top they sit over your shoulders, not in front of your head.","Lower them slowly to your shoulders."],
+  mistakes: ["Arching the lower back to get the weight up.","Using a knee dip to help."],
+  breathing: "Exhale as you press, inhale down."
+ },
+ "Bayesian Curl": {
+  setup: ["Set the pulley low with a single handle, stand facing away and step forward.","The arm is straight and slightly behind your body, palm forward."],
+  steps: ["Bend the elbow and curl the handle to your shoulder.","The elbow stays put, behind your body.","Straighten the arm slowly back into the stretch."],
+  mistakes: ["The elbow drifting forward, turning it into a plain curl.","Leaning the torso forward."],
+  breathing: "Exhale as you curl, inhale down."
+ },
+ "Close-Grip Push-Up off a Dumbbell": {
+  setup: ["Lay a dumbbell on the floor and put both palms on its ends.","Body in one line from head to heels."],
+  steps: ["Lower your chest to the dumbbell, elbows tight to your body.","At the bottom your chest nearly touches it.","Push back up."],
+  mistakes: ["Elbows flared out.","Hips sagging or piked."],
+  breathing: "Inhale down, exhale as you push."
+ },
+ "Cross-Body Hammer Curl": {
+  setup: ["Stand tall with the dumbbells by your sides, palms facing in.","Elbows at your sides."],
+  steps: ["Curl one dumbbell across your body to the opposite shoulder.","The palm keeps facing your body.","Lower it slowly and alternate arms."],
+  mistakes: ["Swinging the torso.","Elbows drifting away from your body."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Dumbbell Concentration Curl": {
+  setup: ["Sit on a bench, legs apart, elbow braced on the inside of your thigh.","The arm hangs with the dumbbell, palm away from the thigh."],
+  steps: ["Bend the elbow and curl the dumbbell to your shoulder.","Squeeze the biceps at the top.","Lower slowly; switch arms after the set."],
+  mistakes: ["Lifting the elbow off the thigh.","Helping with the torso."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Dumbbell Preacher Curl": {
+  setup: ["Set the seat so your armpits sit on the top edge of the pad.","Hold the dumbbells underhand, arms on the pad."],
+  steps: ["Curl the dumbbells to your shoulders.","Squeeze the biceps at the top.","Lower slowly until almost straight."],
+  mistakes: ["Dropping fast and bouncing at the bottom.","Lifting the elbows off the pad."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Dumbbell Skullcrusher": {
+  setup: ["Lie on a flat bench with the dumbbells over your shoulders, palms facing.","Arms vertical, shoulder blades on the bench."],
+  steps: ["Bend your elbows and lower the dumbbells beside your head.","The upper arms stay still.","Straighten your elbows back up."],
+  mistakes: ["Elbows drifting out.","Moving at the shoulders instead of the elbows."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Tricep Kickback": {
+  setup: ["Put one hand and knee on the bench, back flat.","Hold the upper arm with the dumbbell at your side, parallel to the floor."],
+  steps: ["Straighten the elbow, moving the dumbbell back.","Hold briefly at the top.","Bend the elbow slowly; switch arms after the set."],
+  mistakes: ["Swinging the arm from the shoulder.","The upper arm dropping."],
+  breathing: "Exhale as you straighten, inhale back."
+ },
+ "Zottman Curl": {
+  setup: ["Stand tall with the dumbbells by your sides, palms forward.","Elbows at your sides."],
+  steps: ["Curl the dumbbells to your shoulders like a normal curl.","Turn your palms down at the top.","Lower slowly overhand and turn the palms back at the bottom."],
+  mistakes: ["Lowering fast, which takes the work off the forearms.","Swinging the torso."],
+  breathing: "Exhale up, inhale on the way down."
+ },
+ "Dumbbell Cossack Squat": {
+  setup: ["Stand wide, toes slightly out, holding a dumbbell upright at your chest.","Chest up, abs braced."],
+  steps: ["Shift your weight onto one leg and sit into a deep squat on it.","The other leg stays straight, toes pointing up.","Push back to the middle and go to the other side."],
+  mistakes: ["Lifting the heel of the bent leg.","Rounding your back and letting the chest fall forward."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Cross Body Romanian Deadlift": {
+  setup: ["Stand on one leg, knee slightly bent.","Hold the dumbbell in the hand on the side of the raised leg."],
+  steps: ["Hinge at the hip as the free leg goes back.","Take the dumbbell down across your body towards the standing foot.","Drive through the heel to stand; switch legs after the set."],
+  mistakes: ["Hips opening to the side.","Rounding the back instead of hinging."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Deadlift": {
+  setup: ["Stand between two dumbbells on the floor, feet hip-width apart.","Bend your knees, grip the dumbbells, back flat."],
+  steps: ["Brace your abs and stand up by pushing the floor away.","Lock out your hips at the top without leaning back.","Lower them under control to the floor."],
+  mistakes: ["A rounded back as you lift.","Jerking instead of a smooth pull."],
+  breathing: "Inhale and brace at the bottom, exhale at the top."
+ },
+ "Dumbbell Feet Elevated Glute Bridge": {
+  setup: ["Lie on your back with your heels on a bench.","Hold the dumbbell with both hands on your hips."],
+  steps: ["Drive your heels into the bench and lift your hips.","Squeeze your glutes at the top, body in line from shoulders to knees.","Lower your hips slowly almost to the floor."],
+  mistakes: ["Arching the lower back instead of using the glutes.","Bouncing the hips off the floor."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Dumbbell Front Squat": {
+  setup: ["Stand shoulder-width apart with one end of each dumbbell resting on your shoulders.","Elbows forward, chest up."],
+  steps: ["Sit into the squat, knees following your toes.","Go as deep as you can with a flat back.","Push the floor away and stand up."],
+  mistakes: ["Elbows dropping so the dumbbells slide forward.","Knees caving in."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Goblet Alternating Curtsy Lunge": {
+  setup: ["Stand tall holding a dumbbell upright at your chest.","Feet hip-width apart."],
+  steps: ["Step one leg diagonally back behind the other.","Lower until the front thigh is nearly parallel to the floor.","Push back up and alternate legs."],
+  mistakes: ["Twisting the hips to the side.","The front knee caving in."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Goblet Bulgarian Split Squat": {
+  setup: ["Put the top of your back foot on a bench, front foot well ahead.","Hold a dumbbell upright at your chest."],
+  steps: ["Lower straight down, back knee towards the floor.","At the bottom the front thigh is about parallel to the floor.","Push through the front leg back up; switch legs after the set."],
+  mistakes: ["Front foot too close to the bench.","Pushing off with the back leg."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Goblet Split Squat": {
+  setup: ["Take a long stride, back heel lifted.","Hold a dumbbell upright at your chest."],
+  steps: ["Lower straight down until the back knee almost touches the floor.","The front knee follows your toes.","Push up through the front leg; switch legs after the set."],
+  mistakes: ["A stride too short, so the knee travels far past the toes.","Leaning the torso forward."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Lateral Lunge": {
+  setup: ["Stand tall with a dumbbell at your chest.","Feet together."],
+  steps: ["Take a wide step to the side and sit onto that leg.","The other leg stays straight.","Push back to standing; alternate or finish the set on one side."],
+  mistakes: ["The knee caving in.","A rounded back in the deep sit."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Overhead Squat": {
+  setup: ["Press a light dumbbell overhead with one hand.","Feet shoulder-width apart, eyes forward."],
+  steps: ["Sit into the squat with the arm vertical over the shoulder.","Go only as deep as you can keep the arm overhead.","Stand up and switch hands after the set."],
+  mistakes: ["The arm drifting forward.","A dumbbell that is too heavy."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Single Leg Hip Thrust": {
+  setup: ["Rest your shoulder blades on the edge of a bench, one foot down, the other leg up.","Hold the dumbbell on your hip on the planted side."],
+  steps: ["Drive through the heel and lift your hips level.","Squeeze your glutes at the top.","Lower slowly; switch legs after the set."],
+  mistakes: ["The pelvis tipping towards the raised leg.","Throwing the head and lower back back."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Dumbbell Squat": {
+  setup: ["Stand shoulder-width apart with the dumbbells by your sides.","Chest up, abs braced."],
+  steps: ["Sit into the squat, dumbbells hanging straight down.","Knees follow your toes.","Push the floor away and stand up."],
+  mistakes: ["Heels lifting.","Knees caving in."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Thruster": {
+  setup: ["Stand shoulder-width apart with the dumbbells on your shoulders.","Elbows forward, abs braced."],
+  steps: ["Squat down with the dumbbells on your shoulders.","Drive up from the bottom and use that momentum to press the dumbbells overhead.","Lower them to your shoulders and go straight into the next squat."],
+  mistakes: ["Pressing only after you are standing (two separate moves).","Leaning back at the top."],
+  breathing: "Inhale at the bottom, exhale as you press."
+ },
+ "Dumbbell Tibialis Raise": {
+  setup: ["Sit on the end of a bench, legs hanging, a dumbbell held between your feet against the tops.","Hold the bench with your hands."],
+  steps: ["Pull your toes up towards your shins.","Hold briefly at the top.","Lower your toes slowly."],
+  mistakes: ["A loose dumbbell that could fall.","A small range with a jerk."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Dumbbell Walking Lunges": {
+  setup: ["Stand tall with the dumbbells by your sides.","Have clear space in front of you."],
+  steps: ["Take a long step forward and lower, back knee above the floor.","Push off the front leg and bring the back leg forward into the next lunge.","Keep alternating, the same count per leg."],
+  mistakes: ["Short steps with the knee far past the toes.","Leaning the torso forward."],
+  breathing: "Inhale down, exhale as you rise."
+ },
+ "Heel Elevated Dumbbell Front Squat": {
+  setup: ["Put your heels on a plate or wedge with the dumbbells on your shoulders.","Feet hip-width apart."],
+  steps: ["Lower into a deep squat with an upright torso.","The knees may travel past the toes.","Push the floor away and stand up."],
+  mistakes: ["A support that is too high, so you lose balance.","Elbows dropping."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Russian Twist": {
+  setup: ["Sit on a mat, knees bent, torso leaning back slightly.","Hold the dumbbell with both hands in front of your chest."],
+  steps: ["Turn your torso and take the dumbbell to one hip.","Come back through the middle and turn to the other side.","Count reps per side and keep it calm."],
+  mistakes: ["A rounded back and sunken chest.","Moving only the arms without turning the torso."],
+  breathing: "Exhale as you turn, inhale in the middle."
+ },
+ "Dumbbell Side Bend": {
+  setup: ["Stand tall with a dumbbell in one hand at your side.","Free hand on your hip."],
+  steps: ["Bend sideways towards the dumbbell, only to the side.","Come back up by pulling with the obliques on the other side.","Switch hands after the set."],
+  mistakes: ["Leaning forward or twisting.","Dumbbells in both hands (they cancel out)."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Dumbbell Single Arm Clean And Press": {
+  setup: ["Put the dumbbell between your feet, stance hip-width.","Bend your knees and grip it with one hand, back flat."],
+  steps: ["Snap your hips forward and clean the dumbbell to your shoulder, elbow under it.","Press it overhead from the shoulder.","Lower it to the shoulder, then under control to the floor; switch hands after the set."],
+  mistakes: ["Pulling with the arm only, no hip drive.","A rounded back at the bottom."],
+  breathing: "Exhale on the clean and the press, inhale in between."
+ },
+ "Dumbbell Superman": {
+  setup: ["Lie face down with your arms stretched in front holding light dumbbells.","Legs straight, eyes on the mat."],
+  steps: ["Lift your arms, chest and legs a little off the floor together.","Hold 1–2 s at the top.","Lower slowly."],
+  mistakes: ["Throwing the head back.","Swinging up too high."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Dumbbell Windmill": {
+  setup: ["Press a light dumbbell overhead, feet shoulder-width, toes turned away from it.","Eyes on the dumbbell."],
+  steps: ["Push your hips to the dumbbell side and reach your free hand down towards the lower foot.","The dumbbell arm stays vertical over the shoulder.","Stand up slowly; switch sides after the set."],
+  mistakes: ["Bending the dumbbell elbow.","Rounding the back instead of hinging at the hip."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Bench Dips": {
+  setup: ["Sit on the edge of a bench, hands beside your hips, fingers forward.","Slide your hips off the bench, legs bent or straight."],
+  steps: ["Bend your elbows and lower until the upper arms are about level.","Elbows point back, not out.","Straighten your elbows and push up."],
+  mistakes: ["Going so deep that the shoulder is strained.","Shoulders dropping to the ears."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Barbell Floor Press": {
+  setup: ["Lie on the floor under the bar in the rack, hooks set low.","Grip a bit wider than your shoulders, shoulder blades pulled back."],
+  steps: ["Unrack the bar and hold it over your chest.","Lower it until your upper arms touch the floor.","Pause briefly and press it up."],
+  mistakes: ["Bouncing the elbows off the floor.","Elbows straight out to the sides."],
+  breathing: "Inhale down, exhale as you press."
+ },
+ "Barbell Deadlift": {
+  setup: ["Stand at the bar with it over the middle of your feet, feet hip-width.","Grip just outside your knees, shins touching the bar, back flat."],
+  steps: ["Breathe in, brace and push the floor away.","The bar travels close to your legs, hips and shoulders rise together.","Lock out your hips, then lower the bar the same way under control."],
+  mistakes: ["A rounded back.","The bar drifting away from your body."],
+  breathing: "Breathe in and brace before the pull, exhale at the top."
+ },
+ "Barbell Pullover": {
+  setup: ["Lie on a flat bench holding a light bar over your chest with a narrow grip.","Elbows slightly bent."],
+  steps: ["Lower the bar in an arc behind your head into a stretch.","The elbow angle doesn't change.","Pull the bar back over your chest."],
+  mistakes: ["A bar too heavy and bending the elbows.","Arching the lower back."],
+  breathing: "Inhale as you lower, exhale as you pull."
+ },
+ "Barbell Rack Pull": {
+  setup: ["Set the rack safeties just above or below your knees and rest the bar on them.","Stand at the bar, grip shoulder-width, back flat."],
+  steps: ["Brace and pull the bar up along your thighs.","Lock out your hips and squeeze your shoulder blades at the top.","Return the bar to the safeties under control."],
+  mistakes: ["Leaning back at the top.","Dropping the bar onto the safeties."],
+  breathing: "Breathe in and brace before the pull, exhale at the top."
+ },
+ "Pendlay Row": {
+  setup: ["The bar is on the floor; hinge over with a flat back, torso almost level.","Grip a little wider than your shoulders."],
+  steps: ["Row the bar sharply to your lower chest.","Squeeze your shoulder blades at the top.","Set the bar back on the floor and start the next rep from a dead stop."],
+  mistakes: ["Lifting the torso with each pull.","A rounded back."],
+  breathing: "Exhale as you row, inhale at the bottom."
+ },
+ "Seal Row": {
+  setup: ["Raise the bench so the bar hangs below it with straight arms; lie on it face down.","Grip the bar at shoulder width."],
+  steps: ["Row the bar up to the underside of the bench.","Squeeze your shoulder blades at the top.","Lower your arms slowly."],
+  mistakes: ["Lifting the chest off the bench.","Jerking and bouncing."],
+  breathing: "Exhale as you row, inhale down."
+ },
+ "Barbell Rear Delt Row": {
+  setup: ["Hinge over with a flat back, holding the bar with a wide overhand grip.","Knees slightly bent."],
+  steps: ["Row the bar to your upper chest, elbows travelling out.","Hold briefly at the top.","Lower the bar slowly."],
+  mistakes: ["Elbows tucked in (it turns into a normal row).","Swinging the torso."],
+  breathing: "Exhale as you row, inhale down."
+ },
+ "Barbell Upright Row": {
+  setup: ["Stand tall, holding the bar overhand at shoulder width or a little wider.","Abs braced."],
+  steps: ["Pull the bar up along your body, leading with the elbows.","Stop at lower-chest height.","Lower the bar slowly."],
+  mistakes: ["A narrow grip and pulling to the chin.","Swinging the torso."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Seated Barbell Military Press": {
+  setup: ["Put a bench with an upright back in the rack, hooks at chin height.","Grip a little wider than your shoulders."],
+  steps: ["Unrack the bar and hold it at your upper chest.","Press it overhead, moving your head back slightly and then under the bar.","Lower it slowly to your chest."],
+  mistakes: ["Leaning back off the back rest.","Lowering behind your head."],
+  breathing: "Exhale as you press, inhale down."
+ },
+ "Barbell Curl": {
+  setup: ["Stand tall holding the bar underhand at shoulder width.","Elbows at your sides."],
+  steps: ["Curl the bar to your shoulders, elbows staying put.","Squeeze the biceps at the top.","Lower the bar slowly to straight arms."],
+  mistakes: ["Swinging the torso.","Elbows moving forward."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Barbell Drag Curl": {
+  setup: ["Stand tall, holding the bar underhand at shoulder width against your thighs.","Abs braced."],
+  steps: ["Pull the bar up close against your body as your elbows go back.","Stop below your chest and squeeze the biceps.","Lower the bar the same way."],
+  mistakes: ["The bar moving away from your body.","Shrugging."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Barbell Skullcrusher": {
+  setup: ["Lie on a flat bench with the bar held in a narrow overhand grip over your shoulders.","Arms vertical."],
+  steps: ["Bend your elbows and lower the bar to your forehead or just behind your head.","The upper arms stay still.","Straighten your elbows back up."],
+  mistakes: ["Elbows flaring out.","Dropping the bar fast towards your face."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Reverse Grip Barbell Curl": {
+  setup: ["Stand tall, holding the bar overhand at shoulder width.","Elbows at your sides."],
+  steps: ["Curl the bar to your shoulders with straight wrists.","Hold briefly at the top.","Lower the bar slowly."],
+  mistakes: ["Wrists bending down.","A bar too heavy and swinging."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Spider Curl": {
+  setup: ["Set the back rest to 45° and lie on it chest down.","Hold the bar underhand, arms hanging straight down."],
+  steps: ["Curl the bar to your shoulders with the upper arms vertical.","Squeeze the biceps at the top.","Lower the bar slowly."],
+  mistakes: ["Swinging the upper arms forward.","Lifting your chest off the bench."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Barbell Banded Back Squat": {
+  setup: ["Tie the bands to the bottom of the rack and loop them over the bar ends.","Put the bar on your upper back and step out of the hooks."],
+  steps: ["Sit into the squat under control.","Drive up fast from the bottom against the growing resistance.","Lock out your hips at the top and continue."],
+  mistakes: ["Bands stretched unevenly on the two sides.","Knees caving in."],
+  breathing: "Breathe in and brace at the top, exhale past the hardest point."
+ },
+ "Barbell Glute Bridge": {
+  setup: ["Lie on your back and roll the padded bar over your thighs onto your hips.","Feet close to your glutes, hip-width apart."],
+  steps: ["Drive through your heels and lift your hips.","Squeeze your glutes at the top, ribs down.","Lower your hips slowly to the floor."],
+  mistakes: ["Arching the lower back.","Feet too far away so the hamstrings take over."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Barbell Split Squat": {
+  setup: ["Put the bar on your upper back and walk out of the rack.","Take a long stride, back heel lifted."],
+  steps: ["Lower straight down, back knee towards the floor.","The front knee follows your toes.","Push up through the front leg; switch legs after the set."],
+  mistakes: ["Feet in one line so you wobble side to side.","Leaning the torso forward."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Barbell Thruster": {
+  setup: ["Rest the bar on your front shoulders, grip a little wider than your shoulders.","Elbows forward."],
+  steps: ["Sit into a front squat.","Drive up from the bottom and use that momentum to press the bar overhead.","Lower it to your shoulders and go into the next squat."],
+  mistakes: ["Elbows dropping so the bar slides forward.","Leaning back at the top."],
+  breathing: "Inhale at the bottom, exhale as you press."
+ },
+ "Deficit Deadlift": {
+  setup: ["Stand on a stable plate or low platform (2–5 cm), bar over the middle of your feet.","Grip the bar, shins against it, back flat."],
+  steps: ["Brace and push your feet into the platform.","The bar travels close to your legs.","Lock out your hips and return the bar to the floor under control."],
+  mistakes: ["A platform too high and a rounded back.","Hips shooting up before the shoulders."],
+  breathing: "Breathe in and brace before the pull, exhale at the top."
+ },
+ "Pause Squat": {
+  setup: ["Put the bar on your upper back and walk out of the rack.","Feet shoulder-width apart."],
+  steps: ["Sit into the squat and hold 2 s at the bottom without relaxing.","Stand up from the pause without a bounce.","Breathe at the top and continue."],
+  mistakes: ["Relaxing the abs during the pause.","Pausing high above parallel."],
+  breathing: "Breathe in at the top, hold through the pause, exhale at the top."
+ },
+ "Sumo Deadlift": {
+  setup: ["Stand wide, toes out, bar over the middle of your feet.","Grip the bar at shoulder width inside your knees, chest up."],
+  steps: ["Push your knees out and spread the floor with your feet.","Stand up with the bar close to your body.","Lock out your hips and lower the bar under control."],
+  mistakes: ["Knees caving in.","Hips shooting up so the back finishes the lift."],
+  breathing: "Breathe in and brace before the pull, exhale at the top."
+ },
+ "Kettlebell Gorilla Row": {
+  setup: ["Stand wider than your hips with two kettlebells between your feet.","Hinge over with a flat back and grip both."],
+  steps: ["Row one kettlebell to your hip while pressing on the one on the floor.","Set it down and row the other.","Alternate sides, torso low and flat."],
+  mistakes: ["The torso twisting with the pull.","A rounded back."],
+  breathing: "Exhale as you row, inhale as you set down."
+ },
+ "Kettlebell Renegade Rows": {
+  setup: ["Set two kettlebells shoulder-width apart and hold them in a plank.","Feet wide for stability."],
+  steps: ["Row one kettlebell to your hip while pushing the other into the floor.","Set it down under control.","Alternate sides, hips still."],
+  mistakes: ["Twisting the hips.","Feet together so you lose balance."],
+  breathing: "Exhale as you row, inhale at the bottom."
+ },
+ "Kettlebell Single Arm Row": {
+  setup: ["Put one hand and knee on the bench, back flat.","Hold the kettlebell in the other hand under your shoulder."],
+  steps: ["Row the kettlebell to your hip, elbow going back.","Squeeze the shoulder blade at the top.","Lower slowly; switch arms after the set."],
+  mistakes: ["Twisting the torso.","Pulling with the forearm only."],
+  breathing: "Exhale as you row, inhale down."
+ },
+ "Kettlebell Clean & Press (Double)": {
+  setup: ["Put two kettlebells between your feet, stance hip-width.","Hinge over with a flat back and grip them."],
+  steps: ["Swing them back between your legs and snap your hips to clean them to your shoulders, wrists straight.","Press them overhead from the shoulders.","Lower to the shoulders, then swing down into the next rep."],
+  mistakes: ["Kettlebells flipping and banging your forearms.","Leaning back on the press."],
+  breathing: "Exhale on the clean and the press."
+ },
+ "Kettlebell Push Press": {
+  setup: ["Hold the kettlebells in the rack at your shoulders, elbows in.","Stance hip-width."],
+  steps: ["Dip quickly at the knees, torso upright.","Drive with your legs and press the kettlebells overhead.","Lower them under control to your shoulders."],
+  mistakes: ["A deep squat instead of a dip.","Leaning back at the top."],
+  breathing: "Inhale before the dip, exhale as you press."
+ },
+ "One-Arm Kettlebell Military Press To Side": {
+  setup: ["Hold the kettlebell at your shoulder, elbow in.","Stance hip-width, free arm out to the side."],
+  steps: ["Lean slightly away from the kettlebell.","Press it over your shoulder, palm forward.","Lower it to the shoulder and stand tall; switch arms after the set."],
+  mistakes: ["Leaning too far and losing the brace.","Arching the lower back."],
+  breathing: "Exhale as you press, inhale down."
+ },
+ "Two-Arm Kettlebell Military Press": {
+  setup: ["Hold the kettlebells at your shoulders, elbows in, wrists straight.","Brace your abs and glutes."],
+  steps: ["Press the kettlebells overhead as your palms turn forward.","At the top they sit over your shoulders.","Lower them slowly to your shoulders."],
+  mistakes: ["Arching the lower back.","Bent wrists."],
+  breathing: "Exhale as you press, inhale down."
+ },
+ "Kettlebell Goblet Curl": {
+  setup: ["Hold the kettlebell by the horns with both hands in front of your thighs.","Elbows at your sides."],
+  steps: ["Curl the kettlebell to your chest.","Squeeze the biceps at the top.","Lower it slowly to straight arms."],
+  mistakes: ["Swinging the torso.","Elbows moving forward."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Kettlebell Romanian Deadlift": {
+  setup: ["Stand hip-width with one or two kettlebells in front of your thighs.","Knees slightly bent."],
+  steps: ["Push your hips back and slide the kettlebells down your legs.","Stop when you feel a stretch in your hamstrings.","Drive your hips forward to stand."],
+  mistakes: ["A rounded back.","Bending the knees into a squat."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Kettlebell Sumo Deadlift": {
+  setup: ["Stand wide, toes out, kettlebell between your feet.","Bend your knees and grip the handle, back flat."],
+  steps: ["Push through your legs and stand up.","Lock out your hips at the top.","Lower it under control to the floor."],
+  mistakes: ["Knees caving in.","Pulling with the back."],
+  breathing: "Inhale at the bottom, exhale up."
+ },
+ "Kettlebell Thruster": {
+  setup: ["Hold the kettlebells at your shoulders, elbows in.","Stance shoulder-width."],
+  steps: ["Sit into a squat.","Stand up and use the leg drive to press the kettlebells overhead.","Lower them to your shoulders and go into the next squat."],
+  mistakes: ["Pressing only once standing.","Leaning back at the top."],
+  breathing: "Inhale at the bottom, exhale as you press."
+ },
+ "Kettlebell Windmill": {
+  setup: ["Press a light kettlebell overhead, toes turned away from it.","Eyes on the kettlebell."],
+  steps: ["Push your hips to the kettlebell side and slide your free hand down your leg.","The overhead arm doesn't move.","Stand up; switch sides after the set."],
+  mistakes: ["A bent elbow overhead.","A rounded back."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Turkish Get-Up": {
+  setup: ["Lie on your back with the kettlebell held on a straight arm over your shoulder.","Leg on the kettlebell side bent, the other straight."],
+  steps: ["Come up onto your elbow then your hand, lift your hips and sweep the straight leg under you into a kneel.","Stand up from the kneel, eyes still on the kettlebell.","Reverse the same steps back to lying; switch sides after the set."],
+  mistakes: ["Rushing and skipping steps.","The kettlebell arm drifting to the side."],
+  breathing: "Breathe steadily, exhale on each rise."
+ },
+ "Band Kneeling Pulldown": {
+  setup: ["Anchor a band high (pull-up bar, door anchor) and kneel under it.","Hold the band ends, arms stretched up."],
+  steps: ["Pull your shoulder blades down and drive your elbows to your sides.","Squeeze your back at the bottom.","Let your arms return up slowly."],
+  mistakes: ["Leaning the torso back.","Pulling only with the hands."],
+  breathing: "Exhale as you pull down, inhale up."
+ },
+ "Band Pullover": {
+  setup: ["Anchor a band high, stand facing it and lean forward slightly.","Hold the band with straight arms at eye level."],
+  steps: ["Pull your arms down in an arc to your hips.","Hold briefly at the bottom.","Let your arms return up slowly."],
+  mistakes: ["Bending the elbows.","Shrugging."],
+  breathing: "Exhale down, inhale up."
+ },
+ "Band Row": {
+  setup: ["Anchor a band at waist height, or loop it round your feet while seated.","Hold the ends, arms straight, back flat."],
+  steps: ["Pull your elbows back to your sides.","Squeeze your shoulder blades at the back.","Straighten your arms forward slowly."],
+  mistakes: ["Leaning back instead of pulling with the back.","Shrugging."],
+  breathing: "Exhale as you row, inhale back."
+ },
+ "Band Seated Pulldown": {
+  setup: ["Anchor a band high and sit under it on a bench or the floor.","Hold the band ends, arms up."],
+  steps: ["Drive your elbows down to your sides.","Squeeze your back at the bottom.","Let your arms return up slowly."],
+  mistakes: ["Leaning back.","A jerky pull."],
+  breathing: "Exhale down, inhale up."
+ },
+ "Band Straight Arm Pulldown": {
+  setup: ["Anchor a band high, stand facing it with a slight lean.","Hold the band with straight arms."],
+  steps: ["Pull your arms down to your thighs.","Hold and squeeze your lats at the bottom.","Let your arms return to eye level slowly."],
+  mistakes: ["Bending the elbows.","Leaning and pulling with the torso."],
+  breathing: "Exhale down, inhale up."
+ },
+ "Band External Rotation": {
+  setup: ["Anchor a band at elbow height and stand side-on.","Elbow at your side bent to a right angle, forearm across your stomach."],
+  steps: ["Rotate your forearm out away from your body.","Hold briefly.","Return slowly; switch sides after the set."],
+  mistakes: ["The elbow drifting away from your body.","Turning the torso."],
+  breathing: "Exhale out, inhale back."
+ },
+ "Band High Face Pull": {
+  setup: ["Anchor the band above your head and hold it overhand.","Step back so the band is taut."],
+  steps: ["Pull the band to your forehead, elbows high and wide.","Rotate your hands back at the end.","Straighten your arms slowly."],
+  mistakes: ["Elbows dropping.","Leaning back."],
+  breathing: "Exhale as you pull, inhale back."
+ },
+ "Band Lateral Raise": {
+  setup: ["Stand on the band holding the ends at your sides.","Elbows slightly bent."],
+  steps: ["Raise your arms to the sides to shoulder height.","Hold briefly.","Lower them slowly."],
+  mistakes: ["Shrugging.","Swinging the torso."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Band Overhead Press": {
+  setup: ["Stand on the band holding the ends at your shoulders.","Brace your abs and glutes."],
+  steps: ["Press your hands overhead.","Straighten your elbows at the top.","Return slowly to your shoulders."],
+  mistakes: ["Arching the lower back.","The band slipping under your feet."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Band Single Arm Lateral Raise": {
+  setup: ["Stand on one end of the band and hold the other in the opposite hand.","Free hand on your hip."],
+  steps: ["Raise your arm to the side to shoulder height.","Hold briefly.","Lower it slowly; switch sides after the set."],
+  mistakes: ["Leaning the torso.","Shrugging."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Band Curl": {
+  setup: ["Stand on the band holding the ends underhand.","Elbows at your sides."],
+  steps: ["Curl your hands to your shoulders.","Squeeze the biceps at the top.","Lower them slowly."],
+  mistakes: ["Elbows moving forward.","Leaning back."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Band Tricep Kickbacks": {
+  setup: ["Stand on the band and hinge over with a flat back.","Upper arms at your sides, elbows bent."],
+  steps: ["Straighten your elbows back.","Hold briefly.","Bend your elbows back slowly."],
+  mistakes: ["Swinging from the shoulders.","The upper arms dropping."],
+  breathing: "Exhale as you straighten, inhale back."
+ },
+ "Band Glute Bridge": {
+  setup: ["Put a mini band above your knees and lie on your back.","Feet hip-width apart near your glutes."],
+  steps: ["Push your knees out into the band and lift your hips.","Squeeze your glutes at the top.","Lower your hips slowly."],
+  mistakes: ["Knees falling together.","Arching the lower back."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Band Good Morning": {
+  setup: ["Stand on the band with the other end over your upper back.","Knees slightly bent."],
+  steps: ["Hinge at the hips with a flat back.","Stop at a hamstring stretch.","Drive your hips forward and stand."],
+  mistakes: ["A rounded back.","The band on the neck instead of the back."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Band Leg Curl": {
+  setup: ["Anchor a band low, lie face down with your feet towards it and loop it round an ankle.","Or sit with the band round your ankle."],
+  steps: ["Curl your heel to your glutes.","Hold briefly.","Straighten the leg slowly; switch legs after the set."],
+  mistakes: ["Lifting your hips off the floor.","Letting go quickly."],
+  breathing: "Exhale as you curl, inhale back."
+ },
+ "Band Pull-Through": {
+  setup: ["Anchor a band low behind you and hold it between your legs.","Step out so it is taut, stance shoulder-width."],
+  steps: ["Push your hips back as your hands go between your legs.","Drive your hips forward and squeeze your glutes.","Don't lean back at the top."],
+  mistakes: ["Pulling with the arms.","Leaning back at the top."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Band Romanian Deadlift": {
+  setup: ["Stand on the band hip-width apart, holding the ends in front of your thighs.","Knees slightly bent."],
+  steps: ["Push your hips back and slide your hands down your legs.","Stop at a hamstring stretch.","Drive your hips forward to stand."],
+  mistakes: ["A rounded back.","Squatting instead of hinging."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Band Squat": {
+  setup: ["Stand on the band shoulder-width apart, holding the ends at your shoulders.","Chest up."],
+  steps: ["Sit into a squat.","Stand up against the band.","Lock out your hips at the top."],
+  mistakes: ["Knees caving in.","Heels lifting."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Banded Eccentric Tibialis Raise": {
+  setup: ["Sit on the floor with a band anchored in front and looped over the top of your foot.","Leg straight, heel on the floor."],
+  steps: ["Pull your toes towards you against the band.","Hold briefly at the top.","Let the toes go forward slowly over 3 s; switch legs after the set."],
+  mistakes: ["Letting go quickly.","Moving the whole leg instead of the ankle."],
+  breathing: "Exhale as you pull, inhale as you let go."
+ },
+ "Band Hip Abduction": {
+  setup: ["Put a mini band above your knees and stand in a slight squat or sit.","Feet hip-width apart."],
+  steps: ["Push your knees apart against the band.","Hold briefly.","Return slowly, keeping the band taut."],
+  mistakes: ["Swaying the torso.","Letting the band go slack."],
+  breathing: "Exhale out, inhale back."
+ },
+ "Banded Clamshell": {
+  setup: ["Lie on your side, knees bent, mini band above the knees.","Heels together, head on your arm."],
+  steps: ["Open the top knee, heels staying together.","Hold briefly.","Close the knee slowly; switch sides after the set."],
+  mistakes: ["Rolling the pelvis back.","A fast pace."],
+  breathing: "Exhale as you open, inhale back."
+ },
+ "Plate Front Raise": {
+  setup: ["Stand tall holding a plate by its edges in front of your thighs.","Elbows slightly bent."],
+  steps: ["Raise the plate in front of you to eye level.","Hold briefly.","Lower it slowly."],
+  mistakes: ["Leaning back and swinging.","A plate that is too heavy."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Wrist Roller": {
+  setup: ["Tie a plate to the cord of the wrist roller.","Hold the stick overhand with your arms straight in front of you."],
+  steps: ["Turn your wrists in turn to roll the cord up until the plate is at the top.","Unroll it down just as slowly.","Repeat without lowering your arms."],
+  mistakes: ["Dropping the arms.","Letting the plate fall freely."],
+  breathing: "Breathe steadily."
+ },
+ "Plate Forward Lunge": {
+  setup: ["Stand tall holding a plate with both hands at your chest.","Feet hip-width apart."],
+  steps: ["Take a long step forward and lower.","Push off the front leg back to standing.","Alternate legs."],
+  mistakes: ["A short step.","The front knee caving in."],
+  breathing: "Inhale down, exhale up."
+ },
+ "EZ Bar Reverse Preacher Curl": {
+  setup: ["Put your armpits on the top edge of the preacher pad.","Hold the EZ bar overhand."],
+  steps: ["Curl the bar to your shoulders with straight wrists.","Hold briefly at the top.","Lower the bar slowly."],
+  mistakes: ["Bending the wrists.","Lowering fast."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Barbell Landmine Row": {
+  setup: ["Set the bar in the landmine and straddle it near the free end.","Hinge over with a flat back and grip the bar behind the plates with both hands."],
+  steps: ["Row the bar end to your chest.","Squeeze your shoulder blades at the top.","Lower slowly."],
+  mistakes: ["Lifting the torso.","A rounded back."],
+  breathing: "Exhale as you row, inhale down."
+ },
+ "Meadows Row": {
+  setup: ["Stand side-on to the landmine bar end, front foot nearer the bar.","Hinge over and grip the bar behind the plates overhand, other forearm on your thigh."],
+  steps: ["Row the bar to your hip, elbow travelling high and back.","Squeeze your back at the top.","Lower slowly; switch sides after the set."],
+  mistakes: ["Twisting the torso.","Pulling with the biceps."],
+  breathing: "Exhale as you row, inhale down."
+ },
+ "TRX Squat": {
+  setup: ["Hold the TRX handles and step back so the straps are taut.","Feet shoulder-width apart."],
+  steps: ["Sit into a deep squat, arms straight.","Keep your torso upright.","Stand up by pushing with your legs, arms only helping slightly."],
+  mistakes: ["Pulling with the arms.","Knees caving in."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Bodyweight Knee Push Ups": {
+  setup: ["Kneel with your hands a little wider than your shoulders.","Body in a line from knees to head."],
+  steps: ["Lower your chest to the floor, elbows about 45° from your body.","At the bottom your chest nearly touches the floor.","Push back up."],
+  mistakes: ["Hips piked up.","Elbows straight out to the sides."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Decline Push Up": {
+  setup: ["Put your feet on a bench and your hands on the floor a little wider than your shoulders.","Body in a line, abs braced."],
+  steps: ["Lower your chest to the floor.","Elbows about 45° from your body.","Push back up."],
+  mistakes: ["A sagging lower back.","The head dropping forward."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Incline Push Up": {
+  setup: ["Put your hands on the edge of a bench a little wider than your shoulders.","Walk your feet back, body in a line."],
+  steps: ["Lower your chest to the bench.","Elbows about 45° from your body.","Push back up."],
+  mistakes: ["Sagging hips.","A short range."],
+  breathing: "Inhale down, exhale up."
+ },
+ "B-stance Back Extension": {
+  setup: ["Pad under your hips, one foot forward on the platform, the other back on its toes only.","Hands on your chest."],
+  steps: ["Hinge at the hips with a flat back.","Raise your torso level by squeezing the front-leg glute.","Lower slowly; switch legs after the set."],
+  mistakes: ["Leaning back beyond level.","Pushing off the back leg."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Prone Y-T Raises": {
+  setup: ["Lie face down on a mat or an incline bench.","Arms straight, thumbs up."],
+  steps: ["Lift your arms overhead into a Y and hold 2 s.","Lower them, then lift them out to the sides into a T and hold 2 s.","One Y and one T make one rep."],
+  mistakes: ["Throwing the head back.","Swinging instead of control."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Diamond Push Ups": {
+  setup: ["Put your hands under your chest, thumbs and index fingers forming a diamond.","Body in a line."],
+  steps: ["Lower your chest to your hands, elbows tight.","At the bottom your chest nearly touches your hands.","Push back up."],
+  mistakes: ["Elbows flared.","Sagging hips."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Bent-Knee Soleus Raise": {
+  setup: ["Stand on one leg by a wall, knee bent about 30°.","Rest a hand lightly on the wall."],
+  steps: ["Rise onto your toes with the knee staying bent.","Hold at the top.","Lower the heel slowly; switch legs after the set."],
+  mistakes: ["Straightening the knee.","Bouncing fast."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Bodyweight Alternating Lateral Lunge": {
+  setup: ["Stand tall, feet together.","Hands in front of your chest."],
+  steps: ["Step wide to the side and sit onto that leg.","The other leg stays straight.","Return to standing and go to the other side."],
+  mistakes: ["The knee caving in.","A rounded back."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Bodyweight Box Squat": {
+  setup: ["Stand in front of a bench, feet shoulder-width.","Arms in front of you."],
+  steps: ["Push your hips back and sit until you just touch the bench.","Don't relax on it.","Stand up by pushing the floor away."],
+  mistakes: ["Sitting down fully and rocking.","Knees caving in."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Bodyweight Hip Abduction": {
+  setup: ["Lie on your side, bottom leg bent, top leg straight.","Head on your arm."],
+  steps: ["Lift the top leg about 30–40°.","Hold briefly at the top.","Lower it slowly; switch sides after the set."],
+  mistakes: ["Rolling the pelvis back.","Swinging the leg."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Bulgarian Split Squat": {
+  setup: ["Put the top of your back foot on a bench.","Front foot well ahead."],
+  steps: ["Lower straight down.","At the bottom the front thigh is about level.","Push through the front leg back up; switch legs after the set."],
+  mistakes: ["Front foot too close.","Pushing off with the back leg."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Cossack Squat": {
+  setup: ["Stand wide, toes slightly out.","Hands in front of your chest."],
+  steps: ["Sit into a deep squat on one leg.","The other leg straight, toes up.","Move through the middle to the other side."],
+  mistakes: ["A lifted heel.","A rounded back."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Eccentric Calf Lowers": {
+  setup: ["Stand with the balls of your feet on a step, heels hanging off.","Hold the rail."],
+  steps: ["Rise onto your toes on both feet.","Lift one foot and lower the other heel below the step over 3–4 s.","Come back up on both; switch legs after the set."],
+  mistakes: ["Lowering fast.","Bouncing from the knee."],
+  breathing: "Exhale up, inhale as you lower."
+ },
+ "Fire Hydrants": {
+  setup: ["Kneel on all fours, hands under shoulders, knees under hips.","Back flat."],
+  steps: ["Lift a bent leg to the side to hip height.","Hold briefly.","Lower it slowly; switch sides after the set."],
+  mistakes: ["Shifting your weight and tilting the torso.","An arched lower back."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Forward Lunge": {
+  setup: ["Stand tall, hands on hips.","Feet hip-width."],
+  steps: ["Take a long step forward and lower.","Back knee above the floor.","Push off the front leg back; alternate legs."],
+  mistakes: ["A short step.","The knee caving in."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Frog Pump": {
+  setup: ["Lie on your back, soles together, knees out.","Heels near your glutes."],
+  steps: ["Lift your hips by squeezing your glutes.","Hold 1 s at the top.","Lower and go straight into the next."],
+  mistakes: ["Arching the lower back.","No real squeeze."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Front-Foot-Elevated Split Squat": {
+  setup: ["Put your front foot on a plate or low step.","A long stride, back heel lifted."],
+  steps: ["Lower straight down, deeper than usual.","The front knee follows your toes.","Push up through the front leg; switch legs after the set."],
+  mistakes: ["Leaning the torso forward.","A support that is too high."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Nordic Hamstring Curl": {
+  setup: ["Kneel on a soft mat with your heels hooked under something solid or held by a partner.","Body in a line from knees to head."],
+  steps: ["Lower yourself forward slowly for as long as you can.","Catch yourself with your hands at the bottom.","Push off with your hands and pull back up with your hamstrings."],
+  mistakes: ["Breaking at the hips.","Falling fast without braking."],
+  breathing: "Inhale at the top, exhale on the way down."
+ },
+ "Single Leg Glute Bridge": {
+  setup: ["Lie on your back, one foot on the floor, the other leg raised.","Arms by your sides."],
+  steps: ["Drive through your heel and lift your hips.","Squeeze your glutes at the top.","Lower slowly; switch legs after the set."],
+  mistakes: ["The pelvis dropping towards the raised leg.","Arching the lower back."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Single-Leg Step-Down": {
+  setup: ["Stand on one leg on a low step or bench, side-on to the edge.","The other leg hangs free."],
+  steps: ["Bend the standing knee slowly and lower the free heel to the floor.","Just touch, don't shift your weight.","Straighten back up; switch legs after the set."],
+  mistakes: ["The knee caving in.","The pelvis dropping to the side."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Tibialis Raise": {
+  setup: ["Lean your back against a wall, feet about a foot in front of it.","Knees straight."],
+  steps: ["Lift your toes as high as you can.","Hold briefly at the top.","Lower them slowly without slapping."],
+  mistakes: ["Bending the knees.","A small range."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Walking Lunge": {
+  setup: ["Stand tall, hands on hips.","Clear space in front of you."],
+  steps: ["Take a long step and lower.","Push off and bring the back leg into the next lunge.","Keep alternating."],
+  mistakes: ["Short steps.","Leaning forward."],
+  breathing: "Inhale down, exhale up."
+ },
+ "Bicycle Crunches": {
+  setup: ["Lie on your back, hands lightly behind your head.","Lift your legs, knees over hips."],
+  steps: ["Pull one knee in and turn the opposite elbow to it as the other leg straightens.","Switch sides in a smooth motion.","Count reps per side."],
+  mistakes: ["Pulling on your head.","Fast flapping without turning the torso."],
+  breathing: "Exhale as you turn."
+ },
+ "Bird Dog": {
+  setup: ["Kneel on all fours, hands under shoulders, knees under hips.","Back flat, eyes down."],
+  steps: ["Reach one arm forward and the opposite leg back.","Hold 2 s, hips level.","Return and switch sides."],
+  mistakes: ["Lifting the leg above hip height.","Twisting the pelvis."],
+  breathing: "Exhale as you reach, inhale back."
+ },
+ "Crunches": {
+  setup: ["Lie on your back, knees bent, feet on the floor.","Hands on your chest or lightly at your temples."],
+  steps: ["Curl your upper back off the floor, ribs towards your pelvis.","Hold briefly at the top.","Lower slowly."],
+  mistakes: ["Pulling on your head.","Swinging the whole torso."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Decline Sit-Up": {
+  setup: ["Hook your feet on the decline ab bench.","Hands on your chest."],
+  steps: ["Curl your torso up to sitting.","Hold briefly at the top.","Roll back down slowly."],
+  mistakes: ["Swinging and bouncing off the back.","Hands behind the head and pulling."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Reverse Crunch": {
+  setup: ["Lie on your back, arms by your sides, knees bent over your hips.","Lower back on the floor."],
+  steps: ["Pull your knees to your chest and lift your pelvis off the floor.","Hold briefly at the top.","Lower the pelvis slowly."],
+  mistakes: ["Swinging the legs.","Pushing off with the hands."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Supermans": {
+  setup: ["Lie face down with your arms stretched in front of you.","Eyes on the mat."],
+  steps: ["Lift your arms, chest and legs a little off the floor.","Hold 1–2 s at the top.","Lower slowly."],
+  mistakes: ["Throwing the head back.","Swinging."],
+  breathing: "Exhale up, inhale down."
+ },
+ "V-Up": {
+  setup: ["Lie on your back, arms straight overhead, legs straight.","Press your lower back to the floor."],
+  steps: ["Lift your legs and torso together, hands reaching for your toes.","Balance on your glutes at the top.","Lower slowly back to lying."],
+  mistakes: ["Slapping back onto the floor.","Bent legs and swinging."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Stability Ball Leg Curl": {
+  setup: ["Lie on your back with your heels on a gym ball.","Lift your hips into a bridge, arms by your sides."],
+  steps: ["Pull your heels and the ball to your glutes, hips staying up.","Hold briefly.","Straighten your legs slowly."],
+  mistakes: ["Hips dropping as you straighten.","The ball rolling sideways."],
+  breathing: "Exhale as you curl, inhale back."
+ },
+ "Slider Leg Curl": {
+  setup: ["Lie on your back on a smooth floor with your heels on sliders.","Lift your hips into a bridge."],
+  steps: ["Straighten your legs slowly, hips staying up.","Then pull your heels back to your glutes.","If your hips drop, shorten the range."],
+  mistakes: ["The feet shooting away.","Sagging hips."],
+  breathing: "Inhale as you straighten, exhale as you pull in."
+ },
+ "Barbell Close Grip Bench Press": {
+  setup: ["Lie on the bench and grip the bar at shoulder width.","Shoulder blades pulled back, feet on the floor."],
+  steps: ["Unrack the bar and lower it to your lower chest, elbows tucked.","Touch your chest lightly.","Press the bar up to lockout."],
+  mistakes: ["A grip too narrow, straining the wrists.","Elbows flaring out."],
+  breathing: "Inhale down, exhale as you press."
+ },
+ "Reverse-Grip Barbell Bench Press": {
+  setup: ["Lie on the bench and grip the bar underhand at shoulder width, thumbs round the bar.","Have a spotter; unracking feels unusual."],
+  steps: ["Lower the bar to your lower chest, elbows tucked.","Touch your chest lightly.","Press the bar up and slightly towards your face."],
+  mistakes: ["Thumbs off the bar (it can slip).","A jerky descent."],
+  breathing: "Inhale down, exhale as you press."
+ },
+ "Wide-Grip Barbell Bench Press": {
+  setup: ["Lie on the bench and grip the bar wider, forearms vertical at the bottom.","Shoulder blades pulled back, chest up."],
+  steps: ["Lower the bar to the middle of your chest.","Touch your chest lightly.","Press the bar up."],
+  mistakes: ["A grip so wide the shoulders hurt.","Bouncing the bar off your chest."],
+  breathing: "Inhale down, exhale as you press."
+ },
+ "Barbell High Incline Bench Press": {
+  setup: ["Set the back rest to 45–60° and grip the bar a little wider than your shoulders.","Shoulder blades pulled back."],
+  steps: ["Lower the bar to your upper chest below the collarbones.","Touch your chest lightly.","Press the bar up over your chin."],
+  mistakes: ["Lifting your hips off the seat.","Elbows straight out to the sides."],
+  breathing: "Inhale down, exhale as you press."
+ },
+ "Decline Barbell Bench Press": {
+  setup: ["Hook your legs on the decline bench and lie back.","Grip the bar a little wider than your shoulders and unrack it with a spotter."],
+  steps: ["Lower the bar to your lower chest.","Touch your chest lightly.","Press the bar up."],
+  mistakes: ["The bar travelling to the breastbone or neck.","Training without a spotter."],
+  breathing: "Inhale down, exhale as you press."
+ },
+ "Dumbbell Decline Bench Press": {
+  setup: ["Hook your legs on the decline bench with the dumbbells on your thighs.","Lie back carefully and bring the dumbbells over your chest."],
+  steps: ["Lower the dumbbells to your lower chest.","Elbows about 45° from your body.","Press them up."],
+  mistakes: ["Elbows straight out to the sides.","Dropping the dumbbells to the floor while lying down."],
+  breathing: "Inhale down, exhale as you press."
+ },
+ "Band Assisted Pull-Up": {
+  setup: ["Loop the band over the bar so a loop hangs down.","Grip the bar and put a knee or foot in the loop."],
+  steps: ["Pull your shoulder blades down and pull up until your chin is over the bar.","Hold briefly at the top.","Lower slowly to straight arms."],
+  mistakes: ["Swinging and bouncing off the band.","A short range."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Neutral-Grip Pull-Up": {
+  setup: ["Grip the parallel handles on the bar, palms facing.","Hang on straight arms, abs braced."],
+  steps: ["Pull your shoulder blades down and pull up to the handles.","Chin above the handles.","Lower slowly."],
+  mistakes: ["Swinging.","Not going all the way down."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Weighted Pull Ups": {
+  setup: ["Clip the weight to a belt or hold a dumbbell between your feet.","Grip the bar overhand a bit wider than your shoulders."],
+  steps: ["Pull up until your chin is over the bar.","Hold briefly at the top.","Lower slowly to straight arms."],
+  mistakes: ["The weight swinging.","Adding weight before you can do 10 clean pull-ups."],
+  breathing: "Exhale up, inhale down."
+ },
+ "Wide-Grip Pull-Up": {
+  setup: ["Grip the bar overhand about a hand wider on each side than a normal pull-up.","Hang on straight arms."],
+  steps: ["Pull your chest towards the bar, elbows going down and out.","Chin above the bar.","Lower slowly."],
+  mistakes: ["A grip too wide with a small range.","Kicking the legs."],
+  breathing: "Exhale up, inhale down."
  }
 };
