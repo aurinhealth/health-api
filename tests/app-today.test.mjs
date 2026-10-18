@@ -308,3 +308,17 @@ test("a watch gym session without TSS gets one from its heart rate, so the strai
   // Without a resting or max heart rate nothing is guessed.
   assert.equal(withHeartRateLoad(training, [], {}, "2026-10-17"), training);
 });
+
+test("the day's strain counts the training and the steps when the zones saw little (Petr, 2026-10-18)", async () => {
+  const { dayStrainParts } = await import("../src/recovery-model.js");
+  // 21 light minutes from the watch, a gym hour (17 TSS), a 25 min run (8 TSS), 11,616 steps.
+  const parts = dayStrainParts({ zoneMinutes: { light: 21 }, steps: 11616, sessions: [{ tss: 17, sport: "strength", minutes: 63 }, { tss: 8, sport: "run", minutes: 25 }] });
+  assert.ok(parts.score > 6 && parts.score < 9, String(parts.score));
+  assert.ok(parts.movement > 2, String(parts.movement));
+  assert.equal(Math.round((parts.training + parts.movement) * 10) / 10, parts.score);
+  // A hard day the zones measured keeps its zone strain.
+  const hard = dayStrainParts({ zoneMinutes: { moderate: 60, vigorous: 30 }, steps: 6000, sessions: [{ tss: 40, sport: "ride", minutes: 90 }] });
+  assert.equal(hard.score, 15.5);
+  // Nothing measured: no score.
+  assert.equal(dayStrainParts({}).score, null);
+});

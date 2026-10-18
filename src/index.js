@@ -1365,7 +1365,8 @@ export async function matchActivities(env, { days = null } = {}) {
   }
   // Two watch records merged in the app (workout-merge.js): the one dropped
   // stays a copy of the kept one, which pairs on like any other.
-  for (const [dropped, kept] of heldMerges(rows)) {
+  const merges = heldMerges(rows);
+  for (const [dropped, kept] of merges) {
     const copy = byKey.get(dropped);
     if (!copy || held.has(copy) || !byKey.has(kept)) continue;
     held.add(copy);
@@ -1386,6 +1387,12 @@ export async function matchActivities(env, { days = null } = {}) {
        WHERE user_id = ? AND source_family = ? AND data_type = ? AND external_id = ?`
     ).bind(want.role, want.matched, want.matched ? 1 : null, env.USER_ID, row.source_family, row.data_type, row.external_id));
   }
+  // A merged copy written again under a new id (workout-merge.js heldMerges):
+  // the kept record points to the new one, so deleting it takes both.
+  for (const { row, with: copy } of merges.moved) updates.push(env.DB.prepare(
+    `UPDATE health_datapoints SET payload_json = json_set(payload_json, '$.loadwiseMerge.with', ?), updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = ? AND source_family = ? AND data_type = ? AND external_id = ?`
+  ).bind(copy, env.USER_ID, row.source_family, row.data_type, row.external_id));
   for (let i = 0; i < updates.length; i += 50) await env.DB.batch(updates.slice(i, i + 50));
   return { matched: pairs.length, updated: updates.length };
 }
@@ -1638,7 +1645,11 @@ export function googleExerciseActivity(row) {
   const activeSeconds = span ? null : String(exercise.activeDuration || "").match(/([0-9.]+)s/i);
   const activeHours = activeSeconds ? Number(activeSeconds[1]) / 3600 : null;
   const durationHours = activeHours || hoursBetween(span?.start || row.start_time, span?.end || row.end_time);
-  const averageHeartRate = googleExerciseHeartRate(metrics);
+  // Apple Health workouts written by another app (Google Health) carry the
+  // heart rate only as samples ([seconds, bpm]): their mean, so the workout
+  // gets a TSS (app-training.js withHeartRateLoad).
+  const own = Array.isArray(payload.samples?.heartRate) ? payload.samples.heartRate.map(x => Number(Array.isArray(x) ? x[1] : NaN)).filter(v => v >= 30 && v <= 240) : [];
+  const averageHeartRate = googleExerciseHeartRate(metrics) ?? (own.length >= 5 ? Math.round(own.reduce((a, b) => a + b, 0) / own.length) : null);
   // The dashboard reads the Intervals field name for every activity.
   if (averageHeartRate != null && payload.average_heartrate == null) payload.average_heartrate = averageHeartRate;
   return {
