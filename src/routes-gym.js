@@ -7,6 +7,7 @@ import { routineSize, stretchingFor, typicalExtraMinutes, warmupFor } from "./st
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
+import { pinnedExercises, savePinnedExercises } from "./pinned-exercises.js";
 import { gymExerciseCatalog, gymAlternatives } from "./gym-catalog.js";
 import { EXERCISE_STATIONS, stationSections } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
@@ -87,6 +88,15 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   if(url.pathname==='/app/api/gym/history'&&request.method==='GET'){
     const exercises=await strengthSessions(env.DB,{days:url.searchParams.get('days')||180,today:localToday()}).catch(error=>{console.error('Gym history read failed',error);return [];});
     return Response.json({status:'ok',exercises},{headers:{'Cache-Control':'no-store'}});
+  }
+  // Rekordy: the exercises pinned to the top (at most five).
+  if(url.pathname==='/app/api/gym/pinned'&&request.method==='GET'){
+    return Response.json({status:'ok',pinned:await pinnedExercises(env.DB)},{headers:{'Cache-Control':'no-store'}});
+  }
+  if(url.pathname==='/app/api/gym/pinned'&&request.method==='PUT'){
+    let body;try{body=await request.json();}catch{return Response.json({status:'error',error:L('Neplatný požadavek.','Invalid request.')},{status:400});}
+    try{return Response.json(await savePinnedExercises(env.DB,body));}
+    catch(error){return Response.json({status:'error',error:error.message},{status:400});}
   }
   // Levá a pravá strana: one-sided exercises, the last session's sides.
   if(url.pathname==='/app/api/gym/sides'&&request.method==='GET'){

@@ -633,6 +633,8 @@ struct ExerciseHistorySheet: View {
     let name: String
     let exercise: GymHistory.Exercise?
     let today: String
+    /// Rekordy: the star that pins the exercise to the top.
+    var pinned: Binding<Bool>? = nil
 
     var body: some View {
         PageScroll {
@@ -640,6 +642,15 @@ struct ExerciseHistorySheet: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(name).font(.title2.weight(.semibold)).foregroundStyle(Palette.ink)
                     Spacer()
+                    if let pinned {
+                        Button { pinned.wrappedValue.toggle() } label: {
+                            Image(systemName: pinned.wrappedValue ? "star.fill" : "star")
+                                .font(.system(size: 17)).foregroundStyle(pinned.wrappedValue ? Palette.amber : Palette.faint)
+                                .frame(width: 32, height: 32).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.tr(pinned.wrappedValue ? "Odepnout" : "Připnout nahoru"))
+                    }
                     Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
                 }
                 if let exercise, !exercise.sessions.isEmpty {

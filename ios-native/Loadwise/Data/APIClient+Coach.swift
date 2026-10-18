@@ -242,6 +242,10 @@ struct DayReviewResponse: Decodable {
     }
 }
 
+struct PinnedExercises: Decodable {
+    let pinned: [String]
+}
+
 struct FitnessInsights: Decodable {
     let cardioFocus: CardioFocus?
     let records: Records?
@@ -263,6 +267,34 @@ struct FitnessInsights: Decodable {
     struct Records: Decodable {
         let strength: [Strength]?
         let cardio: [String: Record?]?
+        let trends: Trends?
+    }
+
+    /// Records over a period (1, 3, 6 months, a year, all): the best value in
+    /// it and the change against the best before it.
+    struct Trends: Decodable {
+        let periods: [String: Period]?
+        let cardio: [String: Metric?]?
+    }
+
+    struct Period: Decodable {
+        let kind: String?
+        let label: String?
+        let year: Int?
+    }
+
+    struct Metric: Decodable {
+        let unit: String?
+        let change: [String: Change?]?
+    }
+
+    /// basis "before": against the best before the period; "first": the
+    /// period holds the first data, so the change means little.
+    struct Change: Decodable {
+        let value: Double?
+        let date: String?
+        let delta: Double?
+        let basis: String?
     }
 
     struct Record: Decodable {
@@ -274,8 +306,10 @@ struct FitnessInsights: Decodable {
 
     struct Strength: Decodable, Identifiable {
         let exercise: String
+        let last: String?
         let e1rm: Lift?
         let heaviest: Lift?
+        let setReps: Lift?
         let recent: [String]?
         var id: String { exercise }
     }
@@ -441,5 +475,15 @@ extension APIClient {
 
     func fitnessInsights() async throws -> FitnessInsights {
         try await get("/app/api/fitness-insights")
+    }
+
+    /// Rekordy: the exercises pinned to the top, at most five.
+    func pinnedExercises() async throws -> [String] {
+        let r: PinnedExercises = try await get("/app/api/gym/pinned")
+        return r.pinned
+    }
+
+    func savePinnedExercises(_ names: [String]) async throws {
+        let _: PinnedExercises = try await send("/app/api/gym/pinned", method: "PUT", body: ["pinned": names])
     }
 }
