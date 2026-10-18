@@ -237,3 +237,13 @@ test('every answer is in Latin letters and the coach speaks of itself in the mas
   assert.equal(fine['kouč o sobě v mužském rodě'], true);
   assert.equal('kouč o sobě v mužském rodě' in check('I would rather rest today.', 'S10'), false);
 });
+
+test('S15: a hard session the answer makes conditional stays in the text, not a card', () => {
+  const s15 = scenarioById('S15'), wed = '2026-10-21';
+  const ok = (answer, kept) => checkReply(s15, { answer, kept, proposed: kept }, null, '2026-10-18').find(c => c.name === 'podmíněný tvrdý trénink jen v textu, ne jako karta').ok;
+  const vo2 = [{ type: 'workout', sport: 'ride', date: wed, minutes: 60, kind: 'vo2max', card: 'vo2max' }];
+  // Coach evaluation run 15: "VO2max na středu, jen pokud se budeš cítit zotavený" with a firm card.
+  assert.equal(ok('Na středu bych připravil VO2max, jen pokud se budeš cítit zotavený.', vo2), false);
+  assert.equal(ok('Na středu bych připravil VO2max.', vo2), true);
+  assert.equal(ok('Na středu VO2max, jen pokud se budeš cítit zotavený. Napiš mi.', []), true);
+});
