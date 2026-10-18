@@ -277,13 +277,22 @@ export async function runUserJobs(env, ctx, { cron, scheduledTime }, user, names
   })));
 }
 // The UserJobs entrypoint (user-jobs-entrypoint.js): a fresh invocation for one user.
+// A failure of the user's own work (their data, their connections) comes back as
+// { ok: false }, so a rejected call means the call itself did not go through.
 export async function runUserJobsInvocation(env, ctx, { user, names, cron, scheduledTime }) {
-  await ensureTenancy(env.DB, env);
-  useCookbookDatabase(env.DB);
-  await runUserJobs(env, ctx, { cron, scheduledTime }, user, names);
+  try {
+    await ensureTenancy(env.DB, env);
+    useCookbookDatabase(env.DB);
+    await runUserJobs(env, ctx, { cron, scheduledTime }, user, names);
+    return { ok: true };
+  } catch (error) {
+    const message = error?.message || String(error);
+    console.error("User jobs failed", user?.id, message);
+    return { ok: false, error: message };
+  }
 }
 // Ten users at a time through the USER_JOBS binding. Without the binding (tests,
-// local runs), or when it fails before any user went through, the jobs run here.
+// local runs), or when no call of the first ten went through, the jobs run here.
 export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } = {}) {
   const scheduledTime = controller.scheduledTime || Date.now();
   const names = dueUserJobs(controller.cron, new Date(scheduledTime));
@@ -291,17 +300,26 @@ export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } 
   const providers = [...new Set(USER_JOBS.filter(job => names.includes(job.name)).flatMap(job => job.providers))];
   // The App Review demo account syncs with no third-party service (app-review.js).
   const users = (await usersWithProviders(env.DB, env, providers)).filter(user => !isReviewAccount(env, user));
-  let binding = env.USER_JOBS && typeof env.USER_JOBS.run === "function" ? env.USER_JOBS : null, delivered = 0;
-  const inline = user => runUserJobs(env, ctx, { cron: controller.cron, scheduledTime }, user, names).catch(error => console.error("Per-user job failed", user.id, error.message));
-  const one = async user => {
-    if (!binding) return inline(user);
-    try { await binding.run({ user, names, cron: controller.cron, scheduledTime }); delivered++; }
-    catch (error) {
-      console.error("User jobs invocation failed", user.id, error.message);
-      if (!delivered) { binding = null; return inline(user); }
-    }
+  const binding = env.USER_JOBS && typeof env.USER_JOBS.run === "function" ? env.USER_JOBS : null;
+  const inline = async list => {
+    for (const user of list) await runUserJobs(env, ctx, { cron: controller.cron, scheduledTime }, user, names).catch(error => console.error("Per-user job failed", user.id, error.message));
   };
-  for (let i = 0; i < users.length; i += binding ? concurrency : 1) await Promise.all(users.slice(i, i + (binding ? concurrency : 1)).map(one));
+  if (!binding) { await inline(users); return { users: users.length, names }; }
+  // A rejected call is a broken binding, or that one user's invocation went over
+  // a limit (CPU, queries). Running that user here would put the same load on
+  // this cron run, which every user shares, so the user waits for the next run.
+  // Only when every call of the first batch is rejected is the binding taken as
+  // broken, and then all users run here.
+  const send = async user => {
+    try {
+      const result = await binding.run({ user, names, cron: controller.cron, scheduledTime });
+      if (result?.ok === false) console.error("User jobs failed", user.id, result.error);
+      return true;
+    } catch (error) { console.error("User jobs invocation failed", user.id, error.message); return false; }
+  };
+  const first = users.slice(0, concurrency);
+  if (first.length && !(await Promise.all(first.map(send))).some(Boolean)) { await inline(users); return { users: users.length, names }; }
+  for (let i = concurrency; i < users.length; i += concurrency) await Promise.all(users.slice(i, i + concurrency).map(send));
   return { users: users.length, names };
 }
 

@@ -6,7 +6,9 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import { runUserJobsInvocation } from "./entrypoint.js";
 
 export class UserJobs extends WorkerEntrypoint {
+  // { ok: true }, or { ok: false, error } when the user's own jobs failed:
+  // only a call that did not go through rejects.
   async run(message) {
-    await runUserJobsInvocation(this.env, this.ctx, message);
+    return runUserJobsInvocation(this.env, this.ctx, message);
   }
 }
