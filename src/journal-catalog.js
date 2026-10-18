@@ -59,7 +59,7 @@ export const CATALOG = [
   y("earplugs", "Špunty do uší", "Earplugs", "sleep", "moon.zzz"),
   y("sleep_mask", "Maska na oči", "Sleep mask", "sleep", "moon.zzz"),
   y("cool_bedroom", "Chladná ložnice", "Cool bedroom", "sleep", "wind"),
-  y("night_noise", "Hluk v noci", "Noise at night", "sleep", "waveform.path"),
+  y("night_noise", "Hluk v noci", "Noise at night", "sleep", "waveform.path", { auto: "night_noise" }),
   y("woken_kids", "Vzbudily mě děti", "Woken by the children", "sleep", "person.2"),
   y("wind_down", "Večerní rituál", "Wind-down routine", "sleep", "sparkles"),
   y("work_late", "Práce do večera", "Working late", "sleep", "square.and.pencil"),
@@ -104,13 +104,13 @@ export const CATALOG = [
   y("cold_exposure", "Otužování", "Cold exposure", "recovery", "drop.fill", { follow: [minutes(3, 1, 30)] }),
   y("outdoors", "Venku 30+ min", "Outdoors 30+ min", "recovery", "sun.max.fill", { auto: "outdoors" }),
   y("breathing", "Dechová cvičení", "Breathing exercises", "recovery", "wind", { follow: [minutes(10, 5, 60)] }),
-  y("meditation", "Meditace", "Meditation", "recovery", "sparkle", { follow: [minutes(10, 5, 90)] }),
+  y("meditation", "Meditace", "Meditation", "recovery", "sparkle", { auto: "meditation", follow: [minutes(10, 5, 90)] }),
   y("massage", "Masáž", "Massage", "recovery", "figure.cooldown"),
-  y("stretching", "Protahování", "Stretching", "recovery", "figure.flexibility", { follow: [minutes(15, 5, 90)] }),
+  y("stretching", "Protahování", "Stretching", "recovery", "figure.flexibility", { auto: "stretching", follow: [minutes(15, 5, 90)] }),
   y("yoga", "Jóga", "Yoga", "recovery", "figure.cooldown", { auto: "yoga" }),
   y("foam_rolling", "Válec", "Foam rolling", "recovery", "figure.flexibility"),
   y("walk_after_meal", "Procházka po jídle", "Walk after a meal", "recovery", "figure.walk"),
-  y("morning_light", "Ranní světlo", "Morning daylight", "recovery", "sun.max"),
+  y("morning_light", "Ranní světlo", "Morning daylight", "recovery", "sun.max", { auto: "morning_light" }),
   y("hot_bath", "Horká koupel", "Hot bath", "recovery", "drop.fill"),
   y("compression", "Kompresní návleky", "Compression garments", "recovery", "figure.cooldown"),
   { key: "evening_training", cs: "Večerní trénink", en: "Evening training", cat: "recovery", type: "time", icon: "figure.run", late: "18:00", auto: "evening_training" },
@@ -120,7 +120,7 @@ export const CATALOG = [
   y("nature", "Čas v přírodě", "Time in nature", "recovery", "leaf.fill"),
   y("gratitude", "Vděčnost na papíře", "Gratitude written down", "recovery", "square.and.pencil"),
   y("friends", "Čas s přáteli", "Time with friends", "recovery", "person.2.fill"),
-  y("sex", "Sex", "Sex", "recovery", "heart.fill"),
+  y("sex", "Sex", "Sex", "recovery", "heart.fill", { auto: "sex" }),
   y("calm_music", "Klidná hudba", "Calm music", "recovery", "waveform.path"),
   y("no_social", "Den bez sociálních sítí", "Day off social media", "recovery", "iphone"),
   y("physio", "Fyzioterapie", "Physiotherapy", "recovery", "figure.flexibility"),
@@ -130,14 +130,14 @@ export const CATALOG = [
 
   // Zdraví
   y("sick", "Nemoc", "Illness", "health", "bandage.fill"),
-  y("runny_nose", "Rýma", "Runny nose", "health", "drop.fill"),
+  y("runny_nose", "Rýma", "Runny nose", "health", "drop.fill", { auto: "runny_nose" }),
   y("allergy", "Alergie", "Allergy", "health", "leaf.fill"),
-  y("headache", "Bolest hlavy", "Headache", "health", "brain.head.profile"),
-  y("sore_muscles", "Bolest svalů", "Sore muscles", "health", "figure.strengthtraining.traditional"),
+  y("headache", "Bolest hlavy", "Headache", "health", "brain.head.profile", { auto: "headache" }),
+  y("sore_muscles", "Bolest svalů", "Sore muscles", "health", "figure.strengthtraining.traditional", { auto: "sore_muscles" }),
   y("injury", "Zranění", "Injury", "health", "bandage.fill"),
   { key: "stress", cs: "Stres", en: "Stress", cat: "health", type: "scale", icon: "brain.head.profile" },
   y("air_travel", "Cestování letadlem", "Air travel", "health", "paperplane"),
-  y("time_zone", "Změna časového pásma", "Time-zone change", "health", "globe"),
+  y("time_zone", "Změna časového pásma", "Time-zone change", "health", "globe", { auto: "time_zone" }),
   y("long_drive", "Dlouhá cesta autem", "Long drive", "health", "clock"),
   y("anxiety", "Úzkost", "Anxiety", "health", "brain.head.profile"),
   y("busy_workday", "Náročný den v práci", "Demanding workday", "health", "square.and.pencil"),
@@ -149,7 +149,7 @@ export const CATALOG = [
   y("altitude", "Pobyt na horách", "Time at altitude", "health", "mappin.and.ellipse"),
   y("hot_weather", "Horko", "Hot weather", "health", "sun.max.fill"),
   y("hangover", "Kocovina", "Hangover", "health", "wineglass.fill"),
-  y("stomach", "Potíže se žaludkem", "Stomach trouble", "health", "exclamationmark.circle"),
+  y("stomach", "Potíže se žaludkem", "Stomach trouble", "health", "exclamationmark.circle", { auto: "stomach" }),
 
   // Léky
   y("antibiotics", "Antibiotika", "Antibiotics", "meds", "pills.fill"),
@@ -201,15 +201,21 @@ export const NOT_RANKED = new Set(["sick"]);
 // The part of the day an item belongs to in the journal's list ("Ráno",
 // "Přes den", "Večer", "Noc"): from its time when the day has one, else from
 // when it usually happens.
-export const PARTS = ["morning", "day", "evening", "night"];
-const PART_TEXT = { morning: ["Ráno", "Morning"], day: ["Přes den", "Daytime"], evening: ["Večer", "Evening"], night: ["Noc", "Night"] };
+// "Dnešní noc" is what happened in the night the day ends with, up to the
+// wake-up: the morning sheet asks it right away, while the rest of the day
+// can be filled in later.
+export const PARTS = ["morning", "day", "evening", "night", "last_night"];
+const PART_TEXT = { morning: ["Ráno", "Morning"], day: ["Přes den", "Daytime"], evening: ["Večer", "Evening"], night: ["Noc", "Night"], last_night: ["Dnešní noc", "Last night"] };
 export const partTitle = part => L(...(PART_TEXT[part] || PART_TEXT.day));
-const MORNING = new Set(["early_wake", "morning_light", "caffeine", "coffee_cups"]);
+const MORNING = new Set(["morning_light", "caffeine", "coffee_cups"]);
 const EVENING = new Set(["alcohol", "late_meal", "evening_training", "heavy_dinner", "sweets_evening", "carbs_dinner", "herbal_tea", "drink_before_bed",
   "sauna", "hot_bath", "screen_late", "series_before_bed", "work_late", "wind_down", "reading_bed", "gratitude", "calm_music", "sex",
   "melatonin", "glycine", "theanine", "magnesium", "tart_cherry", "sleeping_pill"]);
 const EVENING_SLEEP = new Set(["nap"]);
+const LAST_NIGHT = new Set(["early_wake", "night_noise", "woken_kids", "sleep_away", "partner_bed", "pet_bedroom", "night_shift",
+  "blackout_room", "cool_bedroom", "earplugs", "sleep_mask", "mouth_tape", "white_noise", "weighted_blanket"]);
 export function usualPart(item) {
+  if (LAST_NIGHT.has(item.key)) return "last_night";
   if (MORNING.has(item.key)) return "morning";
   if (EVENING.has(item.key)) return "evening";
   if (item.cat === "sleep") return EVENING_SLEEP.has(item.key) ? "day" : "night";
