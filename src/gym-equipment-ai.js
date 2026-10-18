@@ -4,7 +4,7 @@
 // gym's web page (web search). The athlete checks the list before saving.
 import { L } from "./lang.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
-import { METAGYM_KUTNA_HORA, OTHER_STATIONS, OTHER_STATION_IDS } from "./gym-equipment.js";
+import { METAGYM_KUTNA_HORA, OTHER_STATIONS, OTHER_STATION_IDS, stationPicker } from "./gym-equipment.js";
 import { validFoodImage } from "./food-photo.js";
 import { instructions } from './private/gym-equipment-ai.js';
 
@@ -43,7 +43,7 @@ export const GYM_STATIONS = [
 export const GYM_STATION_IDS = GYM_STATIONS.map(s => s.id);
 
 export function equipmentCatalog() {
-  return GYM_STATIONS.map(s => ({ id: s.id, group: L(s.group, s.group), label: L(s.label, s.en) }));
+  return GYM_STATIONS.map(s => ({ id: s.id, group: L(s.group, s.group), label: L(s.label, s.en), ...stationPicker(s.id) }));
 }
 
 export const GYM_DETECT_SCHEMA = {

@@ -50,7 +50,7 @@ export function normalizePlaces(input){
     while(seen.has(id))id+='-'+i;seen.add(id);
     const kind=PLACE_KINDS.includes(p?.kind)?p.kind:'gym';
     return {id,kind,name:String(p?.name||'').trim().slice(0,80)||(kind==='home'?'Domácí posilovna':'Posilovna'),
-      stations:[...new Set((Array.isArray(p?.stations)?p.stations:[]).map(String).filter(validStation))],url:cleanUrl(p?.url),dumbbellWeights:cleanWeights(p?.dumbbellWeights)};
+      stations:[...new Set((Array.isArray(p?.stations)?p.stations:[]).map(String).filter(validStation))],url:cleanUrl(p?.url),dumbbellWeights:cleanWeights(p?.dumbbellWeights),...(p?.favorite===true?{favorite:true}:{})};
   });
 }
 // Accounts saved before places: their one gym or home gym becomes the first place.

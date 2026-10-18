@@ -2564,3 +2564,23 @@
 "Pokročilý" = "Advanced";
 "Auto · %@" = "Auto · %@";
 "Auto vychází z tréninků za poslední dva roky. Pauza kvůli nemoci nebo zranění úroveň nesníží." = "Auto is based on your training over the last two years. A break for illness or injury won't lower the level.";
+
+/* Gym equipment picker (GymPlaces.swift) */
+"Přidat posilovnu" = "Add a gym";
+"Velké fitko" = "Big gym";
+"Malé fitko" = "Small gym";
+"Doma" = "Home";
+"Přejmenovat" = "Rename";
+"Poznat automaticky" = "Recognise automatically";
+"O stroji %@" = "About %@";
+"nový cvik" = "new exercise";
+"nové cviky" = "new exercises";
+"nových cviků" = "new exercises";
+"Přidáno: %@" = "Added: %@";
+"Cviky ›" = "Exercises ›";
+"Cviky · %@" = "Exercises · %@";
+"Přidat fotky" = "Add photos";
+"Přidat fotky (%@)" = "Add photos (%@)";
+"Poznávám…" = "Recognising…";
+"Poznat" = "Recognise";
+"Vybrat sám" = "Pick myself";
