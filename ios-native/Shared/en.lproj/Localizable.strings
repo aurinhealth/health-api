@@ -2564,3 +2564,5 @@
 "Pokročilý" = "Advanced";
 "Auto · %@" = "Auto · %@";
 "Auto vychází z tréninků za poslední dva roky. Pauza kvůli nemoci nebo zranění úroveň nesníží." = "Auto is based on your training over the last two years. A break for illness or injury won't lower the level.";
+"Spánek se teď nepodařilo načíst" = "Sleep couldn’t load right now";
+"Pití se teď nepodařilo načíst" = "Drinks couldn’t load right now";

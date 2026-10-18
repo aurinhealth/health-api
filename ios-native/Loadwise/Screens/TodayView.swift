@@ -564,17 +564,26 @@ struct KeyNumbers: View {
     let today: TodaySnapshot
 
     var body: some View {
-        HStack(spacing: 0) {
-            RouteLink(route: .sleep) { cell("Spánek", Fmt.hoursMinutes(today.sleep?.minutes), nil, sleep) }
-            Divider().overlay(Palette.hairline)
-            RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
-            Divider().overlay(Palette.hairline)
-            RouteLink(route: .metric(.hrv)) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
+        VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                RouteLink(route: .sleep) { cell("Spánek", sleepFailed ? "–" : Fmt.hoursMinutes(today.sleep?.minutes), nil, sleepFailed ? Gauge(note: nil, color: Palette.indigo) : sleep) }
+                Divider().overlay(Palette.hairline)
+                RouteLink(route: .strain) { cell("Námaha", Fmt.decimal(today.strain.score), nil, strain) }
+                Divider().overlay(Palette.hairline)
+                RouteLink(route: .metric(.hrv)) { cell("HRV", Fmt.int(today.hrv?.value), "ms", hrv) }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            if sleepFailed {
+                Divider().overlay(Palette.hairline)
+                PartUnavailableNote(text: "Spánek se teď nepodařilo načíst")
+            }
         }
-        .fixedSize(horizontal: false, vertical: true)
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
     }
+
+    /// The server could not read the nights this time (not: no night yet).
+    private var sleepFailed: Bool { today.unavailable?.contains("sleep") == true && today.sleep?.minutes == nil }
 
     /// A cell's bar (when it has a range) and the line under it.
     struct Gauge {
@@ -634,6 +643,28 @@ struct KeyNumbers: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// One line at the foot of a Today card whose part the server could not load
+/// this time, with a new try; the card keeps its place.
+struct PartUnavailableNote: View {
+    @Environment(AppModel.self) private var model
+    let text: LocalizedStringKey
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(text).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+            Button {
+                Task { await model.refresh() }
+            } label: {
+                Label("Zkusit znovu", systemImage: "arrow.clockwise").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+            }
+            .buttonStyle(.plain)
+            .disabled(model.loading)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
     }
 }
 

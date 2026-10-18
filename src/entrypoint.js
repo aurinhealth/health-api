@@ -22,7 +22,7 @@ import { watchDetail, withWatch } from './watch-detail.js';
 import { useCookbookDatabase } from './cookbook.js';
 import {googleDashboard} from './google-dashboard.js';
 import {applyEnergyBudget} from './energy-budget.js';
-import {buildToday} from './app-today.js';
+import {buildToday,todayUnavailable} from './app-today.js';
 import {withIdempotency} from './idempotency.js';
 import {buildTraining, weekStart} from './app-training.js';
 import {buildCalendar} from './app-calendar.js';
@@ -1691,7 +1691,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{
       const requested=url.searchParams.get('date'),date=validTrainingDay(requested)&&requested<=localToday()?requested:localToday();
       // A part that fails leaves its card empty; the log says which one and why.
-      const missing=(path,why)=>{console.warn(JSON.stringify({today_part_failed:path.split('?')[0],why:String(why).slice(0,200)}));return {};};
+      // The app marks the card of a part that failed instead of showing it empty (unavailable).
+      const failed=new Set();
+      const missing=(path,why)=>{const part=path.split('?')[0];failed.add(part);console.warn(JSON.stringify({today_part_failed:part,why:String(why).slice(0,200)}));return {};};
       const answer=(path,r)=>r.ok?r.json():missing(path,'HTTP '+r.status);
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>answer(path,r)).catch(error=>missing(path,error?.message||error));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>answer(path,r)).catch(error=>missing(path,error?.message||error));
@@ -1721,7 +1723,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
       applyEnergyBudget(daily,profile,health);
       return Response.json(withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
-        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess}}),training),{headers:{'Cache-Control':'no-store'}});
+        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess},unavailable:todayUnavailable(failed)}),training),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 

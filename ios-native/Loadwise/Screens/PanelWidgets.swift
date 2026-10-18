@@ -523,7 +523,7 @@ struct PanelWidget: View {
         case .zones:
             if let value = data.training?.zones { ZonesWidget(zones: value, size: item.size) }
         case .food:
-            if let t = data.today { FoodWidget(nutrition: t.nutrition, size: item.size) }
+            if let t = data.today { FoodWidget(nutrition: t.nutrition, size: item.size, waterFailed: t.unavailable?.contains("fluids") == true) }
         case .drinks:
             if let f = data.food { DrinksCard(water: f.water, size: item.size) }
         case .macros:

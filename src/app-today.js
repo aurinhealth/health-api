@@ -153,7 +153,14 @@ export function napsOn(sessions, date, night) {
     .map(s => ({ start: clockOf(s.startTime), end: clockOf(s.endTime), minutes: Math.round(num(s.durationMin)) }));
 }
 
-export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null }) {
+// The parts of Today that failed (their paths), by the card they feed: the
+// nights (Spánek) and the drinks (Voda in Jídlo a pití).
+const TODAY_PARTS = { "/health/sleep": "sleep", "/app/api/fluids": "fluids" };
+export function todayUnavailable(failed) {
+  return [...new Set([...failed].map(path => TODAY_PARTS[path]).filter(Boolean))];
+}
+
+export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
   const nights = primaryNights(sessions);
@@ -302,6 +309,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   return {
     status: "ok",
     date,
+    // Parts that could not be read this time (entrypoint.js todayUnavailable): their card says so.
+    unavailable: Array.isArray(unavailable) ? unavailable : [],
     // Connected services that need the user (connection-health.js), shown at the top.
     connectionProblems: Array.isArray(connectionProblems) ? connectionProblems : [],
     // provisional: the baseline is carried over from another source until the
