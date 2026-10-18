@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { CATALOG, DEFAULT_PINNED, CATEGORIES, normalizeCustomItem, itemView, catalogItem } from "../src/journal-catalog.js";
+import { CATALOG, DEFAULT_PINNED, CATEGORIES, normalizeCustomItem, itemView, catalogItem, usualPart } from "../src/journal-catalog.js";
 import { percentEffect, impactOf, thresholdOf, rankImpacts, newDiscovery, dayState, itemDetail, morningMetrics, timeLevel, levelTime, shiftDay } from "../src/journal-impact.js";
 import { saveJournalEntry, listJournalEntries, getJournalSettings, saveCustomItem, autoDays, sickDays, caffeineMg, alcoholDrinks, setJournalOptions, setFixed } from "../src/journal-store.js";
 import { journalDay, journalCard, journalCatalog, thresholdText, waitingText, valueText, handleJournalApi, journalForCoach } from "../src/routes-journal.js";
@@ -221,7 +221,7 @@ test("the day's data fills in alcohol, caffeine, the last meal and an evening wo
   const items = day.sections.flatMap(s => s.items);
   assert.deepEqual(items.filter(i => i.fromData).map(i => [i.key, i.value]), [["caffeine", "145 mg · do 15:10"], ["outdoors", null], ["evening_training", "19:00"], ["late_meal", "21:15"], ["alcohol", "2 · do 21:40"]]);
   // By part of the day and time; the row's value without the time.
-  assert.deepEqual(day.sections.map(s => [s.title, s.items.map(i => i.key)]), [["Přes den", ["caffeine", "outdoors"]], ["Večer", ["evening_training", "late_meal", "alcohol", "sauna"]], ["Noc", ["phone_in_bed", "late_bed", "sleep_away"]]]);
+  assert.deepEqual(day.sections.map(s => [s.title, s.items.map(i => i.key)]), [["Přes den", ["caffeine", "outdoors"]], ["Večer", ["evening_training", "late_meal", "alcohol", "sauna"]], ["Noc", ["phone_in_bed", "late_bed"]], ["Dnešní noc", ["sleep_away"]]]);
   assert.deepEqual(items.filter(i => i.key === "alcohol" || i.key === "late_meal").map(i => i.short), [null, "2 nápoje"]);
   assert.deepEqual([day.answered, day.total], [5, 9]);
   assert.deepEqual(day.week.map(w => w.state), ["empty", "empty", "partial", "empty", "future", "future", "future"]);
@@ -383,4 +383,11 @@ test("the English app gets the catalogue and the day without Czech", async () =>
   const day = await withLang("en", () => journalDay(db, shiftDay(today, -1), today));
   assert.doesNotMatch(JSON.stringify(day), CZECH);
   assert.match(JSON.stringify(await withLang("cs", () => journalCatalog(db))), CZECH);
+});
+
+test("journal: what happened in the night up to the wake-up has its own part, asked first thing", () => {
+  assert.equal(usualPart(catalogItem("early_wake")), "last_night");
+  assert.equal(usualPart(catalogItem("night_noise")), "last_night");
+  assert.equal(usualPart(catalogItem("late_bed")), "night");
+  assert.equal(usualPart(catalogItem("morning_light")), "morning");
 });

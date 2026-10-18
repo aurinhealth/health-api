@@ -201,15 +201,21 @@ export const NOT_RANKED = new Set(["sick"]);
 // The part of the day an item belongs to in the journal's list ("Ráno",
 // "Přes den", "Večer", "Noc"): from its time when the day has one, else from
 // when it usually happens.
-export const PARTS = ["morning", "day", "evening", "night"];
-const PART_TEXT = { morning: ["Ráno", "Morning"], day: ["Přes den", "Daytime"], evening: ["Večer", "Evening"], night: ["Noc", "Night"] };
+// "Dnešní noc" is what happened in the night the day ends with, up to the
+// wake-up: the morning sheet asks it right away, while the rest of the day
+// can be filled in later.
+export const PARTS = ["morning", "day", "evening", "night", "last_night"];
+const PART_TEXT = { morning: ["Ráno", "Morning"], day: ["Přes den", "Daytime"], evening: ["Večer", "Evening"], night: ["Noc", "Night"], last_night: ["Dnešní noc", "Last night"] };
 export const partTitle = part => L(...(PART_TEXT[part] || PART_TEXT.day));
-const MORNING = new Set(["early_wake", "morning_light", "caffeine", "coffee_cups"]);
+const MORNING = new Set(["morning_light", "caffeine", "coffee_cups"]);
 const EVENING = new Set(["alcohol", "late_meal", "evening_training", "heavy_dinner", "sweets_evening", "carbs_dinner", "herbal_tea", "drink_before_bed",
   "sauna", "hot_bath", "screen_late", "series_before_bed", "work_late", "wind_down", "reading_bed", "gratitude", "calm_music", "sex",
   "melatonin", "glycine", "theanine", "magnesium", "tart_cherry", "sleeping_pill"]);
 const EVENING_SLEEP = new Set(["nap"]);
+const LAST_NIGHT = new Set(["early_wake", "night_noise", "woken_kids", "sleep_away", "partner_bed", "pet_bedroom", "night_shift",
+  "blackout_room", "cool_bedroom", "earplugs", "sleep_mask", "mouth_tape", "white_noise", "weighted_blanket"]);
 export function usualPart(item) {
+  if (LAST_NIGHT.has(item.key)) return "last_night";
   if (MORNING.has(item.key)) return "morning";
   if (EVENING.has(item.key)) return "evening";
   if (item.cat === "sleep") return EVENING_SLEEP.has(item.key) ? "day" : "night";
