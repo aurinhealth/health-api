@@ -2556,6 +2556,9 @@
 "Tep se měří" = "Heart rate measured";
 "Tep se neměří" = "No heart rate";
 "připojeno, zatím neposílá tep" = "connected, no heart rate yet";
+"Teď měří" = "Measuring now";
+"snímač tepu" = "heart rate sensor";
+"přes Apple Zdraví" = "via Apple Health";
 "Skrýt trénink" = "Hide workout";
 "Skrýt série" = "Hide sets";
 "Ukázat série" = "Show sets";

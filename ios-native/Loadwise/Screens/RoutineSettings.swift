@@ -113,9 +113,36 @@ struct MealSlotsSettingsView: View {
 /// rate, for Režim tréninku without an Apple Watch.
 struct HeartRateSensorView: View {
     private var sensor: HeartRateSensor { HeartRateSensor.shared }
+    private var live: LiveWorkout { LiveWorkout.shared }
+
+    static func icon(for source: String, sensor: Bool) -> String {
+        if sensor { return "heart.fill" }
+        let name = source.lowercased()
+        if name.contains("airpods") || name.contains("beats") { return "airpodspro" }
+        if name.contains("watch") { return "applewatch" }
+        return "heart.text.square"
+    }
 
     var body: some View {
         SettingsPage(title: "Snímač tepu") {
+            // During a workout: what the heart rate on top of it comes from.
+            if live.running, let bpm = live.heartRate {
+                let fromSensor = sensor.liveBpm != nil
+                let source = (fromSensor ? sensor.savedName : live.heartSource) ?? L10n.tr("Apple Zdraví")
+                SettingsGroup(title: "Teď měří") {
+                    HStack(spacing: 12) {
+                        SettingsIcon(systemImage: Self.icon(for: source, sensor: fromSensor), color: fromSensor ? Palette.rust : Palette.ink)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(source).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
+                            Text(fromSensor ? "snímač tepu" : "přes Apple Zdraví")
+                                .font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
+                        Spacer(minLength: 8)
+                        Text("\(Fmt.int(bpm)) bpm").font(.subheadline).foregroundStyle(Palette.muted)
+                    }
+                    .padding(.horizontal, 16).frame(minHeight: 50)
+                }
+            }
             if let name = sensor.savedName {
                 SettingsGroup(title: "Spárováno") {
                     HStack(spacing: 12) {
