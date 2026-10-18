@@ -3,7 +3,7 @@ import SwiftUI
 /// The coach's answer as the web shows it: headings, lists, numbered steps,
 /// tables, bold and links, in the system font (SF Pro) so long answers read
 /// easily. Text is never a format string: "80 %" stays as it is.
-struct CoachMarkdown: View {
+struct CoachMarkdown: View, Equatable {
     let text: String
 
     var body: some View {

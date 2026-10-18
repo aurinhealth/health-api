@@ -6,6 +6,8 @@ import SwiftUI
 struct FoodWidget: View {
     let nutrition: TodaySnapshot.Nutrition
     var size: WidgetSize = .medium
+    /// The drinks could not be read this time: "–" and a line saying so.
+    var waterFailed = false
 
     var body: some View {
         Card {
@@ -38,7 +40,11 @@ struct FoodWidget: View {
             macro("Bílkoviny", nutrition.protein.eaten, "g", fraction(nutrition.protein.eaten, nutrition.protein.target), Palette.brown)
             macro("Sacharidy", nutrition.carbs.eaten, "g", fraction(nutrition.carbs.eaten, nutrition.carbs.target), Palette.amberBar)
             macro("Tuky", nutrition.fat.eaten, "g", fraction(nutrition.fat.eaten, nutrition.fat.target), Palette.gold)
-            macro("Voda", nutrition.water.ml.map { Units.imperial ? Units.volume($0) : $0 / 1000 }, Units.imperial ? Units.volumeUnit : "l", fraction(nutrition.water.ml, nutrition.water.target), Palette.blue, digits: Units.imperial ? 0 : 1)
+            macro("Voda", waterFailed ? nil : nutrition.water.ml.map { Units.imperial ? Units.volume($0) : $0 / 1000 }, Units.imperial ? Units.volumeUnit : "l", waterFailed ? 0 : fraction(nutrition.water.ml, nutrition.water.target), Palette.blue, digits: Units.imperial ? 0 : 1)
+        }
+        if waterFailed {
+            Divider().overlay(Palette.hairline)
+            PartUnavailableNote(text: "Pití se teď nepodařilo načíst").padding(.horizontal, -16).padding(.vertical, -6)
         }
     }
 
@@ -52,7 +58,7 @@ struct FoodWidget: View {
             Text(title).font(Typo.tiny).foregroundStyle(Palette.muted).lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
                 Text(digits == 0 ? Fmt.int(value) : Fmt.decimal(value, digits: digits)).font(Typo.number(19)).foregroundStyle(Palette.ink)
-                Text(unit).font(Typo.tiny).foregroundStyle(Palette.faint)
+                if value != nil { Text(unit).font(Typo.tiny).foregroundStyle(Palette.faint) }
             }
             ProgressLine(fraction: progress, color: color, height: 3)
         }

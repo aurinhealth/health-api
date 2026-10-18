@@ -45,7 +45,8 @@ struct CoachView: View {
             VStack(spacing: 0) {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 14) {
+                        // Lazy: a long chat lays out only the bubbles on screen.
+                        LazyVStack(alignment: .leading, spacing: 14) {
                             if messages.isEmpty { welcome }
                             ForEach(messages) { bubble in
                                 BubbleView(bubble: bubble,
@@ -206,14 +207,28 @@ struct CoachView: View {
         sending = true
         progress = "Kouč přemýšlí…"
         defer { sending = false; progress = nil }
+        // The answer streams in a few words at a time; the bubble shows it at
+        // most ten times a second, so a long answer does not re-lay the chat
+        // with every word. The last text always shows.
+        var unshown: String?
+        var shownAt = Date.distantPast
         do {
             for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date) {
                 switch event {
                 case .progress(let p): progress = p
-                case .answer(let a): edit(id) { $0.text = a }
+                case .answer(let a):
+                    if Date().timeIntervalSince(shownAt) >= 0.1 {
+                        edit(id) { $0.text = a }
+                        shownAt = Date()
+                        unshown = nil
+                    } else {
+                        unshown = a
+                    }
                 case .done(let result):
+                    let last = unshown
+                    unshown = nil
                     edit(id) {
-                        if let a = result.answer { $0.text = a }
+                        if let a = result.answer ?? last { $0.text = a }
                         $0.actions = result.actions ?? []
                         $0.visuals = result.visuals ?? []
                         $0.memory = result.memoryChanges?.chips ?? []
@@ -226,6 +241,7 @@ struct CoachView: View {
                     if let chat = result.chatId { chatId = chat }
                 }
             }
+            if let last = unshown { edit(id) { $0.text = last } }
             messages.removeAll { $0.id == id && $0.text.isEmpty && $0.food == nil }
         } catch APIError.aiConsentRequired {
             messages.removeAll { $0.id == id }
@@ -357,6 +373,7 @@ struct BubbleView: View {
                         .textSelection(.enabled)
                 } else {
                     CoachMarkdown(text: bubble.text)
+                        .equatable()
                         .padding(.horizontal, 16).padding(.vertical, 14)
                         .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .textSelection(.enabled)

@@ -197,13 +197,22 @@ final class AppModel {
     /// The screens as they were last time, until the server answers.
     private func loadSaved() {
         today = SnapshotCache.load(TodaySnapshot.self, key: "today")?.value
-        training = SnapshotCache.load(TrainingSnapshot.self, key: "training")?.value
-        health = SnapshotCache.load(HealthSnapshot.self, key: "health")?.value
         food = SnapshotCache.load(FoodSnapshot.self, key: "food")?.value
         todayBase = OutboxStore.savedSnapshot("today")
         foodBase = OutboxStore.savedSnapshot("food")
         applyOutbox()
-        SnapshotCache.prune(today: Self.localDate(Date()))
+        // Training and Health are not on the first screen: read off the main
+        // thread, and only where the server has not answered meanwhile.
+        Task {
+            let saved = await Task.detached(priority: .userInitiated) {
+                SavedScreens(training: SnapshotCache.load(TrainingSnapshot.self, key: "training")?.value,
+                             health: SnapshotCache.load(HealthSnapshot.self, key: "health")?.value)
+            }.value
+            guard phase == .signedIn else { return }
+            if training == nil { training = saved.training }
+            if health == nil { health = saved.health }
+        }
+        Task.detached(priority: .utility) { SnapshotCache.prune(today: AppModel.localDate(Date())) }
     }
 
     /// Notes whether a refresh reached the server; true when the error was a
@@ -273,8 +282,12 @@ final class AppModel {
 
     /// The account's name and e-mail for Profil, and the first letter of the
     /// name for the settings button while there is no photo.
-    func loadAccountInitial() async {
-        guard !demo, phase == .signedIn, let account = try? await api.account() else { return }
+    /// account: already fetched (signing in), so it is not asked for twice.
+    func loadAccountInitial(_ known: (name: String?, email: String?)? = nil) async {
+        guard !demo, phase == .signedIn else { return }
+        var account = known
+        if account == nil { account = try? await api.account() }
+        guard let account else { return }
         let defaults = UserDefaults.standard
         defaults.set(account.name, forKey: AvatarStore.nameKey)
         defaults.set(account.email, forKey: AvatarStore.emailKey)
@@ -353,7 +366,8 @@ final class AppModel {
         phase = .signedIn
         errorMessage = nil
         let defaults = UserDefaults.standard
-        if let previous = defaults.string(forKey: AvatarStore.emailKey), let account = try? await api.account(), account.email != previous {
+        let account = try? await api.account()
+        if let previous = defaults.string(forKey: AvatarStore.emailKey), let account, account.email != previous {
             outbox = []
             OutboxStore.save([])
             AvatarStore.remove()
@@ -362,7 +376,7 @@ final class AppModel {
             today = nil; training = nil; health = nil; food = nil
             calendar = [:]
         }
-        await loadAccountInitial()
+        await loadAccountInitial(account)
         // Back in the account that read Apple Health before signing out.
         await AppleHealth.shared.resume(account: defaults.string(forKey: AvatarStore.emailKey), api: api)
         await checkSetup()
@@ -389,6 +403,19 @@ final class AppModel {
     /// announce: the app was opened or pulled down, so the pill says it syncs.
     func refresh(announce: Bool = false) async {
         guard !demo, phase == .signedIn else { return }
+        // The app opened or pulled down while a refresh runs (the app came
+        // back as Today first loaded): that one brings the same data. A write
+        // (refresh() without announce) still loads again after it.
+        guard announce else { return await performRefresh(announce: false) }
+        if let running = announcedRefresh { return await running.value }
+        let task = Task { await performRefresh(announce: true) }
+        announcedRefresh = task
+        await task.value
+        if announcedRefresh == task { announcedRefresh = nil }
+    }
+    @ObservationIgnored private var announcedRefresh: Task<Void, Never>?
+
+    private func performRefresh(announce: Bool) async {
         loading = true
         defer { loading = false }
         if announce { syncStatus = .syncing }
@@ -994,8 +1021,16 @@ final class AppModel {
         let days = ISODay.range(start, end)
         guard force || days.contains(where: { calendar[$0] == nil }) else { return }
         if demo { return }
-        guard phase == .signedIn, let result = try? await api.trainingCalendar(start: start, end: end) else { return }
-        for day in result.days { calendar[day.date] = day }
+        guard phase == .signedIn else { return }
+        do {
+            let result = try await api.trainingCalendar(start: start, end: end)
+            for day in result.days { calendar[day.date] = day }
+        } catch {
+            // Without signal the days already here stay; anything else is said,
+            // not left as an empty calendar (the request is in ErrorLog).
+            if Self.isCancellation(error) || Outbox.isNoConnection(error) || (error as? APIError) == .unauthorized { return }
+            notice = error.localizedDescription
+        }
     }
 
     func updateDrink(id: Int, ml: Int, kind: String) async -> Bool {
@@ -1221,19 +1256,12 @@ final class AppModel {
     }
 
     nonisolated static func localDate(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
+        DateFormatters.iso().string(from: date)
     }
 
     nonisolated static func shift(_ isoDate: String, by days: Int) -> String? {
         let utc = TimeZone(identifier: "UTC")!
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = utc
-        f.dateFormat = "yyyy-MM-dd"
+        let f = DateFormatters.iso(timeZone: utc)
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = utc
         guard let d = f.date(from: isoDate), let moved = calendar.date(byAdding: .day, value: days, to: d) else { return nil }
@@ -1334,5 +1362,16 @@ private final class FirstAnswer {
         guard !taken else { return false }
         taken = true
         return true
+    }
+}
+
+/// Training and Health read from disk off the main thread (AppModel.loadSaved);
+/// read once, then handed over.
+private final class SavedScreens: @unchecked Sendable {
+    let training: TrainingSnapshot?
+    let health: HealthSnapshot?
+    init(training: TrainingSnapshot?, health: HealthSnapshot?) {
+        self.training = training
+        self.health = health
     }
 }
