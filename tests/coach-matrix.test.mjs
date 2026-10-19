@@ -1,6 +1,6 @@
 // The engine's safety rules across every combination the review of 2026-10-16
-// checked (audit "revize doporučování tréninků"): 6 mornings × 9 loads × 10
-// situations × ride and run = 1080 days. Each rule holds whatever chose the
+// checked (audit "revize doporučování tréninků"): 6 mornings × 9 loads × 11
+// situations × ride and run = 1188 days. Each rule holds whatever chose the
 // session: the plan in Intervals.icu, a kind asked for in the chat, the phase
 // or the coach itself.
 import test from "node:test";
@@ -47,7 +47,9 @@ const SITUATIONS = {
   taper: { focus: { event: { date: day(5), name: "Race" } }, taper: true },
   sick: { athleteState: { status: "sick" }, paused: true },
   dayAfterIllness: { athleteState: { status: "active", recoveredAt: day(-1) }, afterIllness: true },
-  askedTempo: { goal: { focus: "tempo" }, availabilityMinutes: 120 }
+  askedTempo: { goal: { focus: "tempo" }, availabilityMinutes: 120 },
+  // The athlete's own card from the coach chat (entrypoint.js workoutPreview).
+  chatVo2: { goal: { focus: "vo2max", asked: true, chat: true }, availabilityMinutes: 30, chat: true }
 };
 
 const days = [];
@@ -70,12 +72,15 @@ const rule = (name, applies, holds) => test(name, () => {
 });
 const run = d => d.sport === "run";
 
-test("the matrix has 1080 days", () => assert.equal(days.length, 1080));
+test("the matrix has 1188 days", () => assert.equal(days.length, 1188));
 rule("Nemoc: no training at all", d => d.sit.paused, d => d.kind === "rest" && d.minutes === 0);
 const live = d => !d.sit.paused;
 rule("red: only a short recovery", d => live(d) && d.coach.readiness.status === "red", d => d.kind === "recovery" && d.minutes <= (run(d) ? 30 : 45));
 rule("deep fatigue (TSB −35) is red", d => live(d) && d.load.deep, d => d.coach.readiness.status === "red");
-rule("yellow: no intensity, tempo included", d => live(d) && d.coach.readiness.status === "yellow", d => !QUALITY.includes(d.kind));
+rule("yellow: no intensity, tempo included", d => live(d) && d.coach.readiness.status === "yellow" && !d.sit.chat, d => !QUALITY.includes(d.kind));
+// The athlete's call (Petr 2026-10-19): asked for in the chat, a yellow day
+// keeps the hard ride or run when nothing else stands in the way.
+rule("yellow, asked in the chat: the asked intensity stays", d => d.sit.chat && d.coach.readiness.status === "yellow" && !d.morning.illness && !d.load.hard48 && !d.load.twoQuality && !d.load.afterBreak && !d.load.novice, d => d.kind === "vo2");
 rule("signs of illness: no intensity and short", d => live(d) && d.morning.illness, d => !QUALITY.includes(d.kind) && d.minutes <= (run(d) ? 40 : 60));
 rule("48 h after a hard day of either sport: no quality", d => live(d) && d.load.hard48, d => !QUALITY.includes(d.kind));
 rule("two quality days in 7: no third", d => live(d) && d.load.twoQuality, d => !QUALITY.includes(d.kind));
