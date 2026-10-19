@@ -53,11 +53,14 @@ export const GYM_DETECT_SCHEMA = {
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["found", "gymName", "stations", "note"],
+    required: ["found", "gymName", "stations", "unsupported", "note"],
     properties: {
       found: { type: "boolean" },
       gymName: { type: "string" },
       stations: { type: "array", items: { type: "string", enum: GYM_STATION_IDS } },
+      // What is there but not on the list (a rowing ergometer, a boxing bag):
+      // the app shows it, so the athlete knows it was seen and left out.
+      unsupported: { type: "array", items: { type: "string" } },
       note: { type: "string" }
     }
   }
@@ -69,7 +72,8 @@ export function parseDetectAnswer(text) {
   try { r = JSON.parse(String(text || "").slice(String(text || "").indexOf("{"), String(text || "").lastIndexOf("}") + 1)); } catch { return null; }
   if (!r || typeof r !== "object") return null;
   const stations = [...new Set((Array.isArray(r.stations) ? r.stations : []).map(String).filter(id => GYM_STATION_IDS.includes(id)))];
-  return { found: r.found === true && stations.length > 0, gymName: String(r.gymName || "").trim().slice(0, 120), stations, note: String(r.note || "").trim().slice(0, 300) };
+  const unsupported = [...new Set((Array.isArray(r.unsupported) ? r.unsupported : []).map(x => String(x || "").trim().slice(0, 60)).filter(Boolean))].slice(0, 12);
+  return { found: r.found === true && stations.length > 0, gymName: String(r.gymName || "").trim().slice(0, 120), stations, unsupported, note: String(r.note || "").trim().slice(0, 300) };
 }
 
 // Photos on a gym's web page (and its gallery page): the machines are often
@@ -156,5 +160,5 @@ export async function detectGymEquipment(env, { images = [], url = "" } = {}, fe
     maxOutputTokens: 3000,
     model: pictures.length || sitePhotos.length ? env.OPENAI_VISION_MODEL || lightModel(env) : lightModel(env)
   });
-  return { ...(parseDetectAnswer(r.text) || { found: false, gymName: "", stations: [], note: "" }), photos: sitePhotos.length, model: r.model };
+  return { ...(parseDetectAnswer(r.text) || { found: false, gymName: "", stations: [], unsupported: [], note: "" }), photos: sitePhotos.length, model: r.model };
 }

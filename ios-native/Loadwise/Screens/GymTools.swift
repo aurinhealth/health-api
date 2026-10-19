@@ -245,8 +245,20 @@ struct GymBuilderView: View {
     @State private var replacing: String?
     @State private var adding = false
     @State private var technique: String?
+    /// "Kde budeš cvičit?" before the first workout of an account without places.
+    @State private var askPlace = false
 
     private var isoDay: String { AppModel.localDate(day) }
+
+    /// No place saved yet: the plan would be body weight only without asking.
+    private var needsPlace: Bool {
+        !model.demo && template == nil && equipment != nil && (equipment?.places ?? []).isEmpty
+    }
+
+    /// Velké fitko, Malé fitko, Doma and Vlastní váha, as Vybavení offers them.
+    private var starterPlaces: EquipmentView.Draft {
+        EquipmentView.seeded([], active: "bodyweight", all: (equipment?.stations ?? []).map(\.id), firstTime: true)
+    }
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Sestavit trénink") {
@@ -283,6 +295,14 @@ struct GymBuilderView: View {
         }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
             TechniqueSheet(exercise: item.name)
+        }
+        .confirmationDialog("Kde budeš cvičit?", isPresented: $askPlace, titleVisibility: .visible) {
+            ForEach(starterPlaces.places) { place in
+                Button(place.name) { Task { await choosePlace(place.id) } }
+            }
+            Button("Zrušit", role: .cancel) {}
+        } message: {
+            Text("Trénink složím jen z vybavení, které tam je. Místa a stroje upravíš ve Vybavení.")
         }
     }
 
@@ -365,7 +385,7 @@ struct GymBuilderView: View {
                     Image(systemName: "dumbbell").foregroundStyle(Palette.indigo)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Vybavení").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(EquipmentView.summary(equipment)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        Text(needsPlace ? L10n.tr("vyber, kde cvičíš") : EquipmentView.summary(equipment)).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     Spacer()
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
@@ -376,7 +396,7 @@ struct GymBuilderView: View {
             .padding(.top, 16)
 
             PrimaryButton(title: busy == "preview" ? "Sestavuji…" : "Navrhnout trénink", systemImage: "sparkles", busy: busy == "preview") {
-                Task { await preview() }
+                if needsPlace { askPlace = true } else { Task { await preview() } }
             }
             .disabled(busy != nil || model.demo || (focus == "muscles" && muscles.isEmpty))
             .padding(.top, 22)
@@ -630,6 +650,20 @@ struct GymBuilderView: View {
         }
     }
 
+    /// The ready-made places are saved with the chosen one active, then the workout is put together.
+    private func choosePlace(_ id: String) async {
+        let draft = EquipmentView.seeded([], active: id, all: (equipment?.stations ?? []).map(\.id), firstTime: true)
+        await run("preview") {
+            var saved = try await model.api.saveGymPlaces(draft.places, active: draft.active)
+            saved.stations = equipment?.stations
+            saved.sections = equipment?.sections
+            equipment = saved
+            UserDefaults.standard.set(true, forKey: EquipmentView.seededKey)
+            UserDefaults.standard.set(true, forKey: EquipmentView.presetsKey)
+        }
+        if !needsPlace { await preview() }
+    }
+
     private func planTemplate(_ t: TemplatePlanRequest) async {
         await run("preview") {
             var next = try await model.api.planTemplate(t, date: isoDay)
@@ -737,7 +771,7 @@ struct EquipmentView: View {
             }
         }
         .sheet(isPresented: $adding) {
-            AddGymSheet { name, stations, url in create(name: name, stations: stations, url: url) }
+            AddGymSheet(catalog: data?.stations ?? []) { name, stations, url in create(name: name, stations: stations, url: url) }
         }
     }
 

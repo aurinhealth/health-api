@@ -87,4 +87,11 @@ final class GymSetEditTests: XCTestCase {
         let again = EquipmentView.seeded([mine, body], active: "place-1", all: [], firstTime: false, presetsFirstTime: false)
         XCTAssertEqual(again.places.count, 2, "deleted ones stay away")
     }
+
+    func testRecognisingAgainShowsWhatComesAndGoes() {
+        let change = AddGymSheet.changes(old: ["dumbbells", "cables", "floor_mats"], found: ["cables", "pullup_bar", "kettlebells"])
+        XCTAssertEqual(change.added, ["kettlebells", "pullup_bar"])
+        XCTAssertEqual(change.removed, ["dumbbells"], "the floor is always there, so it never goes")
+        XCTAssertTrue(AddGymSheet.changes(old: ["cables"], found: ["cables", "floor_mats"]).added.isEmpty)
+    }
 }

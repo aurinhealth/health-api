@@ -2600,6 +2600,15 @@
 "Poznávám…" = "Recognising…";
 "Poznat" = "Recognise";
 "Vybrat sám" = "Pick myself";
+"Poznáno" = "Recognised";
+"Přibude" = "Coming in";
+"Ubude" = "Going out";
+"Našel jsem" = "Found";
+"Bez cviků v aplikaci" = "No exercises in the app";
+"Tohle tam je, ale tréninky s tím aplikace zatím nesestavuje." = "This is there, but the app doesn’t build workouts with it yet.";
+"Kde budeš cvičit?" = "Where will you train?";
+"Trénink složím jen z vybavení, které tam je. Místa a stroje upravíš ve Vybavení." = "I’ll build the workout only from the equipment that’s there. You can change places and machines in Equipment.";
+"vyber, kde cvičíš" = "choose where you train";
 "Týdenní kalorie" = "Weekly calories";
 "Týden spočítám, až budu znát tvůj denní cíl." = "I'll add up the week once I know your daily target.";
 "z %@ kcal snědeno" = "of %@ kcal eaten";

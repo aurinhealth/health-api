@@ -77,6 +77,8 @@ struct GymDetectResult: Decodable, Equatable {
     let found: Bool?
     let gymName: String?
     let stations: [String]?
+    /// What is there but has no station in the app (a rowing ergometer).
+    var unsupported: [String]? = nil
     let note: String?
     let message: String?
 }

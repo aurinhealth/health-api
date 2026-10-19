@@ -56,7 +56,7 @@ struct GymPlaceView: View {
             StationSheet(station: station, sectionLabel: label(of: station), place: $place, catalog: $catalog)
         }
         .sheet(isPresented: $detecting) {
-            AddGymSheet(detectOnly: true, url: place.url) { name, found, url in
+            AddGymSheet(detectOnly: true, url: place.url, current: place.stations, catalog: stations) { name, found, url in
                 place.stations = Array(Set(found).union(place.stations.contains("floor_mats") ? ["floor_mats"] : [])).sorted()
                 if !url.isEmpty { place.url = url }
                 if place.name.isEmpty, let name { place.name = name }
@@ -394,23 +394,34 @@ struct DumbbellWeightsEditor: View {
 // MARK: - Adding a gym
 
 /// "Přidat posilovnu": AI reads the gym's web page (its text and photos) and
-/// the athlete's own photos at once, or the athlete ticks the stations.
+/// the athlete's own photos at once, or the athlete ticks the stations. What
+/// it found is shown before it is used: for a place that exists what comes and
+/// goes, and what is there but has no station in the app.
 struct AddGymSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     /// Only recognising, for a place that exists.
     var detectOnly = false
     @State var url = ""
+    /// The place's stations now (recognising again), for what changes.
+    var current: [String]? = nil
+    /// The stations' names.
+    var catalog: [GymEquipment.Station] = []
     /// name (when AI read one), stations, web page.
     let onDone: (String?, [String], String) -> Void
 
     @State private var photos: [PhotosPickerItem] = []
     @State private var busy = false
     @State private var error: String?
+    /// What AI found, and the web page it read.
+    @State private var result: (answer: GymDetectResult, link: String)?
 
-    init(detectOnly: Bool = false, url: String = "", onDone: @escaping (String?, [String], String) -> Void) {
+    init(detectOnly: Bool = false, url: String = "", current: [String]? = nil, catalog: [GymEquipment.Station] = [],
+         onDone: @escaping (String?, [String], String) -> Void) {
         self.detectOnly = detectOnly
         _url = State(initialValue: url)
+        self.current = current
+        self.catalog = catalog
         self.onDone = onDone
     }
 
@@ -420,47 +431,7 @@ struct AddGymSheet: View {
                 Text(detectOnly ? "Poznat automaticky" : "Přidat posilovnu").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .frame(maxWidth: .infinity).padding(.top, 22)
 
-                VStack(alignment: .leading, spacing: 12) {
-                    if !detectOnly {
-                        Label("Poznat automaticky", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    }
-                    HStack(spacing: 8) {
-                        Image(systemName: "globe").foregroundStyle(Palette.muted)
-                        TextField("https://posilovna.cz", text: $url)
-                            .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    }
-                    .padding(.horizontal, 12).frame(height: 44)
-                    .background(Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    let photoCount = photos.count
-                    PhotosPicker(selection: $photos, maxSelectionCount: 8, matching: .images) {
-                        Label(photoCount == 0 ? L10n.tr("Přidat fotky") : L10n.f("Přidat fotky (%@)", String(photoCount)), systemImage: "camera")
-                            .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                            .frame(maxWidth: .infinity).frame(height: 44)
-                            .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
-                    }
-                    .disabled(busy)
-                    PrimaryButton(title: L10n.tr(busy ? "Poznávám…" : "Poznat"), busy: busy) { Task { await detect() } }
-                        .disabled(busy || model.demo || (photos.isEmpty && !cleanUrl.hasPrefix("http")))
-                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true) }
-                }
-                .padding(16)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Palette.green, lineWidth: 1.5))
-
-                if !detectOnly {
-                    Button {
-                        onDone(nil, [], "")
-                        dismiss()
-                    } label: {
-                        Label("Vybrat sám", systemImage: "pencil").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(16)
-                            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(busy)
-                }
+                if let result { found(result.answer, link: result.link) } else { form }
             }
             .padding(.horizontal, 20).padding(.bottom, 24)
         }
@@ -468,6 +439,112 @@ struct AddGymSheet: View {
         .presentationDragIndicator(.visible)
         .presentationBackground(Palette.background)
         .interactiveDismissDisabled(busy)
+    }
+
+    /// What AI found: the stations (or what comes and goes), what the app has
+    /// no station for, and what it could not check; used only after a tap.
+    private func found(_ r: GymDetectResult, link: String) -> some View {
+        let stations = r.stations ?? []
+        let change = Self.changes(old: current ?? [], found: stations)
+        let count = Set(stations).subtracting(["floor_mats"]).count
+        return VStack(alignment: .leading, spacing: 12) {
+            Label(r.gymName?.nilIfBlank ?? L10n.tr("Poznáno"), systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            Text(L10n.f("%@ %@", String(count), Fmt.plural(count, "věc", "věci", "věcí"))).font(Typo.caption).foregroundStyle(Palette.muted)
+            if current != nil {
+                if change.added.isEmpty && change.removed.isEmpty {
+                    Text("Beze změny").font(Typo.small).foregroundStyle(Palette.muted)
+                }
+                names("Přibude", change.added, Palette.green)
+                names("Ubude", change.removed, Palette.rust)
+            } else {
+                names("Našel jsem", Set(stations).subtracting(["floor_mats"]).sorted(), Palette.ink)
+            }
+            if let other = r.unsupported, !other.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Bez cviků v aplikaci").font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(other.joined(separator: ", ")).font(Typo.small).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                    Text("Tohle tam je, ale tréninky s tím aplikace zatím nesestavuje.").font(Typo.caption).foregroundStyle(Palette.faint)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if let note = r.note?.nilIfBlank {
+                Text(note).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            PrimaryButton(title: L10n.tr("Použít"), systemImage: "checkmark") {
+                onDone(r.gymName?.nilIfBlank, Array(Set(stations).union(["floor_mats"])).sorted(), link)
+                dismiss()
+            }
+            .padding(.top, 4)
+            SecondaryButton(title: "Zkusit znovu") { result = nil }
+        }
+        .padding(16)
+        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    /// "Přibude: Kladky, Leg press" in the app's order of stations.
+    @ViewBuilder
+    private func names(_ title: String, _ ids: [String], _ color: Color) -> some View {
+        if !ids.isEmpty {
+            let order = catalog.map(\.id)
+            let sorted = ids.sorted { (order.firstIndex(of: $0) ?? .max, $0) < (order.firstIndex(of: $1) ?? .max, $1) }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(sorted.map { id in catalog.first { $0.id == id }?.label ?? id }.joined(separator: ", "))
+                    .font(Typo.small).foregroundStyle(color).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// The stations AI adds to the place and those it leaves out (the floor is always there).
+    static func changes(old: [String], found: [String]) -> (added: [String], removed: [String]) {
+        let before = Set(old).subtracting(["floor_mats"]), after = Set(found).subtracting(["floor_mats"])
+        return (after.subtracting(before).sorted(), before.subtracting(after).sorted())
+    }
+
+    private var form: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 12) {
+                if !detectOnly {
+                    Label("Poznat automaticky", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                }
+                HStack(spacing: 8) {
+                    Image(systemName: "globe").foregroundStyle(Palette.muted)
+                    TextField("https://posilovna.cz", text: $url)
+                        .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                }
+                .padding(.horizontal, 12).frame(height: 44)
+                .background(Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                let photoCount = photos.count
+                PhotosPicker(selection: $photos, maxSelectionCount: 8, matching: .images) {
+                    Label(photoCount == 0 ? L10n.tr("Přidat fotky") : L10n.f("Přidat fotky (%@)", String(photoCount)), systemImage: "camera")
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                }
+                .disabled(busy)
+                PrimaryButton(title: L10n.tr(busy ? "Poznávám…" : "Poznat"), busy: busy) { Task { await detect() } }
+                    .disabled(busy || model.demo || (photos.isEmpty && !cleanUrl.hasPrefix("http")))
+                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true) }
+            }
+            .padding(16)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Palette.green, lineWidth: 1.5))
+
+            if !detectOnly {
+                Button {
+                    onDone(nil, [], "")
+                    dismiss()
+                } label: {
+                    Label("Vybrat sám", systemImage: "pencil").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(busy)
+            }
+        }
     }
 
     private var cleanUrl: String { url.trimmingCharacters(in: .whitespaces) }
@@ -486,8 +563,8 @@ struct AddGymSheet: View {
         do {
             let r = try await model.api.detectGymEquipment(photos: jpegs, url: link)
             if r.found == true, let found = r.stations, !found.isEmpty {
-                onDone(r.gymName?.nilIfBlank, Array(Set(found).union(["floor_mats"])).sorted(), link)
-                dismiss()
+                error = nil
+                result = (r, link)
             } else {
                 error = r.message ?? L10n.tr("Vybavení se nepodařilo poznat.")
             }
