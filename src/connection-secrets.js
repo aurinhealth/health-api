@@ -45,7 +45,7 @@ const leaseName=provider=>'refresh_'+provider;
 async function leaseRefresh(env,provider,id){try{await env.DB.prepare('CREATE TABLE IF NOT EXISTS sync_status (user_id INTEGER NOT NULL,sync_name TEXT NOT NULL,status TEXT,started_at TEXT,finished_at TEXT,details_json TEXT,updated_at TEXT,PRIMARY KEY(user_id,sync_name))').run();const claim=await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,started_at,updated_at) VALUES(?,?,'running',?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status='running',started_at=excluded.started_at,finished_at=NULL,updated_at=excluded.updated_at WHERE sync_status.status!='running' OR sync_status.updated_at<datetime('now','-30 seconds')").bind(userId(env),leaseName(provider),id).run();return claim.meta?.changes!==0;}catch{return true;}}
 const releaseRefresh=(env,provider,id)=>env.DB.prepare("UPDATE sync_status SET status='done',finished_at=datetime('now'),updated_at=datetime('now') WHERE user_id=? AND sync_name=? AND started_at=?").bind(userId(env),leaseName(provider),id).run().catch(()=>null);
 const parsed=text=>{try{return JSON.parse(text);}catch{return null;}};
-export async function refreshConnectionTokens(env,provider,held,refresh,{now=Date.now(),pause=250,patience=20000}={}){
+export async function refreshConnectionTokens(env,provider,held,refresh,{now=Date.now(),pause=500,patience=15000}={}){
   for(const until=Date.now()+patience;;){
     const id=new Date().toISOString()+'.'+crypto.randomUUID(),lease=await leaseRefresh(env,provider,id);
     try{
