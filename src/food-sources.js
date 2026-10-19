@@ -24,6 +24,8 @@ export function productFromLabel(input = {}) {
     name: str(input.name),
     brand: str(input.brand),
     serving_size: str(input.serving_size ?? input.servingSize),
+    // What one serving is called ("sušenka"); the app counts in it.
+    ...(str(input.serving_name) ? { serving_name: str(input.serving_name).slice(0, 40) } : {}),
     quantity: str(input.quantity),
     piece_size: str(input.piece_size),
     preferred_unit: ['pack','piece','portion','g','ml'].includes(input.preferred_unit) ? input.preferred_unit : null,

@@ -464,7 +464,7 @@ struct FoodAmountView: View {
                 .buttonStyle(.plain)
                 if edit {
                     SettingsGroup(title: product.perPortion ? "Jedna porce" : L10n.f("Na 100 %@", product.unit),
-                                  footer: product.isShared ? L10n.tr("Oprava zároveň odejde ke kontrole, aby se opravila i v katalogu pro ostatní.") : nil) {
+                                  footer: product.canSuggest && !product.perPortion ? L10n.tr("Oprava zároveň odejde ke kontrole, aby se opravila i v katalogu pro ostatní.") : nil) {
                         SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: "Potravina")
                         SettingsDivider()
                         SettingsField(title: "Výrobce, značka", text: $brand, keyboard: .default, placeholder: "nepovinné")
@@ -551,29 +551,26 @@ struct FoodAmountView: View {
         guard let value else { return }
         saving = true
         defer { saving = false }
-        let corrected = current
+        var corrected = current
+        // A corrected catalogue food stays the user's own until the owner approves it.
+        let changed = product.canSuggest && corrected.values != product.values
+        if changed { corrected.origin = "edited" }
         if let message = await model.logFood(product: corrected, amount: value, meal: target) {
             error = message
         } else {
-            sendCorrection(corrected)
+            if changed { sendCorrection(corrected) }
             done()
         }
     }
 
-    /// A food from the catalog or AI with other values than it had: the
-    /// operator gets the change to check and fix it for everyone (Nahlásit
-    /// problém, src/support-report.js). The user's own copy is already fixed.
+    /// A food from the catalog with other values than it had: the owner gets
+    /// the change to approve for everyone (Nastavení → Návrhy oprav potravin,
+    /// src/food-suggestions.js). The user's own copy is already fixed.
     private func sendCorrection(_ corrected: FoodProduct) {
-        guard !model.demo, product.isShared, corrected.values != product.values else { return }
-        var diagnostics: JSONObject = ["kind": .string("food-correction"), "before": .object(product.values), "after": .object(corrected.values),
-                                       "unit": .string(product.unit)]
-        if let barcode = product.barcode { diagnostics["barcode"] = .string(barcode) }
-        if let source = product.source { diagnostics["source"] = .string(source) }
-        if let url = product.source_url { diagnostics["sourceUrl"] = .string(url) }
-        let message = "Oprava potraviny: " + product.name + (product.barcode.map { " (EAN " + $0 + ")" } ?? "")
-        let api = model.api
-        // In the background: a refused report (daily limit) must not hold up the food.
-        Task.detached { _ = try? await api.reportProblem(message: message, screenshot: nil, diagnostics: diagnostics) }
+        guard !model.demo, !product.perPortion else { return }
+        let api = model.api, before = product
+        // In the background: a refused suggestion (daily limit) must not hold up the food.
+        Task.detached { try? await api.suggestFoodCorrection(before: before, after: corrected) }
     }
 }
 

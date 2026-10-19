@@ -201,11 +201,13 @@ final class APIClient: @unchecked Sendable {
         return (me.user?.name?.nilIfBlank, me.user?.email?.nilIfBlank)
     }
 
-    /// An internal tester, who may switch the server (GET /app/api/me → internalTester).
-    func internalTester() async throws -> Bool {
-        struct Me: Decodable { let internalTester: Bool? }
+    /// An internal tester, who may switch the server (GET /app/api/me →
+    /// internalTester), and the app's owner, who approves food corrections.
+    func roles() async throws -> (internalTester: Bool, owner: Bool) {
+        struct User: Decodable { let isOwner: Bool? }
+        struct Me: Decodable { let internalTester: Bool?; let user: User? }
         let me: Me = try await get("/app/api/me")
-        return me.internalTester ?? false
+        return (me.internalTester ?? false, me.user?.isOwner ?? false)
     }
 
     func setAI(_ allowed: Bool) async throws {

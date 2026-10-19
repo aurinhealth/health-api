@@ -2,17 +2,19 @@ import { L } from './lang.js';
 import {productFromLabel} from './food-sources.js';
 import {foodKey,foodSimilarity} from './personal-foods.js';
 async function ensure(db){await db.prepare('CREATE TABLE IF NOT EXISTS shared_foods (food_key TEXT PRIMARY KEY,search_name TEXT NOT NULL,product_json TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)').run();await db.prepare('CREATE TABLE IF NOT EXISTS food_contributions (user_id INTEGER NOT NULL,personal_id TEXT NOT NULL,catalog_id TEXT NOT NULL,PRIMARY KEY(user_id,personal_id))').run();await ensureFoodReports(db);}
-export async function saveSharedFood(db,input,personalId=null){
+// verified: a correction the owner approved (food-suggestions.js), listed
+// before the unchecked contributions with the same barcode.
+export async function saveSharedFood(db,input,personalId=null,{verified=false}={}){
   await ensure(db);
   if(personalId)await removeFoodContribution(db,personalId);
   const p=productFromLabel(input);if(!p||p.nutrition_basis==='portion')return null;
-  const product={...p,preferred_unit:null,source:'shared',confidence:'user',label_verified:false};
+  const product={...p,preferred_unit:null,source:'shared',confidence:verified?'verified':'user',label_verified:verified};
   // Only food label data is shared. Diary dates, amounts eaten, preferences,
   // author identities and private notes never enter the common catalogue.
   const identity=[foodKey(p.name),foodKey(p.brand),p.barcode,p.nutrition_basis,p.quantity,p.serving_size,p.piece_size,p.calories_100g,p.protein_100g,p.carbs_100g,p.fat_100g];
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(identity)));
   const key=Array.from(new Uint8Array(digest),n=>n.toString(16).padStart(2,'0')).join('');
-  await ensure(db);await db.prepare('INSERT INTO shared_foods(food_key,search_name,product_json) VALUES(?,?,?) ON CONFLICT(food_key) DO NOTHING').bind(key,foodKey(p.name)+' '+foodKey(p.brand),JSON.stringify(product)).run();
+  await ensure(db);await db.prepare('INSERT INTO shared_foods(food_key,search_name,product_json) VALUES(?,?,?) ON CONFLICT(food_key) DO '+(verified?'UPDATE SET product_json=excluded.product_json,updated_at=CURRENT_TIMESTAMP':'NOTHING')).bind(key,foodKey(p.name)+' '+foodKey(p.brand),JSON.stringify(product)).run();
   if(personalId)await db.prepare('INSERT INTO food_contributions(user_id,personal_id,catalog_id) VALUES(?,?,?)').bind(db.userId,personalId,key).run();
   return {...product,catalog_id:key};
 }
@@ -28,7 +30,7 @@ export async function searchSharedFoods(db,name,barcode){
   if(!code&&q.length<2)return [];
   const base="SELECT food_key,product_json,(SELECT COUNT(*) FROM food_reports WHERE user_id IS NOT NULL AND catalog_id=food_key) AS reports FROM shared_foods WHERE ";
   const rows=(await (code?db.prepare(base+"json_extract(product_json,'$.barcode')=? ORDER BY updated_at DESC LIMIT 500").bind(code):db.prepare(base+"search_name LIKE ? ORDER BY updated_at DESC LIMIT 500").bind('%'+narrow(q)+'%')).all()).results;
-  return rows.map(row=>({...JSON.parse(row.product_json),catalog_id:row.food_key,reports:row.reports,confidence:row.reports?'reported':'user'})).filter(p=>code?String(p.barcode)===code:foodSimilarity(name,p.name)>=.65).sort((a,b)=>foodSimilarity(name,b.name)-foodSimilarity(name,a.name)).slice(0,12);
+  return rows.map(row=>({...JSON.parse(row.product_json),catalog_id:row.food_key,reports:row.reports,confidence:row.reports?'reported':JSON.parse(row.product_json).label_verified===true?'verified':'user'})).filter(p=>code?String(p.barcode)===code:foodSimilarity(name,p.name)>=.65).sort((a,b)=>(b.label_verified===true)-(a.label_verified===true)||foodSimilarity(name,b.name)-foodSimilarity(name,a.name)).slice(0,12);
 }
 
 export async function ensureFoodReports(db){await db.prepare('CREATE TABLE IF NOT EXISTS food_reports (user_id INTEGER NOT NULL,catalog_id TEXT NOT NULL,reason TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,catalog_id))').run();}

@@ -2,9 +2,10 @@ import AVFoundation
 import SwiftUI
 import VisionKit
 
-/// The native barcode scanner (VisionKit): point at the code, the food comes
-/// from your foods or the catalog, else an AI lookup by the code; then the
-/// amount and "Přidat".
+/// The native barcode scanner (VisionKit): the camera in a window on the
+/// app's background, a light for the dark; the food comes from your foods or
+/// the catalog, else an AI lookup by the code; then the amount on a wheel and
+/// "Přidat".
 struct BarcodeScanSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -17,12 +18,15 @@ struct BarcodeScanSheet: View {
     /// What the athlete says an unknown code is, for the AI estimate.
     @State private var guess = ""
     @State private var product: FoodProduct?
-    @State private var amount = ""
+    /// In the food's unit (grams, ml, or portions for a per-portion food).
+    @State private var amount: Double = 100
     @State private var state: ScanState = .scanning
     @State private var saving = false
     @State private var error: String?
-    /// "Upravit": the found food in the full editor, values and name correctable.
+    /// "Upravit produkt": the serving, the package and the values, saved for
+    /// the user and maybe suggested for everyone.
     @State private var editing: FoodProduct?
+    @State private var torch = false
 
     /// nil until the camera permission is known (the scanner is unavailable
     /// before the first permission prompt, so the app asks first).
@@ -30,59 +34,93 @@ struct BarcodeScanSheet: View {
 
     enum ScanState { case scanning, searching, found, notFound }
 
-    var body: some View {
-        ZStack {
-            Color(light: 0x1D2020, dark: 0x1D2020).ignoresSafeArea()
-            if cameraAllowed == nil {
-                ProgressView().tint(.white)
-            } else if cameraAllowed == true && DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
-                BarcodeScanner(paused: state != .scanning) { scanned in
-                    guard state == .scanning else { return }
-                    code = scanned
-                    Task { await find(scanned) }
-                }
-                .ignoresSafeArea()
-            } else {
-                VStack(spacing: 16) {
-                    Text(DataScannerViewController.isSupported ? "Skener potřebuje kameru. Povol Aurinu přístup ke kameře v Nastavení iPhonu." : "Tento iPhone skener čárových kódů nepodporuje.")
-                        .font(Typo.sentence(20)).foregroundStyle(Color.white.opacity(0.85)).multilineTextAlignment(.center)
-                    if cameraAllowed == false, let url = URL(string: UIApplication.openSettingsURLString) {
-                        Link("Otevřít Nastavení", destination: url).font(Typo.bodyStrong).foregroundStyle(.white)
-                    }
-                }
-                .padding(32)
-            }
+    private var scannerReady: Bool {
+        cameraAllowed == true && DataScannerViewController.isSupported && DataScannerViewController.isAvailable
+    }
 
-            VStack {
-                HStack {
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
-                            .frame(width: 40, height: 40).background(Color.black.opacity(0.5), in: Circle())
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                circle("xmark", label: "Zavřít") { dismiss() }
+                Spacer()
+                Text("ČÁROVÝ KÓD").font(.system(size: 12, weight: .medium)).tracking(1.9).foregroundStyle(Palette.muted)
+                Spacer()
+                if scannerReady && Self.hasTorch && (state == .scanning || state == .searching) {
+                    circle(torch ? "flashlight.on.fill" : "flashlight.off.fill", label: torch ? "Zhasnout světlo" : "Rozsvítit světlo", on: torch) {
+                        torch.toggle()
                     }
-                    .accessibilityLabel("Zavřít")
-                    Spacer()
-                    Text("ČÁROVÝ KÓD").font(.system(size: 12, weight: .medium)).tracking(1.9).foregroundStyle(Color.white.opacity(0.8))
-                    Spacer()
+                } else {
                     Color.clear.frame(width: 40, height: 40)
                 }
-                .padding(.horizontal, 24)
-                if state == .scanning {
-                    Text("Namiř na kód na obalu").font(Typo.sentence(20)).foregroundStyle(Color.white.opacity(0.9)).padding(.top, 60)
-                }
-                Spacer()
-                if state != .scanning { resultCard.padding(.horizontal, 12).padding(.bottom, 20) }
             }
+            .padding(.horizontal, 24).padding(.top, 12)
+
+            ScrollView {
+                VStack(spacing: 20) {
+                    if state == .scanning || state == .searching { finder }
+                    if state != .scanning { resultCard }
+                }
+                .padding(.horizontal, 12).padding(.top, 24).padding(.bottom, 20)
+            }
+            .scrollBounceBehavior(.basedOnSize)
         }
+        .background(Palette.background.ignoresSafeArea())
         .task { await askCamera() }
+        .onChange(of: torch) { Self.setTorch(torch) }
+        .onChange(of: state) { if state != .scanning && state != .searching { torch = false } }
+        .onDisappear { if torch { Self.setTorch(false) } }
         .sheet(item: $editing) { product in
             NavigationStack {
-                FoodAmountView(product: product, meal: target, editing: true, done: {
-                    editing = nil
-                    dismiss()
-                    onLogged()
-                })
+                FoodProductEditor(product: product) { corrected in show(corrected, keepAmount: true) }
             }
         }
+    }
+
+    private func circle(_ systemImage: String, label: String, on: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage).font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                .frame(width: 40, height: 40)
+                .background(on ? Palette.amber : Palette.ink.opacity(0.08), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr(label))
+    }
+
+    /// The camera only in this window, with its corners; the text under it.
+    @ViewBuilder
+    private var finder: some View {
+        VStack(spacing: 22) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 26, style: .continuous).fill(Color(light: 0x1D2020, dark: 0x151718))
+                if cameraAllowed == nil {
+                    ProgressView().tint(.white)
+                } else if scannerReady {
+                    BarcodeScanner(paused: state != .scanning) { scanned in
+                        guard state == .scanning else { return }
+                        code = scanned
+                        Task { await find(scanned) }
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        Text(DataScannerViewController.isSupported ? "Skener potřebuje kameru. Povol Aurinu přístup ke kameře v Nastavení iPhonu." : "Tento iPhone skener čárových kódů nepodporuje.")
+                            .font(Typo.sentence(18)).foregroundStyle(Color.white.opacity(0.85)).multilineTextAlignment(.center)
+                        if cameraAllowed == false, let url = URL(string: UIApplication.openSettingsURLString) {
+                            Link("Otevřít Nastavení", destination: url).font(Typo.bodyStrong).foregroundStyle(.white)
+                        }
+                    }
+                    .padding(24)
+                }
+                FinderCorners().stroke(Color.white.opacity(0.9), style: StrokeStyle(lineWidth: 3, lineCap: .round)).padding(10)
+                    .allowsHitTesting(false)
+            }
+            .frame(maxWidth: 320).frame(height: 230)
+            .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            if state == .scanning {
+                Text("Namiř na kód na obalu").font(Typo.sentence(20)).foregroundStyle(Palette.ink.opacity(0.85))
+            }
+        }
+        .padding(.horizontal, 12)
     }
 
     private func askCamera() async {
@@ -91,6 +129,18 @@ struct BarcodeScanSheet: View {
         case .notDetermined: cameraAllowed = await AVCaptureDevice.requestAccess(for: .video)
         default: cameraAllowed = false
         }
+    }
+
+    private static var hasTorch: Bool { AVCaptureDevice.default(for: .video)?.hasTorch ?? false }
+
+    /// The back camera's light, which the scanner's camera session keeps on.
+    private static func setTorch(_ on: Bool) {
+        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return }
+        do {
+            try device.lockForConfiguration()
+            if on { try device.setTorchModeOn(level: AVCaptureDevice.maxAvailableTorchLevel) } else { device.torchMode = .off }
+            device.unlockForConfiguration()
+        } catch {}
     }
 
     @ViewBuilder
@@ -106,12 +156,8 @@ struct BarcodeScanSheet: View {
                             if product.source == "ai-estimate" { AIEstimateTag() }
                             else { Text("✓ Nalezeno").font(Typo.caption).foregroundStyle(Palette.green) }
                             Spacer()
-                            Button {
-                                var p = product
-                                if p.barcode == nil { p.barcode = code }
-                                editing = p
-                            } label: {
-                                Label("Upravit údaje", systemImage: "pencil").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                            Button { edit(product) } label: {
+                                Label("Upravit produkt", systemImage: "pencil").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
                                     .padding(.horizontal, 12).frame(height: 30)
                                     .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
                             }
@@ -120,23 +166,18 @@ struct BarcodeScanSheet: View {
                         Text(product.name).font(Typo.sentence(27, relativeTo: .title2)).foregroundStyle(Palette.ink)
                         Text([product.brand, code.map { "EAN " + $0 }].compactMap { $0 }.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
-                    NutritionCells(product: product, amount: amountValue ?? 0)
-                    PortionChips(product: product, amount: $amount)
-                    MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
-                    HStack(spacing: 10) {
-                        HStack(spacing: 4) {
-                            TextField("100", text: $amount).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 56)
-                            Text(product.perPortion ? "porce" : product.unit).foregroundStyle(Palette.muted)
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .padding(.horizontal, 14).frame(height: 50)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
-                        Button { Task { await save(product) } } label: {
-                            Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target)).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                                .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
-                        }
-                        .disabled(saving || amountValue == nil)
+                    NutritionCells(product: product, amount: amount)
+                    VStack(alignment: .leading, spacing: 4) {
+                        PortionWheel(product: product, amount: $amount).id(product.id + (product.serving_size?.string ?? "") + (product.serving_name ?? ""))
+                        servingLine(product)
                     }
+                    MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
+                    Button { Task { await save(product) } } label: {
+                        Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target) + " · " + PortionWheel.label(product: product, amount: amount))
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.onButton).lineLimit(1).minimumScaleFactor(0.8)
+                            .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+                    }
+                    .disabled(saving || amount <= 0)
                 }
             case .notFound:
                 Text("Kód \(code ?? "") neznám.").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
@@ -165,14 +206,49 @@ struct BarcodeScanSheet: View {
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
-    private var amountValue: Double? {
-        guard let v = Double(amount.replacingOccurrences(of: ",", with: ".")), v > 0 else { return nil }
-        return v
+    /// "1 sušenka = 19 g · 90 kcal"; a serving stored as 1 g (or none) gets "Upravit".
+    @ViewBuilder
+    private func servingLine(_ product: FoodProduct) -> some View {
+        if product.perPortion {
+            EmptyView()
+        } else if let size = product.usableServing {
+            Text(L10n.f("1 %@ = %@ %@ · %@ kcal", product.servingName, FoodAmountView.text(size), product.unit, Fmt.int(product.kcal(for: size))))
+                .font(Typo.caption).foregroundStyle(Palette.muted)
+        } else {
+            HStack(spacing: 8) {
+                if let s = FoodProduct.size(product.serving_size, unit: product.unit) {
+                    Text(L10n.f("1 porce = %@ %@", FoodAmountView.text(s), product.unit)).font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(verbatim: "·").font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                Button { edit(product) } label: {
+                    Label(L10n.tr(FoodProduct.size(product.serving_size, unit: product.unit) == nil ? "Nastavit porci" : "Upravit"), systemImage: "pencil")
+                        .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
-    private func show(_ p: FoodProduct) {
+    private func edit(_ product: FoodProduct) {
+        var p = product
+        if p.barcode == nil { p.barcode = code }
+        editing = p
+    }
+
+    /// The amount offered first: a serving that means something, else the
+    /// package up to 500, else 100 (FoodProduct.defaultAmount without a 1 g serving).
+    private static func firstAmount(_ p: FoodProduct) -> Double {
+        if p.perPortion { return 1 }
+        if let s = p.usableServing { return s }
+        if let q = FoodProduct.leadingNumber(p.quantity), q > 0, q <= 500 { return q }
+        return 100
+    }
+
+    private func show(_ p: FoodProduct, keepAmount: Bool = false) {
+        let before = product
         product = p
-        amount = Fmt.decimal(p.defaultAmount, digits: p.defaultAmount.rounded() == p.defaultAmount ? 0 : 1)
+        // After "Upravit produkt" with a new serving, the wheel starts on one serving.
+        if !keepAmount || before?.usableServing != p.usableServing { amount = Self.firstAmount(p) }
         state = .found
     }
 
@@ -210,7 +286,8 @@ struct BarcodeScanSheet: View {
     }
 
     private func save(_ product: FoodProduct) async {
-        guard let value = amountValue else { return }
+        let value = amount
+        guard value > 0 else { return }
         saving = true
         defer { saving = false }
         var p = product
@@ -221,6 +298,22 @@ struct BarcodeScanSheet: View {
             dismiss()
             onLogged()
         }
+    }
+}
+
+/// The four rounded corners of the scanner's window.
+struct FinderCorners: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let l: CGFloat = 30, r: CGFloat = 16
+        for (corner, dx, dy) in [(CGPoint(x: rect.minX, y: rect.minY), 1.0, 1.0), (CGPoint(x: rect.maxX, y: rect.minY), -1.0, 1.0),
+                                 (CGPoint(x: rect.minX, y: rect.maxY), 1.0, -1.0), (CGPoint(x: rect.maxX, y: rect.maxY), -1.0, -1.0)] {
+            p.move(to: CGPoint(x: corner.x, y: corner.y + dy * l))
+            p.addLine(to: CGPoint(x: corner.x, y: corner.y + dy * r))
+            p.addQuadCurve(to: CGPoint(x: corner.x + dx * r, y: corner.y), control: corner)
+            p.addLine(to: CGPoint(x: corner.x + dx * l, y: corner.y))
+        }
+        return p
     }
 }
 

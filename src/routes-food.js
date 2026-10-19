@@ -10,6 +10,7 @@ import { productFromLabel } from "./food-sources.js";
 import { getCookbookRecipeByPage } from "./cookbook.js";
 import { queueFoodGoogle, processFoodGoogle } from "./food-google-sync.js";
 import { lookupFoodWithAI, estimateFoodWithAI } from "./food-ai.js";
+import { saveFoodSuggestion, listFoodSuggestions, decideFoodSuggestion } from "./food-suggestions.js";
 import { listFluids, foodDrinks, dayActivityHours, hydrationTarget, hydrationMl, addFluid, updateFluid, deleteFluid, bulkFluids, FluidInputError } from "./fluids.js";
 import { mealConsumedAt } from "./food-log.js";
 import { updateFoodEntry, copyFoodEntry, deleteFoodEntry, bulkFoodEntries } from "./food-entry-management.js";
@@ -60,6 +61,24 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
     // replaces the world record with the same barcode.
     try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),[saved,world]=await Promise.all([Promise.all([searchPersonalFoods(env.DB,name,barcode),barcode?[]:searchRecipes(env.DB,name)]).then(([foods,recipes])=>[...foods,...recipes]),searchWorldFoods(env,{name,barcode}).catch(error=>{console.error('world foods',error?.message);return [];})]),codes=new Set(saved.map(p=>barcodeKey(p.barcode)).filter(Boolean)),candidates=[...saved,...world.filter(p=>!codes.has(barcodeKey(p.barcode)))];return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:L('Uložené potraviny se nepodařilo načíst. Zkus to znovu nebo zadej hodnoty z etikety.', 'Saved foods couldn\'t be loaded. Try again or enter the values from the label.'),detail:String(error.message).slice(0,160)},{status:500});}
+  }
+  // "Navrhnout opravu pro všechny": a correction of a catalogue food for the
+  // owner to approve; the owner lists and decides them (food-suggestions.js).
+  if(url.pathname==='/app/api/food/suggestions'||url.pathname==='/app/api/food/suggestions/decide'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    const owner=env.USER_IS_OWNER===true||session.user?.isOwner===true,raw=env.RAW_DB||env.DB;
+    try{
+      if(url.pathname==='/app/api/food/suggestions'&&request.method==='GET'){
+        if(!owner)return Response.json({message:L('Nenalezeno.', 'Not found.')},{status:404});
+        return Response.json({status:'ok',...await listFoodSuggestions(raw,{status:url.searchParams.get('status')||'pending'})},{headers:{'Cache-Control':'no-store'}});
+      }
+      if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
+      if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+      const body=await request.json().catch(()=>({}));
+      if(url.pathname==='/app/api/food/suggestions')return Response.json(await saveFoodSuggestion(env.DB,body),{headers:{'Cache-Control':'no-store'}});
+      if(!owner)return Response.json({message:L('Nenalezeno.', 'Not found.')},{status:404});
+      return Response.json(await decideFoodSuggestion(raw,env.DB,body),{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:error.status||500});}
   }
   // A food not saved yet: AI looks up its label values on the web. Only a
   // proposal; the user confirms it and the app saves it with the barcode.

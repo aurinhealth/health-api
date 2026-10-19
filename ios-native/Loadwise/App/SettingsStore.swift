@@ -23,6 +23,10 @@ final class SettingsStore {
     /// Nastavení → Testování → Server is shown (GET /app/api/me → internalTester);
     /// always on the test server, so the way back is there.
     private(set) var internalTester = ServerChoice.current == .staging
+    /// The app's owner: Nastavení → Správa → Návrhy oprav potravin.
+    private(set) var owner = false
+    /// Food corrections waiting for the owner, for the row's badge.
+    var pendingFoodSuggestions = 0
     let demo: Bool
 
     private let api: APIClient
@@ -43,7 +47,7 @@ final class SettingsStore {
         async let training = api.trainingProfile()
         async let connections = api.connections()
         async let sync = api.syncStatus()
-        async let tester = api.internalTester()
+        async let roles = api.roles()
         do {
             let response = try await profile
             self.profile = response.profile ?? [:]
@@ -60,7 +64,11 @@ final class SettingsStore {
             priority = status?.priority ?? .auto
             self.training = try? await training
             self.sync = try? await sync
-            internalTester = (try? await tester) ?? internalTester
+            if let roles = try? await roles {
+                internalTester = roles.internalTester
+                owner = roles.owner
+                if owner { pendingFoodSuggestions = (try? await api.foodSuggestions())?.counts?["pending"] ?? 0 }
+            }
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

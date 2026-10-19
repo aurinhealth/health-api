@@ -68,6 +68,17 @@ struct SettingsMenu: View {
                 SettingsSectionTiles(store: store)
             }
 
+            // Only the owner: users' corrections of catalogue foods to approve.
+            if store.owner && !model.demo {
+                SettingsGroup(title: "Správa") {
+                    NavigationLink { FoodSuggestionsView(store: store) } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "tray", color: Palette.amber), title: "Návrhy oprav potravin",
+                                    badge: store.pendingFoodSuggestions)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+
             SettingsGroup(title: "Měření") {
                 NavigationLink { UnitsSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "ruler", color: Palette.blue), title: "Jednotky")

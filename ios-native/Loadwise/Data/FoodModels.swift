@@ -116,10 +116,15 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     /// Vitamins and minerals per 100 g from the catalogue (src/micronutrients.js keys).
     var micros_100g: [String: Double]?
     var catalog_key: String?
+    /// What one serving is called ("sušenka"); "porce" when not set.
+    var serving_name: String?
+    /// "edited": a catalogue food the user corrected, kept to themselves
+    /// until the owner approves the suggestion (src/food-suggestions.js).
+    var origin: String?
 
     enum CodingKeys: String, CodingKey {
         case name, brand, calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugars_100g, salt_100g
-        case nutrition_basis, serving_size, quantity, barcode, source, source_url, micros_100g, catalog_key
+        case nutrition_basis, serving_size, quantity, barcode, source, source_url, micros_100g, catalog_key, serving_name, origin
     }
 
     init(name: String, brand: String? = nil, calories_100g: Double? = nil, protein_100g: Double? = nil, carbs_100g: Double? = nil,
@@ -157,6 +162,8 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         source_url = value(.source_url)?.string
         micros_100g = try? c.decodeIfPresent([String: Double].self, forKey: .micros_100g)
         catalog_key = value(.catalog_key)?.string
+        serving_name = value(.serving_name)?.string?.nilIfBlank
+        origin = value(.origin)?.string
     }
 
     var id: String { (barcode ?? "") + "|" + name + "|" + (brand ?? "") + "|" + (source ?? "") }
@@ -200,10 +207,23 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         return nil
     }
 
+    /// One serving in the food's unit when it means something: a serving stored
+    /// as "1 g" (some catalogue records) does not.
+    var usableServing: Double? {
+        guard !perPortion, let s = Self.size(serving_size, unit: unit), s >= 2 else { return nil }
+        return s
+    }
+
+    /// The serving's name: "sušenka", else "porce".
+    var servingName: String { serving_name ?? L10n.tr("porce") }
+
     /// The nutrition values, to compare before and after a correction.
     var values: JSONObject {
         var out: JSONObject = ["name": .string(name)]
         if let brand { out["brand"] = .string(brand) }
+        if let s = serving_size?.string { out["serving_size"] = .string(s) }
+        if let serving_name { out["serving_name"] = .string(serving_name) }
+        if let quantity = quantity?.string { out["quantity"] = .string(quantity) }
         for (key, value) in [("calories_100g", calories_100g), ("protein_100g", protein_100g), ("carbs_100g", carbs_100g),
                              ("sugars_100g", sugars_100g), ("fat_100g", fat_100g), ("fiber_100g", fiber_100g)] {
             if let value { out[key] = .number(value) }
@@ -213,6 +233,10 @@ struct FoodProduct: Codable, Equatable, Identifiable {
 
     /// From the shared catalog or an AI lookup, so a correction concerns everyone.
     var isShared: Bool { !["personal", "manual", "recipe", "composed"].contains(source ?? "") }
+
+    /// A correction of it can be suggested for everyone: a catalogue food, or
+    /// the user's own corrected copy of one.
+    var canSuggest: Bool { (isShared && source != "ai-estimate" && source != "ai") || origin == "edited" }
 
     func kcal(for amount: Double) -> Double? {
         guard let c = calories_100g else { return nil }
