@@ -15,9 +15,13 @@ const table = new RegExp(`\\b(${personal.join("|")})\\b`, "i");
 // user id or by the passkey's id. A phone's push token moves to the account
 // that registers it (push.js), leaving every other account. A shared workout
 // link is read by its id by whoever opens it (workout-templates.js); it holds
-// only the workout and the sender's first name.
+// only the workout and the sender's first name. A webhook finds its user by the
+// account at the service it names, and reads that id from the keys of
+// connections saved before connection_accounts (connection-secrets.js).
 const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens WHERE token=\? AND user_id<>\?"$/,/FROM users u JOIN connection_credentials c ON c\.user_id = u\.id/, /FROM connection_credentials WHERE encrypted NOT LIKE 'v2\.%'/, /FROM user_identities i JOIN users u ON u\.id = i\.user_id WHERE i\.provider = 'apple' AND i\.subject = \?/, /^"SELECT user_id FROM user_identities WHERE provider = 'apple' AND subject = \?"$/,
   /^"SELECT id, user_id, user_handle, public_key, alg, sign_count FROM user_passkeys WHERE id = \?"$/,
+  /FROM connection_accounts a JOIN users u ON u\.id = a\.user_id WHERE a\.provider = \? AND a\.external_id = \? ORDER BY u\.id"$/,
+  /^'SELECT c\.user_id,c\.encrypted FROM connection_credentials c WHERE c\.provider=\? AND NOT EXISTS \(SELECT 1 FROM connection_accounts a WHERE a\.user_id=c\.user_id AND a\.provider=\?\)'$/,
   // The owner's morning report sums AI cost over all accounts (ops-report.js).
   /^"SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_usage'"$/, /FROM ai_usage a LEFT JOIN users u ON u\.id = a\.user_id/,
   // The owner lists and decides every user's food corrections (food-suggestions.js);

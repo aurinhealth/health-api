@@ -25,6 +25,8 @@ export const PERSONAL_TABLES = {
   coach_inbox: { indexes: [["user_id", "created_at DESC"]] },
   sync_status: { pk: ["user_id", "sync_name"] },
   connection_credentials: { pk: ["user_id", "provider"] },
+  // The account at a service its webhooks name (connection-secrets.js).
+  connection_accounts: { pk: ["user_id", "provider"] },
   // Created with user_id from the start (workout-library.js); listed so the
   // scoped database enforces the filter.
   training_capabilities: { pk: ["user_id", "sport", "system"] },
@@ -518,6 +520,14 @@ export async function usersWithProviders(db, env, providers) {
   const owner = await ownerUser(db, env);
   if (owner && !list.some(u => u.id === owner.id)) list.unshift(owner);
   return list;
+}
+
+// The users connected to that account at a service (connection_accounts: the
+// Intervals.icu athlete or the Wahoo user a webhook names), by an index and
+// under the same rules as usersWithProviders: enabled and consenting, or the owner.
+export async function usersWithAccount(db, env, provider, externalId) {
+  const rows = await db.prepare("SELECT u.id, u.email, u.name, u.role, u.disabled, EXISTS (SELECT 1 FROM user_consents k WHERE k.user_id = u.id AND k.kind = 'health' AND k.withdrawn_at IS NULL) AS consented FROM connection_accounts a JOIN users u ON u.id = a.user_id WHERE a.provider = ? AND a.external_id = ? ORDER BY u.id").bind(provider, String(externalId)).all().catch(() => ({ results: [] }));
+  return (rows.results || []).map(row => ({ row, user: publicUser(row, env) })).filter(({ row, user }) => user.isOwner || (!row.disabled && row.consented)).map(({ user }) => user);
 }
 
 export function _resetTenancyForTest() { tenancyReady = false; }

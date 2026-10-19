@@ -5,7 +5,8 @@
 // secret from the app's "Webhook Authorization Header" (INTERVALS_WEBHOOK_SECRET)
 // and retries when it gets no 2xx, so the answer comes first and the work
 // runs after it. An event names the athlete, not the Aurin user: the athlete
-// id saved at connecting (intervals_athlete) finds them.
+// id saved at connecting (intervals_athlete, and in the clear in
+// connection_accounts for the lookup) finds them.
 import { timingSafeEqualString } from "./dashboard-auth.js";
 import { KINDS } from "./intervals-reads.js";
 
