@@ -8,8 +8,8 @@ import XCTest
 final class SmokeTests: XCTestCase {
     private var app: XCUIApplication!
     private var step = 0
-    /// The test's number: 1-… the first launch, 2-… the main screens, 3-… the status.
-    private var prefix: String { name.contains("test1") ? "1" : name.contains("test2") ? "2" : "3" }
+    /// The test's number: 1-… the first launch, 2-… the main screens, 3-… the status, 4-… the website.
+    private var prefix: String { name.contains("test1") ? "1" : name.contains("test2") ? "2" : name.contains("test3") ? "3" : "4" }
 
     override func setUp() {
         continueAfterFailure = false
@@ -129,7 +129,118 @@ final class SmokeTests: XCTestCase {
         }
     }
 
+    /// The screens the website draws its scenes from, in English: sleep and the
+    /// bedtime planner, readiness and what affects it, building a workout, the
+    /// gym day and training mode up to the summary, muscles, the ride library,
+    /// food and the coach. It only takes pictures and never fails, so a changed
+    /// label costs a picture, not a release.
+    func test4WebsiteScenes() {
+        continueAfterFailure = true
+        for (route, file, swipes) in [("sleep", "spanek", 3), ("sleep-settings", "planovac", 1), ("readiness", "pripravenost", 2),
+                                      ("gym-builder", "sestavit", 1), ("muscles", "svaly", 2), ("library/ride", "jizda", 1), ("strain", "namaha", 1)] {
+            english("-open", route)
+            pause(4)
+            shot(file)
+            for i in 0..<swipes {
+                app.swipeUp()
+                pause(1)
+                shot("\(file)-\(i + 2)")
+            }
+        }
+
+        // What affects you: from the journal.
+        english("-open", "journal")
+        pause(4)
+        shot("denik")
+        if tapIfThere(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "What affects you")).firstMatch) {
+            pause(3)
+            shot("co-pusobi")
+        }
+
+        // The gym day, then training mode: the exercise, a set done, the rest, the
+        // set's letter and the summary.
+        english("-open", "gym/2026-10-08")
+        pause(4)
+        shot("posilovna")
+        app.swipeUp()
+        pause(1)
+        shot("posilovna-2")
+        app.swipeDown()
+        if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Start workout")).firstMatch) {
+            pause(3)
+            shot("rezim")
+            if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Start workout")).firstMatch) {
+                pause(2)
+                shot("rezim-zacatek")
+            }
+            if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Set done")).firstMatch) {
+                pause(2)
+                shot("odpocinek")
+                app.swipeUp()
+                pause(1)
+                shot("odpocinek-2")
+                if tapIfThere(app.buttons["Skip"]) {
+                    pause(2)
+                    shot("dalsi-serie")
+                }
+            }
+            if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "How hard")).firstMatch) {
+                pause(2)
+                shot("pismena")
+                tapIfThere(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "High")).firstMatch)
+                pause(1)
+            }
+            if tapIfThere(app.buttons["Finish"].firstMatch) {
+                pause(2)
+                shot("dokoncit")
+                if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Finish workout")).firstMatch) {
+                    pause(3)
+                    shot("souhrn")
+                    app.swipeUp()
+                    pause(1)
+                    shot("souhrn-2")
+                }
+            }
+        }
+
+        // Food, its add sheet, and the coach.
+        english("-tab", "food")
+        pause(4)
+        shot("jidlo")
+        app.swipeUp()
+        pause(1)
+        shot("jidlo-2")
+        english()
+        pause(4)
+        if tapIfThere(app.buttons.matching(identifier: "Add entry").firstMatch) {
+            pause(2)
+            shot("pridat")
+        }
+        english()
+        pause(4)
+        if tapIfThere(app.buttons.matching(identifier: "Coach").allElementsBoundByIndex.first { $0.isHittable } ?? app.buttons["Coach"]) {
+            pause(3)
+            shot("kouc")
+        }
+    }
+
     // MARK: - Helpers
+
+    /// The app in English and US English formats, as the website shows it.
+    private func english(_ arguments: String...) {
+        app.launchArguments = ["-demo"] + arguments + ["-language", "en", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launch()
+    }
+
+    /// Taps the element when it shows up; the website's pictures go on without it.
+    @discardableResult
+    private func tapIfThere(_ element: XCUIElement) -> Bool {
+        guard element.waitForExistence(timeout: 6) else { return false }
+        if !element.isHittable { app.swipeUp() }
+        guard element.isHittable else { return false }
+        element.tap()
+        return true
+    }
 
     private func launch(_ arguments: String...) {
         app.launchArguments = arguments + ["-AppleLanguages", "(cs)", "-AppleLocale", "cs_CZ"]
