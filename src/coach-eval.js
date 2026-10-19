@@ -117,6 +117,9 @@ const CYCLE = { profile: { sex: 'female', age: 34, height: 168, cycle: { setting
 // A five-hour race two days ago (450 TSS, IF 0.95): two calendar days, but
 // Regenerace lasts until tomorrow afternoon (S23).
 const RACE = { recovery: true, done: date => ({ [shift(date, -2)]: [{ id: 'eval-race', name: 'Závod 160 km', type: 'Ride', durationHours: 5, tss: 450, intensity: 0.95, averagePower: 240, normalizedPower: 252 }], [shift(date, -4)]: [{ id: 'eval-ride-2', name: 'Endurance', type: 'Ride', durationHours: 2, tss: 105 }] }) };
+// A yellow morning (readiness about 57, 5 h 7 min of sleep) with only an
+// endurance ride three days ago, so no hard-day rule stands in the way (S25).
+const YELLOW = { today: { hrv: 64, restingHR: 49 }, sleepMin: 307, done: date => ({ [shift(date, -3)]: [{ id: 'eval-ride-2', name: 'Endurance', type: 'Ride', durationHours: 2, tss: 105 }] }) };
 // The library the chat would offer for the message (chat-ask.js), from a
 // small catalogue: the asked length within its tolerance, the coach's kind first (S21).
 const EVAL_LIBRARY = [
@@ -220,6 +223,20 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'S24', title: 'Jak jezdit zbytek týdne', message: 'Jak mám jezdit zbytek týdne?',
     checks: r => [safety('tvrdé dny 48 h od sebe, nejvýš 2 za 7 dní', !stackedHardDays(r, hardCards(r)).length, stackedHardDays(r, hardCards(r)).join(', ')),
       quality('dotaz jde na plný model (plánování)', r.task === 'planning', r.task), quality('rozvrhne dny do neděle', says(r, /pondělí|úterý|střed|čtvrt|pátek|sobot|neděl|zítra/i))] },
+  // Petr 2026-10-19: on yellow the coach refused a hard 30 minutes three times. It is the athlete's call:
+  // one sentence of concern, then the hard card they ask for, with no second warning once they insist.
+  { id: 'S25', title: 'Žlutá připravenost, po odmítnutí trvá na tvrdém', lang: 'en', message: 'But I want a hard one.', athlete: YELLOW,
+    conversation: date => [{ role: 'user', content: 'Generate me a bike training for 30 minutes but hard one' }, { role: 'assistant', content: `I'd make this a 30-minute easy ride, not a hard one today. Your readiness is yellow and you slept 5 h 7 min.\n\n[Proposals: workout ${date} ride 30 min recovery]` }],
+    checks: r => { const kind = cardKind(evalAthlete(r.date, YELLOW), { type: 'workout', sport: 'ride', date: r.date, minutes: 30, kind: 'vo2max' });
+      return [quality('aplikace dnes tvrdou kartu na přání pustí (žlutá)', isHardKind(kind), kind), quality('dá tvrdou kartu na dnešek', hardCards(r).some(a => a.date === r.date)),
+        quality('nedá místo toho lehkou jízdu', !easyToday(r)), quality('neodmítne', !says(r, /wouldn.t prescribe|not hard tonight|won.t (?:give|prescribe)|can.t give you|thursday is the earliest/i)),
+        quality('krátce, nejvýš 90 slov', words(r.answer) <= 90, String(words(r.answer)))]; } },
+  // Petr 2026-10-19: asked again, the workout passes the 48 h rule too (a sweet spot yesterday); only red and illness hold.
+  { id: 'S26', title: 'Po odmítnutí znovu chce VO2max den po sweet spotu', message: 'Já vím, ale stejně je chci jet dneska.',
+    conversation: date => [{ role: 'user', content: 'Můžu dneska jet ty VO2max intervaly?' }, { role: 'assistant', content: `Dnes bych je nejel, včera jsi dal sweet spot a od něj ještě neuběhlo 48 h. Dej si dnes hodinu lehce a VO2max přesuň na zítra.\n\n[Návrhy: move planned:9001 ${shift(date, 1)}, workout ${date} ride 60 min endurance]` }],
+    checks: r => { const kind = cardKind(evalAthlete(r.date), { type: 'workout', sport: 'ride', date: r.date, minutes: 75, kind: 'vo2max', insisted: true });
+      return [quality('aplikace VO2max na opakovanou žádost pustí', isHardKind(kind), kind), quality('dá tvrdou kartu na dnešek', hardCards(r).some(a => a.date === r.date)),
+        quality('nedá místo toho lehkou jízdu', !easyToday(r)), quality('nezopakuje odmítnutí', !says(r, /nejel bych|nedoporuč|radši zítra|přesuň na zítra/i))]; } },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
@@ -299,7 +316,7 @@ export function cardKind(athlete, action, library = []) {
   const focus = lib ? (/sprint/.test(String(lib.system)) ? 'vo2max' : FOCUS_OF[kindOfSystem(lib.system)]) : FOCUS_OF[action.kind] || null;
   const day = athlete.week.days.find(d => d.date === action.date)?.daily || athlete.daily;
   const inputs = { date: action.date, daily: day, week: athlete.week, fitness: athlete.fitness, health: athlete.health, gym: athlete.gym, preferences: athlete.preferences, profile: athlete.profile, recoveryTime: athlete.recoveryTime || null, today: athlete.date || null, sport: action.sport, availabilityMinutes: action.minutes };
-  let coach = buildCyclingCoachV2({ ...inputs, goal: focus ? { focus, asked: true } : null });
+  let coach = buildCyclingCoachV2({ ...inputs, goal: focus ? { focus, asked: true, chat: true, ...(action.insisted ? { insisted: true } : {}) } : null });
   if (focus && !['recovery', 'endurance', 'long_endurance'].includes(focus) && coach.readiness?.status === 'red') coach = buildCyclingCoachV2(inputs);
   return coach.recommendation?.session?.kind || null;
 }

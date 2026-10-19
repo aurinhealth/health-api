@@ -113,6 +113,7 @@ enum AppRoute: Hashable {
         case "day-review": self = .dayReview
         case "records": self = .insights
         case "muscles": self = .muscles
+        case "muscle" where parts.count > 1: self = .muscle(parts[1])
         case "cycle": self = .cycle
         case "journal": self = .journal(parts.count > 1 ? parts[1] : AppModel.shift(AppModel.localDate(Date()), by: -1) ?? AppModel.localDate(Date()))
         case "my-workouts": self = .myWorkouts

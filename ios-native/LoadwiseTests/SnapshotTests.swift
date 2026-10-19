@@ -224,6 +224,15 @@ final class SnapshotTests: XCTestCase {
             UserDefaults.standard.removeObject(forKey: "AppleLanguages")
         }
         try render("site-today", glow: Palette.Glow.today) { TodayContent(today: DemoData.today).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
+        // Whole screens for the website's scenes, longer than the simulator's screenshots.
+        let health = DemoData.health
+        try render("site-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: nil).padding(24).padding(.top, 30).environment(\.locale, L10n.locale) }
+        try render("site-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30).environment(\.locale, L10n.locale) }
+        try render("site-food", glow: Palette.Glow.food) { FoodContent(food: DemoData.food).padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)).environment(\.locale, L10n.locale) }
+        try render("site-gym", glow: Palette.Glow.training) {
+            VStack(spacing: 12) { ForEach(DemoData.gym.exercises) { ExerciseCard(exercise: $0, onSet: { _, _, _, _ in }, onUndo: { _ in }, onTechnique: {}, onAlternatives: {}) } }
+                .padding(24).padding(.top, 30).environment(\.locale, L10n.locale)
+        }
     }
 
     func testSettingsScreens() throws {
