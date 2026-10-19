@@ -1174,7 +1174,10 @@ final class AppModel {
         if date > todayDate {
             guard ahead, let last = Self.shift(todayDate, by: Self.foodDaysAhead), date <= last else { return }
             selectedDate = date
+            // The day as last seen (or loaded ahead) at once, as on the days before.
+            showSaved(date, page: page?.date == date ? page : nil)
             await refreshFood()
+            if selectedDate == date, foodError == nil { prefetchFoodAhead(date) }
             return
         }
         selectedDate = date == todayDate ? nil : date
@@ -1306,6 +1309,7 @@ final class AppModel {
         let todayDate = Self.localDate(Date())
         let wantFood = food != nil, wantHealth = health != nil
         let api = api
+        if wantFood { prefetchFoodAhead(date) }
         for offset in [-1, 1] {
             // Today itself is always loaded; later days have no Today or Health.
             guard let day = Self.shift(date, by: offset), day < todayDate else { continue }
@@ -1320,6 +1324,20 @@ final class AppModel {
                 if food { _ = try? await api.foodData(date: day) }
                 if health { _ = try? await api.health(date: day) }
             }
+        }
+    }
+
+    /// Food's days ahead beside the one on screen (each at most once an hour),
+    /// so the next arrow or swipe forward opens at once too.
+    private func prefetchFoodAhead(_ date: String) {
+        let todayDate = Self.localDate(Date())
+        guard let last = Self.shift(todayDate, by: Self.foodDaysAhead) else { return }
+        let api = api
+        for offset in [-1, 1] {
+            guard let day = Self.shift(date, by: offset), day > todayDate, day <= last else { continue }
+            if let saved = SnapshotCache.savedAt(key: SnapshotCache.dayKey("food", day)),
+               Date().timeIntervalSince(saved) < 3600 { continue }
+            Task(priority: .utility) { _ = try? await api.foodData(date: day) }
         }
     }
 
