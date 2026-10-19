@@ -307,7 +307,9 @@ struct GymDay: Decodable, Equatable {
         let drop = sided(list[offset])
             ? list[offset].indices.filter { cell(list[offset][$0], 2) == number && !Self.isDone(cell(list[offset][$0], 8)) && (cell(list[offset][$0], 0) ?? "WORK").uppercased() != "WARMUP" }
             : [last]
-        guard list[offset].count > drop.count else { removeExercise(at: offset); return }
+        // Warm-ups alone are no exercise: with the last set the exercise goes.
+        let left = list[offset].indices.filter { !drop.contains($0) }
+        guard left.contains(where: { !Self.isWarmupRow(list[offset][$0]) }) else { removeExercise(at: offset); return }
         for i in drop.reversed() { list[offset].remove(at: i) }
         write(list, rest)
     }
@@ -315,7 +317,8 @@ struct GymDay: Decodable, Equatable {
     /// A set not done yet taken out by its row (swiped away in Režim tréninku),
     /// by sides both of its rows, with the drop sets right after it; the sets
     /// of the exercise are numbered again (a drop set keeps the number of the
-    /// set above). The last set gone, the exercise leaves the plan. Returns
+    /// set above). The last set gone, the exercise leaves the plan with its
+    /// warm-ups not done yet. Returns
     /// the rows taken out, as they were numbered before.
     @discardableResult
     mutating func deleteSet(row: Int) -> [Int] {
@@ -335,6 +338,10 @@ struct GymDay: Decodable, Equatable {
                 var next = at + 1
                 while next <= end, Self.rowType(values[next]) == "DROP", !Self.isDone(cell(values[next], 8)) { drop.append(next); next += 1 }
             }
+        }
+        // No set left but warm-ups: those not done go too.
+        if !(start...end).contains(where: { !drop.contains($0) && !Self.isWarmupRow(values[$0]) }) {
+            drop += (start...end).filter { Self.isWarmupRow(values[$0]) && !Self.isDone(cell(values[$0], 8)) }
         }
         drop = Array(Set(drop)).sorted()
         for i in drop.reversed() { values.remove(at: i) }

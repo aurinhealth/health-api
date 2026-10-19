@@ -52,6 +52,27 @@ final class GymSetEditTests: XCTestCase {
         XCTAssertEqual(d.exercises.map(\.name), ["Row"])
     }
 
+    func testTheLastSetGoneTakesItsWarmupsAlong() {
+        var d = day([row("WARMUP", "Hip thrust", "1", "12,5"), row("WORK", "Hip thrust", "1", "40"), row("WORK", "Row", "1", "40")])
+        let gone = d.deleteSet(row: d.exercises[0].sets[1].row)
+        XCTAssertEqual(gone.count, 2)
+        XCTAssertEqual(d.exercises.map(\.name), ["Row"])
+        // A warm-up done stays recorded.
+        var e = day([row("WARMUP", "Hip thrust", "1", "12,5", done: true), row("WORK", "Hip thrust", "1", "40")])
+        e.deleteSet(row: e.exercises[0].sets[1].row)
+        XCTAssertEqual(e.exercises[0].sets.map(\.warmup), [true])
+    }
+
+    func testRemovingTheLastSetTakesTheExercise() {
+        var d = day([row("WARMUP", "Hip thrust", "1", "12,5"), row("WORK", "Hip thrust", "1", "40"), row("WORK", "Row", "1", "40")])
+        d.removeSet(at: 0)
+        XCTAssertEqual(d.exercises.map(\.name), ["Row"])
+        // Warm-ups left alone from before go with the exercise.
+        var e = day([row("WARMUP", "Hip thrust", "1", "12,5"), row("WORK", "Row", "1", "40")])
+        e.removeExercise(at: 0)
+        XCTAssertEqual(e.exercises.map(\.name), ["Row"])
+    }
+
     func testWarmupsFollowTheOrder() {
         var d = day([row("WARMUP", "Leg press", "1", "60"), row("WARMUP", "Leg press", "2", "95"), row("WARMUP", "Leg press", "3", "115"),
                      row("WORK", "Leg press", "1", "145"),
