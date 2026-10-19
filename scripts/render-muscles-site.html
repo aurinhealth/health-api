@@ -1,0 +1,74 @@
+<!doctype html><!-- The website's 3D figure (src/site-pages.js, public/site/muscles/): the licensed model as
+the app draws it (ios-native Muscle3D.swift: the same camera, lights and colours), rendered by
+scripts/render-muscles-site.mjs into still frames. The model itself never goes to the website. -->
+<html><body style="margin:0;background:transparent">
+<canvas id="c"></canvas><canvas id="k"></canvas>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
+const buf = await (await fetch(new URLSearchParams(location.search).get('model') || 'muscles-v1.bin')).arrayBuffer();
+const dv = new DataView(buf);
+const vc = dv.getUint32(8, true), gc = dv.getUint32(12, true);
+let o = 16; const heads = [];
+for (let i = 0; i < gc; i++) {
+  const count = dv.getUint32(o, true), len = dv.getUint32(o + 20, true);
+  const name = new TextDecoder().decode(new Uint8Array(buf, o + 24, len));
+  heads.push({name, count, centre: [dv.getFloat32(o + 4, true), dv.getFloat32(o + 8, true), dv.getFloat32(o + 12, true)], radius: dv.getFloat32(o + 16, true)});
+  o += 24 + Math.ceil(len / 4) * 4;
+}
+const pos = new Float32Array(buf.slice(o, o + vc * 12)); o += vc * 12;
+const nor = new Float32Array(buf.slice(o, o + vc * 12)); o += vc * 12;
+const geo = new THREE.BufferGeometry();
+geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+const all = []; let start = 0;
+heads.forEach((h, i) => { const idx = new Uint32Array(buf.slice(o, o + h.count * 4)); o += h.count * 4; for (const v of idx) all.push(v); geo.addGroup(start, h.count, i); start += h.count; });
+geo.setIndex(all);
+window.heads = heads.map(h => h.name);
+
+THREE.ColorManagement.enabled = true;
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({canvas, antialias: true, alpha: true, preserveDrawingBuffer: true});
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+const idr = new THREE.WebGLRenderer({canvas: document.getElementById('k'), antialias: false, preserveDrawingBuffer: true});
+idr.outputColorSpace = THREE.LinearSRGBColorSpace;
+const scene = new THREE.Scene();
+const turntable = new THREE.Group(); scene.add(turntable);
+const lambert = heads.map(() => new THREE.MeshLambertMaterial());
+const flat = heads.map((h, i) => new THREE.MeshBasicMaterial({color: new THREE.Color().setRGB((i + 1) * 12 / 255, 0, 0, THREE.LinearSRGBColorSpace)}));
+const mesh = new THREE.Mesh(geo, lambert); turntable.add(mesh);
+scene.add(new THREE.AmbientLight(0xffffff, 0.42 * Math.PI));
+for (const [x, y, i] of [[-0.6, -0.45, 0.9], [-0.2, 0.9, 0.38]]) {
+  const l = new THREE.DirectionalLight(0xffffff, i * Math.PI);
+  const d = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(x, y, 0, 'YXZ'));
+  l.position.copy(d.multiplyScalar(-10)); scene.add(l);
+}
+const half = 14 * Math.PI / 180;
+const cam = new THREE.PerspectiveCamera(2 * half * 180 / Math.PI, 1, 0.05, 20);
+
+window.setup = (w, h, iw, ih) => { renderer.setPixelRatio(1); renderer.setSize(w, h, false); idr.setPixelRatio(1); idr.setSize(iw, ih, false); cam.aspect = w / h; cam.updateProjectionMatrix(); };
+window.paint = (colors, rest, bone) => {
+  heads.forEach((h, i) => lambert[i].color = new THREE.Color(h.name === 'bone' ? bone : colors[h.name] || rest));
+};
+window.paintSel = (id, color, rest, bone) => {
+  heads.forEach((h, i) => {
+    const base = new THREE.Color(h.name === 'bone' ? bone : h.name === id ? color : rest);
+    lambert[i].color = h.name === id ? base : base.clone().multiplyScalar(0.62);
+    lambert[i].emissive = h.name === id ? base.clone().multiplyScalar(0.35) : new THREE.Color(0);
+  });
+};
+window.place = (focus, dist = 1) => {
+  let t = [0, 0.9, 0], d = 0.98 / Math.tan(half) * dist;
+  const g = heads.find(h => h.name === focus);
+  if (g) { t = [0, g.centre[1], 0]; d = Math.max(0.8, g.radius * 1.15 / Math.tan(half)); }
+  cam.position.set(t[0], t[1], t[2] + d); cam.lookAt(t[0], t[1], t[2]);
+};
+window.frame = (yaw, ids) => {
+  turntable.rotation.y = yaw;
+  mesh.material = ids ? flat : lambert;
+  const r = ids ? idr : renderer;
+  r.setClearColor(0x000000, ids ? 1 : 0);
+  r.render(scene, cam);
+  return r.domElement.toDataURL('image/png');
+};
+window.ready = true;
+</script></body></html>

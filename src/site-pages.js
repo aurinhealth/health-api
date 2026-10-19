@@ -1,7 +1,7 @@
 // Public pages: the Aurin overview on / and the policy pages. They use the iPhone app's light
 // palette (ios-native/Shared/Palette.swift): warm paper, white cards, Newsreader headings.
-// The phones on the overview show the app's own screens (Today in the hero, then one phone whose
-// screen follows the story's chapters), taken in CI from the sample data in English.
+// The phones on the overview show the app's own screens (Today in the hero, then a scene per area of
+// the app whose phone walks through its screens), taken in CI from the sample data in English.
 // When the app changes what a section shows, change the section here too.
 // The site is in English only (Aurin is for the whole world); the privacy policy and the terms also
 // have a Czech version at ?lang=cs, linked from the page and the footer.
@@ -78,24 +78,62 @@ p{margin:0}
 .scr:not(.on){opacity:0;transform:translateY(18px) scale(.98)}
 .up{color:var(--green)}.sleep{color:var(--indigo)}.warm{color:var(--amber)}
 
-/* The story: the phone stays while the chapters scroll past, and its screen follows the chapter
-   in view. Each chapter is a section of the app, in the order of its tabs. */
-.story{position:relative}
-.story .pin{position:sticky;top:0;height:100vh;height:100svh;z-index:2;pointer-events:none;display:flex;align-items:center}
-.story .pin .wrap{width:100%;display:flex;justify-content:flex-end}
-.story .pin .device{margin-right:calc(25% - 161px);transform:scale(1.05)}
-.story .glow{position:absolute;inset:0;z-index:-1;background:radial-gradient(40% 55% at 72% 50%,var(--glow,var(--glow-today)),transparent 70%)}
-.progress{position:absolute;left:24px;bottom:44px;display:flex;gap:8px}
-.progress i{width:28px;height:4px;border-radius:2px;background:var(--track);overflow:hidden}
-.progress i b{display:block;height:100%;width:calc(var(--f,0) * 100%);background:var(--text)}
-.story .steps{position:relative;z-index:1;margin-top:-100vh;margin-top:-100svh}
-.step{position:relative;min-height:100vh;display:flex;align-items:center}
-.step .wrap{width:100%}
-.step .text{max-width:470px}
+/* The scenes: one per area of the app, in the order of its tabs. The phone stays while the steps
+   scroll past, shows the app's screen for each step, and a piece of that screen (cut from the same
+   screenshot) comes forward beside it. */
 .eyebrow{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:16px}
-.step h2{font-size:clamp(46px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
-.step p{margin-top:20px;font-size:20px;color:var(--sec)}
-.step p.free{color:var(--green);font-weight:600}
+.scene{position:relative;--tone:var(--green);--glow:var(--glow-today)}
+.scene .head{text-align:center;padding:130px 24px 0}
+.scene .head .eyebrow{color:var(--tone);margin-bottom:12px}
+.scene .head h2,.muscles h2{font-size:clamp(46px,6.2vw,88px);line-height:.98;letter-spacing:-.025em}
+.scene .head p,.muscles .sub{max-width:580px;margin:20px auto 0;font-size:20px;color:var(--sec)}
+.scene .head p.free{margin-top:8px;color:var(--green);font-weight:600}
+.track{position:relative}
+.scene .pin{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.scene .glow{position:absolute;width:900px;height:900px;border-radius:50%;background:radial-gradient(circle,var(--glow) 0,transparent 62%)}
+.sc{position:relative;flex:none;width:760px;height:702px;transform:scale(var(--s,1))}
+.sc .device{position:absolute;left:438px;top:0}
+.part{position:absolute;left:0;width:420px;border-radius:22px;overflow:hidden;background:var(--panel);box-shadow:0 40px 80px -30px rgba(60,40,10,.5),0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(27,26,23,.05);opacity:0}
+.part img{display:block;width:100%;height:auto}
+.part.on{opacity:1}
+.st .n{font-size:13px;font-weight:700;color:var(--tone);letter-spacing:.06em}
+.st h3{font:400 36px/1.04 Newsreader,"New York",Georgia,serif;letter-spacing:-.02em;margin:8px 0 10px}
+.st p{color:var(--sec);font-size:18px}
+.slot,.dots{display:none}
+@media (min-width:961px){
+  .track{display:grid;grid-template-columns:400px 1fr;max-width:1160px;margin:0 auto;padding:0 24px;gap:20px}
+  .scene .pin{grid-column:2;grid-row:1;align-self:start}
+  .sc-steps{grid-column:1;grid-row:1;padding:25vh 0 35vh}
+  .st{min-height:85vh;display:flex;align-items:center}
+  .st .t{max-width:400px}
+  .js .st .t{opacity:.22;transition:opacity .5s}
+  .js .st.on .t{opacity:1}
+}
+
+/* Muscles: the app's 3D figure (Muscle3D.swift). The model is licensed and stays out of the page: the
+   figure is drawn ahead from 72 sides (scripts/render-muscles-site.html), and a map per side says which
+   muscle each pixel is, so dragging turns it and a tap names the muscle as the app's bubble does. */
+.muscles{padding:130px 24px 40px;text-align:center}
+.muscles .eyebrow{color:var(--rust);margin-bottom:12px}
+.fig{position:relative;margin:16px auto 0;width:min(520px,100%,calc((100svh - 190px) * .64));aspect-ratio:640/1000;touch-action:pan-y;cursor:grab;-webkit-user-select:none;user-select:none}
+.fig::before{content:"";position:absolute;inset:10% -20%;z-index:-1;background:radial-gradient(circle,color-mix(in srgb,var(--rust) 16%,transparent) 0,transparent 60%)}
+.fig canvas{display:block;width:100%;height:100%}
+.fig .bubble{position:absolute;z-index:2;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 6px 24px rgba(0,0,0,.25);font:inherit;text-align:left;white-space:nowrap;cursor:pointer;transform:translate(-50%,-100%) scale(.85);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.16,1,.3,1)}
+.fig .bubble.on{opacity:1;transform:translate(-50%,-100%);pointer-events:auto}
+.fig .bubble b{display:block;font-size:16px;font-weight:600;color:var(--text)}
+.fig .bubble span{font-size:13px}
+.fig .bubble .icon{color:var(--muted);width:14px;height:14px}
+.muscles .hint{font-size:14px;color:var(--muted);margin-top:-6px;transition:opacity .4s}
+.muscles .key{display:flex;gap:18px;justify-content:center;margin-top:14px;font-size:13px;color:var(--muted)}
+.muscles .key span{display:inline-flex;align-items:center;gap:6px}
+.muscles .key i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.muscle-card{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .35s}
+.muscle-card.on{opacity:1;pointer-events:auto}
+.muscle-card .card{width:min(400px,calc(100% - 32px));padding:20px;border-radius:28px;background:var(--bg);text-align:left;box-shadow:0 40px 80px -30px rgba(60,40,10,.5);transform:scale(.94);transition:transform .45s cubic-bezier(.16,1,.3,1)}
+.muscle-card.on .card{transform:none}
+.muscle-card .zoom{height:220px;border-radius:22px;background:var(--panel) center/cover no-repeat}
+.muscle-card h3{font:400 28px/1.1 Newsreader,"New York",Georgia,serif;margin:16px 0 4px}
+.muscle-card .close{float:right;width:34px;height:34px;margin:-6px -6px 10px 10px;border:0;border-radius:50%;background:var(--track);color:var(--text);font-size:18px;cursor:pointer}
 
 /* Connections: the services around the Aurin mark. Dots and the things they carry flow in along one
    curve and back along the other; tapping a logo says what Aurin reads from it and sends back. */
@@ -207,8 +245,10 @@ p{margin:0}
   @keyframes drift{33%{transform:translate(6vmax,4vmax) scale(1.08)}66%{transform:translate(-4vmax,7vmax) scale(.94)}100%{transform:translate(3vmax,-3vmax) scale(1.04)}}
   .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s cubic-bezier(.16,1,.3,1)}
   .js .reveal.in{opacity:1;transform:none}
-  .js .step .text{opacity:.18;transition:opacity .6s ease}
-  .js .step.on .text{opacity:1}
+  .js .part{transform:translate(-30px,30px) scale(.92);clip-path:inset(0 100% 0 0 round 22px);transition:opacity .5s,transform .9s cubic-bezier(.2,.8,.2,1),clip-path 1s cubic-bezier(.2,.8,.2,1) .15s}
+  .js .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);animation:float 6s ease-in-out 1.2s infinite}
+  .js .part.past{transform:translate(-40px,-30px) scale(.94);clip-path:inset(0 0 0 0 round 22px)}
+  @keyframes float{50%{transform:translateY(-8px)}}
   .hub .flow{animation:flow 1.1s linear infinite}
   @keyframes flow{to{stroke-dashoffset:-36}}
   .hub .core{animation:breathe 2.4s ease-in-out infinite}
@@ -230,19 +270,28 @@ p{margin:0}
   .pill-nav .links{display:none}
   .glass.g3{display:none}
   .glass.g1{left:max(4px,calc(50% - 320px))}.glass.g2{right:max(4px,calc(50% - 320px))}
-  /* Phones: the chapter's words sit at the top, the phone below; the next words slide out from behind it. */
-  .story .pin{align-items:flex-end}
-  .story .pin .wrap{justify-content:center}
-  .story .pin .device{margin:0 0 6px;transform:scale(.7);transform-origin:50% 100%}
-  .story .glow{background:radial-gradient(70% 45% at 50% 75%,var(--glow,var(--glow-today)),transparent 70%)}
-  .progress{display:none}
-  .step{align-items:flex-start}
-  .step .text{padding-top:88px}
-  .js .step .text{opacity:0}
-  .step h2{font-size:38px}.step p{font-size:16px;line-height:1.45;margin-top:10px}.eyebrow{margin-bottom:10px}
+  /* Phones: the phone at the top with the piece over its lower part, the step's words at the bottom.
+     Without JS the steps simply follow the phone. */
+  .scene .head{padding-top:110px}
+  .scene .head p{font-size:18px}
+  .js .scene .pin{flex-direction:column;justify-content:flex-start;padding-top:76px}
+  .sc{width:440px;transform-origin:top center;margin-bottom:calc((var(--s,1) - 1) * 702px)}
+  .sc .device{left:59px}
+  .part{left:10px;top:auto!important;bottom:-14px}
+  .js .sc-steps{margin-top:-100vh;margin-top:-100svh;position:relative;pointer-events:none}
+  .js .st{height:85vh;height:85svh;visibility:hidden}
+  .st{padding:24px 0}
+  .js .slot{display:block;position:absolute;left:20px;right:20px;bottom:calc(22px + env(safe-area-inset-bottom));min-height:140px}
+  .slot .t{position:absolute;inset:auto 0 0 0;opacity:0;transform:translateY(16px);transition:opacity .5s,transform .5s cubic-bezier(.2,.8,.2,1)}
+  .slot .t.on{opacity:1;transform:none}
+  .slot .n{display:none}
+  .slot h3{font-size:27px;margin:0 0 6px}.slot p{font-size:15.5px}
+  .js .dots{display:flex;gap:6px;position:absolute;left:20px;bottom:calc(170px + env(safe-area-inset-bottom))}
+  .dots i{width:6px;height:6px;border-radius:9px;background:var(--track);transition:all .4s}
+  .dots i.on{width:22px;background:var(--text)}
+  .muscles{padding-top:110px}.muscles .sub{font-size:18px}
   .connect{padding-top:110px}
 }
-@media (max-width:960px) and (max-height:780px){.story .pin .device{transform:scale(.6)}}
 @media (max-width:560px){
   .wrap{padding:0 16px}
   .hero{padding-top:132px}
@@ -280,26 +329,28 @@ const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" h
 const LOCK = '<svg class="icon lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>';
 const store = () => `<span class="store">${APPLE_LOGO}Coming soon to the App Store</span>`;
 
-// The page's motion. Scroll drives it: the hero phone stands up, the story's phone follows the chapter
+// The page's motion. Scroll drives it: the hero phone stands up, each scene's phone follows the step
 // in view, the privacy sentence lights up. Without JS everything is simply shown; with reduced
-// motion nothing moves and the story still switches screens.
+// motion nothing moves and the scenes still switch screens.
 const siteScript = `<script>(function(){var r=document.documentElement;r.classList.add('js');
 var still=matchMedia('(prefers-reduced-motion: reduce)').matches;
 if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
 document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});}else document.querySelectorAll('.reveal').forEach(function(el){el.classList.add('in');});
-var stage=document.querySelector('.stage'),story=document.querySelector('.story'),priv=document.querySelector('.privacy .big');
-var steps=story?[].slice.call(story.querySelectorAll('.step')):[],scrs=story?[].slice.call(story.querySelectorAll('.scr')):[],bars=story?[].slice.call(story.querySelectorAll('.progress i')):[];
-var words=priv?[].slice.call(priv.querySelectorAll('span')):[],last=-1,queued=false;
+var stage=document.querySelector('.stage'),priv=document.querySelector('.privacy .big');
+var scenes=[].slice.call(document.querySelectorAll('.scene')).map(function(el){var q=function(c){return [].slice.call(el.querySelectorAll(c));};
+ return {sc:el.querySelector('.sc'),steps:q('.st'),parts:[q('.sc .scr'),q('.part'),q('.st'),q('.slot .t'),q('.dots i')],at:-1};});
+var words=priv?[].slice.call(priv.querySelectorAll('span')):[],queued=false;
+// The stage is drawn at one size and scaled to the window: beside the steps on a computer, above them on a phone.
+function fit(){var w=innerWidth,h=innerHeight,s=w<=960?Math.min((w-16)/440,(h-76-214)/702):Math.min(1.1,(h-80)/702,(Math.min(w,1160)-48-420)/760);
+ scenes.forEach(function(x){x.sc.style.setProperty('--s',s.toFixed(3));});}
 function frame(){queued=false;var vh=innerHeight;
  if(stage){var s=stage.getBoundingClientRect(),p=still?1:Math.min(1,Math.max(0,(vh-s.top)/(vh*.9)-.3));stage.style.setProperty('--p',p.toFixed(3));}
- if(steps.length){var at=0,line=vh*(innerWidth>960?.5:.14);steps.forEach(function(el,j){if(el.getBoundingClientRect().top<line)at=j;});
-  bars.forEach(function(b,j){var q=steps[j].getBoundingClientRect(),f=Math.min(1,Math.max(0,(vh*.5-q.top)/q.height));b.style.setProperty('--f',f.toFixed(3));});
-  if(at!==last){last=at;steps.forEach(function(el,j){el.classList.toggle('on',j===at);});scrs.forEach(function(el,j){el.classList.toggle('on',j===at);});
-   story.style.setProperty('--glow','var(--'+steps[at].dataset.glow+')');}}
+ scenes.forEach(function(x){var at=0;x.steps.forEach(function(el,j){if(el.getBoundingClientRect().top<vh*.55)at=j;});if(at===x.at)return;x.at=at;
+  x.parts.forEach(function(list,k){list.forEach(function(el,j){el.classList.toggle('on',j===at);if(k===1)el.classList.toggle('past',j<at);});});});
  if(words.length){var q=priv.getBoundingClientRect(),k=still?1:Math.min(1,Math.max(0,(vh*.8-q.top)/(q.height+vh*.25)));
   words.forEach(function(w,j){w.classList.toggle('lit',k*words.length>j);});}}
 function ask(){if(!queued){queued=true;requestAnimationFrame(frame);}}
-addEventListener('scroll',ask,{passive:true});addEventListener('resize',ask);frame();
+addEventListener('scroll',ask,{passive:true});addEventListener('resize',function(){fit();ask();});fit();frame();
 // Connections: a logo shows what Aurin reads from it and sends back; they take turns until one is picked.
 var hub=document.querySelector('.hub');if(!hub)return;
 if(still)hub.querySelectorAll('svg.lines').forEach(function(s){if(s.pauseAnimations)s.pauseAnimations();});
@@ -309,7 +360,56 @@ document.getElementById('svc-'+id).classList.toggle('on',on);hub.querySelectorAl
 tabs.forEach(function(t,i){t.addEventListener('click',function(){clearInterval(timer);pick(i);});
 t.addEventListener('keydown',function(e){var n=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;
 if(n){e.preventDefault();clearInterval(timer);pick((i+n+tabs.length)%tabs.length);tabs[cur].focus();}});});
-r.classList.add('tabs');pick(0);if(!still)timer=setInterval(function(){pick((cur+1)%tabs.length);},5200);})();</script>`;
+r.classList.add('tabs');pick(0);if(!still)timer=setInterval(function(){pick((cur+1)%tabs.length);},5200);})();</script>
+<script>(function(){
+// Muscles: frame k of 72 is the figure turned k·5°; ids.png holds, per frame, which muscle each pixel is
+// (a quarter of the size, the index in NAMES). The frames load when the figure comes near.
+var fig=document.querySelector('.fig');if(!fig)return;
+var N=72,IW=160,IH=250,base=fig.dataset.base,still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+var NAMES=['quads','hamstrings','glutes','calves','adductors','abductors','chest','back','lower_back','traps','shoulders','side_delts','rear_delts','biceps','triceps','forearms','core','other','bone'];
+var LABEL={quads:'Quads',hamstrings:'Hamstrings',glutes:'Glutes',calves:'Calves',adductors:'Adductors',abductors:'Abductors',chest:'Chest',back:'Back',lower_back:'Lower back',traps:'Traps',shoulders:'Shoulders',side_delts:'Side delts',rear_delts:'Rear delts',biceps:'Biceps',triceps:'Triceps',forearms:'Forearms',core:'Core'};
+var TIRED='var(--rust)',RECOVERING='var(--amber)',RESTED=['rested','var(--green)'];
+var STATE={glutes:['26 % rested · in 2 days',TIRED],hamstrings:['35 % rested · in 2 days',TIRED],quads:['37 % rested · ≈ in 2 days',TIRED],
+ calves:['47 % rested · ≈ tomorrow',TIRED],chest:['61 % rested · today',RECOVERING],back:['61 % rested · today',RECOVERING]};
+var cv=fig.querySelector('canvas'),cx=cv.getContext('2d',{willReadFrequently:true}),bub=fig.querySelector('.bubble'),hint=document.querySelector('.muscles .hint'),card=document.querySelector('.muscle-card');
+var frames=[],ids=null,cur=0,vel=0,sel=null,spin=!still,drag=null,shown=-1,running=false;
+function load(){if(frames.length)return;
+ for(var i=0;i<N;i++){var im=new Image();im.decoding='async';im.onload=draw;im.src=base+'f'+(i<10?'0':'')+i+'.webp';frames.push(im);}
+ var map=new Image();map.onload=function(){var c=document.createElement('canvas');c.width=map.width;c.height=map.height;var g=c.getContext('2d');g.drawImage(map,0,0);ids=g.getImageData(0,0,c.width,c.height);};map.src=base+'ids.png';}
+function at(){return ((Math.round(cur)%N)+N)%N;}
+function idAt(k,x,y){return ids?ids.data[((Math.floor(k/9)*IH+y)*ids.width+(k%9)*IW+x)*4]:255;}
+// The app dims the other muscles to 62 % and lights the one tapped.
+function draw(){var k=at(),im=frames[k];if(!im||!im.complete||!im.naturalWidth)return;shown=k;
+ cx.clearRect(0,0,640,1000);cx.drawImage(im,0,0);if(sel===null||!ids)return;
+ var d=cx.getImageData(0,0,640,1000),p=d.data;
+ for(var y=0;y<1000;y++){var iy=Math.min(IH-1,(y*IH/1000)|0);for(var x=0;x<640;x++){var o=(y*640+x)*4;if(!p[o+3])continue;
+  var f=idAt(k,x>>2,iy)===sel?1.25:.62;p[o]*=f;p[o+1]*=f;p[o+2]*=f;}}
+ cx.putImageData(d,0,0);}
+function close(){sel=null;bub.classList.remove('on');draw();}
+function tick(){if(!running)return;
+ if(!drag){if(spin)cur+=.12;else{cur+=vel;vel*=.92;}}
+ if(at()!==shown){if(sel!==null&&Math.abs(vel)>.05)close();else draw();}
+ requestAnimationFrame(tick);}
+if('IntersectionObserver' in window)new IntersectionObserver(function(es){var on=es[0].isIntersecting;if(on)load();if(on&&!running){running=true;requestAnimationFrame(tick);}else if(!on)running=false;},{rootMargin:'50% 0px'}).observe(fig);
+else{load();running=true;requestAnimationFrame(tick);}
+fig.addEventListener('pointerdown',function(e){if(e.target.closest('.bubble'))return;drag={x:e.clientX,c:cur,moved:false};spin=false;vel=0;hint.style.opacity=0;});
+addEventListener('pointermove',function(e){if(!drag)return;var dx=e.clientX-drag.x;if(Math.abs(dx)>4)drag.moved=true;
+ var next=drag.c-dx/fig.clientWidth*40;vel=(next-cur)*.5;cur=next;if(drag.moved&&sel!==null)close();});
+addEventListener('pointerup',function(e){if(!drag)return;var moved=drag.moved;drag=null;if(moved)return;
+ var r=cv.getBoundingClientRect(),g=idAt(at(),Math.floor((e.clientX-r.left)/r.width*IW),Math.floor((e.clientY-r.top)/r.height*IH)),name=NAMES[g];
+ if(!LABEL[name])return close();
+ sel=g;vel=0;draw();var st=STATE[name]||RESTED,f=fig.getBoundingClientRect();
+ bub.querySelector('b').textContent=LABEL[name];var t=bub.querySelector('.txt span');t.textContent=st[0];t.style.color=st[1];
+ bub.style.left=Math.min(Math.max(e.clientX-f.left,115),f.width-115)+'px';bub.style.top=Math.max(60,e.clientY-f.top-16)+'px';
+ bub.dataset.id=name;bub.classList.add('on');});
+// The bubble opens the muscle as its detail does in the app: the figure close on it, its name and how rested.
+bub.addEventListener('click',function(){var name=bub.dataset.id,st=STATE[name]||RESTED;
+ card.querySelector('.zoom').style.backgroundImage='url('+base+'z-'+name+'.webp)';card.querySelector('h3').textContent=LABEL[name];
+ var p=card.querySelector('.state');p.textContent=st[0];p.style.color=st[1];card.classList.add('on');card.querySelector('.close').focus();});
+function hide(){card.classList.remove('on');close();}
+card.addEventListener('click',function(e){if(e.target===card||e.target.closest('.close'))hide();});
+addEventListener('keydown',function(e){if(e.key==='Escape'&&card.classList.contains('on'))hide();});
+})();</script>`;
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true}) {
   const self = `${origin}${path}${lang === 'cs' ? '?lang=cs' : ''}`;
@@ -393,15 +493,49 @@ export function overviewPage(request) {
   const {lang, origin} = pageLang(request);
   // A screen of the app: a screenshot taken in CI from the sample data (public/site/app/).
   const shot = (name, lazy = true) => `<img src="/site/app/${name}.webp" alt="" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
-  // The story's chapters: [section id, eyebrow, headline, line, glow, the app's screen].
-  const chapters = [
-    ['pripravenost', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal. The journal fills in what it can from your data and shows what lifts it and what drags it down: alcohol, a late meal or the sauna.', 'glow-health', 'readiness'],
-    ['zatez', 'Strain', 'Know when to push and when to back off.', 'Every workout and every step adds up. Aurin shows where today should land and how your week builds.', 'glow-training', 'strain'],
-    ['trenink', 'Training', 'A plan that adapts.', 'An activity for every day, picked for how you recovered and ready in advance. Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu. When the library has little for the length and type you pick, the AI builds a workout to fit.', 'glow-training', 'training'],
-    ['posilovna', 'Gym', 'Sets, weights and muscle recovery.', 'Turn a 3D figure and tap a muscle to see how tired it is from the gym and your runs. Every set carries a letter for how hard to go, from warm-up to failure and drop sets, and you mark how it really went. Supersets, left and right side, warm-up, cardio and stretching in the order you pick, and a rest timer between sets that stays on your lock screen. Say where you train, or let it read your gym’s website and photos: workouts use only the equipment that’s there.', 'glow-health', 'gym'],
-    ['vyziva', 'Nutrition', 'Food that follows your training.', 'Snap a photo, scan a barcode or just tell the coach what you ate. Your target moves with the day’s load, food from other apps comes in too, and fibre, sugar and salt are always counted. Aurin Pro adds vitamins and minerals.', 'glow-food', 'food'],
-    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers. It also speaks up on its own, at most once a day.<span class="free">Free for everyone.</span>', 'glow-today', 'coach']];
-  const steps = chapters.map(([id, eyebrow, h, p, glow]) => `<section id="${id}" class="step" data-glow="${glow}"><div class="wrap"><div class="text"><div class="eyebrow">${eyebrow}</div><h2>${h}</h2>${p.split('<span class="free">').map((t, j) => `<p${j ? ' class="free"' : ''}>${t.replace('</span>', '')}</p>`).join('')}</div></div></section>`).join('\n');
+  // The scenes, one per area of the app: [section id, eyebrow, headline, line, tone, glow, steps], each step
+  // [the app's screen, the piece of it lifted out (public/site/app/parts/), how far down the stage, title, text].
+  const scenes = [
+    ['spanek', 'Sleep', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
+      ['sleep', 'sleep-stages', 380, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
+      ['sleep-need', 'sleep-need', 150, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
+      ['bedtime', 'sleep-dial', 120, 'Plan your bedtime.', 'Drag the moon and the sun on the dial. Aurin tells you when to go to bed to wake up rested.'],
+      ['bedtime-goal', 'sleep-why', 160, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours.']]],
+    ['pripravenost', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
+      ['readiness-parts', 'ready-parts', 220, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal.'],
+      ['journal-impact', 'ready-impact', 170, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.']]],
+    ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
+      ['strain-target', 'strain-gauge', 160, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan.']]],
+    ['trenink', 'Training', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
+      ['training', 'week', 130, 'Your week at a glance.', 'Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu. When the library has little for the length and type you pick, the AI builds a workout to fit.']]],
+    ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
+      ['builder', 'build-form', 190, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and uses only the equipment your gym has.'],
+      ['gym-day', 'gym-parts', 230, 'Warm-up to stretching.', 'Cardio, exercises and stretching in the order you like. Then start.']]],
+    ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
+      ['training-mode', 'tm-table', 170, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them if you need to and start.'],
+      ['training-set', 'tm-current', 170, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets.'],
+      ['training-rest', 'tm-rest', 60, 'Rest on time.', 'The timer starts by itself, stays on your lock screen and shows what comes next.'],
+      ['training-done', 'tm-done', 100, 'See what you lifted.', 'Sets and volume when you finish, saved to Apple Health.']]],
+    ['vyziva', 'Nutrition', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
+      ['food-day', 'food-top', 110, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.'],
+      ['food-add', 'food-add', 330, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, and log drinks with one tap.']]],
+    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.<span class="free">Free for everyone.</span>', 'green', 'glow-today', [
+      ['coach-ask', 'coach-ask', 110, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout.']]]];
+  const step = ([, , , title, text], i) => `<div class="n">0${i + 1}</div><h3>${title}</h3><p>${text}</p>`;
+  const scene = ([id, eyebrow, h, p, tone, glow, list]) => `<section id="${id}" class="scene" style="--tone:var(--${tone});--glow:var(--${glow})">
+<div class="head"><div class="eyebrow">${eyebrow}</div><h2>${h}</h2>${p.split('<span class="free">').map((t, j) => `<p${j ? ' class="free"' : ''}>${t.replace('</span>', '')}</p>`).join('')}</div>
+<div class="track"><div class="pin" aria-hidden="true"><div class="glow"></div><div class="sc">
+<div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}">${shot(screen)}</div>`).join('')}</div></div></div>
+${list.map(([, part, top]) => `<div class="part" style="top:${top}px"><img src="/site/app/parts/${part}.webp" alt="" loading="lazy" decoding="async"></div>`).join('')}
+</div><div class="dots">${list.map(() => '<i></i>').join('')}</div><div class="slot">${list.map((x, i) => `<div class="t">${step(x, i)}</div>`).join('')}</div></div>
+<div class="sc-steps">${list.map((x, i) => `<div class="st"><div class="t">${step(x, i)}</div></div>`).join('')}</div></div></section>`;
+  // Muscles sit between training mode and food, as Svaly sits under Trénink in the app. The bubble's
+  // words are the sample day's (DemoData.muscles), in English.
+  const muscles = `<section id="svaly" class="muscles"><div class="eyebrow">Muscles</div><h2>Know what’s recovered.</h2><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
+<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><button type="button" class="bubble"><span class="txt"><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+<p class="hint">Drag to turn · tap a muscle</p>
+<div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div></section>
+<div class="muscle-card" role="dialog" aria-modal="true" aria-label="Muscle"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3></h3><p class="state"></p></div></div>`;
 
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
   // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
@@ -489,13 +623,9 @@ ${store()}
 </div>
 </div>
 
-<div class="story">
-<div class="pin" aria-hidden="true"><div class="glow"></div><div class="wrap"><div class="device"><div class="bezel"><div class="screen">${chapters.map(([id, , , , , screen], i) => `<div class="scr${i === 0 ? ' on' : ''}" data-s="${id}">${shot(screen)}</div>`).join('')}</div></div></div></div>
-<div class="progress">${chapters.map(() => '<i><b></b></i>').join('')}</div></div>
-<div class="steps">
-${steps}
-</div>
-</div>
+${scenes.slice(0, 6).map(scene).join('\n')}
+${muscles}
+${scenes.slice(6).map(scene).join('\n')}
 
 <section id="propojeni" class="connect"><div class="wrap">
 <div class="center reveal"><h2>Works with what you wear.</h2><p class="sub">Any watch or ring that saves to Apple Health or Google Health, plus power and plans from Intervals.icu. Wear more than one? Aurin takes each night and day from the one you wear most, or you pick.</p></div>
