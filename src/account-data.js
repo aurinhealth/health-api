@@ -96,7 +96,9 @@ const CRON_BUDGET_MS = 20 * 1000;
 // D1 allows 1000 queries per Worker invocation; the cron run shares them with
 // the syncs. One call makes at most this many plus one per table.
 const MAX_CHUNKS = 200;
-const DELETE_ORDER = [...SECRET_TABLES, ...Object.keys(PERSONAL_TABLES).filter(table => !SECRET_TABLES.has(table))];
+// The keys first, with the accounts at the services that route webhooks to the user.
+const FIRST_DELETED = new Set([...SECRET_TABLES, "connection_accounts"]);
+const DELETE_ORDER = [...FIRST_DELETED, ...Object.keys(PERSONAL_TABLES).filter(table => !FIRST_DELETED.has(table))];
 
 // Deletes the user's rows table by table, at most chunkRows per statement.
 // Returns done=false when the time or chunk budget ran out; calling it again

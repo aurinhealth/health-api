@@ -14,7 +14,7 @@ import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
 import { connectionStatus } from "./connections.js";
 import { saveSourcePriority } from "./source-priority.js";
-import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, migrateConnectionSecrets } from "./connection-secrets.js";
+import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, migrateConnectionSecrets, backfillConnectionAccounts } from "./connection-secrets.js";
 import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
@@ -112,7 +112,7 @@ import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman, FIRST_IMPO
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, readWahooTokens, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
-import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, openSignup } from "./tenancy.js";
+import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, usersWithAccount, openSignup } from "./tenancy.js";
 import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
@@ -186,9 +186,10 @@ function intervalsOAuthQuiet(env, minute = 40, now = new Date()) {
 }
 // Runs fn once per active user (with that user's env and credentials), for
 // cron jobs and GitHub automations that act on everyone's data.
-async function forEachUser(env, providers, fn) {
+// `users`: only these (a webhook's, accountUsers) instead of everyone with the providers.
+async function forEachUser(env, providers, fn, users = null) {
   const results = [];
-  for (const user of await usersWithProviders(env.DB, env, providers)) {
+  for (const user of users || await usersWithProviders(env.DB, env, providers)) {
     // The App Review demo account syncs with no third-party service (app-review.js).
     if (isReviewAccount(env, user)) continue;
     try {
@@ -205,6 +206,35 @@ async function forEachUser(env, providers, fn) {
     }
   }
   return results;
+}
+
+
+// The users a webhook names by their account at the service, found by its
+// index (connection_accounts). Going through every user and decrypting their
+// keys made one webhook hit the 1000 database queries an invocation may make at
+// around 200 users. A connection saved before that table is found by reading
+// the keys without a row, once (backfillConnectionAccounts).
+async function accountUsers(env, provider, externalId) {
+  const users = await usersWithAccount(env.DB, env, provider, externalId);
+  return users.length || !(await backfillConnectionAccounts(env, provider).catch(error => { console.error("Connection accounts backfill failed", error.message); return 0; })) ? users : usersWithAccount(env.DB, env, provider, externalId);
+}
+// The keys still decide: a row that no longer matches them does nothing.
+async function forWahooUser(env, wahooUser, fn) {
+  return forEachUser(env, ["wahoo"], async scoped => {
+    if (String(readWahooTokens(scoped)?.user_id ?? "") !== wahooUser) return null;
+    const result = await fn(scoped);
+    if (result?.saved) { await matchActivities(scoped, { days: 3 }).catch(() => null); await bumpCacheVersion(scoped.DB); }
+    return result;
+  }, await accountUsers(env, "wahoo", wahooUser));
+}
+async function forIntervalsAthlete(env, ctx, athlete, parts, kinds) {
+  return forEachUser(env, ["intervals"], async scoped => {
+    if (!scoped.INTERVALS_ATHLETE_ID || scoped.INTERVALS_ATHLETE_ID !== athlete) return null;
+    await intervalsChanged(scoped, kinds);
+    const result = parts.length ? await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent?parts=" + parts.join(","), { method: "POST" }), scoped, ctx).then(r => r.json()).catch(error => ({ error: error.message })) : null;
+    await bumpCacheVersion(scoped.DB);
+    return result;
+  }, await accountUsers(env, "intervals", athlete));
 }
 
 
@@ -425,20 +455,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
     if (url.pathname === "/automation/coach-eval") return handleCoachEval(request, env, principal);
     // Wahoo's webhook: a finished workout of whoever is connected to that Wahoo account.
-    if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forEachUser(rawEnv, ["wahoo"], async scoped => {
-      if (String(readWahooTokens(scoped)?.user_id ?? "") !== wahooUser) return null;
-      const result = await fn(scoped);
-      if (result?.saved) { await matchActivities(scoped, { days: 3 }).catch(() => null); await bumpCacheVersion(scoped.DB); }
-      return result;
-    }));
+    if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forWahooUser(rawEnv, wahooUser, fn));
     // Intervals.icu's webhooks: what changed for an athlete connected with OAuth.
-    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds) => forEachUser(rawEnv, ["intervals"], async scoped => {
-      if (!scoped.INTERVALS_ATHLETE_ID || scoped.INTERVALS_ATHLETE_ID !== athlete) return null;
-      await intervalsChanged(scoped, kinds);
-      const result = parts.length ? await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent?parts=" + parts.join(","), { method: "POST" }), scoped, ctx).then(r => r.json()).catch(error => ({ error: error.message })) : null;
-      await bumpCacheVersion(scoped.DB);
-      return result;
-    }));
+    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds) => forIntervalsAthlete(rawEnv, ctx, athlete, parts, kinds));
     // Passkeys in the iPhone app: the app's associated domain (apple-app-site-association.js).
     const siteAssociation = appleAppSiteAssociation(request, rawEnv, url.pathname);
     if (siteAssociation) return siteAssociation;
