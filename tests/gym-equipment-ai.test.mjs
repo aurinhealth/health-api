@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GYM_STATIONS, equipmentCatalog, parseDetectAnswer } from "../src/gym-equipment-ai.js";
+import { GYM_STATIONS, GYM_DETECT_SCHEMA, equipmentCatalog, parseDetectAnswer } from "../src/gym-equipment-ai.js";
 import { normalizeTraining } from "../src/onboarding.js";
 import { METAGYM_KUTNA_HORA } from "../src/gym-equipment.js";
 
@@ -18,6 +18,13 @@ test("the AI answer keeps only known stations", () => {
   assert.equal(r.found, true);
   assert.equal(parseDetectAnswer('{"found":true,"stations":[]}').found, false, "nothing found is not a gym");
   assert.equal(parseDetectAnswer("no json"), null);
+});
+
+test("what the app has no station for is listed apart", () => {
+  const r = parseDetectAnswer(JSON.stringify({ found: true, gymName: "", stations: ["cables"], unsupported: [" Veslovací trenažér ", "", "Boxovací pytel", "Veslovací trenažér", "x".repeat(200)], note: "" }));
+  assert.deepEqual(r.unsupported, ["Veslovací trenažér", "Boxovací pytel", "x".repeat(60)]);
+  assert.deepEqual(parseDetectAnswer('{"found":true,"stations":["cables"]}').unsupported, [], "an older answer without the list");
+  assert.ok(GYM_DETECT_SCHEMA.schema.required.includes("unsupported"), "strict schema: every property is required");
 });
 
 test("own stations are saved with the training setup", () => {
