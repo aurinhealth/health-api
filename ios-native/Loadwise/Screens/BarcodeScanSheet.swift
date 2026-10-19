@@ -132,16 +132,32 @@ struct BarcodeScanSheet: View {
         }
     }
 
-    private static var hasTorch: Bool { AVCaptureDevice.default(for: .video)?.hasTorch ?? false }
+    private static var hasTorch: Bool { torchDevice?.hasTorch ?? false }
+
+    /// The camera the scanner films with: VisionKit runs the back virtual
+    /// camera (wide + ultra wide, for close-ups), not the plain wide one that
+    /// AVCaptureDevice.default gives. Locking that other camera for the light
+    /// while the scanner's session ran froze the picture.
+    nonisolated(unsafe) private static let torchDevice: AVCaptureDevice? = AVCaptureDevice.DiscoverySession(
+        deviceTypes: [.builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera, .builtInWideAngleCamera],
+        mediaType: .video, position: .back
+    ).devices.first(where: \.hasTorch)
+
+    /// Off the main thread: the lock waits for the camera session, and the
+    /// screen must not stop meanwhile.
+    nonisolated private static let torchQueue = DispatchQueue(label: "health.aurin.torch")
 
     /// The back camera's light, which the scanner's camera session keeps on.
-    private static func setTorch(_ on: Bool) {
-        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return }
-        do {
-            try device.lockForConfiguration()
-            if on { try device.setTorchModeOn(level: AVCaptureDevice.maxAvailableTorchLevel) } else { device.torchMode = .off }
-            device.unlockForConfiguration()
-        } catch {}
+    nonisolated private static func setTorch(_ on: Bool) {
+        torchQueue.async {
+            guard let device = torchDevice, device.hasTorch, device.isTorchModeSupported(on ? .on : .off) else { return }
+            guard (device.torchMode == .on) != on else { return }
+            do {
+                try device.lockForConfiguration()
+                defer { device.unlockForConfiguration() }
+                if on { try device.setTorchModeOn(level: AVCaptureDevice.maxAvailableTorchLevel) } else { device.torchMode = .off }
+            } catch {}
+        }
     }
 
     @ViewBuilder
@@ -326,7 +342,8 @@ struct BarcodeScanner: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> DataScannerViewController {
         let scanner = DataScannerViewController(recognizedDataTypes: [.barcode(symbologies: [.ean13, .ean8, .upce, .code128])],
                                                 qualityLevel: .balanced, recognizesMultipleItems: false,
-                                                isHighFrameRateTrackingEnabled: false, isHighlightingEnabled: true)
+                                                isHighFrameRateTrackingEnabled: false, isGuidanceEnabled: false,
+                                                isHighlightingEnabled: true)
         scanner.delegate = context.coordinator
         return scanner
     }
