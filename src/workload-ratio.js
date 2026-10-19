@@ -109,7 +109,8 @@ export function monotony(loads, historyDays = loads?.length || 0) {
   const xs = (Array.isArray(loads) ? loads : []).map(v => num(v) || 0).slice(-ACUTE_DAYS);
   if (xs.length < ACUTE_DAYS || historyDays < ACUTE_DAYS) return { value: null, strain: null, high: false };
   const m = mean(xs), sd = Math.sqrt(mean(xs.map(v => (v - m) ** 2)));
-  if (!(sd > 0)) return { value: null, strain: null, high: false };
+  // Float rounding leaves a tiny SD for equal decimal loads (7 × 33.3): that is no variation either.
+  if (!(sd > 1e-9 * Math.max(1, m))) return { value: null, strain: null, high: false };
   const value = m / sd, total = xs.reduce((s, v) => s + v, 0);
   return { value: round(value, 2), strain: Math.round(total * value), high: value > HIGH_MONOTONY };
 }

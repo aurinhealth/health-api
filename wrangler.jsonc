@@ -76,7 +76,11 @@
     "USER_DATA_ROUTING": "true",
     "FOOD_CATALOG_ROUTING": "true",
     "USER_DATA_SHARD_COUNT": "20",
-    "OWNER_EMAIL": "chelseafc.czsk@gmail.com",
+    // OWNER_EMAIL (the owner's sign-in address, src/tenancy.js) is not here: the deploy
+    // passes it from the GitHub environment's secret OWNER_EMAIL (deploy-worker.yml),
+    // and wrangler dev reads it from .dev.vars. Problem reports go to CONTACT_EMAIL,
+    // the public address on the website (src/support-report.js).
+    "CONTACT_EMAIL": "support@aurin.health",
     // Anyone may create an account while shard capacity lasts (src/tenancy.js accountCapacity);
     // when it is full, new e-mails land in signup_waitlist.
     "OPEN_SIGNUP": "true",
@@ -142,7 +146,7 @@
         "USER_DATA_ROUTING": "true",
         "FOOD_CATALOG_ROUTING": "true",
         "USER_DATA_SHARD_COUNT": "2",
-        "OWNER_EMAIL": "chelseafc.czsk@gmail.com",
+        "CONTACT_EMAIL": "support@aurin.health",
         "OPEN_SIGNUP": "true",
         "AI_MONTHLY_LIMIT_USD": "10",
         "AI_DAILY_LIMIT_USD": "1",

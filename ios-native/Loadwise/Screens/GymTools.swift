@@ -275,7 +275,11 @@ struct GymBuilderView: View {
         .task {
             if let d = Self.isoFormatter.date(from: date), d >= Calendar.current.startOfDay(for: Date()) { day = d }
             if let minutes = template?.template.minutes { self.minutes = minutes }
-            if !model.demo, equipment == nil { equipment = try? await model.api.gymEquipment() }
+            // Read again on every return, so a list changed in Vybavení shows here (after its save).
+            if !model.demo {
+                await EquipmentView.pendingSave?.value
+                if let fresh = try? await model.api.gymEquipment() { equipment = fresh }
+            }
             if !model.demo, catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
             if template == nil, model.muscleFatigue == nil { await model.loadMuscles() }
             // What is rested today picks the focus, until the athlete picks one.
@@ -743,6 +747,10 @@ struct EquipmentView: View {
     static let seededKey = "gymPlacesSeeded"
     /// Set once Velké fitko, Malé fitko and Doma were offered to an account that had places already.
     static let presetsKey = "gymPresetsSeeded"
+    /// Set once the plates were ticked in the gyms saved before they were on by default.
+    static let platesKey = "gymPlatesSeeded"
+    /// The save started when the screen was left before its autosave; the builder reads the list after it.
+    @MainActor static var pendingSave: Task<Void, Never>?
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Kde cvičíš?") {
@@ -764,6 +772,7 @@ struct EquipmentView: View {
         }
         .task { await load() }
         .task(id: Draft(places: places, active: active)) { await autosave() }
+        .onDisappear { flush() }
         .navigationDestination(isPresented: Binding(get: { open != nil }, set: { if !$0 { open = nil } })) {
             if let id = open {
                 GymPlaceView(place: binding(id), stations: data?.stations ?? [], sections: data?.pickerSections ?? [],
@@ -851,9 +860,14 @@ struct EquipmentView: View {
         let same = places.filter { $0.kind == "gym" }.count
         let base = L10n.tr("Posilovna")
         places.append(GymPlace(id: id, kind: "gym", name: name?.nilIfBlank ?? (same == 0 ? base : base + " \(same + 1)"),
-                               stations: stations, url: url, dumbbellWeights: []))
+                               stations: Self.withPlates(stations), url: url, dumbbellWeights: []))
         active = id
         open = id
+    }
+
+    /// Plates are in every gym unless the athlete unticks them.
+    static func withPlates(_ stations: [String]) -> [String] {
+        stations.contains("weight_plates") ? stations : stations + ["weight_plates"]
     }
 
     private func delete(_ id: String) {
@@ -899,6 +913,7 @@ struct EquipmentView: View {
 
     private func load() async {
         guard data == nil else { return }
+        await Self.pendingSave?.value
         let firstTime = !UserDefaults.standard.bool(forKey: Self.seededKey)
         let presetsFirstTime = !UserDefaults.standard.bool(forKey: Self.presetsKey)
         if model.demo {
@@ -916,12 +931,27 @@ struct EquipmentView: View {
             let next = Self.seeded(saved, active: savedActive, all: (d.stations ?? []).map(\.id), firstTime: firstTime, presetsFirstTime: presetsFirstTime)
             places = next.places
             active = next.active
+            if !UserDefaults.standard.bool(forKey: Self.platesKey) {
+                for i in places.indices where places[i].kind == "gym" && !places[i].bodyweightOnly {
+                    places[i].stations = Self.withPlates(places[i].stations)
+                }
+                UserDefaults.standard.set(true, forKey: Self.platesKey)
+            }
             UserDefaults.standard.set(true, forKey: Self.seededKey)
             UserDefaults.standard.set(true, forKey: Self.presetsKey)
             catalog = (try? await exercises) ?? []
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Leaving the screen before the autosave ran (or while it ran): the change is saved anyway.
+    private func flush() {
+        guard let stored, !model.demo, data != nil else { return }
+        let draft = Draft(places: places, active: active)
+        guard draft != stored else { return }
+        let api = model.api
+        Self.pendingSave = Task { _ = try? await api.saveGymPlaces(draft.places, active: draft.active) }
     }
 
     /// Changes are saved a moment after the last one.

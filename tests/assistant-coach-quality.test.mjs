@@ -169,7 +169,7 @@ test('hard workouts in one answer keep 48 h apart and at most two in 7 days, wit
 
 test('a library workout and a confirmed proposal pass the coach\'s check for their day',()=>{
   const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
-  assert.match(entry,/if\(workoutId&&\['tempo','sweet_spot','threshold','vo2max'\]\.includes\(libraryFocus\)&&!hardDay\)workoutId=null;/);
+  assert.match(entry,/hardDay=isHardKind\(coachKind\);/);assert.match(entry,/if\(workoutId&&isHardKind\(libraryFocus\)&&!hardDay\)workoutId=null;/);
   assert.match(entry,/const fresh=await workoutPreview\(env,ctx,a\)/);
 });
 

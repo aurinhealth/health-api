@@ -1,64 +1,158 @@
 import SwiftUI
 
-/// How much, on a wheel: servings (¼ to 10) or grams/ml, with a switch between
-/// them. Servings count from the food's serving, else from the whole package;
-/// a serving stored as "1 g" does not count (FoodProduct.usableServing).
+/// How much: a field to type the amount with a menu of units above a wheel of
+/// whole number, fraction and unit. Units are grams/ml, the food's serving and
+/// the whole package; a serving stored as "1 g" does not count (FoodProduct.usableServing).
 struct PortionWheel: View {
     let product: FoodProduct
     /// The amount in the food's unit (grams, ml, or portions for a per-portion food).
     @Binding var amount: Double
 
-    @State private var byPortion = true
-    @State private var portion = 5
-    @State private var units = 100
+    @State private var unit = 0
+    @State private var typed = ""
     @State private var ready = false
+    @FocusState private var typing: Bool
 
     static let fractions: [(label: String, value: Double)] = [
         ("¼", 0.25), ("⅓", 1.0 / 3), ("½", 0.5), ("⅔", 2.0 / 3), ("¾", 0.75), ("1", 1), ("1¼", 1.25), ("1⅓", 4.0 / 3), ("1½", 1.5),
         ("1¾", 1.75), ("2", 2), ("2½", 2.5), ("3", 3), ("3½", 3.5), ("4", 4), ("5", 5), ("6", 6), ("8", 8), ("10", 10)
     ]
-    static let unitValues = Array(1...1000)
+    /// The wheel's middle column.
+    static let parts: [(label: String, value: Double)] = [("–", 0), ("¼", 0.25), ("⅓", 1.0 / 3), ("½", 0.5), ("⅔", 2.0 / 3), ("¾", 0.75)]
+    static let maxGrams = 2000.0
 
-    /// One serving, else the package, in the food's unit; 1 for a per-portion food.
-    private var reference: (size: Double, isPackage: Bool)? {
-        if product.perPortion { return (1, false) }
-        if let s = product.usableServing { return (s, false) }
-        if let q = FoodProduct.size(product.quantity, unit: product.unit) { return (q, true) }
-        return nil
+    struct Unit {
+        let name: String
+        let size: Double
+        /// The highest whole number on the wheel.
+        let most: Int
+    }
+
+    /// Grams (or ml), one serving, the package; "porce" alone for a per-portion food.
+    private var units: [Unit] {
+        if product.perPortion { return [Unit(name: L10n.tr("porce"), size: 1, most: 20)] }
+        func counted(_ name: String, _ size: Double) -> Unit {
+            Unit(name: name + " (" + Self.plain(size) + " " + product.unit + ")", size: size, most: min(100, max(10, Int(Self.maxGrams / size))))
+        }
+        var list = [Unit(name: product.unit, size: 1, most: Int(Self.maxGrams))]
+        let serving = product.usableServing
+        if let serving { list.append(counted(product.servingName, serving)) }
+        if let q = FoodProduct.size(product.quantity, unit: product.unit), q != serving { list.append(counted(L10n.tr("balení"), q)) }
+        return list
+    }
+
+    private var current: Unit { units[min(unit, units.count - 1)] }
+    /// The amount counted in the chosen unit.
+    private var value: Double { amount / current.size }
+    private var whole: Int { min(current.most, Int((value + 0.001).rounded(.down))) }
+    private var rest: Double { max(0, value - Double(whole)) }
+    private var part: Int {
+        Self.parts.indices.min { abs(Self.parts[$0].value - rest) < abs(Self.parts[$1].value - rest) } ?? 0
     }
 
     var body: some View {
-        VStack(spacing: 6) {
-            if let reference, !product.perPortion {
-                Picker("Jednotka", selection: $byPortion) {
-                    Text(reference.isPackage ? "Balení" : "Porce").tag(true)
-                    Text(product.unit == "ml" ? "Mililitry" : "Gramy").tag(false)
+        VStack(spacing: 12) {
+            HStack(spacing: 0) {
+                TextField("0", text: field)
+                    .keyboardType(units.count == 1 || unit > 0 ? .decimalPad : .numberPad)
+                    .multilineTextAlignment(.trailing)
+                    .font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
+                    .focused($typing)
+                    .padding(.trailing, 14)
+                    .frame(width: 120)
+                Rectangle().fill(Palette.card).frame(width: 2)
+                Menu {
+                    Picker("Jednotka", selection: unitChoice) {
+                        ForEach(units.indices, id: \.self) { Text(verbatim: units[$0].name).tag($0) }
+                    }
+                } label: {
+                    HStack {
+                        Text(verbatim: current.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.down").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.muted)
+                    }
+                    .padding(.horizontal, 16).frame(maxHeight: .infinity).contentShape(Rectangle())
                 }
-                .pickerStyle(.segmented)
+                .disabled(units.count == 1)
             }
-            if byPortion, reference != nil {
-                wheel(selection: $portion, values: Array(Self.fractions.indices), label: { Self.fractions[$0].label }, unit: unitName)
-            } else {
-                wheel(selection: $units, values: Self.unitValues, label: { String($0) }, unit: product.unit)
+            .frame(height: 50)
+            .background(Palette.track, in: Capsule())
+            .overlay(Capsule().stroke(Palette.amber, lineWidth: typing ? 1.5 : 0))
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Hotovo") { typing = false }.fontWeight(.semibold)
+                }
+            }
+
+            HStack(spacing: 0) {
+                column(selection: wholeChoice, values: Array(0...current.most), width: 90) { String($0) }
+                    .id(current.most)
+                column(selection: partChoice, values: Array(Self.parts.indices), width: 56) { Self.parts[$0].label }
+                column(selection: unitChoice, values: Array(units.indices), width: nil) { units[$0].name }
             }
         }
         .onAppear(perform: start)
-        .onChange(of: byPortion) {
-            // The other wheel opens on about the same amount.
-            if byPortion, let reference {
-                portion = Self.fractions.indices.min { abs(Self.fractions[$0].value * reference.size - amount) < abs(Self.fractions[$1].value * reference.size - amount) } ?? 5
-            } else {
-                units = min(1000, max(1, Int(amount.rounded())))
-            }
-            update()
-        }
-        .onChange(of: portion) { update() }
-        .onChange(of: units) { update() }
+        .onChange(of: typing) { if typing { typed = amount > 0 ? Self.plain(value) : "" } }
     }
 
-    /// The name under the wheel in servings: "porce", "sušenka" or "balení".
-    private var unitName: String {
-        reference?.isPackage == true ? L10n.tr("balení") : product.servingName
+    /// One column of the wheel; one without a width takes the rest of the row.
+    private func column(selection: Binding<Int>, values: [Int], width: CGFloat?, label: @escaping (Int) -> String) -> some View {
+        Picker("Množství", selection: selection) {
+            ForEach(values, id: \.self) { Text(verbatim: label($0)).font(.title3.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7).tag($0) }
+        }
+        .pickerStyle(.wheel)
+        .frame(minWidth: 0, maxWidth: width ?? .infinity)
+        .frame(height: 140)
+        .clipped()
+        .contentShape(Rectangle())
+    }
+
+    /// While typing, what was typed; else the amount: "249", "1½" or "0,4".
+    private var field: Binding<String> {
+        Binding(get: { typing ? typed : display }, set: { text in
+            typed = text
+            if let v = FoodAmountView.number(text) { amount = min(v, Double(current.most)) * current.size }
+        })
+    }
+
+    private var display: String {
+        if unit == 0 && !product.perPortion { return Self.plain(value) }
+        if abs(Self.parts[part].value - rest) < 0.01 {
+            if part == 0 { return String(whole) }
+            return (whole > 0 ? String(whole) : "") + Self.parts[part].label
+        }
+        return Self.plain(value)
+    }
+
+    private var wholeChoice: Binding<Int> {
+        Binding(get: { whole }, set: { typing = false; amount = (Double($0) + rest) * current.size })
+    }
+
+    private var partChoice: Binding<Int> {
+        Binding(get: { part }, set: { typing = false; amount = (Double(whole) + Self.parts[$0].value) * current.size })
+    }
+
+    /// Another unit keeps about the same amount: whole grams, or the nearest fraction.
+    private var unitChoice: Binding<Int> {
+        Binding(get: { min(unit, units.count - 1) }, set: { index in
+            let size = units[index].size, count = amount / size
+            typing = false
+            unit = index
+            if index == 0 && !product.perPortion {
+                amount = max(1, count.rounded())
+            } else {
+                let w = count.rounded(.down)
+                let near = Self.parts.map { w + $0.value } + [w + 1]
+                let pick = near.min { abs($0 - count) < abs($1 - count) } ?? count
+                amount = max(0.25, min(pick, Double(units[index].most))) * size
+            }
+        })
+    }
+
+    /// 1500 → "1500", 0.4 → "0,4": no thousands separator, so the field reads it back.
+    static func plain(_ value: Double) -> String {
+        value.formatted(.number.grouping(.never).precision(.fractionLength(0...1)).locale(L10n.locale))
     }
 
     /// "1⅓ porce", "1 sušenka", "2 × sušenka", "½ balení" or "19 g", for the add button.
@@ -72,46 +166,21 @@ struct PortionWheel: View {
             return f.label + " × " + name
         }
         if product.perPortion { return Fmt.decimal(amount, digits: 2) + " " + L10n.tr("porce") }
-        if let q = FoodProduct.size(product.quantity, unit: product.unit), product.usableServing == nil,
+        if let q = FoodProduct.size(product.quantity, unit: product.unit),
            let f = fractions.first(where: { abs($0.value * q - amount) < 0.01 }) {
             return f.label + " " + L10n.tr("balení")
         }
         return String(Int(amount.rounded())) + " " + product.unit
     }
 
-    private func wheel(selection: Binding<Int>, values: [Int], label: @escaping (Int) -> String, unit: String) -> some View {
-        Picker("Množství", selection: selection) {
-            ForEach(values, id: \.self) { Text(verbatim: label($0)).font(.title3.weight(.semibold)).tag($0) }
-        }
-        .pickerStyle(.wheel)
-        .frame(height: 140)
-        .clipped()
-        .overlay(alignment: .trailing) {
-            Text(unit).font(.subheadline.weight(.medium)).foregroundStyle(Palette.muted)
-                .padding(.trailing, 16).allowsHitTesting(false)
-        }
-    }
-
-    /// Opens on the amount given: a whole serving when the food has one, else grams.
+    /// Opens on a serving or package when the amount is a fraction of one, else on grams.
     private func start() {
         guard !ready else { return }
         ready = true
-        if let reference, let i = Self.fractions.firstIndex(where: { abs($0.value * reference.size - amount) < 0.01 }) {
-            portion = i
-            byPortion = true
-        } else {
-            byPortion = product.perPortion
-            units = min(1000, max(1, Int(amount.rounded())))
-        }
-        update()
-    }
-
-    private func update() {
-        guard ready else { return }
-        if byPortion, let reference {
-            amount = Self.fractions[portion].value * reference.size
-        } else {
-            amount = Double(units)
-        }
+        amount = min(amount, Self.maxGrams)
+        unit = units.indices.dropFirst().first { i in
+            let count = amount / units[i].size
+            return count <= Double(units[i].most) && Self.fractions.contains { abs($0.value - count) < 0.01 }
+        } ?? 0
     }
 }

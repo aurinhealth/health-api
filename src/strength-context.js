@@ -1,7 +1,7 @@
 import { HEART_RATE_BUCKET_TYPE } from "./heart-rate-compaction.js";
 import {trainingSetup} from './onboarding.js';
 import { getAthleteState } from './athlete-state.js';
-import { isQualityName } from './session-intensity.js';
+import { isHardSession } from './session-intensity.js';
 import { dateFormat } from "./date-format.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { timeZone, localDateTime } from "./user-time.js";
@@ -61,21 +61,7 @@ function durationHours(a) {
 function textOf(a) { return `${a?.type || ""} ${a?.activity_type || ""} ${a?.category || ""} ${a?.name || a?.title || ""}`.toLowerCase(); }
 export function isRide(a) { return /\b(ride|bike|cycling|cycle|gravel|mountain bike|mtb|road cycling|indoor cycling)\b/.test(textOf(a)); }
 export function isRun(a) { return !isRide(a) && /\b(run|running|trail run|treadmill|virtualrun)\b/.test(textOf(a)); }
-function semanticIntensityText(a) {
-  const fields = [
-    a?.name, a?.title, a?.workout_type, a?.workoutType,
-    a?.icu_intensity, a?.intensity_label, a?.intensityLabel,
-    a?.category
-  ];
-  const tags = Array.isArray(a?.tags) ? a.tags : [];
-  return [...fields, ...tags].filter(x => typeof x === "string").join(" ").toLowerCase();
-}
-export function isIntensity(a) {
-  if (typeof a?.intensity === "boolean") return a.intensity;
-  if (typeof a?.is_intensity === "boolean") return a.is_intensity;
-  const semantic = semanticIntensityText(a);
-  return /(tempo|sweet spot|threshold|interval|intervals|vo2|vo2max|sprint|anaerobic|over-under|over under|race|race pace|ftp)/.test(semantic) || isQualityName(semantic);
-}
+export const isIntensity = a => isHardSession(a, isRun(a) ? "run" : isRide(a) ? "ride" : null);
 function activityInfo(a) { return { id: String(a?.id ?? ""), date: String(a?.start_date_local || a?.start_date || "").slice(0, 10), start: a?.start_date_local || a?.start_date || null, end: a?.end_date_local || a?.end_date || null, type: a?.type || a?.activity_type || a?.category || "Unknown", name: a?.name || a?.title || "", durationHours: durationHours(a), calories: n(a?.calories ?? a?.calories_kcal ?? a?.icu_calories), tss: n(a?.icu_training_load ?? a?.training_load ?? a?.tss), ctl: n(a?.icu_ctl ?? a?.ctl), atl: n(a?.icu_atl ?? a?.atl), tsb: n(a?.icu_form ?? a?.tsb), normalizedPower: n(a?.icu_weighted_average_watts ?? a?.weighted_average_watts ?? a?.normalized_power), averagePower: n(a?.average_watts ?? a?.average_power), cycling: isRide(a), running: isRun(a), intensity: isIntensity(a) }; }
 function eventInfo(e) { return { id: String(e?.id ?? e?.event_id ?? ""), date: String(e?.start_date_local || e?.start_date || e?.date || "").slice(0, 10), start: e?.start_date_local || e?.start_date || e?.date || null, end: e?.end_date_local || e?.end_date || null, type: e?.type || e?.activity_type || e?.category || "", name: e?.name || e?.title || "", durationHours: durationHours(e), tss: n(e?.icu_training_load ?? e?.training_load ?? e?.tss), cycling: isRide(e), running: isRun(e), intensity: isIntensity(e), payload: e }; }
 // A watch workout (payload.exercise) in the shape of an Intervals.icu activity.

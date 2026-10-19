@@ -14,7 +14,7 @@ import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
 import { connectionStatus } from "./connections.js";
 import { saveSourcePriority } from "./source-priority.js";
-import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, migrateConnectionSecrets } from "./connection-secrets.js";
+import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, migrateConnectionSecrets, backfillConnectionAccounts } from "./connection-secrets.js";
 import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
@@ -73,7 +73,8 @@ import { getAthleteState, updateAthleteState, explicitPreference, assertTraining
 import { savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery } from './chat-ask.js';
-import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS, HARD_KINDS } from './week-ai.js';
+import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
+import { isHardSession, isHardKind } from './session-intensity.js';
 import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { illnessWarning, illnessSigns } from './illness-check.js';
@@ -112,7 +113,7 @@ import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman, FIRST_IMPO
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, readWahooTokens, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
-import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, openSignup } from "./tenancy.js";
+import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, usersWithAccount, openSignup } from "./tenancy.js";
 import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
@@ -186,9 +187,10 @@ function intervalsOAuthQuiet(env, minute = 40, now = new Date()) {
 }
 // Runs fn once per active user (with that user's env and credentials), for
 // cron jobs and GitHub automations that act on everyone's data.
-async function forEachUser(env, providers, fn) {
+// `users`: only these (a webhook's, accountUsers) instead of everyone with the providers.
+async function forEachUser(env, providers, fn, users = null) {
   const results = [];
-  for (const user of await usersWithProviders(env.DB, env, providers)) {
+  for (const user of users || await usersWithProviders(env.DB, env, providers)) {
     // The App Review demo account syncs with no third-party service (app-review.js).
     if (isReviewAccount(env, user)) continue;
     try {
@@ -205,6 +207,35 @@ async function forEachUser(env, providers, fn) {
     }
   }
   return results;
+}
+
+
+// The users a webhook names by their account at the service, found by its
+// index (connection_accounts). Going through every user and decrypting their
+// keys made one webhook hit the 1000 database queries an invocation may make at
+// around 200 users. A connection saved before that table is found by reading
+// the keys without a row, once (backfillConnectionAccounts).
+async function accountUsers(env, provider, externalId) {
+  const users = await usersWithAccount(env.DB, env, provider, externalId);
+  return users.length || !(await backfillConnectionAccounts(env, provider).catch(error => { console.error("Connection accounts backfill failed", error.message); return 0; })) ? users : usersWithAccount(env.DB, env, provider, externalId);
+}
+// The keys still decide: a row that no longer matches them does nothing.
+async function forWahooUser(env, wahooUser, fn) {
+  return forEachUser(env, ["wahoo"], async scoped => {
+    if (String(readWahooTokens(scoped)?.user_id ?? "") !== wahooUser) return null;
+    const result = await fn(scoped);
+    if (result?.saved) { await matchActivities(scoped, { days: 3 }).catch(() => null); await bumpCacheVersion(scoped.DB); }
+    return result;
+  }, await accountUsers(env, "wahoo", wahooUser));
+}
+async function forIntervalsAthlete(env, ctx, athlete, parts, kinds) {
+  return forEachUser(env, ["intervals"], async scoped => {
+    if (!scoped.INTERVALS_ATHLETE_ID || scoped.INTERVALS_ATHLETE_ID !== athlete) return null;
+    await intervalsChanged(scoped, kinds);
+    const result = parts.length ? await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent?parts=" + parts.join(","), { method: "POST" }), scoped, ctx).then(r => r.json()).catch(error => ({ error: error.message })) : null;
+    await bumpCacheVersion(scoped.DB);
+    return result;
+  }, await accountUsers(env, "intervals", athlete));
 }
 
 
@@ -425,20 +456,9 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (url.pathname === "/automation/strength") return handleStrengthAutomation(request, env, ctx);
     if (url.pathname === "/automation/coach-eval") return handleCoachEval(request, env, principal);
     // Wahoo's webhook: a finished workout of whoever is connected to that Wahoo account.
-    if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forEachUser(rawEnv, ["wahoo"], async scoped => {
-      if (String(readWahooTokens(scoped)?.user_id ?? "") !== wahooUser) return null;
-      const result = await fn(scoped);
-      if (result?.saved) { await matchActivities(scoped, { days: 3 }).catch(() => null); await bumpCacheVersion(scoped.DB); }
-      return result;
-    }));
+    if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forWahooUser(rawEnv, wahooUser, fn));
     // Intervals.icu's webhooks: what changed for an athlete connected with OAuth.
-    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds) => forEachUser(rawEnv, ["intervals"], async scoped => {
-      if (!scoped.INTERVALS_ATHLETE_ID || scoped.INTERVALS_ATHLETE_ID !== athlete) return null;
-      await intervalsChanged(scoped, kinds);
-      const result = parts.length ? await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent?parts=" + parts.join(","), { method: "POST" }), scoped, ctx).then(r => r.json()).catch(error => ({ error: error.message })) : null;
-      await bumpCacheVersion(scoped.DB);
-      return result;
-    }));
+    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds) => forIntervalsAthlete(rawEnv, ctx, athlete, parts, kinds));
     // Passkeys in the iPhone app: the app's associated domain (apple-app-site-association.js).
     const siteAssociation = appleAppSiteAssociation(request, rawEnv, url.pathname);
     if (siteAssociation) return siteAssociation;
@@ -1022,7 +1042,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         preferenceMemory:state.memories?.length?state.memories:undefined};
       try{
         // Hard sessions the AI doesn't plan: in the calendar or done from the day before the week on.
-        const fixedHard=inputs.week.days.filter(d=>d.date>=shiftDate(start,-1)&&d.date<=shiftDate(start,7)).flatMap(d=>[...(d.daily?.training?.planned||[]),...(d.daily?.training?.completed||[])].filter(a=>['ride','run'].includes(sportOf(a))&&HARD_KINDS.has(kindOfSystem(a.name||a.type,'endurance'))).map(()=>d.date));
+        const fixedHard=inputs.week.days.filter(d=>d.date>=shiftDate(start,-1)&&d.date<=shiftDate(start,7)).flatMap(d=>[...(d.daily?.training?.planned||[]),...(d.daily?.training?.completed||[])].filter(a=>['ride','run'].includes(sportOf(a))&&isHardSession(a,sportOf(a))).map(()=>d.date));
         const r=await proposeWeekAI(env,facts,{prefs,focus:inputs.focus,usedByDate,existingSports,planDays:rules.items.filter(x=>x.plan),fixedHard});
         return Response.json({status:'ok',start,ai:true,summary:r.summary,items:r.items,warnings:rules.warnings},{headers:{'Cache-Control':'no-store'}});
       }catch(error){
@@ -2024,7 +2044,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // Up to the user's today (in Sydney or after midnight in Prague, UTC is still yesterday).
       const {from,to} = fitnessDays(days);
       const apiKey = String(env.INTERVALS_API_KEY || "");
-      // Without Intervals.icu the load comes from the watch's workouts and the gym (training-load.js).
+      // Without Intervals.icu the load comes from the watch's workouts and the gym (training-load.js);
+      // a failed read answers with an error below, which the callers' cache does not keep.
       if (!apiKey) return Response.json({status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness(env,from,to)},{headers:{"Cache-Control":"no-store"}});
       const auth = intervalsAuthorization(apiKey);
       const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(from)+"&newest="+encodeURIComponent(to);
@@ -2033,9 +2054,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if (!response.ok) return Response.json({status:"error",message:"Intervals wellness HTTP "+response.status,data},{status:response.status});
       const intervalsRows = (Array.isArray(data)?data:[]).map(x=>({...x,tsb:Number.isFinite(Number(x.ctl))&&Number.isFinite(Number(x.atl))?Number(x.ctl)-Number(x.atl):null})).filter(x=>x.id).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
       // Workouts only the watch recorded (not in Intervals.icu) count into CTL too.
-      const watchExtra = await watchOnlyFitness(env,ctx,from,to).catch(error=>{console.error('Watch-only load',error.message);return null;});
+      // A failed read leaves them out of this answer only: degraded keeps it out of the cache (api-cache.js).
+      const watchExtra = await watchOnlyFitness(env,ctx,from,to).catch(error=>{console.error('Watch-only load',error.message);return false;});
       const wellness = watchExtra ? addLoads(intervalsRows,watchExtra) : intervalsRows;
-      return Response.json({status:"ok",source:"intervals.icu",days,wellness},{headers:{"Cache-Control":"no-store"}});
+      return Response.json({status:"ok",source:"intervals.icu",days,wellness,...(watchExtra===false?{degraded:true}:{})},{headers:{"Cache-Control":"no-store"}});
     } catch (error) {
       return Response.json({status:"error",message:error.message},{status:502});
     }
@@ -2333,7 +2355,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // session (Revize doporučování tréninků 2026-10-16, nález 2).
       let workoutId=body.workoutId?String(body.workoutId).slice(0,120):null;
       const askedWorkout=workoutId?await getWorkout(env.DB,workoutId.replace(/~\d+$/,'')).catch(()=>null):null;
-      const libraryFocus=askedWorkout?(/sprint/.test(String(askedWorkout.primary_system))?'vo2max':FOCUS_OF[kindOfSystem(askedWorkout.primary_system)]||null):null;
+      const libraryFocus=askedWorkout?FOCUS_OF[kindOfSystem(askedWorkout.primary_system)]||null:null;
       const askedFocus=Object.values(FOCUS_OF).includes(body.focus)?body.focus:libraryFocus;
       const planned=!workoutId&&!(Number(body.variant)>0)&&!askedFocus?chip?.plan||null:null;
       if(weekTarget?.minutes)availabilityMinutes=weekTarget.minutes;
@@ -2362,8 +2384,8 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // session needs a hard day by the coach (a red or tired morning makes it
       // easy, and then the coach's own easy session stands), an easy one
       // anything but recovery. Tests and the race are the plan's whatever.
-      const coachKind=coach.recommendation?.session?.kind,hardDay=['tempo','sweet_spot','threshold','vo2','vo2max','anaerobic','sprint'].includes(coachKind);
-      if(workoutId&&['tempo','sweet_spot','threshold','vo2max'].includes(libraryFocus)&&!hardDay)workoutId=null;
+      const coachKind=coach.recommendation?.session?.kind,hardDay=isHardKind(coachKind);
+      if(workoutId&&isHardKind(libraryFocus)&&!hardDay)workoutId=null;
       const keeps=planned&&(planned.kind==='race'||planned.kind==='test'?true:planned.kind==='quality'?hardDay:coachKind!=='recovery'||planned.kind==='recovery');
       let planWorkout=null;
       if(keeps){

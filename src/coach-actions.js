@@ -3,7 +3,7 @@ import { validDay } from './training-availability.js';
 import { trainingStatus } from './training-status.js';
 import { prepareGymSwap,gymAdjustmentRequest } from './coach-gym-adjustment.js';
 import { kcalTargets } from './activity-edits.js';
-import { qualityDomain } from './session-intensity.js';
+import { isHardSession, isHardKind } from './session-intensity.js';
 import { trimGymPlan } from './gym-trim.js';
 import { parseStrengthPlan } from './strength-history.js';
 import { actionInstructions } from './private/coach-actions.js';
@@ -51,18 +51,15 @@ export function actionSafetyContext(days,today,planFor){
 export const actionsNote=actions=>actions?.length?L('[Návrhy: ','[Proposals: ')+actions.map(actionSummary).join('; ')+']':'';
 // Hard work the app never prepares for today on a red readiness day or with
 // signs of illness (safetyNote): the answer may say so, the card cannot.
-const INTENSE=['vo2max','threshold','tempo','sweet_spot','anaerobic','sprint'];
 const ILLNESS_FLAG=/^(?:respiration|skin_temp|wrist_temp)_elevated$|^checkin_sick$/;
 export function holdBackToday(context){
   const r=context?.cyclingCoachV2?.readiness;
   return r?.status==='red'||r?.todayZone==='red'||(r?.flags||[]).some(f=>ILLNESS_FLAG.test(f));
 }
 // The hard days around a proposed one: done and planned sessions of the week
-// by their names (session-intensity.js, tempo included), plus the hard
-// workouts proposed earlier in the same answer. A hard workout needs 48 h
-// from each and at most two hard days in any 7 (Revize 2026-10-16, nález 3).
-const HARD_NAME=/threshold|vo2|anaerob|sprint|sweet.?spot|tempo|pr[aá]h|race|z[aá]vod/i;
-const isHardSession=a=>{const text=String(a?.name||'')+' '+[].concat(a?.tags||[]).join(' ');return HARD_NAME.test(text)||Boolean(qualityDomain(text,/run/i.test(String(a?.type||''))?'run':'ride'));};
+// (session-intensity.js, tempo included), plus the hard workouts proposed
+// earlier in the same answer. A hard workout needs 48 h from each and at most
+// two hard days in any 7 (Revize 2026-10-16, nález 3).
 const dayDiff=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
 export function hardDayConflict(date,hardDates){
   if(hardDates.some(d=>Math.abs(dayDiff(d,date))<2))return true;
@@ -143,7 +140,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       // Only a workout the coach was actually offered; the preview then shows exactly it.
       const library=a.workoutId?(context.workoutLibraryRecommendations||[]).find(w=>String(w.id)===String(a.workoutId)&&(!w.sport||w.sport===a.sport)):null;
       const kind=a.sport!=='gym'&&!library&&WORKOUT_KINDS.includes(a.kind)?{kind:a.kind}:{};
-      const intense=a.sport!=='gym'&&INTENSE.includes(library?library.system:a.kind);
+      const intense=a.sport!=='gym'&&isHardKind(library?library.system:a.kind);
       if(intense&&a.date===today&&holdBackToday(context))return [];
       if(intense){if(hardDayConflict(a.date,hard.filter(h=>!(h.planned&&h.date===a.date)).map(h=>h.date)))return [];hard.push({date:a.date});}
       if(a.sport==='gym'){

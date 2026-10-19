@@ -96,8 +96,13 @@ test("only the owner, existing users and invited emails can sign in", async () =
   // Same person signs in again; a different Google account with that email does not.
   assert.equal((await signInGoogleUser(db, env, { sub: "g-friend", email: "friend@example.com" })).id, friend.id);
   assert.equal(await signInGoogleUser(db, env, { sub: "g-impostor", email: "friend@example.com" }), null);
+  const epochBefore = (await db.prepare("SELECT session_epoch FROM users WHERE id=?").bind(friend.id).first()).session_epoch;
   await setUserDisabled(db, env, friend.id, true);
   assert.equal(await signInGoogleUser(db, env, { sub: "g-friend", email: "friend@example.com" }), null);
+  // Blocking ended the sessions, so unblocking does not bring the old cookies back.
+  await setUserDisabled(db, env, friend.id, false);
+  assert.equal((await db.prepare("SELECT session_epoch FROM users WHERE id=?").bind(friend.id).first()).session_epoch, epochBefore + 1);
+  await setUserDisabled(db, env, friend.id, true);
   await assert.rejects(setUserDisabled(db, env, owner.id, true), /Správce/);
   await assert.rejects(inviteUser(db, "owner@example.com", owner.id), /už má přístup/);
 });

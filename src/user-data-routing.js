@@ -5,7 +5,7 @@ export const FOOD_CATALOG_TABLES = new Set([
   'shared_foods', 'shared_recipes', 'food_contributions', 'recipe_contributions', 'food_reports'
 ]);
 export const CENTRAL_PERSONAL_TABLES = new Set([
-  'connection_credentials', 'user_consents', 'user_identities', 'user_passkeys',
+  'connection_credentials', 'connection_accounts', 'user_consents', 'user_identities', 'user_passkeys',
   'user_language', 'user_time_zone', 'subscriptions', 'ai_usage',
   'food_contributions', 'recipe_contributions', 'food_reports', 'support_reports', 'food_suggestions',
   // A phone's push token belongs to one account at a time (push.js).

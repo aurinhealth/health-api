@@ -113,7 +113,7 @@ test('usage of a stream that fails after generation started is still recorded', 
   const original = globalThis.fetch;
   globalThis.fetch = async () => new Response(events.map(e => 'data: ' + JSON.stringify(e) + '\n\n').join(''), { status: 200 });
   try {
-    await assert.rejects(callOpenAI(env, { feature: 'assistant', instructions: 'x', input: 'y', onText: () => {} }), /server overloaded/);
+    await assert.rejects(callOpenAI(env, { feature: 'assistant', instructions: 'x', input: 'y', onText: () => {} }), /AI service broke off|AI odpověď přerušila/, 'OpenAI\'s own text stays in the log');
   } finally { globalThis.fetch = original; }
   const row = db.sqlite.prepare('SELECT feature, model, input_tokens, output_tokens FROM ai_usage').get();
   assert.deepEqual({ ...row }, { feature: 'assistant', model: 'gpt-6-sol', input_tokens: 1000, output_tokens: 50 });

@@ -1,7 +1,7 @@
 // Writes the SQL that loads the owner's cookbook into the database, from the
 // owner's private copy (the book is copyrighted and stays out of this repository):
 //   node scripts/import-cookbook.mjs kucharka.json > cookbook.sql
-//   npx wrangler@4 d1 execute health-data --remote --file cookbook.sql
+//   npx wrangler@4.147.0 d1 execute health-data --remote --file cookbook.sql
 // The owner can upload the same file in Settings → Users instead. The recipes go
 // in as one row of gzipped JSON, which keeps the statement under D1's 100 KB
 // limit. Running it again replaces them.

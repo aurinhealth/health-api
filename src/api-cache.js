@@ -19,7 +19,7 @@ export async function bumpCacheVersion(db) {
 
 function failedValue(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return value.status === "error" || Object.keys(value).length === 0;
+  return value.status === "error" || value.degraded === true || Object.keys(value).length === 0;
 }
 
 export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, store = globalThis.caches?.default } = {}) {
@@ -29,8 +29,9 @@ export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, 
   const hit = await store.match(url).catch(() => null);
   if (hit) return hit.json();
   const value = await compute();
-  // A failed read (an error answer, or the {} callers fall back to) is not
-  // kept: the next request asks again instead of showing nothing for 10 minutes.
+  // A failed read (an error answer, the {} callers fall back to, or an answer
+  // marked degraded: part of it failed) is not kept: the next request asks
+  // again instead of showing nothing for 10 minutes.
   if (failedValue(value)) return value;
   const put = store.put(url, new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json", "Cache-Control": "max-age=" + ttl } })).catch(() => {});
   if (ctx?.waitUntil) ctx.waitUntil(put); else await put;

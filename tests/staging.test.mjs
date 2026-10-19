@@ -52,3 +52,14 @@ test("the server switch is offered to the owner and the internal testers only, a
   assert.equal(internalTester(live, null), false);
   assert.equal(internalTester(STAGING, { email: "tester@example.com" }), true);
 });
+
+test("the owner's address is not in the repository: the deploy passes the environment's secret", () => {
+  assert.equal("OWNER_EMAIL" in config.vars, false);
+  assert.equal("OWNER_EMAIL" in STAGING, false);
+  assert.doesNotMatch(readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8"), /@gmail\.com/);
+  assert.equal(config.vars.CONTACT_EMAIL, "support@aurin.health");
+  const workflow = readFileSync(new URL("../.github/workflows/deploy-worker.yml", import.meta.url), "utf8");
+  assert.match(workflow, /command: deploy --config wrangler\.runtime\.jsonc \$\{\{ env\.ENV_ARGS \}\} --var OWNER_EMAIL:\$\{\{ secrets\.OWNER_EMAIL \}\}/);
+  // Checked before anything changes on the server.
+  assert.ok(workflow.indexOf("Check the owner e-mail") < workflow.indexOf("d1 "));
+});

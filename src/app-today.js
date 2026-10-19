@@ -13,7 +13,7 @@ import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-trainin
 export { withHeartRateLoad };
 import { recoveryToday } from "./recovery-today.js";
 import { cycleState, askPeriodToday, cycleTrainingCaution } from "./cycle-model.js";
-import { qualityDomain } from "./session-intensity.js";
+import { isHardSession } from "./session-intensity.js";
 
 const STEP_GOAL = 10000;
 
@@ -247,7 +247,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   const caution = cyc ? cycleTrainingCaution(cyc) : null;
   let eased = false;
   const easy = (s, item) => {
-    if (!caution || keepPlan || s.status !== "planned" || !["ride", "run"].includes(s.sport) || !qualityDomain(s.title, s.sport)) return item;
+    if (!caution || keepPlan || s.status !== "planned" || !["ride", "run"].includes(s.sport) || !isHardSession(s.title, s.sport)) return item;
     eased = true;
     return { ...item, title: s.sport === "run" ? L("Lehký běh 30 min", "Easy run 30 min") : L("Lehká jízda 45 min", "Easy ride 45 min"), detail: null, eased: { title: s.title } };
   };

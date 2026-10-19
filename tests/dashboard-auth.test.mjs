@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { foreignOriginChange, isPublicPath, resolvePrincipal, sessionCookie, sessionSecret, timingSafeEqualString, verifyDashboardSession, sessionMatchesUser, userSessionCookie, signText, handleSignOutEverywhere, SESSION_SECONDS, SESSION_REFRESH_SECONDS, sessionNeedsRefresh, slidingSession } from "../src/dashboard-auth.js";
+import { foreignOriginChange, isPublicPath, resolvePrincipal, sessionCookie, sessionSecret, timingSafeEqualString, verifyDashboardSession, sessionMatchesUser, userSessionCookie, signText, handleSignOutEverywhere, SESSION_SECONDS, SESSION_REFRESH_SECONDS, SESSION_MAX_SECONDS, sessionNeedsRefresh, slidingSession } from "../src/dashboard-auth.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { ensureTenancy, findUser, bumpSessionEpoch, _resetTenancyForTest } from "../src/tenancy.js";
 
@@ -102,7 +102,7 @@ test("sessions carry the user's epoch; cookies from before the epoch count as 0"
   const payload = b64({ uid: 7, exp: future() });
   const legacy = "pfd_session=" + payload + "." + await signText(payload, env.SESSION_SECRET);
   const legacyExp = JSON.parse(Buffer.from(payload, "base64url")).exp;
-  assert.deepEqual(await verifyDashboardSession(req({ Cookie: legacy }), env.SESSION_SECRET), { uid: 7, exp: legacyExp, epoch: 0, iat: legacyExp - SESSION_SECONDS });
+  assert.deepEqual(await verifyDashboardSession(req({ Cookie: legacy }), env.SESSION_SECRET), { uid: 7, exp: legacyExp, epoch: 0, iat: legacyExp - SESSION_SECONDS, at: legacyExp - SESSION_SECONDS });
   const odd = b64({ uid: 7, exp: future(), se: -1 });
   assert.equal(await verifyDashboardSession(req({ Cookie: "pfd_session=" + odd + "." + await signText(odd, env.SESSION_SECRET) }), env.SESSION_SECRET), null);
   // The cookie is good only for the user row's epoch.
@@ -154,12 +154,12 @@ const hmac = async (payload, secret) => {
 
 test("the cookie carries when it was issued; older cookies count as issued 30 days before they expire", async () => {
   const fresh = await sessionCookie(7, NOW + SESSION_SECONDS, env.SESSION_SECRET, 0, NOW);
-  assert.deepEqual(payloadOf(fresh), { uid: 7, exp: NOW + SESSION_SECONDS, se: 0, iat: NOW });
-  assert.deepEqual(await verifyDashboardSession(apiRequest(cookieOf(fresh)), env.SESSION_SECRET), { uid: 7, exp: NOW + SESSION_SECONDS, epoch: 0, iat: NOW });
+  assert.deepEqual(payloadOf(fresh), { uid: 7, exp: NOW + SESSION_SECONDS, se: 0, iat: NOW, at: NOW });
+  assert.deepEqual(await verifyDashboardSession(apiRequest(cookieOf(fresh)), env.SESSION_SECRET), { uid: 7, exp: NOW + SESSION_SECONDS, epoch: 0, iat: NOW, at: NOW });
   // A cookie from before the sliding sessions: {uid, exp} only.
   const legacyPayload = Buffer.from(JSON.stringify({ uid: 7, exp: NOW + SESSION_SECONDS })).toString("base64url");
   const legacy = "pfd_session=" + legacyPayload + "." + await hmac(legacyPayload, env.SESSION_SECRET);
-  assert.deepEqual(await verifyDashboardSession(apiRequest(legacy), env.SESSION_SECRET), { uid: 7, exp: NOW + SESSION_SECONDS, epoch: 0, iat: NOW });
+  assert.deepEqual(await verifyDashboardSession(apiRequest(legacy), env.SESSION_SECRET), { uid: 7, exp: NOW + SESSION_SECONDS, epoch: 0, iat: NOW, at: NOW });
 });
 
 test("a session a day old needs a fresh cookie, a newer one does not", () => {
@@ -177,7 +177,7 @@ test("an API answer to a day-old session sets a fresh 30-day cookie for the same
   const response = await slidingSession(apiRequest(cookie), okResponse(), env.SESSION_SECRET, NOW);
   const header = response.headers.get("Set-Cookie");
   assert.match(header, /^pfd_session=.+; Path=\/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax$/);
-  assert.deepEqual(payloadOf(header), { uid: 7, exp: NOW + SESSION_SECONDS, se: 3, iat: NOW }, "the same user and epoch, new times");
+  assert.deepEqual(payloadOf(header), { uid: 7, exp: NOW + SESSION_SECONDS, se: 3, iat: NOW, at: issued }, "the same user, epoch and sign-in, new times");
   // The body and the other headers are untouched.
   assert.deepEqual(await response.json(), { status: "ok" });
   assert.equal(response.headers.get("Cache-Control"), "no-store");
@@ -210,4 +210,17 @@ test("the Worker slides the session on every /app/api/* answer", () => {
   const end = block.indexOf("\n    }\n");
   assert.ok(end > 0);
   assert.match(block.slice(0, end), /return slidingSession\(request, response, sessionSecret\(rawEnv\)\);/);
+});
+
+test("a session in use still ends a year after its sign-in", async () => {
+  const real = Math.floor(Date.now() / 1000), signedIn = real - SESSION_MAX_SECONDS + DAY;
+  // Refreshed yesterday, signed in 364 days ago: still good, and the fresh cookie keeps the sign-in time and ends with the year.
+  const yesterday = cookieOf(await sessionCookie(7, real + SESSION_SECONDS, env.SESSION_SECRET, 0, real - DAY, signedIn));
+  const session = await verifyDashboardSession(apiRequest(yesterday), env.SESSION_SECRET);
+  assert.equal(session.at, signedIn);
+  const header = (await slidingSession(apiRequest(yesterday), okResponse(), env.SESSION_SECRET, real)).headers.get("Set-Cookie");
+  assert.deepEqual({ at: payloadOf(header).at, exp: payloadOf(header).exp }, { at: signedIn, exp: signedIn + SESSION_MAX_SECONDS });
+  // Signed in more than a year ago: no session, however fresh the cookie.
+  const stale = cookieOf(await sessionCookie(7, real + SESSION_SECONDS, env.SESSION_SECRET, 0, real - DAY, real - SESSION_MAX_SECONDS - 1));
+  assert.equal(await verifyDashboardSession(apiRequest(stale), env.SESSION_SECRET), null);
 });

@@ -29,8 +29,69 @@ async function decryptSecret(env,uid,provider,stored){
   const plain=v2?await crypto.subtle.decrypt({name:'AES-GCM',iv:dec(iv),additionalData:boundTo(uid,provider)},await connectionKey(env),dec(cipher)):await crypto.subtle.decrypt({name:'AES-GCM',iv:dec(iv)},await legacyKey(env),dec(cipher));
   return new TextDecoder().decode(plain);
 }
-export async function saveConnectionSecret(env,provider,value){const uid=userId(env);await table(env);await env.DB.prepare('INSERT INTO connection_credentials(user_id,provider,encrypted,updated_at) VALUES (?,?,?,?) ON CONFLICT(user_id,provider) DO UPDATE SET encrypted=excluded.encrypted,updated_at=excluded.updated_at').bind(uid,provider,await encryptSecret(env,uid,provider,value),new Date().toISOString()).run();}
-export async function deleteConnectionSecret(env,provider){const uid=userId(env);await table(env);await env.DB.prepare('DELETE FROM connection_credentials WHERE user_id=? AND provider=?').bind(uid,provider).run();}
+// The account at the service a webhook names (the Intervals.icu athlete id, the
+// Wahoo user id in its tokens), kept in the clear in connection_accounts
+// (migration 0028) so the webhook finds its user by an index instead of
+// decrypting everyone's keys; only that id, never a token. Saved and removed
+// with the key it comes from.
+const ACCOUNTS={intervals_athlete:{provider:'intervals',id:plain=>plain},wahoo:{provider:'wahoo',id:plain=>JSON.parse(plain).user_id}};
+function accountId(key,plain){try{const id=ACCOUNTS[key].id(plain);return id==null||String(id)===''?null:String(id);}catch{return null;}}
+const accountSave=(db,uid,key,id)=>id?db.prepare('INSERT INTO connection_accounts(user_id,provider,external_id,updated_at) VALUES (?,?,?,?) ON CONFLICT(user_id,provider) DO UPDATE SET external_id=excluded.external_id,updated_at=excluded.updated_at').bind(uid,ACCOUNTS[key].provider,id,new Date().toISOString()):db.prepare('DELETE FROM connection_accounts WHERE user_id=? AND provider=?').bind(uid,ACCOUNTS[key].provider);
+// Before the migration has run the table is missing; the webhook then still finds the user by the keys.
+const noAccounts=error=>{if(!/no such table/i.test(String(error?.message||error)))throw error;};
+export async function saveConnectionSecret(env,provider,value){const uid=userId(env);await table(env);await env.DB.prepare('INSERT INTO connection_credentials(user_id,provider,encrypted,updated_at) VALUES (?,?,?,?) ON CONFLICT(user_id,provider) DO UPDATE SET encrypted=excluded.encrypted,updated_at=excluded.updated_at').bind(uid,provider,await encryptSecret(env,uid,provider,value),new Date().toISOString()).run();if(ACCOUNTS[provider])await accountSave(env.DB,uid,provider,accountId(provider,value)).run().catch(noAccounts);}
+export async function deleteConnectionSecret(env,provider){const uid=userId(env);await table(env);await env.DB.prepare('DELETE FROM connection_credentials WHERE user_id=? AND provider=?').bind(uid,provider).run();if(ACCOUNTS[provider])await accountSave(env.DB,uid,provider,null).run().catch(noAccounts);}
+// Webhooks: connections saved before connection_accounts existed. When a webhook
+// finds nobody, the ids are read from the keys of `provider` ('intervals',
+// 'wahoo') that have no row yet and saved, so this decrypts each old
+// connection once (env.DB is the whole database). Returns how many it saved.
+export async function backfillConnectionAccounts(env,provider){
+  const key=Object.keys(ACCOUNTS).find(k=>ACCOUNTS[k].provider===provider);
+  if(!key||!env.DB||!(hasConnectionKey(env)||env.STRENGTH_API_KEY))return 0;
+  let rows;
+  try{rows=(await env.DB.prepare('SELECT c.user_id,c.encrypted FROM connection_credentials c WHERE c.provider=? AND NOT EXISTS (SELECT 1 FROM connection_accounts a WHERE a.user_id=c.user_id AND a.provider=?)').bind(key,provider).all()).results||[];}
+  catch(error){noAccounts(error);return 0;}
+  const saves=[];
+  for(const row of rows){
+    let id;
+    try{id=accountId(key,await decryptSecret(env,row.user_id,key,row.encrypted));}catch{continue;}
+    if(id)saves.push(accountSave(env.DB,row.user_id,key,id));
+  }
+  for(let i=0;i<saves.length;i+=50)await env.DB.batch(saves.slice(i,i+50));
+  return saves.length;
+}
+// The stored value now (another request may have saved a newer one since env was loaded); null when none or unreadable.
+export async function readConnectionSecret(env,provider){try{const uid=userId(env);await table(env);const row=await env.DB.prepare('SELECT encrypted FROM connection_credentials WHERE user_id=? AND provider=?').bind(uid,provider).first();return row?await decryptSecret(env,uid,provider,row.encrypted):null;}catch{return null;}}
+// An OAuth pair ({access_token,refresh_token,expires_at} in seconds, WHOOP, Wahoo and Ultrahuman)
+// is refreshed two minutes before it runs out.
+export const tokensDue=(tokens,now=Date.now())=>Boolean(tokens?.expires_at)&&tokens.expires_at*1000<=now+120000;
+// WHOOP and Wahoo take a refresh token back at its first use, so two requests refreshing
+// the same pair at once (the hourly import and the app) got one refusal, and the
+// connection was marked broken. One request at a time refreshes, under a 30-second lease
+// (sync_status 'refresh_<provider>'); the others take the pair it saves. A refused refresh
+// still uses a pair another request saved in the meantime. `refresh(tokens)` gives the new
+// pair's text or null; the pair in use is returned (and saved), or null when refused.
+const leaseName=provider=>'refresh_'+provider;
+async function leaseRefresh(env,provider,id){try{await env.DB.prepare('CREATE TABLE IF NOT EXISTS sync_status (user_id INTEGER NOT NULL,sync_name TEXT NOT NULL,status TEXT,started_at TEXT,finished_at TEXT,details_json TEXT,updated_at TEXT,PRIMARY KEY(user_id,sync_name))').run();const claim=await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,started_at,updated_at) VALUES(?,?,'running',?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status='running',started_at=excluded.started_at,finished_at=NULL,updated_at=excluded.updated_at WHERE sync_status.status!='running' OR sync_status.updated_at<datetime('now','-30 seconds')").bind(userId(env),leaseName(provider),id).run();return claim.meta?.changes!==0;}catch{return true;}}
+const releaseRefresh=(env,provider,id)=>env.DB.prepare("UPDATE sync_status SET status='done',finished_at=datetime('now'),updated_at=datetime('now') WHERE user_id=? AND sync_name=? AND started_at=?").bind(userId(env),leaseName(provider),id).run().catch(()=>null);
+const parsed=text=>{try{return JSON.parse(text);}catch{return null;}};
+export async function refreshConnectionTokens(env,provider,held,refresh,{now=Date.now(),pause=500,patience=15000}={}){
+  for(const until=Date.now()+patience;;){
+    const id=new Date().toISOString()+'.'+crypto.randomUUID(),lease=await leaseRefresh(env,provider,id);
+    try{
+      const current=(await readConnectionSecret(env,provider))??held,tokens=parsed(current);
+      if(current!==held&&tokens?.access_token&&!tokensDue(tokens,now))return current;
+      // A lease never given back (a request that died) is not waited for longer than `patience`.
+      if(lease||Date.now()>until){
+        const text=await refresh(tokens);
+        if(text){await saveConnectionSecret(env,provider,text);return text;}
+        const after=await readConnectionSecret(env,provider),again=parsed(after);
+        return after&&after!==current&&again?.access_token&&!tokensDue(again,now)?after:null;
+      }
+    }finally{if(lease)await releaseRefresh(env,provider,id);}
+    await new Promise(resolve=>setTimeout(resolve,pause));
+  }
+}
 // Loads the signed-in user's credentials into env. Only the owner falls back to
 // the legacy global secrets; userEnv() already removed them for everyone else.
 // A key that does not decrypt counts as not connected, so the user can connect

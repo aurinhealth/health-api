@@ -341,6 +341,8 @@ const FOOD_FEATURES=['food-sentence','food-lookup','food-photo'];
 export const TASK_TIMEOUTS={simple:60000,quick:60000,adjustment:120000,planning:180000,block:240000};
 const timeoutFor=maxOutputTokens=>maxOutputTokens>TASK_LIMITS.planning?TASK_TIMEOUTS.block:maxOutputTokens>TASK_LIMITS.adjustment?TASK_TIMEOUTS.planning:maxOutputTokens>TASK_LIMITS.quick?TASK_TIMEOUTS.adjustment:TASK_TIMEOUTS.simple;
 
+// What the athlete reads when OpenAI refuses a request ("AI 429: …").
+export function aiFailureText(status){return 'AI '+status+': '+(status===429?L('AI je teď přetížená. Zkus to za chvíli.', 'The AI is busy right now. Try again in a moment.'):status>=500?L('AI služba není dostupná.', 'The AI service isn\'t available.'):L('AI požadavek se nepodařil.', 'The AI request failed.'));}
 export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null }) {
   await assertAIAccess(env);
   if (!env.OPENAI_API_KEY) throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
@@ -403,7 +405,8 @@ async function openAIResponse(env, { instructions, input, maxOutputTokens, tools
       ...(format ? {text:{format}} : {})
     })
   }).catch(broken);
-  if(!response.ok){const error=await response.json().catch(()=>({})),failure=new Error('OpenAI '+response.status+': '+(error.error?.message||L('AI služba není dostupná.', 'The AI service isn\'t available.')));failure.ai=true;throw failure;}
+  // OpenAI's own text (organisation id, limits) stays in the log; the athlete gets a plain reason.
+  if(!response.ok){const error=await response.json().catch(()=>({}));console.error('OpenAI '+response.status,error.error?.code||'',String(error.error?.message||'').slice(0,300));const failure=new Error(aiFailureText(response.status));failure.ai=true;failure.status=response.status;throw failure;}
   let data;
   // A stream that fails after generation started still cost tokens (A8a): the
   // usage the failure event carried is recorded before the error goes on.

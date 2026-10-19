@@ -13,7 +13,7 @@ import { WORLD_FOODS_FORMAT } from "../src/world-foods.js";
 const MAX_BYTES = 300 * 1024 * 1024;
 
 function put(bucket, key, file, contentType) {
-  const args = ["--yes", "wrangler@4", "r2", "object", "put", `${bucket}/${key}`, "--file", file, "--remote", "--content-type", contentType];
+  const args = ["--yes", "wrangler@4.147.0", "r2", "object", "put", `${bucket}/${key}`, "--file", file, "--remote", "--content-type", contentType];
   for (let attempt = 1; attempt <= 3; attempt++) {
     const r = spawnSync("npx", args, { stdio: "inherit", shell: process.platform === "win32" });
     if (r.status === 0) return;
@@ -42,7 +42,7 @@ if (process.argv[1]?.endsWith("upload-world-foods.mjs")) {
   // In Eastern Europe, next to the Worker and D1; an existing bucket stays as it is.
   // R2 keeps the location of the first bucket ever created under a name, even
   // after it is deleted, so a bucket placed wrongly needs a new name.
-  const created = spawnSync("npx", ["--yes", "wrangler@4", "r2", "bucket", "create", bucket, "--location", "eeur"], { encoding: "utf8", shell: process.platform === "win32" });
+  const created = spawnSync("npx", ["--yes", "wrangler@4.147.0", "r2", "bucket", "create", bucket, "--location", "eeur"], { encoding: "utf8", shell: process.platform === "win32" });
   if (created.status !== 0 && !/already exists|10004/i.test(created.stdout + created.stderr)) throw new Error(`Could not create bucket ${bucket}: ${created.stderr.slice(-300)}`);
   console.log(`Uploading ${files.length} files of ${version} to ${bucket}`);
   for (const [f, type] of files) put(bucket, `${version}/${f}`, join(dir, f), type);

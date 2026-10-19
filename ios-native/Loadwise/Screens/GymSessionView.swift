@@ -268,7 +268,8 @@ struct GymSessionView: View {
                             onTechnique: { technique = exercise.name },
                             onAlternatives: { alternativesFor = exercise.name },
                             onAddSet: add,
-                            onRemoveSet: remove)
+                            onRemoveSet: remove,
+                            onRemoveExercise: offset.map { (at: Int) -> () -> Void in { Task { await removeExercise(at: at) } } })
     }
 
     private func progress(_ day: GymDay) -> some View {
@@ -325,6 +326,12 @@ struct GymSessionView: View {
         await save()
     }
 
+    /// The exercise out of the plan; its sets done stay recorded.
+    private func removeExercise(at offset: Int) async {
+        day?.removeExercise(at: offset)
+        await save()
+    }
+
     /// Everything ticked is saved already; the last save goes out, the week
     /// shows the session done, then the rating.
     private func finish() async {
@@ -370,6 +377,7 @@ struct ExerciseCard: View {
     var onAlternatives: () -> Void
     var onAddSet: (() -> Void)? = nil
     var onRemoveSet: (() -> Void)? = nil
+    var onRemoveExercise: (() -> Void)? = nil
 
     /// The note the server gives the first set of an exercise it has no weight for
     /// (strength-generator.js TEST_SET_NOTE).
@@ -397,6 +405,9 @@ struct ExerciseCard: View {
                 Menu {
                     Button { onTechnique() } label: { Label("Technika", systemImage: "figure.strengthtraining.traditional") }
                     Button { onAlternatives() } label: { Label("Nahradit cvik", systemImage: "arrow.triangle.swap") }
+                    if let onRemoveExercise, exercise.sets.contains(where: { !$0.done }) {
+                        Button(role: .destructive, action: onRemoveExercise) { Label("Odebrat cvik", systemImage: "trash") }
+                    }
                 } label: {
                     Image(systemName: "ellipsis").font(.system(size: 16, weight: .semibold)).frame(width: 36, height: 36)
                 }

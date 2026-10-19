@@ -6,7 +6,8 @@
 import { L } from "./lang.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
-import { KINDS, HARD_KINDS, EASIER, MIN_MINUTES } from "./week-ai.js";
+import { KINDS, EASIER, MIN_MINUTES } from "./week-ai.js";
+import { HARD_KINDS } from "./session-intensity.js";
 import { EXPECTED_RPE } from "./coach-reflection.js";
 import { MEMORY_RULE } from "./athlete-state.js";
 import { revisionInstructions } from './private/week-revision.js';
