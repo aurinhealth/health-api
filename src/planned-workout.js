@@ -16,6 +16,12 @@ function durationMinutes(token) {
 
 // "- 10m 55%", "- 48m Z1", "- 5m 88-94%", "- 10m ramp 50-75%", "- 30s 120% 100rpm"
 function parseStepLine(line, zoneTargets = ZONE_POWER) {
+  const s = parseStepTarget(line, zoneTargets);
+  // "intensity=warmup|interval|recovery|cooldown|active|rest" says what the step is for.
+  const kind = (line.match(/\bintensity=(warmup|cooldown|interval|recovery|active|rest)\b/i) || [])[1];
+  return s && kind ? { ...s, intensity: kind.toLowerCase() } : s;
+}
+function parseStepTarget(line, zoneTargets) {
   const body = line.replace(/^\s*-\s*/, "").trim();
   const parts = body.split(/\s+/);
   const minutes = durationMinutes(parts[0]);

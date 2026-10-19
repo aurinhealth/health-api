@@ -118,9 +118,30 @@ test("indoor keeps prescribed targets; genuine sprints are free indoors and outd
 
 test("Intervals text expresses repeats, short steps and cadence", () => {
   const text = intervalsText([step(10, 55, "90"), rep(3, [step(sec(30), 120, "100-110"), step(sec(15), 55)]), step(10, 50)], { sport: "ride" });
-  assert.match(text, /^Warmup\n- 10m 55% 90rpm/);
-  assert.match(text, /3x\n- 30s 120% 100-110rpm\n- 15s 55%/);
-  assert.match(text, /Cooldown\n- 10m 50%$/);
+  assert.match(text, /^Warmup\n- 10m 55% 90rpm intensity=warmup/);
+  assert.match(text, /Main Set 3x\n- 30s 120% 100-110rpm intensity=interval\n- 15s 55% intensity=recovery/);
+  assert.match(text, /Cooldown\n- 10m 50% intensity=cooldown$/);
+  // A steady block between warm-up and cool-down is active riding, not a recovery.
+  assert.match(intervalsText([step(10, 55), step(60, 68), step(10, 50)]), /- 60m 68% intensity=active/);
+  // Running uses its own bands: 85 % of threshold speed is still easy.
+  assert.match(intervalsText([step(10, 75), rep(5, [step(3, 105), step(2, 70)]), step(8, 72)], { sport: "run" }), /Main Set 5x\n- 3m 105% Pace intensity=interval\n- 2m 70% Pace intensity=recovery/);
+});
+
+test("the planned event reads like IcuSync: kinds, one focus line with watts, carbs and a start time", () => {
+  const w = byId("pfd-vo2-5x4x112-90");
+  const event = buildIntervalsEvent(w, "2026-10-19", "indoor", { thresholds: { ftp: 260, indoorFtp: 260 }, startTime: "20:00" });
+  assert.equal(event.start_date_local, "2026-10-19T20:00:00");
+  assert.equal(event.carbs_per_hour, 60);
+  const [focus, , steps] = event.description.split("\n");
+  assert.match(focus, /^Zaměření: VO2max na trenažéru, 90 min\. Hlavní část: 5× 4 min na 112 % FTP \(≈ 291 W\)/);
+  assert.match(focus, /Sacharidy cca 60 g\/h\.$/);
+  assert.equal(steps, "Warmup");
+  assert.doesNotMatch(event.description, /ERG|ventilátor/);
+  assert.match(event.description, /Main Set 5x\n- 4m 112% .*intensity=interval/);
+  // Without a time it still gets one; an easy short ride needs no carbs.
+  const easy = buildIntervalsEvent(CYCLING_WORKOUTS.find(x => x.primary_system === "recovery" && x.duration_minutes <= 60), "2026-10-19");
+  assert.equal(easy.start_date_local, "2026-10-19T17:00:00");
+  assert.equal(easy.carbs_per_hour, undefined);
 });
 
 test("Intervals event is deterministic per environment", () => {
@@ -142,7 +163,8 @@ test("Intervals event is deterministic per environment", () => {
 function users() { const raw = createD1(); raw.sqlite.exec("CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,external_id TEXT,sample_time TEXT,start_time TEXT,end_time TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))"); return { raw, alice: scopedDb(raw, 1), bob: scopedDb(raw, 2) }; }
 async function withIntervals(fn) {
   const original = globalThis.fetch; let calls = 0;
-  globalThis.fetch = async () => { calls++; return new Response(JSON.stringify([{ id: 100 + calls, category: "WORKOUT" }]), { status: 200, headers: { "Content-Type": "application/json" } }); };
+  // Counts writes; reading the athlete's FTP is a GET.
+  globalThis.fetch = async (_, opts = {}) => { if ((opts.method || "GET") !== "GET") calls++; return new Response(JSON.stringify([{ id: 100 + calls, category: "WORKOUT" }]), { status: 200, headers: { "Content-Type": "application/json" } }); };
   try { await fn(() => calls); } finally { globalThis.fetch = original; }
 }
 

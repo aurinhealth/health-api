@@ -245,6 +245,8 @@ function intensity(power, first, last) {
   if (last && power <= 60) return 'cd';
   return power < 56 ? 'recover' : power < 76 ? 'active' : power < 88 ? 'tempo' : power < 106 ? 'lt' : power < 121 ? 'map' : 'ac';
 }
+// The step's own kind (intensity= in the workout text) when the plan has one.
+const KIND = { warmup: () => 'wu', cooldown: () => 'cd', recovery: inBlock => inBlock ? 'rest' : 'recover', rest: () => 'rest' };
 // % FTP (ride) or % threshold speed (run) as perceived effort, when the athlete's own value is unknown.
 const RPE = [[56, 2], [76, 3], [88, 5], [95, 6], [106, 7], [121, 8], [Infinity, 9]];
 const rpeOf = p => RPE.find(([hi]) => p < hi)[1];
@@ -276,17 +278,17 @@ export function wahooPlan(event, { ftp = null, thresholdPace = null } = {}) {
   const relative = sport === 'run' ? Boolean(speed) : Boolean(ftp);
   const structure = parseIntervalsWorkoutText(event.description || '', sport);
   const opts = { sport, outdoor, relative };
-  const interval = (s, first, last, rest = false) => ({
+  const interval = (s, first, last, rest = false, inBlock = false) => ({
     ...(s.note && !/bez cíle|no target/i.test(s.note) ? { name: String(s.note).slice(0, 60) } : {}),
     exit_trigger_type: 'time', exit_trigger_value: Math.max(1, Math.round(n(s.durationMinutes, 0) * 60)),
-    intensity_type: rest && n(s.power, 55) < 66 ? 'rest' : intensity(n(s.power, 55), first, last),
+    intensity_type: KIND[s.intensity] ? KIND[s.intensity](rest || inBlock) : rest && n(s.power, 55) < 66 ? 'rest' : intensity(n(s.power, 55), first, last),
     targets: targets(s, opts)
   });
   const intervals = [];
   structure.forEach((block, i) => {
     const first = i === 0, last = i === structure.length - 1;
     if (Array.isArray(block.steps)) {
-      const inner = block.steps.flatMap(expand).map((s, j, all) => interval(s, false, false, all.length > 1 && j === all.length - 1));
+      const inner = block.steps.flatMap(expand).map((s, j, all) => interval(s, false, false, all.length > 1 && j === all.length - 1, true));
       intervals.push(block.repeats > 1 ? { exit_trigger_type: 'repeat', exit_trigger_value: block.repeats - 1, intervals: inner } : { exit_trigger_type: 'repeat', exit_trigger_value: 0, intervals: inner });
     } else intervals.push(...expand(block).map(s => interval(s, first, last)));
   });

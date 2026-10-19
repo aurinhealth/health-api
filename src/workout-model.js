@@ -125,21 +125,35 @@ function stepTarget(s, { sport, environment }) {
   const p = Math.round(n(s.power, 55));
   return width ? (p - width) + "-" + (p + width) + unit : p + unit;
 }
-function stepLine(s, opts) {
+// What each step is for (Intervals.icu "intensity=", Wahoo's intensity type,
+// the Apple Watch step purpose): the easy first step warms up, the easy last
+// one cools down, efforts from tempo up are intervals, easy steps inside an
+// interval block are its recoveries, and the rest is steady riding/running.
+// A step read from a plan keeps the kind the plan gave it.
+const KIND_LIMITS = { ride: { work: 76, easy: 56, warmup: 75, cooldown: 60 }, run: { work: 89, easy: 78, warmup: 88, cooldown: 80 } };
+export function stepIntensities(structure = [], sport = "ride") {
+  const lim = KIND_LIMITS[sport] || KIND_LIMITS.ride, last = structure.length - 1;
+  const kind = (s, inBlock) => s.free || n(s.power, 0) >= lim.work ? "interval" : inBlock || n(s.power, 0) < lim.easy ? "recovery" : "active";
+  return structure.map((block, i) => {
+    if (Array.isArray(block.steps)) return block.steps.map(s => s.intensity || kind(s, block.steps.some(o => o !== s && (o.free || n(o.power, 0) >= lim.work))));
+    if (block.intensity) return block.intensity;
+    if (i === 0 && last > 0 && !block.free && n(block.power, 100) <= lim.warmup) return "warmup";
+    if (i === last && i > 0 && !block.free && n(block.power, 100) <= lim.cooldown) return "cooldown";
+    return kind(block, false);
+  });
+}
+function stepLine(s, opts, intensity = null) {
   const cadence = opts.sport === "ride" && s.cadence ? " " + String(s.cadence).replace(/[–—]/g, "-").replace(/[^0-9-]/g, "") + "rpm" : "";
   const note = s.note ? " " + s.note : "";
-  return "- " + stepDuration(n(s.durationMinutes, 0)) + " " + stepTarget(s, opts) + cadence + note;
+  return "- " + stepDuration(n(s.durationMinutes, 0)) + " " + stepTarget(s, opts) + cadence + note + (intensity ? " intensity=" + intensity : "");
 }
 export function intervalsText(structure = [], { sport = "ride", environment = "indoor" } = {}) {
-  const opts = { sport, environment }, parts = [];
-  structure.forEach((block, i) => {
-    if (Array.isArray(block.steps)) parts.push((block.repeats > 1 ? block.repeats + "x" : "Main Set 1x") + "\n" + block.steps.map(s => stepLine(s, opts)).join("\n"));
-    else {
-      const label = i === 0 ? "Warmup" : i === structure.length - 1 && n(block.power, 100) <= 60 ? "Cooldown" : "";
-      parts.push((label ? label + "\n" : "") + stepLine(block, opts));
-    }
-  });
-  return parts.join("\n\n");
+  const opts = { sport, environment }, kinds = stepIntensities(structure, sport);
+  return structure.map((block, i) => {
+    if (Array.isArray(block.steps)) return "Main Set " + Math.max(1, n(block.repeats, 1)) + "x\n" + block.steps.map((s, j) => stepLine(s, opts, kinds[i][j])).join("\n");
+    const label = kinds[i] === "warmup" ? "Warmup\n" : kinds[i] === "cooldown" ? "Cooldown\n" : "";
+    return label + stepLine(block, opts, kinds[i]);
+  }).join("\n\n");
 }
 
 // Converts a (trainer-style) workout for riding or running outside: longer

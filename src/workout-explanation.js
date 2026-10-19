@@ -1,7 +1,7 @@
 // Human explanation of a recommended workout: why this one today, how to ride
 // it, fuelling, and the step list with % FTP and watts (running: % threshold
 // pace and min/km).
-import { n, outdoorWidth } from "./workout-model.js";
+import { n, outdoorWidth, stepIntensities } from "./workout-model.js";
 import { zoneForPercent, formatPace } from "./training-zones.js";
 import { rideFtpFor } from "./intervals-athlete.js";
 import { L } from "./lang.js";
@@ -176,7 +176,9 @@ export function stepRows(structure = [], { ftp = null, environment = "indoor", z
     if (hr) Object.assign(out, hr);
     return out;
   };
-  return structure.map(block => block.steps ? { repeats: n(block.repeats, 1), note: block.note || null, steps: block.steps.map(row) } : { repeats: 1, steps: [row(block)] });
+  // What each step is for, as in the Intervals.icu text (warmup, interval, recovery, active, cooldown).
+  const kinds = stepIntensities(structure, sport);
+  return structure.map((block, i) => block.steps ? { repeats: n(block.repeats, 1), note: block.note || null, steps: block.steps.map((s, j) => ({ ...row(s), intensity: kinds[i][j] })) } : { repeats: 1, steps: [{ ...row(block), intensity: kinds[i] }] });
 }
 
 function heartRateFor(percent, ranges, hrZones) {
@@ -269,4 +271,34 @@ function explainRun(workout, structure, { coach, environment, thresholds, planne
     steps: stepRows(structure, opts),
     planned: planned ? { name: planned.name, minutes: planned.minutes, system: planned.system, intensityFactor: planned.intensityFactor, steps: stepRows(planned.structure || [], { ...opts, environment: "indoor" }) } : null
   };
+}
+
+// Carbohydrate per hour for the calendars (Intervals.icu carbs_per_hour), from
+// the same fuelling advice the app shows; null when water is enough.
+export function carbsPerHour(minutes, system, sport = "ride") {
+  const m = n(minutes, 0), hard = ["sweet_spot", "threshold", "vo2max", "anaerobic"].includes(system);
+  if (sport === "run") return m > 90 ? 45 : null;
+  if (m <= 75) return hard ? 30 : null;
+  return m <= 150 ? 60 : 85;
+}
+
+const FOCUS_LABELS = () => ({ recovery: L("Regenerace", "Recovery"), endurance: L("Vytrvalost", "Endurance"), tempo: "Tempo", sweet_spot: "Sweet spot", threshold: L("Práh", "Threshold"), vo2max: "VO2max", anaerobic: L("Anaerobní kapacita", "Anaerobic capacity"), sprint: L("Sprinty", "Sprints") });
+
+// One line about this session for the calendars' description: what it trains,
+// where and how long, the main set with % FTP and watts (running: % of the
+// threshold and min/km), and the carbohydrate per hour.
+// "Zaměření: VO2max na trenažéru, 30 min. Hlavní část: 4× 3 min na 110 % FTP (≈ 286 W), mezi nimi 2 min lehce. Sacharidy cca 30 g/h."
+export function focusLine(rendered, { thresholds = {} } = {}) {
+  const sport = rendered.sport === "run" ? "run" : "ride", environment = rendered.environment === "outdoor" ? "outdoor" : "indoor", system = rendered.primary_system;
+  let structure = [];
+  try { structure = JSON.parse(rendered.structure_json || "[]"); } catch {}
+  const ftp = sport === "ride" ? rideFtpFor(thresholds || {}, environment).ftp : null, thresholdPace = sport === "run" ? n(thresholds?.runThresholdPace) : null;
+  const where = sport === "run" ? (environment === "indoor" ? L("na páse", "on the treadmill") : L("venku", "outdoors")) : (environment === "indoor" ? L("na trenažéru", "on the trainer") : L("venku", "outdoors"));
+  const minutes = Math.round(n(rendered.duration_minutes, 0)), carbs = carbsPerHour(minutes, system, sport);
+  const main = structureHow(structure, { system, sport, ftp, thresholdPace })[0];
+  return [
+    L("Zaměření: ", "Focus: ") + (FOCUS_LABELS()[system] || system || (sport === "run" ? L("Běh", "Run") : L("Jízda", "Ride"))) + " " + where + ", " + minutes + " min.",
+    main || "",
+    carbs ? L("Sacharidy cca " + carbs + " g/h.", "Carbs about " + carbs + " g/h.") : ""
+  ].filter(Boolean).join(" ");
 }
