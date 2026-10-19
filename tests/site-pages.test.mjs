@@ -74,9 +74,10 @@ test('the site is English whatever the browser says; privacy and terms also have
   assert.equal(overviewPage(new Request('https://aurin.health/',{headers:{'accept-language':'cs'}})).headers.get('content-language'),'en');
 });
 
-test('the overview speaks English and keeps the App Store label',async()=>{
+test('the overview speaks English and offers the waitlist',async()=>{
   const en=await overviewPage().text();
-  assert.match(en,/Coming soon to the App Store/);
+  assert.match(en,/Join the waitlist/);
+  assert.match(en,/<form class="wl" action="\/waitlist"/);
   assert.match(en,/Train for how you feel today/);
   assert.doesNotMatch(en,/href="\/app"/);
   assert.match(await privacyPage().text(),/Google user data is used only to provide/);

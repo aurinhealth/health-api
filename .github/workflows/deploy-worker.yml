@@ -218,6 +218,32 @@ jobs:
           workingDirectory: .
           wranglerVersion: "4.147.0"
 
+      # The website's waitlist approves people into TestFlight (src/testflight-waitlist.js)
+      # with the App Store Connect key: secrets ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 of this
+      # GitHub environment, the same values as in "testflight". Without them only Schválit
+      # stops working, so the deploy goes on.
+      - name: Hand the App Store Connect key to the server
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          EXTERNAL_GROUP: ${{ vars.EXTERNAL_GROUP }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ]; then
+            echo "::notice::Bez ASC_KEY_ID, ASC_ISSUER_ID a ASC_KEY_P8 v GitHub prostředí nejde schvalovat zájemce z waitlistu."
+            exit 0
+          fi
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8 EXTERNAL_GROUP; do
+            value="${!name}"
+            [ -n "$value" ] || continue
+            printf '%s' "$value" | npx --yes wrangler@4.147.0 secret put "$name" --name "$WORKER" > /dev/null
+          done
+          echo "App Store Connect key handed to $WORKER"
+
       # Keys the test server makes for itself: session signing and the
       # encryption of connected services' keys. Generated once, never shown,
       # and different from the live server's, so a live session never works there.
