@@ -395,7 +395,7 @@ struct MusclesView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "exclamationmark").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.onButton)
                         .frame(width: 38, height: 38).background(Palette.amberBar, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-                    Text(verbatim: L10n.f("Do konce týdne ještě: %@.", missing.map { $0.label.lowercased() }.joined(separator: ", ")))
+                    Text(verbatim: L10n.f("Do konce týdne ještě: %@.", missing.map { L10n.tr($0.label).lowercased() }.joined(separator: ", ")))
                         .font(Typo.small).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -513,9 +513,11 @@ struct MuscleDetailView: View {
 
     private var muscle: MuscleFatigue.Muscle? { model.muscles?.muscle(id) }
     private var today: String { model.muscles?.date ?? AppModel.localDate(Date()) }
+    /// The server names the muscle in the app's language; the sample day only in Czech.
+    private var label: String? { (muscle?.label ?? detail?.label).map(L10n.tr) }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: muscle?.label ?? detail?.label ?? MuscleFatigue.title) {
+        DetailScreen(glow: Palette.Glow.training, title: label ?? MuscleFatigue.title) {
             VStack(alignment: .leading, spacing: 0) {
                 header
                 if let detail {
@@ -528,7 +530,7 @@ struct MuscleDetailView: View {
                 } else if !model.demo {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 30)
                 }
-                SecondaryButton(title: L10n.f("Cviky: %@", (muscle?.label ?? detail?.label ?? "").lowercased()), systemImage: "dumbbell") {
+                SecondaryButton(title: L10n.f("Cviky: %@", (label ?? "").lowercased()), systemImage: "dumbbell") {
                     model.push(.exercises(MuscleFatigue.bodyId(id)))
                 }
                 .padding(.top, 18)
@@ -554,7 +556,7 @@ struct MuscleDetailView: View {
                 .accessibilityHidden(true)
                 .padding(.top, 20)
             VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: muscle?.label ?? detail?.label ?? "").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(verbatim: label ?? "").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if let muscle {
                     Text(verbatim: muscle.stateText(today: today)).font(Typo.small).foregroundStyle(muscle.textColor)
@@ -570,7 +572,7 @@ struct MuscleDetailView: View {
         HStack(spacing: 14) {
             MuscleFigurePair(colors: [id: muscle?.figureColor ?? Palette.green], selected: id, spacing: 2).frame(height: 104)
             VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: muscle?.label ?? detail?.label ?? "").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text(verbatim: label ?? "").font(Typo.sentence(28, relativeTo: .title)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 if let muscle {
                     Text(verbatim: muscle.stateText(today: today)).font(Typo.small).foregroundStyle(muscle.textColor)

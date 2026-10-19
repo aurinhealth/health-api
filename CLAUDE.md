@@ -8,9 +8,12 @@ sees in the app (a screen or section, a number on Today, a connection, sign-in, 
 availability) updates the overview in the same pull request. The site is in English only:
 
 - Each section of the overview matches a part of the app. Its phones show the app's own screens: the
-  English, light-mode screenshots of the sample day that CI takes (`ios-native.yml`, `screens/site/` in
-  the Aurin-screens artifact), saved as `public/site/app/*.webp`. The hero shows Today; the
-  story below it has one chapter per app area, and its phone shows that area's screen. When a screen
+  English, light-mode screenshots of the sample day that CI takes (`ios-native.yml`: `screens/site/` and
+  the smoke test's `smoke/4-…` walk through the app, in the Aurin-screens artifact), saved as
+  `public/site/app/*.webp`; the pieces lifted out beside a phone are cut from the same screenshots
+  (`public/site/app/parts/`). The hero shows Today; below it one scene per app area, whose phone walks
+  through that area's screens as you scroll. The muscles show the app's 3D figure, rendered ahead by
+  `scripts/render-muscles-site.mjs` (the licensed model never goes on the website). When a screen
   they show changes, take them again; the numbers around the hero phone follow the sample day
   (`DemoData.swift`, `tests/site-pages.test.mjs`).
 - Colours come from the light palette in `ios-native/Shared/Palette.swift`.

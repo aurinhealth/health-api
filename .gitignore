@@ -17,3 +17,6 @@ out/
 src/private
 __pycache__/
 *.pyc
+
+# The licensed 3D muscle model, for scripts/render-muscles-site.mjs only (never in the repository).
+scripts/muscles-v1.bin
