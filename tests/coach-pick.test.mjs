@@ -117,6 +117,24 @@ test("a choice without a workout goes into the day's plan, and a changed mind ta
   assert.deepEqual(await kinds(), ["walk"]);
 });
 
+test("Odmítnout hides the day's activity, counts as a decline of the top, and Vrátit takes it back", async () => {
+  const { savePick, undoSkip, pickState } = await import("../src/coach-pick.js");
+  const db = scopedDb(createD1(), 7), date = "2026-10-19";
+  await savePick(db, 7, { date, kind: "skip", top: "rest" });
+  let state = await pickState(db, 7, date);
+  assert.equal(state.chosen, "skip");
+  assert.equal(dayChoice({ chosen: state.chosen, planned: [] }), "skip");
+  assert.deepEqual(state.declines.map(d => d.top), ["rest"]);
+  await undoSkip(db, 7, date);
+  state = await pickState(db, 7, date);
+  assert.equal(state.chosen, null);
+  assert.deepEqual(state.declines, []);
+  // Vrátit leaves a real choice alone.
+  await savePick(db, 7, { date, kind: "swim", top: "rest" });
+  await undoSkip(db, 7, date);
+  assert.equal((await pickState(db, 7, date)).chosen, "swim");
+});
+
 test("Nemoc, Zranění or Pauza leave only rest; signs of an illness drop the sauna", () => {
   const sick = rankOptions({ ride: coach("green"), run: coach("green"), mainSport: "cycling", sports: ["ride"], athleteStatus: "sick" });
   assert.deepEqual(sick.options.map(o => o.kind), ["rest"]);

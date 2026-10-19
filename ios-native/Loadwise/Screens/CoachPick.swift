@@ -41,8 +41,8 @@ struct CoachPick: Decodable, Equatable {
     let options: [Option]
     /// Kinds the athlete asked to see less ("Doporučovat méně").
     var less: [String]? = nil
-    /// What the athlete took today.
-    let chosen: String?
+    /// What the athlete took today ("skip" after Odmítnout).
+    var chosen: String?
 
     var best: Option? { options.first { $0.best == true } ?? options.first }
     var others: [Option] { options.filter { $0.id != best?.id } }
@@ -92,6 +92,11 @@ extension APIClient {
                                           body: ["kind": JSONValue.string(kind), "top": .string(top ?? "")])
     }
 
+    /// "Vrátit" after Odmítnout: the day's activity is back.
+    func undoSkipCoachPick() async throws {
+        let _: JSONValue = try await send("/app/api/coach/pick", method: "DELETE", body: JSONObject())
+    }
+
     /// "Doporučovat méně" (less) or back again.
     func recommendLess(kind: String, less: Bool) async throws {
         let _: JSONValue = try await send("/app/api/coach/pick/less", method: "POST",
@@ -135,59 +140,136 @@ private struct PickDetails: View {
     }
 }
 
-/// Dnes: the day's activity with everything that belongs to it, "Dát na dnes"
-/// and "Další možnosti". It shows what was fetched last (the background
-/// refresh keeps it current), so it opens without loading. Once something is
-/// taken for today it leaves: the choice is in Plán dne (+ → Aktivita dne
-/// still changes it).
+/// Dnes: the day's activity with everything that belongs to it, "Dát na dnes",
+/// "Další možnosti" and "Odmítnout". It shows what was fetched last (the
+/// background refresh keeps it current), so it opens without loading. The
+/// chevron folds it to one line and back (kept until unfolded). Once something
+/// is taken for today it leaves: the choice is in Plán dne (+ → Aktivita dne
+/// still changes it). Odmítnout takes it away for the day, a decline the
+/// coach learns from, with "Vrátit" for a moment.
 struct CoachPickCard: View {
     @Environment(AppModel.self) private var model
     @State private var pick: CoachPick? = CoachPick.stored
     @State private var busy = false
     @State private var error: String?
+    @State private var declined = false
+    @AppStorage("activity-of-the-day-folded") private var folded = false
 
     var body: some View {
         Group {
             if let pick, pick.chosen == nil, let best = pick.best {
                 VStack(alignment: .leading, spacing: 12) {
-                    Label("Aktivita dne", systemImage: "sparkles")
-                        .font(.caption.weight(.semibold)).textCase(.uppercase).tracking(1.2).foregroundStyle(Palette.green)
-                    HStack(spacing: 14) {
-                        PickIcon(option: best)
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text(verbatim: best.title).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                                if best.workout?.ai != nil { AIMark() }
-                            }
-                            if let subtitle = best.subtitle { Text(verbatim: subtitle).font(Typo.small).foregroundStyle(Palette.muted) }
+                    Button { withAnimation(.snappy) { folded.toggle() } } label: {
+                        HStack {
+                            Label("Aktivita dne", systemImage: "sparkles")
+                                .font(.caption.weight(.semibold)).textCase(.uppercase).tracking(1.2).foregroundStyle(Palette.green)
+                            Spacer()
+                            Image(systemName: "chevron.up").font(.footnote.weight(.semibold)).foregroundStyle(Palette.muted)
+                                .rotationEffect(.degrees(folded ? 180 : 0))
                         }
+                        .contentShape(Rectangle())
                     }
-                    PickDetails(option: best)
-                    if let reason = best.reason {
-                        Text(verbatim: reason).font(Typo.sentence(18)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
-                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
-                    HStack(spacing: 10) {
-                        PrimaryButton(title: L10n.tr("Dát na dnes"), systemImage: "calendar", busy: busy) {
-                            Task { await take(best, pick) }
-                        }
-                        if !pick.others.isEmpty {
-                            NavigationLink(value: AppRoute.coachPick(false)) {
-                                Text("Další možnosti").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                                    .frame(maxWidth: .infinity).frame(height: 50)
-                                    .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                    .buttonStyle(.plain)
+                    .accessibilityHint(Text(L10n.tr(folded ? "Rozbalit" : "Sbalit")))
+                    if folded {
+                        Button { withAnimation(.snappy) { folded = false } } label: {
+                            HStack(spacing: 12) {
+                                PickIcon(option: best, size: 32)
+                                Text(verbatim: best.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
+                                if let length = best.subtitle?.components(separatedBy: " · ").first {
+                                    Text(verbatim: length).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1)
+                                }
+                                Spacer(minLength: 0)
                             }
-                            .buttonStyle(.plain)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                    } else {
+                        expanded(best, pick)
                     }
                 }
                 .padding(18).frame(maxWidth: .infinity, alignment: .leading)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .transition(.opacity)
+            } else if declined {
+                HStack(spacing: 10) {
+                    Text("Aktivita dne odmítnuta").font(Typo.small).foregroundStyle(Palette.ink)
+                    Spacer(minLength: 6)
+                    Button { Task { await undo() } } label: {
+                        Label("Vrátit", systemImage: "arrow.uturn.backward").font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 14).frame(height: 36)
+                            .background(Palette.ink.opacity(0.1), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.leading, 18).padding(.trailing, 8).frame(height: 52)
+                .background(Palette.card, in: Capsule())
+                .transition(.opacity)
             }
         }
         // Again whenever Today comes from the server (a new workout, a sync, pull
         // to refresh); a meal or drink shown before it is sent does not ask.
         .task(id: model.todayRevision) { await reload() }
+        // "Vrátit" stays for a moment only.
+        .task(id: declined) {
+            guard declined else { return }
+            try? await Task.sleep(for: .seconds(6))
+            withAnimation(.easeOut(duration: 0.2)) { declined = false }
+        }
+    }
+
+    @ViewBuilder private func expanded(_ best: CoachPick.Option, _ pick: CoachPick) -> some View {
+        HStack(spacing: 14) {
+            PickIcon(option: best)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(verbatim: best.title).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    if best.workout?.ai != nil { AIMark() }
+                }
+                if let subtitle = best.subtitle { Text(verbatim: subtitle).font(Typo.small).foregroundStyle(Palette.muted) }
+            }
+        }
+        PickDetails(option: best)
+        if let reason = best.reason {
+            Text(verbatim: reason).font(Typo.sentence(18)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+        HStack(spacing: 10) {
+            PrimaryButton(title: L10n.tr("Dát na dnes"), systemImage: "calendar", busy: busy) {
+                Task { await take(best, pick) }
+            }
+            if !pick.others.isEmpty {
+                NavigationLink(value: AppRoute.coachPick(false)) {
+                    Text("Další možnosti").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 50)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        Button { Task { await decline(best) } } label: {
+            Text("Odmítnout").font(Typo.small.weight(.medium)).foregroundStyle(Palette.muted)
+                .frame(maxWidth: .infinity).frame(height: 32).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(busy)
+    }
+
+    /// Odmítnout: gone at once, the server keeps it for the day.
+    private func decline(_ best: CoachPick.Option) async {
+        guard !model.demo else { return }
+        error = nil
+        withAnimation(.easeOut(duration: 0.2)) { pick?.chosen = "skip"; declined = true }
+        do { try await model.api.chooseCoachPick(kind: "skip", top: best.kind) } catch {
+            withAnimation { pick?.chosen = nil; declined = false }
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func undo() async {
+        withAnimation(.easeOut(duration: 0.2)) { declined = false; pick?.chosen = nil }
+        do { try await model.api.undoSkipCoachPick() } catch { self.error = error.localizedDescription }
+        await reload()
     }
 
     private func take(_ option: CoachPick.Option, _ pick: CoachPick) async {
