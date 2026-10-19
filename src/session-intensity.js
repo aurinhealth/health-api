@@ -11,8 +11,12 @@ const fold = v => String(v ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").repla
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
 const HIGH = /vo2|anaerob|sprint|tabata|billat|norsk|ronnestad|microburst|\b(30|40)\s*[/-]\s*(15|20|30)\b|\b4\s*[x×]\s*4\b|hill rep|kopc|yasso/;
-const MODERATE = /threshold|\bprah|ftp\b|sweet.?spot|tempo|over.?under|seiler|cruise|torque|double threshold|race pace|zavod|\brace\b|\btest\b|interval|fartlek|\busek/;
+// "práh", "prahový", "pod prahem", "na prahu", but not Praha, Prahy or Prahu (the city).
+const MODERATE = /threshold|\bprah(?:ov\w*|em)?\b|\bna prahu\b|ftp\b|sweet.?spot|over.?under|seiler|cruise|torque|double threshold|race pace|zavod|\brace\b|\btest\b|interval|fartlek|\busek/;
 const EASY = /endurance|\bz[12]\b|recovery|regenera|easy|lehk|aerob|rozjet|vyjet|long ride|dlouh/;
+// Tempo makes a session hard, unless it is the tempo part of an endurance one
+// ("Durability – tempo na konci"): that ride counts by its load (isHardSession).
+const TEMPO = /tempo/, ENDURANCE = /endurance|durab|vytrval|\bz2\b|long ride|dlouh/;
 // "5×6 min", "3x10", "10×1000 m": repeats of work.
 const REPEATS = /\b\d+\s*[x×]\s*\d+/;
 
@@ -24,6 +28,7 @@ export function qualityDomain(name, sport = "ride") {
   if (/double threshold/.test(s)) return "moderate";
   if (HIGH.test(s)) return "high";
   if (MODERATE.test(s)) return "moderate";
+  if (TEMPO.test(s) && !ENDURANCE.test(s)) return "moderate";
   if (sport === "run" && /hill/.test(s)) return "moderate";
   if (REPEATS.test(s) && !EASY.test(s)) return "moderate";
   return null;

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isHardSession, isHardKind, intensityClass, HARD_KINDS } from "../src/session-intensity.js";
+import { isHardSession, isHardKind, intensityClass, HARD_KINDS, qualityDomain } from "../src/session-intensity.js";
 import { SYSTEMS } from "../src/workout-library.js";
 import { KINDS, kindOfSystem } from "../src/week-ai.js";
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
@@ -85,4 +85,14 @@ test("the coach, the chat's check and the gym agree: a tempo ride is a hard day"
   // The gym keeps the legs fresh before a tempo ride.
   assert.ok(isIntensity({ type: "Ride", name: "Tempo 2×20" }));
   assert.ok(!isIntensity({ type: "Ride", name: "Endurance" }));
+});
+
+test("Praha is a city, not a threshold; a tempo finish keeps an endurance ride easy unless its load says otherwise", () => {
+  for (const name of ["Praha – Brno", "Okruh kolem Prahy", "Výjezd z Prahu"]) assert.equal(qualityDomain(name, "ride"), null, name);
+  for (const name of ["Práh 2×20", "Na prahu 3×10", "Prahový běh", "Pod prahem 4×8"]) assert.equal(qualityDomain(name, "run"), "moderate", name);
+  assert.equal(qualityDomain("Durability – tempo na konci", "ride"), null);
+  assert.equal(qualityDomain("Tempo 3×15", "ride"), "moderate");
+  assert.equal(isHardSession({ name: "Durability – tempo na konci", type: "Ride" }), false);
+  // Ridden hard all the same: the load decides.
+  assert.equal(isHardSession({ name: "Durability – tempo na konci", type: "Ride", normalizedPower: 260, ftp: 280 }), true);
 });
