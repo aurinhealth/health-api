@@ -56,7 +56,7 @@ import { handleGoogleOAuth } from "./google-oauth.js";
 import { getStrengthHistory, parseStrengthPlan } from "./strength-history.js";
 import { explainWorkout } from "./workout-explanation.js";
 import { aiWorkoutPick } from "./ai-workout-pick.js";
-import { composeWorkout, poorFit } from "./ai-workout-compose.js";
+import { composeWorkout, poorFit, fewMatches, composeKey, libraryKind, COMPOSE_VARIANTS } from "./ai-workout-compose.js";
 import { rankOptions, dayChoice, recentKinds, pickState, savePick, lessKinds, setLess, pickSignature, storedDetails, storeDetails, workoutLines, gymLines } from "./coach-pick.js";
 import { activityKindOf } from "./activity-match.js";
 import { getWorkout, searchWorkoutLibrary, parseWorkoutSearchFilters, getCapabilities, getScheduledWorkouts, recordWorkoutFeedback, scheduleWorkoutInIntervals, generateWorkout, scheduledLink, stepRows } from "./workout-library.js";
@@ -2304,19 +2304,20 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       w.steps=kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones,hrZones:thresholds.runHrZones?.length?thresholds.runHrZones:thresholds.hrZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones,hrZones:thresholds.hrZones});
       return Response.json({status:'ok',source:library?'library':'intervals',workout:w,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
     }
-    if(url.pathname==='/app/api/workouts/search'&&request.method==='GET'){
-      await cached(env,ctx,'reconcile:'+localToday(),async()=>{await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);return {done:true};});
-      const date=validDate(url.searchParams.get('date'))?url.searchParams.get('date'):localToday();
+    // The library's day: the coach of the week plan's role and the day's time
+    // and the search's filters, as the list and the AI's own workout use them.
+    const libraryDay=async params=>{
+      const date=validDate(params.get('date'))?params.get('date'):localToday();
       // The same coach as the library's Návrh kouče (the week plan's role and
       // the day's time), so the list ranks what the proposal above it says.
       const prefs=await getWeekPlan(env.DB,date).catch(()=>null),plan=prefs?await planForWeek(env,ctx,mondayOfDate(date)).catch(()=>null):null;
       const week={prefs,plan,targets:prefs?await computeWeekTargets(env,ctx,mondayOfDate(date),prefs).catch(()=>null):null};
       const coach=await defaultDayCoach(env,{...await loadCoachInputs(env,ctx,internalAuth,date),athleteState:await getAthleteState(env.DB).catch(()=>null)},date,sport,week);
-      const context={readiness:coach.readiness.status,hardBikeDaysRolling7d:coach.load.hardBikeDaysRolling7d,phase:String(url.searchParams.get('phase')||'')};
+      const context={readiness:coach.readiness.status,hardBikeDaysRolling7d:coach.load.hardBikeDaysRolling7d,phase:String(params.get('phase')||'')};
       // Without a length the list is ranked by the length of the coach's
       // session (the free time is only its limit), indoors shorter, as the
       // proposal is; no length is filtered out.
-      const filters=parseWorkoutSearchFilters(url.searchParams),free=Number(coach.constraints?.availableMinutes)||null,coachMinutes=Number(coach.recommendation?.session?.durationMinutes)||null;
+      const filters=parseWorkoutSearchFilters(params),free=Number(coach.constraints?.availableMinutes)||null,coachMinutes=Number(coach.recommendation?.session?.durationMinutes)||null;
       const freeMinutes=free&&filters.environment==='indoor'?indoorMinutes(sport,free):free,dayMinutes=coachMinutes&&freeMinutes?Math.min(coachMinutes,freeMinutes):coachMinutes||freeMinutes;
       const autoDuration=filters.durationMinutes==null&&dayMinutes>0?{durationMinutes:dayMinutes}:null;
       if(autoDuration)Object.assign(filters,{durationMinutes:autoDuration.durationMinutes,durationSoft:true});
@@ -2325,13 +2326,40 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(dayLimit>0)filters.maxDurationMinutes=dayLimit;
       // With no type chosen, the type the coach recommends for the day ranks first.
       const coachKind=coach.recommendation?.session?.kind;if(!filters.system&&coachKind)filters.preferredSystem=coachKind==='long_endurance'?'endurance':coachKind==='vo2'?'vo2max':coachKind;
+      return {date,coach,context,filters,autoDuration};
+    };
+    if(url.pathname==='/app/api/workouts/search'&&request.method==='GET'){
+      await cached(env,ctx,'reconcile:'+localToday(),async()=>{await reconcileWorkoutLibraryCompletions(env,ctx,internalAuth);return {done:true};});
+      const {date,coach,context,filters,autoDuration}=await libraryDay(url.searchParams);
       const [result,thresholds]=await Promise.all([searchWorkoutLibrary(env.DB,filters,context),cached(env,ctx,'thresholds',()=>athleteThresholds(env))]);
       result.autoDuration=autoDuration;result.coachPick={system:filters.preferredSystem||null,durationMinutes:autoDuration?.durationMinutes||null};
+      // Few workouts of the chosen type: the app asks for the AI's own (/compose).
+      result.compose=date>=localToday()&&fewMatches(result.workouts,filters.system);
       // Step rows with watts or paces for each card.
       for(const w of result.workouts){let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=sport==='run'?stepRows(structure,{environment:w.environment,sport,thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones,hrZones:thresholds.runHrZones?.length?thresholds.runHrZones:thresholds.hrZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones,hrZones:thresholds.hrZones});
         // How to ride or run it, fuelling and terrain, as the web's workout card explains it.
         try{const e=explainWorkout(w,{environment:w.environment||filters.environment,thresholds,sport});w.guide={title:e.title,how:e.how||[],fueling:e.fueling||[],environment:e.environment||[]};}catch{w.guide=null;}}
       return Response.json({...result,date,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,source:thresholds.source,runThresholdPace:thresholds.runThresholdPace,runPaceSource:thresholds.runPaceSource},rankingContext:{...context,tsb:coach.readiness.tsb,readinessScore:coach.readiness.score},sourcePolicy:sport==='run'?L('Vlastní PFD běžecké tréninky, publikované výzkumné protokoly (Helgerud, Billat, Seiler, Daniels) a veřejně popsané metody s uvedením zdroje. Placené plány a aplikace se nekopírují.', 'Own PFD running workouts, published research protocols (Helgerud, Billat, Seiler, Daniels) and publicly described methods with their source. Paid plans and apps are not copied.'):L('Vlastní PFD workouty, publikované výzkumné protokoly a veřejně popsané tréninky profi s uvedením zdroje. Proprietární knihovny (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) se nekopírují.', 'Own PFD workouts, published research protocols and publicly described pro workouts with their source. Proprietary libraries (TrainerRoad, Xert, JOIN, Zwift, TrainerDay) are not copied.')},{headers:{'Cache-Control':'no-store'}});
+    }
+    // The AI's own workout for the library's filters (Na míru od AI): the
+    // chosen type, length and difficulty, or the coach's where none is chosen.
+    // Same query as /search, plus variant ("Jiný návrh").
+    if(url.pathname==='/app/api/workouts/compose'&&request.method==='POST'){
+      assertTrainingAllowed(await getAthleteState(env.DB));
+      const {date,coach,filters}=await libraryDay(url.searchParams);
+      if(date<localToday())return Response.json({status:'empty'},{headers:{'Cache-Control':'no-store'}});
+      const kind=filters.system||filters.preferredSystem||coach.recommendation?.session?.kind||'endurance',minutes=Number(filters.durationMinutes)||Number(coach.recommendation?.session?.durationMinutes)||(sport==='run'?45:60);
+      const environment=filters.environment==='outdoor'?'outdoor':'indoor',variant=Math.max(0,Math.min(COMPOSE_VARIANTS,Number(url.searchParams.get('variant'))||0));
+      const asked={minDifficulty:filters.minDifficulty??null,maxDifficulty:filters.maxDifficulty??null};
+      asked.key=composeKey({date,sport,environment,kind:libraryKind(sport,kind),minutes,...asked,variant});
+      const today={score:coach.readiness?.score,zone:coach.readiness?.status,feeling:await readinessCheckin(env.DB,date).catch(()=>null),ratings:await recentWorkoutRatings(env.DB,{sport,since:shiftDate(date,-42)})};
+      const own=await composeWorkout(env,{sport,kind,minutes,coach,today,asked});
+      if(!own)return Response.json({status:'empty'},{headers:{'Cache-Control':'no-store'}});
+      const w=renderForEnvironment(own,environment),thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env));
+      let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
+      w.steps=sport==='run'?stepRows(structure,{environment:w.environment,sport,thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones,hrZones:thresholds.runHrZones?.length?thresholds.runHrZones:thresholds.hrZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones,hrZones:thresholds.hrZones});
+      try{const e=explainWorkout(w,{environment:w.environment,thresholds,sport});w.guide={title:e.title,how:e.how||[],fueling:e.fueling||[],environment:e.environment||[]};}catch{w.guide=null;}
+      return Response.json({status:'ok',workout:{...w,ai:own.ai},variant,more:variant<COMPOSE_VARIANTS},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/generate'&&request.method==='POST'){
       const body=await request.json().catch(()=>({}));

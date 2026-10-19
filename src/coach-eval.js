@@ -4,7 +4,10 @@
 // automatically. Safety checks fail the run; quality checks are for reading.
 // Only the test server answers, and only the "Coach evaluation" workflow
 // (coach-eval.yml) may call it: its GitHub token has an audience of its own.
-import { askCoach, coachContext, assistantTask, coachInstructionsFor } from './coach-assistant.js';
+import { askCoach, coachContext, assistantTask, coachInstructionsFor, lightModel, complexModel } from './coach-assistant.js';
+import { composeWorkout } from './ai-workout-compose.js';
+import { workoutLoadCheck } from './ai-workout-pick.js';
+import { usageCost } from './ai-usage.js';
 import { validateCoachActions, hardDayConflict } from './coach-actions.js';
 import { buildCyclingCoachV2 } from './cycling-coach-v2.js';
 import { FOCUS_OF, kindOfSystem } from './week-ai.js';
@@ -246,7 +249,12 @@ export const COACH_EVAL_SCENARIOS = [
     checks: r => [safety('žádná tvrdá karta dnes', !hardCards(r).some(a => a.date === r.date)), ...luna(r, { cards: true }),
       quality('řekne dnešní VO2max 5×4', says(r, /VO2|VO₂/i) && says(r, /5\s*[x×]\s*4/i))] },
   { id: 'L03', title: 'Luna: jak dlouho jsem spal', message: 'Jak dlouho jsem včera spal?',
-    checks: r => [...luna(r), quality('řekne 7 h 25 min', says(r, /7\s*h(?:od\p{L}*)?\s*(?:a\s*)?25|7:25|445\s*min/iu))] }
+    checks: r => [...luna(r), quality('řekne 7 h 25 min', says(r, /7\s*h(?:od\p{L}*)?\s*(?:a\s*)?25|7:25|445\s*min/iu))] },
+  // Na míru od AI in the library (ai-workout-compose.js, asked): the same choice
+  // written by Luna (what the app uses) and by Sol, side by side.
+  { id: 'W01', title: 'Knihovna: kolo VO2max 45 min těžké', compose: { sport: 'ride', kind: 'vo2max', minutes: 45, minDifficulty: 6.5, maxDifficulty: 10, zone: 'green', score: 78 } },
+  { id: 'W02', title: 'Knihovna: běh tempo 40 min střední', compose: { sport: 'run', kind: 'tempo', minutes: 40, minDifficulty: 4, maxDifficulty: 6.5, zone: 'green', score: 72 } },
+  { id: 'W03', title: 'Knihovna: kolo vytrvalost 2 h, horší den', compose: { sport: 'ride', kind: 'endurance', minutes: 120, minDifficulty: null, maxDifficulty: null, zone: 'yellow', score: 58 } }
 ];
 // The light model answers, as a quick question, without a card nobody asked for.
 const luna = (r, { cards = false } = {}) => [quality('odpovídá lehký model (Luna)', /luna/i.test(r.model || ''), r.model || ''), quality('dotaz jde jako rychlá otázka', r.task === 'quick', r.task), ...(cards ? [] : [noUnaskedCard(r)])];
@@ -321,8 +329,38 @@ export function cardKind(athlete, action, library = []) {
   return coach.recommendation?.session?.kind || null;
 }
 
+const COMPOSE_KINDS = { vo2max: 'VO2max', tempo: 'tempo', endurance: 'vytrvalost' };
+
+// A W situation: the same library choice composed by both models, nothing kept.
+export async function runComposeScenario(env, scenario, { compose = composeWorkout } = {}) {
+  const c = scenario.compose, started = Date.now(), coach = { readiness: { status: c.zone, score: c.score } };
+  const asked = { minDifficulty: c.minDifficulty, maxDifficulty: c.maxDifficulty };
+  const models = [['Luna', lightModel(env)], ['Sol', complexModel(env)]];
+  const runs = await Promise.all(models.map(async ([label, model]) => {
+    const t = Date.now(), w = await compose(env, { sport: c.sport, kind: c.kind, minutes: c.minutes, coach, today: { score: c.score, zone: c.zone }, asked, model, save: false }).catch(() => null);
+    return { label, model, ms: Date.now() - t, workout: w };
+  }));
+  const band = c.minDifficulty != null ? ` · obtížnost ${c.minDifficulty}–${c.maxDifficulty}` : '';
+  const describe = ({ label, model, ms, workout: w }) => {
+    if (!w) return `### ${label} (${model})\nNesložil nic, co by prošlo kontrolami (délka, typ, těžké minuty, obtížnost).`;
+    const load = workoutLoadCheck(w, c.sport), u = w.ai?.usage;
+    const cost = u ? usageCost(w.ai.model || model, u) : null;
+    return [`### ${label} (${w.ai?.model || model}) · ${Math.round(ms / 1000)} s${cost != null ? ` · ${(cost * 25).toFixed(2)} Kč` : ''}`,
+      `**${w.name}** · ${w.duration_minutes} min · těžké ${load.hard} min · obtížnost ${w.difficulty} · ${Math.round(w.target_load || 0)} TSS`,
+      w.ai?.reason || '', w.ai?.warning ? `⚠️ ${w.ai.warning}` : '', '```', String(w.intervals_description || '').trim(), '```'].filter(Boolean).join('\n');
+  };
+  const checks = runs.flatMap(({ label, workout: w }) => [quality(`${label} složil trénink, který prošel kontrolami`, Boolean(w)),
+    ...(w ? [quality(`${label}: zdůvodnění bez hodnocení dne`, !/připravenost|dnes se hodí|readiness/i.test(w.ai?.reason || ''), w.ai?.reason || '')] : [])]);
+  if (c.zone !== 'green') checks.push(quality('na horší den upozorní jen u těžkého typu', runs.every(r => !r.workout || Boolean(r.workout.ai?.warning) === isHardKind(c.kind))));
+  return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), task: 'compose',
+    message: `Knihovna · ${c.sport === 'run' ? 'běh' : 'kolo'} · ${COMPOSE_KINDS[c.kind] || c.kind} · ${c.minutes} min${band} · připravenost ${c.score} (${c.zone})`,
+    model: runs.map(r => r.workout?.ai?.model || r.model).join(' vs '), ms: Date.now() - started,
+    answer: runs.map(describe).join('\n\n'), proposed: [], kept: [], checks, passed: true };
+}
+
 // One situation through the real coach. `ask` is askCoach (tests pass their own).
 export async function runScenario(env, scenario, { ask = askCoach, date = localToday(), now = localNow() } = {}) {
+  if (scenario.compose) return runComposeScenario(env, scenario);
   const { ctx, focus, conversation, athlete } = scenarioContext(scenario, date, now);
   const task = assistantTask(scenario.message, { view: 'today' }, conversation), started = Date.now();
   const reply = await ask(env, scenario.message, ctx, { focus, actions: true, task });

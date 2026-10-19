@@ -134,12 +134,28 @@ extension APIClient {
     /// difficulty band (1–10, src/workout-model.js difficultyFromStructure).
     func searchWorkouts(sport: String, minutes: Int?, tolerance: Int? = nil, system: String?, indoor: Bool,
                         difficulty: ClosedRange<Double>? = nil) async throws -> WorkoutSearchResponse {
-        var path = "/app/api/workouts/search?sport=" + sport + "&environment=" + (indoor ? "indoor" : "outdoor") + "&limit=40"
-        if let minutes { path += "&duration=\(minutes)" }
-        if let tolerance, minutes != nil { path += "&durationTolerance=\(tolerance)" }
-        if let system { path += "&system=" + system }
-        if let difficulty { path += "&minDifficulty=\(difficulty.lowerBound)&maxDifficulty=\(difficulty.upperBound)" }
-        return try await get(path)
+        try await get("/app/api/workouts/search?" + libraryQuery(sport: sport, minutes: minutes, tolerance: tolerance, system: system,
+                                                                 indoor: indoor, difficulty: difficulty) + "&limit=40")
+    }
+
+    /// The AI's own workout for the same filters, when the library has few of
+    /// the chosen type (the search's `compose`). The same choice on the same
+    /// day gives the same workout; a higher variant asks for another.
+    func composeWorkout(sport: String, minutes: Int?, tolerance: Int? = nil, system: String?, indoor: Bool,
+                        difficulty: ClosedRange<Double>? = nil, variant: Int) async throws -> ComposedWorkout {
+        try await send("/app/api/workouts/compose?" + libraryQuery(sport: sport, minutes: minutes, tolerance: tolerance, system: system,
+                                                                  indoor: indoor, difficulty: difficulty) + "&variant=\(variant)",
+                       method: "POST", body: JSONObject(), timeout: 90)
+    }
+
+    private func libraryQuery(sport: String, minutes: Int?, tolerance: Int?, system: String?, indoor: Bool,
+                              difficulty: ClosedRange<Double>?) -> String {
+        var query = "sport=" + sport + "&environment=" + (indoor ? "indoor" : "outdoor")
+        if let minutes { query += "&duration=\(minutes)" }
+        if let tolerance, minutes != nil { query += "&durationTolerance=\(tolerance)" }
+        if let system { query += "&system=" + system }
+        if let difficulty { query += "&minDifficulty=\(difficulty.lowerBound)&maxDifficulty=\(difficulty.upperBound)" }
+        return query
     }
 
     /// The coach's workout for today (POST /app/api/workouts/generate): the

@@ -507,7 +507,7 @@ export function overviewPage(request) {
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['strain-target', 'strain-gauge', 160, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan.']]],
     ['trenink', 'Training', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 130, 'Your week at a glance.', 'Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu.']]],
+      ['training', 'week', 130, 'Your week at a glance.', 'Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu. When the library has little for the length and type you pick, the AI builds a workout to fit.']]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
       ['builder', 'build-form', 190, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and uses only the equipment your gym has.'],
       ['gym-day', 'gym-parts', 230, 'Warm-up to stretching.', 'Cardio, exercises and stretching in the order you like. Then start.']]],
