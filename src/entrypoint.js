@@ -1795,7 +1795,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const [daily,food,fluids,health,profile]=await Promise.all([
         read('/analysis/daily?date='+date),read('/food/log?date='+date),api('/app/api/fluids?date='+date),
-        googleHealthFor(env,ctx,date).catch(()=>({})),dashboardProfile(env).catch(()=>null)
+        // A day ahead has no measured movement yet: the Google Health read
+        // (91 days of values and a month of steps) would only slow it down.
+        date>localToday()?{}:googleHealthFor(env,ctx,date).catch(()=>({})),dashboardProfile(env).catch(()=>null)
       ]);
       applyEnergyBudget(daily,profile,health);
       const built=buildFood({date,hour:date===localToday()?localHour():null,daily,food,fluids,slots:profile?.meals});
@@ -1813,10 +1815,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const requested=url.searchParams.get('date'),today=localToday(),start=mondayOfDate(validTrainingDay(requested)?requested:today);
       const dates=Array.from({length:7},(_,i)=>shiftDate(start,i));
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
-      // One Google Health read covers the week, as on /app/api/week; today the
-      // same read as the Food screen, so today's target matches it.
-      const [profile,health,healthToday]=await Promise.all([dashboardProfile(env).catch(()=>null),googleHealthFor(env,ctx,dates[6]).catch(()=>null),
-        dates.includes(today)?googleHealthFor(env,ctx,today).catch(()=>null):null]);
+      // One Google Health read covers the week up to today, as on /app/api/week;
+      // in this week it is the Food screen's own read of today, so today's
+      // target matches it. A week ahead has nothing measured and reads none.
+      const [profile,health]=await Promise.all([dashboardProfile(env).catch(()=>null),
+        dates[0]<=today?googleHealthFor(env,ctx,dates[6]<today?dates[6]:today).catch(()=>null):null]);
+      const healthToday=dates.includes(today)?health:null;
       const day=async date=>{
         const [daily,food]=await Promise.all([read('/analysis/daily?date='+date),read('/food/log?date='+date)]);
         applyEnergyBudget(daily,profile,date===today?healthToday:{today:health?.wellness?.find(w=>w.id===date)||{}});
