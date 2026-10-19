@@ -60,7 +60,7 @@ test("advice describes the actual main set with watts", () => {
   const x = explainWorkout(ss, { environment: "outdoor", thresholds: { ftp: 260 } });
   assert.match(x.how.join(" "), /3× 12 min na 91 % FTP \(≈ 237 W\)/);
   assert.match(x.environment[0], /12 min nerušené jízdy/);
-  assert.match(x.fueling.at(-1), /~90 g sacharidů/);
+  assert.match(x.fueling.at(-1), /~105 g sacharidů/);
   const r = renderForEnvironment(CYCLING_WORKOUTS.find(w => w.id === "research-ronnestad-30-15"), "indoor");
   assert.match(structureHow(JSON.parse(r.structure_json), { system: "vo2max", ftp: 260 })[0], /3 série: 13× 30 s na 120 % FTP \(≈ 312 W\) \/ 15 s lehce/);
   const a = explainWorkout(renderForEnvironment(CYCLING_WORKOUTS.find(w => w.id === "pfd-vo2-5x4x112-75"), "indoor"), { thresholds: { ftp: 260 } });

@@ -11,7 +11,9 @@ import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
 import { getTestWorkout } from "./threshold-check.js";
 import { raceWorkout } from "./training-plans.js";
-import { explainWorkout, stepRows } from "./workout-explanation.js";
+import { explainWorkout, stepRows, focusLine, carbsPerHour } from "./workout-explanation.js";
+import { athleteThresholds } from "./intervals-athlete.js";
+import { plannedStart, DEFAULT_START } from "./planned-start.js";
 import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
 import { workoutEn } from "./workout-i18n.js";
 import { L, lang } from "./lang.js";
@@ -500,7 +502,10 @@ export async function hasFeedback(db, workoutId, date) {
   return Boolean(await db.prepare("SELECT id FROM workout_feedback WHERE user_id=? AND workout_id=? AND scheduled_date=? LIMIT 1").bind(db.userId, workoutId, date).first());
 }
 
-export function buildIntervalsEvent(workout, date, environment = "indoor") {
+// The planned workout as every calendar gets it (Intervals.icu; Wahoo and the
+// app read the same event): the step text with each step's kind, one line
+// about this session on top, carbs per hour and a real start time.
+export function buildIntervalsEvent(workout, date, environment = "indoor", { thresholds = null, startTime = null } = {}) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) throw new Error(L("Neplatné datum.", "Invalid date."));
   const rendered = renderForEnvironment(workout, environment);
   const externalId = "pfd-library:" + workout.id + ":" + date + (rendered.environment === "outdoor" ? ":outdoor" : "");
@@ -509,11 +514,16 @@ export function buildIntervalsEvent(workout, date, environment = "indoor") {
   // read back to tell a hard planned session from an easy one; library tags
   // (source, family, length, placement) stay internal in tags_json.
   const tags = [rendered.environment, workout.primary_system].filter(Boolean);
-  const notes = rendered.environment_notes.join(" ");
+  // The athlete's own workout and the AI's workout for the day keep their own
+  // words; a library workout's generic text stays in the app.
+  const own = /^(own|ai)-/.test(String(workout.id || "")) && workout.description ? String(workout.description).trim() + "\n" : "";
+  const sport = sportOf(workout.sport), carbs = carbsPerHour(rendered.duration_minutes, workout.primary_system, sport);
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(startTime || "")) ? startTime : DEFAULT_START;
   return {
-    external_id: externalId, category: "WORKOUT", start_date_local: date + "T00:00:00", type: rendered.intervals_type, name: workout.name,
-    description: (workout.description ? workout.description + "\n" + notes + "\n\n" : notes + "\n\n") + rendered.intervals_description,
-    load_target: Math.round(n(workout.target_load, 0)), tags: [...new Set(tags)]
+    external_id: externalId, category: "WORKOUT", start_date_local: date + "T" + time + ":00", type: rendered.intervals_type, name: workout.name,
+    description: own + focusLine(rendered, { thresholds }) + "\n\n" + rendered.intervals_description,
+    load_target: Math.round(n(workout.target_load, 0)), tags: [...new Set(tags)],
+    ...(carbs ? { carbs_per_hour: carbs } : {})
   };
 }
 
@@ -526,9 +536,12 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   // proposals. Availability limits belong to generation, never to this write.
   await ensureTrainingTables(db);
   await ensureLocalWorkouts(db);
-  const event = buildIntervalsEvent(workout, date, environmentOf(environment));
+  let event = buildIntervalsEvent(workout, date, environmentOf(environment));
   const existing = await db.prepare("SELECT intervals_event_id,status FROM workout_schedule_links WHERE user_id=? AND intervals_external_id=?").bind(db.userId, event.external_id).first();
   if (existing) return { sync: await syncLocalWorkout({...env,DB:db},existing.intervals_event_id), status: "already_scheduled", workout: { id: workout.id, name: workout.name }, date, externalId: event.external_id, intervalsEventId: existing.intervals_event_id || null };
+  // Watts in the description and the start time only for a new event.
+  const [thresholds, startTime] = await Promise.all([athleteThresholds(env).catch(() => null), plannedStart(db, date, sportOf(workout.sport))]);
+  event = buildIntervalsEvent(workout, date, environmentOf(environment), { thresholds, startTime });
   const rendered=renderForEnvironment(workout,environmentOf(environment));
   event.moving_time=Math.round(rendered.duration_minutes*60);event.icu_training_load=event.load_target;
   const local=await storeLocalEvent(db,event);
