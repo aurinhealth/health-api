@@ -2024,7 +2024,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // Up to the user's today (in Sydney or after midnight in Prague, UTC is still yesterday).
       const {from,to} = fitnessDays(days);
       const apiKey = String(env.INTERVALS_API_KEY || "");
-      // Without Intervals.icu the load comes from the watch's workouts and the gym (training-load.js).
+      // Without Intervals.icu the load comes from the watch's workouts and the gym (training-load.js);
+      // a failed read answers with an error below, which the callers' cache does not keep.
       if (!apiKey) return Response.json({status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness(env,from,to)},{headers:{"Cache-Control":"no-store"}});
       const auth = intervalsAuthorization(apiKey);
       const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(from)+"&newest="+encodeURIComponent(to);
@@ -2033,9 +2034,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if (!response.ok) return Response.json({status:"error",message:"Intervals wellness HTTP "+response.status,data},{status:response.status});
       const intervalsRows = (Array.isArray(data)?data:[]).map(x=>({...x,tsb:Number.isFinite(Number(x.ctl))&&Number.isFinite(Number(x.atl))?Number(x.ctl)-Number(x.atl):null})).filter(x=>x.id).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
       // Workouts only the watch recorded (not in Intervals.icu) count into CTL too.
-      const watchExtra = await watchOnlyFitness(env,ctx,from,to).catch(error=>{console.error('Watch-only load',error.message);return null;});
+      // A failed read leaves them out of this answer only: degraded keeps it out of the cache (api-cache.js).
+      const watchExtra = await watchOnlyFitness(env,ctx,from,to).catch(error=>{console.error('Watch-only load',error.message);return false;});
       const wellness = watchExtra ? addLoads(intervalsRows,watchExtra) : intervalsRows;
-      return Response.json({status:"ok",source:"intervals.icu",days,wellness},{headers:{"Cache-Control":"no-store"}});
+      return Response.json({status:"ok",source:"intervals.icu",days,wellness,...(watchExtra===false?{degraded:true}:{})},{headers:{"Cache-Control":"no-store"}});
     } catch (error) {
       return Response.json({status:"error",message:error.message},{status:502});
     }

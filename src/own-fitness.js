@@ -8,15 +8,18 @@ import { localToday, dayStartUtc } from "./user-time.js";
 
 // CTL, ATL and TSB from the athlete's own workouts when Intervals.icu is not
 // connected. 120 days before `from` warm the averages up, so CTL is close to
-// what it would be with the full history.
+// what it would be with the full history. A failed read throws instead of
+// counting as no workouts, so a CTL of 0 is never cached (api-cache.js).
+// A table not created yet (coach_reflections comes with the first note) has no rows.
+const rowsOf=query=>query.then(r=>r.results||[],error=>{if(/no such table/i.test(String(error?.message||error)))return [];throw error;});
 export async function ownFitness(env,from,to){
   const warmup=120,start=shiftDate(from,-warmup);
   const [rows,sets,ratings,athlete]=await Promise.all([
     loadActivityRows(env,start,to),
     // The logged sets give each gym session its length, RPE and volume (training-load.js gymSessions).
-    env.DB.prepare('SELECT workout_date,type,exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,to).all().then(r=>r.results||[]).catch(()=>[]),
+    rowsOf(env.DB.prepare('SELECT workout_date,type,exercise,set_no,actual_kg,actual_reps,rpe FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,start,to).all()),
     // The athlete's RPE of the day's session (Po tréninku), for a gym session without set RPE.
-    env.DB.prepare('SELECT date,rpe FROM coach_reflections WHERE user_id=? AND date>=? AND date<=? AND workout_id IS NULL AND rpe IS NOT NULL ORDER BY id').bind(env.USER_ID,start,to).all().then(r=>r.results||[]).catch(()=>[]),
+    rowsOf(env.DB.prepare('SELECT date,rpe FROM coach_reflections WHERE user_id=? AND date>=? AND date<=? AND workout_id IS NULL AND rpe IS NOT NULL ORDER BY id').bind(env.USER_ID,start,to).all()),
     loadAthlete(env,to)
   ]);
   const byActivity=new Map(),activities=[];
@@ -32,14 +35,14 @@ export async function ownFitness(env,from,to){
 // day after `to` and its midnight in UTC (a New York evening is the next UTC day).
 export function loadActivityRows(env,start,to){
   const end=shiftDate(to,1),utcEnd=dayStartUtc(end);
-  return env.DB.prepare("SELECT start_time,end_time,source_family,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,start,utcEnd>end?utcEnd:end).all().then(r=>r.results||[]).catch(()=>[]);
+  return rowsOf(env.DB.prepare("SELECT start_time,end_time,source_family,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,start,utcEnd>end?utcEnd:end).all());
 }
 // FTP, LTHR, heart-rate range and sex for the load of a session (training-load.js).
 export async function loadAthlete(env,to,ctx=null){
   const [thresholds,profile,rest]=await Promise.all([
-    (ctx?cached(env,ctx,'thresholds',()=>athleteThresholds(env)):athleteThresholds(env)).catch(()=>({})),
-    dashboardProfile(env).catch(()=>null),
-    env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='daily-resting-heart-rate' AND sample_time>=? AND value_numeric>0").bind(env.USER_ID,shiftDate(to,-30)).all().then(r=>(r.results||[]).map(x=>Number(x.value_numeric)).sort((a,b)=>a-b)).catch(()=>[])
+    ctx?cached(env,ctx,'thresholds',()=>athleteThresholds(env)):athleteThresholds(env),
+    dashboardProfile(env),
+    rowsOf(env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='daily-resting-heart-rate' AND sample_time>=? AND value_numeric>0").bind(env.USER_ID,shiftDate(to,-30)).all()).then(r=>r.map(x=>Number(x.value_numeric)).sort((a,b)=>a-b))
   ]);
   const age=Number(profile?.age)||null;
   return {ftp:thresholds.ftp,lthr:thresholds.lthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null),sex:profile?.sex||null};
