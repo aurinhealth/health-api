@@ -7,8 +7,6 @@
 import { L } from "./lang.js";
 
 const OWNER_ONLY_API_PATHS = new Set([
-  "/app/api/account/email/start",
-  "/app/api/account/email/verify",
   "/app/api/activities",
   "/app/api/daily",
   "/app/api/fitness",

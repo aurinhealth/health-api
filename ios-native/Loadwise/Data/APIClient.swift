@@ -193,12 +193,13 @@ final class APIClient: @unchecked Sendable {
         return me.consent?.aiAllowed ?? false
     }
 
-    /// The signed-in account's name and e-mail (GET /app/api/me → user).
-    func account() async throws -> (name: String?, email: String?) {
-        struct User: Decodable { let name: String?; let email: String? }
+    /// The signed-in account's name, e-mail and id (GET /app/api/me → user).
+    /// The id stays when the e-mail is changed in Settings → Účet.
+    func account() async throws -> (name: String?, email: String?, id: Int?) {
+        struct User: Decodable { let name: String?; let email: String?; let id: Int? }
         struct Me: Decodable { let user: User? }
         let me: Me = try await get("/app/api/me")
-        return (me.user?.name?.nilIfBlank, me.user?.email?.nilIfBlank)
+        return (me.user?.name?.nilIfBlank, me.user?.email?.nilIfBlank, me.user?.id)
     }
 
     /// An internal tester, who may switch the server (GET /app/api/me →
@@ -552,6 +553,21 @@ final class APIClient: @unchecked Sendable {
     func verifyEmailLogin(email: String, code: String) async throws {
         let _: JSONValue = try await send("/auth/email/verify", method: "POST", body: ["email": JSONValue.string(email), "code": .string(code)])
         guard hasSession else { throw APIError.message(L10n.tr("Server nevrátil přihlášení. Zkus to znovu.")) }
+    }
+
+    /// Settings → Účet → Změnit e-mail, step 1: a six-digit code goes to the
+    /// new address (src/email-login.js handleEmailChange).
+    func startEmailChange(email: String) async throws {
+        let _: JSONValue = try await send("/app/api/account/email/start", method: "POST", body: ["email": JSONValue.string(email)])
+    }
+
+    /// Step 2: the code moves the account to the new address; returns it. The
+    /// account, its data and subscription stay; every other device is signed
+    /// out and this one gets a fresh cookie.
+    func verifyEmailChange(email: String, code: String) async throws -> String {
+        struct Changed: Decodable { let email: String? }
+        let changed: Changed = try await send("/app/api/account/email/verify", method: "POST", body: ["email": JSONValue.string(email), "code": .string(code)])
+        return changed.email?.nilIfBlank ?? email
     }
 
     // MARK: - Data sources
