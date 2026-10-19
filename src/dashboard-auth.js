@@ -11,6 +11,9 @@ export const SESSION_SECONDS = 30 * 24 * 60 * 60;
 // A session in use slides: once it is a day old, an /app/api/* request gets a
 // fresh 30-day cookie, so only 30 days without the app sign the user out.
 export const SESSION_REFRESH_SECONDS = 24 * 60 * 60;
+// However much it is used, a session ends a year after the sign-in it came
+// from (`at` in the cookie), so a copied cookie does not live for ever.
+export const SESSION_MAX_SECONDS = 365 * 24 * 60 * 60;
 
 // Routes reachable without a dashboard session or API key. Everything else
 // requires authentication. Routes listed here either serve static/public
@@ -97,8 +100,9 @@ export function sessionMatchesUser(principal, user) {
   return Number(principal.epoch || 0) === Number(user?.sessionEpoch || 0);
 }
 
-// Returns the session payload ({uid, exp, epoch, iat}) or null. Cookies from
+// Returns the session payload ({uid, exp, epoch, iat, at}) or null. Cookies from
 // before the sliding sessions carry no iat; they count as issued 30 days before exp.
+// Cookies from before the year's limit carry no sign-in time: their iat stands in.
 export async function verifyDashboardSession(request, secret) {
   if (!secret) return null;
   const cookieHeader = request.headers.get("Cookie") || "";
@@ -115,7 +119,9 @@ export async function verifyDashboardSession(request, secret) {
     const uid = Number(data?.uid), epoch = data?.se === undefined ? 0 : Number(data.se);
     if (!(Number(data?.exp) > Math.floor(Date.now()/1000)) || !Number.isInteger(uid) || uid <= 0 || !Number.isInteger(epoch) || epoch < 0) return null;
     const exp = Number(data.exp), iat = Number.isFinite(Number(data.iat)) ? Number(data.iat) : exp - SESSION_SECONDS;
-    return { uid, exp, epoch, iat };
+    const at = Number.isFinite(Number(data.at)) ? Math.min(Number(data.at), iat) : iat;
+    if (Math.floor(Date.now()/1000) - at > SESSION_MAX_SECONDS) return null;
+    return { uid, exp, epoch, iat, at };
   } catch { return null; }
 }
 
@@ -126,8 +132,8 @@ export function sessionSecret(env) {
   return String(env.SESSION_SECRET || "");
 }
 
-export async function sessionCookie(uid, exp, secret, epoch = 0, iat = Math.floor(Date.now() / 1000)) {
-  const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp,se:Number(epoch)||0,iat})));
+export async function sessionCookie(uid, exp, secret, epoch = 0, iat = Math.floor(Date.now() / 1000), at = iat) {
+  const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp:Math.min(exp,at+SESSION_MAX_SECONDS),se:Number(epoch)||0,iat,at})));
   const signature = await dashboardHmac(payload, secret);
   return SESSION_COOKIE+"="+payload+"."+signature+"; Path=/; Max-Age="+SESSION_SECONDS+"; HttpOnly; Secure; SameSite=Lax";
 }
@@ -182,7 +188,7 @@ export async function slidingSession(request, response, secret, now = Math.floor
   const setCookies = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [response.headers.get("Set-Cookie") || ""];
   if (setCookies.some(value => String(value).startsWith(SESSION_COOKIE + "="))) return response;
   const refreshed = new Response(response.body, response);
-  refreshed.headers.append("Set-Cookie", await sessionCookie(session.uid, now + SESSION_SECONDS, secret, session.epoch, now));
+  refreshed.headers.append("Set-Cookie", await sessionCookie(session.uid, now + SESSION_SECONDS, secret, session.epoch, now, session.at));
   return refreshed;
 }
 
