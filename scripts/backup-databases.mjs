@@ -20,7 +20,7 @@ export function backupPlan(config, date) {
 }
 
 function wrangler(...args) {
-  return execFileSync('npx', ['--yes', 'wrangler@4', ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'inherit'] });
+  return execFileSync('npx', ['--yes', 'wrangler@4.147.0', ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'inherit'] });
 }
 
 function ensureBucket() {

@@ -76,3 +76,12 @@ test("JSON answers name UTF-8, so a Czech message opened in the browser reads ri
   assert.equal(withSecurityHeaders(Response.json({ message: "Neplatný" })).headers.get("Content-Type"), "application/json; charset=utf-8");
   assert.equal(withSecurityHeaders(new Response("{}", { headers: { "Content-Type": "application/geo+json" } })).headers.get("Content-Type"), "application/geo+json");
 });
+
+test("the static files get the same headers (public/_headers)", () => {
+  const file = readFileSync(new URL("../public/_headers", import.meta.url), "utf8");
+  const sent = Object.fromEntries(file.split("\n").filter(line => /^\s+\S+:/.test(line)).map(line => { const i = line.indexOf(":"); return [line.slice(0, i).trim(), line.slice(i + 1).trim()]; }));
+  assert.match(file, /^\/\*$/m, "for every path");
+  assert.deepEqual(sent, SECURITY_HEADERS);
+  assert.match(SECURITY_HEADERS["Strict-Transport-Security"], /includeSubDomains/);
+  assert.match(SECURITY_HEADERS["Permissions-Policy"], /camera=\(\)/);
+});

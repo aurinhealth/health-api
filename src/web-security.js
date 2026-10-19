@@ -1,17 +1,21 @@
 // HTTPS and the browser's security headers for everything the Worker answers;
-// main.js wraps the app in this. Static files in public/ never reach it.
+// main.js wraps the app in this. Static files in public/ never reach it
+// (public/_headers gives them the same).
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 // Only what no page relies on: other sites cannot frame the app (clickjacking),
-// the browser does not guess content types, remembers HTTPS for a year and
-// ignores <base> and plugins. Limiting scripts needs nonces on the inline
-// scripts first.
+// the browser does not guess content types, remembers HTTPS for a year (on
+// the subdomains too), ignores <base> and plugins, and gives no page the
+// camera, microphone, location or payments (passkeys stay allowed). Limiting
+// scripts needs nonces on the inline scripts first. public/_headers sends the
+// same to the static files, which never reach the Worker.
 export const SECURITY_HEADERS = {
-  "Strict-Transport-Security": "max-age=31536000",
+  "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+  "Content-Security-Policy": "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
 };
 
 // A header the app sets itself (for example Referrer-Policy: no-referrer on the

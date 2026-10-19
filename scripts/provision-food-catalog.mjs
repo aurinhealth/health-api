@@ -24,7 +24,7 @@ async function main() {
   writeFileSync('wrangler.runtime.jsonc',JSON.stringify(bindFoodDatabase(config,environment,db),null,2)+'\n');
   console.log('Preparing food database '+db.name+' (EU).');
   try {
-    execFileSync('npx',['--yes','wrangler@4','d1','migrations','apply',db.name,'--remote','--config','wrangler.runtime.jsonc',...(environment?['--env',environment]:[])],{encoding:'utf8',maxBuffer:16*1024*1024});
+    execFileSync('npx',['--yes','wrangler@4.147.0','d1','migrations','apply',db.name,'--remote','--config','wrangler.runtime.jsonc',...(environment?['--env',environment]:[])],{encoding:'utf8',maxBuffer:16*1024*1024});
   } catch (error) { throw new Error('Food schema deployment failed, exit '+error.status); }
   console.log('Food database prepared; catalogue cutover waits for the new Worker.');
 }

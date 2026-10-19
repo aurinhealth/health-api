@@ -1,0 +1,9 @@
+# The same security headers as src/web-security.js SECURITY_HEADERS, for the static files
+# (they never reach the Worker). tests/web-security.test.mjs keeps the two equal.
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
