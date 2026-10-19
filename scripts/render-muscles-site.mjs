@@ -7,6 +7,7 @@
 //   npx http-server scripts -p 8765 &  then  node scripts/render-muscles-site.mjs out/
 //   then convert out/*.png to webp (quality 82) and pack out/i*.png into ids.png, 9 per row, as grey
 //   values round(red / 12) - 1 (render-muscles-site.html paints group i in red (i + 1) · 12).
+/* global setup, paint, paintSel, place, frame, heads */ // defined by render-muscles-site.html, run inside the page
 import {chromium} from 'playwright-core';
 import fs from 'node:fs';
 
