@@ -27,12 +27,18 @@ test('public pages use the app’s light palette',async()=>{
 
 test('the overview follows the app section by section and every file it loads exists',async()=>{
   const html=await overviewPage(new Request('https://petrfitnessdata.eu/')).text();
-  for(const id of ['pripravenost','zatez','trenink','posilovna','vyziva','kouc','propojeni','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
+  for(const id of ['spanek','pripravenost','zatez','trenink','posilovna','rezim','svaly','vyziva','kouc','propojeni','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
   const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/petrfitnessdata\.eu)?\/site\/([^"]+)"/g)].map(m=>m[1]))];
   assert.ok(files.includes('og-en.png'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
-  for(const name of ['today','readiness','strain','training','gym','food','coach'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
+  for(const name of ['today','sleep','readiness-parts','strain-target','training','builder','training-mode','food-day','coach-ask'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
+  // The 3D figure's frames, its map of muscles and a close-up of every muscle the bubble can open.
+  const base=html.match(/data-base="\/site\/([^"]+)"/)[1];
+  for(let i=0;i<72;i++)assert.ok(existsSync(new URL(`../public/site/${base}f${String(i).padStart(2,'0')}.webp`,import.meta.url)),'frame '+i);
+  assert.ok(existsSync(new URL(`../public/site/${base}ids.png`,import.meta.url)));
+  const script=html.match(/var LABEL=\{([^}]+)\}/)[1];
+  for(const [,id] of script.matchAll(/(\w+):'/g))assert.ok(existsSync(new URL(`../public/site/${base}z-${id}.webp`,import.meta.url)),'close-up '+id);
   assert.doesNotMatch(html,/undefined/,'every icon and text the page draws exists');
 });
 
