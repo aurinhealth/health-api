@@ -140,10 +140,10 @@ function terrainLine(structure, { sport, environment, system }) {
 }
 
 function fueling(minutes, system) {
-  const hard = ["sweet_spot", "threshold", "vo2max", "anaerobic"].includes(system);
-  if (minutes <= 75) return hard ? [L("Před jízdou lehké sacharidové jídlo; během jízdy se u intenzity hodí 30–40 g sacharidů/h.", "A light carb meal before the ride; 30–40 g of carbs/h during the ride helps with intensity."), L("Pití 500–750 ml/h, po jízdě bílkoviny a sacharidy.", "Drink 500–750 ml/h; protein and carbs after the ride.")] : [L("Stačí voda nebo iontový nápoj; při jízdě nalačno drž opravdu nízkou intenzitu.", "Water or a sports drink is enough; if you ride fasted, keep the intensity truly low."), L("Pití 500–750 ml/h.", "Drink 500–750 ml/h.")];
-  if (minutes <= 150) return [L("60 g sacharidů/h (gel, tyčinka, iontový nápoj) – začni v první půlhodině.", "60 g of carbs/h (gel, bar, sports drink) – start within the first half hour."), L("Pití 500–750 ml/h, v teple víc a se solí.", "Drink 500–750 ml/h, more and with salt in the heat.")];
-  return [L("80–90 g sacharidů/h (kombinace glukózy a fruktózy), jez pravidelně každých 20–30 min.", "80–90 g of carbs/h (a glucose and fructose mix); eat regularly every 20–30 min."), L("Pití 600–900 ml/h se sodíkem 500–1000 mg/l.", "Drink 600–900 ml/h with 500–1000 mg/l of sodium."), L("Nech si jídlo i na konec jízdy – kvalita je vložená mezi aerobní bloky.", "Save food for the end of the ride too – the quality work sits between aerobic blocks.")];
+  const rate = carbsPerHour(minutes, system);
+  if (minutes <= 75) return rate ? [L("Před jízdou lehké sacharidové jídlo; během jízdy cca " + rate + " g sacharidů/h (gel, banán nebo iontový nápoj).", "A light carb meal before the ride; about " + rate + " g of carbs/h during it (a gel, a banana or a sports drink)."), L("Pití 500–750 ml/h, po jízdě bílkoviny a sacharidy.", "Drink 500–750 ml/h; protein and carbs after the ride.")] : [L("Stačí voda nebo iontový nápoj; při jízdě nalačno drž opravdu nízkou intenzitu.", "Water or a sports drink is enough; if you ride fasted, keep the intensity truly low."), L("Pití 500–750 ml/h.", "Drink 500–750 ml/h.")];
+  if (minutes <= 150) return [L("Cca " + rate + " g sacharidů/h (gel, tyčinka, iontový nápoj) – začni v první půlhodině.", "About " + rate + " g of carbs/h (gel, bar, sports drink) – start within the first half hour."), L("Pití 500–750 ml/h, v teple víc a se solí.", "Drink 500–750 ml/h, more and with salt in the heat.")];
+  return [L("Cca " + rate + " g sacharidů/h (kombinace glukózy a fruktózy), jez pravidelně každých 20–30 min.", "About " + rate + " g of carbs/h (a glucose and fructose mix); eat regularly every 20–30 min."), L("Pití 600–900 ml/h se sodíkem 500–1000 mg/l.", "Drink 600–900 ml/h with 500–1000 mg/l of sodium."), L("Nech si jídlo i na konec jízdy – kvalita je vložená mezi aerobní bloky.", "Save food for the end of the ride too – the quality work sits between aerobic blocks.")];
 }
 
 // Intervals.icu default power zones (% FTP) and pace zones (% threshold
@@ -224,7 +224,7 @@ export function explainWorkout(workout, { coach = {}, environment = "indoor", th
     title: SYSTEM_LABELS()[system] || system,
     why, how,
     environment: [terrainLine(structure, { sport: "ride", environment, system }), ...(workout.environment_notes || [])].filter(Boolean),
-    fueling: [...fueling(minutes, system), ...(minutes > 75 ? [fuelTotals(minutes, minutes <= 150 ? 60 : 85, .65)] : [])],
+    fueling: [...fueling(minutes, system), ...(minutes > 75 && carbsPerHour(minutes, system) ? [fuelTotals(minutes, carbsPerHour(minutes, system), .65)] : [])],
     ftp: ftp || null, ftpSource: thresholds.source || null,
     steps: stepRows(structure, { ftp, environment, zones: thresholds.powerZones, hrZones: thresholds.hrZones }),
     planned: planned ? { name: planned.name, minutes: planned.minutes, system: planned.system, intensityFactor: planned.intensityFactor, steps: stepRows(planned.structure || [], { ftp, environment: "indoor", zones: thresholds.powerZones, hrZones: thresholds.hrZones }) } : null
@@ -266,20 +266,42 @@ function explainRun(workout, structure, { coach, environment, thresholds, planne
     title: RUN_LABELS()[system] || system,
     why, how,
     environment: [terrainLine(structure, { sport: "run", environment, system }), ...(workout.environment_notes || [])].filter(Boolean),
-    fueling: [...runFueling(minutes, system), ...(minutes > 90 ? [fuelTotals(minutes, 45, .6)] : [])],
+    fueling: [...runFueling(minutes, system), ...(minutes > 90 && carbsPerHour(minutes, system, "run") ? [fuelTotals(minutes, carbsPerHour(minutes, system, "run"), .6)] : [])],
     ftp: null, thresholdPace: pace, thresholdPaceFormatted: formatPace(pace), paceSource: thresholds.runPaceSource || null,
     steps: stepRows(structure, opts),
     planned: planned ? { name: planned.name, minutes: planned.minutes, system: planned.system, intensityFactor: planned.intensityFactor, steps: stepRows(planned.structure || [], { ...opts, environment: "indoor" }) } : null
   };
 }
 
-// Carbohydrate per hour for the calendars (Intervals.icu carbs_per_hour), from
-// the same fuelling advice the app shows; null when water is enough.
+// Carbohydrate per hour (g/h) by the kind of session and its length, for the
+// app's fuelling advice and the calendars (Intervals.icu carbs_per_hour); null
+// when water is enough. Harder and longer sessions burn more glycogen.
+const CARBS = {
+  //               ≤45  ≤75  ≤120 ≤180  >180 min
+  ride: {
+    recovery:     [0,   0,   30,  40,   50],
+    endurance:    [0,   40,  50,  60,   75],
+    tempo:        [30,  50,  60,  70,   80],
+    sweet_spot:   [40,  60,  70,  80,   90],
+    threshold:    [40,  60,  75,  85,   90],
+    vo2max:       [40,  60,  75,  85,   90],
+    anaerobic:    [40,  55,  70,  80,   90],
+    sprint:       [20,  40,  50,  60,   70]
+  },
+  run: {
+    recovery:     [0,   0,   0,   30,   40],
+    endurance:    [0,   0,   30,  45,   60],
+    tempo:        [0,   20,  40,  50,   60],
+    threshold:    [0,   25,  45,  55,   60],
+    vo2max:       [0,   25,  45,  55,   60],
+    anaerobic:    [0,   20,  40,  50,   60],
+    sprint:       [0,   0,   30,  40,   50]
+  }
+};
 export function carbsPerHour(minutes, system, sport = "ride") {
-  const m = n(minutes, 0), hard = ["sweet_spot", "threshold", "vo2max", "anaerobic"].includes(system);
-  if (sport === "run") return m > 90 ? 45 : null;
-  if (m <= 75) return hard ? 30 : null;
-  return m <= 150 ? 60 : 85;
+  const m = n(minutes, 0), table = CARBS[sport === "run" ? "run" : "ride"];
+  const row = table[system] || table.endurance, i = [45, 75, 120, 180].findIndex(limit => m <= limit);
+  return row[i < 0 ? 4 : i] || null;
 }
 
 const FOCUS_LABELS = () => ({ recovery: L("Regenerace", "Recovery"), endurance: L("Vytrvalost", "Endurance"), tempo: "Tempo", sweet_spot: "Sweet spot", threshold: L("Práh", "Threshold"), vo2max: "VO2max", anaerobic: L("Anaerobní kapacita", "Anaerobic capacity"), sprint: L("Sprinty", "Sprints") });
