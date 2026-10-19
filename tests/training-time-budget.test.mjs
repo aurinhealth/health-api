@@ -20,6 +20,7 @@ import { internalHeaders } from '../src/internal-auth.js';
 import { exercisePreferences } from '../src/exercise-feedback.js';
 import { searchWorkoutLibrary, parseWorkoutSearchFilters, stepRows } from '../src/workout-library.js';
 import { systemOf } from '../src/training-plans.js';
+import { isHardKind } from '../src/session-intensity.js';
 
 const today = '2026-10-07';
 const source = readFileSync(new URL('../src/entrypoint.js', import.meta.url), 'utf8');
@@ -42,7 +43,7 @@ async function api(minutes) {
     getWeekPlan, availabilityOn, trainingBudget, parseTimeWindow, roleFor, targetFor,
     validTrainingDay: validDay, mondayOfDate: weekStartOf, localToday: () => today,
     getAthleteState, assertTrainingAllowed, environmentFor, indoorMinutes,
-    buildCyclingCoachV2, FOCUS_OF, kindOfSystem, generateWorkout, getCapabilities, getWorkout, scheduleWorkoutInIntervals,
+    buildCyclingCoachV2, FOCUS_OF, kindOfSystem, isHardKind, generateWorkout, getCapabilities, getWorkout, scheduleWorkoutInIntervals,
     storeLocalEvent, syncLocalWorkout, completeLocalWorkout, generateStrengthPlan,
     readGymPlan, writeStrengthPlanToDb, writeStrengthPlanToIntervals, exerciseMuscles, exercisePreferences,
     weekWeather: async () => ({}), computeWeekTargets: async () => ({ items: [] }), planForWeek: async () => ({ plan: null, pw: null, roles: {}, load: null, apply: t => t }), activePlan: async () => null, gymPhaseFor: () => null,
