@@ -122,7 +122,7 @@ test("a deploy stops before going live when the Worker has no SESSION_SECRET", (
   // The deploy runs the check before it changes anything.
   for (const [file, env] of [["deploy-worker.yml", ""]]) {
     const workflow = readFileSync(new URL("../.github/workflows/" + file, import.meta.url), "utf8");
-    const at = workflow.indexOf(`wrangler@4 secret list${env} | node scripts/require-secrets.mjs SESSION_SECRET`);
+    const at = workflow.search(new RegExp(`wrangler@4[.\\d]* secret list${env} \\| node scripts/require-secrets\\.mjs SESSION_SECRET`));
     assert.ok(at > 0 && at < workflow.indexOf("d1 "), file);
   }
 });

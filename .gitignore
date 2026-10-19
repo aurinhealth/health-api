@@ -15,3 +15,5 @@ cookbook*.json
 cookbook*.sql
 out/
 src/private
+__pycache__/
+*.pyc

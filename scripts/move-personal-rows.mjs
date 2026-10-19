@@ -114,7 +114,7 @@ async function main() {
   let fileCount = 0;
   function wrangler(args) {
     // Output is parsed, never echoed: it holds personal rows.
-    try { return execFileSync('npx', ['--yes', 'wrangler@4', ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }); }
+    try { return execFileSync('npx', ['--yes', 'wrangler@4.147.0', ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] }); }
     catch (error) { throw new Error('wrangler d1 command failed on ' + args[2] + ', exit ' + error.status); }
   }
   function query(database, sql) {

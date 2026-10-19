@@ -147,7 +147,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@4 secret list | node scripts/require-secrets.mjs SESSION_SECRET
+          npx --yes wrangler@4.147.0 secret list | node scripts/require-secrets.mjs SESSION_SECRET
 
       # The test server's own database starts empty: the tables that predate
       # the migrations first (a no-op once they exist).
@@ -158,6 +158,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 execute health-data-staging --remote --env staging --file staging/schema.sql
+          wranglerVersion: "4.147.0"
 
       - name: Apply D1 migrations
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
@@ -165,6 +166,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 migrations apply ${{ env.DATABASE }} --remote ${{ env.ENV_ARGS }}
+          wranglerVersion: "4.147.0"
 
       - name: Prepare isolated user data databases
         env:
@@ -192,7 +194,7 @@ jobs:
           set -euo pipefail
           code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$WORKER/settings")"
           if [ "$code" = "404" ]; then echo "$WORKER does not exist yet"; exit 0; fi
-          printf 'wrangler' | npx --yes wrangler@4 secret put DEPLOY_SOURCE --name "$WORKER"
+          printf 'wrangler' | npx --yes wrangler@4.147.0 secret put DEPLOY_SOURCE --name "$WORKER"
 
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@953926a2e2182532811c01a25e53647d93bf07c0 # v4
@@ -201,6 +203,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.runtime.jsonc ${{ env.ENV_ARGS }}
           workingDirectory: .
+          wranglerVersion: "4.147.0"
 
       # Keys the test server makes for itself: session signing and the
       # encryption of connected services' keys. Generated once, never shown,
@@ -213,10 +216,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          names="$(npx --yes wrangler@4 secret list --name "$WORKER")"
+          names="$(npx --yes wrangler@4.147.0 secret list --name "$WORKER")"
           for name in SESSION_SECRET CONNECTION_KEY; do
             if grep -q "\"name\": *\"$name\"" <<< "$names"; then continue; fi
-            openssl rand -base64 48 | tr -d '\n' | npx --yes wrangler@4 secret put "$name" --name "$WORKER" > /dev/null
+            openssl rand -base64 48 | tr -d '\n' | npx --yes wrangler@4.147.0 secret put "$name" --name "$WORKER" > /dev/null
             echo "Generated $name"
           done
 
@@ -263,7 +266,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
-          nohup npx --yes wrangler@4 tail health-api --format json > "$RUNNER_TEMP/tail.jsonl" 2> "$RUNNER_TEMP/tail.err" &
+          nohup npx --yes wrangler@4.147.0 tail health-api --format json > "$RUNNER_TEMP/tail.jsonl" 2> "$RUNNER_TEMP/tail.err" &
           sleep 15
 
       - name: Request GitHub OIDC token for strength smoke test

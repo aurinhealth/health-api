@@ -30,7 +30,7 @@ The model is the explanation and planning layer, not the sole safety mechanism. 
 
 Default quality budget: no more than two genuinely hard cycling days in a rolling seven-day window unless future race-specific logic explicitly justifies otherwise.
 
-A session counts as hard by its name (`src/session-intensity.js`): threshold, práh, sweet spot, VO₂, over-unders, Billat 30-30, Norský 4×4, Seiler, Rønnestad 30/15, Tabata, cruise intervals, repeats such as "5×6 min" outside an easy session. Tempo makes a run hard, not a ride. The same rule is used by the daily summary and the gym.
+A session counts as hard by one rule (`src/session-intensity.js`, `isHardSession`): its kind or library system (tempo, sweet spot, threshold, VO₂max, anaerobic, sprint), else its name: tempo, threshold, práh, sweet spot, VO₂, anaerobic, sprint, over-unders, Billat 30-30, Norský 4×4, Seiler, Rønnestad 30/15, Tabata, cruise intervals, a race or a test, repeats such as "5×6 min" outside an easy session (hills for a run), else its intensity (a ride from NP/FTP 0.86, a run from IF 0.88) or a dense load. Tempo is hard in both sports, as the checks below treat it. The same rule is used by the week plan, the library, the chat's checks, Today and the gym.
 
 ## Readiness
 

@@ -5,6 +5,7 @@
 // what was done lately and the main sport rank them; an option the athlete
 // turns down loses weight for two weeks (the coach learns from declines).
 import { L } from "./lang.js";
+import { isHardKind } from "./session-intensity.js";
 import { activityKindOf, sessionOf } from "./activity-match.js";
 import { addRecovery, ensureRecoveryTable } from "./recovery-plan.js";
 
@@ -18,7 +19,6 @@ const KIND_NAMES = () => ({
   tempo: L("tempo", "tempo"), sweet_spot: L("sweet spot", "sweet spot"), threshold: L("práh", "threshold"), vo2: L("VO2max", "VO2max"),
   vo2max: L("VO2max", "VO2max"), anaerobic: L("anaerobní", "anaerobic"), sprint: L("sprinty", "sprints"), rest: L("volno", "rest")
 });
-const HARD = new Set(["tempo", "sweet_spot", "threshold", "vo2", "vo2max", "anaerobic", "sprint"]);
 const MAIN = { cycling: "ride", running: "run", strength: "gym", triathlon: "ride" };
 
 const sentence = text => { const t = String(text || "").trim(); return t ? t[0].toUpperCase() + t.slice(1).replace(/\.?$/, ".") : ""; };
@@ -37,7 +37,7 @@ export function rankOptions({ ride, run, mainSport = "general", sports = [], tod
   const endurance = (sport, coach) => {
     const s = session(coach), kind = s.kind || "endurance", minutes = Math.round(Number(s.durationMinutes) || (sport === "run" ? 45 : 75));
     const title = (sport === "run" ? L("Běh", "Run") : L("Kolo", "Ride")) + " · " + (names[kind] || kind);
-    return { kind: sport, title, detail: L(`${minutes} min`, `${minutes} min`) + (HARD.has(kind) ? "" : sport === "run" ? L(" · zóna 2", " · zone 2") : L(" · lehce", " · easy")), hard: HARD.has(kind), rest: kind === "rest" || kind === "recovery" };
+    return { kind: sport, title, detail: L(`${minutes} min`, `${minutes} min`) + (isHardKind(kind) ? "" : sport === "run" ? L(" · zóna 2", " · zone 2") : L(" · lehce", " · easy")), hard: isHardKind(kind), rest: kind === "rest" || kind === "recovery" };
   };
   const options = [
     endurance("ride", ride),

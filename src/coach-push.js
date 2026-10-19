@@ -7,7 +7,8 @@
 //   - in the evening before a long or hard session.
 // The phone answers the buttons through /app/api/coach/nudge (entrypoint.js).
 import { L, plural } from './lang.js';
-import { HARD_KINDS, MIN_MINUTES } from './week-ai.js';
+import { MIN_MINUTES } from './week-ai.js';
+import { HARD_KINDS } from './session-intensity.js';
 
 export const COACH_PUSH = 'coach';
 // The phone's notification category with "Vyměnit" and "Nechat" (PushRegistration.swift).

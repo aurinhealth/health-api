@@ -73,7 +73,8 @@ import { getAthleteState, updateAthleteState, explicitPreference, assertTraining
 import { savePlanState, planChoice, planUndo, missedSession, proposalView, phaseLabel, planWeek, planWorkoutId, levelShift, systemOf, planTemplates, templateSummary, planSummary, planStart, planDays, startPlan, stopPlan, getTemplate, planName, planEdit, planWeekDays, planPreview, planCompletion, finishedPlan, closePlanResult } from './training-plans.js';
 import { capWeekTargets, estimatedTargets, weekProposal, weekWeather, environmentFor, activityHistoryEstimate, indoorMinutes, sessionsOn, sportOf } from './adaptive-week.js';
 import { chatLibraryQuery } from './chat-ask.js';
-import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS, HARD_KINDS } from './week-ai.js';
+import { proposeWeekAI, adjustByChip, adjustByText, kindOfSystem, KINDS, FOCUS_OF, WEEK_SPORTS } from './week-ai.js';
+import { isHardSession, isHardKind } from './session-intensity.js';
 import { reviseWeek, rulesRevision, revisionSignature, readRevision, saveRevision, decideRevision, shownRevision } from './week-revision.js';
 import { movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { illnessWarning, illnessSigns } from './illness-check.js';
@@ -1041,7 +1042,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         preferenceMemory:state.memories?.length?state.memories:undefined};
       try{
         // Hard sessions the AI doesn't plan: in the calendar or done from the day before the week on.
-        const fixedHard=inputs.week.days.filter(d=>d.date>=shiftDate(start,-1)&&d.date<=shiftDate(start,7)).flatMap(d=>[...(d.daily?.training?.planned||[]),...(d.daily?.training?.completed||[])].filter(a=>['ride','run'].includes(sportOf(a))&&HARD_KINDS.has(kindOfSystem(a.name||a.type,'endurance'))).map(()=>d.date));
+        const fixedHard=inputs.week.days.filter(d=>d.date>=shiftDate(start,-1)&&d.date<=shiftDate(start,7)).flatMap(d=>[...(d.daily?.training?.planned||[]),...(d.daily?.training?.completed||[])].filter(a=>['ride','run'].includes(sportOf(a))&&isHardSession(a,sportOf(a))).map(()=>d.date));
         const r=await proposeWeekAI(env,facts,{prefs,focus:inputs.focus,usedByDate,existingSports,planDays:rules.items.filter(x=>x.plan),fixedHard});
         return Response.json({status:'ok',start,ai:true,summary:r.summary,items:r.items,warnings:rules.warnings},{headers:{'Cache-Control':'no-store'}});
       }catch(error){
@@ -2043,7 +2044,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // Up to the user's today (in Sydney or after midnight in Prague, UTC is still yesterday).
       const {from,to} = fitnessDays(days);
       const apiKey = String(env.INTERVALS_API_KEY || "");
-      // Without Intervals.icu the load comes from the watch's workouts and the gym (training-load.js).
+      // Without Intervals.icu the load comes from the watch's workouts and the gym (training-load.js);
+      // a failed read answers with an error below, which the callers' cache does not keep.
       if (!apiKey) return Response.json({status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness(env,from,to)},{headers:{"Cache-Control":"no-store"}});
       const auth = intervalsAuthorization(apiKey);
       const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(from)+"&newest="+encodeURIComponent(to);
@@ -2052,9 +2054,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if (!response.ok) return Response.json({status:"error",message:"Intervals wellness HTTP "+response.status,data},{status:response.status});
       const intervalsRows = (Array.isArray(data)?data:[]).map(x=>({...x,tsb:Number.isFinite(Number(x.ctl))&&Number.isFinite(Number(x.atl))?Number(x.ctl)-Number(x.atl):null})).filter(x=>x.id).sort((a,b)=>String(a.id).localeCompare(String(b.id)));
       // Workouts only the watch recorded (not in Intervals.icu) count into CTL too.
-      const watchExtra = await watchOnlyFitness(env,ctx,from,to).catch(error=>{console.error('Watch-only load',error.message);return null;});
+      // A failed read leaves them out of this answer only: degraded keeps it out of the cache (api-cache.js).
+      const watchExtra = await watchOnlyFitness(env,ctx,from,to).catch(error=>{console.error('Watch-only load',error.message);return false;});
       const wellness = watchExtra ? addLoads(intervalsRows,watchExtra) : intervalsRows;
-      return Response.json({status:"ok",source:"intervals.icu",days,wellness},{headers:{"Cache-Control":"no-store"}});
+      return Response.json({status:"ok",source:"intervals.icu",days,wellness,...(watchExtra===false?{degraded:true}:{})},{headers:{"Cache-Control":"no-store"}});
     } catch (error) {
       return Response.json({status:"error",message:error.message},{status:502});
     }
@@ -2352,7 +2355,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // session (Revize doporučování tréninků 2026-10-16, nález 2).
       let workoutId=body.workoutId?String(body.workoutId).slice(0,120):null;
       const askedWorkout=workoutId?await getWorkout(env.DB,workoutId.replace(/~\d+$/,'')).catch(()=>null):null;
-      const libraryFocus=askedWorkout?(/sprint/.test(String(askedWorkout.primary_system))?'vo2max':FOCUS_OF[kindOfSystem(askedWorkout.primary_system)]||null):null;
+      const libraryFocus=askedWorkout?FOCUS_OF[kindOfSystem(askedWorkout.primary_system)]||null:null;
       const askedFocus=Object.values(FOCUS_OF).includes(body.focus)?body.focus:libraryFocus;
       const planned=!workoutId&&!(Number(body.variant)>0)&&!askedFocus?chip?.plan||null:null;
       if(weekTarget?.minutes)availabilityMinutes=weekTarget.minutes;
@@ -2381,8 +2384,8 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // session needs a hard day by the coach (a red or tired morning makes it
       // easy, and then the coach's own easy session stands), an easy one
       // anything but recovery. Tests and the race are the plan's whatever.
-      const coachKind=coach.recommendation?.session?.kind,hardDay=['tempo','sweet_spot','threshold','vo2','vo2max','anaerobic','sprint'].includes(coachKind);
-      if(workoutId&&['tempo','sweet_spot','threshold','vo2max'].includes(libraryFocus)&&!hardDay)workoutId=null;
+      const coachKind=coach.recommendation?.session?.kind,hardDay=isHardKind(coachKind);
+      if(workoutId&&isHardKind(libraryFocus)&&!hardDay)workoutId=null;
       const keeps=planned&&(planned.kind==='race'||planned.kind==='test'?true:planned.kind==='quality'?hardDay:coachKind!=='recovery'||planned.kind==='recovery');
       let planWorkout=null;
       if(keeps){

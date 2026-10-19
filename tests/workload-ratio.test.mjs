@@ -93,6 +93,7 @@ test("monotony is the 7-day mean over its SD, strain the week's load × monotony
   // No variation (all zero or all equal) and short history are null.
   assert.deepEqual(monotony(repeat(7, 0), 30), { value: null, strain: null, high: false });
   assert.deepEqual(monotony(repeat(7, 50), 30), { value: null, strain: null, high: false });
+  assert.deepEqual(monotony(repeat(7, 33.3), 30), { value: null, strain: null, high: false }, "equal decimal loads are no variation, not a monotony of 10^15");
   assert.deepEqual(monotony(week, 6), { value: null, strain: null, high: false });
   assert.deepEqual(monotony([50, 60], 30), { value: null, strain: null, high: false });
 });

@@ -24,6 +24,6 @@ test("an exhausted quota is not asked again", async t => {
   let calls = 0;
   globalThis.fetch = async () => { calls++; return new Response(JSON.stringify({ error: { code: "insufficient_quota", message: "quota" } }), { status: 429 }); };
   t.after(() => { globalThis.fetch = real; AI_RETRY_DELAYS_MS.splice(0, 2, ...delays); });
-  await assert.rejects(callOpenAI(env(), { instructions: "x", input: "y" }), /OpenAI 429/);
+  await assert.rejects(callOpenAI(env(), { instructions: "x", input: "y" }), error => /^AI 429: /.test(error.message) && !/quota/.test(error.message), "OpenAI's own text stays in the log");
   assert.equal(calls, 1);
 });

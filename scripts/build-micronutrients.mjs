@@ -452,7 +452,7 @@ export async function loadTables(dir, log = console.log) {
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 function r2get(bucket, key, file, { optional = false } = {}) {
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const r = spawnSync(npx, ['--yes', 'wrangler@4', 'r2', 'object', 'get', `${bucket}/${key}`, '--remote', '--file', file], { encoding: 'utf8', maxBuffer: 64 << 20 });
+    const r = spawnSync(npx, ['--yes', 'wrangler@4.147.0', 'r2', 'object', 'get', `${bucket}/${key}`, '--remote', '--file', file], { encoding: 'utf8', maxBuffer: 64 << 20 });
     if (r.status === 0 && existsSync(file)) return true;
     if (optional && /not found|does not exist|10007|404/i.test(r.stdout + r.stderr)) return false;
     console.error(`Download of ${key} failed (attempt ${attempt}): ${(r.stderr || r.stdout).slice(-300)}`);
@@ -621,7 +621,7 @@ export function writeOutput(out, dir, { version, counts, used, catalogue, top, e
 function put(bucket, key, file) {
   return new Promise((resolve, reject) => {
     const run = attempt => {
-      const p = spawn(npx, ['--yes', 'wrangler@4', 'r2', 'object', 'put', `${bucket}/${key}`, '--file', file, '--remote', '--content-type', 'application/json'], { stdio: ['ignore', 'ignore', 'pipe'] });
+      const p = spawn(npx, ['--yes', 'wrangler@4.147.0', 'r2', 'object', 'put', `${bucket}/${key}`, '--file', file, '--remote', '--content-type', 'application/json'], { stdio: ['ignore', 'ignore', 'pipe'] });
       let err = '';
       p.stderr.on('data', d => { err = (err + d).slice(-400); });
       p.on('close', code => {

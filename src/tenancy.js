@@ -505,7 +505,8 @@ export async function setUserDisabled(db, env, id, disabled) {
   const row = await db.prepare("SELECT email FROM users WHERE id=?").bind(Number(id)).first();
   if (!row) throw new Error(L("Uživatel neexistuje.", "The user doesn't exist."));
   if (normalizeEmail(row.email) === ownerEmail(env)) throw new Error(L("Správce nelze zablokovat.", "The admin can't be blocked."));
-  await db.prepare("UPDATE users SET disabled=? WHERE id=?").bind(disabled ? 1 : 0, Number(id)).run();
+  // Blocking also ends the user's sessions (session_epoch), so unblocking later does not bring old cookies back.
+  await db.prepare("UPDATE users SET disabled=?, session_epoch=session_epoch+? WHERE id=?").bind(disabled ? 1 : 0, disabled ? 1 : 0, Number(id)).run();
 }
 
 // Users that have at least one of the given providers connected, for cron

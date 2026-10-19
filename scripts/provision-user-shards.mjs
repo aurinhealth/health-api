@@ -99,7 +99,7 @@ async function main() {
   function wrangler(args) {
     // Remote schema/migration output is never echoed: a later data migration
     // could quote rows. Show only the operation and database name ourselves.
-    try { return execFileSync('npx', ['--yes', 'wrangler@4', ...args, '--config', configPath, ...envArgs], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }); }
+    try { return execFileSync('npx', ['--yes', 'wrangler@4.147.0', ...args, '--config', configPath, ...envArgs], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 }); }
     catch (error) { throw new Error('Shard deployment command failed, exit ' + error.status); }
   }
   if (activate) {

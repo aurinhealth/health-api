@@ -1,6 +1,6 @@
 import { trainingStatus } from './training-status.js';
 import { todayGymContext } from './coach-gym-adjustment.js';
-import { isQualityName } from './session-intensity.js';
+import { isHardSession } from './session-intensity.js';
 import { parseIntervalsDescription } from './planned-detail.js';
 import { L, plural } from './lang.js';
 import { buildRideReview } from './ride-review.js';
@@ -12,7 +12,7 @@ const txt=v=>String(v||'');
 const isBike=x=>/ride|cycling|bike|kolo/i.test(txt(x?.name)+' '+txt(x?.type));
 const isRun=x=>/^(Run|VirtualRun|TrailRun|Treadmill)/i.test(txt(x?.type));
 const isGym=x=>/weight|strength|weights|posil|gym/i.test(txt(x?.name)+' '+txt(x?.type));
-const isHard=x=>/threshold|vo2|interval|sweet spot|tempo/i.test(txt(x?.name))||isQualityName(x?.name);
+const isHard=x=>isHardSession(x);
 function sleepFacts(sessions,date){
   const rows=sessions.filter(s=>n(s.durationMin)>=180&&(!date||!s.date||s.date<=date)).sort((a,b)=>txt(b.endTime||b.date).localeCompare(txt(a.endTime||a.date))).slice(0,7);
   const last=rows[0],day=last?.date||txt(last?.endTime).slice(0,10),fresh=!date||!day||day===date;

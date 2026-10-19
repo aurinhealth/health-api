@@ -9,10 +9,10 @@
     "pretest": "node scripts/require-private-prompts.mjs",
     "test": "node --test tests/*.test.mjs",
     "check": "for f in src/*.js src/private/*.js scripts/*.mjs; do node --check \"$f\" || exit 1; done",
-    "dev": "npx --yes wrangler@4 dev",
-    "migrate:local": "npx --yes wrangler@4 d1 migrations apply health-data --local",
-    "tail": "npx --yes wrangler@4 tail health-api",
+    "dev": "npx --yes wrangler@4.147.0 dev",
+    "migrate:local": "npx --yes wrangler@4.147.0 d1 migrations apply health-data --local",
+    "tail": "npx --yes wrangler@4.147.0 tail health-api",
     "lint": "eslint src scripts tests",
-    "lint:install": "npm install --no-save --no-package-lock eslint@9 globals@15"
+    "lint:install": "npm install --no-save --no-package-lock eslint@9.39.5 globals@15.15.0"
   }
 }
