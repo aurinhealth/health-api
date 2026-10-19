@@ -1,0 +1,98 @@
+name: iOS marketing screenshots
+
+# Dedicated simulator-only capture. No signing, device archive or release.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "ios-native/LoadwiseUITests/MarketingCaptureTests.swift"
+      - ".github/workflows/ios-marketing.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-marketing-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    runs-on: macos-15
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: ios-native
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Pick Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi -e beta -e release_candidate | sort -V | tail -1)
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
+          xcodebuild -version
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Prepare a clean iPhone simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          phones = [d for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith("iPhone")]
+          preferred = ("iPhone 16 Pro", "iPhone 16", "iPhone 15 Pro", "iPhone 15")
+          pick = next((d for name in preferred for d in phones if d["name"] == name), phones[0])
+          print(pick["udid"])')
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl shutdown "$udid" || true
+          xcrun simctl erase "$udid"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl ui "$udid" appearance light
+          xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4
+          mkdir -p "$GITHUB_WORKSPACE/screens/marketing"
+
+      - name: Capture the marketing journey in the running app
+        env:
+          TEST_RUNNER_MARKETING_CAPTURE: "1"
+          TEST_RUNNER_MARKETING_DIR: ${{ github.workspace }}/screens/marketing
+        run: |
+          set -o pipefail
+          xcodebuild -project Loadwise.xcodeproj -scheme LoadwiseSmoke -configuration Debug \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
+            -resultBundlePath "$GITHUB_WORKSPACE/marketing.xcresult" \
+            -parallel-testing-enabled NO \
+            -only-testing:LoadwiseUITests/MarketingCaptureTests/testMarketingJourney \
+            CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$GITHUB_WORKSPACE/marketing-build.log"
+
+      - name: Export screenshots from the test result as a fallback
+        if: always()
+        run: |
+          if [ -d "$GITHUB_WORKSPACE/marketing.xcresult" ]; then
+            xcrun xcresulttool export attachments \
+              --path "$GITHUB_WORKSPACE/marketing.xcresult" \
+              --output-path "$GITHUB_WORKSPACE/screens/marketing/xcresult-attachments" || true
+          fi
+          {
+            echo '### Real iOS simulator screenshots'
+            echo 'English, light mode, 9:41 status bar, existing sample data.'
+            echo 'Use selected/ after visual review; diagnostics/ contains rejected captures.'
+            echo 'manifest.json explains omissions, including the empty demo AI coach.'
+            echo 'The xcresult and build log are included to investigate any missing capture.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload screenshots and provenance
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: Aurin-marketing-screens
+          path: |
+            screens/marketing
+            marketing.xcresult
+            marketing-build.log
+          if-no-files-found: error
+          retention-days: 30
