@@ -2275,7 +2275,7 @@ async function workoutPreview(env,ctx,a){
   // The library workout named in the answer, at the proposed length; without one
   // the kind the answer recommends, and only without that the coach picks.
   const exact=a.workoutId&&a.sport!=='gym'?{workoutId:a.workoutId,resizeTo:a.minutes}:a.sport!=='gym'&&FOCUS_OF[a.kind]?{focus:FOCUS_OF[a.kind]}:a.sport==='gym'&&a.gymFocus?{focus:a.gymFocus}:{};
-  const internalUrl=new URL('https://internal'+path),response=await handleDashboardApi(new Request(internalUrl,{method:'POST',headers:{Origin:internalUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({date:a.date,sport:a.sport,durationMinutes:a.minutes,availabilityMinutes:a.minutes,environment:'auto',preview:true,userInitiated:true,...exact})}),env,ctx,internalUrl,{signedIn:true});
+  const internalUrl=new URL('https://internal'+path),response=await handleDashboardApi(new Request(internalUrl,{method:'POST',headers:{Origin:internalUrl.origin,'Content-Type':'application/json'},body:JSON.stringify({date:a.date,sport:a.sport,durationMinutes:a.minutes,availabilityMinutes:a.minutes,environment:'auto',preview:true,userInitiated:true,fromCoach:true,...(a.insisted?{insisted:true}:{}),...exact})}),env,ctx,internalUrl,{signedIn:true});
   const result=await response.json();if(!response.ok||result.status!=='ok')throw new Error(result.message||L('Trénink se nepodařilo připravit.', 'The workout couldn\'t be prepared.'));
   if(a.sport==='gym'&&result.plan?.rows)result.muscles=Object.fromEntries([...new Set(result.plan.rows.map(r=>r?.[1]).filter(Boolean))].map(name=>[name,exerciseMuscles(name)]));
   return result;
@@ -2368,7 +2368,7 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(!userInitiated&&environment==='indoor'&&weekTarget?.environment!=='indoor')availabilityMinutes=availabilityMinutes!=null?indoorMinutes(genSport,availabilityMinutes):genSport==='ride'?90:60;
       const planFocus=planned?({quality:systemOf(genSport,planned.family),test:'threshold',long:'long_endurance',easy:'endurance',recovery:'recovery'})[planned.kind]||null:null;
       const roleFocus=askedFocus||planFocus||weekRole?.focus;
-      const goalOf=focus=>body.phase||focus?{...(body.phase?{phase:String(body.phase)}:{}),...(focus?{focus}:{}),...(focus&&focus===askedFocus?{asked:true}:{})}:null;
+      const goalOf=focus=>body.phase||focus?{...(body.phase?{phase:String(body.phase)}:{}),...(focus?{focus}:{}),...(focus&&focus===askedFocus?{asked:true,...(body.fromCoach===true?{chat:true,...(body.insisted===true?{insisted:true}:{})}:{})}:{})}:null;
       const coachInputs={...await loadCoachInputs(env,ctx,internalAuth,date),athleteState:await getAthleteState(env.DB).catch(()=>null),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),sport:genSport};
       let coach=buildCyclingCoachV2({...coachInputs,goal:goalOf(roleFocus)});
       // A hard kind asked for on a red morning gives way to the coach's own choice.
