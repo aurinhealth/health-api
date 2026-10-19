@@ -360,6 +360,8 @@ document.getElementById('svc-'+id).classList.toggle('on',on);hub.querySelectorAl
 tabs.forEach(function(t,i){t.addEventListener('click',function(){clearInterval(timer);pick(i);});
 t.addEventListener('keydown',function(e){var n=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;
 if(n){e.preventDefault();clearInterval(timer);pick((i+n+tabs.length)%tabs.length);tabs[cur].focus();}});});
+// Pointing at the logos or moving focus into them stops the turns, so what is read stays put.
+['mouseenter','focusin'].forEach(function(t){hub.addEventListener(t,function(){clearInterval(timer);});});
 r.classList.add('tabs');pick(0);if(!still)timer=setInterval(function(){pick((cur+1)%tabs.length);},5200);})();</script>
 <script>(function(){
 // Muscles: frame k of 72 is the figure turned k·5°; ids.png holds, per frame, which muscle each pixel is
@@ -617,7 +619,7 @@ ${store()}
 </div>
 <div class="stage">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">64 ms</div><div class="d up">↑ 6 ms above normal</div></div>
-<div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">score 86</div></div>
+<div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">score 82</div></div>
 <div class="glass g3" aria-hidden="true"><div class="k">Coach</div><div style="margin-top:4px">Go all in on strength today.</div></div>
 <div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness 78, how you feel, the weather, sleep, strain and HRV"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${shot('today', false)}</div></div></div></div>
 </div>
