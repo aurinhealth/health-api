@@ -338,11 +338,21 @@ struct WorkoutSearchResponse: Decodable {
     let total: Int?
     /// The coach's type and length for the day the list is ranked by.
     let coachPick: CoachLength?
+    /// Few workouts of the chosen type: the AI writes its own (/compose).
+    var compose: Bool? = nil
 
     struct CoachLength: Decodable {
         let system: String?
         let durationMinutes: Double?
     }
+}
+
+/// The AI's own workout for the library's filters (POST /app/api/workouts/compose).
+struct ComposedWorkout: Decodable {
+    let status: String
+    let workout: LibraryWorkout?
+    /// Whether "Jiný návrh" may ask for another.
+    var more: Bool? = nil
 }
 
 struct LibraryWorkout: Decodable, Equatable, Identifiable, Hashable {
@@ -367,6 +377,8 @@ struct LibraryWorkout: Decodable, Equatable, Identifiable, Hashable {
 
     struct AIPick: Decodable, Equatable, Hashable {
         let reason: String
+        /// A hard type chosen on a morning the coach would keep easier.
+        var warning: String? = nil
     }
 
     struct Guide: Decodable, Equatable {

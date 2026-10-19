@@ -2710,3 +2710,7 @@
 "návrhy %d, schválené %d" = "%d sent, %d approved";
 "Zamítnout" = "Reject";
 "Schválit" = "Approve";
+"Na míru od AI" = "Made for you by AI";
+"Skládám trénink podle tvého výběru…" = "Building a workout to your choice…";
+"V knihovně tomuto výběru nic neodpovídá." = "Nothing in the library matches this choice.";
+"Z knihovny · %@ %@" = "From the library · %@ %@";

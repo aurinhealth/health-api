@@ -19,6 +19,7 @@ import { exerciseMuscles } from '../src/fitness-insights.js';
 import { internalHeaders } from '../src/internal-auth.js';
 import { exercisePreferences } from '../src/exercise-feedback.js';
 import { searchWorkoutLibrary, parseWorkoutSearchFilters, stepRows } from '../src/workout-library.js';
+import { fewMatches } from '../src/ai-workout-compose.js';
 import { systemOf } from '../src/training-plans.js';
 import { isHardKind } from '../src/session-intensity.js';
 
@@ -55,7 +56,7 @@ async function api(minutes) {
     buildStrengthContext: async (_env, date) => ({ status: 'ok', date, strength: { recentCompletedSets: [] }, cycling: { recentActivities: [], plannedWorkouts: [] }, recovery: {} }),
     ensureCurrentWorkoutSafeToReplace: async () => ({ status: 'ok' }), nutritionFor: async () => ({}),
     handleWorkoutTemplatesApi: async () => undefined,
-    searchWorkoutLibrary, parseWorkoutSearchFilters, stepRows, systemOf, reconcileWorkoutLibraryCompletions: async () => {}, rideFtpFor: t => ({ ftp: t.ftp, estimated: false }), explainWorkout: () => ({ title: '' })
+    searchWorkoutLibrary, parseWorkoutSearchFilters, fewMatches, stepRows, systemOf, reconcileWorkoutLibraryCompletions: async () => {}, rideFtpFor: t => ({ ftp: t.ftp, estimated: false }), explainWorkout: () => ({ title: '' })
   });
   vm.runInContext(slice(coachInbox, 'async function ensureCoachInboxTable(', '\n// Earlier proposals of the assistant'), context);
   for (const text of routeModules) vm.runInContext(text.replace(/^import .*$/gm, '').replace(/^export /gm, ''), context);
@@ -188,4 +189,14 @@ test('Doporučená in the library keeps to the day\'s time in the week plan; a p
   assert.ok(list.data.workouts.every(w => w.duration_minutes <= 45), list.data.workouts.map(w => w.duration_minutes).join(','));
   const picked = await app.get('/app/api/workouts/search?sport=ride&environment=outdoor&limit=40&duration=120&durationTolerance=15');
   assert.ok(picked.data.workouts.some(w => w.duration_minutes > 45));
+});
+
+test('the library asks for the AI\'s own workout only when few of the chosen type are left', async () => {
+  const app = await api(180);
+  const all = await app.get('/app/api/workouts/search?sport=ride&environment=outdoor&limit=40');
+  assert.equal(all.data.compose, false, 'Doporučený has plenty');
+  const rare = await app.get('/app/api/workouts/search?sport=ride&environment=indoor&limit=40&system=vo2max&duration=30&durationTolerance=5&minDifficulty=9&maxDifficulty=10');
+  assert.equal(rare.status, 200, rare.data.message);
+  assert.equal(rare.data.compose, rare.data.workouts.filter(w => w.primary_system === 'vo2max').length < 3);
+  assert.equal(rare.data.compose, true, rare.data.workouts.map(w => w.name).join(', '));
 });
