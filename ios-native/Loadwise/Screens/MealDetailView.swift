@@ -60,8 +60,7 @@ struct MealDetailView: View {
         if action == "delete" { for id in selected where id < 0 { await model.deleteFood(id: id) } }
         if !model.demo, !ids.isEmpty {
             do {
-                let skipped = try await model.api.bulkFood(action, ids: Array(ids), date: date, mealType: mealType)
-                if !skipped.isEmpty { model.notice = L10n.tr("Jídlo z jiné aplikace nejde přesunout, jen zkopírovat nebo smazat. Zůstalo na místě.") }
+                _ = try await model.api.bulkFood(action, ids: Array(ids), date: date, mealType: mealType)
             } catch {
                 return error.localizedDescription
             }
@@ -204,7 +203,8 @@ struct MealDetailContent: View {
 }
 
 /// One food of the meal with every value it has. A tap or a swipe opens its
-/// edit (amount, meal, day, copy); deleting asks first.
+/// edit (amount, meal, day, copy; another app's food without the amount);
+/// deleting asks first.
 struct FoodEntryCard: View {
     @Environment(AppModel.self) private var model
     let entry: FoodSnapshot.Entry
@@ -219,11 +219,9 @@ struct FoodEntryCard: View {
         Group {
             if plain {
                 card
-            // Food from another app (Yazio…) changes there; here it can only
-            // be deleted, from Aurin alone (it stays in that app and Apple Health).
-            } else if entry.app != nil {
-                SwipeRow(select: select, delete: { confirmDelete = true }) { card }
             } else {
+                // Food from another app (Yazio…) opens too: its meal and day change
+                // in Aurin alone (it stays in that app and Apple Health).
                 SwipeRow(edit: { editing = true }, select: select, delete: { confirmDelete = true }) {
                     card.onTapGesture { editing = true }
                 }
@@ -268,7 +266,7 @@ struct FoodEntryCard: View {
         .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(entry.app == nil ? .isButton : [])
+        .accessibilityAddTraits(.isButton)
     }
 
     private func value(_ letter: String, _ grams: Double?, _ color: Color) -> some View {
