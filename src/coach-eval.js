@@ -228,9 +228,15 @@ export const COACH_EVAL_SCENARIOS = [
   { id: 'S25', title: 'Žlutá připravenost, po odmítnutí trvá na tvrdém', lang: 'en', message: 'But I want a hard one.', athlete: YELLOW,
     conversation: date => [{ role: 'user', content: 'Generate me a bike training for 30 minutes but hard one' }, { role: 'assistant', content: `I'd make this a 30-minute easy ride, not a hard one today. Your readiness is yellow and you slept 5 h 7 min.\n\n[Proposals: workout ${date} ride 30 min recovery]` }],
     checks: r => { const kind = cardKind(evalAthlete(r.date, YELLOW), { type: 'workout', sport: 'ride', date: r.date, minutes: 30, kind: 'vo2max' });
-      return [safety('aplikace dnes tvrdou kartu na přání pustí (žlutá)', isHardKind(kind), kind), quality('dá tvrdou kartu na dnešek', hardCards(r).some(a => a.date === r.date)),
+      return [quality('aplikace dnes tvrdou kartu na přání pustí (žlutá)', isHardKind(kind), kind), quality('dá tvrdou kartu na dnešek', hardCards(r).some(a => a.date === r.date)),
         quality('nedá místo toho lehkou jízdu', !easyToday(r)), quality('neodmítne', !says(r, /wouldn.t prescribe|not hard tonight|won.t (?:give|prescribe)|can.t give you|thursday is the earliest/i)),
         quality('krátce, nejvýš 90 slov', words(r.answer) <= 90, String(words(r.answer)))]; } },
+  // Petr 2026-10-19: asked again, the workout passes the 48 h rule too (a sweet spot yesterday); only red and illness hold.
+  { id: 'S26', title: 'Po odmítnutí znovu chce VO2max den po sweet spotu', message: 'Já vím, ale stejně je chci jet dneska.',
+    conversation: date => [{ role: 'user', content: 'Můžu dneska jet ty VO2max intervaly?' }, { role: 'assistant', content: `Dnes bych je nejel, včera jsi dal sweet spot a od něj ještě neuběhlo 48 h. Dej si dnes hodinu lehce a VO2max přesuň na zítra.\n\n[Návrhy: move planned:9001 ${shift(date, 1)}, workout ${date} ride 60 min endurance]` }],
+    checks: r => { const kind = cardKind(evalAthlete(r.date), { type: 'workout', sport: 'ride', date: r.date, minutes: 75, kind: 'vo2max', insisted: true });
+      return [quality('aplikace VO2max na opakovanou žádost pustí', isHardKind(kind), kind), quality('dá tvrdou kartu na dnešek', hardCards(r).some(a => a.date === r.date)),
+        quality('nedá místo toho lehkou jízdu', !easyToday(r)), quality('nezopakuje odmítnutí', !says(r, /nejel bych|nedoporuč|radši zítra|přesuň na zítra/i))]; } },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',
@@ -310,7 +316,7 @@ export function cardKind(athlete, action, library = []) {
   const focus = lib ? (/sprint/.test(String(lib.system)) ? 'vo2max' : FOCUS_OF[kindOfSystem(lib.system)]) : FOCUS_OF[action.kind] || null;
   const day = athlete.week.days.find(d => d.date === action.date)?.daily || athlete.daily;
   const inputs = { date: action.date, daily: day, week: athlete.week, fitness: athlete.fitness, health: athlete.health, gym: athlete.gym, preferences: athlete.preferences, profile: athlete.profile, recoveryTime: athlete.recoveryTime || null, today: athlete.date || null, sport: action.sport, availabilityMinutes: action.minutes };
-  let coach = buildCyclingCoachV2({ ...inputs, goal: focus ? { focus, asked: true, chat: true } : null });
+  let coach = buildCyclingCoachV2({ ...inputs, goal: focus ? { focus, asked: true, chat: true, ...(action.insisted ? { insisted: true } : {}) } : null });
   if (focus && !['recovery', 'endurance', 'long_endurance'].includes(focus) && coach.readiness?.status === 'red') coach = buildCyclingCoachV2(inputs);
   return coach.recommendation?.session?.kind || null;
 }

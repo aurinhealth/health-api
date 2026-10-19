@@ -82,6 +82,11 @@ test("the coach, the chat's check and the gym agree: a tempo ride is a hard day"
   const week = name => ({ athleteState: "active", week: [{ date: "2026-10-04", completed: [{ name, type: "Ride" }] }] });
   for (const name of ["Tempo", "Sprinty 6×10 s", "Anaerobní 6×1 min"]) assert.deepEqual(validateCoachActions([ride("threshold")], week(name), "2026-10-05"), [], name);
   assert.equal(validateCoachActions([ride("threshold")], week("Endurance"), "2026-10-05")[0].kind, "threshold");
+  // Asked again in the chat after the coach's concern (Petr 2026-10-19): the 48 h rule gives way, red does not.
+  const again = { ...ride("threshold"), insisted: true }, chat = { ...week("Tempo"), conversation: [{ role: "user", content: "Chci intervaly." }, { role: "assistant", content: "Dnes ne." }] };
+  assert.equal(validateCoachActions([again], chat, "2026-10-05")[0].insisted, true);
+  assert.deepEqual(validateCoachActions([again], week("Tempo"), "2026-10-05"), [], "a first ask is no insisting");
+  assert.deepEqual(validateCoachActions([{ ...again, date: "2026-10-05" }], { ...chat, cyclingCoachV2: { readiness: { status: "red" } } }, "2026-10-05"), []);
   // The gym keeps the legs fresh before a tempo ride.
   assert.ok(isIntensity({ type: "Ride", name: "Tempo 2×20" }));
   assert.ok(!isIntensity({ type: "Ride", name: "Endurance" }));

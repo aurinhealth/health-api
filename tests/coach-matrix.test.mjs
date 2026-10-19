@@ -1,6 +1,6 @@
 // The engine's safety rules across every combination the review of 2026-10-16
-// checked (audit "revize doporučování tréninků"): 6 mornings × 9 loads × 11
-// situations × ride and run = 1188 days. Each rule holds whatever chose the
+// checked (audit "revize doporučování tréninků"): 6 mornings × 9 loads × 12
+// situations × ride and run = 1296 days. Each rule holds whatever chose the
 // session: the plan in Intervals.icu, a kind asked for in the chat, the phase
 // or the coach itself.
 import test from "node:test";
@@ -49,7 +49,9 @@ const SITUATIONS = {
   dayAfterIllness: { athleteState: { status: "active", recoveredAt: day(-1) }, afterIllness: true },
   askedTempo: { goal: { focus: "tempo" }, availabilityMinutes: 120 },
   // The athlete's own card from the coach chat (entrypoint.js workoutPreview).
-  chatVo2: { goal: { focus: "vo2max", asked: true, chat: true }, availabilityMinutes: 30, chat: true }
+  chatVo2: { goal: { focus: "vo2max", asked: true, chat: true }, availabilityMinutes: 30, chat: true },
+  // Asked again after the coach's concern (coach-actions.js insisted).
+  insistedVo2: { goal: { focus: "vo2max", asked: true, chat: true, insisted: true }, availabilityMinutes: 60, chat: true, insisted: true }
 };
 
 const days = [];
@@ -72,7 +74,7 @@ const rule = (name, applies, holds) => test(name, () => {
 });
 const run = d => d.sport === "run";
 
-test("the matrix has 1188 days", () => assert.equal(days.length, 1188));
+test("the matrix has 1296 days", () => assert.equal(days.length, 1296));
 rule("Nemoc: no training at all", d => d.sit.paused, d => d.kind === "rest" && d.minutes === 0);
 const live = d => !d.sit.paused;
 rule("red: only a short recovery", d => live(d) && d.coach.readiness.status === "red", d => d.kind === "recovery" && d.minutes <= (run(d) ? 30 : 45));
@@ -80,12 +82,14 @@ rule("deep fatigue (TSB −35) is red", d => live(d) && d.load.deep, d => d.coac
 rule("yellow: no intensity, tempo included", d => live(d) && d.coach.readiness.status === "yellow" && !d.sit.chat, d => !QUALITY.includes(d.kind));
 // The athlete's call (Petr 2026-10-19): asked for in the chat, a yellow day
 // keeps the hard ride or run when nothing else stands in the way.
+// Asked again, every load rule gives way; red and illness still hold (rules above).
+rule("insisted: the asked intensity stays unless red or illness", d => live(d) && d.sit.insisted && d.coach.readiness.status !== "red" && !d.morning.illness, d => d.kind === "vo2");
 rule("yellow, asked in the chat: the asked intensity stays", d => d.sit.chat && d.coach.readiness.status === "yellow" && !d.morning.illness && !d.load.hard48 && !d.load.twoQuality && !d.load.afterBreak && !d.load.novice, d => d.kind === "vo2");
 rule("signs of illness: no intensity and short", d => live(d) && d.morning.illness, d => !QUALITY.includes(d.kind) && d.minutes <= (run(d) ? 40 : 60));
-rule("48 h after a hard day of either sport: no quality", d => live(d) && d.load.hard48, d => !QUALITY.includes(d.kind));
-rule("two quality days in 7: no third", d => live(d) && d.load.twoQuality, d => !QUALITY.includes(d.kind));
-rule("after a break: no intensity and not long", d => live(d) && d.load.afterBreak, d => !QUALITY.includes(d.kind) && d.kind !== "long_endurance" && d.minutes <= (run(d) ? 45 : 90));
-rule("beginner: no intensity", d => live(d) && d.load.novice, d => !QUALITY.includes(d.kind));
+rule("48 h after a hard day of either sport: no quality", d => live(d) && d.load.hard48 && !d.sit.insisted, d => !QUALITY.includes(d.kind));
+rule("two quality days in 7: no third", d => live(d) && d.load.twoQuality && !d.sit.insisted, d => !QUALITY.includes(d.kind));
+rule("after a break: no intensity and not long", d => live(d) && d.load.afterBreak && !d.sit.insisted, d => !QUALITY.includes(d.kind) && d.kind !== "long_endurance" && d.minutes <= (run(d) ? 45 : 90));
+rule("beginner: no intensity", d => live(d) && d.load.novice && !d.sit.insisted, d => !QUALITY.includes(d.kind));
 rule("the days after Nemoc: no intensity and shorter", d => d.sit.afterIllness, d => !QUALITY.includes(d.kind) && d.minutes <= (run(d) ? 40 : 75));
 rule("the length never exceeds the time given", d => live(d) && d.sit.availabilityMinutes, d => d.minutes <= d.sit.availabilityMinutes);
 rule("the taper stays short", d => live(d) && d.sit.taper, d => d.minutes <= 80);
