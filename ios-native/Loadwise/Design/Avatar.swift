@@ -9,6 +9,8 @@ enum AvatarStore {
     static let versionKey = "avatarVersion"
     static let nameKey = "accountName"
     static let emailKey = "accountEmail"
+    /// The account's id (GET /app/api/me): the same account after an e-mail change.
+    static let idKey = "accountId"
 
     private static var url: URL {
         let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

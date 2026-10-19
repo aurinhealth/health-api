@@ -2515,6 +2515,12 @@
 "Odebrat %@?" = "Remove %@?";
 "Zařízení, které se s ním přihlásilo, se odhlásí." = "The device that signed in with it will be signed out.";
 "Přidán %@" = "Added %@";
+"Změnit e-mail" = "Change email";
+"Nový e-mail" = "New email";
+"nový e-mail" = "new email";
+"Kód pošleme na novou adresu. Data, předplatné i propojení zůstanou u účtu. Ostatní zařízení se odhlásí." = "We'll send a code to the new address. Your data, subscription and connections stay with the account. Other devices will be signed out.";
+"Zadat jinou adresu" = "Use a different address";
+"E-mail účtu je teď %@." = "Your account email is now %@.";
 "Trénuješ a jsi v pořádku" = "Training and feeling well";
 "Odpočíváš, než se uzdravíš" = "Resting until you are well";
 "Zotavuješ se ze zranění" = "Recovering from an injury";

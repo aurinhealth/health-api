@@ -286,7 +286,7 @@ final class AppModel {
     /// The account's name and e-mail for Profil, and the first letter of the
     /// name for the settings button while there is no photo.
     /// account: already fetched (signing in), so it is not asked for twice.
-    func loadAccountInitial(_ known: (name: String?, email: String?)? = nil) async {
+    func loadAccountInitial(_ known: (name: String?, email: String?, id: Int?)? = nil) async {
         guard !demo, phase == .signedIn else { return }
         var account = known
         if account == nil { account = try? await api.account() }
@@ -294,6 +294,7 @@ final class AppModel {
         let defaults = UserDefaults.standard
         defaults.set(account.name, forKey: AvatarStore.nameKey)
         defaults.set(account.email, forKey: AvatarStore.emailKey)
+        if let id = account.id { defaults.set(id, forKey: AvatarStore.idKey) }
         let shown = defaults.string(forKey: Self.displayNameKey)?.nilIfBlank ?? account.name ?? account.email
         if let first = shown?.trimmingCharacters(in: .whitespaces).first {
             defaults.set(String(first).uppercased(), forKey: Self.accountInitialKey)
@@ -370,7 +371,7 @@ final class AppModel {
         errorMessage = nil
         let defaults = UserDefaults.standard
         let account = try? await api.account()
-        if let previous = defaults.string(forKey: AvatarStore.emailKey), let account, account.email != previous {
+        if let account, Self.anotherAccount(id: account.id, email: account.email, defaults: defaults) {
             outbox = []
             OutboxStore.save([])
             AvatarStore.remove()
@@ -385,6 +386,16 @@ final class AppModel {
         await checkSetup()
         // The morning readiness push for this account (PushRegistration.swift).
         await PushRegistration.refresh(api: api)
+    }
+
+    /// Someone else than the account this phone kept things for: neither the
+    /// same e-mail nor the same account id. The id stays when the e-mail is
+    /// changed in Settings → Účet, so the other devices, signed out by the
+    /// change, keep their waiting writes and the photo when they sign in again.
+    nonisolated static func anotherAccount(id: Int?, email: String?, defaults: UserDefaults) -> Bool {
+        guard let previous = defaults.string(forKey: AvatarStore.emailKey), email != previous else { return false }
+        if let id, defaults.object(forKey: AvatarStore.idKey) != nil, defaults.integer(forKey: AvatarStore.idKey) == id { return false }
+        return true
     }
 
     /// Connects a data source; the event says how it went ("intervals",
@@ -1377,7 +1388,7 @@ final class AppModel {
             // Apple Health was allowed for this account, not the next one.
             AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
             ErrorLog.clear()
-            for key in [AvatarStore.nameKey, AvatarStore.emailKey, Self.displayNameKey] { UserDefaults.standard.removeObject(forKey: key) }
+            for key in [AvatarStore.nameKey, AvatarStore.emailKey, AvatarStore.idKey, Self.displayNameKey] { UserDefaults.standard.removeObject(forKey: key) }
             AvatarStore.remove()
         }
         outboxNote = nil

@@ -347,6 +347,9 @@ export async function ownerUser(db, env) {
 
 // Signs a verified Google identity in. Only the owner, existing users and
 // invited emails get an account; the invitation is consumed on first login.
+// The Google address names a new account only: an existing one keeps its own
+// e-mail (changed in Settings → Účet, or OWNER_EMAIL for the owner), so signing
+// in with the same Google account after a change finds the same account.
 export async function signInGoogleUser(db, env, { sub, email, name }) {
   const address = normalizeEmail(email);
   if (!sub || !address) return null;
@@ -362,10 +365,10 @@ export async function signInGoogleUser(db, env, { sub, email, name }) {
   }
   if (row.disabled) return null;
   await db.batch([
-    db.prepare("UPDATE users SET google_sub=?, email=?, name=?, last_login_at=CURRENT_TIMESTAMP WHERE id=?").bind(String(sub), address, name ? String(name).slice(0, 120) : row.name, row.id),
-    db.prepare("DELETE FROM user_invites WHERE email=?").bind(address)
+    db.prepare("UPDATE users SET google_sub=?, name=?, last_login_at=CURRENT_TIMESTAMP WHERE id=?").bind(String(sub), name ? String(name).slice(0, 120) : row.name, row.id),
+    db.prepare("DELETE FROM user_invites WHERE email=?").bind(normalizeEmail(row.email))
   ]);
-  return publicUser({ ...row, email: address, name: name || row.name }, env);
+  return publicUser({ ...row, name: name || row.name }, env);
 }
 
 // Who may get a sign-in code by e-mail: an active user, an invited address or the owner
@@ -454,10 +457,10 @@ export async function signInEmailUser(db, env, email) {
   return { ...publicUser(row, env), created };
 }
 
-// Moves an account to another e-mail address. Its data stays with it (everything is stored
-// under the account id); the Google account is unlinked, so the next Google sign-in binds the
-// one with the new address, and every device is signed out (session_epoch). The owner's
-// address comes from OWNER_EMAIL and is not changed here.
+// Moves an account to another e-mail address. Its data, subscription, AI usage, passkeys and
+// connections stay with it (everything is stored under the account id); the linked Google and
+// Apple accounts stay linked (by their sub, not the address), and every device is signed out
+// (session_epoch). The owner's address comes from OWNER_EMAIL and is not changed here.
 // Returns { email, previous } or { error: "invalid" | "missing" | "same" | "owner" | "taken" }.
 export async function changeUserEmail(db, env, id, email) {
   const address = normalizeEmail(email);
@@ -469,7 +472,7 @@ export async function changeUserEmail(db, env, id, email) {
   if (await db.prepare("SELECT id FROM users WHERE email=? AND id<>?").bind(address, row.id).first()) return { error: "taken" };
   try {
     await db.batch([
-      db.prepare("UPDATE users SET email=?, google_sub=NULL, session_epoch=session_epoch+1 WHERE id=?").bind(address, row.id),
+      db.prepare("UPDATE users SET email=?, session_epoch=session_epoch+1 WHERE id=?").bind(address, row.id),
       db.prepare("DELETE FROM user_invites WHERE email=?").bind(address)
     ]);
   } catch (error) {

@@ -92,13 +92,31 @@ test("the change is refused for a taken, the same or the owner's address, and fr
   assert.equal((await handleEmailChange(post("/app/api/account/email/start", { email: "x@example.com" }), env, new URL(ORIGIN + "/app/api/account/email/start"), { signedIn: false })).status, 401);
 });
 
-test("after a change the old Google account is unlinked and the new address can bind its own", async () => {
+test("after a change the same Google account still signs in to the same account, and its address stays", async () => {
   const { env } = await setup();
   await inviteUser(env.DB, "friend@gmail.com", 1);
   const user = await signInGoogleUser(env.DB, env, { sub: "g-old", email: "friend@gmail.com" });
-  assert.deepEqual(await changeUserEmail(env.DB, env, user.id, "friend.new@gmail.com"), { email: "friend.new@gmail.com", previous: "friend@gmail.com" });
-  assert.equal(await signInGoogleUser(env.DB, env, { sub: "g-old", email: "friend@gmail.com" }), null, "the old Google account no longer gets in");
-  assert.equal((await signInGoogleUser(env.DB, env, { sub: "g-new", email: "friend.new@gmail.com" })).id, user.id);
+  assert.deepEqual(await changeUserEmail(env.DB, env, user.id, "friend.new@example.com"), { email: "friend.new@example.com", previous: "friend@gmail.com" });
+  const again = await signInGoogleUser(env.DB, env, { sub: "g-old", email: "friend@gmail.com", name: "Friend" });
+  assert.equal(again.id, user.id, "the Google account stays linked");
+  assert.equal(again.email, "friend.new@example.com");
+  assert.equal((await findUser(env.DB, user.id, env)).email, "friend.new@example.com", "the sign-in does not put the Google address back");
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM users").first()).n, 2, "no new empty account (owner and friend)");
+  // Another Google account with the new address does not take the account over.
+  assert.equal(await signInGoogleUser(env.DB, env, { sub: "g-new", email: "friend.new@example.com" }), null);
   assert.deepEqual(await changeUserEmail(env.DB, env, user.id, "not an address"), { error: "invalid" });
   assert.deepEqual(await changeUserEmail(env.DB, env, 999, "a@example.com"), { error: "missing" });
 });
+
+test("a Google account whose address changed keeps the owner's e-mail and the owner's role", async () => {
+  const { env } = await setup();
+  const owner = await signInGoogleUser(env.DB, env, { sub: "g-owner", email: "owner@example.com" });
+  assert.equal(owner.isOwner, true);
+  const later = await signInGoogleUser(env.DB, env, { sub: "g-owner", email: "petr.renamed@gmail.com" });
+  assert.equal(later.id, owner.id);
+  assert.equal(later.isOwner, true);
+  assert.equal(later.email, "owner@example.com");
+  const row = await env.DB.prepare("SELECT email, role FROM users WHERE id=?").bind(owner.id).first();
+  assert.deepEqual({ ...row }, { email: "owner@example.com", role: "admin" });
+});
+
