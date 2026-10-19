@@ -122,6 +122,19 @@ jobs:
         with:
           node-version: "22"
 
+      # The owner's address is not in the repository (wrangler.jsonc): it comes from
+      # the environment's secret OWNER_EMAIL. Without it nobody would be the owner,
+      # so nothing is deployed.
+      - name: Check the owner e-mail
+        env:
+          OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+        shell: bash
+        run: |
+          if [[ ! "$OWNER_EMAIL" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; then
+            echo "::error::Chybí secret OWNER_EMAIL v GitHub prostředí '${{ inputs.target == 'production' && 'production' || 'staging' }}' (Settings → Environments)."
+            exit 1
+          fi
+
       # Only main reaches the live server: a branch commit would be overwritten
       # by the next release, and Vydat relies on production being part of main.
       - name: Check the commit is on main
@@ -201,7 +214,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.runtime.jsonc ${{ env.ENV_ARGS }}
+          command: deploy --config wrangler.runtime.jsonc ${{ env.ENV_ARGS }} --var OWNER_EMAIL:${{ secrets.OWNER_EMAIL }}
           workingDirectory: .
           wranglerVersion: "4.147.0"
 

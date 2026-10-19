@@ -11,7 +11,7 @@ Potřebuješ Node 22.
 ```sh
 npm test              # testy
 npm run check         # kontrola syntaxe
-npm run dev           # wrangler dev; tajné hodnoty patří do .dev.vars
+npm run dev           # wrangler dev; tajné hodnoty (i OWNER_EMAIL) patří do .dev.vars
 ```
 
 Na produkci se nasazuje jen přes GitHub Actions po pushi do `main`. Aplikaci pro iPhone sestavuje GitHub Actions, postup je v `ios-native/README.md`.
