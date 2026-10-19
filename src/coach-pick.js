@@ -11,6 +11,7 @@ import { addRecovery, ensureRecoveryTable } from "./recovery-plan.js";
 
 const TABLE = "CREATE TABLE IF NOT EXISTS coach_picks (user_id INTEGER NOT NULL, date TEXT NOT NULL, kind TEXT NOT NULL, top TEXT, created_at TEXT NOT NULL, PRIMARY KEY (user_id, date))";
 const KINDS = ["ride", "run", "gym", "swim", "sauna", "rest"];
+const SKIP = "skip";
 const LESS_TABLE = "CREATE TABLE IF NOT EXISTS coach_pick_less (user_id INTEGER NOT NULL, kind TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (user_id, kind))";
 const DETAILS_TABLE = "CREATE TABLE IF NOT EXISTS coach_pick_details (user_id INTEGER NOT NULL, date TEXT NOT NULL, signature TEXT NOT NULL, details_json TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, date))";
 
@@ -165,10 +166,12 @@ export function dayChoice({ chosen = null, planned = [] } = {}) {
 export const PICK_PLAN = { swim: ["swim"], sauna: ["sauna"], rest: ["walk", "stretch"] };
 
 // The athlete's choice for the day; another than the coach's top is a decline of it.
+// "skip" (Odmítnout) takes nothing: Aktivita dne leaves Dnes for the day and
+// the coach's top counts as declined.
 // The choice goes into the day's plan; a changed mind takes the earlier
 // choice's rows out again (unless already done).
 export async function savePick(db, userId, { date, kind, top }) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || !KINDS.includes(kind)) throw new Error(L("Neplatná volba.", "Invalid choice."));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || !(KINDS.includes(kind) || kind === SKIP)) throw new Error(L("Neplatná volba.", "Invalid choice."));
   await db.prepare(TABLE).run();
   const before = (await db.prepare("SELECT kind FROM coach_picks WHERE user_id=? AND date=?").bind(userId, date).first())?.kind || null;
   if (before && before !== kind && PICK_PLAN[before]) {
@@ -183,6 +186,13 @@ export async function savePick(db, userId, { date, kind, top }) {
   await db.prepare("INSERT INTO coach_picks (user_id, date, kind, top, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, date) DO UPDATE SET kind=excluded.kind, top=COALESCE(coach_picks.top, excluded.top), created_at=excluded.created_at")
     .bind(userId, date, kind, KINDS.includes(top) ? top : null, new Date().toISOString()).run();
   return { status: "ok", chosen: kind };
+}
+
+// "Vrátit" after Odmítnout: the day's activity is back, the decline gone.
+export async function undoSkip(db, userId, date) {
+  await db.prepare(TABLE).run();
+  await db.prepare("DELETE FROM coach_picks WHERE user_id=? AND date=? AND kind=?").bind(userId, date, SKIP).run();
+  return { status: "ok", chosen: null };
 }
 
 // "Doporučovat méně": kinds the athlete rarely wants. They leave Další
