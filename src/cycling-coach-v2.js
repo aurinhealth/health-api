@@ -1,6 +1,6 @@
 import { classifyPlannedWorkout } from "./planned-workout.js";
 import { trainingStatus } from './training-status.js';
-import { qualityDomain } from './session-intensity.js';
+import { intensityClass, isHardSession, isHardKind } from './session-intensity.js';
 import { recoveryWeek as recoveryWeek_, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
 import { localToday, localDateTime } from "./user-time.js";
 import { cycleState, cycleTrainingCaution } from "./cycle-model.js";
@@ -15,7 +15,6 @@ const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 const txt=v=>String(v??"").toLowerCase();
 
 const BIKE_RE=/ride|cycling|bike|kolo|endurance|tempo|sweet.?spot|threshold|vo2|sprint/i;
-const HARD_RE=/threshold|vo2|anaerob|sprint|interval|sweet.?spot|race|z[aá]vod/i;
 const LOWER_RE=/squat|dřep|dre(p|p)|leg press|leg extension|leg curl|deadlift|mrtv|pendulum|lunge|výpad|vypad|adduction|abduction|calf|lýt|lyt/i;
 
 function isoDate(v){return String(v||"").slice(0,10)}
@@ -25,24 +24,11 @@ const RUN_TYPE_RE=/run|běh|beh|jog|treadmill/i;
 const OTHER_TYPE_RE=/walk|hike|swim|weight|strength|yoga|ski|row/i;
 // Intervals.icu events may carry only their category ("WORKOUT") as the type.
 const typeOf=a=>{const t=String(a?.type||"");return /^(workout|note|race_[abc])$/i.test(t)?"":t};
-const RUN_HARD_RE=/threshold|vo2|anaerob|sprint|interval|fartlek|hill|kopc|yasso|cruise|úsek|usek|race|z[aá]vod|tempo/i;
 // An activity's type decides first; untyped entries fall back to the name.
 const RUN_NAME_RE=/\b(run|running|běh|beh|jog)\b/i;
 function isRide(a){const type=typeOf(a);if(RUN_TYPE_RE.test(type)||OTHER_TYPE_RE.test(type)||(!type&&RUN_NAME_RE.test(String(a?.name||""))))return false;return BIKE_RE.test(type+" "+String(a?.name||""))}
 function isRun(a){const type=typeOf(a);if(type)return RUN_TYPE_RE.test(type);return RUN_NAME_RE.test(String(a?.name||""))}
-function isHardRun(a){
-  if(RUN_HARD_RE.test(String(a?.name||"")+" "+String(a?.tags||""))||qualityDomain(String(a?.name||"")+" "+String(a?.tags||""),"run")) return true;
-  const intensity=n(a?.payload?.icu_intensity);
-  if(intensity&&intensity>=88) return true;
-  const hours=n(a?.durationHours,0);
-  return n(a?.tss,0)>=50&&hours>0&&hours<=1.5&&n(a?.tss,0)/hours>=75;
-}
-function isHard(a){
-  if(HARD_RE.test(String(a?.name||"")+" "+String(a?.tags||""))||qualityDomain(String(a?.name||"")+" "+String(a?.tags||""),"ride")) return true;
-  const np=n(a?.normalizedPower??a?.payload?.icu_weighted_average_watts),ftp=n(a?.ftp??a?.payload?.icu_ftp);
-  if(np&&ftp&&np/ftp>=0.86) return true;
-  return n(a?.tss,0)>=100&&n(a?.durationHours,0)<=1.75;
-}
+const isHardRun=a=>isHardSession(a,"run"),isHard=a=>isHardSession(a,"ride");
 function allWeekActivities(week){
   const out=[];
   for(const row of week?.days||[]){
@@ -103,13 +89,7 @@ function recentLowerGym(gym,date,lookbackDays=2){
     return d!=null&&d>=0&&d<=lookbackDays&&LOWER_RE.test(String(x.exercise||x.name||""));
   });
 }
-function classifyDomain(a){
-  const s=txt(a?.name)+" "+txt(a?.tags);
-  const domain=qualityDomain(s,"ride");
-  if(domain) return domain;
-  if(/tempo/.test(s)) return "moderate";
-  return "low";
-}
+const classifyDomain=a=>intensityClass({name:a?.name,tags:a?.tags},"ride")||"low";
 function runTemplate(kind,minutes){
   const m=Math.max(20,Math.round(minutes||60));
   const templates=L({
@@ -212,7 +192,7 @@ function sessionMinutesFor(kind,capacity,sport){
   if(kind==="recovery"){m=clamp(m*.5,run?20:30,run?40:60);reasons.push(L("regenerace je krátká","recovery is short"));}
   else if(kind==="openers"){m=run?30:45;reasons.push(L("aktivace před závodem je krátká","pre-race openers are short"));}
   else if(kind==="race"){m=run?20:30;reasons.push(L("jen rozjetí před startem","just a warm-up before the start"));}
-  else if(["tempo","sweet_spot","threshold","vo2"].includes(kind)){
+  else if(isHardKind(kind)){
     const [lo,hi]=run?[40,80]:[60,120];
     if(m<lo||m>hi)reasons.push(L("kvalitní trénink držím na "+lo+"–"+hi+" min","I keep quality sessions at "+lo+"–"+hi+" min"));
     m=clamp(m,lo,hi);
@@ -446,7 +426,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   // An asked kind keeps its kind in a short window (2×10 min sweet spot fits 45 min).
   if(requestedMinutes<(sport==="run"?45:55)&&kind==="long_endurance"){kind=askedKind?"endurance":"tempo";adaptations.push(L("trénink zhuštěn do dostupného času","workout condensed into the available time"));}
   if(!askedKind&&requestedMinutes<(sport==="run"?35:50)&&["threshold","sweet_spot"].includes(kind)){kind="tempo";adaptations.push(L("krátké časové okno","short time window"));}
-  const QUALITY=["tempo","sweet_spot","threshold","vo2"],quality=()=>QUALITY.includes(kind);
+  const quality=()=>isHardKind(kind);
   // The longest session the day allows (red, illness, a break), applied with the length below.
   let cap=null;const capAt=(minutes,text)=>{if(!cap||minutes<cap.minutes)cap={minutes,text};};
   // Breathing or temperature in sleep well above the athlete's own, or a sick
@@ -530,7 +510,7 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   else if(!plannedInfo?.minutes){
     // The time the athlete has is a limit, not a target: an easy day, a
     // quality session or the taper does not fill three free hours.
-    const before=requestedMinutes,cap={recovery:run?40:60,openers:run?30:45,race:run?20:30}[kind]??(["tempo","sweet_spot","threshold","vo2"].includes(kind)?(run?80:120):null);
+    const before=requestedMinutes,cap={recovery:run?40:60,openers:run?30:45,race:run?20:30}[kind]??(isHardKind(kind)?(run?80:120):null);
     if(phase==="taper"&&kind!=="openers"&&kind!=="race")requestedMinutes=Math.max(minLen,Math.round(requestedMinutes*.65/5)*5);
     if(cap!=null)requestedMinutes=Math.min(requestedMinutes,cap);
     if(requestedMinutes<before)rationale.push(L("Délka "+requestedMinutes+" min z dostupných "+before+" min: ","Duration "+requestedMinutes+" of the available "+before+" min: ")+(phase==="taper"?L("ladění formy zkracuje objem","tapering cuts the volume"):kind==="recovery"?L("regenerace má být krátká","recovery should be short"):L("kvalita nepotřebuje víc času","quality doesn't need more time"))+".");

@@ -15,9 +15,9 @@ import { explainWorkout, stepRows } from "./workout-explanation.js";
 import { getAthleteState, assertTrainingAllowed } from './athlete-state.js';
 import { workoutEn } from "./workout-i18n.js";
 import { L, lang } from "./lang.js";
+import { isHardKind, intensityClass } from "./session-intensity.js";
 
 export const SYSTEMS = ["recovery", "endurance", "tempo", "sweet_spot", "threshold", "vo2max", "anaerobic", "sprint"];
-const HARD_SYSTEMS = new Set(["sweet_spot", "threshold", "vo2max", "anaerobic", "sprint"]);
 export { CYCLING_WORKOUTS, RUNNING_WORKOUTS, stepRows };
 // The catalog in the user's language; the English one is made on first use.
 const CATALOG_CS = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS };
@@ -151,9 +151,9 @@ export function rankWorkoutCandidates(workouts, filters = {}, context = {}, capa
     const gap = Math.abs(n(w.difficulty, 5) - ideal);
     score += clamp(18 - gap * 4, 0, 18);
     if (gap <= .75) reasons.push(L("obtížnost odpovídá tvé aktuální úrovni", "difficulty matches your current level"));
-    if (readiness === "red" && HARD_SYSTEMS.has(w.primary_system)) { score -= 30; reasons.push(L("penalizace kvůli nízké připravenosti", "penalized for low readiness")); }
-    if (readiness === "yellow" && ["vo2max", "anaerobic", "sprint"].includes(w.primary_system)) score -= 12;
-    if (hardDays >= 2 && HARD_SYSTEMS.has(w.primary_system)) { score -= 24; reasons.push(L("penalizace po dvou kvalitních dnech", "penalized after two quality days")); }
+    if (readiness === "red" && isHardKind(w.primary_system)) { score -= 30; reasons.push(L("penalizace kvůli nízké připravenosti", "penalized for low readiness")); }
+    if (readiness === "yellow" && intensityClass(w.primary_system) === "high") score -= 12;
+    if (hardDays >= 2 && isHardKind(w.primary_system)) { score -= 24; reasons.push(L("penalizace po dvou kvalitních dnech", "penalized after two quality days")); }
     if (w.family && recentFamilies.has(w.family)) { score -= 6; reasons.push(L("podobný trénink byl nedávno", "a similar workout was recent")); }
     if (w.source_kind === "research") { score += 2; reasons.push(L("ověřený vědecký protokol", "proven research protocol")); }
     if (n(w.verified, 0)) score += 2;

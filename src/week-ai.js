@@ -18,6 +18,7 @@ import { callOpenAI, complexModel, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
 import { availabilityOn } from "./training-availability.js";
 import { indoorMinutes } from "./adaptive-week.js";
+import { HARD_KINDS } from "./session-intensity.js";
 import { weekInstructions, sessionInstructions } from './private/week-ai.js';
 export { weekInstructions, sessionInstructions };
 
@@ -26,7 +27,6 @@ const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(
 
 export const WEEK_SPORTS = ["ride", "run", "gym"];
 export const KINDS = ["recovery", "endurance", "long", "tempo", "sweet_spot", "threshold", "vo2max", "gym"];
-export const HARD_KINDS = new Set(["tempo", "sweet_spot", "threshold", "vo2max"]);
 // The generator's focus for a kind (cycling-coach-v2.js reads goal.focus).
 export const FOCUS_OF = { recovery: "recovery", endurance: "endurance", long: "long_endurance", tempo: "tempo", sweet_spot: "sweet_spot", threshold: "threshold", vo2max: "vo2max" };
 export const MIN_MINUTES = { ride: 30, run: 20, gym: 30 };
@@ -224,7 +224,7 @@ export const EASIER = { vo2max: "threshold", threshold: "sweet_spot", sweet_spot
 // The kind a generated workout is (its library system), for "Těžší"/"Lehčí".
 export function kindOfSystem(system, fallback = "endurance") {
   const s = String(system || "").toLowerCase();
-  if (/vo2|anaerob/.test(s)) return "vo2max";
+  if (/vo2|anaerob|sprint/.test(s)) return "vo2max";
   if (/threshold/.test(s)) return "threshold";
   if (/sweet/.test(s)) return "sweet_spot";
   if (/tempo/.test(s)) return "tempo";

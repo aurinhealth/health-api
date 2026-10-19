@@ -4,13 +4,13 @@
 // (recovery-plan.js), or a sauna when the athlete wants stretching less often.
 // Pure: buildToday (app-today.js) passes the day's sessions and tomorrow's plan.
 import { L } from "./lang.js";
+import { isHardSession } from "./session-intensity.js";
 import { recoveryRoutine, describeRecovery, routineAreas } from "./recovery-plan.js";
 import { EXERCISES } from "./strength-generator.js";
 import { normalizeExerciseName } from "./strength-normalization.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const sportOf = s => (s?.sport === "strength" ? "gym" : ["ride", "run"].includes(s?.sport) ? s.sport : null);
-const HARD = /interval|vo2|threshold|práh|sweet|tempo|sprint|závod|race|test/i;
 const LOWER = /nohy|dřep|leg|squat|lower|spodn|výpad|lunge|deadlift|mrtv/i;
 
 // A session that asks for recovery: any strength session, or 30 minutes or
@@ -78,7 +78,7 @@ function tomorrowText(sessions) {
   if (sessions == null) return ".";
   const next = sessions.find(s => s && s.status !== "done");
   if (!next) return L(" a zítra máš volno.", " and tomorrow is a rest day.");
-  const sport = sportOf(next), hard = HARD.test(String(next.title || ""));
+  const sport = sportOf(next), hard = isHardSession(String(next.title || ""), sport);
   if (sport === "ride") return hard ? L(" a zítra jedeš intervaly.", " and tomorrow you ride intervals.") : L(" a zítra jedeš na kolo.", " and tomorrow you ride.");
   if (sport === "run") return hard ? L(" a zítra běžíš intervaly.", " and tomorrow you run intervals.") : L(" a zítra běžíš.", " and tomorrow you run.");
   if (sport === "gym") return L(" a zítra jdeš do posilovny.", " and tomorrow you're at the gym.");

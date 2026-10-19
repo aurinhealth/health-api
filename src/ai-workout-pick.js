@@ -11,6 +11,7 @@ import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { flattenSteps, zoneOf, zonesFor } from "./workout-model.js";
 import { withFocus } from "./athlete-focus.js";
+import { isHardKind } from "./session-intensity.js";
 import { instructions } from './private/ai-workout-pick.js';
 
 const HARD_ZONES = new Set(["threshold", "vo2max", "anaerobic", "sprint"]);
@@ -19,10 +20,9 @@ export const HARD_CAP = { green: 45, yellow: 20, red: 0 };
 // The cap for the coach's session: an easy kind (the engine's answer on a
 // yellow or red morning, with signs of illness, after a hard day…) gets no
 // minutes at threshold and above, whatever the zone.
-const QUALITY_KINDS = new Set(["tempo", "sweet_spot", "threshold", "vo2", "vo2max", "openers", "race"]);
 export function hardCapFor(coach = {}, today = {}) {
   const zone = String(coach.readiness?.status || today.zone || "green").toLowerCase(), kind = coach.recommendation?.session?.kind;
-  return kind && !QUALITY_KINDS.has(kind) ? 0 : HARD_CAP[zone] ?? HARD_CAP.green;
+  return kind && !isHardKind(kind) && kind !== "openers" && kind !== "race" ? 0 : HARD_CAP[zone] ?? HARD_CAP.green;
 }
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
