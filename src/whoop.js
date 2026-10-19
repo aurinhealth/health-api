@@ -13,7 +13,7 @@
 // timeline, so the sleep row carries stageTotals instead of stages
 // (sleep-sessions.js reads either). Which device's night counts is
 // source-priority.js's call. Disconnecting deletes WHOOP's rows.
-import { saveConnectionSecret, deleteConnectionSecret } from './connection-secrets.js';
+import { saveConnectionSecret, deleteConnectionSecret, refreshConnectionTokens, tokensDue } from './connection-secrets.js';
 import { connectReturn, connectReturnUrl } from './connect-return.js';
 import { appOrigin } from './app-origin.js';
 import { markConnectionBroken, markConnectionOk, clearConnectionHealth } from './connection-health.js';
@@ -92,14 +92,16 @@ export async function handleWhoopOAuth(request, env, pathname, fetchImpl = fetch
 export async function whoopAccessToken(env, { fetchImpl = fetch, now = Date.now() } = {}) {
   const tokens = readWhoopTokens(env);
   if (!tokens) throw new Error(L('WHOOP není připojený.', 'WHOOP isn\'t connected.'));
-  if (!tokens.expires_at || tokens.expires_at * 1000 > now + 120000) return tokens.access_token;
+  if (!tokensDue(tokens, now)) return tokens.access_token;
   if (!tokens.refresh_token || !whoopConfigured(env)) throw Object.assign(new Error('WHOOP HTTP 401'), { status: 401 });
-  const data = await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: tokens.refresh_token, scope: 'offline' }, fetchImpl);
-  if (!data) throw Object.assign(new Error('WHOOP HTTP 401'), { status: 401 });
-  const text = tokensText({ refresh_token: tokens.refresh_token, ...data }, now);
-  await saveConnectionSecret(env, SOURCE, text);
+  // One request refreshes at a time; the others take the pair it saved (connection-secrets.js).
+  const text = await refreshConnectionTokens(env, SOURCE, env.WHOOP_TOKEN, async t => {
+    const data = t?.refresh_token && await tokenRequest(env, { grant_type: 'refresh_token', refresh_token: t.refresh_token, scope: 'offline' }, fetchImpl);
+    return data ? tokensText({ refresh_token: t.refresh_token, ...data }, now) : null;
+  }, { now });
+  if (!text) throw Object.assign(new Error('WHOOP HTTP 401'), { status: 401 });
   env.WHOOP_TOKEN = text;
-  return data.access_token;
+  return readWhoopTokens(env).access_token;
 }
 
 // Every record of a collection (/v2/activity/sleep, /v2/recovery) from `start` on, 25 a page.
