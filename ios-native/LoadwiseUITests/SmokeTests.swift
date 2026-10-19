@@ -131,13 +131,14 @@ final class SmokeTests: XCTestCase {
 
     /// The screens the website draws its scenes from, in English: sleep and the
     /// bedtime planner, readiness and what affects it, building a workout, the
-    /// gym day and training mode up to the summary, muscles, the ride library,
+    /// gym day and training mode up to the summary, muscles and one muscle, the ride library,
     /// food and the coach. It only takes pictures and never fails, so a changed
     /// label costs a picture, not a release.
     func test4WebsiteScenes() {
         continueAfterFailure = true
         for (route, file, swipes) in [("sleep", "spanek", 3), ("sleep-settings", "planovac", 1), ("readiness", "pripravenost", 2),
-                                      ("gym-builder", "sestavit", 1), ("muscles", "svaly", 2), ("library/ride", "jizda", 1), ("strain", "namaha", 1)] {
+                                      ("gym-builder", "sestavit", 1), ("muscles", "svaly", 2), ("muscle/glutes", "sval", 2),
+                                      ("library/ride", "jizda", 1), ("strain", "namaha", 1)] {
             english("-open", route)
             pause(4)
             shot(file)
