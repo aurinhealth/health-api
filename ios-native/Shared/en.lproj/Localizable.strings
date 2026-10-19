@@ -1947,7 +1947,6 @@
 "Vybráno %@" = "%@ selected";
 "Kopírovat %@" = "Copy %@";
 "Přesunout %@" = "Move %@";
-"Jídlo z jiné aplikace nejde přesunout, jen zkopírovat nebo smazat. Zůstalo na místě." = "Food from another app can't be moved, only copied or deleted. It stayed where it was.";
 "Pití z jiné aplikace nejde přesunout, jen zkopírovat nebo smazat. Zůstalo na místě." = "Drinks from another app can't be moved, only copied or deleted. They stayed where they were.";
 /* Plán týdne: Opravit návrh */
 "Opravit návrh" = "Fix the proposal";
@@ -2712,3 +2711,7 @@
 "návrhy %d, schválené %d" = "%d sent, %d approved";
 "Zamítnout" = "Reject";
 "Schválit" = "Approve";
+"Na míru od AI" = "Made for you by AI";
+"Skládám trénink podle tvého výběru…" = "Building a workout to your choice…";
+"V knihovně tomuto výběru nic neodpovídá." = "Nothing in the library matches this choice.";
+"Z knihovny · %@ %@" = "From the library · %@ %@";

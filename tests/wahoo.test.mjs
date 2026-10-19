@@ -234,3 +234,11 @@ test("a failing export waits longer after each try and stops after eight", async
   raw.sqlite.prepare("UPDATE workout_exports SET updated_at=datetime('now','-7 hours') WHERE provider='wahoo'").run();
   assert.equal((await retryWahooExports(env(db), { fetchImpl: broken.fetchImpl })).length, 0);
 });
+
+test("the plan's step kinds (intensity=) decide Wahoo's warm-up, rests and cool-down", () => {
+  const description = "Zaměření: VO2max na trenažéru, 30 min.\n\nWarmup\n- 6m 55% intensity=warmup\n\nMain Set 4x\n- 3m 110% intensity=interval\n- 2m 50% intensity=recovery\n\nCooldown\n- 4m 50% intensity=cooldown";
+  const plan = wahooPlan({ type: "VirtualRide", name: "VO2max 4×3", description }, { ftp: 260 });
+  assert.equal(plan.header.description, "Zaměření: VO2max na trenažéru, 30 min.");
+  assert.deepEqual(plan.intervals.map(i => i.intensity_type || i.intervals.map(x => x.intensity_type).join("/")), ["wu", "map/rest", "cd"]);
+  assert.equal(plan.intervals[1].exit_trigger_value, 3);
+});

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { composeWorkout, poorFit, COMPOSE_BELOW } from "../src/ai-workout-compose.js";
+import { composeWorkout, poorFit, COMPOSE_BELOW, fewMatches, composeKey, composeWarning, composeFits } from "../src/ai-workout-compose.js";
 import { getWorkout } from "../src/workout-library.js";
 
 const owner = () => ({ DB: scopedDb(createD1(), 1), USER_ID: 1, USER_IS_OWNER: true, OPENAI_API_KEY: "test" });
@@ -51,4 +51,47 @@ test("a workout that breaks the limits, no consent or a failure gives nothing", 
   assert.equal(await composeWorkout(env, { ...day, ask: async () => { throw new Error("down"); } }), null);
   assert.equal(await composeWorkout({ ...env, USER_IS_OWNER: false }, { ...day, ask: answer(tempo45) }), null, "no AI consent");
   assert.equal(await composeWorkout({ ...env, OPENAI_API_KEY: "" }, { ...day, ask: answer(tempo45) }), null);
+});
+
+// The library's search (Na míru od AI): the athlete's choice is the brief.
+test("the search offers the AI's own workout when few of the chosen type are left", () => {
+  const w = (primary_system) => ({ primary_system });
+  assert.equal(fewMatches([w("vo2max"), w("threshold"), w("threshold")], "vo2max"), true);
+  assert.equal(fewMatches([w("vo2max"), w("vo2max"), w("vo2max")], "vo2max"), false);
+  assert.equal(fewMatches([w("tempo"), w("endurance"), w("recovery")], null), false, "any type when none is chosen");
+  assert.equal(fewMatches([], null), true);
+});
+
+test("the athlete's choice passes a hard type on a worse morning, with a warning, and is written once", async () => {
+  const env = owner(), hard = [block(480, 55, 65), { repeats: 6, steps: [{ label: "VO2", seconds: 240, low: 110, high: 118 }, { label: "lehce", seconds: 120, low: 50, high: 55 }] }, block(60, 50, 55)];
+  let calls = 0, sent = null;
+  const ask = async (_env, request) => { calls += 1; sent = request; return answer(hard)(); };
+  const key = composeKey({ date: "2026-10-19", sport: "ride", environment: "indoor", kind: "vo2max", minutes: 45 });
+  const w = await composeWorkout(env, { ...day, kind: "vo2max", asked: { key }, ask });
+  assert.ok(w, "yellow morning, but the athlete chose it");
+  assert.match(w.ai.warning, /střední/);
+  assert.match(sent.input, /chosenByAthlete/);
+  const again = await composeWorkout(env, { ...day, kind: "vo2max", asked: { key }, ask });
+  assert.equal(again.id, w.id, "the same choice loads the same workout");
+  assert.equal(calls, 1, "and is not paid for again");
+  const other = await composeWorkout(env, { ...day, kind: "vo2max", asked: { key: composeKey({ date: "2026-10-19", sport: "ride", environment: "indoor", kind: "vo2max", minutes: 45, variant: 1 }) }, ask });
+  assert.notEqual(other.id, w.id, "Jiný návrh writes another");
+  assert.equal(composeWarning("endurance", "red"), null);
+  assert.equal(composeWarning("vo2max", "green"), null);
+});
+
+test("the chosen difficulty band holds within one step", async () => {
+  const env = owner(), w = await composeWorkout(env, { ...day, asked: {}, ask: answer(tempo45) });
+  const d = w.difficulty;
+  assert.ok(await composeWorkout(env, { ...day, asked: { minDifficulty: d - 0.5, maxDifficulty: d + 0.5 }, ask: answer(tempo45) }), "inside the band");
+  assert.ok(await composeWorkout(env, { ...day, asked: { minDifficulty: d + 0.9, maxDifficulty: 10 }, ask: answer(tempo45) }), "one step below the band still passes");
+  assert.equal(await composeWorkout(env, { ...day, asked: { minDifficulty: d + 1.5, maxDifficulty: 10 }, ask: answer(tempo45) }), null, "far below the band");
+});
+
+test("the evaluation composes with the model it is given and keeps nothing", async () => {
+  const env = { OPENAI_API_KEY: "test" };
+  let model = null;
+  const w = await composeWorkout(env, { ...day, model: "gpt-6-sol", save: false, ask: async (_e, r) => { model = r.model; return { ...(await answer(tempo45)()), model: "gpt-6-sol" }; } });
+  assert.equal(model, "gpt-6-sol");
+  assert.equal(w.ai.model, "gpt-6-sol");
 });

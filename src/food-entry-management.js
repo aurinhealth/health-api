@@ -47,8 +47,31 @@ function rescale(row,note,amount){
   return scaled;
 }
 
+// Another app's food moved to another meal or day: Aurin cannot change it in
+// Apple or Google Health, so it takes it over. A new row of the athlete's own
+// takes its place, marked from_app (shown with the app's name and, since the
+// original stays there, never written to Apple or Google Health), and the
+// original leaves Aurin like a deleted one, so nothing counts twice.
+async function takeOver(db,row,patch){
+  const date=patch.date==null?row.consumed_date:dateValue(patch.date);
+  const note=noteObject(row.note);
+  if(patch.mealType!=null){if(!MEALS.has(patch.mealType))throw new Error(L('Neplatný typ jídla.', 'Invalid meal type.'));note.mealType=patch.mealType}
+  note.from_app=String(note.app||(row.source==='google-health'?'Google Health':'Apple Health')).slice(0,60);
+  delete note.app;delete note.external_id;
+  const result=await db.prepare('INSERT INTO food_logs (user_id,consumed_date,consumed_at,cookbook_page,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
+    .bind(db.userId,date,changedDate(row.consumed_at,date),row.cookbook_page,row.recipe_title,row.servings,row.kcal,row.protein_g,row.carbs_g,row.fat_g,row.fiber_g,'manual',JSON.stringify(note)).run();
+  await hideAppleFood(db,db.userId,'meal',row.id);
+  return {status:'ok',id:result.meta.last_row_id,date};
+}
+
 export async function updateFoodEntry(db,id,patch){
-  const row=await own(db,id),date=patch.date==null?row.consumed_date:dateValue(patch.date);
+  const found=await existing(db,id);
+  if(OTHER_APP.has(found.source)){
+    // Only where it was eaten can change: its values are the other app's.
+    if(['name','amount_g','quantity',...Object.keys(FIELDS)].some(k=>patch[k]!=null))throw new Error(L('Tohle jídlo je z jiné aplikace, uprav ho tam.', 'This meal comes from another app, change it there.'));
+    return takeOver(db,found,patch);
+  }
+  const row=found,date=patch.date==null?row.consumed_date:dateValue(patch.date);
   const name=patch.name==null?row.recipe_title:String(patch.name).trim().slice(0,180);
   if(!name)throw new Error(L('Doplň název jídla.', 'Add the meal name.'));
   const note=noteObject(row.note);
@@ -73,9 +96,10 @@ export async function updateFoodEntry(db,id,patch){
 export async function copyFoodEntry(db,id,targetDate,mealType=null){
   const row=await existing(db,id),date=dateValue(targetDate);
   if(mealType!=null&&!MEALS.has(mealType))throw new Error(L('Neplatný typ jídla.', 'Invalid meal type.'));
-  // A copy of another app's food is the athlete's own entry.
+  // A copy of another app's food, or of one moved in Aurin, is the athlete's own entry.
   let source=row.source,note=row.note;
-  if(OTHER_APP.has(source)||mealType!=null){const n=noteObject(row.note);if(OTHER_APP.has(source)){delete n.external_id;delete n.app;source='manual'}if(mealType!=null)n.mealType=mealType;note=JSON.stringify(n)}
+  const n=noteObject(row.note),taken=n.from_app!=null;
+  if(OTHER_APP.has(source)||taken||mealType!=null){if(OTHER_APP.has(source)){delete n.external_id;delete n.app;source='manual'}delete n.from_app;if(mealType!=null)n.mealType=mealType;note=JSON.stringify(n)}
   const result=await db.prepare('INSERT INTO food_logs (user_id,consumed_date,consumed_at,cookbook_page,recipe_title,servings,kcal,protein_g,carbs_g,fat_g,fiber_g,source,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
     .bind(db.userId,date,changedDate(row.consumed_at,date),row.cookbook_page,row.recipe_title,row.servings,row.kcal,row.protein_g,row.carbs_g,row.fat_g,row.fiber_g,source,note).run();
   return {status:'ok',id:result.meta.last_row_id,date};
@@ -91,8 +115,9 @@ export async function deleteFoodEntry(db,id){
 }
 
 // Several foods at once (Vybrat in a meal): delete, move to another day or
-// meal, or copy there. Another app's food is deleted from Aurin only and
-// copied as the athlete's own; it cannot be moved. Returns what changed, by id.
+// meal, or copy there. Another app's food is deleted from Aurin only, copied
+// as the athlete's own and moved by taking it over (takeOver). Returns what
+// changed, by id.
 export async function bulkFoodEntries(db,{action,ids,date,mealType}={}){
   const list=[...new Set((Array.isArray(ids)?ids:[]).map(Number).filter(n=>Number.isInteger(n)&&n>0))].slice(0,100);
   if(!list.length)throw new Error(L('Nic není vybrané.', 'Nothing is selected.'));
@@ -101,8 +126,6 @@ export async function bulkFoodEntries(db,{action,ids,date,mealType}={}){
   for(const id of list){
     if(action==='delete'){done.push(await deleteFoodEntry(db,id));continue}
     if(action==='copy'){done.push(await copyFoodEntry(db,id,date,mealType??null));continue}
-    const row=await existing(db,id);
-    if(OTHER_APP.has(row.source)){skipped.push(id);continue}
     done.push(await updateFoodEntry(db,id,{date,mealType:mealType??undefined}));
   }
   return {status:'ok',done,skipped};

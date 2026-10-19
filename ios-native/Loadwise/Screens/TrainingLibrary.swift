@@ -151,7 +151,7 @@ struct GymLibrarySection: View {
                             Text(verbatim: L10n.tr(data.readyTitle == nil ? "Dnes" : "Dnes připravené")).font(Typo.caption).foregroundStyle(Palette.muted)
                             Text(verbatim: data.headline).font(Typo.sentence(20)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
                             if let most = data.tired.first {
-                                Text(verbatim: L10n.f("%@: odpočaté %@", most.label, most.readyText(today: data.date)))
+                                Text(verbatim: L10n.f("%@: odpočaté %@", L10n.tr(most.label), most.readyText(today: data.date)))
                                     .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                             }
                         }
@@ -197,6 +197,12 @@ struct WorkoutLibrarySection: View {
     @State private var variant = 0
     @State private var proposing = false
     @State private var proposalError: String?
+    /// Few workouts of the chosen type: the AI's own for these filters (Na míru od AI).
+    @State private var composeWanted = false
+    @State private var composed: LibraryWorkout?
+    @State private var composing = false
+    @State private var composeVariant = 0
+    @State private var composeMore = false
 
     enum Level: String, CaseIterable, Identifiable {
         case any, easy, medium, hard
@@ -242,15 +248,18 @@ struct WorkoutLibrarySection: View {
             .pickerStyle(.segmented)
             .padding(.top, 8)
 
-            if loading && workouts.isEmpty {
+            if composeShown { composedPick }
+
+            if loading && workouts.isEmpty && !composeShown {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
             } else if let error {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
             } else if workouts.isEmpty {
-                Text("Těmto filtrům nic neodpovídá. Zkus delší toleranci délky nebo jinou obtížnost.")
+                Text(composeShown ? "V knihovně tomuto výběru nic neodpovídá." : "Těmto filtrům nic neodpovídá. Zkus delší toleranci délky nebo jinou obtížnost.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 20)
             } else {
-                Text(L10n.f("%@ %@", String(workouts.count), Fmt.plural(workouts.count, "trénink", "tréninky", "tréninků")))
+                Text(composeShown ? L10n.f("Z knihovny · %@ %@", String(workouts.count), Fmt.plural(workouts.count, "trénink", "tréninky", "tréninků"))
+                                  : L10n.f("%@ %@", String(workouts.count), Fmt.plural(workouts.count, "trénink", "tréninky", "tréninků")))
                     .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 20)
                 VStack(spacing: 10) {
                     ForEach(workouts) { w in
@@ -288,6 +297,57 @@ struct WorkoutLibrarySection: View {
         }
         .padding(.top, 20)
         .onChange(of: "\(minutes ?? 0)|\(indoor)") { proposal = nil; proposalError = nil }
+    }
+
+    /// Shown while the AI writes and once it has; a failure or an empty answer hides it.
+    private var composeShown: Bool { composeWanted && (composing || composed != nil) }
+
+    /// Na míru od AI: the AI's own workout for the filters above the library's few.
+    private var composedPick: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                AIMark()
+                Text(verbatim: L10n.tr("Na míru od AI").uppercased(with: Fmt.locale))
+                    .font(.system(size: 12, weight: .medium)).tracking(1.9).foregroundStyle(Palette.amber)
+                    .accessibilityAddTraits(.isHeader)
+            }
+            if let composed, !composing {
+                Button { open = composed } label: { LibraryWorkoutCard(workout: composed) }.buttonStyle(PressableCardStyle())
+                if composeMore {
+                    SecondaryButton(title: "Jiný návrh") { Task { await compose(variant: composeVariant + 1) } }
+                }
+            } else {
+                Card {
+                    Label("Skládám trénink podle tvého výběru…", systemImage: "sparkles")
+                        .font(Typo.small).foregroundStyle(Palette.secondary)
+                    RoundedRectangle(cornerRadius: 6).fill(Palette.ink.opacity(0.08)).frame(height: 36)
+                }
+                .accessibilityLabel(Text("Skládám trénink podle tvého výběru…"))
+            }
+        }
+        .padding(.top, 24)
+    }
+
+    private func compose(variant: Int) async {
+        composing = true
+        defer { composing = false }
+        do {
+            let result = try await model.api.composeWorkout(sport: sport, minutes: minutes, tolerance: tolerance.wrappedValue, system: system,
+                                                            indoor: indoor, difficulty: level.range, variant: variant)
+            guard !Task.isCancelled else { return }
+            if let workout = result.workout {
+                composed = workout
+                composeVariant = variant
+                composeMore = result.more ?? false
+            } else if variant == 0 {
+                composed = nil
+            } else {
+                composeMore = false
+            }
+        } catch {
+            // The AI is extra: on a failure the library stays as it is.
+            if variant == 0 { composed = nil } else { composeMore = false }
+        }
     }
 
     private func propose() async {
@@ -399,6 +459,12 @@ struct WorkoutLibrarySection: View {
                 if minutes == nil && !dragging { slider = min(max(Double(length), range.lowerBound), range.upperBound) }
             }
             error = nil
+            composed = nil
+            composeWanted = result.compose == true
+            if composeWanted {
+                loading = false
+                await compose(variant: 0)
+            }
         } catch is CancellationError {
         } catch let failure as URLError where failure.code == .cancelled {
         } catch {
@@ -429,6 +495,10 @@ struct LibraryWorkoutCard: View {
             }
             if let reason = workout.ai?.reason {
                 Text(reason).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(3).multilineTextAlignment(.leading)
+                if let warning = workout.ai?.warning {
+                    Label(warning, systemImage: "exclamationmark.triangle").font(Typo.caption).foregroundStyle(Palette.amber)
+                        .lineLimit(3).multilineTextAlignment(.leading)
+                }
             } else if let why = workout.reasons?.first {
                 Label(Fmt.capitalized(why), systemImage: "checkmark").font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
             }
@@ -480,6 +550,10 @@ struct LibraryWorkoutSheet: View {
                         AIMark()
                         Text(reason).font(Typo.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
                     }
+                }
+                if let warning = workout.ai?.warning {
+                    Label(warning, systemImage: "exclamationmark.triangle").font(Typo.small).foregroundStyle(Palette.amber)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 if let d = workout.description?.nilIfBlank {
                     Text(d).font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)

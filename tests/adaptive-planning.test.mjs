@@ -144,7 +144,7 @@ test('three confirmed library workouts can exceed the day budget without using l
   globalThis.fetch=async(_,opts)=>{const event=JSON.parse(opts.body)[0];events.push(event);return Response.json([{id:122+events.length,category:'WORKOUT'}]);};
   try{
     await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:workout.id,date:'2026-10-05',environment:'indoor',confirm:true});
-    assert.equal(events[0].start_date_local,'2026-10-05T00:00:00');
+    assert.equal(events[0].start_date_local,'2026-10-05T17:00:00');
     const others=CYCLING_WORKOUTS.filter(w=>w.duration_minutes===60&&w.id!==workout.id).slice(0,2);
     for(const other of others)assert.equal((await scheduleWorkoutInIntervals({INTERVALS_API_KEY:'test'},db,{workoutId:other.id,date:'2026-10-05',environment:'indoor',confirm:true})).status,'ok');
     assert.equal(events.length,3);

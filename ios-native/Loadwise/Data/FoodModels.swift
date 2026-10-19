@@ -43,7 +43,8 @@ struct FoodSnapshot: Decodable, Equatable {
         var fiber: Double? = nil
         var sugar: Double? = nil
         var salt: Double? = nil
-        /// Logged in another app and read from Apple Health ("Yazio"); not editable here.
+        /// Logged in another app and read from Apple Health ("Yazio"), or such
+        /// a food moved in Aurin: only its meal and day change here.
         var app: String? = nil
         /// Values estimated by AI (no such product was found): "AI odhad".
         var estimate: Bool? = nil
