@@ -80,8 +80,11 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
         salt: round(num(note.salt_g), 2),
         amount: amount != null && unit ? round(amount, 1) + " " + unitLabel(unit, round(amount, 1)) : null,
         brand: note.brand || null,
-        // Logged in another app and read from Apple or Google Health: shown with its name, not editable.
-        ...(e.source === "apple-health" || e.source === "google-health" ? { app: String(note.app || (e.source === "google-health" ? "Google Health" : "Apple Health")).slice(0, 60) } : {}),
+        // Logged in another app and read from Apple or Google Health, or such a
+        // food moved in Aurin (food-entry-management.js): shown with its name;
+        // only its meal and day change.
+        ...(e.source === "apple-health" || e.source === "google-health" ? { app: String(note.app || (e.source === "google-health" ? "Google Health" : "Apple Health")).slice(0, 60) }
+          : note.from_app ? { app: String(note.from_app).slice(0, 60) } : {}),
         ...(note.estimate === true ? { estimate: true } : {})
       };
     });

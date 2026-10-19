@@ -53,8 +53,17 @@ test("other apps' food is not edited here and not sent on to Google; a copy is t
   assert.equal(copied.source, "manual");
   assert.equal(JSON.parse(copied.note).app, undefined);
 
+  // Moving it to another meal takes it over in Aurin; that one still stays away from Google.
+  const moved = await updateFoodEntry(db, id, { mealType: "dinner" });
+  assert.notEqual(moved.id, id);
+  assert.deepEqual(await queueFoodGoogle(db, moved.id), { status: "skipped" });
+  await sync();
+  assert.equal((await raw.prepare("SELECT COUNT(*) AS n FROM food_logs WHERE user_id=7 AND source='apple-health'").first()).n, 0);
+
   // Deleting removes the meal and the drink from Aurin only; the next sync does not bring them back.
-  await deleteFoodEntry(db, id);
+  await raw.prepare("DELETE FROM apple_food_hidden").run();
+  await sync();
+  await deleteFoodEntry(db, (await raw.prepare("SELECT id FROM food_logs WHERE user_id=7 AND source='apple-health'").first()).id);
   await deleteFluid(db, (await listFluids(db, "2026-10-13"))[0].id);
   await sync();
   assert.equal((await raw.prepare("SELECT COUNT(*) AS n FROM food_logs WHERE user_id=7 AND source='apple-health'").first()).n, 0);
@@ -62,11 +71,13 @@ test("other apps' food is not edited here and not sent on to Google; a copy is t
 });
 
 test("the food screen names the app an entry came from", () => {
-  const food = buildFood({ date: "2026-10-13", food: { entries: [{ id: 1, consumed_at: "2026-10-13T12:40:00", recipe_title: "Řecký jogurt", kcal: 205, source: "apple-health", note: JSON.stringify({ app: "Yazio" }) }, { id: 2, consumed_at: "2026-10-13T08:00:00", recipe_title: "Kaše", kcal: 300, source: "manual", note: "{}" }] },
+  const food = buildFood({ date: "2026-10-13", food: { entries: [{ id: 1, consumed_at: "2026-10-13T12:40:00", recipe_title: "Řecký jogurt", kcal: 205, source: "apple-health", note: JSON.stringify({ app: "Yazio" }) }, { id: 2, consumed_at: "2026-10-13T08:00:00", recipe_title: "Kaše", kcal: 300, source: "manual", note: "{}" },
+    { id: 3, consumed_at: "2026-10-13T10:00:00", recipe_title: "Káva", kcal: 60, source: "manual", note: JSON.stringify({ from_app: "Yazio" }) }] },
     fluids: { entries: [{ id: 5, kind: "water", ml: 300, consumedAt: "2026-10-13T09:30", app: "Yazio" }] } });
   const entries = food.meals.flatMap(m => m.entries);
   assert.equal(entries.find(e => e.id === 1).app, "Yazio");
   assert.equal(entries.find(e => e.id === 2).app, undefined);
+  assert.equal(entries.find(e => e.id === 3).app, "Yazio", "moved in Aurin, still named after its app");
   assert.equal(food.water.drinks[0].app, "Yazio");
   assert.equal(mealTypeOfName("Oběd"), "lunch");
   assert.equal(mealTypeOfName("Kuře s rýží"), null);

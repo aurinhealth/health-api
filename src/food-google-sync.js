@@ -27,8 +27,9 @@ export async function queueFoodGoogle(db,id,{deleted=false}={}){
   await ensure(db);
   const row=deleted?null:await db.prepare('SELECT * FROM food_logs WHERE user_id=? AND id=?').bind(db.userId,Number(id)).first();
   if(!deleted&&!row)throw new Error(L('Jídlo už v deníku není.', 'The meal is no longer in the log.'));
-  // Food from another app via Apple or Google Health is not sent on to Google (apple-food.js).
-  if(row?.source==='apple-health'||row?.source==='google-health')return {status:'skipped'};
+  // Food from another app via Apple or Google Health is not sent on to Google
+  // (apple-food.js), nor is such a food moved in Aurin: the original is still there.
+  if(row?.source==='apple-health'||row?.source==='google-health'||/"from_app"/.test(String(row?.note||'')))return {status:'skipped'};
   const desired=row?JSON.stringify({date:row.consumed_date,payload:foodGooglePayload(row)}):null;
   await db.prepare(`INSERT INTO food_google_exports(user_id,entry_id,desired_json) VALUES(?,?,?)
     ON CONFLICT(user_id,entry_id) DO UPDATE SET desired_json=excluded.desired_json,revision=revision+1,

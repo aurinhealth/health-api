@@ -2,7 +2,9 @@ import SwiftUI
 
 /// Jídlo → a food of the diary: its amount (the server rescales the energy
 /// and macros), the meal of the day and the day, a copy to another day, or
-/// deleting it (/app/api/food/entry, src/food-entry-management.js).
+/// deleting it (/app/api/food/entry, src/food-entry-management.js). Food
+/// from another app (Yazio…) keeps its values: only its meal and day change,
+/// in Aurin alone.
 struct FoodEntryEditSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -18,8 +20,9 @@ struct FoodEntryEditSheet: View {
     @State private var confirmDelete = false
     @State private var error: String?
 
-    /// 150 and "g" from "150 g", the amount as the server shows it.
-    private var logged: (value: Double, unit: String)? { Self.amount(entry.amount) }
+    /// 150 and "g" from "150 g", the amount as the server shows it; none for
+    /// another app's food, whose amount changes in that app.
+    private var logged: (value: Double, unit: String)? { entry.app == nil ? Self.amount(entry.amount) : nil }
     /// Millilitres are typed in fluid ounces in imperial units.
     private var fluid: Bool { logged?.unit == "ml" && Units.imperial }
     private var shownUnit: String? { fluid ? Units.volumeUnit : logged?.unit }
@@ -51,8 +54,11 @@ struct FoodEntryEditSheet: View {
     var body: some View {
         NavigationStack {
             SettingsPage(title: "Upravit jídlo") {
-                Text(entry.name).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(entry.name).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let app = entry.app { AppTag(name: app) }
+                }
 
                 SettingsGroup {
                     if let shownUnit {
@@ -95,7 +101,7 @@ struct FoodEntryEditSheet: View {
                 }
 
                 Button(role: .destructive) { confirmDelete = true } label: {
-                    Text("Smazat").font(Typo.bodyStrong).foregroundStyle(Palette.rust).frame(maxWidth: .infinity).frame(height: 46)
+                    Text(L10n.tr(entry.app == nil ? "Smazat" : "Smazat jen v Aurinu")).font(Typo.bodyStrong).foregroundStyle(Palette.rust).frame(maxWidth: .infinity).frame(height: 46)
                 }
                 .disabled(working)
             }
@@ -105,7 +111,7 @@ struct FoodEntryEditSheet: View {
         }
         .tint(Palette.ink)
         .confirmationDialog(L10n.f("Smazat „%@“?", entry.name), isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Smazat", role: .destructive) { Task { await delete() } }
+            Button(entry.app == nil ? "Smazat" : "Smazat jen v Aurinu", role: .destructive) { Task { await delete() } }
         }
         .onAppear {
             if let logged { amountText = Self.text(fluid ? Units.volume(logged.value) : logged.value) }
