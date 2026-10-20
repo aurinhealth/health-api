@@ -22,7 +22,7 @@ from PIL import Image
 SOURCES = {
     'today': 'site/today',
     'sleep': 'smoke/spanek',
-    'sleep-need': 'smoke/spanek-3',
+    'sleep-need': 'smoke/spanek-2',
     'bedtime': 'smoke/planovac',
     'bedtime-goal': 'smoke/planovac-2',
     'readiness-parts': 'smoke/pripravenost',
@@ -30,12 +30,13 @@ SOURCES = {
     'strain-target': 'site/strain',
     'training': 'site/training',
     'builder': 'smoke/sestavit',
-    'gym-day': 'smoke/posilovna',
-    'training-mode': 'smoke/rezim-zacatek',
+    'gym-day': 'site/gym',
+    'training-mode': 'smoke/rezim',
     'training-set': 'smoke/dalsi-serie',
-    'training-rest': 'smoke/odpocinek',
-    'training-done': 'smoke/souhrn',
-    'food-day': 'smoke/jidlo',
+    # odpocinek itself is covered by the notifications question on a fresh simulator.
+    'training-rest': 'smoke/odpocinek-2',
+    'training-done': 'smoke/dokoncit',
+    'food-day': 'site/food',
     'food-add': 'smoke/pridat',
     'coach-ask': 'smoke/kouc',
 }

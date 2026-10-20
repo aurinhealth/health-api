@@ -38,6 +38,7 @@ const P = {
   cal: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 8v.2"/>',
   thumb: '<path d="M7 11v9H4v-9ZM7 11l4-7c1.5 0 2.5 1 2.2 2.6L12.7 10H18a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7"/>',
+  meal: '<path d="M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 21V3c-2 1-3.5 4-3.5 8h3.5"/>',
   rotate: '<path d="M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4"/>',
 };
 const ic = (name, cls = '') => `<svg class="di${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${P[name]}</svg>`;
@@ -168,9 +169,9 @@ const monthState = d => d === '' ? '' : d > 8 ? (d % 7 === 2 ? '' : 'up') : d ==
 const monthSport = d => ['gym', 'bike', 'run', 'gym', 'bike', 'bike', 'run'][d % 7];
 const week = `<div class="dm pad wk">
 <div class="sl">Training · Week 41</div>
-<div class="strip">${dayC('M', 5, 'run', 'ok')}${dayC('T', 6, 'bike', 'ok')}${dayC('W', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">T</span><span class="ci up"${at('1400:done')}>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
+<div class="strip">${dayC('M', 5, 'gym', 'ok')}${dayC('T', 6, 'bike', 'ok')}${dayC('W', 7, 'run', 'ok')}<div class="dc sel"><span class="wd today">T</span><span class="ci up"${at('1400:done')}>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('F', 9, 'moon', 'rest')}${dayC('S', 10, 'bike', 'up')}</div>
 <div class="handle"${at('4300:pull 5200-pull')}><i></i><span data-tx="0|Full month;4800|Less">Full month</span></div>
-<div class="month"${at('4800:open')}><div class="mh"><b>October</b><span class="mut s">12 activities · 14 h 20 min</span></div><div class="mg">${['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<span class="mw">${d}</span>`).join('')}${MONTH.flat().map((d, i) => `<span class="md${d === 8 ? ' sel' : ''}" style="--i:${i}"><span>${d}</span>${monthState(d) ? `<span class="ci ${monthState(d)}">${ic(monthSport(d))}</span>` : ''}</span>`).join('')}</div></div>
+<div class="month"${at('4800:open')}><div class="mh"><b>October</b><span class="mut s">12 activities · 14 h 20 min</span></div><div class="mg">${['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<span class="mw">${d}</span>`).join('')}${MONTH.flat().map((d, i) => `<span class="mday${d === 8 ? ' sel' : ''}" style="--i:${i}"><span>${d}</span>${monthState(d) ? `<span class="ci ${monthState(d)}">${ic(monthSport(d))}</span>` : ''}</span>`).join('')}</div></div>
 <div class="day"><div class="row sp"><b>Today</b><span class="mut s">1 h 27 min · 840 kcal</span></div>
 <div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="src">${logo('apple')}Apple Health</span><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span></div><span class="num">520<small>kcal</small></span></div>
 <div class="ar"><span class="ci up"${at('1400:done')}>${ic('gym')}</span><div><b>Strength, full body</b><span class="src"${at('2200')}>${AURIN}Aurin, Apple Watch</span><span class="mut s" data-tx="0|Planned · 5:30 PM · 45 min;1400|Strength · 5:30 PM · 47 min">Planned · 5:30 PM · 45 min</span></div><span class="num"${at('2200')}>320<small>kcal</small></span></div>
@@ -197,7 +198,7 @@ const part = (id, icon, color, title, sub, toggle) => `<div class="pt ${id}"><sp
 const gymParts = `<div class="dm pad">
 <div class="row sp"><b class="sent md2"><span${n(58, 68, 1200, 700, 'i')}>68</span> min in total</b><span class="mut s"><span${n(13, 23, 1200, 700, 'i')}>23</span> min extra</span></div>
 <div class="tbar"><i class="w" style="flex:5"></i><i class="l" style="flex:45"></i><i class="sx" style="flex:8"></i></div>
-<div class="tl s mut"><span>Warm-up +5 min</span><span>Lifting 45 min</span><span>Stretching +8 min</span></div>
+<div class="tlab s mut"><span>Warm-up +5 min</span><span>Lifting 45 min</span><span>Stretching +8 min</span></div>
 <div class="sl">Today’s workout</div>
 <div class="gparts"${at('2600:drag 3600:swap 4400-drag')}>
 ${part('p1', 'run', 'amb', 'Warm-up', 'Mobility · 5 min', true)}
@@ -236,7 +237,7 @@ const RING = 2 * Math.PI * 84;
 const tmRest = `<div class="dm pad tm rest">
 <div class="ring"><svg viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="84" class="rt"/><circle cx="100" cy="100" r="84" class="ra" stroke-dasharray="${RING.toFixed(1)}" data-ring="90,82,0,8000,90;97,92,8200,5000,105" style="stroke-dashoffset:0"/></svg>
 <div class="rc"><span class="mut s">Rest</span><span class="num rd"${n(90, 82, 0, 8000, 'ms')}${n(97, 92, 8200, 5000, 'ms')}>1:30</span><span class="mut s" data-tx="0|of 1:30;8000|of 1:45">of 1:30</span></div></div>
-<div class="row gap c3"><span class="pb2">−15 s</span><span class="pb2"${at('7700:press 8000-press')}>+15 s</span><span class="pb2">Skip</span></div>
+<div class="row gap btn3"><span class="pb2">−15 s</span><span class="pb2"${at('7700:press 8000-press')}>+15 s</span><span class="pb2">Skip</span></div>
 <div class="nowc"><span class="mut s">Now</span><div class="row sp"><b>Squat · set 3</b><span class="num md">80 kg × 8</span></div><span class="mut s">Last time 77.5 × 8</span></div>
 </div>`;
 
@@ -249,7 +250,7 @@ const doneScreen = `<div class="app glow-training">${STATUS}
 <div class="card rec"${at('1900')}><span class="sc amb">${ic('spark')}</span><div><b>New record</b><span class="mut s">Squat 82.5 × 6</span></div></div>
 <div class="card chg"${at('2500')}>${[['Squat', '3 × 80 kg', '+2.5 kg', 'grn'], ['Bench press', '2 × 62.5 kg', '+1 reps', 'grn'], ['Bent-over rows', '2 × 50 kg', '=', 'mut']].map(([a, b, c, k]) => `<div class="li"><div><b>${a}</b><span class="mut s">${b}</span></div><span class="${k} s b">${c}</span></div>`).join('')}</div>
 <div class="card hk"${at('3100')}><span class="rust">${ic('heart')}</span><b>Saved to Apple Health</b><span class="grn">${ic('check')}</span></div>
-<div class="btn dark big2">${ic('thumb')}Rate</div>
+<div class="btn dark tall">${ic('thumb')}Rate</div>
 </div>`;
 
 const tmDone = `<div class="dm pad">
@@ -265,21 +266,24 @@ const foodTarget = `<div class="dm pad">
 <div class="row sp"><span class="wh"><i style="background:var(--amber-bar)"></i>Food and drinks</span><span class="amb s b"${at('1500')}>+350 training</span></div>
 <div class="row base"><span class="num big2">1,380</span><span class="num faint md">/ <span${n(2300, 2650, 1500, 1100, 'i')}>2,650</span> kcal</span></div>
 <i class="kbar"><b style="--w:${1380 / 2300 * 100}%" class="k1"${at('1500:t')}></b></i>
-<div class="mac">${[['Protein', 112, 150, 'brown'], ['Carbs', 205, 330, 'amber-bar'], ['Fat', 37, 80, 'gold'], ['Water', '1.8', '2.5 l', 'blue']].map(([k, v, t, c]) => `<div><span class="mut s">${k}</span><span class="num md">${v}<small> / ${t}</small></span><i class="mb"><b style="--w:${typeof v === 'number' ? v / t * 100 : 72}%;background:var(--${c})"></b></i></div>`).join('')}</div>
+<div class="mac">${[['Protein', 112, 150, 'brown'], ['Carbs', 205, 330, 'amber-bar'], ['Fat', 37, 80, 'gold'], ['Water', '1.8', '2.5 l', 'blue']].map(([k, v, t, c]) => `<div class="mc"><span class="mut s">${k}</span><span class="num md">${v}<small> / ${t}</small></span><i class="mb"><b style="--w:${typeof v === 'number' ? v / t * 100 : 72}%;background:var(--${c})"></b></i></div>`).join('')}</div>
 <div class="coach"${at('2400')}><div class="ch4">${ic('spark')}Coach</div><p class="sent" data-type="2700,3000">Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.</p></div>
 </div>`;
 
+// From "+" (AddSheet.swift: Food → Photo of meal) to the amount (AddFoodSheet.swift FoodAmountView): the photo is
+// read, the AI's estimate opens with its portion chips, the portion goes from 1 to 1½ and the values follow.
 const foodAdd = `<div class="dm pad fa">
-<div class="sent h">What are you adding?</div>
-<div class="tiles3"><span${at('500:press 900-press')}>${ic('barcode')}Scan</span><span>${ic('camera')}Photo</span><span>${ic('search')}Search</span></div>
-<div class="cam"${at('900:in 2900-in')}><div class="bc"></div><i class="scan"></i><span class="cr tl"></span><span class="cr tr"></span><span class="cr bl"></span><span class="cr br"></span></div>
-<div class="res"${at('2900:in')}>
-<div class="row sp"><span class="grn s b">✓ Found</span><span class="mut s">Hollandia · EAN 8594001234567</span></div>
-<div class="sent h">Plain Greek yogurt</div>
-<div class="nc">${[['kcal', 133, 200], ['protein', 12.6, 18.9], ['carbs', 5.6, 8.4], ['fat', 7, 10.5]].map(([k, a, b]) => `<div><span class="num md"${n(a, b, 4600, 700, k === 'kcal' ? 'i' : '1')}>${b}</span><span class="mut s">${k === 'kcal' ? 'kcal' : k + ' g'}</span></div>`).join('')}</div>
-<div class="row sp s mut"><span>1 serving = 140 g</span><span>Servings</span></div>
-<div class="pc">${['¼', '⅓', '½', '¾', '1', '1½', '2'].map(x => `<span${x === '1' ? ' class="on"' + at('4500-on') : x === '1½' ? at('4500:on') : ''}>${x}</span>`).join('')}</div>
-<div class="btn dark"${at('5800:press 6100-press 6100:ok')}><span data-tx="0|Add to lunch · 1½ serving;6100|✓ Added to lunch">Add to lunch · 1½ serving</span></div>
+<div class="sh"><span class="amb2">${ic('meal')}</span>Food</div>
+<div class="tiles2"><span${at('500:press 850-press')}><i>${ic('camera')}</i>Photo of meal</span><span><i>${ic('search')}</i>Search food</span></div>
+<div class="cam"${at('850:in 3300-in')}><div class="plate"><i class="rice"></i><i class="chk c1"></i><i class="chk c2"></i><i class="chk c3"></i><i class="brc g1"></i><i class="brc g2"></i></div><span class="cr tl"></span><span class="cr tr"></span><span class="cr bl"></span><span class="cr br"></span><span class="shut"${at('1900:press 2150-press')}></span><span class="read"${at('2300')}><span class="spin"></span>Reading photo…</span></div>
+<div class="res"${at('3300:in')}>
+<div class="sent h">Chicken with rice</div>
+<span class="ai">${ic('spark')}AI estimate</span>
+<div class="amt"><span class="num" data-tx="0|1;4800|1½">1½</span><span class="mut s">serving</span></div>
+<div class="row sp s mut"><span>Servings</span></div>
+<div class="pc">${['¼', '⅓', '½', '¾', '1', '1½', '2'].map(x => `<span${x === '1' ? ' class="on"' + at('4700-on') : x === '1½' ? at('4700:on') : ''}>${x}</span>`).join('')}</div>
+<div class="nc">${[['kcal', 640, 960, ''], ['protein', 48, 72, ' g'], ['carbs', 82, 123, ' g'], ['fat', 12, 18, ' g']].map(([k, a, b, u]) => `<div><span class="num md"><span${n(a, b, 4800, 700, 'i')}>${b}</span>${u}</span><span class="mut s">${k}</span></div>`).join('')}</div>
+<div class="btn dark"${at('6200:press 6500-press')}>Add to lunch</div>
 </div></div>`;
 
 // ---- Coach (CoachView.swift: bubbles, ActionCard with a workout preview, the confirmed line) ----
@@ -307,7 +311,7 @@ ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Bent-over r
 // Beside the phone: the confirmed workout lands in the week.
 const coachWeek = `<div class="dm pad wk"${at('10900')}>
 <div class="sl">Training · Week 41</div>
-<div class="strip">${dayC('M', 5, 'run', 'ok')}${dayC('T', 6, 'bike', 'ok')}${dayC('W', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">T</span><span class="ci empty"${at('11600:up')}><span class="rest">–</span>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
+<div class="strip">${dayC('M', 5, 'gym', 'ok')}${dayC('T', 6, 'bike', 'ok')}${dayC('W', 7, 'run', 'ok')}<div class="dc sel"><span class="wd today">T</span><span class="ci empty"${at('11600:up')}><span class="rest">–</span>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('F', 9, 'moon', 'rest')}${dayC('S', 10, 'bike', 'up')}</div>
 <div class="day"><div class="row sp"><b>Today</b><span class="mut s" data-tx="0|42 min · 520 kcal;12000|1 h 42 min · 520 kcal">42 min · 520 kcal</span></div>
 <div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span></div><span class="num">520<small>kcal</small></span></div>
 <div class="ar new"${at('12000')}><span class="ci up">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">Planned · 5:30 PM · 60 min</span></div>${ic('chev')}</div>
@@ -428,6 +432,7 @@ html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
 .ci.done{transform:scale(1.08)}
 .js .ci[data-at]{opacity:1!important;transform:none!important}.js .ci.done[data-at]{transform:scale(1.08)!important}
 .sel .ci{box-shadow:inset 0 0 0 2px var(--c),0 0 0 4px var(--panel),0 0 0 6px var(--text)}.sel .ci.up:not(.done){box-shadow:0 0 0 4px var(--panel),0 0 0 6px var(--text)}
+.ci.rest{--c:var(--muted);background:var(--track);box-shadow:none}
 .ci.empty{--c:transparent}.ci.empty .di{opacity:0;transform:scale(.4);transition:all .5s}.ci.empty .rest{position:absolute;color:var(--muted);transition:opacity .3s}
 .ci.empty.up{--c:var(--muted)}.ci.empty.up .di{opacity:1;transform:none}.ci.empty.up .rest{opacity:0}
 .js .ci.empty[data-at]:not(.up){opacity:1!important;transform:none!important}
@@ -440,8 +445,8 @@ html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
 .month>div{min-height:0}.mh{display:flex;flex-direction:column;align-items:center;padding-top:6px}.mh b{font-size:14px}
 .mg{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:6px 0 4px;overflow:hidden;min-height:0}
 .mw{font-size:10.5px;font-weight:600;color:var(--muted);text-align:center}
-.md{display:flex;flex-direction:column;align-items:center;gap:1px;padding:2px 0;border-radius:9px;font-size:10.5px;min-height:36px}.md.sel{background:var(--track)}
-.md .ci{width:20px;height:20px;font-size:10px}.md .ci.up{outline-width:1.5px}
+.mday{display:flex;flex-direction:column;align-items:center;gap:1px;padding:2px 0;border-radius:9px;font-size:10.5px;min-height:36px}.mday.sel{background:var(--track)}
+.mday .ci{width:20px;height:20px;font-size:10px}.mday .ci.up{outline-width:1.5px}
 .day{margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}.day>.row{margin-bottom:4px}
 .ar{display:grid;grid-template-columns:36px 1fr auto;align-items:center;gap:10px;padding:8px 0}
 .ar .ci{width:34px;height:34px;font-size:15px}.ar b{display:block;font-size:14px}.ar .num{font-size:18px}.ar>.di{color:var(--muted)}
@@ -469,7 +474,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .md2{font-size:20px}
 .tbar{display:flex;gap:4px;height:8px;margin:10px 0 6px}.tbar i{border-radius:9px;transition:flex .6s,opacity .4s}
 .tbar .w{background:var(--amber)}.tbar .l{background:color-mix(in srgb,var(--text) 85%,transparent)}.tbar .c{background:var(--rust)}.tbar .sx{background:var(--indigo)}
-.tl{display:flex;justify-content:space-between}
+.tlab{display:flex;justify-content:space-between}
 .gparts{position:relative;padding:4px 8px;border-radius:20px;background:var(--bg)}
 .pt{display:grid;grid-template-columns:18px 32px 1fr auto;align-items:center;gap:10px;min-height:54px;border-top:1px solid var(--line);background:var(--bg);transition:transform .6s cubic-bezier(.16,1,.3,1),box-shadow .3s,opacity .3s}
 .pt:first-child{border-top:0}.pt b{display:block;font-size:14px;font-weight:500}.pt .gr{color:var(--muted);font-size:14px}
@@ -510,7 +515,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .rest .ring{position:relative;width:200px;height:200px;margin:0 auto}
 .ring svg{width:100%;height:100%;transform:rotate(-90deg)}.rt{fill:none;stroke:var(--track);stroke-width:11}.ra{fill:none;stroke:var(--green);stroke-width:11;stroke-linecap:round}
 .rc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}.rd{font-size:58px;line-height:1}
-.c3{display:grid!important;grid-template-columns:repeat(3,1fr)}.pb2{display:grid;place-items:center;height:40px;border-radius:99px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 18%,transparent);font-weight:500;font-size:14px;transition:transform .2s,background .2s}
+.btn3{display:grid!important;grid-template-columns:repeat(3,1fr)}.pb2{display:grid;place-items:center;height:40px;border-radius:99px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 18%,transparent);font-weight:500;font-size:14px;transition:transform .2s,background .2s}
 .pb2.press{transform:scale(.93);background:var(--track)}.js .pb2[data-at]{opacity:1!important;transform:none!important}.js .pb2.press{transform:scale(.93)!important}
 .nowc{margin-top:12px;padding:10px 14px;border-radius:16px;background:var(--bg)}.nowc b{font-size:14px}
 .thumbs{display:flex;gap:6px}.thumbs i{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--track);color:var(--muted);font-size:14px;transition:all .3s}
@@ -523,24 +528,37 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .kbar{display:block;height:6px;margin:10px 0 12px;border-radius:9px;background:var(--track);overflow:hidden}
 .kbar b{display:block;height:100%;width:var(--w);background:var(--amber-bar);border-radius:9px;transition:width 1.1s cubic-bezier(.16,1,.3,1)!important}
 .js .kbar b{opacity:1!important;transform:none!important}.kbar b.t,html:not(.js) .kbar b{width:${(1380 / 2650 * 100).toFixed(1)}%}
-.mac{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.mac .num.md{font-size:19px}.mac small{font-family:var(--num);font-size:12px;color:var(--muted)}
+.mac{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.mac .mc{display:flex;flex-direction:column;min-width:0}.mac .num.md{font-size:19px}.mac small{font-family:var(--num);font-size:12px;color:var(--muted)}
 .mb{display:block;height:3px;margin-top:4px;border-radius:3px;background:var(--track);overflow:hidden}.mb b{display:block;height:100%;width:var(--w)}
 .coach{margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--bg)}.ch4{display:flex;align-items:center;gap:6px;color:var(--indigo);font-weight:500;font-size:13.5px}
 .coach .sent{margin-top:4px;font-size:17px;line-height:1.3;min-height:3.9em}
-.fa{position:relative;min-height:396px}
-.tiles3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
-.tiles3 span{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0;border-radius:16px;background:var(--bg);font-size:13px;font-weight:500;transition:transform .2s,background .2s}.tiles3 .di{font-size:20px}
-.tiles3 span.press{transform:scale(.93);background:var(--track)}.js .tiles3 span[data-at]{opacity:1!important;transform:none!important}
-.cam{position:absolute;left:18px;right:18px;top:140px;height:200px;border-radius:24px;background:#1D2020;overflow:hidden}
-.cam .bc{position:absolute;left:50%;top:50%;width:150px;height:84px;margin:-42px 0 0 -75px;border-radius:6px;background:#f6f3ec repeating-linear-gradient(90deg,#1b1a17 0 2px,transparent 2px 4px,#1b1a17 4px 7px,transparent 7px 9px,#1b1a17 9px 10px,transparent 10px 13px);background-size:100% 70%;background-repeat:no-repeat;background-position:center 30%;box-shadow:0 0 0 10px #f6f3ec}
-.cam .scan{position:absolute;left:24px;right:24px;height:2px;top:30%;background:#ff4a3d;box-shadow:0 0 12px #ff4a3d;animation:scan 1.4s ease-in-out infinite alternate}
-@keyframes scan{to{top:70%}}
+.fa{position:relative;min-height:470px}
+.sh{display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}.sh .amb2{color:var(--amber-bar);font-size:13px}
+.tiles2{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+.tiles2 span{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11.5px;font-weight:500;text-align:center;transition:transform .2s}
+.tiles2 i{display:grid;place-items:center;width:100%;height:52px;border-radius:16px;background:var(--bg);color:var(--amber-bar);font-size:20px;transition:background .2s}
+.tiles2 span.press{transform:scale(.92)}.tiles2 span.press i{background:var(--track)}.js .tiles2 span[data-at]{opacity:1!important;transform:none!important}.js .tiles2 span.press{transform:scale(.92)!important}
+.cam{position:absolute;left:18px;right:18px;top:112px;height:270px;border-radius:24px;background:#2a2622;overflow:hidden}
+.plate{position:absolute;left:50%;top:46%;width:190px;height:190px;margin:-95px 0 0 -95px;border-radius:50%;background:radial-gradient(circle,#fbfaf7 0 58%,#e9e4da 60%,#f6f3ec 64%,#ddd6c9 100%);box-shadow:0 18px 30px -8px rgba(0,0,0,.6)}
+.plate i{position:absolute;display:block}
+.plate .rice{left:30px;top:44px;width:86px;height:96px;border-radius:46% 54% 48% 52%;background:radial-gradient(circle at 30% 30%,#fff 0 18%,transparent 19%) 0 0/14px 14px,radial-gradient(#f4efe3,#e7dfcd)}
+.chk{width:64px;height:30px;border-radius:40% 60% 45% 55%;background:linear-gradient(160deg,#d9a35e,#a8642a);box-shadow:inset 0 -4px 6px rgba(80,40,10,.35)}
+.plate .c1{left:98px;top:58px;transform:rotate(-18deg)}.plate .c2{left:104px;top:90px;transform:rotate(-8deg)}.plate .c3{left:96px;top:122px;transform:rotate(6deg)}
+.brc{width:30px;height:28px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#7fb069,#3f7a3a 70%)}.plate .g1{left:58px;top:132px}.plate .g2{left:80px;top:142px;width:24px;height:22px}
+.shut{position:absolute;left:50%;bottom:14px;width:46px;height:46px;margin-left:-23px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px rgba(255,255,255,.35);transition:transform .2s}.shut.press{transform:scale(.85)}
+.js .shut[data-at]{opacity:1!important;transform:none!important}.js .shut.press{transform:scale(.85)!important}
+.read{position:absolute;left:50%;top:14px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:99px;background:rgba(0,0,0,.55);color:#fff;font-size:12.5px;white-space:nowrap}
+.js .read.wait:not(.in){transform:translateX(-50%)}
+.spin{width:13px;height:13px;border-radius:50%;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin .8s linear infinite}
 .cr{position:absolute;width:26px;height:26px;border:3px solid rgba(255,255,255,.9)}.cr.tl{left:20px;top:20px;border-right:0;border-bottom:0;border-radius:14px 0 0 0}.cr.tr{right:20px;top:20px;border-left:0;border-bottom:0;border-radius:0 14px 0 0}.cr.bl{left:20px;bottom:20px;border-right:0;border-top:0;border-radius:0 0 0 14px}.cr.br{right:20px;bottom:20px;border-left:0;border-top:0;border-radius:0 0 14px 0}
-.res{position:absolute;left:0;right:0;bottom:0;padding:16px 18px 18px;border-radius:22px 22px 0 0;background:var(--panel);box-shadow:0 -10px 30px -12px rgba(60,40,10,.3)}
+.res{position:absolute;left:0;right:0;bottom:0;top:96px;padding:16px 18px 18px;border-radius:22px 22px 0 0;background:var(--panel);box-shadow:0 -10px 30px -12px rgba(60,40,10,.3)}
 .js .res:not(.in){transform:translateY(40px)}
-.nc{display:grid;grid-template-columns:repeat(4,1fr);margin:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.nc>div{display:flex;flex-direction:column;padding:8px 0}
-.pc{display:flex;gap:6px;margin-top:8px}.pc span{flex:1;display:grid;place-items:center;height:32px;border-radius:99px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:13.5px;font-weight:600;transition:background .3s,color .3s}
+.ai{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border-radius:99px;background:color-mix(in srgb,var(--indigo) 16%,transparent);color:var(--indigo);font-size:11px;font-weight:600}
+.amt{display:flex;align-items:baseline;gap:8px;margin:6px 0 2px}.amt .num{font-size:52px;line-height:1}
+.nc{display:grid;grid-template-columns:repeat(4,1fr);margin:10px 0 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.nc>div{display:flex;flex-direction:column;padding:8px 0}
+.pc{display:flex;gap:6px;margin-top:6px}.pc span{flex:1;display:grid;place-items:center;height:32px;border-radius:99px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:13.5px;font-weight:600;transition:background .3s,color .3s}
 .pc span.on{background:var(--button);color:var(--on-button)}.js .pc span[data-at]{opacity:1!important;transform:none!important}
+@media (prefers-reduced-motion:reduce){.spin{animation:none}}
 
 /* Screens built here, in the phone: drawn at the app's 390 pt and scaled to the screen. */
 .scr .app{position:absolute;left:0;top:0;width:390px;height:848px;zoom:calc(292 / 390);overflow:hidden;padding:0 20px;background:var(--bg);font:15px/1.35 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;color:var(--text);--num:"Instrument Serif","New York",Georgia,serif}
@@ -570,7 +588,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .rec{display:flex;align-items:center;gap:12px;padding:14px 16px!important}.sc{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--amber-soft);font-size:16px}.rec b{display:block}
 .chg{padding:2px 16px!important}.chg .li{min-height:52px}.chg b{display:block;font-size:14.5px}
 .hk{display:flex;align-items:center;gap:10px;padding:14px 16px!important}.hk b{flex:1}
-.big2{height:50px;margin-top:14px}
+.btn.tall{height:50px;margin-top:14px}
 .chat{display:flex;flex-direction:column}.chat .nav b{font-size:17px}
 .msgs{flex:1;display:flex;flex-direction:column;gap:12px;padding:10px 0;justify-content:flex-start}
 .msgs .u{align-self:flex-end;max-width:80%;padding:10px 14px;border-radius:18px;background:var(--button);color:var(--on-button);font-size:15.5px}
@@ -588,7 +606,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .js .conf:not(.in){display:none}
 .inp{display:flex;align-items:center;gap:10px;padding:10px 0 34px}.inp .mut{flex:1;padding:12px 14px;border-radius:20px;background:var(--panel)}
 .snd{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--button);color:var(--on-button)}
-@media (prefers-reduced-motion:reduce){.cam .scan,.dots i,.btn .sp1{animation:none}}
+@media (prefers-reduced-motion:reduce){.dots i,.btn .sp1{animation:none}}
 `;
 
 // The player: AurinDemo.play(el) runs the timeline of every demo inside el from the start, stop(el) clears it,
