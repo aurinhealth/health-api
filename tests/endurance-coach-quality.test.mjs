@@ -136,6 +136,44 @@ test("a week's running grows at most 10 % over the recent weeks", async () => {
   assert.equal(weekProposal({ prefs, start: "2026-10-05", today: "2026-10-05", week: { days: [] }, fitness }).targets.runCap, undefined);
 });
 
+test("proposed runs that do not fit 20 min under the running cap are left out", async () => {
+  const { capRunVolume } = await import("../src/week-planner.js");
+  const run = (minutes, role = "endurance") => ({ sport: "run", role, minutes, tss: minutes, intensity: .78 });
+  const targets = { status: "ok", items: [run(60), run(40, "recovery"), run(70, "long"), { sport: "ride", minutes: 90, tss: 70 }] };
+  const minutesOf = t => t.items.map(x => x.sport + ":" + x.minutes);
+  // No room left: no run, the ride stays.
+  const none = capRunVolume(targets, { cap: 90 }, 90);
+  assert.deepEqual(minutesOf(none), ["ride:90"]);
+  assert.equal(none.runCap.proposed, 0);
+  // 45 min left: the shortest run would get 10 min, the other two share it.
+  assert.deepEqual(minutesOf(capRunVolume(targets, { cap: 90 }, 45)), ["run:20", "run:25", "ride:90"]);
+  // 30 min left: one run gets all of it.
+  const one = capRunVolume(targets, { cap: 90 }, 60);
+  assert.deepEqual(minutesOf(one), ["run:30", "ride:90"]);
+  assert.equal(one.items[0].role, "long");
+  // Whatever the room, the runs stay within it and at least 20 min each.
+  for (let room = 0; room <= 170; room++) {
+    const runs = capRunVolume(targets, { cap: 200 }, 200 - room).items.filter(x => x.sport === "run");
+    assert.ok(runs.reduce((n, x) => n + x.minutes, 0) <= room && runs.every(x => x.minutes >= 20), room + ": " + JSON.stringify(runs));
+  }
+});
+
+test("a run planned for today counts against the running cap until it is done, then once", async () => {
+  const { committedRunMinutes } = await import("../src/week-planner.js");
+  const { weekProposal } = await import("../src/adaptive-week.js");
+  assert.equal(committedRunMinutes("2026-10-07", "2026-10-07", 45, 0), 45);
+  assert.equal(committedRunMinutes("2026-10-07", "2026-10-07", 45, 50), 50);
+  assert.equal(committedRunMinutes("2026-10-06", "2026-10-07", 45, 0), 0);
+  assert.equal(committedRunMinutes("2026-10-08", "2026-10-07", 45, 30), 45);
+  const history = [{ date: "2026-09-29", daily: { training: { completed: [{ type: "Run", durationHours: 1.5 }] } } }];
+  const prefs = { days: [[], [], [], [], ["run"], [], []], availability: Array.from({ length: 7 }, () => ({ minutes: 180, preferredSports: [] })), sessions: {} };
+  const fitness = { wellness: [{ id: "2026-10-06", ctl: 60, tsb: 0 }] };
+  const today = done => ({ date: "2026-10-07", daily: { training: { planned: [{ type: "Run", durationHours: .75 }], completed: done ? [{ type: "Run", durationHours: done / 60 }] : [] } } });
+  const proposal = done => weekProposal({ prefs, start: "2026-10-05", today: "2026-10-07", week: { days: [today(done)] }, fitness, history });
+  assert.equal(proposal(0).targets.runCap.committed, 45);
+  assert.equal(proposal(50).targets.runCap.committed, 50);
+});
+
 test("the ride coach's readiness is the Today screen's, from Google or Apple Health without Intervals.icu", () => {
   const day = "2026-10-11", shift = (d, k) => new Date(Date.parse(d + "T12:00:00Z") + k * 86400000).toISOString().slice(0, 10);
   const rows = Array.from({ length: 30 }, (_, i) => ({ id: shift(day, i - 29), hrv: 60 + (i % 3), restingHR: 50 + (i % 2) }));

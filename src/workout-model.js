@@ -36,7 +36,8 @@ export const RUNNING_ZONES = [
   ["vo2max", 102, 110], ["anaerobic", 111, 125], ["sprint", 126, 400]
 ];
 export const zonesFor = sport => sport === "run" ? RUNNING_ZONES : CYCLING_ZONES;
-export function zoneOf(power, zones = CYCLING_ZONES) { return (zones.find(([, lo, hi]) => power >= lo && power <= hi) || zones.at(-1))[0]; }
+// The bands are continuous: each reaches up to where the next starts, so 75.5 % is still endurance.
+export function zoneOf(power, zones = CYCLING_ZONES) { return (zones.findLast(([, lo]) => power >= lo) || zones.at(-1))[0]; }
 
 export function zoneMinutes(structure = [], zones = CYCLING_ZONES) {
   const out = Object.fromEntries(zones.map(([z]) => [z, 0]));

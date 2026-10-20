@@ -97,6 +97,12 @@ export function sleepDebtMinutes(nights, date, need) {
   const net = days.reduce((s, m) => s + Math.max(-60, want - m), 0);
   return { minutes: Math.max(0, Math.round(net)), nights: days.length, average: days.reduce((s, m) => s + m, 0) / days.length, need: want };
 }
+// The week's sleep debt up to `date` from all sleep sessions (naps too)
+// against the usual need ({ age, goal }, without the day's strain): Today,
+// Health, the coach and tonight's need count it the same.
+export function weekSleepDebt(sessions, date, options) {
+  return sleepDebtMinutes((sessions || []).filter(s => s && (s.date || String(s.endTime || "").slice(0, 10)) <= date), date, sleepNeedMinutes(options));
+}
 
 // HRV status low: the 7-day lnRMSSD average up to `date` below the 60-day
 // baseline before that week by more than the smallest worthwhile change, the
@@ -126,7 +132,7 @@ export function sleepNeedFor(input) {
   const goal = Number(input.goal) >= 360 && Number(input.goal) <= 600 ? Math.round(Number(input.goal)) : null;
   const base = sleepNeedMinutes({ age: input.age, strain, goal });
   const hrv = hrvStatusLow(rows, prev) ? 15 : 0;
-  const debtState = sleepDebtMinutes(sessions.filter(s => (s.date || String(s.endTime || "").slice(0, 10)) <= prev), prev, sleepNeedMinutes({ age: input.age, goal }));
+  const debtState = weekSleepDebt(sessions, prev, { age: input.age, goal });
   const debt = debtState ? Math.min(60, debtState.minutes) : 0;
   const naps = sessions.filter(s => (s.nap || Number(s.durationMin) < 180) && (s.date || String(s.endTime || "").slice(0, 10)) === prev).reduce((t, s) => t + (Number(s.durationMin) || 0), 0);
   const need = goal != null ? Math.max(360, Math.min(600, base + hrv + debt) - Math.round(naps)) : Math.max(420, Math.min(540, base + hrv + debt) - Math.round(naps));

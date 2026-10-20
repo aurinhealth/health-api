@@ -105,3 +105,18 @@ test("cycle tracking is open whatever the profile's sex", async () => {
   const view = await (await handleCycleApi(new Request(getUrl), env, null, getUrl, { signedIn: true })).json();
   assert.equal(view.available, true);
 });
+
+test("a pill marked as taken stays taken when the day is read back, and clearing it still works", async () => {
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { saveCycleSettings, saveCycleDay, listCycleDays, cycleInputs } = await import("../src/cycle-store.js");
+  const { normalizeCycleDay, cycleMonth } = await import("../src/cycle-model.js");
+  const db = createD1(); db.userId = 9;
+  await saveCycleSettings(db, { enabled: true, contraception: "pill", packStart: "2026-10-05" });
+  assert.equal((await saveCycleDay(db, { date: "2026-10-12", pill: true })).pill, "taken");
+  assert.equal((await listCycleDays(db, "2026-10-01", "2026-10-31"))[0].pill, "taken");
+  const inputs = await cycleInputs(db, "2026-10-12");
+  assert.equal(cycleMonth(inputs, "2026-10").find(d => d.date === "2026-10-12").pill, "taken");
+  assert.equal((await saveCycleDay(db, { date: "2026-10-12", pill: null })).pill, null);
+  assert.equal(normalizeCycleDay({ pill: "taken" }).pill, "taken");
+  assert.equal(normalizeCycleDay({ pill: "bogus" }).pill, null);
+});

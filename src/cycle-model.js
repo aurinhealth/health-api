@@ -70,13 +70,13 @@ export function normalizeCycleSettings(raw) {
 }
 
 // One logged day, cleaned: flow 0–3 (0 none, 1 light, 2 medium, 3 heavy),
-// symptoms from SYMPTOMS, pill time "HH:MM" or null, noPeriod (the athlete
-// answered "not yet" that morning).
+// symptoms from SYMPTOMS, pill "taken", its time "HH:MM" or null, noPeriod
+// (the athlete answered "not yet" that morning).
 export function normalizeCycleDay(raw) {
   const d = raw && typeof raw === "object" ? raw : {};
   const flow = Math.round(Number(d.flow));
   const symptoms = Array.isArray(d.symptoms) ? [...new Set(d.symptoms.filter(x => SYMPTOMS.includes(x)))] : [];
-  const pill = d.pill === true ? "taken" : /^([01]\d|2[0-3]):[0-5]\d$/.test(String(d.pill || "")) ? d.pill : null;
+  const pill = d.pill === true || d.pill === "taken" ? "taken" : /^([01]\d|2[0-3]):[0-5]\d$/.test(String(d.pill || "")) ? d.pill : null;
   return { date: isDate(d.date) ? d.date : null, flow: Number.isFinite(flow) ? clamp(flow, 0, 3) : 0, symptoms, pill, noPeriod: d.noPeriod === true, ovulationTest: d.ovulationTest === true };
 }
 

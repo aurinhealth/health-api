@@ -3,7 +3,7 @@
 // heart (HRV, resting heart rate), breathing, skin temperature, oxygen and
 // weight. The same recovery model as Today and the web (recovery-model.js).
 // Pure: GET /app/api/health loads the inputs.
-import { sleepNeedFor, sleepNeedMinutes, sleepDebtMinutes, bedtimePlan, hrvMetric, wristTempDeviation } from "./recovery-model.js";
+import { sleepNeedFor, sleepNeedMinutes, weekSleepDebt, bedtimePlan, hrvMetric, wristTempDeviation } from "./recovery-model.js";
 import { clockOf, minutesOf, dayStrain } from "./app-today.js";
 import { readinessFor, readinessRows, primaryNights, sleepIndexFor } from "./readiness.js";
 import { sleepSettings, tonightChoice } from "./energy-profile.js";
@@ -82,7 +82,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
     need: choice.need,
     nights: [...nights.values()].map(n => ({ date: nightDate(n), wakeMin: minutesOf(n.endTime), durationMin: num(n.durationMin), timeInBedMin: num(n.timeInBedMin) }))
   });
-  const debt = sleepDebtMinutes([...nights.values()], sleepDay, tonight.base);
+  // The week's debt as Today counts it (naps too), up to last night.
+  const debt = weekSleepDebt(sessions, date, { age, goal: sleepSet.goal });
   const week = Array.from({ length: 7 }, (_, i) => shift(date, i - 6)).map(d => ({ date: d, value: round(num(nights.get(d)?.durationMin)) })).filter(p => p.value != null);
 
   // Regularity: bedtimes of the last 14 nights (minutes after 18:00 so that
@@ -118,7 +119,7 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   // Weight: 90 days of weighings, the 30-day change of the trend and body fat
   // from Intervals.icu wellness (Google Health body fat synced there).
   const weights = (Array.isArray(weight.records) ? weight.records : [])
-    .map(r => ({ date: String(r.sample_time || r.start_time || "").slice(0, 10), value: num(r.value_numeric) }))
+    .map(r => ({ date: localDate(r.sample_time || r.start_time), value: num(r.value_numeric) }))
     .filter(p => p.date && p.date <= date && p.date > shift(date, -90) && p.value > 0)
     .sort((a, b) => a.date.localeCompare(b.date));
   const avg = (from, to) => mean(weights.filter(p => p.date > from && p.date <= to).map(p => p.value));

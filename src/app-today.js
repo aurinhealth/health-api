@@ -4,9 +4,9 @@
 // (recovery-model.js), so both show the same readiness, sleep and strain.
 // Pure: GET /app/api/today loads the inputs and passes them in.
 import { environmentFor } from "./adaptive-week.js";
-import { sleepNeedFor, bedtimePlan, heartRateLoad, strainScore, dayStrainParts, hrvMetric, sleepDebtMinutes, sleepNeedMinutes } from "./recovery-model.js";
+import { sleepNeedFor, bedtimePlan, heartRateLoad, strainScore, dayStrainParts, hrvMetric, weekSleepDebt } from "./recovery-model.js";
 import { readinessFor, primaryNights, sleepIndexFor } from "./readiness.js";
-import { localDateTime } from "./user-time.js";
+import { localDate, localDateTime } from "./user-time.js";
 import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { L } from "./lang.js";
 import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-training.js";
@@ -177,7 +177,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   });
 
   // The week's sleep debt up to last night, for the strain target.
-  const debtNow = sleepDebtMinutes(sessions.filter(x => (x.date || String(x.endTime || "").slice(0, 10)) <= date), date, sleepNeedMinutes({ age, goal: sleepSet.goal }));
+  const debtNow = weekSleepDebt(sessions, date, { age, goal: sleepSet.goal });
 
   const planned = Array.isArray(training.planned) ? training.planned : [];
   const plannedTss = planned.reduce((s, w) => s + (num(w.tss) || 0), 0);
@@ -193,7 +193,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   const last = (n, key) => rows.filter(r => r.id <= date && r.id > shift(date, -n)).map(r => ({ date: r.id, value: num(r[key]) })).filter(p => p.value > 0);
   const restingHR = readiness.components?.restingHR || null;
   const weights = (Array.isArray(weight.records) ? weight.records : [])
-    .map(r => ({ date: String(r.sample_time || r.start_time || "").slice(0, 10), value: num(r.value_numeric) }))
+    .map(r => ({ date: localDate(r.sample_time || r.start_time), value: num(r.value_numeric) }))
     .filter(p => p.date && p.date <= date && p.date > shift(date, -30) && p.value > 0);
   // Steps through the day, and the usual climb: the average running total per
   // hour of the earlier days with steps (up to 14).
