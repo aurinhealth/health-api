@@ -2723,10 +2723,3 @@
 "Skládám trénink podle tvého výběru…" = "Building a workout to your choice…";
 "V knihovně tomuto výběru nic neodpovídá." = "Nothing in the library matches this choice.";
 "Z knihovny · %@ %@" = "From the library · %@ %@";
-
-/* Nastavení → Testování → Zájemci (WaitlistView.swift) */
-"Zájemci" = "Waitlist";
-"Testeři" = "Testers";
-"Čekají" = "Waiting";
-"Pozvaní" = "Invited";
-"Pozván %@" = "Invited %@";
