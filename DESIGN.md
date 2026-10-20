@@ -43,8 +43,7 @@ palette changes, change `design-system.js` and this file together.
 | `--amber` | #A35A12 | Strain, gym and food eyebrows and text |
 | `--amber-bar` | #C4782A | Strain bars, "recovering" muscles |
 | `--indigo` | #4F46C8 | Sleep and the coach |
-| `--rust` | #B4532F | Tired muscles, warnings (shapes and bars) |
-| `--rust-ink` | #A3482A | The muscles eyebrow and other small rust text (5.2:1 on paper) |
+| `--rust` | #B4532F | Tired muscles, warnings |
 | `--red` (add) | #C2362B | Form errors only (from `Palette.red`) |
 | `--protein` `--carbs` `--fat` | #2F7FD8 · #D98A06 · #7C5CE0 | Macros, only next to food data |
 | `--logo-load` `--logo-recovery` | #F2B46B · #3FA383 | The Aurin mark and the hero aurora, nothing else |
@@ -52,7 +51,7 @@ palette changes, change `design-system.js` and this file together.
 
 Each section sets two variables, `--tone` (its eyebrow and accent) and `--glow` (the tint behind the phone):
 readiness, training and the coach are green on `glow-today`; sleep is indigo on `glow-health`; strain and the
-gym are amber on `glow-training`; food is amber on `glow-food`; muscles are rust (`--rust-ink` for the eyebrow).
+gym are amber on `glow-training`; food is amber on `glow-food`; muscles are rust.
 
 Contrast: body text is `--text`; small text is never lighter than `--muted`. `--amber-bar`, `--carbs`, the logo
 colours and the glows are for shapes and bars, not for small text.
@@ -126,7 +125,7 @@ stop: "Know when to push." not "Smart Strain Tracking".
 - **Link:** `--primary-text`, underline on hover; a trailing chevron icon when it leads to another page.
 - **Nav:** a floating pill 12px from the top, sticky: the mark and the word Aurin in Newsreader, 4 section
   links in `--muted`, a small ink pill "Join the waitlist" on the right. Under 960px the links go; under 560px
-  the logo and a smaller pill stay, so the page's one action is always a tap away.
+  only the logo stays.
 - **Kicker:** a small glassy pill above the hero headline with a green dot ("Free AI coach for iPhone").
 - **Phone:** the CSS iPhone (titanium edge, black bezel, glare) around a real screenshot. Never a flat rectangle.
 - **Live demo:** a card 380px wide, 22px radius, `--panel`, floating shadow, overlapping the phone's edge. It
