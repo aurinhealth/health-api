@@ -291,6 +291,7 @@ final class AppModel {
         var account = known
         if account == nil { account = try? await api.account() }
         guard let account else { return }
+        if Self.accountUnconfirmed { checkAccount(account) }
         let defaults = UserDefaults.standard
         defaults.set(account.name, forKey: AvatarStore.nameKey)
         defaults.set(account.email, forKey: AvatarStore.emailKey)
@@ -359,33 +360,63 @@ final class AppModel {
     }
 
     /// After either sign-in: no sample data left on screen, and what an expired
-    /// session left behind (writes waiting for signal, the photo) is kept only
-    /// for the same account.
+    /// session left behind (writes waiting for signal, the photo, Apple Health)
+    /// is kept only for the same account. That is settled before the screens
+    /// load; when the account cannot be asked, nothing of it goes out until it can.
     private func signedIn() async {
         if demo {
             today = nil; training = nil; health = nil; food = nil
             calendar = [:]
             demo = false
         }
-        phase = .signedIn
         errorMessage = nil
         let defaults = UserDefaults.standard
+        if defaults.string(forKey: AvatarStore.emailKey) != nil { defaults.set(true, forKey: Self.accountUncheckedKey) }
         let account = try? await api.account()
-        if let account, Self.anotherAccount(id: account.id, email: account.email, defaults: defaults) {
-            outbox = []
-            OutboxStore.save([])
-            AvatarStore.remove()
-            defaults.removeObject(forKey: Self.displayNameKey)
-            SnapshotCache.clear()
-            today = nil; training = nil; health = nil; food = nil
-            calendar = [:]
-        }
+        if let account { checkAccount(account) }
+        phase = .signedIn
         await loadAccountInitial(account)
         // Back in the account that read Apple Health before signing out.
-        await AppleHealth.shared.resume(account: defaults.string(forKey: AvatarStore.emailKey), api: api)
+        if !Self.accountUnconfirmed {
+            await AppleHealth.shared.resume(account: defaults.string(forKey: AvatarStore.emailKey), api: api)
+        }
         await checkSetup()
         // The morning readiness push for this account (PushRegistration.swift).
         await PushRegistration.refresh(api: api)
+    }
+
+    /// Signed in, but not yet known whether to the account this phone kept things
+    /// for (GET /app/api/me failed): its waiting writes and Apple Health wait.
+    nonisolated static let accountUncheckedKey = "accountUnchecked"
+    nonisolated static var accountUnconfirmed: Bool { UserDefaults.standard.bool(forKey: accountUncheckedKey) }
+
+    /// The one place that decides about what the last account left on this
+    /// phone: another account's writes, photo, saved screens, cycle, pill and
+    /// Apple Health go (it turns Apple Health on itself); the same keeps them.
+    private func checkAccount(_ account: (name: String?, email: String?, id: Int?)) {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: Self.accountUncheckedKey)
+        guard Self.anotherAccount(id: account.id, email: account.email, defaults: defaults) else { return }
+        outbox = []
+        OutboxStore.save([])
+        AvatarStore.remove()
+        defaults.removeObject(forKey: Self.displayNameKey)
+        SnapshotCache.clear()
+        today = nil; training = nil; health = nil; food = nil
+        calendar = [:]
+        todayBase = nil
+        foodBase = nil
+        fetched = [:]
+        AppleHealth.shared.pause(account: defaults.string(forKey: AvatarStore.emailKey))
+        forgetAccountData()
+    }
+
+    /// What follows the account and has no sense for the next one.
+    private func forgetAccountData() {
+        cycle = nil
+        cycleHealthSynced = false
+        Reminders.forgetPill()
+        AppleHealthExport.shared.reset()
     }
 
     /// Someone else than the account this phone kept things for: neither the
@@ -433,6 +464,7 @@ final class AppModel {
         loading = true
         defer { loading = false }
         if announce { syncStatus = .syncing }
+        if Self.accountUnconfirmed { await loadAccountInitial() }
         await sendOutbox()
         let health = AppleHealth.shared
         // Until a late-morning sync, last night and the morning's HRV from the
@@ -799,7 +831,7 @@ final class AppModel {
     /// drink; refresh() loads Today itself). True when something went out.
     @discardableResult
     func sendOutbox(reloadToday reload: Bool = false) async -> Bool {
-        guard !demo, phase == .signedIn else { return false }
+        guard !demo, phase == .signedIn, !Self.accountUnconfirmed else { return false }
         if reload { reloadTodayAfterSend = true }
         // Already sending: the running loop takes the new write in one more round.
         guard !sendingOutbox else { sendAgain = true; return false }
@@ -828,6 +860,11 @@ final class AppModel {
     private func sendWaiting() async -> Bool {
         var sent = false
         while let item = outbox.first {
+            if Outbox.isOthers(item, account: Outbox.account) {
+                outbox.removeAll { $0.id == item.id }
+                OutboxStore.save(outbox)
+                continue
+            }
             sendingItem = item.id
             defer { sendingItem = nil }
             do {
@@ -1405,8 +1442,9 @@ final class AppModel {
             OutboxStore.save([])
             // Apple Health was allowed for this account, not the next one.
             AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
+            forgetAccountData()
             ErrorLog.clear()
-            for key in [AvatarStore.nameKey, AvatarStore.emailKey, AvatarStore.idKey, Self.displayNameKey] { UserDefaults.standard.removeObject(forKey: key) }
+            for key in [AvatarStore.nameKey, AvatarStore.emailKey, AvatarStore.idKey, Self.displayNameKey, Self.accountUncheckedKey] { UserDefaults.standard.removeObject(forKey: key) }
             AvatarStore.remove()
         }
         outboxNote = nil

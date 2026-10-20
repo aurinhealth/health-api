@@ -20,6 +20,8 @@ struct OutboxItem: Codable, Identifiable, Equatable {
     var created = Date()
     /// Server errors so far (5xx); after a few the write is given up.
     var failures = 0
+    /// The account it was written in (its id), so another one never sends it.
+    var owner: Int? = Outbox.account
 
     /// A JSON body: the encoded value with the extra fields (requestId…).
     static func json<T: Encodable>(_ value: T, adding extra: JSONObject = [:]) -> Data {
@@ -73,6 +75,15 @@ enum OutboxRefusal: LocalizedError {
 }
 
 enum Outbox {
+    /// The account this phone keeps things for (GET /app/api/me → id).
+    static var account: Int? { UserDefaults.standard.object(forKey: AvatarStore.idKey) as? Int }
+
+    /// A write of another account than the signed-in one; unknown on either side counts as the same.
+    static func isOthers(_ item: OutboxItem, account: Int?) -> Bool {
+        guard let owner = item.owner, let account else { return false }
+        return owner != account
+    }
+
     /// The request did not reach the server (no signal, the connection dropped,
     /// it timed out, a Wi-Fi that wants a sign-in broke the secure connection);
     /// a server error is not one of these.

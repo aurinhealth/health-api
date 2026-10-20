@@ -70,4 +70,27 @@ final class OutboxTests: XCTestCase {
         XCTAssertEqual(patched.kcal, 500)
         XCTAssertEqual(patched.meals[0].entries.map(\.id), [7])
     }
+
+    func testAnotherAccountsWritesAreNotSent() {
+        var item = OutboxItem(path: "/app/api/water", method: "POST", body: Data("{}".utf8), label: "Voda", owner: 7)
+        XCTAssertTrue(Outbox.isOthers(item, account: 8))
+        XCTAssertFalse(Outbox.isOthers(item, account: 7))
+        XCTAssertFalse(Outbox.isOthers(item, account: nil))
+        item.owner = nil
+        XCTAssertFalse(Outbox.isOthers(item, account: 8))
+    }
+
+    func testAnotherAccountByEmailAndId() throws {
+        let suite = "OutboxTests.account"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        XCTAssertFalse(AppModel.anotherAccount(id: 1, email: "a@example.com", defaults: defaults))
+        defaults.set("a@example.com", forKey: AvatarStore.emailKey)
+        defaults.set(1, forKey: AvatarStore.idKey)
+        XCTAssertFalse(AppModel.anotherAccount(id: 1, email: "a@example.com", defaults: defaults))
+        // The e-mail changed in Settings → Účet: the same account.
+        XCTAssertFalse(AppModel.anotherAccount(id: 1, email: "new@example.com", defaults: defaults))
+        XCTAssertTrue(AppModel.anotherAccount(id: 2, email: "b@example.com", defaults: defaults))
+    }
 }

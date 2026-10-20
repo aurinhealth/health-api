@@ -43,6 +43,13 @@ final class AppleHealthExport {
         if let data = try? JSONEncoder().encode(next) { UserDefaults.standard.set(data, forKey: Self.prefsKey) }
     }
 
+    /// Signing out or another account: the next one writes what its own server settings say.
+    func reset() {
+        prefs = .off
+        UserDefaults.standard.removeObject(forKey: Self.prefsKey)
+        UserDefaults.standard.removeObject(forKey: Self.writtenKey)
+    }
+
     /// The types iOS is asked to let Loadwise write, for these preferences.
     static func shareTypes(_ prefs: SyncPrefs) -> Set<HKSampleType> {
         var types = Set<HKSampleType>()

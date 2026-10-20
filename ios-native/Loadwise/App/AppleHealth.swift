@@ -129,6 +129,8 @@ final class AppleHealth {
     /// The sync on its way: a caller that comes meanwhile waits for it instead
     /// of going on without it (Today then still gets last night).
     @ObservationIgnored private var running: Task<SyncOutcome, Never>?
+    /// Bumped when reading stops (a sign-out, another account): a sync on its way sends no more.
+    @ObservationIgnored private var generation = 0
 
     /// What a sync did: ok is false on an error; changed when the server stored
     /// something new (the same hours sent again change nothing).
@@ -201,6 +203,7 @@ final class AppleHealth {
     /// Stops reading. The server keeps what it already has.
     func disconnect() {
         enabled = false
+        generation += 1
         UserDefaults.standard.set(false, forKey: Self.enabledKey)
         UserDefaults.standard.removeObject(forKey: Self.resumeKey)
         stopObservers()
@@ -305,7 +308,7 @@ final class AppleHealth {
     /// The sync with what it did; one already running is awaited, not skipped.
     func run(api: APIClient, force: Bool = false) async -> SyncOutcome {
         if let running { return await running.value }
-        guard enabled, isAvailable, api.hasSession else { return SyncOutcome(ok: false, changed: false) }
+        guard enabled, isAvailable, api.hasSession, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
         // A locked iPhone keeps Apple Health closed: nothing would be read and
         // the empty windows would delete nights and workouts on the server.
         guard UIApplication.shared.isProtectedDataAvailable else { return SyncOutcome(ok: false, changed: false) }
@@ -317,6 +320,7 @@ final class AppleHealth {
     }
 
     private func perform(api: APIClient) async -> SyncOutcome {
+        let round = generation
         syncing = true
         defer { syncing = false }
         // A type added in an update (muscle mass) is asked for once, in the app;
@@ -330,6 +334,8 @@ final class AppleHealth {
             guard let uploads = await reader.collect(categories, days: days, now: started) else { return SyncOutcome(ok: false, changed: false) }
             var changed = false
             for upload in uploads {
+                // Signed out or another account meanwhile: this iPhone's data is not theirs to get.
+                guard round == generation, enabled, !AppModel.accountUnconfirmed else { return SyncOutcome(ok: false, changed: false) }
                 let answer: UploadAnswer = try await api.send("/app/api/health/apple", method: "POST", body: upload)
                 // An older server does not say: count it as new.
                 changed = changed || (answer.changed ?? 1) > 0
