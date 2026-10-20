@@ -113,7 +113,7 @@ import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman, FIRST_IMPO
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, readWahooTokens, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
-import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, usersWithAccount, openSignup } from "./tenancy.js";
+import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
 import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
@@ -255,11 +255,12 @@ const USER_JOBS = [
     if (controller.cron === "* * * * *" && localHour() < 6 && (scoped.CONNECTED_PROVIDERS || []).includes("google")) await compactHeartRate(scoped.DB, scoped.USER_ID).catch(error => console.error("Heart-rate compaction failed", error.message));
     // The morning readiness push once the night's data has synced (push.js),
     // checked every five minutes; it goes out at most once a local day.
-    if (every5(controller.cron, new Date(controller.scheduledTime || Date.now()))) {
-      await morningPush(scoped, ctx).catch(error => console.error("Morning push failed", error.message));
-      await coachPush(scoped, ctx).catch(error => console.error("Coach push failed", error.message));
-    }
+    if (every5(controller.cron, new Date(controller.scheduledTime || Date.now()))) await morningPush(scoped, ctx).catch(error => console.error("Morning push failed", error.message));
   } },
+  // The coach's push, after the morning push above: for everyone with a phone to notify,
+  // whatever they connected (push: chosen by push_tokens, not by a service; no sync runs
+  // for them). At most one a local day (push_log).
+  { name: "coach-push", providers: [], push: true, due: every5, run: (scoped, ctx) => coachPush(scoped, ctx) },
   { name: "google-food", providers: ["google"], due: every5, run: async scoped => { await backfillFoodGoogle(scoped.DB); await processFoodGoogle(scoped, { token: googleToken }); } },
   { name: "intervals-exports", providers: ["intervals"], due: every5, run: scoped => retryWorkoutExports(scoped) },
   // Done activities whose send to Google Health or Intervals.icu did not go through (sync-destinations.js).
@@ -296,7 +297,7 @@ export function dueUserJobs(cron, now) { return USER_JOBS.filter(job => job.due(
 export async function runUserJobs(env, ctx, { cron, scheduledTime }, user, names) {
   const scoped = await connectionEnvironment(await userDataEnvironment(env, user));
   const connected = scoped.CONNECTED_PROVIDERS || [];
-  const jobs = USER_JOBS.filter(job => names.includes(job.name) && job.providers.some(p => connected.includes(p)));
+  const jobs = USER_JOBS.filter(job => names.includes(job.name) && (job.push || job.providers.some(p => connected.includes(p))));
   if (!jobs.length) return;
   const [language, zone] = await Promise.all([storedLanguage(env.DB, user.id, { fresh: true }), storedTimeZone(env.DB, user.id, { fresh: true })]), unitsChoice = await storedUnits(env.DB, user.id);
   const controller = { cron, scheduledTime };
@@ -328,9 +329,12 @@ export async function fanOutUserJobs(env, ctx, controller, { concurrency = 10 } 
   const scheduledTime = controller.scheduledTime || Date.now();
   const names = dueUserJobs(controller.cron, new Date(scheduledTime));
   if (!names.length) return { users: 0, names };
-  const providers = [...new Set(USER_JOBS.filter(job => names.includes(job.name)).flatMap(job => job.providers))];
+  const due = USER_JOBS.filter(job => names.includes(job.name)), providers = [...new Set(due.flatMap(job => job.providers))];
+  // A push job also goes to users with a phone to notify and no service its other jobs need.
+  const notified = due.some(job => job.push) && pushConfigured(env) ? await usersWithPushTokens(env.DB, env) : [];
+  const byId = new Map([...(await usersWithProviders(env.DB, env, providers)), ...notified].map(user => [user.id, user]));
   // The App Review demo account syncs with no third-party service (app-review.js).
-  const users = (await usersWithProviders(env.DB, env, providers)).filter(user => !isReviewAccount(env, user));
+  const users = [...byId.values()].filter(user => !isReviewAccount(env, user));
   const binding = env.USER_JOBS && typeof env.USER_JOBS.run === "function" ? env.USER_JOBS : null;
   const inline = async list => {
     for (const user of list) await runUserJobs(env, ctx, { cron: controller.cron, scheduledTime }, user, names).catch(error => console.error("Per-user job failed", user.id, error.message));

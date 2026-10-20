@@ -22,6 +22,8 @@ const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens
   /^"SELECT id, user_id, user_handle, public_key, alg, sign_count FROM user_passkeys WHERE id = \?"$/,
   /FROM connection_accounts a JOIN users u ON u\.id = a\.user_id WHERE a\.provider = \? AND a\.external_id = \? ORDER BY u\.id"$/,
   /^'SELECT c\.user_id,c\.encrypted FROM connection_credentials c WHERE c\.provider=\? AND NOT EXISTS \(SELECT 1 FROM connection_accounts a WHERE a\.user_id=c\.user_id AND a\.provider=\?\)'$/,
+  // The cron run finds who has a phone to notify, as it finds who connected a service (tenancy.js).
+  /FROM users u WHERE u\.disabled = 0 AND EXISTS \(SELECT 1 FROM push_tokens t WHERE t\.user_id = u\.id\) ORDER BY u\.id"$/,
   // The owner's morning report sums AI cost over all accounts (ops-report.js).
   /^"SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_usage'"$/, /FROM ai_usage a LEFT JOIN users u ON u\.id = a\.user_id/,
   // The owner lists and decides every user's food corrections (food-suggestions.js);

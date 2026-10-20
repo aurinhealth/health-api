@@ -13,6 +13,35 @@ test("each minute names the jobs due then: syncing always, the rest on their min
   assert.ok(dueUserJobs("* * * * *", at(9, 35)).includes("wahoo"));
   assert.ok(!dueUserJobs("* * * * *", at(10, 35)).includes("wahoo"));
   assert.deepEqual(dueUserJobs("5 1 * * *", at(1, 5)), ["sync"]);
+  assert.ok(dueUserJobs("* * * * *", at(10, 5)).includes("coach-push"));
+  assert.ok(!dueUserJobs("* * * * *", at(10, 6)).includes("coach-push"));
+});
+
+test("the coach's push goes to everyone with a phone to notify, whatever they connected, once each", async () => {
+  const db = database(1);
+  db.sqlite.exec("CREATE TABLE push_tokens (user_id INTEGER, token TEXT)");
+  // 1: Google (and a phone); 2: Apple Health only; 3: WHOOP; 4: Ultrahuman, consent withdrawn;
+  // 5: blocked; 6: no phone and nothing connected.
+  for (const [id, provider, consent, disabled, token] of [[2, null, true, 0, true], [3, "whoop", true, 0, true], [4, "ultrahuman", false, 0, true], [5, null, true, 1, true], [6, null, true, 0, false]]) {
+    db.sqlite.prepare("INSERT INTO users (id, email, name, role, disabled) VALUES (?, ?, ?, 'user', ?)").run(id, "u" + id + "@example.com", "U" + id, disabled);
+    if (provider) db.sqlite.prepare("INSERT INTO connection_credentials VALUES (?, ?)").run(id, provider);
+    if (consent) db.sqlite.prepare("INSERT INTO user_consents VALUES (?, 'health', NULL)").run(id);
+    if (token) db.sqlite.prepare("INSERT INTO push_tokens VALUES (?, ?)").run(id, "t" + id);
+  }
+  db.sqlite.prepare("INSERT INTO user_consents VALUES (4, 'health', '2026-10-01')").run();
+  db.sqlite.prepare("INSERT INTO push_tokens VALUES (1, 't1')").run();
+  const apns = { APNS_KEY_P8: "k", APNS_KEY_ID: "id", APPLE_TEAM_ID: "team" };
+  const fanOut = async (env, time) => {
+    const sent = [];
+    await fanOutUserJobs({ DB: db, OWNER_EMAIL: "owner@example.com", USER_JOBS: { run: async message => { sent.push(message); return { ok: true }; } }, ...env }, {}, { cron: "* * * * *", scheduledTime: time.getTime() });
+    return sent;
+  };
+  const sent = await fanOut(apns, at(17, 5));
+  assert.deepEqual(sent.map(m => m.user.id), [1, 2, 3], "each once, the Google user too");
+  assert.ok(sent.every(m => m.names.includes("coach-push")));
+  // Off the push minutes, or without APNs, only the users with a service.
+  assert.deepEqual((await fanOut(apns, at(17, 6))).map(m => m.user.id), [1]);
+  assert.deepEqual((await fanOut({}, at(17, 5))).map(m => m.user.id), [1]);
 });
 
 function database(count) {
