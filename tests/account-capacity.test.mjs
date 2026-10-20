@@ -1,11 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
-import { mayCreateAccount, accountCapacity } from "../src/tenancy.js";
+import { mayCreateAccount, accountCapacity, signInEmailUser, signInGoogleUser } from "../src/tenancy.js";
+import { signInAppleUser } from "../src/apple-login.js";
 
 function database({ shards = 2, perShard = 2, placed = 0, unplaced = 0 } = {}) {
   const db = createD1();
-  db.sqlite.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT UNIQUE, role TEXT, disabled INTEGER DEFAULT 0);
+  db.sqlite.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT UNIQUE, name TEXT, role TEXT, disabled INTEGER DEFAULT 0, google_sub TEXT, last_login_at TEXT);
     CREATE TABLE user_invites (email TEXT PRIMARY KEY);
     CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT);
     CREATE TABLE user_data_shards (shard_key TEXT PRIMARY KEY, binding_name TEXT, state TEXT, accepting_new INTEGER, max_users INTEGER, max_bytes INTEGER);
@@ -47,4 +48,33 @@ test("ACCOUNT_LIMIT stops open sign-up at that many accounts, invitations still 
   assert.equal(await mayCreateAccount(full, open, "new@example.com"), true);
   assert.equal(await mayCreateAccount(full, open, "owner@example.com"), true);
   assert.equal(await mayCreateAccount(full, { ...open, ACCOUNT_LIMIT: "" }, "stranger@example.com"), true);
+});
+
+test("sign-ins racing for the last free place create one account; the others wait on the list", async () => {
+  const open = { ...env, OPEN_SIGNUP: "true" };
+  const signIns = {
+    email: (db, address) => signInEmailUser(db, open, address),
+    google: (db, address) => signInGoogleUser(db, open, { sub: "g-" + address, email: address }),
+    apple: (db, address) => signInAppleUser(db, open, { sub: "a-" + address, email: address })
+  };
+  for (const [how, signIn] of Object.entries(signIns)) {
+    const db = database({ placed: 3 });
+    assert.equal((await accountCapacity(db, open)).free, 1);
+    const users = await Promise.all(["a@example.com", "b@example.com", "c@example.com"].map(address => signIn(db, address)));
+    assert.equal(users.filter(Boolean).length, 1, how + ": one account");
+    assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM users").get().n, 4, how);
+    assert.deepEqual(db.sqlite.prepare("SELECT email FROM signup_waitlist ORDER BY email").all().map(r => r.email), ["a@example.com", "b@example.com", "c@example.com"].filter(address => address !== users.find(Boolean).email), how);
+    assert.equal((await accountCapacity(db, open)).free, 0);
+  }
+});
+
+test("sign-ins racing for the last place under ACCOUNT_LIMIT create one account", async () => {
+  const open = { OWNER_EMAIL: "owner@example.com", OPEN_SIGNUP: "true", ACCOUNT_LIMIT: "3" };
+  const db = database({ placed: 2 });
+  const users = await Promise.all(["a@example.com", "b@example.com"].map(address => signInEmailUser(db, open, address)));
+  assert.equal(users.filter(Boolean).length, 1);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM users").get().n, 3);
+  // An invitation still gets in past the limit, and so does the owner.
+  assert.ok(await signInEmailUser(db, open, "new@example.com"));
+  assert.ok(await signInEmailUser(db, open, "owner@example.com"));
 });
