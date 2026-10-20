@@ -11,10 +11,8 @@ palette changes, change `design-system.js` and this file together.
 
 ## Principles
 
-1. **The app is the picture, and it moves.** Every chapter shows real screens from CI (`public/site/app/`)
-   and, beside the phone, a live demo of that step rebuilt from the app's own view (`src/site-demos.js`):
-   numbers count, the dial turns, the timer runs, the coach answers. No stock photos, no illustrations of
-   people, no UI the app doesn't have.
+1. **The app is the picture.** Every section shows real screens from CI (`public/site/app/`), with one or two
+   parts cut from them floating beside the phone. No stock photos, no illustrations of people, no fake UI.
 2. **One idea per section.** One eyebrow, one headline (a short sentence with a full stop), one line under it,
    one phone. The steps inside a section carry the detail.
 3. **Colour means a part of the app.** The page itself is paper and ink. Green, amber, indigo and rust appear
@@ -128,16 +126,14 @@ stop: "Know when to push." not "Smart Strain Tracking".
   only the logo stays.
 - **Kicker:** a small glassy pill above the hero headline with a green dot ("Free AI coach for iPhone").
 - **Phone:** the CSS iPhone (titanium edge, black bezel, glare) around a real screenshot. Never a flat rectangle.
-- **Live demo:** a card 380px wide, 22px radius, `--panel`, floating shadow, overlapping the phone's edge. It
-  plays its step's timeline while the chapter is in view and shows its last frame with reduced motion. Numbers
-  in Instrument Serif (the app's number face, `/site/fonts/instrument-serif.woff2`), sentences in Newsreader.
-- **Connections flow:** services on the left send chips (sleep, HRV, workouts…) along curves into the Aurin
-  mark, and what Aurin sends back runs out to the services on the right. Services take turns being lit; the
-  panel below lists everything for the lit one.
+- **Lifted part:** a piece cut from the same screenshot, 420px wide, 22px radius, `--panel`, floating shadow,
+  overlapping the phone's edge. One or two per section.
 - **Glass metric card (hero only):** label in meta `--muted`, value in metric style, change in 13px 600 coloured
   by meaning (green up, rust down, indigo for sleep).
 - **Step:** "01" in `--tone`, a Newsreader title, one or two sentences of body; inactive steps show only
   their title in `--muted`.
+- **Connections:** a row of six logo tabs on `--panel2` (three per row on phones); the picked one sits on a
+  `--panel` tile, and the panel below lists "Into Aurin" and "Sent back" as chips.
 - **FAQ:** `<details>` rows separated by `--line`, question in 17px 600, answer in `--sec`.
 - **Footer:** paper, small `--muted` links (Privacy, Terms, Support, contact, Czech versions of the legal pages),
   © line.

@@ -7,7 +7,6 @@
 // have a Czech version at ?lang=cs, linked from the page and the footer.
 import {themeTokens} from './design-system.js';
 import {icon, ICON_PATHS} from './icons.js';
-import {DEMOS, SCREENS, demoCss, demoScript} from './site-demos.js';
 import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
 
@@ -135,7 +134,6 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .step .tx{margin-top:8px;color:var(--sec);font-size:17px}
 .step .bar{grid-column:2;display:none;height:2px;margin-top:16px;border-radius:2px;background:var(--track);overflow:hidden}
 .step .bar i{display:block;height:100%;width:0;background:var(--tone)}
-.part{pointer-events:none}.part:has(.dial){pointer-events:auto}
 .js .multi .step:not(.on) .tx{display:none}
 .js .multi .step:not(.on) .tt{color:var(--muted)}
 .js .multi .step>button:hover .tt{color:var(--text)}
@@ -170,44 +168,19 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .connect{padding:150px 0 0}
 .connect .intro{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:end}
 .connect .intro .sub{margin:0}
-.connect .box{margin-top:48px}
-.flow{position:relative;aspect-ratio:1000/440;border-radius:24px;background:var(--panel2);overflow:hidden}
-.fc{position:absolute;left:0;top:0;width:1000px;height:440px;zoom:var(--fz,1)}
-.lines{position:absolute;inset:0;width:100%;height:100%}.lines.tall,.pks.tall{display:none}
-.lines path{fill:none;stroke-width:2.5;stroke-linecap:round;transition:opacity .5s,stroke .5s}
-.lines .in{stroke:color-mix(in srgb,var(--green) 30%,transparent)}.lines .out{stroke:color-mix(in srgb,var(--amber-bar) 34%,transparent)}
-.lines path.on{stroke-width:3}.lines .in.on{stroke:var(--green)}.lines .out.on{stroke:var(--amber-bar)}
-.pk{position:absolute;left:0;top:0;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px 0 8px;border-radius:99px;background:var(--panel);box-shadow:0 4px 14px -4px rgba(60,45,20,.3);font-size:12.5px;font-weight:600;white-space:nowrap;offset-rotate:0deg;offset-anchor:50% 50%;opacity:0;animation:travel 4.4s linear infinite;transition:filter .4s}
-.pk .icon{width:14px;height:14px}.pk.in{color:var(--green)}.pk.out{color:var(--amber)}
-.pk:not(.on){visibility:hidden}
-@keyframes travel{0%{offset-distance:0%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
-.col-l,.col-r{position:absolute;top:18px;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase}
-.col-l{left:40px;color:var(--green)}.col-r{right:40px;color:var(--amber)}
-.flow .core{position:absolute;left:50%;top:50%;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:0 14px 34px rgba(60,45,20,.16)}
-.node,.dst{position:absolute;left:var(--x);top:var(--y);display:flex;align-items:center;gap:10px;transform:translate(-50%,-50%);border:0;background:none;padding:6px 10px 6px 6px;border-radius:16px;font:inherit;color:var(--muted);transition:background .3s,box-shadow .3s,color .3s}
-.node{cursor:pointer;flex-direction:row-reverse;transform:translate(calc(-100% + 34px),-50%)}
-.dst{transform:translate(-34px,-50%)}
-.node:hover,.node[aria-selected=true],.dst.on{color:var(--text)}
-.node[aria-selected=true],.dst.on{background:var(--panel);box-shadow:0 10px 30px -12px rgba(60,45,20,.3)}
-.node .logo-tile,.dst .logo-tile{flex:none;width:52px;height:52px;display:grid;place-items:center}
-.node img,.dst img{display:block;width:100%;height:100%}.node img.pad,.dst img.pad{padding:4%}
-.node .nm,.dst .nm{font-size:14px;font-weight:600;white-space:nowrap}
-.legend{display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:center;margin-top:14px;font-size:14px;color:var(--muted)}
-.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}.legend .in{background:var(--green)}.legend .out{background:var(--amber-bar)}
-@media (prefers-reduced-motion:reduce){.pk{display:none}}
-@media (max-width:640px){
-  .flow{aspect-ratio:340/660}.fc{width:340px;height:660px}
-  .lines.wide,.pks.wide{display:none}.lines.tall,.pks.tall{display:block}
-  .node,.dst{left:var(--mx);top:var(--my);flex-direction:column;gap:4px;padding:6px;transform:translate(-50%,-50%)}
-  .node .logo-tile,.dst .logo-tile{width:46px;height:46px}.node .nm,.dst .nm{font-size:11px;font-weight:600;max-width:84px;text-align:center;white-space:normal;line-height:1.15}
-  .col-l{left:16px}.col-r{right:auto;left:16px;top:auto;bottom:118px}
-  .flow .core{width:92px;height:92px;margin:-46px 0 0 -46px}.flow .core svg{width:46px;height:auto}
-  .legend .tip{display:none}
-}
+.connect .box{margin-top:48px;padding:12px;border-radius:32px;background:var(--panel2)}
+.logos{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.node{display:flex;flex-direction:column;align-items:center;gap:12px;padding:20px 8px 16px;border:0;border-radius:22px;background:none;font:inherit;color:var(--muted);cursor:pointer;transition:background .3s,box-shadow .3s,color .3s}
+.node:hover{color:var(--text)}
+.node[aria-selected=true]{background:var(--panel);color:var(--text);box-shadow:0 10px 30px -12px rgba(60,45,20,.25)}
+.node .logo-tile{width:56px;height:56px;display:grid;place-items:center}
+.node img{display:block;width:100%;height:100%}
+.node img.pad{padding:4%}
+.node .nm{font-size:14px;font-weight:600}
 .uh-tile{position:relative;display:grid;place-items:center;width:100%;height:100%;border-radius:26%;background:#000}
 .uh-tile img{width:56%!important;height:auto!important}
 .uh-tile.word img{width:78%!important}
-.panels{margin-top:14px;padding:26px 28px;border-radius:24px;background:var(--panel);box-shadow:0 1px 2px rgba(60,45,20,.05)}
+.panels{margin-top:12px;padding:26px 28px;border-radius:24px;background:var(--panel)}
 .svc h3{font-size:21px;font-weight:600}
 .svc .io{display:grid;grid-template-columns:140px 1fr;gap:12px;margin-top:16px;align-items:start}
 .svc .lbl{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;padding-top:7px}
@@ -308,7 +281,7 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
   .js .part.on,.js .flip .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);animation:float 6s ease-in-out 1.2s infinite}
   @keyframes float{50%{transform:translateY(-8px)}}
   .js .auto .step.on .bar{display:block}
-  .js .auto .step.on .bar i{animation:fill var(--dur,6.5s) linear forwards}
+  .js .auto .step.on .bar i{animation:fill 6.5s linear forwards}
   .js .auto.paused .step.on .bar i{animation-play-state:paused}
   @keyframes fill{to{width:100%}}
   .js .multi .step.on .tx{animation:fade .5s both}
@@ -346,11 +319,12 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
   .vis{width:440px;height:700px}
   .vis .glow{width:640px;height:640px;margin:-320px 0 0 -320px}
   .vis .device,.flip .vis .device{left:59px;top:0}
-  .part,.flip .part{left:30px;width:380px;top:auto!important;bottom:-24px}
+  .part,.flip .part{left:10px;width:420px;top:auto!important;bottom:-24px}
   .ch .steps{max-width:none;margin-top:44px}
   .mu,.connect .intro,.faq{grid-template-columns:1fr;gap:32px}
   .muscles,.connect,.privacy,#faq{padding-top:110px}
   .faq .side{position:static}
+  .logos{grid-template-columns:repeat(3,minmax(0,1fr))}
   .privacy .ink{padding:48px 32px}
 }
 @media (max-width:560px){
@@ -364,6 +338,7 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
   .step .tt{font-size:24px}
   .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
   .panels{padding:20px}
+  .node{padding:16px 4px 12px}.node .logo-tile{width:48px;height:48px}.node .nm{font-size:13px}
   .privacy .ink{padding:40px 24px;border-radius:24px}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
@@ -408,27 +383,16 @@ document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});}els
 var vis=[].slice.call(document.querySelectorAll('.vis'));
 function fit(){var w=innerWidth,z=w<=960?Math.min(1,(w-32)/440):w<=1180?.875:1;vis.forEach(function(v){v.style.setProperty('--z',z.toFixed(3));});}
 addEventListener('resize',fit);fit();
-// Chapters: a step shows its screen and its demo, and plays the demo while the chapter is in view. Steps take
-// turns (the bar under the step fills for the step's time, then the next one comes) until one is picked or a
-// demo is touched; a chapter with one step plays it again after its time. With reduced motion every demo shows
-// its last frame and nothing turns on its own.
-var D=window.AurinDemo;
-document.querySelectorAll('.chapter').forEach(function(ch){
- var steps=[].slice.call(ch.querySelectorAll('.step')),scr=[].slice.call(ch.querySelectorAll('.scr')),parts=[].slice.call(ch.querySelectorAll('.part')),cur=0,seen=false,loop=null,multi=ch.classList.contains('multi');
- function units(i){return [scr[i],parts[i]].filter(Boolean);}
- function run(i){units(i).forEach(function(u){if(still||!seen)D.last(u);else D.play(u);});
-  clearTimeout(loop);if(!multi&&seen&&!still&&!ch._touched)loop=setTimeout(function(){run(0);},+steps[0].dataset.dur+2500);}
- function show(i){units(cur).forEach(function(u){D.stop(u);});cur=i;
-  steps.forEach(function(s,j){var on=j===i;s.classList.toggle('on',on);var b=s.querySelector('button');if(b)b.setAttribute('aria-pressed',on);});
-  scr.forEach(function(s,j){s.classList.toggle('on',j===i);});parts.forEach(function(p,j){p.classList.toggle('on',j===i);});run(i);}
- scr.concat(parts).forEach(function(u){if(still)D.last(u);else D.first(u);});
- ch.addEventListener('demo:touch',function(){ch._touched=true;ch.classList.remove('auto');clearTimeout(loop);});
- if(multi)steps.forEach(function(s,i){s.querySelector('button').addEventListener('click',function(){ch.classList.remove('auto');show(i);});
+// Chapters: a step shows its screen and its piece. The steps take turns while the chapter is in view
+// (the bar under the step fills, then the next one comes), until one is picked.
+document.querySelectorAll('.chapter.multi').forEach(function(ch){
+ var steps=[].slice.call(ch.querySelectorAll('.step')),scr=[].slice.call(ch.querySelectorAll('.scr')),parts=[].slice.call(ch.querySelectorAll('.part')),cur=0;
+ function show(i){cur=i;steps.forEach(function(s,j){var on=j===i;s.classList.toggle('on',on);s.querySelector('button').setAttribute('aria-pressed',on);});
+  scr.forEach(function(s,j){s.classList.toggle('on',j===i);});parts.forEach(function(p,j){p.classList.toggle('on',j===i);});}
+ steps.forEach(function(s,i){s.querySelector('button').addEventListener('click',function(){ch.classList.remove('auto');show(i);});
   s.querySelector('.bar i').addEventListener('animationend',function(){if(ch.classList.contains('auto'))show((cur+1)%steps.length);});});
- if(still||!IO){seen=!IO;run(0);return;}
- if(multi)ch.classList.add('auto','paused');
- new IntersectionObserver(function(es){var on=es[0].isIntersecting;ch.classList.toggle('paused',!on);
-  if(on&&!seen){seen=true;run(cur);}else if(!on&&seen){seen=false;clearTimeout(loop);units(cur).forEach(function(u){D.last(u);});}},{threshold:.35}).observe(ch.querySelector('.vis-wrap'));});
+ if(still||!IO)return;ch.classList.add('auto','paused');
+ new IntersectionObserver(function(es){ch.classList.toggle('paused',!es[0].isIntersecting);},{threshold:.45}).observe(ch.querySelector('.vis-wrap'));});
 document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelector('input'),err=f.querySelector('.err'),busy=false;
  f.querySelector('.open').addEventListener('click',function(){f.classList.add('on');input.focus();});
  f.addEventListener('submit',function(e){e.preventDefault();if(busy)return;var email=input.value.trim();err.textContent='';
@@ -439,10 +403,8 @@ document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelect
 // Connections: a logo shows what Aurin reads from it and sends back; they take turns until one is picked.
 var box=document.querySelector('.connect .box');if(!box)return;
 var tabs=[].slice.call(box.querySelectorAll('[role=tab]')),cur=0,timer;
-function pick(i){cur=i;var pid=tabs[i].id.slice(4);tabs.forEach(function(t,j){var on=j===i,id=t.id.slice(4);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
-document.getElementById('svc-'+id).classList.toggle('on',on);});box.querySelectorAll('.flow [data-svc]').forEach(function(el){el.classList.toggle('on',el.dataset.svc===pid);});}
-var flowEl=box.querySelector('.flow');function ffit(){flowEl.style.setProperty('--fz',(flowEl.clientWidth/(innerWidth<=640?340:1000)).toFixed(4));}
-addEventListener('resize',ffit);ffit();
+function pick(i){cur=i;tabs.forEach(function(t,j){var on=j===i,id=t.id.slice(4);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
+document.getElementById('svc-'+id).classList.toggle('on',on);});}
 tabs.forEach(function(t,i){t.addEventListener('click',function(){clearInterval(timer);pick(i);});
 t.addEventListener('keydown',function(e){var n=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;
 if(n){e.preventDefault();clearInterval(timer);pick((i+n+tabs.length)%tabs.length);tabs[cur].focus();}});});
@@ -518,8 +480,7 @@ ${czech ? `<link rel="alternate" hreflang="en" href="${origin}${path}">\n<link r
 ${index ? '' : '<meta name="robots" content="noindex">'}
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preload" href="/site/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/site/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin>
-<style>${themeTokens}${siteCss}${demoCss}</style>
+<style>${themeTokens}${siteCss}</style>
 </head>
 <body>
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
@@ -537,7 +498,6 @@ ${body}
 </div>
 <div class="base"><span>© 2026 Aurin · run by Petr Bouma, Czech Republic</span><span>Aurin is not a medical device.</span></div>
 </div></footer>
-${demoScript}
 ${siteScript}
 </body></html>`;
   return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate'}});
@@ -584,50 +544,48 @@ export function overviewPage(request) {
   const {lang, origin} = pageLang(request);
   // A screen of the app: a screenshot taken in CI from the sample data (public/site/app/).
   const shot = (name, lazy = true) => `<img src="/site/app/${name}.webp" alt="" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
-  // The chapters, one per area of the app: [section id, eyebrow, headline, line, tone, glow, steps]. Each step is
-  // [the phone's screen, the live demo beside it (site-demos.js), how far down the stage, title, text, ms it
-  // shows]. A screen is the app's screenshot (public/site/app/), or "html:" and a screen built in site-demos.js
-  // where the screenshot cannot show the step (a moving screen, or one the sample day draws wrong).
+  // The scenes, one per area of the app: [section id, eyebrow, headline, line, tone, glow, steps], each step
+  // [the app's screen, the piece of it lifted out (public/site/app/parts/), how far down the stage, title, text].
   const scenes = [
     ['spanek', 'Sleep', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
-      ['sleep', 'sleepNight', 300, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
-      ['sleep-need', 'sleepNeed', 150, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
-      ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
-      ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
+      ['sleep', 'sleep-stages', 380, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
+      ['sleep-need', 'sleep-need', 150, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
+      ['bedtime', 'sleep-dial', 120, 'Plan your bedtime.', 'Drag the moon and the sun on the dial. Aurin tells you when to go to bed to wake up rested.'],
+      ['bedtime-goal', 'sleep-why', 160, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours.']]],
     ['pripravenost', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
-      ['readiness-parts', 'readyParts', 70, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal.', 7000],
-      ['journal-impact', 'journal', 110, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000]]],
+      ['readiness-parts', 'ready-parts', 220, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal.'],
+      ['journal-impact', 'ready-impact', 170, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.']]],
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
-      ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
+      ['strain-target', 'strain-gauge', 160, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan.']]],
     ['trenink', 'Training', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 30, 'Your week at a glance.', 'Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu. A finished workout turns green with where it came from, and the month is a pull away.', 8000]]],
+      ['training', 'week', 130, 'Your week at a glance.', 'Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu. When the library has little for the length and type you pick, the AI builds a workout to fit.']]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
-      ['builder', 'builder', 110, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
-      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, and drag them into the order you like. Then start.', 7000]]],
+      ['builder', 'build-form', 190, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and uses only the equipment your gym has.'],
+      ['gym-day', 'gym-parts', 230, 'Warm-up to stretching.', 'Cardio, exercises and stretching in the order you like. Then start.']]],
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
-      ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them, add or remove a set, and start.', 6000],
-      ['training-set', 'tmTick', 130, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets.', 6000],
-      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself and counts down, stays on your lock screen and shows what comes next.', 13500],
-      ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume and new records when you finish, saved to Apple Health. Then say how it went.', 6000]]],
+      ['training-mode', 'tm-table', 170, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them if you need to and start.'],
+      ['training-set', 'tm-current', 170, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets.'],
+      ['training-rest', 'tm-rest', 60, 'Rest on time.', 'The timer starts by itself, stays on your lock screen and shows what comes next.'],
+      ['training-done', 'tm-done', 100, 'See what you lifted.', 'Sets and volume when you finish, saved to Apple Health.']]],
     ['vyziva', 'Nutrition', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
-      ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
-      ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000]]],
+      ['food-day', 'food-top', 110, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.'],
+      ['food-add', 'food-add', 330, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, and log drinks with one tap.']]],
     ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.<span class="free">Free for everyone.</span>', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout. When it proposes a workout, confirm it and it lands in your plan.', 15000]]]];
+      ['coach-ask', 'coach-ask', 110, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout.']]]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {
     const multi = list.length > 1;
     const subs = p.split('<span class="free">').map((t, j) => `<p class="sub${j ? ' free' : ''}">${t.replace('</span>', '')}</p>`).join('');
     const body = ([, , , title, text], i) => `<span class="n">0${i + 1}</span><span class="tt">${title}</span><span class="tx">${text}</span>`;
-    const steps = list.map((x, i) => `<li class="step${i === 0 ? ' on' : ''}" style="--dur:${x[5] || 6500}ms" data-dur="${x[5] || 6500}">${multi
+    const steps = list.map((x, i) => `<li class="step${i === 0 ? ' on' : ''}">${multi
       ? `<button type="button" aria-pressed="${i === 0}">${body(x, i)}<span class="bar" aria-hidden="true"><i></i></span></button>`
       : `<div>${body(x, i)}</div>`}</li>`).join('');
     return `<section id="${id}" class="chapter${n % 2 ? ' flip' : ''}${multi ? ' multi' : ''}" style="--tone:var(--${tone});--glow:var(--${glow})"><div class="wrap ch">
 <div class="head reveal"><div class="eyebrow">${eyebrow}</div><h2 class="big">${h}</h2>${subs}</div>
-<div class="vis-wrap"><div class="vis"><div class="glow"></div>
-<div class="device" aria-hidden="true"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}">${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>
-${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
+<div class="vis-wrap" aria-hidden="true"><div class="vis"><div class="glow"></div>
+<div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}">${shot(screen)}</div>`).join('')}</div></div></div>
+${list.map(([, part, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"><img src="/site/app/parts/${part}.webp" alt="" loading="lazy" decoding="async"></div>`).join('')}
 </div></div>
 <ol class="steps">${steps}</ol>
 </div></section>`;
@@ -661,37 +619,7 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
     {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt=""></span>',
       reads: [['bike', 'finished rides and runs'], ['bolt', 'power and TSS'], ['heart', 'heart rate']],
       sends: [['calendar', 'planned workouts, to ELEMNT and KICKR']]}];
-  // The flow: each service on the left sends what Aurin reads along a curve into the mark, and what Aurin sends
-  // back runs out to the services on the right that take it. Two layouts: wide (left to right) for computers,
-  // tall (top to bottom) for phones. The things carried are chips that travel the curves (CSS offset-path); the
-  // services take turns being lit, and picking one keeps it lit and shows its panel below.
-  const senders = services.filter(x => x.sends.length);
-  const FLOW = {
-    wide: {w: 1000, h: 440, core: [500, 220], src: i => [210, 62 + i * 64], dst: j => [790, 92 + j * 86],
-      into: ([x, y], [cx, cy]) => `M${x + 42} ${y}C${(x + cx) / 2} ${y} ${(x + cx) / 2} ${cy} ${cx - 58} ${cy}`,
-      out: ([cx, cy], [x, y]) => `M${cx + 58} ${cy}C${(x + cx) / 2} ${cy} ${(x + cx) / 2} ${y} ${x - 42} ${y}`},
-    tall: {w: 340, h: 660, core: [170, 330], src: i => [60 + (i % 3) * 110, 52 + Math.floor(i / 3) * 104], dst: j => [47 + j * 82, 606],
-      into: ([x, y], [cx, cy]) => `M${x} ${y + 40}C${x} ${(y + cy) / 2 + 20} ${cx} ${(y + cy) / 2} ${cx} ${cy - 56}`,
-      out: ([cx, cy], [x, y]) => `M${cx} ${cy + 56}C${cx} ${(y + cy) / 2} ${x} ${(y + cy) / 2 - 20} ${x} ${y - 40}`}};
-  const pct = (v, all) => (v / all * 100).toFixed(2) + '%';
-  const flowPaths = kind => { const L = FLOW[kind]; return {
-    into: services.map((x, i) => L.into(L.src(i), L.core)),
-    out: senders.map((x, j) => L.out(L.core, L.dst(j)))}; };
-  const travel = (d, items, cls, id, kind) => items.slice(0, 3).map(([name, label], k, all) =>
-    `<span class="pk ${cls} ${kind}" data-svc="${id}" style="offset-path:path('${d}');animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s">${icon(name)}${label}</span>`).join('');
-  const layer = kind => { const L = FLOW[kind], P = flowPaths(kind);
-    return `<svg class="lines ${kind}" viewBox="0 0 ${L.w} ${L.h}" aria-hidden="true">${services.map(({id}, i) => `<path data-svc="${id}" class="in" d="${P.into[i]}"/>`).join('')}${senders.map(({id}, j) => `<path data-svc="${id}" class="out" d="${P.out[j]}"/>`).join('')}</svg>
-<div class="pks ${kind}" aria-hidden="true">${services.map(({id, reads}, i) => travel(P.into[i], reads, 'in', id, kind)).join('')}${senders.map(({id, sends}, j) => travel(P.out[j], sends, 'out', id, kind)).join('')}</div>`; };
-  const nodes = services.map(({id, name, logo}, i) => { const [x, y] = FLOW.wide.src(i), [mx, my] = FLOW.tall.src(i);
-    return `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, 660)}"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></button>`; }).join('');
-  const backs = senders.map(({id, name, logo}, j) => { const [x, y] = FLOW.wide.dst(j), [mx, my] = FLOW.tall.dst(j);
-    return `<span class="dst" data-svc="${id}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, 660)}" aria-hidden="true"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></span>`; }).join('');
-  const flow = `<div class="flow"><div class="fc">
-${layer('wide')}${layer('tall')}
-<span class="col-l">Into Aurin</span><span class="col-r">Sent back</span>
-<div class="core" aria-hidden="true">${mark(56)}</div>
-<div role="tablist" aria-label="Connected services">${nodes}</div>${backs}
-</div></div>`;
+  const nodes = services.map(({id, name, logo}, i) => `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></button>`).join('');
   const chips = items => `<div class="items">${items.map(([name, label], i) => `<span style="--i:${i}">${icon(name)}${label}</span>`).join('')}</div>`;
   const panels = services.map(({id, name, reads, sends, none}, i) => `<div class="svc${i === 0 ? ' on' : ''}" id="svc-${id}" role="tabpanel" aria-labelledby="tab-${id}">
 <h3>${name}</h3>
@@ -747,8 +675,7 @@ ${scenes.slice(6).map((s, i) => chapter(s, i + 6)).join('\n')}
 <section id="propojeni" class="connect"><div class="wrap">
 <div class="intro reveal"><div><div class="eyebrow">Connections</div><h2 class="big">Works with what you wear.</h2></div><p class="sub">Any watch or ring that saves to Apple Health or Google Health, plus power and plans from Intervals.icu. Wear more than one? Aurin takes each night and day from the one you wear most, or you pick.</p></div>
 <div class="box reveal">
-${flow}
-<div class="legend" aria-hidden="true"><span><i class="in"></i>Into Aurin</span><span><i class="out"></i>Sent back</span><span class="tip">Pick a service to see what it carries</span></div>
+<div class="logos" role="tablist" aria-label="Connected services">${nodes}</div>
 <div class="panels">${panels}</div>
 </div>
 </div></section>
