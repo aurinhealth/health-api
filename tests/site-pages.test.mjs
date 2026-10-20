@@ -27,26 +27,38 @@ test('public pages use the app’s light palette',async()=>{
 
 test('the overview follows the app section by section and every file it loads exists',async()=>{
   const html=await overviewPage(new Request('https://petrfitnessdata.eu/')).text();
-  for(const id of ['propojeni','pripravenost','spanek','posilovna','svaly','vyziva','kouc','soukromi','faq','join'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
-  for(const id of ['zatez','trenink'])assert.match(html,new RegExp('id="'+id+'" class="tile'),id);
+  for(const id of ['propojeni','pripravenost','spanek','zatez','posilovna','svaly','vyziva','kouc','soukromi','faq','join'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
+  assert.match(html,/id="trenink" class="lc/,'the training week');
   const files=[...new Set([...html.matchAll(/(?:src|href|content|data-zoom)="(?:https:\/\/petrfitnessdata\.eu)?\/site\/([^"]+)"/g)].map(m=>m[1]))];
   assert.ok(files.includes('og-en.png'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
+  assert.match(html,/@import url\(\/site\/fonts\/instrument-serif\.css\)/,'the app’s number font');
+  assert.ok(existsSync(new URL('../public/site/fonts/instrument-serif.css',import.meta.url)));
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
-  for(const name of ['today','sleep','training','food-day','training-set','coach-ask'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
+  for(const name of ['today','readiness-parts','sleep','strain-target','builder','gym-day','training-mode','training-set','training-rest','training-done'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
   // The figure from the front and the back, and a close-up of every muscle a bubble opens.
   for(const file of ['muscles/f00.webp','muscles/f36.webp','muscles/z-quads.webp','muscles/z-glutes.webp'])assert.ok(files.includes(file),file);
   assert.doesNotMatch(html,/undefined/,'every icon and text the page draws exists');
 });
 
-// The phones show the app's sample morning (screenshots from ios-native.yml), so the numbers floating
-// around the hero phone come from the same sample day (DemoData.swift) and change with it.
-test('the numbers around the hero phone are the sample morning its screenshot shows',async()=>{
+// The phones show the app's sample morning (screenshots from ios-native.yml), so the cards drawn beside
+// and around them come from the same sample day (DemoData.swift) and change with it.
+test('the live cards show the sample morning the screenshots show',async()=>{
   const demo=readFileSync(new URL('../ios-native/Loadwise/Data/DemoData.swift',import.meta.url),'utf8');
   const today=JSON.parse(demo.match(/json = """\n([\s\S]*?)\n    """/)[1]);
   const html=await overviewPage().text();
-  assert.match(html,new RegExp('readiness '+today.readiness.score+','));
-  assert.match(html,new RegExp('<div class="num" data-n="'+today.readiness.score+'">'+today.readiness.score+'</div>'));
+  const health=JSON.parse(demo.match(/healthJSON = #"""\n([\s\S]*?)\n"""#/)[1]);
+  assert.equal(health.readiness.score,today.readiness.score);
+  const r=health.readiness;
+  assert.match(html,new RegExp('readiness '+r.score+','));
+  assert.match(html,new RegExp('data-n="'+r.score+'">'+r.score+'</span>'));
+  for(const part of r.parts)assert.ok(html.includes((part.points>0?'+':'−')+Math.abs(part.points)+' readiness points'),part.key);
+  const avg=Math.round(r.history.reduce((s,x)=>s+x.value,0)/r.history.length);
+  assert.match(html,new RegExp('average '+avg+'<'));
+  const t=health.sleep.tonight;
+  assert.match(html,new RegExp('data-wake="'+(+t.wake.slice(0,2)*60+ +t.wake.slice(3))+'" data-sleep="'+t.sleep+'"'));
+  assert.match(html,/10:10 PM/,'bedtime '+t.bedtime);
+  assert.match(html,new RegExp('data-eff="'+(t.sleep/t.inBed).toFixed(4)+'"'));
 });
 
 const visit=(path,headers={})=>new Request('https://petrfitnessdata.eu'+path,{headers});
@@ -181,7 +193,7 @@ test('the connections use the app’s own logos and only the services the app of
     assert.ok(site(file).equals(asset(source)),file+' is the app’s logo, unchanged');
     assert.ok(section.includes('/site/logos/'+file),file);
   }
-  assert.deepEqual([...section.matchAll(/id="tab-(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman','whoop','wahoo']);
+  assert.deepEqual([...section.matchAll(/data-svc="(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman','whoop','wahoo']);
   assert.doesNotMatch(section,/strava|garmin|oura/i,'only services the app offers');
   // What Aurin sends back only where the app can sync to that service (SyncViews.swift).
   const sync=readFileSync(new URL('../ios-native/Loadwise/Screens/SyncViews.swift',import.meta.url),'utf8');

@@ -1,8 +1,8 @@
 // Public pages: the Aurin overview on / and the policy pages. They use the iPhone app's light
 // palette (ios-native/Shared/Palette.swift): warm paper, white cards, tight sans headings.
-// The phones on the overview show the app's own screens (Today in the hero, then a tinted panel per
-// area of the app), taken in CI from the sample data in English, with pieces of the next screens
-// (public/site/app/parts/) floating over their edges.
+// The phones on the overview show the app's own screens (Today in the hero, the gym as you scroll),
+// taken in CI from the sample data in English, and move between them as the app does. The cards beside
+// them are drawn here from the same sample day in the app's colours and number font, so they can move.
 // When the app changes what a section shows, change the section here too.
 // The site is in English only (Aurin is for the whole world); the privacy policy and the terms also
 // have a Czech version at ?lang=cs, linked from the page and the footer.
@@ -67,92 +67,215 @@ p{margin:0}
 .disclosure h3{font-size:16px;margin-bottom:10px;letter-spacing:0}
 .disclosure p{font-size:14px;line-height:1.55;color:var(--muted);margin-bottom:12px}
 
-/* The overview. Short headlines in tight sans, each area of the app on its own tinted panel, the app's
-   whole screens in a phone and real pieces of the next screens floating over its edges. */
+/* The overview. Short headlines in tight sans, each area of the app on its own tinted panel. The phones
+   show the app's own screens and move between them as the app does; the cards beside them are drawn
+   live from the sample day in the app's colours and its number font, so they can move. */
 .eb{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--c,var(--green))}
 .h2{font-size:clamp(34px,5.4vw,64px);line-height:1.02;letter-spacing:-.04em}
 .lead{font-size:clamp(16px,1.6vw,19px);line-height:1.45;color:var(--sec);max-width:520px}
-.phone{position:relative;width:226px;padding:7px;border-radius:42px;background:var(--button);box-shadow:0 0 0 1px rgba(0,0,0,.06),0 34px 70px -24px rgba(40,30,10,.45)}
-.phone img{display:block;width:100%;height:auto;aspect-ratio:600/1305;object-fit:cover;object-position:top;border-radius:35px}
-.fl{position:absolute;z-index:2;overflow:hidden;border-radius:18px;background:var(--panel);box-shadow:0 20px 44px -14px rgba(40,30,10,.32),0 0 0 1px rgba(27,26,23,.05)}
-.fl img{display:block;width:100%;height:auto}
-.fl.round{border-radius:50%;aspect-ratio:1;background:var(--bg)}
-.fl.round img{width:100%;height:100%;object-fit:cover}
-/* A stage is drawn at phone size and grows on a computer. */
-.stage{position:relative;width:360px;max-width:100%;height:520px;margin:0 auto}
-.stage .phone{position:absolute;left:50%;top:0;transform:translateX(-50%)}
+.n{font-family:"Instrument Serif","New York",Georgia,serif;font-weight:400;letter-spacing:-.01em;font-variant-numeric:lining-nums}
+.phone{position:relative;width:236px;aspect-ratio:603/1311;padding:7px;border-radius:42px;background:var(--button);box-shadow:0 0 0 1px rgba(0,0,0,.06),0 34px 70px -24px rgba(40,30,10,.45)}
+.scr{position:relative;width:100%;height:100%;overflow:hidden;border-radius:35px;background:var(--bg)}
+.scr img{position:absolute;inset:0;display:block;width:100%;height:100%;transform:translateX(100%)}
+.scr img.on{z-index:2;transform:none}
+.scr img.back{z-index:1;transform:translateX(-28%);filter:brightness(.92)}
+.tap{position:absolute;z-index:5;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;background:rgba(27,26,23,.18);border:2px solid rgba(255,255,255,.9);opacity:0;pointer-events:none}
+.tap.go{animation:tap .7s ease-out}
+@keyframes tap{0%{opacity:0;transform:scale(1.5)}30%{opacity:1;transform:scale(1)}60%{transform:scale(.85)}100%{opacity:0;transform:scale(1.1)}}
 
-.hero{padding:48px 0 0;text-align:center;overflow:hidden}
+/* A live card: the app's card, with its small grey title and big serif numbers. */
+.lc{background:var(--panel);border-radius:22px;padding:15px 16px;text-align:left;box-shadow:0 22px 44px -16px rgba(40,30,10,.3),0 0 0 1px var(--line)}
+.lc .t{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;color:var(--muted)}
+.lc .t.caps{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.flat{box-shadow:none}
+.pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill.g{background:var(--green-soft);color:var(--green)}.pill.a{background:var(--amber-soft);color:var(--amber)}.pill.i{background:var(--lilac);color:var(--indigo)}
+
+.hero{padding:44px 0 0;text-align:center;overflow:hidden}
 .kick{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;background:#fff;font-size:13px;font-weight:500;box-shadow:0 1px 0 rgba(0,0,0,.04)}
 .kick i{width:7px;height:7px;border-radius:50%;background:var(--logo-recovery)}
-.hero h1{font-size:clamp(46px,8.4vw,104px);line-height:.98;letter-spacing:-.045em;margin:18px auto 16px;max-width:900px}
+.hero h1{font-size:clamp(44px,8.4vw,104px);line-height:.98;letter-spacing:-.045em;margin:18px auto 16px;max-width:900px}
 .hero .lead{margin:0 auto 26px;max-width:560px}
 .hero .small{margin-top:10px;font-size:13px;color:var(--muted)}
-.hero .stage{height:560px;margin-top:40px}
-.hero .glow{position:absolute;left:-30%;right:-30%;top:12%;height:70%;border-radius:50%;background:radial-gradient(closest-side,var(--glow-today),transparent)}
-.cyc img+img{position:absolute;left:7px;top:7px;width:calc(100% - 14px)}
-.cyc img{transition:opacity .7s ease}
-.js .cyc img:not(.on){opacity:0}
-.hc{transition:opacity .5s ease,transform .7s cubic-bezier(.2,.7,.2,1)}
-.js .hc:not(.on){opacity:0;transform:translateY(26px) scale(.92);pointer-events:none}
-html:not(.js) .hc:not([data-g="0"]){display:none}
+.stage{position:relative;width:390px;max-width:100%;height:560px;margin:36px auto 0}
+.stage .phone{position:absolute;left:50%;top:0;transform:translateX(-50%)}
+.glow{position:absolute;left:-30%;right:-30%;top:8%;height:76%;border-radius:50%;background:radial-gradient(closest-side,var(--g,var(--glow-today)),transparent)}
+.fc{position:absolute;z-index:6;width:206px}
+.js .fc{opacity:0;transform:translateY(16px) scale(.96);pointer-events:none}
+.js .fc.on{opacity:1;transform:none}
+html:not(.js) .fc:not([data-k=today]){display:none}
+.fc .row{padding:7px 0}
+.fc .row .a b{font-size:13px}.fc .row .a .n{font-size:20px}
+.st{display:grid;gap:7px;margin-top:8px;font-size:13px}
+.st div{display:grid;grid-template-columns:46px 1fr 36px;gap:8px;align-items:center}
+.st i{height:6px;overflow:hidden;border-radius:9px;background:var(--track)}
+.st b{display:block;height:100%;border-radius:9px;background:var(--c)}
+.st .n{font-size:17px;text-align:right}
 
-/* Connections: the services as tabs; between the picked one and Aurin a lane that runs in and a lane
-   that runs back, each with what it carries. */
-.conn{--t:#fff;display:block!important}
-.conn .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:24px 0 18px}
-.conn [role=tab]{padding:0;border:0;border-radius:18px;background:none;cursor:pointer;opacity:.55;transition:opacity .3s,transform .3s}
-.conn [role=tab][aria-selected=true]{opacity:1;transform:scale(1.06)}
-.lt{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:#fff;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
-.lt img{width:76%;height:76%;object-fit:contain}
-.lt.dark{background:var(--button)}.lt.dark img{width:56%;height:auto}.lt.word img{width:80%}
-.lt.aurin{background:var(--green-soft)}
-.svc{display:none;padding-bottom:30px}.svc.on{display:block}
-.ends{display:flex;align-items:center;gap:8px;max-width:560px}
-.ends .lt{width:52px;height:52px}
-.lanes{flex:1;height:64px}
-.lanes path{fill:none;vector-effect:non-scaling-stroke;stroke-width:6;stroke-linecap:round;stroke-dasharray:0 16}
-.lanes .in{stroke:var(--green)}.lanes .out{stroke:var(--amber-bar)}.lanes .off{stroke:var(--track);stroke-dasharray:none;stroke-width:2}
-.io{margin-top:16px}
-.io .lbl{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;margin-bottom:8px}
-.io .lbl .icon{width:16px;height:16px;stroke-width:2.4}
-.io.in .lbl{color:var(--green)}.io.out .lbl{color:var(--amber)}
-.conn .chips{margin:0}
-.conn .chips span{display:inline-flex;align-items:center;gap:6px;padding:7px 12px 7px 10px;background:var(--bg);font-size:14px}
-.conn .chips .icon{width:15px;height:15px}
-.io.in .chips .icon{color:var(--green)}.io.out .chips .icon{color:var(--amber)}
-.io .none{font-size:14px;color:var(--muted)}
+/* Readiness: what each part of the score is against your own normal, and the points it brings. */
+.row{padding:12px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border:0}
+.row .a{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.row .a b{font-size:15px;font-weight:500}
+.row .a .n{font-size:24px;line-height:1}
+.row .bb{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--muted);margin-top:2px}
+.rng{position:relative;height:6px;margin:9px 0 6px;border-radius:9px;background:var(--track)}
+.rng .band{position:absolute;top:0;bottom:0;border-radius:9px;background:color-mix(in srgb,var(--text) 22%,var(--panel));transform-origin:left}
+.rng .dot{position:absolute;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;border:2px solid var(--panel);background:var(--c)}
+.pts{text-align:right;font-size:12px;font-weight:600;color:var(--c)}
+.big{font-size:clamp(96px,11vw,128px);line-height:.8}
+.bars{display:flex;gap:4px;align-items:flex-end;height:72px;margin-top:12px}
+.bars i{flex:1;border-radius:3px 3px 1px 1px;background:var(--amber-bar)}
+.bars i.hi{background:color-mix(in srgb,var(--green) 70%,var(--panel))}
 
-/* Bento: one tile per number on Today, each in its tab's tint with the piece of the app it explains. */
-.start{padding:40px 0 0}
-.start .h2{margin:0 0 22px}
-.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.tile{position:relative;overflow:hidden;border-radius:28px;padding:22px 20px 0;background:var(--t)}
-.tile h3{font-size:clamp(19px,2vw,26px);line-height:1.08;margin-top:6px}
-.tile p{font-size:14px;line-height:1.38;color:var(--sec);margin:6px 0 14px}
-.tile .cut{overflow:hidden;border-radius:16px;background:var(--panel);box-shadow:0 12px 26px -12px rgba(40,30,10,.28)}
-.tile .cut img{display:block;width:100%;height:auto}
-.tile.w2{grid-column:span 2}
-.tile .pad{height:20px}
-.tile .big{display:flex;gap:14px;align-items:flex-end}
-.tile .num{font:400 clamp(84px,9vw,120px)/.8 Newsreader,"New York",Georgia,serif;letter-spacing:-.03em;padding-bottom:22px}
-.tile .big .cut{flex:1;margin-bottom:-10px}
+/* Sleep: the app's dial with the bedtime (moon) and the wake time (sun) as handles. */
+.dial{position:relative;width:min(100%,300px);margin:6px auto 0;touch-action:none;user-select:none;-webkit-user-select:none}
+.dial svg{display:block;width:100%;overflow:visible}
+.dial text{font-size:11px;fill:var(--muted)}
+.dial .hd{cursor:grab;outline:none}
+.dial .hd>circle{fill:var(--panel);filter:drop-shadow(0 1px 3px rgba(0,0,0,.25))}
+.dial .hd:focus-visible>circle{stroke:var(--indigo);stroke-width:2}
+.dial .mid{position:absolute;inset:0;display:grid;place-content:center;text-align:center;pointer-events:none}
+.dial .mid .n{font-size:46px;line-height:1}
+.dial .mid small{font-size:13px;color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.two .lc{padding:11px 13px}
+.two .n{font-size:30px;line-height:1.1}
+.lv{display:flex;gap:8px;margin-top:12px}
+.lv button{flex:1;padding:8px 4px;border:1.5px solid transparent;border-radius:14px;background:var(--panel);font:inherit;font-size:14px;font-weight:500;color:var(--text);cursor:pointer;transition:background .3s,border-color .3s,color .3s}
+.lv button small{display:block;font-size:12px;color:var(--muted)}
+.lv button[aria-pressed=true]{background:var(--lilac);border-color:var(--indigo);color:var(--indigo)}
+.why{margin-top:12px}
+.why div{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line);font-size:15px}
+.why div:first-of-type{border:0}
+.why span+span{font-weight:500;color:var(--indigo)}
+.why .goal{color:var(--text)}.why .less{color:var(--green)}
+.alarm{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+.alarm small{display:block;font-size:13px;color:var(--muted)}
+.tog{position:relative;flex:none;width:46px;height:28px;border:0;border-radius:999px;background:color-mix(in srgb,var(--text) 16%,var(--panel));cursor:pointer;transition:background .3s}
+.tog::after{content:"";position:absolute;left:2px;top:2px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .3s}
+.tog[aria-checked=true]{background:var(--green)}.tog[aria-checked=true]::after{left:20px}
 
-/* A panel per area: words, then the phone with pieces of the next screens over its edges. */
+/* Connections: every service at once. What Aurin reads runs down into it, what it sends back runs on
+   down to the services that take it; a list underneath says the same in words. */
+.conn{--t:#fff}
+.flow{position:relative;max-width:420px;margin:26px auto 0}
+.flow .lines{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.flow .lines path{fill:none;stroke:var(--track);stroke-width:1.5}
+.cap{margin:0 0 10px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:center}
+.lr{position:relative;z-index:2;display:flex;justify-content:space-between}
+.lr.to{padding:0 12%}
+.lt{display:grid;place-items:center;width:48px;height:48px;border-radius:14px;background:#fff;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.lt img{width:64%;height:64%;object-fit:contain}
+.lt.dark{background:var(--button)}.lt.dark img{width:56%;height:auto}.lt.word img{width:84%}
+.hub{position:relative;z-index:4;display:grid;place-items:center;width:80px;height:80px;margin:92px auto;border-radius:24px;background:var(--green-soft);box-shadow:0 0 0 8px color-mix(in srgb,var(--green) 7%,transparent)}
+.pk{position:absolute;left:0;top:0;z-index:3;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;color:#fff;offset-rotate:0deg;offset-anchor:center;opacity:0;pointer-events:none}
+.pk.in{background:var(--green)}.pk.out{background:var(--amber-bar)}
+.svcs{display:grid;gap:8px;margin-top:26px;padding-bottom:30px}
+.svc{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:18px;background:var(--site-bg)}
+.svc .lt{flex:none;width:36px;height:36px;border-radius:10px}
+.svc b{font-size:15px}
+.svc p{font-size:14px;line-height:1.4;color:var(--sec)}
+.svc em{font-style:normal;font-weight:600}
+.svc .i{color:var(--green)}.svc .o{color:var(--amber)}.svc .none{color:var(--muted)}
+
+/* Strain: the gauge fills from today's activities toward the target, the week shows done and planned. */
+.gauge{position:relative;width:200px;margin:10px auto 0}
+.gauge svg{display:block;width:100%}
+.gauge path{fill:none;stroke-linecap:round}
+.gauge .gt{stroke:var(--track)}.gauge .gz{stroke:color-mix(in srgb,var(--green) 40%,var(--panel))}.gauge .gv{stroke:var(--amber-bar)}
+.gauge .mid{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.gauge .mid .n{font-size:52px;line-height:1}
+.gauge .mid small{font-size:12px;color:var(--muted)}
+.act{display:flex;gap:10px;align-items:center;margin-top:12px}
+.act .ic{display:grid;place-items:center;flex:none;width:36px;height:36px;border-radius:11px;background:var(--amber-bar);color:#fff}
+.act .ic.p{background:var(--sand);color:var(--amber)}
+.act .ic .icon{width:18px;height:18px}
+.act div{flex:1}.act b{font-size:15px;font-weight:600}.act small{display:block;font-size:13px;color:var(--muted)}
+.act .n{font-size:24px}
+.wk{display:flex;gap:6px;align-items:flex-end;height:120px;margin-top:8px}
+.wk div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;text-align:center;font-size:12px;color:var(--muted)}
+.wk .n{font-size:15px;color:var(--text)}
+.wk i{display:block;margin:3px 0 4px;border-radius:5px;background:color-mix(in srgb,var(--amber-bar) 55%,var(--panel))}
+.wk .now i{background:var(--amber-bar)}.wk .now{font-weight:700;color:var(--text)}
+.wk .plan i{background:none;border:1.5px dashed var(--amber-bar)}
+
+/* The gym: the phone stays on screen while the page scrolls and walks through a workout. */
+.walk{position:relative;height:540vh}
+.walk .pin{position:sticky;top:64px;height:calc(100vh - 64px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.walk .phone{width:min(218px,27vh)}
+.steps{position:relative;width:100%;max-width:360px;height:76px;margin:0;padding:0;list-style:none;text-align:center}
+.steps li{position:absolute;inset:0;opacity:0;transform:translateY(10px);transition:opacity .4s,transform .4s;font-size:15px;color:var(--sec)}
+.steps li b{display:block;font-size:19px;letter-spacing:-.02em;color:var(--text)}
+.steps li.on{opacity:1;transform:none}
+.dots{display:flex;gap:6px;justify-content:center}
+.dots i{width:6px;height:6px;border-radius:9px;background:color-mix(in srgb,var(--text) 18%,transparent);transition:width .3s,background .3s}
+.dots i.on{width:18px;background:var(--text)}
+.timer{position:absolute;z-index:6;right:-34px;top:52%;width:136px;padding:12px;text-align:center}
+.timer svg{display:block;width:92px;margin:4px auto}
+.timer circle{fill:none;stroke-width:7}
+.timer .bgc{stroke:var(--track)}.timer .fgc{stroke:var(--green);stroke-linecap:round}
+.timer .n{position:absolute;left:0;right:0;top:58px;font-size:30px;line-height:1}
+.timer small{font-size:12px;color:var(--muted)}
+html:not(.js) .walk{height:auto}html:not(.js) .walk .pin{position:static;height:auto;padding:24px 0}
+html:not(.js) .steps{height:auto}html:not(.js) .steps li{position:static;opacity:1;transform:none;margin-bottom:12px}
+html:not(.js) .dots,html:not(.js) .timer,.js .timer:not(.on){opacity:0;pointer-events:none}
+.timer{transition:opacity .4s}
+
+/* Nutrition: what the day adds up to and what the coach says about the next meal. */
+.kc{display:flex;align-items:baseline;gap:8px}
+.kc .n{font-size:76px;line-height:.9}
+.kc span+span{font-size:14px;color:var(--muted)}
+.mac{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}
+.mac div{font-size:12px;color:var(--muted)}
+.mac .n{font-size:26px;color:var(--text)}
+.mac i{display:block;height:4px;margin-top:5px;overflow:hidden;border-radius:9px;background:var(--track)}
+.mac i b{display:block;height:100%;width:var(--w);background:var(--c)}
+.meal{display:flex;gap:10px;align-items:center;margin-top:14px;padding:10px 12px;border-radius:14px;background:#fff}
+.meal .ic{display:grid;place-items:center;flex:none;width:36px;height:36px;border-radius:11px;background:var(--amber-soft);color:var(--amber)}
+.meal div{flex:1}.meal b{font-size:15px;font-weight:600}.meal small{display:block;font-size:13px;color:var(--muted)}
+.meal .n{font-size:22px}
+.say{margin-top:14px}
+.say small{font-size:13px;font-weight:600;color:var(--green)}
+.say p{margin-top:4px;font:20px/1.3 Newsreader,"New York",Georgia,serif;min-height:3.9em}
+
+/* The coach: a question picked from the suggestions and its answer, with today's workout. */
+.chat{display:flex;flex-direction:column;min-height:480px;margin-top:22px;padding:16px 14px 14px;border-radius:28px;background:var(--bg);color:var(--text);text-align:left}
+.chat .top{text-align:center;font-size:16px;font-weight:600;margin-bottom:12px}
+.ask{display:flex;flex-direction:column;align-items:flex-start;gap:7px;transition:opacity .3s}
+.ask h3{font:400 25px/1.15 Newsreader,"New York",Georgia,serif;letter-spacing:0;margin-bottom:6px}
+.ask span{padding:7px 12px;border-radius:14px;background:#fff;font-size:14px;transition:background .25s}
+.ask span.tp{background:var(--panel2)}
+.msgs{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:12px}
+.me{align-self:flex-end;max-width:82%;padding:9px 14px;border-radius:18px 18px 4px 18px;background:var(--button);color:var(--on-button);font-size:15px}
+.ai{align-self:flex-start;max-width:96%;min-height:1.4em;font:18px/1.38 Newsreader,"New York",Georgia,serif}
+.wo{padding:12px 14px;border-radius:16px;background:#fff;font-size:14px}
+.wo small{display:block;font-size:12px;color:var(--muted);letter-spacing:.04em}.wo b{display:block;font-size:15px}.wo span{color:var(--muted)}
+.typing{display:flex;gap:4px;padding:8px 0}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:blink 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes blink{50%{opacity:.25}}
+.inp{display:flex;gap:8px;align-items:center;margin-top:12px}
+.inp span{flex:1;padding:10px 15px;border-radius:999px;background:#fff;font-size:14px;color:var(--muted)}
+.inp i{width:34px;height:34px;border-radius:50%;background:var(--button)}
+html:not(.js) .ask{display:none}
+.js .chat:not(.done) .wo,.js .chat:not(.done) .me{opacity:0;transform:translateY(10px)}
+.wo,.me{transition:opacity .4s,transform .4s}
+
+/* A panel per area: words, then the live part of the app. */
 .sec{padding:12px 0 0}
-.panel{position:relative;overflow:hidden;border-radius:36px;padding:40px 24px 0;background:var(--t)}
+.panel{position:relative;overflow:clip;border-radius:36px;padding:40px 24px 30px;background:var(--t)}
 .panel .h2{margin:10px 0 12px}
-.panel .stage{margin-top:28px;height:500px}
+.demo{margin-top:24px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
 .chips span{padding:6px 12px;border-radius:999px;background:color-mix(in srgb,#fff 65%,transparent);font-size:13px;font-weight:500}
 .sec.dark .panel{color:var(--on-button)}
 .dark .lead{color:color-mix(in srgb,var(--on-button) 72%,var(--button))}
-.dark .phone{box-shadow:0 0 0 1px color-mix(in srgb,var(--on-button) 20%,var(--button)),0 30px 90px -10px color-mix(in srgb,var(--logo-recovery) 55%,transparent)}
 
 /* Muscles: the app's figure from the front or the back, a bubble on each tired muscle, and the bubble's
    muscle up close underneath, as its detail is in the app. */
 .muscles{background:#fff}
-.mu{display:grid;gap:16px;margin-top:10px;padding-bottom:28px}
+.mu{display:grid;gap:16px;margin-top:10px}
 .fig{position:relative;width:min(100%,300px);aspect-ratio:640/1000;margin:0 auto}
 .fig img{position:absolute;inset:0;width:100%;height:100%;transition:opacity .5s}
 .fig img.back,.fig.turned img.front{opacity:0}.fig.turned img.back{opacity:1}
@@ -197,17 +320,19 @@ html:not(.js) .hc:not([data-g="0"]){display:none}
 .final .h2{font-size:clamp(40px,6vw,72px);margin-bottom:24px}
 .final .wl .field{box-shadow:none}
 
-/* Motion, only with JS and without reduced motion: pieces rise in as they scroll into view and then
-   float, the strips run, the hero phone walks through its screens and the readiness counts up. */
+/* Motion, only with JS and without reduced motion: the words rise in, the phones move between screens
+   like the app, the cards fill as they come into view. */
 @media (prefers-reduced-motion:no-preference){
   .js .rv{opacity:0;transform:translateY(36px) scale(.97);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .9s cubic-bezier(.2,.7,.2,1);transition-delay:var(--d,0s)}
   .js .rv.in{opacity:1;transform:none}
-  .js .fl.rv{transform:translateY(46px) scale(.9)}
-  .js .fl.rv.in{transform:none;animation:float 6s ease-in-out 1.2s infinite}
-  @keyframes float{50%{translate:0 -7px}}
-  .lanes path:not(.off){animation:lane 1s linear infinite}
-  @keyframes lane{to{stroke-dashoffset:-32}}
-  .svc.on .chips span{animation:up .5s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(.05s + var(--i,0) * 50ms)}
+  .scr img{transition:transform .55s cubic-bezier(.3,.7,.2,1),filter .55s}
+  .fc{transition:opacity .35s,transform .6s cubic-bezier(.3,.7,.2,1)}
+  .rng .band{transition:transform .7s}.rng .dot{transition:left 1s cubic-bezier(.3,.7,.2,1),opacity .3s}.pts{transition:opacity .4s,transform .4s}
+  .bars i,.wk i{transition:height .6s cubic-bezier(.3,.7,.2,1)}
+  .mac i b,.st b{transition:width 1s cubic-bezier(.3,.7,.2,1)}
+  .act,.meal{transition:opacity .5s,transform .5s}
+  .hub{animation:beat 1.8s ease-in-out infinite}
+  @keyframes beat{50%{box-shadow:0 0 0 16px color-mix(in srgb,var(--green) 4%,transparent)}}
   .js .hero .kick,.js .hero h1,.js .hero .lead,.js .hero .wl{animation:up .9s cubic-bezier(.2,.7,.2,1) both}
   .js .hero h1{animation-delay:.08s}.js .hero .lead{animation-delay:.18s}.js .hero .wl{animation-delay:.28s}
   @keyframes up{from{opacity:0;transform:translateY(24px)}}
@@ -217,39 +342,47 @@ html:not(.js) .hc:not([data-g="0"]){display:none}
     .faq details[open]::details-content{height:auto}
   }
 }
+/* Before a card plays it starts empty; the script takes .pre off as it comes into view. */
+.js .row.pre .rng .band{transform:scaleX(0)}.js .row.pre .rng .dot{left:50%!important;opacity:0}.js .row.pre .pts{opacity:0;transform:translateY(4px)}
+.js .bars.pre i,.js .wk.pre i{height:0!important}
+.js .mac.pre i b,.js .st.pre b{width:0!important}
+.js .act.pre,.js .meal.pre{opacity:0;transform:translateX(-16px)}
 
-/* A computer: the stages grow, each panel puts its words beside the phone, the grids widen. */
+/* A computer: the stages grow, each panel puts its words beside its live part, the grids widen. */
 @media (min-width:900px){
   .hero{padding-top:72px}
-  .hero .stage{transform:scale(1.25);transform-origin:top center;margin-bottom:140px}
-  .panel{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:40px;padding:0 64px;min-height:640px}
-  .panel>.txt{padding:64px 0}
-  .panel .stage{margin:40px auto 0;align-self:end;transform:scale(1.15);transform-origin:bottom center}
+  .hero .stage{transform:scale(1.2);transform-origin:top center;margin-bottom:120px}
+  .panel{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:56px;padding:64px}
+  .panel>.demo{margin:0;max-width:440px;justify-self:center;width:100%}
+  .conn{display:grid;grid-template-columns:1fr 1fr}
+  .conn .flow{margin:0}
+  .conn .svcs{margin:0;padding:0}
+  .gym .panel{display:block}
+  .gym .walk .pin{flex-direction:row;gap:64px}
+  .gym .side{display:flex;flex-direction:column;gap:18px;width:360px}
+  .gym .steps{text-align:left;height:110px}.gym .steps li b{font-size:28px}.gym .steps li{font-size:17px}
+  .gym .dots{justify-content:flex-start}
+  .walk .phone{width:min(260px,30vh)}
   .muscles{display:block;padding:64px}
   .mu{grid-template-columns:1fr 1fr;align-items:center;gap:48px}
   .fig{width:min(100%,380px)}
-  .privacy .panel{display:block;padding:56px 64px;min-height:0}
-  .tile.w2 .cut{max-width:440px;margin:0 auto}
-  .conn{padding:64px 64px 0;text-align:center}.conn .lead{margin:0 auto}
-  .conn .tabs{justify-content:center;gap:14px;margin:32px 0 28px}
-  .conn .lt{width:68px;height:68px;border-radius:20px}.conn .ends .lt{width:76px;height:76px}
-  .ends{max-width:760px;margin:0 auto}.lanes{height:80px}
-  .svc{max-width:860px;margin:0 auto;padding-bottom:56px}
-  .svc .io{display:inline-block;vertical-align:top;width:calc(50% - 12px);margin:24px 6px 0;text-align:left}
+  .privacy .panel{display:block;padding:56px 64px}
   .final{padding:88px 24px 72px}
 }
 @media (max-width:899px){
   .site-head .links{display:none}
-  .bento,.grid{grid-template-columns:1fr 1fr}
+  .grid{grid-template-columns:1fr 1fr}
   .site-foot .top{grid-template-columns:1fr 1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
+  .gym .side{display:contents}
 }
 @media (max-width:560px){
-  .wrap{padding:0 12px}
-  .hero .wrap,.start .wrap>.h2,.more .h2,.faq{padding-left:6px;padding-right:6px}
-  .bento{gap:10px}
-  .tile{padding:18px 14px 0;border-radius:24px}
-  .panel{padding:34px 20px 0;border-radius:32px}
+  .wrap{padding:0 10px}
+  .hero .wrap,.more .h2,.faq{padding-left:8px;padding-right:8px}
+  .panel{padding:32px 18px 26px;border-radius:30px}
   .site-foot .wrap{padding:0 22px}
+  .stage{height:560px}
+  .fc{width:196px}
+  .timer{right:-26px}
 }
 `;
 
@@ -279,38 +412,119 @@ const store = (id, label) => `<form class="wl" action="/waitlist" method="post" 
 <span class="err" role="alert"></span>
 </form>`;
 
-// The page's motion and the waitlist. Without JS everything is simply shown; with reduced motion
-// nothing moves.
+// The page's motion, the live cards and the waitlist. Without JS every card shows the sample day as it
+// ends; with reduced motion the cards show it at once and the phones stay on their first screen.
 const siteScript = `<script>(function(){var r=document.documentElement;r.classList.add('js');
 var still=matchMedia('(prefers-reduced-motion: reduce)').matches;
-// Pieces rise in as they come into view; a number in one counts up to its value.
-function count(el){var n=+el.dataset.n,t0=performance.now();if(still)return;(function step(now){var k=Math.min(1,(now-t0)/1100);el.textContent=Math.round(n*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(step);})(t0);}
-var rv=[].slice.call(document.querySelectorAll('.rv'));
-if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(!e.isIntersecting)return;e.target.classList.add('in');io.unobserve(e.target);
- [].forEach.call(e.target.querySelectorAll('[data-n]'),count);});},{rootMargin:'0px 0px -8% 0px'});rv.forEach(function(el){io.observe(el);});}
+function $(s,e){return (e||document).querySelector(s);}function $$(s,e){return [].slice.call((e||document).querySelectorAll(s));}
+function wait(ms){return new Promise(function(ok){setTimeout(ok,ms);});}
+function tween(ms,f){return new Promise(function(ok){if(still){f(1);ok();return;}var t0=performance.now();(function s(t){var p=Math.min(1,(t-t0)/ms);f(1-Math.pow(1-p,3));if(p<1)requestAnimationFrame(s);else ok();})(t0);});}
+function seen(el,fn,th){if(!el)return;if(!('IntersectionObserver' in window)){fn();return;}var o=new IntersectionObserver(function(es){if(es[0].isIntersecting){o.disconnect();fn();}},{threshold:th||.35});o.observe(el);}
+if(still)$$('.pre').forEach(function(e){e.classList.remove('pre');});
+async function reveal(list,gap){for(var i=0;i<list.length;i++){list[i].classList.remove('pre');await wait(gap);}}
+// Words rise in as they come into view.
+var rv=$$('.rv');
+if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});rv.forEach(function(el){io.observe(el);});}
 else rv.forEach(function(el){el.classList.add('in');});
-// The hero phone walks through Today, Sleep, Training and Food; each screen brings its own pieces.
-var shots=[].slice.call(document.querySelectorAll('.cyc img')),at=0;
-function show(i,on){[].forEach.call(document.querySelectorAll('.hc[data-g="'+i+'"]'),function(el,j){setTimeout(function(){el.classList.toggle('on',on);},on?250+j*160:0);});}
-if(shots.length>1&&!still)setInterval(function(){if(document.hidden)return;show(at,false);shots[at].classList.remove('on');at=(at+1)%shots.length;shots[at].classList.add('on');show(at,true);},3200);
+// The strain gauge: 0 to 21 over three quarters of a circle, the target as a band.
+var A0=Math.PI*.75,SPAN=Math.PI*1.5;
+function arc(r,a,b){var x0=100+r*Math.cos(a),y0=100+r*Math.sin(a),x1=100+r*Math.cos(b),y1=100+r*Math.sin(b);return 'M'+x0.toFixed(1)+' '+y0.toFixed(1)+'A'+r+' '+r+' 0 '+(b-a>Math.PI?1:0)+' 1 '+x1.toFixed(1)+' '+y1.toFixed(1);}
+function gauge(g,v){$('.gv',g).setAttribute('d',v>.05?arc(78,A0,A0+SPAN*v/21):'');$('.mid .n',g).textContent=v.toFixed(1);}
+function count(el,to,ms){return tween(ms||1100,function(p){el.textContent=Math.round(to*p).toLocaleString('en');});}
+// The hero phone taps through Today: readiness, last night's sleep and today's strain, each with its card.
+var hs=$('[data-hero]');
+if(hs&&!still)(async function(){var stage=hs.closest('.stage'),imgs=$$('img',hs),tap=$('.tap',hs),fcs=$$('.fc',stage),glow=$('.glow',stage);
+ function go(k,tint){imgs.forEach(function(i){var on=i.dataset.k===k;i.classList.toggle('on',on);i.classList.toggle('back',!on&&i.dataset.k==='today'&&k!=='today');});
+  fcs.forEach(function(f){f.classList.toggle('on',f.dataset.k===k);});if(tint)glow.style.background='radial-gradient(closest-side,var('+tint+'),transparent)';}
+ async function press(x,y){tap.style.left=x+'%';tap.style.top=y+'%';tap.classList.remove('go');void tap.offsetWidth;tap.classList.add('go');await wait(380);}
+ var ready=$('.fc[data-k=ready]',stage),rows=$$('.row',ready),sleep=$('.fc[data-k=sleep] .st',stage),g=$('.fc[data-k=strain] .gauge',stage);
+ await wait(2400);
+ for(;;){if(document.hidden){await wait(600);continue;}
+  await press(19,44);rows.forEach(function(x){x.classList.add('pre');});go('ready','--glow-today');await wait(350);await reveal(rows,380);await wait(2600);
+  go('today');await wait(900);
+  await press(17,75);sleep.classList.add('pre');go('sleep','--glow-health');await wait(350);sleep.classList.remove('pre');await wait(3000);
+  go('today','--glow-today');await wait(900);
+  await press(45,75);gauge(g,0);go('strain','--glow-training');await wait(300);await tween(1300,function(p){gauge(g,8.4*p);});await wait(2400);
+  go('today','--glow-today');await wait(2600);}})();
+// Connections: what each service gives Aurin runs down into it; what Aurin sends back runs on down.
+var flow=$('.flow');
+if(flow){var lines=$('.lines',flow),paths=[],live=false;
+ function layout(){var fr=flow.getBoundingClientRect(),c=function(e){var b=e.getBoundingClientRect();return [b.left-fr.left+b.width/2,b.top-fr.top+b.height/2,b.height/2];},h=c($('.hub',flow)),out='';paths=[];
+  lines.setAttribute('viewBox','0 0 '+fr.width+' '+fr.height);
+  $$('.lr.from .lt',flow).forEach(function(e){var p=c(e),d='M'+p[0]+' '+(p[1]+p[2])+'C'+p[0]+' '+((p[1]+h[1])/2+10)+' '+h[0]+' '+(h[1]-h[2]-40)+' '+h[0]+' '+(h[1]-h[2]);out+='<path d="'+d+'"/>';paths.push({d:d,dir:'in',items:e.dataset.items.split('|')});});
+  $$('.lr.to .lt',flow).forEach(function(e){var p=c(e),d='M'+h[0]+' '+(h[1]+h[2])+'C'+h[0]+' '+(h[1]+h[2]+40)+' '+p[0]+' '+((p[1]+h[1])/2-10)+' '+p[0]+' '+(p[1]-p[2]);out+='<path d="'+d+'"/>';paths.push({d:d,dir:'out',items:e.dataset.items.split('|')});});
+  lines.innerHTML=out;}
+ layout();addEventListener('resize',layout);
+ function send(p,n){var el=document.createElement('span');el.className='pk '+p.dir;el.textContent=p.items[n%p.items.length];el.style.offsetPath='path("'+p.d+'")';flow.appendChild(el);
+  el.animate([{offsetDistance:'0%',opacity:0},{opacity:1,offset:.12},{opacity:1,offset:.75},{offsetDistance:'100%',opacity:0}],{duration:2400,easing:'cubic-bezier(.4,0,.3,1)'}).onfinish=function(){el.remove();};}
+ if(!still&&CSS.supports('offset-path','path("M0 0")')&&'IntersectionObserver' in window){var k=0;new IntersectionObserver(function(es){live=es[0].isIntersecting;}).observe(flow);
+  setInterval(function(){if(!live||document.hidden)return;var ins=paths.filter(function(p){return p.dir==='in';}),outs=paths.filter(function(p){return p.dir==='out';});
+   var a=ins[k%ins.length];send(a,Math.floor(k/ins.length));if(k%2){var o=outs[(k>>1)%outs.length];setTimeout(function(){send(o,k>>3);},700);}k++;},520);}}
+// Readiness: each part slides to where it sits against your normal, then the score counts up.
+var rc=$('#pripravenost .lc');
+seen(rc,async function(){if(still)return;var n=$('[data-n]',rc);n.textContent='0';await reveal($$('.row',rc),500);await count(n,+n.dataset.n);$('.bars',rc).classList.remove('pre');});
+// Sleep: the app's dial (SleepPlanner.swift). The sun moves the wake time and the bedtime follows; the
+// moon changes how long to sleep. In bed is the sleep over the night's efficiency, in 5-minute steps.
+var dial=$('.dial');
+if(dial){var svg=$('svg',dial),eff=+dial.dataset.eff,wake=+dial.dataset.wake,sl=+dial.dataset.sleep,C=150,R=132,touched=false,lv=$$('.lv button');
+ function wrap(m){return ((m%1440)+1440)%1440;}function inBed(m){return Math.round(m/eff/5)*5;}
+ function pt(m){var a=m/1440*2*Math.PI-Math.PI/2;return [C+R*Math.cos(a),C+R*Math.sin(a)];}
+ function clock(m){m=wrap(m);var h=Math.floor(m/60),mm=m%60,ap=h<12?'AM':'PM';h=h%12||12;return h+':'+(mm<10?'0':'')+mm+' '+ap;}
+ function short(m){return Math.floor(m/60)+' h '+(m%60<10?'0':'')+m%60;}
+ function draw(){var bed=wrap(wake-inBed(sl)),len=wrap(wake-bed),a=pt(bed),b=pt(bed+len);
+  $('.night',svg).setAttribute('d','M'+a[0].toFixed(1)+' '+a[1].toFixed(1)+'A'+R+' '+R+' 0 '+(len>720?1:0)+' 1 '+b[0].toFixed(1)+' '+b[1].toFixed(1));
+  $('.moon',svg).setAttribute('transform','translate('+a[0].toFixed(1)+' '+a[1].toFixed(1)+')');$('.sun',svg).setAttribute('transform','translate('+b[0].toFixed(1)+' '+b[1].toFixed(1)+')');
+  $('.mid .n',dial).textContent=short(sl);$('.tbed').textContent=clock(bed);$('.twake').textContent=clock(wake);
+  $('.moon',svg).setAttribute('aria-valuetext',clock(bed));$('.sun',svg).setAttribute('aria-valuetext',clock(wake));
+  lv.forEach(function(x){x.setAttribute('aria-pressed',+x.dataset.m===sl);});}
+ function at(e){var b=svg.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*300-C,y=(e.clientY-b.top)/b.height*300-C,a=Math.atan2(y,x)+Math.PI/2;if(a<0)a+=2*Math.PI;return wrap(Math.round(a/(2*Math.PI)*1440/5)*5);}
+ function setBed(m){sl=Math.min(720,Math.max(300,Math.round(wrap(wake-m)*eff/5)*5));}
+ [['.sun',function(m){wake=m;}],['.moon',setBed]].forEach(function(x){var h=$(x[0],svg);
+  h.addEventListener('pointerdown',function(e){touched=true;e.preventDefault();h.setPointerCapture(e.pointerId);function mv(e){x[1](at(e));draw();}h.addEventListener('pointermove',mv);h.addEventListener('pointerup',function(){h.removeEventListener('pointermove',mv);},{once:true});});
+  h.addEventListener('keydown',function(e){var d=e.key==='ArrowRight'||e.key==='ArrowUp'?5:e.key==='ArrowLeft'||e.key==='ArrowDown'?-5:0;if(!d)return;e.preventDefault();touched=true;
+   if(x[0]==='.sun')wake=wrap(wake+d);else setBed(wrap(wake-inBed(sl)+d));draw();});});
+ async function toSleep(m){var f=sl;await tween(600,function(p){sl=Math.round((f+(m-f)*p)/5)*5;draw();});sl=m;draw();}
+ async function toWake(m){var f=wake;await tween(1300,function(p){wake=Math.round((f+(m-f)*p)/5)*5;draw();});}
+ lv.forEach(function(x){x.addEventListener('click',function(){touched=true;toSleep(+x.dataset.m);});});
+ var tog=$('.tog');tog.addEventListener('click',function(){touched=true;tog.setAttribute('aria-checked',tog.getAttribute('aria-checked')!=='true');});
+ draw();
+ seen(dial,async function(){if(still)return;var w0=wake,s0=sl;await wait(500);if(touched)return;await toWake(w0-45);await wait(500);if(touched)return;await toWake(w0);await wait(500);if(touched)return;
+  lv[1].setAttribute('aria-pressed','true');await toSleep(+lv[1].dataset.m);await wait(900);if(touched)return;await toSleep(s0);await wait(400);if(!touched)tog.setAttribute('aria-checked','true');},.5);}
+// Strain: the morning run fills the gauge toward the target, then the planned workout and the week.
+var sg=$('#zatez .gauge');
+seen(sg,async function(){if(still)return;var acts=$$('#zatez .act');gauge(sg,0);await wait(300);acts[0].classList.remove('pre');await tween(1400,function(p){gauge(sg,+sg.dataset.v*p);});await wait(300);acts[1].classList.remove('pre');await wait(200);$('#zatez .wk').classList.remove('pre');},.4);
+// The gym: the page scrolls a workout through the phone, from picking it to done; the rest is counted down.
+var walk=$('.walk');
+if(walk){var gs=$$('.scr img',walk),st=$$('.steps li',walk),dots=$$('.dots i',walk),gt=$('.tap',walk),timer=$('.timer',walk),TAPS=[[50,87],[50,62],[50,66],[50,65],[85,46]],gi=0,tick;
+ function step(i){if(i===gi)return;var fw=i>gi;if(fw&&TAPS[gi]&&!still){gt.style.left=TAPS[gi][0]+'%';gt.style.top=TAPS[gi][1]+'%';gt.classList.remove('go');void gt.offsetWidth;gt.classList.add('go');}
+  setTimeout(function(){gs.forEach(function(im,k){im.classList.toggle('on',k===i);im.classList.toggle('back',k<i);});},fw&&!still?250:0);
+  st.forEach(function(p,k){p.classList.toggle('on',k===i);});dots.forEach(function(p,k){p.classList.toggle('on',k===i);});gi=i;
+  clearInterval(tick);timer.classList.toggle('on',i===4);if(i===4){var s=90,n=$('.n',timer),c=$('.fgc',timer);function show(){n.textContent=Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60;c.style.strokeDashoffset=264*(1-s/90);}show();if(!still)tick=setInterval(function(){s=Math.max(0,s-1);show();},150);}}
+ function onScroll(){var b=walk.getBoundingClientRect(),p=Math.min(1,Math.max(0,-b.top/(b.height-innerHeight)));step(Math.min(gs.length-1,Math.floor(p*gs.length)));}
+ addEventListener('scroll',onScroll,{passive:true});onScroll();}
+// Nutrition: breakfast goes in, the day adds up and the coach says what that means for the next meal.
+var food=$('#vyziva .lc');
+seen(food,async function(){if(still)return;var say=$('.say p',food),line=say.textContent;say.textContent='';await wait(200);$('.meal',food).classList.remove('pre');await wait(500);
+ var k=$('.kc .n',food);count(k,+k.dataset.n,1400);$$('.mac .n',food).forEach(function(n){count(n,+n.dataset.n,1400);});$('.mac',food).classList.remove('pre');await wait(1500);
+ for(var i=0;i<=line.length;i++){say.textContent=line.slice(0,i);await wait(22);}},.4);
+// The coach: a suggestion is tapped, the question goes up and the answer comes in word by word.
+var chat=$('.chat');
+if(chat){var ai=$('.ai',chat),answer=ai.textContent;if(still){chat.classList.add('done');$('.ask',chat).style.display='none';}else{ai.textContent='';
+ seen(chat,async function(){await wait(700);$('.ask span',chat).classList.add('tp');await wait(350);$('.ask',chat).style.opacity=0;await wait(300);$('.ask',chat).style.display='none';
+  $('.me',chat).style.cssText='opacity:1;transform:none';await wait(400);ai.innerHTML='<div class="typing"><i></i><i></i><i></i></div>';await wait(1300);
+  var w=answer.split(' ');for(var i=1;i<=w.length;i++){ai.textContent=w.slice(0,i).join(' ');await wait(60);}await wait(300);chat.classList.add('done');},.4);}}
 // The waitlist: the address goes to /waitlist and the field turns into a thank-you.
-document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelector('input'),err=f.querySelector('.err'),busy=false;
+$$('form.wl').forEach(function(f){var input=f.querySelector('input'),err=f.querySelector('.err'),busy=false;
  f.addEventListener('submit',function(e){e.preventDefault();if(busy)return;var email=input.value.trim();err.textContent='';
   if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){err.textContent='Enter a valid email.';input.focus();return;}
   busy=true;fetch('/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})})
   .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');})})
   .catch(function(x){err.textContent=x.message;}).then(function(){busy=false;});});});
-// Connections: a logo shows what goes in and back; they take turns until one is picked.
-var tabs=[].slice.call(document.querySelectorAll('.conn [role=tab]')),cur=0,timer;
-function tab(i){cur=i;tabs.forEach(function(t,j){var on=j===i;t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;document.getElementById(t.getAttribute('aria-controls')).classList.toggle('on',on);});}
-tabs.forEach(function(t,i){t.addEventListener('click',function(){clearInterval(timer);tab(i);});
- t.addEventListener('keydown',function(e){var n=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(n){e.preventDefault();clearInterval(timer);tab((i+n+tabs.length)%tabs.length);tabs[cur].focus();}});});
-if(tabs.length){tab(0);if(!still)timer=setInterval(function(){if(!document.hidden)tab((cur+1)%tabs.length);},5200);}
 // Muscles: Front and Back turn the figure; a bubble shows its muscle up close, as its detail does in the app.
-var fig=document.querySelector('.fig');if(!fig)return;
-var zoom=document.querySelector('.zoom'),bubs=[].slice.call(fig.querySelectorAll('.bub')),turn=[].slice.call(document.querySelectorAll('.turn button'));
+var fig=$('.fig');if(!fig)return;
+var zoom=$('.zoom'),bubs=$$('.bub',fig),turn=$$('.turn button');
 function pick(b){bubs.forEach(function(x){x.classList.toggle('on',x===b);});zoom.style.setProperty('--c',b.style.getPropertyValue('--c'));
- zoom.querySelector('img').src=b.dataset.zoom;zoom.querySelector('b').textContent=b.querySelector('b').textContent;zoom.querySelector('p').textContent=b.dataset.state;}
+ $('img',zoom).src=b.dataset.zoom;$('b',zoom).textContent=$('b',b).textContent;$('p',zoom).textContent=b.dataset.state;}
 bubs.forEach(function(b){b.addEventListener('click',function(){pick(b);});});
 turn.forEach(function(t){t.addEventListener('click',function(){var back=t.dataset.side==='back';fig.classList.toggle('turned',back);
  turn.forEach(function(x){x.setAttribute('aria-pressed',x===t);});pick(bubs.filter(function(b){return b.dataset.side===t.dataset.side;})[0]);});});
@@ -335,6 +549,7 @@ ${czech ? `<link rel="alternate" hreflang="en" href="${origin}${path}">\n<link r
 ${index ? '' : '<meta name="robots" content="noindex">'}
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preload" href="/site/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
+${path === '/' ? '<style>@import url(/site/fonts/instrument-serif.css);</style>' : ''}
 <style>${themeTokens}${siteCss}</style>
 </head>
 <body>
@@ -398,63 +613,137 @@ export const googleDisclosure = () => `<div class="card disclosure reveal" lang=
 export function overviewPage(request) {
   const {lang, origin} = pageLang(request);
   // A screen of the app: a screenshot taken in CI from the sample data (public/site/app/).
-  const shot = (name, {lazy = true, cls = ''} = {}) => `<img src="/site/app/${name}.webp" alt="" width="600" height="1305"${cls ? ` class="${cls}"` : ''}${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
-  // A whole card of the app, lifted out beside a phone with its heading (public/site/app/parts/, cut
-  // from the same screenshots): [width, height].
-  const PARTS = {'build-card': [560, 392], 'coach-card': [547, 225], 'food-add-card': [603, 657], 'food-top': [840, 934],
-    'ready-card': [560, 590], 'rest-card': [400, 400], 'sleep-dial': [840, 876], 'sleep-need-card': [560, 430],
-    'sleep-stages-card': [560, 320], 'strain-card': [560, 560], 'week-card': [556, 460]};
-  const img = name => `<img src="/site/app/parts/${name}.webp" alt="" width="${PARTS[name][0]}" height="${PARTS[name][1]}" loading="lazy" decoding="async">`;
-  const part = (name, style, cls = '') => `<div class="fl ${cls}" style="${style}">${img(name)}</div>`;
-  const phone = (screen, parts) => `<div class="stage" aria-hidden="true"><div class="phone">${shot(screen)}</div>
-${parts.map(([name, style, cls = ''], i) => part(name, `${style};--d:${(.12 + i * .16).toFixed(2)}s`, `rv ${cls}`)).join('\n')}</div>`;
-  const panel = (id, tint, color, eyebrow, h, p, stage, extra = '', cls = '') => `<section id="${id}" class="sec${cls ? ' ' + cls : ''}"><div class="wrap"><div class="panel" style="--t:${tint};--c:${color}">
-<div class="txt"><div class="eb">${eyebrow}</div><h2 class="h2 rv">${h}</h2><p class="lead rv">${p}</p>${extra}</div>
-${stage}</div></div></section>`;
+  const shot = (name, {lazy = true, on = false, k = ''} = {}) => `<img src="/site/app/${name}.webp" alt="" width="603" height="1311"${on ? ' class="on"' : ''}${k ? ` data-k="${k}"` : ''}${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
+  const panel = (id, tint, color, eyebrow, h, p, demo, cls = '') => `<section id="${id}" class="sec${cls ? ' ' + cls : ''}"><div class="wrap"><div class="panel" style="--t:${tint};--c:${color}">
+<div class="txt"><div class="eb">${eyebrow}</div><h2 class="h2 rv">${h}</h2><p class="lead rv">${p}</p></div>
+<div class="demo">${demo}</div></div></div></section>`;
 
-  // The hero phone walks through four screens of the sample day; each brings pieces of its next screens.
-  const HERO = [
-    ['today', [['sleep-stages-card', 'right:-10px;top:64px;width:176px'], ['ready-card', 'left:-8px;top:236px;width:170px'], ['strain-card', 'right:-6px;top:360px;width:150px']]],
-    ['sleep', [['sleep-need-card', 'right:-10px;top:56px;width:178px'], ['sleep-dial', 'left:-10px;top:270px;width:168px', 'round']]],
-    ['training', [['week-card', 'left:-8px;top:110px;width:186px'], ['strain-card', 'right:-6px;top:330px;width:150px']]],
-    ['food-day', [['food-add-card', 'left:-10px;top:250px;width:172px'], ['coach-card', 'right:-12px;top:96px;width:196px']]]];
-  const hero = `<div class="stage" role="img" aria-label="Aurin on a phone: the Today screen with readiness 78, sleep, strain and HRV, then sleep, the training week and food"><div class="glow"></div>
-<div class="phone cyc">${HERO.map(([screen], i) => shot(screen, {lazy: i > 0, cls: i ? '' : 'on'})).join('')}</div>
-${HERO.map(([, parts], g) => parts.map(([name, style, cls = '']) => `<div class="fl hc ${cls}${g ? '' : ' on'}" data-g="${g}" style="${style}">${img(name)}</div>`).join('')).join('\n')}</div>`;
+  // The sample day (DemoData.swift, in English as DemoEnglish.swift has it); every card below draws from it.
+  const DAY = {readiness: 78, history: [65, 69, 60, 82, 67, 71, 62, 53, 75, 80, 63, 54, 77, 78],
+    parts: [['Sleep', '7:12', 'your normal 7:53–9:11 h', '↓ below normal', -4, 432, 473, 551],
+      ['Resting heart rate', '48 bpm', 'your normal 50–54 /min', '↓ below normal', 3, 48, 49.5, 53.5],
+      ['HRV', '64 ms', 'your normal 55–61 ms', '↑ above normal', 9, 64, 55, 61]],
+    stages: [['Deep', '1:23', 83], ['REM', '1:34', 94], ['Light', '4:15', 255], ['Awake', '0:17', 17]],
+    tonight: {need: 510, sleep: 510, inBed: 545, wake: 7 * 60 + 15, goal: 480, strain: 15, debt: 30, naps: 15},
+    strain: 8.4, target: [11.4, 14.4],
+    week: [['Mo', 16.4], ['Tu', 9.9], ['We', 15.4], ['Th', 8.4, 'now'], ['Fr', 10.2, 'plan'], ['Sa', 14.8, 'plan'], ['Su', 4.2, 'plan']],
+    food: {kcal: 1380, target: 2650, carbs: [177, 330], protein: [84, 150], fat: [36, 80]},
+    coach: 'Sleep 7 h 12 min (40 min more than usual). HRV is above normal for the third day. Go all in on strength today, with a carb snack an hour and a half before.'};
+
+  // Readiness parts: your value on a track around your own normal, and the points it brings.
+  const at = (q, lo, hi) => {const w = hi - lo, min = lo - w * 1.3, max = hi + w * 1.3; return Math.max(4, Math.min(96, (q - min) / (max - min) * 100)).toFixed(1);};
+  const row = ([name, value, normal, dir, points, v, lo, hi], short = false) => {
+    const c = points < 0 ? 'var(--rust)' : 'var(--green)';
+    return `<div class="row pre" style="--c:${c}"><div class="a"><b>${short ? name.replace('Resting heart rate', 'Resting HR') : name}</b><span class="n">${short ? value.split(' ')[0] : value}</span></div>
+${short ? '' : `<div class="bb"><span>${normal}</span><span style="color:${c}">${dir}</span></div>`}<div class="rng"><i class="band" style="left:${at(lo, lo, hi)}%;width:${(at(hi, lo, hi) - at(lo, lo, hi)).toFixed(1)}%"></i><i class="dot" style="left:${at(v, lo, hi)}%"></i></div><div class="pts">${points > 0 ? '+' : '−'}${Math.abs(points)}${short ? ' points' : ' readiness points'}</div></div>`;
+  };
+  // The strain gauge, drawn as it ends; the script fills it from 0.
+  const A0 = Math.PI * .75, SPAN = Math.PI * 1.5, ang = v => A0 + SPAN * v / 21;
+  const arc = (r, a, b) => {const p = x => [100 + r * Math.cos(x), 100 + r * Math.sin(x)].map(n => n.toFixed(1)); const [x0, y0] = p(a), [x1, y1] = p(b); return `M${x0} ${y0}A${r} ${r} 0 ${b - a > Math.PI ? 1 : 0} 1 ${x1} ${y1}`;};
+  const gauge = (width, stroke, note) => `<div class="gauge" style="width:${width}px" data-v="${DAY.strain}"><svg viewBox="0 0 200 200" aria-hidden="true"><path class="gt" stroke-width="${stroke}" d="${arc(78, A0, A0 + SPAN)}"/><path class="gz" stroke-width="${stroke}" d="${arc(78, ang(DAY.target[0]), ang(DAY.target[1]))}"/><path class="gv" stroke-width="${stroke}" d="${arc(78, A0, ang(DAY.strain))}"/></svg><div class="mid"><span class="n">${DAY.strain.toFixed(1)}</span><small>${note}</small></div></div>`;
+  const target = `${Math.round(DAY.target[0])}–${Math.round(DAY.target[1])}`;
+
+  // The hero: the phone taps through Today (readiness, last night's sleep, today's strain) and the card
+  // beside it plays what that screen shows.
+  const total = DAY.stages.reduce((s, x) => s + x[2], 0);
+  const stageColor = ['var(--indigo)', 'color-mix(in srgb,var(--indigo) 70%,var(--panel))', 'color-mix(in srgb,var(--indigo) 40%,var(--panel))', 'var(--amber-bar)'];
+  const hero = `<div class="stage" role="img" aria-label="Aurin on a phone: Today with readiness ${DAY.readiness}, sleep 7:12, strain ${DAY.strain} and HRV 64 ms, then what makes up the readiness, last night’s sleep and today’s strain"><div class="glow"></div>
+<div class="phone"><div class="scr" data-hero>${shot('today', {lazy: false, on: true, k: 'today'})}${shot('readiness-parts', {k: 'ready'})}${shot('sleep', {k: 'sleep'})}${shot('strain-target', {k: 'strain'})}<i class="tap"></i></div></div>
+<div class="lc fc on" data-k="today" style="right:-6px;top:250px"><div class="t"><span>How to start today</span></div><p style="font:17px/1.3 Newsreader,Georgia,serif;margin-top:6px">Go all in on strength today, with a carb snack an hour and a half before.</p></div>
+<div class="lc fc" data-k="ready" style="left:-6px;top:200px"><div class="t"><span>What makes up today</span></div>${DAY.parts.map(p => row(p, true)).join('')}</div>
+<div class="lc fc" data-k="sleep" style="right:-6px;top:240px"><div class="t"><span>Sleep stages</span><span class="pill i">score 82</span></div><div class="st">${DAY.stages.map(([name, time, min], i) => `<div style="--c:${stageColor[i]}"><span>${name}</span><i><b style="width:${Math.max(6, Math.round(min / total * 160))}%"></b></i><span class="n">${time}</span></div>`).join('')}</div></div>
+<div class="lc fc" data-k="strain" style="left:-6px;top:240px;width:176px;text-align:center"><div class="t"><span>Strain</span><span class="pill a">moderate</span></div>${gauge(130, 16, `target ${target}`)}</div>
+</div>`;
 
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
   // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
   const services = [
     {id: 'apple', name: 'Apple Health', logo: 'apple-health.png',
-      reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['scale', 'weight']],
-      sends: [['bike', 'workouts'], ['scale', 'weight'], ['meal', 'food'], ['drop', 'water']]},
+      reads: ['sleep', 'HRV', 'workouts', 'heart rate', 'steps', 'weight'], sends: ['workouts', 'weight', 'food', 'water']},
     {id: 'google', name: 'Google Health', logo: 'google-health.png',
-      reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['meal', 'food']],
-      sends: [['meal', 'food'], ['drop', 'drinks'], ['bike', 'workouts, if you allow'], ['scale', 'weight, if you allow']]},
+      reads: ['sleep', 'HRV', 'workouts', 'heart rate', 'steps', 'food'], sends: ['food', 'drinks', 'workouts, if you allow', 'weight, if you allow']},
     {id: 'intervals', name: 'Intervals.icu', logo: 'intervals.svg',
-      reads: [['bolt', 'workouts with power'], ['calendar', 'plan'], ['zones', 'zones'], ['scale', 'weight']],
-      sends: [['calendar', 'planned workouts'], ['flame', 'calorie target'], ['scale', 'weight'], ['training', 'sleep, HRV and daily values']]},
+      reads: ['workouts with power', 'plan', 'zones', 'weight'], sends: ['planned workouts', 'calorie target', 'weight', 'sleep, HRV and daily values']},
     {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: 'ultrahuman.svg', tile: 'dark',
-      reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'VO₂max'], ['thermo', 'temperature']], sends: [], none: 'Nothing, Aurin only reads the ring.'},
+      reads: ['sleep', 'resting heart rate', 'HRV', 'VO₂max', 'temperature'], sends: [], none: 'Nothing, Aurin only reads the ring.'},
     {id: 'whoop', name: 'WHOOP', logo: 'whoop.svg',
-      reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'breathing rate'], ['drop', 'blood oxygen']], sends: [], none: 'Nothing, Aurin only reads WHOOP.'},
+      reads: ['sleep', 'resting heart rate', 'HRV', 'breathing rate', 'blood oxygen'], sends: [], none: 'Nothing, Aurin only reads WHOOP.'},
     {id: 'wahoo', name: 'Wahoo', logo: 'wahoo.png', tile: 'dark word',
-      reads: [['bike', 'finished rides and runs'], ['bolt', 'power and TSS'], ['heart', 'heart rate']],
-      sends: [['calendar', 'planned workouts, to ELEMNT and KICKR']]}];
-  const logo = ({logo, tile = ''}) => `<span class="lt ${tile}"><img src="/site/logos/${logo}" alt=""></span>`;
-  const chips = items => `<div class="chips">${items.map(([name, label], i) => `<span style="--i:${i}">${icon(name)}${label}</span>`).join('')}</div>`;
-  // Two lanes between the service and Aurin: what comes in runs right, what goes back runs left.
-  const lanes = sends => `<svg class="lanes" viewBox="0 0 200 64" preserveAspectRatio="none" aria-hidden="true"><path class="in" d="M4 20H196"/><path class="${sends ? 'out' : 'off'}" d="M196 44H4"/></svg>`;
+      reads: ['finished rides and runs', 'power and TSS', 'heart rate'], sends: ['planned workouts, to ELEMNT and KICKR']}];
+  // The labels that travel along the lines are the short form of the same words.
+  const tag = x => x.split(/,| and | with /)[0].replace('finished ', '').replace('resting heart rate', 'resting HR');
+  const logo = ({logo, tile = ''}, items) => `<span class="lt ${tile}"${items ? ` data-items="${items.map(tag).join('|')}"` : ''}><img src="/site/logos/${logo}" alt=""></span>`;
   const connect = `<section id="propojeni" class="sec"><div class="wrap"><div class="panel conn">
-<div class="eb">Connections</div><h2 class="h2 rv">Works with what you wear.</h2>
-<p class="lead rv">Any watch or ring that saves to Apple Health or Google Health, plus these directly. Pick one to see what goes where.</p>
-<div class="tabs" role="tablist" aria-label="Connected services">${services.map((x, i) => `<button type="button" role="tab" id="tab-${x.id}" aria-controls="svc-${x.id}" aria-selected="${i === 0}">${logo(x)}<span class="vh">${x.name}</span></button>`).join('')}</div>
-${services.map((x, i) => `<div class="svc${i === 0 ? ' on' : ''}" id="svc-${x.id}" role="tabpanel" aria-labelledby="tab-${x.id}">
-<div class="ends">${logo(x)}${lanes(x.sends.length)}<span class="lt aurin">${mark(30)}</span></div>
-<div class="io in"><div class="lbl">${icon('down')}${x.name} → Aurin</div>${chips(x.reads)}</div>
-<div class="io out"><div class="lbl">${icon('up')}Aurin → ${x.name}</div>${x.sends.length ? chips(x.sends) : `<p class="none">${x.none}</p>`}</div>
-</div>`).join('\n')}
+<div class="txt"><div class="eb">Connections</div><h2 class="h2 rv">Works with what you wear.</h2>
+<p class="lead rv">Any watch or ring that saves to Apple Health or Google Health, plus these directly. Here is what goes where.</p>
+<div class="flow" aria-hidden="true"><svg class="lines"></svg><p class="cap">Aurin reads</p>
+<div class="lr from">${services.map(x => logo(x, x.reads)).join('')}</div>
+<div class="hub">${mark(40)}</div>
+<div class="lr to">${services.filter(x => x.sends.length).map(x => logo(x, x.sends)).join('')}</div><p class="cap" style="margin:10px 0 0">Aurin sends back</p></div></div>
+<div class="svcs">${services.map(x => `<div class="svc" data-svc="${x.id}">${logo(x)}<div><b>${x.name}</b><p><em class="i">↓ In:</em> ${x.reads.join(', ')}</p><p>${x.sends.length ? `<em class="o">↑ Out:</em> ${x.sends.join(', ')}` : `<span class="none">${x.none}</span>`}</p></div></div>`).join('\n')}</div>
 </div></div></section>`;
+
+  // Readiness: the score, what makes it up and the last two weeks.
+  const readiness = `<div class="lc flat"><div style="display:flex;align-items:flex-end;gap:10px"><span class="n big" data-n="${DAY.readiness}">${DAY.readiness}</span><span class="pill g" style="margin-bottom:10px">high</span></div>
+<div class="t caps" style="margin-top:18px"><span>What makes up today’s score</span></div>${DAY.parts.map(p => row(p)).join('')}
+<div class="t caps" style="margin-top:12px"><span>Last 14 days</span><span>average ${Math.round(DAY.history.reduce((s, v) => s + v, 0) / DAY.history.length)}</span></div>
+<div class="bars pre">${DAY.history.map(v => `<i class="${v >= 67 ? 'hi' : ''}" style="height:${Math.round(v * .85)}%"></i>`).join('')}</div></div>`;
+
+  // Sleep: the app's dial at tonight's plan, which the script lets you drag.
+  const T = DAY.tonight, C = 150, R = 132, wrapM = m => ((m % 1440) + 1440) % 1440;
+  const pt = (m, r = R) => {const a = m / 1440 * 2 * Math.PI - Math.PI / 2; return [C + r * Math.cos(a), C + r * Math.sin(a)].map(n => +n.toFixed(1));};
+  const clock = m => {m = wrapM(m); const h = Math.floor(m / 60); return `${h % 12 || 12}:${String(m % 60).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;};
+  const hm = m => `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}`;
+  const bed = wrapM(T.wake - T.inBed), [bx, by] = pt(bed), [wx, wy] = pt(T.wake), usual = pt(23 * 60 + 48, R + 17);
+  const sleep = `<div class="dial" data-eff="${(T.sleep / T.inBed).toFixed(4)}" data-wake="${T.wake}" data-sleep="${T.sleep}"><svg viewBox="0 0 300 300">
+<circle cx="150" cy="150" r="${R}" fill="none" stroke="var(--track)" stroke-width="24"/>
+<path class="night" fill="none" stroke="var(--indigo)" stroke-width="24" stroke-linecap="round" d="M${bx} ${by}A${R} ${R} 0 ${T.inBed > 720 ? 1 : 0} 1 ${wx} ${wy}"/>
+${[0, 3, 6, 9, 12, 15, 18, 21].map(h => {const [x, y] = pt(h * 60, R - 26); return `<text x="${x}" y="${(y + 4).toFixed(1)}" text-anchor="middle">${h}</text>`;}).join('')}
+<circle cx="${usual[0]}" cy="${usual[1]}" r="3" fill="var(--muted)"/>
+<g class="hd moon" role="slider" tabindex="0" aria-label="Bedtime" aria-valuetext="${clock(bed)}" transform="translate(${bx} ${by})"><circle r="16"/><path d="M-4.5-6a6.5 6.5 0 1 0 8.5 8.5A5.5 5.5 0 0 1-4.5-6Z" fill="var(--indigo)"/></g>
+<g class="hd sun" role="slider" tabindex="0" aria-label="Wake up" aria-valuetext="${clock(T.wake)}" transform="translate(${wx} ${wy})"><circle r="16"/><circle r="4" fill="var(--amber)"/><path d="M0-9v2M0 7v2M-9 0h2M7 0h2M-6.4-6.4l1.4 1.4M5 5l1.4 1.4M-6.4 6.4l1.4-1.4M5-5l1.4-1.4" stroke="var(--amber)" stroke-width="2" stroke-linecap="round"/></g>
+</svg><div class="mid"><span class="n">${hm(T.sleep)}</span><small>sleep</small></div></div>
+<div class="two"><div class="lc flat"><div class="t"><span>Bedtime</span></div><div class="n tbed">${clock(bed)}</div></div><div class="lc flat"><div class="t"><span>Wake up</span></div><div class="n twake">${clock(T.wake)}</div></div></div>
+<div class="lv" role="group" aria-label="Tonight I want">${[['Catch up', T.need], ['As usual', T.goal], ['At least', 420]].map(([name, m]) => `<button type="button" data-m="${m}" aria-pressed="${m === T.sleep}">${name}<small>${hm(m)}</small></button>`).join('')}</div>
+<div class="lc flat why"><div class="t caps" style="margin-bottom:4px"><span>Why ${hm(T.need)}</span></div><div><span>Your goal</span><span class="goal">${hm(T.goal)}</span></div><div><span>Today’s strain</span><span>+${T.strain} min</span></div><div><span>Sleep debt</span><span>+${T.debt} min</span></div><div><span>Nap</span><span class="less">−${T.naps} min</span></div></div>
+<div class="lc flat alarm"><div><b style="font-weight:500">Weekdays</b><small>Monday to Friday</small></div><button type="button" class="tog" role="switch" aria-checked="false" aria-label="Alarm on weekdays"></button></div>`;
+
+  // Strain: today's run fills the gauge toward the target, then the planned workout and the week.
+  const peak = Math.max(...DAY.week.map(d => d[1]));
+  const strain = `<div class="lc flat" style="text-align:center">${gauge(200, 14, `target ${target} · of 21`)}
+<div class="act pre"><span class="ic">${icon('steps')}</span><div style="text-align:left"><b>Morning run</b><small>7:30 AM · 42 min · 48 TSS</small></div><span class="n">+${DAY.strain}</span></div>
+<div class="act pre"><span class="ic p">${icon('gym')}</span><div style="text-align:left"><b>Strength, full body</b><small>Planned · 5:30 PM · 45 min</small></div><span class="pill a">to target</span></div></div>
+<div id="trenink" class="lc flat" style="margin-top:10px"><div class="t caps"><span>This week</span><span>dashed is planned</span></div>
+<div class="wk pre">${DAY.week.map(([d, v, k = '']) => `<div class="${k}"><span class="n">${k === 'plan' ? Math.round(v) : v}</span><i style="height:${Math.round(v / peak * 80)}px"></i><span>${d}</span></div>`).join('')}</div></div>`;
+
+  // The gym, as you scroll: pick a workout, Aurin builds it, start, tick off sets, rest, done.
+  const GYM = [['builder', 'Say what you want', 'Upper body, legs or full body, and how long you have.'],
+    ['gym-day', 'Aurin builds it', 'Legs rested since Monday, so squats at a moderate load.'],
+    ['training-mode', 'Start when you’re ready', 'Your weights and reps are filled in.'],
+    ['training-set', 'Tick off each set', 'One tap per set, warm-ups included.'],
+    ['training-rest', 'Rest is timed for you', 'It keeps counting on your lock screen.'],
+    ['training-done', 'Done and counted', 'Into your strain, your muscles and your week.']];
+  const gym = `<section id="posilovna" class="sec gym"><div class="wrap"><div class="panel" style="--t:linear-gradient(180deg,var(--glow-training),var(--sand));--c:var(--amber)">
+<div class="txt"><div class="eb">Gym</div><h2 class="h2 rv">A workout made for&nbsp;today.</h2><p class="lead rv">From your rested muscles, your time and your gym, logged set by set.</p></div>
+<div class="walk"><div class="pin"><div class="phone" aria-hidden="true"><div class="scr">${GYM.map(([name], i) => shot(name, {on: !i})).join('')}<i class="tap"></i></div>
+<div class="lc timer"><div class="t" style="justify-content:center"><span>Rest</span></div><svg viewBox="0 0 100 100"><circle class="bgc" cx="50" cy="50" r="42"/><circle class="fgc" cx="50" cy="50" r="42" transform="rotate(-90 50 50)" stroke-dasharray="264" stroke-dashoffset="0"/></svg><span class="n">1:30</span><small>next: Squat · set 3</small></div></div>
+<div class="side"><div class="dots" aria-hidden="true">${GYM.map((x, i) => `<i${i ? '' : ' class="on"'}></i>`).join('')}</div>
+<ol class="steps">${GYM.map(([, title, text], i) => `<li${i ? '' : ' class="on"'}><b>${title}</b>${text}</li>`).join('')}</ol></div></div></div>
+</div></div></section>`;
+
+  // Nutrition: what the day adds up to and what the coach says about the next meal.
+  const F = DAY.food, macro = (name, [v, of], color) => `<div style="--c:${color}">${name}<div><span class="n" data-n="${v}">${v}</span> / ${of} g</div><i><b style="--w:${Math.round(v / of * 100)}%"></b></i></div>`;
+  const nutrition = `<div class="lc flat"><div class="kc"><span class="n" data-n="${F.kcal}">${F.kcal.toLocaleString('en')}</span><span>of ${F.target.toLocaleString('en')}<br>kcal</span></div>
+<div class="mac pre">${macro('Carbs', F.carbs, 'var(--carbs)')}${macro('Protein', F.protein, 'var(--protein)')}${macro('Fat', F.fat, 'var(--fat)')}</div>
+<div class="meal pre"><span class="ic">${icon('camera')}</span><div><b>Oatmeal with yogurt</b><small>Breakfast · 7:30 AM</small></div><span class="n">430</span></div>
+<div class="say"><small>${icon('spark')} Coach</small><p>Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.</p></div></div>`;
+
+  // The coach: a suggestion from the app's coach screen, and its answer from the sample day.
+  const coach = `<div class="chat" aria-label="A conversation with the coach"><div class="top">Coach</div>
+<div class="ask" aria-hidden="true"><h3>What would you like to ask?</h3><span>How should I train today?</span><span>I’m not feeling well, adjust my week.</span><span>Why is my readiness low?</span></div>
+<div class="msgs"><div class="me">How should I train today?</div><div class="ai">${DAY.coach}</div>
+<div class="wo"><small>TODAY · 5:30 PM</small><b>Strength, full body</b><span>45 min · Squat, Bench press, Rows</span></div></div>
+<div class="inp" aria-hidden="true"><span>Message the coach…</span><i></i></div></div>`;
 
   // Muscles: the figure from the front and the back (rendered ahead by scripts/render-muscles-site.mjs),
   // with the sample day's tired and recovering muscles (DemoData.muscles), in English.
@@ -473,13 +762,13 @@ ${MUSCLES.map(bubble).join('\n')}</div>
 </div></div></section>`;
 
   const MORE = [['check', 'var(--green)', 'Journal', 'Tick off a sauna, alcohol or a late meal and see what each does to your mornings.'],
-    ['moon', 'var(--indigo)', 'Alarm', 'Set your wake-up from your sleep plan, right in the iPhone alarm.'],
     ['drop', 'var(--blue)', 'Drinks', 'Water, coffee and tea in one tap.'],
     ['barcode', 'var(--amber)', 'Barcode', 'Scan a packet and log it in seconds.'],
     ['flame', 'var(--carbs)', 'Records', 'Your best lifts, kept for every exercise.'],
     ['training', 'var(--button)', 'Lock screen', 'The rest timer stays on your lock screen and shows what comes next.'],
     ['calendar', 'var(--rust)', 'Cycle', 'Your cycle day, its phase and the next period.'],
-    ['today', 'var(--logo-recovery)', 'Widgets', 'Readiness, sleep, food and drinks on your home screen.']];
+    ['today', 'var(--logo-recovery)', 'Widgets', 'Readiness, sleep, food and drinks on your home screen.'],
+    ['heart', 'var(--indigo)', 'Trends', 'HRV, resting heart rate, VO₂max and weight over weeks and months.']];
 
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
@@ -502,41 +791,30 @@ ${MUSCLES.map(bubble).join('\n')}</div>
 <h1>Train for how you feel today.</h1>
 <p class="lead">Aurin reads your sleep, HRV and workouts and turns them into one number, one plan and one coach every morning.</p>
 ${store('top', 'Join the waitlist')}
-<p class="small">Free to start. Works with the watch or ring you already wear.</p>
+<p class="small">Works with the watch or ring you already wear.</p>
 ${hero}
 </div></section>
 
 ${connect}
 
-<section id="pripravenost" class="start"><div class="wrap">
-<h2 class="h2 rv">Start every day knowing where you stand.</h2>
-<div class="bento">
-<div class="tile w2 rv" style="--t:var(--glow-today);--c:var(--green)"><div class="eb">Readiness</div><h3>One number every morning.</h3><p>HRV, resting heart rate and sleep, weighed against your own normal.</p>
-<div class="big"><div class="num" data-n="78">78</div><div class="cut">${img('ready-card')}</div></div></div>
-<div class="tile rv" style="--t:var(--glow-health);--c:var(--indigo);--d:.1s"><div class="eb">Sleep</div><h3>Know what you need tonight.</h3><p>Your need grows with a hard day and with the debt from the week.</p><div class="cut">${img('sleep-need-card')}</div><div class="pad"></div></div>
-<div id="zatez" class="tile rv" style="--t:var(--glow-training);--c:var(--amber);--d:.2s"><div class="eb">Strain</div><h3>A target for today.</h3><p>Where today’s strain should land, from your readiness, sleep debt and plan.</p><div class="cut">${img('strain-card')}</div><div class="pad"></div></div>
-<div id="trenink" class="tile w2 rv" style="--t:color-mix(in srgb,var(--glow-today) 60%,#fff);--c:var(--green)"><div class="eb">Training</div><h3>A plan that adapts.</h3><p>An activity for every day, picked for how you recovered. Follow a plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu.</p><div class="cut">${img('week-card')}</div><div class="pad"></div></div>
-<div class="tile w2 rv" style="--t:var(--glow-food);--c:var(--coffee);--d:.1s"><div class="eb">Nutrition</div><h3>Your target moves with your training.</h3><p>Train harder and you get more to eat. The coach says what that means for your next meal.</p><div class="cut">${img('food-top')}</div><div class="pad"></div></div>
-</div></div></section>
+${panel('pripravenost', 'var(--glow-today)', 'var(--green)', 'Readiness', 'One number every&nbsp;morning.',
+  'Your sleep, resting heart rate and HRV, each against your own normal, added up into how ready you are today.', readiness)}
 
-${panel('spanek', 'linear-gradient(180deg,var(--glow-health),var(--lilac))', 'var(--indigo)', 'Sleep', 'Every night, in&nbsp;detail.',
-  'Deep, REM and light sleep from any watch or ring, how much you need tonight and the debt from the week, and how your HRV and resting heart rate compare with your own normal.',
-  phone('sleep', [['sleep-need-card', 'right:-12px;top:40px;width:176px'], ['ready-card', 'left:-10px;top:250px;width:172px']]))}
+${panel('spanek', 'linear-gradient(180deg,var(--glow-health),var(--lilac))', 'var(--indigo)', 'Sleep and alarm', 'Bedtime that fits&nbsp;tomorrow.',
+  'Aurin works out how much sleep you need tonight from a hard day and the debt from the week. Drag the sun to when you want to get up and the bedtime follows; the alarm can ring then every weekday.', sleep)}
 
-${panel('posilovna', 'linear-gradient(180deg,var(--glow-training),var(--sand))', 'var(--amber)', 'Gym', 'A workout made for&nbsp;today.',
-  'From your rested muscles, your time and your gym. Then log every set in a tap, with your weights from last time and a rest timer.',
-  phone('training-set', [['build-card', 'left:-10px;top:40px;width:168px'], ['rest-card', 'right:-14px;top:250px;width:150px', 'round']]),
-  '<div class="chips rv"><span>30 to 120 min</span><span>Full body · Upper · Legs</span><span>Only your equipment</span></div>', 'rezim')}
+${panel('zatez', 'linear-gradient(180deg,var(--glow-training),var(--amber-soft))', 'var(--amber)', 'Strain and training', 'See the load add&nbsp;up.',
+  'Every run, ride and gym session counts toward today’s strain, with a target from your readiness, sleep debt and plan. The week shows what’s done and what’s planned, and it syncs with Intervals.icu.', strain)}
+
+${gym}
 
 ${muscles}
 
-${panel('vyziva', 'linear-gradient(180deg,var(--glow-food),var(--amber-soft))', 'var(--coffee)', 'Nutrition', 'Snap, scan or&nbsp;search.',
-  'Take a photo of your plate, scan a barcode or search, and log drinks with one tap.',
-  phone('food-day', [['food-add-card', 'left:-10px;top:236px;width:176px']]))}
+${panel('vyziva', 'linear-gradient(180deg,var(--glow-food),var(--amber-soft))', 'var(--coffee)', 'Nutrition', 'Eat for the day you’re&nbsp;having.',
+  'Take a photo of your plate, scan a barcode or search, and log drinks in a tap. Train harder and your target grows with it.', nutrition)}
 
 ${panel('kouc', 'var(--button)', 'var(--coach-mint)', 'AI coach', 'Just ask. It knows your&nbsp;data.',
-  'Ask how to train today, how to adjust your week or what to eat before a workout. It remembers what you tell it, and you can see and edit what it remembers.',
-  phone('coach-ask', [['coach-card', 'right:-12px;top:330px;width:200px']]), '', 'dark')}
+  'Ask how to train today, how to adjust your week or what to eat before a workout. It remembers what you tell it, and you can see and edit what it remembers.', coach, 'dark')}
 
 <section class="more"><div class="wrap">
 <h2 class="h2 rv">And there’s more.</h2>
