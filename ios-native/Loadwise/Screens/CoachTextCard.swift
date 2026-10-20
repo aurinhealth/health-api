@@ -5,6 +5,19 @@ import SwiftUI
 // once a day, the numbers it leaned on as chips, and "Proč?" with the data it
 // used. Without AI (no consent, no subscription, the AI failed) the screen's
 // rule-based text shows in the same card; without one the card is not shown.
+// The chevron folds it to one line, per screen; Nastavení → Kouč na obrazovkách
+// turns it off on a screen, which then does not ask for the text at all.
+
+/// Where the coach's card shows (Nastavení → Kouč na obrazovkách). Živiny follow Jídlo.
+enum CoachTextPlaces {
+    static let screens = [("today", "Dnes"), ("training", "Trénink"), ("food", "Jídlo")]
+
+    static func shownKey(_ screen: String) -> String {
+        "coach-text-shown-" + (screen == "nutrients" ? "food" : screen)
+    }
+
+    static func foldedKey(_ screen: String) -> String { "coach-text-folded-" + screen }
+}
 
 /// The answers of this launch, so switching tabs does not ask again.
 @MainActor
@@ -20,17 +33,30 @@ struct CoachTextCard: View {
     var fallbackAdvice: String? = nil
     /// Only today's screen asks for the AI text; an earlier day keeps its rule-based one.
     var live = true
-    /// Today's recovery tip under the sentence (RecoveryTipRows); it shows the card on its own too.
+    /// Today's recovery tip under the sentence (RecoveryTipRows); it shows the card on its own too,
+    /// also when the coach is off on Dnes.
     var tip: AnyView? = nil
 
     @State private var loaded: CoachText?
     @State private var showWhy = false
+    @AppStorage private var shown: Bool
+    @AppStorage private var folded: Bool
 
-    private var ai: CoachText? { live && (loaded?.isAI ?? false) ? loaded : nil }
-    private var text: String? { ai?.text ?? fallbackText?.nilIfBlank }
-    private var advice: String? { ai != nil ? ai?.advice?.nilIfBlank : fallbackAdvice?.nilIfBlank }
-    private var chips: [String] { live ? (loaded?.chips ?? []) : [] }
-    private var basis: [CoachText.Basis] { live ? (loaded?.basis ?? []) : [] }
+    init(screen: String, fallbackText: String? = nil, fallbackAdvice: String? = nil, live: Bool = true, tip: AnyView? = nil) {
+        self.screen = screen
+        self.fallbackText = fallbackText
+        self.fallbackAdvice = fallbackAdvice
+        self.live = live
+        self.tip = tip
+        self._shown = AppStorage(wrappedValue: true, CoachTextPlaces.shownKey(screen))
+        self._folded = AppStorage(wrappedValue: false, CoachTextPlaces.foldedKey(screen))
+    }
+
+    private var ai: CoachText? { shown && live && (loaded?.isAI ?? false) ? loaded : nil }
+    private var text: String? { shown ? ai?.text ?? fallbackText?.nilIfBlank : nil }
+    private var advice: String? { !shown ? nil : ai != nil ? ai?.advice?.nilIfBlank : fallbackAdvice?.nilIfBlank }
+    private var chips: [String] { shown && live && !folded ? (loaded?.chips ?? []) : [] }
+    private var basis: [CoachText.Basis] { shown && live && !folded ? (loaded?.basis ?? []) : [] }
 
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
@@ -39,27 +65,40 @@ struct CoachTextCard: View {
                 card
             }
         }
-        .task(id: live ? memoryKey + "|" + String(model.dataRevision) : "") { await load() }
+        .task(id: live && shown ? memoryKey + "|" + String(model.dataRevision) : "") { await load() }
     }
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "sparkles").font(.system(size: 13, weight: .semibold))
-                Text("Kouč").font(Typo.bodyStrong)
-                Spacer(minLength: 8)
-                if let time = ai?.time {
-                    Text(verbatim: L10n.tr("dnes") + " " + ClockText.format(time)).font(Typo.caption).foregroundStyle(Palette.faint)
-                }
-            }
-            .foregroundStyle(Palette.indigo)
-
             if text != nil || advice != nil {
-                sentence
-                    .font(Typo.sentence(21))
-                    .foregroundStyle(Palette.ink)
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
+                Button { withAnimation(.snappy) { folded.toggle() } } label: {
+                    header(chevron: true).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                // Not "Kouč": that is the button that opens the chat.
+                .accessibilityLabel(Text(verbatim: L10n.tr("Rada kouče")))
+                .accessibilityIdentifier("coach-text.fold")
+                .accessibilityHint(Text(verbatim: L10n.tr(folded ? "Rozbalit" : "Sbalit")))
+
+                if folded {
+                    Button { withAnimation(.snappy) { folded = false } } label: {
+                        sentence
+                            .font(Typo.sentence(17))
+                            .foregroundStyle(Palette.ink)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    sentence
+                        .font(Typo.sentence(21))
+                        .foregroundStyle(Palette.ink)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                header(chevron: false)
             }
 
             if !chips.isEmpty {
@@ -129,11 +168,28 @@ struct CoachTextCard: View {
         .animation(.easeInOut(duration: 0.25), value: ai?.text)
     }
 
+    /// "Kouč", the time the AI wrote it and the chevron that folds the text.
+    private func header(chevron: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "sparkles").font(.system(size: 13, weight: .semibold))
+            Text("Kouč").font(Typo.bodyStrong)
+            Spacer(minLength: 8)
+            if let time = ai?.time {
+                Text(verbatim: L10n.tr("dnes") + " " + ClockText.format(time)).font(Typo.caption).foregroundStyle(Palette.faint)
+            }
+            if chevron {
+                Image(systemName: "chevron.up").font(.footnote.weight(.semibold)).foregroundStyle(Palette.muted)
+                    .rotationEffect(.degrees(folded ? 180 : 0))
+            }
+        }
+        .foregroundStyle(Palette.indigo)
+    }
+
     /// The text, then the advice in green italics.
     private var sentence: Text {
         var out = Text(verbatim: text ?? "")
         if let advice {
-            out = out + Text(verbatim: text == nil ? "" : " ") + Text(verbatim: advice).font(Typo.sentenceItalic(21)).foregroundColor(Palette.green)
+            out = out + Text(verbatim: text == nil ? "" : " ") + Text(verbatim: advice).font(Typo.sentenceItalic(folded ? 17 : 21)).foregroundColor(Palette.green)
         }
         return out
     }
@@ -141,7 +197,7 @@ struct CoachTextCard: View {
     private var memoryKey: String { screen + "|" + AppModel.localDate(Date()) }
 
     private func load() async {
-        guard live, !model.demo else { return }
+        guard live, shown, !model.demo else { return }
         let key = memoryKey
         if let kept = CoachTextMemory.values[key] {
             loaded = kept.text
