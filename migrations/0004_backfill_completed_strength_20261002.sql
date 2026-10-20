@@ -1,3 +1,4 @@
+-- Applied once on the live database (2026-10-02); the owner's address is not kept here.
 -- The owner confirmed completing this workout with the prescribed loads.
 -- Preserve explicit actuals (including zero), incomplete sets, other dates,
 -- and every other user's data. Only single fixed rep counts are inferable.
@@ -12,7 +13,7 @@ SET actual_kg = COALESCE(actual_kg, planned_kg),
       ELSE actual_reps
     END,
     updated_at = CURRENT_TIMESTAMP
-WHERE user_id = (SELECT id FROM users WHERE email = 'chelseafc.czsk@gmail.com')
+WHERE user_id = (SELECT id FROM users WHERE email = 'owner@example.com')
   AND workout_date = '2026-10-02'
   AND completed = 1
   AND type IN ('WORK', 'WARMUP')

@@ -38,7 +38,7 @@ test("one-time repair is limited to the owner's completed workout and preserves 
   const raw = createD1(), db = scopedDb(raw, 1);
   try {
     await ensureStrengthTable(db);
-    raw.sqlite.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT); INSERT INTO users VALUES (1, 'chelseafc.czsk@gmail.com'), (2, 'other@example.com')");
+    raw.sqlite.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT); INSERT INTO users VALUES (1, 'owner@example.com'), (2, 'other@example.com')");
     const insert = raw.sqlite.prepare("INSERT INTO strength_sets(user_id,workout_date,plan_row,type,exercise,planned_kg,planned_reps,actual_kg,actual_reps,completed,source_key) VALUES (?,?,?,?, 'DB curl', 12.5,?,?,?,?,?)");
     for (const [i, args] of [
       [1, date, "WORK", "10", null, null, 1],
