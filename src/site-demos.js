@@ -54,12 +54,12 @@ const merge = html => html.replace(/ data-n="([^"]*)" data-n="/g, ' data-n="$1;'
 
 // The service logos (the app's own files in public/site/logos/), as the app's IntegrationIcon draws them.
 const LOGO = {
-  apple: '<img src="/site/logos/apple-health.png" alt="">',
-  google: '<img src="/site/logos/google-health.png" alt="" class="pad">',
-  intervals: '<img src="/site/logos/intervals.svg" alt="">',
-  ultrahuman: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt=""></span>',
-  whoop: '<img src="/site/logos/whoop.svg" alt="">',
-  wahoo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt=""></span>',
+  apple: '<img src="/site/logos/apple-health.png" alt="" width="15" height="15">',
+  google: '<img src="/site/logos/google-health.png" alt="" width="15" height="15" class="pad">',
+  intervals: '<img src="/site/logos/intervals.svg" alt="" width="15" height="15">',
+  ultrahuman: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="15" height="15"></span>',
+  whoop: '<img src="/site/logos/whoop.svg" alt="" width="15" height="15">',
+  wahoo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="15" height="15"></span>',
 };
 const logo = id => `<span class="lg">${LOGO[id]}</span>`;
 // The Aurin mark, as the app's own source tile for what it recorded.
@@ -72,7 +72,7 @@ const STATUS = '<div class="sb"><span>9:41</span><span class="sbi"><svg viewBox=
 // The night: stages in the app's indigo shades, the hypnogram drawing itself, the length counting up.
 const sleepNight = `<div class="dm pad">
 <div class="sl">Sleep · Thursday night</div>
-<div class="row base"><span class="num big"${n(0, 432, 150, 1300, 'hmc')}>7:12</span><span class="pill ind"${at('1300')}>score 82</span></div>
+<div class="row base"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="pill ind"${at('1300')}>score 82</span></div>
 <svg class="hyp" viewBox="0 0 340 70" aria-hidden="true"><path pathLength="1"${at('300')} d="M2 20 H22 V34 H48 V58 H86 V34 H110 V8 H126 V34 H150 V58 H176 V34 H204 V8 H226 V34 H252 V46 H262 V34 H286 V8 H312 V20 H338"/></svg>
 <div class="stg">${[['Deep', '1:23', 19, 'd'], ['REM', '1:34', 22, 'r'], ['Light', '4:15', 59, 'l'], ['Awake', '0:17', 4, 'a']].map(([k, v, p, c], i) => `<div class="sr"><span>${k}</span><i class="bar"><b class="${c}" style="--w:${p}%"${at(String(900 + i * 220))}></b></i><span class="num">${v}</span><span class="mut">${p} %</span></div>`).join('')}</div>
 </div>`;
@@ -283,7 +283,7 @@ const foodAdd = `<div class="dm pad fa">
 <div class="srch">${ic('search')}<span class="mut">Search foods</span></div>
 <div class="tiles6">${[['barcode', 'Scan'], ['camera', 'Photo'], ['photo', 'From library'], ['label', 'Label'], ['pencil', 'Manual'], ['spark', 'AI lookup']].map(([i, t], k) => `<span${k ? '' : at('500:press 900-press')}>${ic(i)}${t}</span>`).join('')}</div>
 <div class="seg2"><span class="on">Foods</span><span>Recipes</span></div>
-${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105], ['Rice with chicken', '1 serving', 640]].map(([k, d, v]) => `<div class="li"><div><b>${k}</b><span class="mut s">${d}</span></div><span class="num">${v}<small>kcal</small></span></div>`).join('')}
+${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105]].map(([k, d, v]) => `<div class="li"><div><b>${k}</b><span class="mut s">${d}</span></div><span class="num">${v}<small>kcal</small></span></div>`).join('')}
 <div class="scn"${at('900:in')}>
 <div class="row sp"><span class="cb">${ic('x')}</span><span class="sl0">BARCODE</span><span class="cb">${ic('torch')}</span></div>
 <div class="finder"${at('900:in 2900-in')}><div class="cam"><div class="bc"></div><i class="scan"></i><span class="cr tl"></span><span class="cr tr"></span><span class="cr bl"></span><span class="cr br"></span></div><p class="sent aim">Point at the barcode on the package</p></div>
@@ -293,7 +293,7 @@ ${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105], 
 <div class="mut s">Hollandia · EAN 8594001234567</div>
 <div class="nc">${[['kcal', 133, 200], ['protein', 12.6, 18.9], ['carbs', 5.6, 8.4], ['fat', 7, 10.5]].map(([k, a, b]) => `<div><span class="num md"${n(a, b, 4500, 700, 'i')}>${Math.round(b)}</span><span class="mut s">${k === 'kcal' ? 'kcal' : k + ' g'}</span></div>`).join('')}</div>
 <div class="wf"><b data-tx="0|1;4500|1½">1½</b><i></i><span>serving (140 g)</span>${ic('chevd')}</div>
-<div class="wheel"><div class="col w"><ul>${['', '0', '1', '2', '3'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col p"><ul${at('4500:on')}>${['', '', '–', '¼', '⅓', '½', '⅔'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col u"><ul>${['', 'g', 'serving (140 g)', '', ''].map(x => `<li>${x}</li>`).join('')}</ul></div></div>
+<div class="wheel"><div class="col w"><ul>${['0', '1', '2'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col p"><ul${at('4500:on')}>${['', '–', '¼', '⅓', '½', '⅔'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col u"><ul>${['g', 'serving (140 g)', ''].map(x => `<li>${x}</li>`).join('')}</ul></div></div>
 <div class="mut s">1 serving = 140 g · 133 kcal</div>
 <span class="meal">Lunch${ic('updown')}</span>
 <div class="btn dark"${at('5800:press 6100-press 6100:ok')}><span data-tx="0|Add to lunch · 1 serving;4500|Add to lunch · 1½ serving;6100|✓ Added to lunch">Add to lunch · 1½ serving</span></div>
@@ -544,7 +544,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .mb{display:block;height:3px;margin-top:4px;border-radius:3px;background:var(--track);overflow:hidden}.mb b{display:block;height:100%;width:var(--w)}
 .coach{margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--bg)}.ch4{display:flex;align-items:center;gap:6px;color:var(--indigo);font-weight:500;font-size:13.5px}
 .coach .sent{margin-top:4px;font-size:17px;line-height:1.3;min-height:3.9em}
-.fa{position:relative;min-height:588px;overflow:hidden}
+.fa{position:relative;min-height:524px;overflow:hidden}
 .meal{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:13px;font-weight:600}.meal .di{font-size:10px}
 .srch{display:flex;align-items:center;gap:10px;height:44px;margin-top:12px;border-bottom:1px solid color-mix(in srgb,var(--text) 25%,transparent);font-size:17px}.srch .di{font-size:18px;color:var(--muted)}
 .tiles6{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
@@ -566,8 +566,8 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .sent.h3{font-size:24px;line-height:1.1;margin-top:4px}
 .nc{display:grid;grid-template-columns:repeat(4,1fr);margin:12px 0 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.nc>div{display:flex;flex-direction:column;padding:8px 0}
 .wf{display:flex;align-items:center;height:44px;margin-top:14px;border-radius:99px;background:var(--track);font-size:15px;font-weight:500}.wf b{width:96px;padding-right:14px;text-align:right;font-size:17px}.wf i{width:2px;height:100%;background:var(--panel)}.wf span{flex:1;padding:0 14px}.wf .di{margin-right:14px;color:var(--muted)}
-.wheel{position:relative;display:flex;height:160px;margin-top:8px;overflow:hidden;-webkit-mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent);mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent)}
-.wheel::before{content:"";position:absolute;left:0;right:0;top:64px;height:32px;border-radius:9px;background:var(--track)}
+.wheel{position:relative;display:flex;height:96px;margin-top:8px;overflow:hidden;-webkit-mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent)}
+.wheel::before{content:"";position:absolute;left:0;right:0;top:32px;height:32px;border-radius:9px;background:var(--track)}
 .wheel .col{position:relative;flex:none;width:90px;text-align:center}.wheel .col.p{width:56px}.wheel .col.u{flex:1;padding-left:14px;text-align:left}
 .wheel ul{margin:0;padding:0;list-style:none;transition:transform 1s cubic-bezier(.16,1,.3,1)}.wheel li{height:32px;font-size:17px;font-weight:600;line-height:32px;white-space:nowrap}
 .js .wheel ul[data-at]{opacity:1!important;transform:none!important}.wheel ul.on,.js .wheel ul.on{transform:translateY(-96px)!important}
