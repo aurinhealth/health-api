@@ -85,6 +85,8 @@ struct GymDay: Decodable, Equatable {
     let date: String?
     var values: [[JSONValue]]
     let cancelled: Bool?
+    /// "partial": the server couldn't read the day (src/routes-gym.js), not an empty one.
+    var status: String? = nil
 
     static let columns = ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie", "Strana", "Intenzita"]
     static let firstSetRow = 7

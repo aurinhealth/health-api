@@ -270,8 +270,13 @@ struct AddFoodSheet: View {
                 .contextMenu {
                     Button(role: .destructive) {
                         Task {
-                            try? await model.api.deleteRecipe(id: recipe.id)
-                            recipes.removeAll { $0.id == recipe.id }
+                            // Off the list only once the server deleted it, else it'd come back later.
+                            do {
+                                try await model.api.deleteRecipe(id: recipe.id)
+                                recipes.removeAll { $0.id == recipe.id }
+                            } catch {
+                                model.notice = L10n.f("Recept se nepodařilo smazat: %@", error.localizedDescription)
+                            }
                         }
                     } label: { Label("Smazat recept", systemImage: "trash") }
                 }

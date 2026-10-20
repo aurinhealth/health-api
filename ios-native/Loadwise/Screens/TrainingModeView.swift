@@ -979,14 +979,16 @@ struct TrainingModeView: View {
         startAtFirstOpen()
         // "Přejít na cvik": that one, whatever is left before it.
         if let focus, let at = edited.exercises.firstIndex(where: { $0.id == focus }) { index = at }
-        await loadMuscles(edited)
-        guard !model.demo else { return }
+        // Saved before the muscles load: a set ticked while they load is saved
+        // after this sheet, never under it.
+        guard !model.demo else { return await loadMuscles(edited) }
         do {
             try await model.saveGym(edited, date: date)
             error = nil
         } catch {
             self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
         }
+        await loadMuscles(edited)
     }
 
     /// An exercise added on the way (or the first one of an empty workout),
@@ -1002,14 +1004,14 @@ struct TrainingModeView: View {
         restEnd = nil
         // Straight to the new exercise when nothing else is left.
         if allDone { index = next.exercises.count - 1 }
-        await loadMuscles(next)
-        guard !model.demo else { return }
+        guard !model.demo else { return await loadMuscles(next) }
         do {
             try await model.saveGym(next, date: date)
             error = nil
         } catch {
             self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
         }
+        await loadMuscles(next)
     }
 
     /// "Začít trénink": the clock, calories and heart rate (a workout recorded

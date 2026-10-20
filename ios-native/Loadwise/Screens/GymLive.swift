@@ -54,6 +54,18 @@ struct LiveGymView: View {
                         restBar(until: restEnd).padding(.horizontal, 16).padding(.bottom, 12)
                     }
                 }
+            } else if let error {
+                // The day didn't load: nothing is saved over it, the way back or again.
+                VStack(spacing: 12) {
+                    Text(error).font(Typo.small).foregroundStyle(Palette.rust).multilineTextAlignment(.center)
+                    SecondaryButton(title: "Zkusit znovu") { self.error = nil; loaded = false; Task { await load() } }
+                    Button { dismiss() } label: {
+                        Text("Zpět").font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(maxWidth: .infinity).frame(height: 46)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -321,7 +333,14 @@ struct LiveGymView: View {
         guard !loaded else { return }
         loaded = true
         var sheet = GymDay(date: date, values: [], cancelled: nil)
-        if !model.demo, let stored = try? await model.gymDay(date: date) { sheet = stored }
+        // A day that didn't load is not an empty day: saving one over it would
+        // wipe the plan and the sets done.
+        if !model.demo {
+            do { sheet = try await model.gymDay(date: date) } catch {
+                self.error = L10n.f("Trénink se nepodařilo načíst: %@", error.localizedDescription)
+                return
+            }
+        }
         sheet.ensureHeader(date: date)
         let fresh = sheet.startedAt == nil
         if fresh { sheet.markStarted(Date()) }

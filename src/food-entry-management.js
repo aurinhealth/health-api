@@ -117,16 +117,22 @@ export async function deleteFoodEntry(db,id){
 // Several foods at once (Vybrat in a meal): delete, move to another day or
 // meal, or copy there. Another app's food is deleted from Aurin only, copied
 // as the athlete's own and moved by taking it over (takeOver). Returns what
-// changed, by id.
+// changed, by id, and the ids left as they were (gone already, say deleted on
+// another phone): the ones done are never answered with an error, so they
+// still go to Google and a retry doesn't copy them twice.
 export async function bulkFoodEntries(db,{action,ids,date,mealType}={}){
   const list=[...new Set((Array.isArray(ids)?ids:[]).map(Number).filter(n=>Number.isInteger(n)&&n>0))].slice(0,100);
   if(!list.length)throw new Error(L('Nic není vybrané.', 'Nothing is selected.'));
   if(!['delete','move','copy'].includes(action))throw new Error(L('Neznámá akce.', 'Unknown action.'));
   const done=[],skipped=[];
+  let failure=null;
   for(const id of list){
-    if(action==='delete'){done.push(await deleteFoodEntry(db,id));continue}
-    if(action==='copy'){done.push(await copyFoodEntry(db,id,date,mealType??null));continue}
-    done.push(await updateFoodEntry(db,id,{date,mealType:mealType??undefined}));
+    try{
+      if(action==='delete')done.push(await deleteFoodEntry(db,id));
+      else if(action==='copy')done.push(await copyFoodEntry(db,id,date,mealType??null));
+      else done.push(await updateFoodEntry(db,id,{date,mealType:mealType??undefined}));
+    }catch(error){skipped.push(id);failure??=error}
   }
+  if(!done.length&&failure)throw failure;
   return {status:'ok',done,skipped};
 }

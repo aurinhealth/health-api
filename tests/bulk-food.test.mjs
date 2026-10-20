@@ -58,3 +58,17 @@ test("several drinks are moved, copied and deleted at once, keeping their clock"
   assert.equal((await listFluids(db, "2026-10-13")).length, 0);
   await assert.rejects(bulkFluids(db, { action: "move", ids: [one.id] }));
 });
+
+test("a food gone meanwhile (deleted on another phone) is skipped: the rest is done once, not answered with an error", async () => {
+  const raw = createD1(), db = scopedDb(raw, 7);
+  diary(raw);
+  const a = Number(add(raw, "Kaše")), b = Number(add(raw, "Banán"));
+  raw.sqlite.prepare("DELETE FROM food_logs WHERE id=?").run(b);
+  const copied = await bulkFoodEntries(db, { action: "copy", ids: [a, b], date: "2026-10-15" });
+  assert.deepEqual([copied.done.length, copied.skipped], [1, [b]]);
+  assert.equal((await raw.prepare("SELECT COUNT(*) AS n FROM food_logs WHERE consumed_date='2026-10-15'").first()).n, 1);
+  const deleted = await bulkFoodEntries(db, { action: "delete", ids: [b, a] });
+  assert.deepEqual([deleted.done.map(d => d.id), deleted.skipped], [[a], [b]]);
+  // Nothing left to change: the error, as for one food.
+  await assert.rejects(bulkFoodEntries(db, { action: "move", ids: [a, b], date: "2026-10-16" }), /už v deníku není/);
+});

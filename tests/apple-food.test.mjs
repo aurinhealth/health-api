@@ -26,17 +26,24 @@ test("food and water other apps wrote to Apple Health land in the diary and stay
   assert.deepEqual(drinks.map(d => [d.ml, d.app]), [[300, "Yazio"]]);
 
   // Sent again with a change and without the breakfast: updated in place, the breakfast gone.
+  // An empty drinks list is a read that brought nothing (denied, restoring): the water stays.
   const result = await saveAppleFood(raw, 7, { ...window, meals: [{ ...yogurt, kcal: 210 }], drinks: [] });
-  assert.deepEqual(result, { saved: 1, removed: 2, changed: 3 });
+  assert.deepEqual(result, { saved: 1, removed: 1, changed: 2 });
   // The same again changes nothing.
   assert.equal((await saveAppleFood(raw, 7, { ...window, meals: [{ ...yogurt, kcal: 210 }], drinks: [] })).changed, 0);
   const after = (await raw.prepare("SELECT id,kcal FROM food_logs WHERE user_id=7").all()).results;
   assert.deepEqual(after, [{ id: rows[1].id, kcal: 210 }]);
-  assert.equal((await listFluids(db, "2026-10-13")).length, 0);
+  assert.equal((await listFluids(db, "2026-10-13")).length, 1);
+  // Another drink read: the first one, gone from Apple Health, goes here too.
+  await saveAppleFood(raw, 7, { ...window, meals: [{ ...yogurt, kcal: 210 }], drinks: [{ id: "W9", date: "2026-10-13", ml: 200 }] });
+  assert.deepEqual((await listFluids(db, "2026-10-13")).map(d => d.ml), [200]);
+
+  // Nothing read at all (the permission taken away): nothing is deleted.
+  assert.deepEqual(await saveAppleFood(raw, 7, { ...window, meals: [], drinks: [] }), { saved: 0, removed: 0, changed: 0 });
+  assert.equal((await raw.prepare("SELECT COUNT(*) AS n FROM food_logs WHERE user_id=7").first()).n, 1);
 
   // Pití switched off: no drinks list, so food still reconciles and drinks stay.
-  await saveAppleFood(raw, 7, { ...window, meals: [], drinks: [{ id: "W2", date: "2026-10-13", ml: 250 }] });
-  assert.deepEqual(await saveAppleFood(raw, 7, { ...window, meals: [{ ...yogurt, kcal: 210 }] }), { saved: 1, removed: 0, changed: 1 });
+  assert.deepEqual(await saveAppleFood(raw, 7, { ...window, meals: [{ ...yogurt, kcal: 220 }] }), { saved: 1, removed: 0, changed: 1 });
   assert.equal((await listFluids(db, "2026-10-13")).length, 1);
 });
 

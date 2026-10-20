@@ -396,6 +396,7 @@
 "Plán na příští týden" = "Plan for next week";
 "Plán na zbytek týdne" = "Plan for the rest of the week";
 "Plán se nepodařilo uložit: %@" = "Couldn't save the plan: %@";
+"Plán se nepodařilo načíst." = "The plan couldn't be loaded.";
 "Plán tréninku" = "Workout plan";
 "Plán týdne" = "Week plan";
 "Plánuji…" = "Scheduling…";
@@ -569,6 +570,7 @@
 "R" = "W";
 "RPE je uložené i v Intervals.icu." = "RPE is saved, in Intervals.icu too.";
 "RPE je uložené, zápis do Intervals.icu selhal: %@" = "RPE is saved; write to Intervals.icu failed: %@";
+"Recept se nepodařilo smazat: %@" = "Couldn't delete the recipe: %@";
 "Recept složíš ze surovin a pak ho přidáš jedním klepnutím, po porcích." = "Build a recipe from ingredients, then add it one serving at a time with a tap.";
 "Recepty" = "Recipes";
 "Regenerace" = "Recovery";
@@ -1346,6 +1348,7 @@
 "Baví mě" = "I like it";
 "Nebaví mě" = "I don't like it";
 "Trénink se nepodařilo uložit: %@" = "The workout couldn't be saved: %@";
+"Trénink se nepodařilo načíst: %@" = "Couldn't load the workout: %@";
 "Začátek" = "Start";
 "Konec" = "End";
 "Fotky začátku a konce cviku" = "Photos of the exercise's start and end position";
