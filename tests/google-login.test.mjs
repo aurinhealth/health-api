@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import { handleGoogleLogin, verifyGoogleIdToken, _finishLoginForTest, _resetJwksCacheForTest } from "../src/google-login.js";
 import { resolvePrincipal, isPublicPath } from "../src/dashboard-auth.js";
 import { createD1 } from "./helpers/d1.mjs";
-import { _resetTenancyForTest } from "../src/tenancy.js";
+import { _resetTenancyForTest, bumpSessionEpoch } from "../src/tenancy.js";
+import { readFileSync } from "node:fs";
 
 const baseEnv = { GOOGLE_CLIENT_ID: "client-123", GOOGLE_CLIENT_SECRET: "secret", SESSION_SECRET: "test-session-secret", OWNER_EMAIL: "Owner@Example.com" };
-function freshEnv() { _resetTenancyForTest(); return { ...baseEnv, DB: createD1() }; }
+const CHALLENGES = readFileSync(new URL("../migrations/0014_passkeys_email_codes.sql", import.meta.url), "utf8");
+function freshEnv() { _resetTenancyForTest(); const DB = createD1(); DB.sqlite.exec(CHALLENGES); return { ...baseEnv, DB }; }
 const env = freshEnv();
 const b64 = value => Buffer.from(typeof value === "string" ? value : JSON.stringify(value)).toString("base64url");
 const { publicKey, privateKey } = await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"]);
@@ -134,6 +136,31 @@ test("the iPhone app signs in through Safari and redeems the token with its veri
   const owner = await e.DB.prepare("SELECT id FROM users WHERE email='owner@example.com'").first();
   assert.deepEqual(principal, { kind: "user", userId: owner.id, epoch: 0 });
   assert.equal(isPublicPath("/auth/app/session"), true);
+  assert.equal((await redeem({ token, verifier })).status, 401, "a token works once");
+});
+
+test("a handoff token issued before signing out everywhere no longer signs in", async () => {
+  _resetJwksCacheForTest();
+  const e = freshEnv();
+  const verifier = "v".repeat(43), challenge = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))).toString("base64url");
+  const handoff = async () => {
+    const begin = await start(e, "?app=" + challenge);
+    const cookie = begin.headers.get("Set-Cookie").split(";")[0];
+    const state = new URL(begin.headers.get("Location")).searchParams.get("state"), nonce = cookie.split("=")[1].split(".")[1];
+    const back = await _finishLoginForTest(callback("code=c1&state=" + state, cookie), e, googleFetch(await idToken({ nonce })));
+    return decodeURIComponent((await back.text()).match(/loadwise:\/\/auth\?token=([^"]+)"/)[1]);
+  };
+  const redeem = token => handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/app/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, verifier }) }), e, "/auth/app/session");
+  const stale = await handoff();
+  const owner = await e.DB.prepare("SELECT id FROM users WHERE email='owner@example.com'").first();
+  assert.equal(await bumpSessionEpoch(e.DB, owner.id), 1);
+  assert.equal((await redeem(stale)).status, 401);
+  // A token issued after it still works, with the new epoch.
+  const ok = await redeem(await handoff());
+  assert.equal(ok.status, 200);
+  const session = ok.headers.getSetCookie().find(c => c.startsWith("pfd_session=")).split(";")[0];
+  const principal = await resolvePrincipal(new Request("https://petrfitnessdata.eu/app/api/daily", { headers: { Cookie: session } }), e, async () => { throw new Error("no"); });
+  assert.deepEqual(principal, { kind: "user", userId: owner.id, epoch: 1 });
 });
 
 test("a handoff token is not a session and sign-in without a valid app challenge is refused", async () => {

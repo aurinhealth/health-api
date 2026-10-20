@@ -1,4 +1,4 @@
-import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
+import { signText, userSessionCookie, sessionSecret, sessionEpochOf, timingSafeEqualString } from "./dashboard-auth.js";
 import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
 import { appOrigin } from "./app-origin.js";
 import { L } from "./lang.js";
@@ -18,7 +18,9 @@ const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
 // the callback sends Safari back to loadwise://auth with a short-lived token,
 // and the app trades that token plus the verifier behind the challenge for
 // its own session at /auth/app/session. Another app grabbing the loadwise://
-// link gets nothing without the verifier.
+// link gets nothing without the verifier. A token works once, and only while
+// the user's session epoch is the one it was issued under, so "sign out
+// everywhere" also ends a token not yet traded.
 const APP_RETURN_URL = "loadwise://auth";
 const APP_HANDOFF_SECONDS = 300;
 export const APP_CHALLENGE = /^[A-Za-z0-9_-]{43}$/;
@@ -96,12 +98,12 @@ async function finishLogin(request, env, fetchImpl = fetch) {
     return fail("not_invited");
   }
 
-  return appReturnPage(await appHandoffToken(user.id, app, sessionSecret(env)));
+  return appReturnPage(await appHandoffToken(user.id, app, sessionSecret(env), await sessionEpochOf(env.DB, user.id)));
 }
 export { finishLogin as _finishLoginForTest };
 
-async function appHandoffToken(uid, challenge, secret) {
-  const payload = base64url(new TextEncoder().encode(JSON.stringify({ uid, ch: challenge, exp: Math.floor(Date.now() / 1000) + APP_HANDOFF_SECONDS })));
+async function appHandoffToken(uid, challenge, secret, epoch) {
+  const payload = base64url(new TextEncoder().encode(JSON.stringify({ uid, ch: challenge, exp: Math.floor(Date.now() / 1000) + APP_HANDOFF_SECONDS, se: epoch, id: randomToken() })));
   return payload + "." + await signText("app-handoff." + payload, secret);
 }
 
@@ -138,9 +140,20 @@ async function finishAppLogin(request, env) {
   const uid = Number(data?.uid), now = Math.floor(Date.now() / 1000);
   if (!Number.isInteger(uid) || uid <= 0 || !(Number(data?.exp) > now)) return fail();
   if (!timingSafeEqualString(base64url(await sha256(verifier)), String(data.ch || ""))) return fail();
+  if (typeof data.id !== "string" || Number(data.se) !== await sessionEpochOf(env.DB, uid)) return fail();
+  if (!(await useHandoff(env.DB, data.id, uid, Number(data.exp), now))) return fail();
   const headers = new Headers({ "Cache-Control": "no-store" });
   headers.append("Set-Cookie", await userSessionCookie(env.DB, uid, sessionSecret(env)));
   return Response.json({ status: "ok" }, { headers });
+}
+
+// Marks the token used (auth_challenges, purpose app-handoff); false when it was used before.
+async function useHandoff(db, id, uid, exp, now) {
+  const [, used] = await db.batch([
+    db.prepare("DELETE FROM auth_challenges WHERE purpose = 'app-handoff' AND expires_at <= ?").bind(now),
+    db.prepare("INSERT INTO auth_challenges(challenge, purpose, user_id, expires_at) VALUES (?, 'app-handoff', ?, ?) ON CONFLICT(challenge) DO NOTHING").bind("app-handoff:" + id, uid, exp)
+  ]);
+  return Number(used?.meta?.changes) > 0;
 }
 
 export async function verifyGoogleIdToken(token, clientId, nonce, fetchImpl = fetch) {
