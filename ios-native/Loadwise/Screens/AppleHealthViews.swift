@@ -116,7 +116,11 @@ struct AppleHealthSettings: View {
                     .disabled(health.syncing || store.demo)
             }
             .onChange(of: chosen) { _, value in
-                guard !value.isEmpty else { return }
+                // Every switch off: reading stops, as Odpojit does; a switch on reads again.
+                guard !value.isEmpty else {
+                    if health.enabled { health.disconnect(); Task { await store.load() } }
+                    return
+                }
                 // Switched off on this iPhone (another sign-in, Synchronizace): a switch turned
                 // here means reading again, so it asks iOS and starts, instead of being forgotten.
                 if !health.enabled {

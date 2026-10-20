@@ -329,7 +329,16 @@ enum Reminders {
         content.categoryIdentifier = pillCategory
         content.userInfo = ["date": date]
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 30 * 60, repeats: false)
-        try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "loadwise-pill-snooze", content: content, trigger: trigger))
+        try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: pillSnoozeId, content: content, trigger: trigger))
+    }
+
+    private static let pillSnoozeId = "loadwise-pill-snooze"
+
+    /// Signing out or another account: no pill of the last one, and none of its reminders.
+    static func forgetPill() {
+        UserDefaults.standard.removeObject(forKey: pillKey)
+        let ids = (0..<8).map { prefix + "pill.\($0)" } + [pillSnoozeId]
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
     }
 
     /// "22:40" → 1360.
