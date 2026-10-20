@@ -169,11 +169,12 @@ test("a saved ride is listed with the athlete's rows, planned and shared with it
   raw.sqlite.exec("CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,sample_time TEXT,end_time TEXT,external_id TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))");
   const planned = await call(raw, 1, "POST", "/app/api/my-workouts/" + w.id + "/schedule", { date: "2099-02-01", environment: "indoor" });
   assert.equal(planned.status, 200, JSON.stringify(planned.body));
-  assert.equal(planned.body.workout.id, "own-" + w.id);
-  const lib = await getWorkout(scopedDb(raw, 1), "own-" + w.id);
+  const plannedId = planned.body.workout.id;
+  assert.match(plannedId, /^own-[A-Za-z0-9]{10}$/);
+  const lib = await getWorkout(scopedDb(raw, 1), plannedId);
   assert.equal(lib.duration_minutes, 85);
   assert.match(lib.intervals_description, /88-93%/);
-  assert.equal(await getWorkout(scopedDb(raw, 2), "own-" + w.id), null);
+  assert.equal(await getWorkout(scopedDb(raw, 2), plannedId), null);
   // The link's page draws the sections and offers the Zwift file.
   const shared = await call(raw, 1, "POST", "/app/api/shares", ride);
   const url = new URL(ORIGIN + "/t/" + shared.body.id);
@@ -188,6 +189,27 @@ test("a saved ride is listed with the athlete's rows, planned and shared with it
   const got = await call(raw, 2, "POST", "/app/api/my-workouts", { fromShare: shared.body.id });
   assert.equal(got.body.workout.sport, "ride");
   assert.equal((await call(raw, 2, "POST", "/app/api/gym/template", { template: ride })).status, 400);
+});
+
+test("editing a saved ride and planning it again leaves the day planned before as it was", async () => {
+  const raw = createD1();
+  raw.sqlite.exec("CREATE TABLE health_datapoints (id INTEGER PRIMARY KEY,user_id INTEGER,source_family TEXT,data_type TEXT,start_time TEXT,sample_time TEXT,end_time TEXT,external_id TEXT,payload_json TEXT,updated_at TEXT,UNIQUE(user_id,source_family,data_type,external_id))");
+  const short = { sport: "ride", name: "Moje jízda", blocks: [{ repeats: 1, steps: [{ seconds: 1800, low: 60, high: 70 }] }] };
+  const w = (await call(raw, 1, "POST", "/app/api/my-workouts", short)).body.workout;
+  const monday = await call(raw, 1, "POST", "/app/api/my-workouts/" + w.id + "/schedule", { date: "2099-02-02" });
+  assert.equal(monday.status, 200, JSON.stringify(monday.body));
+  // Unchanged, it plans with the same copy.
+  const again = await call(raw, 1, "POST", "/app/api/my-workouts/" + w.id + "/schedule", { date: "2099-02-03" });
+  assert.equal(again.body.workout.id, monday.body.workout.id);
+  assert.equal((await call(raw, 1, "PUT", "/app/api/my-workouts/" + w.id, { ...short, blocks: [{ repeats: 1, steps: [{ seconds: 5400, low: 60, high: 70 }] }] })).status, 200);
+  const thursday = await call(raw, 1, "POST", "/app/api/my-workouts/" + w.id + "/schedule", { date: "2099-02-05" });
+  assert.notEqual(thursday.body.workout.id, monday.body.workout.id);
+  const db = scopedDb(raw, 1);
+  assert.equal((await getWorkout(db, monday.body.workout.id)).duration_minutes, 30);
+  assert.equal((await getWorkout(db, thursday.body.workout.id)).duration_minutes, 90);
+  // Deleting the saved workout keeps what the days planned from it show.
+  await call(raw, 1, "DELETE", "/app/api/my-workouts/" + w.id);
+  assert.equal((await getWorkout(db, monday.body.workout.id)).duration_minutes, 30);
 });
 
 test("a library ride becomes an own workout with its ranges", async () => {

@@ -61,12 +61,14 @@ export async function getWorkout(db, id) {
   if (/^test-/.test(String(id))) return getTestWorkout(id);
   // Race day of a running plan (training-plans.js): "race-run-<km>-<minutes>".
   if (/^race-run-/.test(String(id))) return raceWorkout(id);
-  // "own-<id>": a ride or run from the athlete's Moje tréninky, as planned last
-  // (workout-templates.js keeps its minutes at the athlete's pace).
+  // "own-<id>": a ride or run from the athlete's Moje tréninky as it was planned
+  // that time (planned_own_workouts, workout-templates.js, its minutes at the
+  // athlete's pace); days planned before those copies read the saved workout.
   const own = String(id).match(/^own-([A-Za-z0-9]{10})$/);
   if (own) {
     if (!db.userId) return null;
-    const row = await db.prepare("SELECT id,sport,name,structure_json FROM saved_workouts WHERE user_id=? AND id=?").bind(db.userId, own[1]).first().catch(() => null);
+    const row = await db.prepare("SELECT id,sport,name,structure_json FROM planned_own_workouts WHERE user_id=? AND id=?").bind(db.userId, own[1]).first().catch(() => null)
+      || await db.prepare("SELECT id,sport,name,structure_json FROM saved_workouts WHERE user_id=? AND id=?").bind(db.userId, own[1]).first().catch(() => null);
     return row ? ownLibraryWorkout(row) : null;
   }
   // "ai-<id>": the AI's own workout for a day (ai-workout-compose.js).

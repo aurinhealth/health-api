@@ -92,6 +92,19 @@ export function mainMuscles(template, en = false) {
 
 async function ensureTables(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS saved_workouts (user_id INTEGER NOT NULL, id TEXT NOT NULL, sport TEXT NOT NULL, name TEXT NOT NULL, source TEXT NOT NULL DEFAULT 'own', from_name TEXT, share_id TEXT, plan_date TEXT, template_json TEXT NOT NULL, structure_json TEXT, seen INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, id))").run();
+  await db.prepare("CREATE TABLE IF NOT EXISTS planned_own_workouts (user_id INTEGER NOT NULL, id TEXT NOT NULL, saved_id TEXT NOT NULL, sport TEXT NOT NULL, name TEXT NOT NULL, structure_json TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, id))").run();
+}
+
+// The saved workout as planned now, kept apart from the template: a later edit
+// and planning it again never change what an earlier day shows, sends or
+// counts. The same workout planned again unchanged reuses its copy.
+async function plannedCopy(db, userId, row, structure) {
+  const json = JSON.stringify(structure);
+  const same = await db.prepare("SELECT id FROM planned_own_workouts WHERE user_id=? AND saved_id=? AND sport=? AND name=? AND structure_json=? LIMIT 1").bind(userId, row.id, row.sport, row.name, json).first();
+  if (same) return same.id;
+  const id = newId();
+  await db.prepare("INSERT INTO planned_own_workouts(user_id,id,saved_id,sport,name,structure_json) VALUES(?,?,?,?,?,?)").bind(userId, id, row.id, row.sport, row.name, json).run();
+  return id;
 }
 export async function ensureShareTable(db) {
   await db.prepare("CREATE TABLE IF NOT EXISTS workout_shares (id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, sport TEXT NOT NULL, name TEXT NOT NULL, from_name TEXT, plan_date TEXT, template_json TEXT NOT NULL, image_png TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)").run();
@@ -209,8 +222,8 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       if (!DATE.test(date) || date < localToday()) throw new Error(L("Vyber dnešní nebo budoucí datum.", "Choose today or a future date."));
       const template = cleanEnduranceTemplate(JSON.parse(row.template_json)), thresholds = await thresholdsOf(env);
       const structure = enduranceStructure(template, { thresholdPace: thresholds?.runThresholdPace });
-      await env.DB.prepare("UPDATE saved_workouts SET structure_json=? WHERE user_id=? AND id=?").bind(JSON.stringify(structure), env.USER_ID, row.id).run();
-      const result = await scheduleWorkoutInIntervals(env, env.DB, { workoutId: "own-" + row.id, date, confirm: true, environment: body.environment === "outdoor" ? "outdoor" : "indoor" });
+      const copy = await plannedCopy(env.DB, env.USER_ID, row, structure);
+      const result = await scheduleWorkoutInIntervals(env, env.DB, { workoutId: "own-" + copy, date, confirm: true, environment: body.environment === "outdoor" ? "outdoor" : "indoor" });
       return json(result);
     }
     // A planned ride or run (from the library, the coach or Intervals.icu), or
