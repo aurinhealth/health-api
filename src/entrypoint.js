@@ -384,7 +384,11 @@ const worker = {
     const www = wwwRedirect(url);
     if (www) return www;
     // Static pages stay independent of storage availability.
-    if (STATIC_PATHS.has(url.pathname) && request.method === 'GET') return staticRoute(url, request, env);
+    // Crawlers and link checkers ask with HEAD too; a 401 there keeps the site out of search.
+    if (STATIC_PATHS.has(url.pathname) && (request.method === 'GET' || request.method === 'HEAD')) {
+      const page = await staticRoute(url, request, env);
+      return request.method === 'HEAD' ? new Response(null, page) : page;
+    }
     try { await ensureTenancy(env.DB, env, { request }); }
     catch (error) {
       if (error instanceof TenancyUpgradeInProgress) return Response.json({status:"error",message:error.message},{status:503,headers:{"Retry-After":"30","Cache-Control":"no-store"}});
