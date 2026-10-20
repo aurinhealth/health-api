@@ -10,9 +10,12 @@ availability) updates the overview in the same pull request. The site is in Engl
 - Each section of the overview matches a part of the app. Its phones show the app's own screens: the
   English, light-mode screenshots of the sample day that CI takes (`ios-native.yml`: `screens/site/` and
   the smoke test's `smoke/4-…` walk through the app, in the Aurin-screens artifact), saved as
-  `public/site/app/*.webp`; the pieces lifted out beside a phone are cut from the same screenshots
-  (`public/site/app/parts/`). The hero shows Today; below it one scene per app area, whose phone walks
-  through that area's screens as you scroll. The muscles show the app's 3D figure, rendered ahead by
+  `public/site/app/*.webp`. Beside each phone stands a live demo (`src/site-demos.js`): a piece of the
+  app rebuilt in HTML that moves (the dial turns, the rest timer counts down, the coach answers), following
+  the app's own view and the sample day. Where a screenshot can't show a step, the phone's screen is built
+  there too (strain, the finished workout, the coach). When a view a demo copies changes in the app, change
+  the demo in the same pull request. The hero shows Today; below it one chapter per app area, whose steps
+  take turns on the phone. The muscles show the app's 3D figure, rendered ahead by
   `scripts/render-muscles-site.mjs` (the licensed model never goes on the website). When a screen
   they show changes, take them again; the numbers around the hero phone follow the sample day
   (`DemoData.swift`, `tests/site-pages.test.mjs`).

@@ -27,6 +27,8 @@ final class SettingsStore {
     private(set) var owner = false
     /// Food corrections waiting for the owner, for the row's badge.
     var pendingFoodSuggestions = 0
+    /// People from the website's waitlist waiting for the owner (Testování → Zájemci).
+    var pendingWaitlist = 0
     let demo: Bool
 
     private let api: APIClient
@@ -68,6 +70,7 @@ final class SettingsStore {
                 internalTester = roles.internalTester
                 owner = roles.owner
                 if owner { pendingFoodSuggestions = (try? await api.foodSuggestions())?.counts?["pending"] ?? 0 }
+                if owner { pendingWaitlist = (try? await api.waitlist())?.pending.count ?? 0 }
             }
             errorMessage = nil
         } catch {
