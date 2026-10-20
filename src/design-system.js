@@ -7,7 +7,7 @@ export const themeTokens = `
   --line:rgba(27,26,23,.09);--track:rgba(27,26,23,.08);
   /* App hues: readiness green, strain amber, coach indigo, macros. */
   --green:#1F6B52;--green-soft:#D3EADF;--amber:#A35A12;--amber-bar:#C4782A;--amber-soft:#F3E1C6;
-  --indigo:#4F46C8;--lilac:#D9D6F3;--rust:#B4532F;--blue:#1D6FA3;--protein:#2F7FD8;--carbs:#D98A06;--fat:#7C5CE0;
+  --indigo:#4F46C8;--lilac:#D9D6F3;--rust:#B4532F;--rust-ink:#A3482A;--blue:#1D6FA3;--protein:#2F7FD8;--carbs:#D98A06;--fat:#7C5CE0;
   --primary:#1F6B52;--primary-text:#1F6B52;--primary-ink:#FFFFFF;--primary-surface:#D3EADF;
   --button:#15140F;--on-button:#F3EFE8;--frame:#DCD5CA;--health-red:#FF2D55;--google-blue:#4285F4;
   /* The Aurin mark (Rovnováha): the load half over the recovery half. */
