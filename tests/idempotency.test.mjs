@@ -58,9 +58,29 @@ test("a repeat that arrives while the first still runs does not write again", as
   const slow = run(env, "/app/api/fluids", body, async () => { writes++; await gate; return Response.json({ status: "ok", entry: { id: 1 } }); });
   await new Promise(r => setTimeout(r, 10));
   const dup = await run(env, "/app/api/fluids", body, async () => { writes++; return Response.json({ status: "ok" }); });
-  assert.deepEqual(await dup.json(), { status: "ok", duplicate: true });
+  // Not an ok yet: the first attempt may still fail, so the app keeps the write and comes again.
+  assert.equal(dup.status, 503);
+  assert.equal(dup.headers.get("Retry-After"), "5");
   release();
   assert.equal((await slow).status, 200);
+  assert.equal(writes, 1);
+  const again = await run(env, "/app/api/fluids", body, async () => { writes++; return Response.json({ status: "ok" }); });
+  assert.deepEqual(await again.json(), { status: "ok", entry: { id: 1 } });
+  assert.equal(writes, 1);
+});
+
+test("a repeat while the first runs, then the first fails: the write is not lost", async () => {
+  const raw = createD1(), env = { DB: scopedDb(raw, 7), USER_ID: 7 };
+  const body = { ml: 300, requestId: "2a1b2c3d-4e5f-4061-8273-8495a6b7c8d9" };
+  let release, writes = 0;
+  const gate = new Promise(r => { release = r; });
+  const slow = run(env, "/app/api/fluids", body, async () => { await gate; return Response.json({ message: "down" }, { status: 500 }); });
+  await new Promise(r => setTimeout(r, 10));
+  assert.equal((await run(env, "/app/api/fluids", body, async () => { writes++; return Response.json({ status: "ok" }); })).status, 503);
+  release();
+  assert.equal((await slow).status, 500);
+  const retry = await run(env, "/app/api/fluids", body, async () => { writes++; return Response.json({ status: "ok" }); });
+  assert.equal(retry.status, 200);
   assert.equal(writes, 1);
 });
 

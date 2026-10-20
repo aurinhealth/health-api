@@ -89,7 +89,10 @@ export async function saveAppleFood(db, userId, input = {}, { source = FOOD_SOUR
   if (!from || !to || to < from) return { saved: 0, removed: 0 };
   const inWindow = item => item && item.date >= from && item.date <= to;
   // A list left out was not read (that kind is switched off): keep what is here.
-  const readMeals = Array.isArray(input.meals), readDrinks = Array.isArray(input.drinks);
+  // HealthKit answers a read the user denied (or Health still restoring) with
+  // nothing, not an error, so an empty Apple list says nothing was read either.
+  const read = list => Array.isArray(list) && (list.length > 0 || source !== FOOD_SOURCE);
+  const readMeals = read(input.meals), readDrinks = read(input.drinks);
   const mealsIn = (readMeals ? input.meals : []).slice(0, MAX_ITEMS).map(appleFood).filter(inWindow);
   const drinksIn = (readDrinks ? input.drinks : []).slice(0, MAX_ITEMS).map(appleDrink).filter(inWindow);
   await ensureFoodLogTable(db);

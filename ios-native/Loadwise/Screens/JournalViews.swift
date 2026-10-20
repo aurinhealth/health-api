@@ -341,12 +341,17 @@ struct JournalDayEditor: View {
                         .font(.headline).foregroundStyle(Palette.ink)
                         .padding(.top, 18)
                 }
-                if day.sections.isEmpty {
-                    Text("Nic nesleduješ. Vyber si to v Co sledovat.")
-                        .font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
-                        .padding(.top, 20)
+                // Another day tapped: its answers, never the last day's under its name.
+                if !model.demo && day.date != date {
+                    if error == nil { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
+                } else {
+                    if day.sections.isEmpty {
+                        Text("Nic nesleduješ. Vyber si to v Co sledovat.")
+                            .font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
+                            .padding(.top, 20)
+                    }
+                    ForEach(day.sections) { section in sectionView(section) }
                 }
-                ForEach(day.sections) { section in sectionView(section) }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
                 if !inSheet { JournalImpactLink().padding(.top, 24) }
             } else if let error {
@@ -483,10 +488,14 @@ struct JournalDayEditor: View {
             if day == nil { day = DemoJournal.day }
             return
         }
+        let asked = date
         do {
-            day = try await model.api.journalDay(date: date)
+            let loaded = try await model.api.journalDay(date: asked)
+            guard asked == date else { return }
+            day = loaded
             error = nil
         } catch {
+            guard asked == date else { return }
             self.error = error.localizedDescription
         }
     }
@@ -526,7 +535,8 @@ struct JournalDayEditor: View {
             return
         }
         do {
-            day = try await model.api.setJournalFixed(key: item.key, answer: answer, date: date)
+            let saved = try await model.api.setJournalFixed(key: item.key, answer: answer, date: date)
+            if saved.date == date { day = saved }
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -549,7 +559,9 @@ struct JournalDayEditor: View {
             return nil
         }
         do {
-            day = try await model.api.saveJournalEntry(body)
+            let saved = try await model.api.saveJournalEntry(body)
+            // An answer of a day left meanwhile stays off the day shown now.
+            if saved.date == date { day = saved }
             error = nil
             return nil
         } catch {

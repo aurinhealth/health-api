@@ -1047,6 +1047,8 @@ final class AppModel {
         if let waiting = outbox.last(where: { $0.key == "gym:" + date }), let day = Outbox.gymDay(waiting, date: date) { return day }
         do {
             let day = try await api.gym(date: date)
+            // The server couldn't read the day: an error, never an empty sheet to save over it.
+            if day.status == "partial" { throw APIError.message(L10n.tr("Plán se nepodařilo načíst.")) }
             GymDayCache.save(day, date: date)
             return day
         } catch where Outbox.isNoConnection(error) {

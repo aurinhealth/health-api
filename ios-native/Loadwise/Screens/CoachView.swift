@@ -34,6 +34,8 @@ struct CoachView: View {
         var text: String
         var actions: [CoachAction] = []
         var decided: [Int: String] = [:]
+        /// A decision that didn't go through: the error, with Potvrdit and Ne still there.
+        var failed: [Int: String] = [:]
         /// A confirmed change of a done activity that "Vrátit" can take back.
         var undo: [Int: String] = [:]
         var visuals: [String] = []
@@ -303,6 +305,7 @@ struct CoachView: View {
     private func decide(_ action: CoachAction, confirm: Bool, in bubble: UUID) async {
         guard let draftId = action.draftId else { return }
         do {
+            edit(bubble) { $0.failed[draftId] = nil }
             let answer = try await model.api.decideCoachAction(draftId: draftId, confirm: confirm)
             edit(bubble) {
                 $0.decided[draftId] = answer.message ?? (confirm ? "Hotovo." : "Zamítnuto.")
@@ -310,7 +313,7 @@ struct CoachView: View {
             }
             if confirm { await model.refreshTraining(); await model.refresh() }
         } catch {
-            edit(bubble) { $0.decided[draftId] = error.localizedDescription }
+            edit(bubble) { $0.failed[draftId] = error.localizedDescription }
         }
     }
 
@@ -432,6 +435,7 @@ struct BubbleView: View {
             }
             ForEach(bubble.actions) { action in
                 ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] },
+                           failure: action.draftId.flatMap { bubble.failed[$0] },
                            canUndo: action.draftId.map { bubble.undo[$0] != nil } ?? false,
                            decide: { decide(action, $0) }, undo: { undoAction(action) })
             }
@@ -448,6 +452,7 @@ struct BubbleView: View {
 struct ActionCard: View {
     let action: CoachAction
     let result: String?
+    var failure: String? = nil
     var canUndo = false
     var decide: (Bool) -> Void
     var undo: () -> Void = {}
@@ -486,6 +491,9 @@ struct ActionCard: View {
                     }
                 }
                 .buttonStyle(.plain)
+                if let failure {
+                    Text(failure).font(Typo.caption).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .padding(14)

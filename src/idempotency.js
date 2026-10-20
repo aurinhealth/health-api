@@ -1,3 +1,5 @@
+import { L } from "./lang.js";
+
 // Writes the app may send twice. The iOS app keeps a write it could not send
 // (no signal) and sends it again later; when the first attempt did reach the
 // server and only the answer got lost, the replay must not log the meal, the
@@ -36,7 +38,8 @@ export function requestIdOf(body) {
 // Runs handler(request) once per (user, route, requestId). A repeated id gets
 // the first successful answer back; a failed first attempt is forgotten, so
 // the same id can be retried. A repeat that arrives while the first one still
-// runs gets a plain ok (the first one is doing the write).
+// runs is asked to come again (503): that one may still fail, and an ok now
+// would let the app drop a write that never got saved.
 export async function withIdempotency(request, env, url, handler) {
   if (!env?.DB || !idempotentRoute(request, url)) return handler(request);
   let id = null;
@@ -54,7 +57,7 @@ export async function withIdempotency(request, env, url, handler) {
     }
     const headers = { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Idempotent-Replay": "1" };
     if (seen?.status) return new Response(seen.body || "{}", { status: Number(seen.status), headers });
-    return new Response(JSON.stringify({ status: "ok", duplicate: true }), { status: 200, headers });
+    return new Response(JSON.stringify({ message: L("Zápis se ještě ukládá.", "The entry is still being saved.") }), { status: 503, headers: { ...headers, "Retry-After": "5" } });
   }
   const forget = () => db.prepare("DELETE FROM client_requests WHERE user_id=? AND route=? AND request_id=?").bind(user, route, id).run().catch(() => {});
   let response;
