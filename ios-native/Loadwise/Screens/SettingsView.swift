@@ -175,6 +175,13 @@ struct SettingsMenu: View {
                     } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "server.rack", color: Palette.muted), title: "Server", value: ServerChoice.current.title)
                     }
+                    // The owner only: the website's waitlist, approved into TestFlight.
+                    if store.owner {
+                        SettingsDivider()
+                        NavigationLink { WaitlistView(store: store) } label: {
+                            SettingsRow(icon: SettingsIcon(systemImage: "person.2", color: Palette.green), title: "Zájemci", badge: store.pendingWaitlist)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
             }
