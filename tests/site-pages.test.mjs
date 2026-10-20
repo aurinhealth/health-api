@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
+import worker from '../src/entrypoint.js';
 import {overviewPage,privacyPage,termsPage,supportPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
@@ -206,4 +207,15 @@ test('the questions open without JS and name the app’s real Settings paths',as
   assert.ok((faq.match(/<details><summary>/g)||[]).length>=6);
   for(const label of ['Settings → '+en('Zdroje dat'),'Settings → '+en('Soukromí a data').replace('&','&amp;'),'Settings → Help → '+en('Nahlásit problém')])assert.ok(faq.includes(label),label);
   assert.match(faq,/mailto:support@aurin\.health/);
+});
+
+test('the public pages answer GET and HEAD without storage or a session, so crawlers can check them',async()=>{
+  for(const path of ['/','/privacy','/terms','/support','/robots.txt','/sitemap.xml']){
+    for(const method of ['GET','HEAD']){
+      const r=await worker.fetch(new Request('https://aurin.health'+path,{method}),{},{waitUntil(){}});
+      assert.equal(r.status,200,method+' '+path);
+      if(method==='HEAD')assert.equal(await r.text(),'');
+      else assert.ok((await r.text()).length>0);
+    }
+  }
 });
