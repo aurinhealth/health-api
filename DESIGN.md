@@ -38,7 +38,7 @@ palette changes, change `design-system.js` and this file together.
 | `--track` | rgba(27,26,23,.08) | Hover fills, empty bars, close buttons |
 | `--button` | #15140F | Primary button (the ink pill) |
 | `--on-button` | #F3EFE8 | Text on the ink pill |
-| `--primary` / `--green` | #1F6B52 | Links, focus ring, readiness, "free" labels |
+| `--primary` / `--green` | #1F6B52 | Links, focus ring, readiness |
 | `--green-soft` | #D3EADF | Success fills (waitlist "done") |
 | `--amber` | #A35A12 | Strain, gym and food eyebrows and text |
 | `--amber-bar` | #C4782A | Strain bars, "recovering" muscles |
@@ -128,7 +128,8 @@ stop: "Know when to push." not "Smart Strain Tracking".
   links in `--muted`, a small ink pill "Join the waitlist" on the right that appears once the hero's own button
   has scrolled away (one waitlist button on screen at a time). Under 960px the links go; under 560px the logo
   and a smaller pill stay, so the page's one action is always a tap away.
-- **Kicker:** a small glassy pill above the hero headline with a green dot ("Free AI coach for iPhone").
+- **Kicker:** a small glassy pill above the hero headline with a green dot ("For iPhone · now in TestFlight"). The
+  site never sells the app as free: it is in testing, and the price after the release is not set.
 - **Phone:** the CSS iPhone (titanium edge, black bezel, glare) around a real screenshot. Never a flat rectangle.
 - **Live demo:** a card 380px wide, 22px radius, `--panel`, floating shadow, overlapping the phone's edge. It
   plays its step's timeline while the chapter is in view and shows its last frame with reduced motion. Numbers

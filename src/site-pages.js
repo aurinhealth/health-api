@@ -64,7 +64,7 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .nav-cta{display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
 .nav-cta:hover{opacity:.9}
 /* One waitlist button at a time: the nav's pill appears once the hero's button has scrolled away (always there without JS). */
-.js .site-head .nav-cta{opacity:0;pointer-events:none;transition:opacity .3s}.js .site-head.away .nav-cta{opacity:1;pointer-events:auto}
+.js .site-head:not(.away) .nav-cta{display:none}
 
 /* Aurora: the two halves of the mark (and a little lilac), soft behind the hero phone and the end. */
 .aurora{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
@@ -618,7 +618,7 @@ export function overviewPage(request) {
     ['vyziva', 'Nutrition', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
       ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
       ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000]]],
-    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.<span class="free">Free for everyone.</span>', 'green', 'glow-today', [
+    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
       ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout. When it proposes a workout, confirm it and it lands in your plan.', 15000]]]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
@@ -708,7 +708,7 @@ ${layer('wide')}${layer('tall')}
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
-    ['What does it cost?', 'Aurin is free, the AI coach included. If paid features come later, you will see the price before you buy, and they will be sold only through the App Store.'],
+    ['What does it cost?', 'Nothing during testing. The price after the release is not set yet; you will see it in the App Store before you buy, and Apple handles the purchase.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
     ['Can I delete my data?', 'Yes. In Settings → Privacy &amp; data you can download all your data or delete your account with everything in it.'],
@@ -728,10 +728,10 @@ ${layer('wide')}${layer('tall')}
 <div class="hero">${aurora}
 <div class="wrap grid">
 <div class="copy">
-<span class="kicker"><i></i>Free AI coach for iPhone</span>
+<span class="kicker"><i></i>For iPhone · now in TestFlight</span>
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts and turns them into one number, one plan and one coach every morning.</p>
-<div class="cta">${store('top')}<p class="note">Free, AI coach included. We invite people to the test version in TestFlight.</p></div>
+<div class="cta">${store('top')}<p class="note">We invite people to the test version in TestFlight. Testing costs nothing.</p></div>
 </div>
 <div class="stage">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
