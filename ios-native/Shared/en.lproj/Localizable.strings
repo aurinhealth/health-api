@@ -2722,6 +2722,13 @@
 "V knihovně tomuto výběru nic neodpovídá." = "Nothing in the library matches this choice.";
 "Z knihovny · %@ %@" = "From the library · %@ %@";
 
+/* Nastavení → Testování → Zájemci (WaitlistView.swift) */
+"Zájemci" = "Waitlist";
+"Testeři" = "Testers";
+"Čekají" = "Waiting";
+"Pozvaní" = "Invited";
+"Pozván %@" = "Invited %@";
+
 /* Kouč na obrazovkách (SettingsCoachPlaces.swift) */
 "Kouč na obrazovkách" = "Coach on screens";
 "Rada kouče" = "Coach's advice";

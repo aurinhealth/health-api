@@ -37,6 +37,8 @@ const PUBLIC_PATHS = new Set([
   "/auth/passkey/verify",
   "/auth/email/start",
   "/auth/email/verify",
+  // The website's "Join the waitlist" (testflight-waitlist.js): rate limited per caller.
+  "/waitlist",
   "/automation/strength",
   // The coach evaluation on the test server: its own GitHub token (coach-eval.js).
   "/automation/coach-eval",
