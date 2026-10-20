@@ -233,7 +233,10 @@ test('an activity deleted in Intervals.icu goes after a whole answer, and its wa
   const ids=()=>raw.sqlite.prepare("SELECT external_id FROM health_datapoints WHERE source_family='intervals' ORDER BY external_id").all().map(r=>r.external_id);
   let answer=()=>new Response('busy',{status:503});
   t.mock.method(globalThis,'fetch',async url=>String(url).includes('/activities?')?answer():Response.json([]));
-  // A failed read removes nothing.
+  // A failed read removes nothing, and neither does an empty answer.
+  await sync(env,ctx,'/sync/intervals/recent?parts=activities');
+  assert.deepEqual(ids(),['activity:i1','activity:i2','activity:i3','activity:i4']);
+  answer=()=>Response.json([]);
   await sync(env,ctx,'/sync/intervals/recent?parts=activities');
   assert.deepEqual(ids(),['activity:i1','activity:i2','activity:i3','activity:i4']);
   // The whole answer without i2: only i2 goes, its watch copy is the workout again.

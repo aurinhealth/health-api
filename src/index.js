@@ -1223,7 +1223,8 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
   // Deleted in Intervals.icu: an activity stored for the window that a whole,
   // valid answer no longer has. The window's first day is left out (its
   // start may be stored in UTC), and so are the activities the app sent there.
-  if (activities.every(a => a && typeof a === 'object' && a.id != null && a.id !== '')) {
+  // An empty answer deletes nothing: one named by the webhook still goes above.
+  if (activities.length && activities.every(a => a && typeof a === 'object' && a.id != null && a.id !== '')) {
     const returned = new Set(activities.map(a => 'activity:' + String(a.id)));
     const stored = (await env.DB.prepare("SELECT external_id FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND start_time>=? AND start_time<?").bind(env.USER_ID, dateDaysFromDate(oldest, 1), newest).all()).results || [];
     const gone = stored.map(row => row.external_id).filter(id => !returned.has(id) && !named.includes(id) && !sentHere.has(String(id).replace(/^activity:/, '')));
