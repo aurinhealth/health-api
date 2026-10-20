@@ -227,7 +227,7 @@ const tmTick = `<div class="dm pad tm">
 ${setRow('1', '77.5 × 8', '80', '8', '<i class="ip m">M</i>', 'done')}
 <div class="st cur"${at('3600-cur 3600:done')}><span class="sl2">2</span><span class="mut s">77.5 × 8</span><span class="v num">82.5</span><span class="v num">6</span><span class="lt"><i class="ip dash"${at('2300:f')} data-tx="0|H;2300|F">H</i></span><span class="tk"></span></div>
 <div class="st next"${at('3800-next 3800:cur')}><span class="sl2">3</span><span class="mut s">77.5 × 8</span><span class="v num">80</span><span class="v num">6-8</span><span class="lt"><i class="ip dash">H</i></span><span class="tk"></span></div>
-<div class="lpick"${at('700:in 2600-in')}>${LETTERS.map(([l, name, c]) => `<span class="lr"${l === 'F' ? at('1700:on') : ''}><i class="ip" style="--c:var(--${c})">${l}</i>${name}</span>`).join('')}</div>
+<div class="lpick"${at('700:in')}>${LETTERS.map(([l, name, c]) => `<span class="lr"${l === 'F' ? at('1700:on') : ''}><i class="ip" style="--c:var(--${c})">${l}</i>${name}</span>`).join('')}</div>
 <div class="btn dark"${at('3300:press 3600-press')}>${ic('check')}Set done</div>
 </div>`;
 
@@ -503,8 +503,8 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .pb{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:99px;box-shadow:inset 0 0 0 1px var(--line);font-size:12px;font-weight:500;color:var(--sec);transition:transform .2s,background .2s}
 .pb.press{transform:scale(.92);background:var(--track)}.js .pb[data-at]{opacity:1!important;transform:none!important}.js .pb.press{transform:scale(.92)!important}
 .tag{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:99px;font-size:11.5px;font-weight:600}.tag.rust{color:var(--rust);background:color-mix(in srgb,var(--rust) 12%,transparent)}
-.lpick{position:absolute;right:14px;top:96px;z-index:3;display:grid;gap:2px;padding:8px;border-radius:16px;background:var(--panel);box-shadow:0 20px 40px -12px rgba(60,40,10,.45),0 0 0 1px var(--line)}
-.lr{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:10px;font-size:12.5px;transition:background .3s}.lr .ip{min-width:30px;height:20px}
+.lpick{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:10px;padding:6px;border-radius:16px;background:var(--bg)}
+.lr{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;border-radius:10px;font-size:10.5px;line-height:1.15;text-align:center;color:var(--sec);transition:background .3s}.lr .ip{min-width:30px;height:20px}
 .lr.on{background:var(--track);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--amber) 70%,transparent)}
 .js .lr[data-at]{opacity:1!important;transform:none!important}
 .rest .ring{position:relative;width:200px;height:200px;margin:0 auto}
