@@ -33,22 +33,9 @@ p{margin:0}
 .pill-nav .links a{padding:7px 12px;border-radius:999px;color:var(--muted);text-decoration:none;font-size:14px;font-weight:500}
 .pill-nav .links a:hover{color:var(--text);background:var(--track)}
 
-/* The waitlist button: the app is not in the App Store yet; it opens an e-mail field (store()). */
+/* The store badge: the app is not in the App Store yet, so it is a label, not a link. */
 .store{display:inline-flex;align-items:center;gap:10px;height:56px;padding:0 28px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:17px;font-weight:600;box-shadow:0 14px 30px -12px rgba(21,20,15,.6)}
 .store svg{width:20px;height:20px;fill:currentColor}
-button.store{border:0;font:inherit;font-size:17px;font-weight:600;cursor:pointer}
-.wl{display:inline-flex;flex-direction:column;align-items:center;max-width:100%}
-.wl .field,.wl .done{display:none}
-.wl .field{align-items:center;gap:6px;height:56px;width:340px;max-width:100%;padding:0 6px 0 22px;border-radius:999px;background:var(--panel);box-shadow:0 0 0 1px var(--line),0 14px 30px -12px rgba(21,20,15,.35)}
-.wl input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:17px;color:var(--text)}
-.wl .go{flex:none;width:44px;height:44px;border:0;border-radius:50%;background:var(--button);display:flex;align-items:center;justify-content:center;cursor:pointer}
-.wl .go svg,.wl .done svg{width:20px;height:20px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
-.wl .go svg{stroke:var(--on-button)}
-.wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:999px;background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:17px;font-weight:600}
-.wl .done svg{stroke:currentColor}
-.wl .err{margin-top:10px;font-size:15px;color:var(--rust)}.wl .err:empty{display:none}
-.wl.on .open,.wl.sent .open,.wl.sent .field{display:none}.wl.on .field{display:flex}.wl.sent .done{display:inline-flex}
-html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
 
 /* Grain over the whole page: printed paper rather than a flat screen. */
 .site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.06;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
@@ -70,7 +57,7 @@ html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
 .hero h1 .w{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em}
 .hero h1 .w>span{display:inline-block}
 .lede{max-width:560px;margin:26px auto 0;font-size:20px;color:var(--sec)}
-.hero .wl{margin-top:34px}
+.hero .store{margin-top:34px}
 .stage{position:relative;height:770px;margin-top:72px;perspective:1600px;z-index:1}
 .stage .device{position:absolute;left:50%;top:0;transform:translateX(-50%) rotateX(calc(26deg * (1 - var(--p,1)))) scale(calc(.86 + .14 * var(--p,1)));transform-origin:50% 0}
 .glass{position:absolute;z-index:2;text-align:left;padding:16px 18px;border-radius:22px;background:color-mix(in srgb,var(--panel) 70%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);border:1px solid color-mix(in srgb,var(--panel) 85%,transparent);box-shadow:0 24px 60px -18px rgba(80,60,30,.28);transform:translateY(calc(var(--depth) * (1 - var(--p,1)) * 1px))}
@@ -226,7 +213,7 @@ html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
 .final .wrap{position:relative;z-index:1}
 .final .mark{display:block;margin:0 auto 26px;filter:drop-shadow(0 20px 30px rgba(60,45,20,.18))}
 .final h2{font-size:clamp(58px,8vw,104px)}
-.final .wl{margin-top:30px}
+.final .store{margin-top:30px}
 
 /* Footer: the mark and the line from the hero, then three short groups, then who runs Aurin. */
 .site-foot{border-top:1px solid var(--line);padding:56px 0 36px;color:var(--muted);font-size:14px}
@@ -257,8 +244,8 @@ html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
 @media (prefers-reduced-motion:no-preference){
   .js .hero h1 .w>span{transform:translateY(105%);animation:rise 1.1s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(.15s + var(--i) * 90ms)}
   @keyframes rise{to{transform:none}}
-  .js .hero .lede,.js .hero .wl,.js .hero .kicker{opacity:0;animation:fade 1s .8s forwards}
-  .js .hero .kicker{animation-delay:.05s}.js .hero .wl{animation-delay:1s}
+  .js .hero .lede,.js .hero .store,.js .hero .kicker{opacity:0;animation:fade 1s .8s forwards}
+  .js .hero .kicker{animation-delay:.05s}.js .hero .store{animation-delay:1s}
   .js .stage{opacity:0;animation:fade 1.2s .5s forwards}
   @keyframes fade{to{opacity:1}}
   .aurora i{animation:drift 22s ease-in-out infinite alternate}
@@ -345,19 +332,11 @@ function deviceLang(request) {
   return /^(cs|sk)\b/.test(first) ? 'cs' : 'en';
 }
 
+const APPLE_LOGO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.6 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.2.8 1.1 1.7 2.3 2.9 2.3 1.1 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.2-2.5 1.2-2.6 0 0-2.4-.9-2.4-3.7zM14.2 5.6c.6-.8 1.1-1.8 1-2.9-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.8 1 .1 2-.5 2.7-1.3z"/></svg>';
 // The Aurin mark (Rovnováha): the load half over the recovery half, offset as in the app icon.
 const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" height="${Math.round(width * 80 / 88)}" aria-hidden="true"><path d="M6 46A36 36 0 0 1 78 46Z" fill="var(--logo-load)"/><path d="M22 54A36 36 0 0 0 94 54Z" fill="var(--logo-recovery)"/></svg>`;
 const LOCK = '<svg class="icon lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>';
-// "Join the waitlist": the button opens an e-mail field; the address waits for the owner, who
-// invites people into TestFlight from the app (src/testflight-waitlist.js).
-const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
-const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
-const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
-<button type="button" class="store open">Join the waitlist</button>
-<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
-<span class="done" role="status">${CHECK}<span>You're on the list</span></span>
-<span class="err" role="alert"></span>
-</form>`;
+const store = () => `<span class="store">${APPLE_LOGO}Coming soon to the App Store</span>`;
 
 // The page's motion. Scroll drives it: the hero phone stands up, each scene's phone follows the step
 // in view, the privacy sentence lights up. Without JS everything is simply shown; with reduced
@@ -382,13 +361,6 @@ function frame(){queued=false;var vh=innerHeight,p=null,k=0;
   x.parts.forEach(function(list,k){list.forEach(function(el,j){el.classList.toggle('on',j===at);if(k===1)el.classList.toggle('past',j<at);});});});
  if(words.length)words.forEach(function(w,j){w.classList.toggle('lit',k*words.length>j);});}
 function ask(){if(!queued){queued=true;requestAnimationFrame(frame);}}
-document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelector('input'),err=f.querySelector('.err'),busy=false;
- f.querySelector('.open').addEventListener('click',function(){f.classList.add('on');input.focus();});
- f.addEventListener('submit',function(e){e.preventDefault();if(busy)return;var email=input.value.trim();err.textContent='';
-  if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){err.textContent='Enter a valid email.';input.focus();return;}
-  busy=true;fetch('/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})})
-  .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');f.classList.remove('on');})})
-  .catch(function(x){err.textContent=x.message;}).then(function(){busy=false;});});});
 addEventListener('scroll',ask,{passive:true});addEventListener('resize',function(){fit();ask();});fit();frame();
 // Connections: a logo shows what Aurin reads from it and sends back; they take turns until one is picked.
 var hub=document.querySelector('.hub');if(!hub)return;
@@ -654,7 +626,7 @@ ${list.map(([, part, top]) => `<div class="part" style="top:${top}px"><img src="
 <span class="kicker"><i></i>Free AI coach for iPhone</span>
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts and turns them into one number, one plan and one coach every morning.</p>
-${store('top')}
+${store()}
 </div>
 <div class="stage">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">64 ms</div><div class="d up">↑ 6 ms above normal</div></div>
@@ -694,7 +666,7 @@ ${faq}
 <section class="final">${aurora}<div class="wrap reveal">
 ${mark(120)}
 <h2>Aurin</h2>
-${store('end')}
+${store()}
 </div></section>
 </main>`
   });
@@ -742,7 +714,6 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <p><strong>Wahoo</strong>, only if you connect your Wahoo account: your finished rides and runs (start, duration, distance, climbing, power, training load, heart rate, cadence and calories), to count them in your training load. Aurin deletes them when you disconnect Wahoo.</p>
 <p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training), food and drinks, workouts and how they went, notes, your journal answers (such as alcohol, caffeine, sauna or how you felt), and your conversations with the assistant. We count the messages you send the coach each week, to keep the service fair for everyone.</p>
 <p><strong>What you send us from Settings → Help:</strong> a problem report with what you write, a screenshot if you add one and, if you leave it on, the app’s diagnostics (app and iOS version, your connections and their last errors, failed requests and crashes, never your health data), or a feature idea with the app version. We keep them to answer you and fix the problem, and they are deleted with your account.</p>
-<p><strong>The waitlist on our website:</strong> when you join it, we keep the email address you enter and when you joined. We use it only to let you test Aurin through Apple’s TestFlight; we send no newsletters to it.</p>
 <p><strong>On your device:</strong> a sign-in cookie valid for up to 30 days, a short-lived cookie that protects signing in, cookies with your theme and language and, in the browser’s storage, a copy of the last loaded day and a few display settings so the app opens instantly, and, once you add or use a passkey, your email with the passkey’s identifier, so this device signs you in with it instead of sending a code. We use no advertising or tracking cookies.</p>
 <p><strong>Technical logs:</strong> our hosting provider records technical details of requests (such as time, IP address, page and errors) to keep the service running and secure. These logs are kept for a few days.</p>
 <h2>How we use your data</h2>
@@ -782,7 +753,6 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li><strong>Google Health</strong>: the food and drinks you log and, if you allow it, your weight.</li>
 <li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data. OpenAI processes it on our behalf, does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse.</li>
 <li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''}</li>
-<li><strong>Apple</strong>, when we add you to the testers from the waitlist: your email address, so that TestFlight emails you how to install Aurin. Apple handles it under its own privacy policy.</li>
 <li><strong>Open-Meteo</strong> gets only the place you choose for the weather in your training plan: a place you search for, or your location rounded to about 1 km if you allow it. Without that the app shows no weather.</li>
 <li><strong>Authorities</strong>, only when the law requires it.</li>
 </ul>
@@ -806,7 +776,6 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li>You can also remove Aurin’s access at any time in your Google Account under <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>. Aurin then can no longer read or write your Google data.</li>
 ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID settings.</li>' : ''}
 <li>Technical logs are kept for a few days, and OpenAI keeps AI requests for up to 30 days.</li>
-<li>An address on the waitlist stays there until testing ends, or until you ask us to remove it at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
 </ul>
 <p>The <a href="/support">Support</a> page explains step by step how to manage and delete your data.</p>
 <h2>Legal bases and your rights</h2>
@@ -844,7 +813,6 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <p><strong>Wahoo</strong>, jen když připojíš účet Wahoo: tvoje dokončené jízdy a běhy (začátek, délku, vzdálenost, převýšení, výkon, tréninkovou zátěž, tep, kadenci a kalorie), aby se započítaly do tréninkové zátěže. Aurin je po odpojení Wahoo smaže.</p>
 <p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink), jídlo a pití, tréninky a jejich hodnocení, poznámky, odpovědi v deníku (třeba alkohol, kofein, sauna nebo jak ti bylo) a konverzace s asistentem. Počítáme, kolik zpráv koučovi za týden pošleš, aby služba zůstala férová pro všechny.</p>
 <p><strong>Co nám pošleš z Nastavení → Pomoc:</strong> hlášení problému s tím, co napíšeš, snímkem obrazovky, když ho přidáš, a pokud ji necháš zapnutou, diagnostikou aplikace (verze aplikace a iOS, propojení a jejich poslední chyby, nepovedené požadavky a pády, nikdy tvoje zdravotní data), nebo návrh funkce s verzí aplikace. Uchováváme je, abychom ti odpověděli a problém opravili, a smažou se s tvým účtem.</p>
-<p><strong>Waitlist na našem webu:</strong> když se do něj zapíšeš, uložíme e-mail, který zadáš, a datum zápisu. Použijeme ho jen k testování Aurinu přes TestFlight od Applu; žádné newslettery na něj neposíláme.</p>
 <p><strong>Ve tvém zařízení:</strong> cookie přihlášení s platností nejvýš 30 dní, krátkodobá cookie, která chrání přihlašování, cookies s vybraným vzhledem a jazykem a v úložišti prohlížeče kopie naposledy načteného dne a několik nastavení zobrazení, aby se aplikace otevřela hned, a když si přidáš nebo použiješ přístupový klíč, tvůj e-mail s označením klíče, aby tě zařízení přihlásilo jím a nemuselo posílat kód. Reklamní ani sledovací cookies nepoužíváme.</p>
 <p><strong>Technické záznamy:</strong> náš poskytovatel hostingu zaznamenává technické údaje o požadavcích (třeba čas, IP adresu, stránku a chyby), aby služba fungovala a byla bezpečná. Tyto záznamy se uchovávají několik dní.</p>
 <h2>K čemu data používáme</h2>
@@ -884,7 +852,6 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li><strong>Google Health</strong>: jídlo a pití, které zapíšeš, a když to povolíš, i tvoje váha.</li>
 <li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě. OpenAI je zpracovává naším jménem, data poslaná přes své API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití.</li>
 <li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''}</li>
-<li><strong>Apple</strong>, když tě z waitlistu přidáme k testerům: tvůj e-mail, aby ti TestFlight poslal, jak Aurin nainstalovat. Apple s ním nakládá podle svých zásad ochrany soukromí.</li>
 <li><strong>Open-Meteo</strong> dostane jen místo, které vybereš pro počasí v plánu tréninků: vyhledané místo, nebo tvou polohu zaokrouhlenou zhruba na 1 km, pokud ji povolíš. Bez toho aplikace počasí neukazuje.</li>
 <li><strong>Úřady</strong>, jen když to vyžaduje zákon.</li>
 </ul>
@@ -908,7 +875,6 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li>Přístup Aurinu můžeš kdykoli odebrat i ve svém účtu Google v části <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>. Aurin pak už tvoje data z Googlu nepřečte ani nezapíše.</li>
 ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení svého Apple ID.</li>' : ''}
 <li>Technické záznamy se uchovávají několik dní a OpenAI uchovává požadavky AI nejvýš 30 dní.</li>
-<li>E-mail ve waitlistu zůstane, dokud testování neskončí nebo dokud nás nepožádáš o jeho smazání na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
 </ul>
 <p>Na stránce <a href="/support">Podpora</a> najdeš postup krok za krokem, jak data spravovat a smazat.</p>
 <h2>Právní základ a tvoje práva</h2>
