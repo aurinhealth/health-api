@@ -8,8 +8,8 @@ const first = await keyPair(), second = await keyPair();
 const jwkOf = async (pair, kid) => ({ ...(await crypto.subtle.exportKey("jwk", pair.publicKey)), kid });
 async function token(pair, kid, overrides = {}) {
   const claims = {
-    iss: "https://token.actions.githubusercontent.com", aud: "health-strength", repository: "shaarkyn/health-api", repository_id: "1371310425", repository_owner_id: "329509326",
-    ref: "refs/heads/main", workflow_ref: "shaarkyn/health-api/.github/workflows/deploy-worker.yml@refs/heads/main", event_name: "push", actor: "shaarkyn",
+    iss: "https://token.actions.githubusercontent.com", aud: "health-strength", repository: "aurinhealth/health-api", repository_id: "1371310425", repository_owner_id: "329509326",
+    ref: "refs/heads/main", workflow_ref: "aurinhealth/health-api/.github/workflows/deploy-worker.yml@refs/heads/main", event_name: "push", actor: "aurinhealth",
     exp: Math.floor(Date.now() / 1000) + 300, ...overrides
   };
   const data = b64({ alg: "RS256", kid }) + "." + b64(claims);
@@ -22,8 +22,8 @@ test("a workflow token signed with a key GitHub rotated in fetches the keys agai
   const old = await jwkOf(first, "gh-1"), fresh = await jwkOf(second, "gh-2");
   const fetches = [];
   const fetchImpl = async (url, init) => { fetches.push({ url: String(url), init }); return Response.json({ keys: fetches.length === 1 ? [old] : [old, fresh] }); };
-  assert.equal((await verifyGitHubActionsToken(request(await token(first, "gh-1")), fetchImpl)).actor, "shaarkyn");
-  assert.equal((await verifyGitHubActionsToken(request(await token(second, "gh-2")), fetchImpl)).actor, "shaarkyn");
+  assert.equal((await verifyGitHubActionsToken(request(await token(first, "gh-1")), fetchImpl)).actor, "aurinhealth");
+  assert.equal((await verifyGitHubActionsToken(request(await token(second, "gh-2")), fetchImpl)).actor, "aurinhealth");
   assert.equal(fetches.length, 2);
   assert.equal(fetches[1].url, "https://token.actions.githubusercontent.com/.well-known/jwks");
   assert.deepEqual(fetches[1].init, { cache: "no-store" });
@@ -41,7 +41,7 @@ test("the claims of another repository, workflow or actor are refused", async ()
   await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { actor: "mallory" })), fetchImpl), /actor/);
   await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { event_name: "pull_request" })), fetchImpl), /event/);
   // The nightly gym workflow is gone: neither it nor a scheduled run gets in.
-  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { workflow_ref: "shaarkyn/health-api/.github/workflows/health-strength.yml@refs/heads/main", event_name: "schedule" })), fetchImpl), /workflow/);
+  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { workflow_ref: "aurinhealth/health-api/.github/workflows/health-strength.yml@refs/heads/main", event_name: "schedule" })), fetchImpl), /workflow/);
   await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { event_name: "schedule" })), fetchImpl), /event/);
   await assert.rejects(verifyGitHubActionsToken(request(await token(second, "gh-1")), fetchImpl), /signature/);
 });
@@ -49,22 +49,22 @@ test("the claims of another repository, workflow or actor are refused", async ()
 test("the live server's deploy from Vydat, started by hand, gets in; other workflows do not", async () => {
   _resetGitHubJwksCacheForTest();
   const fetchImpl = async () => Response.json({ keys: [await jwkOf(first, "gh-1")] });
-  const vydat = { workflow_ref: "shaarkyn/health-api/.github/workflows/vydat.yml@refs/heads/main", event_name: "workflow_dispatch" };
-  assert.equal((await verifyGitHubActionsToken(request(await token(first, "gh-1", vydat)), fetchImpl)).actor, "shaarkyn");
-  assert.equal((await verifyGitHubActionsToken(request(await token(first, "gh-1", { event_name: "workflow_dispatch" })), fetchImpl)).actor, "shaarkyn");
+  const vydat = { workflow_ref: "aurinhealth/health-api/.github/workflows/vydat.yml@refs/heads/main", event_name: "workflow_dispatch" };
+  assert.equal((await verifyGitHubActionsToken(request(await token(first, "gh-1", vydat)), fetchImpl)).actor, "aurinhealth");
+  assert.equal((await verifyGitHubActionsToken(request(await token(first, "gh-1", { event_name: "workflow_dispatch" })), fetchImpl)).actor, "aurinhealth");
   await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { ...vydat, ref: "refs/heads/feature" })), fetchImpl), /ref/);
-  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { ...vydat, workflow_ref: "shaarkyn/health-api/.github/workflows/ios-testflight.yml@refs/heads/main" })), fetchImpl), /workflow/);
+  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { ...vydat, workflow_ref: "aurinhealth/health-api/.github/workflows/ios-testflight.yml@refs/heads/main" })), fetchImpl), /workflow/);
 });
 
 test("the coach evaluation's token opens only its own audience and workflow", async () => {
   _resetGitHubJwksCacheForTest();
   const fetchImpl = async () => Response.json({ keys: [await jwkOf(first, "gh-1")] });
-  const evalOptions = { audience: "aurin-coach-eval", workflows: new Set(["shaarkyn/health-api/.github/workflows/coach-eval.yml@refs/heads/main"]) };
-  const evalClaims = { aud: "aurin-coach-eval", workflow_ref: "shaarkyn/health-api/.github/workflows/coach-eval.yml@refs/heads/main", event_name: "workflow_dispatch" };
-  assert.equal((await verifyGitHubActionsToken(request(await token(first, "gh-1", evalClaims)), fetchImpl, evalOptions)).actor, "shaarkyn");
+  const evalOptions = { audience: "aurin-coach-eval", workflows: new Set(["aurinhealth/health-api/.github/workflows/coach-eval.yml@refs/heads/main"]) };
+  const evalClaims = { aud: "aurin-coach-eval", workflow_ref: "aurinhealth/health-api/.github/workflows/coach-eval.yml@refs/heads/main", event_name: "workflow_dispatch" };
+  assert.equal((await verifyGitHubActionsToken(request(await token(first, "gh-1", evalClaims)), fetchImpl, evalOptions)).actor, "aurinhealth");
   // Its token is no deploy token, and a deploy token is no evaluation token.
   await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", evalClaims)), fetchImpl), /audience/);
   await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { ...evalClaims, aud: "health-strength" })), fetchImpl), /workflow/);
   await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { event_name: "workflow_dispatch" })), fetchImpl, evalOptions), /audience/);
-  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { ...evalClaims, workflow_ref: "shaarkyn/health-api/.github/workflows/deploy-worker.yml@refs/heads/main" })), fetchImpl, evalOptions), /workflow/);
+  await assert.rejects(verifyGitHubActionsToken(request(await token(first, "gh-1", { ...evalClaims, workflow_ref: "aurinhealth/health-api/.github/workflows/deploy-worker.yml@refs/heads/main" })), fetchImpl, evalOptions), /workflow/);
 });
