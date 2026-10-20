@@ -14,7 +14,7 @@
 // (sleep-sessions.js reads either). Which device's night counts is
 // source-priority.js's call. Disconnecting deletes WHOOP's rows.
 import { saveConnectionSecret, deleteConnectionSecret, refreshConnectionTokens, tokensDue } from './connection-secrets.js';
-import { connectReturn, connectReturnUrl } from './connect-return.js';
+import { connectReturn, connectReturnUrl, oauthStateValue, startedBy } from './connect-return.js';
 import { appOrigin } from './app-origin.js';
 import { markConnectionBroken, markConnectionOk, clearConnectionHealth } from './connection-health.js';
 import { healthPointJson } from './health-point-json.js';
@@ -70,13 +70,15 @@ export async function handleWhoopOAuth(request, env, pathname, fetchImpl = fetch
     u.searchParams.set('response_type', 'code');
     u.searchParams.set('scope', WHOOP_SCOPES.join(' '));
     u.searchParams.set('state', state);
-    return back(u.toString(), STATE_COOKIE + '=' + encodeURIComponent(state + '.' + connectReturn(request)) + '; Max-Age=600; Path=/oauth/whoop; Secure; HttpOnly; SameSite=Lax');
+    return back(u.toString(), STATE_COOKIE + '=' + oauthStateValue(state, request, env) + '; Max-Age=600; Path=/oauth/whoop; Secure; HttpOnly; SameSite=Lax');
   }
   if (pathname !== '/oauth/whoop/callback' || request.method !== 'GET') return null;
   const url = new URL(request.url), code = url.searchParams.get('code'), state = url.searchParams.get('state');
   const m = (request.headers.get('Cookie') || '').match(new RegExp('(?:^|;\\s*)' + STATE_COOKIE + '=([^;]+)'));
-  const [expected, to] = decodeURIComponent(m?.[1] || '').split('.');
+  const [expected, to, uid] = decodeURIComponent(m?.[1] || '').split('.');
   if (!state || state !== expected) return back(connectReturnUrl('settings', 'whoop-failed'));
+  // Started by another account than the one signed in now: its keys are not stored here.
+  if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'whoop-failed'));
   if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'whoop-cancelled'));
   if (!whoopConfigured(env)) return back(connectReturnUrl(to, 'whoop-failed'));
   const data = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri(env, request) }, fetchImpl);

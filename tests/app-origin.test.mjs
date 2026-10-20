@@ -17,7 +17,7 @@ test("OAuth callbacks stay on the host the request came to", () => {
 });
 
 test("Google sign-in, Google Health and Intervals.icu send their callback to the same host", async () => {
-  const env = { GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret", SESSION_SECRET: "s", OWNER_EMAIL: "owner@example.com", DB: {}, INTERVALS_CLIENT_ID: "icu", INTERVALS_CLIENT_SECRET: "icu-secret" };
+  const env = { GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret", SESSION_SECRET: "s", OWNER_EMAIL: "owner@example.com", DB: {}, USER_ID: 7, INTERVALS_CLIENT_ID: "icu", INTERVALS_CLIENT_SECRET: "icu-secret" };
   for (const origin of hosts) {
     const redirect = async response => new URL(response.headers.get("Location")).searchParams.get("redirect_uri");
     assert.equal(await redirect(await handleGoogleLogin(new Request(origin + "/auth/google?app=" + "a".repeat(43)), env, "/auth/google")), origin + "/auth/google/callback");
@@ -26,7 +26,7 @@ test("Google sign-in, Google Health and Intervals.icu send their callback to the
     // The token exchange repeats the same redirect_uri, as the provider requires.
     let sent = null;
     const fetchImpl = async (_url, init) => { sent = new URLSearchParams(init.body).get("redirect_uri"); return Response.json({}, { status: 400 }); };
-    await handleIntervalsOAuth(new Request(origin + "/oauth/intervals/callback?code=c&state=s", { headers: { Cookie: "pfd_intervals_oauth_state=s.settings" } }), env, "/oauth/intervals/callback", fetchImpl);
+    await handleIntervalsOAuth(new Request(origin + "/oauth/intervals/callback?code=c&state=s", { headers: { Cookie: "pfd_intervals_oauth_state=s.settings.7" } }), env, "/oauth/intervals/callback", fetchImpl);
     assert.equal(sent, origin + "/oauth/intervals/callback");
   }
 });

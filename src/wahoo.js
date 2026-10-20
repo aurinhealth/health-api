@@ -24,7 +24,7 @@
 // Wahoo's terms: data deleted on disconnecting, the connection itself never paid.
 import { exportDue, failedExport } from './export-retry.js';
 import { saveConnectionSecret, deleteConnectionSecret, refreshConnectionTokens, tokensDue } from './connection-secrets.js';
-import { connectReturn, connectReturnUrl } from './connect-return.js';
+import { connectReturn, connectReturnUrl, oauthStateValue, startedBy } from './connect-return.js';
 import { appOrigin } from './app-origin.js';
 import { markConnectionBroken, markConnectionOk, clearConnectionHealth } from './connection-health.js';
 import { healthPointJson } from './health-point-json.js';
@@ -85,13 +85,15 @@ export async function handleWahooOAuth(request, env, pathname, fetchImpl = fetch
     u.searchParams.set('response_type', 'code');
     u.searchParams.set('scope', WAHOO_SCOPES.join(' '));
     u.searchParams.set('state', state);
-    return back(u.toString(), STATE_COOKIE + '=' + encodeURIComponent(state + '.' + connectReturn(request)) + '; Max-Age=600; Path=/oauth/wahoo; Secure; HttpOnly; SameSite=Lax');
+    return back(u.toString(), STATE_COOKIE + '=' + oauthStateValue(state, request, env) + '; Max-Age=600; Path=/oauth/wahoo; Secure; HttpOnly; SameSite=Lax');
   }
   if (pathname !== '/oauth/wahoo/callback' || request.method !== 'GET') return null;
   const url = new URL(request.url), code = url.searchParams.get('code'), state = url.searchParams.get('state');
   const m = (request.headers.get('Cookie') || '').match(new RegExp('(?:^|;\\s*)' + STATE_COOKIE + '=([^;]+)'));
-  const [expected, to] = decodeURIComponent(m?.[1] || '').split('.');
+  const [expected, to, uid] = decodeURIComponent(m?.[1] || '').split('.');
   if (!state || state !== expected) return back(connectReturnUrl('settings', 'wahoo-failed'));
+  // Started by another account than the one signed in now: its keys are not stored here.
+  if (!startedBy(uid, env)) return back(connectReturnUrl(to, 'wahoo-failed'));
   if (url.searchParams.get('error') || !code) return back(connectReturnUrl(to, 'wahoo-cancelled'));
   if (!wahooConfigured(env)) return back(connectReturnUrl(to, 'wahoo-failed'));
   const data = await tokenRequest(env, { grant_type: 'authorization_code', code, redirect_uri: redirectUri(env, request) }, fetchImpl);

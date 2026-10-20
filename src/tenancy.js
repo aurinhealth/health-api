@@ -359,8 +359,7 @@ export async function signInGoogleUser(db, env, { sub, email, name }) {
     if (row && row.google_sub && row.google_sub !== String(sub)) return null;
   }
   if (!row) {
-    if (!(await mayCreateAccount(db, env, address))) return null;
-    await db.prepare("INSERT INTO users(email, role) VALUES(?, ?)").bind(address, address === ownerEmail(env) ? "admin" : "user").run();
+    if (!(await mayCreateAccount(db, env, address)) || !(await createAccount(db, env, address))) return null;
     row = await db.prepare("SELECT id, email, name, role, disabled, google_sub FROM users WHERE email=?").bind(address).first();
   }
   if (row.disabled) return null;
@@ -415,6 +414,25 @@ export async function mayCreateAccount(db, env, address) {
   return true;
 }
 
+// Creates the account of an address mayCreateAccount let in: "created", "exists" (made by
+// another sign-in in the meantime) or null. The account limit and the free places are
+// counted again inside the INSERT, so sign-ins racing for the last place never both get an
+// account; the ones that come later wait on the list, as they would have a moment after.
+export async function createAccount(db, env, address, name = null) {
+  const owner = address === ownerEmail(env), conditions = [], args = [];
+  if (!owner) {
+    const limit = Number(env?.ACCOUNT_LIMIT) || 0;
+    if (limit > 0) { conditions.push("(EXISTS (SELECT 1 FROM user_invites WHERE email=?) OR (SELECT COUNT(*) FROM users) < ?)"); args.push(address, limit); }
+    if (await accountCapacity(db, env).catch(() => null)) conditions.push(OPEN_PLACES + " > " + UNPLACED_USERS);
+  }
+  const inserted = await db.prepare(`INSERT INTO users(email, name, role) SELECT ?, ?, ? WHERE ${conditions.join(" AND ") || "1"} ON CONFLICT(email) DO NOTHING`)
+    .bind(address, name, owner ? "admin" : "user", ...args).run();
+  if (Number(inserted.meta?.changes) > 0) return "created";
+  if (await db.prepare("SELECT id FROM users WHERE email=?").bind(address).first()) return "exists";
+  await waitlist(db, address, "another sign-in took the last place");
+  return null;
+}
+
 async function waitlist(db, address, reason) {
   console.warn(`New account refused: ${reason}`);
   await db.prepare("INSERT INTO signup_waitlist(email) VALUES(?) ON CONFLICT(email) DO NOTHING").bind(address).run().catch(() => null);
@@ -424,14 +442,16 @@ async function waitlist(db, address, reason) {
 // Places for new accounts in the user databases (user-data-shards.js): the free
 // places of the ready databases that take new accounts, less the accounts not
 // placed yet (they get a place on their first request). Null without sharding.
+const OPEN_PLACES = "(SELECT COALESCE(SUM(MAX(0,s.max_users-(SELECT COUNT(*) FROM user_data_routes r WHERE r.shard_key=s.shard_key))),0) FROM user_data_shards s WHERE s.shard_key!='legacy' AND s.state='ready' AND s.accepting_new=1)";
+const UNPLACED_USERS = "(SELECT COUNT(*) FROM users u WHERE NOT EXISTS (SELECT 1 FROM user_data_routes r WHERE r.user_id=u.id))";
 export async function accountCapacity(db, env) {
   if (env?.USER_DATA_ROUTING !== "true") return null;
   const enabled = await db.prepare("SELECT value FROM schema_meta WHERE key='user_data_sharding_enabled'").first();
   if (enabled?.value !== "1") return null;
   const row = await db.prepare(`SELECT
       (SELECT COALESCE(SUM(s.max_users),0) FROM user_data_shards s WHERE s.shard_key!='legacy' AND s.state='ready' AND s.accepting_new=1) AS places,
-      (SELECT COALESCE(SUM(MAX(0,s.max_users-(SELECT COUNT(*) FROM user_data_routes r WHERE r.shard_key=s.shard_key))),0) FROM user_data_shards s WHERE s.shard_key!='legacy' AND s.state='ready' AND s.accepting_new=1) AS open,
-      (SELECT COUNT(*) FROM users u WHERE NOT EXISTS (SELECT 1 FROM user_data_routes r WHERE r.user_id=u.id)) AS unplaced`).first();
+      ${OPEN_PLACES} AS open,
+      ${UNPLACED_USERS} AS unplaced`).first();
   const places = Number(row?.places) || 0, free = Math.max(0, (Number(row?.open) || 0) - (Number(row?.unplaced) || 0));
   return { places, used: places - free, free };
 }
@@ -444,8 +464,9 @@ export async function signInEmailUser(db, env, email) {
   let row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first(), created = false;
   if (!row) {
     if (!(await mayCreateAccount(db, env, address))) return null;
-    const inserted = await db.prepare("INSERT INTO users(email, role) VALUES(?, ?) ON CONFLICT(email) DO NOTHING").bind(address, address === ownerEmail(env) ? "admin" : "user").run();
-    created = Number(inserted.meta?.changes) > 0;
+    const made = await createAccount(db, env, address);
+    if (!made) return null;
+    created = made === "created";
     row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
   }
   if (!row || row.disabled) return null;

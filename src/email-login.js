@@ -9,6 +9,9 @@
 // minute, 30 an hour and 100 a day. All codes together stay under EMAIL_CODES_PER_DAY (500) a
 // day, of which addresses that get a code only through OPEN_SIGNUP use at most four fifths,
 // so made-up addresses cannot use up the codes of people with an account or an invitation.
+// Codes for moving an account to another address have their own day's budget
+// (EMAIL_CHANGE_CODES_PER_DAY, 100), so they never take from the codes for signing in, and one
+// account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie } from "./dashboard-auth.js";
 import { allowClient, allowRequest } from "./ip-rate-limit.js";
 import { normalizeEmail, emailCodeAccess, signInEmailUser, changeUserEmail } from "./tenancy.js";
@@ -25,9 +28,13 @@ const MAX_FAILED_PER_DAY = 20;
 const MAX_REVIEW_FAILURES = 20;
 const DEFAULT_CODES_PER_DAY = 500;
 const RESERVED_SHARE = 0.2;
+const DEFAULT_CHANGE_CODES_PER_DAY = 100;
 // Per caller: asking for a code, and checking one.
 export const START_LIMITS = { minute: 5, hour: 30, day: 50 };
 export const VERIFY_LIMITS = { minute: 10, hour: 30, day: 100 };
+// Asking for a code to move the account to another address: per account, and per caller.
+export const CHANGE_USER_LIMITS = { minute: 2, hour: 5, day: 10 };
+export const CHANGE_CLIENT_LIMITS = { minute: 5, hour: 20, day: 30 };
 const STALE_SECONDS = 2 * 24 * 60 * 60;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EXPIRED = () => L("Kód už neplatí. Nech si poslat nový.", "That code has expired. Send a new one.");
@@ -103,15 +110,20 @@ export async function sendCode(env, email, lang = "cs", { now = Date.now(), code
 }
 
 // `open`: the address gets a code only because anyone may sign up, so it draws on the open share.
-async function claimAndSend(db, env, email, code, purpose, message, now, { open = false } = {}) {
+// `change`: a code for moving an account to this address, which draws on its own budget only.
+async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false } = {}) {
   const seconds = Math.floor(now / 1000), day = today(now);
   // The address's own limits are checked first, so a code it would not get spends no budget.
   const current = await db.prepare("SELECT sent_at, day, day_count, fail_day, fail_count FROM email_login_codes WHERE email=?").bind(email).first();
   if (current && (current.sent_at > seconds - RESEND_SECONDS || (current.day === day && current.day_count >= MAX_SENDS_PER_DAY) || (current.fail_day === day && current.fail_count >= MAX_FAILED_PER_DAY))) return false;
   // All codes together: the budget of a day, so an open sign-up cannot turn the sender into a spam
   // source. The open share is claimed first: a refusal there never takes from the shared budget.
-  if (open && !(await allowRequest(db, "email-codes:open:day", { day: openCodesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day for new addresses is used up"); return false; }
-  if (!(await allowRequest(db, "email-codes:day", { day: codesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day is used up"); return false; }
+  if (change) {
+    if (!(await allowRequest(db, "email-codes:change:day", { day: changeCodesPerDay(env) }, now))) { console.warn("E-mail change code budget of the day is used up"); return false; }
+  } else {
+    if (open && !(await allowRequest(db, "email-codes:open:day", { day: openCodesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day for new addresses is used up"); return false; }
+    if (!(await allowRequest(db, "email-codes:day", { day: codesPerDay(env) }, now))) { console.warn("Sign-in code e-mail budget of the day is used up"); return false; }
+  }
   // Claimed before sending, so two quick requests never send two codes or pass the daily limit; the
   // code it replaces is read in the same transaction, to put it back if the e-mail does not go out.
   const hash = await codeHash(env, email, code, purpose);
@@ -140,6 +152,7 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
 export const codesPerDay = env => { const n = Number(env?.EMAIL_CODES_PER_DAY); return Number.isInteger(n) && n > 0 ? n : DEFAULT_CODES_PER_DAY; };
 // What addresses that get a code only through OPEN_SIGNUP may use of it; the rest is kept for the others.
 export const openCodesPerDay = env => { const all = codesPerDay(env); return all - Math.ceil(all * RESERVED_SHARE); };
+export const changeCodesPerDay = env => { const n = Number(env?.EMAIL_CHANGE_CODES_PER_DAY); return Number.isInteger(n) && n > 0 ? n : DEFAULT_CHANGE_CODES_PER_DAY; };
 
 async function verifyCode(env, email, input) {
   const refused = await useCode(env.DB, env, email, input, "email-code");
@@ -216,9 +229,14 @@ export async function handleEmailChange(request, env, url, session, ctx) {
   if (url.pathname === "/app/api/account/email/start") {
     if (email === normalizeEmail(user.email)) return emailChangeRefusal("same");
     if (user.isOwner || email === normalizeEmail(env.OWNER_EMAIL)) return emailChangeRefusal("owner");
+    // Per account and per caller, before any address is looked up, so rotating addresses runs into them.
+    const time = Date.now();
+    if (!(await allowRequest(db, "email-change:user:" + user.id, CHANGE_USER_LIMITS, time)) || !(await allowClient(db, request, sessionSecret(env), "email-change", time, CHANGE_CLIENT_LIMITS))) {
+      return json({ message: L("Příliš mnoho žádostí o změnu e-mailu. Zkus to později.", "Too many email change requests. Try again later.") }, 429);
+    }
     if (await db.prepare("SELECT id FROM users WHERE email=?").bind(email).first()) return emailChangeRefusal("taken");
     const code = randomCode(), lang = requestLanguage(request);
-    const sent = await claimAndSend(db, env, email, code, purpose, emailChangeCodeEmail(lang, code), Date.now());
+    const sent = await claimAndSend(db, env, email, code, purpose, emailChangeCodeEmail(lang, code), time, { change: true });
     if (!sent) return json({ message: L("Kód na tuhle adresu jsme poslali před chvílí. Další můžeš chtít za minutu.", "We sent a code to this address a moment ago. You can ask for another in a minute.") }, 429);
     return json({ status: "ok" });
   }

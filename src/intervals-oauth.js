@@ -6,7 +6,7 @@
 // (disconnectIntervalsApp), which also stops the webhooks.
 import { saveConnectionSecret } from "./connection-secrets.js";
 import { INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
-import { connectReturn, connectReturnUrl } from "./connect-return.js";
+import { connectReturn, connectReturnUrl, oauthStateValue, startedBy } from "./connect-return.js";
 import { appOrigin } from "./app-origin.js";
 
 const STATE_COOKIE = "pfd_intervals_oauth_state";
@@ -33,13 +33,15 @@ export async function handleIntervalsOAuth(request, env, pathname, fetchImpl = f
     u.searchParams.set("redirect_uri", redirectUri(env, request));
     u.searchParams.set("scope", INTERVALS_SCOPES.join(","));
     u.searchParams.set("state", state);
-    return back(u.toString(), STATE_COOKIE + "=" + encodeURIComponent(state + "." + connectReturn(request)) + "; Max-Age=600; Path=/oauth/intervals; Secure; HttpOnly; SameSite=Lax");
+    return back(u.toString(), STATE_COOKIE + "=" + oauthStateValue(state, request, env) + "; Max-Age=600; Path=/oauth/intervals; Secure; HttpOnly; SameSite=Lax");
   }
   if (pathname !== "/oauth/intervals/callback" || request.method !== "GET") return null;
   const url = new URL(request.url), code = url.searchParams.get("code"), state = url.searchParams.get("state");
   const m = (request.headers.get("Cookie") || "").match(new RegExp("(?:^|;\\s*)" + STATE_COOKIE + "=([^;]+)"));
-  const [expected, to] = decodeURIComponent(m?.[1] || "").split(".");
+  const [expected, to, uid] = decodeURIComponent(m?.[1] || "").split(".");
   if (!state || state !== expected) return back(connectReturnUrl("settings", "intervals-failed"));
+  // Started by another account than the one signed in now: its keys are not stored here.
+  if (!startedBy(uid, env)) return back(connectReturnUrl(to, "intervals-failed"));
   if (url.searchParams.get("error") || !code) return back(connectReturnUrl(to, "intervals-cancelled"));
   if (!intervalsOAuthConfigured(env)) return back(connectReturnUrl(to, "intervals-failed"));
   const response = await fetchImpl("https://intervals.icu/api/oauth/token", {

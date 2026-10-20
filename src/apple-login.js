@@ -1,5 +1,5 @@
 import { sessionSecret, signedInResponse } from "./dashboard-auth.js";
-import { ensureTenancy, normalizeEmail, ownerEmail, publicUser, mayCreateAccount } from "./tenancy.js";
+import { ensureTenancy, normalizeEmail, publicUser, mayCreateAccount, createAccount } from "./tenancy.js";
 import { L } from "./lang.js";
 
 // Sign in with Apple in the iPhone app. The Apple IDs live in user_identities.
@@ -159,8 +159,7 @@ export async function signInAppleUser(db, env, { sub, email, name = null }) {
     // An account that already has another Apple ID does not take a second one by e-mail.
     if (row && await db.prepare("SELECT 1 AS linked FROM user_identities WHERE provider = 'apple' AND user_id = ?").bind(row.id).first()) return null;
     if (!row) {
-      if (!(await mayCreateAccount(db, env, address))) return null;
-      await db.prepare("INSERT INTO users(email, name, role) VALUES(?, ?, ?)").bind(address, name, address === ownerEmail(env) ? "admin" : "user").run();
+      if (!(await mayCreateAccount(db, env, address)) || !(await createAccount(db, env, address, name))) return null;
       row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
     }
   }
