@@ -22,6 +22,14 @@ test("each Intervals.icu event asks for only the part of the import it changed",
   ]);
 });
 
+test("a deleted activity's id goes with the work, so the import can remove it", () => {
+  const work = webhookWork({ events: [
+    { athlete_id: "i1", type: "ACTIVITY_DELETED", activity: { id: "i555" } }, { athlete_id: "i1", type: "ACTIVITY_UPDATED", activity: { id: "i556" } },
+    { athlete_id: "i2", type: "ACTIVITY_DELETED", activity: { id: "../x" } }
+  ] }, "77");
+  assert.deepEqual([...work].map(([a, w]) => [a, [...w.parts], [...w.deleted]]), [["i1", ["activities"], ["i555"]], ["i2", ["activities"], []]]);
+});
+
 test("the webhook needs the secret, answers at once and fetches for the athlete after", async () => {
   const calls = [], waits = [];
   const forAthlete = async (athlete, parts) => { calls.push([athlete, parts]); };

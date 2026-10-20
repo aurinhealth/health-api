@@ -217,3 +217,32 @@ test('anonymous export errors are retained alongside successful exports',async()
   const status=await dashboardSyncStatus(db);
   assert.equal(status.status,'partial');assert.equal(status.results.length,3);
 });
+
+test('an activity deleted in Intervals.icu goes after a whole answer, and its watch copy counts again',async t=>{
+  const {raw,env,ctx}=setup();
+  const day=n=>new Date(Date.parse(localToday()+'T12:00:00Z')-n*86400000).toISOString().slice(0,10);
+  const add=(source,type,id,start,extra={})=>raw.sqlite.prepare('INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,start_time,payload_json,record_role,matched_activity_id) VALUES(1,?,?,?,?,?,?,?)').run(source,type,id,start,JSON.stringify(extra.payload||{}),extra.role||'primary',extra.matched||null);
+  add('intervals','activity','activity:i1',day(2)+'T07:00:00',{payload:{id:'i1',type:'Run'}});
+  add('intervals','activity','activity:i2',day(1)+'T07:00:00',{payload:{id:'i2',type:'Run',start_date:day(1)+'T05:00:00Z',start_date_local:day(1)+'T07:00:00',moving_time:3600,elapsed_time:3600}});
+  add('apple-health','exercise','w2',day(1)+'T05:00:00Z',{payload:{exercise:{exerciseType:'RUNNING',activeDuration:'3600s'}},role:'duplicate',matched:'intervals:activity:i2'});
+  add('intervals','activity','activity:i3',day(1)+'T09:00:00',{payload:{id:'i3',type:'Ride'}});
+  add('intervals','activity','activity:i4',day(30)+'T09:00:00',{payload:{id:'i4',type:'Ride'}});
+  // Sent there by the app (Synchronizace): not Intervals.icu's to remove.
+  raw.sqlite.exec("CREATE TABLE sync_sends (user_id INTEGER, activity_key TEXT, destination TEXT, status TEXT, remote_id TEXT, payload_json TEXT)");
+  raw.sqlite.exec("INSERT INTO sync_sends VALUES(1,'gym:x','intervals','sent','i3','{}')");
+  const ids=()=>raw.sqlite.prepare("SELECT external_id FROM health_datapoints WHERE source_family='intervals' ORDER BY external_id").all().map(r=>r.external_id);
+  let answer=()=>new Response('busy',{status:503});
+  t.mock.method(globalThis,'fetch',async url=>String(url).includes('/activities?')?answer():Response.json([]));
+  // A failed read removes nothing.
+  await sync(env,ctx,'/sync/intervals/recent?parts=activities');
+  assert.deepEqual(ids(),['activity:i1','activity:i2','activity:i3','activity:i4']);
+  // The whole answer without i2: only i2 goes, its watch copy is the workout again.
+  answer=()=>Response.json([{id:'i1',type:'Run',name:'Run',start_date_local:day(2)+'T07:00:00'}]);
+  const result=await sync(env,ctx,'/sync/intervals/recent?parts=activities');
+  assert.equal(result.activities.activities_removed,1);
+  assert.deepEqual(ids(),['activity:i1','activity:i3','activity:i4']);
+  assert.deepEqual({...raw.sqlite.prepare("SELECT record_role,matched_activity_id FROM health_datapoints WHERE external_id='w2'").get()},{record_role:'primary',matched_activity_id:null});
+  // Older than the window: the webhook's own id removes it.
+  await sync(env,ctx,'/sync/intervals/recent?parts=activities&deleted=i4');
+  assert.deepEqual(ids(),['activity:i1','activity:i3']);
+});

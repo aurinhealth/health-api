@@ -229,11 +229,11 @@ async function forWahooUser(env, wahooUser, fn) {
     return result;
   }, await accountUsers(env, "wahoo", wahooUser));
 }
-async function forIntervalsAthlete(env, ctx, athlete, parts, kinds) {
+async function forIntervalsAthlete(env, ctx, athlete, parts, kinds, deleted = []) {
   return forEachUser(env, ["intervals"], async scoped => {
     if (!scoped.INTERVALS_ATHLETE_ID || scoped.INTERVALS_ATHLETE_ID !== athlete) return null;
     await intervalsChanged(scoped, kinds);
-    const result = parts.length ? await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent?parts=" + parts.join(","), { method: "POST" }), scoped, ctx).then(r => r.json()).catch(error => ({ error: error.message })) : null;
+    const result = parts.length ? await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent?parts=" + parts.join(",") + (deleted.length ? "&deleted=" + encodeURIComponent(deleted.join(",")) : ""), { method: "POST" }), scoped, ctx).then(r => r.json()).catch(error => ({ error: error.message })) : null;
     await bumpCacheVersion(scoped.DB);
     return result;
   }, await accountUsers(env, "intervals", athlete));
@@ -459,7 +459,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Wahoo's webhook: a finished workout of whoever is connected to that Wahoo account.
     if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forWahooUser(rawEnv, wahooUser, fn));
     // Intervals.icu's webhooks: what changed for an athlete connected with OAuth.
-    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds) => forIntervalsAthlete(rawEnv, ctx, athlete, parts, kinds));
+    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds, deleted) => forIntervalsAthlete(rawEnv, ctx, athlete, parts, kinds, deleted));
     // Passkeys in the iPhone app: the app's associated domain (apple-app-site-association.js).
     const siteAssociation = appleAppSiteAssociation(request, rawEnv, url.pathname);
     if (siteAssociation) return siteAssociation;
