@@ -1,6 +1,6 @@
 import { saveConnectionSecret } from './connection-secrets.js';
 import { HEALTH_SCOPES, EXTRA_SCOPES } from './google-scopes.js';
-import { connectReturn, connectReturnUrl } from './connect-return.js';
+import { connectReturnUrl, oauthStateValue, startedBy } from './connect-return.js';
 import { appOrigin } from './app-origin.js';
 export async function handleGoogleOAuth(request, env, pathname) {
   if (pathname === "/oauth/google" && request.method === "GET") {
@@ -14,13 +14,15 @@ export async function handleGoogleOAuth(request, env, pathname) {
     u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID); u.searchParams.set("redirect_uri", redirectUri); u.searchParams.set("response_type", "code");
     u.searchParams.set("scope", [...HEALTH_SCOPES, ...(extra ? Object.values(EXTRA_SCOPES) : [EXTRA_SCOPES.location])].join(" ")); if (extra) u.searchParams.set("include_granted_scopes", "true"); u.searchParams.set("access_type", "offline"); u.searchParams.set("prompt", "consent"); u.searchParams.set("state", state);
     // Where the user comes back to (the iPhone app) rides along with the state.
-    return new Response(null,{status:302,headers:{Location:u.toString(),"Set-Cookie":"pfd_google_oauth_state="+encodeURIComponent(state+"."+connectReturn(request))+"; Max-Age=600; Path=/oauth/google; Secure; HttpOnly; SameSite=Lax"}});
+    return new Response(null,{status:302,headers:{Location:u.toString(),"Set-Cookie":"pfd_google_oauth_state="+oauthStateValue(state, request, env)+"; Max-Age=600; Path=/oauth/google; Secure; HttpOnly; SameSite=Lax"}});
   }
   if (pathname !== "/oauth/google/callback" || request.method !== "GET") return null;
   const url = new URL(request.url); const code=url.searchParams.get("code"); const state=url.searchParams.get("state"); const cookie=request.headers.get("Cookie")||""; const m=cookie.match(/(?:^|;\s*)pfd_google_oauth_state=([^;]+)/);
-  const [expected, back] = decodeURIComponent(m?.[1] || "").split(".");
+  const [expected, back, uid] = decodeURIComponent(m?.[1] || "").split(".");
   if (url.searchParams.get("error") && state && state === expected) return new Response(null,{status:302,headers:{Location:connectReturnUrl(back,"google-cancelled"),'Set-Cookie':'pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0; Secure; HttpOnly; SameSite=Lax','Cache-Control':'no-store'}});
   if (!code || !state || !m || expected !== state) return html("Google OAuth failed","Invalid or missing OAuth state. Start again from /oauth/google.",400);
+  // Started by another account than the one signed in now: its keys are not stored here.
+  if (!startedBy(uid, env)) return html("Google Health","Připojení začal jiný účet, než který je teď přihlášený. Připoj Google Health znovu v aplikaci Aurin (Nastavení → Zdroje dat).",403);
   const redirectUri=appOrigin(env, request)+"/oauth/google/callback";
   const response=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams({code,client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,redirect_uri:redirectUri,grant_type:"authorization_code"})});
   const data=await response.json().catch(()=>({}));

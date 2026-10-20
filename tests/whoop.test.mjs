@@ -87,6 +87,19 @@ test("connecting stores the tokens; the import pages through, refreshes and save
   assert.equal(raw.sqlite.prepare("SELECT provider FROM connection_credentials").get().provider, "whoop");
 });
 
+test("a connection started by one account is not stored for another signed in before the callback", async () => {
+  const { db, raw } = setup();
+  const start = await handleWhoopOAuth(new Request("https://aurin.health/oauth/whoop"), env(db, null, { WHOOP_TOKEN: undefined, USER_ID: 11 }), "/oauth/whoop");
+  const state = new URL(start.headers.get("Location")).searchParams.get("state"), cookie = start.headers.get("Set-Cookie").split(";")[0];
+  const other = env(scopedDb(raw, 22), null, { WHOOP_TOKEN: undefined, USER_ID: 22 });
+  const { fetchImpl, calls } = api();
+  const done = await handleWhoopOAuth(new Request("https://aurin.health/oauth/whoop/callback?code=c&state=" + state, { headers: { Cookie: cookie } }), other, "/oauth/whoop/callback", fetchImpl);
+  assert.equal(done.headers.get("Location"), "loadwise://connected?event=whoop-failed");
+  assert.equal(calls.length, 0, "the code is never exchanged");
+  assert.equal(other.WHOOP_TOKEN, undefined);
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM connection_credentials").get().n, 0);
+});
+
 test("WHOOP takes the night from the watch when worn more nights, can be chosen, and its data goes on disconnect", async () => {
   const { db, raw } = setup();
   // The watch measured a resting heart rate on the 12th but slept no full nights.

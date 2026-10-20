@@ -40,6 +40,23 @@ test("Google's consent screen comes only after the app's own disclosure and cons
   }
 });
 
+test("a Google Health connection started by one account is not stored for another signed in before the callback", async () => {
+  const start = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1"), { ...google, USER_ID: 11 }, "/oauth/google");
+  const state = new URL(start.headers.get("Location")).searchParams.get("state"), cookie = start.headers.get("Set-Cookie").split(";")[0];
+  const db = createD1(), real = globalThis.fetch;
+  let exchanged = false;
+  globalThis.fetch = async () => { exchanged = true; return Response.json({ refresh_token: "r", scope: HEALTH_SCOPES.join(" ") }); };
+  try {
+    const other = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google/callback?code=c&state=" + state, { headers: { Cookie: cookie } }), { ...google, DB: db, USER_ID: 22, CONNECTION_KEY: "x".repeat(32) }, "/oauth/google/callback");
+    assert.equal(other.status, 403);
+    assert.equal(exchanged, false, "the code is never exchanged");
+    // The account that started gets it.
+    const same = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google/callback?code=c&state=" + state, { headers: { Cookie: cookie } }), { ...google, DB: db, USER_ID: 11, CONNECTION_KEY: "x".repeat(32) }, "/oauth/google/callback");
+    assert.equal(same.headers.get("Location"), "loadwise://connected?event=google");
+  } finally { globalThis.fetch = real; }
+  assert.deepEqual(db.sqlite.prepare("SELECT DISTINCT user_id FROM connection_credentials").all().map(r => r.user_id), [11]);
+});
+
 test("granted scopes are stored per user and offered in the connection status", async () => {
   const db = createD1();
   const env = { DB: db, STRENGTH_API_KEY: "k", USER_ID: 4, ...google };
