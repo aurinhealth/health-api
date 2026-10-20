@@ -7,6 +7,7 @@ import {foodIntake} from '../src/food-portions.js';
 import {savePersonalFood,searchFoodCatalog,searchPersonalFoods,listPersonalFoods} from '../src/personal-foods.js';
 import {foodLookupLanguages,lookupFoodWithAI} from '../src/food-ai.js';
 import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck} from '../src/activity-energy-check.js';
+import {withTimeZone} from '../src/user-time.js';
 import {foodGooglePayload,queueFoodGoogle,processFoodGoogle,foodGoogleStatus,retryFoodGoogle,backfillFoodGoogle} from '../src/food-google-sync.js';
 const food={name:'Řecký jogurt',brand:'Test',nutrition_basis:'g',calories_100g:80,protein_100g:10,carbs_100g:6,fat_100g:2,quantity:'450 g',serving_size:'150 g',piece_size:'150 g',preferred_unit:'pack'};
 function scopedDbs(){return db();}
@@ -38,6 +39,14 @@ test('an unknown portion weight never turns into fabricated 100g values in the c
 test('Google food timestamp follows the consumed date and meal mapping uses Google enums',()=>{
   const p=foodGooglePayload({consumed_date:'2026-09-28',consumed_at:'2026-10-04T12:00:00Z',recipe_title:'Jogurt',kcal:120,protein_g:15,carbs_g:9,fat_g:3,note:'{"mealType":"snack_pm"}'});
   assert.ok(p.nutritionLog.interval.startTime.startsWith('2026-09-28'));assert.equal(p.nutritionLog.mealType,'SNACK');assert.equal(p.nutritionLog.nutrients[0].quantity.grams,15);
+});
+test('a meal logged at a local time goes to Google at that time in the user\'s zone, across DST',()=>{
+  const at=(stamp,zone='Europe/Prague')=>withTimeZone(zone,()=>foodGooglePayload({consumed_date:stamp.slice(0,10),consumed_at:stamp,recipe_title:'Snídaně',kcal:300,note:'{"mealType":"breakfast"}'}).nutritionLog.interval.startTime);
+  assert.equal(at('2026-10-19T07:30:00'),'2026-10-19T05:30:00.000Z');
+  assert.equal(at('2026-10-26T07:30:00'),'2026-10-26T06:30:00.000Z');
+  assert.equal(at('2026-10-19T07:30:00','America/New_York'),'2026-10-19T11:30:00.000Z');
+  // No time at all keeps the day's fallback.
+  assert.equal(withTimeZone('Europe/Prague',()=>foodGooglePayload({consumed_date:'2026-10-19',consumed_at:null,recipe_title:'X',note:'{}'}).nutritionLog.interval.startTime),'2026-10-19T12:00:00.000Z');
 });
 test('Google create is durable, repeat processing does not duplicate, rename patches and delete removes exact remote record',async()=>{
   const {owner,raw}=db(),g=mockGoogle(),env={DB:owner,CONNECTED_PROVIDERS:['google']};
