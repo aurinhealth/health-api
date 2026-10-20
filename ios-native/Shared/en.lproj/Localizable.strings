@@ -2728,3 +2728,8 @@
 "Čekají" = "Waiting";
 "Pozvaní" = "Invited";
 "Pozván %@" = "Invited %@";
+
+/* Kouč na obrazovkách (SettingsCoachPlaces.swift) */
+"Kouč na obrazovkách" = "Coach on screens";
+"Rada kouče" = "Coach's advice";
+"Vypnutá rada kouče se na obrazovce neukáže. Na kartě ji můžeš také jen sbalit šipkou. Tip na regeneraci na Dnes zůstává a chat s koučem funguje dál." = "When it is off, the coach's advice does not show on that screen. You can also just fold it with the arrow on the card. The recovery tip on Today stays and the chat with the coach keeps working.";
