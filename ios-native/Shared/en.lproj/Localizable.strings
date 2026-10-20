@@ -1682,6 +1682,9 @@
 "Vzato %@" = "Taken %@";
 "Za 30 minut" = "In 30 minutes";
 "Zapiš krvácení" = "Log bleeding";
+"krvácení" = "bleeding";
+"od krvácení" = "since bleeding";
+"Bez záznamu" = "Nothing logged";
 "Zapiš poslední menstruaci" = "Log your last period";
 "Zapsat krvácení" = "Log bleeding";
 "Zapsat menstruaci" = "Log period";
