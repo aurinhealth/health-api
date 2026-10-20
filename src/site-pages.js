@@ -90,24 +90,30 @@ html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
 .screen::after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.28),rgba(255,255,255,0) 32%)}
 .scr{position:absolute;inset:0;transition:opacity .6s ease,transform .8s cubic-bezier(.16,1,.3,1)}
 .scr:not(.on){opacity:0;transform:translateY(18px) scale(.98)}
+.scr .added{position:absolute;inset:0;width:100%;height:100%}
+.scr .added rect{fill:var(--panel)}.scr .added .bc{fill:none;stroke:var(--amber-bar);stroke-width:3.4}
+.scr .added text{font:400 19px -apple-system,"SF Pro Text",Inter,system-ui,sans-serif;text-anchor:middle;fill:var(--text)}
+@media (prefers-reduced-motion:no-preference){.js .scr.on .added{animation:addtile .5s cubic-bezier(.2,1.4,.4,1) 1.7s both;transform-origin:62% 72%}}
+@keyframes addtile{from{opacity:0;transform:scale(.6)}}
 .up{color:var(--green)}.sleep{color:var(--indigo)}.warm{color:var(--amber)}
 
 /* The scenes: one per area of the app, in the order of its tabs. The phone stays while the steps
    scroll past, shows the app's screen for each step, and a card beside it shows the next detail a
    tap away in the app (site-details.js). */
 .eyebrow{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:16px}
-.scene{position:relative;--tone:var(--green);--glow:var(--glow-today)}
-.scene .head{text-align:center;padding:130px 24px 0}
+.scene{position:relative;--tone:var(--green);--glow:var(--glow-today);max-width:1280px;margin:28px auto 0;border-radius:48px;overflow:clip;
+  background:radial-gradient(60% 50% at 85% 0%,color-mix(in srgb,var(--panel) 75%,transparent),transparent),radial-gradient(70% 60% at 0% 100%,color-mix(in srgb,var(--panel) 45%,transparent),transparent),var(--glow)}
+.scene .head{text-align:center;padding:96px 24px 0}
 .scene .head .eyebrow{color:var(--tone);margin-bottom:12px}
 .scene .head h2,.muscles h2{font-size:clamp(46px,6.2vw,88px);line-height:.98;letter-spacing:-.025em}
 .scene .head p,.muscles .sub{max-width:580px;margin:20px auto 0;font-size:20px;color:var(--sec)}
 .scene .head p.free{margin-top:8px;color:var(--green);font-weight:600}
 .track{position:relative}
 .scene .pin{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;display:flex;align-items:center;justify-content:center}
-.scene .glow{position:absolute;width:900px;height:900px;border-radius:50%;background:radial-gradient(circle,var(--glow) 0,transparent 62%)}
+.scene .glow{position:absolute;width:900px;height:900px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--panel) 70%,transparent) 0,transparent 62%)}
 .sc{position:relative;flex:none;width:760px;height:702px;transform:scale(var(--s,1))}
 .sc .device{position:absolute;left:438px;top:0}
-.part{position:absolute;left:0;width:420px;border-radius:22px;overflow:hidden;background:var(--panel);box-shadow:0 40px 80px -30px rgba(60,40,10,.5),0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(27,26,23,.05);opacity:0}
+.part{position:absolute;z-index:2;left:80px;width:420px;border-radius:22px;overflow:hidden;background:var(--panel);box-shadow:0 40px 80px -30px rgba(60,40,10,.5),0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(27,26,23,.05);opacity:0}
 .part.on{opacity:1}
 .st .n{font-size:13px;font-weight:700;color:var(--tone);letter-spacing:.06em}
 .st h3{font:400 36px/1.04 Newsreader,"New York",Georgia,serif;letter-spacing:-.02em;margin:8px 0 10px}
@@ -116,8 +122,8 @@ html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
 @media (min-width:961px){
   .track{display:grid;grid-template-columns:400px 1fr;max-width:1160px;margin:0 auto;padding:0 24px;gap:20px}
   .scene .pin{grid-column:2;grid-row:1;align-self:start}
-  .sc-steps{grid-column:1;grid-row:1;padding:25vh 0 35vh}
-  .st{min-height:85vh;display:flex;align-items:center}
+  .sc-steps{grid-column:1;grid-row:1;padding:10vh 0 20vh}
+  .st{min-height:68vh;display:flex;align-items:center}
   .st .t{max-width:400px}
   .js .st .t{opacity:.22;transition:opacity .5s}
   .js .st.on .t{opacity:1}
@@ -298,14 +304,15 @@ html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
   .glass.g1{left:max(4px,calc(50% - 320px))}.glass.g2{right:max(4px,calc(50% - 320px))}
   /* Phones: the phone at the top with the piece over its lower part, the step's words at the bottom.
      Without JS the steps simply follow the phone. */
-  .scene .head{padding-top:110px}
+  .scene{margin:16px 8px 0;border-radius:32px}
+  .scene .head{padding-top:72px}
   .scene .head p{font-size:18px}
   .js .scene .pin{flex-direction:column;justify-content:flex-start;padding-top:76px}
   .sc{width:440px;transform-origin:top center;margin-bottom:calc((var(--s,1) - 1) * 702px)}
   .sc .device{left:59px}
   .part{left:10px;top:auto!important;bottom:-14px}
   .js .sc-steps{margin-top:-100vh;margin-top:-100svh;position:relative;pointer-events:none}
-  .js .st{height:85vh;height:85svh;visibility:hidden}
+  .js .st{height:70vh;height:70svh;visibility:hidden}
   .st{padding:24px 0}
   .js .slot{display:block;position:absolute;left:20px;right:20px;bottom:calc(22px + env(safe-area-inset-bottom));min-height:140px}
   .slot .t{position:absolute;inset:auto 0 0 0;opacity:0;transform:translateY(16px);transition:opacity .5s,transform .5s cubic-bezier(.2,.8,.2,1)}
@@ -539,13 +546,17 @@ export function overviewPage(request) {
     ['vyziva', 'Nutrition', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
       ['food-day', 'food-top', 180, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.'],
       ['food-add', 'food-add', 140, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, and log drinks with one tap.']]],
-    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.<span class="free">Free for everyone.</span>', 'green', 'glow-today', [
+    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.<span class="free">Free for everyone.</span>', 'indigo', 'glow-coach', [
       ['coach-ask', 'coach-ask', 190, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout.']]]];
+  // Edit + beside the food phone moves Barcode among what + shows: the tile appears on the phone too,
+  // after Search food (screen coordinates of food-add.webp, 603×1311).
+  const addedTile = `<svg class="added" viewBox="0 0 603 1311" aria-hidden="true"><rect x="310" y="909" width="123" height="77" rx="22"/>
+<g transform="translate(355 931)" class="bc"><path d="M2 2v30M8 2v30M14 2v30M20 2v30M26 2v30M32 2v30"/></g><text x="371.5" y="1012">Barcode</text></svg>`;
   const step = ([, , , title, text], i) => `<div class="n">0${i + 1}</div><h3>${title}</h3><p>${text}</p>`;
   const scene = ([id, eyebrow, h, p, tone, glow, list]) => `<section id="${id}" class="scene" style="--tone:var(--${tone});--glow:var(--${glow})">
 <div class="head"><div class="eyebrow">${eyebrow}</div><h2>${h}</h2>${p.split('<span class="free">').map((t, j) => `<p${j ? ' class="free"' : ''}>${t.replace('</span>', '')}</p>`).join('')}</div>
 <div class="track"><div class="pin" aria-hidden="true"><div class="glow"></div><div class="sc">
-<div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}">${shot(screen)}</div>`).join('')}</div></div></div>
+<div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}">${shot(screen)}${screen === 'food-add' ? addedTile : ''}</div>`).join('')}</div></div></div>
 ${list.map(([, part, top]) => `<div class="part" style="top:${top}px">${detailCard(part)}</div>`).join('')}
 </div><div class="dots">${list.map(() => '<i></i>').join('')}</div><div class="slot">${list.map((x, i) => `<div class="t">${step(x, i)}</div>`).join('')}</div></div>
 <div class="sc-steps">${list.map((x, i) => `<div class="st"><div class="t">${step(x, i)}</div></div>`).join('')}</div></div></section>`;

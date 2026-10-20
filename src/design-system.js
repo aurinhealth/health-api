@@ -15,7 +15,7 @@ export const themeTokens = `
   /* The aurora behind the hero (the mark's two halves and a touch of the coach's lilac) and the phone's titanium. */
   --aurora-lilac:#B9B4EE;--device-hi:#F4F1EC;--device-mid:#C9C2B8;--device-lo:#A2998E;
   /* Soft glow behind each section's card, in the tint of the app tab it shows. */
-  --glow-today:#DCEBE2;--glow-health:#E3E6F3;--glow-training:#F3E3C6;--glow-food:#F2E4D0;
+  --glow-today:#DCEBE2;--glow-health:#E3E6F3;--glow-training:#F3E3C6;--glow-food:#F2E4D0;--glow-coach:#E6E3F5;
   /* Type scale: caption for short uppercase labels, meta for chips, small for secondary text. */
   --fs-caption:12px;--fs-meta:13px;--fs-small:14px;--fs-body:15px;
 }

@@ -9,8 +9,17 @@ const svg = (name, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-h
 const tick = '<svg class="ok" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const head = (k, title = '') => `<div class="k">${k}</div>${title ? `<div class="h">${title}</div>` : ''}`;
 
-// A line through values, scaled into a w×h box: the points of an SVG polyline.
-const line = (values, w, h, lo, hi) => values.map((v, i) => `${(i / (values.length - 1) * w).toFixed(1)},${(h - (v - lo) / (hi - lo) * h).toFixed(1)}`).join(' ');
+
+// A smooth line through the points (Catmull-Rom as Béziers), scaled into a w×h box.
+const curve = (values, w, h, lo, hi) => {
+  const p = values.map((v, i) => [i / (values.length - 1) * w, h - (v - lo) / (hi - lo) * h]);
+  const f = n => n.toFixed(1);
+  return p.reduce((d, [x, y], i) => {
+    if (!i) return `M${f(x)} ${f(y)}`;
+    const [a, b, c] = [p[i - 2] || p[i - 1], p[i - 1], p[i + 1] || p[i]];
+    return d + `C${f(b[0] + (x - a[0]) / 6)} ${f(b[1] + (y - a[1]) / 6)} ${f(x - (c[0] - b[0]) / 6)} ${f(y - (c[1] - b[1]) / 6)} ${f(x)} ${f(y)}`;
+  }, '');
+};
 
 // Sleep consistency, 14 nights: when you fell asleep (Sleep → Consistency). The scale runs from
 // 11:00 PM to 12:30 AM; the band is the usual 11:18 PM–12:18 AM.
@@ -49,7 +58,7 @@ const HRV = [55, 62, 60, 58, 56, 54, 61, 59, 57, 55, 62, 60, 58, 56, 54, 61, 59,
 const hrv = `${head('HRV by night')}
 <div class="num"><b>64</b><span>ms</span><em class="up">↑ above normal</em></div>
 <svg class="chart" viewBox="0 0 380 120" preserveAspectRatio="none" aria-hidden="true"><rect x="0" y="${(120 - (61 - 50) / 16 * 120).toFixed(1)}" width="380" height="${(6 / 16 * 120).toFixed(1)}" class="band"/>
-<polyline pathLength="1" class="ln" points="${line(HRV, 380, 120, 50, 66)}"/><circle cx="380" cy="${(120 - 14 / 16 * 120).toFixed(1)}" r="5" class="dot"/></svg>
+<path pathLength="1" class="ln" d="${curve(HRV, 380, 120, 50, 66)}"/><circle cx="380" cy="${(120 - 14 / 16 * 120).toFixed(1)}" r="5" class="dot"/></svg>
 <div class="cells"><div><small>7 days</small><b>59</b></div><div><small>Normal (60 days)</small><b>58</b></div><div><small>Your normal</small><b>55–61</b></div></div>`;
 
 // Journal: ticking off a sauna, with its minutes and temperature.
@@ -58,13 +67,19 @@ const journal = `${head('Journal · Thursday')}
 <div class="row on"><b>Sauna</b><i class="cb">${tick}</i></div></div>
 <div class="more"><div class="f"><small>Minutes</small><b>15</b></div><div class="f"><small>Temperature</small><div class="seg"><span>70…</span><span>80…</span><span class="sel">90…</span></div></div></div>`;
 
-// Strain → Fitness and fatigue: building, fatigue above fitness (84 days).
-const FIT = [53.7, 54, 54.3, 54.6, 54.9, 55.2, 55.5, 55.8, 56.1, 56.4, 56.7, 57, 57.3, 57.6, 57.9, 58.2, 58.5, 58.8, 59.1, 59.4, 59.7, 60, 60.3, 60.6, 60.9, 61.2, 61.5, 61.8, 62];
-const TIRED = [64.1, 59.9, 55.7, 54.6, 57.7, 62.9, 67, 67.2, 63.7, 59.1, 56.7, 58.5, 63.4, 68.2, 69.8, 67.3, 62.7, 59.3, 59.7, 63.8, 69, 71.9, 70.8, 66.5, 62.3, 64.3, 67.4, 72.6, 75.6];
-const form = `${head('Fitness and fatigue')}
-<div class="legend"><span style="--c:var(--green)"><i></i>Fitness 62</span><span style="--c:var(--amber-bar)"><i></i>Fatigue 76</span><span class="form">Form −14 · building</span></div>
-<svg class="chart" viewBox="0 0 380 130" preserveAspectRatio="none" aria-hidden="true"><polyline pathLength="1" class="ln f2" points="${line(TIRED, 380, 130, 50, 78)}"/><polyline pathLength="1" class="ln f1" points="${line(FIT, 380, 130, 50, 78)}"/></svg>
-<p class="note">Fatigue is above fitness, just as it should be while building. Fitness is growing.</p>`;
+// Strain → Fitness and fatigue over 12 weeks (form.series): building, fatigue above fitness.
+const FIT = [53.7, 53.8, 53.9, 54, 54.1, 54.2, 54.3, 54.4, 54.5, 54.6, 54.7, 54.8, 54.9, 55, 55.1, 55.2, 55.3, 55.4, 55.5, 55.6, 55.7, 55.8, 55.9, 56, 56.1, 56.2, 56.3, 56.4, 56.5, 56.6, 56.7, 56.8, 56.9, 57, 57.1, 57.2, 57.3, 57.4, 57.5, 57.6, 57.7, 57.8, 57.9, 58, 58.1, 58.2, 58.3, 58.4, 58.5, 58.6, 58.7, 58.8, 58.9, 59, 59.1, 59.2, 59.3, 59.4, 59.5, 59.6, 59.7, 59.8, 59.9, 60, 60.1, 60.2, 60.3, 60.4, 60.5, 60.6, 60.7, 60.8, 60.9, 61, 61.1, 61.2, 61.3, 61.4, 61.5, 61.6, 61.7, 61.8, 61.9, 62];
+const TIRED = [64.1, 62.9, 61.5, 59.9, 58.3, 56.9, 55.7, 54.9, 54.5, 54.6, 55.2, 56.3, 57.7, 59.3, 61.1, 62.9, 64.6, 65.9, 67, 67.5, 67.6, 67.2, 66.3, 65.1, 63.7, 62.1, 60.5, 59.1, 57.9, 57.1, 56.7, 56.8, 57.5, 58.5, 59.9, 61.6, 63.4, 65.2, 66.8, 68.2, 69.2, 69.7, 69.8, 69.4, 68.5, 67.3, 65.9, 64.3, 62.7, 61.3, 60.1, 59.3, 58.9, 59.1, 59.7, 60.7, 62.1, 63.8, 65.6, 67.4, 69, 70.4, 71.4, 71.9, 72, 71.6, 70.8, 69.5, 68.1, 66.5, 64.9, 63.5, 62.3, 61.5, 61.1, 64.3, 64.9, 65.9, 67.4, 69, 70.8, 72.6, 74.2, 75.6];
+const FY = v => (150 - (v - 50) / 30 * 150).toFixed(1);
+const form = `${head('Fitness and fatigue', 'Fatigue is above fitness, just as it should be while building.')}
+<div class="fchart"><svg viewBox="0 0 400 170" aria-hidden="true"><defs><linearGradient id="fg-fit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--green)" stop-opacity=".22"/><stop offset="1" stop-color="var(--green)" stop-opacity="0"/></linearGradient></defs>
+${[55, 65, 75].map(v => `<line x1="0" x2="360" y1="${FY(v)}" y2="${FY(v)}" class="grid"/>`).join('')}
+<path class="area" d="${curve(FIT, 360, 150, 50, 80)}L360 150L0 150Z"/>
+<path pathLength="1" class="ln f2" d="${curve(TIRED, 360, 150, 50, 80)}"/><path pathLength="1" class="ln f1" d="${curve(FIT, 360, 150, 50, 80)}"/>
+<circle cx="360" cy="${FY(75.6)}" r="5" class="end e2"/><circle cx="360" cy="${FY(62)}" r="5" class="end e1"/>
+<text x="368" y="${(+FY(75.6) + 5).toFixed(1)}" class="v2">76</text><text x="368" y="${(+FY(62) + 5).toFixed(1)}" class="v1">62</text>
+${[['Aug', 15], ['Sep', 46], ['Oct', 76]].map(([m, d]) => `<text x="${(d / 83 * 360).toFixed(1)}" y="168" class="m">${m}</text>`).join('')}</svg></div>
+<div class="legend"><span style="--c:var(--green)"><i></i>Fitness</span><span style="--c:var(--amber-bar)"><i></i>Fatigue</span><span class="pill">Form −14 · building</span></div>`;
 
 // Training → Library: pick a length and a type, then the suggestion.
 const library = `${head('Library · Rides')}
@@ -201,11 +216,17 @@ export const detailCss = `
 .journal .seg span{padding:5px 0;text-align:center;border-radius:9px;font-size:14px;color:var(--sec)}
 .journal .seg .sel{background:var(--panel);color:var(--text);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.1)}
 
-.form .legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:10px 0 12px;font-size:14px;font-weight:600}
-.form .legend span{display:inline-flex;align-items:center;gap:6px}.form .legend i{width:9px;height:9px;border-radius:50%;background:var(--c)}
-.form .legend .form{color:var(--amber);font-weight:500}
+.form .fchart svg{display:block;width:100%;overflow:visible}
+.form .grid{stroke:var(--line);stroke-width:1}
+.form .area{fill:url(#fg-fit)}
+.form .ln{stroke-width:3}
 .form .f1{stroke:var(--green)}.form .f2{stroke:var(--amber-bar)}
-.form .note{margin-top:12px;font-size:14px;color:var(--sec)}
+.form .end{stroke:var(--panel);stroke-width:2.5}.form .e1{fill:var(--green)}.form .e2{fill:var(--amber-bar)}
+.form .v1,.form .v2{font:400 17px Newsreader,Georgia,serif}.form .v1{fill:var(--green)}.form .v2{fill:var(--amber)}
+.form .m{font-size:11px;fill:var(--muted);text-anchor:middle}
+.form .legend{display:flex;align-items:center;flex-wrap:wrap;gap:6px 16px;margin-top:12px;font-size:14px;font-weight:600}
+.form .legend span{display:inline-flex;align-items:center;gap:6px}.form .legend i{width:9px;height:9px;border-radius:50%;background:var(--c)}
+.form .legend .pill{margin-left:auto;padding:4px 10px;border-radius:99px;background:var(--amber-soft);color:var(--amber)}
 
 .library .pills{display:flex;flex-wrap:wrap;gap:6px}
 .library .pills span{padding:7px 12px;border-radius:99px;background:var(--panel2);font-size:14px;color:var(--sec)}
@@ -308,6 +329,7 @@ export const detailCss = `
   .js .part.on .consistency .tr b{animation:pop .45s cubic-bezier(.2,1.4,.4,1) both;animation-delay:calc(.5s + var(--i) * 70ms)}
   .js .part.on .ln,.js .part.on .dialc .arc{stroke-dasharray:1;animation:draw 1.6s cubic-bezier(.4,0,.2,1) .5s both}
   .js .part.on .form .f1{animation-delay:.8s}
+  .js .part.on .form .area,.js .part.on .form .end,.js .part.on .form .v1,.js .part.on .form .v2{animation:fade .5s 2s both}
   .js .part.on .hrv .dot{animation:pop .4s 2s both}
   .js .part.on .dialc .sunk{animation:fade .4s 1.9s both}
   .js .part.on .alarm .sw{animation:swbg .3s both;animation-delay:calc(1s + var(--i) * .5s)}
