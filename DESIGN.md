@@ -19,7 +19,8 @@ palette changes, change `design-system.js` and this file together.
    only where that part of the app appears: readiness, strain/food, sleep, tired muscles.
 4. **Warm, not clinical.** Paper instead of white, serif headlines, soft tinted glows. Never cold grey, never
    neon on black.
-5. **Light only.** The site has one look and no theme switch. It follows the app's light screenshots.
+5. **Light only.** The site has one look and no theme switch. It follows the app's light screenshots. The one
+   exception is the privacy promise: an ink panel (`--button` with `--on-button` text), so it stands apart.
 
 ## Colour
 
@@ -85,11 +86,15 @@ stop: "Know when to push." not "Smart Strain Tracking".
 - Scale (4-based): 4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 160.
 - Content width 1160px (`.wrap`), side gutter 24px, 16px under 480px.
 - Section padding 128-160px on computers, 80px on phones.
-- A section is a **scene**: the text on one side, a pinned phone with its glow on the other, and the steps
-  changing as you scroll. On phones it stacks: headline, phone, then the steps as a list.
-- Vary the rhythm: scenes, then the muscle figure (centred, full width), then the connections hub (a box),
-  then the privacy statement (one big sentence), then questions (a narrow column). Only the hero, the muscles,
-  the privacy line and the final call to action are centred; scenes are not.
+- The hero is split: the words on the left, the app's Today on the right with up to three glass numbers.
+- Under the hero, **one morning** says the sample day as a sentence, its numbers set as tinted chips.
+- A part of the app is a **chapter**: the words and the steps on one side, the phone with its glow on the
+  other, sides alternating. Each step shows its own screen and lifts a piece of it beside the phone; steps
+  take turns while the chapter is in view (a thin bar fills under the active step) until one is picked. On
+  phones it stacks: headline, phone, steps.
+- Vary the rhythm: chapters, the muscle figure (split, figure on the right), the connections (a recessed box
+  with a row of logos), the privacy promise (the ink panel), questions (heading left, answers right). Only the
+  final call to action is centred.
 - Never a row of three identical feature cards.
 
 ## Shape and depth
@@ -116,17 +121,19 @@ stop: "Know when to push." not "Smart Strain Tracking".
   When the app is in the App Store this becomes the official App Store badge plus the ink pill "Download".
 - **Secondary button:** transparent, 1px `--line`, 48px, `--text`. Hover: `--track` fill.
 - **Link:** `--primary-text`, underline on hover; a trailing chevron icon when it leads to another page.
-- **Nav:** a floating pill 12px from the top, sticky: the mark and the word Aurin in Newsreader, 4-5 section
-  links in `--muted`, the ink pill on the right. Under 720px the links collapse and only the logo and the pill stay.
+- **Nav:** a floating pill 12px from the top, sticky: the mark and the word Aurin in Newsreader, 4 section
+  links in `--muted`, a small ink pill "Join the waitlist" on the right. Under 960px the links go; under 560px
+  only the logo stays.
 - **Kicker:** a small glassy pill above the hero headline with a green dot ("Free AI coach for iPhone").
 - **Phone:** the CSS iPhone (titanium edge, black bezel, glare) around a real screenshot. Never a flat rectangle.
 - **Lifted part:** a piece cut from the same screenshot, 420px wide, 22px radius, `--panel`, floating shadow,
   overlapping the phone's edge. One or two per section.
 - **Glass metric card (hero only):** label in meta `--muted`, value in metric style, change in 13px 600 coloured
   by meaning (green up, rust down, indigo for sleep).
-- **Step:** "01" in `--tone`, an h3, one or two sentences of body.
-- **Connections hub:** the Aurin mark in the middle, service logos around it, curves carrying "Into Aurin" and
-  "Sent back" chips; each service opens a panel listing what flows each way.
+- **Step:** "01" in `--tone`, a Newsreader title, one or two sentences of body; inactive steps show only
+  their title in `--muted`.
+- **Connections:** a row of six logo tabs on `--panel2` (three per row on phones); the picked one sits on a
+  `--panel` tile, and the panel below lists "Into Aurin" and "Sent back" as chips.
 - **FAQ:** `<details>` rows separated by `--line`, question in 17px 600, answer in `--sec`.
 - **Footer:** paper, small `--muted` links (Privacy, Terms, Support, contact, Czech versions of the legal pages),
   © line.
