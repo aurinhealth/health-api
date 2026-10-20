@@ -9,20 +9,20 @@ import { resolvePrincipal, sessionMatchesUser } from "../src/dashboard-auth.js";
 const ORIGIN = "https://petrfitnessdata.eu";
 const MIGRATION = ["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
-async function setup() {
+async function setup(extra = {}) {
   _resetTenancyForTest();
   const sent = [];
-  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@petrfitnessdata.eu" };
+  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@petrfitnessdata.eu", ...extra };
   await ensureTenancy(env.DB, env);
   env.DB.sqlite.exec(MIGRATION);
   env.RAW_DB = env.DB;
   return { env, sent };
 }
-const post = (path, body, origin = ORIGIN) => new Request(ORIGIN + path, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const post = (path, body, origin = ORIGIN, ip) => new Request(ORIGIN + path, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", ...(ip ? { "CF-Connecting-IP": ip } : {}) }, body: JSON.stringify(body) });
 const codeIn = message => message.text.match(/\b(\d{6})\b/)[1];
-async function change(env, user, path, body, origin) {
+async function change(env, user, path, body, origin, ip) {
   const pending = [];
-  const response = await handleEmailChange(post(path, body, origin), env, new URL(ORIGIN + path), { signedIn: true, user }, { waitUntil: p => pending.push(p) });
+  const response = await handleEmailChange(post(path, body, origin, ip), env, new URL(ORIGIN + path), { signedIn: true, user }, { waitUntil: p => pending.push(p) });
   await Promise.all(pending);
   return response;
 }
@@ -68,6 +68,55 @@ test("a user moves the account to another address with a code sent there, and th
   assert.equal(sent.at(-1).to, "friend@example.com");
   assert.match(sent.at(-1).text, /změnil na new@example\.com/);
   assert.equal((await change(env, moved, "/app/api/account/email/verify", { email: "new@example.com", code })).status, 400, "a code works once");
+});
+
+// Runs `work` as if the clock showed `time` (the handlers read Date.now()).
+async function at(time, work) {
+  const real = Date.now;
+  Date.now = () => time;
+  try { return await work(); } finally { Date.now = real; }
+}
+
+test("one account asks for at most two e-mail change codes a minute and five an hour, whatever the address", async () => {
+  const { env, sent } = await setup();
+  const user = await member(env);
+  const t0 = Date.parse("2026-10-07T08:00:00Z"), start = (email, time, ip = "203.0.113.5") => at(time, () => change(env, user, "/app/api/account/email/start", { email }, ORIGIN, ip));
+  assert.equal((await start("a1@example.com", t0)).status, 200);
+  assert.equal((await start("a2@example.com", t0)).status, 200);
+  assert.equal((await start("a3@example.com", t0, "198.51.100.7")).status, 429, "the third in a minute, even from another network");
+  const later = [];
+  for (let i = 4; i <= 7; i++) later.push((await start("a" + i + "@example.com", t0 + (i - 2) * 60_000)).status);
+  assert.deepEqual(later, [200, 200, 200, 429], "the sixth in an hour");
+  assert.equal(sent.length, 5);
+});
+
+test("codes to move an account have their own day's budget and never take the sign-in codes", async () => {
+  const { env, sent } = await setup({ EMAIL_CODES_PER_DAY: "1", EMAIL_CHANGE_CODES_PER_DAY: "2" });
+  const t0 = Date.parse("2026-10-07T08:00:00Z"), answers = [];
+  for (let i = 0; i < 3; i++) {
+    const user = await member(env, "m" + i + "@example.com");
+    const original = console.warn;
+    console.warn = () => {};
+    try { answers.push((await at(t0, () => change(env, user, "/app/api/account/email/start", { email: "new" + i + "@example.com" }, ORIGIN, "203.0.113." + i))).status); }
+    finally { console.warn = original; }
+  }
+  assert.deepEqual(answers, [200, 200, 429], "the third change code of the day");
+  assert.equal(sent.length, 2);
+  const pending = [];
+  await at(t0, () => handleEmailLogin(post("/auth/email/start", { email: "m2@example.com" }), env, "/auth/email/start", { waitUntil: p => pending.push(p) }));
+  await Promise.all(pending);
+  assert.equal(sent.length, 3);
+  assert.equal(sent.at(-1).to, "m2@example.com", "another user still gets a sign-in code");
+});
+
+test("one caller asks for at most five e-mail change codes a minute, across accounts", async () => {
+  const { env } = await setup();
+  const t0 = Date.parse("2026-10-07T08:00:00Z"), answers = [];
+  for (let i = 0; i < 6; i++) {
+    const user = await member(env, "m" + i + "@example.com");
+    answers.push((await at(t0, () => change(env, user, "/app/api/account/email/start", { email: "new" + i + "@example.com" }, ORIGIN, "203.0.113.5"))).status);
+  }
+  assert.deepEqual(answers, [200, 200, 200, 200, 200, 429]);
 });
 
 test("a code for one account cannot move another account", async () => {
