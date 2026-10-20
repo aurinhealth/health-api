@@ -476,6 +476,9 @@
 "Převýšení" = "Elevation";
 "Přidat" = "Add";
 "Přidat %@ %@" = "Add %2$@ of %1$@";
+"Přidat běh do týdenního plánu" = "Add a run to the week plan";
+"Přidat kolo do týdenního plánu" = "Add a ride to the week plan";
+"Přidat posilovnu do týdenního plánu" = "Add gym to the week plan";
 "Přidat cvik" = "Add exercise";
 "Přidat jídlo" = "Add food";
 "Přidat k druhé večeři" = "Add to late snack";
@@ -700,7 +703,6 @@
 "Tvůj účet Intervals.icu, když ho připojíš. OpenAI, když použiješ AI funkce, a to jen data potřebná pro odpověď. Nikomu dalšímu je nedáváme, neprodáváme je a nepoužíváme k reklamě." = "Your Intervals.icu account, if you connect it. OpenAI, if you use AI features, and only the data needed for an answer. We don't share it with anyone else, sell it, or use it for ads.";
 "Typ" = "Type";
 "Týden" = "Week";
-"Týdenní plán: %@ %@" = "Weekly plan: %@ %@";
 "Tělesný tuk" = "Body fat";
 "Tělo" = "Body";
 "Tělo během noci" = "Body overnight";

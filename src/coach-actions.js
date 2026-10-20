@@ -30,7 +30,7 @@ export function actionSummary(a){
   if(a.type==='activity_time')return L('Posunout ','Move ')+(a.activityName||L('aktivitu','the activity'))+' ('+shortDate(a.date)+L(') na ',') to ')+a.time;
   if(a.type==='activity_kcal')return L('Kalorie ','Calories of ')+(a.activityName||L('aktivity','the activity'))+' ('+shortDate(a.date)+'): '+a.kcal+' kcal';
   if(a.type==='gym_swap')return L('Vyměnit ','Swap ')+a.fromExercise+' → '+a.toExercise+' ('+shortDate(a.date)+')';
-  if(a.type==='week_sport')return L('Přidat '+SPORT_NAMES()[a.sport]+' do týdne na ','Add a '+SPORT_NAMES()[a.sport]+' to the week on ')+shortDate(a.date);
+  if(a.type==='week_sport')return L('Přidat '+SPORT_NAMES()[a.sport]+' do týdenního plánu na ','Add a '+SPORT_NAMES()[a.sport]+' to the week plan on ')+shortDate(a.date);
   if(a.type==='status')return L('Stav ','Status ')+STATUS_NAMES()[a.status]+(a.statusUntil?L(' (znovu Aktivní od ',' (back to Active from ')+shortDate(a.statusUntil)+')':'');
   if(a.type==='move')return L('Přesunout ','Move ')+workout+L(' na ',' to ')+shortDate(a.date);
   if(a.type==='rest')return L('Odstranit ','Remove ')+workout+' ('+shortDate(a.date)+')';
