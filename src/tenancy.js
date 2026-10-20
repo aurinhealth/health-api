@@ -533,4 +533,12 @@ export async function usersWithAccount(db, env, provider, externalId) {
   return (rows.results || []).map(row => ({ row, user: publicUser(row, env) })).filter(({ row, user }) => user.isOwner || (!row.disabled && row.consented)).map(({ user }) => user);
 }
 
+// Users with a phone that takes notifications (push_tokens), whatever service they
+// connected (Apple Health only, WHOOP, Ultrahuman…), under the same rules as
+// usersWithProviders: enabled and consenting, or the owner.
+export async function usersWithPushTokens(db, env) {
+  const rows = await db.prepare("SELECT u.id, u.email, u.name, u.role, u.disabled, EXISTS (SELECT 1 FROM user_consents k WHERE k.user_id = u.id AND k.kind = 'health' AND k.withdrawn_at IS NULL) AS consented FROM users u WHERE u.disabled = 0 AND EXISTS (SELECT 1 FROM push_tokens t WHERE t.user_id = u.id) ORDER BY u.id").all().catch(() => ({ results: [] }));
+  return (rows.results || []).map(row => ({ row, user: publicUser(row, env) })).filter(({ row, user }) => user.isOwner || row.consented).map(({ user }) => user);
+}
+
 export function _resetTenancyForTest() { tenancyReady = false; }
