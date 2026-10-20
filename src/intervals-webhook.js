@@ -36,30 +36,33 @@ function ownChange(event, clientId) {
   return Boolean(clientId) && ids.length > 0 && ids.every(id => String(id) === clientId);
 }
 
-// What each athlete needs: {athleteId: {parts, kinds}}, the parts of the
-// import to fetch ("" when nothing is fetched but the app's numbers should
-// refresh) and the kinds of cached answers that are old now.
+// What each athlete needs: {athleteId: {parts, kinds, deleted}}, the parts of
+// the import to fetch ("" when nothing is fetched but the app's numbers should
+// refresh), the kinds of cached answers that are old now and the activities an
+// ACTIVITY_DELETED event names (the import removes them, index.js).
 export function webhookWork(body, clientId) {
   const work = new Map();
   for (const event of Array.isArray(body?.events) ? body.events : []) {
     const athlete = String(event?.athlete_id ?? "");
     if (!athlete || typeof event.type !== "string") continue;
     if (ownChange(event, clientId)) continue;
-    if (!work.has(athlete)) work.set(athlete, { parts: new Set(), kinds: new Set() });
+    if (!work.has(athlete)) work.set(athlete, { parts: new Set(), kinds: new Set(), deleted: new Set() });
     work.get(athlete).parts.add(PARTS[event.type] || "");
+    const gone = event.type === "ACTIVITY_DELETED" ? String(event.activity?.id ?? event.activity_id ?? "") : "";
+    if (/^[a-zA-Z0-9_-]{1,80}$/.test(gone)) work.get(athlete).deleted.add(gone);
     for (const kind of CHANGED[event.type] || []) work.get(athlete).kinds.add(kind);
   }
   return work;
 }
 
-// forAthlete(athleteId, parts, kinds) does the fetching for the Aurin user connected
-// as that athlete; it runs after the answer (ctx.waitUntil).
+// forAthlete(athleteId, parts, kinds, deleted) does the fetching for the Aurin user
+// connected as that athlete; it runs after the answer (ctx.waitUntil).
 export async function handleIntervalsWebhook(request, env, ctx, forAthlete) {
   const body = await request.json().catch(() => null);
   if (!authorized(request, body, String(env.INTERVALS_WEBHOOK_SECRET || ""))) return new Response(null, { status: 401 });
   const work = webhookWork(body, String(env.INTERVALS_CLIENT_ID || "").trim());
   if (work.size) {
-    const job = Promise.all([...work].map(([athlete, { parts, kinds }]) => forAthlete(athlete, [...parts].filter(Boolean), [...kinds])
+    const job = Promise.all([...work].map(([athlete, { parts, kinds, deleted }]) => forAthlete(athlete, [...parts].filter(Boolean), [...kinds], [...deleted])
       .catch(error => console.error("Intervals.icu webhook failed", error.message))));
     if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
   }

@@ -35,6 +35,7 @@ import { readSyncPrefs } from './sync-destinations.js';
 import { timingSafeEqualString } from './dashboard-auth.js';
 import { athleteThresholds } from './intervals-athlete.js';
 import { L } from './lang.js';
+import { KEEP_TYPE_SQL } from './activity-type.js';
 
 export const SOURCE = 'wahoo';
 const STATE_COOKIE = 'pfd_wahoo_oauth_state';
@@ -185,7 +186,7 @@ const upsert = (db, userId, r) => db.prepare(
   `INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, start_time, end_time, value_numeric, value_unit, payload_json, record_role)
    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'primary')
    ON CONFLICT (user_id, source_family, data_type, external_id) DO UPDATE SET
-     sample_time = excluded.sample_time, start_time = excluded.start_time, end_time = excluded.end_time, payload_json = excluded.payload_json, updated_at = CURRENT_TIMESTAMP
+     sample_time = excluded.sample_time, start_time = excluded.start_time, end_time = excluded.end_time, ${KEEP_TYPE_SQL}, updated_at = CURRENT_TIMESTAMP
    WHERE health_datapoints.payload_json IS NOT excluded.payload_json OR health_datapoints.start_time IS NOT excluded.start_time`
 ).bind(userId, SOURCE, r.data_type, r.external_id, r.sample_time, r.start_time, r.end_time, r.value_numeric, r.value_unit, healthPointJson(r.payload));
 

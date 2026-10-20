@@ -133,3 +133,21 @@ test("loads the user's own sets and activities, a watch's copy of a run once, th
   assert.ok(Math.abs(quads.hours - alone.hours) <= 1, `${quads.hours} vs ${alone.hours}`);
   assert.equal(r.date, today);
 });
+
+test("a ride only from Wahoo tires the legs, and its Apple Health or Intervals.icu copy counts once", async () => {
+  const raw = createD1();
+  raw.sqlite.exec(`CREATE TABLE strength_sets (user_id INTEGER, workout_date TEXT, exercise TEXT, rpe REAL, completed INTEGER, type TEXT, updated_at TEXT);
+    CREATE TABLE health_datapoints (user_id INTEGER, source_family TEXT, data_type TEXT, start_time TEXT, end_time TEXT, payload_json TEXT, record_role TEXT);`);
+  const addRow = raw.sqlite.prepare("INSERT INTO health_datapoints VALUES(?,?,?,?,?,?,?)");
+  const ride = { id: "wahoo:1", type: "Ride", start_date: "2026-10-07T05:00:00Z", start_date_local: "2026-10-07T07:00:00", moving_time: 10800, elapsed_time: 10800, distance: 90000, icu_training_load: 180, source: "WAHOO" };
+  addRow.run(1, "wahoo", "activity", "2026-10-07T07:00:00", "2026-10-07T10:00:00", JSON.stringify(ride), "primary");
+  const alone = await loadMuscleFatigue(scopedDb(raw, 1), { now });
+  assert.equal(alone.recent.length, 1);
+  assert.notEqual(muscle(alone, "quads").state, "rested");
+  // The watch's copy, not paired yet, and the copy Wahoo uploaded to Intervals.icu (paired: duplicate).
+  addRow.run(1, "apple-health", "exercise", "2026-10-07T05:00:30Z", "2026-10-07T08:00:00Z", JSON.stringify({ exercise: { exerciseType: "BIKING", activeDuration: "10800s" } }), null);
+  addRow.run(1, "intervals", "activity", "2026-10-07T07:00:00", null, JSON.stringify({ ...ride, id: "i9" }), "duplicate");
+  const both = await loadMuscleFatigue(scopedDb(raw, 1), { now });
+  assert.equal(both.recent.length, 1);
+  assert.equal(muscle(both, "quads").hours, muscle(alone, "quads").hours);
+});

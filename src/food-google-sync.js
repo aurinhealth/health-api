@@ -1,5 +1,5 @@
 import { L } from './lang.js';
-import { localToday } from "./user-time.js";
+import { localToday, zonedTime } from "./user-time.js";
 import { readSyncPrefs, healthAllowed } from "./sync-destinations.js";
 // Durable, user-scoped outbox. Local food writes never depend on Google being
 // online. Known Google records are patched, not recreated, on edits.
@@ -16,8 +16,11 @@ export function foodGooglePayload(row){
   let note={};try{note=JSON.parse(row.note||'{}');}catch{/* Older free text. */}
   // The consumed date is authoritative; older entries sometimes carried the
   // write time even when food was entered retrospectively.
+  // A time without an offset (food-log.js mealConsumedAt) is the user's wall
+  // clock: their time zone makes it an instant, DST included.
   const stamp=String(row.consumed_at||''),date=row.consumed_date;
-  const start=new Date(stamp.startsWith(date)&&/[Zz]|[+-]\d\d:\d\d$/.test(stamp)?stamp:date+'T12:00:00Z');
+  const at=!stamp.startsWith(date)?NaN:/[Zz]|[+-]\d\d:\d\d$/.test(stamp)?Date.parse(stamp):/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(stamp)?zonedTime(stamp):NaN;
+  const start=new Date(Number.isFinite(at)?at:Date.parse(date+'T12:00:00Z'));
   return {nutritionLog:{interval:{startTime:start.toISOString(),endTime:new Date(+start+60000).toISOString()},
     foodDisplayName:row.recipe_title,mealType:MEALS[note.mealType]||'SNACK',energy:{kcal:Number(row.kcal)||0},
     totalCarbohydrate:{grams:Number(row.carbs_g)||0},totalFat:{grams:Number(row.fat_g)||0},

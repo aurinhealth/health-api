@@ -183,6 +183,37 @@ test("Google Health: a first send without an answer is sent again only by hand",
   assert.deepEqual(ok.calls.map(c => c.method), ["POST", "PATCH"]);
 });
 
+test("Google Health: a write answered with an operation is polled, and one still running is not posted again", async () => {
+  const d = db();
+  await saveSyncPrefs(d, 7, "google", { pushActivities: true });
+  const env = { DB: d, USER_ID: 7, GOOGLE_REFRESH_TOKEN: "r", GOOGLE_SCOPES: [...HEALTH_SCOPES, EXTRA_SCOPES.activityWrite] }, googleToken = async () => "token";
+  const record = "users/me/dataTypes/exercise/dataPoints/abc";
+  // Done on the first poll: the record's name is kept, not the operation's.
+  const quick = recorder((url, opts) => (opts.method || "GET") === "POST" ? Response.json({ name: "operations/op0", done: false }) : Response.json({ name: "operations/op0", done: true, response: { name: record } }));
+  const first = await sendActivity(env, activity, { fetchImpl: quick.fetchImpl, googleToken, pollMs: 0 });
+  assert.deepEqual(first.sends[0], { destination: "google", status: "sent", remoteId: record });
+  assert.deepEqual(quick.calls.map(c => [c.method, c.url.replace("https://health.googleapis.com/v4/", "")]), [["POST", "users/me/dataTypes/exercise/dataPoints"], ["GET", "operations/op0"]]);
+
+  // Still running after the polls: waiting, with the operation kept.
+  const other = { ...activity, key: "gym:2026-10-11", date: "2026-10-11", start: "2026-10-11T16:05:00Z" };
+  const slow = recorder((url, opts) => (opts.method || "GET") === "POST" ? Response.json({ name: "operations/op1", done: false }) : Response.json({ name: "operations/op1", done: false }));
+  const waiting = await sendActivity(env, other, { fetchImpl: slow.fetchImpl, googleToken, pollMs: 0 });
+  assert.equal(waiting.sends[0].status, "pending");
+  assert.equal((await activitySends(env, other.key))[0].remoteId, "operations/op1");
+  assert.deepEqual(slow.calls.map(c => c.method), ["POST", "GET", "GET", "GET"]);
+  // The cron asks the operation first, then patches the record it made: no second POST.
+  d.sqlite.exec("UPDATE sync_sends SET updated_at = datetime('now', '-10 minutes')");
+  const later = recorder((url, opts) => (opts.method || "GET") === "GET" ? Response.json({ name: "operations/op1", done: true, response: { name: record + "2" } }) : Response.json({ name: record + "2" }));
+  assert.deepEqual((await retrySyncSends(env, { fetchImpl: later.fetchImpl, googleToken })).map(r => [r.status, r.remoteId]), [["sent", record + "2"]]);
+  assert.deepEqual(later.calls.map(c => [c.method, c.url.replace("https://health.googleapis.com/v4/", "")]), [["GET", "operations/op1"], ["PATCH", record + "2"]]);
+
+  // An operation that failed made nothing: the activity is sent anew.
+  d.sqlite.exec("UPDATE sync_sends SET status = 'pending', remote_id = 'operations/op2' WHERE activity_key = 'gym:2026-10-11'");
+  const failed = recorder((url, opts) => (opts.method || "GET") === "GET" ? Response.json({ name: "operations/op2", done: true, error: { code: 13 } }) : Response.json({ name: record + "3" }));
+  assert.equal((await retrySend(env, other.key, "google", { fetchImpl: failed.fetchImpl, googleToken })).remoteId, record + "3");
+  assert.deepEqual(failed.calls.map(c => c.method), ["GET", "POST"]);
+});
+
 test("the cron retries only what failed a few times", async () => {
   const d = db();
   const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k" };

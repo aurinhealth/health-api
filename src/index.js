@@ -66,7 +66,7 @@ export default {
         return await googleSyncStatus(env);
       }
       if(url.pathname==='/sync/google/recent'&&request.method==='POST')return Response.json(await syncGoogleRecent(env));
-      if(url.pathname==='/sync/intervals/recent'&&request.method==='POST')return syncIntervals(env,{activityDays:3,parts:url.searchParams.get('parts')});
+      if(url.pathname==='/sync/intervals/recent'&&request.method==='POST')return syncIntervals(env,{activityDays:3,parts:url.searchParams.get('parts'),deleted:url.searchParams.get('deleted')});
       if(url.pathname==='/sync/match'&&request.method==='POST')return Response.json(await matchActivities(env));
 
       // Starting a sync changes data, so it takes POST only: a link or an image
@@ -1132,7 +1132,26 @@ function activityEnd(a) {
 }
 
 
-async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays}={}) {
+// Activities deleted in Intervals.icu: their rows go, and a watch's copy
+// paired with one (matchActivities) counts on its own again.
+async function removeIntervalsActivities(env, externalIds) {
+  const statements = [];
+  for (let i = 0; i < externalIds.length; i += 50) {
+    const ids = externalIds.slice(i, i + 50), marks = ids.map(() => "?").join(",");
+    statements.push(
+      env.DB.prepare(`DELETE FROM health_datapoints WHERE user_id = ? AND source_family = 'intervals' AND data_type = 'activity' AND external_id IN (${marks})`).bind(env.USER_ID, ...ids),
+      env.DB.prepare(`UPDATE health_datapoints SET record_role = 'primary', matched_activity_id = NULL, match_confidence = NULL, updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = ? AND matched_activity_id IN (${marks})`).bind(env.USER_ID, ...ids.map(id => "intervals:" + id))
+    );
+  }
+  if (statements.length) await env.DB.batch(statements);
+  return externalIds.length;
+}
+
+// deleted: the ids an ACTIVITY_DELETED webhook named (intervals-webhook.js).
+async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,deleted=''}={}) {
+  const named = String(deleted || '').split(',').filter(id => /^[a-zA-Z0-9_-]{1,80}$/.test(id)).map(id => 'activity:' + id);
+  let removed = named.length ? await removeIntervalsActivities(env, named) : 0;
   const oldest =
     dateDaysAgo(
       activityDays
@@ -1201,6 +1220,17 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays}={}
   // inside a background request with a limited lifetime.
   for (let i = 0; i < statements.length; i += 50) await env.DB.batch(statements.slice(i, i + 50));
 
+  // Deleted in Intervals.icu: an activity stored for the window that a whole,
+  // valid answer no longer has. The window's first day is left out (its
+  // start may be stored in UTC), and so are the activities the app sent there.
+  // An empty answer deletes nothing: one named by the webhook still goes above.
+  if (activities.length && activities.every(a => a && typeof a === 'object' && a.id != null && a.id !== '')) {
+    const returned = new Set(activities.map(a => 'activity:' + String(a.id)));
+    const stored = (await env.DB.prepare("SELECT external_id FROM health_datapoints WHERE user_id=? AND source_family='intervals' AND data_type='activity' AND start_time>=? AND start_time<?").bind(env.USER_ID, dateDaysFromDate(oldest, 1), newest).all()).results || [];
+    const gone = stored.map(row => row.external_id).filter(id => !returned.has(id) && !named.includes(id) && !sentHere.has(String(id).replace(/^activity:/, '')));
+    if (gone.length) removed += await removeIntervalsActivities(env, gone);
+  }
+
   // Counts only: the activities themselves are health data, and this result
   // ends up in the public GitHub Actions log of the periodic sync.
   return {
@@ -1208,7 +1238,9 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays}={}
       activities.length,
 
     activities_saved:
-      saved
+      saved,
+
+    ...(removed ? { activities_removed: removed } : {})
   };
 }
 

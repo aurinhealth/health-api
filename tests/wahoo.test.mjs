@@ -9,6 +9,8 @@ import { storeLocalEvent, syncLocalWorkout, editLocalWorkout } from "../src/loca
 import { saveSyncPrefs, syncOverview } from "../src/sync-destinations.js";
 import { connectionStatus } from "../src/connections.js";
 import { withTimeZone } from "../src/user-time.js";
+import { changeActivityType } from "../src/activity-type.js";
+import { setActivityKcal } from "../src/activity-edits.js";
 
 const schema = readFileSync(new URL("../staging/schema.sql", import.meta.url), "utf8");
 function setup() {
@@ -189,6 +191,20 @@ test("without Intervals.icu the app hears Wahoo's answer; a full Sandbox waits f
   const done = await syncLocalWorkout(env(db), local.id, ok.fetchImpl);
   assert.deepEqual([done.status, done.destination, done.eventId], ["synced", "wahoo", "7001:8001"]);
   assert.deepEqual(ok.calls.filter(c => c.path.startsWith("/v1/")).map(c => c.method + " " + c.path), ["PUT /v1/plans/7001", "POST /v1/workouts"]);
+});
+
+test("a type and calories changed in Aurin stay after the next Wahoo sync", async () => {
+  const { db, raw } = setup();
+  const e = env(db, { access_token: "a", refresh_token: "r", expires_at: NOW + 3600000, user_id: "55" });
+  let name = "Sweet spot";
+  const { fetchImpl } = api({ "GET /v1/workouts": u => Response.json({ workouts: u.searchParams.get("page") === "1" ? [workout(1, "2026-10-13T16:00:00Z", { name, workout_type_id: 1 })] : [] }) });
+  assert.equal((await syncWahoo(e, { days: 5, fetchImpl, now: NOW })).saved, 1);
+  await changeActivityType(e, { id: "wahoo:1", type: "Walk" });
+  await setActivityKcal(e, { id: "wahoo:1", kcal: 250 });
+  name = "Evening";
+  await syncWahoo(e, { days: 5, fetchImpl, now: NOW });
+  const p = JSON.parse(rows(raw, "source_family='wahoo'")[0].payload_json);
+  assert.deepEqual([p.type, p.loadwiseType, p.calories, p.loadwiseKcal, p.loadwiseKcalDevice, p.name], ["Walk", "Walk", 250, 250, 812, "Evening"]);
 });
 
 test("the same ride from Wahoo and Intervals.icu counts once; Wahoo's ride stands over the watch's", async () => {
