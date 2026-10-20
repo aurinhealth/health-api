@@ -77,7 +77,7 @@ export const typeName = type => { const t = BY_TYPE.get(type); return t ? L(t[1]
 export const activityTypes = () => ACTIVITY_TYPES.map(([type, cs, en, group]) => ({ type, name: L(cs, en), group }));
 
 // Every sync that writes an activity or exercise row (Intervals.icu, Google
-// Health, Apple Health) keeps a type the user chose and calories set in Aurin
+// Health, Apple Health, Wahoo) keeps a type the user chose and calories set in Aurin
 // (activity-edits.js): use in place of `payload_json = excluded.payload_json`.
 const TYPED = `CASE
   WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json)
@@ -87,6 +87,12 @@ const TYPED = `CASE
     '$.loadwiseType', json_extract(health_datapoints.payload_json, '$.loadwiseType'),
     '$.exercise.exerciseType', json_extract(health_datapoints.payload_json, '$.loadwiseType'),
     '$.exercise.displayName', json_extract(health_datapoints.payload_json, '$.exercise.displayName'))
+  -- A Wahoo activity (Intervals.icu's shape): the type sits at the top.
+  WHEN json_valid(health_datapoints.payload_json) AND json_valid(excluded.payload_json)
+    AND json_extract(health_datapoints.payload_json, '$.loadwiseType') IS NOT NULL
+  THEN json_set(excluded.payload_json,
+    '$.loadwiseType', json_extract(health_datapoints.payload_json, '$.loadwiseType'),
+    '$.type', json_extract(health_datapoints.payload_json, '$.loadwiseType'))
   ELSE excluded.payload_json END`;
 const KCAL = "json_extract(health_datapoints.payload_json, '$.loadwiseKcal')";
 const DEVICE = "json_extract(health_datapoints.payload_json, '$.loadwiseKcalDevice')";
@@ -184,9 +190,11 @@ export async function changeActivityType(env, { id, type } = {}, { fetchImpl = f
     return { status: 'ok', type: entry[0], sent: ['intervals'], kept: [] };
   }
 
-  // A Wahoo ride: changed in Aurin only (Wahoo's own type stays).
+  // A Wahoo ride: changed in Aurin only (Wahoo's own type stays), marked so
+  // the next Wahoo sync keeps it (KEEP_TYPE_SQL).
   if (row.source_family === 'wahoo') {
     payload.type = entry[0];
+    payload.loadwiseType = entry[0];
     await env.DB.prepare('UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(JSON.stringify(payload), row.id, env.USER_ID).run();
     return { status: 'ok', type: entry[0], sent: [], kept: ['wahoo'] };
   }
