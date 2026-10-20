@@ -32,7 +32,10 @@ test('the overview follows the app section by section and every file it loads ex
   assert.ok(files.includes('og-en.png'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
-  for(const name of ['today','sleep','readiness-parts','strain-target','training','builder','training-mode','food-day','coach-ask'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
+  for(const name of ['today','sleep','readiness-parts','training','builder','training-mode','food-day'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
+  assert.ok(files.includes('fonts/instrument-serif.woff2'),'the app’s number font');
+  // Strain, the finished workout and the coach are screens built in site-demos.js, so they can move.
+  for(const text of ['5.1</b> workout <b>3.3</b> movement','Saved to Apple Health','Proposal confirmed.'])assert.ok(html.includes(text),text);
   // The 3D figure's frames, its map of muscles and a close-up of every muscle the bubble can open.
   const base=html.match(/data-base="\/site\/([^"]+)"/)[1];
   for(let i=0;i<72;i++)assert.ok(existsSync(new URL(`../public/site/${base}f${String(i).padStart(2,'0')}.webp`,import.meta.url)),'frame '+i);
@@ -52,6 +55,9 @@ test('the numbers around the hero phone are the sample morning its screenshot sh
   assert.match(html,new RegExp('readiness '+today.readiness.score+','));
   assert.match(html,new RegExp('<div class="k">HRV</div><div class="v">'+today.hrv.value+' ms</div><div class="d up">↑ '+(today.hrv.value-today.hrv.baseline)+' ms above normal'));
   assert.match(html,new RegExp('<div class="k">Sleep</div><div class="v">'+clock(today.sleep.minutes)+'</div><div class="d sleep">score '+today.sleep.index+'<'));
+  // The strain screen built for the site splits the day as the sample day does (DemoData strain.training/movement).
+  assert.ok(html.includes('<b>'+today.strain.training+'</b> workout <b>'+today.strain.movement+'</b> movement'),'strain split');
+  assert.equal(Math.round((today.strain.training+today.strain.movement)*10)/10,today.strain.score);
 });
 
 const visit=(path,headers={})=>new Request('https://petrfitnessdata.eu'+path,{headers});
