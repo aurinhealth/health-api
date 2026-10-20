@@ -77,7 +77,7 @@ p{margin:0}
 .fl{position:absolute;z-index:2;overflow:hidden;border-radius:18px;background:var(--panel);box-shadow:0 20px 44px -14px rgba(40,30,10,.32),0 0 0 1px rgba(27,26,23,.05)}
 .fl img{display:block;width:100%;height:auto}
 .fl.round{border-radius:50%;aspect-ratio:1;background:var(--bg)}
-.fl.round img{margin-top:-4%}
+.fl.round img{width:100%;height:100%;object-fit:cover}
 /* A stage is drawn at phone size and grows on a computer. */
 .stage{position:relative;width:360px;max-width:100%;height:520px;margin:0 auto}
 .stage .phone{position:absolute;left:50%;top:0;transform:translateX(-50%)}
@@ -97,18 +97,31 @@ p{margin:0}
 .js .hc:not(.on){opacity:0;transform:translateY(26px) scale(.92);pointer-events:none}
 html:not(.js) .hc:not([data-g="0"]){display:none}
 
-/* Strips that run sideways: the app's screens, and the services Aurin connects to. */
-.marquee{overflow:hidden;-webkit-mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
-.marquee .run{display:flex;gap:12px;width:max-content}
-.shots{margin-top:8px}
-.shots img{display:block;width:132px;height:auto;border-radius:20px;box-shadow:0 12px 26px -14px rgba(40,30,10,.35)}
-.shots .run{padding:6px 0 18px}
-.works{padding:34px 0 30px;text-align:center}
-.works .eb{color:var(--muted);margin-bottom:6px}
-.works .sub{font-size:14px;color:var(--muted);margin:0 24px 18px}
-.lg{flex:none;display:flex;align-items:center;gap:9px;height:50px;padding:0 16px;border-radius:15px;background:#fff;font-size:15px;font-weight:600;white-space:nowrap}
-.lg img{height:24px;width:auto}
-.lg.dark{background:var(--button)}.lg.dark img.word{height:15px}
+/* Connections: the services as tabs; between the picked one and Aurin a lane that runs in and a lane
+   that runs back, each with what it carries. */
+.conn{--t:#fff;display:block!important}
+.conn .tabs{display:flex;flex-wrap:wrap;gap:6px;margin:24px 0 18px}
+.conn [role=tab]{padding:0;border:0;border-radius:18px;background:none;cursor:pointer;opacity:.55;transition:opacity .3s,transform .3s}
+.conn [role=tab][aria-selected=true]{opacity:1;transform:scale(1.06)}
+.lt{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;background:#fff;box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.lt img{width:76%;height:76%;object-fit:contain}
+.lt.dark{background:var(--button)}.lt.dark img{width:56%;height:auto}.lt.word img{width:80%}
+.lt.aurin{background:var(--green-soft)}
+.svc{display:none;padding-bottom:30px}.svc.on{display:block}
+.ends{display:flex;align-items:center;gap:8px;max-width:560px}
+.ends .lt{width:52px;height:52px}
+.lanes{flex:1;height:64px}
+.lanes path{fill:none;vector-effect:non-scaling-stroke;stroke-width:6;stroke-linecap:round;stroke-dasharray:0 16}
+.lanes .in{stroke:var(--green)}.lanes .out{stroke:var(--amber-bar)}.lanes .off{stroke:var(--track);stroke-dasharray:none;stroke-width:2}
+.io{margin-top:16px}
+.io .lbl{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;margin-bottom:8px}
+.io .lbl .icon{width:16px;height:16px;stroke-width:2.4}
+.io.in .lbl{color:var(--green)}.io.out .lbl{color:var(--amber)}
+.conn .chips{margin:0}
+.conn .chips span{display:inline-flex;align-items:center;gap:6px;padding:7px 12px 7px 10px;background:var(--bg);font-size:14px}
+.conn .chips .icon{width:15px;height:15px}
+.io.in .chips .icon{color:var(--green)}.io.out .chips .icon{color:var(--amber)}
+.io .none{font-size:14px;color:var(--muted)}
 
 /* Bento: one tile per number on Today, each in its tab's tint with the piece of the app it explains. */
 .start{padding:40px 0 0}
@@ -192,9 +205,9 @@ html:not(.js) .hc:not([data-g="0"]){display:none}
   .js .fl.rv{transform:translateY(46px) scale(.9)}
   .js .fl.rv.in{transform:none;animation:float 6s ease-in-out 1.2s infinite}
   @keyframes float{50%{translate:0 -7px}}
-  .marquee .run{animation:run var(--t,40s) linear infinite}
-  .marquee.back .run{animation-direction:reverse}
-  @keyframes run{to{transform:translateX(calc(-50% - 6px))}}
+  .lanes path:not(.off){animation:lane 1s linear infinite}
+  @keyframes lane{to{stroke-dashoffset:-32}}
+  .svc.on .chips span{animation:up .5s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(.05s + var(--i,0) * 50ms)}
   .js .hero .kick,.js .hero h1,.js .hero .lead,.js .hero .wl{animation:up .9s cubic-bezier(.2,.7,.2,1) both}
   .js .hero h1{animation-delay:.08s}.js .hero .lead{animation-delay:.18s}.js .hero .wl{animation-delay:.28s}
   @keyframes up{from{opacity:0;transform:translateY(24px)}}
@@ -217,6 +230,12 @@ html:not(.js) .hc:not([data-g="0"]){display:none}
   .fig{width:min(100%,380px)}
   .privacy .panel{display:block;padding:56px 64px;min-height:0}
   .tile.w2 .cut{max-width:440px;margin:0 auto}
+  .conn{padding:64px 64px 0;text-align:center}.conn .lead{margin:0 auto}
+  .conn .tabs{justify-content:center;gap:14px;margin:32px 0 28px}
+  .conn .lt{width:68px;height:68px;border-radius:20px}.conn .ends .lt{width:76px;height:76px}
+  .ends{max-width:760px;margin:0 auto}.lanes{height:80px}
+  .svc{max-width:860px;margin:0 auto;padding-bottom:56px}
+  .svc .io{display:inline-block;vertical-align:top;width:calc(50% - 12px);margin:24px 6px 0;text-align:left}
   .final{padding:88px 24px 72px}
 }
 @media (max-width:899px){
@@ -226,7 +245,7 @@ html:not(.js) .hc:not([data-g="0"]){display:none}
 }
 @media (max-width:560px){
   .wrap{padding:0 12px}
-  .hero .wrap,.start .wrap>.h2,.works,.more .h2,.faq{padding-left:6px;padding-right:6px}
+  .hero .wrap,.start .wrap>.h2,.more .h2,.faq{padding-left:6px;padding-right:6px}
   .bento{gap:10px}
   .tile{padding:18px 14px 0;border-radius:24px}
   .panel{padding:34px 20px 0;border-radius:32px}
@@ -281,6 +300,12 @@ document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelect
   busy=true;fetch('/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})})
   .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');})})
   .catch(function(x){err.textContent=x.message;}).then(function(){busy=false;});});});
+// Connections: a logo shows what goes in and back; they take turns until one is picked.
+var tabs=[].slice.call(document.querySelectorAll('.conn [role=tab]')),cur=0,timer;
+function tab(i){cur=i;tabs.forEach(function(t,j){var on=j===i;t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;document.getElementById(t.getAttribute('aria-controls')).classList.toggle('on',on);});}
+tabs.forEach(function(t,i){t.addEventListener('click',function(){clearInterval(timer);tab(i);});
+ t.addEventListener('keydown',function(e){var n=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(n){e.preventDefault();clearInterval(timer);tab((i+n+tabs.length)%tabs.length);tabs[cur].focus();}});});
+if(tabs.length){tab(0);if(!still)timer=setInterval(function(){if(!document.hidden)tab((cur+1)%tabs.length);},5200);}
 // Muscles: Front and Back turn the figure; a bubble shows its muscle up close, as its detail does in the app.
 var fig=document.querySelector('.fig');if(!fig)return;
 var zoom=document.querySelector('.zoom'),bubs=[].slice.call(fig.querySelectorAll('.bub')),turn=[].slice.call(document.querySelectorAll('.turn button'));
@@ -374,10 +399,12 @@ export function overviewPage(request) {
   const {lang, origin} = pageLang(request);
   // A screen of the app: a screenshot taken in CI from the sample data (public/site/app/).
   const shot = (name, {lazy = true, cls = ''} = {}) => `<img src="/site/app/${name}.webp" alt="" width="600" height="1305"${cls ? ` class="${cls}"` : ''}${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
-  // A piece of the app lifted out beside a phone (public/site/app/parts/, cut from the same screenshots).
-  const PARTS = {'build-form': 582, 'coach-card': 350, 'food-add': 903, 'food-top': 934, 'ready-parts': 804, 'sleep-dial': 876,
-    'sleep-need': 565, 'sleep-stages': 401, 'sleep-why': 737, 'strain-gauge': 715, 'tm-rest': 759, week: 408};
-  const img = name => `<img src="/site/app/parts/${name}.webp" alt="" width="${name === 'week' ? 540 : 840}" height="${PARTS[name]}" loading="lazy" decoding="async">`;
+  // A whole card of the app, lifted out beside a phone with its heading (public/site/app/parts/, cut
+  // from the same screenshots): [width, height].
+  const PARTS = {'build-card': [560, 392], 'coach-card': [547, 225], 'food-add-card': [603, 657], 'food-top': [840, 934],
+    'ready-card': [560, 590], 'rest-card': [400, 400], 'sleep-dial': [840, 876], 'sleep-need-card': [560, 430],
+    'sleep-stages-card': [560, 320], 'strain-card': [560, 560], 'week-card': [556, 460]};
+  const img = name => `<img src="/site/app/parts/${name}.webp" alt="" width="${PARTS[name][0]}" height="${PARTS[name][1]}" loading="lazy" decoding="async">`;
   const part = (name, style, cls = '') => `<div class="fl ${cls}" style="${style}">${img(name)}</div>`;
   const phone = (screen, parts) => `<div class="stage" aria-hidden="true"><div class="phone">${shot(screen)}</div>
 ${parts.map(([name, style, cls = ''], i) => part(name, `${style};--d:${(.12 + i * .16).toFixed(2)}s`, `rv ${cls}`)).join('\n')}</div>`;
@@ -387,22 +414,47 @@ ${stage}</div></div></section>`;
 
   // The hero phone walks through four screens of the sample day; each brings pieces of its next screens.
   const HERO = [
-    ['today', [['ready-parts', 'left:-6px;top:250px;width:178px'], ['sleep-stages', 'right:-8px;top:70px;width:170px'], ['strain-gauge', 'right:-4px;top:384px;width:150px']]],
-    ['sleep', [['sleep-why', 'right:-10px;top:60px;width:172px'], ['sleep-dial', 'left:-10px;top:250px;width:170px', 'round']]],
-    ['training', [['week', 'left:-8px;top:120px;width:190px'], ['strain-gauge', 'right:-6px;top:330px;width:150px']]],
-    ['food-day', [['food-add', 'left:-10px;top:260px;width:176px'], ['coach-card', 'right:-12px;top:96px;width:196px']]]];
+    ['today', [['sleep-stages-card', 'right:-10px;top:64px;width:176px'], ['ready-card', 'left:-8px;top:236px;width:170px'], ['strain-card', 'right:-6px;top:360px;width:150px']]],
+    ['sleep', [['sleep-need-card', 'right:-10px;top:56px;width:178px'], ['sleep-dial', 'left:-10px;top:270px;width:168px', 'round']]],
+    ['training', [['week-card', 'left:-8px;top:110px;width:186px'], ['strain-card', 'right:-6px;top:330px;width:150px']]],
+    ['food-day', [['food-add-card', 'left:-10px;top:250px;width:172px'], ['coach-card', 'right:-12px;top:96px;width:196px']]]];
   const hero = `<div class="stage" role="img" aria-label="Aurin on a phone: the Today screen with readiness 78, sleep, strain and HRV, then sleep, the training week and food"><div class="glow"></div>
 <div class="phone cyc">${HERO.map(([screen], i) => shot(screen, {lazy: i > 0, cls: i ? '' : 'on'})).join('')}</div>
 ${HERO.map(([, parts], g) => parts.map(([name, style, cls = '']) => `<div class="fl hc ${cls}${g ? '' : ' on'}" data-g="${g}" style="${style}">${img(name)}</div>`).join('')).join('\n')}</div>`;
 
-  // Strips that run sideways; the second copy is only for the loop.
-  const marquee = (items, cls = '', time = 40) => `<div class="marquee ${cls}" style="--t:${time}s"><div class="run">${items}<span style="display:contents" aria-hidden="true">${items}</span></div></div>`;
-  const screens = ['sleep', 'strain-target', 'training', 'builder', 'training-set', 'food-day', 'journal-impact', 'coach-ask', 'sleep-need', 'bedtime']
-    .map(name => shot(name)).join('');
-  // Every service the app connects to, with the app's own logo file.
-  const services = [['apple-health.png', 'Apple Health'], ['google-health.png', 'Google Health'], ['intervals.svg', 'Intervals.icu'],
-    ['whoop.svg', ''], ['ultrahuman.svg', '', 'dark'], ['wahoo.png', '', 'dark word']]
-    .map(([file, name, cls = '']) => `<span class="lg${cls.includes('dark') ? ' dark' : ''}"><img src="/site/logos/${file}" alt="${name ? '' : {'whoop.svg': 'WHOOP', 'ultrahuman.svg': 'Ultrahuman Ring', 'wahoo.png': 'Wahoo'}[file]}"${cls.includes('word') ? ' class="word"' : ''}>${name}</span>`).join('');
+  // Connections: what Aurin reads from each service and what it sends back, as the app's connect
+  // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
+  const services = [
+    {id: 'apple', name: 'Apple Health', logo: 'apple-health.png',
+      reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['scale', 'weight']],
+      sends: [['bike', 'workouts'], ['scale', 'weight'], ['meal', 'food'], ['drop', 'water']]},
+    {id: 'google', name: 'Google Health', logo: 'google-health.png',
+      reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['meal', 'food']],
+      sends: [['meal', 'food'], ['drop', 'drinks'], ['bike', 'workouts, if you allow'], ['scale', 'weight, if you allow']]},
+    {id: 'intervals', name: 'Intervals.icu', logo: 'intervals.svg',
+      reads: [['bolt', 'workouts with power'], ['calendar', 'plan'], ['zones', 'zones'], ['scale', 'weight']],
+      sends: [['calendar', 'planned workouts'], ['flame', 'calorie target'], ['scale', 'weight'], ['training', 'sleep, HRV and daily values']]},
+    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: 'ultrahuman.svg', tile: 'dark',
+      reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'VO₂max'], ['thermo', 'temperature']], sends: [], none: 'Nothing, Aurin only reads the ring.'},
+    {id: 'whoop', name: 'WHOOP', logo: 'whoop.svg',
+      reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'breathing rate'], ['drop', 'blood oxygen']], sends: [], none: 'Nothing, Aurin only reads WHOOP.'},
+    {id: 'wahoo', name: 'Wahoo', logo: 'wahoo.png', tile: 'dark word',
+      reads: [['bike', 'finished rides and runs'], ['bolt', 'power and TSS'], ['heart', 'heart rate']],
+      sends: [['calendar', 'planned workouts, to ELEMNT and KICKR']]}];
+  const logo = ({logo, tile = ''}) => `<span class="lt ${tile}"><img src="/site/logos/${logo}" alt=""></span>`;
+  const chips = items => `<div class="chips">${items.map(([name, label], i) => `<span style="--i:${i}">${icon(name)}${label}</span>`).join('')}</div>`;
+  // Two lanes between the service and Aurin: what comes in runs right, what goes back runs left.
+  const lanes = sends => `<svg class="lanes" viewBox="0 0 200 64" preserveAspectRatio="none" aria-hidden="true"><path class="in" d="M4 20H196"/><path class="${sends ? 'out' : 'off'}" d="M196 44H4"/></svg>`;
+  const connect = `<section id="propojeni" class="sec"><div class="wrap"><div class="panel conn">
+<div class="eb">Connections</div><h2 class="h2 rv">Works with what you wear.</h2>
+<p class="lead rv">Any watch or ring that saves to Apple Health or Google Health, plus these directly. Pick one to see what goes where.</p>
+<div class="tabs" role="tablist" aria-label="Connected services">${services.map((x, i) => `<button type="button" role="tab" id="tab-${x.id}" aria-controls="svc-${x.id}" aria-selected="${i === 0}">${logo(x)}<span class="vh">${x.name}</span></button>`).join('')}</div>
+${services.map((x, i) => `<div class="svc${i === 0 ? ' on' : ''}" id="svc-${x.id}" role="tabpanel" aria-labelledby="tab-${x.id}">
+<div class="ends">${logo(x)}${lanes(x.sends.length)}<span class="lt aurin">${mark(30)}</span></div>
+<div class="io in"><div class="lbl">${icon('down')}${x.name} → Aurin</div>${chips(x.reads)}</div>
+<div class="io out"><div class="lbl">${icon('up')}Aurin → ${x.name}</div>${x.sends.length ? chips(x.sends) : `<p class="none">${x.none}</p>`}</div>
+</div>`).join('\n')}
+</div></div></section>`;
 
   // Muscles: the figure from the front and the back (rendered ahead by scripts/render-muscles-site.mjs),
   // with the sample day's tired and recovering muscles (DemoData.muscles), in English.
@@ -453,41 +505,38 @@ ${store('top', 'Join the waitlist')}
 <p class="small">Free to start. Works with the watch or ring you already wear.</p>
 ${hero}
 </div></section>
-<div class="shots" aria-hidden="true">${marquee(screens, '', 60)}</div>
 
-<section id="propojeni" class="works"><div class="eb">Works with what you wear</div>
-<p class="sub">Any watch or ring that saves to Apple Health or Google Health, plus these directly.</p>
-${marquee(services, '', 30)}</section>
+${connect}
 
 <section id="pripravenost" class="start"><div class="wrap">
 <h2 class="h2 rv">Start every day knowing where you stand.</h2>
 <div class="bento">
 <div class="tile w2 rv" style="--t:var(--glow-today);--c:var(--green)"><div class="eb">Readiness</div><h3>One number every morning.</h3><p>HRV, resting heart rate and sleep, weighed against your own normal.</p>
-<div class="big"><div class="num" data-n="78">78</div><div class="cut">${img('ready-parts')}</div></div></div>
-<div class="tile rv" style="--t:var(--glow-health);--c:var(--indigo);--d:.1s"><div class="eb">Sleep</div><h3>Know what you need tonight.</h3><p>Your need grows with a hard day and with the debt from the week.</p><div class="cut">${img('sleep-need')}</div><div class="pad"></div></div>
-<div id="zatez" class="tile rv" style="--t:var(--glow-training);--c:var(--amber);--d:.2s"><div class="eb">Strain</div><h3>A target for today.</h3><p>Where today’s strain should land, from your readiness, sleep debt and plan.</p><div class="cut">${img('strain-gauge')}</div><div class="pad"></div></div>
-<div id="trenink" class="tile w2 rv" style="--t:color-mix(in srgb,var(--glow-today) 60%,#fff);--c:var(--green)"><div class="eb">Training</div><h3>A plan that adapts.</h3><p>An activity for every day, picked for how you recovered. Follow a plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu.</p><div class="cut">${img('week')}</div><div class="pad"></div></div>
+<div class="big"><div class="num" data-n="78">78</div><div class="cut">${img('ready-card')}</div></div></div>
+<div class="tile rv" style="--t:var(--glow-health);--c:var(--indigo);--d:.1s"><div class="eb">Sleep</div><h3>Know what you need tonight.</h3><p>Your need grows with a hard day and with the debt from the week.</p><div class="cut">${img('sleep-need-card')}</div><div class="pad"></div></div>
+<div id="zatez" class="tile rv" style="--t:var(--glow-training);--c:var(--amber);--d:.2s"><div class="eb">Strain</div><h3>A target for today.</h3><p>Where today’s strain should land, from your readiness, sleep debt and plan.</p><div class="cut">${img('strain-card')}</div><div class="pad"></div></div>
+<div id="trenink" class="tile w2 rv" style="--t:color-mix(in srgb,var(--glow-today) 60%,#fff);--c:var(--green)"><div class="eb">Training</div><h3>A plan that adapts.</h3><p>An activity for every day, picked for how you recovered. Follow a plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu.</p><div class="cut">${img('week-card')}</div><div class="pad"></div></div>
 <div class="tile w2 rv" style="--t:var(--glow-food);--c:var(--coffee);--d:.1s"><div class="eb">Nutrition</div><h3>Your target moves with your training.</h3><p>Train harder and you get more to eat. The coach says what that means for your next meal.</p><div class="cut">${img('food-top')}</div><div class="pad"></div></div>
 </div></div></section>
 
 ${panel('spanek', 'linear-gradient(180deg,var(--glow-health),var(--lilac))', 'var(--indigo)', 'Sleep', 'Every night, in&nbsp;detail.',
-  'Deep, REM and light sleep from any watch or ring. Drag the moon and the sun on the dial and Aurin tells you when to go to bed to wake up rested.',
-  phone('sleep', [['sleep-dial', 'left:-10px;top:200px;width:170px', 'round'], ['sleep-why', 'right:-12px;top:40px;width:168px']]))}
+  'Deep, REM and light sleep from any watch or ring, how much you need tonight and the debt from the week, and how your HRV and resting heart rate compare with your own normal.',
+  phone('sleep', [['sleep-need-card', 'right:-12px;top:40px;width:176px'], ['ready-card', 'left:-10px;top:250px;width:172px']]))}
 
 ${panel('posilovna', 'linear-gradient(180deg,var(--glow-training),var(--sand))', 'var(--amber)', 'Gym', 'A workout made for&nbsp;today.',
   'From your rested muscles, your time and your gym. Then log every set in a tap, with your weights from last time and a rest timer.',
-  phone('training-set', [['build-form', 'left:-10px;top:40px;width:160px'], ['tm-rest', 'right:-14px;top:250px;width:150px', 'round']]),
+  phone('training-set', [['build-card', 'left:-10px;top:40px;width:168px'], ['rest-card', 'right:-14px;top:250px;width:150px', 'round']]),
   '<div class="chips rv"><span>30 to 120 min</span><span>Full body · Upper · Legs</span><span>Only your equipment</span></div>', 'rezim')}
 
 ${muscles}
 
 ${panel('vyziva', 'linear-gradient(180deg,var(--glow-food),var(--amber-soft))', 'var(--coffee)', 'Nutrition', 'Snap, scan or&nbsp;search.',
   'Take a photo of your plate, scan a barcode or search, and log drinks with one tap.',
-  phone('food-day', [['food-add', 'left:-10px;top:250px;width:172px']]))}
+  phone('food-day', [['food-add-card', 'left:-10px;top:236px;width:176px']]))}
 
 ${panel('kouc', 'var(--button)', 'var(--coach-mint)', 'AI coach', 'Just ask. It knows your&nbsp;data.',
   'Ask how to train today, how to adjust your week or what to eat before a workout. It remembers what you tell it, and you can see and edit what it remembers.',
-  phone('coach-ask', [['coach-card', 'right:-12px;top:330px;width:200px']]), '<div class="chips rv"><span>Free for everyone</span></div>', 'dark')}
+  phone('coach-ask', [['coach-card', 'right:-12px;top:330px;width:200px']]), '', 'dark')}
 
 <section class="more"><div class="wrap">
 <h2 class="h2 rv">And there’s more.</h2>

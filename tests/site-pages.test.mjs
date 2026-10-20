@@ -33,7 +33,7 @@ test('the overview follows the app section by section and every file it loads ex
   assert.ok(files.includes('og-en.png'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
-  for(const name of ['today','sleep','training','food-day','training-set','coach-ask','strain-target','builder'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
+  for(const name of ['today','sleep','training','food-day','training-set','coach-ask'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
   // The figure from the front and the back, and a close-up of every muscle a bubble opens.
   for(const file of ['muscles/f00.webp','muscles/f36.webp','muscles/z-quads.webp','muscles/z-glutes.webp'])assert.ok(files.includes(file),file);
   assert.doesNotMatch(html,/undefined/,'every icon and text the page draws exists');
@@ -181,7 +181,18 @@ test('the connections use the app’s own logos and only the services the app of
     assert.ok(site(file).equals(asset(source)),file+' is the app’s logo, unchanged');
     assert.ok(section.includes('/site/logos/'+file),file);
   }
+  assert.deepEqual([...section.matchAll(/id="tab-(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman','whoop','wahoo']);
   assert.doesNotMatch(section,/strava|garmin|oura/i,'only services the app offers');
+  // What Aurin sends back only where the app can sync to that service (SyncViews.swift).
+  const sync=readFileSync(new URL('../ios-native/Loadwise/Screens/SyncViews.swift',import.meta.url),'utf8');
+  for(const id of ['apple','google','intervals'])assert.match(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
+  for(const id of ['ultrahuman','whoop'])assert.doesNotMatch(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
+  assert.match(section,/Nothing, Aurin only reads the ring\./);
+  assert.match(section,/Nothing, Aurin only reads WHOOP\./);
+  // Wahoo gets the planned workouts, as its connect sheet says (SettingsConnectFlow.swift).
+  const connect=readFileSync(new URL('../ios-native/Loadwise/Screens/SettingsPages/SettingsConnectFlow.swift',import.meta.url),'utf8');
+  assert.match(connect,/Tréninky naplánované v Aurinu, do ELEMNT a KICKR/);
+  assert.match(section,/planned workouts, to ELEMNT and KICKR/);
 });
 
 test('the questions open without JS and name the app’s real Settings paths',async()=>{
