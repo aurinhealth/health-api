@@ -1,286 +1,203 @@
 // Public pages: the Aurin overview on / and the policy pages. They use the iPhone app's light
-// palette (ios-native/Shared/Palette.swift): warm paper, white cards, Newsreader headings.
-// The phones on the overview show the app's own screens (Today in the hero, then a scene per area of
-// the app whose phone walks through its screens), taken in CI from the sample data in English.
+// palette (ios-native/Shared/Palette.swift): warm paper, white cards, tight sans headings.
+// The phones on the overview show the app's own screens (Today in the hero, then a tinted panel per
+// area of the app), taken in CI from the sample data in English, with pieces of the next screens
+// (public/site/app/parts/) floating over their edges.
 // When the app changes what a section shows, change the section here too.
 // The site is in English only (Aurin is for the whole world); the privacy policy and the terms also
 // have a Czech version at ?lang=cs, linked from the page and the footer.
 import {themeTokens} from './design-system.js';
-import {icon, ICON_PATHS} from './icons.js';
+import {icon} from './icons.js';
 import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
 
 const siteCss = `
 @font-face{font-family:Newsreader;src:url(/site/fonts/newsreader.woff2) format("woff2");font-display:swap}
 *{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;overflow-x:clip}
-body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 -apple-system,BlinkMacSystemFont,Inter,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip}
+body{margin:0;background:var(--site-bg);color:var(--text);font:17px/1.5 -apple-system,BlinkMacSystemFont,Inter,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip}
 a{color:var(--primary-text)}
 img{max-width:100%}
 .icon{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.wrap{max-width:1160px;margin:0 auto;padding:0 24px}
-h1,h2,h3{margin:0;font-weight:400}
-h1,h2{font-family:Newsreader,"New York",Georgia,serif;letter-spacing:-.02em;line-height:1.02}
+.wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.035em}
 p{margin:0}
 .muted{color:var(--muted)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 :focus-visible{outline:2px solid var(--primary);outline-offset:3px}
 
-/* Floating pill navigation. */
-.site-head{position:sticky;top:12px;z-index:20;display:flex;justify-content:center;padding:0 16px;margin-top:12px;pointer-events:none}
-.pill-nav{pointer-events:auto;display:flex;align-items:center;gap:6px;padding:6px 6px 6px 14px;border:1px solid var(--line);border-radius:999px;background:color-mix(in srgb,var(--panel) 80%,transparent);backdrop-filter:saturate(1.4) blur(18px);-webkit-backdrop-filter:saturate(1.4) blur(18px);box-shadow:0 8px 30px rgba(60,45,20,.08)}
-.logo{display:flex;align-items:center;gap:9px;color:var(--text);text-decoration:none;margin-right:10px}
-.logo span{font:400 25px/1 Newsreader,"New York",Georgia,serif;letter-spacing:-.01em}
-.pill-nav .links{display:flex;gap:2px;margin-right:6px}
-.pill-nav .links a{padding:7px 12px;border-radius:999px;color:var(--muted);text-decoration:none;font-size:14px;font-weight:500}
-.pill-nav .links a:hover{color:var(--text);background:var(--track)}
+/* Top bar: the mark on the left, the waitlist on the right; on a computer the sections in between. */
+.site-head{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--site-bg) 82%,transparent);-webkit-backdrop-filter:saturate(1.4) blur(16px);backdrop-filter:saturate(1.4) blur(16px)}
+.site-head .wrap{display:flex;align-items:center;gap:24px;height:64px}
+.logo{display:flex;align-items:center;gap:9px;color:var(--text);text-decoration:none;font-size:21px;font-weight:600;letter-spacing:-.03em}
+.site-head .links{display:flex;gap:4px;margin-left:auto}
+.site-head .links a{padding:7px 12px;border-radius:999px;color:var(--sec);text-decoration:none;font-size:15px;font-weight:500}
+.site-head .links a:hover{background:var(--track)}
+.btn{display:inline-flex;align-items:center;height:40px;padding:0 18px;border-radius:999px;background:var(--button);color:var(--on-button);text-decoration:none;font-size:15px;font-weight:600;white-space:nowrap}
+.site-head .btn{margin-left:auto}.site-head .links+.btn{margin-left:8px}
+@media (max-width:899px){.site-head .links+.btn{margin-left:auto}}
 
-/* The waitlist button: the app is not in the App Store yet; it opens an e-mail field (store()). */
-.store{display:inline-flex;align-items:center;gap:10px;height:56px;padding:0 28px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:17px;font-weight:600;box-shadow:0 14px 30px -12px rgba(21,20,15,.6)}
-.store svg{width:20px;height:20px;fill:currentColor}
-button.store{border:0;font:inherit;font-size:17px;font-weight:600;cursor:pointer}
-.wl{display:inline-flex;flex-direction:column;align-items:center;max-width:100%}
-.wl .field,.wl .done{display:none}
-.wl .field{align-items:center;gap:6px;height:56px;width:340px;max-width:100%;padding:0 6px 0 22px;border-radius:999px;background:var(--panel);box-shadow:0 0 0 1px var(--line),0 14px 30px -12px rgba(21,20,15,.35)}
+/* The waitlist: an e-mail field with its button inside, sent without leaving the page (siteScript). */
+.wl{display:flex;flex-direction:column;align-items:center;width:100%;max-width:440px;margin:0 auto}
+.wl .field{display:flex;align-items:center;gap:6px;width:100%;height:60px;padding:0 6px 0 22px;border-radius:999px;background:#fff;box-shadow:0 0 0 1px var(--line),0 14px 34px -14px rgba(40,30,10,.28)}
 .wl input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:17px;color:var(--text)}
-.wl .go{flex:none;width:44px;height:44px;border:0;border-radius:50%;background:var(--button);display:flex;align-items:center;justify-content:center;cursor:pointer}
-.wl .go svg,.wl .done svg{width:20px;height:20px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
-.wl .go svg{stroke:var(--on-button)}
-.wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:999px;background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:17px;font-weight:600}
-.wl .done svg{stroke:currentColor}
+.wl input::placeholder{color:var(--muted)}
+.wl .go{flex:none;height:48px;padding:0 20px;border:0;border-radius:999px;background:var(--button);color:var(--on-button);font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+.wl .done{display:none;align-items:center;gap:10px;height:60px;padding:0 26px;border-radius:999px;background:color-mix(in srgb,var(--green) 13%,#fff);color:var(--green);font-size:17px;font-weight:600}
+.wl .done svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .wl .err{margin-top:10px;font-size:15px;color:var(--rust)}.wl .err:empty{display:none}
-.wl.on .open,.wl.sent .open,.wl.sent .field{display:none}.wl.on .field{display:flex}.wl.sent .done{display:inline-flex}
-html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
-
-/* Grain over the whole page: printed paper rather than a flat screen. */
-.site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.06;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
-
-/* Aurora: the two halves of the mark (and a little lilac) drifting slowly behind the hero and the end. */
-.aurora{position:absolute;inset:-12% -10% 0;overflow:hidden;pointer-events:none;z-index:0}
-.aurora i{position:absolute;border-radius:50%;filter:blur(70px);opacity:.5}
-.aurora .a{width:52vmax;height:40vmax;left:-8vmax;top:-6vmax;background:var(--logo-load)}
-.aurora .b{width:48vmax;height:42vmax;right:-10vmax;top:6vmax;background:var(--logo-recovery)}
-.aurora .c{width:34vmax;height:30vmax;left:30%;top:22vmax;background:var(--aurora-lilac);opacity:.35}
-.aurora::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 55%,var(--bg))}
-
-/* Hero: the line, then the phone lying back that stands up as you scroll, with glass cards around it. */
-.hero{position:relative;margin-top:-76px;padding:168px 0 0;text-align:center;overflow:clip}
-.hero .wrap{position:relative;z-index:1}
-.kicker{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:color-mix(in srgb,var(--panel) 55%,transparent);border:1px solid color-mix(in srgb,var(--panel) 80%,transparent);font-size:14px;font-weight:600;color:var(--sec);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
-.kicker i{width:8px;height:8px;border-radius:50%;background:var(--green)}
-.hero h1{font-size:clamp(58px,9.6vw,136px);line-height:.98;letter-spacing:-.025em;max-width:1000px;margin:26px auto 0}
-.hero h1 .w{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em}
-.hero h1 .w>span{display:inline-block}
-.lede{max-width:560px;margin:26px auto 0;font-size:20px;color:var(--sec)}
-.hero .wl{margin-top:34px}
-.stage{position:relative;height:770px;margin-top:72px;perspective:1600px;z-index:1}
-.stage .device{position:absolute;left:50%;top:0;transform:translateX(-50%) rotateX(calc(26deg * (1 - var(--p,1)))) scale(calc(.86 + .14 * var(--p,1)));transform-origin:50% 0}
-.glass{position:absolute;z-index:2;text-align:left;padding:16px 18px;border-radius:22px;background:color-mix(in srgb,var(--panel) 70%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);border:1px solid color-mix(in srgb,var(--panel) 85%,transparent);box-shadow:0 24px 60px -18px rgba(80,60,30,.28);transform:translateY(calc(var(--depth) * (1 - var(--p,1)) * 1px))}
-.glass .k{font-size:13px;color:var(--muted)}.glass .v{font-size:30px;font-weight:600;letter-spacing:-.03em}.glass .d{font-size:13px;font-weight:600}
-.glass.g1{left:calc(50% - 400px);top:160px;--depth:140}.glass.g2{right:calc(50% - 400px);top:330px;--depth:260}
-.glass.g3{left:calc(50% - 430px);top:480px;width:250px;--depth:380;font-size:15px}
-
-/* A real-looking iPhone: titanium edge, black bezel, glass glare and a deep shadow. Its screens are
-   the app's own, taken in CI from the sample data (ios-native.yml, screens/site/). */
-.device{position:relative;width:322px;padding:10px;border-radius:58px;text-align:left;background:linear-gradient(140deg,var(--device-hi) 0%,var(--device-lo) 18%,var(--device-hi) 34%,var(--device-lo) 58%,var(--device-mid) 80%,var(--device-lo) 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.7),inset 0 0 3px 1px rgba(0,0,0,.25),0 2px 2px rgba(0,0,0,.08),0 60px 120px -30px rgba(60,40,15,.45),0 30px 60px -30px rgba(0,0,0,.35)}
-.device::before,.device::after{content:"";position:absolute;width:4px;border-radius:2px;background:linear-gradient(var(--device-mid),var(--device-lo))}
-.device::before{left:-3px;top:150px;height:58px}.device::after{right:-3px;top:190px;height:86px}
-.bezel{padding:5px;border-radius:49px;background:#000}
-.screen{position:relative;aspect-ratio:1206/2622;border-radius:44px;overflow:hidden;background:var(--bg)}
-.screen img{display:block;width:100%;height:100%}
-.screen::after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.28),rgba(255,255,255,0) 32%)}
-.scr{position:absolute;inset:0;transition:opacity .6s ease,transform .8s cubic-bezier(.16,1,.3,1)}
-.scr:not(.on){opacity:0;transform:translateY(18px) scale(.98)}
-.up{color:var(--green)}.sleep{color:var(--indigo)}.warm{color:var(--amber)}
-
-/* The scenes: one per area of the app, in the order of its tabs. The phone stays while the steps
-   scroll past, shows the app's screen for each step, and a piece of that screen (cut from the same
-   screenshot) comes forward beside it. */
-.eyebrow{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:16px}
-.scene{position:relative;--tone:var(--green);--glow:var(--glow-today)}
-.scene .head{text-align:center;padding:130px 24px 0}
-.scene .head .eyebrow{color:var(--tone);margin-bottom:12px}
-.scene .head h2,.muscles h2{font-size:clamp(46px,6.2vw,88px);line-height:.98;letter-spacing:-.025em}
-.scene .head p,.muscles .sub{max-width:580px;margin:20px auto 0;font-size:20px;color:var(--sec)}
-.scene .head p.free{margin-top:8px;color:var(--green);font-weight:600}
-.track{position:relative}
-.scene .pin{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;display:flex;align-items:center;justify-content:center}
-.scene .glow{position:absolute;width:900px;height:900px;border-radius:50%;background:radial-gradient(circle,var(--glow) 0,transparent 62%)}
-.sc{position:relative;flex:none;width:760px;height:702px;transform:scale(var(--s,1))}
-.sc .device{position:absolute;left:438px;top:0}
-.part{position:absolute;left:0;width:420px;border-radius:22px;overflow:hidden;background:var(--panel);box-shadow:0 40px 80px -30px rgba(60,40,10,.5),0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(27,26,23,.05);opacity:0}
-.part img{display:block;width:100%;height:auto}
-.part.on{opacity:1}
-.st .n{font-size:13px;font-weight:700;color:var(--tone);letter-spacing:.06em}
-.st h3{font:400 36px/1.04 Newsreader,"New York",Georgia,serif;letter-spacing:-.02em;margin:8px 0 10px}
-.st p{color:var(--sec);font-size:18px}
-.slot,.dots{display:none}
-@media (min-width:961px){
-  .track{display:grid;grid-template-columns:400px 1fr;max-width:1160px;margin:0 auto;padding:0 24px;gap:20px}
-  .scene .pin{grid-column:2;grid-row:1;align-self:start}
-  .sc-steps{grid-column:1;grid-row:1;padding:25vh 0 35vh}
-  .st{min-height:85vh;display:flex;align-items:center}
-  .st .t{max-width:400px}
-  .js .st .t{opacity:.22;transition:opacity .5s}
-  .js .st.on .t{opacity:1}
-}
-
-/* Muscles: the app's 3D figure (Muscle3D.swift). The model is licensed and stays out of the page: the
-   figure is drawn ahead from 72 sides (scripts/render-muscles-site.html), and a map per side says which
-   muscle each pixel is, so dragging turns it and a tap names the muscle as the app's bubble does. */
-.muscles{padding:130px 24px 40px;text-align:center}
-.muscles .eyebrow{color:var(--rust);margin-bottom:12px}
-.fig{position:relative;margin:16px auto 0;width:min(520px,100%,calc((100svh - 190px) * .64));aspect-ratio:640/1000;touch-action:pan-y;cursor:grab;-webkit-user-select:none;user-select:none}
-.fig::before{content:"";position:absolute;inset:10% -20%;z-index:-1;background:radial-gradient(circle,color-mix(in srgb,var(--rust) 16%,transparent) 0,transparent 60%)}
-.fig canvas{display:block;width:100%;height:100%}
-.fig .bubble{position:absolute;z-index:2;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 6px 24px rgba(0,0,0,.25);font:inherit;text-align:left;white-space:nowrap;cursor:pointer;transform:translate(-50%,-100%) scale(.85);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.16,1,.3,1)}
-.fig .bubble.on{opacity:1;transform:translate(-50%,-100%);pointer-events:auto}
-.fig .bubble b{display:block;font-size:16px;font-weight:600;color:var(--text)}
-.fig .bubble span{font-size:13px}
-.fig .bubble .icon{color:var(--muted);width:14px;height:14px}
-.muscles .hint{font-size:14px;color:var(--muted);margin-top:-6px;transition:opacity .4s}
-.muscles .key{display:flex;gap:18px;justify-content:center;margin-top:14px;font-size:13px;color:var(--muted)}
-.muscles .key span{display:inline-flex;align-items:center;gap:6px}
-.muscles .key i{width:8px;height:8px;border-radius:50%;background:var(--c)}
-.muscle-card{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .35s}
-.muscle-card.on{opacity:1;pointer-events:auto}
-.muscle-card .card{width:min(400px,calc(100% - 32px));padding:20px;border-radius:28px;background:var(--bg);text-align:left;box-shadow:0 40px 80px -30px rgba(60,40,10,.5);transform:scale(.94);transition:transform .45s cubic-bezier(.16,1,.3,1)}
-.muscle-card.on .card{transform:none}
-.muscle-card .zoom{height:220px;border-radius:22px;background:var(--panel) center/cover no-repeat}
-.muscle-card h3{font:400 28px/1.1 Newsreader,"New York",Georgia,serif;margin:16px 0 4px}
-.muscle-card .close{float:right;width:34px;height:34px;margin:-6px -6px 10px 10px;border:0;border-radius:50%;background:var(--track);color:var(--text);font-size:18px;cursor:pointer}
-
-/* Connections: the services around the Aurin mark. Dots and the things they carry flow in along one
-   curve and back along the other; tapping a logo says what Aurin reads from it and sends back. */
-.connect{padding:140px 0 40px}
-.center{text-align:center;max-width:760px;margin:0 auto}
-.center h2{font-size:clamp(46px,6.2vw,88px);line-height:.98;letter-spacing:-.025em}
-.center .sub{max-width:560px;margin:22px auto 0;font-size:20px;color:var(--sec)}
-.connect .box{max-width:720px;margin:56px auto 0}
-.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.hub{position:relative;aspect-ratio:520/360;border-radius:32px;overflow:hidden;background:var(--panel2);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--panel) 70%,transparent)}
-.hub .lines{position:absolute;inset:0;width:100%;height:100%}
-.hub .lines.tall{display:none}
-.hub .lines path{fill:none;stroke-linecap:round}
-.hub .base{stroke:color-mix(in srgb,var(--panel) 80%,transparent);stroke-width:2.5}
-.hub .flow{stroke-width:5;stroke-dasharray:0 18;transition:opacity .4s}
-.hub .flow.in{stroke:var(--green)}.hub .flow.out{stroke:var(--amber-bar)}
-.tabs .hub [data-svc]:not(.on) .flow{opacity:.22}
-.hub .packets:not(.on){display:none}
-.hub .pk circle{fill:var(--panel);stroke-width:2}
-.hub .pk.in circle{stroke:var(--green)}.hub .pk.out circle{stroke:var(--amber-bar)}
-.hub .pk svg{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
-.hub .pk.in svg{stroke:var(--green)}.hub .pk.out svg{stroke:var(--amber)}
-.hub .core{position:absolute;left:50%;top:50%;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:0 14px 34px rgba(60,45,20,.16)}
-.hub .node{position:absolute;left:var(--x);top:var(--y);width:64px;height:64px;margin:-32px 0 0 -32px;padding:0;border:0;border-radius:18px;background:none;cursor:pointer;transition:transform .4s cubic-bezier(.16,1,.3,1)}
-.hub .node::before{content:"";position:absolute;inset:-10px;border-radius:26px;background:var(--panel);opacity:0;transition:opacity .3s;box-shadow:0 10px 30px rgba(60,45,20,.14)}
-.hub .node[aria-selected=true]{transform:scale(1.1)}
-.hub .node[aria-selected=true]::before{opacity:1}
-.hub .node img{position:relative;display:block;width:100%;height:100%}
-.hub .node img.pad{padding:4%}
-.uh-tile{position:relative;display:grid;place-items:center;width:100%;height:100%;border-radius:26%;background:#000}
-.uh-tile img{width:56%!important;height:auto!important}
-.uh-tile.word img{width:78%!important}
-.legend{display:flex;gap:20px;justify-content:center;margin-top:16px;font-size:14px;color:var(--muted)}
-.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
-.legend .in{background:var(--green)}.legend .out{background:var(--amber-bar)}
-.panels{margin-top:16px;padding:24px 26px;border-radius:28px;background:var(--panel);box-shadow:0 1px 2px rgba(60,45,20,.05)}
-.svc h3{font-size:21px;font-weight:600}
-.svc .io{display:grid;grid-template-columns:130px 1fr;gap:12px;margin-top:16px;align-items:start}
-.svc .lbl{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;padding-top:7px}
-.svc .lbl .icon{width:15px;height:15px;stroke-width:2.4}
-.svc .lbl.in{color:var(--green)}.svc .lbl.out{color:var(--amber)}
-.svc .items{display:flex;flex-wrap:wrap;gap:8px}
-.svc .items span{display:inline-flex;align-items:center;gap:7px;padding:7px 12px 7px 10px;border-radius:999px;font-size:15px;font-weight:500;background:var(--bg)}
-.svc .items .icon{width:16px;height:16px}
-.svc .in+.items .icon{color:var(--green)}.svc .out+.items .icon{color:var(--amber)}
-.svc .none{font-size:15px;color:var(--muted);padding-top:6px}
-.svc+.svc{margin-top:24px;padding-top:22px;border-top:1px solid var(--line)}
-.tabs .svc+.svc{margin:0;padding:0;border:0}
-.tabs .svc:not(.on){display:none}
-
-/* Privacy: the sentence lights up word by word as you read it; the details and Google's text follow. */
-.privacy{padding:150px 0 0}
-.privacy .say{max-width:980px;margin:0 auto}
-.privacy .lock{width:44px;height:44px;color:var(--green);margin-bottom:28px;stroke-width:1.8}
-.privacy .big{font:400 clamp(36px,5.2vw,72px)/1.08 Newsreader,"New York",Georgia,serif;letter-spacing:-.02em}
-.privacy .big span{transition:opacity .25s}
-.js .privacy .big span:not(.lit){opacity:.16}
-.card{background:var(--panel);border-radius:28px;padding:24px;box-shadow:0 1px 2px rgba(60,45,20,.05)}
-.disclosure{max-width:680px;margin:56px auto 0;padding:24px 26px;text-align:left}
-.disclosure h3{font-size:16px;font-weight:600;margin-bottom:10px}
-.disclosure p{font-size:14px;line-height:1.55;color:var(--muted);margin-bottom:12px}
-
-/* Questions: plain details/summary, so they open without JS; browsers that can animate to auto height do. */
-#faq{padding:140px 0 0}
-.faq{max-width:760px;margin:0 auto}
-.faq h2{text-align:center;font-size:clamp(46px,6.2vw,88px);letter-spacing:-.025em;margin-bottom:40px}
-.faq details{border-top:1px solid var(--line)}
-.faq details:last-child{border-bottom:1px solid var(--line)}
-.faq summary{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:22px 2px;font-size:19px;font-weight:600;cursor:pointer;list-style:none}
-.faq summary::-webkit-details-marker{display:none}
-.faq summary::after{content:"";flex:none;width:10px;height:10px;margin-top:-5px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .3s}
-.faq details[open] summary::after{transform:translateY(5px) rotate(-135deg)}
-.faq details p{padding:0 2px 22px;color:var(--sec);max-width:640px}
-
-.final{position:relative;padding:190px 0 200px;text-align:center;overflow:clip}
-.final .aurora{inset:0}.final .aurora::after{background:linear-gradient(var(--bg),transparent 35%,transparent 70%,var(--bg))}
-.final .wrap{position:relative;z-index:1}
-.final .mark{display:block;margin:0 auto 26px;filter:drop-shadow(0 20px 30px rgba(60,45,20,.18))}
-.final h2{font-size:clamp(58px,8vw,104px)}
-.final .wl{margin-top:30px}
+.wl.sent .field{display:none}.wl.sent .done{display:inline-flex}
 
 /* Footer: the mark and the line from the hero, then three short groups, then who runs Aurin. */
-.site-foot{border-top:1px solid var(--line);padding:56px 0 36px;color:var(--muted);font-size:14px}
+.site-foot{padding:56px 0 36px;color:var(--muted);font-size:14px}
 .site-foot .top{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:32px}
 .site-foot .brand{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
-.site-foot .brand p{font:400 22px/1.2 Newsreader,"New York",Georgia,serif;color:var(--text);letter-spacing:-.01em;max-width:320px}
+.site-foot .brand p{font-size:20px;font-weight:600;letter-spacing:-.03em;color:var(--text);max-width:320px}
 .site-foot h3{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
 .site-foot ul{list-style:none;margin:0;padding:0;display:grid;gap:9px}
 .site-foot a{color:var(--sec);text-decoration:none}.site-foot a:hover{color:var(--text)}
 .site-foot .base{display:flex;flex-wrap:wrap;gap:6px 24px;justify-content:space-between;margin-top:44px;padding-top:20px;border-top:1px solid var(--line);font-size:13px}
 
-.doc{max-width:760px;padding:72px 24px 96px}
-.doc h1{font-size:52px;margin:0 0 24px}
-.doc h2{font-family:inherit;font-size:22px;font-weight:600;line-height:1.25;letter-spacing:-.01em;margin:40px 0 10px}
+.doc{max-width:760px;padding:56px 24px 96px}
+.doc h1{font-size:48px;line-height:1.05;margin:0 0 24px}
+.doc h2{font-size:22px;line-height:1.25;letter-spacing:-.02em;margin:40px 0 10px}
 .doc p{color:var(--sec);margin-bottom:12px}
 .doc ul,.doc ol{color:var(--sec);margin:0 0 12px;padding-left:22px}.doc li{margin-bottom:6px}
+.card{background:var(--panel);border-radius:28px;padding:24px;box-shadow:0 1px 2px rgba(60,45,20,.05)}
+.disclosure{max-width:680px;margin:40px auto 0;padding:24px 26px;text-align:left}
+.disclosure h3{font-size:16px;margin-bottom:10px;letter-spacing:0}
+.disclosure p{font-size:14px;line-height:1.55;color:var(--muted);margin-bottom:12px}
 
-/* Motion, only with JS and without reduced motion: the headline rises word by word, the aurora
-   drifts, content fades up as it scrolls in, and each phone screen draws itself when it comes on. */
-/* Phones and tablets: blurred, blended and glass layers are redrawn on every scrolled frame there, which makes the
-   scroll stutter. The same colours are drawn flat instead: soft gradients for the aurora, no grain, solid glass. */
-@media (hover:none),(max-width:960px){
-  .site body::after{display:none}
-  .aurora i{filter:none;opacity:.62;background:radial-gradient(closest-side,var(--k) 35%,transparent)!important}
-  .aurora .a{--k:var(--logo-load)}.aurora .b{--k:var(--logo-recovery)}.aurora .c{--k:var(--aurora-lilac)}
-  .site *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
-}
+/* The overview. Short headlines in tight sans, each area of the app on its own tinted panel, the app's
+   whole screens in a phone and real pieces of the next screens floating over its edges. */
+.eb{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--c,var(--green))}
+.h2{font-size:clamp(34px,5.4vw,64px);line-height:1.02;letter-spacing:-.04em}
+.lead{font-size:clamp(16px,1.6vw,19px);line-height:1.45;color:var(--sec);max-width:520px}
+.phone{position:relative;width:226px;padding:7px;border-radius:42px;background:var(--button);box-shadow:0 0 0 1px rgba(0,0,0,.06),0 34px 70px -24px rgba(40,30,10,.45)}
+.phone img{display:block;width:100%;height:auto;aspect-ratio:600/1305;object-fit:cover;object-position:top;border-radius:35px}
+.fl{position:absolute;z-index:2;overflow:hidden;border-radius:18px;background:var(--panel);box-shadow:0 20px 44px -14px rgba(40,30,10,.32),0 0 0 1px rgba(27,26,23,.05)}
+.fl img{display:block;width:100%;height:auto}
+.fl.round{border-radius:50%;aspect-ratio:1;background:var(--bg)}
+.fl.round img{margin-top:-4%}
+/* A stage is drawn at phone size and grows on a computer. */
+.stage{position:relative;width:360px;max-width:100%;height:520px;margin:0 auto}
+.stage .phone{position:absolute;left:50%;top:0;transform:translateX(-50%)}
+
+.hero{padding:48px 0 0;text-align:center;overflow:hidden}
+.kick{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;background:#fff;font-size:13px;font-weight:500;box-shadow:0 1px 0 rgba(0,0,0,.04)}
+.kick i{width:7px;height:7px;border-radius:50%;background:var(--logo-recovery)}
+.hero h1{font-size:clamp(46px,8.4vw,104px);line-height:.98;letter-spacing:-.045em;margin:18px auto 16px;max-width:900px}
+.hero .lead{margin:0 auto 26px;max-width:560px}
+.hero .small{margin-top:10px;font-size:13px;color:var(--muted)}
+.hero .stage{height:560px;margin-top:40px}
+.hero .glow{position:absolute;left:-30%;right:-30%;top:12%;height:70%;border-radius:50%;background:radial-gradient(closest-side,var(--glow-today),transparent)}
+.cyc img+img{position:absolute;left:7px;top:7px;width:calc(100% - 14px)}
+.cyc img{transition:opacity .7s ease}
+.js .cyc img:not(.on){opacity:0}
+.hc{transition:opacity .5s ease,transform .7s cubic-bezier(.2,.7,.2,1)}
+.js .hc:not(.on){opacity:0;transform:translateY(26px) scale(.92);pointer-events:none}
+html:not(.js) .hc:not([data-g="0"]){display:none}
+
+/* Strips that run sideways: the app's screens, and the services Aurin connects to. */
+.marquee{overflow:hidden;-webkit-mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);mask:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+.marquee .run{display:flex;gap:12px;width:max-content}
+.shots{margin-top:8px}
+.shots img{display:block;width:132px;height:auto;border-radius:20px;box-shadow:0 12px 26px -14px rgba(40,30,10,.35)}
+.shots .run{padding:6px 0 18px}
+.works{padding:34px 0 30px;text-align:center}
+.works .eb{color:var(--muted);margin-bottom:6px}
+.works .sub{font-size:14px;color:var(--muted);margin:0 24px 18px}
+.lg{flex:none;display:flex;align-items:center;gap:9px;height:50px;padding:0 16px;border-radius:15px;background:#fff;font-size:15px;font-weight:600;white-space:nowrap}
+.lg img{height:24px;width:auto}
+.lg.dark{background:var(--button)}.lg.dark img.word{height:15px}
+
+/* Bento: one tile per number on Today, each in its tab's tint with the piece of the app it explains. */
+.start{padding:40px 0 0}
+.start .h2{margin:0 0 22px}
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.tile{position:relative;overflow:hidden;border-radius:28px;padding:22px 20px 0;background:var(--t)}
+.tile h3{font-size:clamp(19px,2vw,26px);line-height:1.08;margin-top:6px}
+.tile p{font-size:14px;line-height:1.38;color:var(--sec);margin:6px 0 14px}
+.tile .cut{overflow:hidden;border-radius:16px;background:var(--panel);box-shadow:0 12px 26px -12px rgba(40,30,10,.28)}
+.tile .cut img{display:block;width:100%;height:auto}
+.tile.w2{grid-column:span 2}
+.tile .pad{height:20px}
+.tile .big{display:flex;gap:14px;align-items:flex-end}
+.tile .num{font:400 clamp(84px,9vw,120px)/.8 Newsreader,"New York",Georgia,serif;letter-spacing:-.03em;padding-bottom:22px}
+.tile .big .cut{flex:1;margin-bottom:-10px}
+
+/* A panel per area: words, then the phone with pieces of the next screens over its edges. */
+.sec{padding:12px 0 0}
+.panel{position:relative;overflow:hidden;border-radius:36px;padding:40px 24px 0;background:var(--t)}
+.panel .h2{margin:10px 0 12px}
+.panel .stage{margin-top:28px;height:500px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
+.chips span{padding:6px 12px;border-radius:999px;background:color-mix(in srgb,#fff 65%,transparent);font-size:13px;font-weight:500}
+.sec.dark .panel{color:var(--on-button)}
+.dark .lead{color:color-mix(in srgb,var(--on-button) 72%,var(--button))}
+.dark .phone{box-shadow:0 0 0 1px color-mix(in srgb,var(--on-button) 20%,var(--button)),0 30px 90px -10px color-mix(in srgb,var(--logo-recovery) 55%,transparent)}
+
+/* Muscles: the app's figure from the front or the back, a bubble on each tired muscle, and the bubble's
+   muscle up close underneath, as its detail is in the app. */
+.muscles{background:#fff}
+.mu{display:grid;gap:16px;margin-top:10px;padding-bottom:28px}
+.fig{position:relative;width:min(100%,300px);aspect-ratio:640/1000;margin:0 auto}
+.fig img{position:absolute;inset:0;width:100%;height:100%;transition:opacity .5s}
+.fig img.back,.fig.turned img.front{opacity:0}.fig.turned img.back{opacity:1}
+.bub{position:absolute;z-index:2;display:flex;align-items:center;gap:9px;padding:9px 13px 9px 11px;border:0;border-radius:16px;background:#fff;box-shadow:0 12px 30px -10px rgba(0,0,0,.3);font:inherit;font-size:14px;text-align:left;color:var(--text);cursor:pointer;transform:translateY(-50%);transition:opacity .35s,transform .45s cubic-bezier(.2,.7,.2,1)}
+.bub i{width:9px;height:9px;border-radius:50%;background:var(--c)}
+.bub b{display:block;font-weight:600}.bub small{display:block;font-size:12px;color:var(--muted)}
+.bub.on{box-shadow:0 0 0 2px var(--c),0 12px 30px -10px rgba(0,0,0,.3)}
+.fig:not(.turned) .bub[data-side=back],.fig.turned .bub[data-side=front]{opacity:0;pointer-events:none;transform:translateY(-50%) scale(.8)}
+.turn{display:flex;gap:4px;width:max-content;margin:0 auto;padding:4px;border-radius:999px;background:var(--panel2)}
+.turn button{border:0;padding:7px 16px;border-radius:999px;background:none;font:inherit;font-size:14px;font-weight:500;color:var(--sec);cursor:pointer}
+.turn button[aria-pressed=true]{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.zoom{overflow:hidden;border-radius:22px;background:var(--panel);box-shadow:0 0 0 1px var(--line)}
+.zoom img{display:block;width:100%;height:auto;aspect-ratio:800/440}
+.zoom div{padding:14px 18px 16px}.zoom b{font-size:18px}.zoom p{font-size:14px;font-weight:600;color:var(--c)}
+
+/* More: the smaller things the app does, one line each. */
+.more{padding:60px 0 0}
+.more .h2{margin-bottom:20px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.grid div{padding:18px;border-radius:22px;background:#fff}
+.grid i{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:var(--c);color:#fff}
+.grid i .icon{width:18px;height:18px}
+.grid h3{font-size:16px;letter-spacing:-.01em;margin:12px 0 4px}
+.grid p{font-size:13.5px;line-height:1.38;color:var(--muted)}
+
+.privacy .panel{padding-bottom:36px}
+.privacy .lock{width:32px;height:32px;color:var(--green);stroke-width:1.8}
+.privacy .h2{font-size:clamp(28px,4vw,48px)}
+
+/* Questions: plain details/summary, so they open without JS; browsers that can animate to auto height do. */
+.faq{max-width:820px;margin:0 auto;padding:64px 0 0}
+.faq .h2{margin-bottom:18px}
+.faq details{margin-bottom:8px;border-radius:18px;background:#fff}
+.faq summary{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:18px 20px;font-size:16px;font-weight:500;cursor:pointer;list-style:none}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";flex:none;font-size:22px;font-weight:300;color:var(--muted);transition:transform .3s}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq details p{padding:0 20px 18px;color:var(--sec);font-size:15px}
+
+.final{margin-top:48px;padding:56px 24px 40px;border-radius:36px;text-align:center;color:var(--on-button);background:linear-gradient(160deg,var(--green),color-mix(in srgb,var(--green) 55%,#000))}
+.final .mark{display:block;margin:0 auto 18px}
+.final .h2{font-size:clamp(40px,6vw,72px);margin-bottom:24px}
+.final .wl .field{box-shadow:none}
+
+/* Motion, only with JS and without reduced motion: pieces rise in as they scroll into view and then
+   float, the strips run, the hero phone walks through its screens and the readiness counts up. */
 @media (prefers-reduced-motion:no-preference){
-  .js .hero h1 .w>span{transform:translateY(105%);animation:rise 1.1s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(.15s + var(--i) * 90ms)}
-  @keyframes rise{to{transform:none}}
-  .js .hero .lede,.js .hero .wl,.js .hero .kicker{opacity:0;animation:fade 1s .8s forwards}
-  .js .hero .kicker{animation-delay:.05s}.js .hero .wl{animation-delay:1s}
-  .js .stage{opacity:0;animation:fade 1.2s .5s forwards}
-  @keyframes fade{to{opacity:1}}
-  .aurora i{animation:drift 22s ease-in-out infinite alternate}
-  .aurora .b{animation-duration:26s;animation-delay:-8s}.aurora .c{animation-duration:30s;animation-delay:-14s}
-  @keyframes drift{33%{transform:translate(6vmax,4vmax) scale(1.08)}66%{transform:translate(-4vmax,7vmax) scale(.94)}100%{transform:translate(3vmax,-3vmax) scale(1.04)}}
-  .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s cubic-bezier(.16,1,.3,1)}
-  .js .reveal.in{opacity:1;transform:none}
-  .js .part{transform:translate(-30px,30px) scale(.92);clip-path:inset(0 100% 0 0 round 22px);transition:opacity .5s,transform .9s cubic-bezier(.2,.8,.2,1),clip-path 1s cubic-bezier(.2,.8,.2,1) .15s}
-  .js .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);animation:float 6s ease-in-out 1.2s infinite}
-  .js .part.past{transform:translate(-40px,-30px) scale(.94);clip-path:inset(0 0 0 0 round 22px)}
-  @keyframes float{50%{transform:translateY(-8px)}}
-  @media (hover:none),(max-width:960px){.aurora i,.js .part.on{animation:none}}
-  .hub .flow{animation:flow 1.1s linear infinite}
-  @keyframes flow{to{stroke-dashoffset:-36}}
-  .hub .core{animation:breathe 2.4s ease-in-out infinite}
-  @keyframes breathe{50%{box-shadow:0 14px 34px rgba(60,45,20,.16),0 0 0 12px color-mix(in srgb,var(--logo-recovery) 16%,transparent)}}
-  .hub .node:not([aria-selected=true]){animation:bob 5s ease-in-out infinite}
-  .hub .node:nth-of-type(2){animation-delay:-1.2s}.hub .node:nth-of-type(3){animation-delay:-2.5s}.hub .node:nth-of-type(4){animation-delay:-3.7s}
-  @keyframes bob{50%{transform:translateY(-6px)}}
-  .tabs .svc.on h3{animation:fade .5s both}
-  .tabs .svc.on .items span{opacity:0;animation:chip .5s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(.08s + var(--i,0) * 60ms)}
-  @keyframes chip{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
+  .js .rv{opacity:0;transform:translateY(36px) scale(.97);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .9s cubic-bezier(.2,.7,.2,1);transition-delay:var(--d,0s)}
+  .js .rv.in{opacity:1;transform:none}
+  .js .fl.rv{transform:translateY(46px) scale(.9)}
+  .js .fl.rv.in{transform:none;animation:float 6s ease-in-out 1.2s infinite}
+  @keyframes float{50%{translate:0 -7px}}
+  .marquee .run{animation:run var(--t,40s) linear infinite}
+  .marquee.back .run{animation-direction:reverse}
+  @keyframes run{to{transform:translateX(calc(-50% - 6px))}}
+  .js .hero .kick,.js .hero h1,.js .hero .lead,.js .hero .wl{animation:up .9s cubic-bezier(.2,.7,.2,1) both}
+  .js .hero h1{animation-delay:.08s}.js .hero .lead{animation-delay:.18s}.js .hero .wl{animation-delay:.28s}
+  @keyframes up{from{opacity:0;transform:translateY(24px)}}
   @supports (interpolate-size:allow-keywords){
     .faq{interpolate-size:allow-keywords}
     .faq details::details-content{height:0;overflow:clip;transition:height .35s cubic-bezier(.16,1,.3,1),content-visibility .35s allow-discrete}
@@ -288,46 +205,32 @@ html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
   }
 }
 
-@media (max-width:960px){
-  .pill-nav .links{display:none}
-  .glass.g3{display:none}
-  .glass.g1{left:max(4px,calc(50% - 320px))}.glass.g2{right:max(4px,calc(50% - 320px))}
-  /* Phones: the phone at the top with the piece over its lower part, the step's words at the bottom.
-     Without JS the steps simply follow the phone. */
-  .scene .head{padding-top:110px}
-  .scene .head p{font-size:18px}
-  .js .scene .pin{flex-direction:column;justify-content:flex-start;padding-top:76px}
-  .sc{width:440px;transform-origin:top center;margin-bottom:calc((var(--s,1) - 1) * 702px)}
-  .sc .device{left:59px}
-  .part{left:10px;top:auto!important;bottom:-14px}
-  .js .sc-steps{margin-top:-100vh;margin-top:-100svh;position:relative;pointer-events:none}
-  .js .st{height:85vh;height:85svh;visibility:hidden}
-  .st{padding:24px 0}
-  .js .slot{display:block;position:absolute;left:20px;right:20px;bottom:calc(22px + env(safe-area-inset-bottom));min-height:140px}
-  .slot .t{position:absolute;inset:auto 0 0 0;opacity:0;transform:translateY(16px);transition:opacity .5s,transform .5s cubic-bezier(.2,.8,.2,1)}
-  .slot .t.on{opacity:1;transform:none}
-  .slot .n{display:none}
-  .slot h3{font-size:27px;margin:0 0 6px}.slot p{font-size:15.5px}
-  .js .dots{display:flex;gap:6px;position:absolute;left:20px;bottom:calc(170px + env(safe-area-inset-bottom))}
-  .dots i{width:6px;height:6px;border-radius:9px;background:var(--track);transition:all .4s}
-  .dots i.on{width:22px;background:var(--text)}
-  .muscles{padding-top:110px}.muscles .sub{font-size:18px}
-  .connect{padding-top:110px}
+/* A computer: the stages grow, each panel puts its words beside the phone, the grids widen. */
+@media (min-width:900px){
+  .hero{padding-top:72px}
+  .hero .stage{transform:scale(1.25);transform-origin:top center;margin-bottom:140px}
+  .panel{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:40px;padding:0 64px;min-height:640px}
+  .panel>.txt{padding:64px 0}
+  .panel .stage{margin:40px auto 0;align-self:end;transform:scale(1.15);transform-origin:bottom center}
+  .muscles{display:block;padding:64px}
+  .mu{grid-template-columns:1fr 1fr;align-items:center;gap:48px}
+  .fig{width:min(100%,380px)}
+  .privacy .panel{display:block;padding:56px 64px;min-height:0}
+  .tile.w2 .cut{max-width:440px;margin:0 auto}
+  .final{padding:88px 24px 72px}
+}
+@media (max-width:899px){
+  .site-head .links{display:none}
+  .bento,.grid{grid-template-columns:1fr 1fr}
+  .site-foot .top{grid-template-columns:1fr 1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 @media (max-width:560px){
-  .wrap{padding:0 16px}
-  .hero{padding-top:132px}
-  .lede{font-size:18px}
-  .stage{height:700px;margin-top:56px}
-  /* On a phone the floating cards would cover the real screen's numbers. */
-  .glass{display:none}
-  .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
-  .panels{padding:20px}
-  .hub{border-radius:24px;aspect-ratio:340/520}
-  .hub .lines.wide{display:none}.hub .lines.tall{display:block}
-  .hub .node{left:var(--mx);top:var(--my);width:58px;height:58px;margin:-29px 0 0 -29px}
-  .hub .core{width:84px;height:84px;margin:-42px 0 0 -42px}
-  .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
+  .wrap{padding:0 12px}
+  .hero .wrap,.start .wrap>.h2,.works,.more .h2,.faq{padding-left:6px;padding-right:6px}
+  .bento{gap:10px}
+  .tile{padding:18px 14px 0;border-radius:24px}
+  .panel{padding:34px 20px 0;border-radius:32px}
+  .site-foot .wrap{padding:0 22px}
 }
 `;
 
@@ -348,108 +251,44 @@ function deviceLang(request) {
 // The Aurin mark (Rovnováha): the load half over the recovery half, offset as in the app icon.
 const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" height="${Math.round(width * 80 / 88)}" aria-hidden="true"><path d="M6 46A36 36 0 0 1 78 46Z" fill="var(--logo-load)"/><path d="M22 54A36 36 0 0 0 94 54Z" fill="var(--logo-recovery)"/></svg>`;
 const LOCK = '<svg class="icon lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>';
-// "Join the waitlist": the button opens an e-mail field; the address waits for the owner, who
-// invites people into TestFlight from the app (src/testflight-waitlist.js).
-const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+// The waitlist: an e-mail field with its button; the address waits for the owner, who invites
+// people into TestFlight from the app (src/testflight-waitlist.js).
 const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
-const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
-<button type="button" class="store open">Join the waitlist</button>
-<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
+const store = (id, label) => `<form class="wl" action="/waitlist" method="post" novalidate>
+<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" required><button type="submit" class="go">${label}</button></span>
 <span class="done" role="status">${CHECK}<span>You're on the list</span></span>
 <span class="err" role="alert"></span>
 </form>`;
 
-// The page's motion. Scroll drives it: the hero phone stands up, each scene's phone follows the step
-// in view, the privacy sentence lights up. Without JS everything is simply shown; with reduced
-// motion nothing moves and the scenes still switch screens.
+// The page's motion and the waitlist. Without JS everything is simply shown; with reduced motion
+// nothing moves.
 const siteScript = `<script>(function(){var r=document.documentElement;r.classList.add('js');
 var still=matchMedia('(prefers-reduced-motion: reduce)').matches;
-if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
-document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});}else document.querySelectorAll('.reveal').forEach(function(el){el.classList.add('in');});
-var stage=document.querySelector('.stage'),priv=document.querySelector('.privacy .big');
-var scenes=[].slice.call(document.querySelectorAll('.scene')).map(function(el){var q=function(c){return [].slice.call(el.querySelectorAll(c));};
- return {el:el,sc:el.querySelector('.sc'),steps:q('.st'),parts:[q('.sc .scr'),q('.part'),q('.st'),q('.slot .t'),q('.dots i')],at:-1};});
-var words=priv?[].slice.call(priv.querySelectorAll('span')):[],queued=false;
-// The stage is drawn at one size and scaled to the window: beside the steps on a computer, above them on a phone.
-function fit(){var w=innerWidth,h=innerHeight,s=w<=960?Math.min((w-16)/440,(h-76-214)/702):Math.min(1.1,(h-80)/702,(Math.min(w,1160)-48-420)/760);
- scenes.forEach(function(x){x.sc.style.setProperty('--s',s.toFixed(3));});}
-function frame(){queued=false;var vh=innerHeight,p=null,k=0;
- if(stage){var s=stage.getBoundingClientRect();p=still?1:Math.min(1,Math.max(0,(vh-s.top)/(vh*.9)-.3));}
- var ats=scenes.map(function(x){var r=x.el.getBoundingClientRect(),at=x.at;if(r.bottom<-vh||r.top>2*vh)return at;at=0;x.steps.forEach(function(el,j){if(el.getBoundingClientRect().top<vh*.55)at=j;});return at;});
- if(words.length){var q=priv.getBoundingClientRect();k=still?1:Math.min(1,Math.max(0,(vh*.8-q.top)/(q.height+vh*.25)));}
- if(p!==null){var v=p.toFixed(3);if(v!==stage._p){stage._p=v;stage.style.setProperty('--p',v);}}
- scenes.forEach(function(x,i){var at=ats[i];if(at===x.at)return;x.at=at;
-  x.parts.forEach(function(list,k){list.forEach(function(el,j){el.classList.toggle('on',j===at);if(k===1)el.classList.toggle('past',j<at);});});});
- if(words.length)words.forEach(function(w,j){w.classList.toggle('lit',k*words.length>j);});}
-function ask(){if(!queued){queued=true;requestAnimationFrame(frame);}}
+// Pieces rise in as they come into view; a number in one counts up to its value.
+function count(el){var n=+el.dataset.n,t0=performance.now();if(still)return;(function step(now){var k=Math.min(1,(now-t0)/1100);el.textContent=Math.round(n*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(step);})(t0);}
+var rv=[].slice.call(document.querySelectorAll('.rv'));
+if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(!e.isIntersecting)return;e.target.classList.add('in');io.unobserve(e.target);
+ [].forEach.call(e.target.querySelectorAll('[data-n]'),count);});},{rootMargin:'0px 0px -8% 0px'});rv.forEach(function(el){io.observe(el);});}
+else rv.forEach(function(el){el.classList.add('in');});
+// The hero phone walks through Today, Sleep, Training and Food; each screen brings its own pieces.
+var shots=[].slice.call(document.querySelectorAll('.cyc img')),at=0;
+function show(i,on){[].forEach.call(document.querySelectorAll('.hc[data-g="'+i+'"]'),function(el,j){setTimeout(function(){el.classList.toggle('on',on);},on?250+j*160:0);});}
+if(shots.length>1&&!still)setInterval(function(){if(document.hidden)return;show(at,false);shots[at].classList.remove('on');at=(at+1)%shots.length;shots[at].classList.add('on');show(at,true);},3200);
+// The waitlist: the address goes to /waitlist and the field turns into a thank-you.
 document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelector('input'),err=f.querySelector('.err'),busy=false;
- f.querySelector('.open').addEventListener('click',function(){f.classList.add('on');input.focus();});
  f.addEventListener('submit',function(e){e.preventDefault();if(busy)return;var email=input.value.trim();err.textContent='';
   if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){err.textContent='Enter a valid email.';input.focus();return;}
   busy=true;fetch('/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})})
-  .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');f.classList.remove('on');})})
+  .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');})})
   .catch(function(x){err.textContent=x.message;}).then(function(){busy=false;});});});
-addEventListener('scroll',ask,{passive:true});addEventListener('resize',function(){fit();ask();});fit();frame();
-// Connections: a logo shows what Aurin reads from it and sends back; they take turns until one is picked.
-var hub=document.querySelector('.hub');if(!hub)return;
-if(still)hub.querySelectorAll('svg.lines').forEach(function(s){if(s.pauseAnimations)s.pauseAnimations();});
-var tabs=[].slice.call(hub.querySelectorAll('[role=tab]')),cur=0,timer;
-function pick(i){cur=i;tabs.forEach(function(t,j){var on=j===i,id=t.id.slice(4);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
-document.getElementById('svc-'+id).classList.toggle('on',on);hub.querySelectorAll('[data-svc='+id+']').forEach(function(g){g.classList.toggle('on',on);});});}
-tabs.forEach(function(t,i){t.addEventListener('click',function(){clearInterval(timer);pick(i);});
-t.addEventListener('keydown',function(e){var n=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;
-if(n){e.preventDefault();clearInterval(timer);pick((i+n+tabs.length)%tabs.length);tabs[cur].focus();}});});
-// Pointing at the logos or moving focus into them stops the turns, so what is read stays put.
-['mouseenter','focusin'].forEach(function(t){hub.addEventListener(t,function(){clearInterval(timer);});});
-r.classList.add('tabs');pick(0);if(!still)timer=setInterval(function(){pick((cur+1)%tabs.length);},5200);})();</script>
-<script>(function(){
-// Muscles: frame k of 72 is the figure turned k·5°; ids.png holds, per frame, which muscle each pixel is
-// (a quarter of the size, the index in NAMES). The frames load when the figure comes near.
+// Muscles: Front and Back turn the figure; a bubble shows its muscle up close, as its detail does in the app.
 var fig=document.querySelector('.fig');if(!fig)return;
-var N=72,IW=160,IH=250,base=fig.dataset.base,still=matchMedia('(prefers-reduced-motion: reduce)').matches;
-var NAMES=['quads','hamstrings','glutes','calves','adductors','abductors','chest','back','lower_back','traps','shoulders','side_delts','rear_delts','biceps','triceps','forearms','core','other','bone'];
-var LABEL={quads:'Quads',hamstrings:'Hamstrings',glutes:'Glutes',calves:'Calves',adductors:'Adductors',abductors:'Abductors',chest:'Chest',back:'Back',lower_back:'Lower back',traps:'Traps',shoulders:'Shoulders',side_delts:'Side delts',rear_delts:'Rear delts',biceps:'Biceps',triceps:'Triceps',forearms:'Forearms',core:'Core'};
-var TIRED='var(--rust)',RECOVERING='var(--amber)',RESTED=['rested','var(--green)'];
-var STATE={glutes:['26 % rested · in 2 days',TIRED],hamstrings:['35 % rested · in 2 days',TIRED],quads:['37 % rested · ≈ in 2 days',TIRED],
- calves:['47 % rested · ≈ tomorrow',TIRED],chest:['61 % rested · today',RECOVERING],back:['61 % rested · today',RECOVERING]};
-var cv=fig.querySelector('canvas'),cx=cv.getContext('2d',{willReadFrequently:true}),bub=fig.querySelector('.bubble'),hint=document.querySelector('.muscles .hint'),card=document.querySelector('.muscle-card');
-var frames=[],ids=null,cur=0,vel=0,sel=null,spin=!still,drag=null,shown=-1,running=false;
-function load(){if(frames.length)return;
- for(var i=0;i<N;i++){var im=new Image();im.decoding='async';im.onload=draw;im.src=base+'f'+(i<10?'0':'')+i+'.webp';frames.push(im);}
- var map=new Image();map.onload=function(){var c=document.createElement('canvas');c.width=map.width;c.height=map.height;var g=c.getContext('2d');g.drawImage(map,0,0);ids=g.getImageData(0,0,c.width,c.height);};map.src=base+'ids.png';}
-function at(){return ((Math.round(cur)%N)+N)%N;}
-function idAt(k,x,y){return ids?ids.data[((Math.floor(k/9)*IH+y)*ids.width+(k%9)*IW+x)*4]:255;}
-// The app dims the other muscles to 62 % and lights the one tapped.
-function draw(){var k=at(),im=frames[k];if(!im||!im.complete||!im.naturalWidth)return;shown=k;
- cx.clearRect(0,0,640,1000);cx.drawImage(im,0,0);if(sel===null||!ids)return;
- var d=cx.getImageData(0,0,640,1000),p=d.data;
- for(var y=0;y<1000;y++){var iy=Math.min(IH-1,(y*IH/1000)|0);for(var x=0;x<640;x++){var o=(y*640+x)*4;if(!p[o+3])continue;
-  var f=idAt(k,x>>2,iy)===sel?1.25:.62;p[o]*=f;p[o+1]*=f;p[o+2]*=f;}}
- cx.putImageData(d,0,0);}
-function close(){sel=null;bub.classList.remove('on');draw();}
-function tick(){if(!running)return;
- if(!drag){if(spin)cur+=.12;else{cur+=vel;vel*=.92;}}
- if(at()!==shown){if(sel!==null&&Math.abs(vel)>.05)close();else draw();}
- requestAnimationFrame(tick);}
-if('IntersectionObserver' in window)new IntersectionObserver(function(es){var on=es[0].isIntersecting;if(on)load();if(on&&!running){running=true;requestAnimationFrame(tick);}else if(!on)running=false;},{rootMargin:'50% 0px'}).observe(fig);
-else{load();running=true;requestAnimationFrame(tick);}
-fig.addEventListener('pointerdown',function(e){if(e.target.closest('.bubble'))return;drag={x:e.clientX,c:cur,moved:false};spin=false;vel=0;hint.style.opacity=0;});
-addEventListener('pointermove',function(e){if(!drag)return;var dx=e.clientX-drag.x;if(Math.abs(dx)>4)drag.moved=true;
- var next=drag.c-dx/fig.clientWidth*40;vel=(next-cur)*.5;cur=next;if(drag.moved&&sel!==null)close();});
-addEventListener('pointerup',function(e){if(!drag)return;var moved=drag.moved;drag=null;if(moved)return;
- var r=cv.getBoundingClientRect(),g=idAt(at(),Math.floor((e.clientX-r.left)/r.width*IW),Math.floor((e.clientY-r.top)/r.height*IH)),name=NAMES[g];
- if(!LABEL[name])return close();
- sel=g;vel=0;draw();var st=STATE[name]||RESTED,f=fig.getBoundingClientRect();
- bub.querySelector('b').textContent=LABEL[name];var t=bub.querySelector('.txt span');t.textContent=st[0];t.style.color=st[1];
- bub.style.left=Math.min(Math.max(e.clientX-f.left,115),f.width-115)+'px';bub.style.top=Math.max(60,e.clientY-f.top-16)+'px';
- bub.dataset.id=name;bub.classList.add('on');});
-// The bubble opens the muscle as its detail does in the app: the figure close on it, its name and how rested.
-bub.addEventListener('click',function(){var name=bub.dataset.id,st=STATE[name]||RESTED;
- card.querySelector('.zoom').style.backgroundImage='url('+base+'z-'+name+'.webp)';card.querySelector('h3').textContent=LABEL[name];
- var p=card.querySelector('.state');p.textContent=st[0];p.style.color=st[1];card.classList.add('on');card.querySelector('.close').focus();});
-function hide(){card.classList.remove('on');close();}
-card.addEventListener('click',function(e){if(e.target===card||e.target.closest('.close'))hide();});
-addEventListener('keydown',function(e){if(e.key==='Escape'&&card.classList.contains('on'))hide();});
+var zoom=document.querySelector('.zoom'),bubs=[].slice.call(fig.querySelectorAll('.bub')),turn=[].slice.call(document.querySelectorAll('.turn button'));
+function pick(b){bubs.forEach(function(x){x.classList.toggle('on',x===b);});zoom.style.setProperty('--c',b.style.getPropertyValue('--c'));
+ zoom.querySelector('img').src=b.dataset.zoom;zoom.querySelector('b').textContent=b.querySelector('b').textContent;zoom.querySelector('p').textContent=b.dataset.state;}
+bubs.forEach(function(b){b.addEventListener('click',function(){pick(b);});});
+turn.forEach(function(t){t.addEventListener('click',function(){var back=t.dataset.side==='back';fig.classList.toggle('turned',back);
+ turn.forEach(function(x){x.setAttribute('aria-pressed',x===t);});pick(bubs.filter(function(b){return b.dataset.side===t.dataset.side;})[0]);});});
 })();</script>`;
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true}) {
@@ -459,7 +298,7 @@ function sitePage({title, description, lang, origin, path, body, czech=false, in
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#F3EFE8">
+<meta name="theme-color" content="#F6F4EF">
 <title>${title}</title>
 <meta name="description" content="${description}">
 <meta property="og:title" content="${title}">
@@ -474,10 +313,11 @@ ${index ? '' : '<meta name="robots" content="noindex">'}
 <style>${themeTokens}${siteCss}</style>
 </head>
 <body>
-<header class="site-head"><nav class="pill-nav" aria-label="Main">
-<a class="logo" href="/">${mark(30)}<span>Aurin</span></a>
-<div class="links"><a href="/#pripravenost">Features</a><a href="/#kouc">AI coach</a><a href="/#propojeni">Connections</a><a href="/#soukromi">Privacy</a></div>
-</nav></header>
+<header class="site-head"><div class="wrap">
+<a class="logo" href="/">${mark(28)}<span>Aurin</span></a>
+<nav class="links" aria-label="Main"><a href="/#pripravenost">Features</a><a href="/#kouc">AI coach</a><a href="/#propojeni">Connections</a><a href="/#soukromi">Privacy</a></nav>
+<a class="btn" href="/#join">Join waitlist</a>
+</div></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
 <div class="top">
@@ -533,103 +373,61 @@ export const googleDisclosure = () => `<div class="card disclosure reveal" lang=
 export function overviewPage(request) {
   const {lang, origin} = pageLang(request);
   // A screen of the app: a screenshot taken in CI from the sample data (public/site/app/).
-  const shot = (name, lazy = true) => `<img src="/site/app/${name}.webp" alt="" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
-  // The scenes, one per area of the app: [section id, eyebrow, headline, line, tone, glow, steps], each step
-  // [the app's screen, the piece of it lifted out (public/site/app/parts/), how far down the stage, title, text].
-  const scenes = [
-    ['spanek', 'Sleep', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
-      ['sleep', 'sleep-stages', 380, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
-      ['sleep-need', 'sleep-need', 150, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
-      ['bedtime', 'sleep-dial', 120, 'Plan your bedtime.', 'Drag the moon and the sun on the dial. Aurin tells you when to go to bed to wake up rested.'],
-      ['bedtime-goal', 'sleep-why', 160, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours.']]],
-    ['pripravenost', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
-      ['readiness-parts', 'ready-parts', 220, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal.'],
-      ['journal-impact', 'ready-impact', 170, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.']]],
-    ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
-      ['strain-target', 'strain-gauge', 160, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan.']]],
-    ['trenink', 'Training', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 130, 'Your week at a glance.', 'Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu. When the library has little for the length and type you pick, the AI builds a workout to fit.']]],
-    ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
-      ['builder', 'build-form', 190, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and uses only the equipment your gym has.'],
-      ['gym-day', 'gym-parts', 230, 'Warm-up to stretching.', 'Cardio, exercises and stretching in the order you like. Then start.']]],
-    ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
-      ['training-mode', 'tm-table', 170, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them if you need to and start.'],
-      ['training-set', 'tm-current', 170, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets.'],
-      ['training-rest', 'tm-rest', 60, 'Rest on time.', 'The timer starts by itself, stays on your lock screen and shows what comes next.'],
-      ['training-done', 'tm-done', 100, 'See what you lifted.', 'Sets and volume when you finish, saved to Apple Health.']]],
-    ['vyziva', 'Nutrition', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
-      ['food-day', 'food-top', 110, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.'],
-      ['food-add', 'food-add', 330, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, and log drinks with one tap.']]],
-    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.<span class="free">Free for everyone.</span>', 'green', 'glow-today', [
-      ['coach-ask', 'coach-ask', 110, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout.']]]];
-  const step = ([, , , title, text], i) => `<div class="n">0${i + 1}</div><h3>${title}</h3><p>${text}</p>`;
-  const scene = ([id, eyebrow, h, p, tone, glow, list]) => `<section id="${id}" class="scene" style="--tone:var(--${tone});--glow:var(--${glow})">
-<div class="head"><div class="eyebrow">${eyebrow}</div><h2>${h}</h2>${p.split('<span class="free">').map((t, j) => `<p${j ? ' class="free"' : ''}>${t.replace('</span>', '')}</p>`).join('')}</div>
-<div class="track"><div class="pin" aria-hidden="true"><div class="glow"></div><div class="sc">
-<div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}">${shot(screen)}</div>`).join('')}</div></div></div>
-${list.map(([, part, top]) => `<div class="part" style="top:${top}px"><img src="/site/app/parts/${part}.webp" alt="" loading="lazy" decoding="async"></div>`).join('')}
-</div><div class="dots">${list.map(() => '<i></i>').join('')}</div><div class="slot">${list.map((x, i) => `<div class="t">${step(x, i)}</div>`).join('')}</div></div>
-<div class="sc-steps">${list.map((x, i) => `<div class="st"><div class="t">${step(x, i)}</div></div>`).join('')}</div></div></section>`;
-  // Muscles sit between training mode and food, as Svaly sits under Trénink in the app. The bubble's
-  // words are the sample day's (DemoData.muscles), in English.
-  const muscles = `<section id="svaly" class="muscles"><div class="eyebrow">Muscles</div><h2>Know what’s recovered.</h2><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
-<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><button type="button" class="bubble"><span class="txt"><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
-<p class="hint">Drag to turn · tap a muscle</p>
-<div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div></section>
-<div class="muscle-card" role="dialog" aria-modal="true" aria-label="Muscle"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3></h3><p class="state"></p></div></div>`;
+  const shot = (name, {lazy = true, cls = ''} = {}) => `<img src="/site/app/${name}.webp" alt="" width="600" height="1305"${cls ? ` class="${cls}"` : ''}${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
+  // A piece of the app lifted out beside a phone (public/site/app/parts/, cut from the same screenshots).
+  const PARTS = {'build-form': 582, 'coach-card': 350, 'food-add': 903, 'food-top': 934, 'ready-parts': 804, 'sleep-dial': 876,
+    'sleep-need': 565, 'sleep-stages': 401, 'sleep-why': 737, 'strain-gauge': 715, 'tm-rest': 759, week: 408};
+  const img = name => `<img src="/site/app/parts/${name}.webp" alt="" width="${name === 'week' ? 540 : 840}" height="${PARTS[name]}" loading="lazy" decoding="async">`;
+  const part = (name, style, cls = '') => `<div class="fl ${cls}" style="${style}">${img(name)}</div>`;
+  const phone = (screen, parts) => `<div class="stage" aria-hidden="true"><div class="phone">${shot(screen)}</div>
+${parts.map(([name, style, cls = ''], i) => part(name, `${style};--d:${(.12 + i * .16).toFixed(2)}s`, `rv ${cls}`)).join('\n')}</div>`;
+  const panel = (id, tint, color, eyebrow, h, p, stage, extra = '', cls = '') => `<section id="${id}" class="sec${cls ? ' ' + cls : ''}"><div class="wrap"><div class="panel" style="--t:${tint};--c:${color}">
+<div class="txt"><div class="eb">${eyebrow}</div><h2 class="h2 rv">${h}</h2><p class="lead rv">${p}</p>${extra}</div>
+${stage}</div></div></section>`;
 
-  // Connections: what Aurin reads from each service and what it sends back, as the app's connect
-  // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
-  const services = [
-    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="">',
-      reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['scale', 'weight']],
-      sends: [['bike', 'workouts'], ['scale', 'weight'], ['meal', 'food'], ['drop', 'water']]},
-    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" class="pad">',
-      reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['meal', 'food']],
-      sends: [['meal', 'food'], ['drop', 'drinks'], ['bike', 'workouts, if you allow'], ['scale', 'weight, if you allow']]},
-    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="">',
-      reads: [['bolt', 'workouts with power'], ['calendar', 'plan'], ['zones', 'zones'], ['scale', 'weight']],
-      sends: [['calendar', 'planned workouts'], ['flame', 'calorie target'], ['scale', 'weight'], ['training', 'sleep, HRV and daily values']]},
-    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt=""></span>',
-      reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'VO₂max'], ['thermo', 'temperature']], sends: [], none: 'nothing, Aurin only reads the ring'},
-    {id: 'whoop', name: 'WHOOP', logo: '<img src="/site/logos/whoop.svg" alt="">',
-      reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'breathing rate'], ['drop', 'blood oxygen']], sends: [], none: 'nothing, Aurin only reads WHOOP'},
-    {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt=""></span>',
-      reads: [['bike', 'finished rides and runs'], ['bolt', 'power and TSS'], ['heart', 'heart rate']],
-      sends: [['calendar', 'planned workouts, to ELEMNT and KICKR']]}];
-  // Two curves per service: dots and what they carry flow along one into Aurin and along the other back
-  // out. A wide layout for computers (left and right of the mark) and a tall one for phones (above and
-  // below it), so the curves stay long arcs on a narrow screen instead of hiding behind the logos.
-  // A logo straight under or over the mark (WHOOP, Wahoo) gets a loop instead: in on its left, back on its right.
-  const LAYOUTS = {
-    wide: {w: 520, h: 360, c: [260, 180], at: [[84, 72], [84, 288], [436, 72], [436, 288], [260, 318], [260, 42]],
-      into: ([x, y], [cx, cy]) => x === cx ? `M${x - 8} ${y}C${x - 150} ${y + 6 * Math.sign(y - cy)} ${x - 130} ${cy + 12 * Math.sign(y - cy)} ${cx - 8} ${cy}`
-        : `M${x} ${y - 8}C${(x + cx) / 2} ${y - 8} ${(x + cx) / 2} ${cy - 8} ${cx} ${cy - 8}`,
-      back: ([x, y], [cx, cy]) => x === cx ? `M${cx + 8} ${cy}C${x + 130} ${cy + 12 * Math.sign(y - cy)} ${x + 150} ${y + 6 * Math.sign(y - cy)} ${x + 8} ${y}`
-        : `M${cx} ${cy + 8}C${(x + cx) / 2} ${cy + 8} ${(x + cx) / 2} ${y + 8} ${x} ${y + 8}`},
-    tall: {w: 340, h: 520, c: [170, 260], at: [[70, 74], [70, 380], [270, 74], [270, 380], [170, 468], [170, 52]],
-      // Down (or up) from the logo, then a wide turn into the mark; in and out never cross.
-      into: ([x, y], [cx, cy]) => { if (x === cx) return `M${x - 7} ${y}C${x - 84} ${y + 4 * Math.sign(y - cy)} ${x - 74} ${cy + 14 * Math.sign(y - cy)} ${cx - 7} ${cy}`; const ix = x + (x < cx ? 7 : -7), iy = y < cy ? cy - 8 : cy + 8; return `M${ix} ${y}C${ix} ${iy} ${ix} ${iy} ${cx} ${iy}`; },
-      back: ([x, y], [cx, cy]) => { if (x === cx) return `M${cx + 7} ${cy}C${x + 74} ${cy + 14 * Math.sign(y - cy)} ${x + 84} ${y + 4 * Math.sign(y - cy)} ${x + 7} ${y}`; const ox = x - (x < cx ? 7 : -7), oy = y < cy ? cy + 8 : cy - 8; return `M${cx} ${oy}C${ox} ${oy} ${ox} ${oy} ${ox} ${y}`; }}};
-  const packets = (items, d, dir) => items.map(([name], i) => {
-    const dur = 3.6, begin = (i * dur / items.length).toFixed(2);
-    return `<g class="pk ${dir}" opacity="0"><circle r="17"/><svg x="-10" y="-10" width="20" height="20" viewBox="0 0 24 24">${ICON_PATHS[name]}</svg><animateMotion dur="${dur}s" begin="${begin}s" repeatCount="indefinite" path="${d}" keyPoints="0;1" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .25 1"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.82;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/></g>`;
-  }).join('');
-  const lines = Object.entries(LAYOUTS).map(([kind, {w, h, c, at, into, back}]) => `<svg class="lines ${kind}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
-    + services.map(({id, sends}, i) => `<g data-svc="${id}"${i === 0 ? ' class="on"' : ''}><path class="base" d="${into(at[i], c)}"/><path class="flow in" d="${into(at[i], c)}"/>${sends.length ? `<path class="base" d="${back(at[i], c)}"/><path class="flow out" d="${back(at[i], c)}"/>` : ''}</g>`).join('')
-    + services.map(({id, reads, sends}, i) => `<g class="packets${i === 0 ? ' on' : ''}" data-svc="${id}">${packets(reads, into(at[i], c), 'in')}${packets(sends, back(at[i], c), 'out')}</g>`).join('')
-    + '</svg>').join('');
-  const pos = ({w, h, at}, i) => [(at[i][0] / w * 100).toFixed(2), (at[i][1] / h * 100).toFixed(2)];
-  const nodes = services.map(({id, name, logo}, i) => {
-    const [x, y] = pos(LAYOUTS.wide, i), [mx, my] = pos(LAYOUTS.tall, i);
-    return `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="--x:${x}%;--y:${y}%;--mx:${mx}%;--my:${my}%">${logo}<span class="vh">${name}</span></button>`;
-  }).join('');
-  const chips = items => `<div class="items">${items.map(([name, label], i) => `<span style="--i:${i}">${icon(name)}${label}</span>`).join('')}</div>`;
-  const panels = services.map(({id, name, reads, sends, none}, i) => `<div class="svc${i === 0 ? ' on' : ''}" id="svc-${id}" role="tabpanel" aria-labelledby="tab-${id}">
-<h3>${name}</h3>
-<div class="io"><div class="lbl in">${icon('down')}Into Aurin</div>${chips(reads)}</div>
-<div class="io"><div class="lbl out">${icon('up')}Sent back</div>${sends.length ? chips(sends) : `<div class="none">${none}</div>`}</div>
-</div>`).join('');
+  // The hero phone walks through four screens of the sample day; each brings pieces of its next screens.
+  const HERO = [
+    ['today', [['ready-parts', 'left:-6px;top:250px;width:178px'], ['sleep-stages', 'right:-8px;top:70px;width:170px'], ['strain-gauge', 'right:-4px;top:384px;width:150px']]],
+    ['sleep', [['sleep-why', 'right:-10px;top:60px;width:172px'], ['sleep-dial', 'left:-10px;top:250px;width:170px', 'round']]],
+    ['training', [['week', 'left:-8px;top:120px;width:190px'], ['strain-gauge', 'right:-6px;top:330px;width:150px']]],
+    ['food-day', [['food-add', 'left:-10px;top:260px;width:176px'], ['coach-card', 'right:-12px;top:96px;width:196px']]]];
+  const hero = `<div class="stage" role="img" aria-label="Aurin on a phone: the Today screen with readiness 78, sleep, strain and HRV, then sleep, the training week and food"><div class="glow"></div>
+<div class="phone cyc">${HERO.map(([screen], i) => shot(screen, {lazy: i > 0, cls: i ? '' : 'on'})).join('')}</div>
+${HERO.map(([, parts], g) => parts.map(([name, style, cls = '']) => `<div class="fl hc ${cls}${g ? '' : ' on'}" data-g="${g}" style="${style}">${img(name)}</div>`).join('')).join('\n')}</div>`;
+
+  // Strips that run sideways; the second copy is only for the loop.
+  const marquee = (items, cls = '', time = 40) => `<div class="marquee ${cls}" style="--t:${time}s"><div class="run">${items}<span style="display:contents" aria-hidden="true">${items}</span></div></div>`;
+  const screens = ['sleep', 'strain-target', 'training', 'builder', 'training-set', 'food-day', 'journal-impact', 'coach-ask', 'sleep-need', 'bedtime']
+    .map(name => shot(name)).join('');
+  // Every service the app connects to, with the app's own logo file.
+  const services = [['apple-health.png', 'Apple Health'], ['google-health.png', 'Google Health'], ['intervals.svg', 'Intervals.icu'],
+    ['whoop.svg', ''], ['ultrahuman.svg', '', 'dark'], ['wahoo.png', '', 'dark word']]
+    .map(([file, name, cls = '']) => `<span class="lg${cls.includes('dark') ? ' dark' : ''}"><img src="/site/logos/${file}" alt="${name ? '' : {'whoop.svg': 'WHOOP', 'ultrahuman.svg': 'Ultrahuman Ring', 'wahoo.png': 'Wahoo'}[file]}"${cls.includes('word') ? ' class="word"' : ''}>${name}</span>`).join('');
+
+  // Muscles: the figure from the front and the back (rendered ahead by scripts/render-muscles-site.mjs),
+  // with the sample day's tired and recovering muscles (DemoData.muscles), in English.
+  const MUSCLES = [['front', 'quads', 'Quads', '37 % rested · ≈ in 2 days', 'var(--rust)', 'left:2%;top:60%'],
+    ['front', 'chest', 'Chest', '61 % rested · today', 'var(--amber-bar)', 'right:0;top:25%'],
+    ['back', 'glutes', 'Glutes', '26 % rested · in 2 days', 'var(--rust)', 'right:0;top:48%'],
+    ['back', 'hamstrings', 'Hamstrings', '35 % rested · in 2 days', 'var(--rust)', 'left:0;top:64%']];
+  const bubble = ([side, id, name, state, color, at], i) => `<button type="button" class="bub${i ? '' : ' on'}" data-side="${side}" data-zoom="/site/muscles/z-${id}.webp" data-state="${state}" style="${at};--c:${color}"><i></i><span><b>${name}</b><small>${state.split(' · ')[0]}</small></span></button>`;
+  const muscles = `<section id="svaly" class="sec"><div class="wrap"><div class="panel muscles" style="--c:var(--green)">
+<div class="eb">Muscles</div><h2 class="h2 rv">Know what’s recovered.</h2><p class="lead rv">From the gym and from your runs and rides. Tap a muscle to see it up close.</p>
+<div class="mu"><div><div class="fig" role="img" aria-label="Aurin’s figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested">
+<img class="front" src="/site/muscles/f00.webp" alt="" width="640" height="1000" loading="lazy" decoding="async"><img class="back" src="/site/muscles/f36.webp" alt="" width="640" height="1000" loading="lazy" decoding="async">
+${MUSCLES.map(bubble).join('\n')}</div>
+<div class="turn"><button type="button" data-side="front" aria-pressed="true">Front</button><button type="button" data-side="back" aria-pressed="false">Back</button></div></div>
+<div class="zoom rv" style="--c:${MUSCLES[0][4]}"><img src="/site/muscles/z-${MUSCLES[0][1]}.webp" alt="" width="800" height="440" loading="lazy" decoding="async"><div><b>${MUSCLES[0][2]}</b><p>${MUSCLES[0][3]}</p></div></div></div>
+</div></div></section>`;
+
+  const MORE = [['check', 'var(--green)', 'Journal', 'Tick off a sauna, alcohol or a late meal and see what each does to your mornings.'],
+    ['moon', 'var(--indigo)', 'Alarm', 'Set your wake-up from your sleep plan, right in the iPhone alarm.'],
+    ['drop', 'var(--blue)', 'Drinks', 'Water, coffee and tea in one tap.'],
+    ['barcode', 'var(--amber)', 'Barcode', 'Scan a packet and log it in seconds.'],
+    ['flame', 'var(--carbs)', 'Records', 'Your best lifts, kept for every exercise.'],
+    ['training', 'var(--button)', 'Lock screen', 'The rest timer stays on your lock screen and shows what comes next.'],
+    ['calendar', 'var(--rust)', 'Cycle', 'Your cycle day, its phase and the next period.'],
+    ['today', 'var(--logo-recovery)', 'Widgets', 'Readiness, sleep, food and drinks on your home screen.']];
 
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
@@ -642,59 +440,75 @@ ${list.map(([, part, top]) => `<div class="part" style="top:${top}px"><img src="
     ['Something doesn’t work. What now?', `In the app, open Settings → Help → Report a problem and send it with diagnostics attached, or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.`],
     ['I’m missing something in Aurin. Can I suggest it?', 'Yes. In the app, open Settings → Help → Suggest a feature, write what would help you and send it.']]
     .map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('\n');
-  const headline = 'Train for how you feel today.';
-  const aurora = '<div class="aurora" aria-hidden="true"><i class="a"></i><i class="b"></i><i class="c"></i></div>';
 
   return sitePage({lang, origin, path: '/',
     title: 'Aurin · train for how you feel today',
     description: 'Aurin for iPhone reads your sleep, HRV and workouts from Apple Health, Google Health and Intervals.icu, shows your readiness every morning and plans your training and food around it.',
     body: `<main>
-<div class="hero">${aurora}
-<div class="wrap">
-<span class="kicker"><i></i>Free AI coach for iPhone</span>
-<h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
-<p class="lede">Aurin reads your sleep, HRV and workouts and turns them into one number, one plan and one coach every morning.</p>
-${store('top')}
-</div>
-<div class="stage">
-<div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">64 ms</div><div class="d up">↑ 6 ms above normal</div></div>
-<div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">score 82</div></div>
-<div class="glass g3" aria-hidden="true"><div class="k">Coach</div><div style="margin-top:4px">Go all in on strength today.</div></div>
-<div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness 78, how you feel, the weather, sleep, strain and HRV"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${shot('today', false)}</div></div></div></div>
-</div>
-</div>
+<section class="hero"><div class="wrap">
+<span class="kick"><i></i>AI fitness coach for iPhone</span>
+<h1>Train for how you feel today.</h1>
+<p class="lead">Aurin reads your sleep, HRV and workouts and turns them into one number, one plan and one coach every morning.</p>
+${store('top', 'Join the waitlist')}
+<p class="small">Free to start. Works with the watch or ring you already wear.</p>
+${hero}
+</div></section>
+<div class="shots" aria-hidden="true">${marquee(screens, '', 60)}</div>
 
-${scenes.slice(0, 6).map(scene).join('\n')}
+<section id="propojeni" class="works"><div class="eb">Works with what you wear</div>
+<p class="sub">Any watch or ring that saves to Apple Health or Google Health, plus these directly.</p>
+${marquee(services, '', 30)}</section>
+
+<section id="pripravenost" class="start"><div class="wrap">
+<h2 class="h2 rv">Start every day knowing where you stand.</h2>
+<div class="bento">
+<div class="tile w2 rv" style="--t:var(--glow-today);--c:var(--green)"><div class="eb">Readiness</div><h3>One number every morning.</h3><p>HRV, resting heart rate and sleep, weighed against your own normal.</p>
+<div class="big"><div class="num" data-n="78">78</div><div class="cut">${img('ready-parts')}</div></div></div>
+<div class="tile rv" style="--t:var(--glow-health);--c:var(--indigo);--d:.1s"><div class="eb">Sleep</div><h3>Know what you need tonight.</h3><p>Your need grows with a hard day and with the debt from the week.</p><div class="cut">${img('sleep-need')}</div><div class="pad"></div></div>
+<div id="zatez" class="tile rv" style="--t:var(--glow-training);--c:var(--amber);--d:.2s"><div class="eb">Strain</div><h3>A target for today.</h3><p>Where today’s strain should land, from your readiness, sleep debt and plan.</p><div class="cut">${img('strain-gauge')}</div><div class="pad"></div></div>
+<div id="trenink" class="tile w2 rv" style="--t:color-mix(in srgb,var(--glow-today) 60%,#fff);--c:var(--green)"><div class="eb">Training</div><h3>A plan that adapts.</h3><p>An activity for every day, picked for how you recovered. Follow a plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu.</p><div class="cut">${img('week')}</div><div class="pad"></div></div>
+<div class="tile w2 rv" style="--t:var(--glow-food);--c:var(--coffee);--d:.1s"><div class="eb">Nutrition</div><h3>Your target moves with your training.</h3><p>Train harder and you get more to eat. The coach says what that means for your next meal.</p><div class="cut">${img('food-top')}</div><div class="pad"></div></div>
+</div></div></section>
+
+${panel('spanek', 'linear-gradient(180deg,var(--glow-health),var(--lilac))', 'var(--indigo)', 'Sleep', 'Every night, in&nbsp;detail.',
+  'Deep, REM and light sleep from any watch or ring. Drag the moon and the sun on the dial and Aurin tells you when to go to bed to wake up rested.',
+  phone('sleep', [['sleep-dial', 'left:-10px;top:200px;width:170px', 'round'], ['sleep-why', 'right:-12px;top:40px;width:168px']]))}
+
+${panel('posilovna', 'linear-gradient(180deg,var(--glow-training),var(--sand))', 'var(--amber)', 'Gym', 'A workout made for&nbsp;today.',
+  'From your rested muscles, your time and your gym. Then log every set in a tap, with your weights from last time and a rest timer.',
+  phone('training-set', [['build-form', 'left:-10px;top:40px;width:160px'], ['tm-rest', 'right:-14px;top:250px;width:150px', 'round']]),
+  '<div class="chips rv"><span>30 to 120 min</span><span>Full body · Upper · Legs</span><span>Only your equipment</span></div>', 'rezim')}
+
 ${muscles}
-${scenes.slice(6).map(scene).join('\n')}
 
-<section id="propojeni" class="connect"><div class="wrap">
-<div class="center reveal"><h2>Works with what you wear.</h2><p class="sub">Any watch or ring that saves to Apple Health or Google Health, plus power and plans from Intervals.icu. Wear more than one? Aurin takes each night and day from the one you wear most, or you pick.</p></div>
-<div class="box reveal">
-<div class="hub">
-${lines}
-<div class="core" aria-hidden="true">${mark(52)}</div>
-<div role="tablist" aria-label="Connected services">${nodes}</div>
-</div>
-<div class="legend" aria-hidden="true"><span><i class="in"></i>Into Aurin</span><span><i class="out"></i>Sent back</span></div>
-<div class="panels">${panels}</div>
-</div>
+${panel('vyziva', 'linear-gradient(180deg,var(--glow-food),var(--amber-soft))', 'var(--coffee)', 'Nutrition', 'Snap, scan or&nbsp;search.',
+  'Take a photo of your plate, scan a barcode or search, and log drinks with one tap.',
+  phone('food-day', [['food-add', 'left:-10px;top:250px;width:172px']]))}
+
+${panel('kouc', 'var(--button)', 'var(--coach-mint)', 'AI coach', 'Just ask. It knows your&nbsp;data.',
+  'Ask how to train today, how to adjust your week or what to eat before a workout. It remembers what you tell it, and you can see and edit what it remembers.',
+  phone('coach-ask', [['coach-card', 'right:-12px;top:330px;width:200px']]), '<div class="chips rv"><span>Free for everyone</span></div>', 'dark')}
+
+<section class="more"><div class="wrap">
+<h2 class="h2 rv">And there’s more.</h2>
+<div class="grid">${MORE.map(([name, color, title, text], i) => `<div class="rv" style="--d:${(i % 4) * .06}s"><i style="--c:${color}">${icon(name)}</i><h3>${title}</h3><p>${text}</p></div>`).join('')}</div>
 </div></section>
 
-<section id="soukromi" class="privacy"><div class="wrap">
-<div class="say">${LOCK}<p class="big">${'Your data works only for you. Aurin reads only what you allow, never sells it or uses it for ads, and you can delete all of it in Settings at any time.'.split(' ').map(w => `<span>${w}</span>`).join(' ')}</p></div>
+<section id="soukromi" class="sec privacy"><div class="wrap"><div class="panel" style="--t:var(--green-soft)">
+${LOCK}<h2 class="h2 rv" style="margin-top:14px">Your data works only for you.</h2>
+<p class="lead rv">Aurin reads only what you allow, never sells it or uses it for ads, and you can delete all of it in Settings at any time.</p>
 ${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
-</div></section>
+</div></div></section>
 
-<section id="faq"><div class="wrap faq reveal">
-<h2>Questions</h2>
+<section id="faq"><div class="wrap"><div class="faq">
+<h2 class="h2 rv">Questions</h2>
 ${faq}
-</div></section>
+</div></div></section>
 
-<section class="final">${aurora}<div class="wrap reveal">
-${mark(120)}
-<h2>Aurin</h2>
-${store('end')}
+<section id="join" class="wrap"><div class="final rv">
+${mark(64)}
+<h2 class="h2">Your mornings, with a plan.</h2>
+${store('end', 'Join')}
 </div></section>
 </main>`
   });

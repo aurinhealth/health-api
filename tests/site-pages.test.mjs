@@ -27,18 +27,15 @@ test('public pages use the app’s light palette',async()=>{
 
 test('the overview follows the app section by section and every file it loads exists',async()=>{
   const html=await overviewPage(new Request('https://petrfitnessdata.eu/')).text();
-  for(const id of ['spanek','pripravenost','zatez','trenink','posilovna','rezim','svaly','vyziva','kouc','propojeni','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
-  const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/petrfitnessdata\.eu)?\/site\/([^"]+)"/g)].map(m=>m[1]))];
+  for(const id of ['propojeni','pripravenost','spanek','posilovna','svaly','vyziva','kouc','soukromi','faq','join'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
+  for(const id of ['zatez','trenink'])assert.match(html,new RegExp('id="'+id+'" class="tile'),id);
+  const files=[...new Set([...html.matchAll(/(?:src|href|content|data-zoom)="(?:https:\/\/petrfitnessdata\.eu)?\/site\/([^"]+)"/g)].map(m=>m[1]))];
   assert.ok(files.includes('og-en.png'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
-  for(const name of ['today','sleep','readiness-parts','strain-target','training','builder','training-mode','food-day','coach-ask'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
-  // The 3D figure's frames, its map of muscles and a close-up of every muscle the bubble can open.
-  const base=html.match(/data-base="\/site\/([^"]+)"/)[1];
-  for(let i=0;i<72;i++)assert.ok(existsSync(new URL(`../public/site/${base}f${String(i).padStart(2,'0')}.webp`,import.meta.url)),'frame '+i);
-  assert.ok(existsSync(new URL(`../public/site/${base}ids.png`,import.meta.url)));
-  const script=html.match(/var LABEL=\{([^}]+)\}/)[1];
-  for(const [,id] of script.matchAll(/(\w+):'/g))assert.ok(existsSync(new URL(`../public/site/${base}z-${id}.webp`,import.meta.url)),'close-up '+id);
+  for(const name of ['today','sleep','training','food-day','training-set','coach-ask','strain-target','builder'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
+  // The figure from the front and the back, and a close-up of every muscle a bubble opens.
+  for(const file of ['muscles/f00.webp','muscles/f36.webp','muscles/z-quads.webp','muscles/z-glutes.webp'])assert.ok(files.includes(file),file);
   assert.doesNotMatch(html,/undefined/,'every icon and text the page draws exists');
 });
 
@@ -48,10 +45,8 @@ test('the numbers around the hero phone are the sample morning its screenshot sh
   const demo=readFileSync(new URL('../ios-native/Loadwise/Data/DemoData.swift',import.meta.url),'utf8');
   const today=JSON.parse(demo.match(/json = """\n([\s\S]*?)\n    """/)[1]);
   const html=await overviewPage().text();
-  const clock=m=>Math.floor(m/60)+':'+String(m%60).padStart(2,'0');
   assert.match(html,new RegExp('readiness '+today.readiness.score+','));
-  assert.match(html,new RegExp('<div class="k">HRV</div><div class="v">'+today.hrv.value+' ms</div><div class="d up">↑ '+(today.hrv.value-today.hrv.baseline)+' ms above normal'));
-  assert.match(html,new RegExp('<div class="k">Sleep</div><div class="v">'+clock(today.sleep.minutes)+'</div><div class="d sleep">score '+today.sleep.index+'<'));
+  assert.match(html,new RegExp('<div class="num" data-n="'+today.readiness.score+'">'+today.readiness.score+'</div>'));
 });
 
 const visit=(path,headers={})=>new Request('https://petrfitnessdata.eu'+path,{headers});
@@ -176,27 +171,17 @@ test('robots.txt and the sitemap list the public pages on the host they are serv
 });
 
 // Connections show only the services the app offers to connect, each with the app's own logo file
-// (Assets.xcassets), and say what Aurin sends back only where the app can sync to that service.
+// (Assets.xcassets).
 test('the connections use the app’s own logos and only the services the app offers',async()=>{
   const html=await overviewPage().text();
-  const section=html.slice(html.indexOf('<section id="propojeni"'),html.indexOf('<section id="soukromi"'));
+  const section=html.slice(html.indexOf('<section id="propojeni"'),html.indexOf('<section id="pripravenost"'));
   const asset=path=>readFileSync(new URL('../ios-native/Loadwise/Resources/Assets.xcassets/'+path,import.meta.url));
   const site=file=>readFileSync(new URL('../public/site/logos/'+file,import.meta.url));
   for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg'],['whoop.svg','WhoopLogo.imageset/whoop-black.svg'],['wahoo.png','WahooLogo.imageset/wahoo-wordmark-white.png']]){
     assert.ok(site(file).equals(asset(source)),file+' is the app’s logo, unchanged');
     assert.ok(section.includes('/site/logos/'+file),file);
   }
-  assert.deepEqual([...section.matchAll(/id="tab-(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman','whoop','wahoo']);
   assert.doesNotMatch(section,/strava|garmin|oura/i,'only services the app offers');
-  const sync=readFileSync(new URL('../ios-native/Loadwise/Screens/SyncViews.swift',import.meta.url),'utf8');
-  for(const id of ['apple','google','intervals'])assert.match(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
-  for(const id of ['ultrahuman','whoop'])assert.doesNotMatch(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
-  assert.match(section,/nothing, Aurin only reads the ring/);
-  assert.match(section,/nothing, Aurin only reads WHOOP/);
-  // Wahoo gets the planned workouts, as its connect sheet says (SettingsConnectFlow.swift).
-  const connect=readFileSync(new URL('../ios-native/Loadwise/Screens/SettingsPages/SettingsConnectFlow.swift',import.meta.url),'utf8');
-  assert.match(connect,/Tréninky naplánované v Aurinu, do ELEMNT a KICKR/);
-  assert.match(section,/planned workouts, to ELEMNT and KICKR/);
 });
 
 test('the questions open without JS and name the app’s real Settings paths',async()=>{
