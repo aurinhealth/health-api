@@ -14,7 +14,7 @@
 :root{color-scheme:light;
   --bg:#F3EFE8;--panel:#FBFAF7;--panel2:#EAE5DC;--text:#1B1A17;--sec:#3B3832;--muted:#6D6A63;
   --line:rgba(27,26,23,.09);--track:rgba(27,26,23,.08);
-  --green:#1F6B52;--green-soft:#D3EADF;--amber:#A35A12;--amber-bar:#C4782A;--indigo:#4F46C8;--rust:#B4532F;
+  --green:#1F6B52;--green-soft:#D3EADF;--amber:#A35A12;--amber-bar:#C4782A;--indigo:#4F46C8;--rust:#B4532F;--rust-ink:#A3482A;
   --button:#15140F;--on-button:#F3EFE8;
   --logo-load:#F2B46B;--logo-recovery:#3FA383;--aurora-lilac:#B9B4EE;
   --device-hi:#F4F1EC;--device-mid:#C9C2B8;--device-lo:#A2998E;
@@ -172,6 +172,31 @@ h1,h2,.serif{font-family:Newsreader,"New York",Georgia,serif;font-weight:400;let
 .boardT .area b{font-size:19px}.boardT .area span{font-size:16.5px}
 .boardT .band{left:56px;right:56px;bottom:40px;height:150px;flex-direction:column;align-items:flex-start;justify-content:center;gap:10px;padding:0 36px}
 .boardT .band .t{font-size:30px}.boardT .band .s{font-size:17px;margin:0}
+
+/* 8 · The screens board: a mosaic of the app's own screens, each cropped to its top, with the call for testers. */
+.mosaic{width:1600px;height:1200px;padding:56px 64px 0}
+.mosaic .top{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:28px}
+.mosaic .brand{font-size:44px}.mosaic .brand .mark svg{width:52px;height:47px}
+.mosaic h1{font-size:54px;margin:18px 0 0}
+.mosaic .lede{font-size:21px;line-height:1.4;color:var(--sec);margin:10px 0 0;max-width:760px}
+.mosaic .pill.sm{height:56px;padding:0 26px;font-size:22px;gap:10px;flex:none}
+.grid5{display:grid;grid-template-columns:repeat(5,1fr);grid-auto-rows:364px;gap:18px}
+.tileS{position:relative;overflow:hidden;border-radius:26px;background:var(--panel);border:1px solid var(--line)}
+.tileS .hd{min-height:96px;padding:16px 18px 10px}
+.tileS .hd .eyebrow{font-size:12px;letter-spacing:.16em;margin-bottom:4px}
+.tileS .hd b{display:block;font-family:Newsreader,serif;font-weight:400;font-size:23px;letter-spacing:-.02em;line-height:1.1}
+.tileS .scr{position:absolute;left:18px;right:18px;top:100px;bottom:-20px;border-radius:22px 22px 0 0;overflow:hidden;box-shadow:0 0 0 1px var(--line),0 24px 40px -24px rgba(60,40,10,.35);background:var(--bg) var(--img) no-repeat;background-size:100% auto;background-position:0 var(--y,-18px)}
+.tileS .scr::after{content:"";position:absolute;left:0;right:0;bottom:0;height:70px;background:linear-gradient(transparent,var(--panel))}
+.mosaic .band,.mosaicT .band{position:static;margin-top:22px;height:112px}
+.mosaicT{width:1080px;height:1600px;padding:52px 52px 0}
+.mosaicT .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+.mosaicT .brand{font-size:40px}.mosaicT .brand .mark svg{width:46px;height:42px}
+.mosaicT h1{font-size:48px;margin:14px 0 0}
+.mosaicT .lede{font-size:20px;line-height:1.4;color:var(--sec);margin:10px 0 0}
+.mosaicT .pill.sm{height:52px;padding:0 22px;font-size:20px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:352px;gap:16px}
+.mosaicT .band{height:150px;flex-direction:column;align-items:flex-start;justify-content:center;gap:8px;padding:0 32px}
+.mosaicT .band .t{font-size:30px}.mosaicT .band .s{font-size:17px;margin:0;line-height:1.35}
 </style>
 <body>
 
@@ -238,6 +263,30 @@ h1,h2,.serif{font-family:Newsreader,"New York",Georgia,serif;font-weight:400;let
   <div class="band">
     <div class="t">Looking for 20 testers for November.</div>
     <div class="s">Started as an app I built for myself, built with AI help. Testing costs nothing. aurin.health → Join the waitlist.</div>
+  </div>
+</section>
+
+
+<section class="shot mosaic" data-shot="22-screens">
+  <div class="top">
+    <div><div class="brand"><span class="mark" data-mark="52"></span>Aurin</div><h1>Train for how you feel today.</h1><p class="lede">An iPhone app that reads your sleep, HRV and workouts from the watch or ring you already wear and turns them into readiness, a plan, a gym workout, food targets and a coach.</p></div>
+    <span class="pill sm">aurin.health → Join the waitlist</span>
+  </div>
+  <div class="grid5" id="mosaic-wide"></div>
+  <div class="band">
+    <div><div class="t">Looking for 20 testers for November.</div><div class="s">Started as an app I built for myself, built with AI help. In TestFlight; testing costs nothing. Tell me what is wrong and report bugs.</div></div>
+    <div class="r"><div class="logos" id="works-logos-2"></div></div>
+  </div>
+</section>
+
+<section class="shot mosaicT" data-shot="23-screens-tall">
+  <div class="top"><div class="brand"><span class="mark" data-mark="46"></span>Aurin</div><span class="pill sm">In TestFlight</span></div>
+  <h1>Train for how you feel today.</h1>
+  <p class="lede">An iPhone app that reads your sleep, HRV and workouts from the watch or ring you already wear and turns them into readiness, a plan, a gym workout, food targets and a coach.</p>
+  <div class="grid3" id="mosaic-tall" style="margin-top:22px"></div>
+  <div class="band">
+    <div class="t">Looking for 20 testers for November.</div>
+    <div class="s">Started as an app I built for myself, built with AI help. Testing costs nothing; tell me what is wrong and report bugs. aurin.health → Join the waitlist.</div>
   </div>
 </section>
 
@@ -341,6 +390,24 @@ const areaRows = list => list.map(([ic, c, t, d]) => `<div class="area" style="-
 document.getElementById('areas-tall').innerHTML = areaRows(AREAS_SHORT);
 document.getElementById('areas-wide').innerHTML = areaRows(AREAS_SHORT);
 document.getElementById('works-logos').innerHTML = logos;
+
+
+// The screens board: [screen file, eyebrow, title, tone, how far down the screen starts (px at tile width)].
+const SCREENS = [
+  ['today', 'Today', 'Your morning on one screen', 'green', -58],
+  ['sleep', 'Sleep', 'Every night, in detail', 'indigo', -58],
+  ['readiness-parts', 'Readiness', 'What is behind the number', 'green', -58],
+  ['strain-target', 'Strain', 'Know when to push', 'amber', -58],
+  ['training', 'Training', 'A plan that adapts', 'green', -58],
+  ['builder', 'Gym', 'A workout made for today', 'amber', -58],
+  ['training-rest', 'Training mode', 'Log every set in a tap', 'green', -58],
+  ['muscles', 'Muscles', 'Know what is recovered', 'rust', -58],
+  ['food-day', 'Nutrition', 'Eat for the day you are having', 'amber', -58],
+  ['coach-ask', 'AI coach', 'Just ask, it knows your data', 'green', -58]];
+const tilesS = list => list.map(([f, e, t, c, y]) => `<div class="tileS" style="--tone:var(--${c === 'rust' ? 'rust-ink' : c})"><div class="hd"><div class="eyebrow">${e}</div><b>${t}</b></div><div class="scr" style="--img:url(/site/app/${f}.webp);--y:${y}px"></div></div>`).join('');
+document.getElementById('mosaic-wide').innerHTML = tilesS(SCREENS);
+document.getElementById('mosaic-tall').innerHTML = tilesS(SCREENS.filter(x => x[0] !== 'coach-ask'));
+document.getElementById('works-logos-2').innerHTML = logos;
 
 for (const el of document.querySelectorAll('[data-mark]')) el.innerHTML = mark(+el.dataset.mark);
 for (const el of document.querySelectorAll('[data-phone]')) el.innerHTML = phone(el.dataset.phone);
