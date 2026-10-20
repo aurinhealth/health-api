@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildHealth, readinessParts } from "../src/app-health.js";
+import { buildToday } from "../src/app-today.js";
+import { withTimeZone } from "../src/user-time.js";
 import { buildCyclingCoachV2 } from "../src/cycling-coach-v2.js";
 
 const DATE = "2026-10-08";
@@ -178,3 +180,27 @@ test("Health: HRV and resting heart rate for the detail charts reach 90 days bac
   assert.equal(h.hrv.series.at(-1).date, DATE);
   assert.equal(h.restingHR.series.length, 90);
 });
+
+// A 7-hour night and an hour's nap against 8 hours: no debt on Today, and the
+// same on Health (it used to count the nights only).
+test("Health and Today count the same sleep debt, naps included", () => {
+  const night = { date: DATE, startTime: day(-1) + "T23:00:00Z", endTime: DATE + "T06:00:00Z", durationMin: 420, timeInBedMin: 430 };
+  const nap = { date: DATE, startTime: DATE + "T13:00:00Z", endTime: DATE + "T14:00:00Z", durationMin: 60, nap: true };
+  const both = { date: DATE, hour: 20, health: { wellness }, sleep: { sessions: [night, nap] }, profile: { age: 38 } };
+  const h = buildHealth(both), t = buildToday(both);
+  assert.equal(t.strain.target.debt, 0);
+  assert.equal(h.sleep.debt.minutes, t.strain.target.debt);
+  const short = { ...both, sleep: { sessions: [night] } };
+  assert.equal(buildHealth(short).sleep.debt.minutes, 60);
+  assert.equal(buildToday(short).strain.target.debt, 60);
+});
+
+// 01:00 UTC on 9 October is 21:00 on 8 October in New York: the weighing is
+// the 8th's, not a day in the future.
+test("a weighing counts on the user's own day, on Health and Today", () => withTimeZone("America/New_York", () => {
+  const weight = { records: [{ sample_time: day(-3) + "T12:00:00Z", value_numeric: 81 }, { sample_time: day(1) + "T01:00:00Z", value_numeric: 80 }] };
+  const h = buildHealth({ date: DATE, weight }), t = buildToday({ date: DATE, weight });
+  assert.deepEqual([h.weight.latest, h.weight.date], [80, DATE]);
+  assert.equal(t.weight.latest, 80);
+  assert.deepEqual(t.weight.series.map(p => p.date), [day(-3), DATE]);
+}));

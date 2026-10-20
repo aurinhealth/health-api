@@ -65,7 +65,7 @@ import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { grantedExtras } from "./google-scopes.js";
 import { renderForEnvironment } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
-import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows, weeklyRunCap, capRunVolume } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
@@ -722,14 +722,15 @@ async function computeWeekTargets(env,ctx,start,prefs){
   const rows=(await env.DB.prepare("SELECT data_type,source_family,start_time,payload_json FROM health_datapoints WHERE user_id=? AND ((source_family IN ('intervals','local','wahoo') AND data_type IN ('planned-workout','activity')) OR (source_family IN ('google-wearables','apple-health') AND data_type='exercise')) AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')").bind(env.USER_ID,shiftDate(start,-1),shiftDate(end,1)).all().catch(()=>({results:[]}))).results||[];
   const gymDays=new Set(((await env.DB.prepare("SELECT DISTINCT workout_date FROM strength_sets WHERE user_id=? AND workout_date>=? AND workout_date<?").bind(env.USER_ID,start,end).all().catch(()=>({results:[]}))).results||[]).map(r=>r.workout_date));
   const days=Array.from({length:7},(_,i)=>({date:shiftDate(start,i),done:loadOn(shiftDate(start,i)),planned:0,sports:[]}));
-  // Running this week so far: done runs, and planned ones still ahead.
-  let runCommitted=0;
+  // Running this week so far: done runs, and planned ones still ahead or today (committedRunMinutes).
+  const runOn={};
   for(const r of rows){let p={};try{p=JSON.parse(r.payload_json||'{}');}catch{}const d=days.find(x=>x.date===localDate(r.start_time));if(!d)continue;
     const sport=sportOfType((r.source_family==='google-wearables'||r.source_family==='apple-health')?{WEIGHTLIFTING:'weight',WEIGHTS:'weight',STRENGTH_TRAINING:'weight',RUNNING:'run',BIKING:'ride'}[p.exercise?.exerciseType]:p.type);
     if(r.data_type==='planned-workout'&&!/nutrition/i.test(String(p.name||'')+' '+String(p.category||''))){d.planned+=Number(p.icu_training_load)||0;}
-    if(sport==='run')runCommitted+=r.data_type==='planned-workout'?(d.date>today?(Number(p.moving_time)||0)/60:0):activityFromRow(r)?.minutes||0;
+    if(sport==='run'){const m=runOn[d.date]||={planned:0,done:0};if(r.data_type==='planned-workout')m.planned+=(Number(p.moving_time)||0)/60;else m.done+=activityFromRow(r)?.minutes||0;}
     if(sport&&!/nutrition/i.test(String(p.name||'')))d.sports.push(sport);}
   for(const d of days)if(gymDays.has(d.date))d.sports.push('gym');
+  const runCommitted=days.reduce((n,d)=>n+committedRunMinutes(d.date,today,runOn[d.date]?.planned,runOn[d.date]?.done),0);
   // The forecast decides outdoor or indoor (and so the length) unless the athlete chose.
   const weather=await weekWeather(prefs.location,start).catch(()=>({}));
   const runCap=weeklyRunCap(await planningHistory(env,start,28).catch(()=>[]),start);

@@ -12,7 +12,7 @@ import { aiLanguageNote, L, lang } from './lang.js';
 import { assertAiAllowance, claimAiSlot, estimateAiCostUsd, keepAiReservation, recordAiUsage } from './ai-usage.js';
 import { trendFacts } from './trend-facts.js';
 import { localDateTime } from './user-time.js';
-import { sleepNeedFor, sleepDebtMinutes, sleepNeedMinutes } from './recovery-model.js';
+import { sleepNeedFor, weekSleepDebt } from './recovery-model.js';
 import { SPORT_RULES, coachInstructionsFor, safetyNote } from './private/coach-assistant.js';
 export { coachInstructionsFor, safetyNote };
 
@@ -150,7 +150,7 @@ export function sleepNeedContext(sessions=[],{date,profile=null,wellness=[]}={})
   const nights=(sessions||[]).filter(s=>!s.nap);
   if(!nights.length)return null;
   const need=sleepNeedFor({date,age:num(profile?.age),goal:profile?.sleepGoal,rows:wellness||[],sessions:sessions||[]});
-  const debt=sleepDebtMinutes(nights,date,sleepNeedMinutes({age:num(profile?.age),goal:Number(profile?.sleepGoal)>=360&&Number(profile?.sleepGoal)<=600?Number(profile.sleepGoal):null}));
+  const debt=weekSleepDebt(sessions,date,{age:num(profile?.age),goal:profile?.sleepGoal});
   return compactObject({tonightMinutes:need?.need??null,usualMinutes:debt?.need??null,debt7dMinutes:debt?.minutes??null,nights7d:debt?.nights??null});
 }
 // The engine plans rides or runs: the open screen first, then the sport the

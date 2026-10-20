@@ -333,13 +333,22 @@ export function weeklyRunCap(history = [], weekStart) {
   const base = Math.max(weeks[0], weeks.reduce((a, b) => a + b, 0) / 4);
   return { cap: Math.max(RUN_FLOOR_MINUTES, round5(base * 1.1)), base: Math.round(base), weeks };
 }
-// Proposed runs share what is left under the cap (at least 20 min each).
+// Proposed runs share what is left under the cap, at least 20 min each: a run
+// that would get less is left out (the shortest first) and the rest share again.
 export function capRunVolume(targets, runCap, committed = 0) {
   if (!runCap || !["ok", "estimated"].includes(targets?.status)) return targets;
   const runs = targets.items.filter(x => x.sport === "run"), proposed = runs.reduce((n, x) => n + x.minutes, 0), room = Math.max(0, runCap.cap - committed);
   const info = { ...runCap, committed: Math.round(committed), proposed, limited: false };
   if (!runs.length || proposed <= room) return { ...targets, runCap: info };
-  const items = targets.items.map(x => { if (x.sport !== "run") return x; const minutes = Math.max(20, round5(x.minutes * room / proposed)), intensity = x.intensity || RUN_IF[x.role] || .78; return { ...x, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), capped: true }; });
+  // Rounded to 5 min, or down when rounding would pass the room.
+  const share = list => { const total = list.reduce((n, x) => n + x.minutes, 0), near = list.map(x => round5(x.minutes * room / total)); return near.reduce((a, b) => a + b, 0) <= room ? near : list.map(x => Math.floor(x.minutes * room / total / 5) * 5); };
+  let kept = runs, shares = share(kept);
+  while (kept.length && Math.min(...shares) < 20) { const out = shares.indexOf(Math.min(...shares)); kept = kept.filter((_, i) => i !== out); shares = kept.length ? share(kept) : []; }
+  const items = targets.items.filter(x => x.sport !== "run" || kept.includes(x)).map(x => { if (x.sport !== "run") return x; const minutes = shares[kept.indexOf(x)], intensity = x.intensity || RUN_IF[x.role] || .78; return { ...x, minutes, tss: Math.round(minutes / 60 * intensity * intensity * 100), capped: true }; });
   return { ...targets, items, runCap: { ...info, proposed: items.filter(x => x.sport === "run").reduce((n, x) => n + x.minutes, 0), limited: true } };
 }
+// Running minutes a day adds to the week: the done runs before today, the
+// planned ones after it, and today the planned run until a done run (taken
+// for the same one) is as long.
+export const committedRunMinutes = (date, today, planned = 0, done = 0) => date > today ? planned : date < today ? done : Math.max(planned, done);
 export function targetFor(targets, date, sport) { return (targets?.items || []).find(x => x.date === date && x.sport === sport) || null; }

@@ -240,3 +240,14 @@ test("the library filters by a difficulty band", () => {
   assert.ok(rows.length > 0);
   assert.ok(rows.every(w => w.difficulty >= 4 && w.difficulty <= 6.5));
 });
+
+test("a step between two whole-number zone bands belongs to the lower one, not to sprint", async () => {
+  const { zoneOf, CYCLING_ZONES, RUNNING_ZONES } = await import("../src/workout-model.js");
+  assert.equal(zoneOf(75.5), "endurance");
+  assert.equal(zoneOf(75.5, CYCLING_ZONES), "endurance");
+  assert.equal(zoneOf(77.5, RUNNING_ZONES), "recovery");
+  assert.equal(zoneOf(150.5), "anaerobic");
+  // Whole numbers keep their band, in both sports.
+  for (const zones of [CYCLING_ZONES, RUNNING_ZONES]) for (const [name, lo, hi] of zones) for (let v = lo; v <= hi; v++) assert.equal(zoneOf(v, zones), name, String(v));
+  assert.equal(zoneOf(500), "sprint");
+});
