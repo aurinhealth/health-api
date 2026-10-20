@@ -95,6 +95,8 @@ export const PERSONAL_TABLES = {
   activity_undo: { pk: ["user_id", "token"] },
   // Moje tréninky and Od přátel, and the links the athlete shared (workout-templates.js).
   saved_workouts: { pk: ["user_id", "id"] },
+  // A saved ride or run as it was planned for a day (workout-templates.js).
+  planned_own_workouts: { pk: ["user_id", "id"] },
   // The AI's own rides and runs for a day (ai-workout-compose.js).
   ai_workouts: { pk: ["user_id", "id"] },
   workout_shares: {},
