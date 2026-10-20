@@ -131,7 +131,7 @@ h1,h2,.serif{font-family:Newsreader,"New York",Georgia,serif;font-weight:400;let
   <div class="aurora"><i class="a"></i><i class="b"></i><i class="c"></i></div>
   <div class="words">
     <div class="brand"><span class="mark" data-mark="72"></span>Aurin</div>
-    <div class="kicker" style="margin-top:56px"><i></i>Free AI coach for iPhone</div>
+    <div class="kicker" style="margin-top:56px"><i></i>For iPhone · now in TestFlight</div>
     <h1>Train for how you feel today.</h1>
     <p class="lede">Readiness, sleep, strain and a plan that adapts, from the watch or ring you already wear.</p>
     <span class="pill">Join the waitlist</span><span class="site">aurin.health</span>
@@ -146,7 +146,7 @@ h1,h2,.serif{font-family:Newsreader,"New York",Georgia,serif;font-weight:400;let
     <div>
       <div class="brand"><span class="mark" data-mark="60"></span>Aurin</div>
       <h1>Everything in Aurin.</h1>
-      <p class="sub">Readiness, sleep, strain, a plan that adapts, a gym built for today, your muscles, food and a coach that knows your numbers. Free, on iPhone.</p>
+      <p class="sub">Readiness, sleep, strain, a plan that adapts, a gym built for today, your muscles, food and a coach that knows your numbers. On iPhone, in testing.</p>
     </div>
   </div>
   <div class="grid" id="tiles"></div>
@@ -173,7 +173,7 @@ h1,h2,.serif{font-family:Newsreader,"New York",Georgia,serif;font-weight:400;let
   <div class="brandline"><span class="mark" data-mark="44"></span>Aurin</div>
   <div class="eyebrow">TestFlight</div>
   <h2>Looking for 20 testers.</h2>
-  <p class="sub">Aurin is free and in testing before the App Store. If you wear an Apple Watch, an Ultrahuman ring, a WHOOP or ride with Intervals.icu or Wahoo, we would like your mornings in it.</p>
+  <p class="sub">Aurin is in testing before the App Store, and testing costs nothing. If you wear an Apple Watch, an Ultrahuman ring, a WHOOP or ride with Intervals.icu or Wahoo, we would like your mornings in it.</p>
   <ol>
     <li><b>1</b><span>Join the waitlist at aurin.health with your email.</span></li>
     <li><b>2</b><span>We invite you through Apple’s TestFlight. Install it, open Aurin and connect Apple Health or your ring.</span></li>
@@ -199,7 +199,7 @@ const AREAS = [
   ['08-training-mode', 'Training mode', 'Log every set in a tap.', 'Every set is filled in with its weight and reps from last time. One tap marks it done, the rest timer starts by itself and stays on your lock screen.', 'green', 'glow-today', ['training-mode', 'training-rest'], [['80 × 8', 'ready from last time'], ['1:24', 'rest, on the lock screen'], ['', 'saved to Apple Health']]],
   ['09-muscles', 'Muscles', 'Know what’s recovered.', 'From the gym and from your runs and rides. Turn the figure and tap a muscle for how it is doing and when it will be ready.', 'rust', 'glow-training', ['muscles'], [['11 of 17', 'rested'], ['', 'legs and glutes in 2 days'], ['', 'good for today: upper body']]],
   ['10-nutrition', 'Nutrition', 'Eat for the day you’re having.', 'Train harder and you get more to eat. Take a photo of your plate, scan a barcode or search, and log drinks with one tap.', 'amber', 'glow-food', ['food-day', 'food-add'], [['1,380', 'of 2,650 kcal'], ['+350', 'kcal on a training day'], ['', 'photo, barcode, search'], ['', 'macros and all nutrients']]],
-  ['11-coach', 'AI coach', 'Just ask. It knows your data.', 'Ask how to train today, how to adjust your week or what to eat before a workout. When it proposes a workout, confirm it and it lands in your plan. Free for everyone.', 'green', 'glow-today', ['coach-ask'], [['', 'knows your numbers'], ['', 'remembers what you tell it'], ['', 'proposes, you confirm'], ['', 'free']]]];
+  ['11-coach', 'AI coach', 'Just ask. It knows your data.', 'Ask how to train today, how to adjust your week or what to eat before a workout. When it proposes a workout, confirm it and it lands in your plan.', 'green', 'glow-today', ['coach-ask'], [['', 'knows your numbers'], ['', 'remembers what you tell it'], ['', 'proposes, you confirm']]]];
 
 document.getElementById('cards').innerHTML = AREAS.map(([file, eyebrow, h, p, tone, glow, phones, list]) =>
   `<section class="shot card${phones.length === 1 ? ' one' : ''}" data-shot="${file}" style="--tone:var(--${tone});--glow:var(--${glow})">
@@ -222,9 +222,9 @@ const TILES = [
   ['training-rest', '', 'Training mode', 'green', 'glow-today', 'Log every set in a tap.', 'Weights from last time, a rest timer.'],
   ['muscles', '', 'Muscles', 'rust', 'glow-training', 'Know what’s recovered.', 'From the gym, your runs and rides.'],
   ['food-day', '', 'Nutrition', 'amber', 'glow-food', 'Eat for the day you’re having.', 'Photo, barcode or search.'],
-  ['coach-ask', 'w2', 'AI coach', 'green', 'glow-today', 'Just ask. It knows your data.', 'How to train today, how to adjust the week, what to eat before a workout.', '<span class="free">Free for everyone</span>'],
+  ['coach-ask', 'w2', 'AI coach', 'green', 'glow-today', 'Just ask. It knows your data.', 'How to train today, how to adjust the week, what to eat before a workout.'],
   [null, 'w2', 'Connections', 'green', 'glow-today', 'Any watch or ring.', 'Reads sleep, HRV and workouts; sends workouts, weight and food back where you want them.'],
-  ['waitlist', 'w2', 'TestFlight', 'green', 'glow-today', 'Free, in testing.', 'Aurin is free, the coach included. Join the waitlist at aurin.health and we invite you through TestFlight.', '<span class="pill" style="margin-top:34px;height:72px;font-size:26px;padding:0 32px">Join the waitlist</span>']];
+  ['waitlist', 'w2', 'TestFlight', 'green', 'glow-today', 'In testing.', 'Aurin is in TestFlight before the App Store. Join the waitlist at aurin.health and we invite you.', '<span class="pill" style="margin-top:34px;height:72px;font-size:26px;padding:0 32px">Join the waitlist</span>']];
 const SERVICES = [['apple-health.png', 'Apple Health', 'sleep, workouts, heart rate, HRV, steps, weight', ''], ['google-health.png', 'Google Health', 'sleep, workouts, heart rate, HRV, steps, food', 'pad'],
   ['intervals.svg', 'Intervals.icu', 'workouts with power, plan, zones', 'pad'], ['ultrahuman.svg', 'Ultrahuman Ring', 'sleep, resting heart rate, HRV, temperature', 'dark'],
   ['whoop.svg', 'WHOOP', 'sleep, resting heart rate, HRV, breathing', 'dark'], ['wahoo.png', 'Wahoo', 'rides and runs, power, heart rate', 'dark']];
