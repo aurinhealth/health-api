@@ -125,10 +125,6 @@ struct SettingsMenu: View {
                     SettingsRow(icon: SettingsIcon(systemImage: "bell", color: Palette.amber), title: "Oznámení")
                 }
                 SettingsDivider()
-                NavigationLink { CoachPlacesSettingsView() } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "sparkles", color: Palette.indigo), title: "Kouč na obrazovkách")
-                }
-                SettingsDivider()
                 NavigationLink { AppearanceSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "circle.lefthalf.filled", color: Palette.ink), title: "Vzhled")
                 }
