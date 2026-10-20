@@ -133,12 +133,6 @@ struct TodayContent: View {
         KeyNumbers(today: today)
             .padding(.top, selectedDate == nil ? 12 : 28)
 
-        // Cycle tracking under the numbers it explains: the morning question,
-        // the day's bleeding, or perimenopause and menopause symptoms; on a
-        // past day what was logged that day, tap to change it.
-        if let cycle = today.cycle, TodayCycleCard.shows(cycle, past: selectedDate != nil) {
-            TodayCycleCard(cycle: cycle, date: today.date, past: selectedDate != nil).padding(.top, 12)
-        }
         // Aktivita dne: the day's activity from anything (CoachPick.swift).
         if selectedDate == nil { CoachPickCard().padding(.top, 16) }
 

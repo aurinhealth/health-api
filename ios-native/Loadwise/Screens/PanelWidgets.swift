@@ -59,7 +59,7 @@ enum WidgetPanel: String {
     /// "Doporučené" in the gallery, best first.
     var recommended: [WidgetKind] {
         switch self {
-        case .today: return [.sleep, .vo2max, .drinks, .form, .activeCalories, .thisWeek, .sleepDebt, .oxygen]
+        case .today: return [.cycle, .sleep, .vo2max, .drinks, .form, .activeCalories, .thisWeek, .sleepDebt, .oxygen]
         case .health: return [.steps, .vo2max, .form, .drinks, .food, .activeCalories]
         case .training: return [.musclesFigure, .musclesGlance, .sleep, .hrv, .restingHR, .steps, .food, .weight]
         case .food: return [.weekCalories, .food, .macros, .weight, .steps, .activeCalories, .sleep]
@@ -121,6 +121,8 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     case weight, bodyFat, muscle
     /// Deník (JournalViews.swift): yesterday's open questions and the biggest effects.
     case journal
+    /// Cyklus (CycleViews.swift): off until added; offered to those who track a cycle.
+    case cycle
 
     var id: String { rawValue }
 
@@ -152,12 +154,13 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         case .bodyFat: return "Tělesný tuk"
         case .muscle: return "Svalová hmota"
         case .journal: return "Deník"
+        case .cycle: return "Cyklus"
         }
     }
 
     var section: WidgetSection {
         switch self {
-        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen, .journal: return .health
+        case .restingHR, .hrv, .vo2max, .respiration, .skinTemp, .oxygen, .journal, .cycle: return .health
         case .form, .thisWeek, .sessions, .plan, .zones, .musclesFigure, .musclesGlance: return .training
         case .food, .drinks, .macros, .weekCalories: return .food
         case .sleep, .sleepDebt, .bedtime: return .sleep
@@ -171,7 +174,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
         switch self {
         case .restingHR, .hrv, .vo2max, .form, .thisWeek, .sleep, .steps, .activeCalories, .weight, .bodyFat, .musclesFigure:
             return [.small, .medium, .large]
-        case .respiration, .skinTemp, .oxygen, .zones, .food, .drinks, .sleepDebt, .muscle, .musclesGlance:
+        case .respiration, .skinTemp, .oxygen, .zones, .food, .drinks, .sleepDebt, .muscle, .musclesGlance, .cycle:
             return [.small, .medium]
         case .sessions, .plan, .macros, .bedtime, .journal, .weekCalories:
             return [.medium]
@@ -188,7 +191,7 @@ enum WidgetKind: String, CaseIterable, Identifiable {
     /// The tab whose data the widget shows (loaded when another panel shows it).
     var source: AppTab? {
         switch self {
-        case .restingHR, .hrv, .weight, .plan, .food, .steps: return .today
+        case .restingHR, .hrv, .weight, .plan, .food, .steps, .cycle: return .today
         case .respiration, .skinTemp, .oxygen, .sleep, .sleepDebt, .bedtime, .bodyFat: return .health
         case .vo2max, .form, .thisWeek, .sessions, .zones, .activeCalories: return .training
         case .drinks, .macros: return .food
@@ -354,6 +357,8 @@ struct WidgetData {
         case .musclesFigure, .musclesGlance, .weekCalories: return true
         // On unless turned off in Nastavení → Deník or its ··· menu.
         case .journal: return JournalSwitch.isOn
+        // Only with cycle tracking on (Nastavení → Cyklus).
+        case .cycle: return today?.cycle != nil
         case .form: return training?.form != nil
         case .thisWeek: return training != nil
         case .sessions: return !(training?.sessions ?? []).isEmpty
@@ -561,6 +566,10 @@ struct PanelWidget: View {
             JournalHealthCard().allowsHitTesting(linked)
         case .weekCalories:
             FoodWeekWidget()
+        case .cycle:
+            if let t = data.today, let cycle = t.cycle {
+                CycleWidget(cycle: cycle, date: t.date, past: t.steps.hour == nil, size: item.size).allowsHitTesting(linked)
+            }
         }
     }
 

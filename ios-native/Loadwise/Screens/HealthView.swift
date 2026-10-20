@@ -75,9 +75,10 @@ struct HealthContent: View {
                 RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness) }
                     .padding(.top, 24)
 
-                // Cycle tracking, only for today.
+                // Cycle tracking, only for today, with the morning question
+                // (on Today only in the Cyklus widget).
                 if (page.map(\.selectedDate) ?? model.selectedDate) == nil, let cycle = model.cycle, cycle.enabled, let state = cycle.state {
-                    CycleHealthSection(state: state).padding(.top, 12)
+                    CycleHealthSection(state: state, today: (page.map(\.today) ?? model.today)?.cycle).padding(.top, 12)
                 }
             }
 

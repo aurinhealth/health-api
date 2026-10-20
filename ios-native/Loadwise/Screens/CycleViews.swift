@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Cycle tracking (src/cycle-model.js): Settings → Cyklus, the Health card,
-// the calendar, the sheet that logs a day and the Today card. Open to
+// the calendar, the sheet that logs a day and the Cyklus widget. Open to
 // everyone; with hormonal contraception there are no phases, ovulation or
 // forecast, only what was logged and the pill.
 
@@ -55,55 +55,128 @@ extension CycleState {
 // MARK: - Health
 
 /// The cycle on Health under readiness: the ring (natural cycle) or the days
-/// since the bleeding (hormonal contraception), and the pill of the pack.
+/// since the bleeding (hormonal contraception), on the expected days the
+/// morning question, and the pill of the pack.
 struct CycleHealthSection: View {
     let state: CycleState
+    /// Today's cycle from Today, for "Začala menstruace?".
+    var today: TodayCycle? = nil
+    @State private var logging = false
 
     var body: some View {
         VStack(spacing: 12) {
-            RouteLink(route: .cycle) { card }
+            if today?.ask == true {
+                // The question's buttons can't sit inside the link.
+                Card {
+                    NavigationLink(value: AppRoute.cycle) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            WidgetHeader(title: "Cyklus", color: Palette.pink)
+                            CycleStateSummary(state: state)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    Text("Začala menstruace?").font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
+                    CyclePeriodButtons(date: state.date) { logging = true }
+                }
+            } else {
+                RouteLink(route: .cycle) {
+                    Card {
+                        WidgetHeader(title: "Cyklus", color: Palette.pink)
+                        CycleStateSummary(state: state)
+                    }
+                }
+            }
             if let pill = state.pill, !pill.pause, pill.number != nil {
                 PillCard(pill: pill, date: state.date)
             }
         }
-    }
-
-    private var card: some View {
-        Card {
-            WidgetHeader(title: "Cyklus", color: Palette.pink)
-            if state.hormonal {
-                if let days = state.daysSinceBleeding {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(verbatim: String(days)).font(Typo.number(40)).foregroundStyle(Palette.ink)
-                        Text(Fmt.plural(days, "den od krvácení", "dny od krvácení", "dní od krvácení"))
-                            .font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
-                    }
-                } else {
-                    Text("Zapiš krvácení").font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
-                }
-            } else if let day = state.cycleDay, let length = state.length {
-                HStack(spacing: 16) {
-                    CycleRing(day: day, length: length, periodLength: state.periodLength ?? 5, ovulationDay: state.ovulationDay, size: 120)
-                    VStack(alignment: .leading, spacing: 6) {
-                        if let phase = CycleText.phase(state.phase) {
-                            Text(phase).font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
-                        }
-                        if let next = state.next {
-                            Text(nextText(next)).font(Typo.small).foregroundStyle(Palette.muted)
-                        }
-                    }
-                }
-            } else {
-                Text("Zapiš poslední menstruaci").font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
-            }
+        .sheet(isPresented: $logging) {
+            CycleLogSheet(date: state.date, flow: 2, symptoms: today?.symptoms ?? [])
         }
     }
+}
 
-    private func nextText(_ next: CycleState.Next) -> String {
+/// Where the cycle is today: the ring with the phase and the next period
+/// (natural cycle), or the days since the bleeding (hormonal contraception).
+struct CycleStateSummary: View {
+    let state: CycleState
+    var ringSize: CGFloat = 120
+
+    var body: some View {
+        if state.hormonal {
+            if let days = state.daysSinceBleeding {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(verbatim: String(days)).font(Typo.number(40)).foregroundStyle(Palette.ink)
+                    Text(Fmt.plural(days, "den od krvácení", "dny od krvácení", "dní od krvácení"))
+                        .font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
+                }
+            } else {
+                Text("Zapiš krvácení").font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
+            }
+        } else if let day = state.cycleDay, let length = state.length {
+            HStack(spacing: 16) {
+                CycleRing(day: day, length: length, periodLength: state.periodLength ?? 5, ovulationDay: state.ovulationDay, size: ringSize)
+                VStack(alignment: .leading, spacing: 6) {
+                    if let phase = CycleText.phase(state.phase) {
+                        Text(phase).font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
+                    }
+                    if let next = state.nextText {
+                        Text(next).font(Typo.small).foregroundStyle(Palette.muted)
+                    }
+                }
+            }
+        } else {
+            Text("Zapiš poslední menstruaci").font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
+        }
+    }
+}
+
+extension CycleState {
+    /// "menstruace asi za 5 dní", "menstruace asi dnes" or "menstruace se čeká".
+    var nextText: String? {
+        guard let next else { return nil }
         if next.late { return L10n.tr("menstruace se čeká") }
-        let days = state.daysToNext ?? 0
+        let days = daysToNext ?? 0
         if days == 0 { return L10n.tr("menstruace asi dnes") }
         return L10n.f("menstruace asi za %@", String(days) + " " + Fmt.plural(days, "den", "dny", "dní"))
+    }
+}
+
+/// "Ano" opens the log, "Ještě ne" tells the server the period hasn't come.
+struct CyclePeriodButtons: View {
+    @Environment(AppModel.self) private var model
+    let date: String
+    let yes: () -> Void
+    @State private var saving = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: yes) {
+                Text("Ano").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    .frame(maxWidth: .infinity).frame(height: 42).background(Palette.button, in: Capsule())
+            }
+            Button { notYet() } label: {
+                Text("Ještě ne").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .frame(maxWidth: .infinity).frame(height: 42)
+                    .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+            }
+            .disabled(saving)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func notYet() {
+        saving = true
+        Task {
+            do {
+                try await model.logCycleDay(date, ["noPeriod": .bool(true)])
+            } catch {
+                model.notice = error.localizedDescription
+            }
+            saving = false
+        }
     }
 }
 
@@ -179,59 +252,42 @@ struct PillButton: View {
     }
 }
 
-// MARK: - Today
+// MARK: - The widget
 
-/// On Today: "Začala menstruace?" on the expected days, else the day's log
-/// and the coach's note once bleeding is logged.
-struct TodayCycleCard: View {
+/// Cyklus as a widget, added from the gallery (off until then): on the
+/// expected days "Začala menstruace?", the day's bleeding or symptoms with
+/// the coach's note, otherwise where the cycle is; on a past day what was
+/// logged that day. A tap logs the day.
+struct CycleWidget: View {
     @Environment(AppModel.self) private var model
     let cycle: TodayCycle
     let date: String
-    /// A past day picked in the week strip: its log only, without the
-    /// morning question or today's note.
-    let past: Bool
+    /// A past day picked in the week strip: its log only.
+    var past = false
+    var size: WidgetSize = .medium
     @State private var logging = false
-    @State private var saving = false
 
-    init(cycle: TodayCycle, date: String, past: Bool = false) {
-        self.cycle = cycle
-        self.date = date
-        self.past = past
+    static func logged(_ cycle: TodayCycle) -> Bool {
+        cycle.flow > 0 || (cycle.stage != "regular" && !cycle.symptoms.isEmpty)
     }
 
-    static func shows(_ cycle: TodayCycle, past: Bool = false) -> Bool {
-        (cycle.ask && !past) || cycle.flow > 0 || (cycle.stage != "regular" && !cycle.symptoms.isEmpty)
-    }
+    private var asks: Bool { cycle.ask && !past }
+    /// Where the cycle is today (GET /app/api/cycle), not on a past day.
+    private var state: CycleState? { past ? nil : model.cycle?.state }
 
     var body: some View {
         Group {
-            if cycle.ask && !past {
+            if asks && size != .small {
                 Card {
                     WidgetHeader(title: "Cyklus", color: Palette.pink)
                     Text("Začala menstruace?").font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
-                    HStack(spacing: 10) {
-                        Button { logging = true } label: {
-                            Text("Ano").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                                .frame(maxWidth: .infinity).frame(height: 42).background(Palette.button, in: Capsule())
-                        }
-                        Button { notYet() } label: {
-                            Text("Ještě ne").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                                .frame(maxWidth: .infinity).frame(height: 42)
-                                .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
-                        }
-                        .disabled(saving)
-                    }
-                    .buttonStyle(.plain)
+                    CyclePeriodButtons(date: date) { logging = true }
                 }
-            } else if Self.shows(cycle, past: past) {
+            } else {
                 Button { logging = true } label: {
                     Card {
                         WidgetHeader(title: "Cyklus", color: Palette.pink)
-                        Text(verbatim: summary).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        if !past, let note = cycle.note {
-                            Text(note).font(Typo.sentence(18)).foregroundStyle(Palette.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                        if size == .small { small } else { medium }
                     }
                 }
                 .buttonStyle(PressableCardStyle())
@@ -240,6 +296,52 @@ struct TodayCycleCard: View {
         .sheet(isPresented: $logging) {
             CycleLogSheet(date: date, flow: cycle.flow > 0 ? cycle.flow : 2, symptoms: cycle.symptoms)
         }
+        .task { if model.cycle == nil && !past { await model.loadCycle() } }
+    }
+
+    @ViewBuilder private var medium: some View {
+        if Self.logged(cycle) {
+            Text(verbatim: summary).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            if !past, let note = cycle.note {
+                Text(note).font(Typo.sentence(18)).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else if let state {
+            CycleStateSummary(state: state, ringSize: 96)
+        } else {
+            Text(past ? "Bez záznamu" : "Zapiš krvácení").font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
+        }
+    }
+
+    /// The day of the cycle (or the days since the bleeding) and one line under it.
+    @ViewBuilder private var small: some View {
+        if asks {
+            Text("Začala menstruace?").font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if cycle.flow > 0 {
+            if !cycle.hormonal, let day = cycle.cycleDay {
+                NumberText(value: "\(day).", unit: L10n.tr("den"))
+            } else {
+                Text("Krvácení").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            }
+            line(cycle.symptoms.isEmpty ? L10n.tr("krvácení") : cycle.symptoms.map { CycleText.symptom($0) }.joined(separator: ", "))
+        } else if Self.logged(cycle) {
+            Text(verbatim: summary).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if let state, state.hormonal, let days = state.daysSinceBleeding {
+            NumberText(value: String(days), unit: Fmt.plural(days, "den", "dny", "dní"))
+            line(L10n.tr("od krvácení"))
+        } else if !past, !cycle.hormonal, let day = cycle.cycleDay {
+            NumberText(value: "\(day).", unit: L10n.tr("den"))
+            if let next = state?.nextText { line(next) } else if let phase = CycleText.phase(cycle.phase) { line(phase) }
+        } else {
+            Text(past ? "Bez záznamu" : "Zapiš krvácení").font(Typo.sentence(18)).foregroundStyle(Palette.secondary)
+        }
+    }
+
+    private func line(_ text: String) -> some View {
+        Text(verbatim: text).font(Typo.caption).foregroundStyle(Palette.faint)
+            .lineLimit(2).fixedSize(horizontal: false, vertical: true)
     }
 
     /// "1. den · křeče, únava", "Krvácení · křeče", or without bleeding "Návaly horka · noční pocení".
@@ -250,18 +352,6 @@ struct TodayCycleCard: View {
         let head = cycle.hormonal || cycle.cycleDay == nil ? L10n.tr("Krvácení") : L10n.f("%@. den", String(cycle.cycleDay ?? 1))
         let symptoms = cycle.symptoms.map { CycleText.symptom($0) }
         return ([head] + (symptoms.isEmpty ? [] : [symptoms.joined(separator: ", ")])).joined(separator: " · ")
-    }
-
-    private func notYet() {
-        saving = true
-        Task {
-            do {
-                try await model.logCycleDay(date, ["noPeriod": .bool(true)])
-            } catch {
-                model.notice = error.localizedDescription
-            }
-            saving = false
-        }
     }
 }
 
