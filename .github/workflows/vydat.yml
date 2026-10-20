@@ -7,7 +7,8 @@ name: Vydat
 # 2. deploys the newest main to the live server (deploy-worker.yml, production);
 #    production only ever runs main commits, so this never goes back to an
 #    older server than a hand-started deploy left there, and server-only
-#    pull requests merged after the build go out too,
+#    pull requests merged after the build go out too. A typed server commit
+#    (a main commit that holds the build's) leaves out what was merged after it,
 # 3. sets "What to Test" to a summary of every pull request since the last
 #    release, adds the build to the external TestFlight group and sends it to
 #    Apple's beta review,
@@ -27,6 +28,10 @@ on:
     inputs:
       build:
         description: "Build number (empty: the newest build from main)"
+        required: false
+        default: ""
+      server:
+        description: "Server commit on main (empty: the newest main); it must hold the build's commit"
         required: false
         default: ""
       what_to_test:
@@ -65,6 +70,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BUILD: ${{ inputs.build }}
+          SERVER: ${{ inputs.server }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
@@ -92,7 +98,13 @@ jobs:
           [ "$notes" = "success" ] || { echo "::error::Build $build se do TestFlightu nenahrál (notes: ${notes:-chybí})."; exit 1; }
           git cat-file -e "$sha^{commit}" || { echo "::error::Commit $sha buildu $build v main není."; exit 1; }
           git merge-base --is-ancestor "$sha" origin/main || { echo "::error::Build $build není z main."; exit 1; }
-          server="$(git rev-parse origin/main)"
+          if [ -n "$SERVER" ]; then
+            server="$(git rev-parse --verify --quiet "$SERVER^{commit}")" || { echo "::error::Commit serveru $SERVER neexistuje."; exit 1; }
+            git merge-base --is-ancestor "$server" origin/main || { echo "::error::Commit serveru $SERVER není v main."; exit 1; }
+            git merge-base --is-ancestor "$sha" "$server" || { echo "::error::Commit serveru $SERVER neobsahuje commit buildu $build."; exit 1; }
+          else
+            server="$(git rev-parse origin/main)"
+          fi
           # The newest build must hold every app change on main, else the testers
           # would read about changes their build lacks.
           if [ -z "$BUILD" ] && [ -n "$(git diff --name-only "$sha" "$server" -- ios-native)" ]; then
