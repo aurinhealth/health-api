@@ -43,6 +43,9 @@ test("the public pages link to the host they are served on, aurin.health by defa
   for (const origin of hosts) {
     const html = await (await overviewPage(new Request(origin + "/"))).text();
     assert.match(html, new RegExp(`<meta property="og:image" content="${origin}/site/og-en\\.png">`));
+    assert.match(html, new RegExp(`<meta property="og:url" content="${origin}/">`));
+    assert.match(html, new RegExp(`<meta name="twitter:image" content="${origin}/site/og-en\\.png">`));
+    assert.match(html, /<meta name="twitter:card" content="summary_large_image">/);
     assert.match(html, new RegExp(`<link rel="canonical" href="${origin}/">`));
     const privacy = await (await privacyPage(new Request(origin + "/privacy"))).text();
     assert.match(privacy, new RegExp(`hreflang="cs" href="${origin}/privacy\\?lang=cs"`));

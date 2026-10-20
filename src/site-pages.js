@@ -517,8 +517,18 @@ function sitePage({title, description, lang, origin, path, body, czech=false, in
 <meta name="description" content="${description}">
 <meta property="og:title" content="${title}">
 <meta property="og:description" content="${description}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${self}">
+<meta property="og:site_name" content="Aurin">
 <meta property="og:image" content="${origin}/site/og-en.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:locale" content="${lang === 'cs' ? 'cs_CZ' : 'en_US'}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="@aurin_health">
+<meta name="twitter:title" content="${title}">
+<meta name="twitter:description" content="${description}">
+<meta name="twitter:image" content="${origin}/site/og-en.png">
 <link rel="canonical" href="${self}">
 ${czech ? `<link rel="alternate" hreflang="en" href="${origin}${path}">\n<link rel="alternate" hreflang="cs" href="${origin}${path}?lang=cs">` : ''}
 ${index ? '' : '<meta name="robots" content="noindex">'}
