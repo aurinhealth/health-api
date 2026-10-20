@@ -45,7 +45,7 @@ test("the test server shares no data, background jobs or sign-in keys with the l
 
 test("the server switch is offered to the owner and the internal testers only, and to everyone on the test server", () => {
   const live = { ...config.vars, INTERNAL_TESTERS: "Partner@Example.com, other@example.com" };
-  assert.equal(internalTester(live, { email: "chelseafc.czsk@gmail.com", isOwner: true }), true);
+  assert.equal(internalTester(live, { email: "owner@example.com", isOwner: true }), true);
   assert.equal(internalTester(live, { email: "partner@example.com", isOwner: false }), true);
   assert.equal(internalTester(live, { email: "tester@example.com", isOwner: false }), false);
   assert.equal(internalTester(config.vars, { email: "partner@example.com" }), false);
