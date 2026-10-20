@@ -97,7 +97,8 @@ struct TrainingContent: View {
                 TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay)
                     .padding(.top, 18)
 
-                StrainHero(training: training)
+                // The same Námaha detail as Dnes opens it.
+                RouteLink(route: .strain) { StrainHero(training: training) }
                     .padding(.top, 26)
                 CoachTextCard(screen: "training").padding(.top, 18)
 
@@ -137,7 +138,10 @@ struct StrainHero: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Námaha dnes").font(Typo.body).foregroundStyle(Palette.muted)
+            HStack(spacing: 4) {
+                Text("Námaha dnes").font(Typo.body).foregroundStyle(Palette.muted)
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+            }
             HStack(alignment: .lastTextBaseline, spacing: 14) {
                 Text(Fmt.decimal(training.strain.score ?? 0))
                     .font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5)
@@ -147,6 +151,8 @@ struct StrainHero: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 
