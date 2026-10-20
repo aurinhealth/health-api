@@ -118,7 +118,6 @@ import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './us
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
 import { handleEmailLogin } from "./email-login.js";
-import { handleWaitlistSignup } from "./testflight-waitlist.js";
 import { emailConfigured } from "./email-sender.js";
 import { needsAIAccess } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems } from "./connection-health.js";
@@ -498,8 +497,6 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (googleLogin) return googleLogin;
     const passkeyLogin = await handlePasskeyLogin(request, rawEnv, url.pathname);
     if (passkeyLogin) return passkeyLogin;
-    const waitlist = await handleWaitlistSignup(request, rawEnv, url.pathname);
-    if (waitlist) return waitlist;
     const emailLogin = await handleEmailLogin(request, rawEnv, url.pathname, ctx);
     if (emailLogin) return emailLogin;
     if (url.pathname.startsWith("/app/api/")) {
