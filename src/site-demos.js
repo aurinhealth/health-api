@@ -39,12 +39,6 @@ const P = {
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 8v.2"/>',
   thumb: '<path d="M7 11v9H4v-9ZM7 11l4-7c1.5 0 2.5 1 2.2 2.6L12.7 10H18a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7"/>',
   rotate: '<path d="M4 12a8 8 0 0 1 14-5.3M20 4v4h-4M20 12a8 8 0 0 1-14 5.3M4 20v-4h4"/>',
-  pencil: '<path d="M15.5 5.5l3 3M4 20l1-4L16 5a2.1 2.1 0 0 1 3 3L8 19Z"/>',
-  photo: '<rect x="4" y="5" width="16" height="14" rx="2.5"/><circle cx="9" cy="10" r="1.6" fill="currentColor" stroke="none"/><path d="m20 15-4.5-4.5L8 18"/>',
-  label: '<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16M8.5 9h7M8.5 12h7M8.5 15h4.5"/>',
-  updown: '<path d="m8 9.5 4-4 4 4M8 14.5l4 4 4-4"/>',
-  chevd: '<path d="m6 9 6 6 6-6"/>',
-  torch: '<path d="M9 3h6v4l-1.5 2v12h-3V9L9 7ZM12 12v3"/>',
 };
 const ic = (name, cls = '') => `<svg class="di${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${P[name]}</svg>`;
 const at = spec => ` data-at="${spec}"`;
@@ -275,29 +269,18 @@ const foodTarget = `<div class="dm pad">
 <div class="coach"${at('2400')}><div class="ch4">${ic('spark')}Coach</div><p class="sent" data-type="2700,3000">Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.</p></div>
 </div>`;
 
-// AddFoodSheet.swift ("Co přidáme?": the meal, the search, six tiles, the foods list), then BarcodeScanSheet.swift:
-// the finder, the found card with NutritionCells, the PortionWheel turned to 1½ servings, and "Přidat do oběda".
 const foodAdd = `<div class="dm pad fa">
-<div class="row sp"><span class="sent h">What are you adding?</span><span class="mut s">Close</span></div>
-<span class="meal">Lunch${ic('updown')}</span>
-<div class="srch">${ic('search')}<span class="mut">Search foods</span></div>
-<div class="tiles6">${[['barcode', 'Scan'], ['camera', 'Photo'], ['photo', 'From library'], ['label', 'Label'], ['pencil', 'Manual'], ['spark', 'AI lookup']].map(([i, t], k) => `<span${k ? '' : at('500:press 900-press')}>${ic(i)}${t}</span>`).join('')}</div>
-<div class="seg2"><span class="on">Foods</span><span>Recipes</span></div>
-${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105], ['Rice with chicken', '1 serving', 640]].map(([k, d, v]) => `<div class="li"><div><b>${k}</b><span class="mut s">${d}</span></div><span class="num">${v}<small>kcal</small></span></div>`).join('')}
-<div class="scn"${at('900:in')}>
-<div class="row sp"><span class="cb">${ic('x')}</span><span class="sl0">BARCODE</span><span class="cb">${ic('torch')}</span></div>
-<div class="finder"${at('900:in 2900-in')}><div class="cam"><div class="bc"></div><i class="scan"></i><span class="cr tl"></span><span class="cr tr"></span><span class="cr bl"></span><span class="cr br"></span></div><p class="sent aim">Point at the barcode on the package</p></div>
+<div class="sent h">What are you adding?</div>
+<div class="tiles3"><span${at('500:press 900-press')}>${ic('barcode')}Scan</span><span>${ic('camera')}Photo</span><span>${ic('search')}Search</span></div>
+<div class="cam"${at('900:in 2900-in')}><div class="bc"></div><i class="scan"></i><span class="cr tl"></span><span class="cr tr"></span><span class="cr bl"></span><span class="cr br"></span></div>
 <div class="res"${at('2900:in')}>
-<div class="row sp"><span class="grn s b">✓ Found</span><span class="olp">${ic('pencil')}Edit product</span></div>
-<div class="sent h3">Plain Greek yogurt</div>
-<div class="mut s">Hollandia · EAN 8594001234567</div>
-<div class="nc">${[['kcal', 133, 200], ['protein', 12.6, 18.9], ['carbs', 5.6, 8.4], ['fat', 7, 10.5]].map(([k, a, b]) => `<div><span class="num md"${n(a, b, 4500, 700, 'i')}>${Math.round(b)}</span><span class="mut s">${k === 'kcal' ? 'kcal' : k + ' g'}</span></div>`).join('')}</div>
-<div class="wf"><b data-tx="0|1;4500|1½">1½</b><i></i><span>serving (140 g)</span>${ic('chevd')}</div>
-<div class="wheel"><div class="col w"><ul>${['', '0', '1', '2', '3'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col p"><ul${at('4500:on')}>${['', '', '–', '¼', '⅓', '½', '⅔'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col u"><ul>${['', 'g', 'serving (140 g)', '', ''].map(x => `<li>${x}</li>`).join('')}</ul></div></div>
-<div class="mut s">1 serving = 140 g · 133 kcal</div>
-<span class="meal">Lunch${ic('updown')}</span>
-<div class="btn dark"${at('5800:press 6100-press 6100:ok')}><span data-tx="0|Add to lunch · 1 serving;4500|Add to lunch · 1½ serving;6100|✓ Added to lunch">Add to lunch · 1½ serving</span></div>
-</div></div></div>`;
+<div class="row sp"><span class="grn s b">✓ Found</span><span class="mut s">Hollandia · EAN 8594001234567</span></div>
+<div class="sent h">Plain Greek yogurt</div>
+<div class="nc">${[['kcal', 133, 200], ['protein', 12.6, 18.9], ['carbs', 5.6, 8.4], ['fat', 7, 10.5]].map(([k, a, b]) => `<div><span class="num md"${n(a, b, 4600, 700, k === 'kcal' ? 'i' : '1')}>${b}</span><span class="mut s">${k === 'kcal' ? 'kcal' : k + ' g'}</span></div>`).join('')}</div>
+<div class="row sp s mut"><span>1 serving = 140 g</span><span>Servings</span></div>
+<div class="pc">${['¼', '⅓', '½', '¾', '1', '1½', '2'].map(x => `<span${x === '1' ? ' class="on"' + at('4500-on') : x === '1½' ? at('4500:on') : ''}>${x}</span>`).join('')}</div>
+<div class="btn dark"${at('5800:press 6100-press 6100:ok')}><span data-tx="0|Add to lunch · 1½ serving;6100|✓ Added to lunch">Add to lunch · 1½ serving</span></div>
+</div></div>`;
 
 // ---- Coach (CoachView.swift: bubbles, ActionCard with a workout preview, the confirmed line) ----
 const coachScreen = `<div class="app glow-today chat">${STATUS}
@@ -544,34 +527,20 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .mb{display:block;height:3px;margin-top:4px;border-radius:3px;background:var(--track);overflow:hidden}.mb b{display:block;height:100%;width:var(--w)}
 .coach{margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--bg)}.ch4{display:flex;align-items:center;gap:6px;color:var(--indigo);font-weight:500;font-size:13.5px}
 .coach .sent{margin-top:4px;font-size:17px;line-height:1.3;min-height:3.9em}
-.fa{position:relative;min-height:588px;overflow:hidden}
-.meal{display:inline-flex;align-items:center;gap:4px;margin-top:6px;padding:4px 10px;border-radius:99px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:13px;font-weight:600}.meal .di{font-size:10px}
-.srch{display:flex;align-items:center;gap:10px;height:44px;margin-top:12px;border-bottom:1px solid color-mix(in srgb,var(--text) 25%,transparent);font-size:17px}.srch .di{font-size:18px;color:var(--muted)}
-.tiles6{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
-.tiles6 span{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;height:62px;border-radius:16px;background:var(--bg);font-size:12.5px;font-weight:500;transition:transform .2s,background .2s}.tiles6 .di{font-size:19px}
-.tiles6 span.press{transform:scale(.93);background:var(--track)}.js .tiles6 span[data-at]{opacity:1!important;transform:none!important}
-.seg2{display:grid;grid-template-columns:1fr 1fr;margin-top:16px;padding:2px;border-radius:9px;background:var(--track);font-size:13px;font-weight:500}.seg2 span{padding:5px 0;border-radius:7px;text-align:center}.seg2 .on{background:var(--panel);box-shadow:0 1px 3px rgba(0,0,0,.08);font-weight:600}
-.fa .li{padding:7px 0}.fa .li b{display:block;font-size:14px}.fa .li .num{font-size:18px}
-.scn{position:absolute;inset:0;padding:16px 18px 18px;background:var(--panel);transition:opacity .4s}.js .scn.wait:not(.in){transform:none}
-.sl0{font-size:11px;font-weight:500;letter-spacing:.16em;color:var(--muted)}.fa .cb{width:32px;height:32px;font-size:14px}
-.finder{position:absolute;left:18px;right:18px;top:68px;transition:opacity .4s}.js .finder:not(.in){opacity:0}
-.cam{position:relative;height:200px;border-radius:24px;background:#1D2020;overflow:hidden}
+.fa{position:relative;min-height:396px}
+.tiles3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.tiles3 span{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 0;border-radius:16px;background:var(--bg);font-size:13px;font-weight:500;transition:transform .2s,background .2s}.tiles3 .di{font-size:20px}
+.tiles3 span.press{transform:scale(.93);background:var(--track)}.js .tiles3 span[data-at]{opacity:1!important;transform:none!important}
+.cam{position:absolute;left:18px;right:18px;top:140px;height:200px;border-radius:24px;background:#1D2020;overflow:hidden}
 .cam .bc{position:absolute;left:50%;top:50%;width:150px;height:84px;margin:-42px 0 0 -75px;border-radius:6px;background:#f6f3ec repeating-linear-gradient(90deg,#1b1a17 0 2px,transparent 2px 4px,#1b1a17 4px 7px,transparent 7px 9px,#1b1a17 9px 10px,transparent 10px 13px);background-size:100% 70%;background-repeat:no-repeat;background-position:center 30%;box-shadow:0 0 0 10px #f6f3ec}
 .cam .scan{position:absolute;left:24px;right:24px;height:2px;top:30%;background:#ff4a3d;box-shadow:0 0 12px #ff4a3d;animation:scan 1.4s ease-in-out infinite alternate}
 @keyframes scan{to{top:70%}}
 .cr{position:absolute;width:26px;height:26px;border:3px solid rgba(255,255,255,.9)}.cr.tl{left:20px;top:20px;border-right:0;border-bottom:0;border-radius:14px 0 0 0}.cr.tr{right:20px;top:20px;border-left:0;border-bottom:0;border-radius:0 14px 0 0}.cr.bl{left:20px;bottom:20px;border-right:0;border-top:0;border-radius:0 0 0 14px}.cr.br{right:20px;bottom:20px;border-left:0;border-top:0;border-radius:0 0 14px 0}
-.aim{margin:18px 0 0;font-size:19px;text-align:center;color:color-mix(in srgb,var(--text) 85%,transparent)}
-.res{margin-top:14px}.js .res.wait:not(.in){transform:translateY(24px)}
-.olp{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border-radius:99px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 20%,transparent);font-size:12px;font-weight:600}.olp .di{font-size:12px}
-.sent.h3{font-size:24px;line-height:1.1;margin-top:4px}
-.nc{display:grid;grid-template-columns:repeat(4,1fr);margin:12px 0 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.nc>div{display:flex;flex-direction:column;padding:8px 0}
-.wf{display:flex;align-items:center;height:44px;margin-top:14px;border-radius:99px;background:var(--track);font-size:15px;font-weight:500}.wf b{width:96px;padding-right:14px;text-align:right;font-size:17px}.wf i{width:2px;height:100%;background:var(--panel)}.wf span{flex:1;padding:0 14px}.wf .di{margin-right:14px;color:var(--muted)}
-.wheel{position:relative;display:flex;height:160px;margin-top:8px;overflow:hidden;-webkit-mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent);mask-image:linear-gradient(transparent,#000 28%,#000 72%,transparent)}
-.wheel::before{content:"";position:absolute;left:0;right:0;top:64px;height:32px;border-radius:9px;background:var(--track)}
-.wheel .col{position:relative;flex:none;width:90px;text-align:center}.wheel .col.p{width:56px}.wheel .col.u{flex:1;padding-left:14px;text-align:left}
-.wheel ul{margin:0;padding:0;list-style:none;transition:transform 1s cubic-bezier(.16,1,.3,1)}.wheel li{height:32px;font-size:17px;font-weight:600;line-height:32px;white-space:nowrap}
-.js .wheel ul[data-at]{opacity:1!important;transform:none!important}.wheel ul.on,.js .wheel ul.on{transform:translateY(-96px)!important}
-.fa .res .meal{margin-top:10px}.fa .res .btn{margin-top:10px}
+.res{position:absolute;left:0;right:0;bottom:0;padding:16px 18px 18px;border-radius:22px 22px 0 0;background:var(--panel);box-shadow:0 -10px 30px -12px rgba(60,40,10,.3)}
+.js .res:not(.in){transform:translateY(40px)}
+.nc{display:grid;grid-template-columns:repeat(4,1fr);margin:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.nc>div{display:flex;flex-direction:column;padding:8px 0}
+.pc{display:flex;gap:6px;margin-top:8px}.pc span{flex:1;display:grid;place-items:center;height:32px;border-radius:99px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:13.5px;font-weight:600;transition:background .3s,color .3s}
+.pc span.on{background:var(--button);color:var(--on-button)}.js .pc span[data-at]{opacity:1!important;transform:none!important}
 
 /* Screens built here, in the phone: drawn at the app's 390 pt and scaled to the screen. */
 .scr .app{position:absolute;left:0;top:0;width:390px;height:848px;zoom:calc(292 / 390);overflow:hidden;padding:0 20px;background:var(--bg);font:15px/1.35 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;color:var(--text);--num:"Instrument Serif","New York",Georgia,serif}
