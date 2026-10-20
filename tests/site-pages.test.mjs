@@ -33,12 +33,13 @@ test('the overview follows the app section by section and every file it loads ex
   assert.ok(files.includes('fonts/newsreader.woff2'));
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
   for(const name of ['today','sleep','readiness-parts','strain-target','training','builder','training-mode','food-day','coach-ask'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
-  // The 3D figure's frames, its map of muscles and a close-up of every muscle the bubble can open.
+  // The 3D figure from the front and the back, and a close-up of every muscle a bubble opens.
   const base=html.match(/data-base="\/site\/([^"]+)"/)[1];
-  for(let i=0;i<72;i++)assert.ok(existsSync(new URL(`../public/site/${base}f${String(i).padStart(2,'0')}.webp`,import.meta.url)),'frame '+i);
-  assert.ok(existsSync(new URL(`../public/site/${base}ids.png`,import.meta.url)));
-  const script=html.match(/var LABEL=\{([^}]+)\}/)[1];
-  for(const [,id] of script.matchAll(/(\w+):'/g))assert.ok(existsSync(new URL(`../public/site/${base}z-${id}.webp`,import.meta.url)),'close-up '+id);
+  for(const side of ['f00','f36'])assert.ok(files.includes(base+side+'.webp'),'the figure '+side);
+  const label=html.match(/var LABEL=\{([^}]+)\}/)[1];
+  const ids=[...label.matchAll(/(\w+):'/g)].map(m=>m[1]);
+  for(const id of ids)assert.ok(existsSync(new URL(`../public/site/${base}z-${id}.webp`,import.meta.url)),'close-up '+id);
+  for(const [,id] of html.matchAll(/class="bub" data-m="(\w+)"/g))assert.ok(ids.includes(id),'bubble '+id);
   assert.doesNotMatch(html,/undefined/,'every icon and text the page draws exists');
 });
 

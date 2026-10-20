@@ -1,12 +1,11 @@
 // Renders the website's 3D muscle figure (public/site/muscles/) from the licensed model, which stays
-// off the website: 72 turns of the figure with the sample day's colours (f00–f71), a map per turn of
-// which muscle each pixel is (ids.png, the index in render-muscles-site.html's groups, 255 for none)
-// and a close-up of every muscle as its detail shows it in the app (z-<id>).
+// off the website: 72 turns of the figure with the sample day's colours (f00–f71), of which the site
+// keeps the front (f00) and the back (f36), and a close-up of every muscle as its detail shows it in
+// the app (z-<id>).
 //
 //   gunzip -c muscles-v1.bin.gz > scripts/muscles-v1.bin   (the file in R2, models/muscles-v1.bin.gz)
 //   npx http-server scripts -p 8765 &  then  node scripts/render-muscles-site.mjs out/
-//   then convert out/*.png to webp (quality 82) and pack out/i*.png into ids.png, 9 per row, as grey
-//   values round(red / 12) - 1 (render-muscles-site.html paints group i in red (i + 1) · 12).
+//   then convert f00, f36 and the z-*.png to webp (quality 82).
 /* global setup, paint, paintSel, place, frame, heads */ // defined by render-muscles-site.html, run inside the page
 import {chromium} from 'playwright-core';
 import fs from 'node:fs';
