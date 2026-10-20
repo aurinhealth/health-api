@@ -100,6 +100,8 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .screen{position:relative;aspect-ratio:1206/2622;border-radius:44px;overflow:hidden;background:var(--bg)}
 .screen img{display:block;width:100%;height:100%}
 .screen::after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.28),rgba(255,255,255,0) 32%)}
+/* The hero's Today: the coach's sentence scrolled under the tab bar fades into the paper instead of reading as cut off. */
+.hero .screen::before{content:"";position:absolute;left:0;right:0;bottom:0;height:56px;z-index:3;pointer-events:none;background:linear-gradient(to top,var(--bg) 45%,transparent)}
 .scr{position:absolute;inset:0;transition:opacity .6s ease,transform .8s cubic-bezier(.16,1,.3,1)}
 .scr:not(.on){opacity:0;transform:translateY(14px) scale(.985)}
 
@@ -126,6 +128,7 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .flip .part{left:260px}
 .part img{display:block;width:100%;height:auto}
 .part.on{opacity:1}
+.part:has(>.dm.wait:not(.in)){opacity:0!important}
 .step{border-top:1px solid var(--line)}
 .step:last-child{border-bottom:1px solid var(--line)}
 .step>button,.step>div{display:grid;grid-template-columns:40px 1fr;column-gap:8px;width:100%;padding:20px 0;border:0;background:none;font:inherit;color:inherit;text-align:left}
@@ -143,7 +146,7 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 /* Muscles: the app's 3D figure (Muscle3D.swift). The model is licensed and stays out of the page: the
    figure is drawn ahead from 72 sides (scripts/render-muscles-site.html), and a map per side says which
    muscle each pixel is, so dragging turns it and a tap names the muscle as the app's bubble does. */
-.muscles{padding:150px 0 0;--tone:var(--rust)}
+.muscles{padding:150px 0 0;--tone:var(--rust-ink)}
 .mu{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:center}
 .muscles .key{display:flex;flex-wrap:wrap;gap:18px;margin-top:28px;font-size:14px;color:var(--muted)}
 .muscles .key span{display:inline-flex;align-items:center;gap:7px}
@@ -157,8 +160,8 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .fig .bubble b{display:block;font-size:16px;font-weight:600;color:var(--text)}
 .fig .bubble span{font-size:13px}
 .fig .bubble .icon{color:var(--muted);width:14px;height:14px}
-.muscle-card{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .35s}
-.muscle-card.on{opacity:1;pointer-events:auto}
+.muscle-card{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .35s,visibility .35s}
+.muscle-card.on{opacity:1;visibility:visible;pointer-events:auto}
 .muscle-card .card{width:min(400px,calc(100% - 32px));padding:20px;border-radius:28px;background:var(--bg);text-align:left;box-shadow:0 40px 80px -30px rgba(60,40,10,.5);transform:scale(.94);transition:transform .45s cubic-bezier(.16,1,.3,1)}
 .muscle-card.on .card{transform:none}
 .muscle-card .zoom{height:220px;border-radius:22px;background:var(--panel) center/cover no-repeat}
@@ -355,7 +358,7 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 }
 @media (max-width:560px){
   .wrap{padding:0 16px}
-  .nav-cta{display:none}
+  .nav-cta{height:32px;padding:0 12px;font-size:13px}
   .hero{padding-top:110px}
   .lede,.sub{font-size:18px}
   .stage{height:640px}
@@ -600,9 +603,9 @@ export function overviewPage(request) {
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
     ['trenink', 'Training', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 30, 'Your week at a glance.', 'Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu. A finished workout turns green with where it came from, and the month is a pull away.', 8000]]],
+      ['training', 'week', 150, 'Your week at a glance.', 'Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu. A finished workout turns green with where it came from, and the month is a pull away.', 8000]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
-      ['builder', 'builder', 110, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
+      ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
       ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, and drag them into the order you like. Then start.', 7000]]],
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
       ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them, add or remove a set, and start.', 6000],
@@ -638,27 +641,27 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
 <div class="copy reveal"><div class="eyebrow">Muscles</div><h2 class="big">Know what’s recovered.</h2><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
 <div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
 <p class="hint">Drag to turn · tap a muscle</p></div>
-<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><button type="button" class="bubble"><span class="txt"><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
 </div></section>
 <div class="muscle-card" role="dialog" aria-modal="true" aria-label="Muscle"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3></h3><p class="state"></p></div></div>`;
 
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
   // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
   const services = [
-    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="">',
+    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="" width="40" height="40">',
       reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['scale', 'weight']],
       sends: [['bike', 'workouts'], ['scale', 'weight'], ['meal', 'food'], ['drop', 'water']]},
-    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" class="pad">',
+    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" width="40" height="40" class="pad">',
       reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['meal', 'food']],
       sends: [['meal', 'food'], ['drop', 'drinks'], ['bike', 'workouts, if you allow'], ['scale', 'weight, if you allow']]},
-    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="">',
+    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="" width="40" height="40">',
       reads: [['bolt', 'workouts with power'], ['calendar', 'plan'], ['zones', 'zones'], ['scale', 'weight']],
       sends: [['calendar', 'planned workouts'], ['flame', 'calorie target'], ['scale', 'weight'], ['training', 'sleep, HRV and daily values']]},
-    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt=""></span>',
+    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="40" height="40"></span>',
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'VO₂max'], ['thermo', 'temperature']], sends: [], none: 'nothing, Aurin only reads the ring'},
-    {id: 'whoop', name: 'WHOOP', logo: '<img src="/site/logos/whoop.svg" alt="">',
+    {id: 'whoop', name: 'WHOOP', logo: '<img src="/site/logos/whoop.svg" alt="" width="40" height="40">',
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'breathing rate'], ['drop', 'blood oxygen']], sends: [], none: 'nothing, Aurin only reads WHOOP'},
-    {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt=""></span>',
+    {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="40" height="40"></span>',
       reads: [['bike', 'finished rides and runs'], ['bolt', 'power and TSS'], ['heart', 'heart rate']],
       sends: [['calendar', 'planned workouts, to ELEMNT and KICKR']]}];
   // The flow: each service on the left sends what Aurin reads along a curve into the mark, and what Aurin sends
