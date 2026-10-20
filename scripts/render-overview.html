@@ -48,6 +48,7 @@ h1,h2,.serif{font-family:Newsreader,"New York",Georgia,serif;font-weight:400;let
 .screen::after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.28),rgba(255,255,255,0) 32%)}
 /* Positioned without zoom (zoom would scale the offsets too); the device inside is zoomed by --z. */
 .phone{position:absolute;--z:1}.phone .device{zoom:var(--z)}
+.board .screen::before,.boardT .screen::before{content:"";position:absolute;left:0;right:0;bottom:0;height:56px;z-index:3;background:linear-gradient(to top,var(--bg) 45%,transparent)}
 .chip{display:inline-flex;align-items:center;gap:12px;padding:14px 24px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:26px;font-weight:600;color:var(--sec);box-shadow:0 8px 30px rgba(60,45,20,.08)}
 .chip b{font-family:"Instrument Serif",serif;font-weight:400;font-size:34px;letter-spacing:-.02em;color:var(--text)}
 .chip i{width:12px;height:12px;border-radius:50%;background:var(--tone,var(--green))}
@@ -124,6 +125,53 @@ h1,h2,.serif{font-family:Newsreader,"New York",Georgia,serif;font-weight:400;let
 #testers .cta .site{font-size:40px;font-family:Newsreader,serif}
 #testers .phone{left:1010px;top:830px;--z:1.9}
 #testers .glow{width:900px;height:900px;left:900px;bottom:-300px}
+
+/* 6 · The board: everything at a glance on one picture, for a Reddit post. Today in the middle with
+   callouts to its numbers, the areas of the app around it, the call for testers along the bottom. */
+.board{width:1600px;height:1200px;padding:56px 64px 0}
+.board .top{display:flex;justify-content:space-between;align-items:flex-start}
+.board .brand{font-size:44px}.board .brand .mark svg{width:52px;height:47px}
+.board .tag{font-size:22px;color:var(--muted);margin-top:8px}
+.board .pill.sm{height:56px;padding:0 26px;font-size:22px;gap:10px}
+.board h1{font-size:60px;margin:40px 0 0;max-width:470px}
+.board .lede{font-size:21px;line-height:1.4;color:var(--sec);margin:18px 0 0;max-width:450px}
+.board .phone{left:620px;top:190px;--z:1.1}
+.board .glow{width:720px;height:720px;left:440px;top:200px;filter:blur(110px);opacity:.9}
+.callout{position:absolute;width:300px;padding:14px 16px;border-radius:16px;background:var(--panel);border:1px solid var(--line);box-shadow:0 8px 30px rgba(60,45,20,.08);font-size:17px;line-height:1.35;color:var(--sec)}
+.callout b{display:block;font-size:19px;color:var(--text);margin-bottom:2px}
+.callout .n{font-family:"Instrument Serif",serif;font-size:30px;line-height:1;color:var(--text);margin-right:6px;letter-spacing:-.02em}
+.callout.g b,.callout.g .n{color:var(--green)}.callout.i b,.callout.i .n{color:var(--indigo)}.callout.a b,.callout.a .n{color:var(--amber)}
+.lines{position:absolute;inset:0;pointer-events:none}
+.lines line{stroke:color-mix(in srgb,var(--text) 35%,transparent);stroke-width:1.5}
+.lines circle{fill:var(--panel);stroke:color-mix(in srgb,var(--text) 45%,transparent);stroke-width:1.5}
+.areas{position:absolute;left:1060px;top:170px;width:476px;display:grid;gap:13px}
+.area{display:flex;gap:14px;align-items:flex-start}
+.area .ic{flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--c) 14%,transparent);color:var(--c)}
+.area .ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.area b{display:block;font-size:19px;line-height:1.2}.area span{font-size:16.5px;line-height:1.35;color:var(--muted)}
+.band{position:absolute;left:64px;right:64px;bottom:48px;height:128px;border-radius:24px;background:var(--button);color:var(--on-button);display:flex;align-items:center;justify-content:space-between;padding:0 40px}
+.band .t{font-family:Newsreader,serif;font-size:34px;letter-spacing:-.02em}
+.band .s{font-size:19px;opacity:.78;margin-top:4px}
+.band .r{display:flex;align-items:center;gap:26px;font-size:19px;opacity:.9}
+.band .logos{margin:0;gap:10px;max-width:none;flex-wrap:nowrap}.band .logos span{height:auto;padding:0;background:none;border:0;font-size:0;gap:0}.band .logos img{width:40px;height:40px;border-radius:11px;background:#fff;object-fit:contain}.band .logos img.pad{padding:5px}.band .logos img.dark{background:#111;padding:6px}
+.board .works{display:none}
+.board .works .k{font-size:14px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.board .works .logos{margin:0;gap:10px;max-width:none}.board .works .logos span{height:52px;font-size:17px;padding:0 16px 0 8px;gap:10px}.board .works .logos img{width:34px;height:34px;border-radius:9px}
+.board .honest{display:none}
+
+/* 7 · The same board, tall, for the phone feed. */
+.boardT{width:1080px;height:1350px;padding:56px 56px 0}
+.boardT .top{display:flex;justify-content:space-between;align-items:center}
+.boardT .brand{font-size:40px}.boardT .brand .mark svg{width:46px;height:42px}
+.boardT h1{font-size:54px;margin:28px 0 0}
+.boardT .lede{font-size:21px;line-height:1.4;color:var(--sec);margin:14px 0 0;max-width:620px}
+.boardT .phone{left:56px;top:370px;--z:1.12}
+.boardT .glow{width:620px;height:620px;left:-40px;top:380px;filter:blur(100px);opacity:.9}
+.boardT .callout{width:230px;font-size:16px}
+.boardT .areas{left:520px;top:370px;width:504px;gap:14px}
+.boardT .area b{font-size:19px}.boardT .area span{font-size:16.5px}
+.boardT .band{left:56px;right:56px;bottom:40px;height:150px;flex-direction:column;align-items:flex-start;justify-content:center;gap:10px;padding:0 36px}
+.boardT .band .t{font-size:30px}.boardT .band .s{font-size:17px;margin:0}
 </style>
 <body>
 
@@ -153,6 +201,45 @@ h1,h2,.serif{font-family:Newsreader,"New York",Georgia,serif;font-weight:400;let
 </section>
 
 <div id="cards"></div>
+
+
+<section class="shot board" data-shot="20-board" style="--tone:var(--green);--glow:var(--glow-today)">
+  <div class="top">
+    <div><div class="brand"><span class="mark" data-mark="52"></span>Aurin</div><div class="tag">Readiness, training and food for iPhone · in TestFlight</div></div>
+    <span class="pill sm">aurin.health → Join the waitlist</span>
+  </div>
+  <h1>Train for how you feel today.</h1>
+  <p class="lede">Every morning Aurin reads your sleep, HRV and workouts from the watch or ring you already wear and turns them into one number, one plan and one coach.</p>
+  <div class="glow"></div>
+  <div class="phone" data-phone="today"></div>
+  <svg class="lines" viewBox="0 0 1600 1200" aria-hidden="true">
+    <line x1="364" y1="560" x2="700" y2="458"/><circle cx="700" cy="458" r="5"/>
+    <line x1="364" y1="760" x2="690" y2="702"/><circle cx="690" cy="702" r="5"/>
+    <line x1="1060" y1="760" x2="810" y2="702"/><circle cx="810" cy="702" r="5"/>
+      </svg>
+  <div class="callout g" style="left:64px;top:520px"><b><span class="n">78</span>readiness</b>HRV, resting heart rate and sleep, weighed against your own normal.</div>
+  <div class="callout i" style="left:64px;top:720px"><b><span class="n">7:12</span>sleep · score 82</b>Stages, need and debt, and a dial that says when to go to bed.</div>
+  <div class="areas" id="areas-wide"></div>
+  <div class="callout a" style="left:1060px;top:730px"><b><span class="n">8.4</span>strain · target 11–14</b>Every workout and every step adds up; the target follows your readiness.</div>
+  <div class="callout g" style="left:1060px;top:880px"><b>Coach: go all in on strength today.</b>Ask anything; it knows your numbers and proposes workouts you confirm.</div>
+  <div class="band">
+    <div><div class="t">Looking for 20 testers for November.</div><div class="s">Started as an app I built for myself, built with AI help. Testing costs nothing; tell me what is wrong and report bugs. aurin.health</div></div>
+    <div class="r"><div class="logos" id="works-logos"></div></div>
+  </div>
+</section>
+
+<section class="shot boardT" data-shot="21-board-tall" style="--tone:var(--green);--glow:var(--glow-today)">
+  <div class="top"><div class="brand"><span class="mark" data-mark="46"></span>Aurin</div><span class="pill sm">In TestFlight</span></div>
+  <h1>Train for how you feel today.</h1>
+  <p class="lede">Every morning Aurin reads your sleep, HRV and workouts from the watch or ring you already wear and turns them into one number, one plan and one coach.</p>
+  <div class="glow"></div>
+  <div class="phone" data-phone="today"></div>
+  <div class="areas" id="areas-tall"></div>
+  <div class="band">
+    <div class="t">Looking for 20 testers for November.</div>
+    <div class="s">Started as an app I built for myself, built with AI help. Testing costs nothing. aurin.health → Join the waitlist.</div>
+  </div>
+</section>
 
 <section class="shot card" id="connect" data-shot="12-connections" style="--tone:var(--green)">
   <div class="brandline"><span class="mark" data-mark="44"></span>Aurin</div>
@@ -233,6 +320,28 @@ document.getElementById('tiles').innerHTML = TILES.map(([screen, size, eyebrow, 
   `<div class="tile ${size}${screen ? '' : ' wide'}" style="--tone:var(--${tone});--glow:var(--${glow})"><div class="eyebrow">${eyebrow}</div><h3>${h}</h3><p>${p}</p>${extra}
   ${screen === 'waitlist' ? `<div class="glow"></div><div class="phone">${phone('today')}</div>` : screen ? `<div class="glow"></div><div class="phone">${phone(screen)}</div>` : `<div class="logos">${logos}</div>`}</div>`).join('');
 document.getElementById('svcs').innerHTML = SERVICES.map(([f, n, what, cls]) => `<div class="svc"><img src="/site/logos/${f}" class="${cls}" alt=""><div><b>${n}</b><span>${what}</span></div></div>`).join('');
+
+// The areas of the app for the boards: icon, title, one line.
+const AREA_ICONS = {
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z"/>', heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/>',
+  flame: '<path d="M12 21c-4 0-6.5-2.6-6.5-6 0-4 3.5-5.5 4-10 3 2 5 4.5 5.5 7.5.8-.8 1.2-2 1.2-3 1.8 1.6 2.3 3.6 2.3 5.5 0 3.4-2.5 6-6.5 6Z"/>',
+  cal: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>', gym: '<path d="M3 9.5v5M6 7v10M18 7v10M21 9.5v5M6 12h12"/>',
+  flex: '<circle cx="12" cy="4.5" r="1.8"/><path d="M5 11h14M12 7.5v6.5l-4 6M12 14l4 6"/>', fork: '<path d="M7 3v7a3 3 0 0 0 6 0V3M10 3v18M17 3c-2 1-3 4-3 7h3v11"/>',
+  spark: '<path d="M12 3.5l1.8 5.2 5.2 1.8-5.2 1.8-1.8 5.2-1.8-5.2L5 10.5l5.2-1.8Z"/>'};
+const AREAS_SHORT = [
+  ['moon', 'indigo', 'Sleep', 'Stages, need tonight, debt, a bedtime dial.'],
+  ['heart', 'green', 'Readiness', 'One number every morning, against your own normal.'],
+  ['flame', 'amber', 'Strain', 'A target for today and what fills it.'],
+  ['cal', 'green', 'Training plan', 'Adapts to how you recovered; syncs with Intervals.icu.'],
+  ['gym', 'amber', 'Gym', 'A workout from rested muscles and your gym’s equipment; set-by-set training mode.'],
+  ['flex', 'rust', 'Muscles', 'A 3D figure of what is tired and what is recovered.'],
+  ['fork', 'amber', 'Nutrition', 'A target that moves with training; log by photo, barcode or search.'],
+  ['spark', 'green', 'AI coach', 'Knows your numbers; proposes, you confirm.']];
+const areaRows = list => list.map(([ic, c, t, d]) => `<div class="area" style="--c:var(--${c})"><span class="ic"><svg viewBox="0 0 24 24">${AREA_ICONS[ic]}</svg></span><div><b>${t}</b><span>${d}</span></div></div>`).join('');
+document.getElementById('areas-tall').innerHTML = areaRows(AREAS_SHORT);
+document.getElementById('areas-wide').innerHTML = areaRows(AREAS_SHORT);
+document.getElementById('works-logos').innerHTML = logos;
+
 for (const el of document.querySelectorAll('[data-mark]')) el.innerHTML = mark(+el.dataset.mark);
 for (const el of document.querySelectorAll('[data-phone]')) el.innerHTML = phone(el.dataset.phone);
 </script>
