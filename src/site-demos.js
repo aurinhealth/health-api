@@ -520,7 +520,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .pb{display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:99px;box-shadow:inset 0 0 0 1px var(--line);font-size:12px;font-weight:500;color:var(--sec);transition:transform .2s,background .2s}
 .pb.press{transform:scale(.92);background:var(--track)}.js .pb[data-at]{opacity:1!important;transform:none!important}.js .pb.press{transform:scale(.92)!important}
 .tag{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:99px;font-size:11.5px;font-weight:600}.tag.rust{color:var(--rust);background:color-mix(in srgb,var(--rust) 12%,transparent)}
-.lpick{position:absolute;right:14px;top:60px;z-index:3;display:grid;grid-template-columns:auto auto;gap:2px 6px;padding:8px;border-radius:16px;background:var(--panel);box-shadow:0 20px 40px -12px rgba(60,40,10,.45),0 0 0 1px var(--line)}
+.lpick{position:absolute;right:14px;top:96px;z-index:3;display:grid;gap:2px;padding:8px;border-radius:16px;background:var(--panel);box-shadow:0 20px 40px -12px rgba(60,40,10,.45),0 0 0 1px var(--line)}
 .lr{display:flex;align-items:center;gap:8px;padding:4px 10px 4px 4px;border-radius:10px;font-size:12.5px;transition:background .3s}.lr .ip{min-width:30px;height:20px}
 .lr.on{background:var(--track);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--amber) 70%,transparent)}
 .js .lr[data-at]{opacity:1!important;transform:none!important}

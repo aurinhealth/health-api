@@ -125,9 +125,8 @@ stop: "Know when to push." not "Smart Strain Tracking".
 - **Secondary button:** transparent, 1px `--line`, 48px, `--text`. Hover: `--track` fill.
 - **Link:** `--primary-text`, underline on hover; a trailing chevron icon when it leads to another page.
 - **Nav:** a floating pill 12px from the top, sticky: the mark and the word Aurin in Newsreader, 4 section
-  links in `--muted`, a small ink pill "Join the waitlist" on the right that appears once the hero's own button
-  has scrolled away (one waitlist button on screen at a time). Under 960px the links go; under 560px the logo
-  and a smaller pill stay, so the page's one action is always a tap away.
+  links in `--muted`, a small ink pill "Join the waitlist" on the right. Under 960px the links go; under 560px
+  the logo and a smaller pill stay, so the page's one action is always a tap away.
 - **Kicker:** a small glassy pill above the hero headline with a green dot ("Free AI coach for iPhone").
 - **Phone:** the CSS iPhone (titanium edge, black bezel, glare) around a real screenshot. Never a flat rectangle.
 - **Live demo:** a card 380px wide, 22px radius, `--panel`, floating shadow, overlapping the phone's edge. It
