@@ -12,8 +12,8 @@ import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
 const siteCss = `
 @font-face{font-family:Newsreader;src:url(/site/fonts/newsreader.woff2) format("woff2");font-display:swap}
-*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;overflow-x:clip}
-body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 -apple-system,BlinkMacSystemFont,Inter,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip}
+*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 -apple-system,BlinkMacSystemFont,Inter,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:var(--primary-text)}
 img{max-width:100%}
 .icon{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -233,14 +233,6 @@ p{margin:0}
 
 /* Motion, only with JS and without reduced motion: the headline rises word by word, the aurora
    drifts, content fades up as it scrolls in, and each phone screen draws itself when it comes on. */
-/* Phones and tablets: blurred, blended and glass layers are redrawn on every scrolled frame there, which makes the
-   scroll stutter. The same colours are drawn flat instead: soft gradients for the aurora, no grain, solid glass. */
-@media (hover:none),(max-width:960px){
-  .site body::after{display:none}
-  .aurora i{filter:none;opacity:.62;background:radial-gradient(closest-side,var(--k) 35%,transparent)!important}
-  .aurora .a{--k:var(--logo-load)}.aurora .b{--k:var(--logo-recovery)}.aurora .c{--k:var(--aurora-lilac)}
-  .site *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
-}
 @media (prefers-reduced-motion:no-preference){
   .js .hero h1 .w>span{transform:translateY(105%);animation:rise 1.1s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(.15s + var(--i) * 90ms)}
   @keyframes rise{to{transform:none}}
@@ -257,7 +249,6 @@ p{margin:0}
   .js .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);animation:float 6s ease-in-out 1.2s infinite}
   .js .part.past{transform:translate(-40px,-30px) scale(.94);clip-path:inset(0 0 0 0 round 22px)}
   @keyframes float{50%{transform:translateY(-8px)}}
-  @media (hover:none),(max-width:960px){.aurora i,.js .part.on{animation:none}}
   .hub .flow{animation:flow 1.1s linear infinite}
   @keyframes flow{to{stroke-dashoffset:-36}}
   .hub .core{animation:breathe 2.4s ease-in-out infinite}
@@ -347,19 +338,17 @@ if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es
 document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});}else document.querySelectorAll('.reveal').forEach(function(el){el.classList.add('in');});
 var stage=document.querySelector('.stage'),priv=document.querySelector('.privacy .big');
 var scenes=[].slice.call(document.querySelectorAll('.scene')).map(function(el){var q=function(c){return [].slice.call(el.querySelectorAll(c));};
- return {el:el,sc:el.querySelector('.sc'),steps:q('.st'),parts:[q('.sc .scr'),q('.part'),q('.st'),q('.slot .t'),q('.dots i')],at:-1};});
+ return {sc:el.querySelector('.sc'),steps:q('.st'),parts:[q('.sc .scr'),q('.part'),q('.st'),q('.slot .t'),q('.dots i')],at:-1};});
 var words=priv?[].slice.call(priv.querySelectorAll('span')):[],queued=false;
 // The stage is drawn at one size and scaled to the window: beside the steps on a computer, above them on a phone.
 function fit(){var w=innerWidth,h=innerHeight,s=w<=960?Math.min((w-16)/440,(h-76-214)/702):Math.min(1.1,(h-80)/702,(Math.min(w,1160)-48-420)/760);
  scenes.forEach(function(x){x.sc.style.setProperty('--s',s.toFixed(3));});}
-function frame(){queued=false;var vh=innerHeight,p=null,k=0;
- if(stage){var s=stage.getBoundingClientRect();p=still?1:Math.min(1,Math.max(0,(vh-s.top)/(vh*.9)-.3));}
- var ats=scenes.map(function(x){var r=x.el.getBoundingClientRect(),at=x.at;if(r.bottom<-vh||r.top>2*vh)return at;at=0;x.steps.forEach(function(el,j){if(el.getBoundingClientRect().top<vh*.55)at=j;});return at;});
- if(words.length){var q=priv.getBoundingClientRect();k=still?1:Math.min(1,Math.max(0,(vh*.8-q.top)/(q.height+vh*.25)));}
- if(p!==null){var v=p.toFixed(3);if(v!==stage._p){stage._p=v;stage.style.setProperty('--p',v);}}
- scenes.forEach(function(x,i){var at=ats[i];if(at===x.at)return;x.at=at;
+function frame(){queued=false;var vh=innerHeight;
+ if(stage){var s=stage.getBoundingClientRect(),p=still?1:Math.min(1,Math.max(0,(vh-s.top)/(vh*.9)-.3));stage.style.setProperty('--p',p.toFixed(3));}
+ scenes.forEach(function(x){var at=0;x.steps.forEach(function(el,j){if(el.getBoundingClientRect().top<vh*.55)at=j;});if(at===x.at)return;x.at=at;
   x.parts.forEach(function(list,k){list.forEach(function(el,j){el.classList.toggle('on',j===at);if(k===1)el.classList.toggle('past',j<at);});});});
- if(words.length)words.forEach(function(w,j){w.classList.toggle('lit',k*words.length>j);});}
+ if(words.length){var q=priv.getBoundingClientRect(),k=still?1:Math.min(1,Math.max(0,(vh*.8-q.top)/(q.height+vh*.25)));
+  words.forEach(function(w,j){w.classList.toggle('lit',k*words.length>j);});}}
 function ask(){if(!queued){queued=true;requestAnimationFrame(frame);}}
 addEventListener('scroll',ask,{passive:true});addEventListener('resize',function(){fit();ask();});fit();frame();
 // Connections: a logo shows what Aurin reads from it and sends back; they take turns until one is picked.
@@ -371,8 +360,6 @@ document.getElementById('svc-'+id).classList.toggle('on',on);hub.querySelectorAl
 tabs.forEach(function(t,i){t.addEventListener('click',function(){clearInterval(timer);pick(i);});
 t.addEventListener('keydown',function(e){var n=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;
 if(n){e.preventDefault();clearInterval(timer);pick((i+n+tabs.length)%tabs.length);tabs[cur].focus();}});});
-// Pointing at the logos or moving focus into them stops the turns, so what is read stays put.
-['mouseenter','focusin'].forEach(function(t){hub.addEventListener(t,function(){clearInterval(timer);});});
 r.classList.add('tabs');pick(0);if(!still)timer=setInterval(function(){pick((cur+1)%tabs.length);},5200);})();</script>
 <script>(function(){
 // Muscles: frame k of 72 is the figure turned k·5°; ids.png holds, per frame, which muscle each pixel is
@@ -630,7 +617,7 @@ ${store()}
 </div>
 <div class="stage">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">64 ms</div><div class="d up">↑ 6 ms above normal</div></div>
-<div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">score 82</div></div>
+<div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">score 86</div></div>
 <div class="glass g3" aria-hidden="true"><div class="k">Coach</div><div style="margin-top:4px">Go all in on strength today.</div></div>
 <div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness 78, how you feel, the weather, sleep, strain and HRV"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${shot('today', false)}</div></div></div></div>
 </div>
