@@ -505,7 +505,7 @@ card.addEventListener('click',function(e){if(e.target===card||e.target.closest('
 addEventListener('keydown',function(e){if(e.key==='Escape'&&card.classList.contains('on'))hide();});
 })();</script>`;
 
-function sitePage({title, description, lang, origin, path, body, czech=false, index=true}) {
+function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null}) {
   const self = `${origin}${path}${lang === 'cs' ? '?lang=cs' : ''}`;
   const html = `<!doctype html>
 <html lang="${lang}" class="site">
@@ -532,6 +532,7 @@ function sitePage({title, description, lang, origin, path, body, czech=false, in
 <link rel="canonical" href="${self}">
 ${czech ? `<link rel="alternate" hreflang="en" href="${origin}${path}">\n<link rel="alternate" hreflang="cs" href="${origin}${path}?lang=cs">` : ''}
 ${index ? '' : '<meta name="robots" content="noindex">'}
+${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preload" href="/site/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/site/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin>
@@ -731,9 +732,20 @@ ${layer('wide')}${layer('tall')}
   // The sample morning (DemoData.swift) the hero phone shows; the sentence under the hero says the same.
   const day = {readiness: 78, hrv: 64, hrvBaseline: 58, sleep: '7:12', sleepScore: 82};
 
-  return sitePage({lang, origin, path: '/',
+  const description = 'Aurin for iPhone reads your sleep, HRV and workouts from Apple Health, Google Health and Intervals.icu, shows your readiness every morning and plans your training and food around it.';
+  // What search engines read about the app (schema.org); the overview text says the same.
+  const jsonLd = {'@context': 'https://schema.org', '@graph': [
+    {'@type': 'SoftwareApplication', name: 'Aurin', url: origin, description, applicationCategory: 'HealthApplication',
+     operatingSystem: 'iOS', image: `${origin}/site/og-en.png`, screenshot: `${origin}/site/app/today.webp`,
+     offers: {'@type': 'Offer', price: '0', priceCurrency: 'USD', availability: 'https://schema.org/PreOrder', description: 'Free test version in TestFlight'},
+     publisher: {'@id': `${origin}/#org`}},
+    {'@type': 'Organization', '@id': `${origin}/#org`, name: 'Aurin', url: origin, logo: `${origin}/logo.svg`,
+     email: CONTACT_EMAIL, sameAs: ['https://x.com/aurin_health']},
+    {'@type': 'WebSite', url: origin, name: 'Aurin', inLanguage: 'en', publisher: {'@id': `${origin}/#org`}}]};
+
+  return sitePage({lang, origin, path: '/', jsonLd,
     title: 'Aurin · train for how you feel today',
-    description: 'Aurin for iPhone reads your sleep, HRV and workouts from Apple Health, Google Health and Intervals.icu, shows your readiness every morning and plans your training and food around it.',
+    description,
     body: `<main>
 <div class="hero">${aurora}
 <div class="wrap grid">
