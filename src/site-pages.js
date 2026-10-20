@@ -7,14 +7,13 @@
 // have a Czech version at ?lang=cs, linked from the page and the footer.
 import {themeTokens} from './design-system.js';
 import {icon, ICON_PATHS} from './icons.js';
-import {DEMOS, SCREENS, demoCss, demoScript} from './site-demos.js';
 import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
 
 const siteCss = `
 @font-face{font-family:Newsreader;src:url(/site/fonts/newsreader.woff2) format("woff2");font-display:swap}
-*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;overflow-x:clip}
-body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 -apple-system,BlinkMacSystemFont,Inter,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip}
+*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 -apple-system,BlinkMacSystemFont,Inter,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:var(--primary-text)}
 img{max-width:100%}
 .icon{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -34,64 +33,37 @@ p{margin:0}
 .pill-nav .links a{padding:7px 12px;border-radius:999px;color:var(--muted);text-decoration:none;font-size:14px;font-weight:500}
 .pill-nav .links a:hover{color:var(--text);background:var(--track)}
 
-/* The waitlist button: the app is not in the App Store yet; it opens an e-mail field (store()). */
+/* The store badge: the app is not in the App Store yet, so it is a label, not a link. */
 .store{display:inline-flex;align-items:center;gap:10px;height:56px;padding:0 28px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:17px;font-weight:600;box-shadow:0 14px 30px -12px rgba(21,20,15,.6)}
 .store svg{width:20px;height:20px;fill:currentColor}
-button.store{border:0;font:inherit;font-size:17px;font-weight:600;cursor:pointer}
-.wl{display:inline-flex;flex-direction:column;align-items:center;max-width:100%}
-.wl .field,.wl .done{display:none}
-.wl .field{align-items:center;gap:6px;height:56px;width:340px;max-width:100%;padding:0 6px 0 22px;border-radius:999px;background:var(--panel);box-shadow:0 0 0 1px var(--line),0 14px 30px -12px rgba(21,20,15,.35)}
-.wl input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:17px;color:var(--text)}
-.wl .go{flex:none;width:44px;height:44px;border:0;border-radius:50%;background:var(--button);display:flex;align-items:center;justify-content:center;cursor:pointer}
-.wl .go svg,.wl .done svg{width:20px;height:20px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
-.wl .go svg{stroke:var(--on-button)}
-.wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:999px;background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:17px;font-weight:600}
-.wl .done svg{stroke:currentColor}
-.wl .err{margin-top:10px;font-size:15px;color:var(--rust)}.wl .err:empty{display:none}
-.wl.on .open,.wl.sent .open,.wl.sent .field{display:none}.wl.on .field{display:flex}.wl.sent .done{display:inline-flex}
-html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
 
 /* Grain over the whole page: printed paper rather than a flat screen. */
-.site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.05;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.06;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
-/* Shared pieces of the overview. */
-.eyebrow{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--tone,var(--green));margin-bottom:16px}
-.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.sub{font-size:20px;line-height:1.5;color:var(--sec);max-width:520px;margin-top:20px}
-.sub.free{margin-top:8px;color:var(--green);font-weight:600}
-h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
-.up{color:var(--green)}.sleep{color:var(--indigo)}.warm{color:var(--amber)}
-.nav-cta{display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
-.nav-cta:hover{opacity:.9}
-/* One waitlist button at a time: the nav's pill appears once the hero's button has scrolled away (always there without JS). */
-.js .site-head:not(.away) .nav-cta{display:none}
+/* Aurora: the two halves of the mark (and a little lilac) drifting slowly behind the hero and the end. */
+.aurora{position:absolute;inset:-12% -10% 0;overflow:hidden;pointer-events:none;z-index:0}
+.aurora i{position:absolute;border-radius:50%;filter:blur(70px);opacity:.5}
+.aurora .a{width:52vmax;height:40vmax;left:-8vmax;top:-6vmax;background:var(--logo-load)}
+.aurora .b{width:48vmax;height:42vmax;right:-10vmax;top:6vmax;background:var(--logo-recovery)}
+.aurora .c{width:34vmax;height:30vmax;left:30%;top:22vmax;background:var(--aurora-lilac);opacity:.35}
+.aurora::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 55%,var(--bg))}
 
-/* Aurora: the two halves of the mark (and a little lilac), soft behind the hero phone and the end. */
-.aurora{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
-.aurora i{position:absolute;border-radius:50%;filter:blur(80px);opacity:.42}
-.aurora .a{width:40vmax;height:34vmax;right:2vmax;top:-4vmax;background:var(--logo-load)}
-.aurora .b{width:38vmax;height:36vmax;right:-14vmax;top:16vmax;background:var(--logo-recovery)}
-.aurora .c{width:26vmax;height:24vmax;right:22vmax;top:26vmax;background:var(--aurora-lilac);opacity:.3}
-.aurora::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 60%,var(--bg))}
-
-/* Hero: the line on the left, the app's Today on the right with three numbers floating beside it. */
-.hero{position:relative;margin-top:-76px;padding:136px 0 72px;overflow:clip}
-.hero .grid{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);align-items:center;gap:32px}
-.kicker{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:color-mix(in srgb,var(--panel) 60%,transparent);border:1px solid var(--line);font-size:14px;font-weight:600;color:var(--sec)}
+/* Hero: the line, then the phone lying back that stands up as you scroll, with glass cards around it. */
+.hero{position:relative;margin-top:-76px;padding:168px 0 0;text-align:center;overflow:clip}
+.hero .wrap{position:relative;z-index:1}
+.kicker{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:color-mix(in srgb,var(--panel) 55%,transparent);border:1px solid color-mix(in srgb,var(--panel) 80%,transparent);font-size:14px;font-weight:600;color:var(--sec);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .kicker i{width:8px;height:8px;border-radius:50%;background:var(--green)}
-.hero h1{font-size:clamp(56px,7.2vw,112px);line-height:.96;letter-spacing:-.03em;margin-top:26px}
+.hero h1{font-size:clamp(58px,9.6vw,136px);line-height:.98;letter-spacing:-.025em;max-width:1000px;margin:26px auto 0}
 .hero h1 .w{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em}
 .hero h1 .w>span{display:inline-block}
-.lede{max-width:500px;margin-top:26px;font-size:20px;color:var(--sec)}
-.hero .cta{margin-top:36px}
-.hero .wl{align-items:flex-start}
-.hero .note{margin-top:16px;font-size:14px;color:var(--muted)}
-.stage{position:relative;height:720px;display:flex;align-items:center;justify-content:center}
-.glass{position:absolute;z-index:2;text-align:left;padding:16px 18px;border-radius:22px;background:color-mix(in srgb,var(--panel) 74%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);border:1px solid color-mix(in srgb,var(--panel) 85%,transparent);box-shadow:0 24px 60px -18px rgba(80,60,30,.28)}
-.glass .k{font-size:13px;color:var(--muted)}.glass .v{font-size:30px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.glass .d{font-size:13px;font-weight:600}
-.glass.g1{left:calc(50% - 300px);top:150px}
-.glass.g2{right:calc(50% - 280px);top:300px}
-.glass.g3{left:calc(50% - 300px);bottom:84px;width:240px;font-size:15px}
+.lede{max-width:560px;margin:26px auto 0;font-size:20px;color:var(--sec)}
+.hero .store{margin-top:34px}
+.stage{position:relative;height:770px;margin-top:72px;perspective:1600px;z-index:1}
+.stage .device{position:absolute;left:50%;top:0;transform:translateX(-50%) rotateX(calc(26deg * (1 - var(--p,1)))) scale(calc(.86 + .14 * var(--p,1)));transform-origin:50% 0}
+.glass{position:absolute;z-index:2;text-align:left;padding:16px 18px;border-radius:22px;background:color-mix(in srgb,var(--panel) 70%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);border:1px solid color-mix(in srgb,var(--panel) 85%,transparent);box-shadow:0 24px 60px -18px rgba(80,60,30,.28);transform:translateY(calc(var(--depth) * (1 - var(--p,1)) * 1px))}
+.glass .k{font-size:13px;color:var(--muted)}.glass .v{font-size:30px;font-weight:600;letter-spacing:-.03em}.glass .d{font-size:13px;font-weight:600}
+.glass.g1{left:calc(50% - 400px);top:160px;--depth:140}.glass.g2{right:calc(50% - 400px);top:330px;--depth:260}
+.glass.g3{left:calc(50% - 430px);top:480px;width:250px;--depth:380;font-size:15px}
 
 /* A real-looking iPhone: titanium edge, black bezel, glass glare and a deep shadow. Its screens are
    the app's own, taken in CI from the sample data (ios-native.yml, screens/site/). */
@@ -102,119 +74,104 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .screen{position:relative;aspect-ratio:1206/2622;border-radius:44px;overflow:hidden;background:var(--bg)}
 .screen img{display:block;width:100%;height:100%}
 .screen::after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.28),rgba(255,255,255,0) 32%)}
-/* The hero's Today: the coach's sentence scrolled under the tab bar fades into the paper instead of reading as cut off. */
-.hero .screen::before{content:"";position:absolute;left:0;right:0;bottom:0;height:56px;z-index:3;pointer-events:none;background:linear-gradient(to top,var(--bg) 45%,transparent)}
 .scr{position:absolute;inset:0;transition:opacity .6s ease,transform .8s cubic-bezier(.16,1,.3,1)}
-.scr:not(.on){opacity:0;transform:translateY(14px) scale(.985)}
+.scr:not(.on){opacity:0;transform:translateY(18px) scale(.98)}
+.up{color:var(--green)}.sleep{color:var(--indigo)}.warm{color:var(--amber)}
 
-/* One morning: the sample day said as a sentence, with the numbers the hero phone shows. */
-.morning{padding:56px 0 24px}
-.morning .say{max-width:1000px;font:400 clamp(30px,3.8vw,52px)/1.18 Newsreader,"New York",Georgia,serif;letter-spacing:-.015em;color:var(--text)}
-.morning .say b{font:600 .78em/1 -apple-system,BlinkMacSystemFont,Inter,"Segoe UI",system-ui,sans-serif;letter-spacing:-.02em;font-variant-numeric:tabular-nums;padding:.08em .32em;border-radius:.4em;white-space:nowrap;background:color-mix(in srgb,currentColor 11%,transparent)}
-.morning .say em{font-style:italic}
-
-/* Chapters: one per area of the app, in the order of its tabs. The words on one side, the phone on
-   the other (sides alternate); each step shows its own screen and lifts a piece of it beside the phone.
-   Steps take turns on their own while the chapter is in view, until one is picked. */
-.chapter{position:relative;padding:140px 0 0}
-.ch{display:grid;grid-template-columns:minmax(0,1fr) 640px;grid-template-areas:"head vis" "steps vis";column-gap:56px;align-items:start}
-.chapter.flip .ch{grid-template-columns:640px minmax(0,1fr);grid-template-areas:"vis head" "vis steps"}
-.ch .head{grid-area:head;padding-top:56px}
-.ch .vis-wrap{grid-area:vis;position:relative}
-.ch .steps{grid-area:steps;list-style:none;margin:40px 0 0;padding:0;max-width:480px}
-.vis{position:relative;width:640px;height:702px;zoom:var(--z,1)}
-.vis .glow{position:absolute;left:50%;top:50%;width:880px;height:880px;margin:-440px 0 0 -440px;border-radius:50%;background:radial-gradient(circle,var(--glow) 0,transparent 62%);pointer-events:none}
-.vis .device{position:absolute;left:318px;top:18px}
-.flip .vis .device{left:0}
-.part{position:absolute;left:0;width:380px;border-radius:22px;overflow:hidden;background:var(--panel);box-shadow:0 40px 80px -30px rgba(60,40,10,.5),0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(27,26,23,.05);opacity:0;z-index:3}
-.flip .part{left:260px}
+/* The scenes: one per area of the app, in the order of its tabs. The phone stays while the steps
+   scroll past, shows the app's screen for each step, and a piece of that screen (cut from the same
+   screenshot) comes forward beside it. */
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:16px}
+.scene{position:relative;--tone:var(--green);--glow:var(--glow-today)}
+.scene .head{text-align:center;padding:130px 24px 0}
+.scene .head .eyebrow{color:var(--tone);margin-bottom:12px}
+.scene .head h2,.muscles h2{font-size:clamp(46px,6.2vw,88px);line-height:.98;letter-spacing:-.025em}
+.scene .head p,.muscles .sub{max-width:580px;margin:20px auto 0;font-size:20px;color:var(--sec)}
+.scene .head p.free{margin-top:8px;color:var(--green);font-weight:600}
+.track{position:relative}
+.scene .pin{position:sticky;top:0;height:100vh;height:100svh;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.scene .glow{position:absolute;width:900px;height:900px;border-radius:50%;background:radial-gradient(circle,var(--glow) 0,transparent 62%)}
+.sc{position:relative;flex:none;width:760px;height:702px;transform:scale(var(--s,1))}
+.sc .device{position:absolute;left:438px;top:0}
+.part{position:absolute;left:0;width:420px;border-radius:22px;overflow:hidden;background:var(--panel);box-shadow:0 40px 80px -30px rgba(60,40,10,.5),0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(27,26,23,.05);opacity:0}
 .part img{display:block;width:100%;height:auto}
 .part.on{opacity:1}
-.part:has(>.dm.wait:not(.in)){opacity:0!important}
-.step{border-top:1px solid var(--line)}
-.step:last-child{border-bottom:1px solid var(--line)}
-.step>button,.step>div{display:grid;grid-template-columns:40px 1fr;column-gap:8px;width:100%;padding:20px 0;border:0;background:none;font:inherit;color:inherit;text-align:left}
-.step>button{cursor:pointer}
-.step .n{grid-row:1/3;font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--tone);padding-top:6px;font-variant-numeric:tabular-nums}
-.step .tt{font:400 28px/1.1 Newsreader,"New York",Georgia,serif;letter-spacing:-.015em}
-.step .tx{margin-top:8px;color:var(--sec);font-size:17px}
-.step .bar{grid-column:2;display:none;height:2px;margin-top:16px;border-radius:2px;background:var(--track);overflow:hidden}
-.step .bar i{display:block;height:100%;width:0;background:var(--tone)}
-.part{pointer-events:none}.part:has(.dial){pointer-events:auto}
-.js .multi .step:not(.on) .tx{display:none}
-.js .multi .step:not(.on) .tt{color:var(--muted)}
-.js .multi .step>button:hover .tt{color:var(--text)}
+.st .n{font-size:13px;font-weight:700;color:var(--tone);letter-spacing:.06em}
+.st h3{font:400 36px/1.04 Newsreader,"New York",Georgia,serif;letter-spacing:-.02em;margin:8px 0 10px}
+.st p{color:var(--sec);font-size:18px}
+.slot,.dots{display:none}
+@media (min-width:961px){
+  .track{display:grid;grid-template-columns:400px 1fr;max-width:1160px;margin:0 auto;padding:0 24px;gap:20px}
+  .scene .pin{grid-column:2;grid-row:1;align-self:start}
+  .sc-steps{grid-column:1;grid-row:1;padding:25vh 0 35vh}
+  .st{min-height:85vh;display:flex;align-items:center}
+  .st .t{max-width:400px}
+  .js .st .t{opacity:.22;transition:opacity .5s}
+  .js .st.on .t{opacity:1}
+}
 
 /* Muscles: the app's 3D figure (Muscle3D.swift). The model is licensed and stays out of the page: the
    figure is drawn ahead from 72 sides (scripts/render-muscles-site.html), and a map per side says which
    muscle each pixel is, so dragging turns it and a tap names the muscle as the app's bubble does. */
-.muscles{padding:150px 0 0;--tone:var(--rust-ink)}
-.mu{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:center}
-.muscles .key{display:flex;flex-wrap:wrap;gap:18px;margin-top:28px;font-size:14px;color:var(--muted)}
-.muscles .key span{display:inline-flex;align-items:center;gap:7px}
-.muscles .key i{width:9px;height:9px;border-radius:50%;background:var(--c)}
-.muscles .hint{font-size:14px;color:var(--muted);margin-top:14px;transition:opacity .4s}
-.fig{position:relative;margin:0 auto;width:min(480px,100%,calc((100svh - 120px) * .64));aspect-ratio:640/1000;touch-action:pan-y;cursor:grab;-webkit-user-select:none;user-select:none}
-.fig::before{content:"";position:absolute;inset:10% -20%;z-index:-1;background:radial-gradient(circle,color-mix(in srgb,var(--rust) 15%,transparent) 0,transparent 60%)}
+.muscles{padding:130px 24px 40px;text-align:center}
+.muscles .eyebrow{color:var(--rust);margin-bottom:12px}
+.fig{position:relative;margin:16px auto 0;width:min(520px,100%,calc((100svh - 190px) * .64));aspect-ratio:640/1000;touch-action:pan-y;cursor:grab;-webkit-user-select:none;user-select:none}
+.fig::before{content:"";position:absolute;inset:10% -20%;z-index:-1;background:radial-gradient(circle,color-mix(in srgb,var(--rust) 16%,transparent) 0,transparent 60%)}
 .fig canvas{display:block;width:100%;height:100%}
 .fig .bubble{position:absolute;z-index:2;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 6px 24px rgba(0,0,0,.25);font:inherit;text-align:left;white-space:nowrap;cursor:pointer;transform:translate(-50%,-100%) scale(.85);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.16,1,.3,1)}
 .fig .bubble.on{opacity:1;transform:translate(-50%,-100%);pointer-events:auto}
 .fig .bubble b{display:block;font-size:16px;font-weight:600;color:var(--text)}
 .fig .bubble span{font-size:13px}
 .fig .bubble .icon{color:var(--muted);width:14px;height:14px}
-.muscle-card{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .35s,visibility .35s}
-.muscle-card.on{opacity:1;visibility:visible;pointer-events:auto}
+.muscles .hint{font-size:14px;color:var(--muted);margin-top:-6px;transition:opacity .4s}
+.muscles .key{display:flex;gap:18px;justify-content:center;margin-top:14px;font-size:13px;color:var(--muted)}
+.muscles .key span{display:inline-flex;align-items:center;gap:6px}
+.muscles .key i{width:8px;height:8px;border-radius:50%;background:var(--c)}
+.muscle-card{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .35s}
+.muscle-card.on{opacity:1;pointer-events:auto}
 .muscle-card .card{width:min(400px,calc(100% - 32px));padding:20px;border-radius:28px;background:var(--bg);text-align:left;box-shadow:0 40px 80px -30px rgba(60,40,10,.5);transform:scale(.94);transition:transform .45s cubic-bezier(.16,1,.3,1)}
 .muscle-card.on .card{transform:none}
 .muscle-card .zoom{height:220px;border-radius:22px;background:var(--panel) center/cover no-repeat}
 .muscle-card h3{font:400 28px/1.1 Newsreader,"New York",Georgia,serif;margin:16px 0 4px}
 .muscle-card .close{float:right;width:34px;height:34px;margin:-6px -6px 10px 10px;border:0;border-radius:50%;background:var(--track);color:var(--text);font-size:18px;cursor:pointer}
 
-/* Connections: a row of the services the app connects; picking one says what Aurin reads from it and
-   what it sends back. They take turns until one is picked. */
-.connect{padding:150px 0 0}
-.connect .intro{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:end}
-.connect .intro .sub{margin:0}
-.connect .box{margin-top:48px}
-.flow{position:relative;aspect-ratio:1000/440;border-radius:24px;background:var(--panel2);overflow:hidden}
-.fc{position:absolute;left:0;top:0;width:1000px;height:440px;zoom:var(--fz,1)}
-.lines{position:absolute;inset:0;width:100%;height:100%}.lines.tall,.pks.tall{display:none}
-.lines path{fill:none;stroke-width:2.5;stroke-linecap:round;transition:opacity .5s,stroke .5s}
-.lines .in{stroke:color-mix(in srgb,var(--green) 30%,transparent)}.lines .out{stroke:color-mix(in srgb,var(--amber-bar) 34%,transparent)}
-.lines path.on{stroke-width:3}.lines .in.on{stroke:var(--green)}.lines .out.on{stroke:var(--amber-bar)}
-.pk{position:absolute;left:0;top:0;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px 0 8px;border-radius:99px;background:var(--panel);box-shadow:0 4px 14px -4px rgba(60,45,20,.3);font-size:12.5px;font-weight:600;white-space:nowrap;offset-rotate:0deg;offset-anchor:50% 50%;opacity:0;animation:travel 4.4s linear infinite;transition:filter .4s}
-.pk .icon{width:14px;height:14px}.pk.in{color:var(--green)}.pk.out{color:var(--amber)}
-.pk:not(.on){visibility:hidden}
-@keyframes travel{0%{offset-distance:0%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
-.col-l,.col-r{position:absolute;top:18px;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase}
-.col-l{left:40px;color:var(--green)}.col-r{right:40px;color:var(--amber)}
-.flow .core{position:absolute;left:50%;top:50%;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:0 14px 34px rgba(60,45,20,.16)}
-.node,.dst{position:absolute;left:var(--x);top:var(--y);display:flex;align-items:center;gap:10px;transform:translate(-50%,-50%);border:0;background:none;padding:6px 10px 6px 6px;border-radius:16px;font:inherit;color:var(--muted);transition:background .3s,box-shadow .3s,color .3s}
-.node{cursor:pointer;flex-direction:row-reverse;transform:translate(calc(-100% + 34px),-50%)}
-.dst{transform:translate(-34px,-50%)}
-.node:hover,.node[aria-selected=true],.dst.on{color:var(--text)}
-.node[aria-selected=true],.dst.on{background:var(--panel);box-shadow:0 10px 30px -12px rgba(60,45,20,.3)}
-.node .logo-tile,.dst .logo-tile{flex:none;width:52px;height:52px;display:grid;place-items:center}
-.node img,.dst img{display:block;width:100%;height:100%}.node img.pad,.dst img.pad{padding:4%}
-.node .nm,.dst .nm{font-size:14px;font-weight:600;white-space:nowrap}
-.legend{display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:center;margin-top:14px;font-size:14px;color:var(--muted)}
-.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}.legend .in{background:var(--green)}.legend .out{background:var(--amber-bar)}
-@media (prefers-reduced-motion:reduce){.pk{display:none}}
-@media (max-width:640px){
-  .flow{aspect-ratio:340/660}.fc{width:340px;height:660px}
-  .lines.wide,.pks.wide{display:none}.lines.tall,.pks.tall{display:block}
-  .node,.dst{left:var(--mx);top:var(--my);flex-direction:column;gap:4px;padding:6px;transform:translate(-50%,-50%)}
-  .node .logo-tile,.dst .logo-tile{width:46px;height:46px}.node .nm,.dst .nm{font-size:11px;font-weight:600;max-width:84px;text-align:center;white-space:normal;line-height:1.15}
-  .col-l{left:16px}.col-r{right:auto;left:16px;top:auto;bottom:118px}
-  .flow .core{width:92px;height:92px;margin:-46px 0 0 -46px}.flow .core svg{width:46px;height:auto}
-  .legend .tip{display:none}
-}
+/* Connections: the services around the Aurin mark. Dots and the things they carry flow in along one
+   curve and back along the other; tapping a logo says what Aurin reads from it and sends back. */
+.connect{padding:140px 0 40px}
+.center{text-align:center;max-width:760px;margin:0 auto}
+.center h2{font-size:clamp(46px,6.2vw,88px);line-height:.98;letter-spacing:-.025em}
+.center .sub{max-width:560px;margin:22px auto 0;font-size:20px;color:var(--sec)}
+.connect .box{max-width:720px;margin:56px auto 0}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.hub{position:relative;aspect-ratio:520/360;border-radius:32px;overflow:hidden;background:var(--panel2);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--panel) 70%,transparent)}
+.hub .lines{position:absolute;inset:0;width:100%;height:100%}
+.hub .lines.tall{display:none}
+.hub .lines path{fill:none;stroke-linecap:round}
+.hub .base{stroke:color-mix(in srgb,var(--panel) 80%,transparent);stroke-width:2.5}
+.hub .flow{stroke-width:5;stroke-dasharray:0 18;transition:opacity .4s}
+.hub .flow.in{stroke:var(--green)}.hub .flow.out{stroke:var(--amber-bar)}
+.tabs .hub [data-svc]:not(.on) .flow{opacity:.22}
+.hub .packets:not(.on){display:none}
+.hub .pk circle{fill:var(--panel);stroke-width:2}
+.hub .pk.in circle{stroke:var(--green)}.hub .pk.out circle{stroke:var(--amber-bar)}
+.hub .pk svg{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.hub .pk.in svg{stroke:var(--green)}.hub .pk.out svg{stroke:var(--amber)}
+.hub .core{position:absolute;left:50%;top:50%;width:96px;height:96px;margin:-48px 0 0 -48px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:0 14px 34px rgba(60,45,20,.16)}
+.hub .node{position:absolute;left:var(--x);top:var(--y);width:64px;height:64px;margin:-32px 0 0 -32px;padding:0;border:0;border-radius:18px;background:none;cursor:pointer;transition:transform .4s cubic-bezier(.16,1,.3,1)}
+.hub .node::before{content:"";position:absolute;inset:-10px;border-radius:26px;background:var(--panel);opacity:0;transition:opacity .3s;box-shadow:0 10px 30px rgba(60,45,20,.14)}
+.hub .node[aria-selected=true]{transform:scale(1.1)}
+.hub .node[aria-selected=true]::before{opacity:1}
+.hub .node img{position:relative;display:block;width:100%;height:100%}
+.hub .node img.pad{padding:4%}
 .uh-tile{position:relative;display:grid;place-items:center;width:100%;height:100%;border-radius:26%;background:#000}
 .uh-tile img{width:56%!important;height:auto!important}
 .uh-tile.word img{width:78%!important}
-.panels{margin-top:14px;padding:26px 28px;border-radius:24px;background:var(--panel);box-shadow:0 1px 2px rgba(60,45,20,.05)}
+.legend{display:flex;gap:20px;justify-content:center;margin-top:16px;font-size:14px;color:var(--muted)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
+.legend .in{background:var(--green)}.legend .out{background:var(--amber-bar)}
+.panels{margin-top:16px;padding:24px 26px;border-radius:28px;background:var(--panel);box-shadow:0 1px 2px rgba(60,45,20,.05)}
 .svc h3{font-size:21px;font-weight:600}
-.svc .io{display:grid;grid-template-columns:140px 1fr;gap:12px;margin-top:16px;align-items:start}
+.svc .io{display:grid;grid-template-columns:130px 1fr;gap:12px;margin-top:16px;align-items:start}
 .svc .lbl{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;padding-top:7px}
 .svc .lbl .icon{width:15px;height:15px;stroke-width:2.4}
 .svc .lbl.in{color:var(--green)}.svc .lbl.out{color:var(--amber)}
@@ -227,25 +184,22 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .tabs .svc+.svc{margin:0;padding:0;border:0}
 .tabs .svc:not(.on){display:none}
 
-/* Privacy: the one ink panel on the page, so the promise stands apart. */
+/* Privacy: the sentence lights up word by word as you read it; the details and Google's text follow. */
 .privacy{padding:150px 0 0}
-.privacy .ink{position:relative;padding:72px 64px;border-radius:32px;background:var(--button);color:var(--on-button);overflow:hidden}
-.privacy .ink::before{content:"";position:absolute;right:-120px;top:-160px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--logo-recovery) 34%,transparent) 0,transparent 65%)}
-.privacy .lock{position:relative;width:40px;height:40px;color:var(--logo-recovery);margin-bottom:28px;stroke-width:1.8}
-.privacy .big{position:relative;max-width:920px;font:400 clamp(30px,4.2vw,56px)/1.12 Newsreader,"New York",Georgia,serif;letter-spacing:-.02em}
-.privacy .more{position:relative;display:inline-flex;align-items:center;gap:8px;margin-top:32px;color:var(--on-button);font-weight:600;text-decoration:none;opacity:.86}
-.privacy .more:hover{opacity:1;text-decoration:underline}
-.privacy .more .icon{width:16px;height:16px}
+.privacy .say{max-width:980px;margin:0 auto}
+.privacy .lock{width:44px;height:44px;color:var(--green);margin-bottom:28px;stroke-width:1.8}
+.privacy .big{font:400 clamp(36px,5.2vw,72px)/1.08 Newsreader,"New York",Georgia,serif;letter-spacing:-.02em}
+.privacy .big span{transition:opacity .25s}
+.js .privacy .big span:not(.lit){opacity:.16}
 .card{background:var(--panel);border-radius:28px;padding:24px;box-shadow:0 1px 2px rgba(60,45,20,.05)}
-.disclosure{max-width:680px;margin:40px auto 0;padding:24px 26px;text-align:left}
+.disclosure{max-width:680px;margin:56px auto 0;padding:24px 26px;text-align:left}
 .disclosure h3{font-size:16px;font-weight:600;margin-bottom:10px}
 .disclosure p{font-size:14px;line-height:1.55;color:var(--muted);margin-bottom:12px}
 
-/* Questions: the heading stays on the left, plain details/summary on the right (they open without JS). */
-#faq{padding:150px 0 0}
-.faq{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:56px;align-items:start}
-.faq .side{position:sticky;top:110px}
-.faq .side p{margin-top:18px;color:var(--sec)}
+/* Questions: plain details/summary, so they open without JS; browsers that can animate to auto height do. */
+#faq{padding:140px 0 0}
+.faq{max-width:760px;margin:0 auto}
+.faq h2{text-align:center;font-size:clamp(46px,6.2vw,88px);letter-spacing:-.025em;margin-bottom:40px}
 .faq details{border-top:1px solid var(--line)}
 .faq details:last-child{border-bottom:1px solid var(--line)}
 .faq summary{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:22px 2px;font-size:19px;font-weight:600;cursor:pointer;list-style:none}
@@ -254,16 +208,12 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .faq details[open] summary::after{transform:translateY(5px) rotate(-135deg)}
 .faq details p{padding:0 2px 22px;color:var(--sec);max-width:640px}
 
-/* The end: the mark, the name and the waitlist once more. */
-.final{position:relative;padding:180px 0 170px;text-align:center;overflow:clip}
-.final .aurora i{opacity:.36}
-.final .aurora .a{right:auto;left:8vmax;top:6vmax}.final .aurora .b{right:4vmax;top:4vmax}.final .aurora .c{right:auto;left:38%;top:12vmax}
-.final .aurora::after{background:linear-gradient(var(--bg),transparent 35%,transparent 70%,var(--bg))}
+.final{position:relative;padding:190px 0 200px;text-align:center;overflow:clip}
+.final .aurora{inset:0}.final .aurora::after{background:linear-gradient(var(--bg),transparent 35%,transparent 70%,var(--bg))}
 .final .wrap{position:relative;z-index:1}
 .final .mark{display:block;margin:0 auto 26px;filter:drop-shadow(0 20px 30px rgba(60,45,20,.18))}
 .final h2{font-size:clamp(58px,8vw,104px)}
-.final .sub{margin:18px auto 0;text-align:center}
-.final .wl{margin-top:32px}
+.final .store{margin-top:30px}
 
 /* Footer: the mark and the line from the hero, then three short groups, then who runs Aurin. */
 .site-foot{border-top:1px solid var(--line);padding:56px 0 36px;color:var(--muted);font-size:14px}
@@ -281,43 +231,31 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .doc p{color:var(--sec);margin-bottom:12px}
 .doc ul,.doc ol{color:var(--sec);margin:0 0 12px;padding-left:22px}.doc li{margin-bottom:6px}
 
-/* Phones and tablets: blurred, blended and glass layers are redrawn on every scrolled frame there, which makes the
-   scroll stutter. The same colours are drawn flat instead: soft gradients for the aurora, no grain, solid glass. */
-@media (hover:none),(max-width:960px){
-  .site body::after{display:none}
-  .aurora i{filter:none;opacity:.55;background:radial-gradient(closest-side,var(--k) 35%,transparent)!important}
-  .aurora .a{--k:var(--logo-load)}.aurora .b{--k:var(--logo-recovery)}.aurora .c{--k:var(--aurora-lilac)}
-  .site *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
-}
-
-/* Motion, only with JS and without reduced motion: the headline rises word by word, the aurora drifts,
-   content fades up as it scrolls in, a step's bar fills while it is shown and its piece floats. */
+/* Motion, only with JS and without reduced motion: the headline rises word by word, the aurora
+   drifts, content fades up as it scrolls in, and each phone screen draws itself when it comes on. */
 @media (prefers-reduced-motion:no-preference){
   .js .hero h1 .w>span{transform:translateY(105%);animation:rise 1.1s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(.15s + var(--i) * 90ms)}
   @keyframes rise{to{transform:none}}
-  .js .hero .lede,.js .hero .cta,.js .hero .kicker{opacity:0;animation:fade 1s .7s forwards}
-  .js .hero .kicker{animation-delay:.05s}.js .hero .cta{animation-delay:.9s}
-  .js .stage{opacity:0;transform:translateY(40px);animation:lift 1.3s cubic-bezier(.16,1,.3,1) .35s forwards}
-  .js .glass{opacity:0;animation:pop .9s cubic-bezier(.16,1,.3,1) forwards}
-  .js .glass.g1{animation-delay:1s}.js .glass.g2{animation-delay:1.15s}.js .glass.g3{animation-delay:1.3s}
+  .js .hero .lede,.js .hero .store,.js .hero .kicker{opacity:0;animation:fade 1s .8s forwards}
+  .js .hero .kicker{animation-delay:.05s}.js .hero .store{animation-delay:1s}
+  .js .stage{opacity:0;animation:fade 1.2s .5s forwards}
   @keyframes fade{to{opacity:1}}
-  @keyframes lift{to{opacity:1;transform:none}}
-  @keyframes pop{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
   .aurora i{animation:drift 22s ease-in-out infinite alternate}
   .aurora .b{animation-duration:26s;animation-delay:-8s}.aurora .c{animation-duration:30s;animation-delay:-14s}
-  @keyframes drift{33%{transform:translate(4vmax,3vmax) scale(1.06)}66%{transform:translate(-3vmax,5vmax) scale(.95)}100%{transform:translate(2vmax,-2vmax) scale(1.03)}}
+  @keyframes drift{33%{transform:translate(6vmax,4vmax) scale(1.08)}66%{transform:translate(-4vmax,7vmax) scale(.94)}100%{transform:translate(3vmax,-3vmax) scale(1.04)}}
   .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s cubic-bezier(.16,1,.3,1)}
   .js .reveal.in{opacity:1;transform:none}
-  .js .part{transform:translate(-24px,24px) scale(.94);clip-path:inset(0 100% 0 0 round 22px);transition:opacity .5s,transform .9s cubic-bezier(.2,.8,.2,1),clip-path 1s cubic-bezier(.2,.8,.2,1) .1s}
-  .js .flip .part{transform:translate(24px,24px) scale(.94);clip-path:inset(0 0 0 100% round 22px)}
-  .js .part.on,.js .flip .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);animation:float 6s ease-in-out 1.2s infinite}
+  .js .part{transform:translate(-30px,30px) scale(.92);clip-path:inset(0 100% 0 0 round 22px);transition:opacity .5s,transform .9s cubic-bezier(.2,.8,.2,1),clip-path 1s cubic-bezier(.2,.8,.2,1) .15s}
+  .js .part.on{transform:none;clip-path:inset(0 0 0 0 round 22px);animation:float 6s ease-in-out 1.2s infinite}
+  .js .part.past{transform:translate(-40px,-30px) scale(.94);clip-path:inset(0 0 0 0 round 22px)}
   @keyframes float{50%{transform:translateY(-8px)}}
-  .js .auto .step.on .bar{display:block}
-  .js .auto .step.on .bar i{animation:fill var(--dur,6.5s) linear forwards}
-  .js .auto.paused .step.on .bar i{animation-play-state:paused}
-  @keyframes fill{to{width:100%}}
-  .js .multi .step.on .tx{animation:fade .5s both}
-  @media (hover:none),(max-width:960px){.aurora i,.js .part.on{animation:none}}
+  .hub .flow{animation:flow 1.1s linear infinite}
+  @keyframes flow{to{stroke-dashoffset:-36}}
+  .hub .core{animation:breathe 2.4s ease-in-out infinite}
+  @keyframes breathe{50%{box-shadow:0 14px 34px rgba(60,45,20,.16),0 0 0 12px color-mix(in srgb,var(--logo-recovery) 16%,transparent)}}
+  .hub .node:not([aria-selected=true]){animation:bob 5s ease-in-out infinite}
+  .hub .node:nth-of-type(2){animation-delay:-1.2s}.hub .node:nth-of-type(3){animation-delay:-2.5s}.hub .node:nth-of-type(4){animation-delay:-3.7s}
+  @keyframes bob{50%{transform:translateY(-6px)}}
   .tabs .svc.on h3{animation:fade .5s both}
   .tabs .svc.on .items span{opacity:0;animation:chip .5s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(.08s + var(--i,0) * 60ms)}
   @keyframes chip{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
@@ -328,48 +266,45 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
   }
 }
 
-@media (max-width:1180px){
-  .ch{grid-template-columns:minmax(0,1fr) 560px}.chapter.flip .ch{grid-template-columns:560px minmax(0,1fr)}
-  .vis{--z:.875}
-}
 @media (max-width:960px){
   .pill-nav .links{display:none}
-  /* Hero: the words first, the phone under them. */
-  .hero{padding-top:120px}
-  .hero .grid{grid-template-columns:1fr;text-align:center}
-  .lede{margin-left:auto;margin-right:auto}
-  .hero .wl{align-items:center}
-  .stage{height:700px;margin-top:24px}
   .glass.g3{display:none}
-  .glass.g1{left:max(4px,calc(50% - 300px))}.glass.g2{right:max(4px,calc(50% - 300px))}
-  .morning{padding-top:32px}
-  /* Chapters: the words, then the phone with its piece over the lower part, then the steps. */
-  .chapter{padding-top:110px}
-  .ch,.chapter.flip .ch{grid-template-columns:1fr;grid-template-areas:"head" "vis" "steps"}
-  .ch .head{padding-top:0}
-  .ch .vis-wrap{display:flex;justify-content:center;margin-top:32px}
-  .vis{width:440px;height:700px}
-  .vis .glow{width:640px;height:640px;margin:-320px 0 0 -320px}
-  .vis .device,.flip .vis .device{left:59px;top:0}
-  .part,.flip .part{left:30px;width:380px;top:auto!important;bottom:-24px}
-  .ch .steps{max-width:none;margin-top:44px}
-  .mu,.connect .intro,.faq{grid-template-columns:1fr;gap:32px}
-  .muscles,.connect,.privacy,#faq{padding-top:110px}
-  .faq .side{position:static}
-  .privacy .ink{padding:48px 32px}
+  .glass.g1{left:max(4px,calc(50% - 320px))}.glass.g2{right:max(4px,calc(50% - 320px))}
+  /* Phones: the phone at the top with the piece over its lower part, the step's words at the bottom.
+     Without JS the steps simply follow the phone. */
+  .scene .head{padding-top:110px}
+  .scene .head p{font-size:18px}
+  .js .scene .pin{flex-direction:column;justify-content:flex-start;padding-top:76px}
+  .sc{width:440px;transform-origin:top center;margin-bottom:calc((var(--s,1) - 1) * 702px)}
+  .sc .device{left:59px}
+  .part{left:10px;top:auto!important;bottom:-14px}
+  .js .sc-steps{margin-top:-100vh;margin-top:-100svh;position:relative;pointer-events:none}
+  .js .st{height:85vh;height:85svh;visibility:hidden}
+  .st{padding:24px 0}
+  .js .slot{display:block;position:absolute;left:20px;right:20px;bottom:calc(22px + env(safe-area-inset-bottom));min-height:140px}
+  .slot .t{position:absolute;inset:auto 0 0 0;opacity:0;transform:translateY(16px);transition:opacity .5s,transform .5s cubic-bezier(.2,.8,.2,1)}
+  .slot .t.on{opacity:1;transform:none}
+  .slot .n{display:none}
+  .slot h3{font-size:27px;margin:0 0 6px}.slot p{font-size:15.5px}
+  .js .dots{display:flex;gap:6px;position:absolute;left:20px;bottom:calc(170px + env(safe-area-inset-bottom))}
+  .dots i{width:6px;height:6px;border-radius:9px;background:var(--track);transition:all .4s}
+  .dots i.on{width:22px;background:var(--text)}
+  .muscles{padding-top:110px}.muscles .sub{font-size:18px}
+  .connect{padding-top:110px}
 }
 @media (max-width:560px){
   .wrap{padding:0 16px}
-  .nav-cta{height:32px;padding:0 12px;font-size:13px}
-  .hero{padding-top:110px}
-  .lede,.sub{font-size:18px}
-  .stage{height:640px}
+  .hero{padding-top:132px}
+  .lede{font-size:18px}
+  .stage{height:700px;margin-top:56px}
   /* On a phone the floating cards would cover the real screen's numbers. */
   .glass{display:none}
-  .step .tt{font-size:24px}
   .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
   .panels{padding:20px}
-  .privacy .ink{padding:40px 24px;border-radius:24px}
+  .hub{border-radius:24px;aspect-ratio:340/520}
+  .hub .lines.wide{display:none}.hub .lines.tall{display:block}
+  .hub .node{left:var(--mx);top:var(--my);width:58px;height:58px;margin:-29px 0 0 -29px}
+  .hub .core{width:84px;height:84px;margin:-42px 0 0 -42px}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 `;
@@ -388,72 +323,43 @@ function deviceLang(request) {
   return /^(cs|sk)\b/.test(first) ? 'cs' : 'en';
 }
 
+const APPLE_LOGO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.4 12.6c0-2.4 2-3.5 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.9-3.5.9-.7 0-1.8-.8-3-.8-1.6 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.2.8 1.1 1.7 2.3 2.9 2.3 1.1 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.2-2.5 1.2-2.6 0 0-2.4-.9-2.4-3.7zM14.2 5.6c.6-.8 1.1-1.8 1-2.9-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.8 1 .1 2-.5 2.7-1.3z"/></svg>';
 // The Aurin mark (Rovnováha): the load half over the recovery half, offset as in the app icon.
 const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" height="${Math.round(width * 80 / 88)}" aria-hidden="true"><path d="M6 46A36 36 0 0 1 78 46Z" fill="var(--logo-load)"/><path d="M22 54A36 36 0 0 0 94 54Z" fill="var(--logo-recovery)"/></svg>`;
 const LOCK = '<svg class="icon lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>';
-// "Join the waitlist": the button opens an e-mail field; the address waits for the owner, who
-// invites people into TestFlight from the app (src/testflight-waitlist.js).
-const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
-const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
-const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
-<button type="button" class="store open">Join the waitlist</button>
-<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
-<span class="done" role="status">${CHECK}<span>You're on the list</span></span>
-<span class="err" role="alert"></span>
-</form>`;
+const store = () => `<span class="store">${APPLE_LOGO}Coming soon to the App Store</span>`;
 
-// The page's motion: content fades up as it scrolls in, each chapter's steps take turns on its phone,
-// the connections take turns. Without JS everything is simply shown; with reduced motion nothing moves
-// on its own and the steps still switch screens when picked.
+// The page's motion. Scroll drives it: the hero phone stands up, each scene's phone follows the step
+// in view, the privacy sentence lights up. Without JS everything is simply shown; with reduced
+// motion nothing moves and the scenes still switch screens.
 const siteScript = `<script>(function(){var r=document.documentElement;r.classList.add('js');
-var still=matchMedia('(prefers-reduced-motion: reduce)').matches,IO='IntersectionObserver' in window;
-if(IO){var hb=document.querySelector('.hero .wl'),sh=document.querySelector('.site-head');if(hb&&sh)new IntersectionObserver(function(es){sh.classList.toggle('away',!es[0].isIntersecting);}).observe(hb);}
-if(IO){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
+var still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
 document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});}else document.querySelectorAll('.reveal').forEach(function(el){el.classList.add('in');});
-// Each chapter's stage is drawn at one size and scaled to the window.
-var vis=[].slice.call(document.querySelectorAll('.vis'));
-function fit(){var w=innerWidth,z=w<=960?Math.min(1,(w-32)/440):w<=1180?.875:1;vis.forEach(function(v){v.style.setProperty('--z',z.toFixed(3));});}
-addEventListener('resize',fit);fit();
-// Chapters: a step shows its screen and its demo, and plays the demo while the chapter is in view. Steps take
-// turns (the bar under the step fills for the step's time, then the next one comes) until one is picked or a
-// demo is touched; a chapter with one step plays it again after its time. With reduced motion every demo shows
-// its last frame and nothing turns on its own.
-var D=window.AurinDemo;
-document.querySelectorAll('.chapter').forEach(function(ch){
- var steps=[].slice.call(ch.querySelectorAll('.step')),scr=[].slice.call(ch.querySelectorAll('.scr')),parts=[].slice.call(ch.querySelectorAll('.part')),cur=0,seen=false,loop=null,multi=ch.classList.contains('multi');
- function units(i){return [scr[i],parts[i]].filter(Boolean);}
- function run(i){units(i).forEach(function(u){if(still||!seen)D.last(u);else D.play(u);});
-  clearTimeout(loop);if(!multi&&seen&&!still&&!ch._touched)loop=setTimeout(function(){run(0);},+steps[0].dataset.dur+2500);}
- function show(i){units(cur).forEach(function(u){D.stop(u);});cur=i;
-  steps.forEach(function(s,j){var on=j===i;s.classList.toggle('on',on);var b=s.querySelector('button');if(b)b.setAttribute('aria-pressed',on);});
-  scr.forEach(function(s,j){s.classList.toggle('on',j===i);});parts.forEach(function(p,j){p.classList.toggle('on',j===i);});run(i);}
- scr.concat(parts).forEach(function(u){if(still)D.last(u);else D.first(u);});
- ch.addEventListener('demo:touch',function(){ch._touched=true;ch.classList.remove('auto');clearTimeout(loop);});
- if(multi)steps.forEach(function(s,i){s.querySelector('button').addEventListener('click',function(){ch.classList.remove('auto');show(i);});
-  s.querySelector('.bar i').addEventListener('animationend',function(){if(ch.classList.contains('auto'))show((cur+1)%steps.length);});});
- if(still||!IO){seen=!IO;run(0);return;}
- if(multi)ch.classList.add('auto','paused');
- new IntersectionObserver(function(es){var on=es[0].isIntersecting;ch.classList.toggle('paused',!on);
-  if(on&&!seen){seen=true;run(cur);}else if(!on&&seen){seen=false;clearTimeout(loop);units(cur).forEach(function(u){D.last(u);});}},{threshold:.35}).observe(ch.querySelector('.vis-wrap'));});
-document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelector('input'),err=f.querySelector('.err'),busy=false;
- f.querySelector('.open').addEventListener('click',function(){f.classList.add('on');input.focus();});
- f.addEventListener('submit',function(e){e.preventDefault();if(busy)return;var email=input.value.trim();err.textContent='';
-  if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){err.textContent='Enter a valid email.';input.focus();return;}
-  busy=true;fetch('/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})})
-  .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');f.classList.remove('on');})})
-  .catch(function(x){err.textContent=x.message;}).then(function(){busy=false;});});});
+var stage=document.querySelector('.stage'),priv=document.querySelector('.privacy .big');
+var scenes=[].slice.call(document.querySelectorAll('.scene')).map(function(el){var q=function(c){return [].slice.call(el.querySelectorAll(c));};
+ return {sc:el.querySelector('.sc'),steps:q('.st'),parts:[q('.sc .scr'),q('.part'),q('.st'),q('.slot .t'),q('.dots i')],at:-1};});
+var words=priv?[].slice.call(priv.querySelectorAll('span')):[],queued=false;
+// The stage is drawn at one size and scaled to the window: beside the steps on a computer, above them on a phone.
+function fit(){var w=innerWidth,h=innerHeight,s=w<=960?Math.min((w-16)/440,(h-76-214)/702):Math.min(1.1,(h-80)/702,(Math.min(w,1160)-48-420)/760);
+ scenes.forEach(function(x){x.sc.style.setProperty('--s',s.toFixed(3));});}
+function frame(){queued=false;var vh=innerHeight;
+ if(stage){var s=stage.getBoundingClientRect(),p=still?1:Math.min(1,Math.max(0,(vh-s.top)/(vh*.9)-.3));stage.style.setProperty('--p',p.toFixed(3));}
+ scenes.forEach(function(x){var at=0;x.steps.forEach(function(el,j){if(el.getBoundingClientRect().top<vh*.55)at=j;});if(at===x.at)return;x.at=at;
+  x.parts.forEach(function(list,k){list.forEach(function(el,j){el.classList.toggle('on',j===at);if(k===1)el.classList.toggle('past',j<at);});});});
+ if(words.length){var q=priv.getBoundingClientRect(),k=still?1:Math.min(1,Math.max(0,(vh*.8-q.top)/(q.height+vh*.25)));
+  words.forEach(function(w,j){w.classList.toggle('lit',k*words.length>j);});}}
+function ask(){if(!queued){queued=true;requestAnimationFrame(frame);}}
+addEventListener('scroll',ask,{passive:true});addEventListener('resize',function(){fit();ask();});fit();frame();
 // Connections: a logo shows what Aurin reads from it and sends back; they take turns until one is picked.
-var box=document.querySelector('.connect .box');if(!box)return;
-var tabs=[].slice.call(box.querySelectorAll('[role=tab]')),cur=0,timer;
-function pick(i){cur=i;var pid=tabs[i].id.slice(4);tabs.forEach(function(t,j){var on=j===i,id=t.id.slice(4);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
-document.getElementById('svc-'+id).classList.toggle('on',on);});box.querySelectorAll('.flow [data-svc]').forEach(function(el){el.classList.toggle('on',el.dataset.svc===pid);});}
-var flowEl=box.querySelector('.flow');function ffit(){flowEl.style.setProperty('--fz',(flowEl.clientWidth/(innerWidth<=640?340:1000)).toFixed(4));}
-addEventListener('resize',ffit);ffit();
+var hub=document.querySelector('.hub');if(!hub)return;
+if(still)hub.querySelectorAll('svg.lines').forEach(function(s){if(s.pauseAnimations)s.pauseAnimations();});
+var tabs=[].slice.call(hub.querySelectorAll('[role=tab]')),cur=0,timer;
+function pick(i){cur=i;tabs.forEach(function(t,j){var on=j===i,id=t.id.slice(4);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
+document.getElementById('svc-'+id).classList.toggle('on',on);hub.querySelectorAll('[data-svc='+id+']').forEach(function(g){g.classList.toggle('on',on);});});}
 tabs.forEach(function(t,i){t.addEventListener('click',function(){clearInterval(timer);pick(i);});
 t.addEventListener('keydown',function(e){var n=e.key==='ArrowRight'||e.key==='ArrowDown'?1:e.key==='ArrowLeft'||e.key==='ArrowUp'?-1:0;
 if(n){e.preventDefault();clearInterval(timer);pick((i+n+tabs.length)%tabs.length);tabs[cur].focus();}});});
-// Pointing at the logos or moving focus into them stops the turns, so what is read stays put.
-['mouseenter','focusin'].forEach(function(t){box.addEventListener(t,function(){clearInterval(timer);});});
 r.classList.add('tabs');pick(0);if(!still)timer=setInterval(function(){pick((cur+1)%tabs.length);},5200);})();</script>
 <script>(function(){
 // Muscles: frame k of 72 is the figure turned k·5°; ids.png holds, per frame, which muscle each pixel is
@@ -524,14 +430,12 @@ ${czech ? `<link rel="alternate" hreflang="en" href="${origin}${path}">\n<link r
 ${index ? '' : '<meta name="robots" content="noindex">'}
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
 <link rel="preload" href="/site/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="preload" href="/site/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin>
-<style>${themeTokens}${siteCss}${demoCss}</style>
+<style>${themeTokens}${siteCss}</style>
 </head>
 <body>
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
 <a class="logo" href="/">${mark(30)}<span>Aurin</span></a>
 <div class="links"><a href="/#pripravenost">Features</a><a href="/#kouc">AI coach</a><a href="/#propojeni">Connections</a><a href="/#soukromi">Privacy</a></div>
-<a class="nav-cta" href="/#join">Join the waitlist</a>
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
@@ -543,7 +447,6 @@ ${body}
 </div>
 <div class="base"><span>© 2026 Aurin · run by Petr Bouma, Czech Republic</span><span>Aurin is not a medical device.</span></div>
 </div></footer>
-${demoScript}
 ${siteScript}
 </body></html>`;
   return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate'}});
@@ -571,9 +474,9 @@ const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-p
 const HEALTH_POLICY = 'https://developers.google.com/health/policies/health-api-developer-user-data-policy';
 const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 
-// The overview follows the app: Today in the hero, one morning said as a sentence, then a chapter per area
-// of the app (its words on one side, a phone with its screens on the other), the muscles, the connections,
-// privacy and questions. The numbers are one believable morning, the same everywhere.
+// The overview follows the app: Today in the hero, then a story with one phone whose screen follows
+// the chapters (readiness, strain, the plan, the gym, food, the coach), the connections, privacy and
+// questions. The numbers are one believable morning, the same everywhere.
 // Google's app verification reads this disclosure on the homepage. Petr took it off the overview
 // to keep the page clean (2026-10-15); before asking Google to verify the app, set this to true.
 // The text stays word for word (tests/site-pages.test.mjs).
@@ -590,114 +493,96 @@ export function overviewPage(request) {
   const {lang, origin} = pageLang(request);
   // A screen of the app: a screenshot taken in CI from the sample data (public/site/app/).
   const shot = (name, lazy = true) => `<img src="/site/app/${name}.webp" alt="" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
-  // The chapters, one per area of the app: [section id, eyebrow, headline, line, tone, glow, steps]. Each step is
-  // [the phone's screen, the live demo beside it (site-demos.js), how far down the stage, title, text, ms it
-  // shows]. A screen is the app's screenshot (public/site/app/), or "html:" and a screen built in site-demos.js
-  // where the screenshot cannot show the step (a moving screen, or one the sample day draws wrong).
+  // The scenes, one per area of the app: [section id, eyebrow, headline, line, tone, glow, steps], each step
+  // [the app's screen, the piece of it lifted out (public/site/app/parts/), how far down the stage, title, text].
   const scenes = [
     ['spanek', 'Sleep', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
-      ['sleep', 'sleepNight', 300, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
-      ['sleep-need', 'sleepNeed', 150, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
-      ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
-      ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
+      ['sleep', 'sleep-stages', 380, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
+      ['sleep-need', 'sleep-need', 150, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
+      ['bedtime', 'sleep-dial', 120, 'Plan your bedtime.', 'Drag the moon and the sun on the dial. Aurin tells you when to go to bed to wake up rested.'],
+      ['bedtime-goal', 'sleep-why', 160, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours.']]],
     ['pripravenost', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
-      ['readiness-parts', 'readyParts', 70, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal.', 7000],
-      ['journal-impact', 'journal', 110, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000]]],
+      ['readiness-parts', 'ready-parts', 220, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal.'],
+      ['journal-impact', 'ready-impact', 170, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.']]],
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
-      ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
+      ['strain-target', 'strain-gauge', 160, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan.']]],
     ['trenink', 'Training', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 150, 'Your week at a glance.', 'Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu. A finished workout turns green with where it came from, and the month is a pull away.', 8000]]],
+      ['training', 'week', 130, 'Your week at a glance.', 'Follow a training plan, plan the week yourself or let the AI do it, and sync it with Intervals.icu. When the library has little for the length and type you pick, the AI builds a workout to fit.']]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
-      ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
-      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, and drag them into the order you like. Then start.', 7000]]],
+      ['builder', 'build-form', 190, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and uses only the equipment your gym has.'],
+      ['gym-day', 'gym-parts', 230, 'Warm-up to stretching.', 'Cardio, exercises and stretching in the order you like. Then start.']]],
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
-      ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them, add or remove a set, and start.', 6000],
-      ['training-set', 'tmTick', 380, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets.', 6000],
-      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself and counts down, stays on your lock screen and shows what comes next.', 13500],
-      ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume and new records when you finish, saved to Apple Health. Then say how it went.', 6000]]],
+      ['training-mode', 'tm-table', 170, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them if you need to and start.'],
+      ['training-set', 'tm-current', 170, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets.'],
+      ['training-rest', 'tm-rest', 60, 'Rest on time.', 'The timer starts by itself, stays on your lock screen and shows what comes next.'],
+      ['training-done', 'tm-done', 100, 'See what you lifted.', 'Sets and volume when you finish, saved to Apple Health.']]],
     ['vyziva', 'Nutrition', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
-      ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
-      ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000]]],
-    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout. When it proposes a workout, confirm it and it lands in your plan.', 15000]]]];
-  // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
-  // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
-  const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {
-    const multi = list.length > 1;
-    const subs = p.split('<span class="free">').map((t, j) => `<p class="sub${j ? ' free' : ''}">${t.replace('</span>', '')}</p>`).join('');
-    const body = ([, , , title, text], i) => `<span class="n">0${i + 1}</span><span class="tt">${title}</span><span class="tx">${text}</span>`;
-    const steps = list.map((x, i) => `<li class="step${i === 0 ? ' on' : ''}" style="--dur:${x[5] || 6500}ms" data-dur="${x[5] || 6500}">${multi
-      ? `<button type="button" aria-pressed="${i === 0}">${body(x, i)}<span class="bar" aria-hidden="true"><i></i></span></button>`
-      : `<div>${body(x, i)}</div>`}</li>`).join('');
-    return `<section id="${id}" class="chapter${n % 2 ? ' flip' : ''}${multi ? ' multi' : ''}" style="--tone:var(--${tone});--glow:var(--${glow})"><div class="wrap ch">
-<div class="head reveal"><div class="eyebrow">${eyebrow}</div><h2 class="big">${h}</h2>${subs}</div>
-<div class="vis-wrap"><div class="vis"><div class="glow"></div>
-<div class="device" aria-hidden="true"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}">${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>
-${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
-</div></div>
-<ol class="steps">${steps}</ol>
-</div></section>`;
-  };
+      ['food-day', 'food-top', 110, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.'],
+      ['food-add', 'food-add', 330, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, and log drinks with one tap.']]],
+    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.<span class="free">Free for everyone.</span>', 'green', 'glow-today', [
+      ['coach-ask', 'coach-ask', 110, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout.']]]];
+  const step = ([, , , title, text], i) => `<div class="n">0${i + 1}</div><h3>${title}</h3><p>${text}</p>`;
+  const scene = ([id, eyebrow, h, p, tone, glow, list]) => `<section id="${id}" class="scene" style="--tone:var(--${tone});--glow:var(--${glow})">
+<div class="head"><div class="eyebrow">${eyebrow}</div><h2>${h}</h2>${p.split('<span class="free">').map((t, j) => `<p${j ? ' class="free"' : ''}>${t.replace('</span>', '')}</p>`).join('')}</div>
+<div class="track"><div class="pin" aria-hidden="true"><div class="glow"></div><div class="sc">
+<div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}">${shot(screen)}</div>`).join('')}</div></div></div>
+${list.map(([, part, top]) => `<div class="part" style="top:${top}px"><img src="/site/app/parts/${part}.webp" alt="" loading="lazy" decoding="async"></div>`).join('')}
+</div><div class="dots">${list.map(() => '<i></i>').join('')}</div><div class="slot">${list.map((x, i) => `<div class="t">${step(x, i)}</div>`).join('')}</div></div>
+<div class="sc-steps">${list.map((x, i) => `<div class="st"><div class="t">${step(x, i)}</div></div>`).join('')}</div></div></section>`;
   // Muscles sit between training mode and food, as Svaly sits under Trénink in the app. The bubble's
   // words are the sample day's (DemoData.muscles), in English.
-  const muscles = `<section id="svaly" class="muscles"><div class="wrap mu">
-<div class="copy reveal"><div class="eyebrow">Muscles</div><h2 class="big">Know what’s recovered.</h2><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
-<div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
-<p class="hint">Drag to turn · tap a muscle</p></div>
-<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
-</div></section>
+  const muscles = `<section id="svaly" class="muscles"><div class="eyebrow">Muscles</div><h2>Know what’s recovered.</h2><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
+<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><button type="button" class="bubble"><span class="txt"><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+<p class="hint">Drag to turn · tap a muscle</p>
+<div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div></section>
 <div class="muscle-card" role="dialog" aria-modal="true" aria-label="Muscle"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3></h3><p class="state"></p></div></div>`;
 
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
   // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
   const services = [
-    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="" width="40" height="40">',
+    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="">',
       reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['scale', 'weight']],
       sends: [['bike', 'workouts'], ['scale', 'weight'], ['meal', 'food'], ['drop', 'water']]},
-    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" width="40" height="40" class="pad">',
+    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" class="pad">',
       reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['meal', 'food']],
       sends: [['meal', 'food'], ['drop', 'drinks'], ['bike', 'workouts, if you allow'], ['scale', 'weight, if you allow']]},
-    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="" width="40" height="40">',
+    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="">',
       reads: [['bolt', 'workouts with power'], ['calendar', 'plan'], ['zones', 'zones'], ['scale', 'weight']],
       sends: [['calendar', 'planned workouts'], ['flame', 'calorie target'], ['scale', 'weight'], ['training', 'sleep, HRV and daily values']]},
-    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="40" height="40"></span>',
+    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt=""></span>',
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'VO₂max'], ['thermo', 'temperature']], sends: [], none: 'nothing, Aurin only reads the ring'},
-    {id: 'whoop', name: 'WHOOP', logo: '<img src="/site/logos/whoop.svg" alt="" width="40" height="40">',
+    {id: 'whoop', name: 'WHOOP', logo: '<img src="/site/logos/whoop.svg" alt="">',
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'breathing rate'], ['drop', 'blood oxygen']], sends: [], none: 'nothing, Aurin only reads WHOOP'},
-    {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="40" height="40"></span>',
+    {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt=""></span>',
       reads: [['bike', 'finished rides and runs'], ['bolt', 'power and TSS'], ['heart', 'heart rate']],
       sends: [['calendar', 'planned workouts, to ELEMNT and KICKR']]}];
-  // The flow: each service on the left sends what Aurin reads along a curve into the mark, and what Aurin sends
-  // back runs out to the services on the right that take it. Two layouts: wide (left to right) for computers,
-  // tall (top to bottom) for phones. The things carried are chips that travel the curves (CSS offset-path); the
-  // services take turns being lit, and picking one keeps it lit and shows its panel below.
-  const senders = services.filter(x => x.sends.length);
-  const FLOW = {
-    wide: {w: 1000, h: 440, core: [500, 220], src: i => [210, 62 + i * 64], dst: j => [790, 92 + j * 86],
-      into: ([x, y], [cx, cy]) => `M${x + 42} ${y}C${(x + cx) / 2} ${y} ${(x + cx) / 2} ${cy} ${cx - 58} ${cy}`,
-      out: ([cx, cy], [x, y]) => `M${cx + 58} ${cy}C${(x + cx) / 2} ${cy} ${(x + cx) / 2} ${y} ${x - 42} ${y}`},
-    tall: {w: 340, h: 660, core: [170, 330], src: i => [60 + (i % 3) * 110, 52 + Math.floor(i / 3) * 104], dst: j => [47 + j * 82, 606],
-      into: ([x, y], [cx, cy]) => `M${x} ${y + 40}C${x} ${(y + cy) / 2 + 20} ${cx} ${(y + cy) / 2} ${cx} ${cy - 56}`,
-      out: ([cx, cy], [x, y]) => `M${cx} ${cy + 56}C${cx} ${(y + cy) / 2} ${x} ${(y + cy) / 2 - 20} ${x} ${y - 40}`}};
-  const pct = (v, all) => (v / all * 100).toFixed(2) + '%';
-  const flowPaths = kind => { const L = FLOW[kind]; return {
-    into: services.map((x, i) => L.into(L.src(i), L.core)),
-    out: senders.map((x, j) => L.out(L.core, L.dst(j)))}; };
-  const travel = (d, items, cls, id, kind) => items.slice(0, 3).map(([name, label], k, all) =>
-    `<span class="pk ${cls} ${kind}" data-svc="${id}" style="offset-path:path('${d}');animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s">${icon(name)}${label}</span>`).join('');
-  const layer = kind => { const L = FLOW[kind], P = flowPaths(kind);
-    return `<svg class="lines ${kind}" viewBox="0 0 ${L.w} ${L.h}" aria-hidden="true">${services.map(({id}, i) => `<path data-svc="${id}" class="in" d="${P.into[i]}"/>`).join('')}${senders.map(({id}, j) => `<path data-svc="${id}" class="out" d="${P.out[j]}"/>`).join('')}</svg>
-<div class="pks ${kind}" aria-hidden="true">${services.map(({id, reads}, i) => travel(P.into[i], reads, 'in', id, kind)).join('')}${senders.map(({id, sends}, j) => travel(P.out[j], sends, 'out', id, kind)).join('')}</div>`; };
-  const nodes = services.map(({id, name, logo}, i) => { const [x, y] = FLOW.wide.src(i), [mx, my] = FLOW.tall.src(i);
-    return `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, 660)}"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></button>`; }).join('');
-  const backs = senders.map(({id, name, logo}, j) => { const [x, y] = FLOW.wide.dst(j), [mx, my] = FLOW.tall.dst(j);
-    return `<span class="dst" data-svc="${id}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, 660)}" aria-hidden="true"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></span>`; }).join('');
-  const flow = `<div class="flow"><div class="fc">
-${layer('wide')}${layer('tall')}
-<span class="col-l">Into Aurin</span><span class="col-r">Sent back</span>
-<div class="core" aria-hidden="true">${mark(56)}</div>
-<div role="tablist" aria-label="Connected services">${nodes}</div>${backs}
-</div></div>`;
+  // Two curves per service: dots and what they carry flow along one into Aurin and along the other back
+  // out. A wide layout for computers (left and right of the mark) and a tall one for phones (above and
+  // below it), so the curves stay long arcs on a narrow screen instead of hiding behind the logos.
+  // A logo straight under or over the mark (WHOOP, Wahoo) gets a loop instead: in on its left, back on its right.
+  const LAYOUTS = {
+    wide: {w: 520, h: 360, c: [260, 180], at: [[84, 72], [84, 288], [436, 72], [436, 288], [260, 318], [260, 42]],
+      into: ([x, y], [cx, cy]) => x === cx ? `M${x - 8} ${y}C${x - 150} ${y + 6 * Math.sign(y - cy)} ${x - 130} ${cy + 12 * Math.sign(y - cy)} ${cx - 8} ${cy}`
+        : `M${x} ${y - 8}C${(x + cx) / 2} ${y - 8} ${(x + cx) / 2} ${cy - 8} ${cx} ${cy - 8}`,
+      back: ([x, y], [cx, cy]) => x === cx ? `M${cx + 8} ${cy}C${x + 130} ${cy + 12 * Math.sign(y - cy)} ${x + 150} ${y + 6 * Math.sign(y - cy)} ${x + 8} ${y}`
+        : `M${cx} ${cy + 8}C${(x + cx) / 2} ${cy + 8} ${(x + cx) / 2} ${y + 8} ${x} ${y + 8}`},
+    tall: {w: 340, h: 520, c: [170, 260], at: [[70, 74], [70, 380], [270, 74], [270, 380], [170, 468], [170, 52]],
+      // Down (or up) from the logo, then a wide turn into the mark; in and out never cross.
+      into: ([x, y], [cx, cy]) => { if (x === cx) return `M${x - 7} ${y}C${x - 84} ${y + 4 * Math.sign(y - cy)} ${x - 74} ${cy + 14 * Math.sign(y - cy)} ${cx - 7} ${cy}`; const ix = x + (x < cx ? 7 : -7), iy = y < cy ? cy - 8 : cy + 8; return `M${ix} ${y}C${ix} ${iy} ${ix} ${iy} ${cx} ${iy}`; },
+      back: ([x, y], [cx, cy]) => { if (x === cx) return `M${cx + 7} ${cy}C${x + 74} ${cy + 14 * Math.sign(y - cy)} ${x + 84} ${y + 4 * Math.sign(y - cy)} ${x + 7} ${y}`; const ox = x - (x < cx ? 7 : -7), oy = y < cy ? cy + 8 : cy - 8; return `M${cx} ${oy}C${ox} ${oy} ${ox} ${oy} ${ox} ${y}`; }}};
+  const packets = (items, d, dir) => items.map(([name], i) => {
+    const dur = 3.6, begin = (i * dur / items.length).toFixed(2);
+    return `<g class="pk ${dir}" opacity="0"><circle r="17"/><svg x="-10" y="-10" width="20" height="20" viewBox="0 0 24 24">${ICON_PATHS[name]}</svg><animateMotion dur="${dur}s" begin="${begin}s" repeatCount="indefinite" path="${d}" keyPoints="0;1" keyTimes="0;1" calcMode="spline" keySplines=".45 0 .25 1"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.82;1" dur="${dur}s" begin="${begin}s" repeatCount="indefinite"/></g>`;
+  }).join('');
+  const lines = Object.entries(LAYOUTS).map(([kind, {w, h, c, at, into, back}]) => `<svg class="lines ${kind}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
+    + services.map(({id, sends}, i) => `<g data-svc="${id}"${i === 0 ? ' class="on"' : ''}><path class="base" d="${into(at[i], c)}"/><path class="flow in" d="${into(at[i], c)}"/>${sends.length ? `<path class="base" d="${back(at[i], c)}"/><path class="flow out" d="${back(at[i], c)}"/>` : ''}</g>`).join('')
+    + services.map(({id, reads, sends}, i) => `<g class="packets${i === 0 ? ' on' : ''}" data-svc="${id}">${packets(reads, into(at[i], c), 'in')}${packets(sends, back(at[i], c), 'out')}</g>`).join('')
+    + '</svg>').join('');
+  const pos = ({w, h, at}, i) => [(at[i][0] / w * 100).toFixed(2), (at[i][1] / h * 100).toFixed(2)];
+  const nodes = services.map(({id, name, logo}, i) => {
+    const [x, y] = pos(LAYOUTS.wide, i), [mx, my] = pos(LAYOUTS.tall, i);
+    return `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="--x:${x}%;--y:${y}%;--mx:${mx}%;--my:${my}%">${logo}<span class="vh">${name}</span></button>`;
+  }).join('');
   const chips = items => `<div class="items">${items.map(([name, label], i) => `<span style="--i:${i}">${icon(name)}${label}</span>`).join('')}</div>`;
   const panels = services.map(({id, name, reads, sends, none}, i) => `<div class="svc${i === 0 ? ' on' : ''}" id="svc-${id}" role="tabpanel" aria-labelledby="tab-${id}">
 <h3>${name}</h3>
@@ -708,7 +593,7 @@ ${layer('wide')}${layer('tall')}
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
-    ['What does it cost?', 'Nothing during testing. The price after the release is not set yet; you will see it in the App Store before you buy, and Apple handles the purchase.'],
+    ['What does it cost?', 'Aurin is free, the AI coach included. If paid features come later, you will see the price before you buy, and they will be sold only through the App Store.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
     ['Can I delete my data?', 'Yes. In Settings → Privacy &amp; data you can download all your data or delete your account with everything in it.'],
@@ -718,70 +603,64 @@ ${layer('wide')}${layer('tall')}
     .map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('\n');
   const headline = 'Train for how you feel today.';
   const aurora = '<div class="aurora" aria-hidden="true"><i class="a"></i><i class="b"></i><i class="c"></i></div>';
-  // The sample morning (DemoData.swift) the hero phone shows; the sentence under the hero says the same.
-  const day = {readiness: 78, hrv: 64, hrvBaseline: 58, sleep: '7:12', sleepScore: 82};
 
   return sitePage({lang, origin, path: '/',
     title: 'Aurin · train for how you feel today',
     description: 'Aurin for iPhone reads your sleep, HRV and workouts from Apple Health, Google Health and Intervals.icu, shows your readiness every morning and plans your training and food around it.',
     body: `<main>
 <div class="hero">${aurora}
-<div class="wrap grid">
-<div class="copy">
-<span class="kicker"><i></i>For iPhone · now in TestFlight</span>
+<div class="wrap">
+<span class="kicker"><i></i>Free AI coach for iPhone</span>
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts and turns them into one number, one plan and one coach every morning.</p>
-<div class="cta">${store('top')}<p class="note">We invite people to the test version in TestFlight. Testing costs nothing.</p></div>
+${store()}
 </div>
 <div class="stage">
-<div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
-<div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">${day.sleep}</div><div class="d sleep">score ${day.sleepScore}</div></div>
+<div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">64 ms</div><div class="d up">↑ 6 ms above normal</div></div>
+<div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">7:12</div><div class="d sleep">score 86</div></div>
 <div class="glass g3" aria-hidden="true"><div class="k">Coach</div><div style="margin-top:4px">Go all in on strength today.</div></div>
-<div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness ${day.readiness}, how you feel, the weather, sleep, strain and HRV"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${shot('today', false)}</div></div></div></div>
-</div>
+<div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness 78, how you feel, the weather, sleep, strain and HRV"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${shot('today', false)}</div></div></div></div>
 </div>
 </div>
 
-<section class="morning"><div class="wrap reveal"><div class="eyebrow">One morning with Aurin</div>
-<p class="say">You slept <b class="sleep">${day.sleep}</b>, your HRV is <b class="up">${day.hrv - day.hrvBaseline} ms above normal</b> and your readiness is <b class="up">${day.readiness}</b>. So the coach says: <em>go all in on strength today.</em></p>
-</div></section>
-
-${scenes.slice(0, 6).map(chapter).join('\n')}
+${scenes.slice(0, 6).map(scene).join('\n')}
 ${muscles}
-${scenes.slice(6).map((s, i) => chapter(s, i + 6)).join('\n')}
+${scenes.slice(6).map(scene).join('\n')}
 
 <section id="propojeni" class="connect"><div class="wrap">
-<div class="intro reveal"><div><div class="eyebrow">Connections</div><h2 class="big">Works with what you wear.</h2></div><p class="sub">Any watch or ring that saves to Apple Health or Google Health, plus power and plans from Intervals.icu. Wear more than one? Aurin takes each night and day from the one you wear most, or you pick.</p></div>
+<div class="center reveal"><h2>Works with what you wear.</h2><p class="sub">Any watch or ring that saves to Apple Health or Google Health, plus power and plans from Intervals.icu. Wear more than one? Aurin takes each night and day from the one you wear most, or you pick.</p></div>
 <div class="box reveal">
-${flow}
-<div class="legend" aria-hidden="true"><span><i class="in"></i>Into Aurin</span><span><i class="out"></i>Sent back</span><span class="tip">Pick a service to see what it carries</span></div>
+<div class="hub">
+${lines}
+<div class="core" aria-hidden="true">${mark(52)}</div>
+<div role="tablist" aria-label="Connected services">${nodes}</div>
+</div>
+<div class="legend" aria-hidden="true"><span><i class="in"></i>Into Aurin</span><span><i class="out"></i>Sent back</span></div>
 <div class="panels">${panels}</div>
 </div>
 </div></section>
 
 <section id="soukromi" class="privacy"><div class="wrap">
-<div class="ink reveal">${LOCK}<p class="big">Your data works only for you. Aurin reads only what you allow, never sells it or uses it for ads, and you can delete all of it in Settings at any time.</p>
-<a class="more" href="/privacy">Read the privacy policy <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></div>
+<div class="say">${LOCK}<p class="big">${'Your data works only for you. Aurin reads only what you allow, never sells it or uses it for ads, and you can delete all of it in Settings at any time.'.split(' ').map(w => `<span>${w}</span>`).join(' ')}</p></div>
 ${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
 </div></section>
 
-<section id="faq"><div class="wrap faq">
-<div class="side reveal"><h2 class="big">Questions</h2><p>Something else? Write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p></div>
-<div class="list">
+<section id="faq"><div class="wrap faq reveal">
+<h2>Questions</h2>
 ${faq}
-</div>
 </div></section>
 
-<section class="final">${aurora}<div class="wrap reveal" id="join">
+<section class="final">${aurora}<div class="wrap reveal">
 ${mark(120)}
 <h2>Aurin</h2>
-<p class="sub">Leave your email and we’ll invite you to try Aurin on your iPhone.</p>
-${store('end')}
+${store()}
 </div></section>
 </main>`
   });
 }
 
+// Policy pages. The English text is the reference version (Google verification reads it). The
+// privacy policy and the terms also have a Czech version that says the same, at ?lang=cs.
 function doc(request, path, title, html) {
   const czech = Boolean(html.cs), {lang, origin} = pageLang(request, czech), pick = x => lang === 'cs' ? x.cs : x.en;
   const other = !czech ? '' : lang === 'cs'
@@ -797,7 +676,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
   const methods = {en: (apple ? 'Apple, ' : '') + (email ? 'Google, a passkey or a one-time code sent to your email' : 'Google or a passkey'), cs: (apple ? 'přes Apple, ' : '') + (email ? 'přes Google, přístupovým klíčem nebo jednorázovým kódem z e-mailu' : 'přes Google nebo přístupovým klíčem')};
   return doc(request, '/privacy', {cs: 'Zásady ochrany soukromí', en: 'Privacy Policy'}, {
     en: `<p class="muted">Last updated: ${UPDATED.en}</p>
-<p><strong>Aurin</strong> (formerly Loadwise; Petr Fitness Data, aurin.health) is a personal service for training, recovery and nutrition. The controller of your personal data is Petr Bouma, a private individual in the Czech Republic (the operator, “we” below). You can reach the operator at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin is currently in testing: access is by invitation to the testers from the waitlist, through Apple’s TestFlight.'}</p>
+<p><strong>Aurin</strong> (formerly Loadwise; Petr Fitness Data, aurin.health) is a personal service for training, recovery and nutrition. The controller of your personal data is Petr Bouma, a private individual in the Czech Republic (the operator, “we” below). You can reach the operator at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin is currently available only by personal invitation.'}</p>
 <h2>In short</h2>
 <ul>
 <li>We use your data only to provide the Aurin features you use.</li>
@@ -822,7 +701,6 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <p><strong>Wahoo</strong>, only if you connect your Wahoo account: your finished rides and runs (start, duration, distance, climbing, power, training load, heart rate, cadence and calories), to count them in your training load. Aurin deletes them when you disconnect Wahoo.</p>
 <p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training), food and drinks, workouts and how they went, notes, your journal answers (such as alcohol, caffeine, sauna or how you felt), and your conversations with the assistant. We count the messages you send the coach each week, to keep the service fair for everyone.</p>
 <p><strong>What you send us from Settings → Help:</strong> a problem report with what you write, a screenshot if you add one and, if you leave it on, the app’s diagnostics (app and iOS version, your connections and their last errors, failed requests and crashes, never your health data), or a feature idea with the app version. We keep them to answer you and fix the problem, and they are deleted with your account.</p>
-<p><strong>The waitlist on our website:</strong> when you join it, we keep the email address you enter and when you joined. We use it only to let you test Aurin through Apple’s TestFlight; we send no newsletters to it.</p>
 <p><strong>On your device:</strong> a sign-in cookie valid for up to 30 days, a short-lived cookie that protects signing in, cookies with your theme and language and, in the browser’s storage, a copy of the last loaded day and a few display settings so the app opens instantly, and, once you add or use a passkey, your email with the passkey’s identifier, so this device signs you in with it instead of sending a code. We use no advertising or tracking cookies.</p>
 <p><strong>Technical logs:</strong> our hosting provider records technical details of requests (such as time, IP address, page and errors) to keep the service running and secure. These logs are kept for a few days.</p>
 <h2>How we use your data</h2>
@@ -860,15 +738,14 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li><strong>Intervals.icu</strong>, if you connect it: the workouts you plan in Aurin, the workouts you finish in Aurin, workouts from Apple Health that no other service has brought there (type, time, distance, heart rate and calories), nutrition notes and calorie targets in your calendar, your weight, and several times a day a copy of your daily wellness from Google Health and Apple Health (sleep, average sleeping heart rate, steps, resting heart rate, HRV, oxygen saturation, respiration, VO2 max and body fat). Intervals.icu handles this data under its own privacy policy.</li>
 <li><strong>Wahoo</strong>, if you connect it: the rides and runs you plan in Aurin, with their steps and targets, so they appear on your ELEMNT and KICKR. Wahoo handles this data under its own privacy policy.</li>
 <li><strong>Google Health</strong>: the food and drinks you log and, if you allow it, your weight.</li>
-<li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data. OpenAI processes it on our behalf under its API data processing terms: it does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse, unless the law requires it to keep it longer.</li>
+<li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data. OpenAI processes it on our behalf, does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse.</li>
 <li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''}</li>
-<li><strong>Apple</strong>, when we add you to the testers from the waitlist: your email address, so that TestFlight emails you how to install Aurin. Apple handles it under its own privacy policy.</li>
 <li><strong>Open-Meteo</strong> gets only the place you choose for the weather in your training plan: a place you search for, or your location rounded to about 1 km if you allow it. Without that the app shows no weather.</li>
 <li><strong>Authorities</strong>, only when the law requires it.</li>
 </ul>
 <p>When you scan a barcode or a food label without AI, the image is processed on your device; the scanning library is loaded from the jsDelivr network. Exercise videos are embedded from YouTube in privacy-enhanced mode, and YouTube receives data only when you play a video.</p>
 <p><strong>Food database.</strong> Food search uses a catalogue stored with Aurin (your searches are not sent anywhere else), made from open data: Open Food Facts (© Open Food Facts contributors, <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL 1.0</a>), USDA FoodData Central (public domain), Fineli by THL (CC BY 4.0), Ciqual by Anses (Licence Ouverte / CC BY 4.0) and CoFID by Public Health England (Open Government Licence 3.0). The catalogue as a database is available under the ODbL; values are as the sources give them and are not checked against every label.</p>
-<p>Some of these providers are based in the United States. Where data leaves the European Union, they protect it with the safeguards the GDPR requires: the EU–US Data Privacy Framework where the provider is certified under it, and otherwise the EU Standard Contractual Clauses.</p>
+<p>Some of these providers are based in the United States. Where data leaves the European Union, they protect it with the safeguards the GDPR requires, such as the EU Standard Contractual Clauses.</p>
 <h2>Storage and security</h2>
 <ul>
 <li>Your data is stored in Aurin’s database at Cloudflare, encrypted at rest. All connections use HTTPS.</li>
@@ -885,13 +762,12 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li>Data that Aurin copied to Intervals.icu or Google Health stays there; you can delete it in those services.</li>
 <li>You can also remove Aurin’s access at any time in your Google Account under <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>. Aurin then can no longer read or write your Google data.</li>
 ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID settings.</li>' : ''}
-<li>Technical logs are kept for a few days, and OpenAI keeps AI requests for up to 30 days under its API terms.</li>
-<li>An address on the waitlist stays there until testing ends, or until you ask us to remove it at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
+<li>Technical logs are kept for a few days, and OpenAI keeps AI requests for up to 30 days.</li>
 </ul>
 <p>The <a href="/support">Support</a> page explains step by step how to manage and delete your data.</p>
 <h2>Legal bases and your rights</h2>
-<p>We process your data to provide the service you asked for (Article 6(1)(b) GDPR). Health data, from Google Health, Apple Health, Intervals.icu or entered by you, is processed only with your explicit consent (Article 9(2)(a) GDPR). You give it in the app before you first use it, and we record when and to which version of this text; syncing of your connected services in the background also runs only after it. The consent covers sending the data an AI feature needs to OpenAI, because the AI features are part of the service; you can turn the AI features off at any time in Settings → Privacy &amp; data → AI features, and from then on nothing is sent to OpenAI while the rest of Aurin keeps working. Your email on the waitlist is processed at your request, as a step before using Aurin (Article 6(1)(b) GDPR). You withdraw your consent by deleting your account in Settings → Privacy &amp; data, where you can first download all your data; disconnecting a service stops new data from it. Withdrawing does not affect processing before it. Technical logs rely on our legitimate interest in a secure service (Article 6(1)(f) GDPR).</p>
-<p>You have the right to access, correct and delete your data, to restrict or object to its processing and to receive it in a portable format. Most of this you can do directly in the app: in Settings → Privacy &amp; data you can download all your data as a JSON Lines (NDJSON) file or delete your account. You can also lodge a complaint with the Czech Office for Personal Data Protection (<a href="https://uoou.gov.cz">uoou.gov.cz</a>). Aurin makes no decisions about you with legal or similarly significant effects by automated means alone; the coach’s proposals wait for your confirmation.</p>
+<p>We process your data to provide the service you asked for (Article 6(1)(b) GDPR). Health data, from Google Health, Apple Health, Intervals.icu or entered by you, is processed only with your explicit consent (Article 9(2)(a) GDPR). You give it in the app before you first use it, and we record when and to which version of this text; syncing of your connected services in the background also runs only after it. The consent covers sending the data an AI feature needs to OpenAI, because the AI features are part of the service. You withdraw your consent by deleting your account in Settings → Privacy &amp; data, where you can first download all your data; disconnecting a service stops new data from it. Withdrawing does not affect processing before it. Technical logs rely on our legitimate interest in a secure service (Article 6(1)(f) GDPR).</p>
+<p>You have the right to access, correct and delete your data, to restrict or object to its processing and to receive it in a portable format. Most of this you can do directly in the app: in Settings → Privacy &amp; data you can download all your data as a JSON Lines (NDJSON) file or delete your account. You can also lodge a complaint with the Czech Office for Personal Data Protection (<a href="https://uoou.gov.cz">uoou.gov.cz</a>).</p>
 <h2>Children</h2>
 <p>Aurin is not intended for children under 16, and we do not knowingly collect their data.</p>
 <h2>Changes</h2>
@@ -899,7 +775,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <h2>Contact</h2>
 <p>For questions about this policy or your data, or to exercise your rights, write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>`,
     cs: `<p class="muted">Poslední změna: ${UPDATED.cs}</p>
-<p><strong>Aurin</strong> (dříve Loadwise; Petr Fitness Data, aurin.health) je osobní služba pro trénink, regeneraci a výživu. Správcem tvých osobních údajů je Petr Bouma, soukromá osoba v České republice (dále provozovatel nebo „my“). Provozovatele zastihneš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin je zatím v testování: přístup dostávají pozvaní testeři z waitlistu přes TestFlight od Applu.'}</p>
+<p><strong>Aurin</strong> (dříve Loadwise; Petr Fitness Data, aurin.health) je osobní služba pro trénink, regeneraci a výživu. Správcem tvých osobních údajů je Petr Bouma, soukromá osoba v České republice (dále provozovatel nebo „my“). Provozovatele zastihneš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin je zatím dostupný jen na osobní pozvánku.'}</p>
 <h2>Ve zkratce</h2>
 <ul>
 <li>Tvoje data používáme jen k funkcím Aurinu, které používáš.</li>
@@ -924,7 +800,6 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <p><strong>Wahoo</strong>, jen když připojíš účet Wahoo: tvoje dokončené jízdy a běhy (začátek, délku, vzdálenost, převýšení, výkon, tréninkovou zátěž, tep, kadenci a kalorie), aby se započítaly do tréninkové zátěže. Aurin je po odpojení Wahoo smaže.</p>
 <p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink), jídlo a pití, tréninky a jejich hodnocení, poznámky, odpovědi v deníku (třeba alkohol, kofein, sauna nebo jak ti bylo) a konverzace s asistentem. Počítáme, kolik zpráv koučovi za týden pošleš, aby služba zůstala férová pro všechny.</p>
 <p><strong>Co nám pošleš z Nastavení → Pomoc:</strong> hlášení problému s tím, co napíšeš, snímkem obrazovky, když ho přidáš, a pokud ji necháš zapnutou, diagnostikou aplikace (verze aplikace a iOS, propojení a jejich poslední chyby, nepovedené požadavky a pády, nikdy tvoje zdravotní data), nebo návrh funkce s verzí aplikace. Uchováváme je, abychom ti odpověděli a problém opravili, a smažou se s tvým účtem.</p>
-<p><strong>Waitlist na našem webu:</strong> když se do něj zapíšeš, uložíme e-mail, který zadáš, a datum zápisu. Použijeme ho jen k testování Aurinu přes TestFlight od Applu; žádné newslettery na něj neposíláme.</p>
 <p><strong>Ve tvém zařízení:</strong> cookie přihlášení s platností nejvýš 30 dní, krátkodobá cookie, která chrání přihlašování, cookies s vybraným vzhledem a jazykem a v úložišti prohlížeče kopie naposledy načteného dne a několik nastavení zobrazení, aby se aplikace otevřela hned, a když si přidáš nebo použiješ přístupový klíč, tvůj e-mail s označením klíče, aby tě zařízení přihlásilo jím a nemuselo posílat kód. Reklamní ani sledovací cookies nepoužíváme.</p>
 <p><strong>Technické záznamy:</strong> náš poskytovatel hostingu zaznamenává technické údaje o požadavcích (třeba čas, IP adresu, stránku a chyby), aby služba fungovala a byla bezpečná. Tyto záznamy se uchovávají několik dní.</p>
 <h2>K čemu data používáme</h2>
@@ -962,15 +837,14 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li><strong>Intervals.icu</strong>, když ho připojíš: tréninky, které naplánuješ v Aurinu, tréninky, které v Aurinu dokončíš, tréninky z Apple Zdraví, které tam nepřinesla jiná služba (typ, čas, vzdálenost, tep a kalorie), poznámky k výživě a cíle kalorií v kalendáři, tvoji váhu a několikrát denně kopii denních wellness údajů z Google Health a Apple Zdraví (spánek, průměrný tep ve spánku, kroky, klidový tep, HRV, okysličení krve, dech, VO₂max a tělesný tuk). Intervals.icu s nimi zachází podle svých zásad ochrany soukromí.</li>
 <li><strong>Wahoo</strong>, když ho připojíš: jízdy a běhy, které naplánuješ v Aurinu, s jejich úseky a cíli, aby se objevily v ELEMNT a KICKR. Wahoo s nimi nakládá podle svých zásad ochrany osobních údajů.</li>
 <li><strong>Google Health</strong>: jídlo a pití, které zapíšeš, a když to povolíš, i tvoje váha.</li>
-<li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě. OpenAI je zpracovává naším jménem podle svých podmínek zpracování dat přes API: data poslaná přes API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití, pokud mu zákon neukládá uchovat je déle.</li>
+<li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě. OpenAI je zpracovává naším jménem, data poslaná přes své API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití.</li>
 <li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''}</li>
-<li><strong>Apple</strong>, když tě z waitlistu přidáme k testerům: tvůj e-mail, aby ti TestFlight poslal, jak Aurin nainstalovat. Apple s ním nakládá podle svých zásad ochrany soukromí.</li>
 <li><strong>Open-Meteo</strong> dostane jen místo, které vybereš pro počasí v plánu tréninků: vyhledané místo, nebo tvou polohu zaokrouhlenou zhruba na 1 km, pokud ji povolíš. Bez toho aplikace počasí neukazuje.</li>
 <li><strong>Úřady</strong>, jen když to vyžaduje zákon.</li>
 </ul>
 <p>Když skenuješ čárový kód nebo etiketu bez AI, obrázek se zpracuje přímo ve tvém zařízení; knihovna pro skenování se načítá ze sítě jsDelivr. Videa cviků jsou vložená z YouTube v režimu se zvýšenou ochranou soukromí a YouTube dostane data, až když video spustíš.</p>
 <p><strong>Databáze potravin.</strong> Hledání potravin používá katalog uložený u Aurinu (co hledáš, se nikam dál neposílá), sestavený z otevřených dat: Open Food Facts (© přispěvatelé Open Food Facts, <a href="https://opendatacommons.org/licenses/odbl/1-0/">ODbL 1.0</a>), USDA FoodData Central (volné dílo), Fineli od THL (CC BY 4.0), Ciqual od Anses (Licence Ouverte / CC BY 4.0) a CoFID od Public Health England (Open Government Licence 3.0). Katalog jako databáze je k dispozici pod licencí ODbL; hodnoty jsou převzaté ze zdrojů a nejsou ověřené proti každé etiketě.</p>
-<p>Někteří z těchto poskytovatelů sídlí ve Spojených státech. Když data opouštějí Evropskou unii, chrání je zárukami, které vyžaduje GDPR: rámcem EU–USA pro ochranu údajů (Data Privacy Framework), pokud je v něm poskytovatel certifikovaný, jinak standardními smluvními doložkami EU.</p>
+<p>Někteří z těchto poskytovatelů sídlí ve Spojených státech. Když data opouštějí Evropskou unii, chrání je zárukami, které vyžaduje GDPR, například standardními smluvními doložkami EU.</p>
 <h2>Uložení a zabezpečení</h2>
 <ul>
 <li>Data jsou uložená v databázi Aurinu u Cloudflare a jsou šifrovaná. Všechna spojení používají HTTPS.</li>
@@ -987,13 +861,12 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li>Co Aurin zkopíroval do Intervals.icu nebo Google Health, tam zůstane; smazat to můžeš v těchto službách.</li>
 <li>Přístup Aurinu můžeš kdykoli odebrat i ve svém účtu Google v části <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>. Aurin pak už tvoje data z Googlu nepřečte ani nezapíše.</li>
 ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení svého Apple ID.</li>' : ''}
-<li>Technické záznamy se uchovávají několik dní a OpenAI podle svých podmínek API uchovává požadavky AI nejvýš 30 dní.</li>
-<li>E-mail ve waitlistu zůstane, dokud testování neskončí nebo dokud nás nepožádáš o jeho smazání na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
+<li>Technické záznamy se uchovávají několik dní a OpenAI uchovává požadavky AI nejvýš 30 dní.</li>
 </ul>
 <p>Na stránce <a href="/support">Podpora</a> najdeš postup krok za krokem, jak data spravovat a smazat.</p>
 <h2>Právní základ a tvoje práva</h2>
-<p>Data zpracováváme, abychom ti poskytli službu, o kterou stojíš (čl. 6 odst. 1 písm. b) GDPR). Údaje o zdraví, z Google Health, Apple Health, Intervals.icu i ty, které zadáš sám, zpracováváme jen s tvým výslovným souhlasem (čl. 9 odst. 2 písm. a) GDPR). Dáváš ho v aplikaci před prvním použitím a my zaznamenáme kdy a ke které verzi tohoto textu; synchronizace propojených služeb na pozadí běží až po něm. Souhlas zahrnuje i posílání dat, která AI funkce potřebuje, do OpenAI, protože AI funkce jsou součástí služby; AI funkce můžeš kdykoli vypnout v Nastavení → Soukromí a data → AI funkce a od té chvíle se do OpenAI nic neposílá, zatímco zbytek Aurinu funguje dál. E-mail ve waitlistu zpracováváme na tvou žádost jako krok před používáním Aurinu (čl. 6 odst. 1 písm. b) GDPR). Souhlas odvoláš smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data; odpojením služby zastavíš nová data z ní. Odvoláním nepřestává být zákonné zpracování před ním. Technické záznamy vedeme na základě oprávněného zájmu na bezpečné službě (čl. 6 odst. 1 písm. f) GDPR).</p>
-<p>Máš právo na přístup ke svým datům, jejich opravu a výmaz, na omezení zpracování, vznesení námitky a na přenositelnost dat. Většinu z toho uděláš přímo v aplikaci: v Nastavení → Soukromí a data si všechna svoje data stáhneš jako soubor JSON Lines (NDJSON), nebo smažeš účet. Můžeš si také stěžovat u Úřadu pro ochranu osobních údajů (<a href="https://uoou.gov.cz">uoou.gov.cz</a>). Aurin o tobě nerozhoduje čistě automatizovaně způsobem, který by měl právní nebo podobně závažné účinky; návrhy kouče čekají na tvoje potvrzení.</p>
+<p>Data zpracováváme, abychom ti poskytli službu, o kterou stojíš (čl. 6 odst. 1 písm. b) GDPR). Údaje o zdraví, z Google Health, Apple Health, Intervals.icu i ty, které zadáš sám, zpracováváme jen s tvým výslovným souhlasem (čl. 9 odst. 2 písm. a) GDPR). Dáváš ho v aplikaci před prvním použitím a my zaznamenáme kdy a ke které verzi tohoto textu; synchronizace propojených služeb na pozadí běží až po něm. Souhlas zahrnuje i posílání dat, která AI funkce potřebuje, do OpenAI, protože AI funkce jsou součástí služby. Souhlas odvoláš smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data; odpojením služby zastavíš nová data z ní. Odvoláním nepřestává být zákonné zpracování před ním. Technické záznamy vedeme na základě oprávněného zájmu na bezpečné službě (čl. 6 odst. 1 písm. f) GDPR).</p>
+<p>Máš právo na přístup ke svým datům, jejich opravu a výmaz, na omezení zpracování, vznesení námitky a na přenositelnost dat. Většinu z toho uděláš přímo v aplikaci: v Nastavení → Soukromí a data si všechna svoje data stáhneš jako soubor JSON Lines (NDJSON), nebo smažeš účet. Můžeš si také stěžovat u Úřadu pro ochranu osobních údajů (<a href="https://uoou.gov.cz">uoou.gov.cz</a>).</p>
 <h2>Děti</h2>
 <p>Aurin není určený dětem mladším 16 let a jejich data vědomě nesbíráme.</p>
 <h2>Změny</h2>
@@ -1005,7 +878,7 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
 }
 
 // Terms of Use. The English text is the reference version; the Czech one says the same.
-const TERMS_UPDATED = {cs: '20. října 2026', en: '20 October 2026'};
+const TERMS_UPDATED = {cs: '18. října 2026', en: '18 October 2026'};
 const APPLE_EULA = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 export function termsPage(request) {
@@ -1052,8 +925,7 @@ export function termsPage(request) {
 <p>Do not try to get around Aurin’s security, access someone else’s account or data, overload the service, download it automatically, copy or resell it, or use it for anything unlawful. Reverse engineering is allowed only where the law permits it.</p>
 <h2>Availability and changes</h2>
 <ul>
-<li>Aurin is currently in testing through Apple’s TestFlight: test builds expire, and the app changes more often than a released one.</li>
-<li>We develop Aurin continuously, so features can change, move or be removed. We do our best to keep it running, but we cannot promise it will always be available or free of errors. We provide the updates needed to keep Aurin working as described, through the App Store or TestFlight; install them when they come.</li>
+<li>We develop Aurin continuously, so features can change, move or be removed. We do our best to keep it running, but we cannot promise it will always be available or free of errors.</li>
 <li>If we ever shut Aurin down, we will tell you at least 30 days ahead in the app or by e-mail, so you can download your data.</li>
 </ul>
 <h2>Liability</h2>
@@ -1070,11 +942,11 @@ export function termsPage(request) {
 <h2>Aurin’s name and content</h2>
 <p>The app, this website, the name Aurin, its logo, texts and graphics belong to the operator. You may use the app for your own personal, non-commercial purposes.</p>
 <h2>App Store</h2>
-<p>If you got Aurin from the App Store, Apple’s <a href="${APPLE_EULA}">Licensed Application End User License Agreement</a> applies as well. These terms are between you and us, not Apple. Apple has no obligation to provide maintenance, support or a warranty for Aurin, and any claim about the app, including product liability, consumer protection or intellectual property claims, is ours to handle, not Apple’s. Apple and its subsidiaries are third-party beneficiaries of these terms and may enforce them against you. You confirm that you are not in a country under a US government embargo and not on any US list of prohibited or restricted parties.</p>
+<p>If you got Aurin from the App Store, Apple’s <a href="${APPLE_EULA}">Licensed Application End User License Agreement</a> applies as well. These terms are between you and us, not Apple, and Apple is not responsible for Aurin or its support.</p>
 <h2>Changes to these terms</h2>
 <p>We publish every change on this page with its date. Before a significant change takes effect, we tell you at least 30 days ahead in the app or by e-mail. If you do not agree, you can delete your account before then.</p>
 <h2>Law and disputes</h2>
-<p>These terms are governed by Czech law. If you are a consumer living in another country, you keep the protection that the mandatory law of that country gives you. If something goes wrong, write to us first and we will try to put it right. If you are a consumer in the Czech Republic, you can also turn to the Czech Trade Inspection Authority (<a href="https://www.coi.cz">coi.cz</a>) for out-of-court resolution of a dispute.</p>
+<p>These terms are governed by Czech law. If you are a consumer living in another country, you keep the protection that the mandatory law of that country gives you. If something goes wrong, write to us first and we will try to put it right.</p>
 <h2>Contact</h2>
 <p><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>`,
     cs: `<p class="muted">Poslední změna: ${TERMS_UPDATED.cs}</p>
@@ -1119,8 +991,7 @@ export function termsPage(request) {
 <p>Nesnaž se obejít zabezpečení Aurinu, dostat se k cizímu účtu nebo datům, přetěžovat službu, automaticky ji stahovat, kopírovat ji nebo přeprodávat, ani ji používat k ničemu protiprávnímu. Zpětná analýza je dovolená jen tam, kde to povoluje zákon.</p>
 <h2>Dostupnost a změny</h2>
 <ul>
-<li>Aurin je zatím v testování přes TestFlight od Applu: testovací sestavení mají omezenou platnost a aplikace se mění častěji než vydaná.</li>
-<li>Aurin průběžně vyvíjíme, takže se funkce můžou měnit, přesouvat nebo zmizet. Snažíme se, aby fungoval, ale nemůžeme slíbit, že bude vždy dostupný a bez chyb. Aktualizace potřebné k tomu, aby Aurin fungoval, jak popisujeme, dodáváme přes App Store nebo TestFlight; nainstaluj si je, když přijdou.</li>
+<li>Aurin průběžně vyvíjíme, takže se funkce můžou měnit, přesouvat nebo zmizet. Snažíme se, aby fungoval, ale nemůžeme slíbit, že bude vždy dostupný a bez chyb.</li>
 <li>Kdybychom Aurin někdy ukončili, dáme ti to vědět aspoň 30 dní předem v aplikaci nebo e-mailem, ať máš čas si stáhnout data.</li>
 </ul>
 <h2>Odpovědnost</h2>
@@ -1137,11 +1008,11 @@ export function termsPage(request) {
 <h2>Název a obsah Aurinu</h2>
 <p>Aplikace, tento web, název Aurin, jeho logo, texty a grafika patří provozovateli. Aplikaci smíš používat pro vlastní osobní a nekomerční potřebu.</p>
 <h2>App Store</h2>
-<p>Pokud máš Aurin z App Storu, platí navíc <a href="${APPLE_EULA}">licenční smlouva Apple pro koncové uživatele</a> (Licensed Application End User License Agreement). Tyto podmínky jsou mezi tebou a námi, ne Applem. Apple nemá povinnost poskytovat k Aurinu údržbu, podporu ani záruku a jakýkoli nárok týkající se aplikace, včetně odpovědnosti za výrobek, ochrany spotřebitele nebo duševního vlastnictví, řešíme my, ne Apple. Apple a jeho dceřiné společnosti jsou oprávněnou třetí stranou těchto podmínek a mohou je vůči tobě vymáhat. Potvrzuješ, že nejsi v zemi, na kterou vláda USA uvalila embargo, ani na žádném seznamu zakázaných nebo omezených osob USA.</p>
+<p>Pokud máš Aurin z App Storu, platí navíc <a href="${APPLE_EULA}">licenční smlouva Apple pro koncové uživatele</a> (Licensed Application End User License Agreement). Tyto podmínky jsou mezi tebou a námi, ne Applem, a Apple za Aurin ani jeho podporu neodpovídá.</p>
 <h2>Změny podmínek</h2>
 <p>Každou změnu zveřejníme na této stránce s datem. Než začne platit podstatná změna, dáme ti to vědět aspoň 30 dní předem v aplikaci nebo e-mailem. Když nesouhlasíš, můžeš do té doby účet smazat.</p>
 <h2>Právo a spory</h2>
-<p>Tyto podmínky se řídí českým právem. Pokud jsi spotřebitel s bydlištěm v jiné zemi, zůstává ti ochrana, kterou ti dávají kogentní předpisy té země. Když se něco pokazí, napiš nám nejdřív a pokusíme se to napravit. Spotřebitel v České republice se může s mimosoudním řešením sporu obrátit také na Českou obchodní inspekci (<a href="https://www.coi.cz">coi.cz</a>).</p>
+<p>Tyto podmínky se řídí českým právem. Pokud jsi spotřebitel s bydlištěm v jiné zemi, zůstává ti ochrana, kterou ti dávají kogentní předpisy té země. Když se něco pokazí, napiš nám nejdřív a pokusíme se to napravit.</p>
 <h2>Kontakt</h2>
 <p><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>
 <p class="muted">Závazné je anglické znění: <a href="/terms?lang=en">Terms of Use</a>.</p>`
@@ -1150,7 +1021,7 @@ export function termsPage(request) {
 
 export function supportPage(request, {apple = false, email = false, open = false} = {}) {
   return doc(request, '/support', {en: 'Support'}, {
-    en: `<p>${open ? '' : 'Aurin is currently in testing through Apple’s TestFlight; access is by invitation from the waitlist at aurin.health. '}If something does not work, report it in the app or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Never send passwords, API keys or other secrets.</p>
+    en: `<p>${open ? '' : 'Aurin is currently available only by personal invitation. '}If something does not work, report it in the app or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. Never send passwords, API keys or other secrets.</p>
 <h2 id="problem">Reporting a problem</h2>
 <ol>
 <li>In the app, open <strong>Settings → Help → Report a problem</strong>.</li>

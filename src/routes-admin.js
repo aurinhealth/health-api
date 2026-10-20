@@ -7,7 +7,6 @@ import { listUsersAndInvites, inviteUser, removeInvite, changeUserEmail, setUser
 import { emailChangeRefusal, notifyOldAddress, requestLanguage } from "./email-login.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
-import { listWaitlist, decideWaitlist } from "./testflight-waitlist.js";
 
 export async function handleAdminApi(request, env, url, session, ctx) {
   const user = session.user;
@@ -15,14 +14,6 @@ export async function handleAdminApi(request, env, url, session, ctx) {
   if (request.method !== "GET" && request.headers.get("Origin") !== url.origin) return Response.json({message:L("Neplatný původ požadavku.", "Invalid request origin.")},{status:403});
   const db = env.RAW_DB;
   try {
-    // The website's waitlist (testflight-waitlist.js): the owner approves people into TestFlight.
-    if (url.pathname === "/app/api/admin/waitlist" || url.pathname === "/app/api/admin/waitlist/decide") {
-      if (!user.isOwner) return Response.json({status:"error",message:L("Jen pro majitele aplikace.", "The app owner only.")},{status:403});
-      try {
-        if (request.method === "GET") return Response.json({status:"ok",...await listWaitlist(db, env)},{headers:{"Cache-Control":"no-store"}});
-        return Response.json(await decideWaitlist(db, env, await request.json().catch(() => ({}))),{headers:{"Cache-Control":"no-store"}});
-      } catch (error) { return Response.json({status:"error",message:error.message},{status:error.status||500}); }
-    }
     if (url.pathname === "/app/api/admin/users" && request.method === "GET") return Response.json({status:"ok",...await listUsersAndInvites(db)},{headers:{"Cache-Control":"no-store"}});
     const body = await request.json().catch(() => ({}));
     // The owner's private copy of his printed cookbook (cookbook.js); it never goes into the repository.
