@@ -257,18 +257,58 @@ export function googleExercise(activity) {
   if (activity.notes) exercise.notes = activity.notes.slice(0, 1000);
   return { exercise };
 }
-async function pushGoogle(env, row, { fetchImpl, googleToken }) {
+// A long-running write answers with its operation (operations/…); the record
+// is there once the operation is done (as food-google-sync.js polls it). The
+// operation's record name, null while it still runs; a failed one throws
+// with `failed`.
+const GOOGLE_OPERATION = /^operations\/[^?#]+$/;
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function googleOperation(fetchImpl, access, name, { wait, pollMs }) {
+  for (let i = 0; i < 3; i++) {
+    if (i || wait) await pause(pollMs);
+    const response = await reach(fetchImpl, 'https://health.googleapis.com/v4/' + name, { headers: { Authorization: 'Bearer ' + access, Accept: 'application/json' }, signal: AbortSignal.timeout(15000) }).catch(() => null);
+    if (!response?.ok) continue;
+    const data = await response.json().catch(() => ({}));
+    if (data.error) throw Object.assign(new Error('Google operation failed'), { failed: true });
+    if (data.done) {
+      const record = data.response?.name;
+      if (!GOOGLE_EXERCISE.test(record || '')) throw Object.assign(new Error('Google operation without a record'), { failed: true });
+      return record;
+    }
+  }
+  return null;
+}
+// Still running: kept as the send's remote_id, so the next try asks the
+// operation first instead of posting a second copy.
+const stillRunning = operation => Object.assign(new Error('Google operation still running'), { pending: operation });
+
+async function pushGoogle(env, row, { fetchImpl, googleToken, pollMs = 1000 }) {
   if (!grantedExtras(env).activityWrite) throw Object.assign(new Error('Google scope missing'), { scope: 'activityWrite' });
   if (!googleToken) throw new Error('Google token unavailable');
-  const activity = JSON.parse(row.payload_json || '{}'), known = GOOGLE_EXERCISE.test(row.remote_id || '');
+  const activity = JSON.parse(row.payload_json || '{}');
   const access = await googleToken(env);
-  const url = 'https://health.googleapis.com/v4/' + (known ? row.remote_id : 'users/me/dataTypes/exercise/dataPoints');
+  let remote = row.remote_id || '';
+  // An earlier write still running then: its record, else it is waited for.
+  // One that failed made nothing, so the activity is sent anew.
+  if (GOOGLE_OPERATION.test(remote)) {
+    const record = await googleOperation(fetchImpl, access, remote, { wait: false, pollMs }).catch(error => { if (error.failed) return ''; throw error; });
+    if (record === null) throw stillRunning(remote);
+    remote = record;
+  }
+  const known = GOOGLE_EXERCISE.test(remote);
+  const url = 'https://health.googleapis.com/v4/' + (known ? remote : 'users/me/dataTypes/exercise/dataPoints');
   const response = await reach(fetchImpl, url, { method: known ? 'PATCH' : 'POST', headers: { Authorization: 'Bearer ' + access, Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(googleExercise(activity)), signal: AbortSignal.timeout(15000) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error('Google Health HTTP ' + response.status);
   if (data.error) throw new Error('Google operation failed');
-  // A long-running write answers with its operation; the record name comes later.
-  return String(data.response?.name || data.name || row.remote_id || 'accepted');
+  if (data.done === false) {
+    if (!GOOGLE_OPERATION.test(data.name || '')) throw new Error('Google operation failed');
+    const record = await googleOperation(fetchImpl, access, data.name, { wait: true, pollMs });
+    // A known record keeps its name: the next try patches it again.
+    if (record === null) throw stillRunning(known ? remote : data.name);
+    return record;
+  }
+  return String(data.response?.name || data.name || remote || 'accepted');
 }
 
 const NAMES = { google: 'Google Health', intervals: 'Intervals.icu' };
@@ -303,6 +343,12 @@ async function deliver(env, row, options) {
     return { destination: row.destination, status: 'sent', remoteId: remoteId ?? row.remote_id ?? null };
   } catch (error) {
     console.error('Activity send failed', row.destination, error.message);
+    // Accepted, not done yet: the cron asks again (retrySyncSends).
+    if (error.pending) {
+      const message = L('Google Health zápis ještě dokončuje.', 'Google Health is still finishing the write.');
+      await setStatus(env, row, 'pending', message, error.pending);
+      return { destination: row.destination, status: 'pending', message };
+    }
     // No answer to a first send: it may be there, so the next try looks before it sends again.
     if (error.noAnswer && !row.remote_id) {
       const message = NO_ANSWER();
@@ -319,7 +365,7 @@ async function deliver(env, row, options) {
 // one entry per destination it went to (sent or error); Apple Health is
 // written by the iPhone and is not in the list. `googleToken` makes the
 // Google access token (index.js googleToken); `only` limits the destinations.
-export async function sendActivity(env, input, { fetchImpl = fetch, googleToken = null, only = SERVER_DESTINATIONS } = {}) {
+export async function sendActivity(env, input, { fetchImpl = fetch, googleToken = null, only = SERVER_DESTINATIONS, pollMs } = {}) {
   const activity = normalizeActivity(input);
   await ensureSyncTables(env.DB);
   const sends = [];
@@ -334,7 +380,7 @@ export async function sendActivity(env, input, { fetchImpl = fetch, googleToken 
         message = CASE WHEN sync_sends.status = 'unknown' AND sync_sends.remote_id IS NULL THEN sync_sends.message ELSE NULL END, attempts = 0, updated_at = CURRENT_TIMESTAMP`)
       .bind(env.USER_ID, activity.key, destination, JSON.stringify(activity)).run();
     const row = await env.DB.prepare('SELECT * FROM sync_sends WHERE user_id = ? AND activity_key = ? AND destination = ?').bind(env.USER_ID, activity.key, destination).first();
-    sends.push(await deliver(env, row, { fetchImpl, googleToken }));
+    sends.push(await deliver(env, row, { fetchImpl, googleToken, pollMs }));
   }
   return { status: 'ok', key: activity.key, sends };
 }
