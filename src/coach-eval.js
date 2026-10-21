@@ -387,7 +387,7 @@ const namesToday = (r, scenario) => !WEEKDAYS.cs[weekdayOf(r.date)].test(scenari
 // Runs 21 and 23, S09: "Předchozí doporučení VO2max bych tedy změnil", "Opravuji tím své předchozí doporučení".
 const SELF_BLAME = /(?:moje|mé|mý|svoje|své) (?:předchozí|dřívější|původní|první) doporučení|(?:předchozí|dřívější|původní) doporučení[^.]{0,20}?bych (?:tedy )?(?:změnil|upravil|opravil)|opravuji (?:tím )?(?:své |svoje |moje )?(?:předchozí|dřívější|původní)|příliš agresivn|byl jsem příliš|my (?:earlier|previous|first) (?:recommendation|advice)|too aggressive/iu;
 // Run 23, S28: "návrh přesunu připravím v navazující zprávě": every change is a card now, not a later message.
-const LATER_MESSAGE = /(?:v )?(?:navazující|další|příští|následující) zpráv|připravím (?:ti )?(?:návrh|přesun|úpravu)|pošlu (?:ti )?(?:návrh|přesun|úpravu)|in (?:a|the) (?:next|follow-up|later) message/i;
+const LATER_MESSAGE = /(?:v )?(?:navazující|další|příští|následující) zpráv|připravím (?:ti )?(?:návrh|přesun|úpravu)|pošlu (?:ti )?(?:návrh|přesun|úpravu)|(?:jako|v) dalším? krok|in (?:a|the) (?:next|follow-up|later) message|as a next step/i;
 // Run 20, S21: "vhodnější by bylo přesunout intervaly" right after the card.
 // Run 22, S21: "pro intervaly bych raději volil jiný den" right after the card.
 const SECOND_GUESS = /(?:lepší|šetrnější|rozumnější|vhodnější) (?:volb|alternativ|by byl)|(?:šetrnější|lepší|rozumnější|vhodnější) volbou|(?:lepší|vhodnější|rozumnější) by (?:byl|bylo|byla)|raději bych (?:volil|vybral|zvolil|dal)|bych raději|jinak bych (?:je |ho |to )?(?:zařadil|dal|volil|vybral)|bych (?:je |ho |intervaly )?jinak (?:zařadil|dal|volil|vybral)|bych intervaly zařadil až (?:jiný den|jindy)|better (?:option|choice|alternative)|would be (?:better|more suitable)|would rather/i;
@@ -440,7 +440,7 @@ function otherCards(r) {
 function droppedCards(r) {
   const same = (p, k) => p.type === k.type && (['rest', 'move'].includes(p.type) ? p.eventId === k.eventId : p.type === 'gym_swap' ? p.toExercise === k.toExercise : !p.date || p.date === k.date) && (p.type !== 'workout' || p.sport === k.sport);
   const left = [...r.kept];
-  return r.proposed.slice(0, 3).filter(p => { const i = left.findIndex(k => same(p, k)); if (i < 0) return true; left.splice(i, 1); return false; }).map(p => [p.type, p.kind || p.sport, p.date].filter(Boolean).join(' '));
+  return r.proposed.slice(0, 4).filter(p => { const i = left.findIndex(k => same(p, k)); if (i < 0) return true; left.splice(i, 1); return false; }).map(p => [p.type, p.kind || p.sport, p.date].filter(Boolean).join(' '));
 }
 
 export function scenarioById(id) { return COACH_EVAL_SCENARIOS.find(s => s.id === id) || null; }
@@ -483,11 +483,12 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
   const asked = { minDifficulty: c.minDifficulty, maxDifficulty: c.maxDifficulty };
   const models = [['Luna', lightModel(env)]];
   const runs = await Promise.all(models.map(async ([label, model]) => {
-    const t = Date.now(), w = await compose(env, { sport: c.sport, kind: c.kind, minutes: c.minutes, coach, today: { score: c.score, zone: c.zone }, asked, model, save: false }).catch(() => null);
-    return { label, model, ms: Date.now() - t, workout: w };
+    const t = Date.now(), w = await compose(env, { sport: c.sport, kind: c.kind, minutes: c.minutes, coach, today: { score: c.score, zone: c.zone }, asked, model, save: false, diagnose: true }).catch(() => null);
+    return { label, model, ms: Date.now() - t, workout: w, rejected: w?.rejected || null };
   }));
   const band = c.minDifficulty != null ? ` · obtížnost ${c.minDifficulty}–${c.maxDifficulty}` : '';
-  const describe = ({ label, model, ms, workout: w }) => {
+  const describe = ({ label, model, ms, workout: w, rejected }) => {
+    if (rejected) return `### ${label} (${model}) · ${Math.round(ms / 1000)} s\nNesložil nic, co by prošlo kontrolami: ${rejected}.`;
     if (!w) return `### ${label} (${model})\nNesložil nic, co by prošlo kontrolami (délka, typ, těžké minuty, obtížnost).`;
     const load = workoutLoadCheck(w, c.sport), u = w.ai?.usage;
     const cost = u ? usageCost(w.ai.model || model, u) : null;
@@ -495,7 +496,8 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
       `**${w.name}** · ${w.duration_minutes} min · těžké ${load.hard} min · obtížnost ${w.difficulty} · ${Math.round(w.target_load || 0)} TSS`,
       w.ai?.reason || '', w.ai?.warning ? `⚠️ ${w.ai.warning}` : '', '```', String(w.intervals_description || '').trim(), '```'].filter(Boolean).join('\n');
   };
-  const checks = runs.flatMap(({ label, workout: w }) => [quality(`${label} složil trénink, který prošel kontrolami`, Boolean(w)),
+  for (const r of runs) if (r.rejected) r.workout = null;
+  const checks = runs.flatMap(({ label, workout: w, rejected }) => [quality(`${label} složil trénink, který prošel kontrolami`, Boolean(w), rejected || ''),
     ...(w ? [quality(`${label}: zdůvodnění bez hodnocení dne`, !/připravenost|dnes se hodí|readiness/i.test(w.ai?.reason || ''), w.ai?.reason || '')] : [])]);
   // Run 21/22, W01: the asked band is 6.5–10 and Luna composed 5.7 (the app itself allows ± 1).
   if (c.minDifficulty != null || c.maxDifficulty != null) {

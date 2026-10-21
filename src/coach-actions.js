@@ -83,7 +83,8 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
   // A rest or move in the same answer takes its planned session away first, so
   // "rest today, VO2max on Tuesday" counts without today's VO2max (Revize
   // doporučování tréninků 2026-10-16, S15); the cards keep their order.
-  const list=(Array.isArray(actions)?actions:[]).slice(0,3),first=a=>['move','rest'].includes(a?.type)?0:1;
+  // Four cards: a tired weekend needs today's ride, Saturday's tempo and both gym days (Coach evaluation run 25, S28).
+  const list=(Array.isArray(actions)?actions:[]).slice(0,4),first=a=>['move','rest'].includes(a?.type)?0:1;
   const out=new Array(list.length);
   for(const i of [...list.keys()].sort((i,j)=>first(list[i])-first(list[j])||i-j))out[i]=check(list[i]);
   const kept=out.flat();

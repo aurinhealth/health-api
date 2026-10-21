@@ -95,3 +95,19 @@ test("the evaluation composes with the model it is given and keeps nothing", asy
   assert.equal(model, "gpt-6-sol");
   assert.equal(w.ai.model, "gpt-6-sol");
 });
+
+test("a draft under the chosen band is asked for once more, and the evaluation learns why a draft was rejected", async () => {
+  const env = owner(), first = await composeWorkout(env, { ...day, asked: {}, ask: answer(tempo45) }), d = first.difficulty;
+  // The second draft: one more tempo effort, inside the band the first draft missed.
+  const harder = [block(300, 55, 65), { repeats: 4, steps: [{ label: "tempo", seconds: 480, low: 83, high: 88 }, { label: "lehce", seconds: 120, low: 50, high: 55 }] }, block(60, 50, 55)];
+  const notes = [], ask = async (e, args) => { notes.push(args.instructions); return answer(notes.length > 1 ? harder : tempo45)(); };
+  const w = await composeWorkout(env, { ...day, coach: { readiness: { status: "green" } }, asked: { minDifficulty: d + 1.5, maxDifficulty: 10 }, ask });
+  assert.equal(notes.length, 2, "asked twice");
+  assert.match(notes[1], new RegExp(`rated ${d} .*under the chosen band`));
+  assert.ok(w && w.difficulty > d, "the harder draft is kept");
+  const r = await composeWorkout(env, { ...day, asked: { minDifficulty: d + 3, maxDifficulty: 10 }, ask: answer(tempo45), diagnose: true });
+  assert.equal(r.rejected, `difficulty ${d}`);
+  assert.equal(await composeWorkout(env, { ...day, asked: { minDifficulty: d + 3, maxDifficulty: 10 }, ask: answer(tempo45) }), null, "without diagnose still nothing");
+  const longer = [block(600, 55, 65), { repeats: 3, steps: [{ label: "tempo", seconds: 480, low: 80, high: 85 }, { label: "lehce", seconds: 180, low: 50, high: 55 }] }, block(900, 50, 55)];
+  assert.match((await composeWorkout(env, { ...day, ask: answer(longer), diagnose: true })).rejected, /^length \d+ min$/);
+});

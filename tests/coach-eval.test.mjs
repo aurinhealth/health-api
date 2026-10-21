@@ -5,6 +5,8 @@ import { coachInstructionsFor, assistantTask } from '../src/coach-assistant.js';
 import { isPublicPath } from '../src/dashboard-auth.js';
 import { lang } from '../src/lang.js';
 import { validateCoachActions } from '../src/coach-actions.js';
+import { gymLoadEstimate } from '../src/gym-catalog.js';
+const evalGymOf = id => scenarioById(id).athlete.gym(date);
 
 const date = '2026-10-16', now = '2026-10-16 07:40', staging = { ENVIRONMENT: 'staging' };
 const failed = (id, reply) => checkReply(scenarioById(id), reply).filter(c => !c.ok).map(c => c.severity + ':' + c.name);
@@ -346,4 +348,22 @@ test('runs 21–24: self-correction, a promised later message and "jinak bych je
   assert.ok(at('S21', 'Zítra sweet spot. Pro vyšší kvalitu páteční jízdy bych je jinak zařadil až po ní.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
   assert.ok(at('S21', 'Zítra sweet spot. Pro větší odstup od dlouhé jízdy bych intervaly zařadil až jiný den.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
   assert.ok(!at('S15', 'V pátek bych ponechal dlouhou jízdu; další VO2max bych zařadil až po zotavení z ní.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
+});
+
+test('runs 25/26: "jako další krok" is a later message, a fourth card stays, Luna\'s rejected draft names its fault, one leg keeps no leg-press weight', async () => {
+  const at = (id, answer) => checkReply(scenarioById(id), { answer, kept: [], proposed: [] }, now, date).filter(c => !c.ok).map(c => c.name);
+  assert.ok(at('S28', 'Nedělní posilovna zatím zůstává; jako další krok bych ji přesunul na úterý.').includes('neslibuje návrh v další zprávě'));
+  // The tired weekend (S28): today's ride, Saturday's tempo and both gym days are four cards.
+  const { ctx } = scenarioContext(scenarioById('S28'), date, now), reason = 'Na tvůj stav je toho moc.';
+  const four = [{ type: 'rest', eventId: 'planned:9101', date: date, sport: 'ride', reason }, { type: 'rest', eventId: 'planned:9102', date: '2026-10-19', sport: 'ride', reason }, { type: 'move', eventId: 'planned:9103', date: '2026-10-21', sport: 'gym', reason }, { type: 'move', eventId: 'planned:9105', date: '2026-10-22', sport: 'gym', reason }];
+  const kept = validateCoachActions(four, ctx, date, { userInitiated: true });
+  assert.deepEqual(kept.map(a => a.eventId), ['planned:9101', 'planned:9102', 'planned:9103', 'planned:9105'], JSON.stringify(kept));
+  assert.equal(validateCoachActions([...four, { ...four[3], date: '2026-10-23' }], ctx, date, { userInitiated: true }).length, 4, 'a fifth is dropped');
+  const rejected = async () => ({ rejected: 'difficulty 5.7', ai: { model: 'gpt-6-luna' } });
+  const w01 = await runComposeScenario({}, scenarioById('W01'), { compose: rejected });
+  assert.match(w01.answer, /difficulty 5\.7/);
+  assert.equal(w01.checks.find(c => c.name === 'Luna složil trénink, který prošel kontrolami').detail, 'difficulty 5.7');
+  const gym = evalGymOf('S19');
+  assert.equal(gymLoadEstimate('Single-Leg Press', gym.history), null);
+  assert.ok(gymLoadEstimate('Pivot leg press', gym.history)?.kg >= 150, 'the leg press itself keeps its history');
 });
