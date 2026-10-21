@@ -59,11 +59,15 @@ struct WeekSessionDraft: Identifiable, Equatable {
 
     /// Builds the workout: a gym plan as a draft, a ride or run from the
     /// library. `resize` keeps the workout and only changes its length.
-    func building(_ api: APIClient, resize: Bool = false) async -> WeekSessionDraft {
+    /// `others`: the week's other sessions, so gym days follow on from each other.
+    func building(_ api: APIClient, resize: Bool = false, others: [WeekSessionDraft] = []) async -> WeekSessionDraft {
         var next = self
         do {
             if sport == "gym" {
-                next.gym = try await api.previewGym(date: date, minutes: minutes, focus: role == "gym_upper" ? "upper" : nil, muscles: [], fromWeek: true)
+                let gymDays = others.filter { $0.sport == "gym" && $0.date != date }
+                next.gym = try await api.previewGym(date: date, minutes: minutes, focus: role == "gym_upper" ? "upper" : nil, muscles: [], fromWeek: true,
+                                                    gymDays: gymDays.map(\.date),
+                                                    weekSessions: gymDays.compactMap { s in s.gym.map { (date: s.date, rows: $0.rows) } })
             } else {
                 let r = try await api.generateWeekSession(date: date, sport: sport, minutes: minutes, environment: environment, focus: focus,
                                                           resize: resize ? workout?.id : nil)
@@ -511,7 +515,7 @@ struct WeekPlanView: View {
         for i in sessions.indices where !sessions[i].built {
             sessions[i].status = .building
             let id = sessions[i].id
-            let next = await sessions[i].building(model.api)
+            let next = await sessions[i].building(model.api, others: sessions.filter { $0.id != id })
             if let k = sessions.firstIndex(where: { $0.id == id }) { sessions[k] = next }
         }
     }
@@ -752,7 +756,7 @@ struct WeekSessionDetailView: View {
         busy = true
         defer { busy = false }
         session.status = .building
-        session = await session.building(model.api, resize: resize)
+        session = await session.building(model.api, resize: resize, others: others)
     }
 }
 

@@ -5,7 +5,7 @@ import { timingSafeEqualString } from "./dashboard-auth.js";
 import { isInternalCall } from "./internal-auth.js";
 import { buildStrengthContext } from "./strength-context.js";
 import { parseStrengthPlan } from "./strength-history.js";
-import { generateStrengthPlan } from "./strength-generator.js";
+import { generateStrengthPlan, plannedSessionFromRows, weeklyGymDays } from "./strength-generator.js";
 import { readGymPlan, writeStrengthPlanToDb, syncGymPlanHistory } from "./gym-plan-store.js";
 import { buildNutritionPlan, withAppTarget } from "./nutrition-intelligence.js";
 import { applyEnergyBudget } from "./energy-budget.js";
@@ -114,6 +114,19 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
       focusMuscles: body?.focusMuscles,
       excludeExercises: Array.isArray(body?.excludeExercises) ? body.excludeExercises.map(String) : []
     };
+    // The week plan builds its gym days one by one before saving any: the ones
+    // built so far (their rows) and the dates still to come, so the days
+    // follow on from each other instead of repeating one full body.
+    const isDay = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || "")) && d !== context.date;
+    for (const s of (Array.isArray(body?.weekSessions) ? body.weekSessions : []).slice(0, 7)) {
+      if (!isDay(s?.date) || !Array.isArray(s?.rows)) continue;
+      const session = plannedSessionFromRows(s.date, s.rows.slice(0, 120));
+      if (!session.exercises.length) continue;
+      context.strength.plannedSessions = [...(context.strength.plannedSessions || []).filter(x => x.date !== s.date), session];
+    }
+    options.blockDates = (Array.isArray(body?.gymDays) ? body.gymDays : []).filter(isDay).slice(0, 7);
+    const doneDates = (context.strength?.recentCompletedSets || []).map(r => String(r.workout_date || "").slice(0, 10));
+    options.weeklyGymDays = weeklyGymDays(context.date, prefs?.days, [...options.blockDates, ...(context.strength.plannedSessions || []).map(x => x.date), ...doneDates]);
     // A gym plan (training-plans.js) sets the session on its days, unless the
     // athlete chose what to train.
     if (!options.focusMuscles && !(options.focus && options.focusSource !== "week")) {

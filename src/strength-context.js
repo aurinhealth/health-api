@@ -162,8 +162,10 @@ export async function plannedGymSessions(env, date, span = 4) {
   const sessions = [];
   for (const r of rows) {
     let parsed; try { parsed = parseStrengthPlan(JSON.parse(r.values_json)); } catch { continue; }
-    const exercises = [...new Set((parsed.rows || []).filter(x => x.type === "WORK" && !x.completed).map(x => x.exercise))];
-    if (exercises.length && !(await env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?').bind(env.USER_ID, r.workout_date).first())) sessions.push({ date: r.workout_date, exercises });
+    const open = (parsed.rows || []).filter(x => x.type === "WORK" && !x.completed);
+    const exercises = [...new Set(open.map(x => x.exercise))], sets = {}, loads = {};
+    for (const x of open) { sets[x.exercise] = (sets[x.exercise] || 0) + 1; loads[x.exercise] ??= { kg: x.plannedKg ?? null, reps: String(x.plannedReps ?? "") }; }
+    if (exercises.length && !(await env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date=?').bind(env.USER_ID, r.workout_date).first())) sessions.push({ date: r.workout_date, exercises, sets, loads });
   }
   return sessions.sort((a, b) => a.date.localeCompare(b.date));
 }
