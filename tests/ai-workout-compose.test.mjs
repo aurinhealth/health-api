@@ -101,10 +101,14 @@ test("a draft under the chosen band is asked for once more, and the evaluation l
   // The second draft: one more tempo effort, inside the band the first draft missed.
   const harder = [block(300, 55, 65), { repeats: 4, steps: [{ label: "tempo", seconds: 480, low: 83, high: 88 }, { label: "lehce", seconds: 120, low: 50, high: 55 }] }, block(60, 50, 55)];
   const notes = [], ask = async (e, args) => { notes.push(args.instructions); return answer(notes.length > 1 ? harder : tempo45)(); };
-  const w = await composeWorkout(env, { ...day, coach: { readiness: { status: "green" } }, asked: { minDifficulty: d + 1.5, maxDifficulty: 10 }, ask });
-  assert.equal(notes.length, 2, "asked twice");
+  const w = await composeWorkout(env, { ...day, coach: { readiness: { status: "green" } }, asked: { minDifficulty: d + 0.7, maxDifficulty: 10 }, ask });
+  assert.equal(notes.length, 2, "asked twice: one step under the band passes the checks but is still outside it");
   assert.match(notes[1], new RegExp(`rated ${d} .*under the chosen band`));
   assert.ok(w && w.difficulty > d, "the harder draft is kept");
+  notes.length = 0;
+  assert.ok(await composeWorkout(env, { ...day, coach: { readiness: { status: "green" } }, asked: { minDifficulty: d - 0.5, maxDifficulty: d + 0.5 }, ask }), "inside the band");
+  assert.equal(notes.length, 1, "no second ask inside the band");
+  assert.match((await composeWorkout(env, { ...day, ask: async () => { throw new Error("down"); }, diagnose: true })).rejected, /^error: down/);
   const r = await composeWorkout(env, { ...day, asked: { minDifficulty: d + 3, maxDifficulty: 10 }, ask: answer(tempo45), diagnose: true });
   assert.equal(r.rejected, `difficulty ${d}`);
   assert.equal(await composeWorkout(env, { ...day, asked: { minDifficulty: d + 3, maxDifficulty: 10 }, ask: answer(tempo45) }), null, "without diagnose still nothing");

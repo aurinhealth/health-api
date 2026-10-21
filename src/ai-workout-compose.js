@@ -141,10 +141,17 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
       return { r, template, structure, reason, faults: [...composeFaults({ structure, sport, type, length, cap, band }), ...(reason ? [] : ["reason"])] };
     };
     let { r, template, structure, reason, faults } = await compose("");
-    // Only the difficulty is off: once more, with the number it came out at.
-    if (band && faults.length === 1 && faults[0].startsWith("difficulty")) {
-      const d = difficultyFromStructure(type, structure, sport), again = await compose("\n" + retryNote(d, band));
-      if (again.faults.length <= faults.length) ({ r, template, structure, reason, faults } = again);
+    // The difficulty is outside the band itself (the checks allow one step
+    // around it): once more, with the number it came out at; the draft
+    // nearer the band stays (runs 29 and 30: 5.8 for 6.5–10 passed as is).
+    const off = d => d < band[0] ? band[0] - d : d > band[1] ? d - band[1] : 0;
+    const only = f => f.filter(x => !x.startsWith("difficulty"));
+    if (band && !only(faults).length) {
+      const d = difficultyFromStructure(type, structure, sport);
+      if (off(d) > 0) {
+        const again = await compose("\n" + retryNote(d, band));
+        if (!only(again.faults).length && off(difficultyFromStructure(type, again.structure, sport)) < off(d)) ({ r, template, structure, reason, faults } = again);
+      }
     }
     if (faults.length) return diagnose ? { rejected: faults.join(", "), ai: { model: r.model || model || lightModel(env), usage: r.usage || null } } : null;
     const id = newId();
@@ -160,7 +167,7 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
     return workout ? { ...workout, ai: { reason, composed: true, ...(warning ? { warning } : {}) } } : null;
   } catch (error) {
     if (!error?.ai) console.error("Workout compose AI failed", error?.message || error);
-    return null;
+    return diagnose ? { rejected: "error: " + String(error?.message || error).slice(0, 120) } : null;
   }
 }
 
