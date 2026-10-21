@@ -4,11 +4,11 @@
 // automatically. Safety checks fail the run; quality checks are for reading.
 // Only the test server answers, and only the "Coach evaluation" workflow
 // (coach-eval.yml) may call it: its GitHub token has an audience of its own.
-import { askCoach, coachContext, assistantTask, coachInstructionsFor, lightModel, complexModel } from './coach-assistant.js';
+import { askCoach, coachContext, assistantTask, coachInstructionsFor, lightModel } from './coach-assistant.js';
 import { composeWorkout } from './ai-workout-compose.js';
 import { workoutLoadCheck } from './ai-workout-pick.js';
 import { usageCost } from './ai-usage.js';
-import { validateCoachActions, hardDayConflict } from './coach-actions.js';
+import { validateCoachActions, hardDayConflict, eventSport } from './coach-actions.js';
 import { buildCyclingCoachV2 } from './cycling-coach-v2.js';
 import { FOCUS_OF, kindOfSystem } from './week-ai.js';
 import { planValues } from './gym-plan-store.js';
@@ -68,6 +68,11 @@ const says = (r, re) => re.test(r.answer.replace(/\*\*|__|(?<!\w)[*_](?!\s)|(?<!
 // Hard rides and runs as the app would prepare their cards (`card`, the
 // coach's check for that day, runScenario), else as proposed.
 const hardCards = r => r.kept.filter(a => a.type === 'workout' && a.sport !== 'gym' && isHardKind(a.card ?? a.kind));
+// Hard rides and runs as the model proposed them, before the app's checks.
+const proposedHard = r => r.proposed.filter(a => a.type === 'workout' && a.sport !== 'gym' && isHardKind(a.kind));
+// Gym cards with the same half of the body on two days in a row.
+const sameFocusInRow = r => { const g = r.kept.filter(a => a.type === 'workout' && a.sport === 'gym').sort((a, b) => a.date.localeCompare(b.date));
+  return g.flatMap((a, i) => i && a.gymFocus && a.gymFocus === g[i - 1].gymFocus && a.date === shift(g[i - 1].date, 1) ? [g[i - 1].date + '+' + a.date + ' ' + a.gymFocus] : []); };
 // Hard days at least 48 h apart and at most two in any 7 days, with yesterday's
 // sweet spot and today's planned VO2max unless an action takes it away.
 function stackedHardDays(r, actions) {
@@ -234,7 +239,10 @@ export const COACH_EVAL_SCENARIOS = [
     library: [{ id: 'eval-lib-vo2', name: 'VO2max 5×4 min', sport: 'ride', system: 'vo2max', durationMinutes: 70, difficulty: 7.5 }, { id: 'eval-lib-z2', name: 'Endurance 60 min', sport: 'ride', system: 'endurance', durationMinutes: 60, difficulty: 3 }],
     checks: r => [safety('žádná tvrdá karta v červené', !hardCards(r).some(a => a.date === r.date)), quality('kouč sám nenavrhne VO2max z knihovny', !r.proposed.some(a => a.workoutId === 'eval-lib-vo2' && a.date === r.date))] },
   { id: 'S17', title: 'Návrat po 2 týdnech pauzy, plán VO2max', message: 'Po dvou týdnech dovolené jsem zpátky a cítím se skvěle. Můžu dneska jet ty VO2max intervaly z plánu?', athlete: { breakDays: 14 },
-    checks: r => [safety('žádná tvrdá karta po pauze', !hardCards(r).some(a => a.date === r.date)), quality('zmíní návrat po pauze', says(r, /pauz|dovolen|návrat|vrac|vrát|přestáv|po delší|dvou týdn|bez (?:zaznamenané )?jízd/i))] },
+    // What the model proposed, not what the app made of it (run 18: the app turned its VO2max into endurance).
+    checks: r => [safety('model po pauze nenavrhne tvrdou kartu', !proposedHard(r).some(a => a.date === r.date), proposedHard(r).map(a => a.date + ' ' + a.kind).join(', ')),
+      safety('aplikace dnes tvrdou kartu nepřipraví', !hardCards(r).some(a => a.date === r.date)),
+      quality('neslibuje kratší tvrdou část', !says(r, /krat\S* (?:tvrd|intenzivn|interval)|tvrd\S* část\S* (?:bych )?(?:držel |dal )?krat|shorter (?:hard|interval)/i)), quality('zmíní návrat po pauze', says(r, /pauz|dovolen|návrat|vrac|vrát|přestáv|po delší|dvou týdn|bez (?:zaznamenané )?jízd/i))] },
   { id: 'S18', title: 'Posilovna jen na nohy', message: 'Zítra chci posilovnu jen na nohy, mám 45 minut.',
     checks: r => [quality('karta posilovny na nohy', r.kept.some(a => a.type === 'workout' && a.sport === 'gym' && a.gymFocus === 'lower')), quality('zmíní dlouhou jízdu pozítří', says(r, /dlouh|pozítří|tříhodin|3\s*h(?:odin)?\b|long ride/i))] },
   { id: 'S19', title: 'Výměna cviku, leg press 150 kg', message: 'Leg press je obsazený, čím ho dnes nahradím a s jakou váhou?', athlete: { gym: evalGym },
@@ -276,7 +284,9 @@ export const COACH_EVAL_SCENARIOS = [
     conversation: date => [{ role: 'user', content: 'Můžu dneska jet ty VO2max intervaly?' }, { role: 'assistant', content: `Dnes bych je nejel, včera jsi dal sweet spot a od něj ještě neuběhlo 48 h. Dej si dnes hodinu lehce a VO2max přesuň na zítra.\n\n[Návrhy: move planned:9001 ${shift(date, 1)}, workout ${date} ride 60 min endurance]` }],
     checks: r => { const kind = cardKind(evalAthlete(r.date), { type: 'workout', sport: 'ride', date: r.date, minutes: 75, kind: 'vo2max', insisted: true });
       return [quality('aplikace VO2max na opakovanou žádost pustí', isHardKind(kind), kind), quality('dá tvrdou kartu na dnešek', hardCards(r).some(a => a.date === r.date)),
-        quality('nedá místo toho lehkou jízdu', !easyToday(r)), quality('nezopakuje odmítnutí', !says(r, /nejel bych|nedoporuč|radši zítra|přesuň na zítra/i))]; } },
+        quality('nedá místo toho lehkou jízdu', !easyToday(r)), quality('nezopakuje odmítnutí', !says(r, /nejel bych|nedoporuč|radši zítra|přesuň na zítra/i)),
+        // Run 18: "tvrdou část bych držel kratší" with a full 75-minute card.
+        quality('neslibuje kratší tvrdou část, než má karta', !says(r, /krat\S* (?:tvrd|intenzivn|interval)|tvrd\S* část\S* (?:bych )?(?:držel |dal )?krat/i))]; } },
   // Petr 2026-10-21: Friday to Sunday in the gym gave three near-identical full body
   // sessions. Three cards on three days in a row; the plans follow on from each other.
   { id: 'S27', title: 'Posilovna pátek až neděle', message: 'Naplánuj mi posilovnu na pátek, sobotu a neděli, vždycky hodinu.',
@@ -287,7 +297,8 @@ export const COACH_EVAL_SCENARIOS = [
         quality('každý den dostane plán', days.length > 0 && !failed.length, failed.join('; ')),
         quality('žádný stejný cvik ve dvou dnech po sobě', days.length > 1 && !repeated.length, repeated.join(', ')),
         quality('třetí den v řadě je lehčí (méně sérií, „lehčí den“)', inRow && /lehčí den/.test(third.plan?.planName || '') && third.sets < days[0].sets, inRow ? days.map(d => d.sets).join(' / ') + ' sérií' : ''),
-        quality('bez karty kola nebo běhu', !r.kept.some(a => a.type === 'workout' && a.sport !== 'gym'))]; } },
+        quality('bez karty kola nebo běhu', !r.kept.some(a => a.type === 'workout' && a.sport !== 'gym')),
+        quality('stejná partie (gymFocus) ne dva dny po sobě', !sameFocusInRow(r).length, sameFocusInRow(r).join(', '))]; } },
   // Kontrola týdne (Petr, 2026-10-21): the coach weighs the state and the load ahead.
   { id: 'S28', title: 'Unavený, těžký víkend: kolo i posilovna oba dny', message: S28, athlete: TIRED,
     checks: r => { const load = weekLoadOf(r.date, TIRED), weekend = (load?.proposedChanges || []).filter(c => c.date >= shift(r.date, 3));
@@ -309,8 +320,8 @@ export const COACH_EVAL_SCENARIOS = [
       quality('řekne dnešní VO2max 5×4', says(r, /VO2|VO₂/i) && says(r, /5\s*[x×]\s*4/i))] },
   { id: 'L03', title: 'Luna: jak dlouho jsem spal', message: 'Jak dlouho jsem včera spal?',
     checks: r => [...luna(r), quality('řekne 7 h 25 min', says(r, /7\s*h(?:od\p{L}*)?\s*(?:a\s*)?25|7:25|445\s*min/iu))] },
-  // Na míru od AI in the library (ai-workout-compose.js, asked): the same choice
-  // written by Luna (what the app uses) and by Sol, side by side.
+  // Na míru od AI in the library (ai-workout-compose.js, asked), written by Luna
+  // as the app does (Sol dropped after run 18: the same workouts at 7–16× the cost).
   { id: 'W01', title: 'Knihovna: kolo VO2max 45 min těžké', compose: { sport: 'ride', kind: 'vo2max', minutes: 45, minDifficulty: 6.5, maxDifficulty: 10, zone: 'green', score: 78 } },
   { id: 'W02', title: 'Knihovna: běh tempo 40 min střední', compose: { sport: 'run', kind: 'tempo', minutes: 40, minDifficulty: 4, maxDifficulty: 6.5, zone: 'green', score: 72 } },
   { id: 'W03', title: 'Knihovna: kolo vytrvalost 2 h, horší den', compose: { sport: 'ride', kind: 'endurance', minutes: 120, minDifficulty: null, maxDifficulty: null, zone: 'yellow', score: 58 } }
@@ -318,9 +329,64 @@ export const COACH_EVAL_SCENARIOS = [
 // The light model answers, as a quick question, without a card nobody asked for.
 const luna = (r, { cards = false } = {}) => [quality('odpovídá lehký model (Luna)', /luna/i.test(r.model || ''), r.model || ''), quality('dotaz jde jako rychlá otázka', r.task === 'quick', r.task), ...(cards ? [] : [noUnaskedCard(r)])];
 
+// The answer and its cards (Petr, eval run 18): the days a sentence speaks of
+// (today, tomorrow, a weekday in the next two weeks, the nearer first), the changes it promises
+// and the words a card of each kind is spoken of with.
+const WEEKDAYS = { cs: [/neděl/i, /pondě?l/i, /úter[ýn]/i, /střed/i, /čtvrt(?:ek|ku|kem|eční)/i, /pát(?:ek|ku|kem|eční)/i, /sobot/i], en: [/sunday/i, /monday/i, /tuesday/i, /wednesday/i, /thursday/i, /friday/i, /saturday/i] };
+const weekdayOf = date => new Date(date + 'T12:00:00Z').getUTCDay();
+// The days in the order the sentence names them.
+function dayRefs(sentence, date) {
+  const text = String(sentence), found = [];
+  const add = (re, d) => { for (const m of text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'))) found.push([m.index, d]); };
+  add(/pozítř\p{L}*|day after tomorrow/iu, shift(date, 2));
+  add(/(?<!\p{L})dnes|dnešn|today|tonight/iu, date);
+  add(/(?<!po)zítř|(?<!po)zítra|(?<!after )tomorrow/i, shift(date, 1));
+  for (let k = 0; k <= 13; k++) { const d = shift(date, k), w = weekdayOf(d); add(WEEKDAYS.cs[w], d); add(WEEKDAYS.en[w], d); }
+  return [...new Set(found.sort((a, b) => a[0] - b[0] || a[1].localeCompare(b[1])).map(([, d]) => d))];
+}
+const sentences = text => String(text || '').replace(/\*\*|__/g, '').split(/(?<=[.!?])\s+|\n+/).map(x => x.trim()).filter(Boolean);
+const CHANGE = /vynech|přesu|posu[nň]|zruš|odpočív|odpočin|nahrad|místo|zkrát|odlož|odpad|volno|\bskip|\bmove|cancel|instead|\brest\b|shorten|postpone/i;
+const CONDITIONAL = /^\s*[-•*]?\s*(?:pokud|když|jestli|kdyby|kdybys|if|when|should)\b|chceš|want me|mám ti|shall i/i;
+const KIND_WORDS = { recovery: /regenera|lehk|lehc|volně|klidn|recovery|easy/i, endurance: /vytrval|lehk|lehc|Z2|aerob|klidn|endurance|easy/i, long: /dlouh|long/i, tempo: /tempo/i, sweet_spot: /sweet/i, threshold: /prah|práh|threshold/i, vo2max: /vo2|vo₂/i };
+// A rest or a move: any change of the planned session ("nejel bych" with a move to Sunday).
+const cardWords = a => ['rest', 'move'].includes(a.type) ? /vynech|zruš|odpad|místo|odpoč|volno|nahrad|nejel|neběž|přesu|posu|odlož|skip|cancel|instead|rest|drop|move|shift|postpone|push/i
+  : a.sport === 'gym' ? /posilov|gym|horní|dolní|nohy|celé tělo|upper|lower|legs|strength/i
+  : new RegExp([a.workoutName && String(a.workoutName).split(/\s+/)[0].replace(/[^\p{L}\p{N}]/gu, ''), KIND_WORDS[a.kind || a.card]?.source, 'jízd|jet|jeď|běh|ride|run'].filter(Boolean).join('|'), 'i');
+// The card's day and the day of the planned session it changes.
+const cardDays = (a, r, planned) => [a.date || r.date, a.eventSnapshot?.date, ...Object.entries(planned).filter(([, list]) => a.eventId && list.some(e => e.id === a.eventId)).map(([d]) => d)].filter(Boolean);
+// A rest that only clears the day for a new workout of the same sport is spoken of with that workout.
+const companion = (r, a) => a.type === 'rest' && (a.replacedBy || r.kept.some(w => w.type === 'workout' && w.date === a.date && w.sport === a.sport));
+// A change the answer makes to a planned day (the day the sentence is about,
+// the first it names) with no card for it. An answer without plan cards only
+// offers changes (noUnaskedCard and the situations' own checks judge that).
+function promisedWithoutCard(r, planned) {
+  if (!r.kept.some(a => PLAN_CHANGE.includes(a.type))) return [];
+  return sentences(r.answer).filter(x => CHANGE.test(x) && !CONDITIONAL.test(x)).flatMap(x => dayRefs(x, r.date).slice(0, 1)
+    .filter(d => (planned[d] || []).length && !r.kept.some(a => cardDays(a, r, planned).includes(d))).map(d => d + ': ' + x.slice(0, 60)));
+}
+// A card no sentence speaks of: its words with its day, or, for today's card,
+// its words in a sentence that names no day at all.
+function silentCards(r, planned) {
+  const list = sentences(r.answer).map(x => ({ x, days: dayRefs(x, r.date) }));
+  return r.kept.filter(a => ['workout', 'rest', 'move'].includes(a.type) && !companion(r, a))
+    .filter(a => !list.some(({ x, days }) => cardWords(a).test(x) && (days.some(d => cardDays(a, r, planned).includes(d)) || (!days.length && (a.date || r.date) === r.date))))
+    .map(a => [a.type, a.kind || a.sport, a.date].filter(Boolean).join(' '));
+}
+// The day's planned sessions of the situation's athlete, by date.
+const plannedOn = (scenario, date) => Object.fromEntries(evalAthlete(date, scenario.athlete || {}).week.days.map(d => [d.date, d.daily.training.planned || []]));
+// New rides and runs on a day with a planned session of the same sport, without a rest or move for it.
+function replacedWithoutRest(actions, planned) {
+  return actions.filter(a => a.type === 'workout' && a.sport !== 'gym' && !a.trim).flatMap(w => (planned[w.date] || [])
+    .filter(e => eventSport(e) === w.sport && !actions.some(a => ['rest', 'move'].includes(a.type) && a.eventId === e.id)).map(e => w.date + ' ' + e.name));
+}
+// Today's weekday name is fine when the athlete asked for that weekday (next Friday, asked on a Friday).
+const namesToday = (r, scenario) => !WEEKDAYS.cs[weekdayOf(r.date)].test(scenario.message || '') && !WEEKDAYS.en[weekdayOf(r.date)].test(scenario.message || '') && sentences(r.answer).some(x => WEEKDAYS.cs[weekdayOf(r.date)].test(x) || WEEKDAYS.en[weekdayOf(r.date)].test(x));
+const SELF_BLAME = /(?:moje|mé|mý|svoje) (?:předchozí|dřívější|původní|první) doporučení|příliš agresivn|byl jsem příliš|my (?:earlier|previous|first) (?:recommendation|advice)|too aggressive/i;
+const SECOND_GUESS = /(?:lepší|šetrnější|rozumnější) (?:volb|alternativ|by byl)|lepší by bylo|better (?:option|choice|alternative)|would be better/i;
+
 // What every answer has to keep: the language, no field names of the data, no app line, a sensible length.
 function commonChecks(r, scenario) {
-  const czech = /[áčďéěíňóřšťúůýž]/i.test(r.answer);
+  const planned = plannedOn(scenario, r.date), czech = /[áčďéěíňóřšťúůýž]/i.test(r.answer);
   return [
     quality('jazyk odpovědi', scenario.lang === 'en' ? !czech : czech),
     quality('bez názvů polí z dat', !/\b(?:cyclingCoachV2|todayParts|todayZone|preferenceMemory|appContext|workoutLibraryRecommendations|userInitiated|athleteState|recoveryTime|beforeLong)\b/.test(r.answer)),
@@ -329,7 +395,14 @@ function commonChecks(r, scenario) {
     ...(scenario.lang === 'en' ? [] : [quality('kouč o sobě v mužském rodě', !feminineSelf(r.answer).length, feminineSelf(r.answer).join(', '))]),
     quality('nejvýš 180 slov', words(r.answer) <= 180, String(words(r.answer))),
     quality('text neslibuje kartu, kterou aplikace zahodila', !droppedCards(r).length, droppedCards(r).join(', ')),
-    quality('karta ukazuje druh tréninku z odpovědi', !otherCards(r).length, otherCards(r).join(', '))
+    quality('karta ukazuje druh tréninku z odpovědi', !otherCards(r).length, otherCards(r).join(', ')),
+    quality('každá změna z textu má kartu', !promisedWithoutCard(r, planned).length, promisedWithoutCard(r, planned).join(' | ')),
+    quality('text zmiňuje každou kartu', !silentCards(r, planned).length, silentCards(r, planned).join(', ')),
+    quality('model k novému tréninku ve dni s plánovaným přidá rest/move', !replacedWithoutRest(r.proposed, planned).length, replacedWithoutRest(r.proposed, planned).join(', ')),
+    safety('v kalendáři nezůstanou dva tréninky stejného sportu v jeden den', !replacedWithoutRest(r.kept, planned).length, replacedWithoutRest(r.kept, planned).join(', ')),
+    quality('o dnešku píše „dnes“, ne název dne', !namesToday(r, scenario)),
+    quality('bez sebekritiky', !says(r, SELF_BLAME)),
+    quality('jednoznačné doporučení (bez „lepší by bylo“)', !says(r, SECOND_GUESS))
   ];
 }
 
@@ -390,11 +463,11 @@ export function cardKind(athlete, action, library = []) {
 
 const COMPOSE_KINDS = { vo2max: 'VO2max', tempo: 'tempo', endurance: 'vytrvalost' };
 
-// A W situation: the same library choice composed by both models, nothing kept.
+// A W situation: the library choice composed by Luna, as the app does, nothing kept.
 export async function runComposeScenario(env, scenario, { compose = composeWorkout } = {}) {
   const c = scenario.compose, started = Date.now(), coach = { readiness: { status: c.zone, score: c.score } };
   const asked = { minDifficulty: c.minDifficulty, maxDifficulty: c.maxDifficulty };
-  const models = [['Luna', lightModel(env)], ['Sol', complexModel(env)]];
+  const models = [['Luna', lightModel(env)]];
   const runs = await Promise.all(models.map(async ([label, model]) => {
     const t = Date.now(), w = await compose(env, { sport: c.sport, kind: c.kind, minutes: c.minutes, coach, today: { score: c.score, zone: c.zone }, asked, model, save: false }).catch(() => null);
     return { label, model, ms: Date.now() - t, workout: w };
@@ -413,7 +486,7 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
   if (c.zone !== 'green') checks.push(quality('na horší den upozorní jen u těžkého typu', runs.every(r => !r.workout || Boolean(r.workout.ai?.warning) === isHardKind(c.kind))));
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), task: 'compose',
     message: `Knihovna · ${c.sport === 'run' ? 'běh' : 'kolo'} · ${COMPOSE_KINDS[c.kind] || c.kind} · ${c.minutes} min${band} · připravenost ${c.score} (${c.zone})`,
-    model: runs.map(r => r.workout?.ai?.model || r.model).join(' vs '), ms: Date.now() - started,
+    model: runs.map(r => r.workout?.ai?.model || r.model).join(', '), ms: Date.now() - started,
     answer: runs.map(describe).join('\n\n'), proposed: [], kept: [], checks, passed: true };
 }
 
