@@ -192,9 +192,24 @@ struct NightDetail: Decodable, Equatable {
         let e: Double
     }
 
+    /// Heart rate in a 5-minute bucket, minutes from the start of the night.
     struct HeartRate: Decodable, Equatable {
         let m: Double
         let avg: Double?
+        var min: Double? = nil
+        var max: Double? = nil
+    }
+
+    /// A bucket whose peak is 15 bpm or more above the night's average.
+    struct Spike: Decodable, Equatable {
+        let m: Double
+        let max: Double
+    }
+
+    /// One night's average heart rate (Tep po nocích).
+    struct NightHR: Decodable, Equatable {
+        let date: String
+        let avgHr: Double
     }
 
     struct Stats: Decodable, Equatable {
@@ -202,6 +217,7 @@ struct NightDetail: Decodable, Equatable {
         let avgHr: Double?
         let lowHr: Double?
         let lowHrAt: Double?
+        var spikes: [Spike]? = nil
         let hrv: Double?
         let hrvLow: Double?
         let hrvHigh: Double?
@@ -213,5 +229,7 @@ struct NightDetail: Decodable, Equatable {
         let segments: [Segment]?
         let hr: [HeartRate]?
         let stats: Stats?
+        /// The nights up to this one, oldest first.
+        var hrNights: [NightHR]? = nil
     }
 }

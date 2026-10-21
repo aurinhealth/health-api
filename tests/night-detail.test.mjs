@@ -55,3 +55,15 @@ test('an Apple Health night, which carries no clock offset, is read in the user\
   const newYork = await withTimeZone('America/New_York', () => nightDetail(db, { date: '2026-10-07' }));
   assert.equal(newYork.night.bedClock, 17 * 60 + 30); assert.equal(newYork.night.wakeClock, 22 * 60 + 35);
 });
+
+test('the nights before carry their average heart rate, oldest first, ending with this night', async () => {
+  const night = (id, startTime, endTime) => ({ external_id: id, start_time: startTime, end_time: endTime, payload_json: JSON.stringify({ sleep: { interval: { startTime, endTime, startUtcOffset: '7200s' }, stages: id === 'a' ? stages : [] } }) });
+  const rows = [night('a', start, at(305)), night('b', '2026-10-06T20:30:00Z', '2026-10-07T04:30:00Z'), night('c', '2026-10-05T20:30:00Z', '2026-10-06T04:30:00Z')];
+  const bucketsFrom = (iso, count, avg) => Array.from({ length: count }, (_, i) => ({ bucket: Date.parse(iso) / 1000 + i * 300, avg, min: avg - 2, max: avg + 2 }));
+  // Night b has a full hour of heart rate; night c only a few minutes, too little for an average.
+  const earlier = [...bucketsFrom('2026-10-06T21:00:00Z', 12, 54), ...bucketsFrom('2026-10-05T21:00:00Z', 3, 60)];
+  const db = { userId: 7, prepare(q) { return { bind: (...args) => ({ all: async () => ({ results: /data_type='sleep'/.test(q) ? rows
+    : /heart-rate'/.test(q) ? (args[1] === start ? [{ bucket: Date.parse(start) / 1000 + 600, avg: 51, min: 49, max: 55 }] : earlier) : [] }) }) }; } };
+  const d = await nightDetail(db, { date: '2026-10-08' });
+  assert.deepEqual(d.night.hrNights, [{ date: '2026-10-07', avgHr: 54 }, { date: '2026-10-08', avgHr: 51 }]);
+});
