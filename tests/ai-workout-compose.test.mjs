@@ -111,3 +111,11 @@ test("a draft under the chosen band is asked for once more, and the evaluation l
   const longer = [block(600, 55, 65), { repeats: 3, steps: [{ label: "tempo", seconds: 480, low: 80, high: 85 }, { label: "lehce", seconds: 180, low: 50, high: 55 }] }, block(900, 50, 55)];
   assert.match((await composeWorkout(env, { ...day, ask: answer(longer), diagnose: true })).rejected, /^length \d+ min$/);
 });
+
+test("two efforts in a row without a recovery are rejected", async () => {
+  const env = owner(), green = { ...day, kind: "vo2max", coach: { readiness: { status: "green" } } };
+  const split = [block(480, 50, 75), block(240, 112, 118), { repeats: 4, steps: [{ label: "vo2", seconds: 240, low: 112, high: 118 }, { label: "lehce", seconds: 120, low: 45, high: 55 }] }, block(540, 45, 55)];
+  assert.equal((await composeWorkout(env, { ...green, ask: answer(split), diagnose: true })).rejected, "efforts back to back");
+  const whole = [block(480, 50, 75), { repeats: 5, steps: [{ label: "vo2", seconds: 240, low: 112, high: 118 }, { label: "lehce", seconds: 120, low: 45, high: 55 }] }, block(420, 45, 55)];
+  assert.ok(await composeWorkout(env, { ...green, ask: answer(whole) }), "the same efforts in one repeat pass");
+});

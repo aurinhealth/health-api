@@ -16,7 +16,7 @@ import { L } from "./lang.js";
 import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
-import { zonesFor, buildWorkout, difficultyFromStructure } from "./workout-model.js";
+import { zonesFor, buildWorkout, difficultyFromStructure, stepIntensities } from "./workout-model.js";
 import { cleanEnduranceTemplate, enduranceStructure, enduranceSystem } from "./endurance-templates.js";
 import { workoutLoadCheck, hardCapFor, HARD_CAP } from "./ai-workout-pick.js";
 import { isHardKind } from "./session-intensity.js";
@@ -179,7 +179,20 @@ export function composeFaults({ structure, sport = "ride", type, length, cap, ba
     const d = difficultyFromStructure(type, structure, sport);
     if (!(d >= band[0] - 1 && d <= band[1] + 1)) faults.push(`difficulty ${d}`);
   }
+  if (effortsBackToBack(structure, sport)) faults.push("efforts back to back");
   return faults;
+}
+
+// Two efforts with no recovery between them: an effort as its own section
+// right before the repeat, or a repeat that ends with an effort (Coach
+// evaluation runs 27 and 28: 4 + 4×4 min VO2max, 8 + 2×8 min tempo).
+export function effortsBackToBack(structure = [], sport = "ride") {
+  const kinds = stepIntensities(structure, sport), flat = [];
+  structure.forEach((block, i) => {
+    const list = Array.isArray(kinds[i]) ? kinds[i] : [kinds[i]];
+    for (let k = 0; k < (Array.isArray(block.steps) ? Math.max(1, Number(block.repeats) || 1) : 1); k++) flat.push(...list);
+  });
+  return flat.some((kind, i) => kind === "interval" && flat[i - 1] === "interval");
 }
 
 function newId() {
