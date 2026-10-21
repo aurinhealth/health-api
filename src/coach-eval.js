@@ -13,7 +13,7 @@ import { buildCyclingCoachV2 } from './cycling-coach-v2.js';
 import { FOCUS_OF, kindOfSystem } from './week-ai.js';
 import { planValues } from './gym-plan-store.js';
 import { gymLoadEstimate } from './gym-catalog.js';
-import { EXERCISES, generateStrengthPlan } from './strength-generator.js';
+import { EXERCISES, generateStrengthPlan, plannedSessionFromRows, weeklyGymDays } from './strength-generator.js';
 import { buildAdaptiveDecision } from './adaptive-engine.js';
 import { cycleForCoach } from './cycle-model.js';
 import { recoveryTime } from './recovery-time.js';
@@ -143,10 +143,26 @@ const S21 = 'Zítra mám jen 45 minut, dej mi z knihovny nějaké intervaly.';
 // (strength-context.js: the wellness, the nights, the profile), as the app's
 // gym builder and the coach's card preview call it: true when it refuses,
 // otherwise how many work sets it planned.
-function gymRefused(date, athlete) {
-  const a = evalAthlete(date, athlete), context = { date, wellnessSeries: a.health.wellness, sleepSessions: a.health.sleep, profile: a.profile, checkin: null, athleteState: { status: 'active' }, strength: { history: [], recentCompletedSets: [] } };
+function gymContext(date, athlete, plannedSessions = []) {
+  const a = evalAthlete(date, athlete), context = { date, wellnessSeries: a.health.wellness, sleepSessions: a.health.sleep, profile: a.profile, checkin: null, athleteState: { status: 'active' }, strength: { history: [], recentCompletedSets: [], plannedSessions } };
   context.adaptive = buildAdaptiveDecision(context, null);
-  try { return generateStrengthPlan(context, { durationMinutes: 60 }).rows.filter(r => r[0] === 'WORK').length + ' pracovních sérií'; } catch { return true; }
+  return context;
+}
+function gymRefused(date, athlete) {
+  try { return generateStrengthPlan(gymContext(date, athlete), { durationMinutes: 60 }).rows.filter(r => r[0] === 'WORK').length + ' pracovních sérií'; } catch { return true; }
+}
+// The coach's gym cards built as the app builds them (entrypoint.js: several
+// gym cards in one answer are a block, each seeing the others): one plan per card, in date order.
+function gymBlock(r) {
+  const cards = r.kept.filter(a => a.type === 'workout' && a.sport === 'gym').sort((a, b) => a.date.localeCompare(b.date)), dates = cards.map(a => a.date), built = [];
+  return cards.map(a => {
+    const others = dates.filter(d => d !== a.date);
+    try {
+      const plan = generateStrengthPlan(gymContext(a.date, undefined, built.slice()), { durationMinutes: a.minutes || 60, blockDates: others, weeklyGymDays: weeklyGymDays(a.date, [], others) });
+      built.push(plannedSessionFromRows(a.date, plan.rows));
+      return { date: a.date, plan, exercises: [...new Set(plan.rows.filter(x => x[0] === 'WORK').map(x => x[1]))], sets: plan.rows.filter(x => x[0] === 'WORK').length };
+    } catch (error) { return { date: a.date, error: error.message, exercises: [], sets: 0 }; }
+  });
 }
 
 // Each situation: what the athlete writes, their data and what the reply must (safety) or should (quality) do.
@@ -240,6 +256,17 @@ export const COACH_EVAL_SCENARIOS = [
     checks: r => { const kind = cardKind(evalAthlete(r.date), { type: 'workout', sport: 'ride', date: r.date, minutes: 75, kind: 'vo2max', insisted: true });
       return [quality('aplikace VO2max na opakovanou žádost pustí', isHardKind(kind), kind), quality('dá tvrdou kartu na dnešek', hardCards(r).some(a => a.date === r.date)),
         quality('nedá místo toho lehkou jízdu', !easyToday(r)), quality('nezopakuje odmítnutí', !says(r, /nejel bych|nedoporuč|radši zítra|přesuň na zítra/i))]; } },
+  // Petr 2026-10-21: Friday to Sunday in the gym gave three near-identical full body
+  // sessions. Three cards on three days in a row; the plans follow on from each other.
+  { id: 'S27', title: 'Posilovna pátek až neděle', message: 'Naplánuj mi posilovnu na pátek, sobotu a neděli, vždycky hodinu.',
+    checks: r => { const days = gymBlock(r), inRow = days.length === 3 && days.every((d, i) => !i || d.date === shift(days[i - 1].date, 1));
+      const repeated = days.flatMap((d, i) => i ? d.exercises.filter(x => days[i - 1].exercises.includes(x)).map(x => d.date + ' ' + x) : []);
+      const failed = days.filter(d => d.error).map(d => d.date + ': ' + d.error), third = days[2];
+      return [quality('tři karty posilovny na tři dny po sobě', inRow, days.map(d => d.date).join(', ')),
+        quality('každý den dostane plán', days.length > 0 && !failed.length, failed.join('; ')),
+        quality('žádný stejný cvik ve dvou dnech po sobě', days.length > 1 && !repeated.length, repeated.join(', ')),
+        quality('třetí den v řadě je lehčí (méně sérií, „lehčí den“)', inRow && /lehčí den/.test(third.plan?.planName || '') && third.sets < days[0].sets, inRow ? days.map(d => d.sets).join(' / ') + ' sérií' : ''),
+        quality('bez karty kola nebo běhu', !r.kept.some(a => a.type === 'workout' && a.sport !== 'gym'))]; } },
   // Quick questions about the athlete's own numbers: the app answers them with
   // the light model (Luna, coach-assistant.js lightModel), from the same data.
   { id: 'L01', title: 'Luna: jaké mám FTP', message: 'Jaké mám FTP?',

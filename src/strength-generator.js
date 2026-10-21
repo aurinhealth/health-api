@@ -878,10 +878,41 @@ function recentMuscleLoad(history, contextDate) {
 // each), so a second session in the same week picks different exercises.
 function selectionHistory(context) {
   const done = context?.strength?.recentCompletedSets || [];
-  const planned = (context?.strength?.plannedSessions || []).flatMap(s => (s.exercises || []).map(exercise => ({ exercise, workout_date: s.date, type: "WORK", rpe: null, set_no: 1, planned: true })));
+  const planned = (context?.strength?.plannedSessions || []).flatMap(s => (s.exercises || []).map(exercise => ({ exercise, workout_date: s.date, type: "WORK", rpe: null, set_no: 1, planned: true, sets: Number(s.sets?.[exercise]) || null })));
   // A variant stands for its main exercise too: the main one would become the same variant again.
   const asParent = r => { const parent = EXERCISES[normalizeExerciseName(r.exercise)]?.variantOf; return parent ? [r, { ...r, exercise: parent, planned: true }] : [r]; };
   return [...done, ...planned].flatMap(asParent);
+}
+// A gym day's rows ([type, exercise, set, kg, reps, …, done]) as a planned
+// session: its exercises, the work sets of each and the first set's load.
+export function plannedSessionFromRows(date, rows) {
+  const work = (Array.isArray(rows) ? rows : []).filter(r => Array.isArray(r) && r[1] && String(r[0] || "WORK").toUpperCase() === "WORK" && !["TRUE", "true", "1", "ANO", "✓"].includes(String(r[8] ?? "")));
+  const exercises = [...new Set(work.map(r => String(r[1])))], sets = {}, loads = {};
+  for (const r of work) {
+    const ex = String(r[1]); sets[ex] = (sets[ex] || 0) + 1;
+    const kg = Number(String(r[3] ?? "").replace(",", "."));
+    if (!loads[ex]) loads[ex] = { kg: String(r[3] ?? "").trim() !== "" && Number.isFinite(kg) ? kg : null, reps: String(r[4] ?? "") };
+  }
+  return { date, exercises, sets, loads };
+}
+// Movement groups as the parts of a split: what a session trained most.
+const SPLIT_PART = { horizontalPush: "push", verticalPush: "push", triceps: "push", lateralRaise: "push", horizontalPull: "pull", verticalPull: "pull", biceps: "pull", rearDelts: "pull", forearms: "pull", traps: "pull", quad: "legs", hinge: "legs", unilateral: "legs", posterior: "legs", calves: "legs" };
+// Gym days a week from which the sessions are a split instead of full body:
+// four are upper and lower body, five and more push, pull and legs.
+export const SPLIT_FROM = 4;
+export function splitParts(weeklyGymDays) {
+  const n = Number(weeklyGymDays) || 0;
+  return n >= 5 ? ["push", "pull", "legs"] : n >= SPLIT_FROM ? ["upper", "lower"] : null;
+}
+// Gym days in the week of `date`: the week plan's gym chips, or more when the
+// sessions done, planned and about to be built that week are more.
+export function weeklyGymDays(date, planDays = [], dates = []) {
+  const day = dateKey(date); if (!day) return 0;
+  const t = Date.parse(day + "T12:00:00Z"), monday = new Date(t - ((new Date(t).getUTCDay() + 6) % 7) * 86400000).toISOString().slice(0, 10);
+  const sunday = new Date(Date.parse(monday + "T12:00:00Z") + 6 * 86400000).toISOString().slice(0, 10);
+  const inWeek = new Set([day, ...dates.map(dateKey)].filter(d => d && d >= monday && d <= sunday));
+  const planned = (Array.isArray(planDays) ? planDays : []).filter(list => Array.isArray(list) && list.includes("gym")).length;
+  return Math.max(planned, inWeek.size);
 }
 // Exercises per session from its length: about 9–10 minutes each with
 // warm-ups and rests; the timing check below trims what does not fit.
@@ -972,7 +1003,7 @@ function choosePlan(context, options = {}) {
   const score = (ex, rank = 0, withStall = true) => {
     const def = EXERCISES[ex], last = lastExerciseDate.get(ex);
     const recent = last && daysBetween(last, context.date) <= 4 ? 3 : 0;
-    return recent + groupRecency(ex) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
+    return recent + groupRecency(ex) + (adjacentGroups.has(groupOf[ex]) ? 6 : 0) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
   };
 
   // Only a close call between variants: recency and muscle load still decide.
@@ -1011,7 +1042,28 @@ function choosePlan(context, options = {}) {
   candidatesByPattern.horizontalPush.push('Push-up');candidatesByPattern.quad.push('Bodyweight squat');candidatesByPattern.hinge.push('Glute bridge');candidatesByPattern.core.push('Dead bug');
   const groupOf = {}, lastGroupDate = new Map();
   for (const [group, list] of Object.entries(candidatesByPattern)) for (const ex of list) groupOf[ex] ??= group;
-  for (const [ex, d] of lastExerciseDate) { const group = groupOf[ex]; if (group && (!lastGroupDate.has(group) || d > lastGroupDate.get(group))) lastGroupDate.set(group, d); }
+  // The nearest day, before or after: planned sessions later in the week count too.
+  for (const [ex, d] of lastExerciseDate) { const group = groupOf[ex]; if (group && (!lastGroupDate.has(group) || daysBetween(d, context.date) < daysBetween(lastGroupDate.get(group), context.date))) lastGroupDate.set(group, d); }
+
+  // Gym days next to this one (done, planned, or about to be built in the same
+  // week plan) make a block: no exercise again within 48 hours, no movement
+  // group of the day before or after, and the third day in a row is lighter.
+  const gymDates = new Map();
+  const note = (date, exercise) => { const d = dateKey(date); if (!d || d === dateKey(context.date)) return; if (!gymDates.has(d)) gymDates.set(d, new Set()); if (exercise) gymDates.get(d).add(normalizeExerciseName(exercise)); };
+  for (const row of context?.strength?.recentCompletedSets || []) if (String(row.type || "WORK").toUpperCase() === "WORK") note(row.workout_date, row.exercise);
+  for (const session of context?.strength?.plannedSessions || []) { note(session.date); for (const ex of session.exercises || []) note(session.date, ex); }
+  for (const d of options.blockDates || []) note(d);
+  const adjacentExercises = new Set(), adjacentGroups = new Set();
+  for (const [d, list] of gymDates) if (daysBetween(d, context.date) <= 1) for (const ex of list) { adjacentExercises.add(ex); if (groupOf[ex]) adjacentGroups.add(groupOf[ex]); }
+  const shift = k => new Date(Date.parse(dateKey(context.date) + "T12:00:00Z") + k * 86400000).toISOString().slice(0, 10);
+  const inBlock = [...gymDates.keys()].some(d => daysBetween(d, context.date) === 1);
+  const thirdInRow = gymDates.has(shift(-1)) && gymDates.has(shift(-2));
+  // Sets of each small muscle within three days either side.
+  const nearbySets = {};
+  for (const row of history) {
+    const def = EXERCISES[normalizeExerciseName(row.exercise)];
+    if (def && daysBetween(row.workout_date, context.date) <= 3) nearbySets[def.muscle] = (nearbySets[def.muscle] || 0) + (row.planned ? row.sets || 2 : 1);
+  }
 
   // Small muscles (arms, core, shoulders, calves) take turns by how few sets
   // they got in the last 14 days; calves of a cyclist or runner also count the riding.
@@ -1019,10 +1071,13 @@ function choosePlan(context, options = {}) {
   const accessorySets = {};
   for (const row of history) {
     const def = EXERCISES[normalizeExerciseName(row.exercise)];
-    if (def && daysBetween(row.workout_date, context.date) <= 14) accessorySets[def.muscle] = (accessorySets[def.muscle] || 0) + (row.planned ? 2 : 1);
+    if (def && daysBetween(row.workout_date, context.date) <= 14) accessorySets[def.muscle] = (accessorySets[def.muscle] || 0) + (row.planned ? row.sets || 2 : 1);
   }
   const accessories = Object.keys(accessoryMuscle).map((group, order) => ({ group, order, sets: (accessorySets[accessoryMuscle[group]] || 0) + (group === "calves" ? 2 * (sportLoad.get("calves") || 0) + 2 : 0) + (group === "forearms" || group === "traps" ? 4 : 0) }))
     .sort((a, b) => a.sets - b.sets || a.order - b.order).map(x => x.group);
+  // In a block a small muscle of the day before or after waits, and one with
+  // eight sets within three days has had enough for now.
+  const freshAccessories = accessories.filter(g => !adjacentGroups.has(g) && (nearbySets[accessoryMuscle[g]] || 0) < 8);
 
   // An exercise actually done in the last two days is left out entirely.
   const used = new Set((options.excludeExercises || []).map(normalizeExerciseName));
@@ -1030,6 +1085,8 @@ function choosePlan(context, options = {}) {
     const ex = normalizeExerciseName(row.exercise);
     if (ex && daysBetween(row.workout_date, context.date) <= 2) used.add(ex);
   }
+  // Nor one done or planned the day before or after (the same exercise only after 48 hours).
+  for (const ex of adjacentExercises) used.add(ex);
   // A movement already in the session (e.g. a hip thrust) counts against its twin.
   const usedPatterns = new Set();
   function pick(patterns) {
@@ -1048,8 +1105,47 @@ function choosePlan(context, options = {}) {
     muscleExposure: Object.fromEntries(muscleExposure),
     recentWorkoutCount,
     muscleLoad,
-    plannedSessions: context?.strength?.plannedSessions || []
+    plannedSessions: context?.strength?.plannedSessions || [],
+    inBlock,
+    lighterDay: false
   };
+
+  // Four and more gym days a week: a split. The part that rested longest comes
+  // next (done and planned sessions within a week either side), legs not
+  // before a key session. The athlete's own focus or poor recovery decide first.
+  const parts = splitParts(options.weeklyGymDays);
+  if (parts && !forceUpper && !forceLower && !(acuteRecovery && !forceLower)) {
+    const partOf = list => {
+      const count = {}; for (const ex of list) { const p = SPLIT_PART[groupOf[ex]]; if (p) count[p] = (count[p] || 0) + 1; }
+      const total = Object.values(count).reduce((a, b) => a + b, 0) || 1;
+      const trained = new Set(Object.entries(count).filter(([, c]) => c / total >= 0.35).map(([p]) => p));
+      if (trained.has("push") || trained.has("pull")) trained.add("upper");
+      if (trained.has("legs")) trained.add("lower");
+      return trained;
+    };
+    const rested = part => Math.min(99, ...[...gymDates].filter(([, list]) => partOf(list).has(part)).map(([d]) => daysBetween(d, context.date)));
+    const allowed = parts.filter(p => !(protectLegs && (p === "legs" || p === "lower")));
+    const part = allowed.slice().sort((a, b) => rested(b) - rested(a) || parts.indexOf(a) - parts.indexOf(b))[0];
+    const upperAccessories = accessories.filter(g => g !== "calves");
+    const template = {
+      push: ["horizontalPush", "verticalPush", "lateralRaise", "triceps", ["horizontalPush", "verticalPush"], "core", "lateralRaise", "triceps"],
+      pull: ["verticalPull", "horizontalPull", "rearDelts", "biceps", ["horizontalPull", "verticalPull"], "core", "forearms", "traps"],
+      legs: ["quad", "hinge", "unilateral", "posterior", "calves", "core", ["quad", "hinge"]],
+      upper: ["horizontalPush", "horizontalPull", "verticalPush", "verticalPull", ...upperAccessories.slice(0, 4)],
+      lower: ["quad", "hinge", "unilateral", "posterior", "calves", "core"]
+    }[part];
+    const names = { push: L("Push · prsa, ramena, triceps", "Push · chest, shoulders, triceps"), pull: L("Pull · záda, biceps", "Pull · back, biceps"), legs: L("Nohy", "Legs"), upper: "Upper Body", lower: "Lower Body" };
+    const label = { push: L("tlaky (prsa, ramena, triceps)", "pushing (chest, shoulders, triceps)"), pull: L("tahy (záda, biceps)", "pulling (back, biceps)"), legs: L("nohy", "legs"), upper: L("horní polovina těla", "upper body"), lower: L("dolní polovina těla", "lower body") };
+    const days = Math.round(Number(options.weeklyGymDays));
+    return {
+      ...base,
+      name: names[part],
+      split: part,
+      exercises: build(template),
+      rationale: L("Při " + days + " posilovnách týdně trénuješ ve splitu (" + parts.map(p => label[p]).join(" / ") + "), aby se partie nepřekrývaly a stihly zregenerovat. Dnes přichází na řadu " + label[part] + ": " + (rested(part) >= 99 ? "v posledních dnech nebyly na programu." : "naposledy před " + rested(part) + " dny.") + " Cviky se střídají podle toho, co jsi dělal naposledy.", "With " + days + " gym sessions a week you train a split (" + parts.map(p => label[p]).join(" / ") + "), so the muscle groups don't overlap and have time to recover. Today it's " + label[part] + ": " + (rested(part) >= 99 ? "not trained in the last days." : "last trained " + rested(part) + " days ago.") + " The exercises rotate by what you did last.") + sexNote,
+      protectedLegs: part === "legs" || part === "lower" ? false : protectLegs
+    };
+  }
 
   if (forceUpper || (acuteRecovery && !forceLower)) {
     return {
@@ -1080,13 +1176,23 @@ function choosePlan(context, options = {}) {
   // the small muscles in turn, a second pull and push for longer sessions.
   const leg = pick(["quad", "hinge", "posterior", "unilateral"]);
   const kneeFirst = ["quad", "unilateral"].some(p => (candidatesByPattern[p] || []).includes(leg));
-  const exercises = [leg, ...build([["horizontalPush", "verticalPush"], ["horizontalPull", "verticalPull"], kneeFirst ? ["hinge", "posterior"] : ["quad", "unilateral"], accessories[0], accessories[1], ["horizontalPull", "verticalPull"], accessories[2], ["horizontalPush", "verticalPush"], accessories[3]])].filter(Boolean);
+  // In a block of gym days: one push and one pull (the direction the day
+  // before and after did not have), the second leg pattern, then the small
+  // muscles whose turn it is; a second push or pull only from a fresh group.
+  const freshPair = pair => pair.filter(p => !adjacentGroups.has(p));
+  const exercises = inBlock
+    ? [leg, ...build([["horizontalPush", "verticalPush"], ["horizontalPull", "verticalPull"], kneeFirst ? ["hinge", "posterior"] : ["quad", "unilateral"], ...freshAccessories, ...[freshPair(["horizontalPull", "verticalPull"]), freshPair(["horizontalPush", "verticalPush"])].filter(x => x.length)])].filter(Boolean)
+    : [leg, ...build([["horizontalPush", "verticalPush"], ["horizontalPull", "verticalPull"], kneeFirst ? ["hinge", "posterior"] : ["quad", "unilateral"], accessories[0], accessories[1], ["horizontalPull", "verticalPull"], accessories[2], ["horizontalPush", "verticalPush"], accessories[3]])].filter(Boolean);
   const reason = protection.reason || (weekUpper ? L("Podle plánu týdne je blízko klíčový trénink.", "According to the week plan, a key session is coming up.") : "");
+  const fmt = d => { const w = new Date(d + "T12:00:00Z").getUTCDay(); return L(["v neděli", "v pondělí", "v úterý", "ve středu", "ve čtvrtek", "v pátek", "v sobotu"][w], "on " + ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][w]); };
+  const neighbours = [...gymDates.keys()].filter(d => daysBetween(d, context.date) === 1).sort().map(fmt);
+  const blockText = inBlock ? " " + L("Navazuje na posilovnu " + neighbours.join(" a ") + ": jiné pohybové vzory, žádný cvik dřív než po 48 hodinách a malé svaly se střídají." + (thirdInRow ? " Třetí den v řadě je lehčí: méně sérií a váhy nejvýš jako dřív v bloku." : ""), "It follows on from the gym " + neighbours.join(" and ") + ": other movement patterns, no exercise again within 48 hours, and the small muscles take turns." + (thirdInRow ? " The third day in a row is lighter: fewer sets and loads no higher than earlier in the block." : "")) : "";
   return {
     ...base,
-    name: protectLegs?L("Full Body · s rezervou","Full Body · with reserve"):"Full Body",
+    lighterDay: thirdInRow,
+    name: (protectLegs?L("Full Body · s rezervou","Full Body · with reserve"):"Full Body") + (thirdInRow ? L(" · lehčí den", " · lighter day") : ""),
     exercises,
-    rationale: (protectLegs?L("Vyvážený silový trénink zahrnuje i nohy. " + reason + " Proto mají nohy nejvýše 2 pracovní série na cvik a rezervu 3–4 opakování; horní část těla trénuje naplno.", "A balanced strength workout includes the legs too. " + reason + " So the legs get at most 2 work sets per exercise with 3–4 reps in reserve; the upper body trains in full."):L("Vyvážený silový trénink zahrnuje dolní i horní část těla v plné dávce. Výběr cviků zohledňuje skutečné silové tréninky a čerstvost jednotlivých svalů.", "A balanced strength workout covers the lower and upper body at a full dose. The choice of exercises takes your actual strength sessions and the freshness of each muscle into account.")) + sexNote,
+    rationale: blockText.trim() + (blockText ? " " : "") + (protectLegs?L("Vyvážený silový trénink zahrnuje i nohy. " + reason + " Proto mají nohy nejvýše 2 pracovní série na cvik a rezervu 3–4 opakování; horní část těla trénuje naplno.", "A balanced strength workout includes the legs too. " + reason + " So the legs get at most 2 work sets per exercise with 3–4 reps in reserve; the upper body trains in full."):L("Vyvážený silový trénink zahrnuje dolní i horní část těla v plné dávce. Výběr cviků zohledňuje skutečné silové tréninky a čerstvost jednotlivých svalů.", "A balanced strength workout covers the lower and upper body at a full dose. The choice of exercises takes your actual strength sessions and the freshness of each muscle into account.")) + sexNote,
     protectedLegs: protectLegs,
     protectionReason: reason
   };
@@ -1373,11 +1479,18 @@ export function generateStrengthPlan(context, options = {}) {
   const explicitLegs = options.focus === 'lower' || (focusMuscles || []).some(id => ['quads', 'hamstrings', 'hips', 'calves'].includes(id));
   const nearRide = legProtection(context);
   const durationVolume = Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? .75 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? .9 : 1;
-  const volumeModifier = Math.min(Number(context?.adaptive?.strengthVolumeModifier) || 1, durationVolume, deload ? 0.6 : 1);
+  const volumeModifier = Math.min(Number(context?.adaptive?.strengthVolumeModifier) || 1, durationVolume, deload ? 0.6 : 1, chosen.lighterDay ? 0.7 : 1);
+  // An exercise planned a few days before (the same one, 48 hours or more
+  // apart) keeps that day's reps and is never heavier; a lighter day goes a step down.
+  const earlierLoad = new Map();
+  for (const s of (context?.strength?.plannedSessions || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)))) {
+    if (!(String(s.date) < String(context.date)) || daysBetween(s.date, context.date) > 4) continue;
+    for (const [ex, load] of Object.entries(s.loads || {})) earlierLoad.set(normalizeExerciseName(ex), load);
+  }
   const experience = context.trainingSetup?.experience || '', chosenGoal = STRENGTH_GOALS.includes(context.trainingSetup?.goal) ? context.trainingSetup.goal : 'auto';
   const sport = context.profile?.mainSport || context.trainingSetup?.history?.mainSport || '';
   const goal = planPhase ? 'auto' : chosenGoal === 'auto' ? recommendedGoal(sport, experience) : chosenGoal;
-  const maxSets = Math.min(experience==='beginner'?2:Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? 2 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? 3 : 4, goal === 'fitness' ? 3 : 4);
+  const maxSets = Math.min(chosen.lighterDay ? 3 : 4, experience==='beginner'?2:Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 45 ? 2 : Number(options.durationMinutes) > 0 && Number(options.durationMinutes) <= 60 ? 3 : 4, goal === 'fitness' ? 3 : 4);
   let warmedUp = false;
   for (const exercise of exercises) {
     const muscle=EXERCISES[exercise].muscle;
@@ -1390,6 +1503,18 @@ export function generateStrengthPlan(context, options = {}) {
     const reducedDose=!moderated&&(leg?!explicitLegs&&(chosen.protectedLegs||sport>=1.5):sport>=1);
     const cap=Math.min(reducedDose?Math.min(2,maxSets):moderated?Math.min(3,maxSets):maxSets,planPhase?.sets||4);
     const work = workRows(exercise, historyMap, reducedDose||moderated?factor*.9:factor, chosen.protectedLegs&&!explicitLegs, muscleLoad, volumeModifier, cap, athleteSex(context, options), context.date, firstSession, planPhase?.reps||null, goal, experience, context?.trainingSetup?.dumbbellWeights);
+    // The third gym day in a row: about 30 % fewer sets, never under two.
+    if (chosen.lighterDay && work.rows.length > 2) { work.rows.splice(Math.max(2, Math.round(work.rows.length * 0.7))); work.sets = work.rows.length; }
+    const earlier = earlierLoad.get(exercise);
+    if (earlier) {
+      const cap = earlier.kg == null ? null : chosen.lighterDay ? earlier.kg * 0.9 : earlier.kg;
+      for (const row of work.rows) {
+        const kg = Number(String(row[3]).replace(",", "."));
+        if (cap != null && row[3] !== "" && Number.isFinite(kg) && kg > cap) row[3] = kgText(resolveLoad(exercise, cap));
+        if (earlier.reps) row[4] = earlier.reps;
+      }
+      if (cap != null && work.kg != null) work.kg = Math.min(work.kg, cap);
+    }
     if(planPhase)for(const row of work.rows)row[9]+=L('; '+planPhase.phaseName+': RPE '+planPhase.rpe,'; '+planPhase.phaseName+': RPE '+planPhase.rpe);
     if(reducedDose)for(const row of work.rows)row[9]+=L('; sportovní zátěž: nejvýše 2 pracovní série, nech si 3–4 opakování v rezervě (RPE 6–7)','; load from other sports: at most 2 work sets, keep 3–4 reps in reserve (RPE 6–7)');
     // One instruction per set: the deload's reserve replaces "one more rep".
