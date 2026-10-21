@@ -74,8 +74,8 @@ extension APIClient {
 
     /// "Upravit" (apply) or "Nechat" (keep) on Today.
     func decideWeekCheck(date: String, apply: Bool) async throws -> WeekCheck? {
-        let r: WeekCheckResponse = try await send("/app/api/coach/week-check", method: "POST",
-                                                  body: ["date": JSONValue.string(date), "decision": .string(apply ? "apply" : "keep")])
+        let body: JSONObject = ["date": .string(date), "decision": .string(apply ? "apply" : "keep")]
+        let r: WeekCheckResponse = try await send("/app/api/coach/week-check", method: "POST", body: body)
         return r.check
     }
 
@@ -89,14 +89,15 @@ extension APIClient {
             if let role = s.role { x["role"] = .string(role) }
             return .object(x)
         }
-        let r: WeekCheckResponse = try await send("/app/api/coach/week-check/draft", method: "POST",
-                                                  body: ["start": .string(start), "sessions": .array(list)])
+        let body: JSONObject = ["start": .string(start), "sessions": .array(list)]
+        let r: WeekCheckResponse = try await send("/app/api/coach/week-check/draft", method: "POST", body: body)
         return r.check
     }
 
     /// Stretching into a day's plan (not done yet).
     func addStretching(date: String) async throws {
-        let _: JSONValue = try await send("/app/api/recovery", method: "POST", body: ["date": .string(date), "kind": .string("stretch")])
+        let body: JSONObject = ["date": .string(date), "kind": .string("stretch")]
+        let _: JSONValue = try await send("/app/api/recovery", method: "POST", body: body)
     }
 }
 
