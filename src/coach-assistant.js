@@ -1,4 +1,5 @@
 import {assertAIAccess} from './subscription.js';
+import { weekCheckForCoach } from './week-check.js';
 import { buildCyclingCoachV2, CYCLING_COACH_V2_META } from "./cycling-coach-v2.js";
 import { withFocus } from "./athlete-focus.js";
 import { COACH_ACTION_FORMAT, actionInstructions, COACH_VISUALS } from './coach-actions.js';
@@ -239,6 +240,9 @@ export function coachContext({date, daily, week, fitness, health, gym, preferenc
     ...(journal?{journal}:{}),
     today:{training:compactTraining(daily?.training), nutrition:nutritionContext(daily?.nutrition,{daily,week,fluids,date})},
     week:days,
+    // Kontrola týdne (week-check.js): the athlete's state against the load
+    // ahead and the changes the app proposes, when there are any.
+    ...(()=>{const weekLoad=weekCheckForCoach({date,week,fitness,health,profile,readiness:cyclingCoachV2.readiness});return weekLoad?{weekLoad}:{};})(),
     fitness:compactWellness(fitness?.wellness,{date,days:14}),
     sleep:sleepNights(health?.sleep,date),
     ...(()=>{const need=sleepNeedContext(health?.sleep,{date,profile,wellness:health?.wellness});return need?{sleepNeed:need}:{};})(),

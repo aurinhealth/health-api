@@ -85,7 +85,8 @@ import { loadMuscleFatigue, loadTrainingDoses } from "./muscle-fatigue.js";
 import { loadMuscleDetail } from "./muscle-detail.js";
 import { recoveryTime } from "./recovery-time.js";
 import { readGymPlan, ensureGymPlans } from "./gym-plan-store.js";
-import { listRecovery, addRecovery, updateRecovery } from "./recovery-plan.js";
+import { listRecovery, addRecovery, updateRecovery, recoveryRoutine, describeRecovery } from "./recovery-plan.js";
+import { checkWeek, checkSummary, checkChips, checkSignature, strainOf, kindOfPlanned, readWeekCheck, saveWeekCheck, decideWeekCheck, shownWeekCheck } from './week-check.js';
 import { screenText, SCREENS, markScreenTextsStale } from "./screen-texts.js";
 import { nightDetail } from "./night-detail.js";
 import { applyGymSwap } from './coach-gym-adjustment.js';
@@ -706,6 +707,54 @@ async function replacePlannedSession(env, c) {
   return scheduled;
 }
 
+// "Kontrola týdne" (week-check.js): the athlete's state (today's readiness, the
+// two days before it, how hard the last sessions felt, the form today), the
+// wellness row the form is carried from and the load done since it.
+async function weekCheckState(env,inputs,today){
+  const days=inputs.week?.days||[],wellness=inputs.fitness?.wellness||[];
+  const readinessOf=date=>readinessFor({date,google:inputs.health?.wellness||[],intervals:wellness,sessions:inputs.health?.sleep||[],profile:inputs.profile});
+  const now=readinessOf(today),readiness={score:now?.score??null,zone:now?.zone||null};
+  const past=[shiftDate(today,-1),shiftDate(today,-2)].map(date=>({date,zone:readinessOf(date)?.zone||null}));
+  // The effort given anywhere: the library workout's survey (its kind known),
+  // "Jak to šlo?" and the RPE in Intervals.icu (the kind from the ride's
+  // intensity or name). An effort of unknown kind counts only from 9.
+  const efforts=[];
+  for(const f of await recentWorkoutFeedback(env.DB,shiftDate(today,-3)).catch(()=>[]))if(Number(f.rpe)>0&&f.date<today)efforts.push({date:f.date,rpe:Number(f.rpe),kind:f.system?kindOfSystem(f.system):null});
+  for(const x of await listReflections(env.DB,{limit:8}).catch(()=>[]))if(Number(x.rpe)>0&&x.date>=shiftDate(today,-3)&&x.date<today&&!efforts.some(e=>e.date===x.date))efforts.push({date:x.date,rpe:Number(x.rpe),kind:null});
+  for(const d of days.filter(d=>d.date>=shiftDate(today,-3)&&d.date<today))for(const a of d.daily?.training?.completed||[]){
+    const rpe=Number(a.rpe??a.payload?.icu_rpe??a.payload?.perceived_exertion);if(!(rpe>0)||efforts.some(e=>e.date===d.date))continue;
+    const raw=Number(a.intensityFactor??a.payload?.icu_intensity),fi=raw>3?raw/100:raw;
+    efforts.push({date:d.date,rpe,kind:fi>=.88?'threshold':fi>=.8?'tempo':fi>0?'endurance':null});
+  }
+  const start=[...wellness].filter(w=>w?.id<today&&Number.isFinite(Number(w.ctl))&&Number.isFinite(Number(w.atl))).sort((a,b)=>String(a.id).localeCompare(String(b.id))).at(-1);
+  const row=wellness.find(w=>w?.id===today)||start,tsb=row?Number(row.tsb??(Number(row.ctl)-Number(row.atl))):null;
+  const done={};
+  if(start)for(const d of days.filter(d=>d.date>start.id&&d.date<=today))done[d.date]=Number(d.daily?.training?.actualTss)||(d.daily?.training?.completed||[]).reduce((n,a)=>n+(Number(a.tss)||0),0);
+  const strain=strainOf({today,readiness,past,efforts,tsb:Number.isFinite(tsb)?tsb:null});
+  return {readiness,strain,done,start:start?{date:start.id,ctl:Number(start.ctl),atl:Number(start.atl)}:null};
+}
+// The planned sessions of `days` (rides and runs with their workout's kind,
+// gym sessions), as week-check.js reads them; a race or a test stays.
+async function weekCheckSessions(env,days){
+  const rides=await upcomingSessions(env,days),out=[];
+  for(const d of days)for(const a of d.daily?.training?.planned||[]){
+    const id=String(a.id||'');if(!id.startsWith('planned:'))continue;
+    const sport=sportOf(a),minutes=Math.round((Number(a.durationHours)||1)*60),tss=Number(a.tss)||null;
+    if(sport==='gym'){out.push({id,date:d.date,sport,minutes,tss,name:a.name||null,kind:'gym'});continue;}
+    const r=rides.find(x=>x.eventId===id);if(!r)continue;
+    out.push({id,date:d.date,sport:r.sport,minutes:r.minutes,tss,name:r.name,kind:r.kind==='endurance'?kindOfPlanned({sport:r.sport,name:r.name,minutes:r.minutes}):r.kind,environment:r.environment,fixed:/race|závod|zavod|\btest\b/i.test(String(a.name||''))});
+  }
+  return out;
+}
+// May `date` take a moved session: the athlete hasn't set it as a day off.
+async function weekCheckFreeOn(env,dates){
+  const plans=new Map(),free=new Set();
+  for(const date of dates){const w=mondayOfDate(date);if(!plans.has(w))plans.set(w,await getWeekPlan(env.DB,w).catch(()=>null));const p=plans.get(w);if(!p||availabilityOn(p,date).minutes!==0)free.add(date);}
+  return date=>free.has(date);
+}
+// The stretching put in place of a session: its length on the card.
+const stretchMinutes=()=>describeRecovery({kind:'stretch',items:recoveryRoutine({}).items}).minutes;
+
 // Load targets of a week: CTL and daily load from Intervals.icu wellness, what
 // is done or planned per day from D1, then the shared calculation.
 const sportOfType=t=>{t=String(t||'').toLowerCase();return /weight|strength/.test(t)?'gym':/ride|cycl|bike/.test(t)?'ride':/run/.test(t)?'run':null;};
@@ -1021,7 +1070,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const today=localToday();
       const [prefs,state,inputs]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,today)]);
       if(!inputs.week.days.some(d=>d.date===start)){const extra=await handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start));const data=await extra.json();inputs.week.days.push(...(data.days||[]));}
-      const [weather,history]=await Promise.all([weekWeather(prefs.location,start),planningHistory(env,start<localToday()?start:localToday(),28)]),proposal=weekProposal({prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan:await planForWeek(env,ctx,start)});
+      // The athlete's state now (week-check.js): it eases the week, and a week
+      // that starts later by one step less.
+      const strain=await weekCheckState(env,inputs,today).then(x=>({...x.strain,level:start>today?Math.max(0,x.strain.level-1):x.strain.level})).catch(()=>null);
+      const [weather,history]=await Promise.all([weekWeather(prefs.location,start),planningHistory(env,start<localToday()?start:localToday(),28)]),proposal=weekProposal({prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan:await planForWeek(env,ctx,start),strain});
       // "Vygenerovat tréninky": the week's sessions to prepare. Reviewing the plan is the AI chat's job.
       return Response.json({status:'ok',start,proposal},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
@@ -1041,7 +1093,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(!inputs.week.days.some(d=>d.date===start)){const extra=await handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start));const data=await extra.json();inputs.week={...inputs.week,days:[...inputs.week.days,...(data.days||[])]};}
       const [weather,history,plan]=await Promise.all([weekWeather(prefs.location,start),planningHistory(env,start<today?start:today,28),planForWeek(env,ctx,start)]);
       // The rules see an empty week, so they propose every day the athlete has time for.
-      const rules=weekProposal({prefs:{...prefs,days:prefs.days.map(()=>[])},state,start,today,week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan});
+      const strain=await weekCheckState(env,inputs,today).then(x=>({...x.strain,level:start>today?Math.max(0,x.strain.level-1):x.strain.level})).catch(()=>null);
+      const rules=weekProposal({prefs:{...prefs,days:prefs.days.map(()=>[])},state,start,today,week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
       const fallback=rules.items.map(x=>({date:x.date,sport:x.sport==='strength'?'gym':x.sport,minutes:x.minutes,environment:x.sport==='gym'?null:x.environment,kind:null,focus:ROLE_FOCUS[x.role]||null,label:x.label||null,reason:x.reason||null,role:x.role||null,slot:x.slot||0}));
       if(state.status&&state.status!=='active')return Response.json({status:'ok',start,ai:false,summary:null,items:[],warnings:rules.warnings},{headers:{'Cache-Control':'no-store'}});
       const dates=Array.from({length:7},(_,i)=>shiftDate(start,i)),weekDays=inputs.week.days.filter(d=>dates.includes(d.date));
@@ -1054,6 +1107,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const weekdayNames=L(['pondělí','úterý','středa','čtvrtek','pátek','sobota','neděle'],['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']);
       const facts={start,today,note:note||null,...(correction?{correction,previousProposal:previous}:{}),weekDays:dates.map((d,i)=>({date:d,weekday:weekdayNames[i]})),availabilityByDate:Object.fromEntries(dates.map(d=>[d,availabilityOn(prefs,d).minutes??null])),existingSessions,
         rulesProposal:rules.items.map(x=>({date:x.date,sport:x.sport,minutes:x.minutes,environment:x.environment,role:x.role,label:x.label,...(x.plan?{planSession:x.plan.kind}:{})})),recoveryWeek:Boolean(rules.targets?.recovery),readiness,
+        ...(strain?.level?{recentState:{level:strain.level,signs:strain.chips}}:{}),
         weather:Object.fromEntries(Object.entries(weather||{}).map(([d,w])=>[d,{max:w.max,rain:w.rain,wind:w.wind}])),
         trainingPlan:plan.pw?{name:plan.pw.template?.name||null,week:plan.pw.week,weeks:plan.pw.weeks,phase:plan.pw.spec?.phase||null}:null,coach,
         preferenceMemory:state.memories?.length?state.memories:undefined};
@@ -1160,6 +1214,93 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const summary=(r.changes||[]).length&&!changes.length?rulesRevision({...facts,upcoming:[]}).summary:r.summary;
       const revision=await saveRevision(env.DB,{date,signature,revision:{summary,changes,source:r.source}});
       return Response.json({status:'ok',revision},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({message:error.message},{status:400})}
+  }
+  // "Kontrola týdne" on Today (week-check.js): every morning the next seven
+  // days of the calendar against the athlete's state and the form ahead; the
+  // card shows only changes. "Upravit" moves, cancels or eases the sessions and
+  // puts stretching in place of a gym; "Nechat" keeps the plan for the day.
+  if(url.pathname==='/app/api/coach/week-check'&&['GET','POST'].includes(request.method)){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.method==='POST'&&request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const noStore={headers:{'Cache-Control':'no-store'}};
+    try{
+      const today=localToday();
+      if(request.method==='POST'){
+        const body=await request.json().catch(()=>({}));
+        if(body.date!==today||!['apply','keep'].includes(body.decision))throw new Error(L('Tahle kontrola už neplatí.', 'This check has expired.'));
+        const stored=await readWeekCheck(env.DB,today);
+        if(!stored||stored.status!=='pending')return Response.json({status:'ok',check:stored},noStore);
+        if(body.decision==='keep'){await decideWeekCheck(env.DB,today,'kept');return Response.json({status:'ok',check:{...stored,status:'kept'}},noStore);}
+        assertTrainingAllowed(await getAthleteState(env.DB));
+        const changes=[];
+        for(const c of stored.changes||[]){
+          try{
+            if(c.date<today){changes.push({...c,applied:false});continue;}
+            if(c.type==='move')await movePlannedEvent(env,{eventId:c.id,date:c.to.date});
+            else if(c.type==='cancel')await deletePlannedEvent(env,{eventId:c.id});
+            else if(c.type==='recovery'){await deletePlannedEvent(env,{eventId:c.id});await addRecovery(env.DB,{date:c.date,kind:'stretch'});}
+            else if(c.type==='ease'){if(!c.to?.workoutId||!(await replacePlannedSession(env,{eventId:c.id,date:c.date,environment:c.environment||'outdoor',to:c.to}))){changes.push({...c,applied:false});continue;}}
+            changes.push({...c,applied:true});
+          }catch(error){console.error('Week check change failed',error.message);changes.push({...c,applied:false});}
+        }
+        const check={...stored,changes,status:'applied'};
+        await decideWeekCheck(env.DB,today,'applied',{summary:stored.summary,chips:stored.chips,changes});
+        return Response.json({status:'ok',check:{...check,decidedAt:new Date().toISOString()}},noStore);
+      }
+      const athlete=await getAthleteState(env.DB).catch(()=>null);
+      if(athlete?.status&&athlete.status!=='active')return Response.json({status:'ok',check:null},noStore);
+      const stored=await readWeekCheck(env.DB,today);
+      // A decided check stays decided for the day.
+      if(stored&&stored.status!=='pending')return Response.json({status:'ok',check:shownWeekCheck(stored,{today})},noStore);
+      const inputs=await loadCoachInputs(env,ctx,internalAuth,today),to=shiftDate(today,6);
+      const days=(inputs.week?.days||[]).filter(d=>d.date>=today&&d.date<=to);
+      const [state,sessions,freeOn]=await Promise.all([weekCheckState(env,inputs,today),weekCheckSessions(env,days),weekCheckFreeOn(env,Array.from({length:10},(_,i)=>shiftDate(today,i)))]);
+      // The coach's own offer for today and a revision after a workout keep their sessions.
+      const revision=await readRevision(env.DB,today).catch(()=>null),taken=new Set([...(athlete?.nudge?.status==='pending'&&athlete.nudge.day===today?[athlete.nudge.eventId]:[]),...(revision?.status==='pending'?(revision.changes||[]).map(c=>c.eventId):[])]);
+      const list=sessions.map(s=>taken.has(s.id)?{...s,fixed:true}:s);
+      const signature=checkSignature(list,state.strain,state.readiness);
+      if(stored&&stored.signature===signature)return Response.json({status:'ok',check:shownWeekCheck(stored,{today})},noStore);
+      const r=checkWeek({today,from:today,to,sessions:list,done:state.done,start:state.start,strain:state.strain,readiness:state.readiness,freeOn,morning:true});
+      // An eased ride or run gets its workout now, so the card shows what replaces what.
+      const changes=[];
+      for(const c of r.changes){
+        if(c.type==='ease'){
+          const s=list.find(x=>x.id===c.id),built=await generateReplacement(env,ctx,{date:c.date,sport:c.sport,environment:s?.environment||'outdoor',minutes:c.to.minutes,kind:c.to.kind});
+          if(built)changes.push({...c,environment:s?.environment||'outdoor',to:{...c.to,workoutId:built.workoutId,name:built.name,minutes:built.minutes,kind:built.kind}});
+        }else changes.push(c.type==='recovery'?{...c,to:{minutes:stretchMinutes()}}:c);
+      }
+      const check=changes.length?{summary:checkSummary({...r,changes,strain:state.strain,today}),chips:checkChips({strain:state.strain,lowest:r.lowest,floor:r.floor,today}),changes}:{summary:null,chips:[],changes:[]};
+      const saved=await saveWeekCheck(env.DB,{date:today,signature,check});
+      return Response.json({status:'ok',check:shownWeekCheck(saved,{today})},noStore);
+    }catch(error){return Response.json({message:error.message},{status:400})}
+  }
+  // "Kontrola týdne" in Plán týdne: the week built there (not yet saved, as
+  // `sessions` with the app's keys) with the calendar's sessions of that week,
+  // checked the same way. The app changes its drafts on "Upravit".
+  if(url.pathname==='/app/api/coach/week-check/draft'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const body=await request.json().catch(()=>({})),today=localToday(),start=validTrainingDay(body.start)?mondayOfDate(body.start):mondayOfDate(today),last=shiftDate(start,6);
+      const from=start>today?start:today;
+      if(from>last)return Response.json({status:'ok',check:null},{headers:{'Cache-Control':'no-store'}});
+      const ROLE_KIND={quality:'threshold',long:'long',endurance:'endurance',recovery:'recovery'};
+      const drafts=(Array.isArray(body.sessions)?body.sessions:[]).slice(0,28).filter(x=>validTrainingDay(x?.date)&&x.date>=from&&x.date<=last&&['ride','run','gym'].includes(x?.sport)&&x.key).map(x=>{
+        const minutes=Math.max(10,Math.min(360,Math.round(Number(x.minutes)||60))),kind=x.sport==='gym'?'gym':KINDS.includes(x.kind)&&x.kind!=='gym'?x.kind:x.system?kindOfSystem(x.system):ROLE_KIND[x.role]||null;
+        return {id:String(x.key).slice(0,64),date:x.date,sport:x.sport,minutes,kind:kind||kindOfPlanned({sport:x.sport,name:x.name,minutes}),name:typeof x.name==='string'?x.name.slice(0,120):null};
+      });
+      if(!drafts.length)return Response.json({status:'ok',check:null},{headers:{'Cache-Control':'no-store'}});
+      const inputs=await loadCoachInputs(env,ctx,internalAuth,today);
+      if(!inputs.week.days.some(d=>d.date===start)){const extra=await handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start));const data=await extra.json();inputs.week={...inputs.week,days:[...inputs.week.days,...(data.days||[])]};}
+      const days=inputs.week.days.filter(d=>d.date>=today&&d.date<=last);
+      const [state,calendar,freeOn]=await Promise.all([weekCheckState(env,inputs,today),weekCheckSessions(env,days),weekCheckFreeOn(env,Array.from({length:7},(_,i)=>shiftDate(start,i)))]);
+      // The calendar's sessions count but stay; between today and the week they carry the form.
+      const sessions=[...drafts,...calendar.map(s=>({...s,fixed:true}))];
+      const r=checkWeek({today,from,to:last,sessions,done:state.done,start:state.start,strain:state.strain,readiness:state.readiness,freeOn,morning:from===today,moveUntil:last});
+      const changes=r.changes.filter(c=>drafts.some(d=>d.id===c.id)).map(c=>c.type==='recovery'?{...c,to:{minutes:stretchMinutes()}}:c);
+      const check=changes.length?{summary:checkSummary({...r,changes,strain:state.strain,today}),chips:checkChips({strain:state.strain,lowest:r.lowest,floor:r.floor,today}),changes}:null;
+      return Response.json({status:'ok',check},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
   }
   {const r=await handleAccountApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}

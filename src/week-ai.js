@@ -65,6 +65,7 @@ const easedNote = why => L("Lehčí trénink: ", "An easier session: ") + {
   neighbour: L("vedle je jiný tvrdý den.", "there's another hard day next to it."),
   count: L("v týdnu už jsou dva tvrdé dny.", "the week already has two hard days."),
   fatigue: L("forma (TSB) je pod −20, tělo potřebuje ubrat.", "your form (TSB) is below −20, so the body needs less."),
+  tired: L("poslední dny je tělo unavené, potřebuje ubrat.", "your body has been tired the last few days and needs less."),
   recovery: L("tento týden je odpočinkový.", "this is a recovery week.")
 }[why];
 export function gymNote(text) {
@@ -81,8 +82,10 @@ export function gymNote(text) {
 // calendar, done, or a key session of the training plan); they count toward
 // the two hard days and keep the AI's hard days off their neighbours.
 // tsb and recoveryWeek turn the prompt's rules into checks: no hard day below
-// TSB −20 or in a recovery week. A day of the plan (`plan`) is never eased.
-export function sanitizeWeekDays(days, { start, today, prefs = null, readiness = "green", usedByDate = {}, existingSports = {}, fixedHard = [], tsb = null, recoveryWeek = false } = {}) {
+// TSB −20 or in a recovery week. strain: the athlete's state (week-check.js
+// strainOf); tired (2) allows no hard day, strained (1) one. A day of the plan
+// (`plan`) is never eased.
+export function sanitizeWeekDays(days, { start, today, prefs = null, readiness = "green", usedByDate = {}, existingSports = {}, fixedHard = [], tsb = null, recoveryWeek = false, strain = 0 } = {}) {
   const first = today > start ? today : start, last = shift(start, 6);
   const used = new Map(Object.entries(usedByDate).map(([d, m]) => [d, Number(m) || 0])), perDay = new Map(Object.entries(existingSports).map(([d, list]) => [d, list.length]));
   const out = [];
@@ -116,7 +119,7 @@ export function sanitizeWeekDays(days, { start, today, prefs = null, readiness =
   const near = date => [...hardDates].some(d => Math.abs((Date.parse(d) - Date.parse(date)) / 86400000) <= 1);
   for (const x of out) {
     if (x.plan || !HARD_KINDS.has(x.kind)) continue;
-    const why = readiness === "red" && x.date === today ? "red" : num(tsb) != null && num(tsb) < -20 ? "fatigue" : recoveryWeek ? "recovery" : near(x.date) ? "neighbour" : hardDays >= 2 ? "count" : null;
+    const why = readiness === "red" && x.date === today ? "red" : num(tsb) != null && num(tsb) < -20 ? "fatigue" : strain >= 2 || (strain >= 1 && hardDays >= 1) ? "tired" : recoveryWeek ? "recovery" : near(x.date) ? "neighbour" : hardDays >= 2 ? "count" : null;
     if (why) { x.kind = "endurance"; x.reason = easedNote(why); eased++; continue; }
     hardDays++;
     hardDates.add(x.date);
@@ -211,7 +214,7 @@ export async function proposeWeekAI(env, facts, { prefs = null, focus = null, us
   const r = await ask(env, { feature: "week-plan", instructions: withFocus(weekInstructions() + MEMORY_RULE(), focus), input: L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts), format: WEEK_SCHEMA, maxOutputTokens: 4000, model: complexModel(env) });
   let parsed; try { parsed = JSON.parse(r.text); } catch { const error = new Error(L("Návrh týdne se nepodařilo zpracovat. Zkus to znovu.", "The week couldn't be processed. Try again.")); error.ai = true; throw error; }
   const asked = lockPlanDays(applyRequests(parsed?.days, parsed?.requested, { start: facts.start }), planDays, facts.trainingPlan?.name || null);
-  const days = sanitizeWeekDays(asked, { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports, fixedHard, tsb: facts.readiness?.tsb ?? null, recoveryWeek: Boolean(facts.recoveryWeek) });
+  const days = sanitizeWeekDays(asked, { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports, fixedHard, tsb: facts.readiness?.tsb ?? null, recoveryWeek: Boolean(facts.recoveryWeek), strain: facts.recentState?.level || 0 });
   // A summary written for days the checks then eased would promise them still.
   return { summary: days.eased ? null : String(parsed?.summary || "").trim().slice(0, 400) || null, items: itemsFromDays(days) };
 }

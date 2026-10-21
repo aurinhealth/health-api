@@ -10,7 +10,7 @@ const failed = (id, reply) => checkReply(scenarioById(id), reply).filter(c => !c
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
-  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 26 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
+  assert.deepEqual(COACH_EVAL_SCENARIOS.map(s => s.id), [...Array.from({ length: 26 }, (_, i) => 'S' + String(i + 1).padStart(2, '0')), 'S28', 'S29', 'L01', 'L02', 'L03', 'W01', 'W02', 'W03']);
   const zone = id => scenarioContext(scenarioById(id), date, now).ctx.cyclingCoachV2.readiness;
   assert.equal(zone('S01').todayZone, 'green');
   for (const id of ['S02', 'S03', 'S08']) assert.equal(zone(id).status, 'red', id);
@@ -73,7 +73,7 @@ test('only the test server answers, and only the evaluation workflow', async () 
   assert.equal((await handleCoachEval(post({}), staging, null)).status, 401);
   assert.equal((await handleCoachEval(post({}), staging, { kind: 'system' })).status, 401);
   const list = await (await handleCoachEval(post({}), staging, { kind: 'coach-eval' })).json();
-  assert.equal(list.scenarios.length, 32);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
+  assert.equal(list.scenarios.length, 34);assert.equal(list.scenarios.find(s => s.id === 'S10').lang, 'en');
   const run = async (env, s) => ({ id: s.id, status: 'ok', lang: lang() });
   assert.deepEqual(await (await handleCoachEval(post({ id: 'S04' }), staging, { kind: 'coach-eval' }, { run })).json(), { id: 'S04', status: 'ok', lang: 'cs' });
   assert.equal((await (await handleCoachEval(post({ id: 'S10' }), staging, { kind: 'coach-eval' }, { run })).json()).lang, 'en');
@@ -246,4 +246,15 @@ test('S15: a hard session the answer makes conditional stays in the text, not a 
   assert.equal(ok('Na středu bych připravil VO2max, jen pokud se budeš cítit zotavený.', vo2), false);
   assert.equal(ok('Na středu bych připravil VO2max.', vo2), true);
   assert.equal(ok('Na středu VO2max, jen pokud se budeš cítit zotavený. Napiš mi.', []), true);
+});
+
+test('S28/S29: the week check proposes easing a heavy weekend only when the athlete is tired', () => {
+  const tired = scenarioContext(scenarioById('S28'), date, now).ctx.weekLoad;
+  assert.equal(tired.state, 'tired');
+  assert.ok(tired.proposedChanges.some(c => c.date >= '2026-10-19' && ['planned:9103', 'planned:9105'].includes(c.eventId)));
+  assert.equal(scenarioContext(scenarioById('S29'), date, now).ctx.weekLoad, undefined);
+  const answer = 'Na tvůj stav je toho o víkendu moc, sobotní posilovnu bych přesunul.';
+  assert.deepEqual(failed('S28', { answer, kept: [{ type: 'move', eventId: 'planned:9103', date: '2026-10-21' }] }), []);
+  assert.ok(failed('S28', { answer: 'Zvládneš to, jen jez.', kept: [] }).includes('quality:kouč navrhne zrušit nebo přesunout víkendovou aktivitu'));
+  assert.ok(failed('S29', { answer: 'Zvládneš to, víkend nech, jak je.', kept: [{ type: 'rest', eventId: 'planned:9104' }] }).includes('quality:kouč víkend nezruší ani nepřesune'));
 });
