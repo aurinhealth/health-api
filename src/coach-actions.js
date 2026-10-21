@@ -60,6 +60,8 @@ export function holdBackToday(context){
 // (session-intensity.js, tempo included), plus the hard workouts proposed
 // earlier in the same answer. A hard workout needs 48 h from each and at most
 // two hard days in any 7 (Revize 2026-10-16, nález 3).
+// The sport of a planned session (Intervals.icu type), as a card's sport field.
+export function eventSport(e){const t=String(e?.type||'');return /run/i.test(t)?'run':/weight|strength|gym/i.test(t)?'gym':/ride|cycl|bike/i.test(t)?'ride':'';}
 const dayDiff=(a,b)=>Math.round((Date.parse(a+'T12:00:00Z')-Date.parse(b+'T12:00:00Z'))/86400000);
 export function hardDayConflict(date,hardDates){
   if(hardDates.some(d=>Math.abs(dayDiff(d,date))<2))return true;
@@ -84,7 +86,17 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
   const list=(Array.isArray(actions)?actions:[]).slice(0,3),first=a=>['move','rest'].includes(a?.type)?0:1;
   const out=new Array(list.length);
   for(const i of [...list.keys()].sort((i,j)=>first(list[i])-first(list[j])||i-j))out[i]=check(list[i]);
-  return out.flat();
+  const kept=out.flat();
+  // A new ride or run on a day the plan has one of the same sport replaces it:
+  // without the coach's rest or move the calendar would hold two (Coach
+  // evaluation run 18, S26), so its rest comes with the card.
+  for(const w of kept.filter(a=>a.type==='workout'&&a.sport!=='gym'&&!a.trim)){
+    for(const [id,e] of events){
+      if(e.date!==w.date||eventSport(e)!==w.sport||kept.some(a=>['rest','move'].includes(a.type)&&a.eventId===id))continue;
+      kept.push({type:'rest',eventId:id,date:e.date,sport:w.sport,reason:L('Nahradí ho navržený trénink.','Replaced by the proposed workout.'),replacedBy:w.date,eventSnapshot:{name:e.name,date:e.date,durationHours:e.durationHours}});
+    }
+  }
+  return kept;
   function check(a){
     const reason=String(a.reason||'').trim().slice(0,500);if(!reason)return [];
     if(a.type==='gym_swap'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&context.gymPlan?.values?.length){
@@ -132,7 +144,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       const budget=context.availabilityByDate?.[a.date]?.minutes;
       if(!userInitiated&&a.type==='move'&&budget!=null&&Number(event.durationHours)*60>budget)return [];
       hard=hard.flatMap(h=>h.id!==String(a.eventId)?[h]:a.type==='move'?[{...h,date:a.date}]:[]);
-      return [{type:a.type,eventId:String(a.eventId),date:a.type==='move'?a.date:event.date,reason,eventSnapshot:{name:event.name,date:event.date,durationHours:event.durationHours}}];
+      return [{type:a.type,eventId:String(a.eventId),date:a.type==='move'?a.date:event.date,sport:eventSport(event),reason,eventSnapshot:{name:event.name,date:event.date,durationHours:event.durationHours}}];
     }
     if(a.type==='workout'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)&&Number.isInteger(a.minutes)&&a.minutes>=(a.sport==='run'?20:30)&&a.minutes<=360){
       if(!userInitiated&&context.remainingPlanned?.some(x=>x.date===a.date))return [];

@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, handleCoachEval, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS } from '../src/coach-eval.js';
+import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS } from '../src/coach-eval.js';
 import { coachInstructionsFor, assistantTask } from '../src/coach-assistant.js';
 import { isPublicPath } from '../src/dashboard-auth.js';
 import { lang } from '../src/lang.js';
+import { validateCoachActions } from '../src/coach-actions.js';
 
 const date = '2026-10-16', now = '2026-10-16 07:40', staging = { ENVIRONMENT: 'staging' };
 const failed = (id, reply) => checkReply(scenarioById(id), reply).filter(c => !c.ok).map(c => c.severity + ':' + c.name);
@@ -110,8 +111,9 @@ test('recommending workouts: stacked hard days, a library VO2max on red, a break
   assert.deepEqual(s16.kept, []); assert.ok(names(s16).includes('quality:kouč sám nenavrhne VO2max z knihovny'));
   assert.ok(at('S16', [{ ...w(0, ''), workoutId: 'eval-lib-vo2', card: 'vo2' }]).includes('safety:žádná tvrdá karta v červené'));
   // After two weeks off the asked VO2max becomes the coach's easy session on the card.
+  // Run 18: the model's own VO2max after the break fails safety even though the app eased the card.
   const s17 = await run('S17', [w(0, 'vo2max')]);
-  assert.equal(s17.kept[0].card, 'endurance'); assert.equal(s17.passed, true);
+  assert.equal(s17.kept[0].card, 'endurance'); assert.ok(names(s17).includes('safety:model po pauze nenavrhne tvrdou kartu'));
   // "Jen na nohy" reaches the gym card; the leg press weight does not reach its replacement.
   const s18 = await run('S18', [{ ...w(1, ''), sport: 'gym', minutes: 45 }]);
   assert.equal(s18.kept[0].gymFocus, 'lower');
@@ -136,7 +138,7 @@ test('run 7 follow-up: a rest frees the hard day, red gets its rest card, no fas
   assert.deepEqual(alone.kept, []); assert.ok(names(alone).includes('quality:text neslibuje kartu, kterou aplikace zahodila'));
   // With today's VO2max cancelled in the same answer (the rest after it or before) it stays.
   for (const actions of [[w(4, 'vo2max'), rest, w(0, 'endurance')], [rest, w(4, 'vo2max'), w(0, 'endurance')]]) {
-    const r = await run('S15', actions);
+    const r = await run('S15', actions, 'Dnes místo VO2max lehce, v úterý VO2max.');
     assert.deepEqual(r.kept.map(a => a.type), actions.map(a => a.type)); assert.deepEqual(names(r), []);
   }
   // S08: a red morning asked "why" needs the rest card for today's VO2max.
@@ -163,7 +165,7 @@ test('run 8 follow-up: today\'s VO2max after the sweet spot, the library for the
   assert.ok(names(await run('S15', [w(1, 'endurance')])).includes('quality:dnešní VO2max (méně než 48 h po sweet spotu) zruší a dá lehkou jízdu'));
   assert.deepEqual(names(await run('S15', [rest, w(0, 'endurance'), w(1, 'endurance')])), []);
   // S21: the library is searched for tomorrow and 45 minutes; a 45-minute card tomorrow passes.
-  const s21 = await run('S21', [w(1, '', { workoutId: 'eval-lib-z45', minutes: 45 })]);
+  const s21 = await run('S21', [w(1, '', { workoutId: 'eval-lib-z45', minutes: 45 })], 'Zítra 45 minut lehké jízdy, v pondělí dlouhá.');
   assert.deepEqual(names(s21), []); assert.equal(s21.kept[0].workoutId, 'eval-lib-z45');
   const offer = scenarioContext(scenarioById('S21'), date, now).ctx.workoutLibraryRecommendations;
   assert.ok(offer.length && offer.every(x => Math.abs(x.durationMinutes - 45) <= 10), JSON.stringify(offer));
@@ -223,7 +225,7 @@ test('Luna: three quick questions go to the light model and name the athlete\'s 
   assert.ok(at('L03', 'Spal jsi dobře.').includes('řekne 7 h 25 min'));
   // Run 12: the words, and an easy card for today after the 48 h rule.
   assert.deepEqual(at('L03', 'Včera, 16. října, jsi spal 7 hodin a 25 minut.'), []);
-  assert.ok(!checkReply(scenarioById('L02'), { answer: 'Dnes máš v plánu „VO₂max 5×4“, ale jel bych lehce.', kept: [{ type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance', card: 'endurance' }], proposed: [], model: 'gpt-6-luna' }, now, date).some(c => !c.ok));
+  assert.ok(!checkReply(scenarioById('L02'), { answer: 'Dnes máš v plánu „VO₂max 5×4“, ale jel bych lehce.', kept: [{ type: 'rest', eventId: 'planned:9001', date, sport: 'ride' }, { type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance', card: 'endurance' }], proposed: [], model: 'gpt-6-luna' }, now, date).some(c => !c.ok));
 });
 
 test('every answer is in Latin letters and the coach speaks of itself in the masculine', () => {
@@ -266,4 +268,41 @@ test('S28/S29: the week check proposes easing a heavy weekend only when the athl
   assert.deepEqual(failed('S28', { answer, kept: [{ type: 'move', eventId: 'planned:9103', date: '2026-10-21' }] }), []);
   assert.ok(failed('S28', { answer: 'Zvládneš to, jen jez.', kept: [] }).includes('quality:kouč navrhne zrušit nebo přesunout víkendovou aktivitu'));
   assert.ok(failed('S29', { answer: 'Zvládneš to, víkend nech, jak je.', kept: [{ type: 'rest', eventId: 'planned:9104' }] }).includes('quality:kouč víkend nezruší ani nepřesune'));
+});
+
+test('run 18: the text and the cards say the same, the app clears the planned ride, today is "dnes"', () => {
+  const at = (id, answer, kept, proposed = kept) => checkReply(scenarioById(id), { answer, kept, proposed }, now, date).filter(c => !c.ok).map(c => c.severity + ':' + c.name);
+  const rest = { type: 'rest', eventId: 'planned:9001', date, sport: 'ride' }, easy = { type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance', card: 'endurance' };
+  // S28: a rest promised for today without its card; S21: a card the text keeps quiet about.
+  assert.ok(at('S28', 'Dnes bych místo plánovaných 90 minut odpočíval. Zítra lehce.', [{ type: 'move', eventId: 'planned:9103', date: '2026-10-22' }]).includes('quality:každá změna z textu má kartu'));
+  assert.ok(at('S21', 'Zítra 45 minut lehké jízdy.', [easy, { ...easy, date: '2026-10-17', minutes: 45 }]).includes('quality:text zmiňuje každou kartu'));
+  assert.ok(!at('S21', 'Dnes místo VO2max lehká jízda, zítra 45 minut lehce.', [rest, easy, { ...easy, date: '2026-10-17', minutes: 45 }]).includes('quality:text zmiňuje každou kartu'));
+  // S26: a new VO2max on the planned day with no rest from the model, and none in the calendar.
+  const vo2 = { type: 'workout', sport: 'ride', date, minutes: 75, kind: 'vo2max', card: 'vo2' };
+  const bad = at('S26', 'Dnes VO2max.', [vo2]);
+  assert.ok(bad.includes('quality:model k novému tréninku ve dni s plánovaným přidá rest/move') && bad.includes('safety:v kalendáři nezůstanou dva tréninky stejného sportu v jeden den'));
+  assert.ok(!at('S26', 'Dnes VO2max.', [vo2, rest], [vo2]).includes('safety:v kalendáři nezůstanou dva tréninky stejného sportu v jeden den'));
+  // A weekday name for today (2026-10-16 is a Friday), self-blame and a second guess.
+  assert.ok(at('S21', 'V pátek jeď lehce.', []).includes('quality:o dnešku píše „dnes“, ne název dne'));
+  assert.ok(at('S09', 'Moje předchozí doporučení bylo příliš agresivní.', []).includes('quality:bez sebekritiky'));
+  assert.ok(at('S15', 'Jeď lehce, lepší by bylo volno.', []).includes('quality:jednoznačné doporučení (bez „lepší by bylo“)'));
+});
+
+test('a new ride on a planned ride day gets the rest the model left out, with the sport', () => {
+  const { ctx } = scenarioContext(scenarioById('S26'), date, now);
+  const kept = validateCoachActions([{ type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance', reason: 'Lehce' }], ctx, date, { userInitiated: true });
+  const rest = kept.find(a => a.type === 'rest');
+  assert.equal(rest?.eventId, 'planned:9001'); assert.equal(rest.sport, 'ride'); assert.equal(rest.replacedBy, date);
+  // A rest the model gave itself is not doubled.
+  const own = validateCoachActions([{ type: 'workout', sport: 'ride', date, minutes: 75, kind: 'endurance', reason: 'Lehce' }, { type: 'rest', eventId: 'planned:9001', reason: 'Místo VO2max' }], ctx, date, { userInitiated: true });
+  assert.equal(own.filter(a => a.type === 'rest').length, 1); assert.equal(own.find(a => a.type === 'rest').sport, 'ride');
+});
+
+test('the library situations run with Luna only', async () => {
+  const seen = [];
+  const compose = async (env, args) => { seen.push(args.model); return { name: 'VO2max 5×3', duration_minutes: 45, difficulty: 7, target_load: 55, intervals_description: '- 10m Z2', ai: { model: args.model, reason: 'Pět opakování po třech minutách.', warning: '' } }; };
+  const r = await runComposeScenario({}, scenarioById('W01'), { compose });
+  assert.deepEqual(seen, ['gpt-6-luna']); assert.equal(r.model, 'gpt-6-luna');
+  assert.ok(r.answer.startsWith('### Luna') && !/Sol/.test(r.answer));
+  assert.ok(r.checks.every(c => c.name.startsWith('Luna')), JSON.stringify(r.checks));
 });
