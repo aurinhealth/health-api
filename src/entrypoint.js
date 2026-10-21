@@ -384,7 +384,11 @@ const worker = {
     const www = wwwRedirect(url);
     if (www) return www;
     // Static pages stay independent of storage availability.
-    if (STATIC_PATHS.has(url.pathname) && request.method === 'GET') return staticRoute(url, request, env);
+    // Crawlers and link checkers ask with HEAD too; a 401 there keeps the site out of search.
+    if (STATIC_PATHS.has(url.pathname) && (request.method === 'GET' || request.method === 'HEAD')) {
+      const page = await staticRoute(url, request, env);
+      return request.method === 'HEAD' ? new Response(null, page) : page;
+    }
     try { await ensureTenancy(env.DB, env, { request }); }
     catch (error) {
       if (error instanceof TenancyUpgradeInProgress) return Response.json({status:"error",message:error.message},{status:503,headers:{"Retry-After":"30","Cache-Control":"no-store"}});
@@ -647,7 +651,7 @@ async function coachPush(env, ctx) {
     const readiness = morningDue ? readinessFor({ date, google: inputs.health?.wellness || [], intervals: inputs.fitness?.wellness || [], sessions: inputs.health?.sleep || [], profile: inputs.profile }) : null;
     nudge = coachNudge({ date, hour, morning: morningDue, evening: eveningDue, upcoming, sleep: inputs.health?.sleep || [],
       illness: morningDue ? illnessWarning({ date, readiness, state, week: inputs.week }) : null,
-      recovery: morningDue ? proactiveAdvice({ ...inputs, state }) : null });
+      recovery: morningDue ? proactiveAdvice({ ...inputs, state, readiness }) : null });
   }
   if (!nudge) return { sent: 0, reason: 'nothing-to-say' };
   if (!(await claim(COACH_PUSH, date))) return { sent: 0, reason: 'already-sent' };
@@ -985,7 +989,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const date=localToday(),state=await getAthleteState(env.DB),inputs=await loadCoachInputs(env,ctx,internalAuth,date);
       // The signs of an oncoming illness come first, then the general break advice.
       const readiness=readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
-      const advice=swapOffer(state,date)||illnessWarning({date,readiness,state,week:inputs.week})||proactiveAdvice({...inputs,state})||memoryCheck(state,date);
+      const advice=swapOffer(state,date)||illnessWarning({date,readiness,state,week:inputs.week})||proactiveAdvice({...inputs,state,readiness})||memoryCheck(state,date);
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
@@ -1657,7 +1661,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         }
       }
       await env.DB.prepare('UPDATE coach_inbox SET status=?,confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(body.decision==='confirm'?'confirmed':'rejected',env.USER_ID,row.id).run();
-      const done={activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
+      const done={week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
       return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):done||L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result,undo:result?.undo||null},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}
   }

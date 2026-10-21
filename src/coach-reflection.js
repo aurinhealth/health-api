@@ -77,7 +77,11 @@ export function fillWellness(intervals = [], watch = []) {
 }
 
 // Deterministic signals, strongest first. `date` is the workout's day.
-export function reflectionSignals({ date, feedback = {}, workout = {}, activities = [], wellness = [], sleep = [], recentFeedback = [] }) {
+// `body` (optional) is the day's HRV and resting heart rate as Today shows
+// them, with the athlete's normal: { hrv: { value, usual }, restingHR: { value,
+// usual } } from the readiness (athlete-state.js proactiveAdvice), so a note
+// on Today never quotes another number than the tile above it.
+export function reflectionSignals({ date, feedback = {}, workout = {}, activities = [], wellness = [], sleep = [], recentFeedback = [], body = null }) {
   const out = [], system = workout.system || null, sport = workout.sport === "run" ? "run" : "ride";
   const rpe = n(feedback.rpe), range = EXPECTED_RPE[system];
 
@@ -131,9 +135,15 @@ export function reflectionSignals({ date, feedback = {}, workout = {}, activitie
     if (d < 360 || (usualSleep != null && d <= usualSleep - 45)) signal(out, "sleep_short", 2, L(`Spánek ${hm(d)}${usualSleep != null ? ", obvykle " + hm(usualSleep) : ""}.`, `Sleep ${hm(d)}${usualSleep != null ? ", usually " + hm(usualSleep) : ""}.`), { minutes: d, usual: usualSleep == null ? null : round(usualSleep) });
   }
   const before = Array.from({ length: 14 }, (_, i) => w.get(shift(date, -i - 1))).filter(Boolean);
-  const hrv = n(w.get(date)?.hrv), hrvUsual = mean(before.map(x => n(x.hrv)));
-  if (hrv != null && hrvUsual && hrv <= hrvUsual * 0.9) signal(out, "hrv_low", 2, L(`HRV ${round(hrv)} ms je pod tvým průměrem ${round(hrvUsual)} ms (−${round((1 - hrv / hrvUsual) * 100)} %).`, `HRV ${round(hrv)} ms is below your average of ${round(hrvUsual)} ms (−${round((1 - hrv / hrvUsual) * 100)} %).`), { hrv, usual: round(hrvUsual) });
-  const rhr = n(w.get(date)?.restingHR), rhrUsual = mean(before.map(x => n(x.restingHR)));
+  const ownHrv = body?.hrv && n(body.hrv.value) != null ? body.hrv : null, ownRhr = body?.restingHR && n(body.restingHR.value) != null ? body.restingHR : null;
+  const hrv = ownHrv ? n(ownHrv.value) : n(w.get(date)?.hrv), hrvUsual = ownHrv ? n(ownHrv.usual) : mean(before.map(x => n(x.hrv)));
+  if (hrv != null && hrvUsual && hrv <= hrvUsual * 0.9) {
+    const minus = round((1 - hrv / hrvUsual) * 100);
+    signal(out, "hrv_low", 2, ownHrv
+      ? L(`HRV ${round(hrv)} ms je pod tvou normou ${round(hrvUsual)} ms (−${minus} %).`, `HRV ${round(hrv)} ms is below your normal of ${round(hrvUsual)} ms (−${minus} %).`)
+      : L(`HRV ${round(hrv)} ms je pod tvým průměrem ${round(hrvUsual)} ms (−${minus} %).`, `HRV ${round(hrv)} ms is below your average of ${round(hrvUsual)} ms (−${minus} %).`), { hrv, usual: round(hrvUsual) });
+  }
+  const rhr = ownRhr ? n(ownRhr.value) : n(w.get(date)?.restingHR), rhrUsual = ownRhr ? n(ownRhr.usual) : mean(before.map(x => n(x.restingHR)));
   if (rhr != null && rhrUsual && rhr >= rhrUsual + 4) signal(out, "rhr_high", 1.5, L(`Klidový tep ${round(rhr)} bpm je o ${round(rhr - rhrUsual)} vyšší než obvyklých ${round(rhrUsual)}.`, `Resting heart rate of ${round(rhr)} bpm is ${round(rhr - rhrUsual)} above your usual ${round(rhrUsual)}.`), { rhr, usual: round(rhrUsual) });
 
   return out.sort((a, b) => b.weight - a.weight);

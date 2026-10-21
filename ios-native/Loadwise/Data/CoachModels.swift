@@ -132,7 +132,9 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "activity_kcal":
             let what = activityName.flatMap { $0.isEmpty ? nil : L10n.f("„%@“", $0) } ?? L10n.tr("aktivity")
             return L10n.f("Kalorie %@ (%@): %@ kcal", what, day, Fmt.int(kcal))
-        case "week_sport": return L10n.f("Týdenní plán: %@ %@", day, L10n.tr(["ride": "kolo", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? (sport ?? "")))
+        case "week_sport":
+            let title = ["ride": "Přidat kolo do týdenního plánu", "run": "Přidat běh do týdenního plánu", "gym": "Přidat posilovnu do týdenního plánu"][sport ?? ""]
+            return title.map { L10n.tr($0) } ?? type
         case "status":
             let label = L10n.tr(["sick": "nemoc", "injured": "zranění", "on_break": "pauza", "active": "zpět v tréninku"][status ?? ""] ?? (status ?? ""))
             return L10n.f("Stav: %@", label)
@@ -148,6 +150,8 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "activity_delete": return [activityName, day].compactMap { $0 }.joined(separator: " · ")
         case "activity_merge": return [activityName, otherName].compactMap { $0 }.joined(separator: " + ")
         case "activity_time": return [activityName, [fromTime, time].compactMap { $0 }.joined(separator: " → ")].compactMap { $0 }.joined(separator: " · ")
+        // A sport added to the week plan holds for that one week only.
+        case "week_sport": return day.map { $0 + " · " + L10n.tr("jen tento týden") }
         default: return nil
         }
     }

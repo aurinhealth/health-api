@@ -25,7 +25,7 @@ import { lang, withLang } from './lang.js';
 import { HARD_KINDS, isHardKind } from './session-intensity.js';
 
 export const COACH_EVAL_AUDIENCE = 'aurin-coach-eval';
-export const COACH_EVAL_WORKFLOWS = new Set(['shaarkyn/health-api/.github/workflows/coach-eval.yml@refs/heads/main']);
+export const COACH_EVAL_WORKFLOWS = new Set(['aurinhealth/health-api/.github/workflows/coach-eval.yml@refs/heads/main']);
 
 const shift = (date, days) => new Date(Date.parse(date + 'T12:00:00Z') + days * 86400000).toISOString().slice(0, 10);
 
