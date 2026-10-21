@@ -559,8 +559,11 @@ function estimateFromOwnHistory(own, exercise, targetReps, loadFactor, today = n
 export function historyFamily(exercise) {
   const meta = EXERCISE_INTELLIGENCE[exercise];
   if (!meta) return [exercise];
+  // A one-side variant of a two-side exercise (Single-Leg Press of the leg
+  // press) lifts a different weight, so it keeps its own history (Coach
+  // evaluation run 26, S19: 150 kg from the leg press on one leg).
   const root = meta.variantOf || exercise;
-  return [exercise, ...Object.keys(EXERCISE_INTELLIGENCE).filter(name => name !== exercise && (name === root || EXERCISE_INTELLIGENCE[name].variantOf === root) && EXERCISE_INTELLIGENCE[name].loadUnit === meta.loadUnit)];
+  return [exercise, ...Object.keys(EXERCISE_INTELLIGENCE).filter(name => name !== exercise && (name === root || EXERCISE_INTELLIGENCE[name].variantOf === root) && EXERCISE_INTELLIGENCE[name].loadUnit === meta.loadUnit && Boolean(EXERCISE_INTELLIGENCE[name].unilateral) === Boolean(meta.unilateral))];
 }
 
 export function estimateStartingLoad({ exercise, history = [], targetReps = "8â€“15", fallbackKg = null, loadFactor = 1, today = null }) {
@@ -580,6 +583,7 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8â€
     if (kg == null) continue;
     const similarity = scoreSimilarity(name, exercise);
     const factor = transferFactor(name, exercise);
+    if (Boolean(EXERCISE_INTELLIGENCE[name].unilateral) !== Boolean(def.unilateral)) continue;
     // Only a variant of the same movement says anything about this one.
     if (factor == null || similarity < 0.75 && !(EXERCISE_INTELLIGENCE[name].variants || []).includes(exercise) && !(EXERCISE_INTELLIGENCE[exercise].variants || []).includes(name)) continue;
     candidates.push({ name, kg, rpe: normalizeRpe(ref.rpe), reps: n(ref.actual_reps), similarity, factor, date: ref.workout_date });
