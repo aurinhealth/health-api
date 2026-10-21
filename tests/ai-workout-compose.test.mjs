@@ -37,17 +37,20 @@ test("the AI's workout is saved and loads again for planning", async () => {
   assert.equal((await getWorkout(env.DB, w.id + "~60")).duration_minutes, 60);
 });
 
-test("a workout that breaks the limits, no consent or a failure gives nothing", async () => {
-  const env = owner();
+test("a workout that breaks the limits twice comes from the library; no consent or a failure gives nothing", async () => {
+  const env = owner(), none = async () => null;
   const longer = [block(600, 55, 65), { repeats: 4, steps: [{ label: "tempo", seconds: 600, low: 80, high: 85 }, { label: "lehce", seconds: 180, low: 50, high: 55 }] }, block(300, 50, 55)];
-  assert.equal(await composeWorkout(env, { ...day, ask: answer(longer) }), null, "too long");
+  const fromLibrary = w => { assert.ok(w?.ai?.fallback, "a library workout"); assert.equal(w.duration_minutes, 45); assert.equal(w.primary_system, "tempo"); assert.doesNotMatch(w.id, /^ai-/); return w; };
+  assert.match(fromLibrary(await composeWorkout(env, { ...day, ask: answer(longer) })).ai.tried, /^length \d+ min$/, "too long, twice");
+  assert.equal(await composeWorkout(env, { ...day, ask: answer(longer), fallback: none }), null, "too long and no library");
   // 45 min with 24 minutes of VO2max: over the yellow morning's 20.
   const hard = [block(480, 55, 65), { repeats: 6, steps: [{ label: "VO2", seconds: 240, low: 110, high: 118 }, { label: "lehce", seconds: 120, low: 50, high: 55 }] }, block(60, 50, 55)];
-  assert.equal(await composeWorkout(env, { ...day, kind: "vo2", ask: answer(hard) }), null, "over the yellow hard-minute cap");
-  assert.ok(await composeWorkout(env, { ...day, kind: "vo2", coach: { readiness: { status: "green" } }, ask: answer(hard) }), "fine on a green morning");
+  const capped = await composeWorkout(env, { ...day, kind: "vo2", ask: answer(hard) });
+  assert.ok(capped.ai.fallback && capped.primary_system === "vo2max", "over the yellow hard-minute cap: the library's");
+  assert.ok(!(await composeWorkout(env, { ...day, kind: "vo2", coach: { readiness: { status: "green" } }, ask: answer(hard) })).ai.fallback, "fine on a green morning");
   const easy = [block(2700, 60, 70)];
-  assert.equal(await composeWorkout(env, { ...day, ask: answer(easy) }), null, "not the coach's type");
-  assert.equal(await composeWorkout(env, { ...day, ask: answer(tempo45, "") }), null, "no reason");
+  assert.equal((await composeWorkout(env, { ...day, ask: answer(easy), fallback: none, diagnose: true })).rejected, "type endurance", "not the coach's type");
+  assert.equal((await composeWorkout(env, { ...day, ask: answer(tempo45, ""), fallback: none, diagnose: true })).rejected, "reason", "no reason");
   assert.equal(await composeWorkout(env, { ...day, ask: async () => { throw new Error("down"); } }), null);
   assert.equal(await composeWorkout({ ...env, USER_IS_OWNER: false }, { ...day, ask: answer(tempo45) }), null, "no AI consent");
   assert.equal(await composeWorkout({ ...env, OPENAI_API_KEY: "" }, { ...day, ask: answer(tempo45) }), null);
@@ -96,30 +99,36 @@ test("the evaluation composes with the model it is given and keeps nothing", asy
   assert.equal(w.ai.model, "gpt-6-sol");
 });
 
-test("a draft under the chosen band is asked for once more, and the evaluation learns why a draft was rejected", async () => {
-  const env = owner(), first = await composeWorkout(env, { ...day, asked: {}, ask: answer(tempo45) }), d = first.difficulty;
+test("a draft outside the band is asked for once more with the reason; two misses give the library's workout", async () => {
+  const env = owner(), none = async () => null, first = await composeWorkout(env, { ...day, asked: {}, ask: answer(tempo45) }), d = first.difficulty;
   // The second draft: one more tempo effort, inside the band the first draft missed.
   const harder = [block(300, 55, 65), { repeats: 4, steps: [{ label: "tempo", seconds: 480, low: 83, high: 88 }, { label: "lehce", seconds: 120, low: 50, high: 55 }] }, block(60, 50, 55)];
   const notes = [], ask = async (e, args) => { notes.push(args.instructions); return answer(notes.length > 1 ? harder : tempo45)(); };
   const w = await composeWorkout(env, { ...day, coach: { readiness: { status: "green" } }, asked: { minDifficulty: d + 0.7, maxDifficulty: 10 }, ask });
   assert.equal(notes.length, 2, "asked twice: one step under the band passes the checks but is still outside it");
-  assert.match(notes[1], new RegExp(`rated ${d} .*under the chosen band`));
-  assert.ok(w && w.difficulty > d, "the harder draft is kept");
+  assert.match(notes[1], new RegExp(`rejected: difficulty ${d} \\(wanted ${d + 0.7}–10 .*add an effort`));
+  assert.ok(w && !w.ai.fallback && w.difficulty > d, "the second draft is kept");
   notes.length = 0;
   assert.ok(await composeWorkout(env, { ...day, coach: { readiness: { status: "green" } }, asked: { minDifficulty: d - 0.5, maxDifficulty: d + 0.5 }, ask }), "inside the band");
   assert.equal(notes.length, 1, "no second ask inside the band");
   assert.match((await composeWorkout(env, { ...day, ask: async () => { throw new Error("down"); }, diagnose: true })).rejected, /^error: down/);
-  const r = await composeWorkout(env, { ...day, asked: { minDifficulty: d + 3, maxDifficulty: 10 }, ask: answer(tempo45), diagnose: true });
+  // Both drafts under the band (4 for 4.5–10): the library's tempo workout inside it (its hardest at 45 min is 4.9).
+  const twice = await composeWorkout(env, { ...day, coach: { readiness: { status: "green" } }, asked: { minDifficulty: 4.5, maxDifficulty: 10 }, ask: answer(tempo45) });
+  assert.ok(twice?.ai?.fallback, "from the library");
+  assert.ok(twice.difficulty >= 4.5 && twice.difficulty <= 10 && twice.primary_system === "tempo" && Math.abs(twice.duration_minutes - 45) <= 5, JSON.stringify([twice.id, twice.difficulty, twice.duration_minutes]));
+  assert.equal(twice.ai.tried, `difficulty ${d}`);
+  const r = await composeWorkout(env, { ...day, asked: { minDifficulty: d + 3, maxDifficulty: 10 }, ask: answer(tempo45), diagnose: true, fallback: none });
   assert.equal(r.rejected, `difficulty ${d}`);
-  assert.equal(await composeWorkout(env, { ...day, asked: { minDifficulty: d + 3, maxDifficulty: 10 }, ask: answer(tempo45) }), null, "without diagnose still nothing");
+  assert.equal(await composeWorkout(env, { ...day, asked: { minDifficulty: d + 3, maxDifficulty: 10 }, ask: answer(tempo45), fallback: none }), null, "without diagnose and without a library still nothing");
   const longer = [block(600, 55, 65), { repeats: 3, steps: [{ label: "tempo", seconds: 480, low: 80, high: 85 }, { label: "lehce", seconds: 180, low: 50, high: 55 }] }, block(900, 50, 55)];
-  assert.match((await composeWorkout(env, { ...day, ask: answer(longer), diagnose: true })).rejected, /^length \d+ min$/);
+  assert.match((await composeWorkout(env, { ...day, ask: answer(longer), diagnose: true, fallback: none })).rejected, /^length \d+ min$/);
 });
 
 test("two efforts in a row without a recovery are rejected", async () => {
   const env = owner(), green = { ...day, kind: "vo2max", coach: { readiness: { status: "green" } } };
   const split = [block(480, 50, 75), block(240, 112, 118), { repeats: 4, steps: [{ label: "vo2", seconds: 240, low: 112, high: 118 }, { label: "lehce", seconds: 120, low: 45, high: 55 }] }, block(540, 45, 55)];
-  assert.equal((await composeWorkout(env, { ...green, ask: answer(split), diagnose: true })).rejected, "efforts back to back");
+  assert.equal((await composeWorkout(env, { ...green, ask: answer(split), diagnose: true, fallback: async () => null })).rejected, "efforts back to back");
+  assert.ok((await composeWorkout(env, { ...green, ask: answer(split) })).ai.fallback, "the library's VO2max instead");
   const whole = [block(480, 50, 75), { repeats: 5, steps: [{ label: "vo2", seconds: 240, low: 112, high: 118 }, { label: "lehce", seconds: 120, low: 45, high: 55 }] }, block(420, 45, 55)];
   assert.ok(await composeWorkout(env, { ...green, ask: answer(whole) }), "the same efforts in one repeat pass");
 });

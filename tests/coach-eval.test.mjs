@@ -358,7 +358,10 @@ test('runs 25/26: "jako další krok" is a later message, a fourth card stays, L
   const four = [{ type: 'rest', eventId: 'planned:9101', date: date, sport: 'ride', reason }, { type: 'rest', eventId: 'planned:9102', date: '2026-10-19', sport: 'ride', reason }, { type: 'move', eventId: 'planned:9103', date: '2026-10-21', sport: 'gym', reason }, { type: 'move', eventId: 'planned:9105', date: '2026-10-22', sport: 'gym', reason }];
   const kept = validateCoachActions(four, ctx, date, { userInitiated: true });
   assert.deepEqual(kept.map(a => a.eventId), ['planned:9101', 'planned:9102', 'planned:9103', 'planned:9105'], JSON.stringify(kept));
-  assert.equal(validateCoachActions([...four, { ...four[3], date: '2026-10-23' }], ctx, date, { userInitiated: true }).length, 4, 'a fifth is dropped');
+  const five = [...four, { type: 'workout', date: '2026-10-23', sport: 'ride', minutes: 60, kind: 'endurance', reason }];
+  assert.equal(validateCoachActions(five, ctx, date, { userInitiated: true }).length, 5, 'a fifth card stays');
+  assert.equal(validateCoachActions([...five, { ...five[4], date: '2026-10-22' }], ctx, date, { userInitiated: true }).length, 5, 'a sixth is dropped');
+  assert.ok(at('S28', 'Dnes volno. Nedělní posilovnu bych také přesunul, ale do této odpovědi se vejdou jen tři návrhy změn.').includes('neslibuje návrh v další zprávě'));
   const rejected = async () => ({ rejected: 'difficulty 5.7', ai: { model: 'gpt-6-luna' } });
   const w01 = await runComposeScenario({}, scenarioById('W01'), { compose: rejected });
   assert.match(w01.answer, /difficulty 5\.7/);
