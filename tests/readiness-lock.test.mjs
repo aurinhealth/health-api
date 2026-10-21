@@ -59,3 +59,20 @@ test("a night locked at a wake-up takes the rest of it when it arrives", () => {
   const evening = readinessFor({ date: DATE, google: at(rest, { restingHR: 60 }), sessions: whole, profile: { readinessLocks: { [DATE]: relock } } });
   assert.equal(evening.score, later.score);
 });
+
+test("the main device's night arriving after another watch's takes the lock over", () => {
+  // 6:30: only the Apple Watch has synced (SDNN 68). 7:40: the Fitbit worn
+  // most nights arrives and replaces it (source-priority.js), RMSSD 50.
+  const tagged = rows => rows.map(r => ({ ...r, hrvSource: "google-wearables", restingHRSource: "google-wearables" }));
+  const apple = tagged(wellness).map(r => (r.id === DATE ? { ...r, hrv: 68, hrvSource: "apple-health:sdnn", restingHRSource: "apple-health" } : r));
+  const lock = readinessLockOf(readinessFor({ date: DATE, google: apple, sessions }), DATE);
+  assert.equal(lock.row.hrv, 68);
+  const fitbit = at(tagged(wellness), { hrv: 50 });
+  const later = readinessFor({ date: DATE, google: fitbit, sessions, profile: { readinessLocks: { [DATE]: lock } } });
+  assert.equal(later.components.hrv.value, 50);
+  assert.equal(later.rows.find(r => r.id === DATE).hrv, 50);
+  // The same device recomputing its value later keeps the lock.
+  const relock = readinessLockOf(later, DATE);
+  const evening = readinessFor({ date: DATE, google: at(fitbit, { hrv: 61 }), sessions, profile: { readinessLocks: { [DATE]: relock } } });
+  assert.equal(evening.components.hrv.value, 50);
+});

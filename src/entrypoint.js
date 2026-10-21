@@ -651,7 +651,7 @@ async function coachPush(env, ctx) {
     const readiness = morningDue ? readinessFor({ date, google: inputs.health?.wellness || [], intervals: inputs.fitness?.wellness || [], sessions: inputs.health?.sleep || [], profile: inputs.profile }) : null;
     nudge = coachNudge({ date, hour, morning: morningDue, evening: eveningDue, upcoming, sleep: inputs.health?.sleep || [],
       illness: morningDue ? illnessWarning({ date, readiness, state, week: inputs.week }) : null,
-      recovery: morningDue ? proactiveAdvice({ ...inputs, state }) : null });
+      recovery: morningDue ? proactiveAdvice({ ...inputs, state, readiness }) : null });
   }
   if (!nudge) return { sent: 0, reason: 'nothing-to-say' };
   if (!(await claim(COACH_PUSH, date))) return { sent: 0, reason: 'already-sent' };
@@ -989,7 +989,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const date=localToday(),state=await getAthleteState(env.DB),inputs=await loadCoachInputs(env,ctx,internalAuth,date);
       // The signs of an oncoming illness come first, then the general break advice.
       const readiness=readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile});
-      const advice=swapOffer(state,date)||illnessWarning({date,readiness,state,week:inputs.week})||proactiveAdvice({...inputs,state})||memoryCheck(state,date);
+      const advice=swapOffer(state,date)||illnessWarning({date,readiness,state,week:inputs.week})||proactiveAdvice({...inputs,state,readiness})||memoryCheck(state,date);
       return Response.json({status:'ok',state,advice},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
