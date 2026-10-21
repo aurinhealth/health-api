@@ -313,3 +313,13 @@ test('run 19: "bezprostředním" is no Wednesday, "před páteční jízdou" is 
   const kept = [{ type: 'rest', eventId: 'planned:9001', date: wed, sport: 'ride' }, { type: 'workout', sport: 'ride', date: wed, minutes: 75, kind: 'endurance', card: 'endurance' }];
   assert.deepEqual(at('S15', 'Dnešní VO2max bych odložil. Místo něj bych jel 75 minut lehce, aby ses zotavil před páteční dlouhou jízdou.', kept).filter(n => n.startsWith('každá změna')), []);
 });
+
+test('run 20: "vhodnější by bylo" second-guesses, sleep in minutes, a yellow day\'s endurance above 68 %', async () => {
+  const at = (id, answer) => checkReply(scenarioById(id), { answer, kept: [], proposed: [] }, now, date).filter(c => !c.ok).map(c => c.name);
+  assert.ok(at('S21', 'Zítra sweet spot. Pokud chceš mít čerstvější nohy, vhodnější by bylo přesunout intervaly na jiný den.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
+  assert.ok(at('S16', 'HRV je nízká a spal jsi 290 minut.').includes('spánek v hodinách a minutách'));
+  assert.ok(!at('S16', 'HRV je nízká a spal jsi 4 h 50 min. Dej si 45 minut lehce.').includes('spánek v hodinách a minutách'));
+  const ride = high => async (env, args) => ({ name: 'Vytrvalost 120', duration_minutes: 120, difficulty: 3, target_load: 80, intervals_description: `Warmup\n- 10m 50-65% Rozjetí intensity=warmup\n\n- 100m 60-${high}% Vytrvalost intensity=active`, ai: { model: args.model, reason: 'Souvislá vytrvalost.', warning: '' } });
+  const w03 = async high => (await runComposeScenario({}, scenarioById('W03'), { compose: ride(high) })).checks.find(c => c.name === 'Luna: na horší den vytrvalost nejvýš 68 %');
+  assert.equal((await w03(72)).ok, false); assert.equal((await w03(68)).ok, true);
+});

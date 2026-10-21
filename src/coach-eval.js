@@ -385,7 +385,10 @@ function replacedWithoutRest(actions, planned) {
 // Today's weekday name is fine when the athlete asked for that weekday (next Friday, asked on a Friday).
 const namesToday = (r, scenario) => !WEEKDAYS.cs[weekdayOf(r.date)].test(scenario.message || '') && !WEEKDAYS.en[weekdayOf(r.date)].test(scenario.message || '') && sentences(r.answer).some(x => WEEKDAYS.cs[weekdayOf(r.date)].test(x) || WEEKDAYS.en[weekdayOf(r.date)].test(x));
 const SELF_BLAME = /(?:moje|mé|mý|svoje) (?:předchozí|dřívější|původní|první) doporučení|příliš agresivn|byl jsem příliš|my (?:earlier|previous|first) (?:recommendation|advice)|too aggressive/i;
-const SECOND_GUESS = /(?:lepší|šetrnější|rozumnější) (?:volb|alternativ|by byl)|(?:šetrnější|lepší|rozumnější) volbou|lepší by bylo|better (?:option|choice|alternative)|would be better/i;
+// Run 20, S21: "vhodnější by bylo přesunout intervaly" right after the card.
+const SECOND_GUESS = /(?:lepší|šetrnější|rozumnější|vhodnější) (?:volb|alternativ|by byl)|(?:šetrnější|lepší|rozumnější|vhodnější) volbou|(?:lepší|vhodnější|rozumnější) by (?:byl|bylo|byla)|better (?:option|choice|alternative)|would be (?:better|more suitable)/i;
+// Sleep in minutes ("spal jsi 290 minut", run 20, S16) instead of hours and minutes.
+const SLEEP_MINUTES = /(?:spal\p{L}*|spánk\p{L}*|spánek|sleep\p{L}*|slept)[^.]{0,25}?\b\d{3}\s*min|\b\d{3}\s*min\p{L}*\s+(?:spánku|sleep)/iu;
 
 // What every answer has to keep: the language, no field names of the data, no app line, a sensible length.
 function commonChecks(r, scenario) {
@@ -405,7 +408,8 @@ function commonChecks(r, scenario) {
     safety('v kalendáři nezůstanou dva tréninky stejného sportu v jeden den', !replacedWithoutRest(r.kept, planned).length, replacedWithoutRest(r.kept, planned).join(', ')),
     quality('o dnešku píše „dnes“, ne název dne', !namesToday(r, scenario)),
     quality('bez sebekritiky', !says(r, SELF_BLAME)),
-    quality('jednoznačné doporučení (bez „lepší by bylo“)', !says(r, SECOND_GUESS))
+    quality('jednoznačné doporučení (bez „lepší by bylo“)', !says(r, SECOND_GUESS)),
+    quality('spánek v hodinách a minutách', !says(r, SLEEP_MINUTES))
   ];
 }
 
@@ -487,6 +491,12 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
   const checks = runs.flatMap(({ label, workout: w }) => [quality(`${label} složil trénink, který prošel kontrolami`, Boolean(w)),
     ...(w ? [quality(`${label}: zdůvodnění bez hodnocení dne`, !/připravenost|dnes se hodí|readiness/i.test(w.ai?.reason || ''), w.ai?.reason || '')] : [])]);
   if (c.zone !== 'green') checks.push(quality('na horší den upozorní jen u těžkého typu', runs.every(r => !r.workout || Boolean(r.workout.ai?.warning) === isHardKind(c.kind))));
+  // Run 20, W03: a yellow day's endurance stays in the lower half of the zone (cycling to 68 % FTP, running to 83 %).
+  if (c.zone !== 'green' && ['endurance', 'long'].includes(c.kind)) {
+    const top = w => Math.max(0, ...String(w?.intervals_description || '').split('\n').filter(l => /intensity=(?:active|interval)/.test(l)).map(l => Number(l.match(/(\d+)-(\d+)%/)?.[2] || 0)));
+    const limit = c.sport === 'run' ? 83 : 68;
+    checks.push(...runs.filter(r => r.workout).map(({ label, workout: w }) => quality(`${label}: na horší den vytrvalost nejvýš ${limit} %`, top(w) <= limit, top(w) + ' %')));
+  }
   return { id: scenario.id, title: scenario.title, status: 'ok', lang: lang(), task: 'compose',
     message: `Knihovna · ${c.sport === 'run' ? 'běh' : 'kolo'} · ${COMPOSE_KINDS[c.kind] || c.kind} · ${c.minutes} min${band} · připravenost ${c.score} (${c.zone})`,
     model: runs.map(r => r.workout?.ai?.model || r.model).join(', '), ms: Date.now() - started,
