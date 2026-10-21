@@ -125,6 +125,10 @@ struct SettingsMenu: View {
                     SettingsRow(icon: SettingsIcon(systemImage: "bell", color: Palette.amber), title: "Oznámení")
                 }
                 SettingsDivider()
+                NavigationLink { CoachPlacesSettingsView() } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "sparkles", color: Palette.indigo), title: "Kouč na obrazovkách")
+                }
+                SettingsDivider()
                 NavigationLink { AppearanceSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "circle.lefthalf.filled", color: Palette.ink), title: "Vzhled")
                 }
@@ -174,6 +178,13 @@ struct SettingsMenu: View {
                                        options: ServerChoice.allCases.map { ($0.rawValue, $0.title) })
                     } label: {
                         SettingsRow(icon: SettingsIcon(systemImage: "server.rack", color: Palette.muted), title: "Server", value: ServerChoice.current.title)
+                    }
+                    // The owner only: the website's waitlist, approved into TestFlight.
+                    if store.owner {
+                        SettingsDivider()
+                        NavigationLink { WaitlistView(store: store) } label: {
+                            SettingsRow(icon: SettingsIcon(systemImage: "person.2", color: Palette.green), title: "Zájemci", badge: store.pendingWaitlist)
+                        }
                     }
                 }
                 .buttonStyle(.plain)
