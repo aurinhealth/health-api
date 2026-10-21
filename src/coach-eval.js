@@ -332,12 +332,14 @@ const luna = (r, { cards = false } = {}) => [quality('odpovídá lehký model (L
 // The answer and its cards (Petr, eval run 18): the days a sentence speaks of
 // (today, tomorrow, a weekday in the next two weeks, the nearer first), the changes it promises
 // and the words a card of each kind is spoken of with.
-const WEEKDAYS = { cs: [/neděl/i, /pondě?l/i, /úter[ýn]/i, /střed/i, /čtvrt(?:ek|ku|kem|eční)/i, /pát(?:ek|ku|kem|eční)/i, /sobot/i], en: [/sunday/i, /monday/i, /tuesday/i, /wednesday/i, /thursday/i, /friday/i, /saturday/i] };
+// At the start of a word: "bezprostředním" is no Wednesday (run 19, S12).
+const WEEKDAYS = { cs: [/(?<!\p{L})neděl/iu, /(?<!\p{L})pondě?l/iu, /(?<!\p{L})úter[ýn]/iu, /(?<!\p{L})střed/iu, /(?<!\p{L})čtvrt(?:ek|ku|kem|eční)/iu, /(?<!\p{L})pát(?:ek|ku|kem|eční)/iu, /(?<!\p{L})sobot/iu], en: [/sunday/i, /monday/i, /tuesday/i, /wednesday/i, /thursday/i, /friday/i, /saturday/i] };
 const weekdayOf = date => new Date(date + 'T12:00:00Z').getUTCDay();
 // The days in the order the sentence names them.
 function dayRefs(sentence, date) {
   const text = String(sentence), found = [];
-  const add = (re, d) => { for (const m of text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'))) found.push([m.index, d]); };
+  // "před páteční dlouhou jízdou" gives a reason, the sentence is not about Friday (run 19, S07).
+  const add = (re, d) => { for (const m of text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'))) if (!/(?:před|before)\s+$/i.test(text.slice(0, m.index))) found.push([m.index, d]); };
   add(/pozítř\p{L}*|day after tomorrow/iu, shift(date, 2));
   add(/(?<!\p{L})dnes|dnešn|today|tonight/iu, date);
   add(/(?<!po)zítř|(?<!po)zítra|(?<!after )tomorrow/i, shift(date, 1));
@@ -365,9 +367,10 @@ function promisedWithoutCard(r, planned) {
     .filter(d => (planned[d] || []).length && !r.kept.some(a => cardDays(a, r, planned).includes(d))).map(d => d + ': ' + x.slice(0, 60)));
 }
 // A card no sentence speaks of: its words with its day, or, for today's card,
-// its words in a sentence that names no day at all.
+// its words in a sentence that names no day at all. An alternative ("lehká
+// vytrvalost by byla šetrnější") does not speak of a card.
 function silentCards(r, planned) {
-  const list = sentences(r.answer).map(x => ({ x, days: dayRefs(x, r.date) }));
+  const list = sentences(r.answer).filter(x => !SECOND_GUESS.test(x)).map(x => ({ x, days: dayRefs(x, r.date) }));
   return r.kept.filter(a => ['workout', 'rest', 'move'].includes(a.type) && !companion(r, a))
     .filter(a => !list.some(({ x, days }) => cardWords(a).test(x) && (days.some(d => cardDays(a, r, planned).includes(d)) || (!days.length && (a.date || r.date) === r.date))))
     .map(a => [a.type, a.kind || a.sport, a.date].filter(Boolean).join(' '));
@@ -382,7 +385,7 @@ function replacedWithoutRest(actions, planned) {
 // Today's weekday name is fine when the athlete asked for that weekday (next Friday, asked on a Friday).
 const namesToday = (r, scenario) => !WEEKDAYS.cs[weekdayOf(r.date)].test(scenario.message || '') && !WEEKDAYS.en[weekdayOf(r.date)].test(scenario.message || '') && sentences(r.answer).some(x => WEEKDAYS.cs[weekdayOf(r.date)].test(x) || WEEKDAYS.en[weekdayOf(r.date)].test(x));
 const SELF_BLAME = /(?:moje|mé|mý|svoje) (?:předchozí|dřívější|původní|první) doporučení|příliš agresivn|byl jsem příliš|my (?:earlier|previous|first) (?:recommendation|advice)|too aggressive/i;
-const SECOND_GUESS = /(?:lepší|šetrnější|rozumnější) (?:volb|alternativ|by byl)|lepší by bylo|better (?:option|choice|alternative)|would be better/i;
+const SECOND_GUESS = /(?:lepší|šetrnější|rozumnější) (?:volb|alternativ|by byl)|(?:šetrnější|lepší|rozumnější) volbou|lepší by bylo|better (?:option|choice|alternative)|would be better/i;
 
 // What every answer has to keep: the language, no field names of the data, no app line, a sensible length.
 function commonChecks(r, scenario) {

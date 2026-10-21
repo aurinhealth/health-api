@@ -306,3 +306,10 @@ test('the library situations run with Luna only', async () => {
   assert.ok(r.answer.startsWith('### Luna') && !/Sol/.test(r.answer));
   assert.ok(r.checks.every(c => c.name.startsWith('Luna')), JSON.stringify(r.checks));
 });
+
+test('run 19: "bezprostředním" is no Wednesday, "před páteční jízdou" is a reason, not the day of the change', () => {
+  const wed = '2026-10-21', at = (id, answer, kept) => checkReply(scenarioById(id), { answer, kept, proposed: kept }, null, wed).filter(c => !c.ok).map(c => c.name);
+  assert.ok(!at('S12', 'Dnešní VO2max bych zrušil. Pokud bys byl v bezprostředním ohrožení, volej 155.', [{ type: 'rest', eventId: 'planned:9001', date: wed, sport: 'ride' }]).includes('o dnešku píše „dnes“, ne název dne'));
+  const kept = [{ type: 'rest', eventId: 'planned:9001', date: wed, sport: 'ride' }, { type: 'workout', sport: 'ride', date: wed, minutes: 75, kind: 'endurance', card: 'endurance' }];
+  assert.deepEqual(at('S15', 'Dnešní VO2max bych odložil. Místo něj bych jel 75 minut lehce, aby ses zotavil před páteční dlouhou jízdou.', kept).filter(n => n.startsWith('každá změna')), []);
+});
