@@ -204,3 +204,16 @@ test("a weighing counts on the user's own day, on Health and Today", () => withT
   assert.equal(t.weight.latest, 80);
   assert.deepEqual(t.weight.series.map(p => p.date), [day(-3), DATE]);
 }));
+
+test("Health: the HRV chart ends on the number above it, the morning's locked one", () => {
+  // Locked at 66 in the morning; the watch later says 50 for the same day.
+  const morning = buildHealth(input);
+  const lock = { row: { hrv: 66, restingHR: 47 }, night: sessions.find(s => s.date === DATE) };
+  const later = wellness.map(r => (r.id === DATE ? { ...r, hrv: 50 } : r));
+  const h = buildHealth({ ...input, health: { wellness: later }, profile: { ...input.profile, readinessLocks: { [DATE]: lock } } });
+  assert.equal(h.hrv.value, 66);
+  assert.deepEqual(h.hrv.series.at(-1), { date: DATE, value: 66 });
+  assert.equal(h.hrv.value, morning.hrv.value);
+  const t = buildToday({ ...input, health: { wellness: later }, profile: { ...input.profile, readinessLocks: { [DATE]: lock } } });
+  assert.equal(t.hrv.value, h.hrv.value);
+});

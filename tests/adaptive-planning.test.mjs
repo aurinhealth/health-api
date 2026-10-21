@@ -98,6 +98,21 @@ test('without Intervals.icu the break advice reads HRV and resting HR from the w
   assert.equal(a?.status,'on_break');
   assert.equal(proactiveAdvice({...input,health:{wellness:[],sleep:[]}}),null);
 });
+test('the break advice quotes the HRV and resting HR Today shows, against their normal',()=>{
+  // The watch row says 40 ms (a later reading); Today's readiness locked 68 ms
+  // against a normal of 75 and 64 bpm against 54: the card quotes those.
+  const day=k=>new Date(Date.UTC(2026,9,5-k)).toISOString().slice(0,10);
+  const watch=Array.from({length:15},(_,k)=>({id:day(k),hrv:k===0?40:60,restingHR:k===0?60:52}));
+  const input={date:'2026-10-05',fitness:{wellness:[{id:'2026-10-05',tsb:-30}]},health:{wellness:watch,sleep:[]},state:{status:'active'}};
+  const readiness={components:{hrv:{value:60,baseline:75},restingHR:{value:64,baseline:54}}};
+  const a=proactiveAdvice({...input,readiness});
+  assert.ok(a.reasons.some(r=>/HRV 60 ms .*75 ms \(−20 %\)/.test(r)),a.reasons.join(' | '));
+  assert.ok(a.reasons.some(r=>/64 bpm .*10 .*54/.test(r)));
+  assert.ok(!a.reasons.some(r=>/HRV 40/.test(r)));
+  // HRV in its normal on Today: no HRV line, though the watch row is low.
+  const normal=proactiveAdvice({...input,readiness:{components:{hrv:{value:68,baseline:75},restingHR:{value:64,baseline:54}}}});
+  assert.ok(!normal.reasons.some(r=>/HRV/.test(r)));
+});
 test('scheduling respects a pause and a clock window before external writes',async()=>{
   const raw=createD1(),db=scopedDb(raw,1);
   await updateAthleteState(db,{status:'sick'});

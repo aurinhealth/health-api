@@ -62,10 +62,12 @@ export function readinessFor({ date, rows = null, google = [], intervals = [], s
   const list = Array.isArray(sessions) ? sessions : [];
   const live = primaryNights(list).get(date) || null;
   const locked = profile?.readinessLocks?.[date] || null;
+  const own = Array.isArray(rows) ? rows.filter(r => r && r.id && r.id <= date) : readinessRows(google, intervals, date);
   // The rest of a night locked at a wake-up brings its own night signals
-  // too (HRV, resting HR, breathing, temperature): the lock is set anew.
-  const lock = locked?.night && continues(live, locked.night) ? null : locked;
-  const plain = withLock(Array.isArray(rows) ? rows.filter(r => r && r.id && r.id <= date) : readinessRows(google, intervals, date), date, lock);
+  // too (HRV, resting HR, breathing, temperature), and so does the main
+  // device's night arriving after another watch's: the lock is set anew.
+  const lock = locked && ((locked.night && continues(live, locked.night)) || otherDevice(locked, own.find(r => r.id === date))) ? null : locked;
+  const plain = withLock(own, date, lock);
   const merged = profile?.cycle ? markCyclePhases(plain, profile.cycle) : plain;
   const sleepSet = sleepSettings(profile || {});
   const need = sleepNeedFor({ date, age: num(profile?.age), goal: sleepSet.goal, strain: strainOn(merged, shift(date, -1)), rows: merged, sessions: list });
@@ -100,6 +102,19 @@ export function readinessLockOf(readiness, date) {
 function continues(live, locked) {
   const t = v => Date.parse(v || "");
   return Boolean(live) && t(live.startTime) <= t(locked.endTime) && t(live.endTime) > t(locked.endTime) && num(live.durationMin) > num(locked.durationMin);
+}
+
+// The day's HRV or resting heart rate now comes from another device than the
+// locked one (source-priority.js: the Apple Watch synced first, the Fitbit
+// worn most nights came later and replaced it). The lock would keep the first
+// device's value while every chart and the coach show the main one's.
+// Intervals.icu only fills a gap, so it never moves the lock.
+function otherDevice(lock, row) {
+  const device = v => String(v || "").split(":")[0];
+  return ["hrvSource", "restingHRSource"].some(key => {
+    const was = device(lock?.row?.[key]), now = device(row?.[key]);
+    return was && now && was !== "intervals" && now !== "intervals" && was !== now;
+  });
 }
 
 function withLock(rows, date, lock) {
