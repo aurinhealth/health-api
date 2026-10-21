@@ -104,8 +104,16 @@ extension APIClient {
     /// ("upper", "lower") or 1–5 muscle groups to work.
     /// fromWeek: the focus is the week plan's role ("Posilovna · s rezervou"),
     /// which keeps a full body with lighter legs, not the athlete's "upper body".
-    func previewGym(date: String, minutes: Int, focus: String?, muscles: [String], fromWeek: Bool = false) async throws -> GymProposal {
+    /// gymDays and weekSessions: the week plan's other gym days (all of their
+    /// dates, and the rows of those built so far), so the days follow on from
+    /// each other instead of repeating one session.
+    func previewGym(date: String, minutes: Int, focus: String?, muscles: [String], fromWeek: Bool = false,
+                    gymDays: [String] = [], weekSessions: [(date: String, rows: [[JSONValue]])] = []) async throws -> GymProposal {
         var body: JSONObject = ["date": .string(date), "durationMinutes": .number(Double(minutes)), "preview": .bool(true), "userInitiated": .bool(true)]
+        if !gymDays.isEmpty { body["gymDays"] = .array(gymDays.map { .string($0) }) }
+        if !weekSessions.isEmpty {
+            body["weekSessions"] = .array(weekSessions.map { .object(["date": .string($0.date), "rows": .array($0.rows.map { .array($0) })]) })
+        }
         if !muscles.isEmpty { body["focusMuscles"] = .array(muscles.map { .string($0) }) }
         else if let focus { body["focus"] = .string(focus); if fromWeek { body["focusSource"] = .string("week") } }
         let r: GymPreviewResponse = try await send("/app/api/gym/generate", method: "POST", body: body)
