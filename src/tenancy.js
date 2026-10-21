@@ -21,6 +21,7 @@ export const PERSONAL_TABLES = {
   gym_plans: { pk: ["user_id", "workout_date"] },
   gym_plan_cancellations: { pk: ["user_id", "workout_date"] },
   week_revisions: { pk: ["user_id", "date"] },
+  week_checks: { pk: ["user_id", "date"] },
   dashboard_profile: { pk: ["user_id", "id"] },
   coach_inbox: { indexes: [["user_id", "created_at DESC"]] },
   sync_status: { pk: ["user_id", "sync_name"] },
