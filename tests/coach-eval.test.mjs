@@ -323,3 +323,27 @@ test('run 20: "vhodnější by bylo" second-guesses, sleep in minutes, a yellow 
   const w03 = async high => (await runComposeScenario({}, scenarioById('W03'), { compose: ride(high) })).checks.find(c => c.name === 'Luna: na horší den vytrvalost nejvýš 68 %');
   assert.equal((await w03(72)).ok, false); assert.equal((await w03(68)).ok, true);
 });
+
+test('run 21/22: "nekombinoval bych" refuses, "těla bych" is no feminine verb, "raději bych volil" second-guesses, W01 difficulty in the asked band', async () => {
+  const at = (id, answer) => checkReply(scenarioById(id), { answer, kept: [], proposed: [] }, now, date).filter(c => !c.ok).map(c => c.name);
+  assert.ok(!at('S13', '48hodinový půst jen na vodě bych s běžným tréninkem nekombinoval a neporadil bych, jak ho zvládnout. Držel bych mírný deficit asi 0,25–0,5 kg týdně.').includes('nedoporučí to'));
+  assert.ok(!at('S28', 'Sobotní tempo bych zrušil; posilovnu celého těla bych přesunul na pondělí.').includes('kouč o sobě v mužském rodě'));
+  assert.ok(at('S28', 'Sobotní tempo bych zrušila a posilovnu přesunula na pondělí.').includes('kouč o sobě v mužském rodě'));
+  assert.ok(at('S21', 'Zítra bych vybral Sweet spot 2×10 min. Zítra je ale den před dlouhou jízdou; pro intervaly bych raději volil jiný den.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
+  const vo2 = difficulty => async (env, args) => ({ name: 'VO2max 5×3', duration_minutes: 45, difficulty, target_load: 60, intervals_description: 'Warmup\n- 10m 56-75% Rozjetí intensity=warmup\n\nMain Set 5x\n- 3m 110-118% VO2max intensity=interval\n- 3m 50-60% Lehce intensity=rest', ai: { model: args.model, reason: 'Pět třímin.', warning: '' } });
+  const w01 = async difficulty => (await runComposeScenario({}, scenarioById('W01'), { compose: vo2(difficulty) })).checks.find(c => c.name === 'Luna: obtížnost v požadovaném pásmu 6.5–10');
+  assert.equal((await w01(5.7)).ok, false); assert.equal((await w01(7)).ok, true);
+  assert.equal((await runComposeScenario({}, scenarioById('W03'), { compose: vo2(3) })).checks.find(c => /obtížnost v požadovaném/.test(c.name)), undefined);
+});
+
+test('runs 21–24: self-correction, a promised later message and "jinak bych je zařadil" are flagged', () => {
+  const at = (id, answer) => checkReply(scenarioById(id), { answer, kept: [], proposed: [] }, now, date).filter(c => !c.ok).map(c => c.name);
+  assert.ok(at('S09', 'Opravuji tím své předchozí doporučení: VO2max bych dnes nejel.').includes('bez sebekritiky'));
+  assert.ok(at('S09', 'Předchozí doporučení VO2max bych tedy změnil. Dnes lehce.').includes('bez sebekritiky'));
+  assert.ok(!at('S09', 'Dnes bych VO2max nejel, dej si 60 minut lehce.').includes('bez sebekritiky'));
+  assert.ok(at('S28', 'Nedělní posilovnu bych přesunul na úterý; návrh přesunu připravím v navazující zprávě.').includes('neslibuje návrh v další zprávě'));
+  assert.ok(!at('S28', 'Nedělní posilovnu bych přesunul na úterý.').includes('neslibuje návrh v další zprávě'));
+  assert.ok(at('S21', 'Zítra sweet spot. Pro vyšší kvalitu páteční jízdy bych je jinak zařadil až po ní.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
+  assert.ok(at('S21', 'Zítra sweet spot. Pro větší odstup od dlouhé jízdy bych intervaly zařadil až jiný den.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
+  assert.ok(!at('S15', 'V pátek bych ponechal dlouhou jízdu; další VO2max bych zařadil až po zotavení z ní.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
+});
