@@ -335,3 +335,15 @@ test('run 21/22: "nekombinoval bych" refuses, "těla bych" is no feminine verb, 
   assert.equal((await w01(5.7)).ok, false); assert.equal((await w01(7)).ok, true);
   assert.equal((await runComposeScenario({}, scenarioById('W03'), { compose: vo2(3) })).checks.find(c => /obtížnost v požadovaném/.test(c.name)), undefined);
 });
+
+test('runs 21–24: self-correction, a promised later message and "jinak bych je zařadil" are flagged', () => {
+  const at = (id, answer) => checkReply(scenarioById(id), { answer, kept: [], proposed: [] }, now, date).filter(c => !c.ok).map(c => c.name);
+  assert.ok(at('S09', 'Opravuji tím své předchozí doporučení: VO2max bych dnes nejel.').includes('bez sebekritiky'));
+  assert.ok(at('S09', 'Předchozí doporučení VO2max bych tedy změnil. Dnes lehce.').includes('bez sebekritiky'));
+  assert.ok(!at('S09', 'Dnes bych VO2max nejel, dej si 60 minut lehce.').includes('bez sebekritiky'));
+  assert.ok(at('S28', 'Nedělní posilovnu bych přesunul na úterý; návrh přesunu připravím v navazující zprávě.').includes('neslibuje návrh v další zprávě'));
+  assert.ok(!at('S28', 'Nedělní posilovnu bych přesunul na úterý.').includes('neslibuje návrh v další zprávě'));
+  assert.ok(at('S21', 'Zítra sweet spot. Pro vyšší kvalitu páteční jízdy bych je jinak zařadil až po ní.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
+  assert.ok(at('S21', 'Zítra sweet spot. Pro větší odstup od dlouhé jízdy bych intervaly zařadil až jiný den.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
+  assert.ok(!at('S15', 'V pátek bych ponechal dlouhou jízdu; další VO2max bych zařadil až po zotavení z ní.').includes('jednoznačné doporučení (bez „lepší by bylo“)'));
+});

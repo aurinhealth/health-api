@@ -384,10 +384,13 @@ function replacedWithoutRest(actions, planned) {
 }
 // Today's weekday name is fine when the athlete asked for that weekday (next Friday, asked on a Friday).
 const namesToday = (r, scenario) => !WEEKDAYS.cs[weekdayOf(r.date)].test(scenario.message || '') && !WEEKDAYS.en[weekdayOf(r.date)].test(scenario.message || '') && sentences(r.answer).some(x => WEEKDAYS.cs[weekdayOf(r.date)].test(x) || WEEKDAYS.en[weekdayOf(r.date)].test(x));
-const SELF_BLAME = /(?:moje|mé|mý|svoje) (?:předchozí|dřívější|původní|první) doporučení|příliš agresivn|byl jsem příliš|my (?:earlier|previous|first) (?:recommendation|advice)|too aggressive/i;
+// Runs 21 and 23, S09: "Předchozí doporučení VO2max bych tedy změnil", "Opravuji tím své předchozí doporučení".
+const SELF_BLAME = /(?:moje|mé|mý|svoje|své) (?:předchozí|dřívější|původní|první) doporučení|(?:předchozí|dřívější|původní) doporučení[^.]{0,20}?bych (?:tedy )?(?:změnil|upravil|opravil)|opravuji (?:tím )?(?:své |svoje |moje )?(?:předchozí|dřívější|původní)|příliš agresivn|byl jsem příliš|my (?:earlier|previous|first) (?:recommendation|advice)|too aggressive/iu;
+// Run 23, S28: "návrh přesunu připravím v navazující zprávě": every change is a card now, not a later message.
+const LATER_MESSAGE = /(?:v )?(?:navazující|další|příští|následující) zpráv|připravím (?:ti )?(?:návrh|přesun|úpravu)|pošlu (?:ti )?(?:návrh|přesun|úpravu)|in (?:a|the) (?:next|follow-up|later) message/i;
 // Run 20, S21: "vhodnější by bylo přesunout intervaly" right after the card.
 // Run 22, S21: "pro intervaly bych raději volil jiný den" right after the card.
-const SECOND_GUESS = /(?:lepší|šetrnější|rozumnější|vhodnější) (?:volb|alternativ|by byl)|(?:šetrnější|lepší|rozumnější|vhodnější) volbou|(?:lepší|vhodnější|rozumnější) by (?:byl|bylo|byla)|raději bych (?:volil|vybral|zvolil|dal)|bych raději|better (?:option|choice|alternative)|would be (?:better|more suitable)|would rather/i;
+const SECOND_GUESS = /(?:lepší|šetrnější|rozumnější|vhodnější) (?:volb|alternativ|by byl)|(?:šetrnější|lepší|rozumnější|vhodnější) volbou|(?:lepší|vhodnější|rozumnější) by (?:byl|bylo|byla)|raději bych (?:volil|vybral|zvolil|dal)|bych raději|jinak bych (?:je |ho |to )?(?:zařadil|dal|volil|vybral)|bych (?:je |ho |intervaly )?jinak (?:zařadil|dal|volil|vybral)|bych intervaly zařadil až (?:jiný den|jindy)|better (?:option|choice|alternative)|would be (?:better|more suitable)|would rather/i;
 // Sleep in minutes ("spal jsi 290 minut", run 20, S16) instead of hours and minutes.
 const SLEEP_MINUTES = /(?:spal\p{L}*|spánk\p{L}*|spánek|sleep\p{L}*|slept)[^.]{0,25}?\b\d{3}\s*min|\b\d{3}\s*min\p{L}*\s+(?:spánku|sleep)/iu;
 
@@ -410,7 +413,8 @@ function commonChecks(r, scenario) {
     quality('o dnešku píše „dnes“, ne název dne', !namesToday(r, scenario)),
     quality('bez sebekritiky', !says(r, SELF_BLAME)),
     quality('jednoznačné doporučení (bez „lepší by bylo“)', !says(r, SECOND_GUESS)),
-    quality('spánek v hodinách a minutách', !says(r, SLEEP_MINUTES))
+    quality('spánek v hodinách a minutách', !says(r, SLEEP_MINUTES)),
+    quality('neslibuje návrh v další zprávě', !says(r, LATER_MESSAGE))
   ];
 }
 
