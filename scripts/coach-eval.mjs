@@ -3,18 +3,27 @@
 // to the job summary (or stdout), JSON to coach-eval.json. Exits 1 when a
 // safety check failed or a situation got no answer.
 // COACH_EVAL_TOKEN: the workflow's GitHub token (audience aurin-coach-eval).
+// In Actions a fresh one is asked for before every situation: a token lives
+// only minutes and the whole run takes longer (run 19 lost L01–W03 to it).
 // COACH_EVAL_HOST (staging.aurin.health) and COACH_EVAL_SCENARIOS ("S02,S04") are optional.
 import { appendFileSync, writeFileSync } from "node:fs";
 
 const host = process.env.COACH_EVAL_HOST || "staging.aurin.health";
-const token = process.env.COACH_EVAL_TOKEN;
-if (!token) { console.error("COACH_EVAL_TOKEN is missing."); process.exit(2); }
+const { ACTIONS_ID_TOKEN_REQUEST_URL: oidcUrl, ACTIONS_ID_TOKEN_REQUEST_TOKEN: oidcAuth } = process.env;
+if (!process.env.COACH_EVAL_TOKEN && !oidcUrl) { console.error("COACH_EVAL_TOKEN is missing."); process.exit(2); }
 const wanted = String(process.env.COACH_EVAL_SCENARIOS || "").split(/[,\s]+/).filter(Boolean);
+
+async function token() {
+  if (!oidcUrl || !oidcAuth) return process.env.COACH_EVAL_TOKEN;
+  const response = await fetch(`${oidcUrl}&audience=aurin-coach-eval`, { headers: { Authorization: `bearer ${oidcAuth}` } });
+  if (!response.ok) throw new Error(`OIDC token: HTTP ${response.status}`);
+  return (await response.json()).value;
+}
 
 async function call(body) {
   const response = await fetch(`https://${host}/automation/coach-eval`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    headers: { Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(6 * 60 * 1000)
   });
