@@ -75,11 +75,14 @@ const sameFocusInRow = r => { const g = r.kept.filter(a => a.type === 'workout' 
   return g.flatMap((a, i) => i && a.gymFocus && a.gymFocus === g[i - 1].gymFocus && a.date === shift(g[i - 1].date, 1) ? [g[i - 1].date + '+' + a.date + ' ' + a.gymFocus] : []); };
 // Hard days at least 48 h apart and at most two in any 7 days, with yesterday's
 // sweet spot and today's planned VO2max unless an action takes it away.
+// The day after the planned long ride (3 h, planned:9002) takes no hard
+// session either (run 28, S15: VO2max on Saturday); the ride itself stays out
+// of the "2 in 7 days" count, as in the app.
 function stackedHardDays(r, actions) {
-  const removed = r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === 'planned:9001');
-  const hard = [shift(r.date, -1), ...(removed ? [] : [r.date])], bad = [];
+  const removed = id => r.kept.some(a => ['rest', 'move'].includes(a.type) && a.eventId === id);
+  const hard = [shift(r.date, -1), ...(removed('planned:9001') ? [] : [r.date])], afterLong = removed('planned:9002') ? null : shift(r.date, 3), bad = [];
   for (const a of [...actions].sort((x, y) => String(x.date).localeCompare(String(y.date)))) {
-    if (hardDayConflict(a.date, hard.filter(d => d !== a.date || a.date !== r.date))) bad.push(a.date); else hard.push(a.date);
+    if (hardDayConflict(a.date, hard.filter(d => d !== a.date || a.date !== r.date)) || a.date === afterLong) bad.push(a.date); else hard.push(a.date);
   }
   return bad;
 }
@@ -339,7 +342,8 @@ const weekdayOf = date => new Date(date + 'T12:00:00Z').getUTCDay();
 function dayRefs(sentence, date) {
   const text = String(sentence), found = [];
   // "před páteční dlouhou jízdou" gives a reason, the sentence is not about Friday (run 19, S07).
-  const add = (re, d) => { for (const m of text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'))) if (!/(?:před|before)\s+$/i.test(text.slice(0, m.index))) found.push([m.index, d]); };
+  // "po páteční jízdě" is about the day after it (run 28, S15).
+  const add = (re, d) => { for (const m of text.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g'))) if (!/(?:před|po|before|after)\s+$/i.test(text.slice(0, m.index))) found.push([m.index, d]); };
   add(/pozítř\p{L}*|day after tomorrow/iu, shift(date, 2));
   add(/(?<!\p{L})dnes|dnešn|today|tonight/iu, date);
   add(/(?<!po)zítř|(?<!po)zítra|(?<!after )tomorrow/i, shift(date, 1));
@@ -349,6 +353,8 @@ function dayRefs(sentence, date) {
 const sentences = text => String(text || '').replace(/\*\*|__/g, '').split(/(?<=[.!?])\s+|\n+/).map(x => x.trim()).filter(Boolean);
 const CHANGE = /vynech|přesu|posu[nň]|zruš|odpočív|odpočin|nahrad|místo|zkrát|odlož|odpad|volno|\bskip|\bmove|cancel|instead|\brest\b|shorten|postpone/i;
 const CONDITIONAL = /^\s*[-•*]?\s*(?:pokud|když|jestli|kdyby|kdybys|if|when|should)\b|chceš|want me|mám ti|shall i/i;
+// A change only under a condition in a later clause ("…; při nedostatku času ji vynech", runs 27 and 28, S24 and S15) is advice, not a change.
+const unconditional = x => String(x).split(/[;:]\s*/).filter(part => !/^(?:při|pokud|když|jestli|kdyby|v případě|if|when|should)\b/i.test(part)).join('; ');
 const KIND_WORDS = { recovery: /regenera|lehk|lehc|volně|klidn|recovery|easy/i, endurance: /vytrval|lehk|lehc|Z2|aerob|klidn|endurance|easy/i, long: /dlouh|long/i, tempo: /tempo/i, sweet_spot: /sweet/i, threshold: /prah|práh|threshold/i, vo2max: /vo2|vo₂/i };
 // A rest or a move: any change of the planned session ("nejel bych" with a move to Sunday).
 const cardWords = a => ['rest', 'move'].includes(a.type) ? /vynech|zruš|odpad|místo|odpoč|volno|nahrad|nejel|neběž|přesu|posu|odlož|skip|cancel|instead|rest|drop|move|shift|postpone|push/i
@@ -363,7 +369,7 @@ const companion = (r, a) => a.type === 'rest' && (a.replacedBy || r.kept.some(w 
 // offers changes (noUnaskedCard and the situations' own checks judge that).
 function promisedWithoutCard(r, planned) {
   if (!r.kept.some(a => PLAN_CHANGE.includes(a.type))) return [];
-  return sentences(r.answer).filter(x => CHANGE.test(x) && !CONDITIONAL.test(x)).flatMap(x => dayRefs(x, r.date).slice(0, 1)
+  return sentences(r.answer).filter(x => !CONDITIONAL.test(x) && CHANGE.test(unconditional(x))).flatMap(x => dayRefs(unconditional(x), r.date).slice(0, 1)
     .filter(d => (planned[d] || []).length && !r.kept.some(a => cardDays(a, r, planned).includes(d))).map(d => d + ': ' + x.slice(0, 60)));
 }
 // A card no sentence speaks of: its words with its day, or, for today's card,
@@ -477,6 +483,17 @@ export function cardKind(athlete, action, library = []) {
 
 const COMPOSE_KINDS = { vo2max: 'VO2max', tempo: 'tempo', endurance: 'vytrvalost' };
 
+// Two "intensity=interval" steps in a row in the workout's text (a repeat's steps come round again).
+export function effortsBackToBackText(description) {
+  const flat = [];
+  for (const block of String(description || '').split(/\n\s*\n/)) {
+    const lines = block.split('\n').map(l => l.trim()).filter(Boolean), steps = lines.filter(l => l.startsWith('-')), head = lines.find(l => !l.startsWith('-')) || '';
+    const repeats = Number(head.match(/(\d+)\s*[x×]/i)?.[1] || 1), kinds = steps.map(l => l.match(/intensity=(\w+)/)?.[1] || 'active');
+    for (let k = 0; k < repeats; k++) flat.push(...kinds);
+  }
+  return flat.some((kind, i) => kind === 'interval' && flat[i - 1] === 'interval');
+}
+
 // A W situation: the library choice composed by Luna, as the app does, nothing kept.
 export async function runComposeScenario(env, scenario, { compose = composeWorkout } = {}) {
   const c = scenario.compose, started = Date.now(), coach = { readiness: { status: c.zone, score: c.score } };
@@ -504,6 +521,8 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
     const lo = c.minDifficulty ?? 1, hi = c.maxDifficulty ?? 10;
     checks.push(...runs.filter(r => r.workout).map(({ label, workout: w }) => quality(`${label}: obtížnost v požadovaném pásmu ${lo}–${hi}`, Number(w.difficulty) >= lo && Number(w.difficulty) <= hi, String(w.difficulty))));
   }
+  // Runs 27 and 28, W01/W02: an effort right before the repeat, two efforts in a row.
+  checks.push(...runs.filter(r => r.workout).map(({ label, workout: w }) => quality(`${label}: úseky oddělené odpočinkem`, !effortsBackToBackText(w.intervals_description))));
   if (c.zone !== 'green') checks.push(quality('na horší den upozorní jen u těžkého typu', runs.every(r => !r.workout || Boolean(r.workout.ai?.warning) === isHardKind(c.kind))));
   // Run 20, W03: a yellow day's endurance stays in the lower half of the zone (cycling to 68 % FTP, running to 83 %).
   if (c.zone !== 'green' && ['endurance', 'long'].includes(c.kind)) {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS } from '../src/coach-eval.js';
+import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS, effortsBackToBackText } from '../src/coach-eval.js';
 import { coachInstructionsFor, assistantTask } from '../src/coach-assistant.js';
 import { isPublicPath } from '../src/dashboard-auth.js';
 import { lang } from '../src/lang.js';
@@ -366,4 +366,23 @@ test('runs 25/26: "jako další krok" is a later message, a fourth card stays, L
   const gym = evalGymOf('S19');
   assert.equal(gymLoadEstimate('Single-Leg Press', gym.history), null);
   assert.ok(gymLoadEstimate('Pivot leg press', gym.history)?.kg >= 150, 'the leg press itself keeps its history');
+});
+
+test('runs 27/28: efforts back to back, VO2max the day after the long ride, a conditional clause is no change, one leg gets no leg-press weight', async () => {
+  const at = (id, answer, kept = []) => checkReply(scenarioById(id), { answer, kept, proposed: [] }, now, date).filter(c => !c.ok).map(c => c.name);
+  // W01 run 27: a 4 min effort as its own section right before the 4× repeat.
+  assert.ok(effortsBackToBackText('Warmup\n- 8m 50-75% Warmup intensity=warmup\n\n- 4m 112-118% VO₂max intensity=interval\n\nMain Set 4x\n- 4m 112-118% VO₂max intensity=interval\n- 2m 45-55% Lehce intensity=recovery\n\nCooldown\n- 9m 45-55% Cool-down intensity=cooldown'));
+  assert.ok(!effortsBackToBackText('Warmup\n- 10m 50-75% Warmup intensity=warmup\n\nMain Set 5x\n- 3m 112-120% VO₂max intensity=interval\n- 3m 50-55% Lehce intensity=recovery\n\nCooldown\n- 5m 45-55% Cool-down intensity=cooldown'));
+  const vo2 = desc => async (env, args) => ({ name: 'VO2max', duration_minutes: 45, difficulty: 7, target_load: 60, intervals_description: desc, ai: { model: args.model, reason: 'Pět úseků.', warning: '' } });
+  const w01 = await runComposeScenario({}, scenarioById('W01'), { compose: vo2('- 4m 112-118% VO₂max intensity=interval\n\nMain Set 4x\n- 4m 112-118% VO₂max intensity=interval\n- 2m 45-55% Lehce intensity=recovery') });
+  assert.equal(w01.checks.find(c => c.name === 'Luna: úseky oddělené odpočinkem').ok, false);
+  // S15 run 28: VO2max on Saturday, the day after Friday's 3 h ride, with today's VO2max cancelled.
+  const sat = [{ type: 'rest', eventId: 'planned:9001', date, sport: 'ride' }, { type: 'workout', date, sport: 'ride', minutes: 75, kind: 'endurance', card: 'endurance' }, { type: 'workout', date: '2026-10-19', sport: 'ride', minutes: 60, kind: 'vo2max', card: 'vo2max' }];
+  assert.ok(at('S15', 'Dnes lehce, v pondělí VO2max.', sat).includes('tvrdé dny 48 h od sebe, nejvýš 2 za 7 dní'));
+  assert.ok(!at('S15', 'Dnes lehce, v úterý VO2max.', [sat[0], sat[1], { ...sat[2], date: '2026-10-20' }]).includes('tvrdé dny 48 h od sebe, nejvýš 2 za 7 dní'));
+  // S24 run 27 and S15 run 28: a change only under a condition after the semicolon, and "po páteční jízdě" is Saturday.
+  const today = [{ type: 'rest', eventId: 'planned:9001', date, sport: 'ride' }, { type: 'workout', date, sport: 'ride', minutes: 75, kind: 'endurance', card: 'endurance' }];
+  assert.ok(!at('S24', 'Dnes bych místo VO2max jel 75 minut lehce. Zítra 40 min lehce: jízda má nechat nohy čerstvé na neděli; při nedostatku času ji vynech.', today).includes('každá změna z textu má kartu'));
+  assert.ok(!at('S15', 'Dnes bych místo VO2max jel lehce. Po nedělní jízdě bude rozhodující, zda udržíš výkon; při horší připravenosti dej místo intervalů lehkou vytrvalost.', today).includes('každá změna z textu má kartu'));
+  assert.ok(at('S24', 'Dnes bych místo VO2max jel 75 minut lehce. Nedělní dlouhou jízdu vynech.', today).includes('každá změna z textu má kartu'));
 });
