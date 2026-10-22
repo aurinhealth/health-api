@@ -1,4 +1,4 @@
-// "Možná na tebe něco leze": the Today card when the night shows signs that
+// "Noc mimo tvůj normál": the Today card when the night shows signs that
 // often come before an illness. A raised temperature in sleep (Apple Watch's
 // wrist temperature or Google's skin temperature) or a raised breathing rate
 // must be one of them, with at least one more: HRV clearly under the normal or
@@ -33,5 +33,5 @@ export function illnessWarning({ date, readiness, state = {}, week = {} }) {
   if (!rows.length) return null;
   const sessions = (week.days || []).filter(d => d.date >= date)
     .flatMap(d => (d.daily?.training?.planned || []).filter(a => a?.id && !/nutrition/i.test(a.name || '')).map(a => ({ eventId: String(a.id), date: d.date, name: a.name || L('Trénink', 'Workout') })));
-  return { id, kind: 'illness', headline: L('Možná na tebe něco leze', 'Something may be coming on'), reasons: [], rows, sessions, message: null };
+  return { id, kind: 'illness', headline: L('Noc mimo tvůj normál', 'Last night was off your normal'), reasons: [], rows, sessions, message: null };
 }

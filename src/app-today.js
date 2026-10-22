@@ -116,7 +116,7 @@ export function readinessSummary(summary, readiness = {}, checkin = null, hasPla
   const signs = flags.some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f));
   if (!(readiness?.zone === "red" || sick || signs)) return summary;
   const recommendation = sick ? L("Když je ti špatně, trénink dnes vynech a odpočívej. Vrať se, až budeš zase fit.", "If you feel unwell, skip training today and rest. Come back when you're well again.")
-    : signs ? L("Dech nebo teplota jsou vyšší než obvykle, to může být začátek nemoci. Dnes bez intenzity, a když se necítíš dobře, odpočívej.", "Your breathing or temperature is higher than usual, which can be the start of an illness. No intensity today, and rest if you don't feel well.")
+    : signs ? L("Dech nebo teplota ve spánku jsou nad tvým normálem. Dnes bez intenzity, a když se necítíš dobře, odpočívej.", "Your breathing or temperature in sleep is above your normal. No intensity today, and rest if you don't feel well.")
     : hasPlan ? L("Připravenost je dnes nízká: náročný trénink vynech a dej volno nebo jen lehký pohyb do 45 minut.", "Readiness is low today: skip the hard session and take a rest day or just easy movement up to 45 minutes.")
     : L("Připravenost je dnes nízká: dej si volno, procházku a jdi dřív spát.", "Readiness is low today: take a rest day, go for a walk and get to bed earlier.");
   return { ...(summary || { text: null }), headline: sick || readiness?.zone === "red" ? L("Den na odpočinek", "A day to recover") : L("Dnes opatrně", "Take care today"), recommendation };
