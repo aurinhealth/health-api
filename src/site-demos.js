@@ -166,20 +166,22 @@ const strainMade = `<div class="dm pad">
 </div>`;
 
 // ---- Training week (TrainingCalendar.swift, PlanSessionActions.swift) ----
-// The day strip: green on plan, amber done differently, dashed grey upcoming. Thursday's planned gym session
-// turns done, its source appears, and the month opens under the handle.
-const dayC = (d, num, sport, state, sel = '', attrs = '') => `<div class="dc${sel}"${attrs}><span class="wd">${d}</span><span class="ci ${state}">${ic(sport)}</span><span class="num dn">${num}</span></div>`;
+// The day strip: green on plan, amber done differently, dashed grey upcoming, each done day with its
+// percent of the plan. Thursday's planned gym session turns done, its source and percent appear, and the
+// month opens under the handle.
+const pct = (p, attrs = '') => `<span class="pc ${p >= 85 && p <= 115 ? 'ok' : 'off'}"${attrs}>${p} %</span>`;
+const dayC = (d, num, sport, state, p = null) => `<div class="dc"><span class="wd">${d}</span><span class="ci ${state}">${ic(sport)}</span><span class="num dn">${num}</span>${p ? pct(p) : '<span class="pc"></span>'}</div>`;
 const MONTH = [['', '', '', 1, 2, 3, 4], [5, 6, 7, 8, 9, 10, 11], [12, 13, 14, 15, 16, 17, 18], [19, 20, 21, 22, 23, 24, 25], [26, 27, 28, 29, 30, 31, '']];
 const monthState = d => d === '' ? '' : d > 8 ? (d % 7 === 2 ? '' : 'up') : d === 4 ? 'off' : d === 7 ? 'off' : d % 11 === 0 ? '' : d === 3 || d === 8 ? 'ok' : (d % 7 === 5 ? 'out' : 'ok');
 const monthSport = d => ['gym', 'bike', 'run', 'gym', 'bike', 'bike', 'run'][d % 7];
 const week = `<div class="dm pad wk">
 <div class="sl">Training · Week 41</div>
-<div class="strip">${dayC('M', 5, 'run', 'ok')}${dayC('T', 6, 'bike', 'ok')}${dayC('W', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">T</span><span class="ci up"${at('1400:done')}>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
+<div class="strip">${dayC('M', 5, 'run', 'ok', 96)}${dayC('T', 6, 'bike', 'ok', 104)}${dayC('W', 7, 'bike', 'off', 128)}<div class="dc sel"><span class="wd today">T</span><span class="ci up"${at('1400:done')}>${ic('gym')}</span><span class="num dn">8</span>${pct(94, at('2200'))}</div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
 <div class="handle"${at('4300:pull 5200-pull')}><i></i><span data-tx="0|Full month;4800|Less">Full month</span></div>
 <div class="month"${at('4800:open')}><div class="mh"><b>October</b><span class="mut s">12 activities · 14 h 20 min</span></div><div class="mg">${['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<span class="mw">${d}</span>`).join('')}${MONTH.flat().map((d, i) => `<span class="md${d === 8 ? ' sel' : ''}" style="--i:${i}"><span>${d}</span>${monthState(d) ? `<span class="ci ${monthState(d)}">${ic(monthSport(d))}</span>` : ''}</span>`).join('')}</div></div>
 <div class="day"><div class="row sp"><b>Today</b><span class="mut s">1 h 27 min · 840 kcal</span></div>
-<div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="src">${logo('apple')}Apple Health</span><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span></div><span class="num">520<small>kcal</small></span></div>
-<div class="ar"><span class="ci up"${at('1400:done')}>${ic('gym')}</span><div><b>Strength, full body</b><span class="src"${at('2200')}>${AURIN}Aurin, Apple Watch</span><span class="mut s" data-tx="0|Planned · 5:30 PM · 45 min;1400|Strength · 5:30 PM · 47 min">Planned · 5:30 PM · 45 min</span></div><span class="num"${at('2200')}>320<small>kcal</small></span></div>
+<div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="src">${logo('apple')}Apple Health</span><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span>${pct(98)}</div><span class="num">520<small>kcal</small></span></div>
+<div class="ar"><span class="ci up"${at('1400:done')}>${ic('gym')}</span><div><b>Strength, full body</b><span class="src"${at('2200')}>${AURIN}Aurin, Apple Watch</span><span class="mut s" data-tx="0|Planned · 5:30 PM · 45 min;1400|Strength · 5:30 PM · 47 min">Planned · 5:30 PM · 45 min</span>${pct(94, at('2200'))}</div><span class="num"${at('2200')}>320<small>kcal</small></span></div>
 </div></div>`;
 
 // ---- Gym (GymTools.swift GymBuilderView, GymDayParts.swift GymPartsCard) ----
@@ -324,9 +326,9 @@ ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Bent-over r
 // Beside the phone: the confirmed workout lands in the week.
 const coachWeek = `<div class="dm pad wk"${at('10900')}>
 <div class="sl">Training · Week 41</div>
-<div class="strip">${dayC('M', 5, 'run', 'ok')}${dayC('T', 6, 'bike', 'ok')}${dayC('W', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">T</span><span class="ci empty"${at('11600:up')}><span class="rest">–</span>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
+<div class="strip">${dayC('M', 5, 'run', 'ok', 96)}${dayC('T', 6, 'bike', 'ok', 104)}${dayC('W', 7, 'bike', 'off', 128)}<div class="dc sel"><span class="wd today">T</span><span class="ci empty"${at('11600:up')}><span class="rest">–</span>${ic('gym')}</span><span class="num dn">8</span><span class="pc"></span></div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
 <div class="day"><div class="row sp"><b>Today</b><span class="mut s" data-tx="0|42 min · 520 kcal;12000|1 h 42 min · 520 kcal">42 min · 520 kcal</span></div>
-<div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span></div><span class="num">520<small>kcal</small></span></div>
+<div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span>${pct(98)}</div><span class="num">520<small>kcal</small></span></div>
 <div class="ar new"${at('12000')}><span class="ci up">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">Planned · 5:30 PM · 60 min</span></div>${ic('chev')}</div>
 </div></div>`;
 
@@ -449,6 +451,7 @@ html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
 .ci.empty.up{--c:var(--muted)}.ci.empty.up .di{opacity:1;transform:none}.ci.empty.up .rest{opacity:0}
 .js .ci.empty[data-at]:not(.up){opacity:1!important;transform:none!important}
 .dn{font-size:15px}
+.pc{display:block;min-height:14px;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}.pc.ok{color:var(--green)}.pc.off{color:var(--amber)}
 .handle{display:flex;flex-direction:column;align-items:center;gap:3px;margin:8px 0 2px;font-size:11px;font-weight:500;color:var(--muted);transition:transform .4s}
 .handle i{width:34px;height:4px;border-radius:4px;background:color-mix(in srgb,var(--muted) 50%,transparent)}
 .handle.pull{transform:translateY(8px)}.js .handle[data-at]{opacity:1!important;transform:none!important}.js .handle.pull{transform:translateY(8px)!important}

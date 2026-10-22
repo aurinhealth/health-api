@@ -63,6 +63,9 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     /// them (src/workout-merge.js), and whose calories and heart rate count.
     var sources: [ActivityDetail.Origin]? = nil
     var mergeEnergy: String? = nil
+    /// On a done session with a plan: how much of the plan was done, in
+    /// percent (src/plan-compliance.js), coloured by ComplianceScale.
+    var compliance: Int? = nil
 }
 
 /// The answer to POST /app/api/planned/move (src/planned-events.js).

@@ -139,6 +139,7 @@ import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
 import { planningHistory, planForWeek, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor } from "./coach-ride-reviews.js";
+import { planComplianceRoute } from "./plan-compliance-route.js";
 import { ownFitness, watchOnlyFitness, fitnessDays } from "./own-fitness.js";
 import { handleStrengthAutomation, handleAdminApi } from "./routes-admin.js";
 import { handleAccountApi } from "./routes-account.js";
@@ -1892,6 +1893,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     const detail=await (source==='wahoo'?wahooDetail(env,{id,...await watchOptions(env)}):watchDetail(env,{source,id,...await watchOptions(env)})).catch(error=>{console.error('Watch detail failed',error.message);return null;});
     if(!detail)return Response.json({message:L('Aktivita není v tvé synchronizované historii.', 'The activity isn\'t in your synced history.')},{status:404});
     return Response.json(detail,{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  // "Splnění plánu" of a done ride, run or gym day (plan-compliance-route.js).
+  if(url.pathname==='/app/api/plan-compliance'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    return planComplianceRoute(env,ctx,url);
   }
 
   // The coach's sentence on the app's Today, Training and Food screens

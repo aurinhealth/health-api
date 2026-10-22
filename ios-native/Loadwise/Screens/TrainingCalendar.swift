@@ -18,13 +18,14 @@ struct TrainingCalendarCard: View {
     @AppStorage("calendarMode") private var mode = CalendarMode.count.rawValue
 
     enum CalendarMode: String, CaseIterable, Identifiable {
-        case count, time, kcal
+        case count, time, kcal, compliance
         var id: String { rawValue }
         var label: String {
             switch self {
             case .count: return "Počet"
             case .time: return "Čas"
             case .kcal: return "Kalorie"
+            case .compliance: return "Splnění"
             }
         }
     }
@@ -167,7 +168,7 @@ struct DayCircle: View {
                 .foregroundStyle(date == today ? Palette.amber : Palette.faint)
             ZStack {
                 if let state = style.state {
-                    PlanStateIcon(symbol: style.symbol, state: state, size: 44)
+                    PlanStateIcon(symbol: style.symbol, state: state, size: 44, percent: style.percent)
                 } else {
                     Circle().fill(style.fill)
                     Image(systemName: style.symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.faint)
@@ -178,6 +179,11 @@ struct DayCircle: View {
             Text(ISODay.day(date))
                 .font(Typo.number(15))
                 .foregroundStyle(selected ? Palette.ink : Palette.muted)
+            // The day's percent of the plan; the line stays for days without one.
+            Text(verbatim: style.percent.map { "\($0) %" } ?? " ")
+                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                .foregroundStyle(style.percent.map(ComplianceScale.color) ?? .clear)
+                .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
@@ -199,15 +205,18 @@ struct SportStyle {
     /// The quiet circle of a day at rest.
     let fill: Color
     let label: String
+    /// The day's percent of the plan (CalendarDay.compliance) when it is done.
+    let percent: Int?
 
     init(day: CalendarDay?, date: String, today: String) {
         let sport = day?.primary ?? "rest"
         let planState: PlanState? = sport == "rest" ? nil : PlanState(day: day)
         state = planState
+        percent = planState == .good || planState == .off ? day?.compliance : nil
         fill = date <= today ? Palette.track : .clear
         if let planState {
             symbol = SportIcon.symbol(sport)
-            label = L10n.tr(Self.name(sport)) + ", " + L10n.tr(planState.title)
+            label = L10n.tr(Self.name(sport)) + ", " + L10n.tr(planState.title) + (percent.map { ", " + L10n.f("%@ %% plánu", String($0)) } ?? "")
         } else {
             symbol = "moon.zzz"
             label = L10n.tr(day == nil ? "bez dat" : "volno")
@@ -298,7 +307,7 @@ struct MonthGrid: View {
                 .foregroundStyle(date == today ? Palette.amber : Palette.muted)
             ZStack {
                 if let state = style.state {
-                    PlanStateIcon(symbol: style.symbol, state: state, size: 26)
+                    PlanStateIcon(symbol: style.symbol, state: state, size: 26, percent: style.percent)
                 } else {
                     Circle().fill(style.fill)
                     Image(systemName: style.symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
@@ -306,7 +315,7 @@ struct MonthGrid: View {
             }
             .frame(width: 26, height: 26)
             Text(Self.value(day, mode)).font(.system(size: 10, weight: .semibold).monospacedDigit())
-                .foregroundStyle((day?.count ?? 0) > 0 ? Palette.ink : Palette.faint)
+                .foregroundStyle(mode == .compliance ? style.percent.map(ComplianceScale.color) ?? Palette.faint : (day?.count ?? 0) > 0 ? Palette.ink : Palette.faint)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, minHeight: 62)
@@ -321,6 +330,9 @@ struct MonthGrid: View {
     static func value(_ day: CalendarDay?, _ mode: TrainingCalendarCard.CalendarMode) -> String {
         guard let day, day.count > 0 else { return " " }
         switch mode {
+        case .compliance:
+            guard PlanState(day: day) == .good || PlanState(day: day) == .off, let percent = day.compliance else { return " " }
+            return "\(percent) %"
         case .count: return String(day.count)
         case .time: return Fmt.hoursMinutes(day.minutes)
         case .kcal: return Fmt.int(day.kcal)
@@ -335,6 +347,12 @@ struct MonthGrid: View {
         let kcal = list.reduce(0.0) { $0 + $1.kcal }
         guard count > 0 else { return L10n.tr("zatím bez aktivit") }
         let head = L10n.f("%@ %@", String(count), Fmt.plural(count, "aktivita", "aktivity", "aktivit"))
+        // Splnění: the month's sessions done to a plan, their mean percent.
+        if mode == .compliance {
+            let values = list.flatMap(\.activities).filter { $0.status == "done" }.compactMap(\.compliance)
+            guard !values.isEmpty else { return head }
+            return head + " · " + L10n.f("%@ %% plánu", String(Int((Double(values.reduce(0, +)) / Double(values.count)).rounded())))
+        }
         return head + " · " + Fmt.hoursMinutesLong(minutes) + " · " + Fmt.int(kcal) + " kcal"
     }
 }
@@ -441,7 +459,7 @@ struct CalendarActivityRow: View {
         let state = PlanState(activity.session)
         HStack(spacing: 12) {
             // The plan's colours, as a row of Tréninky týdne.
-            PlanStateIcon(symbol: SportIcon.symbol(activity.sport), state: state)
+            PlanStateIcon(symbol: SportIcon.symbol(activity.sport), state: state, percent: activity.compliance)
                 .accessibilityLabel(L10n.tr(state.title))
             VStack(alignment: .leading, spacing: 2) {
                 Text(activity.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
@@ -450,8 +468,11 @@ struct CalendarActivityRow: View {
                     SourceLine(sources: sources)
                 }
                 Text(Self.detail(activity)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                // Only a session done differently says why.
-                if state == .off, let reason = activity.adherenceReason, !reason.isEmpty {
+                // A session done to a plan: only its percent, the why is in its detail.
+                if activity.status == "done", let percent = activity.compliance {
+                    Text(verbatim: "\(percent) %").font(Typo.caption.weight(.semibold)).foregroundStyle(ComplianceScale.color(percent))
+                        .accessibilityLabel(L10n.f("%@ %% plánu", String(percent)))
+                } else if state == .off, let reason = activity.adherenceReason, !reason.isEmpty {
                     Text(reason).font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(1)
                 }
             }

@@ -183,18 +183,21 @@ struct SessionRow: View {
         HStack(spacing: 14) {
             // The plan's colours: green kept to it, amber done differently, rust
             // missed, a dashed grey ring still ahead, blue outside the plan.
-            PlanStateIcon(symbol: SportIcon.symbol(session.sport), state: state)
+            PlanStateIcon(symbol: SportIcon.symbol(session.sport), state: state, percent: session.compliance)
                 .accessibilityLabel(L10n.tr(state.title))
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
                 Text(subtitle).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                // Only a session done differently says why.
-                if state == .off, let reason = session.adherenceReason, !reason.isEmpty {
+                // Only a session done differently says why; one with a percent shows just that.
+                if state == .off, session.compliance == nil, let reason = session.adherenceReason, !reason.isEmpty {
                     Text(reason).font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(1)
                 }
             }
             Spacer(minLength: 8)
-            if let tss = session.tss, tss > 0 {
+            if let percent = session.compliance, session.status == "done" {
+                Text(verbatim: "\(percent) %").font(Typo.bodyStrong).foregroundStyle(ComplianceScale.color(percent))
+                    .accessibilityLabel(L10n.f("%@ %% plánu", String(percent)))
+            } else if let tss = session.tss, tss > 0 {
                 Text(Fmt.int(tss)).font(Typo.number(18)).foregroundStyle(Palette.ink)
             }
             Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
@@ -278,6 +281,7 @@ struct ActivityDetailView: View {
                 if let detail {
                     ActivityRouteMap(detail: detail, localRoute: localRoute)
                     ActivityDetailContent(detail: detail, kcal: countedKcal, kcalNote: kcalNote,
+                                          compliance: session.plannedId == nil ? nil : AnyView(ActivityComplianceSection(session: session)),
                                           rating: model.demo ? nil : AnyView(FeedbackRow(session: session, reload: feedbackClosed) { feedback = true }))
                     // Device calories that look like a measurement error (src/activity-energy-check.js).
                     if !model.demo { KcalCheck(session: model.liveSession(session), date: session.date) }
@@ -415,7 +419,9 @@ struct ActivityDetailContent: View {
     /// What Aurin counts, when it differs from the source's number, and why.
     var kcal: Double?
     var kcalNote: String?
-    /// "Jak to šlo?" right under the numbers.
+    /// "Splnění plánu" of a session done to a plan, right under the numbers.
+    var compliance: AnyView?
+    /// "Jak to šlo?" under the numbers (and the plan's percent).
     var rating: AnyView?
     /// The minute the finger is on, shared by the power and heart-rate charts.
     @State private var cursor: Double?
@@ -423,10 +429,11 @@ struct ActivityDetailContent: View {
     private let watts: [StreamChart.Sample]
     private let hr: [StreamChart.Sample]
 
-    init(detail: ActivityDetail, kcal: Double? = nil, kcalNote: String? = nil, rating: AnyView? = nil) {
+    init(detail: ActivityDetail, kcal: Double? = nil, kcalNote: String? = nil, compliance: AnyView? = nil, rating: AnyView? = nil) {
         self.detail = detail
         self.kcal = kcal
         self.kcalNote = kcalNote
+        self.compliance = compliance
         self.rating = rating
         watts = Self.samples("watts", in: detail)
         hr = Self.samples("heartrate", in: detail)
@@ -454,7 +461,8 @@ struct ActivityDetailContent: View {
                 }
             }
             .padding(.top, 22)
-            if let rating { rating.padding(.top, 18) }
+            if let compliance { compliance.padding(.top, 18) }
+            if let rating { rating.padding(.top, compliance == nil ? 18 : 12) }
 
             let span = max(watts.last?.minute ?? 0, hr.last?.minute ?? 0, 1)
             if watts.count > 10 {

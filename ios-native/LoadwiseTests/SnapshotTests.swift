@@ -713,6 +713,33 @@ final class SnapshotTests: XCTestCase {
     }
 
     /// Training plans: before the start, the running plan, a week and the result.
+    /// "Splnění plánu": the card under a ride's numbers, its sheet with the
+    /// plan against what was done, a run well over the plan and the colours.
+    func testPlanComplianceScreens() throws {
+        func step(_ label: String, _ role: String, _ min: Double, _ lo: Double?, _ hi: Double?, _ v: Double?, _ status: String?) -> PlanCompliance.Step {
+            PlanCompliance.Step(label: label, role: role, seconds: min * 60, plannedSeconds: min * 60, lo: lo, hi: hi, value: v,
+                                text: v.map { "\(Int(min)):00 · \(Int($0)) W" }, status: status)
+        }
+        let ride = PlanCompliance(percent: 92, word: "Podle plánu",
+            rows: [.init(kind: "tss", done: 73, plan: 79, percent: 92), .init(kind: "time", done: 68, plan: 60, percent: 113)],
+            steps: .init(unit: "W", inBand: 3, of: 4, steps: [
+                step("Rozjetí", "warmup", 10, 150, 195, 175, "in"), step("Práh 1", "work", 8, 285, 300, 291, "in"), step("Pauza", "rest", 4, 150, 180, 165, "in"),
+                step("Práh 2", "work", 8, 285, 300, 294, "in"), step("Pauza", "rest", 4, 150, 180, 160, "in"), step("Práh 3", "work", 8, 285, 300, 288, "in"),
+                step("Pauza", "rest", 4, 150, 180, 168, "in"), step("Práh 4", "work", 8, 285, 300, 264, "under"), step("Vyjetí", "cooldown", 6, 135, 180, nil, "missing")]),
+            target: "Cíl prahu byl 95–100 %, tedy zhruba 285–300 W při FTP 300 W.")
+        let run = PlanCompliance(percent: 140, word: "Výrazně víc",
+            rows: [.init(kind: "tss", done: 63, plan: 45, percent: 140), .init(kind: "time", done: 62, plan: 45, percent: 138), .init(kind: "distance", done: 11.4, plan: 8, percent: 143)])
+        try render("plan-compliance", glow: Palette.Glow.training) {
+            VStack(spacing: 14) {
+                PlanComplianceCard(compliance: ride) {}
+                PlanComplianceCard(compliance: run, run: true) {}
+            }
+            .padding(24).padding(.top, 30)
+        }
+        try render("plan-compliance-sheet", glow: Palette.Glow.training) { PlanComplianceSheet(compliance: ride, title: "Práh 4×8 min") }
+        try render("plan-colors-legend", glow: Palette.Glow.training, height: 900) { PlanColorsLegend() }
+    }
+
     func testTrainingPlanScreens() throws {
         func block(_ minutes: Double, _ low: Double, _ high: Double, repeats: Int = 1) -> String {
             #"{"repeats":\#(repeats),"steps":[{"durationSeconds":\#(minutes * 60),"percentLow":\#(low),"percentHigh":\#(high)}]}"#
