@@ -111,6 +111,8 @@ test('an explicitly resized library workout keeps its chosen length even with ze
   const result = await app.post('/app/api/workouts/generate', { date: today, environment: 'indoor', workoutId: workout.id, resizeTo: 180 });
   assert.equal(result.status, 200, result.data.message);
   assert.equal(result.data.workout.duration_minutes, 180);
+  // The week plan's detail draws the workout from its step rows.
+  assert.ok(result.data.workout.steps?.length > 0);
   const saved = await app.post('/app/api/workouts/schedule', { date: today, workoutId: result.data.workout.id, environment: 'indoor', confirm: true });
   assert.equal(saved.status, 200, saved.data.message);
 });
@@ -132,6 +134,8 @@ test('automatic generation still caps rides and gyms and rejects days with zero 
   const ride = await app.post('/app/api/workouts/generate', { date: today, sport: 'ride', environment: 'outdoor', availabilityMinutes: 180 });
   assert.equal(ride.status, 200, ride.data.message);
   assert.ok(ride.data.workout.duration_minutes <= 45);
+  assert.ok(ride.data.workout.steps?.length > 0);
+  assert.ok(ride.data.workout.steps.flatMap(b => b.steps).some(x => x.durationSeconds > 0));
   const gym = await app.post('/app/api/gym/generate', { date: today, preview: true, durationMinutes: 90 });
   assert.equal(gym.status, 200, gym.data.message);
   assert.equal(gym.data.plan.timing.requestedMinutes, 45);

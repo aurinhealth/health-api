@@ -2783,3 +2783,11 @@
 "Vyber fotku etikety z Fotek." = "Choose a photo of the label from Photos.";
 "Vyfotit etiketu" = "Take photo of label";
 "Fotku se nepodařilo pořídit. Zkus to znovu." = "Couldn't take the photo. Try again.";
+
+"Odebrat z plánu" = "Remove from plan";
+"Odebrat „%@“?" = "Remove “%@”?";
+"Odebrat a přepočítat" = "Remove and recalculate";
+"Ostatní tréninky můžeš nechat, jak jsou, nebo je nechat přepočítat." = "Keep the other workouts as they are, or have them recalculated.";
+"Jen odebrat" = "Just remove";
+"Přepočteno" = "Recalculated";
+"Odeber %@ (%@) a zbytek týdne přepočítej." = "Remove the %1$@ (%2$@) and recalculate the rest of the week.";

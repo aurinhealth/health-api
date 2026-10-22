@@ -1435,6 +1435,7 @@ final class AppModel {
         SnapshotCache.clear()
         GymDayCache.clear()
         CoachTextMemory.values = [:]
+        WeekPlanDraftMemory.drafts = [:]
         ThresholdCheckMemory.kept = nil
         GymHistoryCache.clear()
         ActivityDetailMemory.values = [:]
