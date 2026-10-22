@@ -2777,3 +2777,9 @@
 "Čas %@ z plánovaných %@" = "Time %@ of the planned %@";
 "Vzdálenost %@ z plánovaných %@" = "Distance %@ of the planned %@";
 "vynecháno" = "skipped";
+"ETIKETA" = "LABEL";
+"Vyfoť tabulku výživových údajů" = "Take a photo of the nutrition table";
+"Fotoaparát potřebuje přístup. Povol ho Aurinu v Nastavení iPhonu, nebo vyber fotku." = "The camera needs access. Allow it for Aurin in iPhone Settings, or choose a photo.";
+"Vyber fotku etikety z Fotek." = "Choose a photo of the label from Photos.";
+"Vyfotit etiketu" = "Take photo of label";
+"Fotku se nepodařilo pořídit. Zkus to znovu." = "Couldn't take the photo. Try again.";
