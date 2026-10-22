@@ -1,4 +1,20 @@
 import { L } from './lang.js';
+// The card asks the user only about a gap that changes the day's numbers: at
+// least 50 kcal and a quarter of the larger value, compared as the app shows
+// them (whole kcal), so a device value equal to the estimate never asks.
+export function energyGap(device,counted){
+  const d=Math.round(Number(device)),c=Math.round(Number(counted));
+  if(!(d>0&&c>=0))return false;
+  const gap=Math.abs(d-c);
+  return gap>=50&&gap>=.25*Math.max(d,c);
+}
+// A check flagged against the walking or lifting estimate whose counted value
+// ends up close to the device's (e.g. the watch's own per-minute energy) has
+// nothing to choose between.
+export function settleEnergyCheck(check,counted){
+  if(check?.status!=='review'||energyGap(check.reported,counted))return check;
+  return {...check,status:'consistent',reason:L('Orientační kontrola. Údaj zařízení odpovídá odhadu, nejde o měření.', 'A rough check. The device value matches the estimate; it isn\'t a measurement.')};
+}
 // A plausibility check, not a replacement for measured energy. Terrain,
 // carrying load and individual physiology can move a walk outside this range.
 // MET reference: https://pacompendium.com/walking/ (2024 Adult Compendium).
@@ -9,7 +25,7 @@ export function walkingEnergyCheck(activity,weightKg){
   const km=Number(metrics.distanceMillimeters||metrics.distanceMillimiters||0)/1000000,speed=km/hours;
   const met=speed>0?(speed<3.2?2.8:speed<4.5?3:speed<5.6?3.8:speed<6.4?4.8:5.5):3.5;
   const estimated=Math.round((met-1)*weight*hours),low=Math.round(estimated*.6),high=Math.round(estimated*1.6),reported=Number(activity.calories);
-  const review=reported>0&&(reported>high||reported<low);
+  const review=reported>0&&(reported>high||reported<low)&&energyGap(reported,estimated);
   return {status:review?'review':'consistent',reported:reported>0?reported:null,estimated,low,high,
     source:L('Google Health · souhrn chůze', 'Google Health · walking summary'),basis:'active',steps:Number(metrics.steps)||null,distanceKm:km||null,
     reason:review?L('Údaj zařízení se liší od orientačního odhadu běžné chůze. Zkontroluj délku, kopce, zátěž a tep.', 'The device value differs from a rough estimate for normal walking. Check the duration, hills, load and heart rate.'):L('Orientační kontrola podle hmotnosti, délky a dostupné vzdálenosti. Nejde o měření.', 'A rough check based on weight, duration and the available distance. It isn\'t a measurement.')};
@@ -38,7 +54,7 @@ export function strengthEnergyCheck(activity,weightKg){
   const weight=Number(weightKg),hours=Number(activity.durationHours);
   if(!(weight>=30&&weight<=300&&hours>0&&hours<=6))return {status:'unavailable',reason:L('Chybí hmotnost nebo délka tréninku pro kontrolu výdeje.', 'Weight or workout duration is missing for the expenditure check.')};
   const estimated=Math.round(2.5*weight*hours),low=Math.round(1.5*weight*hours),high=Math.round(5*weight*hours),reported=Number(activity.calories);
-  const review=reported>0&&(reported>high||reported<low);
+  const review=reported>0&&(reported>high||reported<low)&&energyGap(reported,estimated);
   return {status:review?'review':'consistent',reported:reported>0?reported:null,estimated,low,high,basis:'active',
     source:activity.source==='google-health'?L('Google Health · souhrn tréninku', 'Google Health · workout summary'):null,
     reason:review?L('Hodinky počítají posilovnu podle tepu jako vytrvalostní trénink, včetně pauz mezi sériemi. Skutečný výdej bývá nižší.', 'Watches count lifting from heart rate like endurance training, rests between sets included. The real burn is usually lower.'):L('Orientační kontrola podle hmotnosti a délky tréninku. Nejde o měření.', 'A rough check based on weight and workout duration. It isn\'t a measurement.')};

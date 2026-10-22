@@ -6,7 +6,7 @@ import {scopedDb} from '../src/tenancy.js';
 import {foodIntake} from '../src/food-portions.js';
 import {savePersonalFood,searchFoodCatalog,searchPersonalFoods,listPersonalFoods} from '../src/personal-foods.js';
 import {foodLookupLanguages,lookupFoodWithAI} from '../src/food-ai.js';
-import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck} from '../src/activity-energy-check.js';
+import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck,energyGap,settleEnergyCheck} from '../src/activity-energy-check.js';
 import {withTimeZone} from '../src/user-time.js';
 import {foodGooglePayload,queueFoodGoogle,processFoodGoogle,foodGoogleStatus,retryFoodGoogle,backfillFoodGoogle} from '../src/food-google-sync.js';
 const food={name:'Řecký jogurt',brand:'Test',nutrition_basis:'g',calories_100g:80,protein_100g:10,carbs_100g:6,fat_100g:2,quantity:'450 g',serving_size:'150 g',piece_size:'150 g',preferred_unit:'pack'};
@@ -88,6 +88,16 @@ test('a lifting session the watch counts like cardio is flagged with a realistic
   const a={type:'WeightTraining',name:'WeightTraining',durationHours:1.55,calories:711,source:'google-health'};const c=strengthEnergyCheck(a,82);
   assert.equal(c.status,'review');assert.equal(c.estimated,318);assert.ok(c.high<711);
   assert.equal(strengthEnergyCheck({...a,calories:300},82).status,'consistent');assert.equal(strengthEnergyCheck({...a,type:'Walk',name:'Walk'},82),null);assert.equal(strengthEnergyCheck(a,null).status,'unavailable');
+});
+test('calories are flagged only from a meaningful gap, never when the device equals the estimate',()=>{
+  assert.equal(energyGap(97,97),false);assert.equal(energyGap(97.4,96.6),false);assert.equal(energyGap(140,100),false);assert.equal(energyGap(200,155),false);
+  assert.equal(energyGap(150,100),true);assert.equal(energyGap(711,318),true);assert.equal(energyGap(60,0),true);assert.equal(energyGap(0,80),false);
+  // A short walk just outside the range but only a few kcal off the estimate is not worth a question.
+  const walk={type:'Walk',durationHours:.25,calories:70,payload:{exercise:{metricsSummary:{distanceMillimeters:1100000}}}};const w=walkingEnergyCheck(walk,80);
+  assert.ok(w.reported>w.high);assert.equal(w.status,'consistent');
+  // The watch's per-minute energy is counted as is: device 97, counted 97, nothing to check.
+  const measured=walkingEnergyCheck({...walk,calories:97},40);assert.equal(measured.status,'review');assert.equal(settleEnergyCheck(measured,97).status,'consistent');
+  assert.equal(settleEnergyCheck(measured,measured.estimated).status,'review');
 });
 test('exercise active energy uses complete intraday coverage, excludes daily rollups and never doubles overlapping points',()=>{
   const a={start:'2026-10-04T10:00:00Z',end:'2026-10-04T10:10:00Z'},rows=Array.from({length:10},(_,i)=>({start_time:'2026-10-04T10:'+String(i).padStart(2,'0')+':00Z',end_time:'2026-10-04T10:'+String(i+1).padStart(2,'0')+':00Z',value_numeric:5}));
