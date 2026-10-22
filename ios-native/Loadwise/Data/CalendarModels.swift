@@ -111,9 +111,9 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
                            sources: sources, mergeEnergy: mergeEnergy)
     }
 
-    /// A done session from the watch opens its own detail.
+    /// A done session from the watch or Wahoo opens its own detail.
     private var watchRef: WatchRef? {
-        guard status == "done", let source, source == "google-wearables" || source == "apple-health" else { return nil }
+        guard status == "done", let source, ["google-wearables", "apple-health", "wahoo"].contains(source) else { return nil }
         return WatchRef(source: source, id: id)
     }
 

@@ -158,6 +158,13 @@ const isoOf = v => { const t = Date.parse(v || ''); return Number.isFinite(t) ? 
 const round = (v, d = 0) => v == null ? null : Math.round(v * 10 ** d) / 10 ** d;
 const localIn = (zone, iso) => (validTimeZone(zone) ? withTimeZone(zone, () => localDateTime(iso)) : localDateTime(iso)) + ':00';
 
+// The FIT file Wahoo keeps of a done workout (the detail's curves, wahoo-detail.js).
+const fileUrl = summary => { const url = String(summary?.file?.url || ''); return /^https:\/\/[^/\s]+\/\S+$/.test(url) && url.length < 1000 ? url : null; };
+export async function wahooFileUrl(env, workoutId, { fetchImpl = fetch, now = Date.now() } = {}) {
+  if (!readWahooTokens(env) || !/^\d{1,15}$/.test(String(workoutId))) return null;
+  return fileUrl(await wahooApi(env, '/v1/workouts/' + workoutId + '/workout_summary', { fetchImpl, now }).catch(() => null));
+}
+
 // A Wahoo workout with its summary as a health_datapoints row; null for a
 // workout not done yet (the plans Aurin sent are workouts too).
 export function wahooActivityRow(workout, summary = workout?.workout_summary) {
@@ -178,7 +185,7 @@ export function wahooActivityRow(workout, summary = workout?.workout_summary) {
     average_speed: round(num(summary.speed_avg), 2), calories: round(num(summary.calories_accum, 1, 20000)),
     icu_average_watts: round(num(summary.power_avg, 1, 2500)), icu_weighted_avg_watts: round(num(summary.power_bike_np_last, 1, 2500)),
     icu_training_load: round(num(summary.power_bike_tss_last, 0, 1000)),
-    source: 'WAHOO', wahoo: { workoutId: workout.id, planId: workout.plan_id ?? null, token: workout.workout_token ?? null, typeId: workout.workout_type_id ?? null }
+    source: 'WAHOO', wahoo: { workoutId: workout.id, planId: workout.plan_id ?? null, token: workout.workout_token ?? null, typeId: workout.workout_type_id ?? null, ...(fileUrl(summary) ? { file: fileUrl(summary) } : {}) }
   };
   for (const k of Object.keys(payload)) if (payload[k] == null) delete payload[k];
   return { data_type: 'activity', external_id: 'wahoo:' + workout.id, sample_time: startLocal, start_time: startLocal, end_time: endLocal, value_numeric: null, value_unit: null, payload };
