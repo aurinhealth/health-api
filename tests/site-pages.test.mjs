@@ -124,8 +124,8 @@ test('the privacy policy names the controller and the contact',async()=>{
   // The consent step (consent.js) and the two-year deletion (inactiveAccounts) are described.
   assert.match(en,/deleted automatically with all its data/);
   assert.match(cs,/dva roky nepřihlásil, automaticky smažeme/);
-  assert.match(en,/The consent covers sending the data an AI feature needs to OpenAI/);
-  assert.match(cs,/Souhlas zahrnuje i posílání dat, která AI funkce potřebuje, do OpenAI/);
+  assert.match(en,/Sending the data an AI feature needs to OpenAI takes a separate explicit consent/);
+  assert.match(cs,/Posílání dat, která AI funkce potřebuje, do OpenAI vyžaduje samostatný výslovný souhlas/);
   assert.doesNotMatch(en+cs,/ChatGPT|the same way you received your invitation|stejnou cestou, jakou ti přišla pozvánka/);
 });
 

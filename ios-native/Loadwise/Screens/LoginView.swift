@@ -129,7 +129,6 @@ struct LoginView: View {
                     .disabled(model.signingIn)
                     .padding(.top, 4)
                 }
-                Button("Prohlédnout ukázku") { model.showDemo() }
                     .font(Typo.bodyStrong)
                     .foregroundStyle(Palette.muted)
                     .frame(maxWidth: .infinity)

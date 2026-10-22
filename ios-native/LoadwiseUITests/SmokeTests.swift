@@ -16,8 +16,8 @@ final class SmokeTests: XCTestCase {
         app = XCUIApplication()
     }
 
-    /// A new phone: the welcome pages, the sign-in, the e-mail code sheet, then
-    /// "Prohlédnout ukázku" into the app. Runs first (tests go by name).
+    /// A new phone: the welcome pages, the sign-in and the e-mail code sheet.
+    /// The sign-in offers no sample data. Runs first (tests go by name).
     func test1FirstLaunch() {
         launch()
         let skip = app.buttons["Přeskočit"]
@@ -34,11 +34,8 @@ final class SmokeTests: XCTestCase {
         XCTAssertTrue(cancel.waitForExistence(timeout: 5), "the e-mail sign-in did not open")
         shot("prihlaseni-e-mailem")
         cancel.tap()
-        let demo = app.buttons["Prohlédnout ukázku"]
-        XCTAssertTrue(demo.waitForExistence(timeout: 5))
-        demo.tap()
-        XCTAssertTrue(tab("Dnes").waitForExistence(timeout: 10), "the sample data did not open")
-        shot("ukazka-dnes")
+        XCTAssertTrue(email.waitForExistence(timeout: 5), "the sign-in did not come back")
+        XCTAssertFalse(app.buttons["Prohlédnout ukázku"].exists, "the sign-in still offers the sample data")
     }
 
     /// The four tabs, a detail on each of Dnes and Zdraví, "+", the coach and

@@ -1,7 +1,7 @@
 import Foundation
 
 /// Sample day in the shape of /app/api/today, for previews, the screenshot
-/// tests and "Prohlédnout ukázku" on the sign-in screen.
+/// tests and the "-demo" launch argument.
 enum DemoData {
     static var today: TodaySnapshot { L10n.isEnglish ? todayEnglish : todayCzech }
     private static let todayCzech: TodaySnapshot = decode(json)
