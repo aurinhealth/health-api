@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {existsSync,readFileSync} from 'node:fs';
 import worker from '../src/entrypoint.js';
-import {overviewPage,privacyPage,termsPage,supportPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME} from '../src/site-pages.js';
+import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,sitemapXml,googleDisclosure,GOOGLE_DISCLOSURE_ON_HOME} from '../src/site-pages.js';
 
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
@@ -124,8 +124,8 @@ test('the privacy policy names the controller and the contact',async()=>{
   // The consent step (consent.js) and the two-year deletion (inactiveAccounts) are described.
   assert.match(en,/deleted automatically with all its data/);
   assert.match(cs,/dva roky nepřihlásil, automaticky smažeme/);
-  assert.match(en,/The consent covers sending the data an AI feature needs to OpenAI/);
-  assert.match(cs,/Souhlas zahrnuje i posílání dat, která AI funkce potřebuje, do OpenAI/);
+  assert.match(en,/Sending the data an AI feature needs to OpenAI takes a separate explicit consent/);
+  assert.match(cs,/Posílání dat, která AI funkce potřebuje, do OpenAI vyžaduje samostatný výslovný souhlas/);
   assert.doesNotMatch(en+cs,/ChatGPT|the same way you received your invitation|stejnou cestou, jakou ti přišla pozvánka/);
 });
 
@@ -179,7 +179,7 @@ test('robots.txt and the sitemap list the public pages on the host they are serv
   assert.match(robots,/Disallow: \/app\//);
   assert.match(robots,/Sitemap: https:\/\/aurin\.health\/sitemap\.xml/);
   const map=await sitemapXml(new Request('https://aurin.health/sitemap.xml')).text();
-  for(const path of ['/','/support','/privacy','/terms','/privacy?lang=cs','/terms?lang=cs'])assert.ok(map.includes('<loc>https://aurin.health'+path+'</loc>'),path);
+  for(const path of ['/','/support','/privacy','/terms','/health-data','/privacy?lang=cs','/terms?lang=cs'])assert.ok(map.includes('<loc>https://aurin.health'+path+'</loc>'),path);
 });
 
 // Connections show only the services the app offers to connect, each with the app's own logo file
@@ -217,7 +217,7 @@ test('the questions open without JS and name the app’s real Settings paths',as
 });
 
 test('the public pages answer GET and HEAD without storage or a session, so crawlers can check them',async()=>{
-  for(const path of ['/','/privacy','/terms','/support','/robots.txt','/sitemap.xml']){
+  for(const path of ['/','/privacy','/terms','/support','/health-data','/robots.txt','/sitemap.xml']){
     for(const method of ['GET','HEAD']){
       const r=await worker.fetch(new Request('https://aurin.health'+path,{method}),{},{waitUntil(){}});
       assert.equal(r.status,200,method+' '+path);
@@ -226,3 +226,10 @@ test('the public pages answer GET and HEAD without storage or a session, so craw
     }
   }
 });
+
+test('the Consumer Health Data Privacy Policy is its own page, linked from the homepage, and names the processors and appeals',async()=>{
+  const html=await healthDataPage(new Request('https://aurin.health/health-data')).text();
+  for(const part of ['My Health My Data Act','Senate Bill 370','we do not sell consumer health data','Cloudflare','OpenAI','Appeal','Washington State Attorney General'])assert.ok(html.includes(part),part);
+  assert.match(await overviewPage().text(),/<a href="\/health-data">/);
+});
+

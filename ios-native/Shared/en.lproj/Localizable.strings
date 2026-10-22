@@ -45,7 +45,7 @@
 "AI kouč" = "AI coach";
 "AI potravinu nenašla. Zadej ji ručně." = "AI couldn't find this food. Enter it manually.";
 "AI ten kód nezná." = "AI doesn't know this code.";
-"Aby mohl odpovídat, potřebuje tvůj souhlas se zpracováním dat pomocí AI. Jde kdykoli vzít zpět v Nastavení → Soukromí a data." = "To answer, it needs your consent to process data with AI. You can withdraw it anytime in Settings → Privacy & data.";
+"Aby mohl odpovídat, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data." = "To answer, Aurin sends the health data it needs, including data from your connected watches and rings, to OpenAI in the USA. You can turn this off anytime in Settings → Privacy & data.";
 "Akorát" = "Just right";
 "Aktivita a cíl" = "Activity and goal";
 "Aktivní" = "Active";
@@ -447,7 +447,6 @@
 "Procvičí: %@" = "Works: %@";
 "Profil" = "Profile";
 "Profil a nastavení" = "Profile and settings";
-"Prohlédnout ukázku" = "Try the demo";
 "Prohlížíš ukázková data. Změny se neukládají." = "You're viewing demo data. Changes aren't saved.";
 "Propojení" = "Connections";
 "Provedení" = "Execution";
@@ -633,7 +632,7 @@
 "Snímek obrazovky" = "Screenshot";
 "Souhlas" = "Consent";
 "Souhlasím, aby Aurin takto používal moje data z Google Health." = "I agree to Aurin using my Google Health data this way.";
-"Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše, včetně AI funkcí." = "I agree that Aurin processes my health data as described above, including the AI features.";
+"Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše." = "I agree that Aurin processes my health data as described above.";
 "Soukromí a data" = "Privacy & data";
 "Spodní záda" = "Lower back";
 "Sport" = "Sport";
@@ -2748,5 +2747,7 @@
 "Lehčí trénink" = "Easier session";
 "Upraveno i v kalendáři." = "Changed in the calendar too.";
 "Upraveno. Tréninky níže jsou podle kontroly." = "Done. The sessions below follow the check.";
+"Posílat data do AI funkcí" = "Send data to the AI features";
+"Kouč a rozpoznání jídla pošlou potřebné údaje o zdraví společnosti OpenAI v USA. Jde to vypnout v Nastavení." = "The coach and food recognition send the health data they need to OpenAI in the USA. You can turn this off in Settings.";
 "Vybrat fotku" = "Choose photo";
 "Na fotce jsem kód nenašel." = "No barcode found in the photo.";

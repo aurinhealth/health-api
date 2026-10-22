@@ -159,7 +159,7 @@ struct CoachView: View {
     private var consentCard: some View {
         Card {
             Text("Kouč používá AI").font(.headline)
-            Text("Aby mohl odpovídat, potřebuje tvůj souhlas se zpracováním dat pomocí AI. Jde kdykoli vzít zpět v Nastavení → Soukromí a data.")
+            Text("Aby mohl odpovídat, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data.")
                 .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             Button {
                 Task {

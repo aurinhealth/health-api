@@ -2,8 +2,9 @@ import SwiftUI
 import UserNotifications
 
 /// After the first sign-in, two pages: where the data comes from ("Odkud brát
-/// data": Apple Health, Google Health, Intervals.icu and the consent to health
-/// data) and who you are ("O tobě": sex, year of birth, height and weight,
+/// data": Apple Health, Google Health, the Ultrahuman Ring, WHOOP, Intervals.icu,
+/// Wahoo, the consent to health data and the separate one to the AI features)
+/// and who you are ("O tobě": sex, year of birth, height and weight,
 /// filled in from Apple Health or the server's suggestions). Everything else
 /// (the day, goals, training, sleep) lives in Settings. An account set up
 /// earlier that still owes the consent sees only the consent page.
@@ -23,6 +24,9 @@ struct SetupFlowView: View {
     @State private var consentNeeded = false
     @State private var consentOnly = false
     @State private var agree = false
+    // Sending what an AI feature needs to OpenAI: its own choice, never ticked
+    // in advance (GDPR, App Review 5.1.2(i), WHOOP API terms 4.2.1).
+    @State private var agreeAI = false
     // Data sources
     @State private var appleOn = true
     @State private var appleWorking = false
@@ -135,7 +139,9 @@ struct SetupFlowView: View {
                 }
             }
         }
-        Toggle("Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše, včetně AI funkcí.", isOn: $agree)
+        Toggle("Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše.", isOn: $agree)
+            .font(Typo.small).tint(Palette.green)
+        Toggle("Posílat data do AI funkcí", isOn: $agreeAI)
             .font(Typo.small).tint(Palette.green)
         Link("Zásady ochrany soukromí", destination: Self.privacyURL).font(Typo.small)
     }
@@ -154,10 +160,18 @@ struct SetupFlowView: View {
                 SettingsDivider()
             }
             if let google = provider("google") { sourceRow(google) }
+            ForEach(listed(["ultrahuman", "whoop"]), id: \.id) { p in
+                SettingsDivider()
+                sourceRow(p)
+            }
         }
         SectionLabel(text: "Tréninkové aplikace").padding(.top, 10)
         SettingsGroup {
             if let intervals = provider("intervals") { sourceRow(intervals) }
+            ForEach(listed(["wahoo"]), id: \.id) { p in
+                SettingsDivider()
+                sourceRow(p)
+            }
         }
         if let line = syncLine {
             HStack(spacing: 8) {
@@ -213,27 +227,44 @@ struct SetupFlowView: View {
             .background(Palette.button, in: Capsule())
     }
 
-    /// One checkbox for the health-data consent (the same POST /app/api/consent
-    /// as the consent page), with the policy next to it.
+    /// Two checkboxes (the same POST /app/api/consent as the consent page):
+    /// the health-data consent, needed to go on, with the policy next to it,
+    /// and the optional one for the AI features.
     private var consentRow: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Button { agree.toggle() } label: {
-                HStack(alignment: .center, spacing: 12) {
-                    Image(systemName: agree ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 24, weight: .regular))
-                        .foregroundStyle(agree ? Palette.green : Palette.faint)
-                    Text("Souhlasím se zpracováním zdravotních dat")
-                        .font(Typo.small).foregroundStyle(Palette.ink)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .contentShape(Rectangle())
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
+                checkbox("Souhlasím se zpracováním zdravotních dat", note: nil, isOn: $agree)
+                Spacer(minLength: 8)
+                Link("Zásady", destination: Self.privacyURL).font(Typo.bodyStrong).foregroundStyle(Palette.blue)
             }
-            .buttonStyle(.plain)
-            .accessibilityValue(L10n.tr(agree ? "zapnuto" : "vypnuto"))
-            Spacer(minLength: 8)
-            Link("Zásady", destination: Self.privacyURL).font(Typo.bodyStrong).foregroundStyle(Palette.blue)
+            checkbox("Posílat data do AI funkcí",
+                     note: "Kouč a rozpoznání jídla pošlou potřebné údaje o zdraví společnosti OpenAI v USA. Jde to vypnout v Nastavení.",
+                     isOn: $agreeAI)
         }
+    }
+
+    private func checkbox(_ title: LocalizedStringKey, note: LocalizedStringKey?, isOn: Binding<Bool>) -> some View {
+        Button { isOn.wrappedValue.toggle() } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: isOn.wrappedValue ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 24, weight: .regular))
+                    .foregroundStyle(isOn.wrappedValue ? Palette.green : Palette.faint)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(Typo.small).foregroundStyle(Palette.ink)
+                    if let note { Text(note).font(Typo.caption).foregroundStyle(Palette.secondary) }
+                }
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(L10n.tr(isOn.wrappedValue ? "zapnuto" : "vypnuto"))
+    }
+
+    /// The listed services the server offers (configured or connected), in this order.
+    private func listed(_ ids: [String]) -> [ConnectionsResponse.Provider] {
+        ids.compactMap { id in providers.first { $0.id == id } }
     }
 
     /// Google and Intervals.icu, also before /app/api/connections answers.
@@ -421,7 +452,7 @@ struct SetupFlowView: View {
         saving = true
         defer { saving = false }
         do {
-            try await model.api.giveHealthConsent()
+            try await model.api.giveHealthConsent(ai: agreeAI)
             if consentOnly {
                 await model.finishSetup()
             } else {

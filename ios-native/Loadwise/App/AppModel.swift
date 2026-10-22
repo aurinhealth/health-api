@@ -36,7 +36,7 @@ final class AppModel {
     enum SyncStatus: Equatable { case syncing, done, failed }
     private(set) var signingIn = false
     var errorMessage: String?
-    /// Sample data instead of the server ("Prohlédnout ukázku", screenshots).
+    /// Sample data instead of the server ("-demo": screenshots and UI tests).
     private(set) var demo: Bool
     /// The last refresh failed for lack of a connection: the screens show the
     /// data saved on the phone (SnapshotCache) with a note.

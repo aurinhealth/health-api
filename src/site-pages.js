@@ -550,7 +550,7 @@ ${body}
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
 <nav aria-label="Aurin"><h3>Aurin</h3><ul><li><a href="/#pripravenost">Features</a></li><li><a href="/#kouc">AI coach</a></li><li><a href="/#propojeni">Connections</a></li></ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
-<nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li lang="cs">Česky: <a href="/privacy?lang=cs" hreflang="cs">Soukromí</a> · <a href="/terms?lang=cs" hreflang="cs">Podmínky</a></li></ul></nav>
+<nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/privacy?lang=cs" hreflang="cs">Soukromí</a> · <a href="/terms?lang=cs" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
 <div class="base"><span>© 2026 Aurin · run by Petr Bouma, Czech Republic</span><span>Aurin is not a medical device.</span></div>
 </div></footer>
@@ -575,7 +575,7 @@ function pageLang(request, czech = false) {
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '20. října 2026', en: '20 October 2026'};
+const UPDATED = {cs: '22. října 2026', en: '22 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -839,8 +839,8 @@ export function privacyPage(request, {apple = false, email = false, open = false
 </ul>
 <p>Two optional permissions are asked for separately: reading your date of birth from your Google Account, to fill in your age, and writing your weight to Google Health.</p>
 <p><strong>Intervals.icu</strong>, only if you connect it: your activities and their details, planned workouts and events, wellness data and sport settings.</p>
-<p><strong>Ultrahuman</strong>, only if you connect your Ultrahuman Ring: your sleep and its stages, heart rate variability, resting heart rate, skin temperature deviation and VO2max, to work out your readiness. Aurin only reads this data, never passes it on to other services, and deletes it when you disconnect the ring.</p>
-<p><strong>WHOOP</strong>, only if you connect your WHOOP account: your sleep and its stages, resting heart rate, heart rate variability, breathing rate and blood oxygen, to work out your readiness. Aurin only reads this data, never passes it on to other services, and deletes it when you disconnect WHOOP.</p>
+<p><strong>Ultrahuman</strong>, only if you connect your Ultrahuman Ring: your sleep and its stages, heart rate variability, resting heart rate, skin temperature deviation and VO2max, to work out your readiness. Aurin only reads this data and deletes it when you disconnect the ring. It does not pass it on to other services, except that an AI feature you use sends OpenAI the part of it that the request needs (see below). It is never sold or used to train AI models.</p>
+<p><strong>WHOOP</strong>, only if you connect your WHOOP account: your sleep and its stages, resting heart rate, heart rate variability, breathing rate and blood oxygen, to work out your readiness. Aurin only reads this data and deletes it when you disconnect WHOOP. It does not pass it on to other services, except that an AI feature you use sends OpenAI the part of it that the request needs (see below). It is never sold or used to train AI models.</p>
 <p><strong>Wahoo</strong>, only if you connect your Wahoo account: your finished rides and runs (start, duration, distance, climbing, power, training load, heart rate, cadence and calories), to count them in your training load. Aurin deletes them when you disconnect Wahoo.</p>
 <p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training), food and drinks, workouts and how they went, notes, your journal answers (such as alcohol, caffeine, sauna or how you felt), and your conversations with the assistant. We count the messages you send the coach each week, to keep the service fair for everyone.</p>
 <p><strong>What you send us from Settings → Help:</strong> a problem report with what you write, a screenshot if you add one and, if you leave it on, the app’s diagnostics (app and iOS version, your connections and their last errors, failed requests and crashes, never your health data), or a feature idea with the app version. We keep them to answer you and fix the problem, and they are deleted with your account.</p>
@@ -882,7 +882,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li><strong>Intervals.icu</strong>, if you connect it: the workouts you plan in Aurin, the workouts you finish in Aurin, workouts from Apple Health that no other service has brought there (type, time, distance, heart rate and calories), nutrition notes and calorie targets in your calendar, your weight, and several times a day a copy of your daily wellness from Google Health and Apple Health (sleep, average sleeping heart rate, steps, resting heart rate, HRV, oxygen saturation, respiration, VO2 max and body fat). Intervals.icu handles this data under its own privacy policy.</li>
 <li><strong>Wahoo</strong>, if you connect it: the rides and runs you plan in Aurin, with their steps and targets, so they appear on your ELEMNT and KICKR. Wahoo handles this data under its own privacy policy.</li>
 <li><strong>Google Health</strong>: the food and drinks you log and, if you allow it, your weight.</li>
-<li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data. OpenAI processes it on our behalf under its API data processing terms: it does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse, unless the law requires it to keep it longer.</li>
+<li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data, including data from a connected Ultrahuman Ring or WHOOP. OpenAI processes it on our behalf under its API data processing terms: it does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse, unless the law requires it to keep it longer.</li>
 <li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''}</li>
 <li><strong>Apple</strong>, when we add you to the testers from the waitlist: your email address, so that TestFlight emails you how to install Aurin. Apple handles it under its own privacy policy.</li>
 <li><strong>Open-Meteo</strong> gets only the place you choose for the weather in your training plan: a place you search for, or your location rounded to about 1 km if you allow it. Without that the app shows no weather.</li>
@@ -912,7 +912,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 </ul>
 <p>The <a href="/support">Support</a> page explains step by step how to manage and delete your data.</p>
 <h2>Legal bases and your rights</h2>
-<p>We process your data to provide the service you asked for (Article 6(1)(b) GDPR). Health data, from Google Health, Apple Health, Intervals.icu or entered by you, is processed only with your explicit consent (Article 9(2)(a) GDPR). You give it in the app before you first use it, and we record when and to which version of this text; syncing of your connected services in the background also runs only after it. The consent covers sending the data an AI feature needs to OpenAI, because the AI features are part of the service; you can turn the AI features off at any time in Settings → Privacy &amp; data → AI features, and from then on nothing is sent to OpenAI while the rest of Aurin keeps working. Your email on the waitlist is processed at your request, as a step before using Aurin (Article 6(1)(b) GDPR). You withdraw your consent by deleting your account in Settings → Privacy &amp; data, where you can first download all your data; disconnecting a service stops new data from it. Withdrawing does not affect processing before it. Technical logs rely on our legitimate interest in a secure service (Article 6(1)(f) GDPR).</p>
+<p>We process your data to provide the service you asked for (Article 6(1)(b) GDPR). Health data, from Google Health, Apple Health, Intervals.icu or entered by you, is processed only with your explicit consent (Article 9(2)(a) GDPR). You give it in the app before you first use it, and we record when and to which version of this text; syncing of your connected services in the background also runs only after it. Sending the data an AI feature needs to OpenAI takes a separate explicit consent (Article 9(2)(a) GDPR): a checkbox of its own when you start, or later in the app (for example “Allow AI” in the coach). Without it Aurin sends nothing to OpenAI and the rest of Aurin keeps working. You withdraw it at any time in Settings → Privacy &amp; data → AI features. Your email on the waitlist is processed at your request, as a step before using Aurin (Article 6(1)(b) GDPR). You withdraw your consent by deleting your account in Settings → Privacy &amp; data, where you can first download all your data; disconnecting a service stops new data from it. Withdrawing does not affect processing before it. Technical logs rely on our legitimate interest in a secure service (Article 6(1)(f) GDPR).</p>
 <p>You have the right to access, correct and delete your data, to restrict or object to its processing and to receive it in a portable format. Most of this you can do directly in the app: in Settings → Privacy &amp; data you can download all your data as a JSON Lines (NDJSON) file or delete your account. You can also lodge a complaint with the Czech Office for Personal Data Protection (<a href="https://uoou.gov.cz">uoou.gov.cz</a>). Aurin makes no decisions about you with legal or similarly significant effects by automated means alone; the coach’s proposals wait for your confirmation.</p>
 <h2>Children</h2>
 <p>Aurin is not intended for children under 16, and we do not knowingly collect their data.</p>
@@ -941,8 +941,8 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 </ul>
 <p>Dvě oprávnění jsou nepovinná a žádáme o ně zvlášť: čtení data narození z tvého účtu Google, aby se doplnil věk, a zápis váhy do Google Health.</p>
 <p><strong>Intervals.icu</strong>, jen když ho připojíš: tvoje aktivity a jejich podrobnosti, plánované tréninky a události, wellness údaje a nastavení sportů.</p>
-<p><strong>Ultrahuman</strong>, jen když připojíš prsten Ultrahuman: tvůj spánek a jeho fáze, variabilitu srdečního tepu, klidový tep, odchylku teploty kůže a VO2max, z nichž počítáme připravenost. Aurin tato data jen čte, nikomu dalšímu je nepředává a po odpojení prstenu je smaže.</p>
-<p><strong>WHOOP</strong>, jen když připojíš účet WHOOP: tvůj spánek a jeho fáze, klidový tep, variabilitu srdečního tepu, dechovou frekvenci a okysličení krve, z nichž počítáme připravenost. Aurin tato data jen čte, nikomu dalšímu je nepředává a po odpojení WHOOPu je smaže.</p>
+<p><strong>Ultrahuman</strong>, jen když připojíš prsten Ultrahuman: tvůj spánek a jeho fáze, variabilitu srdečního tepu, klidový tep, odchylku teploty kůže a VO2max, z nichž počítáme připravenost. Aurin tato data jen čte a po odpojení prstenu je smaže. Jiným službám je nepředává, jen AI funkce, kterou použiješ, pošle společnosti OpenAI tu část, kterou daný požadavek potřebuje (viz níže). Data nikdy neprodáváme ani je nepoužíváme k trénování modelů AI.</p>
+<p><strong>WHOOP</strong>, jen když připojíš účet WHOOP: tvůj spánek a jeho fáze, klidový tep, variabilitu srdečního tepu, dechovou frekvenci a okysličení krve, z nichž počítáme připravenost. Aurin tato data jen čte a po odpojení WHOOPu je smaže. Jiným službám je nepředává, jen AI funkce, kterou použiješ, pošle společnosti OpenAI tu část, kterou daný požadavek potřebuje (viz níže). Data nikdy neprodáváme ani je nepoužíváme k trénování modelů AI.</p>
 <p><strong>Wahoo</strong>, jen když připojíš účet Wahoo: tvoje dokončené jízdy a běhy (začátek, délku, vzdálenost, převýšení, výkon, tréninkovou zátěž, tep, kadenci a kalorie), aby se započítaly do tréninkové zátěže. Aurin je po odpojení Wahoo smaže.</p>
 <p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink), jídlo a pití, tréninky a jejich hodnocení, poznámky, odpovědi v deníku (třeba alkohol, kofein, sauna nebo jak ti bylo) a konverzace s asistentem. Počítáme, kolik zpráv koučovi za týden pošleš, aby služba zůstala férová pro všechny.</p>
 <p><strong>Co nám pošleš z Nastavení → Pomoc:</strong> hlášení problému s tím, co napíšeš, snímkem obrazovky, když ho přidáš, a pokud ji necháš zapnutou, diagnostikou aplikace (verze aplikace a iOS, propojení a jejich poslední chyby, nepovedené požadavky a pády, nikdy tvoje zdravotní data), nebo návrh funkce s verzí aplikace. Uchováváme je, abychom ti odpověděli a problém opravili, a smažou se s tvým účtem.</p>
@@ -984,7 +984,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li><strong>Intervals.icu</strong>, když ho připojíš: tréninky, které naplánuješ v Aurinu, tréninky, které v Aurinu dokončíš, tréninky z Apple Zdraví, které tam nepřinesla jiná služba (typ, čas, vzdálenost, tep a kalorie), poznámky k výživě a cíle kalorií v kalendáři, tvoji váhu a několikrát denně kopii denních wellness údajů z Google Health a Apple Zdraví (spánek, průměrný tep ve spánku, kroky, klidový tep, HRV, okysličení krve, dech, VO₂max a tělesný tuk). Intervals.icu s nimi zachází podle svých zásad ochrany soukromí.</li>
 <li><strong>Wahoo</strong>, když ho připojíš: jízdy a běhy, které naplánuješ v Aurinu, s jejich úseky a cíli, aby se objevily v ELEMNT a KICKR. Wahoo s nimi nakládá podle svých zásad ochrany osobních údajů.</li>
 <li><strong>Google Health</strong>: jídlo a pití, které zapíšeš, a když to povolíš, i tvoje váha.</li>
-<li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě. OpenAI je zpracovává naším jménem podle svých podmínek zpracování dat přes API: data poslaná přes API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití, pokud mu zákon neukládá uchovat je déle.</li>
+<li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě, včetně dat z připojeného prstenu Ultrahuman nebo WHOOPu. OpenAI je zpracovává naším jménem podle svých podmínek zpracování dat přes API: data poslaná přes API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití, pokud mu zákon neukládá uchovat je déle.</li>
 <li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''}</li>
 <li><strong>Apple</strong>, když tě z waitlistu přidáme k testerům: tvůj e-mail, aby ti TestFlight poslal, jak Aurin nainstalovat. Apple s ním nakládá podle svých zásad ochrany soukromí.</li>
 <li><strong>Open-Meteo</strong> dostane jen místo, které vybereš pro počasí v plánu tréninků: vyhledané místo, nebo tvou polohu zaokrouhlenou zhruba na 1 km, pokud ji povolíš. Bez toho aplikace počasí neukazuje.</li>
@@ -1014,7 +1014,7 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
 </ul>
 <p>Na stránce <a href="/support">Podpora</a> najdeš postup krok za krokem, jak data spravovat a smazat.</p>
 <h2>Právní základ a tvoje práva</h2>
-<p>Data zpracováváme, abychom ti poskytli službu, o kterou stojíš (čl. 6 odst. 1 písm. b) GDPR). Údaje o zdraví, z Google Health, Apple Health, Intervals.icu i ty, které zadáš sám, zpracováváme jen s tvým výslovným souhlasem (čl. 9 odst. 2 písm. a) GDPR). Dáváš ho v aplikaci před prvním použitím a my zaznamenáme kdy a ke které verzi tohoto textu; synchronizace propojených služeb na pozadí běží až po něm. Souhlas zahrnuje i posílání dat, která AI funkce potřebuje, do OpenAI, protože AI funkce jsou součástí služby; AI funkce můžeš kdykoli vypnout v Nastavení → Soukromí a data → AI funkce a od té chvíle se do OpenAI nic neposílá, zatímco zbytek Aurinu funguje dál. E-mail ve waitlistu zpracováváme na tvou žádost jako krok před používáním Aurinu (čl. 6 odst. 1 písm. b) GDPR). Souhlas odvoláš smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data; odpojením služby zastavíš nová data z ní. Odvoláním nepřestává být zákonné zpracování před ním. Technické záznamy vedeme na základě oprávněného zájmu na bezpečné službě (čl. 6 odst. 1 písm. f) GDPR).</p>
+<p>Data zpracováváme, abychom ti poskytli službu, o kterou stojíš (čl. 6 odst. 1 písm. b) GDPR). Údaje o zdraví, z Google Health, Apple Health, Intervals.icu i ty, které zadáš sám, zpracováváme jen s tvým výslovným souhlasem (čl. 9 odst. 2 písm. a) GDPR). Dáváš ho v aplikaci před prvním použitím a my zaznamenáme kdy a ke které verzi tohoto textu; synchronizace propojených služeb na pozadí běží až po něm. Posílání dat, která AI funkce potřebuje, do OpenAI vyžaduje samostatný výslovný souhlas (čl. 9 odst. 2 písm. a) GDPR): vlastní zaškrtávací políčko na začátku, nebo později v aplikaci (třeba „Povolit AI“ u kouče). Bez něj Aurin do OpenAI nic neposílá a zbytek Aurinu funguje dál. Odvoláš ho kdykoli v Nastavení → Soukromí a data → AI funkce. E-mail ve waitlistu zpracováváme na tvou žádost jako krok před používáním Aurinu (čl. 6 odst. 1 písm. b) GDPR). Souhlas odvoláš smazáním účtu v Nastavení → Soukromí a data, kde si předtím můžeš stáhnout všechna svoje data; odpojením služby zastavíš nová data z ní. Odvoláním nepřestává být zákonné zpracování před ním. Technické záznamy vedeme na základě oprávněného zájmu na bezpečné službě (čl. 6 odst. 1 písm. f) GDPR).</p>
 <p>Máš právo na přístup ke svým datům, jejich opravu a výmaz, na omezení zpracování, vznesení námitky a na přenositelnost dat. Většinu z toho uděláš přímo v aplikaci: v Nastavení → Soukromí a data si všechna svoje data stáhneš jako soubor JSON Lines (NDJSON), nebo smažeš účet. Můžeš si také stěžovat u Úřadu pro ochranu osobních údajů (<a href="https://uoou.gov.cz">uoou.gov.cz</a>). Aurin o tobě nerozhoduje čistě automatizovaně způsobem, který by měl právní nebo podobně závažné účinky; návrhy kouče čekají na tvoje potvrzení.</p>
 <h2>Děti</h2>
 <p>Aurin není určený dětem mladším 16 let a jejich data vědomě nesbíráme.</p>
@@ -1217,9 +1217,54 @@ export function supportPage(request, {apple = false, email = false, open = false
   });
 }
 
+// The Consumer Health Data Privacy Policy that Washington's My Health My Data Act (RCW 19.373) and
+// Nevada's SB 370 ask for, apart from the privacy policy and linked from the homepage (footer). It
+// says the same as the privacy policy, in the categories those laws use; change both together.
+const HEALTH_DATA_UPDATED = '22 October 2026';
+export function healthDataPage(request) {
+  return doc(request, '/health-data', {en: 'Consumer Health Data Privacy Policy'}, {
+    en: `<p class="muted">Last updated: ${HEALTH_DATA_UPDATED}</p>
+<p>This policy explains how Aurin handles “consumer health data” as defined by Washington’s My Health My Data Act and Nevada’s Senate Bill 370. It adds to our <a href="/privacy">Privacy Policy</a>, which describes everything Aurin does with your data in more detail. Aurin is run by Petr Bouma, a private individual in the Czech Republic, reachable at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>
+<h2>Consumer health data we collect</h2>
+<ul>
+<li>Sleep (duration, stages, times), heart rate, resting heart rate, heart rate variability, breathing rate, blood oxygen, skin or wrist temperature, VO2 max, steps and activity.</li>
+<li>Workouts and how they went, training load, readiness and recovery estimates, soreness, pain, illness or injury status you report.</li>
+<li>Body measurements: weight, height, body fat, age and sex.</li>
+<li>Food, drinks and nutrition targets, including photos of food you choose to send.</li>
+<li>Journal entries you tick off (such as sauna, a late meal, alcohol, medication or breathing exercises) and, if you allow it, symptoms and mindful minutes from Apple Health.</li>
+<li>Only if you turn cycle tracking on: periods, their strength, symptoms, contraception, life stage, hormone therapy and the pills you mark as taken.</li>
+<li>What you write to the AI coach.</li>
+</ul>
+<h2>Why we collect it</h2>
+<p>Only to provide Aurin to you: to estimate your readiness and training load, suggest workouts, plans and nutrition targets, show your history and, when you use them, run the AI features. We do not use it for advertising, do not sell it and do not give it to data brokers.</p>
+<h2>Where it comes from</h2>
+<p>From you, from your iPhone (Apple Health, with the permissions you give in iOS) and from services you connect: Google Health, Intervals.icu, the Ultrahuman Ring, WHOOP and Wahoo.</p>
+<h2>Consent</h2>
+<p>We collect and process consumer health data only after you consent in the app, before any of it is synced. Sharing it with OpenAI for the AI features takes a separate consent, a checkbox of its own that is never ticked in advance; you can withdraw it at any time in <strong>Settings → Privacy &amp; data → AI features</strong>, and Aurin keeps working without it.</p>
+<h2>Who receives it</h2>
+<ul>
+<li><strong>Processors acting on our behalf:</strong> Cloudflare, which hosts Aurin and its database, and OpenAI, which processes the data an AI feature needs when you use one and does not use it to train its models.</li>
+<li><strong>Services you ask us to send data to:</strong> Intervals.icu, Wahoo, Google Health and Apple Health, only if you connect them and only what the <a href="/privacy">Privacy Policy</a> lists for each.</li>
+<li><strong>Authorities</strong>, only when the law requires it.</li>
+</ul>
+<p>We have no affiliates that receive consumer health data, and we do not sell consumer health data.</p>
+<h2>Your rights</h2>
+<ul>
+<li><strong>Know and access:</strong> confirm whether we collect, share or sell your consumer health data, see a list of the third parties we share it with, and download a copy of all your data in <strong>Settings → Privacy &amp; data → Download my data</strong>.</li>
+<li><strong>Withdraw consent:</strong> turn off the AI features in the app, disconnect a service in <strong>Settings → Data sources</strong>, or withdraw consent entirely by deleting your account.</li>
+<li><strong>Delete:</strong> <strong>Settings → Privacy &amp; data → Delete account</strong> deletes your account and all its data immediately. Data Aurin copied to Intervals.icu, Google Health or Apple Health stays there; you can delete it in those services.</li>
+</ul>
+<p>You can also e-mail any request to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>. We may ask you to confirm the request from the e-mail address of your account, and we answer within 45 days.</p>
+<h2>Appeals</h2>
+<p>If we decline your request, you can appeal by replying to our answer or writing to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a> with “Appeal” in the subject. We decide within 45 days and explain why. If the appeal is denied, you can contact the <a href="https://www.atg.wa.gov/file-complaint">Washington State Attorney General</a> or, in Nevada, the <a href="https://ag.nv.gov/Complaints/File_Complaint/">Nevada Attorney General</a>.</p>
+<h2>Changes</h2>
+<p>We publish every change on this page with its date. Before we collect or share consumer health data in a new way, we ask for your consent in the app.</p>`
+  });
+}
+
 // Search engines: the public pages are listed in the sitemap; sign-in, the app's API and shared
 // workouts are left out of the index.
-const PUBLIC_PAGES = ['/', '/support', '/privacy', '/terms', '/privacy?lang=cs', '/terms?lang=cs'];
+const PUBLIC_PAGES = ['/', '/support', '/privacy', '/terms', '/health-data', '/privacy?lang=cs', '/terms?lang=cs'];
 
 export function robotsTxt(request) {
   const {origin} = pageLang(request);

@@ -318,7 +318,7 @@ extension APIClient {
     }
 }
 
-/// "Prohlédnout ukázku": the journal with sample answers.
+/// The sample data ("-demo"): the journal with sample answers.
 enum DemoJournal {
     private static func decode<T: Decodable>(_ json: String) -> T? {
         try? JSONDecoder().decode(T.self, from: Data(json.utf8))
