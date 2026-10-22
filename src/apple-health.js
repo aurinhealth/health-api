@@ -13,16 +13,20 @@
 // imports Apple Health. Where Apple Health sent a data type for a day, the
 // Google Health rows of that type and day become record_role 'duplicate'
 // (marked matched_activity_id 'apple-health', which keeps them out of the
-// activity matching).
+// activity matching). Workouts go by their time instead (resolveWorkoutCopies).
 import { KEEP_TYPE_SQL } from "./activity-type.js";
 import { healthPointJson } from "./health-point-json.js";
 import { saveAppleFood } from "./apple-food.js";
 import { resolveSources, MANAGED_TYPES } from "./source-priority.js";
+import { fromGoogleApp } from "./activity-origin.js";
+import { overlapShare, sessionGap } from "./activity-match.js";
 
 export const SOURCE = "apple-health";
 export const WEARABLE_FAMILIES = "('google-wearables','apple-health')";
 const STATUS = "apple_health";
 const REPLACED = "apple-health";
+// An Apple Health copy of a Google Health workout (resolveWorkoutCopies).
+const GOOGLE_KEPT = "google-wearables";
 const MAX_RECORDS = 5000;
 // One request: at most this many bytes (Content-Length), records, heart-rate
 // points per workout and stages per night. Days and instants have to lie
@@ -198,6 +202,7 @@ const DAY_OF = "substr(COALESCE(sample_time,end_time,start_time),1,10)";
 export async function replaceGoogleWithApple(db, userId, types, since) {
   let changed = 0;
   for (const type of types) {
+    if (type === "exercise") { changed += await resolveWorkoutCopies(db, userId, since); continue; }
     // Weighings and body fat come from Google's other sources (scales, apps).
     const family = SAMPLE[type] ? "'google-sources','all-sources'" : "'google-wearables'";
     const result = await db.prepare(
@@ -212,6 +217,45 @@ export async function replaceGoogleWithApple(db, userId, types, since) {
   return changed;
 }
 
+// One workout in both: Google Health's iPhone app copies the Fitbit's workouts
+// into Apple Health, and Google Health on an iPhone imports the Apple Watch's.
+// A Fitbit workout counts as Google Health has it, since that record follows
+// a change made in Google Health (a run that was a walk) and the Apple copy
+// stays as first written; any other workout counts as Apple Health has it.
+// The two are matched by their time, so another workout that day stays.
+// Only the marks set here are changed back; a workout deleted in Aurin keeps
+// its copy hidden too.
+const parseJson = json => { try { return JSON.parse(json || "{}") || {}; } catch { return {}; } };
+export async function resolveWorkoutCopies(db, userId, since) {
+  const from = new Date(Date.parse(String(since).slice(0, 10) + "T00:00:00Z") - 86400000).toISOString().slice(0, 10);
+  const rows = (await db.prepare(
+    `SELECT id, source_family, data_type, start_time, end_time, payload_json, record_role, matched_activity_id FROM health_datapoints
+     WHERE user_id = ? AND data_type = 'exercise' AND source_family IN ('google-wearables', '${SOURCE}') AND start_time IS NOT NULL AND start_time >= ?`
+  ).bind(userId, from).all()).results || [];
+  const google = rows.filter(r => r.source_family === "google-wearables");
+  const apple = rows.filter(r => r.source_family === SOURCE).map(r => ({ row: r, copy: fromGoogleApp(parseJson(r.payload_json).sourceName) }));
+  const same = (a, b) => overlapShare(a, b) >= 0.6 || sessionGap(a, b) != null;
+  const free = r => !r.record_role || r.record_role === "primary";
+  const updates = [];
+  const set = (row, role, matched) => updates.push(db.prepare(
+    "UPDATE health_datapoints SET record_role = ?, matched_activity_id = ?, match_confidence = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?"
+  ).bind(role, matched, matched ? 0 : null, row.id, userId));
+  for (const g of google) {
+    const marked = g.record_role === "duplicate" && g.matched_activity_id === REPLACED;
+    const hide = apple.some(({ row, copy }) => (!copy || row.matched_activity_id === "deleted") && same(row, g));
+    if (hide && !marked && g.matched_activity_id !== "deleted") set(g, "duplicate", REPLACED);
+    else if (!hide && marked) set(g, "primary", null);
+  }
+  for (const { row, copy } of apple) {
+    const marked = row.record_role === "duplicate" && row.matched_activity_id === GOOGLE_KEPT;
+    const hide = copy && row.matched_activity_id !== "deleted" && google.some(g => same(row, g));
+    if (hide && !marked && free(row)) set(row, "duplicate", GOOGLE_KEPT);
+    else if (!hide && marked) set(row, "primary", null);
+  }
+  for (let i = 0; i < updates.length; i += 50) await db.batch(updates.slice(i, i + 50));
+  return updates.length;
+}
+
 // After a Google Health sync: which copy of the new rows counts. Measurements
 // several devices take follow source-priority.js; the rest (workouts, weight)
 // keep Apple Health's on the days it has them.
@@ -224,7 +268,8 @@ export async function afterGoogleSync(env, type, points) {
     let on = appleUsers.get(env);
     if (on === undefined) { on = Boolean(await env.DB.prepare("SELECT 1 FROM sync_status WHERE user_id = ? AND sync_name = ? AND status != 'disconnected'").bind(env.USER_ID, STATUS).first()); appleUsers.set(env, on); }
     if (!on) return 0;
-    return await replaceGoogleWithApple(env.DB, env.USER_ID, [type], new Date(Date.now() - 400 * 86400000).toISOString().slice(0, 10));
+    // Workouts: the days the sync read and the activity matching after it covers (index.js).
+    return await replaceGoogleWithApple(env.DB, env.USER_ID, [type], new Date(Date.now() - (type === "exercise" ? 14 : 400) * 86400000).toISOString().slice(0, 10));
   } catch (error) { console.error("Apple Health dedupe failed", error.message); return 0; }
 }
 

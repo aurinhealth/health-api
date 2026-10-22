@@ -262,3 +262,31 @@ test("a request declared over 4 MB is refused before it is read", () => {
   assert.equal(appleBodyTooLarge(request(MAX_BODY_BYTES + 1)), true);
   assert.equal(appleBodyTooLarge(request(null)), false);
 });
+
+test("a Fitbit workout counts as Google Health has it; the Apple Watch's as Apple Health has it, matched by time", async () => {
+  const { raw, db } = setup();
+  const watch = (id, start, end, type, extra = {}) => raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,start_time,end_time,payload_json,record_role,matched_activity_id) VALUES(1,'google-wearables','exercise',?,?,?,?,?,?)")
+    .run(id, start, end, JSON.stringify({ exercise: { exerciseType: type } }), extra.role ?? "primary", extra.matched ?? null);
+  // The Fitbit's walk, changed from a run in Google Health; hidden by the old day-wide rule.
+  watch("g-walk", "2026-10-22T13:49:00Z", "2026-10-22T14:22:00Z", "WALKING", { role: "duplicate", matched: "apple-health" });
+  // Google Health's import of the morning Apple Watch ride.
+  watch("g-ride", "2026-10-22T05:00:30Z", "2026-10-22T06:00:00Z", "BIKING");
+  await saveAppleHealth(db, 1, { records: [
+    // Google Health's iPhone app wrote the run into Apple Health before the change.
+    { type: "exercise", id: "W1", activity: "running", start: "2026-10-22T13:49:00Z", end: "2026-10-22T14:22:00Z", sourceName: "Google Health" },
+    { type: "exercise", id: "W2", activity: "cycling", start: "2026-10-22T05:00:00Z", end: "2026-10-22T06:00:00Z", sourceName: "Apple Watch uživatele Petr" }
+  ] });
+  const role = id => { const r = rows(raw, `external_id='${id}'`)[0]; return [r.record_role, r.matched_activity_id]; };
+  assert.deepEqual(role("g-walk"), ["primary", null]);
+  assert.deepEqual(role("apple:W1"), ["duplicate", "google-wearables"]);
+  assert.deepEqual(role("g-ride"), ["duplicate", "apple-health"]);
+  assert.deepEqual(role("apple:W2"), ["primary", null]);
+  // A Google workout at another time that day stays.
+  watch("g-later", "2026-10-22T18:00:00Z", "2026-10-22T18:30:00Z", "WALKING");
+  await afterGoogleSync({ DB: db, USER_ID: 1 }, "exercise", [{}]);
+  assert.deepEqual(role("g-later"), ["primary", null]);
+  // Google gone (disconnected, or the workout deleted there): the Apple copy shows again.
+  raw.sqlite.exec("DELETE FROM health_datapoints WHERE external_id='g-walk'");
+  await afterGoogleSync({ DB: db, USER_ID: 1 }, "exercise", [{}]);
+  assert.deepEqual(role("apple:W1"), ["primary", null]);
+});
