@@ -1,5 +1,6 @@
 import { L } from './lang.js';
 import { routedUserDb } from './user-data-routing.js';
+import { inheritAiLimits } from './ai-limit-memory.js';
 // Multi-user support: every personal row carries user_id, requests run with a
 // user-scoped env, and the schema upgrade that adds user_id to existing tables.
 
@@ -48,6 +49,8 @@ export const PERSONAL_TABLES = {
   ai_usage: {},
   // The weekly allowance of coach messages (coach-allowance.js).
   coach_messages: {},
+  // What a deleted account of the same person used this week (ai-limit-memory.js).
+  coach_carryover: {},
   user_setup: {}, subscriptions: {}, local_workouts: {}, workout_exports: {},
   personal_recipes: {}, recipe_contributions: {}, food_contributions: {}, food_reports: {},
   user_language: {}, user_time_zone: {}, recovery_sessions: {}, user_consents: {},
@@ -362,8 +365,11 @@ export async function signInGoogleUser(db, env, { sub, email, name }) {
     if (row && row.google_sub && row.google_sub !== String(sub)) return null;
   }
   if (!row) {
-    if (!(await mayCreateAccount(db, env, address)) || !(await createAccount(db, env, address))) return null;
+    if (!(await mayCreateAccount(db, env, address))) return null;
+    const made = await createAccount(db, env, address);
+    if (!made) return null;
     row = await db.prepare("SELECT id, email, name, role, disabled, google_sub FROM users WHERE email=?").bind(address).first();
+    if (made === "created" && row) await inheritAiLimits(db, env, row.id, { email: address, googleSub: String(sub) });
   }
   if (row.disabled) return null;
   await db.batch([
@@ -471,6 +477,7 @@ export async function signInEmailUser(db, env, email) {
     if (!made) return null;
     created = made === "created";
     row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
+    if (created && row) await inheritAiLimits(db, env, row.id, { email: address });
   }
   if (!row || row.disabled) return null;
   await db.batch([

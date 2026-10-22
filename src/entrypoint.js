@@ -107,6 +107,7 @@ import { handleWorkoutTemplatesApi, publicSharePage } from "./workout-templates.
 import { wwwRedirect } from "./app-origin.js";
 import { internalHeaders } from "./internal-auth.js";
 import { deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
+import { forgetExpiredAiLimits } from "./ai-limit-memory.js";
 import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.js";
 import { handleIntervalsWebhook } from "./intervals-webhook.js";
 import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
@@ -374,6 +375,8 @@ const worker = {
         await deleteAccount(await connectionEnvironment(await userDataEnvironment(env, user)), user, { budgetMs: 1000 }).catch(error => console.error("Inactive account deletion failed", user.id, error.message));
       }
     }
+    // Remembered AI limits of deleted accounts whose week and month are over (ai-limit-memory.js).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetExpiredAiLimits(env.DB).catch(error => console.error("AI limit memory cleanup failed", error.message));
     // Connection keys saved before CONNECTION_KEY existed get it (connection-secrets.js).
     if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await migrateConnectionSecrets(env).then(result => { if (result.migrated || result.failed) console.log("Connection key migration", result); }).catch(error => console.error("Connection key migration failed", error.message));
     // Yesterday's failed syncs, broken connections and server errors, to the owner (ops-report.js);

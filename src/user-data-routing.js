@@ -6,7 +6,7 @@ export const FOOD_CATALOG_TABLES = new Set([
 ]);
 export const CENTRAL_PERSONAL_TABLES = new Set([
   'connection_credentials', 'connection_accounts', 'user_consents', 'user_identities', 'user_passkeys',
-  'user_language', 'user_time_zone', 'subscriptions', 'ai_usage',
+  'user_language', 'user_time_zone', 'subscriptions', 'ai_usage', 'coach_carryover',
   'food_contributions', 'recipe_contributions', 'food_reports', 'support_reports', 'food_suggestions',
   // A phone's push token belongs to one account at a time (push.js).
   'push_tokens',
@@ -15,7 +15,7 @@ export const CENTRAL_PERSONAL_TABLES = new Set([
 ]);
 const CENTRAL_TABLES = new Set([
   ...CENTRAL_PERSONAL_TABLES, 'users', 'user_invites', 'schema_meta',
-  'account_deletions', 'user_data_routes', 'user_data_shards',
+  'account_deletions', 'user_data_routes', 'user_data_shards', 'ai_limit_memory',
   'shared_foods', 'shared_recipes', 'workout_library', 'exercise_techniques',
   'cookbook', 'auth_challenges', 'email_login_codes', 'review_code_failures', 'request_limits', 'd1_migrations'
 ]);

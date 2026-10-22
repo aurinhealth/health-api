@@ -7,6 +7,8 @@
 //   any further one counts as usual.
 // - Once the allowance is used up, a conversation still going on gets
 //   COACH_EXTRA_MESSAGES more, so it does not stop mid-thought.
+// - A new account of someone who deleted their account this week starts with
+//   the messages the deleted one used (coach_carryover, ai-limit-memory.js).
 // The owner has no allowance. The numbers are Worker settings (wrangler.jsonc).
 import { L } from './lang.js';
 import { localToday } from './user-time.js';
@@ -33,13 +35,25 @@ async function ensure(db) {
   await db.prepare('CREATE INDEX IF NOT EXISTS coach_messages_user_week ON coach_messages(user_id, week)').run();
 }
 
+// Kept with the accounts (central database), as it is written when an account is created.
+export async function ensureCoachCarryover(db) {
+  await db.prepare('CREATE TABLE IF NOT EXISTS coach_carryover (user_id INTEGER PRIMARY KEY, week TEXT NOT NULL, used INTEGER NOT NULL)').run();
+}
+
+// The messages this week that a deleted account of the same person used.
+async function carriedOver(env, week) {
+  await ensureCoachCarryover(env.DB);
+  const row = await env.DB.prepare('SELECT used FROM coach_carryover WHERE user_id = ? AND week = ?').bind(env.USER_ID, week).first();
+  return Number(row?.used) || 0;
+}
+
 // { limit, used, left, resetsOn, near } for this week; null when there is none.
 export async function coachAllowance(env, today = localToday()) {
   if (!tracked(env)) return null;
   await ensure(env.DB);
   const week = mondayOfDate(today), limit = coachWeeklyMessages(env);
   const row = await env.DB.prepare('SELECT COUNT(*) AS used FROM coach_messages WHERE user_id = ? AND week = ? AND counted = 1').bind(env.USER_ID, week).first();
-  const used = Number(row?.used) || 0, left = Math.max(0, limit - used);
+  const used = (Number(row?.used) || 0) + await carriedOver(env, week), left = Math.max(0, limit - used);
   return { limit, used, left, resetsOn: shiftDate(week, 7), near: left <= nearAt(limit) };
 }
 
@@ -102,7 +116,7 @@ export async function claimCoachMessage(env, chatId, { today = localToday(), now
     if (!claim) return null;
     const kind = storedKind(claim.kind), counted = countedKind(claim.kind);
     const [condition, ...values] = counted
-      ? ['SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND counted = 1', env.USER_ID, week, coachWeeklyMessages(env)]
+      ? ['SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND counted = 1', env.USER_ID, week, coachWeeklyMessages(env) - await carriedOver(env, week)]
       : claim.kind === 'extra'
         ? ["SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND chat_id = ? AND kind = 'extra'", env.USER_ID, week, chat, coachExtraMessages(env)]
         : ['SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND chat_id = ?', env.USER_ID, week, chat, coachWorkoutChatMessages(env)];

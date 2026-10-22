@@ -1,5 +1,6 @@
 import { sessionSecret, signedInResponse } from "./dashboard-auth.js";
 import { ensureTenancy, normalizeEmail, publicUser, mayCreateAccount, createAccount } from "./tenancy.js";
+import { inheritAiLimits } from "./ai-limit-memory.js";
 import { L } from "./lang.js";
 
 // Sign in with Apple in the iPhone app. The Apple IDs live in user_identities.
@@ -159,8 +160,11 @@ export async function signInAppleUser(db, env, { sub, email, name = null }) {
     // An account that already has another Apple ID does not take a second one by e-mail.
     if (row && await db.prepare("SELECT 1 AS linked FROM user_identities WHERE provider = 'apple' AND user_id = ?").bind(row.id).first()) return null;
     if (!row) {
-      if (!(await mayCreateAccount(db, env, address)) || !(await createAccount(db, env, address, name))) return null;
+      if (!(await mayCreateAccount(db, env, address))) return null;
+      const made = await createAccount(db, env, address, name);
+      if (!made) return null;
       row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
+      if (made === "created" && row) await inheritAiLimits(db, env, row.id, { email: address, appleSub: String(sub) });
     }
   }
   if (!row || row.disabled) return null;
