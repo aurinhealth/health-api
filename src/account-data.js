@@ -9,6 +9,7 @@ import { revokeWhoop } from "./whoop.js";
 import { revokeUltrahuman } from "./ultrahuman.js";
 import { revokeWahoo } from "./wahoo.js";
 import { revokeIntervals } from "./intervals-oauth.js";
+import { rememberAiLimits } from "./ai-limit-memory.js";
 
 // Sign-in keys of the connected services are never exported.
 const SECRET_TABLES = new Set(["connection_credentials"]);
@@ -133,6 +134,9 @@ export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = R
   // WHOOP, Ultrahuman, Wahoo and Intervals.icu (OAuth) would keep Aurin among
   // the allowed apps. A personal Intervals.icu API key is only deleted here.
   const [whoop, ultrahuman, wahoo, intervals] = await Promise.all([revokeWhoop(env, fetchImpl), revokeUltrahuman(env, fetchImpl), revokeWahoo(env, fetchImpl), revokeIntervals(env, fetchImpl)]);
+  // What the AI limits counted stays, under hashes of the sign-in, so a new
+  // account of the same person does not start them over (ai-limit-memory.js).
+  await rememberAiLimits(env, user);
   // The account row goes first, together with the note that its data is to be
   // removed: the session no longer signs anyone in, signing in again needs a
   // new invitation (and gets a new id), and the cron finishes the data if this
