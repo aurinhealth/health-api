@@ -129,10 +129,6 @@ struct LoginView: View {
                     .disabled(model.signingIn)
                     .padding(.top, 4)
                 }
-                    .font(Typo.bodyStrong)
-                    .foregroundStyle(Palette.muted)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
             }
             .padding(.horizontal, 24)
             .padding(.vertical, 24)
