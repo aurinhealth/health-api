@@ -1,8 +1,11 @@
 import AVFoundation
+import PhotosUI
 import SwiftUI
+import Vision
 
 /// The barcode scanner: the camera in a window on the
-/// app's background, a light for the dark; the food comes from your foods or
+/// app's background, a light for the dark, or a photo of the code from
+/// Photos; the food comes from your foods or
 /// the catalog, else an AI lookup by the code; then the amount on a wheel and
 /// "Přidat".
 struct BarcodeScanSheet: View {
@@ -26,6 +29,8 @@ struct BarcodeScanSheet: View {
     /// the user and maybe suggested for everyone.
     @State private var editing: FoodProduct?
     @State private var torch = false
+    /// A photo of a code, picked from Photos instead of the camera.
+    @State private var photo: PhotosPickerItem?
 
     /// nil until the camera permission is known (the scanner is unavailable
     /// before the first permission prompt, so the app asks first).
@@ -67,6 +72,11 @@ struct BarcodeScanSheet: View {
         .onChange(of: torch) { Self.setTorch(torch) }
         .onChange(of: state) { if state != .scanning && state != .searching { torch = false } }
         .onDisappear { if torch { Self.setTorch(false) } }
+        .onChange(of: photo) {
+            guard let item = photo else { return }
+            photo = nil
+            Task { await read(item) }
+        }
         .sheet(item: $editing) { product in
             NavigationStack {
                 FoodProductEditor(product: product) { corrected in show(corrected, keepAmount: true) }
@@ -97,6 +107,7 @@ struct BarcodeScanSheet: View {
                     BarcodeScanner(paused: state != .scanning) { scanned in
                         guard state == .scanning else { return }
                         code = scanned
+                        error = nil
                         state = .searching
                         Task { await find(scanned) }
                     }
@@ -116,7 +127,16 @@ struct BarcodeScanSheet: View {
             .frame(maxWidth: 320).frame(height: 230)
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             if state == .scanning {
-                Text("Namiř na kód na obalu").font(Typo.sentence(20)).foregroundStyle(Palette.ink.opacity(0.85))
+                VStack(spacing: 14) {
+                    Text("Namiř na kód na obalu").font(Typo.sentence(20)).foregroundStyle(Palette.ink.opacity(0.85))
+                    PhotosPicker(selection: $photo, matching: .images) {
+                        Label("Vybrat fotku", systemImage: "photo").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 18).frame(height: 44)
+                            .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).multilineTextAlignment(.center) }
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -280,6 +300,33 @@ struct BarcodeScanSheet: View {
             self.error = error.localizedDescription
             state = .notFound
         }
+    }
+
+    /// The code in a picked photo, looked up as if scanned; without one the
+    /// scanner keeps running and says so.
+    private func read(_ item: PhotosPickerItem) async {
+        guard state == .scanning else { return }
+        error = nil
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            error = L10n.tr("Obrázek se nepodařilo načíst.")
+            return
+        }
+        guard let found = await Self.barcode(in: data) else {
+            error = L10n.tr("Na fotce jsem kód nenašel.")
+            return
+        }
+        code = found
+        await find(found)
+    }
+
+    /// Vision reads the same codes as the camera, off the main thread.
+    nonisolated private static func barcode(in data: Data) async -> String? {
+        await Task.detached(priority: .userInitiated) {
+            let request = VNDetectBarcodesRequest()
+            request.symbologies = [.ean13, .ean8, .upce, .code128]
+            try? VNImageRequestHandler(data: data).perform([request])
+            return request.results?.compactMap(\.payloadStringValue).first { !$0.isEmpty }
+        }.value
     }
 
     private func lookUp() async {
