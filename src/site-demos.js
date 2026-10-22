@@ -276,7 +276,7 @@ const foodTarget = `<div class="dm pad">
 </div>`;
 
 // AddFoodSheet.swift ("Co přidáme?": the meal, the search, six tiles, the foods list), then BarcodeScanSheet.swift:
-// the finder, the found card with NutritionCells, the PortionWheel turned to 1½ servings, and "Přidat do oběda".
+// the finder with "Vybrat fotku", the found card with NutritionCells, the PortionWheel turned to 1½ servings, and "Přidat do oběda".
 const foodAdd = `<div class="dm pad fa">
 <div class="row sp"><span class="sent h">What are you adding?</span><span class="mut s">Close</span></div>
 <span class="meal">Lunch${ic('updown')}</span>
@@ -286,7 +286,7 @@ const foodAdd = `<div class="dm pad fa">
 ${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105]].map(([k, d, v]) => `<div class="li"><div><b>${k}</b><span class="mut s">${d}</span></div><span class="num">${v}<small>kcal</small></span></div>`).join('')}
 <div class="scn"${at('900:in')}>
 <div class="row sp"><span class="cb">${ic('x')}</span><span class="sl0">BARCODE</span><span class="cb">${ic('torch')}</span></div>
-<div class="finder"${at('900:in 2900-in')}><div class="cam"><div class="bc"></div><i class="scan"></i><span class="cr tl"></span><span class="cr tr"></span><span class="cr bl"></span><span class="cr br"></span></div><p class="sent aim">Point at the barcode on the package</p></div>
+<div class="finder"${at('900:in 2900-in')}><div class="cam"><div class="bc"></div><i class="scan"></i><span class="cr tl"></span><span class="cr tr"></span><span class="cr bl"></span><span class="cr br"></span></div><p class="sent aim">Point at the barcode on the package</p><span class="olp pk">${ic('photo')}Choose photo</span></div>
 <div class="res"${at('2900:in')}>
 <div class="row sp"><span class="grn s b">✓ Found</span><span class="olp">${ic('pencil')}Edit product</span></div>
 <div class="sent h3">Plain Greek yogurt</div>
@@ -561,6 +561,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 @keyframes scan{to{top:70%}}
 .cr{position:absolute;width:26px;height:26px;border:3px solid rgba(255,255,255,.9)}.cr.tl{left:20px;top:20px;border-right:0;border-bottom:0;border-radius:14px 0 0 0}.cr.tr{right:20px;top:20px;border-left:0;border-bottom:0;border-radius:0 14px 0 0}.cr.bl{left:20px;bottom:20px;border-right:0;border-top:0;border-radius:0 0 0 14px}.cr.br{right:20px;bottom:20px;border-left:0;border-top:0;border-radius:0 0 14px 0}
 .aim{margin:18px 0 0;font-size:19px;text-align:center;color:color-mix(in srgb,var(--text) 85%,transparent)}
+.finder .pk{display:flex;width:max-content;height:36px;margin:12px auto 0;padding:0 15px;font-size:13px;font-weight:500}
 .res{margin-top:14px}.js .res.wait:not(.in){transform:translateY(24px)}
 .olp{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border-radius:99px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 20%,transparent);font-size:12px;font-weight:600}.olp .di{font-size:12px}
 .sent.h3{font-size:24px;line-height:1.1;margin-top:4px}

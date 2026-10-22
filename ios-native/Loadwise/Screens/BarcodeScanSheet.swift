@@ -1,9 +1,11 @@
 import AVFoundation
+import PhotosUI
 import SwiftUI
-import VisionKit
+import Vision
 
-/// The native barcode scanner (VisionKit): the camera in a window on the
-/// app's background, a light for the dark; the food comes from your foods or
+/// The barcode scanner: the camera in a window on the
+/// app's background, a light for the dark, or a photo of the code from
+/// Photos; the food comes from your foods or
 /// the catalog, else an AI lookup by the code; then the amount on a wheel and
 /// "Přidat".
 struct BarcodeScanSheet: View {
@@ -27,6 +29,8 @@ struct BarcodeScanSheet: View {
     /// the user and maybe suggested for everyone.
     @State private var editing: FoodProduct?
     @State private var torch = false
+    /// A photo of a code, picked from Photos instead of the camera.
+    @State private var photo: PhotosPickerItem?
 
     /// nil until the camera permission is known (the scanner is unavailable
     /// before the first permission prompt, so the app asks first).
@@ -34,9 +38,7 @@ struct BarcodeScanSheet: View {
 
     enum ScanState { case scanning, searching, found, notFound }
 
-    private var scannerReady: Bool {
-        cameraAllowed == true && DataScannerViewController.isSupported && DataScannerViewController.isAvailable
-    }
+    private var scannerReady: Bool { cameraAllowed == true && BarcodeScanner.device != nil }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -70,6 +72,11 @@ struct BarcodeScanSheet: View {
         .onChange(of: torch) { Self.setTorch(torch) }
         .onChange(of: state) { if state != .scanning && state != .searching { torch = false } }
         .onDisappear { if torch { Self.setTorch(false) } }
+        .onChange(of: photo) {
+            guard let item = photo else { return }
+            photo = nil
+            Task { await read(item) }
+        }
         .sheet(item: $editing) { product in
             NavigationStack {
                 FoodProductEditor(product: product) { corrected in show(corrected, keepAmount: true) }
@@ -100,11 +107,13 @@ struct BarcodeScanSheet: View {
                     BarcodeScanner(paused: state != .scanning) { scanned in
                         guard state == .scanning else { return }
                         code = scanned
+                        error = nil
+                        state = .searching
                         Task { await find(scanned) }
                     }
                 } else {
                     VStack(spacing: 12) {
-                        Text(DataScannerViewController.isSupported ? "Skener potřebuje kameru. Povol Aurinu přístup ke kameře v Nastavení iPhonu." : "Tento iPhone skener čárových kódů nepodporuje.")
+                        Text(BarcodeScanner.device != nil ? "Skener potřebuje kameru. Povol Aurinu přístup ke kameře v Nastavení iPhonu." : "Tento iPhone skener čárových kódů nepodporuje.")
                             .font(Typo.sentence(18)).foregroundStyle(Color.white.opacity(0.85)).multilineTextAlignment(.center)
                         if cameraAllowed == false, let url = URL(string: UIApplication.openSettingsURLString) {
                             Link("Otevřít Nastavení", destination: url).font(Typo.bodyStrong).foregroundStyle(.white)
@@ -118,7 +127,16 @@ struct BarcodeScanSheet: View {
             .frame(maxWidth: 320).frame(height: 230)
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             if state == .scanning {
-                Text("Namiř na kód na obalu").font(Typo.sentence(20)).foregroundStyle(Palette.ink.opacity(0.85))
+                VStack(spacing: 14) {
+                    Text("Namiř na kód na obalu").font(Typo.sentence(20)).foregroundStyle(Palette.ink.opacity(0.85))
+                    PhotosPicker(selection: $photo, matching: .images) {
+                        Label("Vybrat fotku", systemImage: "photo").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 18).frame(height: 44)
+                            .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).multilineTextAlignment(.center) }
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -134,14 +152,9 @@ struct BarcodeScanSheet: View {
 
     private static var hasTorch: Bool { torchDevice?.hasTorch ?? false }
 
-    /// The camera the scanner films with: VisionKit runs the back virtual
-    /// camera (wide + ultra wide, for close-ups), not the plain wide one that
-    /// AVCaptureDevice.default gives. Locking that other camera for the light
-    /// while the scanner's session ran froze the picture.
-    nonisolated(unsafe) private static let torchDevice: AVCaptureDevice? = AVCaptureDevice.DiscoverySession(
-        deviceTypes: [.builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera, .builtInWideAngleCamera],
-        mediaType: .video, position: .back
-    ).devices.first(where: \.hasTorch)
+    /// The scanner's own lens: locking another camera for the light while the
+    /// scanner's session ran froze the picture.
+    nonisolated private static var torchDevice: AVCaptureDevice? { BarcodeScanner.device }
 
     /// Off the main thread: the lock waits for the camera session, and the
     /// screen must not stop meanwhile.
@@ -289,6 +302,33 @@ struct BarcodeScanSheet: View {
         }
     }
 
+    /// The code in a picked photo, looked up as if scanned; without one the
+    /// scanner keeps running and says so.
+    private func read(_ item: PhotosPickerItem) async {
+        guard state == .scanning else { return }
+        error = nil
+        guard let data = try? await item.loadTransferable(type: Data.self) else {
+            error = L10n.tr("Obrázek se nepodařilo načíst.")
+            return
+        }
+        guard let found = await Self.barcode(in: data) else {
+            error = L10n.tr("Na fotce jsem kód nenašel.")
+            return
+        }
+        code = found
+        await find(found)
+    }
+
+    /// Vision reads the same codes as the camera, off the main thread.
+    nonisolated private static func barcode(in data: Data) async -> String? {
+        await Task.detached(priority: .userInitiated) {
+            let request = VNDetectBarcodesRequest()
+            request.symbologies = [.ean13, .ean8, .upce, .code128]
+            try? VNImageRequestHandler(data: data).perform([request])
+            return request.results?.compactMap(\.payloadStringValue).first { !$0.isEmpty }
+        }.value
+    }
+
     private func lookUp() async {
         guard let code else { return }
         state = .searching
@@ -334,39 +374,123 @@ struct FinderCorners: Shape {
     }
 }
 
-/// VisionKit's DataScannerViewController for EAN/UPC codes.
-struct BarcodeScanner: UIViewControllerRepresentable {
+/// The camera for EAN/UPC codes. Only the main (wide) lens, zoomed in so a
+/// code fills the window from its closest focus: VisionKit's scanner filmed
+/// with the back virtual camera, which jumped between the wide and the ultra
+/// wide (macro) lens as the phone moved. Apple's barcode sample (AVCamBarcode)
+/// keeps one lens the same way.
+struct BarcodeScanner: UIViewRepresentable {
     var paused: Bool
     let onCode: (String) -> Void
 
-    func makeUIViewController(context: Context) -> DataScannerViewController {
-        let scanner = DataScannerViewController(recognizedDataTypes: [.barcode(symbologies: [.ean13, .ean8, .upce, .code128])],
-                                                qualityLevel: .balanced, recognizesMultipleItems: false,
-                                                isHighFrameRateTrackingEnabled: false, isGuidanceEnabled: false,
-                                                isHighlightingEnabled: true)
-        scanner.delegate = context.coordinator
-        return scanner
+    /// The lens the scanner films with, and the light belongs to.
+    nonisolated(unsafe) static let device: AVCaptureDevice? = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+
+    func makeUIView(context: Context) -> PreviewView {
+        let view = PreviewView()
+        view.previewLayer.videoGravity = .resizeAspectFill
+        context.coordinator.camera.start(on: view.previewLayer)
+        return view
     }
 
-    func updateUIViewController(_ scanner: DataScannerViewController, context: Context) {
+    func updateUIView(_ view: PreviewView, context: Context) {
         context.coordinator.onCode = onCode
-        if paused { scanner.stopScanning() } else if !scanner.isScanning { try? scanner.startScanning() }
+        context.coordinator.paused = paused
+    }
+
+    static func dismantleUIView(_ view: PreviewView, coordinator: Coordinator) {
+        coordinator.camera.stop()
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(onCode: onCode) }
 
-    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
-        var onCode: (String) -> Void
-        init(onCode: @escaping (String) -> Void) { self.onCode = onCode }
+    /// The camera's picture, filling the window.
+    final class PreviewView: UIView {
+        override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+        var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
+    }
 
-        func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
-            for item in addedItems {
-                if case .barcode(let barcode) = item, let code = barcode.payloadStringValue, !code.isEmpty {
-                    onCode(code)
-                    return
-                }
+    @MainActor
+    final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
+        var onCode: (String) -> Void
+        var paused = false
+        let camera = BarcodeCamera()
+
+        init(onCode: @escaping (String) -> Void) {
+            self.onCode = onCode
+            super.init()
+            camera.setDelegate(self)
+        }
+
+        nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
+            let code = metadataObjects.lazy.compactMap { ($0 as? AVMetadataMachineReadableCodeObject)?.stringValue }.first { !$0.isEmpty }
+            guard let code else { return }
+            // The delegate queue is the main queue. The output reports the
+            // code on every frame: one is enough until the sheet scans again.
+            MainActor.assumeIsolated {
+                guard !paused else { return }
+                paused = true
+                onCode(code)
             }
         }
+    }
+}
+
+/// The capture session, set up and run on its own queue so the screen does
+/// not wait for the camera.
+final class BarcodeCamera: @unchecked Sendable {
+    private let session = AVCaptureSession()
+    private let output = AVCaptureMetadataOutput()
+    private let queue = DispatchQueue(label: "health.aurin.barcode")
+    private var configured = false
+
+    func setDelegate(_ delegate: AVCaptureMetadataOutputObjectsDelegate) {
+        output.setMetadataObjectsDelegate(delegate, queue: .main)
+    }
+
+    func start(on layer: AVCaptureVideoPreviewLayer) {
+        layer.session = session
+        queue.async { [self] in
+            if !configured { configured = configure() }
+            if configured && !session.isRunning { session.startRunning() }
+        }
+    }
+
+    func stop() {
+        queue.async { [self] in if session.isRunning { session.stopRunning() } }
+    }
+
+    private func configure() -> Bool {
+        guard let device = BarcodeScanner.device, let input = try? AVCaptureDeviceInput(device: device) else { return false }
+        session.beginConfiguration()
+        defer { session.commitConfiguration() }
+        if session.canSetSessionPreset(.hd1920x1080) { session.sessionPreset = .hd1920x1080 }
+        guard session.canAddInput(input), session.canAddOutput(output) else { return false }
+        session.addInput(input)
+        session.addOutput(output)
+        output.metadataObjectTypes = ([.ean13, .ean8, .upce, .code128] as [AVMetadataObject.ObjectType]).filter(output.availableMetadataObjectTypes.contains)
+        Self.zoomForCodes(device)
+        return true
+    }
+
+    /// The main lens of newer iPhones focuses only from 15–20 cm, where a code
+    /// is small; zoom in so a 35 mm wide code fills most of the window there
+    /// (Apple's recipe from AVCamBarcode), at most 2.5× so it stays sharp.
+    private static func zoomForCodes(_ device: AVCaptureDevice) {
+        guard (try? device.lockForConfiguration()) != nil else { return }
+        defer { device.unlockForConfiguration() }
+        if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+        if device.isAutoFocusRangeRestrictionSupported { device.autoFocusRangeRestriction = .near }
+        let closest = Double(device.minimumFocusDistance)
+        guard closest > 0 else { return }
+        // The window's width is the sensor's shorter side (the phone is upright).
+        let dims = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
+        let wide = Double(device.activeFormat.videoFieldOfView) * .pi / 180
+        let short = 2 * atan(tan(wide / 2) * Double(min(dims.width, dims.height)) / Double(max(dims.width, dims.height)))
+        let filled = 35 / 0.7
+        let distance = filled / 2 / tan(short / 2)
+        guard distance < closest else { return }
+        device.videoZoomFactor = CGFloat(min(closest / distance, 2.5, Double(device.activeFormat.videoMaxZoomFactor)))
     }
 }
 
