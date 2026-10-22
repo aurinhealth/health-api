@@ -1,0 +1,6 @@
+# How to report a security problem in Aurin (RFC 9116). Renew Expires before it passes.
+Contact: mailto:support@aurin.health
+Expires: 2027-10-22T00:00:00.000Z
+Preferred-Languages: en, cs
+Canonical: https://aurin.health/.well-known/security.txt
+Policy: https://aurin.health/support

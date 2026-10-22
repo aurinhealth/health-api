@@ -31,7 +31,7 @@ const server = createServer(async (req, res) => {
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const url = `http://127.0.0.1:${server.address().port}/`;
 
-const browser = await chromium.launch();
+const browser = await chromium.launch(process.env.CHROMIUM ? {executablePath: process.env.CHROMIUM} : {});
 const page = await browser.newPage({viewport: {width: 2000, height: 1200}, deviceScaleFactor: 1});
 await page.goto(url);
 await page.evaluate(async () => {
