@@ -49,6 +49,10 @@ button.store{border:0;font:inherit;font-size:17px;font-weight:600;cursor:pointer
 .wl .done svg{stroke:currentColor}
 .wl .err{margin-top:10px;font-size:15px;color:var(--rust)}.wl .err:empty{display:none}
 .wl.on .open,.wl.sent .open,.wl.sent .field{display:none}.wl.on .field{display:flex}.wl.sent .done{display:inline-flex}
+/* After joining: pass Aurin on (the phone's own sharing, or the link copied). Nothing about it is stored. */
+.wl .share{display:none;align-items:center;gap:8px;margin-top:12px;padding:8px 14px;border:0;border-radius:999px;background:transparent;font:inherit;font-size:15px;font-weight:600;color:var(--sec);cursor:pointer}
+.wl .share:hover{background:var(--panel)}.wl .share svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.wl.sent .share{display:inline-flex}
 html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
 
 /* Grain over the whole page: printed paper rather than a flat screen. */
@@ -395,10 +399,12 @@ const LOCK = '<svg class="icon lock" viewBox="0 0 24 24" aria-hidden="true"><rec
 // invites people into TestFlight from the app (src/testflight-waitlist.js).
 const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const SHARE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
 const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
 <button type="button" class="store open">Join the waitlist</button>
 <span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
 <span class="done" role="status">${CHECK}<span>You're on the list</span></span>
+<button type="button" class="share">${SHARE}<span>Know someone who trains? Share Aurin</span></button>
 <span class="err" role="alert"></span>
 </form>`;
 
@@ -441,7 +447,11 @@ document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelect
   if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){err.textContent='Enter a valid email.';input.focus();return;}
   busy=true;fetch('/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})})
   .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');f.classList.remove('on');})})
-  .catch(function(x){err.textContent=x.message;}).then(function(){busy=false;});});});
+  .catch(function(x){err.textContent=x.message;}).then(function(){busy=false;});});
+ var sh=f.querySelector('.share'),said=sh.querySelector('span');
+ sh.addEventListener('click',function(){var link=location.origin+'/';
+  if(navigator.share)navigator.share({title:'Aurin',text:'Aurin reads your sleep, HRV and workouts and tells you how hard to train today. Free to test on iPhone:',url:link}).catch(function(){});
+  else if(navigator.clipboard)navigator.clipboard.writeText(link).then(function(){said.textContent='Link copied: '+link;});});});
 // Connections: a logo shows what Aurin reads from it and sends back; they take turns until one is picked.
 var box=document.querySelector('.connect .box');if(!box)return;
 var tabs=[].slice.call(box.querySelectorAll('[role=tab]')),cur=0,timer;
