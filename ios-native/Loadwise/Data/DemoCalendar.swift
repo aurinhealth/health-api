@@ -31,9 +31,12 @@ extension DemoData {
                 if !done && item.0 == "walk" { return nil }
                 let adherence: String? = !done ? nil : item.0 == "walk" || date == today ? "offplan" : differently ? "off" : "good"
                 let time = date == today && !done ? "17:30" : i == 0 ? "07:30" : "17:10"
+                // Splnění plánu: near 100 % kept to the plan, well off it done differently.
+                let day = Int(date.suffix(2)) ?? 0
+                let compliance: Int? = adherence == "good" ? 88 + day % 25 : adherence == "off" ? (day % 2 == 0 ? 72 : 134) : nil
                 return CalendarActivity(id: date + "-\(i)", sport: item.0, status: done ? "done" : "planned", title: english ? Self.english[item.1] ?? item.1 : item.1, date: date,
                                         time: time, minutes: item.2, km: item.3, kcal: done ? item.4 : nil,
-                                        activityId: nil, eventId: nil, adherence: adherence)
+                                        activityId: nil, eventId: nil, adherence: adherence, compliance: compliance)
             }
             let real = list.filter { $0.status == "done" }
             let main = list.filter { $0.sport != "walk" }.max { ($0.minutes ?? 0) < ($1.minutes ?? 0) } ?? list.first

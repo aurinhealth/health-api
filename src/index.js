@@ -5,7 +5,7 @@ import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
 import { getCookbook, getCookbookRecipeByPage } from "./cookbook.js";
 import { reconcileCancelledGymPlans } from './planned-events.js';
-import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck} from './activity-energy-check.js';
+import {walkingEnergyCheck,activityTelemetryEnergy,strengthEnergyCheck,settleEnergyCheck} from './activity-energy-check.js';
 import {energyChoices,applyEnergyChoice} from './activity-energy-choices.js';
 import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { energyBaseline, MISSING_LABELS, proteinReferenceKg, trendAdjustment, TREND_REASONS } from "./energy-profile.js";
@@ -1923,7 +1923,7 @@ async function energyForDate(env, date) {
       activity.reportedCalories=activity.calories;
       if(measured){activity.calories=measured.kcal;activity.calorieSource=measured.source;activity.energyCoverage=measured.coverage;}
       const check=walkingEnergyCheck(activity,weight?.value_numeric);
-      if(check){activity.energyCheck={...check,summaryCalories:activity.reportedCalories,summaryMismatch:checked?.status==='review',telemetry:measured};activity.caloriesForPlanning=measured?measured.kcal:check.status==='review'?check.estimated:activity.calories;}
+      if(check){const counted=measured?measured.kcal:check.status==='review'?check.estimated:activity.calories;activity.energyCheck={...settleEnergyCheck(check,counted),summaryCalories:activity.reportedCalories,summaryMismatch:checked?.status==='review',telemetry:measured};activity.caloriesForPlanning=counted;}
     }
   }
   // A lifting session's device calories are checked the same way; the energy
