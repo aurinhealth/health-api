@@ -20,13 +20,16 @@ import { recoveryTime } from './recovery-time.js';
 import { chatLibraryQuery } from './chat-ask.js';
 import { verifyGitHubActionsToken } from './github-oidc.js';
 import { isStaging } from './staging.js';
-import { localToday, localNow } from './user-time.js';
 import { lang, withLang } from './lang.js';
 import { HARD_KINDS, isHardKind } from './session-intensity.js';
 
 export const COACH_EVAL_AUDIENCE = 'aurin-coach-eval';
 export const COACH_EVAL_WORKFLOWS = new Set(['aurinhealth/health-api/.github/workflows/coach-eval.yml@refs/heads/main']);
 
+// Every run plays the same Wednesday morning, so the made-up week lands where
+// the situations expect it: the weekend of S28 and S29 on Saturday and Sunday,
+// not on Sunday and Monday when the run starts on a Thursday (Petr, run 35).
+export const COACH_EVAL_DATE = '2026-10-21', COACH_EVAL_NOW = COACH_EVAL_DATE + ' 08:00';
 const shift = (date, days) => new Date(Date.parse(date + 'T12:00:00Z') + days * 86400000).toISOString().slice(0, 10);
 
 // A cyclist (FTP 265) with 60 steady days: a sweet spot ride yesterday, VO2max
@@ -355,6 +358,9 @@ const CHANGE = /vynech|přesu|posu[nň]|zruš|odpočív|odpočin|nahrad|místo|z
 const CONDITIONAL = /^\s*[-•*]?\s*(?:pokud|když|jestli|kdyby|kdybys|if|when|should)\b|chceš|want me|mám ti|shall i/i;
 // A change only under a condition in a later clause ("…; při nedostatku času ji vynech", runs 27 and 28, S24 and S15) is advice, not a change.
 const unconditional = x => String(x).split(/[;:]\s*/).filter(part => !/^(?:při|pokud|když|jestli|kdyby|v případě|if|when|should)\b/i.test(part)).join('; ');
+// "V sobotu bych ponechal dlouhou jízdu" keeps the plan; only the other parts can change it (run 35, S15).
+const KEEP = /(?<!\p{L})(?:po)?nechal|\bkeep\b/iu;
+const changing = x => String(x).split(/[;,]\s*/).filter(part => !KEEP.test(part)).join('; ');
 const KIND_WORDS = { recovery: /regenera|lehk|lehc|volně|klidn|recovery|easy/i, endurance: /vytrval|lehk|lehc|Z2|aerob|klidn|endurance|easy/i, long: /dlouh|long/i, tempo: /tempo/i, sweet_spot: /sweet/i, threshold: /prah|práh|threshold/i, vo2max: /vo2|vo₂/i };
 // A rest or a move: any change of the planned session ("nejel bych" with a move to Sunday).
 const cardWords = a => ['rest', 'move'].includes(a.type) ? /vynech|zruš|odpad|místo|odpoč|volno|nahrad|nejel|neběž|přesu|posu|odlož|skip|cancel|instead|rest|drop|move|shift|postpone|push/i
@@ -369,7 +375,7 @@ const companion = (r, a) => a.type === 'rest' && (a.replacedBy || r.kept.some(w 
 // offers changes (noUnaskedCard and the situations' own checks judge that).
 function promisedWithoutCard(r, planned) {
   if (!r.kept.some(a => PLAN_CHANGE.includes(a.type))) return [];
-  return sentences(r.answer).filter(x => !CONDITIONAL.test(x) && CHANGE.test(unconditional(x))).flatMap(x => dayRefs(unconditional(x), r.date).slice(0, 1)
+  return sentences(r.answer).filter(x => !CONDITIONAL.test(x) && CHANGE.test(changing(unconditional(x)))).flatMap(x => dayRefs(changing(unconditional(x)), r.date).slice(0, 1)
     .filter(d => (planned[d] || []).length && !r.kept.some(a => cardDays(a, r, planned).includes(d))).map(d => d + ': ' + x.slice(0, 60)));
 }
 // A card no sentence speaks of: its words with its day, or, for today's card,
@@ -452,7 +458,7 @@ function droppedCards(r) {
 export function scenarioById(id) { return COACH_EVAL_SCENARIOS.find(s => s.id === id) || null; }
 
 // The coach's context for a situation, built as the chat builds it.
-export function scenarioContext(scenario, date = localToday(), now = localNow()) {
+export function scenarioContext(scenario, date = COACH_EVAL_DATE, now = COACH_EVAL_NOW) {
   const a = evalAthlete(date, scenario.athlete || {}), conversation = scenario.conversation ? scenario.conversation(date) : [];
   const ctx = coachContext({ ...a, now, checkin: null });
   Object.assign(ctx, { userInitiated: true, athleteState: 'active', preferenceMemory: ['Kolo nejradši venku', 'Posilovna 2× týdně'], conversation, appContext: { view: 'today', date } });
@@ -461,7 +467,7 @@ export function scenarioContext(scenario, date = localToday(), now = localNow())
   return { ctx, focus: a.focus, conversation, athlete: a };
 }
 
-export function checkReply(scenario, reply, now = null, date = localToday()) {
+export function checkReply(scenario, reply, now = null, date = COACH_EVAL_DATE) {
   const r = { answer: String(reply.answer || ''), kept: reply.kept || [], proposed: reply.proposed || [], task: reply.task || assistantTask(scenario.message, { view: 'today' }), model: reply.model || null, now, date };
   return [...(scenario.checks ? scenario.checks(r) : []), ...commonChecks(r, scenario)];
 }
@@ -538,7 +544,7 @@ export async function runComposeScenario(env, scenario, { compose = composeWorko
 }
 
 // One situation through the real coach. `ask` is askCoach (tests pass their own).
-export async function runScenario(env, scenario, { ask = askCoach, date = localToday(), now = localNow() } = {}) {
+export async function runScenario(env, scenario, { ask = askCoach, date = COACH_EVAL_DATE, now = COACH_EVAL_NOW } = {}) {
   if (scenario.compose) return runComposeScenario(env, scenario);
   const { ctx, focus, conversation, athlete } = scenarioContext(scenario, date, now);
   const task = assistantTask(scenario.message, { view: 'today' }, conversation), started = Date.now();
