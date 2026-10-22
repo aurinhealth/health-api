@@ -2623,6 +2623,8 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       // The library workout that gave way, so the chat can say the card differs.
       const replaced=askedWorkout&&!workoutId?{id:askedWorkout.id,name:askedWorkout.name,why:coach.recommendation?.adaptations||[]}:null;
       if(replaced&&generated.explanation?.why)generated.explanation.why=[L('„'+askedWorkout.name+'“ dnes nahrazuje lehčí trénink: ','Today “'+askedWorkout.name+'” gives way to an easier session: ')+(replaced.why.join(', ')||L('podle připravenosti a zátěže','from your readiness and load'))+'.',...generated.explanation.why];
+      // Step rows with watts or paces, so the week plan's detail draws the workout's graph.
+      for(const w of [generated.workout,...(generated.alternatives||[])]){if(!w||w.steps)continue;let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=genSport==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones,hrZones:thresholds.runHrZones?.length?thresholds.runHrZones:thresholds.hrZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones,hrZones:thresholds.hrZones});}
       return Response.json({...generated,weekRole,weekTarget,plan:planInfo,environmentReason:suggestedEnvironment.reason,...(replaced?{replaced}:{})},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/feedback'&&request.method==='POST'){

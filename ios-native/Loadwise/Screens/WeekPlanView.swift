@@ -40,6 +40,10 @@ struct WeekSessionDraft: Identifiable, Equatable {
     var role: String?
     /// What the AI changed, in its words.
     var note: String?
+    /// "Přepočteno": the session changed when another one was removed;
+    /// `previous` is what it was before, when the day had one of this sport.
+    var recalculated = false
+    var previous: String?
     var workout: LibraryWorkout?
     var gym: GymProposal?
     var status: Status = .waiting
@@ -50,6 +54,9 @@ struct WeekSessionDraft: Identifiable, Equatable {
         if let gym { return gym.planName }
         return workout?.name ?? label ?? kindLabel(kind) ?? sportLabel(sport)
     }
+
+    /// "Vytrvalost · 2 h", as the row shows what the session was before a recalculation.
+    var line: String { title + " · " + Fmt.duration(minutes) }
 
     /// The lengths the detail offers (src/week-planner.js SESSION_MINUTES).
     static func lengths(_ sport: String, including current: Int) -> [Int] {
@@ -294,7 +301,9 @@ struct WeekPlanView: View {
 
     /// The layout becomes this week's own plan, the rules give each sport its
     /// length and role, and every session is built.
-    private func buildLayout() async {
+    /// `previous`: the sessions before "Odebrat z plánu"; the ones the new
+    /// layout keeps as they were keep their built workout.
+    private func buildLayout(previous: [WeekSessionDraft]? = nil) async {
         guard let prefs = plan?.prefs else { return }
         working = true
         defer { working = false }
@@ -311,9 +320,15 @@ struct WeekPlanView: View {
             notice = nil
             sessions = (r.proposal?.items ?? []).map { item in
                 let sport = item.sport == "strength" ? "gym" : item.sport
-                return WeekSessionDraft(date: item.date, sport: sport, minutes: item.minutes ?? (sport == "run" ? 45 : 60),
-                                        environment: sport == "gym" ? nil : item.environment ?? "outdoor",
-                                        label: item.label, reason: item.reason, role: item.role)
+                let next = WeekSessionDraft(date: item.date, sport: sport, minutes: item.minutes ?? (sport == "run" ? 45 : 60),
+                                            environment: sport == "gym" ? nil : item.environment ?? "outdoor",
+                                            label: item.label, reason: item.reason, role: item.role)
+                guard let previous else { return next }
+                if let same = previous.first(where: { $0.built && $0.date == next.date && $0.sport == next.sport && $0.minutes == next.minutes
+                                                     && $0.environment == next.environment && $0.role == next.role }) {
+                    return same
+                }
+                return Self.recalculated(next, from: previous)
             }
             if sessions.isEmpty { error = L10n.tr("Na zvolené dny nezbývá dost času na trénink. Přidej čas nahoře.") }
             await buildAll()
@@ -355,17 +370,22 @@ struct WeekPlanView: View {
 
     /// With a correction the AI fixes its last proposal; a session it keeps
     /// as it was keeps its built workout.
-    private func proposeAI(correction: String? = nil) async {
+    /// `removed`: the session "Odebrat z plánu" took out; it stays out and the
+    /// sessions that changed around it are marked.
+    private func proposeAI(correction: String? = nil, removed: WeekSessionDraft? = nil) async {
         working = true
         defer { working = false }
         error = nil
         do {
-            let previous = sessions
-            let r = try await model.api.weekAI(start: weekStart, note: note, correction: correction, previous: previous)
+            let r = try await model.api.weekAI(start: weekStart, note: note, correction: correction, previous: sessions)
+            let previous = sessions.filter { $0.id != removed?.id }
             summary = r.summary
             notice = r.ai == false ? r.message : nil
             warnings = r.warnings ?? []
-            sessions = (r.items ?? []).map { item in
+            sessions = (r.items ?? []).filter { item in
+                guard let removed else { return true }
+                return !(item.date == removed.date && (item.sport == "strength" ? "gym" : item.sport) == removed.sport)
+            }.map { item in
                 let sport = item.sport == "strength" ? "gym" : item.sport
                 let next = WeekSessionDraft(date: item.date, sport: sport, minutes: item.minutes ?? 60,
                                             environment: sport == "gym" ? nil : item.environment ?? "outdoor",
@@ -376,10 +396,10 @@ struct WeekPlanView: View {
                     same.note = nil
                     return same
                 }
-                return next
+                return removed == nil ? next : Self.recalculated(next, from: previous)
             }
             if sessions.isEmpty { error = L10n.tr("Na tento týden nevyšel žádný trénink.") }
-            if correction != nil { self.correction = "" }
+            if correction != nil && removed == nil { self.correction = "" }
             await buildAll()
             await runCheck()
         } catch {
@@ -444,7 +464,8 @@ struct WeekPlanView: View {
                         row(session)
                     } else {
                     NavigationLink {
-                        WeekSessionDetailView(session: $session, others: sessions.filter { $0.id != session.id }, weekStart: weekStart)
+                        WeekSessionDetailView(session: $session, others: sessions.filter { $0.id != session.id }, weekStart: weekStart,
+                                              onRemove: removal(session.id))
                     } label: {
                         row(session)
                     }
@@ -498,6 +519,15 @@ struct WeekPlanView: View {
                     if case .failed(let message) = s.status {
                         Text(message).font(Typo.caption).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
                     }
+                    if s.recalculated {
+                        if let previous = s.previous {
+                            Text(verbatim: previous).font(Typo.caption).foregroundStyle(Palette.faint).strikethrough().lineLimit(1)
+                        }
+                        Label(L10n.tr("Přepočteno"), systemImage: "sparkles").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.amber)
+                    }
+                    if let blocks = s.workout?.steps, !WorkoutProfile.segments(blocks).isEmpty {
+                        WorkoutProfile(blocks: blocks, sport: s.sport, compact: true).padding(.top, 4)
+                    }
                 }
                 Spacer(minLength: 4)
                 switch s.status {
@@ -508,6 +538,45 @@ struct WeekPlanView: View {
                 }
             }
         }
+    }
+
+    /// "Odebrat z plánu": the session goes and the rest of the week is planned
+    /// again without it: by the AI with its proposal, or the layout without
+    /// that sport on the day.
+    private func remove(_ id: UUID) async {
+        // The detail closes first: its session must not go while it shows it.
+        try? await Task.sleep(for: .milliseconds(500))
+        guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
+        let gone = sessions[i], before = sessions
+        check = nil
+        if mode == "ai" {
+            let correction = L10n.f("Odeber %@ (%@) a zbytek týdne přepočítej.", sportLabel(gone.sport).lowercased(), Fmt.dayHeading(gone.date).lowercased())
+            await proposeAI(correction: correction, removed: gone)
+        } else {
+            let w = ISODay.weekdayIndex(gone.date)
+            if let k = days[w].firstIndex(of: gone.sport) { days[w].remove(at: k) }
+            sessions.remove(at: i)
+            if days.allSatisfy(\.isEmpty) {
+                sessions = []
+                summary = nil
+                return
+            }
+            await buildLayout(previous: before.filter { $0.id != id })
+        }
+    }
+
+    /// The detail's "Odebrat z plánu" until the week is in the calendar.
+    private func removal(_ id: UUID) -> (() -> Void)? {
+        guard !sessions.contains(where: { $0.status == .saved }) else { return nil }
+        return { Task { await remove(id) } }
+    }
+
+    /// A session that is new or changed after a removal, with what the day had before.
+    private static func recalculated(_ next: WeekSessionDraft, from previous: [WeekSessionDraft]) -> WeekSessionDraft {
+        var next = next
+        next.recalculated = true
+        next.previous = previous.first { $0.date == next.date && $0.sport == next.sport }?.line
+        return next
     }
 
     /// One at a time: the server builds each session from the whole week.
@@ -631,8 +700,12 @@ struct WeekSessionDetailView: View {
     @Binding var session: WeekSessionDraft
     let others: [WeekSessionDraft]
     let weekStart: String
+    /// "Odebrat z plánu", nil once the week is in the calendar.
+    var onRemove: (() -> Void)? = nil
+    @Environment(\.dismiss) private var dismiss
     @State private var asking = false
     @State private var busy = false
+    @State private var confirmRemove = false
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: session.title) {
@@ -719,6 +792,24 @@ struct WeekSessionDetailView: View {
                     SecondaryButton(title: "Upravit s AI", systemImage: "sparkles") { asking = true }
                         .disabled(busy)
                         .padding(.top, 4)
+
+                    if let onRemove {
+                        Button { confirmRemove = true } label: {
+                            Label(L10n.tr("Odebrat z plánu"), systemImage: "trash")
+                                .font(Typo.body.weight(.medium)).foregroundStyle(Palette.rust)
+                                .frame(maxWidth: .infinity).frame(height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(busy)
+                        .confirmationDialog(L10n.f("Odebrat „%@“?", session.title), isPresented: $confirmRemove, titleVisibility: .visible) {
+                            Button("Odebrat a přepočítat", role: .destructive) {
+                                dismiss()
+                                onRemove()
+                            }
+                        } message: {
+                            Text("Ostatní tréninky týdne se přepočítají.")
+                        }
+                    }
                 }
             }
         }
