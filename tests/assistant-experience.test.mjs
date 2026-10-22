@@ -131,3 +131,10 @@ test('failed streamed work never publishes a completed reply or proposed actions
   const frames=(await response.text()).trim().split('\n').map(JSON.parse);
   assert.deepEqual(frames.map(f=>f.type),['start','answer','error']);assert.doesNotMatch(frames.at(-1).message,/Database/);
 });
+
+test('a one-leg press replacing the leg press takes no weight from it (Coach evaluation run 26, S19)',()=>{
+  const date='2026-10-16',history=[-14,-10,-7,-3].flatMap(d=>[1,2,3].map(n=>({workout_date:new Date(Date.parse(date+'T12:00:00Z')+d*86400000).toISOString().slice(0,10),exercise:'Pivot leg press',set_no:n,actual_kg:150,actual_reps:10,rpe:8,completed:1,type:'WORK'})));
+  const values=planValues({date,planName:'Celé tělo',rows:[1,2,3].map(n=>['WORK','Pivot leg press',String(n),'150','8-12','','','','FALSE','[Pauza 120 s]','','FALSE','',''])});
+  const swap=prepareGymSwap({values,history},'Pivot leg press','Single-Leg Press','Leg press je obsazený.');
+  assert.equal(swap.kg,null);assert.ok(swap.replacementRows.filter(r=>r[0]==='WORK').every(r=>r[3]===''),JSON.stringify(swap.replacementRows));
+});

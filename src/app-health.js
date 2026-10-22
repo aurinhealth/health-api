@@ -95,16 +95,18 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   const bedAvg = mean(beds.map(b => b.value));
   const bedSd = beds.length >= 3 ? Math.sqrt(beds.reduce((s, b) => s + (b.value - bedAvg) ** 2, 0) / (beds.length - 1)) : null;
 
-  // Series for the widgets.
-  const series = (key, n, d = 0, from = rows) => from.filter(r => r.id <= date && r.id > shift(date, -n) && num(r[key]) != null && (key === "skinTempDeviation" || num(r[key]) > 0)).map(r => ({ date: r.id, value: round(num(r[key]), d) }));
+  // Series for the widgets, from the readiness's own rows: today's point is
+  // the value Today and the detail's big number show (the morning lock,
+  // readiness.js), not a later reading of the same day.
+  const series = (key, n, d = 0, from = readiness.rows) => from.filter(r => r.id <= date && r.id > shift(date, -n) && num(r[key]) != null && (key === "skinTempDeviation" || num(r[key]) > 0)).map(r => ({ date: r.id, value: round(num(r[key]), d) }));
   const c = readiness.components || {};
   // HRV and resting heart rate for 90 days: Health's detail charts pick 7, 30
   // or 90 of them.
   const hrvSeries = series("hrv", 90), rhrSeries = series("restingHR", 90);
   const lastWeek = hrvSeries.filter(p => p.date > shift(date, -7)).map(p => p.value);
-  const today = rows.find(r => r.id === date) || {};
+  const today = readiness.rows.find(r => r.id === date) || {};
   const respiration = series("respiration", 14, 1);
-  const skin = series("skinTempDeviation", 14, 2, google);
+  const skin = series("skinTempDeviation", 14, 2);
   // Oxygen from the watch (Apple Health, Google) first, Intervals.icu filling the rest (mergeWellnessRows).
   const spo2 = series("spO2", 14, 1);
   const walkingHR = series("walkingHR", 90), hrRecovery = series("hrRecovery", 90);
@@ -113,8 +115,8 @@ export function buildHealth({ date, hour = null, health = {}, fitness = {}, slee
   // it (recovery-model.js wristTempDeviation), null under 7 of them.
   // `deviations` is each of the last 14 nights against its own 28 nights
   // before (the Health card's bars), nights without a baseline left out.
-  const wrist = series("wristTemp", 30, 2), wristLast = wrist.length ? wristTempDeviation(rows, date) : null;
-  const wristDeviations = wristLast ? wrist.filter(p => p.date > shift(date, -14)).map(p => ({ date: p.date, value: wristTempDeviation(rows, p.date)?.deviation ?? null })).filter(p => p.value != null) : [];
+  const wrist = series("wristTemp", 30, 2), wristLast = wrist.length ? wristTempDeviation(readiness.rows, date) : null;
+  const wristDeviations = wristLast ? wrist.filter(p => p.date > shift(date, -14)).map(p => ({ date: p.date, value: wristTempDeviation(readiness.rows, p.date)?.deviation ?? null })).filter(p => p.value != null) : [];
 
   // Weight: 90 days of weighings, the 30-day change of the trend and body fat
   // from Intervals.icu wellness (Google Health body fat synced there).

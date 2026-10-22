@@ -126,7 +126,9 @@ export function proposeEmptyDays({ prefs, start, today, week = {}, focus = null,
 }
 // A training plan (training-plans.js) comes in as `plan`: { roles } for
 // planWeekRoles, { load } for weekTargets and apply(targets) for its sessions.
-export function weekProposal({ prefs, start, today, week = {}, fitness = {}, state = {}, weather = {}, focus = null, history = null, plan = null, health = null }) {
+// strain: the athlete's state (week-check.js strainOf, level 0–2): strained
+// allows one quality day and holds the load, tired allows none.
+export function weekProposal({ prefs, start, today, week = {}, fitness = {}, state = {}, weather = {}, focus = null, history = null, plan = null, health = null, strain = null }) {
   const proposedPrefs = proposeEmptyDays({ prefs, start, today, week, focus, history });
   const warnings = [], existing = (week.days || []).filter(d => d.date >= start && d.date <= shift(start, 6));
   const historyEstimate=activityHistoryEstimate(history||week.days||[],today<start?today:start);
@@ -139,12 +141,13 @@ export function weekProposal({ prefs, start, today, week = {}, fitness = {}, sta
   if (state.status && state.status !== 'active') return { prefs: proposedPrefs, items: [], warnings: [...warnings, { text: L('Stav ', 'Status ') + state.status + L(' pozastavuje návrhy tréninků.', ' pauses workout proposals.') }], mode: 'review' };
   const wellness = (fitness.wellness || []).filter(w => w.id <= today).at(-1), ctl = Number(wellness?.ctl) || null;
   const loads = existing.map(d => ({ date: d.date, done: Number(d.daily?.training?.actualTss) || (d.daily?.training?.completed || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), planned: (d.daily?.training?.planned || []).reduce((n, a) => n + (Number(a.tss) || 0), 0), sports: sessionsOn(d).map(sportOf) }));
-  const roles = planWeekRoles(proposedPrefs.days, { readiness: Number(wellness?.tsb) < -20 ? 'red' : 'green', ...(plan?.roles || {}) });
+  const level = strain?.level || 0;
+  const roles = planWeekRoles(proposedPrefs.days, { readiness: Number(wellness?.tsb) < -20 || level >= 2 ? 'red' : level >= 1 ? 'yellow' : 'green', ...(plan?.roles || {}) });
   const withPlan = t => plan?.apply ? plan.apply(t) : t;
   // Running this week so far (done, and planned still ahead or today) counts against the weekly running cap.
   const runOf = list => (list || []).filter(isRunActivity).reduce((m, a) => m + (Number(a.durationHours) || 0) * 60, 0);
   const runCommitted = existing.reduce((n, d) => n + committedRunMinutes(d.date, today, runOf(d.daily?.training?.planned), runOf(d.daily?.training?.completed)), 0);
-  let targets = capRunVolume(withPlan(weekTargets({ plan: plan?.load || null, roles, ctl, days: loads, today, weekStart: start, weekLoads: weekLoadsBefore(fitness.wellness || [], start), hrvDown: hrvWeekTrendDown(hrvSourceRows(fitness.wellness, health?.wellness, start), start), rampRate: [...(fitness.wellness || [])].reverse().find(r => Number.isFinite(Number(r.rampRate)))?.rampRate ?? null, lastWeekLoad: (fitness.wellness || []).filter(w => w.id >= shift(start, -7) && w.id < start).reduce((n, w) => n + (Number(w.ctlLoad) || 0), 0) })), history ? weeklyRunCap(history, start) : null, runCommitted);
+  let targets = capRunVolume(withPlan(weekTargets({ plan: plan?.load || null, strained: level >= 1, roles, ctl, days: loads, today, weekStart: start, weekLoads: weekLoadsBefore(fitness.wellness || [], start), hrvDown: hrvWeekTrendDown(hrvSourceRows(fitness.wellness, health?.wellness, start), start), rampRate: [...(fitness.wellness || [])].reverse().find(r => Number.isFinite(Number(r.rampRate)))?.rampRate ?? null, lastWeekLoad: (fitness.wellness || []).filter(w => w.id >= shift(start, -7) && w.id < start).reduce((n, w) => n + (Number(w.ctlLoad) || 0), 0) })), history ? weeklyRunCap(history, start) : null, runCommitted);
   // Without fitness data the estimate keeps the same running cap: a beginner's
   // runs share the floor (60 min a week) or what the recent weeks allow.
   if (!ctl) targets = capRunVolume(withPlan(estimatedTargets(roles, start, today, loads)), weeklyRunCap(history || [], start), runCommitted);

@@ -2743,3 +2743,8 @@
 "Podle fáze spánku" = "By sleep stage";
 "Tep po nocích" = "Heart rate night by night";
 "Tep ve spánku, průměr %@ bpm" = "Heart rate during sleep, average %@ bpm";
+"Kontrola týdne" = "Week check";
+"Místo toho protažení · %@" = "Stretching instead · %@";
+"Lehčí trénink" = "Easier session";
+"Upraveno i v kalendáři." = "Changed in the calendar too.";
+"Upraveno. Tréninky níže jsou podle kontroly." = "Done. The sessions below follow the check.";

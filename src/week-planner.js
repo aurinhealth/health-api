@@ -285,14 +285,15 @@ export function raceDayRole(x, date, eventDate) {
   const role = left === 1 ? "recovery" : x.sport === "gym" ? "gym_upper" : x.role === "long" ? "endurance" : x.role;
   return role === x.role ? x : { ...x, role, label: ROLE_LABELS[role], share: SHARE[role], ...(x.sport === "gym" ? {} : { focus: ROLE_FOCUS[role] }) };
 }
-export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null, plan = null, eventDate = null } = {}) {
+export function weekTargets({ roles = [], ctl = null, lastWeekLoad = 0, weekLoads = null, days = [], today, weekStart, hrvDown = false, rampRate = null, plan = null, eventDate = null, strained = false } = {}) {
   const fitness = Number(ctl) > 0 ? Number(ctl) : null;
   if (!fitness) return { status: "no_fitness", items: [] };
   const base = Math.round(fitness * 7);
   const rule = recoveryWeek({ base, weekLoads: weekLoads?.length ? weekLoads : [Number(lastWeekLoad) || 0], hrvDown }), recovery = rule.recovery || Boolean(plan?.light);
   // +5 % raises CTL by about CTL/120 a week, well under the 5–8 a week Friel
-  // (TrainingPeaks) calls sustainable; a ramp already above 8 only holds.
-  const hold = Number(rampRate) > 8;
+  // (TrainingPeaks) calls sustainable; a ramp already above 8 only holds, and
+  // so does a strained athlete (week-check.js strainOf).
+  const hold = Number(rampRate) > 8 || Boolean(strained);
   const planned = Number(plan?.load) > 0 ? Number(plan.load) : null;
   const target = Math.round(base * (rule.recovery ? Math.min(.7, planned ?? .7) : planned != null ? (hold ? Math.min(1, planned) : planned) : recovery ? .7 : hold ? 1 : 1.05));
   const dateOf = i => new Date(Date.parse(weekStart + "T12:00:00Z") + i * 86400000).toISOString().slice(0, 10);

@@ -6,11 +6,11 @@ import SwiftUI
 // changed with the AI, and "Uložit do kalendáře" schedules them all.
 
 private func sportLabel(_ sport: String) -> String {
-    ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "strength": "Posilovna", "walk": "Chůze", "swim": "Plavání"][sport].map { L10n.tr($0) } ?? Fmt.capitalized(sport)
+    ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "strength": "Posilovna", "walk": "Chůze", "swim": "Plavání", "stretch": "Protažení"][sport].map { L10n.tr($0) } ?? Fmt.capitalized(sport)
 }
 
 private func sportSymbol(_ sport: String) -> String {
-    ["ride": "bicycle", "run": "figure.run", "gym": "dumbbell.fill", "strength": "dumbbell.fill", "walk": "figure.walk", "swim": "figure.pool.swim"][sport] ?? "figure.mixed.cardio"
+    ["ride": "bicycle", "run": "figure.run", "gym": "dumbbell.fill", "strength": "dumbbell.fill", "walk": "figure.walk", "swim": "figure.pool.swim", "stretch": "figure.flexibility"][sport] ?? "figure.mixed.cardio"
 }
 
 /// The session kinds of src/week-ai.js KINDS.
@@ -59,11 +59,15 @@ struct WeekSessionDraft: Identifiable, Equatable {
 
     /// Builds the workout: a gym plan as a draft, a ride or run from the
     /// library. `resize` keeps the workout and only changes its length.
-    func building(_ api: APIClient, resize: Bool = false) async -> WeekSessionDraft {
+    /// `others`: the week's other sessions, so gym days follow on from each other.
+    func building(_ api: APIClient, resize: Bool = false, others: [WeekSessionDraft] = []) async -> WeekSessionDraft {
         var next = self
         do {
             if sport == "gym" {
-                next.gym = try await api.previewGym(date: date, minutes: minutes, focus: role == "gym_upper" ? "upper" : nil, muscles: [], fromWeek: true)
+                let gymDays = others.filter { $0.sport == "gym" && $0.date != date }
+                next.gym = try await api.previewGym(date: date, minutes: minutes, focus: role == "gym_upper" ? "upper" : nil, muscles: [], fromWeek: true,
+                                                    gymDays: gymDays.map(\.date),
+                                                    weekSessions: gymDays.compactMap { s in s.gym.map { (date: s.date, rows: $0.rows) } })
             } else {
                 let r = try await api.generateWeekSession(date: date, sport: sport, minutes: minutes, environment: environment, focus: focus,
                                                           resize: resize ? workout?.id : nil)
@@ -97,6 +101,10 @@ struct WeekPlanView: View {
     @State private var working = false
     @State private var saving = false
     @State private var error: String?
+    /// "Kontrola týdne" of the built week (WeekCheck.swift); `checkApplied`
+    /// once "Upravit" changed the sessions.
+    @State private var check: WeekCheck?
+    @State private var checkApplied = false
 
     private var thisWeek: String { Self.monday() }
     private var nextWeek: String { ISODay.shift(Self.monday(), 7) }
@@ -147,6 +155,7 @@ struct WeekPlanView: View {
         .task { if plan == nil { await load() } }
         .onChange(of: weekStart) { _, _ in
             sessions = []
+            check = nil
             summary = nil
             Task { await load() }
         }
@@ -308,6 +317,7 @@ struct WeekPlanView: View {
             }
             if sessions.isEmpty { error = L10n.tr("Na zvolené dny nezbývá dost času na trénink. Přidej čas nahoře.") }
             await buildAll()
+            await runCheck()
         } catch {
             self.error = error.localizedDescription
         }
@@ -371,6 +381,7 @@ struct WeekPlanView: View {
             if sessions.isEmpty { error = L10n.tr("Na tento týden nevyšel žádný trénink.") }
             if correction != nil { self.correction = "" }
             await buildAll()
+            await runCheck()
         } catch {
             self.error = error.localizedDescription
         }
@@ -404,6 +415,13 @@ struct WeekPlanView: View {
 
     private var generated: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let check, !(check.changes ?? []).isEmpty, !sessions.contains(where: { $0.status == .saved }) {
+                WeekCheckContent(check: check, today: today, applied: checkApplied,
+                                 appliedText: L10n.tr("Upraveno. Tréninky níže jsou podle kontroly."), busy: working,
+                                 onKeep: { withAnimation { self.check = nil } },
+                                 onApply: { Task { await applyCheck(check) } })
+                    .padding(.top, 18)
+            }
             if let summary {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     AIMark()
@@ -422,6 +440,9 @@ struct WeekPlanView: View {
             }
             VStack(spacing: 10) {
                 ForEach($sessions) { $session in
+                    if session.sport == "stretch" {
+                        row(session)
+                    } else {
                     NavigationLink {
                         WeekSessionDetailView(session: $session, others: sessions.filter { $0.id != session.id }, weekStart: weekStart)
                     } label: {
@@ -429,6 +450,7 @@ struct WeekPlanView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(session.status == .waiting || session.status == .building)
+                    }
                 }
             }
             .padding(.top, 18)
@@ -455,6 +477,7 @@ struct WeekPlanView: View {
                 SecondaryButton(title: "Naplánovat znovu", systemImage: "arrow.counterclockwise") {
                     sessions = []
                     summary = nil
+                    check = nil
                 }
                 .padding(.top, 10)
             }
@@ -492,9 +515,48 @@ struct WeekPlanView: View {
         for i in sessions.indices where !sessions[i].built {
             sessions[i].status = .building
             let id = sessions[i].id
-            let next = await sessions[i].building(model.api)
+            let next = await sessions[i].building(model.api, others: sessions.filter { $0.id != id })
             if let k = sessions.firstIndex(where: { $0.id == id }) { sessions[k] = next }
         }
+    }
+
+    /// "Kontrola týdne": the built week against the athlete's state and the form ahead.
+    private func runCheck() async {
+        checkApplied = false
+        check = try? await model.api.weekCheckDraft(start: weekStart, sessions: sessions)
+    }
+
+    /// "Upravit": the check's changes on the built sessions; moved and eased
+    /// ones are built again, a session swapped for stretching becomes one.
+    private func applyCheck(_ c: WeekCheck) async {
+        let focusOf = ["recovery": "recovery", "endurance": "endurance", "long": "long_endurance", "tempo": "tempo",
+                       "sweet_spot": "sweet_spot", "threshold": "threshold", "vo2max": "vo2max"]
+        for change in c.changes ?? [] {
+            guard let i = sessions.firstIndex(where: { $0.id.uuidString == change.id }) else { continue }
+            switch change.type {
+            case "move":
+                guard let date = change.to?.date else { continue }
+                sessions[i].date = date
+                sessions[i].gym = nil
+                sessions[i].status = .waiting
+            case "cancel":
+                sessions.remove(at: i)
+            case "recovery":
+                let s = sessions[i]
+                sessions[i] = WeekSessionDraft(date: s.date, sport: "stretch", minutes: change.to?.minutes ?? 12, environment: nil,
+                                               label: L10n.tr("Protažení"), status: .ready)
+            default:
+                if let kind = change.to?.kind { sessions[i].kind = kind; sessions[i].focus = focusOf[kind] }
+                if let minutes = change.to?.minutes { sessions[i].minutes = minutes }
+                sessions[i].workout = nil
+                sessions[i].status = .waiting
+            }
+        }
+        sessions.sort { $0.date < $1.date }
+        withAnimation { checkApplied = true }
+        working = true
+        defer { working = false }
+        await buildAll()
     }
 
     /// The AI's week (or the built one) back as a layout to change by hand.
@@ -507,6 +569,7 @@ struct WeekPlanView: View {
         days = next
         sessions = []
         summary = nil
+        check = nil
         mode = "manual"
     }
 
@@ -516,7 +579,9 @@ struct WeekPlanView: View {
         for i in sessions.indices where sessions[i].status == .ready {
             let s = sessions[i]
             do {
-                if let gym = s.gym {
+                if s.sport == "stretch" {
+                    try await model.api.addStretching(date: s.date)
+                } else if let gym = s.gym {
                     guard let draftId = gym.draftId else { throw APIError.message(L10n.tr("Trénink se nepodařilo sestavit.")) }
                     try await model.api.confirmGym(draftId: draftId, rows: gym.rows)
                 } else if let w = s.workout {
@@ -691,7 +756,7 @@ struct WeekSessionDetailView: View {
         busy = true
         defer { busy = false }
         session.status = .building
-        session = await session.building(model.api, resize: resize)
+        session = await session.building(model.api, resize: resize, others: others)
     }
 }
 

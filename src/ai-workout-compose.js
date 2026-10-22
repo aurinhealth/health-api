@@ -16,11 +16,12 @@ import { L } from "./lang.js";
 import { consentStatus } from "./consent.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
-import { zonesFor, buildWorkout, difficultyFromStructure } from "./workout-model.js";
+import { zonesFor, buildWorkout, difficultyFromStructure, stepIntensities } from "./workout-model.js";
 import { cleanEnduranceTemplate, enduranceStructure, enduranceSystem } from "./endurance-templates.js";
 import { workoutLoadCheck, hardCapFor, HARD_CAP } from "./ai-workout-pick.js";
 import { isHardKind } from "./session-intensity.js";
-import { instructions } from './private/ai-workout-compose.js';
+import { catalog, resizeWorkout } from "./workout-library.js";
+import { instructions, secondTryNote } from './private/ai-workout-compose.js';
 
 // Under this suitability (% of the reachable score) the library pick is a poor fit.
 export const COMPOSE_BELOW = 80;
@@ -102,7 +103,10 @@ const SCHEMA = { type: "json_schema", name: "own_workout", strict: true, schema:
 // call or a workout that breaks the limits).
 // `asked`: the library search's choice ({ minDifficulty, maxDifficulty, key });
 // `model` and `save: false` are for the coach evaluation (made-up data, nothing kept).
-export async function composeWorkout(env, { sport = "ride", kind, minutes, coach = {}, today = {}, focus = null, asked = null, model = null, save = true, ask = callOpenAI } = {}) {
+// `diagnose`: instead of null, return { rejected } naming the check the AI's
+// workout failed (the coach evaluation). With a band, a workout whose only
+// fault is a difficulty outside it is asked for once more with that number.
+export async function composeWorkout(env, { sport = "ride", kind, minutes, coach = {}, today = {}, focus = null, asked = null, model = null, save = true, ask = callOpenAI, diagnose = false, fallback = libraryFallback } = {}) {
   sport = sport === "run" ? "run" : "ride";
   const type = libraryKind(sport, kind), length = Math.round(Number(minutes) || 0);
   if (!env.OPENAI_API_KEY || (save && !env.DB?.userId) || !(length >= 20)) return null;
@@ -128,12 +132,36 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
     ...(Array.isArray(today.ratings) && today.ratings.length ? { recentRatings: today.ratings } : {})
   };
   try {
-    const r = await ask(env, { feature: "workout-compose", instructions: withFocus(instructions(sport, { asked: Boolean(asked) }), focus), input: L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts), format: SCHEMA, maxOutputTokens: 2500, model: model || lightModel(env) });
-    const data = JSON.parse(r.text);
-    const template = cleanEnduranceTemplate({ sport, name: data.name, blocks: (data.blocks || []).map(b => ({ repeats: b.repeats, steps: (b.steps || []).map(s => ({ label: s.label, seconds: s.seconds, low: s.low, high: s.high })) })) });
-    const structure = enduranceStructure(template);
-    const reason = String(data.reason || "").trim().slice(0, 300);
-    if (!composeFits({ structure, sport, type, length, cap, band }) || !reason) return null;
+    const input = L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts);
+    const compose = async extra => {
+      const r = await ask(env, { feature: "workout-compose", instructions: withFocus(instructions(sport, { asked: Boolean(asked) }), focus) + extra, input, format: SCHEMA, maxOutputTokens: 2500, model: model || lightModel(env) });
+      const data = JSON.parse(r.text);
+      const template = cleanEnduranceTemplate({ sport, name: data.name, blocks: (data.blocks || []).map(b => ({ repeats: b.repeats, steps: (b.steps || []).map(s => ({ label: s.label, seconds: s.seconds, low: s.low, high: s.high })) })) });
+      const structure = enduranceStructure(template);
+      const reason = String(data.reason || "").trim().slice(0, 300);
+      return { r, template, structure, reason, faults: [...composeFaults({ structure, sport, type, length, cap, band }), ...(reason ? [] : ["reason"])] };
+    };
+    let { r, template, structure, reason, faults } = await compose("");
+    // A draft that fails a check, or whose difficulty is outside the band
+    // itself (the checks allow one step around it), is asked for once more
+    // with the reasons; the better draft stays. A second failure falls back
+    // to a library workout that meets the brief (runs 25–30, W01 and W02).
+    const strict = ({ structure: st, faults: f }) => {
+      if (!band) return f;
+      const d = difficultyFromStructure(type, st, sport);
+      return d < band[0] || d > band[1] ? [...f.filter(x => !x.startsWith("difficulty")), `difficulty ${d}`] : f;
+    };
+    let first = strict({ structure, faults });
+    if (first.length) {
+      const again = await compose("\n" + secondTryNote({ faults: first, length, cap, band, difficulty: difficultyFromStructure(type, structure, sport) }));
+      const second = strict(again);
+      if (second.length < first.length || (second.length === first.length && !again.faults.length && faults.length)) ({ r, template, structure, reason, faults } = again), first = second;
+      if (first.length) {
+        const library = await fallback(env, { sport, type, length, cap, band });
+        if (library) return { ...library, ai: { reason: library.ai.reason, fallback: true, composed: false, model: r.model || model || lightModel(env), usage: r.usage || null, tried: first.join(", "), ...(warning ? { warning } : {}) } };
+      }
+    }
+    if (faults.length) return diagnose ? { rejected: faults.join(", "), ai: { model: r.model || model || lightModel(env), usage: r.usage || null } } : null;
     const id = newId();
     if (!save) {
       const workout = aiWorkout({ id, sport, name: template.name, structure_json: JSON.stringify(structure), reason });
@@ -147,18 +175,59 @@ export async function composeWorkout(env, { sport = "ride", kind, minutes, coach
     return workout ? { ...workout, ai: { reason, composed: true, ...(warning ? { warning } : {}) } } : null;
   } catch (error) {
     if (!error?.ai) console.error("Workout compose AI failed", error?.message || error);
-    return null;
+    return diagnose ? { rejected: "error: " + String(error?.message || error).slice(0, 120) } : null;
   }
 }
 
 // The AI's workout keeps to the brief: the length within 5 minutes, the type,
 // the hard-minute cap and, when one was chosen, the difficulty band (± 1).
-export function composeFits({ structure, sport = "ride", type, length, cap, band = null }) {
-  const check = workoutLoadCheck({ structure }, sport);
-  if (Math.abs(check.total - length) > 5 || check.hard > cap || enduranceSystem(structure, sport) !== type) return false;
-  if (!band) return true;
-  const d = difficultyFromStructure(type, structure, sport);
-  return d >= band[0] - 1 && d <= band[1] + 1;
+export function composeFits(args) { return composeFaults(args).length === 0; }
+
+// The library workout of the brief's type nearest its length, with the
+// difficulty inside the band itself, under the hard-minute cap and with its
+// efforts apart, resized to the length; null when the library has none.
+export async function libraryFallback(env, { sport = "ride", type, length, cap, band = null }) {
+  const list = await catalog(env.DB, sport).catch(() => []);
+  const aim = band ? band[0] + (band[1] - band[0]) / 3 : null;
+  const fits = list.filter(w => w.primary_system === type).map(w => {
+    const resized = resizeWorkout(w, length);
+    let structure = [];
+    try { structure = JSON.parse(resized.structure_json || "[]"); } catch { return null; }
+    const d = Number(resized.difficulty);
+    // A curated workout may run a surge straight after a tempo step; the other checks hold.
+    if (composeFaults({ structure, sport, type, length, cap, band }).some(f => !f.startsWith("efforts")) || (band && (d < band[0] || d > band[1]))) return null;
+    return { resized, score: Math.abs(Number(resized.duration_minutes) - length) + (aim == null ? 0 : Math.abs(d - aim)) };
+  }).filter(Boolean).sort((a, b) => a.score - b.score);
+  if (!fits.length) return null;
+  const w = fits[0].resized;
+  return { ...w, ai: { reason: L("Z knihovny: ", "From the library: ") + w.name } };
+}
+
+// The checks the workout failed, each with its number: "length 52 min", "hard 30 min over 22", "type endurance", "difficulty 5.7".
+export function composeFaults({ structure, sport = "ride", type, length, cap, band = null }) {
+  const check = workoutLoadCheck({ structure }, sport), faults = [];
+  if (Math.abs(check.total - length) > 5) faults.push(`length ${Math.round(check.total)} min`);
+  if (check.hard > cap) faults.push(`hard ${Math.round(check.hard)} min over ${cap}`);
+  const system = enduranceSystem(structure, sport);
+  if (system !== type) faults.push(`type ${system}`);
+  if (band) {
+    const d = difficultyFromStructure(type, structure, sport);
+    if (!(d >= band[0] - 1 && d <= band[1] + 1)) faults.push(`difficulty ${d}`);
+  }
+  if (effortsBackToBack(structure, sport)) faults.push("efforts back to back");
+  return faults;
+}
+
+// Two efforts with no recovery between them: an effort as its own section
+// right before the repeat, or a repeat that ends with an effort (Coach
+// evaluation runs 27 and 28: 4 + 4×4 min VO2max, 8 + 2×8 min tempo).
+export function effortsBackToBack(structure = [], sport = "ride") {
+  const kinds = stepIntensities(structure, sport), flat = [];
+  structure.forEach((block, i) => {
+    const list = Array.isArray(kinds[i]) ? kinds[i] : [kinds[i]];
+    for (let k = 0; k < (Array.isArray(block.steps) ? Math.max(1, Number(block.repeats) || 1) : 1); k++) flat.push(...list);
+  });
+  return flat.some((kind, i) => kind === "interval" && flat[i - 1] === "interval");
 }
 
 function newId() {

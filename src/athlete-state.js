@@ -113,11 +113,15 @@ export function assertTrainingAllowed(state) {
 }
 // A single bad value cannot diagnose illness or injury. Only suggest a break,
 // based on multiple recent signals, and always let the athlete decide.
-export function proactiveAdvice({ date, fitness = {}, health = {}, week = {}, state = {} }) {
+export function proactiveAdvice({ date, fitness = {}, health = {}, week = {}, state = {}, readiness = null }) {
   if (state.status !== 'active') return null;
   // HRV and resting HR from the watch where Intervals.icu has none: without
-  // Intervals the form rows carry only the load (own-fitness.js).
-  const signals = reflectionSignals({ date, wellness: fillWellness(fitness.wellness || [], health.wellness || []), sleep: health.sleep || [] }).filter(s => ['sleep_short', 'hrv_low', 'rhr_high', 'tsb_low', 'tsb_chronic'].includes(s.id));
+  // Intervals the form rows carry only the load (own-fitness.js). With the
+  // day's readiness (readiness.js) its HRV and resting HR with their normal
+  // win, the numbers Today and the Health detail show.
+  const c = readiness?.components || {}, part = x => (x && x.value != null && x.baseline != null ? { value: x.value, usual: x.baseline } : null);
+  const body = readiness ? { hrv: part(c.hrv), restingHR: part(c.restingHR) } : null;
+  const signals = reflectionSignals({ date, wellness: fillWellness(fitness.wellness || [], health.wellness || []), sleep: health.sleep || [], body }).filter(s => ['sleep_short', 'hrv_low', 'rhr_high', 'tsb_low', 'tsb_chronic'].includes(s.id));
   if (signals.length < 2) return null;
   const id = date + ':recovery';
   if (state.dismissed?.includes(id)) return null;
