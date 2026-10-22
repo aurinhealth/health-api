@@ -29,7 +29,7 @@ test('public pages use the app’s light palette',async()=>{
 test('the overview follows the app section by section and every file it loads exists',async()=>{
   const html=await overviewPage(new Request('https://petrfitnessdata.eu/')).text();
   for(const id of ['spanek','pripravenost','zatez','trenink','posilovna','rezim','svaly','vyziva','kouc','propojeni','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
-  const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/petrfitnessdata\.eu)?\/site\/([^"]+)"/g)].map(m=>m[1]))];
+  const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/petrfitnessdata\.eu)?\/site\/([^"?]+)(?:\?[^"]*)?"/g)].map(m=>m[1]))];
   assert.ok(files.includes('og-en.png'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
@@ -44,6 +44,21 @@ test('the overview follows the app section by section and every file it loads ex
   const script=html.match(/var LABEL=\{([^}]+)\}/)[1];
   for(const [,id] of script.matchAll(/(\w+):'/g))assert.ok(existsSync(new URL(`../public/site/${base}z-${id}.webp`,import.meta.url)),'close-up '+id);
   assert.doesNotMatch(html,/undefined/,'every icon and text the page draws exists');
+});
+
+// Link previews: a large image card on X, Facebook, LinkedIn, Slack and iMessage, with icons that exist.
+test('every public page carries a link preview with the share image and icons',async()=>{
+  for(const page of [overviewPage,privacyPage,termsPage,supportPage,healthDataPage]){
+    const html=await page(new Request('https://aurin.health/')).text();
+    for(const tag of ['og:title','og:description','og:image','og:image:alt','og:url'])assert.match(html,new RegExp('<meta property="'+tag+'" content="[^"]+">'),tag);
+    assert.match(html,/<meta name="twitter:card" content="summary_large_image">/);
+    assert.match(html,/<meta name="twitter:image" content="https:\/\/aurin\.health\/site\/og-en\.png\?v=\d+">/,'versioned, so the networks pick up a new render');
+    for(const [,file] of html.matchAll(/<link rel="(?:icon|apple-touch-icon)" href="\/([^"]+)"/g))
+      if(file!=='logo.svg')assert.ok(existsSync(new URL(`../public/${file}`,import.meta.url)),file);
+    assert.match(html,/<link rel="apple-touch-icon" href="\/apple-touch-icon\.png">/);
+  }
+  const description=(await overviewPage().text()).match(/<meta name="description" content="([^"]+)">/)[1];
+  assert.ok(description.length<=160,'Google cuts a longer description: '+description.length);
 });
 
 // The phones show the app's sample morning (screenshots from ios-native.yml), so the numbers floating
