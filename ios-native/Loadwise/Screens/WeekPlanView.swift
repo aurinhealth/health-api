@@ -540,15 +540,22 @@ struct WeekPlanView: View {
         }
     }
 
-    /// "Odebrat z plánu": the session goes and the rest of the week is planned
-    /// again without it: by the AI with its proposal, or the layout without
-    /// that sport on the day.
-    private func remove(_ id: UUID) async {
+    /// "Odebrat z plánu": the session goes. "Jen odebrat" keeps the rest as it
+    /// is; "Odebrat a přepočítat" plans the rest of the week again without it:
+    /// by the AI with its proposal, or the layout without that sport on the day.
+    private func remove(_ id: UUID, recalculate: Bool) async {
         // The detail closes first: its session must not go while it shows it.
         try? await Task.sleep(for: .milliseconds(500))
         guard let i = sessions.firstIndex(where: { $0.id == id }) else { return }
         let gone = sessions[i], before = sessions
         check = nil
+        if !recalculate {
+            let w = ISODay.weekdayIndex(gone.date)
+            if let k = days[w].firstIndex(of: gone.sport) { days[w].remove(at: k) }
+            withAnimation { sessions.remove(at: i) }
+            if !sessions.isEmpty { await runCheck() }
+            return
+        }
         if mode == "ai" {
             let correction = L10n.f("Odeber %@ (%@) a zbytek týdne přepočítej.", sportLabel(gone.sport).lowercased(), Fmt.dayHeading(gone.date).lowercased())
             await proposeAI(correction: correction, removed: gone)
@@ -566,9 +573,9 @@ struct WeekPlanView: View {
     }
 
     /// The detail's "Odebrat z plánu" until the week is in the calendar.
-    private func removal(_ id: UUID) -> (() -> Void)? {
+    private func removal(_ id: UUID) -> ((Bool) -> Void)? {
         guard !sessions.contains(where: { $0.status == .saved }) else { return nil }
-        return { Task { await remove(id) } }
+        return { recalculate in Task { await remove(id, recalculate: recalculate) } }
     }
 
     /// A session that is new or changed after a removal, with what the day had before.
@@ -700,8 +707,8 @@ struct WeekSessionDetailView: View {
     @Binding var session: WeekSessionDraft
     let others: [WeekSessionDraft]
     let weekStart: String
-    /// "Odebrat z plánu", nil once the week is in the calendar.
-    var onRemove: (() -> Void)? = nil
+    /// "Odebrat z plánu" (true: and recalculate the rest), nil once the week is in the calendar.
+    var onRemove: ((Bool) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var asking = false
     @State private var busy = false
@@ -802,12 +809,16 @@ struct WeekSessionDetailView: View {
                         .buttonStyle(.plain)
                         .disabled(busy)
                         .confirmationDialog(L10n.f("Odebrat „%@“?", session.title), isPresented: $confirmRemove, titleVisibility: .visible) {
-                            Button("Odebrat a přepočítat", role: .destructive) {
+                            Button("Jen odebrat", role: .destructive) {
                                 dismiss()
-                                onRemove()
+                                onRemove(false)
+                            }
+                            Button("Odebrat a přepočítat") {
+                                dismiss()
+                                onRemove(true)
                             }
                         } message: {
-                            Text("Ostatní tréninky týdne se přepočítají.")
+                            Text("Ostatní tréninky můžeš nechat, jak jsou, nebo je nechat přepočítat.")
                         }
                     }
                 }
