@@ -263,7 +263,7 @@ struct ActivityDetailView: View {
                     }
                     if !model.demo, session.status == "done" {
                         Menu {
-                            if session.activityId != nil {
+                            if typeSource != nil {
                                 Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
                             }
                             Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
@@ -303,9 +303,17 @@ struct ActivityDetailView: View {
         .sheet(isPresented: $feedback, onDismiss: { feedbackClosed += 1 }) { FeedbackSheet(session: session) }
         .sheet(isPresented: $sharing) { ShareSheet(source: .activity(model.liveSession(session), withRoute)) }
         .sheet(isPresented: $changingType) {
-            ActivityTypeSheet(activityId: session.id, current: detail?.activity.type, source: "intervals") { dismiss() }
+            ActivityTypeSheet(activityId: session.id, current: detail?.activity.type, source: typeSource) { dismiss() }
         }
         .task { await load() }
+    }
+
+    /// Where Změnit typ aktivity goes: Intervals.icu, or the watch's own record
+    /// (Google Health, Apple Health, Wahoo), whose change stays in Aurin.
+    private var typeSource: String? {
+        if session.activityId != nil { return "intervals" }
+        if let watch = session.watch, watch.id == session.id { return watch.source }
+        return nil
     }
 
     /// The detail with the iPhone's own route when it has none.

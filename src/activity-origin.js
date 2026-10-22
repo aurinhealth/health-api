@@ -35,3 +35,20 @@ export function watchOrigin(family) {
   if (family === 'wahoo') return { name: 'Wahoo', logo: 'wahoo' };
   return null;
 }
+
+// Who recorded a watch workout. Apple Health names the app or device that
+// wrote it (sourceName): Google Health's iPhone app copies the Fitbit's
+// workouts there, so one of those is Google Health's, with Google's logo.
+export function watchRecorder(family, sourceName) {
+  if (family !== 'apple-health') return watchOrigin(family);
+  const name = String(sourceName || '').trim();
+  if (/aurin|loadwise/i.test(name)) return { name: 'Aurin', logo: 'aurin' };
+  if (/watch/i.test(name)) return { name: 'Apple Watch', logo: 'apple' };
+  if (/iphone/i.test(name)) return { name: 'iPhone', logo: 'apple' };
+  for (const [match, origin] of DEVICES) if (origin.logo !== 'apple' && match.test(name)) return origin;
+  return { name: name ? name.slice(0, 40) : 'Apple Health', logo: 'apple' };
+}
+
+// An Apple Health workout Google Health's iPhone app wrote: a copy of one
+// Google Health has itself (apple-health.js keeps Google's, which follows edits).
+export const fromGoogleApp = sourceName => watchRecorder('apple-health', sourceName).logo === 'google';

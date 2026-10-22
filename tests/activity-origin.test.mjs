@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { intervalsOrigin, watchOrigin } from '../src/activity-origin.js';
+import { intervalsOrigin, watchOrigin, watchRecorder, fromGoogleApp } from '../src/activity-origin.js';
 
 test('an Intervals.icu activity names the device or service that recorded it', () => {
   assert.deepEqual(intervalsOrigin({ source: 'OAUTH_CLIENT', device_name: 'Wahoo ELEMNT BOLT' }), { name: 'Wahoo', logo: 'wahoo' });
@@ -15,4 +15,15 @@ test('a watch workout names its health app', () => {
   assert.equal(watchOrigin('google-wearables').name, 'Google Health');
   assert.equal(watchOrigin('apple-health').logo, 'apple');
   assert.equal(watchOrigin('other'), null);
+});
+
+test('an Apple Health workout names the app that wrote it, with its logo', () => {
+  assert.deepEqual(watchRecorder('apple-health', 'Google Health'), { name: 'Google Health', logo: 'google' });
+  assert.deepEqual(watchRecorder('apple-health', 'Fitbit'), { name: 'Google Health', logo: 'google' });
+  assert.deepEqual(watchRecorder('apple-health', 'Apple Watch uživatele Petr'), { name: 'Apple Watch', logo: 'apple' });
+  assert.deepEqual(watchRecorder('apple-health', 'Ultrahuman'), { name: 'Ultrahuman', logo: 'ultrahuman' });
+  assert.deepEqual(watchRecorder('apple-health', ''), { name: 'Apple Health', logo: 'apple' });
+  assert.deepEqual(watchRecorder('google-wearables', 'Apple Watch'), { name: 'Google Health', logo: 'google' });
+  assert.equal(fromGoogleApp('Google Health'), true);
+  assert.equal(fromGoogleApp('Apple Watch'), false);
 });

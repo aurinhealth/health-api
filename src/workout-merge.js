@@ -17,6 +17,7 @@ import { sessionOf, overlapShare, activityKindOf } from "./activity-match.js";
 import { localDateTime } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { L } from "./lang.js";
+import { watchRecorder } from "./activity-origin.js";
 
 const parse = json => { if (json && typeof json === "object") return json; try { return JSON.parse(json || "{}") || {}; } catch { return {}; } };
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -30,12 +31,7 @@ export const keyOf = row => row.source_family + ":" + row.external_id;
 // Who recorded a watch workout, with the logo the app shows for it
 // (IntegrationIcon): Apple Health names the app or device in sourceName.
 export function recorderOf(row, payload = parse(row.payload_json)) {
-  if (row.source_family === "google-wearables") return { name: "Google Health", logo: "google" };
-  const name = String(payload.sourceName || "").trim();
-  if (/aurin|loadwise/i.test(name)) return { name: "Aurin", logo: "aurin" };
-  if (/watch/i.test(name)) return { name: "Apple Watch", logo: "apple" };
-  if (/iphone/i.test(name)) return { name: "iPhone", logo: "apple" };
-  return { name: name ? name.slice(0, 40) : "Apple Health", logo: "apple" };
+  return watchRecorder(row.source_family === "google-wearables" ? "google-wearables" : "apple-health", payload.sourceName);
 }
 
 // The devices behind a watch workout: both after a merge, else its own.
