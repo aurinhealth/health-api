@@ -80,3 +80,23 @@ test("the choices offered follow the connected sources", () => {
   assert.deepEqual(priorityChoices(["google", "apple", "intervals"]), { night: ["google", "apple"], day: ["google", "apple"] });
   assert.deepEqual(priorityChoices(["ultrahuman", "apple"]), { night: ["ultrahuman", "apple"], day: ["apple"] });
 });
+
+test("an evening nap from the band stays when the watch's night wins the day", async () => {
+  const { raw, db } = setup();
+  const sleep = (family, id, start, end, nap) => raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,start_time,end_time,payload_json) VALUES(1,?,'sleep',?,?,?,?)")
+    .run(family, id, start, end, JSON.stringify({ sleep: { interval: { startTime: start, endTime: end }, metadata: { nap } } }));
+  // The watch every night, the band only some: the watch is home.
+  for (let i = 0; i < 10; i++) sleep("apple-health", "an" + i, day(i + 1) + "T22:00:00Z", day(i) + "T05:00:00Z", false);
+  sleep("google-wearables", "gn", day(1) + "T22:00:00Z", day(0) + "T05:00:00Z", false);
+  sleep("google-wearables", "gnap", day(0) + "T17:26:00Z", day(0) + "T18:53:00Z", true);
+  await resolveSources(db, 1, { since: day(30), now: NOW });
+  assert.equal(role(raw, "google-wearables", "gn"), "duplicate", "the night is the watch's");
+  assert.equal(role(raw, "apple-health", "an0"), "primary");
+  assert.equal(role(raw, "google-wearables", "gnap"), "primary", "the nap only the band measured is kept");
+  // Both measured the nap: the home device's copy counts, once.
+  sleep("apple-health", "anap", day(0) + "T17:30:00Z", day(0) + "T18:50:00Z", true);
+  await resolveSources(db, 1, { since: day(30), now: NOW });
+  assert.equal(role(raw, "apple-health", "anap"), "primary");
+  assert.equal(role(raw, "google-wearables", "gnap"), "duplicate");
+  assert.equal(await resolveSources(db, 1, { since: day(30), now: NOW }), 0);
+});
