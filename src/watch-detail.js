@@ -39,7 +39,7 @@ export function parseTcx(xml, start) {
 
 // Heart rate through [start, end) from the stored samples: 10-second averages
 // (5-minute rows once the samples are older than two weeks), seconds from start.
-async function storedHeartRate(db, userId, start, end) {
+export async function storedHeartRate(db, userId, start, end) {
   const s = Date.parse(start), e = Date.parse(end);
   if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s || e - s > 24 * 3600e3) return [];
   const bpm = "CAST(COALESCE(value_numeric, json_extract(payload_json, '$.heartRate.beatsPerMinute')) AS REAL)";

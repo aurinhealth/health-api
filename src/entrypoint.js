@@ -112,6 +112,7 @@ import { handleIntervalsWebhook } from "./intervals-webhook.js";
 import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
 import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman, FIRST_IMPORT_DAYS } from "./ultrahuman.js";
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
+import { wahooDetail } from "./wahoo-detail.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, readWahooTokens, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
 import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
@@ -1881,10 +1882,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!detail)return failed;
     return Response.json(detail,{headers:{'Cache-Control':'private, no-store'}});
   }
-  // A workout from the watch (Apple Health, Google Health): summary, heart rate, zones, route.
+  // A workout from the watch (Apple Health, Google Health) or Wahoo: summary, curves, zones, route.
   if(url.pathname==='/app/api/activity-detail/watch'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
-    const detail=await watchDetail(env,{source:url.searchParams.get('source'),id:url.searchParams.get('id'),...await watchOptions(env)}).catch(error=>{console.error('Watch detail failed',error.message);return null;});
+    const source=url.searchParams.get('source'),id=url.searchParams.get('id');
+    const detail=await (source==='wahoo'?wahooDetail(env,{id,...await watchOptions(env)}):watchDetail(env,{source,id,...await watchOptions(env)})).catch(error=>{console.error('Watch detail failed',error.message);return null;});
     if(!detail)return Response.json({message:L('Aktivita není v tvé synchronizované historii.', 'The activity isn\'t in your synced history.')},{status:404});
     return Response.json(detail,{headers:{'Cache-Control':'private, no-store'}});
   }
@@ -2655,5 +2657,5 @@ function logoResponse() {
 // token for the route of a watch workout (watch-detail.js).
 async function watchOptions(env){
   const t=await athleteThresholds(env).catch(()=>null);
-  return {hrZones:t?.hrZones||[],token:grantedExtras(env).location?()=>googleToken(env):null};
+  return {hrZones:t?.hrZones||[],thresholds:t,token:grantedExtras(env).location?()=>googleToken(env):null};
 }

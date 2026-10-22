@@ -57,19 +57,31 @@ struct SleepDetailContent: View {
                 }
             }
 
-            if let hr = detail?.night?.hr, hr.count > 3 {
+            if let night = detail?.night, let hr = night.hr, hr.count > 3 {
                 SectionLabel(text: "Tělo během noci").padding(.top, 30)
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Tep").font(.body)
-                    Spacer()
-                    if let stats = detail?.night?.stats {
-                        Text(L10n.f("průměr %@ · nejníž %@", Fmt.int(stats.avgHr), Fmt.int(stats.lowHr))).font(Typo.small).foregroundStyle(Palette.muted)
+                // Opens Tep ve spánku with the night already loaded here.
+                NavigationLink { SleepHeartRateView(health: health, night: night) } label: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Tep").font(.body).foregroundStyle(Palette.ink)
+                            Spacer()
+                            Text(verbatim: Fmt.int(night.stats?.avgHr)).font(Typo.number(22)).foregroundStyle(Palette.ink)
+                            Text("bpm").font(Typo.small).foregroundStyle(Palette.faint)
+                            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                        }
+                        .padding(.vertical, 13)
+                        let end = SleepHeartRate.end(night)
+                        NightHeartChart(hr: hr, low: SleepHeartRate.low(night), end: end, height: 78)
+                            .padding(.top, 2)
+                        NightStageStrip(segments: night.segments ?? [], end: end).padding(.top, 6)
+                        NightClockRow(night: night).padding(.top, 6)
                     }
+                    .contentShape(Rectangle())
                 }
-                .padding(.top, 14)
-                let values = hr.compactMap(\.avg)
-                LineChart(values: values, color: Palette.rust, lo: (values.min() ?? 40) - 2, hi: (values.max() ?? 70) + 2, height: 70)
-                    .padding(.top, 6)
+                .buttonStyle(PressableCardStyle())
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(L10n.f("Tep ve spánku, průměr %@ bpm", Fmt.int(night.stats?.avgHr)))
+                .accessibilityIdentifier("open.sleepHeartRate")
             }
             VStack(spacing: 0) {
                 if let stats = detail?.night?.stats, let hrv = stats.hrv {

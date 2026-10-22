@@ -2734,6 +2734,14 @@
 "Kouč na obrazovkách" = "Coach on screens";
 "Rada kouče" = "Coach's advice";
 "Vypnutá rada kouče se na obrazovce neukáže. Na kartě ji můžeš také jen sbalit šipkou. Tip na regeneraci na Dnes zůstává a chat s koučem funguje dál." = "When it is off, the coach's advice does not show on that screen. You can also just fold it with the arrow on the card. The recovery tip on Today stays and the chat with the coach keeps working.";
+/* Tep ve spánku (SleepHeartRate.swift) */
+"Tep ve spánku" = "Heart rate during sleep";
+"Průměrný tep ve spánku" = "Average heart rate during sleep";
+"Během noci" = "Through the night";
+"Výkyvy" = "Spikes";
+"Podle fáze spánku" = "By sleep stage";
+"Tep po nocích" = "Heart rate night by night";
+"Tep ve spánku, průměr %@ bpm" = "Heart rate during sleep, average %@ bpm";
 "Kontrola týdne" = "Week check";
 "Místo toho protažení · %@" = "Stretching instead · %@";
 "Lehčí trénink" = "Easier session";
@@ -2741,3 +2749,5 @@
 "Upraveno. Tréninky níže jsou podle kontroly." = "Done. The sessions below follow the check.";
 "Posílat data do AI funkcí" = "Send data to the AI features";
 "Kouč a rozpoznání jídla pošlou potřebné údaje o zdraví společnosti OpenAI v USA. Jde to vypnout v Nastavení." = "The coach and food recognition send the health data they need to OpenAI in the USA. You can turn this off in Settings.";
+"Vybrat fotku" = "Choose photo";
+"Na fotce jsem kód nenašel." = "No barcode found in the photo.";

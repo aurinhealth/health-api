@@ -1,6 +1,7 @@
 // Last night in detail for the morning card: the stage timeline (hypnogram),
 // heart rate in 5-minute buckets with its spikes, HRV through the night and
-// the previous nights for comparison. Reads only the signed-in user's rows.
+// the previous nights for comparison, with their average heart rate. Reads
+// only the signed-in user's rows.
 import { sleepSessionFromRow, joinSplitNights } from "./sleep-sessions.js";
 import { localDateTime } from "./user-time.js";
 
@@ -54,7 +55,7 @@ export function nightStats(segments, hr = [], hrv = []) {
 export async function nightDetail(db, { date }) {
   const rows = (await db.prepare(`SELECT external_id, source_family, start_time, end_time, payload_json FROM health_datapoints
     WHERE user_id=? AND source_family IN ('google-wearables','apple-health','ultrahuman','whoop') AND data_type='sleep' AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate')
-    ORDER BY start_time DESC LIMIT 60`).bind(db.userId, shift(date, -9), date + "T23:59:59Z").all()).results || [];
+    ORDER BY start_time DESC LIMIT 120`).bind(db.userId, shift(date, -16), date + "T23:59:59Z").all()).results || [];
   const seen = new Set(), sessions = [];
   for (const row of rows) {
     const s = sleepSessionFromRow(row), key = s.startTime + "|" + s.endTime;
@@ -73,29 +74,26 @@ export async function nightDetail(db, { date }) {
     .map(x => ({ date: x.date, asleepMin: x.durationMin, inBedMin: x.timeInBedMin, stages: x.stages, bedClock: clockMin(x.startTime, x.offset), wakeClock: clockMin(x.endTime, x.offset) }));
   if (!last) return { status: "ok", date, night: null, history };
   const between = [db.userId, last.startTime, last.endTime];
-  const [rawHr, compactHr, hrvRows] = await Promise.all([
-    db.prepare(`SELECT (CAST(strftime('%s', sample_time) AS INTEGER) / 300) * 300 AS bucket,
-        AVG(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS avg,
-        MIN(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS min,
-        MAX(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS max
-      FROM health_datapoints WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<?
-      GROUP BY bucket ORDER BY bucket`).bind(...between).all().then(r => r.results || []).catch(() => []),
-    // Nights older than two weeks keep heart rate as 5-minute rows (heart-rate-compaction.js).
-    db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS bucket, value_numeric AS avg,
-        json_extract(payload_json, '$.min') AS min, json_extract(payload_json, '$.max') AS max
-      FROM health_datapoints WHERE user_id=? AND data_type='heart-rate-5min' AND sample_time>=? AND sample_time<?
-      ORDER BY sample_time`).bind(...between).all().then(r => r.results || []).catch(() => []),
+  // The 13 nights before it, for the average heart rate night by night.
+  const earlier = [...byDay.values()].filter(x => x.date < date).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 13);
+  const [hrRows, earlierHr, hrvRows] = await Promise.all([
+    heartRateBuckets(db, [last]),
+    earlier.length ? heartRateBuckets(db, earlier) : [],
     db.prepare(`SELECT sample_time, json_extract(payload_json, '$.heartRateVariability.rootMeanSquareOfSuccessiveDifferencesMilliseconds') AS rmssd
       FROM health_datapoints WHERE user_id=? AND data_type='heart-rate-variability' AND sample_time>=? AND sample_time<?
       ORDER BY sample_time LIMIT 400`).bind(...between).all().then(r => r.results || []).catch(() => [])
   ]);
-  const buckets = new Map(compactHr.map(r => [n(r.bucket), r]));
-  for (const r of rawHr) buckets.set(n(r.bucket), r);
-  const hrRows = [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => r);
   const t0 = ms(last.startTime), round = v => v == null ? null : Math.round(v * 10) / 10;
   const hr = hrRows.map(r => ({ m: Math.round((n(r.bucket) * 1000 - t0) / 60000), avg: round(n(r.avg)), min: n(r.min), max: n(r.max) })).filter(b => b.avg != null && b.avg > 20 && b.avg < 220);
   const hrv = hrvRows.map(r => ({ m: Math.round((ms(r.sample_time) - t0) / 60000), ms: round(n(r.rmssd)) })).filter(x => x.ms != null && x.ms > 0 && x.ms < 300);
   const segments = nightSegments(last.payload.stages || last.payload.sleepStages, last.startTime);
+  const nightHr = x => {
+    const a = ms(x.startTime) / 1000, b = ms(x.endTime) / 1000;
+    const avgs = earlierHr.filter(r => n(r.bucket) >= a && n(r.bucket) < b).map(r => n(r.avg)).filter(v => v != null && v > 20 && v < 220);
+    return avgs.length >= 12 ? Math.round(mean(avgs)) : null;
+  };
+  const stats = nightStats(segments, hr, hrv);
+  const hrNights = [...earlier.map(x => ({ date: x.date, avgHr: nightHr(x) })).reverse(), { date, avgHr: stats?.avgHr ?? null }].filter(x => x.avgHr != null);
   const usual = key => mean(history.map(h => n(h[key])).filter(v => v != null));
   const usualStage = key => mean(history.map(h => n(h.stages?.[key])).filter(v => v != null));
   return {
@@ -103,8 +101,33 @@ export async function nightDetail(db, { date }) {
     night: {
       start: last.startTime, end: last.endTime, offset: last.offset, inBedMin: last.timeInBedMin, asleepMin: last.durationMin, stages: last.stages,
       bedClock: clockMin(last.startTime, last.offset), wakeClock: clockMin(last.endTime, last.offset),
-      segments, hr, hrv, stats: nightStats(segments, hr, hrv),
+      segments, hr, hrv, stats, hrNights,
       usual: { asleepMin: usual("asleepMin"), bedClock: usual("bedClock"), wakeClock: usual("wakeClock"), deep: usualStage("DEEP"), rem: usualStage("REM"), nights: history.length }
     }
   };
+}
+
+// Heart rate in 5-minute buckets within the given nights: the raw samples, and
+// for nights older than two weeks the 5-minute rows they were compacted into
+// (heart-rate-compaction.js). A raw bucket wins over a compacted one.
+async function heartRateBuckets(db, nights) {
+  const within = nights.map(() => "(sample_time>=? AND sample_time<?)").join(" OR ");
+  // The outer range keeps the scan on the index; the windows pick the nights in it.
+  const from = nights.map(x => x.startTime).sort()[0], to = nights.map(x => x.endTime).sort().at(-1);
+  const args = [db.userId, from, to, ...nights.flatMap(x => [x.startTime, x.endTime])];
+  const [raw, compact] = await Promise.all([
+    db.prepare(`SELECT (CAST(strftime('%s', sample_time) AS INTEGER) / 300) * 300 AS bucket,
+        AVG(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS avg,
+        MIN(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS min,
+        MAX(CAST(json_extract(payload_json, '$.heartRate.beatsPerMinute') AS REAL)) AS max
+      FROM health_datapoints WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<? AND (${within})
+      GROUP BY bucket ORDER BY bucket`).bind(...args).all().then(r => r.results || []).catch(() => []),
+    db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS bucket, value_numeric AS avg,
+        json_extract(payload_json, '$.min') AS min, json_extract(payload_json, '$.max') AS max
+      FROM health_datapoints WHERE user_id=? AND data_type='heart-rate-5min' AND sample_time>=? AND sample_time<? AND (${within})
+      ORDER BY sample_time`).bind(...args).all().then(r => r.results || []).catch(() => [])
+  ]);
+  const buckets = new Map(compact.map(r => [n(r.bucket), r]));
+  for (const r of raw) buckets.set(n(r.bucket), r);
+  return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => r);
 }

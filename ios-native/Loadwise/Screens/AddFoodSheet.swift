@@ -195,9 +195,9 @@ struct AddFoodSheet: View {
             answers[key] = found
             if !Task.isCancelled { results = found }
             message = nil
-        } catch is CancellationError {
         } catch {
-            message = error.localizedDescription
+            // Typing on cancels the previous search; URLSession then throws "cancelled".
+            if !AppModel.isCancellation(error) { message = error.localizedDescription }
         }
     }
 

@@ -166,7 +166,7 @@ struct WeekSessionsList: View {
         // its detail is the planned one, where it can move or be deleted.
         if s.kind == "planned", let id = s.eventId, id.hasPrefix("planned:local-"), s.sport == "strength" { return .planned(s) }
         if s.kind == "gym" || s.sport == "strength" { return .gym(s.date) }
-        // An activity from another source (Wahoo, typed in) opens too: its
+        // An activity from another source (typed in) opens too: its
         // numbers from the list, with the ⋯ to delete it.
         if s.kind == "activity" { return .activity(s) }
         if s.kind == "planned", s.eventId != nil { return .planned(s) }
@@ -330,7 +330,7 @@ struct ActivityDetailView: View {
     }
 
     /// Intervals.icu's detail (with the watch's heart rate and route where it
-    /// has none) or the watch workout's own; an Apple route from the iPhone.
+    /// has none) or the watch (or Wahoo) workout's own; an Apple route from the iPhone.
     private func load() async {
         guard detail == nil else { return }
         if model.demo { error = L10n.tr("V ukázce se detail nenačítá."); return }
@@ -376,7 +376,7 @@ struct ActivityOriginLine: View {
     }
 }
 
-/// An activity without a source detail (Wahoo, typed in): time, load and energy.
+/// An activity without a source detail (typed in): time, load and energy.
 private struct BasicActivityNumbers: View {
     let session: WeekSession
     var kcal: Double?
