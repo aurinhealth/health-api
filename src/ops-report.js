@@ -139,8 +139,8 @@ async function aiSection(env, date) {
   if (!exists) return null;
   await ensureAiUsage(env.DB);
   const rows = (await env.DB.prepare(`SELECT COALESCE(u.email, '#' || a.user_id) AS email, a.feature, COUNT(*) AS calls, SUM(a.cost_usd) AS cost, SUM(a.input_tokens) AS input, SUM(a.cached_tokens) AS cached
-    FROM ai_usage a LEFT JOIN users u ON u.id = a.user_id WHERE a.day = ? AND a.model != 'pending' GROUP BY a.user_id, a.feature`).bind(date).all()).results || [];
+    FROM ai_usage a LEFT JOIN users u ON u.id = a.user_id WHERE a.day = ? AND a.model NOT IN ('pending', 'carried-over') GROUP BY a.user_id, a.feature`).bind(date).all()).results || [];
   const month = (await env.DB.prepare(`SELECT COALESCE(u.email, '#' || a.user_id) AS email, SUM(a.cost_usd) AS cost
-    FROM ai_usage a LEFT JOIN users u ON u.id = a.user_id WHERE a.day >= ? AND a.day <= ? AND a.model != 'pending' GROUP BY a.user_id`).bind(date.slice(0, 8) + "01", date).all()).results || [];
+    FROM ai_usage a LEFT JOIN users u ON u.id = a.user_id WHERE a.day >= ? AND a.day <= ? AND a.model NOT IN ('pending', 'carried-over') GROUP BY a.user_id`).bind(date.slice(0, 8) + "01", date).all()).results || [];
   return aiReport(rows, month, aiMonthlyLimitUsd(env));
 }

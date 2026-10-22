@@ -54,14 +54,20 @@ export async function ensureAiUsage(db) {
 
 // The coach chat, which the daily guard does not cover.
 export const COACH_CHAT_FEATURE = "assistant";
+// What a new account took over from a deleted one of the same person
+// (ai-limit-memory.js): rows of this model; the rest of the month's spending
+// sits on the 1st under CARRIED_MONTH_FEATURE, which the daily guard leaves out.
+export const CARRIED_MODEL = "carried-over";
+export const CARRIED_MONTH_FEATURE = "carried-over-month";
 
-// Today's spending under the daily guard: everything but the coach chat.
+// Today's spending under the daily guard: everything but the coach chat (and a
+// carried-over month).
 // A running call counts at its reservation (claimAiSlot); exceptId leaves one
 // row out, the call that is asking.
 export async function aiSpentToday(env, { exceptId = 0 } = {}) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') != ? AND id != ?").bind(env.USER_ID, localToday(), COACH_CHAT_FEATURE, Number(exceptId) || 0).first();
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') NOT IN (?, ?) AND id != ?").bind(env.USER_ID, localToday(), COACH_CHAT_FEATURE, CARRIED_MONTH_FEATURE, Number(exceptId) || 0).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
