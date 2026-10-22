@@ -37,6 +37,10 @@ export const MANAGED_TYPES = [...NIGHT, ...DAY_HOURLY, ...DAY_DAILY].flat();
 const PART = Object.fromEntries([...NIGHT.flat().map(t => [t, 'night']), ...[...DAY_HOURLY, ...DAY_DAILY].flat().map(t => [t, 'day'])]);
 
 const DAY_OF = "substr(COALESCE(sample_time,end_time,start_time),1,10)";
+// A nap competes only with naps of the same day, not with the night: the
+// device that measured the night often was not worn for an evening nap, and
+// keyed together the other device's nap was set aside with its night.
+const SLEEP_KEY = `${DAY_OF} || CASE WHEN json_valid(payload_json) THEN CASE WHEN json_extract(payload_json, '$.sleep.metadata.nap') THEN '|nap' ELSE '' END ELSE '' END`;
 const HOUR_OF = 'substr(start_time,1,13)';
 const WINDOW_DAYS = 30;
 const addDays = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
@@ -152,7 +156,7 @@ export async function resolveSources(db, userId, { part, types, since, now = Dat
         WHERE user_id = ? AND source_family = ? AND data_type IN (${names}) AND record_role = 'duplicate' AND matched_activity_id IN ${OURS} AND COALESCE(sample_time,end_time,start_time) >= ? AND ${keyExpr} IN (SELECT value FROM json_each(?))`).bind(userId, f, from, JSON.stringify(keep.get(f))));
     }
   };
-  for (const g of night) await apply(g, DAY_OF, 'night', d => home(hist.night, d));
+  for (const g of night) await apply(g, g[0] === 'sleep' ? SLEEP_KEY : DAY_OF, 'night', d => home(hist.night, d));
   for (const g of hourly) await apply(g, HOUR_OF, 'day', d => home(hist.wear, d));
   for (const g of daily) await apply(g, DAY_OF, 'day', d => home(hist.wear, d));
   let changed = 0;
