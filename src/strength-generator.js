@@ -1394,7 +1394,7 @@ export function generateStrengthPlan(context, options = {}) {
   // sleep, a sick check-in) leave the gym out today, as the ride and the run
   // (Revize doporučování tréninků 2026-10-16, nález 22).
   const today=context?.adaptive?.recovery,ill=(today?.flags||[]).some(f=>/^(respiration|skin_temp|wrist_temp)_elevated$/.test(f))||context?.checkin==='sick';
-  if(!options.diagnosticPreview&&(today?.zone==='red'||ill))throw new Error(ill?L('Dech nebo teplota ve spánku jsou vyšší než obvykle, může jít o začátek nemoci. Posilovnu dnes vynech, nanejvýš lehké protažení.','Your breathing or temperature in sleep is higher than usual, which may be an oncoming illness. Skip the gym today, at most some easy stretching.'):L('Připravenost je dnes nízká (červená zóna). Posilovnu dnes vynech, nanejvýš lehké protažení.','Readiness is low today (red zone). Skip the gym today, at most some easy stretching.'));
+  if(!options.diagnosticPreview&&(today?.zone==='red'||ill))throw new Error(ill?L('Dech nebo teplota ve spánku jsou nad tvým normálem. Posilovnu dnes vynech, nanejvýš lehké protažení.','Your breathing or temperature in sleep is above your normal. Skip the gym today, at most some easy stretching.'):L('Připravenost je dnes nízká (červená zóna). Posilovnu dnes vynech, nanejvýš lehké protažení.','Readiness is low today (red zone). Skip the gym today, at most some easy stretching.'));
   options = { ...options, focus: normalizeGymFocus(options.focus) };
   const pain = painfulExercises(context?.athleteState?.memories);
   if (pain.avoid.size) options = { ...options, excludeExercises: [...(options.excludeExercises || []), ...pain.avoid] };

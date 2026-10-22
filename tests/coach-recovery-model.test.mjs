@@ -85,5 +85,5 @@ test('a red morning or signs of illness leave the gym out today',()=>{
   breathing.wellnessSeries=breathing.wellnessSeries.map(r=>r.id===date?r:{...r,respiration:14+(Number(r.id.slice(-1))%2)*0.2});
   breathing.strength={recentCompletedSets:[]};breathing.adaptive=buildAdaptiveDecision(breathing);
   assert.ok(breathing.adaptive.recovery.flags.includes('respiration_elevated'));
-  assert.throws(()=>generateStrengthPlan(breathing,{maxExercises:6}),/začátek nemoci|oncoming illness/);
+  assert.throws(()=>generateStrengthPlan(breathing,{maxExercises:6}),/nad tvým normálem|above your normal/);
 });

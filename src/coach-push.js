@@ -63,7 +63,7 @@ export function coachNudge({ date, hour, zone = null, illness = null, recovery =
     };
   }
   if (morning && hour < MORNING_TO_HOUR && illness) {
-    return { kind: 'illness', title: illness.headline, body: L('Na Dnes můžeš přepnout na Nemoc a zrušit tréninky do té doby.', 'On Today you can switch to Sick and cancel the sessions until then.') };
+    return { kind: 'illness', title: illness.headline, body: L('Dnes raději lehce. Když se necítíš dobře, na Dnes můžeš přepnout na Nemoc a zrušit tréninky.', 'Keep today easy. If you feel unwell, on Today you can switch to Sick and cancel the sessions.') };
   }
   if (morning && hour < MORNING_TO_HOUR && recovery) {
     const hard = upcoming.find(u => (u.date === date || u.date === shift(date, 1)) && HARD_KINDS.has(u.kind) && MIN_MINUTES[u.sport]);

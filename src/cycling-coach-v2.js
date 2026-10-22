@@ -268,12 +268,12 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
   if(bh&&br&&bh.z<=-1&&br.z>=1)readinessReasons.push(L("HRV i klidový tep zároveň ukazují na výraznou únavu","HRV and resting heart rate both point to significant fatigue"));
   if(bh?.trend==="down")readinessReasons.push(L("7denní průměr HRV klesl pod tvoje běžné pásmo","the 7-day HRV average has dropped below your usual range"));
   if(bs&&bs.performance<85)readinessReasons.push(L("spánek "+Math.round(bs.minutes/60*10)/10+" h z potřebných "+Math.round(bs.need/60*10)/10+" h","sleep "+Math.round(bs.minutes/60*10)/10+" h of the "+Math.round(bs.need/60*10)/10+" h you need"));
-  if(body.flags?.includes("respiration_elevated"))readinessReasons.push(L("dech ve spánku je výrazně nad tvým průměrem, může jít o nastupující nemoc","breathing during sleep is well above your average, which may be an oncoming illness"));
-  if(body.flags?.includes("skin_temp_elevated"))readinessReasons.push(L("teplota kůže ve spánku je zvýšená, může jít o nastupující nemoc","skin temperature during sleep is raised, which may be an oncoming illness"));
+  if(body.flags?.includes("respiration_elevated"))readinessReasons.push(L("dech ve spánku je výrazně nad tvým průměrem","breathing during sleep is well above your average"));
+  if(body.flags?.includes("skin_temp_elevated"))readinessReasons.push(L("teplota kůže ve spánku je nad tvým průměrem","skin temperature during sleep is above your average"));
   // Apple Watch's wrist temperature in sleep against the athlete's own nights:
   // from +1.0 °C a reason of its own, as a possible oncoming illness.
   const bw=body.components?.wristTemp;
-  if(bw?.elevated)readinessReasons.push(L("teplota zápěstí ve spánku je o "+bw.deviation.toFixed(1).replace(".",",")+" °C nad tvým průměrem, může jít o nastupující nemoc","wrist temperature during sleep is "+bw.deviation.toFixed(1)+" °C above your average, which may be an oncoming illness"));
+  if(bw?.elevated)readinessReasons.push(L("teplota zápěstí ve spánku je o "+bw.deviation.toFixed(1).replace(".",",")+" °C nad tvým průměrem","wrist temperature during sleep is "+bw.deviation.toFixed(1)+" °C above your average"));
   // Without the body's signals (no watch, or under 14 days of baseline) the
   // load decides, and only fatigue data plus a full night allow green.
   let readiness=ready.zone||(farAhead||tsb!=null&&sleepMinutes!=null&&sleepMinutes>=420?"green":"yellow");
@@ -465,8 +465,8 @@ export function buildCyclingCoachV2({date,daily,week,fitness,health,gym,preferen
       adaptations.push(L("nízká připravenost: jen krátká regenerace","low readiness: only a short recovery session"));
     } else if(illness){
       if(quality()||kind==="long_endurance")kind="endurance";
-      capAt(run?40:60,L("možný začátek nemoci","possible oncoming illness"));
-      adaptations.push(L("dech nebo teplota ve spánku jsou vyšší, může jít o začátek nemoci: bez intenzity a krátce","breathing or temperature in sleep are raised, which may be an oncoming illness: no intensity and short"));
+      capAt(run?40:60,L("dech nebo teplota ve spánku nad normálem","breathing or temperature in sleep above normal"));
+      adaptations.push(L("dech nebo teplota ve spánku jsou nad normálem: bez intenzity a krátce","breathing or temperature in sleep are above normal: no intensity and short"));
     } else if(cycleEase&&!insisted&&(quality()||kind==="long_endurance")){
       kind="endurance";capAt(run?30:45,L("menstruace","period"));
       adaptations.push(L("menstruace se silným krvácením, křečemi nebo únavou: dnes lehce a krátce","period with heavy flow, cramps or fatigue: easy and short today"));
