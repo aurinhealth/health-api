@@ -145,11 +145,18 @@ struct AddFoodSheet: View {
         }
         .fullScreenCover(isPresented: $scanning) { BarcodeScanSheet(meal: meal, onLogged: { dismiss() }) }
         .fullScreenCover(item: Binding(get: { photoMode.map { Named(name: $0) } }, set: { photoMode = $0?.name })) { mode in
-            CameraPicker { image in
-                photoMode = nil
-                if let image { Task { await read(image, mode: mode.name) } }
+            if mode.name == "label" {
+                LabelCameraSheet { image in
+                    photoMode = nil
+                    Task { await read(image, mode: mode.name) }
+                }
+            } else {
+                CameraPicker { image in
+                    photoMode = nil
+                    if let image { Task { await read(image, mode: mode.name) } }
+                }
+                .ignoresSafeArea()
             }
-            .ignoresSafeArea()
         }
     }
 

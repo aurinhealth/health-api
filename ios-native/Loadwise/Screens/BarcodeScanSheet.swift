@@ -150,7 +150,7 @@ struct BarcodeScanSheet: View {
         }
     }
 
-    private static var hasTorch: Bool { torchDevice?.hasTorch ?? false }
+    static var hasTorch: Bool { torchDevice?.hasTorch ?? false }
 
     /// The scanner's own lens: locking another camera for the light while the
     /// scanner's session ran froze the picture.
@@ -161,7 +161,7 @@ struct BarcodeScanSheet: View {
     nonisolated private static let torchQueue = DispatchQueue(label: "health.aurin.torch")
 
     /// The back camera's light, which the scanner's camera session keeps on.
-    nonisolated private static func setTorch(_ on: Bool) {
+    nonisolated static func setTorch(_ on: Bool) {
         torchQueue.async {
             guard let device = torchDevice, device.hasTorch, device.isTorchModeSupported(on ? .on : .off) else { return }
             guard (device.torchMode == .on) != on else { return }
