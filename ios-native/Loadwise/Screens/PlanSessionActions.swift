@@ -4,7 +4,7 @@ import SwiftUI
 
 /// How a session of the week stands against the plan (Training → Tréninky
 /// týdne). The server sends adherence for the done ones (src/app-training.js):
-/// length and load within ±15 % of the plan, in the gym 80 % of the sets.
+/// "good" within 85–115 % of the plan, with the percent itself (compliance).
 enum PlanState: CaseIterable {
     case good, off, missed, upcoming, offPlan
 
@@ -67,12 +67,39 @@ enum PlanState: CaseIterable {
 
     var detail: String {
         switch self {
-        case .good: return "délka a intenzita do ±15 % plánu"
-        case .off: return "kratší, delší nebo jinak intenzivní"
+        case .good: return "85–115 % plánu"
+        case .off: return "méně nebo víc, než byl plán"
         case .missed: return "plán bez aktivity"
         case .upcoming: return "naplánováno dopředu"
         case .offPlan: return "aktivita navíc, třeba chůze"
         }
+    }
+}
+
+/// "Splnění plánu": the percent of a planned workout that was done, coloured
+/// the same both ways from the plan (src/plan-compliance.js complianceBand).
+enum ComplianceScale {
+    /// Lower bound, upper bound, colour, word; both ways from the plan.
+    static let bands: [(ClosedRange<Int>, Color, String)] = [
+        (0...49, Palette.red, "Zlomek plánu"), (50...69, Palette.rust, "Výrazně méně"), (70...84, Palette.amber, "Méně než plán"),
+        (85...115, Palette.green, "Podle plánu"),
+        (116...130, Palette.amber, "Víc než plán"), (131...150, Palette.rust, "Výrazně víc"), (151...Int.max, Palette.red, "Přes plán")
+    ]
+
+    static func color(_ percent: Int) -> Color {
+        bands.first { $0.0.contains(max(0, percent)) }?.1 ?? Palette.red
+    }
+
+    /// "Podle plánu", "Výrazně víc"…, in the app language.
+    static func word(_ percent: Int) -> String {
+        L10n.tr(bands.first { $0.0.contains(max(0, percent)) }?.2 ?? "Přes plán")
+    }
+
+    /// "50–69 %", "pod 50 %", "nad 150 %".
+    static func rangeText(_ range: ClosedRange<Int>) -> String {
+        if range.lowerBound == 0 { return L10n.f("pod %@ %%", String(range.upperBound + 1)) }
+        if range.upperBound == Int.max { return L10n.f("nad %@ %%", String(range.lowerBound - 1)) }
+        return "\(range.lowerBound)–\(range.upperBound) %"
     }
 }
 
@@ -82,9 +109,11 @@ struct PlanStateIcon: View {
     let symbol: String
     let state: PlanState
     var size: CGFloat = 36
+    /// A done session's percent of the plan: its colour instead of the state's.
+    var percent: Int? = nil
 
     var body: some View {
-        let color: Color = state.color
+        let color: Color = (state == .good || state == .off) ? percent.map(ComplianceScale.color) ?? state.color : state.color
         let dash: [CGFloat] = state == .upcoming ? [3, 3] : []
         Image(systemName: symbol)
             .font(.system(size: size * 0.42, weight: .medium))
@@ -119,27 +148,42 @@ struct WeekSessionsHeader: View {
 /// "Co znamenají barvy": the five states, one line each.
 struct PlanColorsLegend: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Co znamenají barvy")
-                .font(Typo.sentence(28, relativeTo: .title))
-                .foregroundStyle(Palette.ink)
-                .padding(.bottom, 12)
-            ForEach(Array(PlanState.allCases.enumerated()), id: \.offset) { index, state in
-                if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                HStack(spacing: 14) {
-                    PlanStateIcon(symbol: state == .offPlan ? "figure.walk" : "figure.outdoor.cycle", state: state, size: 40)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(verbatim: L10n.tr(state.title)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(verbatim: L10n.tr(state.detail)).font(Typo.caption).foregroundStyle(Palette.muted)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Co znamenají barvy")
+                    .font(Typo.sentence(28, relativeTo: .title))
+                    .foregroundStyle(Palette.ink)
+                    .padding(.bottom, 12)
+                ForEach(Array(PlanState.allCases.enumerated()), id: \.offset) { index, state in
+                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    HStack(spacing: 14) {
+                        PlanStateIcon(symbol: state == .offPlan ? "figure.walk" : "figure.outdoor.cycle", state: state, size: 40)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: L10n.tr(state.title)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            Text(verbatim: L10n.tr(state.detail)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 0)
+                    .padding(.vertical, 10)
+                    .accessibilityElement(children: .combine)
                 }
-                .padding(.vertical, 10)
-                .accessibilityElement(children: .combine)
+                Text("Splnění plánu")
+                    .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    .padding(.top, 22).padding(.bottom, 4)
+                ForEach(Array(ComplianceScale.bands.enumerated()), id: \.offset) { index, band in
+                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    HStack(spacing: 12) {
+                        Circle().fill(band.1).frame(width: 10, height: 10)
+                        Text(verbatim: ComplianceScale.rangeText(band.0)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(width: 96, alignment: .leading)
+                        Text(verbatim: L10n.tr(band.2)).font(Typo.body).foregroundStyle(Palette.muted)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 8)
+                    .accessibilityElement(children: .combine)
+                }
             }
-            Spacer(minLength: 0)
+            .padding(24)
         }
-        .padding(24)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .presentationBackground(Palette.background)

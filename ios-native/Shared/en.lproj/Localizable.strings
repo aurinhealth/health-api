@@ -1376,8 +1376,6 @@
 "Neodjeto" = "Missed";
 "Čeká" = "Upcoming";
 "Mimo plán" = "Outside the plan";
-"délka a intenzita do ±15 % plánu" = "length and intensity within ±15% of the plan";
-"kratší, delší nebo jinak intenzivní" = "shorter, longer or a different intensity";
 "plán bez aktivity" = "a plan with no activity";
 "naplánováno dopředu" = "planned ahead";
 "aktivita navíc, třeba chůze" = "an extra activity, a walk for instance";
@@ -2751,3 +2749,31 @@
 "Kouč a rozpoznání jídla pošlou potřebné údaje o zdraví společnosti OpenAI v USA. Jde to vypnout v Nastavení." = "The coach and food recognition send the health data they need to OpenAI in the USA. You can turn this off in Settings.";
 "Vybrat fotku" = "Choose photo";
 "Na fotce jsem kód nenašel." = "No barcode found in the photo.";
+
+/* Splnění plánu (src/plan-compliance.js) */
+"Splnění plánu" = "Plan completion";
+"Splnění" = "Completion";
+"Zlomek plánu" = "A fraction of the plan";
+"Výrazně méně" = "Much less";
+"Méně než plán" = "Less than planned";
+"Víc než plán" = "More than planned";
+"Výrazně víc" = "Much more";
+"Přes plán" = "Well over the plan";
+"pod %@ %%" = "under %@%%";
+"nad %@ %%" = "over %@%%";
+"%@ %% plánu" = "%@%% of plan";
+"85–115 % plánu" = "85–115% of the plan";
+"méně nebo víc, než byl plán" = "less or more than planned";
+"Úseky v pásmu" = "Reps in range";
+"Intervaly v pásmu" = "Intervals in range";
+"Plán a skutečnost" = "Plan and actual";
+"V pásmu" = "In range";
+"Pod" = "Under";
+"Nad" = "Over";
+"chybí" = "missing";
+"pod pásmem" = "below range";
+"nad pásmem" = "above range";
+"Zátěž %@ z plánovaných %@" = "Load %@ of the planned %@";
+"Čas %@ z plánovaných %@" = "Time %@ of the planned %@";
+"Vzdálenost %@ z plánovaných %@" = "Distance %@ of the planned %@";
+"vynecháno" = "skipped";

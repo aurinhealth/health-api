@@ -12,6 +12,7 @@ import { weekWeather, dayHours } from "./adaptive-week.js";
 import { ensureGymPlans } from "./gym-plan-store.js";
 import { localToday } from "./user-time.js";
 import { mondayOfDate, shiftDate } from "./dashboard-shared.js";
+import { gymCompliance } from "./plan-compliance.js";
 
 // The active training plan in a week (training-plans.js): how many quality
 // days and what load the week planner makes, and its sessions on the chips.
@@ -106,7 +107,7 @@ export async function trainingGymPlans(env,from,to){
     const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);
     // done: sets per exercise that were ticked off (Hotovo) or have reps written in.
     const isDone=x=>['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))||Number(x?.[6])>0,count=list=>list.reduce((m,x)=>{const n=String(x[1]).slice(0,80);m[n]=(m[n]||0)+1;return m;},{});
-    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],sets:rows.length,logged:rows.filter(isDone).length,setsBy:count(rows),done:count(rows.filter(isDone)),...(types[r.workout_date]?{type:types[r.workout_date]}:{})};
+    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],sets:rows.length,logged:rows.filter(isDone).length,compliance:gymCompliance(rows.map(x=>({type:String(x[0]||'WORK'),exercise:String(x[1]).slice(0,80),plannedKg:x[3],plannedReps:x[4],actualKg:x[5],actualReps:x[6],completed:['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))})))?.percent??null,setsBy:count(rows),done:count(rows.filter(isDone)),...(types[r.workout_date]?{type:types[r.workout_date]}:{})};
   }
   return out;
 }

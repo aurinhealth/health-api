@@ -29,6 +29,14 @@ struct CalendarDay: Decodable, Equatable, Identifiable {
     /// Two devices recorded one workout: the proposal to merge them (src/workout-merge.js).
     var merge: MergeProposal? = nil
     var id: String { date }
+
+    /// The day's percent of the plan: the mean of its done sessions that had a
+    /// plan; nil when none had one.
+    var compliance: Int? {
+        let values = activities.filter { $0.status == "done" }.compactMap(\.compliance)
+        guard !values.isEmpty else { return nil }
+        return Int((Double(values.reduce(0, +)) / Double(values.count)).rounded())
+    }
 }
 
 /// Two records of one workout (Aurin and the Apple Watch), with the times and
@@ -91,6 +99,8 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
     /// Who recorded it, and after a merge whose calories count (WeekSession.sources).
     var sources: [ActivityDetail.Origin]? = nil
     var mergeEnergy: String? = nil
+    /// Percent of its plan done (WeekSession.compliance).
+    var compliance: Int? = nil
 
     struct Summary: Decodable, Equatable {
         let source: String?
@@ -108,7 +118,7 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
         return WeekSession(id: id, kind: kind, status: status, date: date, time: time, title: title, sport: sport,
                            minutes: rounded, tss: nil, activityId: activityId, eventId: eventId, plannedId: plannedId,
                            watch: watchRef, adherence: adherence, adherenceReason: adherenceReason,
-                           sources: sources, mergeEnergy: mergeEnergy)
+                           sources: sources, mergeEnergy: mergeEnergy, compliance: compliance)
     }
 
     /// A done session from the watch or Wahoo opens its own detail.

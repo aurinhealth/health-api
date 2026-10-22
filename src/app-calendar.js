@@ -186,6 +186,7 @@ export function buildCalendar({ start, end, today, activities = [], google = [],
       const s = byId.get(pair.id);
       rest.adherence = s?.adherence || "offplan";
       if (s?.adherenceReason) rest.adherenceReason = s.adherenceReason;
+      if (s?.compliance != null) rest.compliance = s.compliance;
       if (s?.plannedId) {
         rest.plannedId = s.plannedId;
         const plan = dayPlans.find(w => w.id === s.plannedId);
@@ -208,7 +209,7 @@ export function buildCalendar({ start, end, today, activities = [], google = [],
     if (gymSession && gymPlan) {
       items.push({
         id: gymSession.id, sport: gymSession.sport || "strength", ...(gymPlan.type ? { type: gymPlan.type, source: "gym" } : {}), status: gymSession.status, title: gymSession.title, date, time: null, minutes: null, km: null, kcal: null, activityId: null, eventId: null, exercises: gymPlan.exercises.length,
-        ...(gymSession.adherence ? { adherence: gymSession.adherence } : {}), ...(gymSession.adherenceReason ? { adherenceReason: gymSession.adherenceReason } : {})
+        ...(gymSession.adherence ? { adherence: gymSession.adherence } : {}), ...(gymSession.adherenceReason ? { adherenceReason: gymSession.adherenceReason } : {}), ...(gymSession.compliance != null ? { compliance: gymSession.compliance } : {})
       });
     }
   }

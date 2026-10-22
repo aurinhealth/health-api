@@ -9,6 +9,7 @@ import { sessionLoad } from "./training-load.js";
 import { athleteFocus } from "./athlete-focus.js";
 import { localDateTime } from "./user-time.js";
 import { L } from "./lang.js";
+import { complianceBand, enduranceCompliance } from "./plan-compliance.js";
 import { workloadMetrics } from "./workload-ratio.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -90,27 +91,35 @@ export function eventPlan(event, date) {
   return { name: event.name || null, date: event.date, daysLeft: left, phase, phases };
 }
 
-// How a done session kept to its plan (Training → Tréninky týdne colours it):
-// "good" when its length and load (TSS) are within ±15 % of the plan and, in
-// the gym, at least 80 % of the planned sets were logged; "off" with a short
-// reason otherwise. Nothing to compare (a stub without data) counts as good.
-const PLAN_MARGIN = 0.15, GYM_SETS = 0.8;
+// How a done session kept to its plan (Training → Tréninky týdne and the
+// calendar colour it and show the percent): compliance is the percent of the
+// plan that was done (plan-compliance.js), "good" within 85–115 % of it, "off"
+// with a short reason otherwise. In the gym the percent comes from the sets
+// against the plan (gym.compliance), else from the share of sets logged.
+// Nothing to compare (a stub without data) counts as good, without a percent.
+const PLAN_MARGIN = 0.15;
 const hm = minutes => minutes >= 60 ? Math.floor(minutes / 60) + " h" + (minutes % 60 ? " " + String(minutes % 60).padStart(2, "0") : "") : minutes + " min";
 export function adherenceOf(done = {}, plan = {}, gym = null) {
   const sets = num(gym?.sets), logged = num(gym?.logged);
   if (sets > 0 && logged > 0) {
-    return logged >= sets * GYM_SETS ? { adherence: "good" } : { adherence: "off", adherenceReason: L("jen " + logged + " z " + sets + (sets === 1 ? " série" : " sérií"), "only " + logged + " of " + sets + (sets === 1 ? " set" : " sets")) };
+    const compliance = num(gym.compliance) ?? Math.round(logged / sets * 100);
+    if (complianceBand(compliance) === "good") return { adherence: "good", compliance };
+    return { adherence: "off", compliance, adherenceReason: logged < sets ? L("jen " + logged + " z " + sets + (sets === 1 ? " série" : " sérií"), "only " + logged + " of " + sets + (sets === 1 ? " set" : " sets")) : compliance > 100 ? L("víc než plán", "more than planned") : L("méně než plán", "less than planned") };
   }
+  const compliance = enduranceCompliance(done, plan)?.percent ?? null;
   const ratio = (a, p) => (a > 0 && p > 0 ? a / p - 1 : null);
   const planMinutes = num(plan.durationHours) ? Math.round(num(plan.durationHours) * 60) : null;
   const length = ratio(num(done.durationHours), num(plan.durationHours));
   const load = ratio(num(done.tss), num(plan.tss));
+  const withPercent = compliance != null ? { compliance } : {};
+  if (compliance != null && complianceBand(compliance) === "good") return { adherence: "good", ...withPercent };
   if (length != null && Math.abs(length) > PLAN_MARGIN) {
-    return { adherence: "off", adherenceReason: length < 0 ? L("kratší než plán (" + hm(planMinutes) + ")", "shorter than planned (" + hm(planMinutes) + ")") : L("delší než plán (" + hm(planMinutes) + ")", "longer than planned (" + hm(planMinutes) + ")") };
+    return { adherence: "off", ...withPercent, adherenceReason: length < 0 ? L("kratší než plán (" + hm(planMinutes) + ")", "shorter than planned (" + hm(planMinutes) + ")") : L("delší než plán (" + hm(planMinutes) + ")", "longer than planned (" + hm(planMinutes) + ")") };
   }
   if (load != null && Math.abs(load) > PLAN_MARGIN) {
-    return { adherence: "off", adherenceReason: load > 0 ? L("vyšší intenzita než plán", "harder than planned") : L("nižší intenzita než plán", "easier than planned") };
+    return { adherence: "off", ...withPercent, adherenceReason: load > 0 ? L("vyšší intenzita než plán", "harder than planned") : L("nižší intenzita než plán", "easier than planned") };
   }
+  if (compliance != null) return { adherence: "off", ...withPercent, adherenceReason: compliance > 100 ? L("víc než plán", "more than planned") : L("méně než plán", "less than planned") };
   return { adherence: "good" };
 }
 

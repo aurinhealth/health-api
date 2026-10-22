@@ -39,6 +39,9 @@ struct GymDoneDetail: View {
             if let session, session.kcal != nil, session.kcalEstimate?.value != nil {
                 KcalCheck(session: session, date: date)
             }
+            // "Splnění plánu": the sets against the plan, every exercise's percent.
+            GymComplianceSection(date: date, reload: day.exercises.flatMap(\.sets).filter(\.done).count)
+                .padding(.top, 18)
             if day.exercises.isEmpty {
                 Text("Série z tohoto tréninku tu zatím nejsou. Přidej cviky, ať se počítají do historie a příštích návrhů.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 18)
