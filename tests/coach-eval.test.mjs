@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS, effortsBackToBackText } from '../src/coach-eval.js';
+import { COACH_EVAL_SCENARIOS, scenarioById, scenarioContext, checkReply, cardKind, runScenario, runComposeScenario, handleCoachEval, COACH_EVAL_DATE, coachEvalPrincipal, COACH_EVAL_AUDIENCE, COACH_EVAL_WORKFLOWS, effortsBackToBackText } from '../src/coach-eval.js';
 import { coachInstructionsFor, assistantTask } from '../src/coach-assistant.js';
 import { isPublicPath } from '../src/dashboard-auth.js';
 import { lang } from '../src/lang.js';
@@ -390,4 +390,20 @@ test('runs 27/28: efforts back to back, VO2max the day after the long ride, a co
   assert.ok(!at('S24', 'Dnes bych místo VO2max jel 75 minut lehce. Zítra 40 min lehce: jízda má nechat nohy čerstvé na neděli; při nedostatku času ji vynech.', today).includes('každá změna z textu má kartu'));
   assert.ok(!at('S15', 'Dnes bych místo VO2max jel lehce. Po nedělní jízdě bude rozhodující, zda udržíš výkon; při horší připravenosti dej místo intervalů lehkou vytrvalost.', today).includes('každá změna z textu má kartu'));
   assert.ok(at('S24', 'Dnes bych místo VO2max jel 75 minut lehce. Nedělní dlouhou jízdu vynech.', today).includes('každá změna z textu má kartu'));
+});
+
+test('run 35: every run plays Wednesday 2026-10-21, and "ponechal bych" is no change', async () => {
+  assert.equal(COACH_EVAL_DATE, '2026-10-21');
+  assert.equal(new Date(COACH_EVAL_DATE + 'T12:00:00Z').getUTCDay(), 3, 'a Wednesday');
+  // runScenario without a date: the coach sees the fixed day, whatever today is.
+  let seen = null;
+  const ask = async (env, message, ctx) => { seen = ctx; return { status: 'ok', answer: 'Dnes lehce.', actions: [], model: 'test' }; };
+  await runScenario({}, scenarioById('S29'), { ask });
+  assert.equal(seen.appContext.date, COACH_EVAL_DATE);
+  // S15, run 35: keeping Friday's long ride needs no card, cancelling it does.
+  const today = [{ type: 'rest', eventId: 'planned:9001', date: COACH_EVAL_DATE, sport: 'ride' }, { type: 'workout', date: COACH_EVAL_DATE, sport: 'ride', minutes: 60, kind: 'endurance', card: 'endurance' }];
+  const at = answer => checkReply(scenarioById('S15'), { answer, kept: today, proposed: today }).filter(c => !c.ok).map(c => c.name);
+  assert.ok(!at('Dnes bych místo VO2max jel lehce. V pátek bych ponechal dlouhou jízdu.').includes('každá změna z textu má kartu'));
+  assert.ok(!at('Dnes bych místo VO2max jel lehce. V pátek bych nechal dlouhou jízdu, jak je; v sobotu po ní volno.').includes('každá změna z textu má kartu'));
+  assert.ok(at('Dnes bych místo VO2max jel lehce. Páteční dlouhou jízdu bych zrušil.').includes('každá změna z textu má kartu'));
 });
