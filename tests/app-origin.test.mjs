@@ -42,9 +42,9 @@ test("www.aurin.health leads to aurin.health, other hosts pass", () => {
 test("the public pages link to the host they are served on, aurin.health by default", async () => {
   for (const origin of hosts) {
     const html = await (await overviewPage(new Request(origin + "/"))).text();
-    assert.match(html, new RegExp(`<meta property="og:image" content="${origin}/site/og-en\\.png">`));
+    assert.match(html, new RegExp(`<meta property="og:image" content="${origin}/site/og-en\\.png\\?v=\\d+">`));
     assert.match(html, new RegExp(`<meta property="og:url" content="${origin}/">`));
-    assert.match(html, new RegExp(`<meta name="twitter:image" content="${origin}/site/og-en\\.png">`));
+    assert.match(html, new RegExp(`<meta name="twitter:image" content="${origin}/site/og-en\\.png\\?v=\\d+">`));
     assert.match(html, /<meta name="twitter:card" content="summary_large_image">/);
     const ld = JSON.parse(html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);
     assert.equal(ld['@graph'][0]['@type'], 'SoftwareApplication');
@@ -53,7 +53,7 @@ test("the public pages link to the host they are served on, aurin.health by defa
     const privacy = await (await privacyPage(new Request(origin + "/privacy"))).text();
     assert.match(privacy, new RegExp(`hreflang="cs" href="${origin}/privacy\\?lang=cs"`));
   }
-  assert.match(await overviewPage().text(), /content="https:\/\/aurin\.health\/site\/og-en\.png"/);
+  assert.match(await overviewPage().text(), /content="https:\/\/aurin\.health\/site\/og-en\.png\?v=\d+"/);
   const unknown = await (await privacyPage(new Request("https://evil.example/privacy"))).text();
   assert.match(unknown, /<link rel="canonical" href="https:\/\/aurin\.health\/privacy">/);
 });

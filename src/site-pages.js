@@ -505,6 +505,11 @@ card.addEventListener('click',function(e){if(e.target===card||e.target.closest('
 addEventListener('keydown',function(e){if(e.key==='Escape'&&card.classList.contains('on'))hide();});
 })();</script>`;
 
+// The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
+// for days by its URL, so ?v= goes up whenever og-en.png is rendered again.
+const SHARE_IMAGE = '/site/og-en.png?v=2';
+const SHARE_IMAGE_ALT = 'Aurin: Train for how you feel today. The Today screen with readiness 78.';
+
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null}) {
   const self = `${origin}${path}${lang === 'cs' ? '?lang=cs' : ''}`;
   const html = `<!doctype html>
@@ -520,20 +525,25 @@ function sitePage({title, description, lang, origin, path, body, czech=false, in
 <meta property="og:type" content="website">
 <meta property="og:url" content="${self}">
 <meta property="og:site_name" content="Aurin">
-<meta property="og:image" content="${origin}/site/og-en.png">
+<meta property="og:image" content="${origin}${SHARE_IMAGE}">
+<meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="${SHARE_IMAGE_ALT}">
 <meta property="og:locale" content="${lang === 'cs' ? 'cs_CZ' : 'en_US'}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="@aurin_health">
 <meta name="twitter:title" content="${title}">
 <meta name="twitter:description" content="${description}">
-<meta name="twitter:image" content="${origin}/site/og-en.png">
+<meta name="twitter:image" content="${origin}${SHARE_IMAGE}">
+<meta name="twitter:image:alt" content="${SHARE_IMAGE_ALT}">
 <link rel="canonical" href="${self}">
 ${czech ? `<link rel="alternate" hreflang="en" href="${origin}${path}">\n<link rel="alternate" hreflang="cs" href="${origin}${path}?lang=cs">` : ''}
 ${index ? '' : '<meta name="robots" content="noindex">'}
 ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-96.png" type="image/png" sizes="96x96">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preload" href="/site/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/site/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin>
 <style>${themeTokens}${siteCss}${demoCss}</style>
@@ -732,11 +742,11 @@ ${layer('wide')}${layer('tall')}
   // The sample morning (DemoData.swift) the hero phone shows; the sentence under the hero says the same.
   const day = {readiness: 78, hrv: 64, hrvBaseline: 58, sleep: '7:12', sleepScore: 82};
 
-  const description = 'Aurin for iPhone reads your sleep, HRV and workouts from Apple Health, Google Health and Intervals.icu, shows your readiness every morning and plans your training and food around it.';
+  const description = 'Aurin for iPhone reads sleep, HRV and workouts from Apple Health and Google Health, shows your readiness each morning and plans training and food.';
   // What search engines read about the app (schema.org); the overview text says the same.
   const jsonLd = {'@context': 'https://schema.org', '@graph': [
     {'@type': 'SoftwareApplication', name: 'Aurin', url: origin, description, applicationCategory: 'HealthApplication',
-     operatingSystem: 'iOS', image: `${origin}/site/og-en.png`, screenshot: `${origin}/site/app/today.webp`,
+     operatingSystem: 'iOS', image: `${origin}${SHARE_IMAGE}`, screenshot: `${origin}/site/app/today.webp`,
      offers: {'@type': 'Offer', price: '0', priceCurrency: 'USD', availability: 'https://schema.org/PreOrder', description: 'Free test version in TestFlight'},
      publisher: {'@id': `${origin}/#org`}},
     {'@type': 'Organization', '@id': `${origin}/#org`, name: 'Aurin', url: origin, logo: `${origin}/logo.svg`,
