@@ -9,7 +9,7 @@ import { gymLoadEstimate } from '../src/gym-catalog.js';
 const evalGymOf = id => scenarioById(id).athlete.gym(date);
 
 const date = '2026-10-16', now = '2026-10-16 07:40', staging = { ENVIRONMENT: 'staging' };
-const failed = (id, reply) => checkReply(scenarioById(id), reply).filter(c => !c.ok).map(c => c.severity + ':' + c.name);
+const failed = (id, reply) => checkReply(scenarioById(id), reply, now, date).filter(c => !c.ok).map(c => c.severity + ':' + c.name);
 const czech = 'Dnes bych intervaly nejel, připravenost je červená. Dej si lehkou jízdu.';
 
 test('the situations get the readiness they are about', () => {
@@ -266,10 +266,12 @@ test('S28/S29: the week check proposes easing a heavy weekend only when the athl
   assert.equal(tired.state, 'tired');
   assert.ok(tired.proposedChanges.some(c => c.date >= '2026-10-19' && ['planned:9103', 'planned:9105'].includes(c.eventId)));
   assert.equal(scenarioContext(scenarioById('S29'), date, now).ctx.weekLoad, undefined);
+  // Asked on Wednesday 2026-10-21, so the planned weekend falls on Saturday and Sunday.
+  const wed = '2026-10-21', at = (id, reply) => checkReply(scenarioById(id), reply, wed + ' 07:40', wed).filter(c => !c.ok).map(c => c.severity + ':' + c.name);
   const answer = 'Na tvůj stav je toho o víkendu moc, sobotní posilovnu bych přesunul.';
-  assert.deepEqual(failed('S28', { answer, kept: [{ type: 'move', eventId: 'planned:9103', date: '2026-10-21' }] }), []);
-  assert.ok(failed('S28', { answer: 'Zvládneš to, jen jez.', kept: [] }).includes('quality:kouč navrhne zrušit nebo přesunout víkendovou aktivitu'));
-  assert.ok(failed('S29', { answer: 'Zvládneš to, víkend nech, jak je.', kept: [{ type: 'rest', eventId: 'planned:9104' }] }).includes('quality:kouč víkend nezruší ani nepřesune'));
+  assert.deepEqual(at('S28', { answer, kept: [{ type: 'move', eventId: 'planned:9103', date: wed }] }), []);
+  assert.ok(at('S28', { answer: 'Zvládneš to, jen jez.', kept: [] }).includes('quality:kouč navrhne zrušit nebo přesunout víkendovou aktivitu'));
+  assert.ok(at('S29', { answer: 'Zvládneš to, víkend nech, jak je.', kept: [{ type: 'rest', eventId: 'planned:9104' }] }).includes('quality:kouč víkend nezruší ani nepřesune'));
 });
 
 test('run 18: the text and the cards say the same, the app clears the planned ride, today is "dnes"', () => {
