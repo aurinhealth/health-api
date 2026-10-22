@@ -89,6 +89,25 @@ struct WeekSessionDraft: Identifiable, Equatable {
     }
 }
 
+/// "Plán týdne" built but not yet in the calendar, by the week's Monday: it
+/// waits while the athlete leaves the screen (to the coach, the calendar…)
+/// and comes back, until it is saved or planned again. Kept for this run of
+/// the app; a sign-out clears it.
+struct WeekPlanDraft {
+    var mode: String
+    var days: [[String]]
+    var sessions: [WeekSessionDraft]
+    var summary: String?
+    var notice: String?
+    var warnings: [WeekProposalResponse.Warning]
+    var check: WeekCheck?
+    var checkApplied: Bool
+}
+
+enum WeekPlanDraftMemory {
+    static var drafts: [String: WeekPlanDraft] = [:]
+}
+
 struct WeekPlanView: View {
     @Environment(AppModel.self) private var model
     @State private var weekStart = WeekPlanView.monday()
@@ -159,12 +178,59 @@ struct WeekPlanView: View {
                 }
             }
         }
-        .task { if plan == nil { await load() } }
-        .onChange(of: weekStart) { _, _ in
+        .task {
+            if sessions.isEmpty { await restore() }
+            if plan == nil { await load() }
+        }
+        .onChange(of: weekStart) { old, _ in
+            keep(old)
             sessions = []
             check = nil
             summary = nil
-            Task { await load() }
+            Task {
+                await restore()
+                await load()
+            }
+        }
+        .onChange(of: sessions) { _, _ in keep(weekStart) }
+        .onChange(of: check) { _, _ in keep(weekStart) }
+        .onDisappear { keep(weekStart) }
+    }
+
+    // MARK: The unsaved week
+
+    /// The built week waits for the athlete (WeekPlanDraftMemory); a saved or
+    /// emptied one is forgotten.
+    private func keep(_ week: String) {
+        guard !model.demo else { return }
+        if sessions.isEmpty || sessions.allSatisfy({ $0.status == .saved }) {
+            WeekPlanDraftMemory.drafts[week] = nil
+        } else {
+            WeekPlanDraftMemory.drafts[week] = WeekPlanDraft(mode: mode, days: days, sessions: sessions, summary: summary, notice: notice,
+                                                             warnings: warnings, check: check, checkApplied: checkApplied)
+        }
+    }
+
+    /// The week the athlete left; sessions still being built when the screen
+    /// closed are built now.
+    private func restore() async {
+        guard let d = WeekPlanDraftMemory.drafts[weekStart] else { return }
+        mode = d.mode
+        days = d.days
+        sessions = d.sessions.map { s in
+            var s = s
+            if s.status == .building { s.status = .waiting }
+            return s
+        }
+        summary = d.summary
+        notice = d.notice
+        warnings = d.warnings
+        check = d.check
+        checkApplied = d.checkApplied
+        if sessions.contains(where: { $0.status == .waiting }) {
+            working = true
+            defer { working = false }
+            await buildAll()
         }
     }
 
