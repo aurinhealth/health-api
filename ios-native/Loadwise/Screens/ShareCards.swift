@@ -16,18 +16,44 @@ struct ShareCard: View {
     var week: ShareWeek?
     var milestones: ShareMilestones?
     var width: CGFloat = ShareCard.width
+    /// The user's photo behind the numbers.
+    var photo: UIImage? = nil
+    /// Drawn over the live camera: no background of its own.
+    var overCamera = false
+    /// Where the user moved each block on a photo, in hundredths of the width.
+    var offsets: [String: CGSize] = [:]
 
-    private var s: ShareStyle { ShareStyle(u: width / 100, t: ShareTheme(dark: options.dark, clear: options.clear)) }
+    /// The coordinate space the blocks report their frames in.
+    static let space = "shareCard"
+
+    private var onPhoto: Bool { photo != nil || overCamera }
+
+    private var s: ShareStyle {
+        ShareStyle(u: width / 100, t: ShareTheme(dark: options.dark, clear: options.clear || onPhoto), offsets: onPhoto ? offsets : [:])
+    }
 
     var body: some View {
         let s = s
+        let height = width * 16 / 9
         ZStack(alignment: .topLeading) {
-            s.t.background(glow, width: width)
+            if onPhoto {
+                if let photo {
+                    Image(uiImage: photo).resizable().scaledToFill().frame(width: width, height: height).clipped()
+                }
+                // Darker (lighter) at the top and the bottom, where the numbers usually are.
+                let veil = options.dark ? Color.black : Color.white
+                LinearGradient(stops: [.init(color: veil.opacity(0.4), location: 0), .init(color: veil.opacity(0), location: 0.28),
+                                       .init(color: veil.opacity(0), location: 0.6), .init(color: veil.opacity(0.5), location: 1)],
+                               startPoint: .top, endPoint: .bottom)
+            } else {
+                s.t.background(glow, width: width)
+            }
             content(s)
-                .frame(width: width, height: width * 16 / 9, alignment: .topLeading)
-                .shadow(color: options.clear ? (options.dark ? Color.black.opacity(0.45) : Color.white.opacity(0.7)) : .clear, radius: s.u * 1.4, y: s.u * 0.3)
+                .frame(width: width, height: height, alignment: .topLeading)
+                .shadow(color: s.t.clear ? (options.dark ? Color.black.opacity(0.45) : Color.white.opacity(0.7)) : .clear, radius: s.u * 1.4, y: s.u * 0.3)
         }
-        .frame(width: width, height: width * 16 / 9)
+        .frame(width: width, height: height)
+        .coordinateSpace(.named(Self.space))
         .clipped()
         .environment(\.colorScheme, options.dark ? .dark : .light)
     }
@@ -70,6 +96,8 @@ struct ShareCard: View {
 struct ShareStyle {
     let u: CGFloat
     let t: ShareTheme
+    /// The blocks moved on a photo, by id (ShareBlock), in hundredths of the width.
+    var offsets: [String: CGSize] = [:]
 
     func serif(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Regular", fixedSize: u * size) }
     func news(_ size: CGFloat) -> Font { .custom("Newsreader-Regular", fixedSize: u * size) }
@@ -145,6 +173,34 @@ struct ShareStyle {
             center()
         }
         .frame(width: u * size, height: u * size)
+    }
+}
+
+/// The parts of an image the user can drag on a photo: the numbers at the
+/// bottom and the big number or picture at the top.
+enum ShareBlock {
+    static let top = "top"
+    static let bottom = "bottom"
+}
+
+/// Each movable block's frame where the layout put it, before its offset.
+struct ShareBlockFrames: PreferenceKey {
+    static let defaultValue: [String: CGRect] = [:]
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue()) { $1 }
+    }
+}
+
+extension View {
+    /// A block that moves on a photo: it reports its frame and takes its offset.
+    func shareBlock(_ id: String, _ s: ShareStyle) -> some View {
+        let offset = s.offsets[id] ?? .zero
+        return background {
+            GeometryReader { geo in
+                Color.clear.preference(key: ShareBlockFrames.self, value: [id: geo.frame(in: .named(ShareCard.space))])
+            }
+        }
+        .offset(x: offset.width * s.u, y: offset.height * s.u)
     }
 }
 
@@ -263,11 +319,11 @@ struct ShareDayCard: View {
                         if let sub = hero.sub { s.pill(sub, hero.color(s.t)) }
                     }
                 }
+                .shareBlock(ShareBlock.top, s)
                 .padding(.horizontal, u * 7)
                 .padding(.top, u * 26)
             }
             VStack(spacing: 0) {
-                Spacer(minLength: 0)
                 ForEach(Array(list.dropFirst().prefix(4).enumerated()), id: \.element.id) { i, m in
                     VStack(alignment: .leading, spacing: u * 2) {
                         HStack(alignment: .firstTextBaseline) {
@@ -281,6 +337,8 @@ struct ShareDayCard: View {
                     .overlay(alignment: .top) { if i > 0 { Rectangle().fill(s.t.line(0.08)).frame(height: 1) } }
                 }
             }
+            .shareBlock(ShareBlock.bottom, s)
+            .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
         }
@@ -300,11 +358,11 @@ struct ShareDayCard: View {
                     s.label(hero.label, size: 4.6).padding(.top, u * 2)
                     if let sub = hero.sub { s.pill(sub, hero.color(s.t)) }
                 }
+                .shareBlock(ShareBlock.top, s)
                 .frame(maxWidth: .infinity)
                 .padding(.top, u * 24)
             }
             VStack {
-                Spacer(minLength: 0)
                 HStack(alignment: .top) {
                     ForEach(Array(list.dropFirst().prefix(3).enumerated()), id: \.element.id) { i, m in
                         if i > 0 { Spacer(minLength: u * 2) }
@@ -312,6 +370,8 @@ struct ShareDayCard: View {
                     }
                 }
             }
+            .shareBlock(ShareBlock.bottom, s)
+            .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
         }
@@ -624,9 +684,63 @@ struct ShareActivityCard: View {
 
     var body: some View {
         switch options.variant {
-        case 1: graph
-        case 2: numbers
-        default: route
+        case 1 where !workout.isGym || workout.curve.count >= 2: graph
+        case 1, 2: numbers
+        default:
+            if workout.isGym { exercises } else { route }
+        }
+    }
+
+    /// The sport's icon and the workout's name.
+    private var sportTitle: some View {
+        let u = s.u
+        return HStack(spacing: u * 3) {
+            Image(systemName: workout.symbol).font(.system(size: u * 5.4, weight: .semibold)).foregroundStyle(s.t.amber)
+                .frame(width: u * 11, height: u * 11)
+                .background(s.t.amber.opacity(0.18), in: Circle())
+            Text(verbatim: workout.title).font(s.news(8.4)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
+        }
+    }
+
+    /// Gym A: each exercise's best set, three numbers under them.
+    private var exercises: some View {
+        let u = s.u
+        let list = Array(stats.filter { $0.label != "Cviky" }.prefix(3))
+        let rows = Array(workout.best.prefix(list.isEmpty ? 8 : 6))
+        return ZStack(alignment: .topLeading) {
+            s.brand(ShareText.date(dateText))
+            VStack(alignment: .leading, spacing: 0) {
+                sportTitle
+                if !rows.isEmpty {
+                    Text(L10n.tr("Nejlepší série").uppercased()).font(s.sans(3.4)).kerning(u * 0.3).foregroundStyle(s.t.muted)
+                        .padding(.top, u * 9)
+                    VStack(spacing: 0) {
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { i, best in
+                            HStack(alignment: .firstTextBaseline, spacing: u * 3) {
+                                Text(verbatim: best.name).font(s.sans(4.2)).foregroundStyle(s.t.secondary).lineLimit(1)
+                                Spacer(minLength: u * 2)
+                                Text(verbatim: best.set).font(s.serif(6.2)).foregroundStyle(s.t.ink).lineLimit(1)
+                            }
+                            .padding(.vertical, u * 2.4)
+                            .overlay(alignment: .top) { if i > 0 { Rectangle().fill(s.t.line(0.08)).frame(height: 1) } }
+                        }
+                    }
+                    .padding(.top, u * 1.6)
+                }
+            }
+            .shareBlock(ShareBlock.top, s)
+            .padding(.horizontal, u * 7)
+            .padding(.top, u * 19)
+            HStack(alignment: .top) {
+                ForEach(Array(list.enumerated()), id: \.element.id) { i, stat in
+                    if i > 0 { Spacer(minLength: u * 2) }
+                    s.number(stat.label, stat.value, stat.unit, size: 10)
+                }
+            }
+            .shareBlock(ShareBlock.bottom, s)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+            .padding(.horizontal, u * 7)
+            .padding(.bottom, u * 8)
         }
     }
 
@@ -645,15 +759,17 @@ struct ShareActivityCard: View {
                         .padding(.top, u * 30)
                 }
             }
+            .shareBlock(ShareBlock.top, s)
             .frame(maxWidth: .infinity)
             .padding(.top, u * 20)
             VStack(alignment: .leading, spacing: u * 4) {
-                Spacer(minLength: 0)
                 Text(verbatim: workout.title).font(s.news(9)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
                 HStack(spacing: u * (list.count < 3 ? 12 : 6)) {
                     ForEach(list) { s.number($0.label, $0.value, $0.unit, size: list.count < 3 ? 11 : 8) }
                 }
             }
+            .shareBlock(ShareBlock.bottom, s)
+            .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
         }
@@ -692,9 +808,9 @@ struct ShareActivityCard: View {
                     .padding(.top, u * 10)
                 }
             }
+            .shareBlock(ShareBlock.top, s)
             .padding(.top, u * 21)
             VStack {
-                Spacer(minLength: 0)
                 HStack(alignment: .top) {
                     ForEach(Array(list.enumerated()), id: \.element.id) { i, stat in
                         if i > 0 { Spacer(minLength: u * 2) }
@@ -702,6 +818,8 @@ struct ShareActivityCard: View {
                     }
                 }
             }
+            .shareBlock(ShareBlock.bottom, s)
+            .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
         }
@@ -713,16 +831,11 @@ struct ShareActivityCard: View {
         let list = Array(stats.prefix(4))
         return ZStack(alignment: .topLeading) {
             s.brand(ShareText.date(dateText))
-            HStack(spacing: u * 3) {
-                Image(systemName: workout.symbol).font(.system(size: u * 5.4, weight: .semibold)).foregroundStyle(s.t.amber)
-                    .frame(width: u * 11, height: u * 11)
-                    .background(s.t.amber.opacity(0.18), in: Circle())
-                Text(verbatim: workout.title).font(s.news(8.4)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
-            }
-            .padding(.horizontal, u * 7)
-            .padding(.top, u * 19)
+            sportTitle
+                .shareBlock(ShareBlock.top, s)
+                .padding(.horizontal, u * 7)
+                .padding(.top, u * 19)
             VStack(alignment: .leading, spacing: 0) {
-                Spacer(minLength: 0)
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, stat in
                     s.number(stat.label, stat.value, stat.unit, size: list.count > 3 ? 15 : 18)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -730,6 +843,8 @@ struct ShareActivityCard: View {
                         .overlay(alignment: .top) { if i > 0 { Rectangle().fill(s.t.line(0.08)).frame(height: 1) } }
                 }
             }
+            .shareBlock(ShareBlock.bottom, s)
+            .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 7)
         }
@@ -897,11 +1012,11 @@ struct ShareFoodCard: View {
                      + Text(verbatim: food.kcalTarget.map { " / " + Fmt.int($0) + " kcal" } ?? " kcal").font(s.sans(4.4, .regular)).foregroundColor(s.t.muted))
                         .lineLimit(1).minimumScaleFactor(0.5)
                 }
+                .shareBlock(ShareBlock.top, s)
                 .padding(.horizontal, u * 7)
                 .padding(.top, u * 24)
             }
             VStack(alignment: .leading, spacing: u * 6) {
-                Spacer(minLength: 0)
                 ForEach(parts) { p in
                     let a = amount(p)
                     VStack(alignment: .leading, spacing: u * 1.6) {
@@ -917,6 +1032,8 @@ struct ShareFoodCard: View {
                     }
                 }
             }
+            .shareBlock(ShareBlock.bottom, s)
+            .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 10)
         }
@@ -950,10 +1067,10 @@ struct ShareFoodCard: View {
                 }
             }
             .frame(width: u * size, height: u * size)
+            .shareBlock(ShareBlock.top, s)
             .frame(maxWidth: .infinity)
             .padding(.top, u * 24)
             VStack {
-                Spacer(minLength: 0)
                 HStack(alignment: .top) {
                     ForEach(Array(arcs.enumerated()), id: \.element.id) { i, arc in
                         if i > 0 { Spacer(minLength: u * 2) }
@@ -964,6 +1081,8 @@ struct ShareFoodCard: View {
                     }
                 }
             }
+            .shareBlock(ShareBlock.bottom, s)
+            .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 12)
         }
@@ -988,11 +1107,11 @@ struct ShareFoodCard: View {
                     }
                 }
                 .frame(width: u * 78, height: u * 43)
+                .shareBlock(ShareBlock.top, s)
                 .frame(maxWidth: .infinity)
                 .padding(.top, u * 22)
             }
             VStack {
-                Spacer(minLength: 0)
                 HStack(alignment: .bottom, spacing: 0) {
                     ForEach(list) { part in
                         let a = amount(part)
@@ -1013,6 +1132,8 @@ struct ShareFoodCard: View {
                     }
                 }
             }
+            .shareBlock(ShareBlock.bottom, s)
+            .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
         }

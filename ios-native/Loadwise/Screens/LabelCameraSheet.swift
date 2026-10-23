@@ -131,7 +131,7 @@ struct LabelCameraSheet: View {
 }
 
 /// The camera's picture in the window; the session stops with the window.
-private struct CameraWindow: UIViewRepresentable {
+struct CameraWindow: UIViewRepresentable {
     let camera: PhotoCamera
 
     func makeUIView(context: Context) -> BarcodeScanner.PreviewView {
@@ -157,6 +157,9 @@ final class PhotoCamera: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sen
     private let output = AVCapturePhotoOutput()
     private let queue = DispatchQueue(label: "health.aurin.label-camera")
     private var configured = false
+    private var input: AVCaptureDeviceInput?
+    /// The selfie camera instead of the main lens (Sdílet's camera can switch).
+    private var front = false
     private var pending: CheckedContinuation<UIImage?, Never>?
 
     func start(on layer: AVCaptureVideoPreviewLayer) {
@@ -177,11 +180,35 @@ final class PhotoCamera: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sen
                 guard configured, session.isRunning, pending == nil else { continuation.resume(returning: nil); return }
                 pending = continuation
                 // Upright like the phone, so the label reads the right way up.
-                if let connection = output.connection(with: .video), connection.isVideoRotationAngleSupported(90) {
-                    connection.videoRotationAngle = 90
+                if let connection = output.connection(with: .video) {
+                    if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
+                    // The selfie camera saves the picture as its preview showed it.
+                    if connection.isVideoMirroringSupported {
+                        connection.automaticallyAdjustsVideoMirroring = false
+                        connection.isVideoMirrored = front
+                    }
                 }
                 output.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
             }
+        }
+    }
+
+    /// Between the main lens and the selfie camera.
+    func flip() {
+        queue.async { [self] in
+            guard configured else { return }
+            let device = front ? BarcodeScanner.device : AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
+            guard let device, let next = try? AVCaptureDeviceInput(device: device) else { return }
+            session.beginConfiguration()
+            if let input { session.removeInput(input) }
+            if session.canAddInput(next) {
+                session.addInput(next)
+                input = next
+                front.toggle()
+            } else if let input {
+                session.addInput(input)
+            }
+            session.commitConfiguration()
         }
     }
 
@@ -201,6 +228,7 @@ final class PhotoCamera: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sen
         guard session.canAddInput(input), session.canAddOutput(output) else { return false }
         session.addInput(input)
         session.addOutput(output)
+        self.input = input
         if (try? device.lockForConfiguration()) != nil {
             if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
             device.unlockForConfiguration()
