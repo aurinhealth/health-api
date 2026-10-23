@@ -87,6 +87,21 @@ test("the app's own copy in Intervals.icu is deleted there too; a watch's record
   await assert.rejects(deleteActivity(env, { id: "nothing" }, { fetchImpl }), /nebyla nalezena|wasn't found/);
 });
 
+test("a Strava activity Intervals.icu shows as a stub is only hidden: its API refuses to delete it (HTTP 422)", async () => {
+  const { env, insert, role } = setup();
+  const stub = { source_family: "intervals", data_type: "activity", external_id: "20698107994", start_time: "2026-10-23T08:22:02", payload: { id: "20698107994", start_date_local: "2026-10-23T08:22:02", source: "STRAVA", _note: "STRAVA activities are not available via the API" } };
+  insert(stub);
+  insert({ ...stub, external_id: "20676456041", payload: { id: "20676456041", start_date_local: "2026-10-21T16:23:07", _note: "STRAVA activities are not available via the API" } });
+  assert.deepEqual(await deleteOptions(env, "20698107994"), { kind: "watch", source: "strava" });
+  assert.deepEqual(await deleteOptions(env, "20676456041"), { kind: "watch", source: "strava" });
+  const calls = [];
+  const fetchImpl = async (url, init) => { calls.push(init.method); return new Response("{}", { status: 422 }); };
+  // An older app still offers "i v Intervals.icu": the stub is hidden here, nothing is sent.
+  assert.deepEqual((await deleteActivity(env, { id: "20698107994", everywhere: true }, { fetchImpl })).removed, ["aurin"]);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(role("20698107994"), { record_role: "duplicate", matched_activity_id: "deleted" });
+});
+
 test("the coach may set calories only of an activity it was shown", () => {
   const context = { week: [{ date: "2026-10-13", completed: [{ id: "i196923325", name: "Endurance", calories: 772 }] }] };
   const base = { eventId: "", sport: "", minutes: 0, status: "", statusUntil: "", fromExercise: "", toExercise: "", workoutId: "", reason: "Petr chce 574 kcal." };
