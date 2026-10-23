@@ -99,9 +99,13 @@ struct TrainingContent: View {
                 TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay)
                     .padding(.top, 18)
 
-                // Today's opens the same Námaha detail as Dnes; another day shows its own strain.
+                // Today's opens the same Námaha detail as Dnes, a past day its own;
+                // a day ahead has no detail yet.
                 if shownDay == training.date {
                     RouteLink(route: .strain) { StrainHero(training: training) }
+                        .padding(.top, 26)
+                } else if shownDay < training.date {
+                    RouteLink(route: .strainDay(shownDay)) { StrainHero(training: training, day: shownDay) }
                         .padding(.top, 26)
                 } else {
                     StrainHero(training: training, day: shownDay)
@@ -152,7 +156,7 @@ struct StrainHero: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
                 Text(title).font(Typo.body).foregroundStyle(Palette.muted)
-                if isToday {
+                if !isAhead {
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
                 }
             }

@@ -1617,6 +1617,7 @@
 "zatím bez dat" = "no data yet";
 "cíl %@–%@" = "target %@–%@";
 "Dnešní cíl" = "Today's target";
+"Cíl dne" = "The day's target";
 "nic v plánu" = "nothing planned";
 "Navrženo AI" = "Suggested by AI";
 "data z %@" = "data from %@";

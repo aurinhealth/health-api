@@ -5,17 +5,30 @@ import SwiftUI
 /// made of, and fitness and fatigue with the forecast to the end of the week.
 struct StrainDetailView: View {
     @Environment(AppModel.self) private var model
+    /// A past day chosen on Training; nil is the day Today shows.
+    var date: String? = nil
+    /// That day as Today shows it, loaded here.
+    @State private var day: TodaySnapshot?
+
+    private var shown: TodaySnapshot? {
+        guard let date else { return model.today }
+        return model.today?.date == date ? model.today : day
+    }
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Námaha") {
-            if let today = model.today {
-                StrainDetailContent(today: today, training: model.training)
+            if let today = shown {
+                StrainDetailContent(today: today, training: model.training, past: date != nil)
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
             }
         }
         .task {
-            if model.today == nil { await model.refresh() }
+            if let date {
+                if model.today?.date != date, !model.demo { day = try? await model.api.today(date: date) }
+            } else if model.today == nil {
+                await model.refresh()
+            }
             if model.training == nil { await model.refreshTraining() }
         }
     }
@@ -37,6 +50,10 @@ struct StrainDetailContent: View {
         }
     }
 
+    /// A past day chosen on Training: named in the title, without the forecast.
+    var past = false
+    private var isToday: Bool { !past }
+
     private var sessions: [WeekSession] {
         today.plan.compactMap { $0.kind == "workout" ? $0.session : nil }
     }
@@ -55,17 +72,19 @@ struct StrainDetailContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Námaha").font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
+            Text(verbatim: isToday ? L10n.tr("Námaha") : L10n.f("Námaha · %@", Fmt.dayShort(today.date, today: AppModel.localDate(Date()))))
+                .font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
             dial
             if let target = today.strain.target {
-                SectionLabel(text: "Dnešní cíl").padding(.top, 30)
+                SectionLabel(text: isToday ? "Dnešní cíl" : "Cíl dne").padding(.top, 30)
                 targetRows(target).padding(.top, 12)
             }
             SectionLabel(text: "Z čeho je").padding(.top, 30)
             sources.padding(.top, 12)
             if let form = training?.form, !form.series.isEmpty {
                 SectionLabel(text: "Kondice a únava").padding(.top, 30)
-                FitnessChart(form: form, upcoming: upcomingTss)
+                // The forecast runs from today; a past day shows the chart without it.
+                FitnessChart(form: form, upcoming: isToday ? upcomingTss : [])
                     .padding(.top, 12)
             }
         }
