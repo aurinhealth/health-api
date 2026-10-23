@@ -32,6 +32,13 @@ enum ShareKind: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The layouts this image offers, by index: a gym workout shows its
+    /// exercises instead of a route, and a chart only with its heart rate.
+    func layouts(_ workout: ShareWorkout?) -> [(index: Int, name: String)] {
+        guard self == .activity, let workout, workout.isGym else { return variants.enumerated().map { ($0.offset, $0.element) } }
+        return [(0, "Cviky")] + (workout.curve.count >= 2 ? [(1, "Graf")] : []) + [(2, "Čísla")]
+    }
+
     /// The rows Upravit switches on and off, in their order.
     var rows: [String] {
         switch self {
@@ -212,7 +219,7 @@ struct ShareDay: Equatable {
 
 /// One workout: its numbers, route and power or heart-rate curve.
 struct ShareWorkout: Equatable {
-    static let stats = ["Vzdálenost", "Čas", "Výkon", "Tep", "Převýšení", "Tempo"]
+    static let stats = ["Vzdálenost", "Čas", "Výkon", "Tep", "Převýšení", "Tempo", "Objem", "Série", "Kalorie", "Cviky"]
 
     var title: String
     var sport: String
@@ -236,6 +243,21 @@ struct ShareWorkout: Equatable {
     var curveIsPower = false
     /// Time in zones, %, from the lowest.
     var zones: [Double] = []
+    /// Gym: the lifted volume in kg, the work sets done and each exercise's best set.
+    var volume: Double?
+    var sets: Int?
+    var best: [Best] = []
+    /// The calories the device reported.
+    var kcal: Double?
+
+    /// An exercise and its heaviest set, "80 kg × 6".
+    struct Best: Equatable, Identifiable {
+        let name: String
+        let set: String
+        var id: String { name }
+    }
+
+    var isGym: Bool { sport == "strength" || sport == "gym" }
 
     init(title: String, sport: String) {
         self.title = title
@@ -249,6 +271,7 @@ struct ShareWorkout: Equatable {
         start = item.time
         minutes = item.session?.minutes.map(Double.init)
         tss = item.session?.tss
+        kcal = item.session?.kcal
     }
 
     init(session: WeekSession, detail: ActivityDetail?) {
@@ -258,7 +281,28 @@ struct ShareWorkout: Equatable {
         start = session.time
         minutes = session.minutes.map(Double.init)
         tss = session.tss
+        kcal = session.kcal
         if let detail { add(detail) }
+    }
+
+    /// The day's sets from the gym sheet: its name, volume, sets and the best set of each exercise.
+    mutating func add(_ gym: GymDay) {
+        let done = gym.exercises.filter { $0.sets.contains { $0.done && $0.work } }
+        guard !done.isEmpty else { return }
+        if let name = gym.planName?.trimmingCharacters(in: .whitespaces), !name.isEmpty { title = name }
+        if gym.volume > 0 { volume = gym.volume }
+        sets = gym.doneWorkSets
+        if minutes == nil, let logged = gym.loggedMinutes, logged > 0 { minutes = Double(logged) }
+        let number = { (text: String?) -> Double in text.flatMap(LiftWeight.number) ?? 0 }
+        best = done.compactMap { exercise -> Best? in
+            let work = exercise.sets.filter { $0.done && $0.work }
+            guard let top = work.max(by: { (number($0.kg), number($0.reps)) < (number($1.kg), number($1.reps)) }) else { return nil }
+            let reps = number(top.reps)
+            let kg = number(top.kg)
+            let times = reps > 0 ? "× " + Fmt.int(reps) : ""
+            guard kg > 0 else { return reps > 0 ? Best(name: exercise.name, set: times) : nil }
+            return Best(name: exercise.name, set: [(LiftWeight.shown(top.kg) ?? Fmt.int(kg)) + " " + Units.weightUnit, times].filter { !$0.isEmpty }.joined(separator: " "))
+        }
     }
 
     mutating func add(_ detail: ActivityDetail) {
@@ -271,6 +315,7 @@ struct ShareWorkout: Equatable {
         heartRate = a.average_heartrate.flatMap { $0 > 0 ? $0 : nil }
         elevation = a.total_elevation_gain.flatMap { $0 > 0 ? $0 : nil }
         if let load = a.icu_training_load, load > 0 { tss = load }
+        if kcal == nil, let calories = a.calories, calories > 0 { kcal = calories }
         if sport == "run" || sport == "walk", let speed = a.average_speed, speed > 0 { pace = 1000 / speed }
         route = (detail.streams?.first { $0.type == "latlng" }?.points ?? []).compactMap { p -> [Double]? in
             guard let ll = p.ll, ll.count == 2, abs(ll[0]) <= 90, abs(ll[1]) <= 180, ll[0] != 0 || ll[1] != 0 else { return nil }
@@ -330,6 +375,18 @@ struct ShareWorkout: Equatable {
         case "Zátěž":
             guard let tss, tss > 0 else { return nil }
             return (Fmt.int(tss), "TSS")
+        case "Objem":
+            guard let volume, volume > 0 else { return nil }
+            return (Fmt.int(LiftWeight.shownValue(volume)), Units.weightUnit)
+        case "Série":
+            guard let sets, sets > 0 else { return nil }
+            return (String(sets), "")
+        case "Kalorie":
+            guard let kcal, kcal > 0 else { return nil }
+            return (Fmt.int(kcal), "kcal")
+        case "Cviky":
+            guard !best.isEmpty else { return nil }
+            return (String(best.count), "")
         default:
             return nil
         }
