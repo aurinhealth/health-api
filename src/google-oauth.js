@@ -4,15 +4,17 @@ import { connectReturnUrl, oauthStateValue, startedBy } from './connect-return.j
 import { appOrigin } from './app-origin.js';
 export async function handleGoogleOAuth(request, env, pathname) {
   if (pathname === "/oauth/google" && request.method === "GET") {
-    // ?extra=1 adds the optional scopes on top of what was already granted.
-    const params = new URL(request.url).searchParams, extra = params.get("extra") === "1";
+    // One Google page for everything: the optional scopes are asked for with the base ones
+    // (the user can untick them there), and what was granted before stays granted.
+    // ?extra=1 (the app's "Google hasn't allowed write access yet") asks the same.
+    const params = new URL(request.url).searchParams;
     // Google Health data policy: the app's own disclosure and consent come right before Google's
     // consent screen. A visit without it (a bookmark, an old link) opens the disclosure first.
     if (params.get("consent") !== "1") return html("Google Health","Google Health se připojuje v aplikaci Aurin pro iPhone (Nastavení → Zdroje dat).",400);
     const origin = appOrigin(env, request); const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
     const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID); u.searchParams.set("redirect_uri", redirectUri); u.searchParams.set("response_type", "code");
-    u.searchParams.set("scope", [...HEALTH_SCOPES, ...(extra ? Object.values(EXTRA_SCOPES) : [EXTRA_SCOPES.location])].join(" ")); if (extra) u.searchParams.set("include_granted_scopes", "true"); u.searchParams.set("access_type", "offline"); u.searchParams.set("prompt", "consent"); u.searchParams.set("state", state);
+    u.searchParams.set("scope", [...HEALTH_SCOPES, ...Object.values(EXTRA_SCOPES)].join(" ")); u.searchParams.set("include_granted_scopes", "true"); u.searchParams.set("access_type", "offline"); u.searchParams.set("prompt", "consent"); u.searchParams.set("state", state);
     // Where the user comes back to (the iPhone app) rides along with the state.
     return new Response(null,{status:302,headers:{Location:u.toString(),"Set-Cookie":"pfd_google_oauth_state="+oauthStateValue(state, request, env)+"; Max-Age=600; Path=/oauth/google; Secure; HttpOnly; SameSite=Lax"}});
   }

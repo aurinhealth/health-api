@@ -2049,8 +2049,8 @@
 "Kdykoli v Nastavení → Zdroje dat." = "Anytime in Settings → Data sources.";
 "Kdykoli v Nastavení → Zdroje dat, v Soukromí smažeš účet i se všemi daty." = "Anytime in Settings → Data sources; delete your account and all data in Privacy.";
 "Nic." = "Nothing.";
-"Aktivitu a kondici (kroky, vzdálenost, aktivní energii, tréninky), zdravotní měření (tep, HRV, okysličení krve, dech, VO₂max, váhu, výšku, tělesný tuk), spánek a záznamy jídla." = "Activity and fitness (steps, distance, active energy, workouts), health measurements (heart rate, HRV, blood oxygen, breathing, VO₂max, weight, height, body fat), sleep and food logs.";
-"Jen jídlo a pití, které zapíšeš v Aurinu." = "Only the food and drinks you log in Aurin.";
+"Aktivitu a kondici (kroky, vzdálenost, aktivní energii, tréninky a jejich trasy), zdravotní měření (tep, HRV, okysličení krve, dech, VO₂max, váhu, výšku, tělesný tuk), spánek, záznamy jídla a datum narození z účtu Google." = "Activity and fitness (steps, distance, active energy, workouts and their routes), health measurements (heart rate, HRV, blood oxygen, breathing, VO₂max, weight, height, body fat), sleep, food logs and your date of birth from your Google account.";
+"Jídlo a pití, které zapíšeš v Aurinu. Když to na stránce Googlu povolíš, i váhu a tréninky z Aurinu." = "The food and drinks you log in Aurin. If you allow it on Google's page, also your weight and workouts from Aurin.";
 "Tréninky, plán, zóny a váhu." = "Workouts, plan, zones and weight.";
 "Tréninky naplánované i odcvičené v Aurinu, kalorický cíl, váhu a denní hodnoty z Apple Health a Google Health." = "Workouts planned and done in Aurin, calorie target, weight and daily values from Apple Health and Google Health.";
 "Spánek, klidový tep, HRV, VO₂max a teplotu z prstenu." = "Sleep, resting heart rate, HRV, VO₂max and temperature from the ring.";

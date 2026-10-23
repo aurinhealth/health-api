@@ -88,7 +88,7 @@ struct ConnectFlowSheets: ViewModifier {
     func body(content: Content) -> some View {
         content
             .sheet(item: $flow.connecting) { target in
-                ServiceConnectSheet(target: target) { await store.load() }
+                ServiceConnectSheet(target: target) { actions.message = nil; await store.load() }
             }
             .confirmationDialog(L10n.f("Odpojit %@?", flow.disconnecting?.name ?? ""),
                                 isPresented: Binding(get: { flow.disconnecting != nil }, set: { if !$0 { flow.disconnecting = nil } }),
@@ -137,8 +137,8 @@ struct ServiceConnectSheet: View {
         switch id {
         case "google":
             return Service(name: "Google Health",
-                           reads: L10n.tr("Aktivitu a kondici (kroky, vzdálenost, aktivní energii, tréninky), zdravotní měření (tep, HRV, okysličení krve, dech, VO₂max, váhu, výšku, tělesný tuk), spánek a záznamy jídla."),
-                           writes: L10n.tr("Jen jídlo a pití, které zapíšeš v Aurinu."), google: true)
+                           reads: L10n.tr("Aktivitu a kondici (kroky, vzdálenost, aktivní energii, tréninky a jejich trasy), zdravotní měření (tep, HRV, okysličení krve, dech, VO₂max, váhu, výšku, tělesný tuk), spánek, záznamy jídla a datum narození z účtu Google."),
+                           writes: L10n.tr("Jídlo a pití, které zapíšeš v Aurinu. Když to na stránce Googlu povolíš, i váhu a tréninky z Aurinu."), google: true)
         case "intervals":
             return Service(name: "Intervals.icu",
                            reads: L10n.tr("Tréninky, plán, zóny a váhu."),

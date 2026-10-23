@@ -22,12 +22,13 @@ test("Google Health tokens carry weight writing only when it was granted", () =>
   assert.ok(!healthScopes(granted).includes(EXTRA_SCOPES.birthday));
 });
 
-test("connecting asks for Google Health and the workout route; 'extra' adds the optional scopes incrementally", async () => {
-  const plain = new URL((await handleGoogleOAuth(new Request("https://aurin.health/oauth/google?consent=1"), google, "/oauth/google")).headers.get("Location"));
-  assert.deepEqual(plain.searchParams.get("scope").split(" "), [...HEALTH_SCOPES, EXTRA_SCOPES.location]);
-  const extra = new URL((await handleGoogleOAuth(new Request("https://aurin.health/oauth/google?consent=1&extra=1"), google, "/oauth/google")).headers.get("Location"));
-  assert.deepEqual(extra.searchParams.get("scope").split(" "), [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite, EXTRA_SCOPES.activityWrite, EXTRA_SCOPES.birthday, EXTRA_SCOPES.location]);
-  assert.equal(extra.searchParams.get("include_granted_scopes"), "true");
+test("connecting asks for everything on one Google page and keeps what was granted before", async () => {
+  // Reconnecting with only the base scopes dropped the writing granted earlier (Petr, 2026-10-23).
+  for (const path of ["/oauth/google?consent=1", "/oauth/google?consent=1&extra=1"]) {
+    const url = new URL((await handleGoogleOAuth(new Request("https://aurin.health" + path), google, "/oauth/google")).headers.get("Location"));
+    assert.deepEqual(url.searchParams.get("scope").split(" "), [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite, EXTRA_SCOPES.activityWrite, EXTRA_SCOPES.birthday, EXTRA_SCOPES.location]);
+    assert.equal(url.searchParams.get("include_granted_scopes"), "true");
+  }
 });
 
 test("Google's consent screen comes only after the app's own disclosure and consent", async () => {

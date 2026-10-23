@@ -113,7 +113,7 @@ test('the privacy policy and support page cover what Google verification asks fo
   for(const statement of limitedUse){assert.match(home,statement);assert.match(privacy,statement);}
   // The disclosure stays word for word, under the app's one name, and names every optional permission.
   assert.match(home,/<p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows\.<\/p>/);
-  assert.match(home,/Four optional permissions are requested separately: adding weight records to Google Health \(weight you log in Aurin or Intervals\.icu\), adding the workouts you finish in Aurin to Google Health, reading the GPS route of a workout to show its map, and reading your date of birth/);
+  assert.match(home,/Four optional permissions can be left unticked on Google’s consent screen: adding weight records to Google Health \(weight you log in Aurin or Intervals\.icu\), adding the workouts you finish in Aurin to Google Health, reading the GPS route of a workout to show its map, and reading your date of birth/);
   assert.doesNotMatch(home+privacy,/Petr Fitness Data/);
   assert.match(home,/<p style="margin:0">The service can process training and fitness data from connected services, including Google Health data that the account owner has authorized, in order to provide these requested workflows\.<\/p>/);
   // Every party that receives data, how it is secured, and what happens on disconnecting and deleting.
