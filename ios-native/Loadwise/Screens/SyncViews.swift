@@ -87,10 +87,12 @@ final class SyncSettingsStore {
         if let i = destinations.firstIndex(where: { $0.id == id }) { destinations[i].prefs = prefs }
     }
 
-    /// The server apps a done activity goes to, for the toast without signal.
+    /// The server apps a done activity goes to, for the toast without signal,
+    /// and what Google Health gets, so Apple Health does not carry it to Google twice.
     private func remember() {
         let ids = destinations.filter { $0.id != "apple" && $0.connected == true && $0.prefs.pushActivities }.map(\.id)
         UserDefaults.standard.set(ids, forKey: AppModel.activityDestinationsKey)
+        AppleHealthExport.shared.setGoogle(destination("google"))
     }
 
     private static let all = SyncSupports(pushPlanned: true, pushActivities: true, pullActivities: true, health: true)

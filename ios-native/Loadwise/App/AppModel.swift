@@ -647,6 +647,14 @@ final class AppModel {
         if training != nil { await refreshTraining() }
     }
 
+    /// What the server writes to Google Health, so Apple Health does not
+    /// carry the same food, weight or workout there a second time.
+    func loadGoogleSync() async {
+        guard !demo, phase == .signedIn else { return }
+        guard let google = try? await api.syncOverview().destinations.first(where: { $0.id == "google" }) else { return }
+        AppleHealthExport.shared.setGoogle(google)
+    }
+
     /// Every tab again, e.g. after a change of language (the server's texts).
     func refreshAll() async {
         fetched = [:]
@@ -1005,7 +1013,7 @@ final class AppModel {
             }
         }
         let apple = AppleHealthExport.shared
-        if toApple && apple.prefs.pushActivities {
+        if toApple && apple.writesWorkouts {
             let failed = await apple.saveWorkout(activity)
             rows.insert(SyncReport.Row(destination: "apple", status: failed == nil ? .sent : .error, message: failed), at: 0)
         }

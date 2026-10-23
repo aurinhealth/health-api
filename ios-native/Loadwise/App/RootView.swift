@@ -225,7 +225,8 @@ struct RootView: View {
                 if !model.demo { AppleHealth.shared.start(api: model.api) }
                 async let setup: Void = model.checkSetup()
                 async let account: Void = model.loadAccountInitial()
-                _ = await (setup, account)
+                async let google: Void = model.loadGoogleSync()
+                _ = await (setup, account, google)
             }
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.
