@@ -132,3 +132,10 @@ test("a watch workout with only heart-rate samples gets their mean", () => {
   const row = { ...watch, payload_json: JSON.stringify({ ...watch.payload, exercise: { exerciseType: "RUNNING", metricsSummary: { caloriesKcal: 187 } }, samples: { heartRate: [[0, 100], [20, 104], [40, 98], [60, 110], [80, 108]] } }) };
   assert.equal(googleExerciseActivity(row).averageHeartRate, 104);
 });
+
+test("a Google walk with only seconds counted as active keeps the length of its session", () => {
+  const walk = (activeDuration) => ({ ...watch, start_time: "2026-10-23T14:45:00Z", end_time: "2026-10-23T15:05:00Z", payload_json: JSON.stringify({ ...watch.payload, exercise: { exerciseType: "WALKING", activeDuration, metricsSummary: { caloriesKcal: 23 } } }) });
+  assert.equal(Math.round(googleExerciseActivity(walk("15s")).durationHours * 60), 20);
+  // A pause of a few minutes still counts only the active time.
+  assert.equal(Math.round(googleExerciseActivity(walk("900s")).durationHours * 60), 15);
+});

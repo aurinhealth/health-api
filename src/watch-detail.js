@@ -125,7 +125,8 @@ export async function watchDetail(env, { source, id, hrZones = [], token = null,
     : await storedHeartRate(env.DB, env.USER_ID, start, end);
   const route = source === 'google-wearables' ? await googleRoute(env, row, { token, fetchImpl }) : null;
   const elapsed = (Date.parse(end) - Date.parse(start)) / 1000;
-  const moving = seconds(ex.activeDuration) || (elapsed > 0 ? elapsed : null);
+  // Under half the span the active time is Google's mistake (index.js googleExerciseActivity).
+  const active = seconds(ex.activeDuration), moving = active && !(elapsed > 0 && active < elapsed / 2) ? active : (elapsed > 0 ? elapsed : null);
   const distance = n(m.distanceMeters) ?? (n(m.distanceMillimeters) != null ? n(m.distanceMillimeters) / 1000 : null) ?? (route?.at(-1)?.dist ?? null);
   const hrs = heart.map(x => x[1]);
   const avgHr = metric(m, /^av(era)?g.*heart|heart.*av(era)?g/i) || (hrs.length ? Math.round(hrs.reduce((a, b) => a + b, 0) / hrs.length) : null);
