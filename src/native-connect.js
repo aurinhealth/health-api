@@ -14,7 +14,7 @@
 //    closes the sheet (connect-return.js).
 import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { findUser } from "./tenancy.js";
-import { L } from "./lang.js";
+import { L, lang } from "./lang.js";
 
 const TICKET_SECONDS = 120;
 // "google-extra": the optional Google scopes (writing weight and workouts).
@@ -62,8 +62,13 @@ export function postedFromHere(request, url) {
 const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const expired = () => new Response(null, { status: 302, headers: { Location: "loadwise://connected?event=expired", "Cache-Control": "no-store" } });
 
-function confirmPage(request, ticketText, ticket, email) {
-  const en = /^en\b/i.test(request.headers.get("Accept-Language") || "");
+// The app's language rides along from /app/api/connect/start (hl=en|cs): the
+// browser's own language can differ from the one chosen in Aurin.
+const pageLang = (url, request) => ["en", "cs"].includes(url.searchParams.get("hl")) ? url.searchParams.get("hl")
+  : /^en\b/i.test(request.headers.get("Accept-Language") || "") ? "en" : "cs";
+
+function confirmPage(request, ticketText, ticket, email, hl) {
+  const en = hl === "en";
   const service = ticket.provider.startsWith("google") ? "Google Health" : ticket.provider === "ultrahuman" ? "Ultrahuman" : ticket.provider === "whoop" ? "WHOOP" : ticket.provider === "wahoo" ? "Wahoo" : "Intervals.icu";
   const t = en
     ? { title: "Connect " + service, body: "Connect " + service + " to the Aurin account", note: "If this isn't your account, close this page.", go: "Continue", lang: "en" }
@@ -71,16 +76,18 @@ function confirmPage(request, ticketText, ticket, email) {
   const html = `<!doctype html><html lang="${t.lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(t.title)}</title>
 <style>body{font:17px -apple-system,system-ui,sans-serif;margin:0;padding:32px 20px;background:#fff;color:#111}@media(prefers-color-scheme:dark){body{background:#000;color:#eee}}main{max-width:420px;margin:auto}b{word-break:break-all}p.n{opacity:.7;font-size:15px}button{width:100%;padding:14px;border:0;border-radius:12px;background:#0a84ff;color:#fff;font:600 17px -apple-system,system-ui,sans-serif;margin-top:16px}</style></head>
 <body><main><p>${escapeHtml(t.body)}</p><p><b>${escapeHtml(email)}</b></p><p class="n">${escapeHtml(t.note)}</p>
-<form method="post" action="/auth/app/connect"><input type="hidden" name="ticket" value="${escapeHtml(ticketText)}"><button type="submit">${escapeHtml(t.go)}</button></form></main></body></html>`;
+<form method="post" action="/auth/app/connect"><input type="hidden" name="ticket" value="${escapeHtml(ticketText)}"><input type="hidden" name="hl" value="${t.lang}"><button type="submit">${escapeHtml(t.go)}</button></form></main></body></html>`;
   // same-origin, not no-referrer: with no-referrer the browser posts the form with "Origin: null".
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "same-origin" } });
 }
 
-async function continueToProvider(env, ticket) {
+async function continueToProvider(env, ticket, hl) {
   if (!(await useTicket(env.DB, ticket))) return expired();
   // Google's data policy: the app showed its own disclosure right before this (consent=1).
   const next = { google: "/oauth/google?consent=1&return=native", "google-extra": "/oauth/google?consent=1&extra=1&return=native", ultrahuman: "/oauth/ultrahuman?return=native", whoop: "/oauth/whoop?return=native", wahoo: "/oauth/wahoo?return=native" }[ticket.provider] || "/oauth/intervals?return=native";
-  const headers = new Headers({ Location: next, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+  // Google shows its consent page in the app's language (hl).
+  const location = ticket.provider.startsWith("google") ? next + "&hl=" + hl : next;
+  const headers = new Headers({ Location: location, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
   headers.append("Set-Cookie", await userSessionCookie(env.DB, ticket.uid, sessionSecret(env)));
   return new Response(null, { status: 303, headers });
 }
@@ -92,19 +99,20 @@ export async function handleNativeConnect(request, env, url, { user, signedIn })
     const { provider } = await request.json().catch(() => ({}));
     if (!PROVIDERS.has(provider)) return Response.json({ message: L("Neznámá služba.", "Unknown service.") }, { status: 400 });
     const ticket = await connectTicket(user.id, provider, sessionSecret(env));
-    return Response.json({ status: "ok", url: url.origin + "/auth/app/connect?ticket=" + encodeURIComponent(ticket) }, { headers: { "Cache-Control": "no-store" } });
+    return Response.json({ status: "ok", url: url.origin + "/auth/app/connect?ticket=" + encodeURIComponent(ticket) + "&hl=" + lang() }, { headers: { "Cache-Control": "no-store" } });
   }
   if (url.pathname === "/auth/app/connect" && request.method === "GET") {
     const ticketText = url.searchParams.get("ticket");
     const ticket = await readConnectTicket(ticketText, sessionSecret(env));
     if (!ticket) return expired();
+    const hl = pageLang(url, request);
     // Already signed in here as the ticket's user: nothing to confirm.
-    if (signedIn && Number(user?.id) === ticket.uid) return continueToProvider(env, ticket);
+    if (signedIn && Number(user?.id) === ticket.uid) return continueToProvider(env, ticket, hl);
     // Opened by the app's own sheet (Auth.swift): nobody else's link can add this header.
-    if (request.headers.get("X-Aurin-Connect") === ticketText) return continueToProvider(env, ticket);
+    if (request.headers.get("X-Aurin-Connect") === ticketText) return continueToProvider(env, ticket, hl);
     const owner = await findUser(env.DB, ticket.uid, env).catch(() => null);
     if (!owner) return expired();
-    return confirmPage(request, ticketText, ticket, owner.email);
+    return confirmPage(request, ticketText, ticket, owner.email, hl);
   }
   if (url.pathname === "/auth/app/connect" && request.method === "POST") {
     // Only the confirm button on this site's own page, never a form posted from elsewhere.
@@ -112,7 +120,7 @@ export async function handleNativeConnect(request, env, url, { user, signedIn })
     const form = await request.formData().catch(() => null);
     const ticket = await readConnectTicket(form?.get("ticket"), sessionSecret(env));
     if (!ticket) return expired();
-    return continueToProvider(env, ticket);
+    return continueToProvider(env, ticket, form?.get("hl") === "en" ? "en" : "cs");
   }
   return null;
 }

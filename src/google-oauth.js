@@ -14,7 +14,7 @@ export async function handleGoogleOAuth(request, env, pathname) {
     const origin = appOrigin(env, request); const state = crypto.randomUUID(); const redirectUri = origin + "/oauth/google/callback";
     const u = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     u.searchParams.set("client_id", env.GOOGLE_CLIENT_ID); u.searchParams.set("redirect_uri", redirectUri); u.searchParams.set("response_type", "code");
-    u.searchParams.set("scope", [...HEALTH_SCOPES, ...Object.values(EXTRA_SCOPES)].join(" ")); u.searchParams.set("include_granted_scopes", "true"); u.searchParams.set("access_type", "offline"); u.searchParams.set("prompt", "consent"); u.searchParams.set("state", state);
+    u.searchParams.set("scope", [...HEALTH_SCOPES, ...Object.values(EXTRA_SCOPES)].join(" ")); u.searchParams.set("include_granted_scopes", "true"); if (["en", "cs"].includes(params.get("hl"))) u.searchParams.set("hl", params.get("hl")); u.searchParams.set("access_type", "offline"); u.searchParams.set("prompt", "consent"); u.searchParams.set("state", state);
     // Where the user comes back to (the iPhone app) rides along with the state.
     return new Response(null,{status:302,headers:{Location:u.toString(),"Set-Cookie":"pfd_google_oauth_state="+oauthStateValue(state, request, env)+"; Max-Age=600; Path=/oauth/google; Secure; HttpOnly; SameSite=Lax"}});
   }
