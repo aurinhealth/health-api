@@ -77,6 +77,29 @@ test("a sync skips Google data the user gave no permission for and still ends ok
   } finally { globalThis.fetch = realFetch; }
 });
 
+test("workouts come from every Google source, without the ones Aurin wrote there", async () => {
+  const db = profileDb();
+  db.sqlite.exec("CREATE UNIQUE INDEX hd_key ON health_datapoints(user_id, source_family, data_type, external_id)");
+  const families = [];
+  const realFetch = globalThis.fetch;
+  const point = (id, client) => ({ name: "users/me/dataTypes/exercise/dataPoints/" + id, dataSource: client ? { application: { googleWebClientId: client } } : { platform: "FITBIT" },
+    exercise: { interval: { startTime: "2026-10-23T14:20:00Z", endTime: "2026-10-23T14:45:00Z" }, exerciseType: "WALKING", activeDuration: "1500s" } });
+  globalThis.fetch = async url => {
+    const text = String(url);
+    if (text.includes("oauth2")) return Response.json({ access_token: "t" });
+    if (text.includes("/dataTypes/exercise/")) { families.push(text); return Response.json({ dataPoints: [point("phone-walk"), point("aurin-gym", "aurin-client")] }); }
+    return Response.json({ dataPoints: [] });
+  };
+  try {
+    const env = { DB: db, USER_ID: 7, GOOGLE_CLIENT_ID: "aurin-client", GOOGLE_REFRESH_TOKEN: "r", GOOGLE_SCOPES: [HEALTH_PERMISSIONS.activity], CONNECTED_PROVIDERS: ["google"] };
+    const body = await (await legacy.fetch(new Request("https://internal/sync/google/recent", { method: "POST" }), env, ctx)).json();
+    assert.equal(body.results.find(r => r.type === "exercise").saved, 1);
+    assert.ok(families.length && families.every(url => decodeURIComponent(url).includes("dataSourceFamilies/google-sources")), families.join());
+    const rows = db.sqlite.prepare("SELECT source_family, external_id FROM health_datapoints WHERE data_type = 'exercise'").all();
+    assert.deepEqual(rows.map(r => [r.source_family, r.external_id]), [["google-wearables", "users/me/dataTypes/exercise/dataPoints/phone-walk"]]);
+  } finally { globalThis.fetch = realFetch; }
+});
+
 test("the connection status names Google permissions that were not given", async () => {
   const status = await connectionStatus({ GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "s", GOOGLE_REFRESH_TOKEN: "r", GOOGLE_SCOPES: [HEALTH_PERMISSIONS.activity] });
   const google = status.providers.find(p => p.id === "google");

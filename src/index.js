@@ -806,6 +806,11 @@ const GOOGLE_SYNC_CONFIGS = [
   ["body-fat", "body_fat", "sample", "google-sources", 30]
 ];
 
+// Workouts are read from every Google source, not only the wearables: a walk
+// started in the Google Health phone app (with the phone's GPS) is not a
+// wearable's. They are stored with the watch's (source_family google-wearables).
+const googleSourceFamily = (type, family) => "users/me/dataSourceFamilies/" + (type === "exercise" ? "google-sources" : family);
+
 async function googleReconcilePage(
   token,
   type,
@@ -866,6 +871,9 @@ async function saveGooglePointsBatch(env, family, type, points) {
   if (!points.length) return 0;
   // Settings → Synchronizace → Google Health → Stahovat hotové aktivity off.
   if (type === "exercise" && !(await readSyncPrefs(env.DB, env.USER_ID, "google")).pullActivities) return 0;
+  // Workouts Aurin itself wrote to Google Health (sync-destinations.js) are already in Aurin.
+  if (type === "exercise" && env.GOOGLE_CLIENT_ID) points = points.filter(p => p?.dataSource?.application?.googleWebClientId !== env.GOOGLE_CLIENT_ID);
+  if (!points.length) return 0;
 
   const statements = points.map(point => {
     const i = googleInfo(type, point);
@@ -925,7 +933,7 @@ async function saveGooglePointsBatch(env, family, type, points) {
 const RECENT_EXERCISE_DAYS=7;
 async function syncGoogleRecent(env){
   const token=await googleToken(env),wanted=['sleep','daily-heart-rate-variability','daily-resting-heart-rate','steps','active-energy-burned','exercise','weight'],configs=GOOGLE_SYNC_CONFIGS.filter(c=>wanted.includes(c[0])).map(c=>c[0]==='weight'?['weight','weight','sample','all-sources',2]:c);
-  const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;if(!googleTypeAllowed(env,type))return{type,saved,status:'skipped'};try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(type==='exercise'?RECENT_EXERCISE_DAYS:2),'users/me/dataSourceFamilies/'+family,dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:skippedForPermission(env,error)?'skipped':'error',message:error.message};}}));
+  const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;if(!googleTypeAllowed(env,type))return{type,saved,status:'skipped'};try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(type==='exercise'?RECENT_EXERCISE_DAYS:2),googleSourceFamily(type,family),dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:skippedForPermission(env,error)?'skipped':'error',message:error.message};}}));
   // Food and drinks other apps logged in Google Health (google-food.js).
   results.push(await importGoogleFood(env,{token}).then(r=>({type:'food',...r}),error=>({type:'food',status:skippedForPermission(env,error)?'skipped':'error',message:error.message})));
   // Data the user did not give permission for is not a failure.
@@ -1015,7 +1023,7 @@ async function processGoogleSyncBatch(env) {
         filterName,
         filterType,
         dateDaysAgo(days),
-        `users/me/dataSourceFamilies/${family}`,
+        googleSourceFamily(type, family),
         dateDaysFromNow(1),
         pageToken
       ) : { dataPoints: [], nextPageToken: null };
