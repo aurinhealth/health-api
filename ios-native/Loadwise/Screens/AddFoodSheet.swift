@@ -472,12 +472,16 @@ struct FoodAmountView: View {
                         if product.canReport && (product.reported == true || reportedNow) { ReportedTag() }
                     }
                 }
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    TextField("100", text: $amount).keyboardType(.decimalPad).font(Typo.number(56)).frame(maxWidth: 160)
-                    Text(product.perPortion ? "porce" : product.unit).font(Typo.body).foregroundStyle(Palette.faint)
-                }
-                PortionChips(product: current, amount: $amount)
+                // The same card as after a scan (BarcodeScanSheet): the values, then the wheel.
                 NutritionCells(product: current, amount: value ?? 0)
+                VStack(alignment: .leading, spacing: 4) {
+                    PortionWheel(product: current, amount: Binding(get: { value ?? 0 }, set: { amount = String(($0 * 10).rounded() / 10) }))
+                        .id(current.unit + (current.usableServing.map(Self.text) ?? "") + (current.serving_name ?? ""))
+                    if !current.perPortion, let size = current.usableServing {
+                        Text(L10n.f("1 %@ = %@ %@ · %@ kcal", current.servingName, Self.text(size), current.unit, Fmt.int(current.kcal(for: size))))
+                            .font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
                 if let note {
                     Label(note, systemImage: "sparkles").font(Typo.caption).foregroundStyle(Palette.amber)
                         .fixedSize(horizontal: false, vertical: true)
@@ -616,49 +620,6 @@ struct FoodAmountView: View {
         let api = model.api, before = product
         // In the background: a refused suggestion (daily limit) must not hold up the food.
         Task.detached { try? await api.suggestFoodCorrection(before: before, after: corrected) }
-    }
-}
-
-/// ¼, ⅓, ½ … of a serving or of the whole package, so nobody has to work out
-/// grams. Hidden when the food has neither.
-struct PortionChips: View {
-    let product: FoodProduct
-    @Binding var amount: String
-
-    static let fractions: [(label: String, value: Double)] = [("¼", 0.25), ("⅓", 1.0 / 3), ("½", 0.5), ("¾", 0.75), ("1", 1), ("1½", 1.5), ("2", 2)]
-
-    var body: some View {
-        if let reference = product.portionReference {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(product.perPortion ? L10n.tr("Počet porcí") : L10n.f("1 %@ = %@ %@", reference.name, FoodAmountView.text(reference.size), product.unit))
-                    .font(Typo.caption).foregroundStyle(Palette.muted)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Self.fractions, id: \.label) { fraction in
-                            let text = Self.text(reference.size * fraction.value, perPortion: product.perPortion)
-                            let selected = text == amount
-                            Button { amount = text } label: {
-                                Text(fraction.label).font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(selected ? Palette.onButton : Palette.ink)
-                                    .frame(minWidth: 44).frame(height: 36).padding(.horizontal, 4)
-                                    .background(selected ? Palette.button : Palette.ink.opacity(0.06), in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(L10n.f("%@ %@", fraction.label, reference.name))
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// Grams and ml whole; portions up to two decimals (⅓ = 0,33, ½ = 0,5).
-    static func text(_ value: Double, perPortion: Bool) -> String {
-        // No thousands separator: the amount field must read it back ("1500", not "1 500").
-        guard perPortion else { return String(Int(value.rounded())) }
-        let v = (value * 100).rounded() / 100
-        let digits = v.rounded() == v ? 0 : (v * 10).rounded() == v * 10 ? 1 : 2
-        return Fmt.decimal(v, digits: digits)
     }
 }
 
