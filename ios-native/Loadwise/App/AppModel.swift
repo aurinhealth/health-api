@@ -458,14 +458,43 @@ final class AppModel {
         if let running = announcedRefresh { return await running.value }
         let task = Task { await performRefresh(announce: true) }
         announcedRefresh = task
+        announcedSince = Date()
+        // Leaving the app mid-sync: it goes on for the time iOS gives, then stops.
+        let background = FinishInBackground("Today") { [weak self] in self?.dropRefresh() }
+        defer { background.end() }
         await task.value
         if announcedRefresh == task { announcedRefresh = nil }
     }
     @ObservationIgnored private var announcedRefresh: Task<Void, Never>?
+    @ObservationIgnored private var announcedSince = Date.distantPast
+    /// Bumped by each refresh: a stopped one leaves the pill to the one after it.
+    @ObservationIgnored private var refreshRound = 0
+    @ObservationIgnored private var leftAt: Date?
+
+    /// The app went to the background (RootView).
+    func left() { leftAt = Date() }
+
+    /// Back in the app (RootView). After more than the half minute iOS lets
+    /// work go on, what was on its way then stayed frozen mid-request: the
+    /// open does not wait for it but syncs anew.
+    func cameBack() {
+        guard let leftAt else { return }
+        self.leftAt = nil
+        guard Date().timeIntervalSince(leftAt) > 25 else { return }
+        if announcedRefresh != nil, announcedSince < leftAt { dropRefresh() }
+        AppleHealth.shared.dropFrozen(left: leftAt)
+    }
+
+    private func dropRefresh() {
+        announcedRefresh?.cancel()
+        announcedRefresh = nil
+    }
 
     private func performRefresh(announce: Bool) async {
+        refreshRound += 1
+        let round = refreshRound
         loading = true
-        defer { loading = false }
+        defer { if round == refreshRound { loading = false } }
         if announce { syncStatus = .syncing }
         if Self.accountUnconfirmed { await loadAccountInitial() }
         await sendOutbox()
@@ -508,7 +537,7 @@ final class AppModel {
         } catch {
             // Without signal the saved screen stays; an error only without one.
             // A request cut short (a newer load of the same data, a closed screen) is no error.
-            if Self.isCancellation(error) { if syncStatus == .syncing { syncStatus = nil }; return }
+            if Self.isCancellation(error) { if round == refreshRound, syncStatus == .syncing { syncStatus = nil }; return }
             let lost = noteConnection(error)
             if !(lost && today != nil) { errorMessage = error.localizedDescription }
             // Offline has its own note; the pill takes a failed sync.
@@ -600,7 +629,8 @@ final class AppModel {
         let day = tab == .training ? Self.localDate(Date()) : shownDay
         if fresh(tab, day: day) { return }
         refreshing.insert(tab)
-        defer { refreshing.remove(tab) }
+        let background = FinishInBackground("Refresh")
+        defer { refreshing.remove(tab); background.end() }
         switch tab {
         case .today: await refresh(announce: true)
         case .training: await refreshTraining()
@@ -847,7 +877,9 @@ final class AppModel {
         // Already sending: the running loop takes the new write in one more round.
         guard !sendingOutbox else { sendAgain = true; return false }
         sendingOutbox = true
-        defer { sendingOutbox = false }
+        // A meal saved just before leaving the app still goes out.
+        let background = FinishInBackground("Outbox")
+        defer { sendingOutbox = false; background.end() }
         var sentAny = false
         repeat {
             sendAgain = false
