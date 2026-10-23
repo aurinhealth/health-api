@@ -174,8 +174,7 @@ struct GymSessionView: View {
                 if let note = Self.withoutMuscleList(day.note) {
                     Text(note).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
                 }
-                SectionLabel(text: "Dnešní trénink").padding(.top, 18)
-                GymPartsCard(day: day, date: date).padding(.top, 8)
+                GymPartsCard(day: day, date: date).padding(.top, 18)
                 NavigationLink(value: AppRoute.trainingMode(date)) {
                     Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())

@@ -127,6 +127,9 @@ test("planned for the athlete, a shared workout keeps its exercises and sets but
   assert.match(work.filter(r => r[1] === "Můj vlastní cvik")[1][9], /podle zkušební série/);
   assert.equal(plan.planName, "Nohy");
   assert.match(plan.rationale, /Petr/);
+  // The warm-up and the stretching come with a saved workout too.
+  assert.ok(plan.warmup.items.length && plan.stretching.items.length);
+  assert.equal(plan.spare, null);
 });
 
 const ride = { sport: "ride", name: "Sweet spot 3×15", blocks: [

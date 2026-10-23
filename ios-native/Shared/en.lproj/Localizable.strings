@@ -730,6 +730,7 @@
 "Upravit" = "Edit";
 "Upravit hodnoty a značku" = "Edit values and brand";
 "Upravit jídla dne" = "Edit meals";
+"Upravit pořadí" = "Reorder";
 "Upravit jídlo" = "Edit food";
 "Upravit pití" = "Edit drink";
 "Upravit plán" = "Edit plan";
@@ -2651,7 +2652,6 @@
 "Švihadlo" = "Jump rope";
 "Kardio hotové" = "Cardio done";
 "Tempo, při kterém ještě zvládneš mluvit." = "A pace at which you can still talk.";
-"Podržením a tažením změníš pořadí." = "Touch and hold, then drag to change the order.";
 "%@ cvik" = "%@ exercise";
 "%@ cviky" = "%@ exercises";
 "%@ cviků" = "%@ exercises";

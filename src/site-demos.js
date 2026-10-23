@@ -34,7 +34,8 @@ const P = {
   play: '<path d="M8 5.5v13l10.5-6.5Z" fill="currentColor" stroke="none"/>',
   wand: '<path d="M4 20 15 9M14 4v3M17.5 5.5l-2 2M20 9h-3M18.5 12.5l-2-2"/>',
   steps: '<path d="M7 4c2 0 3 2.2 3 5s-1 4-3 4-3-1.2-3-4 1-5 3-5ZM5 16h4M17 8c2 0 3 2.2 3 5s-1 4-3 4-3-1.2-3-4 1-5 3-5ZM15 20h4"/>',
-  grip: '<path d="M5 8h14M5 12h14M5 16h14"/>',
+  chup: '<path d="m6 15 6-6 6 6"/>',
+  chdown: '<path d="m6 9 6 6 6-6"/>',
   cal: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 8v.2"/>',
   thumb: '<path d="M7 11v9H4v-9ZM7 11l4-7c1.5 0 2.5 1 2.2 2.6L12.7 10H18a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7"/>',
@@ -201,19 +202,19 @@ const builder = `<div class="dm pad bld">
 <div class="btn dark"${at('5900')}>${ic('check')}Save to plan</div>
 </div></div>`;
 
-const part = (id, icon, color, title, sub, toggle) => `<div class="pt ${id}"><span class="gr">${ic('grip')}</span><span class="ib ${color}">${ic(icon)}</span><div><b>${title}</b><span class="mut s">${sub}</span></div>${toggle === null ? '' : `<span class="tg${toggle ? ' on' : ''}"${toggle === 'flip' ? at('1200:on') : ''}><i></i></span>`}</div>`;
+// Upravit pořadí (GymDayParts.swift GymPartsCard) swaps the switches for arrows that move a part up or down.
+const part = (id, icon, color, title, sub, toggle) => `<div class="pt ${id}"><span class="ib ${color}">${ic(icon)}</span><div><b>${title}</b><span class="mut s">${sub}</span></div><span class="gpr">${toggle === null ? '' : `<span class="tg${toggle ? ' on' : ''}"${toggle === 'flip' ? at('1200:on') : ''}><i></i></span>`}<span class="gar"><i>${ic('chup')}</i><i>${ic('chdown')}</i></span></span></div>`;
 const gymParts = `<div class="dm pad">
 <div class="row sp"><b class="sent md2"><span${n(58, 68, 1200, 700, 'i')}>68</span> min in total</b><span class="mut s"><span${n(13, 23, 1200, 700, 'i')}>23</span> min extra</span></div>
 <div class="tbar"><i class="w" style="flex:5"></i><i class="l" style="flex:45"></i><i class="sx" style="flex:8"></i></div>
 <div class="tl s mut"><span>Warm-up +5 min</span><span>Lifting 45 min</span><span>Stretching +8 min</span></div>
-<div class="sl">Today’s workout</div>
-<div class="gparts"${at('2600:drag 3600:swap 4400-drag')}>
+<div class="row sp"><span class="sl">Today’s workout</span><span class="s gro" data-tx="0|Reorder;2600|Done;4600|Reorder">Reorder</span></div>
+<div class="gparts"${at('2600:reo 3500:swap 4600-reo')}>
 ${part('p1', 'run', 'amb', 'Warm-up', 'Mobility · 5 min', true)}
 ${part('p2', 'bike', 'rust', 'Cardio', 'Exercise bike · 10 min', 'flip')}
 ${part('p3', 'gym', 'amb2', 'Exercises', '5 exercises · 45 min', null)}
 ${part('p4', 'flex', 'ind', 'Stretching', '8 min', true)}
 </div>
-<p class="hint"${at('2600')}>Hold and drag to change the order</p>
 </div>`;
 
 // ---- Training mode (TrainingModeView.swift, TrainingModeParts.swift GymSetRow, GymIntensity.swift) ----
@@ -491,16 +492,19 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .tbar .w{background:var(--amber)}.tbar .l{background:color-mix(in srgb,var(--text) 85%,transparent)}.tbar .c{background:var(--rust)}.tbar .sx{background:var(--indigo)}
 .tl{display:flex;justify-content:space-between}
 .gparts{position:relative;padding:4px 8px;border-radius:20px;background:var(--bg)}
-.pt{display:grid;grid-template-columns:18px 32px 1fr auto;align-items:center;gap:10px;min-height:54px;border-top:1px solid var(--line);background:var(--bg);transition:transform .6s cubic-bezier(.16,1,.3,1),box-shadow .3s,opacity .3s}
-.pt:first-child{border-top:0}.pt b{display:block;font-size:14px;font-weight:500}.pt .gr{color:var(--muted);font-size:14px}
+.pt{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:10px;min-height:54px;border-top:1px solid var(--line);background:var(--bg);transition:transform .6s cubic-bezier(.16,1,.3,1),box-shadow .3s,opacity .3s}
+.pt:first-child{border-top:0}.pt b{display:block;font-size:14px;font-weight:500}
+.gro{font-weight:600;color:var(--amber);margin:14px 0 8px}
+.gpr{display:grid;justify-items:end;align-items:center}.gpr>*{grid-area:1/1}
+.gar{display:flex;gap:6px;opacity:0;transition:opacity .3s}.gar i{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:color-mix(in srgb,var(--text) 8%,transparent)}.gar svg{width:14px;height:14px}
+.gparts.reo .gar{opacity:1}.gparts.reo .pt .tg{opacity:0!important}.gparts.reo .pt{opacity:1}
+.p1 .gar i:first-child,.p4 .gar i:last-child{opacity:.3}
 .tg{position:relative;width:44px;height:26px;border-radius:99px;background:color-mix(in srgb,var(--text) 12%,transparent);transition:background .3s}
 .tg i{position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:var(--muted);transition:transform .35s cubic-bezier(.3,1.5,.5,1),background .3s}
 .tg.on{background:var(--button)}.tg.on i{transform:translateX(18px);background:var(--on-button)}
 .js .tg[data-at]{opacity:1!important;transform:none!important}
 .p2:has(.tg:not(.on)){opacity:.45}
-.gparts.drag .p2{position:relative;z-index:2;border-radius:14px;box-shadow:0 14px 30px -10px rgba(60,40,10,.4);transform:scale(1.03)}
-.gparts.swap .p2{transform:translateY(54px) scale(1.03)}.gparts.swap .p3{transform:translateY(-54px)}
-.gparts.swap:not(.drag) .p2{transform:translateY(54px)}
+.gparts.swap .p2{transform:translateY(54px)}.gparts.swap .p3{transform:translateY(-54px)}
 .js .gparts[data-at]{opacity:1!important;transform:none!important}
 
 /* Training mode. */

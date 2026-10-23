@@ -47,6 +47,12 @@ test('stretching follows the muscles worked, fits the time and can be turned off
   assert.equal(off.stretching, null);
   assert.equal(off.warmup, null);
   assert.equal(off.timing.routineSeconds, 0);
+  // Turned off, they are still offered switched off for the day.
+  assert.ok(off.spare.warmup.items.length && off.spare.stretching.items.length);
+  const offered = readRoutines(planValues(off));
+  assert.deepEqual(offered.off, ['warmup', 'stretching']);
+  assert.deepEqual(offered.warmup.items, off.spare.warmup.items);
+  assert.equal(plan.spare, null);
   assert.equal(stretchingFor([['WARMUP', 'DB bench press']], name => EXERCISES[name]?.muscle), null);
 });
 

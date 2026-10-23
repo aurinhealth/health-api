@@ -371,7 +371,7 @@ struct TrainingModeView: View {
         let shownKg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg) ?? ""
         let shownReps: String = (s.done ? s.reps : carry?.reps ?? s.plannedReps) ?? ""
         // By sides the number shows on the L row only.
-        let letter = s.intensity ?? (s.done ? GymIntensity.from(rpe: s.rpe) : nil)
+        let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) : carriedLetter(s, in: exercise) ?? s.intensity
         return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
@@ -1259,14 +1259,25 @@ struct TrainingModeView: View {
         }
     }
 
+    /// The letter chosen for the set before (not the plan's): the sets to come
+    /// take it too, as they take its weight and reps.
+    private func carriedLetter(_ set: GymSet, in exercise: GymExercise) -> String? {
+        guard set.work, !picked.contains(set.row),
+              let before = exercise.sets.last(where: { $0.work && $0.done && $0.row < set.row && $0.side == set.side }),
+              picked.contains(before.row) else { return nil }
+        return before.intensity
+    }
+
     private func complete(_ set: GymSet) async {
         guard var next = day else { return }
+        let carried = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { carriedLetter(set, in: $0) }
+        if carried != nil { picked.insert(set.row) }
         let k = LiftWeight.kgText(kg)
         let r = reps.trimmingCharacters(in: .whitespaces)
         // Nothing typed in reps: the plan's lower number ("5" of "5–8").
         let planned: String = GymCoach.firstNumber(set.plannedReps).map { String($0) } ?? (set.plannedReps ?? "")
-        // The letter in the set (the plan's, or the one chosen) goes with it.
-        next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.drop ? "" : planned) : r, rpe: "")
+        // The letter in the set (the plan's, the one chosen, or the one chosen for the set before) goes with it.
+        next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.drop ? "" : planned) : r, rpe: "", intensity: carried)
         // The start in the sheet: after iOS closes the app the clock goes on from it.
         if next.startedAt == nil { next.markStarted(live.start ?? Date()) }
         day = next

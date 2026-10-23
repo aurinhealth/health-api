@@ -640,7 +640,7 @@ export function overviewPage(request) {
       ['training', 'week', 150, 'Your week at a glance.', 'Follow a training plan, plan the week yourself or let the AI do it, each workout with its intervals drawn out, and sync it with Intervals.icu. Take one session out and keep the rest, or have the week recalculated. When your readiness and the load ahead add up to too much, the coach proposes moving, easing or dropping a session. A finished workout shows how much of the plan you did, 92 % or 140 %, with where it came from, and the month is a pull away.', 8000]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
-      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, and drag them into the order you like. Then start.', 7000]]],
+      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, and move them into the order you like. Then start.', 7000]]],
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
       ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them, add or remove a set, and start.', 6000],
       ['training-set', 'tmTick', 380, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets.', 6000],

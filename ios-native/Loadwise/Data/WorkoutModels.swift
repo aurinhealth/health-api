@@ -122,6 +122,8 @@ struct GymDay: Decodable, Equatable {
         return GymStretching(minutes: max(1, all.minutes - Int((Double(seconds) / 60).rounded())), items: moves)
     }
     var stretching: GymStretching? { GymStretching.routines(values)?.stretching }
+    /// The warm-up and the stretching turned off in Nastavení → Posilovna ("warmup", "stretching"): offered switched off.
+    var routinesOff: [String] { GymStretching.routines(values)?.off ?? [] }
     /// The cardio at the start and at the end (an older plan: its warm-up's easy cardio).
     var cardio: GymStretching.Cardio? {
         let routines = GymStretching.routines(values)

@@ -3,7 +3,7 @@
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
 import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts } from "./strength-generator.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { cardioFor, cardioMode, cardioOptions, cardioType, routineSize, stretchingFor, typicalExtraMinutes, warmupFor } from "./stretching.js";
+import { cardioFor, cardioMode, cardioOptions, cardioType, planRoutines, routineSize, stretchingFor, typicalExtraMinutes, warmupFor } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
@@ -261,6 +261,7 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
         const size=routineSize(Number(draft.minutes)||60),setup=await trainingSetup(env.DB).catch(()=>null);
         if(plan.warmup)plan.warmup=warmupFor(plan.rows,muscleOf,{...size.warmup,stations:setup?.stations})||plan.warmup;
         if(plan.stretching)plan.stretching=stretchingFor(plan.rows,muscleOf,{...size.stretching,stations:setup?.stations})||plan.stretching;
+        if(plan.spare)plan.spare=planRoutines(plan.rows,muscleOf,{...setup,warmup:!plan.spare.warmup,stretching:!plan.spare.stretching},Number(draft.minutes)||60).spare;
         if(setup)plan.cardio=cardioFor(setup,size.cardio);
       }
       if((await readGymPlan(env.DB,plan.date)).stored)throw new Error(L('Na tento den již existuje gym plán. Otevři jej a uprav ho.', 'A gym plan already exists for this day. Open it and edit it.'));
