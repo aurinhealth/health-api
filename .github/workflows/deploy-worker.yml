@@ -101,7 +101,7 @@ jobs:
     env:
       WORKER: ${{ inputs.target == 'production' && 'health-api' || 'health-api-staging' }}
       DATABASE: ${{ inputs.target == 'production' && 'health-data' || 'health-data-staging' }}
-      HOST: ${{ inputs.target == 'production' && 'petrfitnessdata.eu' || 'staging.aurin.health' }}
+      HOST: ${{ inputs.target == 'production' && 'aurin.health' || 'staging.aurin.health' }}
       ENV_ARGS: ${{ inputs.target == 'production' && ' ' || '--env staging' }}
       STAGING_FLAG: ${{ inputs.target == 'production' && ' ' || '--staging' }}
     steps:
@@ -334,7 +334,7 @@ jobs:
           set -euo pipefail
           date_value="$(TZ=Europe/Prague date +%F)"
           # Keep the response body on failure so the cause is visible in the log.
-          response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data "{\"action\":\"generate\",\"date\":\"$date_value\",\"preview\":true}" "https://petrfitnessdata.eu/automation/strength")"
+          response="$(curl -sS -w '\n%{http_code}' -X POST -H "Authorization: Bearer $OIDC_TOKEN" -H "Content-Type: application/json" --data "{\"action\":\"generate\",\"date\":\"$date_value\",\"preview\":true}" "https://aurin.health/automation/strength")"
           code="${response##*$'\n'}"
           body="${response%$'\n'*}"
           if [ "$code" != "200" ]; then
@@ -371,7 +371,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          response="$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/health/nutrition")"
+          response="$(curl -sS -w '\n%{http_code}' -H "Authorization: Bearer $OIDC_TOKEN" "https://aurin.health/health/nutrition")"
           code="${response##*$'\n'}"
           body="${response%$'\n'*}"
           if [ "$code" != "200" ]; then
@@ -394,7 +394,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          result="$(curl -sS -o "$RUNNER_TEMP/today.json" -w '%{http_code} %{time_total}' -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/today")"
+          result="$(curl -sS -o "$RUNNER_TEMP/today.json" -w '%{http_code} %{time_total}' -H "Authorization: Bearer $OIDC_TOKEN" "https://aurin.health/app/api/today")"
           code="${result%% *}"
           seconds="${result##* }"
           echo "HTTP $code in ${seconds} s"
@@ -424,27 +424,27 @@ jobs:
         run: |
           set -euo pipefail
           # The old web app is gone: /app leads to the overview page.
-          old_app="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://petrfitnessdata.eu/app")"
-          [ "$old_app" = "301 https://petrfitnessdata.eu/" ] || { echo "/app must redirect to the overview page, got $old_app"; exit 1; }
-          anonymous="$(curl -sS -o /dev/null -w '%{http_code}' "https://petrfitnessdata.eu/app/api/daily")"
+          old_app="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://aurin.health/app")"
+          [ "$old_app" = "301 https://aurin.health/" ] || { echo "/app must redirect to the overview page, got $old_app"; exit 1; }
+          anonymous="$(curl -sS -o /dev/null -w '%{http_code}' "https://aurin.health/app/api/daily")"
           [ "$anonymous" = "401" ] || { echo "Dashboard API must reject anonymous requests, got HTTP $anonymous"; exit 1; }
           # Sessions are signed with SESSION_SECRET only: without it nobody can sign in.
           # Google sign-in stays open only for the iPhone app (?app=<challenge>).
-          login="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://petrfitnessdata.eu/auth/google?app=$(printf 'a%.0s' $(seq 1 43))")"
+          login="$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://aurin.health/auth/google?app=$(printf 'a%.0s' $(seq 1 43))")"
           case "$login" in "302 https://accounts.google.com/"*) ;; *) echo "Google sign-in is not set up (HTTP ${login%% *}); is SESSION_SECRET set?"; exit 1;; esac
-          home="$(curl -fsS "https://petrfitnessdata.eu/")"
+          home="$(curl -fsS "https://aurin.health/")"
           python -c 'import sys; s=sys.stdin.read(); assert "Aurin" in s; assert "href=\"/privacy\"" in s' <<< "$home"
-          share_type="$(curl -fsS -o /dev/null -w '%{content_type}' "https://petrfitnessdata.eu/site/og-en.png")"
+          share_type="$(curl -fsS -o /dev/null -w '%{content_type}' "https://aurin.health/site/og-en.png")"
           [ "$share_type" = "image/png" ] || { echo "Overview share image not served, got $share_type"; exit 1; }
-          daily="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/daily")"
+          daily="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://aurin.health/app/api/daily")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"' <<< "$daily"
-          sleep="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/sleep")"
+          sleep="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://aurin.health/app/api/sleep")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "sessions" in d' <<< "$sleep"
-          gym="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/gym")"
+          gym="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://aurin.health/app/api/gym")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "values" in d; assert "videoLinks" in d' <<< "$gym"
-          activities="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/activities")"
+          activities="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://aurin.health/app/api/activities")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert "activities" in d' <<< "$activities"
-          week="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://petrfitnessdata.eu/app/api/week?start=$(TZ=Europe/Prague date -d 'monday this week' +%F)")"
+          week="$(curl -fsS -H "Authorization: Bearer $OIDC_TOKEN" "https://aurin.health/app/api/week?start=$(TZ=Europe/Prague date -d 'monday this week' +%F)")"
           python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status")=="ok"; assert len(d.get("days",[]))==7,"days="+str(len(d.get("days",[])))' <<< "$week"
 
       # The test server has no data of its own until a tester signs in, so it

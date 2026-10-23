@@ -98,19 +98,19 @@ test("Intervals.icu connects with one button once its app is registered", async 
   const db = createD1();
   const env = { DB: db, STRENGTH_API_KEY: "k", USER_ID: 5, INTERVALS_CLIENT_ID: " cid ", INTERVALS_CLIENT_SECRET: "secret" };
   // Not registered: the key form stays the way in.
-  const off = await handleIntervalsOAuth(new Request("https://petrfitnessdata.eu/oauth/intervals?return=native"), { ...env, INTERVALS_CLIENT_ID: "" }, "/oauth/intervals");
+  const off = await handleIntervalsOAuth(new Request("https://aurin.health/oauth/intervals?return=native"), { ...env, INTERVALS_CLIENT_ID: "" }, "/oauth/intervals");
   assert.equal(off.headers.get("Location"), "loadwise://connected?event=intervals-failed");
   assert.equal((await connectionStatus({ ...env, INTERVALS_CLIENT_ID: "" })).providers.find(p => p.id === "intervals").method, "key");
 
-  const start = await handleIntervalsOAuth(new Request("https://petrfitnessdata.eu/oauth/intervals?return=native"), env, "/oauth/intervals");
+  const start = await handleIntervalsOAuth(new Request("https://aurin.health/oauth/intervals?return=native"), env, "/oauth/intervals");
   const to = new URL(start.headers.get("Location"));
   assert.equal(to.origin + to.pathname, "https://intervals.icu/oauth/authorize");
   assert.equal(to.searchParams.get("client_id"), "cid");
   assert.equal(to.searchParams.get("scope"), INTERVALS_SCOPES.join(","));
-  assert.equal(to.searchParams.get("redirect_uri"), "https://petrfitnessdata.eu/oauth/intervals/callback");
+  assert.equal(to.searchParams.get("redirect_uri"), "https://aurin.health/oauth/intervals/callback");
   const cookie = start.headers.get("Set-Cookie").split(";")[0], state = to.searchParams.get("state");
 
-  const callback = (query, fetchImpl) => handleIntervalsOAuth(new Request("https://petrfitnessdata.eu/oauth/intervals/callback?" + query, { headers: { Cookie: cookie } }), env, "/oauth/intervals/callback", fetchImpl);
+  const callback = (query, fetchImpl) => handleIntervalsOAuth(new Request("https://aurin.health/oauth/intervals/callback?" + query, { headers: { Cookie: cookie } }), env, "/oauth/intervals/callback", fetchImpl);
   assert.equal((await callback("state=other&code=x")).headers.get("Location"), "loadwise://connected?event=intervals-failed");
   assert.equal((await callback("state=" + state + "&error=access_denied")).headers.get("Location"), "loadwise://connected?event=intervals-cancelled");
 
@@ -133,9 +133,9 @@ test("Intervals.icu connects with one button once its app is registered", async 
 
 test("connecting Google returns to the app; cancelling there is not a dead end", async () => {
   const google = { GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret" };
-  const start = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1&return=native"), google, "/oauth/google");
+  const start = await handleGoogleOAuth(new Request("https://aurin.health/oauth/google?consent=1&return=native"), google, "/oauth/google");
   const state = new URL(start.headers.get("Location")).searchParams.get("state"), cookie = start.headers.get("Set-Cookie").split(";")[0];
-  const cancelled = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google/callback?error=access_denied&state=" + state, { headers: { Cookie: cookie } }), google, "/oauth/google/callback");
+  const cancelled = await handleGoogleOAuth(new Request("https://aurin.health/oauth/google/callback?error=access_denied&state=" + state, { headers: { Cookie: cookie } }), google, "/oauth/google/callback");
   assert.equal(cancelled.headers.get("Location"), "loadwise://connected?event=google-cancelled");
 });
 

@@ -5,7 +5,7 @@ import { appleAppSiteAssociation, appleAppSiteAssociationBody, APP_BUNDLE_ID } f
 import { isPublicPath } from "../src/dashboard-auth.js";
 
 const env = { APPLE_TEAM_ID: "ABCDE12345" };
-const get = (path, method = "GET") => new Request("https://petrfitnessdata.eu" + path, { method });
+const get = (path, method = "GET") => new Request("https://aurin.health" + path, { method });
 
 test("the file names the app for passkeys (webcredentials) with the team id", async () => {
   assert.deepEqual(appleAppSiteAssociationBody(env).webcredentials, { apps: ["ABCDE12345.eu.petrfitnessdata.loadwise.native"] });

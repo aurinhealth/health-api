@@ -7,7 +7,7 @@ import { templateStrengthPlan } from "../src/strength-generator.js";
 import { enduranceStructure, enduranceSystem, zwoFile } from "../src/endurance-templates.js";
 import { getWorkout, catalog } from "../src/workout-library.js";
 
-const ORIGIN = "https://petrfitnessdata.eu";
+const ORIGIN = "https://aurin.health";
 const env = (raw, id) => ({ DB: scopedDb(raw, id), RAW_DB: raw, USER_ID: id });
 const session = name => ({ signedIn: true, user: { name } });
 async function call(raw, id, method, path, body, name = "Petr Bouma") {
@@ -101,7 +101,7 @@ test("the link's page shows the workout and its preview image to anyone", async 
   assert.doesNotMatch(html, /apple-itunes-app/);
   // With the app's App Store ID: the Safari banner, and the store when the app is missing.
   const listed = await (await publicSharePage(new Request(url), raw, url, { APP_STORE_ID: "6740000000" })).text();
-  assert.match(listed, /<meta name="apple-itunes-app" content="app-id=6740000000, app-argument=https:\/\/petrfitnessdata\.eu\/t\//);
+  assert.match(listed, /<meta name="apple-itunes-app" content="app-id=6740000000, app-argument=https:\/\/aurin\.health\/t\//);
   assert.match(listed, /apps\.apple\.com\/app\/id6740000000/);
   const imageUrl = new URL(url + "/og.png");
   const image = await publicSharePage(new Request(imageUrl), raw, imageUrl);

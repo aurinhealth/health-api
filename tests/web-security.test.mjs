@@ -9,7 +9,7 @@ const app = {
   async fetch(request) {
     this.calls.push(request.url);
     if (new URL(request.url).pathname === "/signin") return new Response("<h1>Loadwise</h1>", { headers: { "content-type": "text/html", "Referrer-Policy": "no-referrer" } });
-    if (new URL(request.url).pathname === "/go") return Response.redirect("https://petrfitnessdata.eu/app", 302);
+    if (new URL(request.url).pathname === "/go") return Response.redirect("https://aurin.health/app", 302);
     return Response.json({ status: "ok" });
   },
   async scheduled(controller) { this.calls.push("cron " + controller.cron); }
@@ -17,7 +17,7 @@ const app = {
 const worker = secured(app);
 
 test("every answer carries the security headers", async () => {
-  const response = await worker.fetch(new Request("https://petrfitnessdata.eu/app/api/me"), {}, ctx);
+  const response = await worker.fetch(new Request("https://aurin.health/app/api/me"), {}, ctx);
   assert.deepEqual(await response.json(), { status: "ok" });
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) assert.equal(response.headers.get(name), value, name);
   assert.match(response.headers.get("Content-Security-Policy"), /frame-ancestors 'none'/);
@@ -25,27 +25,27 @@ test("every answer carries the security headers", async () => {
 });
 
 test("a header the app sets itself is kept", async () => {
-  const response = await worker.fetch(new Request("https://petrfitnessdata.eu/signin"), {}, ctx);
+  const response = await worker.fetch(new Request("https://aurin.health/signin"), {}, ctx);
   assert.equal(response.headers.get("Referrer-Policy"), "no-referrer");
   assert.equal(response.headers.get("X-Frame-Options"), "DENY");
   assert.equal(await response.text(), "<h1>Loadwise</h1>");
 });
 
 test("a redirect (immutable headers) gets them too", async () => {
-  const response = await worker.fetch(new Request("https://petrfitnessdata.eu/go"), {}, ctx);
+  const response = await worker.fetch(new Request("https://aurin.health/go"), {}, ctx);
   assert.equal(response.status, 302);
-  assert.equal(response.headers.get("Location"), "https://petrfitnessdata.eu/app");
+  assert.equal(response.headers.get("Location"), "https://aurin.health/app");
   assert.equal(response.headers.get("X-Content-Type-Options"), "nosniff");
 });
 
 test("plain HTTP goes to HTTPS without reaching the app", async () => {
   app.calls.length = 0;
-  const page = await worker.fetch(new Request("http://petrfitnessdata.eu/app?lang=en"), {}, ctx);
+  const page = await worker.fetch(new Request("http://aurin.health/app?lang=en"), {}, ctx);
   assert.equal(page.status, 301);
-  assert.equal(page.headers.get("Location"), "https://petrfitnessdata.eu/app?lang=en");
-  const post = await worker.fetch(new Request("http://petrfitnessdata.eu/app/api/sync", { method: "POST", body: "{}" }), {}, ctx);
+  assert.equal(page.headers.get("Location"), "https://aurin.health/app?lang=en");
+  const post = await worker.fetch(new Request("http://aurin.health/app/api/sync", { method: "POST", body: "{}" }), {}, ctx);
   assert.equal(post.status, 308);
-  assert.equal(post.headers.get("Location"), "https://petrfitnessdata.eu/app/api/sync");
+  assert.equal(post.headers.get("Location"), "https://aurin.health/app/api/sync");
   assert.deepEqual(app.calls, []);
 });
 

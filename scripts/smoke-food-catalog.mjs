@@ -7,7 +7,7 @@ import {cloudflareD1,foodPlan,verifyFoodDatabase} from './food-catalog-tools.mjs
 export async function smokeFoodCatalog({api,foods,oidcToken,fetchImpl=fetch}) {
   if (!oidcToken) throw new Error('Deployment authentication is missing');
   await verifyFoodDatabase(api,foods,{check:async({key,product})=>{
-    const response=await fetchImpl('https://petrfitnessdata.eu/app/api/food/search',{
+    const response=await fetchImpl('https://aurin.health/app/api/food/search',{
       method:'POST',signal:AbortSignal.timeout(30000),headers:{Authorization:'Bearer '+oidcToken,'Content-Type':'application/json'},
       body:JSON.stringify({name:product.name,barcode:product.barcode})
     });

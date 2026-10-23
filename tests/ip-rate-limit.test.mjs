@@ -6,7 +6,7 @@ import { allowRequest, allowClient, clientKey, callerNetwork, CLIENT_LIMITS } fr
 
 const MIGRATION = readFileSync(new URL("../migrations/0020_request_limits.sql", import.meta.url), "utf8");
 const T0 = Date.parse("2026-10-07T08:00:00Z");
-const from = (ip, path = "/auth/email/start") => new Request("https://petrfitnessdata.eu" + path, { method: "POST", headers: ip ? { "CF-Connecting-IP": ip } : {} });
+const from = (ip, path = "/auth/email/start") => new Request("https://aurin.health" + path, { method: "POST", headers: ip ? { "CF-Connecting-IP": ip } : {} });
 
 test("a key gets its minute, hour and day budgets; each window starts over", async () => {
   const db = createD1();

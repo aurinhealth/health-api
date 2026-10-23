@@ -5,7 +5,7 @@ Two servers run the same code with separate data:
 | | Live | Test |
 | --- | --- | --- |
 | Worker | `health-api` | `health-api-staging` |
-| Address | aurin.health (and petrfitnessdata.eu) | staging.aurin.health |
+| Address | aurin.health | staging.aurin.health |
 | Central database | `health-data` + 20 user databases | `health-data-staging` + 2 user databases |
 | Food catalogue | `petrfitness-foods` | `petrfitness-foods-staging`; the read-only world catalogue in R2 is shared |
 | Deployed by | `vydat.yml` (or `deploy-worker.yml` by hand, target production) | every push to main (`deploy-worker.yml`) |

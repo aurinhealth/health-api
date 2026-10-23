@@ -70,7 +70,7 @@ export async function resolvePrincipal(request, env, verifyOidc = verifyGitHubAc
 }
 
 // The browser sends the session cookie also with requests that pages of other
-// sites under petrfitnessdata.eu make here: it treats them as the same site, so
+// sites under aurin.health make here: it treats them as the same site, so
 // SameSite=Lax does not stop them. A change made with the session therefore
 // has to come from a page of this very address.
 const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

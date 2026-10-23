@@ -185,7 +185,7 @@ test("preview deployments cannot upgrade the shared production database", async 
   const preview = new Request("https://040dc7e4-health-api.chelseafc-czsk.workers.dev/app/api/me");
   await assert.rejects(ensureTenancy(db, env, { request: preview }), /previews cannot upgrade/);
   assert.equal(await db.prepare("SELECT name FROM sqlite_master WHERE name='users'").first(), null);
-  await ensureTenancy(db, env, { request: new Request("https://petrfitnessdata.eu/app/api/me") });
+  await ensureTenancy(db, env, { request: new Request("https://aurin.health/app/api/me") });
   assert.ok(await db.prepare("SELECT id FROM users").first());
   // Once upgraded, previews simply use the new schema.
   _resetTenancyForTest();

@@ -15,7 +15,7 @@ async function token(pair, kid, overrides = {}) {
   const data = b64({ alg: "RS256", kid }) + "." + b64(claims);
   return data + "." + Buffer.from(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", pair.privateKey, new TextEncoder().encode(data))).toString("base64url");
 }
-const request = jwt => new Request("https://petrfitnessdata.eu/automation/strength", { method: "POST", headers: { Authorization: "Bearer " + jwt } });
+const request = jwt => new Request("https://aurin.health/automation/strength", { method: "POST", headers: { Authorization: "Bearer " + jwt } });
 
 test("a workflow token signed with a key GitHub rotated in fetches the keys again, at most once a minute", async () => {
   _resetGitHubJwksCacheForTest();

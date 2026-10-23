@@ -84,8 +84,8 @@ enum AppRoute: Hashable {
         }
     }
 
-    /// Hosts of shared workout links: aurin.health, older links on petrfitnessdata.eu.
-    static let linkHosts: Set<String> = ["aurin.health", "www.aurin.health", "petrfitnessdata.eu", "www.petrfitnessdata.eu"]
+    /// Hosts of shared workout links.
+    static let linkHosts: Set<String> = ["aurin.health", "www.aurin.health"]
 
     /// loadwise://open/<name>: the home-screen widgets link here. A shared
     /// workout's link opens here too, as a universal link or from its web page.

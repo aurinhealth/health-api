@@ -190,8 +190,8 @@ test('authenticated API requests route writes and caches; a missing shard return
   _resetTenancyForTest();
   env.SESSION_SECRET = 'test-session-secret'; env.OWNER_EMAIL = user(1).email;
   const cookie = (await sessionCookie(3,Math.floor(Date.now()/1000)+60,env.SESSION_SECRET)).split(';')[0];
-  const request = () => new Request('https://petrfitnessdata.eu/app/api/profile',{
-    method:'POST',headers:{Cookie:cookie,Origin:'https://petrfitnessdata.eu','Content-Type':'application/json'},body:JSON.stringify({sex:'female',age:30,height:165})
+  const request = () => new Request('https://aurin.health/app/api/profile',{
+    method:'POST',headers:{Cookie:cookie,Origin:'https://aurin.health','Content-Type':'application/json'},body:JSON.stringify({sex:'female',age:30,height:165})
   });
   const response = await entrypoint.fetch(request(),env,{waitUntil(){}});
   assert.equal(response.status,200); assert.equal((await response.json()).status,'ok');
@@ -203,7 +203,7 @@ test('authenticated API requests route writes and caches; a missing shard return
   assert.equal(failed.status,503); assert.equal(failed.headers.get('Retry-After'),'30');
   assert.equal(rows(core,'dashboard_profile',3).length,0);
   assert.equal(rows(shards[1],'dashboard_profile',3).length,0);
-  const anonymous = await entrypoint.fetch(new Request('https://petrfitnessdata.eu/app/api/me'),env,{waitUntil(){}});
+  const anonymous = await entrypoint.fetch(new Request('https://aurin.health/app/api/me'),env,{waitUntil(){}});
   assert.equal(anonymous.status,401); assert.equal(anonymous.headers.get('X-Storage-Routing'),'1');
   _resetTenancyForTest();
 });

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { appUpdateRequired, MIN_APP_API, APP_API_HEADER } from "../src/app-version.js";
 
-const request = headers => new Request("https://petrfitnessdata.eu/app/api/today", { headers });
+const request = headers => new Request("https://aurin.health/app/api/today", { headers });
 
 test("an app built for an older API is told to update", async () => {
   const response = appUpdateRequired(request({ [APP_API_HEADER]: String(MIN_APP_API - 1) }));

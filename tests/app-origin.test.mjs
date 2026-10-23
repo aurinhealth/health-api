@@ -6,13 +6,14 @@ import { handleGoogleOAuth } from "../src/google-oauth.js";
 import { handleIntervalsOAuth } from "../src/intervals-oauth.js";
 import { overviewPage, privacyPage } from "../src/site-pages.js";
 
-// aurin.health is the new home; petrfitnessdata.eu keeps working for older app builds and links.
-const hosts = ["https://aurin.health", "https://petrfitnessdata.eu"];
+// aurin.health is the new home; aurin.health keeps working for older app builds and links.
+const hosts = ["https://aurin.health", "https://aurin.health"];
 
-test("OAuth callbacks stay on the host the request came to", () => {
+test("OAuth callbacks go to aurin.health", () => {
   for (const origin of hosts) assert.equal(appOrigin({}, new Request(origin + "/auth/google")), origin);
-  assert.equal(appOrigin({}, new Request("https://health-api.example.workers.dev/x")), "https://petrfitnessdata.eu");
-  assert.equal(appOrigin({}, null), "https://petrfitnessdata.eu");
+  assert.equal(appOrigin({}, new Request("https://health-api.example.workers.dev/x")), "https://aurin.health");
+  assert.equal(appOrigin({}, new Request("https://petrfitnessdata.eu/auth/google")), "https://aurin.health");
+  assert.equal(appOrigin({}, null), "https://aurin.health");
   assert.equal(appOrigin({ APP_ORIGIN: "http://localhost:8787" }, new Request("https://aurin.health/")), "http://localhost:8787");
 });
 
@@ -31,12 +32,18 @@ test("Google sign-in, Google Health and Intervals.icu send their callback to the
   }
 });
 
-test("www.aurin.health leads to aurin.health, other hosts pass", () => {
+test("www.aurin.health and the old petrfitnessdata.eu lead to aurin.health, other hosts pass", () => {
   const response = wwwRedirect(new URL("https://www.aurin.health/privacy?lang=en"));
   assert.equal(response.status, 301);
   assert.equal(response.headers.get("Location"), "https://aurin.health/privacy?lang=en");
   assert.equal(wwwRedirect(new URL("https://aurin.health/")), null);
-  assert.equal(wwwRedirect(new URL("https://petrfitnessdata.eu/")), null);
+  for (const old of ["https://petrfitnessdata.eu", "https://www.petrfitnessdata.eu"]) {
+    const page = wwwRedirect(new URL(old + "/t/Ab3dEf7hJk?x=1"));
+    assert.equal(page.status, 301);
+    assert.equal(page.headers.get("Location"), "https://aurin.health/t/Ab3dEf7hJk?x=1");
+    // A POST keeps its method and body on the way.
+    assert.equal(wwwRedirect(new URL(old + "/app/api/sync"), "POST").status, 308);
+  }
 });
 
 test("the public pages link to the host they are served on, aurin.health by default", async () => {

@@ -1,6 +1,5 @@
 // /.well-known/apple-app-site-association: the file iOS reads before it lets
-// the iPhone app use the passkeys of the server's host (aurin.health, and
-// petrfitnessdata.eu for older builds). The webcredentials entry matches the
+// the iPhone app use the passkeys of the server's host (aurin.health). The webcredentials entry matches the
 // app's associated-domains entitlement (ios-native/project.yml).
 // APPLE_TEAM_ID is the Apple Developer team of the app (App Store Connect →
 // Membership, ten characters); without it the file is not served and the
@@ -13,7 +12,7 @@ export function appleAppSiteAssociationBody(env = {}) {
   if (!/^[A-Z0-9]{10}$/.test(team)) return null;
   const app = team + "." + APP_BUNDLE_ID;
   // applinks: a shared workout's link (/t/<id>, workout-templates.js) opens
-  // the app when it is installed (applinks:aurin.health and petrfitnessdata.eu in project.yml).
+  // the app when it is installed (applinks:aurin.health in project.yml).
   return { webcredentials: { apps: [app] }, applinks: { details: [{ appIDs: [app], components: [{ "/": "/t/*", comment: "Shared workouts" }] }] } };
 }
 

@@ -6,13 +6,13 @@ import { handleEmailLogin, handleEmailChange } from "../src/email-login.js";
 import { ensureTenancy, inviteUser, signInEmailUser, signInGoogleUser, findUser, changeUserEmail, _resetTenancyForTest } from "../src/tenancy.js";
 import { resolvePrincipal, sessionMatchesUser } from "../src/dashboard-auth.js";
 
-const ORIGIN = "https://petrfitnessdata.eu";
+const ORIGIN = "https://aurin.health";
 const MIGRATION = ["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
 async function setup(extra = {}) {
   _resetTenancyForTest();
   const sent = [];
-  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@petrfitnessdata.eu", ...extra };
+  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@aurin.health", ...extra };
   await ensureTenancy(env.DB, env);
   env.DB.sqlite.exec(MIGRATION);
   env.RAW_DB = env.DB;

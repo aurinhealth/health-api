@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { decodeCbor, parseAuthenticatorData, derToRawSignature, verifyRegistration, verifyAuthentication, clientDataChallenge, WebAuthnError, fromBase64url } from "../src/webauthn.js";
 import { createPasskey, signInWith, encodeCbor, rawToDer } from "./helpers/passkey.mjs";
 
-const ORIGIN = "https://petrfitnessdata.eu", RP = "petrfitnessdata.eu";
+const ORIGIN = "https://aurin.health", RP = "aurin.health";
 const expected = challenge => ({ challenge, origin: ORIGIN, rpId: RP });
 const rejects = (promise, pattern) => assert.rejects(promise, error => error instanceof WebAuthnError && pattern.test(error.message));
 
@@ -31,7 +31,7 @@ test("registration checks the challenge, origin, type, RP ID and user verificati
   const make = options => createPasskey({ challenge: "c1", ...options }).then(r => r.credential);
   await rejects(verifyRegistration(await make({ challenge: "other" }), expected("c1")), /Challenge/);
   await rejects(verifyRegistration(await make({ origin: "https://evil.example", rpId: RP }), expected("c1")), /Origin/);
-  await rejects(verifyRegistration(await make({ origin: "https://staging.petrfitnessdata.eu", rpId: RP }), expected("c1")), /Origin/);
+  await rejects(verifyRegistration(await make({ origin: "https://staging.aurin.health", rpId: RP }), expected("c1")), /Origin/);
   await rejects(verifyRegistration(await make({ rpId: "evil.example" }), expected("c1")), /RP ID/);
   await rejects(verifyRegistration(await make({ flags: 0x41 }), expected("c1")), /not verified/);
   await rejects(verifyRegistration(await make({ flags: 0x44 }), expected("c1")), /not present/);

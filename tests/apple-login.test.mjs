@@ -56,7 +56,7 @@ function nativeFetch(claims, seen = {}) {
   };
 }
 async function nativeRequest(env, body, { fetchImpl, saveRefreshToken, headers = { "Content-Type": "application/json" } } = {}) {
-  const request = new Request("https://petrfitnessdata.eu/auth/app/apple", { method: "POST", headers, body: JSON.stringify(body) });
+  const request = new Request("https://aurin.health/auth/app/apple", { method: "POST", headers, body: JSON.stringify(body) });
   return handleNativeAppleLogin(request, env, "/auth/app/apple", { fetchImpl, saveRefreshToken });
 }
 

@@ -256,7 +256,7 @@ test("only accepted rows set how far back Google is replaced, and a window never
 });
 
 test("a request declared over 4 MB is refused before it is read", () => {
-  const request = size => new Request("https://petrfitnessdata.eu/app/api/health/apple", { method: "POST", headers: size == null ? {} : { "Content-Length": String(size) }, body: "{}" });
+  const request = size => new Request("https://aurin.health/app/api/health/apple", { method: "POST", headers: size == null ? {} : { "Content-Length": String(size) }, body: "{}" });
   assert.equal(MAX_BODY_BYTES, 4 * 1024 * 1024);
   assert.equal(appleBodyTooLarge(request(MAX_BODY_BYTES)), false);
   assert.equal(appleBodyTooLarge(request(MAX_BODY_BYTES + 1)), true);
