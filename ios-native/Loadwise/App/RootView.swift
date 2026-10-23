@@ -233,8 +233,9 @@ struct RootView: View {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background, !model.demo { BackgroundRefresh.schedule() }
                 // The icon's menu in the language and order of the moment.
-                if phase == .background { QuickActions.update(model.today) }
+                if phase == .background { QuickActions.update(model.today); model.left() }
                 guard phase == .active else { return }
+                model.cameBack()
                 // Mid-workout (a look at the lock screen, another app between
                 // sets) the screen stays as it is; the workout's end refreshes.
                 guard !model.immersive, !LiveWorkout.shared.running else { return }

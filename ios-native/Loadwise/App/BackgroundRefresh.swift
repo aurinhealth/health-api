@@ -35,7 +35,10 @@ enum BackgroundRefresh {
         let work = Task { @MainActor in
             task.setTaskCompleted(success: await refresh(api: api, widgets: true))
         }
-        task.expirationHandler = { work.cancel() }
+        task.expirationHandler = {
+            work.cancel()
+            MainActor.assumeIsolated { AppleHealth.shared.abandon() }
+        }
     }
 
     /// Apple Health out, then Today for the widgets: always from the refresh
@@ -52,5 +55,30 @@ enum BackgroundRefresh {
         // so it opens ready without loading.
         if !Task.isCancelled { _ = try? await api.coachPick() }
         return synced || !AppleHealth.shared.enabled
+    }
+}
+
+/// Leaving the app mid-sync: iOS froze the app within seconds, the requests on
+/// their way stayed frozen until the next open, and that open waited for them
+/// (the sync took minutes or never ended). This asks iOS for the time to
+/// finish (about half a minute); when it runs out, `expired` stops the work
+/// first, so nothing is left frozen half done.
+@MainActor
+final class FinishInBackground {
+    private var id = UIBackgroundTaskIdentifier.invalid
+
+    init(_ name: String, expired: @escaping @MainActor @Sendable () -> Void = {}) {
+        id = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in
+            MainActor.assumeIsolated {
+                expired()
+                self?.end()
+            }
+        }
+    }
+
+    func end() {
+        guard id != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(id)
+        id = .invalid
     }
 }

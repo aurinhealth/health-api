@@ -315,14 +315,37 @@ final class AppleHealth {
         if !force, let lastSync, Date().timeIntervalSince(lastSync) < 600 { return SyncOutcome(ok: true, changed: false) }
         let task = Task { await perform(api: api) }
         running = task
-        defer { running = nil }
+        runningSince = Date()
+        syncing = true
+        // Leaving the app mid-sync: it goes on for the time iOS gives.
+        let background = FinishInBackground("Apple Health") { AppleHealth.shared.abandon() }
+        defer {
+            background.end()
+            // A newer sync took the place of an abandoned one: that one stays.
+            if running == task { running = nil; syncing = false }
+        }
         return await task.value
+    }
+    @ObservationIgnored private var runningSince = Date.distantPast
+
+    /// Stops the sync on its way: it sends nothing more, its callers get a
+    /// failure and the next sync starts anew instead of waiting for it.
+    func abandon() {
+        guard let task = running else { return }
+        task.cancel()
+        running = nil
+        syncing = false
+        generation += 1
+    }
+
+    /// Back in the app after `left`: a sync begun before it was frozen with
+    /// the app (iOS gave it no time, or the time ran out) and is not waited for.
+    func dropFrozen(left: Date) {
+        if running != nil, runningSince < left { abandon() }
     }
 
     private func perform(api: APIClient) async -> SyncOutcome {
         let round = generation
-        syncing = true
-        defer { syncing = false }
         // A type added in an update (muscle mass) is asked for once, in the app;
         // granted, its history comes with this sync.
         if UIApplication.shared.applicationState == .active, await reader.askNewTypes(categories) { lastSync = nil }
@@ -340,11 +363,14 @@ final class AppleHealth {
                 // An older server does not say: count it as new.
                 changed = changed || (answer.changed ?? 1) > 0
             }
+            guard round == generation else { return SyncOutcome(ok: false, changed: changed) }
             lastSync = started
             UserDefaults.standard.set(started, forKey: Self.lastSyncKey)
             message = nil
             return SyncOutcome(ok: true, changed: changed)
         } catch {
+            // Abandoned (AppleHealth.abandon): no error to show, the next sync goes on.
+            if AppModel.isCancellation(error) || round != generation { return SyncOutcome(ok: false, changed: false) }
             message = error.localizedDescription
             return SyncOutcome(ok: false, changed: false)
         }

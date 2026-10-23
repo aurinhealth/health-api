@@ -98,6 +98,11 @@ async function deleteInIntervals(env, remote, fetchImpl) {
   if (!response.ok && response.status !== 404) throw fail(L('Intervals.icu smazání nepřijalo (HTTP ', 'Intervals.icu didn\'t accept the delete (HTTP ') + response.status + ').', 502);
 }
 
+// Intervals.icu shows a Strava activity only as a stub (Strava's API terms keep
+// its data from other apps) and its API refuses to delete it (HTTP 422): it can
+// only be deleted in Strava, here it is only hidden.
+const stravaStub = (row, p) => /strava/i.test(String(p.source || '')) || (Boolean(p._note) && !/^i\d/.test(String(p.id || row.external_id).replace(/^activity:/, '')));
+
 const hide = (env, row) => env.DB.prepare(`UPDATE health_datapoints SET record_role = 'duplicate', matched_activity_id = ?, match_confidence = NULL, updated_at = CURRENT_TIMESTAMP
   WHERE id = ? AND user_id = ?`).bind(DELETED, row.id, env.USER_ID);
 
@@ -111,6 +116,7 @@ export async function deleteOptions(env, id) {
   if (row.source_family === 'local') return { kind: 'app' };
   if (row.source_family === 'intervals') {
     const p = parse(row.payload_json), remote = String(p.id || row.external_id);
+    if (stravaStub(row, p)) return { kind: 'watch', source: 'strava' };
     return { kind: /^loadwise:/.test(String(p.external_id || '')) || await sentByApp(env, remote) ? 'app' : 'intervals' };
   }
   // A Wahoo ride stays in Wahoo; here it is only hidden, like a watch's record.
@@ -149,7 +155,7 @@ export async function deleteActivity(env, { id, everywhere = false } = {}, { fet
     return { status: 'ok', id: row.external_id, removed };
   }
 
-  if (row.source_family === 'intervals') {
+  if (row.source_family === 'intervals' && !stravaStub(row, payload)) {
     const remote = String(payload.id || row.external_id);
     const own = /^loadwise:/.test(String(payload.external_id || '')) || await sentByApp(env, remote);
     if (own || everywhere) {

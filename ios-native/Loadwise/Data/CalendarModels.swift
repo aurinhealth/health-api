@@ -224,7 +224,7 @@ struct ActivityTypeOption: Decodable, Hashable, Identifiable {
 struct ActivityDeleteOptions: Decodable, Equatable {
     /// "app", "intervals" or "watch".
     let kind: String
-    /// With "watch": "google" or "apple".
+    /// With "watch": "google", "apple", "wahoo" or "strava".
     var source: String? = nil
 }
 

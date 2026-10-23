@@ -119,7 +119,7 @@ struct TrainingContent: View {
                 // The next session belongs to today, not to a day looked back at.
                 if shownDay == training.date, let next = training.next {
                     NextSession(session: next, today: training.date)
-                        .padding(.top, 20)
+                        .padding(.top, 24)
                 }
 
                 if let event = training.event {
@@ -280,20 +280,29 @@ struct NextSession: View {
     let session: TrainingSnapshot.Session
     let today: String
 
+    // Its own card, so the gym tools below (today's) don't read as its buttons.
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Rectangle().fill(Palette.hairline).frame(height: 1).padding(.bottom, 6)
+        Card {
             HStack(alignment: .firstTextBaseline) {
-                Text(when).font(Typo.number(20)).foregroundStyle(Palette.ink)
-                Spacer()
-                Text(meta).font(Typo.small).foregroundStyle(Palette.muted)
+                Label {
+                    Text(verbatim: when.uppercased(with: Fmt.locale))
+                        .font(.system(size: 12, weight: .medium)).tracking(1.9)
+                } icon: {
+                    Image(systemName: "calendar").font(.system(size: 12, weight: .medium))
+                }
+                .foregroundStyle(Palette.muted)
+                Spacer(minLength: 8)
+                Text(meta).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1)
             }
-            Text(session.title)
-                .font(Typo.sentence(30, relativeTo: .title))
-                .foregroundStyle(Palette.ink)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                PlanStateIcon(symbol: SportIcon.symbol(session.sport ?? "other"), state: .upcoming, size: 40)
+                Text(session.title)
+                    .font(Typo.sentence(24, relativeTo: .title2))
+                    .foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let detail {
-                Text(detail).font(Typo.body).foregroundStyle(Palette.muted).lineSpacing(2)
+                Text(detail).font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let advice = session.advice {
