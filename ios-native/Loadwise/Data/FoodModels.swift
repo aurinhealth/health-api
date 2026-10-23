@@ -175,7 +175,7 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     /// The amount offered first: a serving, else the package, else 100.
     var defaultAmount: Double {
         if perPortion { return 1 }
-        if let s = Self.leadingNumber(serving_size), s > 0 { return s }
+        if let s = usableServing { return s }
         if let q = Self.leadingNumber(quantity), q > 0, q <= 500 { return q }
         return 100
     }
@@ -203,7 +203,7 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     /// What ¼, ½ or 2 are counted from: one serving, else the whole package.
     var portionReference: (size: Double, name: String)? {
         if perPortion { return (1, L10n.tr("porce")) }
-        if let s = Self.size(serving_size, unit: unit) { return (s, L10n.tr("porce")) }
+        if let s = usableServing { return (s, L10n.tr("porce")) }
         if let q = Self.size(quantity, unit: unit) { return (q, L10n.tr("balení")) }
         return nil
     }
