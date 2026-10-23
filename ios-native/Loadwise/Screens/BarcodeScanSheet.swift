@@ -31,6 +31,9 @@ struct BarcodeScanSheet: View {
     @State private var torch = false
     /// A photo of a code, picked from Photos instead of the camera.
     @State private var photo: PhotosPickerItem?
+    /// "Vyfotit etiketu" for a code nobody knows: the values read from the
+    /// label are saved with the code, so the next scan finds them.
+    @State private var labelOpen = false
 
     /// nil until the camera permission is known (the scanner is unavailable
     /// before the first permission prompt, so the app asks first).
@@ -76,6 +79,12 @@ struct BarcodeScanSheet: View {
             guard let item = photo else { return }
             photo = nil
             Task { await read(item) }
+        }
+        .fullScreenCover(isPresented: $labelOpen) {
+            LabelCameraSheet { image in
+                labelOpen = false
+                Task { await readLabel(image) }
+            }
         }
         .sheet(item: $editing) { product in
             NavigationStack {
@@ -226,6 +235,13 @@ struct BarcodeScanSheet: View {
                             .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
                     }
                 }
+                Button { labelOpen = true } label: {
+                    Label("Vyfotit etiketu", systemImage: "camera").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 46)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(model.demo)
             case .scanning:
                 EmptyView()
             }
@@ -336,6 +352,28 @@ struct BarcodeScanSheet: View {
             let name = guess.trimmingCharacters(in: .whitespaces)
             if let p = try await model.api.lookupFood(name: name, barcode: code) { show(p) }
             else { state = .notFound; error = name.isEmpty ? "AI ten kód nezná. Napiš, co to je, a odhadne to." : "AI ji nedokázala dohledat ani odhadnout. Zadej ji ručně." }
+        } catch {
+            self.error = error.localizedDescription
+            state = .notFound
+        }
+    }
+
+    /// The nutrition table read by AI, as the food of this code; adding it
+    /// saves it with the code (src/routes-food.js /app/api/food/log).
+    private func readLabel(_ image: UIImage) async {
+        guard let code, !model.demo else { return }
+        state = .searching
+        error = nil
+        guard let jpeg = await image.jpegForUpload() else { state = .notFound; return }
+        do {
+            var p = try await model.api.readFoodPhoto(jpeg, mode: "label").product
+            p.barcode = code
+            let name = guess.trimmingCharacters(in: .whitespaces)
+            let unnamed = p.name == L10n.tr("Jídlo z fotky")
+            if name.count >= 2 && unnamed { p.name = name }
+            show(p)
+            // A label rarely says what the food is called: the name first.
+            if unnamed && name.count < 2 { editing = p }
         } catch {
             self.error = error.localizedDescription
             state = .notFound
