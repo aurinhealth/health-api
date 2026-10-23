@@ -1735,8 +1735,12 @@ export function googleExerciseActivity(row) {
   // Merged with another device's record (workout-merge.js): the time chosen then.
   const span = mergedSpan(payload);
   const activeSeconds = span ? null : String(exercise.activeDuration || "").match(/([0-9.]+)s/i);
+  const spanHours = hoursBetween(span?.start || row.start_time, span?.end || row.end_time);
+  // Google Health sometimes counts only seconds of a phone-tracked walk as
+  // active (15 s of a 20 min loop, Petr 2026-10-23): under half the session's
+  // span the active time is not believed, and the span stands.
   const activeHours = activeSeconds ? Number(activeSeconds[1]) / 3600 : null;
-  const durationHours = activeHours || hoursBetween(span?.start || row.start_time, span?.end || row.end_time);
+  const durationHours = activeHours && !(spanHours > 0 && activeHours < spanHours / 2) ? activeHours : spanHours;
   // Apple Health workouts written by another app (Google Health) carry the
   // heart rate only as samples ([seconds, bpm]): their mean, so the workout
   // gets a TSS (app-training.js withHeartRateLoad).
