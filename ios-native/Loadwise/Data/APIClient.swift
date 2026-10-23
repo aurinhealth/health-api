@@ -429,6 +429,15 @@ final class APIClient: @unchecked Sendable {
 
     /// Reads a photo with AI: "label" (the nutrition table, per 100 g/ml) or
     /// "portion" (a plate of food or a portion, the whole portion).
+    /// The product name and brand on the front of a package; nil when AI can't read them.
+    func readPackageFront(_ jpeg: Data) async throws -> (name: String, brand: String?)? {
+        struct Response: Decodable { let status: String?; let name: String?; let brand: String? }
+        let body: JSONObject = ["image": .string("data:image/jpeg;base64," + jpeg.base64EncodedString()), "mode": .string("front")]
+        let r: Response = try await send("/app/api/food/photo", method: "POST", body: body, timeout: 120)
+        guard r.status == "ok", let name = r.name?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
+        return (name, r.brand?.trimmingCharacters(in: .whitespaces).nilIfBlank)
+    }
+
     func readFoodPhoto(_ jpeg: Data, mode: String) async throws -> (product: FoodProduct, note: String?) {
         struct Values: Decodable { let calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugars_100g, salt_100g: Double? }
         struct Response: Decodable { let status: String?; let name: String?; let basis: String?; let values: Values?; let servingSize: String?; let note: String?; let warning: String?; let message: String? }

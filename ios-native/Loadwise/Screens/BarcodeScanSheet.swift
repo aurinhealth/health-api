@@ -34,6 +34,9 @@ struct BarcodeScanSheet: View {
     /// "Vyfotit etiketu" for a code nobody knows: the values read from the
     /// label are saved with the code, so the next scan finds them.
     @State private var labelOpen = false
+    /// The label had no name: the front of the package, read for the name
+    /// and the brand of this food.
+    @State private var frontOf: FoodProduct?
 
     /// nil until the camera permission is known (the scanner is unavailable
     /// before the first permission prompt, so the app asks first).
@@ -84,6 +87,12 @@ struct BarcodeScanSheet: View {
             LabelCameraSheet { image in
                 labelOpen = false
                 Task { await readLabel(image) }
+            }
+        }
+        .fullScreenCover(item: $frontOf) { product in
+            LabelCameraSheet(title: "PŘEDNÍ STRANA", hint: "Vyfoť přední stranu s názvem") { image in
+                frontOf = nil
+                Task { await readFront(image, of: product) }
             }
         }
         .sheet(item: $editing) { product in
@@ -372,11 +381,27 @@ struct BarcodeScanSheet: View {
             let unnamed = p.name == L10n.tr("Jídlo z fotky")
             if name.count >= 2 && unnamed { p.name = name }
             show(p)
-            // A label rarely says what the food is called: the name first.
-            if unnamed && name.count < 2 { editing = p }
+            // A label rarely says what the food is called: the front of the package next.
+            if unnamed && name.count < 2 { frontOf = p }
         } catch {
             self.error = error.localizedDescription
             state = .notFound
+        }
+    }
+
+    /// The name and the brand from the front; when AI can't read them, the
+    /// editor opens to type the name.
+    private func readFront(_ image: UIImage, of product: FoodProduct) async {
+        var p = product
+        state = .searching
+        error = nil
+        if let jpeg = await image.jpegForUpload(), let front = try? await model.api.readPackageFront(jpeg) {
+            p.name = front.name
+            p.brand = front.brand ?? p.brand
+            show(p)
+        } else {
+            show(p)
+            editing = p
         }
     }
 

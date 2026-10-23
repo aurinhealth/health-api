@@ -5,7 +5,8 @@
 import { L } from './lang.js';
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { nutritionConsistency } from "./food-label.js";
-import { foodPhotoInstructionsText, barcodeInstructions } from './private/food-photo.js';
+import * as prompts from './private/food-photo.js';
+const { foodPhotoInstructionsText, barcodeInstructions } = prompts;
 export { foodPhotoInstructionsText };
 
 const nullableNumber = { type: ["number", "null"] };
@@ -121,4 +122,40 @@ export async function readBarcodeWithAI(env, { image } = {}) {
   let answer = null; try { answer = JSON.parse(r.text); } catch { answer = null; }
   const code = String(answer?.digits || "").replace(/\D/g, "");
   return { barcode: answer?.found && validBarcode(code) ? code : null, model: r.model };
+}
+
+// ---- The name and the brand on the front of a package ----
+// After a label without a name (a scanned code nobody knows), so the food is
+// saved under the code with what the package calls it.
+export const PACKAGE_FRONT_SCHEMA = {
+  type: "json_schema",
+  name: "package_front",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    required: ["found", "name", "brand"],
+    properties: { found: { type: "boolean" }, name: { type: "string" }, brand: { type: "string" } }
+  }
+};
+
+export function packageFrontFromAnswer(answer) {
+  let r = answer;
+  if (typeof r === "string") { try { r = JSON.parse(r.slice(r.indexOf("{"), r.lastIndexOf("}") + 1)); } catch { return null; } }
+  const name = String(r?.name || "").trim().slice(0, 120);
+  if (!r?.found || !name) return null;
+  return { name, brand: String(r.brand || "").trim().slice(0, 80) || null };
+}
+
+export async function readPackageFrontWithAI(env, { image } = {}) {
+  if (!validFoodImage(image)) throw new Error(L("Fotografie musí být JPG, PNG nebo WebP do 5 MB.", "The photo must be a JPG, PNG or WebP up to 5 MB."));
+  // Until aurin-prompts carries the text, the front is simply not read.
+  if (typeof prompts.packageFrontInstructions !== "function") return { front: null, model: null };
+  const r = await callOpenAI(env, { feature: "food-photo",
+    instructions: prompts.packageFrontInstructions(),
+    input: [{ role: "user", content: [{ type: "input_image", image_url: image, detail: "high" }] }],
+    format: PACKAGE_FRONT_SCHEMA, maxOutputTokens: 300,
+    model: env.OPENAI_VISION_MODEL || lightModel(env)
+  });
+  return { front: packageFrontFromAnswer(r.text), model: r.model };
 }

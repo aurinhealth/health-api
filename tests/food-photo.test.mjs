@@ -60,3 +60,12 @@ test('a meal photo with impossible portion values is not offered', () => {
   assert.equal(photoResultFromAnswer(answer({ kind: 'meal_photo', basis: 'portion', calories: 7200, protein_g: 45, carbs_g: 80, fat_g: 22 }), 'portion'), null);
   assert.equal(photoResultFromAnswer(answer({ kind: 'meal_photo', basis: 'portion', calories: 900, protein_g: 45, carbs_g: 800, fat_g: 22 }), 'portion'), null);
 });
+
+test("the front of a package gives the name and the brand, or nothing", async () => {
+  const { packageFrontFromAnswer } = await import("../src/food-photo.js");
+  assert.deepEqual(packageFrontFromAnswer('{"found":true,"name":" Pomerančový džus ","brand":"Relax"}'), { name: "Pomerančový džus", brand: "Relax" });
+  assert.deepEqual(packageFrontFromAnswer({ found: true, name: "Tonic", brand: "" }), { name: "Tonic", brand: null });
+  assert.equal(packageFrontFromAnswer({ found: false, name: "", brand: "" }), null);
+  assert.equal(packageFrontFromAnswer({ found: true, name: "  ", brand: "Relax" }), null);
+  assert.equal(packageFrontFromAnswer("not json"), null);
+});
