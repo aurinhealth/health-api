@@ -262,7 +262,8 @@ struct NotificationsSettingsView: View {
             if limited || on.count == 1 { parts.append(summary) }
             return ReminderLine(kind: kind, time: Reminders.clock(first.time), detail: parts.joined(separator: " · "), order: first.time)
         case .workout:
-            return ReminderLine(kind: kind, time: Reminders.clock(workoutTime), detail: limited ? summary : L10n.tr("hodinu předem"), order: workoutTime)
+            // An hour before a session with a time of its own, the others at the chosen time.
+            return ReminderLine(kind: kind, time: L10n.tr("1 h předem"), detail: limited ? summary : L10n.f("bez času v %@", Reminders.clock(workoutTime)), order: workoutTime)
         case .food:
             return ReminderLine(kind: kind, time: Reminders.clock(foodTime), detail: limited ? summary : L10n.tr("jen když chybí"), order: foodTime)
         case .weight:
