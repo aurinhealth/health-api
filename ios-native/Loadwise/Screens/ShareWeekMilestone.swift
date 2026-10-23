@@ -279,6 +279,7 @@ struct ShareWeekCard: View {
                 HStack(spacing: u * 9) {
                     ForEach(heads) { s.number($0.label, $0.value, $0.unit, size: 12) }
                 }
+                .shareBlock(ShareBlock.top, s)
                 .padding(.horizontal, u * 7)
                 .padding(.top, u * 4)
             }
@@ -289,6 +290,7 @@ struct ShareWeekCard: View {
                         .overlay(alignment: .top) { if i > 0 { Rectangle().fill(s.t.line(0.08)).frame(height: 1) } }
                 }
             }
+            .shareBlock(ShareBlock.bottom, s)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 7)
         }
@@ -332,6 +334,7 @@ struct ShareWeekCard: View {
             s.brand(range)
             s.title(L10n.tr("Připravenost"), sub: L10n.tr("průměr týdne")).padding(.top, u * 8)
             Text(verbatim: week.week.readiness.map { Fmt.int($0) } ?? "–").font(s.serif(24)).foregroundStyle(s.t.ink)
+                .shareBlock(ShareBlock.top, s)
                 .padding(.horizontal, u * 7)
                 .padding(.top, u * 1)
             VStack(alignment: .leading, spacing: u * 4) {
@@ -341,6 +344,7 @@ struct ShareWeekCard: View {
                     }
                 }
             }
+            .shareBlock(ShareBlock.bottom, s)
             .padding(.horizontal, u * 7)
             .padding(.top, u * 7)
             Spacer(minLength: 0)
@@ -393,6 +397,7 @@ struct ShareWeekCard: View {
                     }
                 }
             }
+            .shareBlock(ShareBlock.bottom, s)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 9)
         }
@@ -417,6 +422,7 @@ struct ShareWeekCard: View {
                         deltaText("Trénink", now: hero.raw, before: before, size: 3.8)
                     }
                 }
+                .shareBlock(ShareBlock.top, s)
                 .padding(.horizontal, u * 7)
                 .padding(.top, u * 7)
             }
@@ -424,6 +430,7 @@ struct ShareWeekCard: View {
             VStack(alignment: .leading, spacing: u * 4.4) {
                 ForEach(keys, id: \.self) { compareRow($0) }
             }
+            .shareBlock(ShareBlock.bottom, s)
             .padding(.horizontal, u * 7)
             HStack(spacing: u * 4) {
                 legend(s.t.ink, "tento týden")
@@ -515,6 +522,7 @@ struct ShareMilestoneCard: View {
                     Text(verbatim: since).font(s.sans(3.6)).foregroundStyle(s.t.muted).padding(.top, u * 1.4)
                 }
             }
+            .shareBlock(ShareBlock.top, s)
             .padding(.horizontal, u * 7)
             .padding(.top, u * 18)
             if options.shows("Graf"), !item.bars.isEmpty {
@@ -527,6 +535,7 @@ struct ShareMilestoneCard: View {
             HStack(alignment: .top, spacing: u * 9) {
                 ForEach(stats) { s.number($0.label, $0.value, $0.unit, size: 7.4) }
             }
+            .shareBlock(ShareBlock.bottom, s)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
         }
@@ -547,6 +556,7 @@ struct ShareMilestoneCard: View {
                     .lineLimit(1).minimumScaleFactor(0.5)
                 Text(verbatim: item.pathText).font(s.news(6.4)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
             }
+            .shareBlock(ShareBlock.bottom, s)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
         }
@@ -582,6 +592,7 @@ struct ShareMilestoneCard: View {
                     Text(L10n.tr("nejlepší za 30 dní")).font(s.sans(3.6)).foregroundStyle(s.t.muted)
                 }
             }
+            .shareBlock(ShareBlock.top, s)
             .padding(.horizontal, u * 7)
             .padding(.top, u * 14)
             Spacer(minLength: 0)

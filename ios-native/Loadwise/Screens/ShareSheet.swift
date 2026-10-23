@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 // MARK: - Sdílet
@@ -22,6 +23,14 @@ struct ShareSheet: View {
     @State private var editing = false
     @State private var busy = false
     @State private var instagram = false
+    /// Fotka: the photo behind the image and where the numbers were moved on it.
+    @State private var photo: UIImage?
+    @State private var offsets: [String: [String: CGSize]] = [:]
+    @State private var photoFlow: SharePhotoFlow.Step?
+    @State private var pickingPhoto = false
+    @State private var pickedPhoto: PhotosPickerItem?
+    /// The photo the flow opens with: one picked from Photos, or the current one to move its numbers.
+    @State private var flowPhoto: UIImage?
 
     init(source: Source) {
         self.source = source
@@ -60,8 +69,15 @@ struct ShareSheet: View {
     }
 
     private func card(_ options: ShareOptions, width: CGFloat) -> ShareCard {
-        ShareCard(kind: kind, options: options, day: day, workout: workout, food: food, week: week, milestones: milestones, width: width)
+        ShareCard(kind: kind, options: options, day: day, workout: workout, food: food, week: week, milestones: milestones, width: width,
+                  photo: photo, offsets: offsets[Self.offsetKey(kind, options)] ?? [:])
     }
+
+    /// The moved blocks belong to one layout of one type.
+    static func offsetKey(_ kind: ShareKind, _ options: ShareOptions) -> String { kind.rawValue + "." + String(options.variant) }
+
+    /// Transparent only without a photo behind it.
+    private var clear: Bool { current.wrappedValue.clear && photo == nil }
 
     var body: some View {
         NavigationStack {
@@ -69,11 +85,14 @@ struct ShareSheet: View {
                 VStack(spacing: 0) {
                     Text(L10n.tr("Sdílet")).font(.headline).foregroundStyle(Palette.ink).padding(.top, 18)
                     if kinds.count > 1 { kindChips.padding(.top, 14) }
-                    SharePreview(card: card(current.wrappedValue, width: 240), clear: current.wrappedValue.clear, dark: current.wrappedValue.dark)
+                    SharePreview(card: card(current.wrappedValue, width: 240), clear: clear, dark: current.wrappedValue.dark)
                         .padding(.top, 18)
                     thumbnails.padding(.top, 14)
-                    SecondaryButton(title: "Upravit", systemImage: "slider.horizontal.3") { editing = true }
-                        .padding(.top, 22)
+                    HStack(spacing: 10) {
+                        photoMenu
+                        SecondaryButton(title: "Upravit", systemImage: "slider.horizontal.3") { editing = true }
+                    }
+                    .padding(.top, 22)
                     PrimaryButton(title: L10n.tr("Sdílet"), systemImage: "square.and.arrow.up", busy: busy) { share() }
                         .disabled(busy)
                         .padding(.top, 10)
@@ -88,36 +107,108 @@ struct ShareSheet: View {
             .background(Palette.background.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $editing) {
-                ShareEditView(kind: kind, options: current, workout: workout, milestones: milestones?.items ?? []) { self.card($0, width: $1) }
+                ShareEditView(kind: kind, options: current, workout: workout, milestones: milestones?.items ?? [], hasPhoto: photo != nil) { self.card($0, width: $1) }
+            }
+        }
+        .fullScreenCover(item: Binding(get: { photoFlow.map { FlowStart(step: $0) } }, set: { photoFlow = $0?.step })) { start in
+            SharePhotoFlow(kind: kind, layouts: kind.layouts(workout), options: current, card: { options, width in
+                ShareCard(kind: kind, options: options, day: day, workout: workout, food: food, week: week, milestones: milestones, width: width)
+            }, step: start.step, photo: start.step == .camera ? nil : flowPhoto, offsets: offsets) { image, moved in
+                photo = image
+                offsets = moved
+            }
+        }
+        .photosPicker(isPresented: $pickingPhoto, selection: $pickedPhoto, matching: .images)
+        .onChange(of: pickedPhoto) {
+            guard let item = pickedPhoto else { return }
+            pickedPhoto = nil
+            Task {
+                guard let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) else { return }
+                flowPhoto = SharePhoto.fitted(image)
+                photoFlow = .place(fromLibrary: true)
             }
         }
         .task {
             instagram = ShareExport.canShareToInstagram
             await load()
         }
+        .onChange(of: kind) { fixLayout() }
     }
 
-    private var kindChips: some View {
-        HStack(spacing: 7) {
-            ForEach(kinds) { k in
-                let on = k == kind
-                Button { kind = k } label: {
-                    Text(L10n.tr(k.title))
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(on ? Palette.onButton : Palette.ink)
-                        .padding(.horizontal, 15).frame(height: 34)
-                        .background(on ? Palette.button : Palette.card, in: Capsule())
-                        .overlay(Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.1), lineWidth: 1))
+    private struct FlowStart: Identifiable {
+        let step: SharePhotoFlow.Step
+        var id: String { step == .camera ? "camera" : "place" }
+    }
+
+    /// Fotka: take one with the numbers in the camera, pick one from Photos,
+    /// move the numbers on it or take it away.
+    private var photoMenu: some View {
+        Menu {
+            Button { photoFlow = .camera } label: { Label(L10n.tr("Vyfotit"), systemImage: "camera") }
+            Button { pickingPhoto = true } label: { Label(L10n.tr("Vybrat z knihovny"), systemImage: "photo") }
+            if let photo {
+                Button {
+                    flowPhoto = photo
+                    photoFlow = .place(fromLibrary: true)
+                } label: { Label(L10n.tr("Posunout údaje"), systemImage: "hand.draw") }
+                Button(role: .destructive) { self.photo = nil } label: { Label(L10n.tr("Odebrat fotku"), systemImage: "trash") }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                if let photo {
+                    Image(uiImage: photo).resizable().scaledToFill().frame(width: 22, height: 22)
+                        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                } else {
+                    Image(systemName: "camera")
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(on ? .isSelected : [])
+                Text(L10n.tr("Fotka"))
+            }
+            .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+            .frame(maxWidth: .infinity).frame(height: 46)
+            .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// The types as underlined words spread across the width; when they don't
+    /// fit (a small phone, large text) they scroll, never cut short.
+    private var kindChips: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 0) {
+                ForEach(Array(kinds.enumerated()), id: \.element) { i, k in
+                    if i > 0 { Spacer(minLength: 14) }
+                    kindTab(k)
+                }
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 22) { ForEach(kinds) { kindTab($0) } }
             }
         }
+        .overlay(alignment: .bottom) { Rectangle().fill(Palette.ink.opacity(0.1)).frame(height: 1) }
+    }
+
+    private func kindTab(_ k: ShareKind) -> some View {
+        let on = k == kind
+        return Button { kind = k } label: {
+            Text(L10n.tr(k.title))
+                .font(.subheadline.weight(on ? .semibold : .medium))
+                .foregroundStyle(on ? Palette.ink : Palette.muted)
+                .lineLimit(1).fixedSize()
+                .padding(.top, 8).padding(.bottom, 11)
+                .overlay(alignment: .bottom) {
+                    if on { Capsule().fill(Palette.ink).frame(height: 2.5) }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 
     private var thumbnails: some View {
         HStack(alignment: .top, spacing: 12) {
-            ForEach(Array(kind.variants.enumerated()), id: \.offset) { i, name in
+            ForEach(kind.layouts(workout), id: \.index) { layout in
+                let i = layout.index, name = layout.name
                 let selected = current.wrappedValue.variant == i
                 let shown = previewOptions(variant: i)
                 Button { current.wrappedValue.variant = i } label: {
@@ -146,10 +237,16 @@ struct ShareSheet: View {
     /// The week, the milestones, the night's stages and the done workouts'
     /// details, after the sheet shows.
     private func load() async {
-        guard case .today(let today) = source else { return }
+        defer { fixLayout() }
+        guard case .today(let today) = source else {
+            if workout?.isGym == true, let date = workout?.date { await addGym(date) }
+            return
+        }
         if model.demo {
             week = ShareWeek.sample
             milestones = ShareMilestones.sample
+            if day?.workouts.contains(where: \.isGym) == true { await addGym(today.date) }
+            workout = day?.workouts.last
             return
         }
         week = try? await model.api.shareWeek(date: today.date)
@@ -166,14 +263,35 @@ struct ShareSheet: View {
             if let detail, day?.workouts.indices.contains(i) == true { day?.workouts[i].add(detail) }
         }
         if let night = try? await model.api.night(date: today.date) { day?.add(night) }
+        if day?.workouts.contains(where: \.isGym) == true { await addGym(today.date) }
         workout = day?.workouts.last
+    }
+
+    /// The gym sheet's sets for that day's lifting: the best set of each exercise, volume and sets.
+    private func addGym(_ date: String) async {
+        var gym: GymDay? = DemoData.gym
+        if !model.demo { gym = try? await model.api.gym(date: date) }
+        guard let gym else { return }
+        if var w = workout, w.isGym {
+            w.add(gym)
+            workout = w
+        }
+        if let i = day?.workouts.lastIndex(where: \.isGym) { day?.workouts[i].add(gym) }
+    }
+
+    /// A layout this workout doesn't offer (a chart without heart rate) goes to the first one it does.
+    private func fixLayout() {
+        let layouts = kind.layouts(workout)
+        if !layouts.contains(where: { $0.index == current.wrappedValue.variant }), let first = layouts.first {
+            current.wrappedValue.variant = first.index
+        }
     }
 
     private func share() {
         busy = true
         defer { busy = false }
         let options = current.wrappedValue
-        guard let image = ShareExport.image(card(options, width: ShareCard.width), clear: options.clear) else { return }
+        guard let image = ShareExport.image(card(options, width: ShareCard.width), clear: clear) else { return }
         let date = (kind == .week ? week?.start : nil) ?? day?.date ?? food?.date ?? workout?.date ?? AppModel.localDate(Date())
         let title = kind == .week ? week.map { ShareText.range($0.start, $0.end) } ?? ShareText.date(date) : ShareText.date(date)
         guard let url = ShareExport.file(image, name: "Aurin-" + kind.rawValue + "-" + date) else { return }
@@ -182,8 +300,8 @@ struct ShareSheet: View {
 
     private func shareToInstagram() {
         let options = current.wrappedValue
-        guard let image = ShareExport.image(card(options, width: ShareCard.width), clear: options.clear) else { return }
-        ShareExport.instagram(image, clear: options.clear, dark: options.dark)
+        guard let image = ShareExport.image(card(options, width: ShareCard.width), clear: clear) else { return }
+        ShareExport.instagram(image, clear: clear, dark: options.dark)
     }
 }
 
@@ -244,6 +362,8 @@ struct ShareEditView: View {
     @Binding var options: ShareOptions
     let workout: ShareWorkout?
     var milestones: [ShareMilestones.Item] = []
+    /// With a photo behind it the image has no background of its own to pick.
+    var hasPhoto = false
     let card: (ShareOptions, CGFloat) -> ShareCard
     @Environment(\.dismiss) private var dismiss
 
@@ -253,7 +373,7 @@ struct ShareEditView: View {
                 header
                 HStack {
                     Spacer()
-                    SharePreview(card: card(options, 132), clear: options.clear, dark: options.dark)
+                    SharePreview(card: card(options, 132), clear: options.clear && !hasPhoto, dark: options.dark)
                     Spacer()
                 }
                 .padding(.top, 12)
@@ -263,11 +383,13 @@ struct ShareEditView: View {
                     look("Světlé", on: !options.dark, swatch: .light) { options.dark = false }
                 }
                 .padding(.top, 10)
-                HStack(spacing: 10) {
-                    look("Pozadí", on: !options.clear, swatch: .background) { options.clear = false }
-                    look("Průhledné", on: options.clear, swatch: .clear) { options.clear = true }
+                if !hasPhoto {
+                    HStack(spacing: 10) {
+                        look("Pozadí", on: !options.clear, swatch: .background) { options.clear = false }
+                        look("Průhledné", on: options.clear, swatch: .clear) { options.clear = true }
+                    }
+                    .padding(.top, 10)
                 }
-                .padding(.top, 10)
                 if kind == .milestone && options.variant != 2 && milestones.count > 1 {
                     SectionLabel(text: "Milník").padding(.top, 26).padding(.horizontal, 4)
                     let chosen = milestones.first { item in item.key == options.milestone }?.key ?? milestones[0].key

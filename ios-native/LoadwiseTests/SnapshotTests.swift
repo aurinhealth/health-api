@@ -481,6 +481,11 @@ final class SnapshotTests: XCTestCase {
         let ride = try XCTUnwrap(calendar.days.first?.activities.first)
         XCTAssertEqual(ride.session.kind, "activity")
         XCTAssertEqual(CalendarDayList.route(ride), .activity(ride.session))
+        // A done lifting activity opens the day's gym sheet for itself: a day can
+        // have several, and deleting one leaves the exercises with the others.
+        let lift = CalendarActivity(id: "apple-health:w3", sport: "strength", status: "done", title: "Posilovna", date: "2026-10-05", time: "18:00",
+                                    minutes: 40, km: nil, kcal: 210, activityId: nil, eventId: nil)
+        XCTAssertEqual(CalendarDayList.route(lift), .gymSession(lift.session))
         XCTAssertEqual(CalendarActivityRow.detail(ride), "Kolo · " + ClockText.format("07:00") + " · 1 h 30 min · 42,3 km")
         XCTAssertEqual(MonthGrid.value(calendar.days.first, .count), "2")
         XCTAssertEqual(MonthGrid.value(calendar.days.first, .time), "2:05")

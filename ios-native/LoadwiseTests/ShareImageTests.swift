@@ -119,6 +119,62 @@ final class ShareImageTests: XCTestCase {
         }
     }
 
+    /// The sample gym day with every work set done.
+    private var gym: ShareWorkout {
+        var day = DemoData.gym
+        for set in day.exercises.flatMap(\.sets) where set.work {
+            day.complete(row: set.row, kg: set.plannedKg ?? "", reps: "8", rpe: "")
+        }
+        var w = ShareWorkout(title: "Posilovna", sport: "strength")
+        w.date = "2026-10-08"
+        w.minutes = 64
+        w.kcal = 412
+        w.add(day)
+        return w
+    }
+
+    func testGymNumbers() throws {
+        let w = gym
+        XCTAssertFalse(w.best.isEmpty)
+        XCTAssertNotNil(w.value("Objem"))
+        XCTAssertNotNil(w.value("Série"))
+        XCTAssertEqual(w.value("Kalorie")?.value, "412")
+        XCTAssertEqual(w.value("Cviky")?.value, String(w.best.count))
+        XCTAssertTrue(w.best.allSatisfy { $0.set.contains("× 8") })
+        // No route for a gym: its exercises instead, and no chart without heart rate.
+        XCTAssertEqual(ShareKind.activity.layouts(w).map(\.name), ["Cviky", "Čísla"])
+        XCTAssertEqual(ShareKind.activity.layouts(ride).map(\.name), ["Trasa", "Graf", "Čísla"])
+
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        for variant in [0, 2] {
+            var options = ShareOptions()
+            options.variant = variant
+            let card = ShareCard(kind: .activity, options: options, workout: w)
+            let png = try XCTUnwrap(ShareExport.image(card, clear: false)?.pngData())
+            try png.write(to: outputDirectory.appending(path: "share-activity-gym-\(variant + 1).png"))
+        }
+    }
+
+    /// A photo behind the numbers, the numbers moved up to the middle.
+    func testPhotoBehindTheImage() throws {
+        let size = CGSize(width: 900, height: 1200)
+        let photo = UIGraphicsImageRenderer(size: size).image { context in
+            let colors = [UIColor(red: 0.95, green: 0.7, blue: 0.48, alpha: 1).cgColor, UIColor(red: 0.16, green: 0.16, blue: 0.2, alpha: 1).cgColor]
+            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0, 1])!
+            context.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
+        }
+        XCTAssertEqual(SharePhoto.fitted(photo, longSide: 600).size, CGSize(width: 450, height: 600))
+        var options = ShareOptions()
+        options.variant = 2
+        options.clear = true
+        let card = ShareCard(kind: .activity, options: options, workout: gym, photo: photo,
+                             offsets: [ShareBlock.bottom: CGSize(width: 0, height: -60)])
+        let image = try XCTUnwrap(ShareExport.image(card, clear: false))
+        XCTAssertEqual(image.size.width * image.scale, 1080)
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        try XCTUnwrap(image.pngData()).write(to: outputDirectory.appending(path: "share-activity-photo.png"))
+    }
+
     func testWeekAndMilestoneData() throws {
         let week = ShareWeek.sample
         XCTAssertEqual(ShareWeek.value("Trénink", week.week)?.value, "7:40")
