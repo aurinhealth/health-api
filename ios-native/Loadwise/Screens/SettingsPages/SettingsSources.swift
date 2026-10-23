@@ -100,10 +100,14 @@ struct SourcesSettingsView: View {
                 .buttonStyle(.plain)
                 .disabled(syncing || store.demo || connected.isEmpty)
                 // The last sync left a source out (src/dashboard-sync.js results, googleStatus).
-                if !syncing, let failed = store.sync?.failedSources, !failed.isEmpty {
+                // Each source that failed in the last day: what and when (src/dashboard-sync.js).
+                if !syncing, let failures = store.sync?.failures(), !failures.isEmpty {
                     SettingsDivider()
-                    SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.circle.fill", color: Palette.rust), title: "Poslední synchronizace s chybou",
-                                subtitle: failed.joined(separator: ", "), chevron: false)
+                    SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.circle.fill", color: Palette.rust), title: "Poslední synchronizace s chybou", chevron: false)
+                    ForEach(failures) { failure in
+                        let detail = [failure.message, failure.at.map(SourceActions.when)].compactMap { $0 }.joined(separator: " · ")
+                        SettingsRow(title: failure.name, subtitle: detail.isEmpty ? nil : detail, chevron: false)
+                    }
                 }
                 SettingsDivider()
                 SettingsToggle(title: "Sloučit stejné záznamy", subtitle: "Když stejnou noc nebo trénink pošle víc zdrojů, započítá se jednou.", isOn: .constant(true), disabled: true)

@@ -56,17 +56,42 @@ struct SyncStatus: Decodable, Equatable {
     struct SourceResult: Decodable, Equatable {
         let source: String?
         let status: String?
+        /// What failed and why, readable (src/dashboard-sync.js).
         let message: String?
+        /// When this result came, ISO.
+        var at: String? = nil
     }
 
-    /// Sources whose last sync failed, in a readable form.
-    var failedSources: [String] {
+    /// One source whose last sync failed: its name, what failed and when.
+    struct Failure: Equatable, Identifiable {
+        let id: String
+        let name: String
+        let message: String?
+        let at: Date?
+    }
+
+    private static func date(_ text: String) -> Date? {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return iso.date(from: text) ?? ISO8601DateFormatter().date(from: text)
+    }
+
+    /// Sources whose last sync failed within the last day; an older failure
+    /// was followed by syncs that went fine, so it is no longer shown.
+    func failures(now: Date = Date()) -> [Failure] {
         let names = ["google": "Google Health", "intervals": "Intervals.icu", "weight": L10n.tr("váha"), "wellness": "wellness",
                      "exports": L10n.tr("export tréninků"), "matching": L10n.tr("párování aktivit")]
-        var failed = (results ?? []).filter { $0.status == "error" || $0.status == "partial" }.compactMap { $0.source }
-        if googleStatus == "error" || googleStatus == "partial" { failed.append("google") }
+        var failed = (results ?? []).filter { $0.status == "error" || $0.status == "partial" }
+        if (googleStatus == "error" || googleStatus == "partial") && !failed.contains(where: { $0.source == "google" }) {
+            failed.append(SourceResult(source: "google", status: googleStatus, message: nil, at: updatedAt))
+        }
         var seen = Set<String>()
-        return failed.filter { seen.insert($0).inserted }.map { names[$0] ?? $0 }
+        return failed.compactMap { result -> Failure? in
+            guard let source = result.source, seen.insert(source).inserted else { return nil }
+            let at = result.at.flatMap(Self.date)
+            if let at, now.timeIntervalSince(at) > 24 * 3600 { return nil }
+            return Failure(id: source, name: names[source] ?? source, message: result.message, at: at)
+        }
     }
 }
 
