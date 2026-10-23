@@ -94,3 +94,17 @@ test("zone bounds need at least three upper limits", () => {
   assert.deepEqual(zoneBounds(ZONES), [118, 140, 156, 170, 250]);
   assert.deepEqual(zoneBounds([{ bpmHigh: 120 }]), []);
 });
+
+test("a phone walk without the GPS flag still gets its route, and its heart rate until the samples come", async () => {
+  const { env, row } = database();
+  const phone = { exercise: { ...walk.exercise, exerciseMetadata: {} } };
+  row("google-wearables", "exercise", GOOGLE_ID, "2026-10-13T06:00:00Z", "2026-10-13T06:30:00Z", phone);
+  const prefixed = tcx.replace(/<(\/?)(Trackpoint|Time|LatitudeDegrees|LongitudeDegrees|AltitudeMeters|DistanceMeters|HeartRateBpm|Value)>/g, "<$1ns3:$2>").replace(/<ns3:Trackpoint>/g, '<ns3:Trackpoint xmlns:ns3="x">');
+  const detail = await watchDetail(env, { source: "google-wearables", id: GOOGLE_ID, token: async () => "t", fetchImpl: async () => new Response(prefixed) });
+  assert.equal(detail.watch.route, true);
+  assert.deepEqual(detail.streams.find(s => s.type === "heartrate").points.map(p => p.v), [101]);
+  // A workout Google marks as without GPS is not asked for a file.
+  const indoor = database();
+  indoor.row("google-wearables", "exercise", GOOGLE_ID, "2026-10-13T06:00:00Z", "2026-10-13T06:30:00Z", { exercise: { ...walk.exercise, exerciseMetadata: { hasGps: false } } });
+  await watchDetail(indoor.env, { source: "google-wearables", id: GOOGLE_ID, token: async () => "t", fetchImpl: () => assert.fail("no export") });
+});
