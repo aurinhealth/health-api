@@ -113,6 +113,9 @@ struct SourcesSettingsView: View {
                 SettingsToggle(title: "Sloučit stejné záznamy", subtitle: "Když stejnou noc nebo trénink pošle víc zdrojů, započítá se jednou.", isOn: .constant(true), disabled: true)
             }
 
+            if let message = store.errorMessage, !syncing {
+                Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+            }
             if let message = actions.message {
                 Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -150,7 +153,13 @@ struct SourcesSettingsView: View {
         .buttonStyle(.plain)
     }
 
-    private var lastSync: String? { store.sync?.updatedAt.flatMap(SourceActions.when) }
+    /// The newest finished sync: a connected service's last good fetch (the server
+    /// fetches every few minutes by itself) or the end of "Synchronizovat vše".
+    private var lastSync: String? {
+        var times = connected.compactMap { $0.lastSuccessAt.flatMap(SourceActions.date) }
+        if store.sync?.status != "running", let end = store.sync?.finishedAt.flatMap(SourceActions.date) { times.append(end) }
+        return times.max().map(SourceActions.when)
+    }
 
     private func start(_ provider: String) {
         if provider == "apple" { connectingApple = true; return }

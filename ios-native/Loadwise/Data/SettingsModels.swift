@@ -48,6 +48,8 @@ struct SyncStatus: Decodable, Equatable {
     /// "running", "done", "partial", "error" or "idle".
     let status: String?
     let updatedAt: String?
+    /// When the last "Synchronizovat vše" finished (its details).
+    var finishedAt: String? = nil
     /// The latest result of each source ("google", "intervals", "weight"…).
     let results: [SourceResult]?
     /// The Google Health import's own state ("completed", "partial", "error"…).
