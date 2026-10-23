@@ -741,21 +741,31 @@ struct PlannedWorkoutView: View {
     @State private var confirmDelete = false
     @State private var rating = false
     @State private var ratingClosed = 0
+    /// The time of day set here (Čas): .some(nil) after "Bez času".
+    @State private var timeSet: String??
+    @State private var pickingTime = false
 
     private var libraryId: String? { plan?.source == "library" ? plan?.workout.id?.string : nil }
 
     /// Today's or a past session can be rated: it may be done without being paired yet.
     private var ratable: Bool { session.date <= AppModel.localDate(Date()) && !model.demo }
 
+    private var shownTime: String? { timeSet ?? session.time }
+
+    /// A session still ahead on the calendar can get a time of day of its own,
+    /// optional (Oznámení → Trénink reminds an hour before it).
+    private var timeEditable: Bool { session.eventId != nil && PlanSessionActions.upcoming(session) && !model.demo }
+
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: session.title) {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (session.time.map { " · " + ClockText.format($0) } ?? "")).padding(.top, 24)
+                SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (shownTime.map { " · " + ClockText.format($0) } ?? "")).padding(.top, 24)
                 Text(session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 HStack(spacing: 18) {
                     if let m = session.minutes { meta("Délka", Fmt.duration(m)) }
                     if let t = session.tss { meta("Zátěž", Fmt.int(t) + " TSS") }
                     if let f = plan?.workout.intensity_factor { meta("IF", Fmt.decimal(f, digits: 2)) }
+                    if timeEditable { timeMeta }
                 }
                 .padding(.top, 16)
                 if ratable {
@@ -819,6 +829,7 @@ struct PlannedWorkoutView: View {
             }
         }
         .sheet(isPresented: $rating, onDismiss: { ratingClosed += 1 }) { FeedbackSheet(session: session, workoutId: libraryId) }
+        .sheet(isPresented: $pickingTime) { PlannedTimeSheet(initial: shownTime) { await saveTime($0) } }
         .confirmationDialog("Smazat „\(session.title)“ z plánu?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Smazat", role: .destructive) { Task { await delete() } }
         } message: {
@@ -834,6 +845,41 @@ struct PlannedWorkoutView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(Typo.caption).foregroundStyle(Palette.muted)
             Text(value).font(Typo.number(22)).foregroundStyle(Palette.ink)
+        }
+    }
+
+    /// "Čas": the session's time, or "+ přidat" while it has none.
+    private var timeMeta: some View {
+        Button { pickingTime = true } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Čas").font(Typo.caption).foregroundStyle(Palette.muted)
+                if let time = shownTime {
+                    Text(verbatim: ClockText.format(time)).font(Typo.number(22)).foregroundStyle(Palette.ink)
+                } else {
+                    Label("přidat", systemImage: "plus")
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.amber)
+                        .frame(minHeight: 28)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(working)
+    }
+
+    /// value "" leaves the day without a time. The screen stays open.
+    private func saveTime(_ value: String) async -> Bool {
+        guard let id = session.eventId else { return false }
+        do {
+            let _: PlannedChange = try await model.api.reschedulePlanned(eventId: id, to: session.date, time: value)
+            timeSet = .some(value.isEmpty ? nil : value)
+            error = nil
+            await model.refreshTraining()
+            await model.refresh()
+            return true
+        } catch {
+            self.error = error.localizedDescription
+            return false
         }
     }
 
@@ -877,6 +923,63 @@ struct PlannedWorkoutView: View {
     private func environment(indoor: Bool) async {
         guard let id = session.eventId else { return }
         await run { try await model.api.setPlannedEnvironment(eventId: id, indoor: indoor) }
+    }
+}
+
+/// "Čas tréninku": a wheel for the planned session's time of day; "Bez času"
+/// takes a time set earlier off. Empty until the athlete picks one.
+struct PlannedTimeSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let initial: String?
+    /// "HH:MM", or "" for no time; true when the server took it.
+    let onSave: (String) async -> Bool
+    @State private var picked: Date
+    @State private var busy = false
+
+    init(initial: String?, onSave: @escaping (String) async -> Bool) {
+        self.initial = initial
+        self.onSave = onSave
+        let parts = (initial ?? "17:00").split(separator: ":").compactMap { Int($0) }
+        let hour = parts.first ?? 17, minute = parts.count > 1 ? parts[1] : 0
+        _picked = State(initialValue: Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: Date()) ?? Date())
+    }
+
+    private var clock: String {
+        let c = Calendar.current.dateComponents([.hour, .minute], from: picked)
+        return String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("Čas tréninku").font(Typo.bodyStrong).foregroundStyle(Palette.ink).padding(.top, 8)
+            DatePicker("", selection: $picked, displayedComponents: .hourAndMinute)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .frame(maxWidth: .infinity)
+                .environment(\.locale, Fmt.locale)
+            PrimaryButton(title: L10n.f("Uložit %@", ClockText.format(clock)), busy: busy) { save(clock) }
+            if initial != nil {
+                Button { save("") } label: {
+                    Text("Bez času").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                        .frame(maxWidth: .infinity).frame(height: 46)
+                }
+                .buttonStyle(.plain)
+                .disabled(busy)
+            }
+        }
+        .padding(24)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(Palette.background)
+    }
+
+    private func save(_ value: String) {
+        Task {
+            busy = true
+            let saved = await onSave(value)
+            busy = false
+            if saved { dismiss() }
+        }
     }
 }
 

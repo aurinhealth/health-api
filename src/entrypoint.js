@@ -257,10 +257,12 @@ const USER_JOBS = [
   { name: "sync", providers: ["google", "intervals"], due: () => true, run: async (scoped, ctx, controller) => {
     await app.scheduled(controller, scoped, ctx);
     if (controller.cron === "* * * * *" && localHour() < 6 && (scoped.CONNECTED_PROVIDERS || []).includes("google")) await compactHeartRate(scoped.DB, scoped.USER_ID).catch(error => console.error("Heart-rate compaction failed", error.message));
-    // The morning readiness push once the night's data has synced (push.js),
-    // checked every five minutes; it goes out at most once a local day.
-    if (every5(controller.cron, new Date(controller.scheduledTime || Date.now()))) await morningPush(scoped, ctx).catch(error => console.error("Morning push failed", error.message));
   } },
+  // The morning readiness push once the night's data has synced (push.js), checked
+  // every five minutes, at most once a local day. A job of its own: inside "sync" a
+  // failing Google sync skipped it, and a user without Google or Intervals (Apple
+  // Health, WHOOP, a ring) never had it checked.
+  { name: "morning-push", providers: [], push: true, due: every5, run: (scoped, ctx) => morningPush(scoped, ctx) },
   // The coach's push, after the morning push above: for everyone with a phone to notify,
   // whatever they connected (push: chosen by push_tokens, not by a service; no sync runs
   // for them). At most one a local day (push_log).

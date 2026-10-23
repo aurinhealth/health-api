@@ -113,15 +113,17 @@ enum Reminders {
             }
         }
         // Today's workouts not done yet (on the chosen days): an hour before
-        // one with a start time, the others at the chosen time (16:00).
+        // one with a start time (the planned session's own, Plánovaný trénink →
+        // Čas), the others at the chosen time (16:00).
         if isOn(workoutKey), has(days(workoutKey), weekday) {
             let open = today.plan.filter { $0.kind == "workout" && !$0.done && $0.status != "missed" }
+            let timeOf = { (item: TodaySnapshot.PlanItem) in item.time ?? item.session?.time }
             for item in open {
-                guard let time = item.time, let at = minutes(time), at >= 60 else { continue }
+                guard let time = timeOf(item), let at = minutes(time), at >= 60 else { continue }
                 add(center, "workout." + time, at: at - 60, title: L10n.f("Za hodinu: %@", item.title),
                     body: item.detail.map { L10n.f("%@. Dej si něco malého a připrav se.", $0) } ?? L10n.tr("Dej si něco malého a připrav se."))
             }
-            let untimed = open.filter { $0.time == nil }
+            let untimed = open.filter { timeOf($0) == nil }
             if !untimed.isEmpty {
                 add(center, "workout.day", at: minute(workoutTimeKey, 16 * 60), title: L10n.f("Dnes v plánu: %@", untimed.map(\.title).joined(separator: ", ")),
                     body: untimed.first?.detail.map { L10n.f("%@. Dej si něco malého a připrav se.", $0) } ?? L10n.tr("Dej si něco malého a připrav se."))

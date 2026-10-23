@@ -2791,3 +2791,7 @@
 "Jen odebrat" = "Just remove";
 "Přepočteno" = "Recalculated";
 "Odeber %@ (%@) a zbytek týdne přepočítej." = "Remove the %1$@ (%2$@) and recalculate the rest of the week.";
+"přidat" = "add";
+"Čas tréninku" = "Workout time";
+"1 h předem" = "1 h before";
+"bez času v %@" = "untimed at %@";

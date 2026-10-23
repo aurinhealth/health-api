@@ -49,7 +49,7 @@ export const routeName = pathname => String(pathname || "/").replace(/\/[0-9a-f-
 
 const SERVICE_NAMES = {
   sync: "Google Health", "google-food": "Google Health (jídlo)", "intervals-exports": "Intervals (odeslání tréninků)", "sync-sends": "odeslání do aplikací",
-  "coach-push": "push kouče", ultrahuman: "Ultrahuman", "wahoo-exports": "Wahoo (odeslání tréninků)", wahoo: "Wahoo", whoop: "WHOOP",
+  "coach-push": "push kouče", "morning-push": "ranní připravenost", ultrahuman: "Ultrahuman", "wahoo-exports": "Wahoo (odeslání tréninků)", wahoo: "Wahoo", whoop: "WHOOP",
   "intervals-recent": "Intervals", "intervals-wellness": "Intervals (wellness)", google: "Google Health", intervals: "Intervals"
 };
 const label = service => SERVICE_NAMES[service] || service;
