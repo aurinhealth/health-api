@@ -19,6 +19,8 @@ enum AppRoute: Hashable {
     case steps
     /// The day's strain, what it is made of and the form forecast (Today → Zátěž).
     case strain
+    /// A past day's Námaha (Training → the day chosen in the calendar).
+    case strainDay(String)
     /// Regenerace from the coach's card on Today (RecoveryViews.swift).
     case recoveryTime
     case gym(String)
@@ -168,6 +170,7 @@ struct RouteScreen: View {
             if let training = model.training { ZonesDetailView(training: training) } else { LoadingScreen { await model.refreshTraining() } }
         case .steps: StepsDetailView()
         case .strain: StrainDetailView()
+        case .strainDay(let date): StrainDetailView(date: date)
         case .recoveryTime: RecoveryTimeView()
         case .gym(let date): GymSessionView(date: date)
         case .activity(let session): ActivityDetailView(session: session)
