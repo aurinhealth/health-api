@@ -284,6 +284,18 @@ export function stretchingFor(rows, muscleOf, { count = 4, doubled = 2, stations
   return routine([...picked, { ...FINISH, rounds: 1 }]);
 }
 
+/**
+ * The warm-up and the stretching of a plan as the setup wants them (null when
+ * turned off), and the ones turned off as `spare`, offered switched off.
+ */
+export function planRoutines(rows, muscleOf, setup = {}, minutes = 60) {
+  const size = routineSize(minutes), stations = setup?.stations;
+  const all = { warmup: warmupFor(rows, muscleOf, { ...size.warmup, stations }), stretching: stretchingFor(rows, muscleOf, { ...size.stretching, stations }) };
+  const on = { warmup: setup?.warmup !== false, stretching: setup?.stretching !== false };
+  const spare = { warmup: on.warmup ? null : all.warmup, stretching: on.stretching ? null : all.stretching };
+  return { warmup: on.warmup ? all.warmup : null, stretching: on.stretching ? all.stretching : null, spare: spare.warmup || spare.stretching ? spare : null, cardio: cardioFor(setup || {}, size.cardio) };
+}
+
 // Cardio at the start, at the end or both (Nastavení → Posilovna → Kardio). The machines are the active place's cardio stations;
 // the jump rope fits anywhere.
 export const CARDIO_MODES = ['none', 'start', 'end', 'both'];
@@ -326,8 +338,13 @@ export const ROUTINES_ROW = 5;
 export const ROUTINES_LABEL = 'Rozcvička a protažení';
 const stored = r => r?.items?.length ? { minutes: r.minutes, items: r.items } : null;
 const storedCardio = c => c && (c.start || c.end) ? { type: String(c.type || 'exercise_bike'), start: Number(c.start) || null, end: Number(c.end) || null } : null;
-export function routinesRow({ warmup = null, stretching = null, cardio = null } = {}) {
+// A part turned off in Posilovna is still stored (`spare`) and listed in `off`,
+// so the app offers it switched off and it can be turned on for the day.
+export function routinesRow({ warmup = null, stretching = null, cardio = null, spare = null } = {}) {
   const value = { warmup: stored(warmup), stretching: stored(stretching) };
+  const off = ['warmup', 'stretching'].filter(k => !value[k] && stored(spare?.[k]));
+  for (const k of off) value[k] = stored(spare[k]);
+  if (off.length) value.off = off;
   const c = storedCardio(cardio);
   if (c) value.cardio = c;
   return value.warmup || value.stretching || c ? [ROUTINES_LABEL, JSON.stringify(value)] : [];
@@ -338,6 +355,7 @@ export function readRoutines(values) {
   try {
     const parsed = JSON.parse(row[1]);
     const out = { warmup: parsed?.warmup?.items ? parsed.warmup : null, stretching: parsed?.stretching?.items ? parsed.stretching : null };
+    if (Array.isArray(parsed?.off) && parsed.off.length) out.off = parsed.off.filter(k => k === 'warmup' || k === 'stretching');
     const c = storedCardio(parsed?.cardio);
     return c ? { ...out, cardio: c } : out;
   } catch { return { warmup: null, stretching: null }; }

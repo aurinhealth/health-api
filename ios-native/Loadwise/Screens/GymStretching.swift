@@ -56,6 +56,8 @@ struct GymStretching: Decodable, Equatable {
         let warmup: GymStretching?
         let stretching: GymStretching?
         var cardio: Cardio? = nil
+        /// The parts turned off in Nastavení → Posilovna, offered switched off.
+        var off: [String]? = nil
     }
 
     /// The day's cardio: the machine and the minutes at the start and at the end (nil when off).

@@ -2,8 +2,9 @@ import SwiftUI
 
 // The parts of a gym day in order (Rozcvička, Kardio, Cviky, Kardio, Protažení):
 // each but the exercises turned on or off for the day, the cardio's machine and
-// minutes, and the order changed by dragging. Nastavení → Posilovna holds the
-// defaults; the day's choices are kept on the phone for that day.
+// minutes, and the order changed with Upravit pořadí. Nastavení → Posilovna holds the
+// defaults (a warm-up or stretching turned off there is offered switched off);
+// the day's choices are kept on the phone for that day.
 
 /// The cardio machines (ids of src/stretching.js CARDIO_MACHINES).
 enum GymCardio {
@@ -61,11 +62,12 @@ struct GymDayParts: Codable, Equatable {
 
     static let storageKey = "gym.day.parts"
 
-    /// The plan's parts: the cardio the setup chose is on, the other one off.
+    /// The plan's parts: the cardio the setup chose is on, the other one off, and
+    /// the warm-up and the stretching off when Posilovna turned them off.
     static func defaults(_ day: GymDay) -> GymDayParts {
         let plan = day.cardio
         let type = plan?.type ?? "exercise_bike"
-        var off: [GymDayPart] = []
+        var off: [GymDayPart] = day.routinesOff.compactMap { $0 == "warmup" ? .warmup : $0 == "stretching" ? .stretching : nil }
         if plan?.start == nil { off.append(.cardioStart) }
         if plan?.end == nil { off.append(.cardioEnd) }
         return GymDayParts(order: GymDayPart.allCases, off: off,
@@ -155,32 +157,44 @@ struct GymDayParts: Codable, Equatable {
         order.remove(at: from)
         order.insert(part, at: to)
     }
+
+    /// Moves `part` one place up (-1) or down (+1) among the day's parts.
+    mutating func step(_ part: GymDayPart, by offset: Int, day: GymDay) {
+        let shown = visible(day)
+        guard let i = shown.firstIndex(of: part), shown.indices.contains(i + offset) else { return }
+        move(part, to: shown[i + offset])
+    }
 }
 
-/// Dnešní trénink: the parts in order, each with its switch, the cardio's Změnit
-/// and dragging to change the order.
+/// Dnešní trénink: the parts in order, each with its switch and the cardio's Změnit;
+/// Upravit pořadí shows arrows that move a part up or down.
 struct GymPartsCard: View {
     let day: GymDay
     let date: String
     @Environment(AppModel.self) private var model
     @AppStorage(GymDayParts.storageKey) private var stored = ""
     @State private var editing: GymDayPart?
+    @State private var reordering = false
     @State private var options: [GymPreferences.CardioOption] = []
 
     private var parts: GymDayParts { GymDayParts.resolved(day, stored: stored, date: date) }
 
     var body: some View {
-        Card(padding: 8) {
-            VStack(spacing: 0) {
-                ForEach(Array(parts.visible(day).enumerated()), id: \.element) { index, part in
-                    if index > 0 { Divider().overlay(Palette.hairline).padding(.leading, 56) }
-                    row(part)
-                        .draggable(part.rawValue)
-                        .dropDestination(for: String.self) { items, _ in
-                            guard let raw = items.first, let moved = GymDayPart(rawValue: raw) else { return false }
-                            withAnimation(.snappy) { update { $0.move(moved, to: part) } }
-                            return true
-                        }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                SectionLabel(text: "Dnešní trénink")
+                Spacer()
+                Button(reordering ? LocalizedStringKey("Hotovo") : LocalizedStringKey("Upravit pořadí")) { withAnimation(.snappy) { reordering.toggle() } }
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.amber)
+                    .buttonStyle(.plain)
+            }
+            Card(padding: 8) {
+                VStack(spacing: 0) {
+                    let shown = parts.visible(day)
+                    ForEach(Array(shown.enumerated()), id: \.element) { index, part in
+                        if index > 0 { Divider().overlay(Palette.hairline).padding(.leading, 48) }
+                        row(part, first: index == 0, last: index == shown.count - 1)
+                    }
                 }
             }
         }
@@ -199,12 +213,9 @@ struct GymPartsCard: View {
         stored = GymDayParts.saving(next, date: date, into: stored)
     }
 
-    private func row(_ part: GymDayPart) -> some View {
+    private func row(_ part: GymDayPart, first: Bool, last: Bool) -> some View {
         let on = parts.isOn(part)
         return HStack(spacing: 10) {
-            Image(systemName: "line.3.horizontal").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
-                .frame(width: 16)
-                .accessibilityHidden(true)
             Image(systemName: symbol(part)).font(.system(size: 15, weight: .medium)).foregroundStyle(color(part))
                 .frame(width: 34, height: 34)
                 .background(color(part).opacity(0.14), in: Circle())
@@ -214,30 +225,48 @@ struct GymPartsCard: View {
                 Text(verbatim: subtitle(part)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
             Spacer(minLength: 6)
-            if part.isCardio {
-                Button { editing = part } label: {
-                    Text("Změnit").font(.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-                        .padding(.horizontal, 10).frame(height: 28)
-                        .background(Palette.track, in: Capsule())
+            if reordering {
+                HStack(spacing: 8) {
+                    arrow(part, up: true).disabled(first).opacity(first ? 0.3 : 1)
+                    arrow(part, up: false).disabled(last).opacity(last ? 0.3 : 1)
                 }
-                .buttonStyle(.plain)
-                .disabled(!on)
-            }
-            if part != .exercises {
-                Toggle(isOn: Binding(get: { on }, set: { value in
-                    update { p in p.off.removeAll { $0 == part }; if !value { p.off.append(part) } }
-                })) { EmptyView() }
-                    .toggleStyle(LoadwiseToggleStyle())
-                    .fixedSize()
-                    .accessibilityLabel(Text(title(part)))
+            } else {
+                if part.isCardio {
+                    Button { editing = part } label: {
+                        Text("Změnit").font(.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                            .padding(.horizontal, 10).frame(height: 28)
+                            .background(Palette.track, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!on)
+                }
+                if part != .exercises {
+                    Toggle(isOn: Binding(get: { on }, set: { value in
+                        update { p in p.off.removeAll { $0 == part }; if !value { p.off.append(part) } }
+                    })) { EmptyView() }
+                        .toggleStyle(LoadwiseToggleStyle())
+                        .fixedSize()
+                        .accessibilityLabel(Text(title(part)))
+                }
             }
         }
         .padding(.horizontal, 8)
         .frame(minHeight: 56)
         .contentShape(Rectangle())
-        .opacity(on ? 1 : 0.45)
+        .opacity(on || reordering ? 1 : 0.45)
         .accessibilityElement(children: .contain)
-        .accessibilityHint(L10n.tr("Podržením a tažením změníš pořadí."))
+    }
+
+    private func arrow(_ part: GymDayPart, up: Bool) -> some View {
+        Button {
+            withAnimation(.snappy) { update { $0.step(part, by: up ? -1 : 1, day: day) } }
+        } label: {
+            Image(systemName: up ? "chevron.up" : "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.ink)
+                .frame(width: 34, height: 34)
+                .background(Palette.track, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(up ? LocalizedStringKey("Posunout výš") : LocalizedStringKey("Posunout níž")))
     }
 
     private func title(_ part: GymDayPart) -> LocalizedStringKey {
