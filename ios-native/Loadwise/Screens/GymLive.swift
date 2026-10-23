@@ -458,9 +458,9 @@ struct LiveGymView: View {
     /// A set out of the sheet; the notes of the rows below move up with them.
     private func remove(_ set: GymSet) {
         guard var next = day else { return }
-        next.removeRow(set.row)
+        let gone = next.deleteSet(row: set.row)
         var moved: [Int: String] = [:]
-        for (row, note) in notes where row != set.row { moved[row > set.row ? row - 1 : row] = note }
+        for (row, note) in notes where !gone.contains(row) { moved[row - gone.filter { $0 < row }.count] = note }
         notes = moved
         day = next
         persist()

@@ -258,8 +258,8 @@ struct GymSessionView: View {
     private func card(_ day: GymDay, _ exercise: GymExercise) -> some View {
         // The exercise's place in the plan (the cards may be regrouped by superset).
         let offset: Int? = day.exercises.firstIndex { $0.id == exercise.id }
-        let add: (() -> Void)? = offset.map { (at: Int) -> () -> Void in { Task { await changeSets(at: at, by: 1) } } }
-        let remove: (() -> Void)? = offset.map { (at: Int) -> () -> Void in { Task { await changeSets(at: at, by: -1) } } }
+        let add: (() -> Void)? = offset.map { (at: Int) -> () -> Void in { Task { await addSet(at: at) } } }
+        let remove: ((GymSet) -> Void)? = offset.map { (_: Int) -> (GymSet) -> Void in { set in Task { await deleteSet(set) } } }
         return ExerciseCard(exercise: exercise,
                             failure: Set(exercise.sets.map { $0.row }.filter { day.isToFailure(row: $0) }),
                             onSet: { set, kg, reps, rpe in Task { await record(set, kg: kg, reps: reps, rpe: rpe) } },
@@ -319,9 +319,15 @@ struct GymSessionView: View {
         await save()
     }
 
-    /// One set more (like the last one) or one fewer (the last one not done).
-    private func changeSets(at offset: Int, by step: Int) async {
-        if step > 0 { day?.addSet(at: offset) } else { day?.removeSet(at: offset) }
+    /// One set more, like the last one.
+    private func addSet(at offset: Int) async {
+        day?.addSet(at: offset)
+        await save()
+    }
+
+    /// The set swiped away, just that one (with its drop sets).
+    private func deleteSet(_ set: GymSet) async {
+        day?.deleteSet(row: set.row)
         await save()
     }
 
@@ -375,15 +381,12 @@ struct ExerciseCard: View {
     var onTechnique: () -> Void
     var onAlternatives: () -> Void
     var onAddSet: (() -> Void)? = nil
-    var onRemoveSet: (() -> Void)? = nil
+    var onRemoveSet: ((GymSet) -> Void)? = nil
     var onRemoveExercise: (() -> Void)? = nil
 
     /// The note the server gives the first set of an exercise it has no weight for
     /// (strength-generator.js TEST_SET_NOTE).
     static func isTestSet(_ note: String) -> Bool { note.hasPrefix("zkušební série") || note.hasPrefix("test set") }
-
-    /// A set can go while one is not done and another stays.
-    private var canRemoveSet: Bool { exercise.sets.count > 1 && exercise.sets.contains { !$0.done } }
 
     var body: some View {
         Card {
@@ -415,16 +418,15 @@ struct ExerciseCard: View {
             }
             VStack(spacing: 6) {
                 ForEach(exercise.sets) { set in
+                    // Swiped left: just this set goes away.
                     SetRow(set: set, failure: failure.contains(set.row), onDone: { kg, reps, rpe in onSet(set, kg, reps, rpe) }, onUndo: { onUndo(set) })
+                        .modifier(SwipeToDelete(enabled: onRemoveSet != nil) { onRemoveSet?(set) })
                 }
             }
             if let onAddSet {
                 HStack(spacing: 16) {
                     Button(action: onAddSet) { Label("Přidat sérii", systemImage: "plus") }
                     Spacer()
-                    if let onRemoveSet, canRemoveSet {
-                        Button(action: onRemoveSet) { Label("Odebrat sérii", systemImage: "minus") }
-                    }
                 }
                 .font(Typo.caption.weight(.semibold))
                 .foregroundStyle(Palette.muted)

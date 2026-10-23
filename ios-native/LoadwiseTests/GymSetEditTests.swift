@@ -23,9 +23,18 @@ final class GymSetEditTests: XCTestCase {
         let work = d.exercises[0].sets.first { !$0.warmup }!
         d.deleteSet(row: work.row)
         XCTAssertEqual(d.exercises[0].sets.filter { !$0.warmup }.map(\.number), ["1"])
-        // A set done stays.
+        // A set done goes too, the one swiped.
         d.deleteSet(row: d.exercises[0].sets[0].row)
-        XCTAssertEqual(d.exercises[0].sets.count, 3)
+        XCTAssertEqual(d.exercises[0].sets.filter(\.warmup).map(\.plannedKg), ["45"])
+        XCTAssertEqual(d.exercises[0].sets.count, 2)
+    }
+
+    func testDeletingTheSetSwipedNotTheFirst() {
+        var d = day([row("WORK", "Bench", "1", "50", done: true), row("WORK", "Bench", "2", "55", done: true), row("WORK", "Bench", "3", "60")])
+        d.deleteSet(row: d.exercises[0].sets[1].row)
+        XCTAssertEqual(d.exercises[0].sets.map(\.plannedKg), ["50", "60"])
+        XCTAssertEqual(d.exercises[0].sets.map(\.number), ["1", "2"])
+        XCTAssertEqual(d.exercises[0].sets.map(\.done), [true, false])
     }
 
     func testDeletingBySidesTakesBothRows() {

@@ -321,15 +321,14 @@ struct GymDay: Decodable, Equatable {
         write(list, rest)
     }
 
-    /// A set not done yet taken out by its row (swiped away in Režim tréninku),
-    /// by sides both of its rows, with the drop sets right after it; the sets
-    /// of the exercise are numbered again (a drop set keeps the number of the
-    /// set above). The last set gone, the exercise leaves the plan with its
-    /// warm-ups not done yet. Returns
-    /// the rows taken out, as they were numbered before.
+    /// A set taken out by its row (swiped away), done or not, by sides both of
+    /// its rows, with the drop sets right after it; the sets of the exercise
+    /// are numbered again (a drop set keeps the number of the set above). The
+    /// last set gone, the exercise leaves the plan with its warm-ups not done
+    /// yet. Returns the rows taken out, as they were numbered before.
     @discardableResult
     mutating func deleteSet(row: Int) -> [Int] {
-        guard row >= Self.firstSetRow, row < values.count, !Self.isDone(cell(values[row], 8)),
+        guard row >= Self.firstSetRow, row < values.count,
               let name = cell(values[row], 1), !name.isEmpty else { return [] }
         var start = row, end = row
         while start - 1 >= Self.firstSetRow, cell(values[start - 1], 1) == name { start -= 1 }
@@ -338,12 +337,12 @@ struct GymDay: Decodable, Equatable {
         if Self.rowType(values[row]) == "WORK" {
             let number = cell(values[row], 2)
             if ["L", "P"].contains(cell(values[row], 13) ?? "") {
-                drop += (start...end).filter { $0 != row && Self.rowType(values[$0]) == "WORK" && cell(values[$0], 2) == number && !Self.isDone(cell(values[$0], 8)) }
+                drop += (start...end).filter { $0 != row && Self.rowType(values[$0]) == "WORK" && cell(values[$0], 2) == number }
             }
             // Its drop sets go with it.
             for at in drop.sorted() {
                 var next = at + 1
-                while next <= end, Self.rowType(values[next]) == "DROP", !Self.isDone(cell(values[next], 8)) { drop.append(next); next += 1 }
+                while next <= end, Self.rowType(values[next]) == "DROP" { drop.append(next); next += 1 }
             }
         }
         // No set left but warm-ups: those not done go too.

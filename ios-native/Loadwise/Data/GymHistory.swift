@@ -574,12 +574,6 @@ extension GymDay {
         set(row: row, column: 6, reps)
     }
 
-    /// One set out of the sheet (a set that was never done).
-    mutating func removeRow(_ row: Int) {
-        guard row >= Self.firstSetRow, row < values.count else { return }
-        values.remove(at: row)
-    }
-
     /// One more work set for the exercise whose sets include `row`, like its last one.
     mutating func addSet(after row: Int) {
         guard let exercise = exercises.first(where: { $0.sets.contains { $0.row == row } }), let last = exercise.sets.last else { return }

@@ -555,7 +555,6 @@ struct RestSetsList: View {
 }
 
 /// A set row swiped left: Smazat shows behind it, a long swipe deletes at once.
-/// Off for sets already done (those go back with the tick first).
 struct SwipeToDelete: ViewModifier {
     let enabled: Bool
     let onDelete: () -> Void
