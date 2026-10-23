@@ -122,10 +122,15 @@ struct FoodProduct: Codable, Equatable, Identifiable {
     /// "edited": a catalogue food the user corrected, kept to themselves
     /// until the owner approves the suggestion (src/food-suggestions.js).
     var origin: String?
+    /// A catalogue food someone reported ("Hodnoty nesedí") and the owner
+    /// hasn't settled yet; reported_by_me when this user did.
+    var reported: Bool?
+    var reported_by_me: Bool?
 
     enum CodingKeys: String, CodingKey {
         case name, brand, calories_100g, protein_100g, carbs_100g, fat_100g, fiber_100g, sugars_100g, salt_100g
         case nutrition_basis, serving_size, quantity, barcode, source, source_url, micros_100g, catalog_key, serving_name, origin
+        case reported, reported_by_me
     }
 
     init(name: String, brand: String? = nil, calories_100g: Double? = nil, protein_100g: Double? = nil, carbs_100g: Double? = nil,
@@ -165,6 +170,8 @@ struct FoodProduct: Codable, Equatable, Identifiable {
         catalog_key = value(.catalog_key)?.string
         serving_name = value(.serving_name)?.string?.nilIfBlank
         origin = value(.origin)?.string
+        reported = try? c.decodeIfPresent(Bool.self, forKey: .reported)
+        reported_by_me = try? c.decodeIfPresent(Bool.self, forKey: .reported_by_me)
     }
 
     var id: String { (barcode ?? "") + "|" + name + "|" + (brand ?? "") + "|" + (source ?? "") }
@@ -237,6 +244,10 @@ struct FoodProduct: Codable, Equatable, Identifiable {
 
     /// A correction of it can be suggested for everyone: a catalogue food, or
     /// the user's own corrected copy of one.
+    /// "Hodnoty nesedí" can be sent: a food from a catalogue, not one the user
+    /// saved, AI found or read from a photo.
+    var canReport: Bool { isShared && !["ai", "ai-estimate", "photo", "package_label"].contains(source ?? "") && origin != "edited" }
+
     var canSuggest: Bool { (isShared && source != "ai-estimate" && source != "ai") || origin == "edited" }
 
     func kcal(for amount: Double) -> Double? {

@@ -56,3 +56,35 @@ test("a corrected catalogue food stays the user's own until approved", async () 
   assert.ok(PERSONAL_TABLES.food_suggestions, "deleted and exported with the account");
   assert.equal(productFromLabel(before).serving_name, undefined);
 });
+
+test("a report without values marks the food for everyone until the owner fixes it", async () => {
+  const { saveFoodReport, markReported, foodRef } = await import("../src/food-suggestions.js");
+  const raw = createD1(), a = scopedDb(raw, 3), b = scopedDb(raw, 4);
+  const world = { name: "Tyčinka Margot", brand: "Orion", barcode: "8594001234567", nutrition_basis: "g", calories_100g: 259, protein_100g: 10, carbs_100g: 36, fat_100g: 9, source: "catalog", catalog_key: "gtin:08594001234567" };
+  await assert.rejects(saveFoodReport(a, { product: world, reason: "nonsense" }), e => e.status === 400);
+  const sent = await saveFoodReport(a, { product: world, reason: "values", note: "na obalu je 207 kcal na kus" });
+  await saveFoodReport(b, { product: world, reason: "serving" });
+  assert.equal(foodRef(world), "gtin:08594001234567");
+
+  const [mine, own] = await markReported(raw, [world, { ...world, source: "personal" }], 3);
+  assert.equal(mine.reported, true);
+  assert.equal(mine.reported_by_me, true);
+  assert.equal(own.reported, undefined, "the user's own copy carries no label");
+  assert.equal((await markReported(raw, [world], 9))[0].reported_by_me, false);
+
+  // Corrections and reports are listed apart.
+  assert.equal((await listFoodSuggestions(raw)).suggestions.length, 0);
+  const { suggestions, pending } = await listFoodSuggestions(raw, { kind: "report" });
+  assert.deepEqual(pending, { correction: 0, report: 2 });
+  const first = suggestions.find(s => s.id === sent.id);
+  assert.equal(first.reason, "values");
+  assert.equal(first.note, "na obalu je 207 kcal na kus");
+  assert.equal(first.reports, 2);
+
+  // Approving needs the corrected values; it settles both reports.
+  await assert.rejects(decideFoodSuggestion(raw, scopedDb(raw, 1), { id: sent.id, decision: "approve" }), e => e.status === 400);
+  await decideFoodSuggestion(raw, scopedDb(raw, 1), { id: sent.id, decision: "approve", after: { ...world, calories_100g: 207 } });
+  assert.equal((await listFoodSuggestions(raw, { kind: "report" })).suggestions.length, 0);
+  assert.equal((await markReported(raw, [world], 3))[0].reported, undefined);
+  assert.equal((await searchFoodCatalog(b, "", world.barcode))[0].calories_100g, 207);
+});

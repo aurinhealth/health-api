@@ -10,6 +10,8 @@ struct FoodProductEditor: View {
     let product: FoodProduct
     /// The corrected food, once saved.
     let saved: (FoodProduct) -> Void
+    /// Instead of the user's own food: the owner fixing a reported food.
+    var save: ((FoodProduct) async throws -> Void)? = nil
 
     @State private var servingName = ""
     @State private var serving = ""
@@ -60,7 +62,7 @@ struct FoodProductEditor: View {
                     SettingsDivider()
                     SettingsField(title: "Vláknina", text: $fiber, unit: "g")
                 }
-                if product.canSuggest && !product.perPortion {
+                if save == nil && product.canSuggest && !product.perPortion {
                     SettingsGroup { SettingsToggle(title: "Navrhnout opravu pro všechny", isOn: $suggest) }
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
@@ -116,6 +118,10 @@ struct FoodProductEditor: View {
         if model.demo { saved(corrected); dismiss(); return }
         saving = true
         defer { saving = false }
+        if let save {
+            do { try await save(corrected); saved(corrected); dismiss() } catch { self.error = error.localizedDescription }
+            return
+        }
         do {
             let own = try await model.api.savePersonalFood(corrected)
             if suggest && product.canSuggest && !product.perPortion {

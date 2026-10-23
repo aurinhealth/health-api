@@ -433,6 +433,9 @@ struct FoodAmountView: View {
     @State private var saving = false
     @State private var error: String?
     @State private var edit = false
+    /// "Co nesedí?" open, and the report sent from here.
+    @State private var reporting = false
+    @State private var reportedNow = false
     @State private var filled = false
     @State private var name = ""
     @State private var brand = ""
@@ -448,18 +451,37 @@ struct FoodAmountView: View {
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 16) {
-                CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }
+                HStack {
+                    CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }
+                    Spacer()
+                    if product.canReport && !model.demo {
+                        Button { reporting = true } label: {
+                            Image(systemName: mine ? "flag.fill" : "flag").font(.system(size: 19, weight: .medium))
+                                .foregroundStyle(Palette.rust).frame(width: 44, height: 44, alignment: .trailing)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(mine)
+                        .accessibilityLabel(L10n.tr(mine ? "Nahlášeno" : "Hodnoty nesedí"))
+                    }
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(current.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     if product.source == "ai-estimate" { AIEstimateTag() }
-                    if let brand = current.brand { Text(brand).font(Typo.small).foregroundStyle(Palette.muted) }
+                    HStack(spacing: 8) {
+                        if let brand = current.brand { Text(brand).font(Typo.small).foregroundStyle(Palette.muted) }
+                        if product.canReport && (product.reported == true || reportedNow) { ReportedTag() }
+                    }
                 }
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    TextField("100", text: $amount).keyboardType(.decimalPad).font(Typo.number(56)).frame(maxWidth: 160)
-                    Text(product.perPortion ? "porce" : product.unit).font(Typo.body).foregroundStyle(Palette.faint)
-                }
-                PortionChips(product: current, amount: $amount)
+                // The same card as after a scan (BarcodeScanSheet): the values, then the wheel.
                 NutritionCells(product: current, amount: value ?? 0)
+                VStack(alignment: .leading, spacing: 4) {
+                    PortionWheel(product: current, amount: Binding(get: { value ?? 0 }, set: { amount = String(($0 * 10).rounded() / 10) }))
+                        .id(current.unit + (current.usableServing.map(Self.text) ?? "") + (current.serving_name ?? ""))
+                    if !current.perPortion, let size = current.usableServing {
+                        Text(L10n.f("1 %@ = %@ %@ · %@ kcal", current.servingName, Self.text(size), current.unit, Fmt.int(current.kcal(for: size))))
+                            .font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
                 if let note {
                     Label(note, systemImage: "sparkles").font(Typo.caption).foregroundStyle(Palette.amber)
                         .fixedSize(horizontal: false, vertical: true)
@@ -507,13 +529,28 @@ struct FoodAmountView: View {
                         .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                 }
                 .disabled(saving || value == nil || current.name.isEmpty || current.calories_100g == nil)
+                if reportedNow {
+                    Label("Díky, nahlášeno.", systemImage: "checkmark").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .labelStyle(ReportedLabelStyle())
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).frame(height: 48)
+                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .transition(.opacity)
+                }
             }
             .padding(24)
         }
         .background(Palette.background.ignoresSafeArea())
         .toolbar(.hidden, for: .navigationBar)
         .onAppear(perform: fill)
+        .sheet(isPresented: $reporting) {
+            FoodReportSheet(product: product) { withAnimation { reportedNow = true } }
+                .presentationDetents([.medium, .large])
+                .presentationBackground(Palette.background)
+        }
     }
+
+    /// The flag is filled once this user reported the food.
+    private var mine: Bool { reportedNow || product.reported_by_me == true }
 
     private func fill() {
         guard !filled else { return }
@@ -583,49 +620,6 @@ struct FoodAmountView: View {
         let api = model.api, before = product
         // In the background: a refused suggestion (daily limit) must not hold up the food.
         Task.detached { try? await api.suggestFoodCorrection(before: before, after: corrected) }
-    }
-}
-
-/// ¼, ⅓, ½ … of a serving or of the whole package, so nobody has to work out
-/// grams. Hidden when the food has neither.
-struct PortionChips: View {
-    let product: FoodProduct
-    @Binding var amount: String
-
-    static let fractions: [(label: String, value: Double)] = [("¼", 0.25), ("⅓", 1.0 / 3), ("½", 0.5), ("¾", 0.75), ("1", 1), ("1½", 1.5), ("2", 2)]
-
-    var body: some View {
-        if let reference = product.portionReference {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(product.perPortion ? L10n.tr("Počet porcí") : L10n.f("1 %@ = %@ %@", reference.name, FoodAmountView.text(reference.size), product.unit))
-                    .font(Typo.caption).foregroundStyle(Palette.muted)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Self.fractions, id: \.label) { fraction in
-                            let text = Self.text(reference.size * fraction.value, perPortion: product.perPortion)
-                            let selected = text == amount
-                            Button { amount = text } label: {
-                                Text(fraction.label).font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(selected ? Palette.onButton : Palette.ink)
-                                    .frame(minWidth: 44).frame(height: 36).padding(.horizontal, 4)
-                                    .background(selected ? Palette.button : Palette.ink.opacity(0.06), in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(L10n.f("%@ %@", fraction.label, reference.name))
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// Grams and ml whole; portions up to two decimals (⅓ = 0,33, ½ = 0,5).
-    static func text(_ value: Double, perPortion: Bool) -> String {
-        // No thousands separator: the amount field must read it back ("1500", not "1 500").
-        guard perPortion else { return String(Int(value.rounded())) }
-        let v = (value * 100).rounded() / 100
-        let digits = v.rounded() == v ? 0 : (v * 10).rounded() == v * 10 ? 1 : 2
-        return Fmt.decimal(v, digits: digits)
     }
 }
 
@@ -762,6 +756,86 @@ struct MealMenu: View {
             .font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
             .padding(.horizontal, 10).padding(.vertical, 5)
             .background(Capsule().fill(Palette.ink.opacity(0.06)))
+        }
+    }
+}
+
+/// "Nahlášeno": a catalogue food someone reported and the owner hasn't settled.
+struct ReportedTag: View {
+    var body: some View {
+        Label("Nahlášeno", systemImage: "flag.fill").labelStyle(.titleAndIcon)
+            .font(.caption2.weight(.semibold)).foregroundStyle(Palette.amber).lineLimit(1)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(Palette.amber.opacity(0.16), in: Capsule())
+    }
+}
+
+private struct ReportedLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 10) { configuration.icon.foregroundStyle(Palette.green); configuration.title }
+    }
+}
+
+/// "Co nesedí?": what is wrong with a catalogue food when the right values
+/// aren't at hand, and a note; it reaches the owner (Návrhy oprav → Hlášení).
+struct FoodReportSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let product: FoodProduct
+    let sent: () -> Void
+    @State private var reason = "values"
+    @State private var note = ""
+    @State private var sending = false
+    @State private var error: String?
+
+    static let reasons: [(code: String, title: String)] = [
+        ("values", "Energie nebo živiny"), ("name", "Název nebo značka"),
+        ("serving", "Velikost porce nebo balení"), ("other_product", "Pod kódem je jiný výrobek")
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Co nesedí?").font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink).padding(.top, 8)
+            SettingsGroup {
+                ForEach(Array(Self.reasons.filter { $0.code != "other_product" || product.barcode != nil }.enumerated()), id: \.element.code) { index, item in
+                    if index > 0 { SettingsDivider() }
+                    Button { reason = item.code } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: reason == item.code ? "largecircle.fill.circle" : "circle")
+                                .font(.system(size: 20)).foregroundStyle(reason == item.code ? Palette.ink : Palette.faint)
+                            Text(LocalizedStringKey(item.title)).font(.body).foregroundStyle(Palette.ink)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(reason == item.code ? .isSelected : [])
+                }
+            }
+            TextField("Poznámka, nepovinné", text: $note, axis: .vertical)
+                .lineLimit(2...4).font(.body)
+                .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            Button { Task { await send() } } label: {
+                Text(sending ? L10n.tr("Odesílám…") : L10n.tr("Nahlásit")).font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                    .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(sending)
+            Spacer(minLength: 0)
+        }
+        .padding(24)
+    }
+
+    private func send() async {
+        sending = true
+        defer { sending = false }
+        do {
+            try await model.api.reportFood(product, reason: reason, note: note.trimmingCharacters(in: .whitespacesAndNewlines))
+            sent()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

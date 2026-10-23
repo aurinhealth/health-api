@@ -28,8 +28,11 @@ const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens
   /^"SELECT 1 FROM sqlite_master WHERE type='table' AND name='ai_usage'"$/, /FROM ai_usage a LEFT JOIN users u ON u\.id = a\.user_id/,
   // The owner lists and decides every user's food corrections (food-suggestions.js);
   // the route refuses anyone else.
-  /FROM food_suggestions s WHERE s\.status=\?/, /^"SELECT status, COUNT\(\*\) AS n FROM food_suggestions GROUP BY status"$/,
-  /^"SELECT id,after_json,status FROM food_suggestions WHERE id=\?"$/, /^"UPDATE food_suggestions SET status=\?, decided_at=CURRENT_TIMESTAMP WHERE id=\? AND status='pending'"$/];
+  /FROM food_suggestions s WHERE s\.status=\?/, /^"SELECT status, COUNT\(\*\) AS n FROM food_suggestions WHERE kind=\? GROUP BY status"$/,
+  /^"SELECT kind, COUNT\(\*\) AS n FROM food_suggestions WHERE status='pending' GROUP BY kind"$/,
+  /^"SELECT id,after_json,status,kind,ref FROM food_suggestions WHERE id=\?"$/, /^"UPDATE food_suggestions SET status=\?, after_json=\?, decided_at=CURRENT_TIMESTAMP WHERE id=\? AND status='pending'"$/,
+  // Fixing a reported food settles every user's report of it.
+  /^"UPDATE food_suggestions SET status='approved', decided_at=CURRENT_TIMESTAMP WHERE kind='report' AND status='pending' AND ref=\?"$/];
 
 test("personal tables are known", () => {
   for (const name of ["health_datapoints", "food_logs", "dashboard_profile", "connection_credentials"]) assert.ok(personal.includes(name), name);
