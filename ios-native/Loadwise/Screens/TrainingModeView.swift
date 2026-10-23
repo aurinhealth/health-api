@@ -339,9 +339,9 @@ struct TrainingModeView: View {
         VStack(spacing: 2) {
             tableHeader
             ForEach(exercise.sets) { s in
-                // Swiped left: a set not done yet (a warm-up too) goes away.
+                // Swiped left: just this set goes away (a done one, a warm-up too).
                 setRow(s, exercise, current: set, last: last)
-                    .modifier(SwipeToDelete(enabled: !s.done && !saving) { Task { await deleteSet(s) } })
+                    .modifier(SwipeToDelete(enabled: !saving) { Task { await deleteSet(s) } })
             }
             tableActions(exercise, set)
         }
@@ -389,10 +389,7 @@ struct TrainingModeView: View {
 
     private func tableActions(_ exercise: GymExercise, _ set: GymSet?) -> some View {
         HStack(spacing: 8) {
-            pill("plus", L10n.tr("Série")) { Task { await changeSets(by: 1) } }.disabled(saving)
-            if exercise.sets.count > 1, set != nil {
-                pill("minus", L10n.tr("Série")) { Task { await changeSets(by: -1) } }.disabled(saving)
-            }
+            pill("plus", L10n.tr("Série")) { Task { await addSet() } }.disabled(saving)
             if let plates = platesText(exercise) {
                 Text(plates).font(Typo.caption).foregroundStyle(Palette.secondary)
                     .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
@@ -1099,11 +1096,11 @@ struct TrainingModeView: View {
         dismiss()
     }
 
-    /// One set more for the current exercise (like its last one), or one fewer
-    /// (the last one not done).
-    private func changeSets(by step: Int) async {
+    /// One set more for the current exercise, like its last one. A set goes
+    /// away swiped left, the one the user means.
+    private func addSet() async {
         guard var next = day, next.exercises.indices.contains(index) else { return }
-        if step > 0 { next.addSet(at: index) } else { next.removeSet(at: index) }
+        next.addSet(at: index)
         day = next
         guard !model.demo else { return }
         saving = true
@@ -1197,7 +1194,7 @@ struct TrainingModeView: View {
         }
     }
 
-    /// A set not done yet swiped away (with its drop sets). The fields follow
+    /// A set swiped away (with its drop sets). The fields follow
     /// the set now at hand.
     private func deleteSet(_ set: GymSet) async {
         guard var next = day else { return }

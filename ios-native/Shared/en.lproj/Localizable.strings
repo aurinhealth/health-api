@@ -1342,7 +1342,6 @@
 "Podobný cvik" = "Similar exercise";
 "K tomuhle cviku zatím video nemáme." = "There's no video for this exercise yet.";
 "Přidat sérii" = "Add set";
-"Odebrat sérii" = "Remove set";
 "Odebrat cvik" = "Remove exercise";
 "Dokončit trénink" = "Finish workout";
 "Jak se ti trénink líbil?" = "How was the workout?";
@@ -1470,7 +1469,7 @@
 "Historie" = "History";
 "OPAK." = "REPS";
 "rozcvička" = "warm-up";
-"Série %@ není vyplněná: doplň opakování, nebo ji smaž." = "Set %@ isn't filled in: enter the reps or delete it.";
+"Série %@ není vyplněná: doplň opakování, nebo ji přejetím doleva smaž." = "Set %@ isn't filled in: enter the reps or swipe it left to delete it.";
 "Naposledy" = "Recent";
 "v tréninku" = "in workout";
 "Nic se nenašlo." = "Nothing found.";
@@ -1802,7 +1801,6 @@
 "Ukončit trénink?" = "End the workout?";
 "Pokračovat později" = "Continue later";
 "Zahodit trénink" = "Discard workout";
-"Smazat sérii" = "Delete set";
 "Právě teď" = "Just now";
 "Skončil" = "Ended";
 "Tep během tréninku" = "Heart rate during the workout";

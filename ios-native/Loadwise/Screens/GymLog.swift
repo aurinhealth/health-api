@@ -133,7 +133,7 @@ struct GymDoneDetail: View {
     }
 
     private func remove(_ set: GymSet) {
-        day.removeRow(set.row)
+        day.deleteSet(row: set.row)
         saveNow()
     }
 
@@ -404,11 +404,8 @@ struct GymExerciseTable: View {
                                        editable: onEdit != nil,
                                        onToggle: { kg, reps in onToggle(set, kg, reps) },
                                        onEdit: { kg, reps in onEdit?(set, kg, reps) })
-                            .contextMenu {
-                                if let onRemove {
-                                    Button(role: .destructive) { onRemove(set) } label: { Label("Smazat sérii", systemImage: "trash") }
-                                }
-                            }
+                            // Swiped left: just this set goes away.
+                            .modifier(SwipeToDelete(enabled: onRemove != nil) { onRemove?(set) })
                         if let note = notes[set.row] {
                             Text(note).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.amber).padding(.leading, 32)
                         } else if set.warmup && set.row == highlight {
@@ -419,24 +416,15 @@ struct GymExerciseTable: View {
             }
             if missingNote, let missing = exercise.sets.first(where: { !$0.done }) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text(L10n.f("Série %@ není vyplněná: doplň opakování, nebo ji smaž.", missing.warmup ? "W" : missing.number))
+                    Text(L10n.f("Série %@ není vyplněná: doplň opakování, nebo ji přejetím doleva smaž.", missing.warmup ? "W" : missing.number))
                         .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
-                    if let onRemove {
-                        Button("Smazat") { onRemove(missing) }
-                            .font(Typo.small.weight(.semibold)).foregroundStyle(Palette.rust).buttonStyle(.borderless)
-                    }
                 }
             }
-            if onAddSet != nil || onRemove != nil {
+            if let onAddSet {
                 HStack(spacing: 16) {
-                    if let onAddSet {
-                        Button(action: onAddSet) { Label("Přidat sérii", systemImage: "plus") }
-                    }
+                    Button(action: onAddSet) { Label("Přidat sérii", systemImage: "plus") }
                     Spacer()
-                    if let onRemove, exercise.sets.count > 1, let last = exercise.sets.last {
-                        Button { onRemove(last) } label: { Label("Odebrat sérii", systemImage: "minus") }
-                    }
                 }
                 .font(Typo.caption.weight(.semibold))
                 .foregroundStyle(Palette.muted)
