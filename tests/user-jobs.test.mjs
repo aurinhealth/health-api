@@ -15,6 +15,10 @@ test("each minute names the jobs due then: syncing always, the rest on their min
   assert.deepEqual(dueUserJobs("5 1 * * *", at(1, 5)), ["sync"]);
   assert.ok(dueUserJobs("* * * * *", at(10, 5)).includes("coach-push"));
   assert.ok(!dueUserJobs("* * * * *", at(10, 6)).includes("coach-push"));
+  // The morning push before the coach's, which waits for it.
+  const names = dueUserJobs("* * * * *", at(10, 5));
+  assert.ok(names.indexOf("morning-push") >= 0 && names.indexOf("morning-push") < names.indexOf("coach-push"));
+  assert.ok(!dueUserJobs("* * * * *", at(10, 6)).includes("morning-push"));
 });
 
 test("the coach's push goes to everyone with a phone to notify, whatever they connected, once each", async () => {
@@ -38,7 +42,7 @@ test("the coach's push goes to everyone with a phone to notify, whatever they co
   };
   const sent = await fanOut(apns, at(17, 5));
   assert.deepEqual(sent.map(m => m.user.id), [1, 2, 3], "each once, the Google user too");
-  assert.ok(sent.every(m => m.names.includes("coach-push")));
+  assert.ok(sent.every(m => m.names.includes("coach-push") && m.names.includes("morning-push")));
   // Off the push minutes, or without APNs, only the users with a service.
   assert.deepEqual((await fanOut(apns, at(17, 6))).map(m => m.user.id), [1]);
   assert.deepEqual((await fanOut({}, at(17, 5))).map(m => m.user.id), [1]);

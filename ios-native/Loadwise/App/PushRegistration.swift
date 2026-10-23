@@ -51,13 +51,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         return configuration
     }
 
-    /// In the app the pill reminder shows as a banner; the others stay quiet
-    /// as before.
+    /// In the app the pill reminder and the server's pushes show as a banner;
+    /// the other reminders stay quiet as before.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         let content = notification.request.content
         if content.categoryIdentifier == Reminders.pillCategory { return [.banner, .sound, .list] }
-        // The coach's message, also while the app is open.
-        return content.userInfo["coach"] != nil ? [.banner, .list] : []
+        // The server's pushes (the morning readiness, the coach), also while the
+        // app is open: opening the app uploads the night, which sends the morning
+        // push at once, and with no options iOS dropped it without a trace.
+        return notification.request.trigger is UNPushNotificationTrigger || content.userInfo["coach"] != nil ? [.banner, .list] : []
     }
 
     /// "Vzato" logs the pill of the reminder's day at this time; "Za 30
