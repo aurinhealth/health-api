@@ -19,9 +19,15 @@ final class AppleHealthExport {
     /// Apple Health's preferences; the server keeps a copy (sync_preferences).
     private(set) var prefs: SyncPrefs
 
+    /// What the server already writes to Google Health ("activities", "weight",
+    /// "nutrition"). The Google Health iPhone app also reads Apple Health, so the
+    /// same data written here too counted twice there: Google's copy wins.
+    private(set) var viaGoogle: Set<String>
+
     @ObservationIgnored private let store = HKHealthStore()
     private static let prefsKey = "appleHealth.export"
     private static let writtenKey = "appleHealth.written"
+    private static let viaGoogleKey = "appleHealth.viaGoogle"
 
     static let healthTypes = ["weight", "nutrition", "water"]
 
@@ -36,6 +42,7 @@ final class AppleHealthExport {
         } else {
             prefs = .off
         }
+        viaGoogle = Set(UserDefaults.standard.stringArray(forKey: Self.viaGoogleKey) ?? [])
     }
 
     func setPrefs(_ next: SyncPrefs) {
@@ -43,10 +50,29 @@ final class AppleHealthExport {
         if let data = try? JSONEncoder().encode(next) { UserDefaults.standard.set(data, forKey: Self.prefsKey) }
     }
 
+    /// From Synchronizace → Google Health: what really goes there (connected,
+    /// switched on and with the permission to write it).
+    func setGoogle(_ google: SyncDestination?) {
+        var types = Set<String>()
+        if let google, google.connected == true {
+            let missing = Set(google.missingScopes ?? [])
+            if google.prefs.pushActivities && !missing.contains("activityWrite") { types.insert("activities") }
+            if google.prefs.health.allows("weight") && !missing.contains("weightWrite") { types.insert("weight") }
+            if google.prefs.health.allows("nutrition") && !missing.contains("nutritionWrite") { types.insert("nutrition") }
+        }
+        viaGoogle = types
+        UserDefaults.standard.set(types.sorted(), forKey: Self.viaGoogleKey)
+    }
+
+    /// Done workouts go to Apple Health (not when they go to Google Health).
+    var writesWorkouts: Bool { prefs.pushActivities && !viaGoogle.contains("activities") }
+
     /// Signing out or another account: the next one writes what its own server settings say.
     func reset() {
         prefs = .off
+        viaGoogle = []
         UserDefaults.standard.removeObject(forKey: Self.prefsKey)
+        UserDefaults.standard.removeObject(forKey: Self.viaGoogleKey)
         UserDefaults.standard.removeObject(forKey: Self.writtenKey)
     }
 
@@ -203,7 +229,7 @@ final class AppleHealthExport {
 
     /// A weigh-in typed in Loadwise (one per day, the newest wins).
     func saveWeight(kg: Double, date: String) async {
-        guard prefs.health.allows("weight"), isAvailable, allowed(HKQuantityType(.bodyMass)) else { return }
+        guard prefs.health.allows("weight"), !viaGoogle.contains("weight"), isAvailable, allowed(HKQuantityType(.bodyMass)) else { return }
         let now = Date()
         let sample = HKQuantitySample(type: HKQuantityType(.bodyMass), quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: kg),
                                       start: now, end: now, metadata: metadata("weight:" + date))
@@ -225,11 +251,13 @@ final class AppleHealthExport {
         let other = entries.filter { $0.app != nil }
         func theirs(_ key: KeyPath<FoodSnapshot.Entry, Double?>) -> Double { other.reduce(0.0) { $0 + ($1[keyPath: key] ?? 0) } }
         if prefs.health.allows("nutrition") {
+            // Food that goes to Google Health: a zero replaces what was written here before.
+            let mine = viaGoogle.contains("nutrition") ? 0.0 : 1.0
             let kcal = (food.kcal ?? entries.reduce(0.0) { $0 + ($1.kcal ?? 0) }) - theirs(\.kcal)
-            totals.append(("kcal", .dietaryEnergyConsumed, .kilocalorie(), kcal))
-            totals.append(("protein", .dietaryProtein, .gram(), (food.macros.protein.eaten ?? 0) - theirs(\.protein)))
-            totals.append(("carbs", .dietaryCarbohydrates, .gram(), (food.macros.carbs.eaten ?? 0) - theirs(\.carbs)))
-            totals.append(("fat", .dietaryFatTotal, .gram(), (food.macros.fat.eaten ?? 0) - theirs(\.fat)))
+            totals.append(("kcal", .dietaryEnergyConsumed, .kilocalorie(), kcal * mine))
+            totals.append(("protein", .dietaryProtein, .gram(), ((food.macros.protein.eaten ?? 0) - theirs(\.protein)) * mine))
+            totals.append(("carbs", .dietaryCarbohydrates, .gram(), ((food.macros.carbs.eaten ?? 0) - theirs(\.carbs)) * mine))
+            totals.append(("fat", .dietaryFatTotal, .gram(), ((food.macros.fat.eaten ?? 0) - theirs(\.fat)) * mine))
         }
         if prefs.health.allows("water") {
             let drinks = food.water.drinks ?? []
