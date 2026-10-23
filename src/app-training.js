@@ -363,9 +363,11 @@ function sessionOf(w, date, status) {
     // A plan at midnight is the day without a time (Intervals.icu's "any time").
     time: !done && clockOf(w.start) === "00:00" ? null : clockOf(w.start),
     // A watch workout without its own name is named by its type, in words
-    // ("Posilovna", not "WeightTraining").
-    title: String((w.name && w.name !== w.type ? w.name : w.type ? typeName(w.type) : w.name) || L("Trénink", "Workout")).slice(0, 120),
+    // ("Posilovna", not "WeightTraining"); one without a sport is a "Trénink".
+    title: String((w.name && w.name !== w.type ? w.name : w.type && w.type !== "Workout" ? typeName(w.type) : null) || L("Trénink", "Workout")).slice(0, 120),
     sport: sportOf(w),
+    // Intervals.icu's type of a done session ("Tennis"), for its icon in the app.
+    ...(done && w.type && typeName(w.type) !== w.type ? { type: String(w.type) } : {}),
     minutes: num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null,
     tss: round(num(w.tss)),
     activityId: activityId && /^[a-zA-Z0-9_-]{1,80}$/.test(activityId) ? activityId : null,

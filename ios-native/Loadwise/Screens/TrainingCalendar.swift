@@ -457,7 +457,7 @@ struct CalendarActivityRow: View {
         let state = PlanState(activity.session)
         HStack(spacing: 12) {
             // The plan's colours, as a row of Tréninky týdne.
-            PlanStateIcon(symbol: SportIcon.symbol(activity.sport), state: state, percent: activity.compliance)
+            PlanStateIcon(symbol: SportIcon.symbol(activity.sport, type: activity.type), state: state, percent: activity.compliance)
                 .accessibilityLabel(L10n.tr(state.title))
             VStack(alignment: .leading, spacing: 2) {
                 Text(activity.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
@@ -527,7 +527,7 @@ struct WatchActivityDetail: View {
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 14) {
-                        Image(systemName: SportIcon.symbol(activity.sport))
+                        Image(systemName: SportIcon.symbol(activity.sport, type: activity.type))
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(Palette.onAccent)
                             .frame(width: 48, height: 48)

@@ -184,7 +184,7 @@ struct SessionRow: View {
         HStack(spacing: 14) {
             // The plan's colours: green kept to it, amber done differently, rust
             // missed, a dashed grey ring still ahead, blue outside the plan.
-            PlanStateIcon(symbol: SportIcon.symbol(session.sport), state: state, percent: session.compliance)
+            PlanStateIcon(symbol: SportIcon.symbol(session.sport, type: session.type), state: state, percent: session.compliance)
                 .accessibilityLabel(L10n.tr(state.title))
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
@@ -217,7 +217,10 @@ struct SessionRow: View {
 }
 
 enum SportIcon {
-    static func symbol(_ sport: String) -> String {
+    /// The icon of a sport group, or of an Intervals.icu type when the
+    /// session has one (src/activity-type.js ACTIVITY_TYPES).
+    static func symbol(_ sport: String, type: String? = nil) -> String {
+        if let type, let symbol = byType[type] { return symbol }
         switch sport {
         case "ride": return "figure.outdoor.cycle"
         case "run": return "figure.run"
@@ -227,6 +230,35 @@ enum SportIcon {
         default: return "figure.mixed.cardio"
         }
     }
+
+    private static let byType: [String: String] = [
+        "Hike": "figure.hiking", "Snowshoe": "figure.hiking",
+        "VirtualRide": "figure.indoor.cycle",
+        "OpenWaterSwim": "figure.open.water.swim",
+        "Crossfit": "figure.cross.training", "HighIntensityIntervalTraining": "figure.highintensity.intervaltraining",
+        "Rowing": "figure.rower", "VirtualRow": "figure.rower",
+        "Kayaking": "oar.2.crossed", "Canoeing": "oar.2.crossed", "StandUpPaddling": "oar.2.crossed",
+        "Surfing": "figure.surfing", "Windsurf": "figure.surfing", "Kitesurf": "figure.surfing", "Sail": "figure.sailing",
+        "NordicSki": "figure.skiing.crosscountry", "RollerSki": "figure.skiing.crosscountry", "BackcountrySki": "figure.skiing.crosscountry",
+        "AlpineSki": "figure.skiing.downhill", "Snowboard": "figure.snowboarding",
+        "IceSkate": "figure.skating", "InlineSkate": "figure.skating", "RockClimbing": "figure.climbing",
+        "Yoga": "figure.yoga", "Pilates": "figure.pilates", "Elliptical": "figure.elliptical", "StairStepper": "figure.stair.stepper",
+        "Tennis": "figure.tennis", "Padel": "figure.tennis", "Squash": "figure.squash", "Badminton": "figure.badminton",
+        "TableTennis": "figure.table.tennis", "Pickleball": "figure.pickleball",
+        "Soccer": "figure.soccer", "Hockey": "figure.hockey", "Rugby": "figure.rugby", "Golf": "figure.golf",
+        "Basketball": "figure.basketball", "Volleyball": "figure.volleyball", "Handball": "figure.handball",
+        "Baseball": "figure.baseball", "Softball": "figure.softball", "AmericanFootball": "figure.american.football",
+        "AustralianFootball": "figure.australian.football", "Cricket": "figure.cricket", "Lacrosse": "figure.lacrosse",
+        "Racquetball": "figure.racquetball", "Boxing": "figure.boxing", "Kickboxing": "figure.kickboxing",
+        "MartialArts": "figure.martial.arts", "Wrestling": "figure.wrestling", "Fencing": "figure.fencing",
+        "Dance": "figure.dance", "Barre": "figure.barre", "TaiChi": "figure.taichi", "MindAndBody": "figure.mind.and.body",
+        "Flexibility": "figure.flexibility", "Cooldown": "figure.cooldown", "JumpRope": "figure.jumprope",
+        "StepTraining": "figure.step.training", "Gymnastics": "figure.gymnastics", "TrackAndField": "figure.track.and.field",
+        "Archery": "figure.archery", "Bowling": "figure.bowling", "Curling": "figure.curling", "DiscSports": "figure.disc.sports",
+        "EquestrianSports": "figure.equestrian.sports", "Fishing": "figure.fishing", "Hunting": "figure.hunting",
+        "WaterPolo": "figure.waterpolo", "WaterFitness": "figure.water.fitness", "Handcycle": "figure.hand.cycling",
+        "Wheelchair": "figure.roll", "Play": "figure.play", "FitnessGaming": "gamecontroller"
+    ]
 }
 
 // MARK: - Activity detail

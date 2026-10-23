@@ -1,4 +1,5 @@
 import { L } from './lang.js';
+import { intervalsTypeOf } from './activity-type.js';
 import { intervalsAuthorization } from './intervals-auth.js';
 import { localDateTime } from './user-time.js';
 import { grantedExtras, hasGoogleScope, HEALTH_PERMISSIONS } from './google-scopes.js';
@@ -197,7 +198,7 @@ const intervalsType = sport => ({ gym: 'WeightTraining', strength: 'WeightTraini
 export function intervalsActivity(userId, activity) {
   const body = {
     start_date_local: activity.startLocal,
-    type: activity.type || intervalsType(activity.sport),
+    type: intervalsTypeOf(activity.type || intervalsType(activity.sport)),
     name: activity.name,
     moving_time: activity.minutes * 60,
     elapsed_time: activity.minutes * 60,

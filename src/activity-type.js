@@ -67,12 +67,61 @@ export const ACTIVITY_TYPES = [
   ['Golf', 'Golf', 'Golf', 'other'],
   ['Workout', 'Jiné', 'Other', 'other']
 ];
+// Sports Apple Health knows and Intervals.icu doesn't: they go there as a
+// "Workout" with their name (intervalsTypeOf). Named as HealthKit names them.
+const AURIN_TYPES = [
+  ['Basketball', 'Basketbal', 'Basketball'], ['Volleyball', 'Volejbal', 'Volleyball'], ['Handball', 'Házená', 'Handball'],
+  ['Baseball', 'Baseball', 'Baseball'], ['Softball', 'Softball', 'Softball'], ['AmericanFootball', 'Americký fotbal', 'American football'],
+  ['AustralianFootball', 'Australský fotbal', 'Australian football'], ['Cricket', 'Kriket', 'Cricket'], ['Lacrosse', 'Lakros', 'Lacrosse'],
+  ['Racquetball', 'Racquetball', 'Racquetball'], ['Boxing', 'Box', 'Boxing'], ['Kickboxing', 'Kickbox', 'Kickboxing'],
+  ['MartialArts', 'Bojová umění', 'Martial arts'], ['Wrestling', 'Zápas', 'Wrestling'], ['Fencing', 'Šerm', 'Fencing'],
+  ['Dance', 'Tanec', 'Dance'], ['Barre', 'Barre', 'Barre'], ['TaiChi', 'Tai-či', 'Tai chi'], ['MindAndBody', 'Mysl a tělo', 'Mind and body'],
+  ['Flexibility', 'Protažení', 'Flexibility'], ['Cooldown', 'Zklidnění', 'Cooldown'], ['JumpRope', 'Švihadlo', 'Jump rope'],
+  ['StepTraining', 'Step aerobik', 'Step training'], ['Gymnastics', 'Gymnastika', 'Gymnastics'], ['TrackAndField', 'Atletika', 'Track and field'],
+  ['Archery', 'Lukostřelba', 'Archery'], ['Bowling', 'Bowling', 'Bowling'], ['Curling', 'Curling', 'Curling'], ['DiscSports', 'Frisbee', 'Disc sports'],
+  ['EquestrianSports', 'Jezdectví', 'Horse riding'], ['Fishing', 'Rybaření', 'Fishing'], ['Hunting', 'Lov', 'Hunting'],
+  ['WaterPolo', 'Vodní pólo', 'Water polo'], ['WaterFitness', 'Vodní aerobik', 'Water fitness'], ['Handcycle', 'Handbike', 'Handcycle'],
+  ['Wheelchair', 'Vozík', 'Wheelchair'], ['Play', 'Hra', 'Play'], ['FitnessGaming', 'Fitness hry', 'Fitness gaming']
+].map(t => [...t, 'other']);
+ACTIVITY_TYPES.splice(ACTIVITY_TYPES.length - 1, 0, ...AURIN_TYPES);
+const AURIN_ONLY = new Set(AURIN_TYPES.map(t => t[0]));
+/** The type Intervals.icu takes: one only Aurin knows is a "Workout". */
+export const intervalsTypeOf = type => (AURIN_ONLY.has(type) ? 'Workout' : type);
 const BY_TYPE = new Map(ACTIVITY_TYPES.map(t => [t[0], t]));
 
 /** The sport group of a known type, else null (the caller guesses from the
  *  type and the name). "Workout" says nothing, so its name decides. */
 export const groupOfType = type => (type === 'Workout' ? null : BY_TYPE.get(String(type || ''))?.[3] ?? null);
 export const typeName = type => { const t = BY_TYPE.get(type); return t ? L(t[1], t[2]) : type; };
+// A watch's sport (Google Health's exerciseType, and HealthKit's as
+// apple-health.js stores it) as an Intervals.icu type, for the sports whose
+// name differs. TABLE_TENNIS, KAYAKING and the like match by their name.
+const WATCH_TYPES = {
+  RUNNING: 'Run', TREADMILL_RUNNING: 'VirtualRun', TRAIL_RUNNING: 'TrailRun',
+  WALKING: 'Walk', TREADMILL_WALKING: 'Walk', HIKING: 'Hike', SNOWSHOEING: 'Snowshoe',
+  BIKING: 'Ride', CYCLING: 'Ride', ROAD_BIKING: 'Ride', INDOOR_BIKING: 'VirtualRide', STATIONARY_BIKING: 'VirtualRide', SPINNING: 'VirtualRide',
+  MOUNTAIN_BIKING: 'MountainBikeRide', E_BIKING: 'EBikeRide',
+  SWIMMING: 'Swim', SWIMMING_POOL: 'Swim', POOL_SWIMMING: 'Swim', OPEN_WATER_SWIMMING: 'OpenWaterSwim', SWIMMING_OPEN_WATER: 'OpenWaterSwim',
+  WEIGHTLIFTING: 'WeightTraining', WEIGHTS: 'WeightTraining', STRENGTH_TRAINING: 'WeightTraining', CORE_TRAINING: 'WeightTraining',
+  HIIT: 'HighIntensityIntervalTraining', HIGH_INTENSITY_INTERVAL_TRAINING: 'HighIntensityIntervalTraining',
+  ROWING_MACHINE: 'VirtualRow', INDOOR_ROWING: 'VirtualRow', STAIR_CLIMBING: 'StairStepper', STAIR_CLIMBER: 'StairStepper', STAIRS: 'StairStepper',
+  FOOTBALL: 'Soccer', ICE_HOCKEY: 'Hockey', FIELD_HOCKEY: 'Hockey',
+  CROSS_COUNTRY_SKIING: 'NordicSki', SKIING: 'AlpineSki', DOWNHILL_SKIING: 'AlpineSki', ALPINE_SKIING: 'AlpineSki', SNOWBOARDING: 'Snowboard',
+  ICE_SKATING: 'IceSkate', SKATING: 'IceSkate', INLINE_SKATING: 'InlineSkate', ROLLER_SKATING: 'InlineSkate', CLIMBING: 'RockClimbing',
+  SAILING: 'Sail', KITESURFING: 'Kitesurf', WINDSURFING: 'Windsurf', PADDLEBOARDING: 'StandUpPaddling', STAND_UP_PADDLEBOARDING: 'StandUpPaddling',
+  PADDLE_SPORTS: 'Kayaking', SNOW_SPORTS: 'AlpineSki', SURFING_SPORTS: 'Surfing', SKATING_SPORTS: 'IceSkate', DANCING: 'Dance', CARDIO_DANCE: 'Dance',
+  SOCIAL_DANCE: 'Dance', DANCE_INSPIRED_TRAINING: 'Dance', PREPARATION_AND_RECOVERY: 'Cooldown', STRETCHING: 'Flexibility', HAND_CYCLING: 'Handcycle',
+  WHEELCHAIR_WALK_PACE: 'Wheelchair', WHEELCHAIR_RUN_PACE: 'Wheelchair', HORSEBACK_RIDING: 'EquestrianSports', FRISBEE: 'DiscSports', SKIPPING_ROPE: 'JumpRope'
+};
+const BY_UPPER = new Map(ACTIVITY_TYPES.map(t => [t[0].toUpperCase(), t[0]]));
+/** The Intervals.icu type of a watch's sport, else null. A type the user
+ *  chose in Aurin (activity-type.js changeActivityType) is one already. */
+export const watchType = exerciseType => {
+  const s = String(exerciseType || '');
+  if (BY_TYPE.has(s)) return s;
+  return WATCH_TYPES[s] || BY_UPPER.get(s.replace(/_/g, '')) || null;
+};
+
 /** GET /app/api/activity/types: the list in the user's language. */
 export const activityTypes = () => ACTIVITY_TYPES.map(([type, cs, en, group]) => ({ type, name: L(cs, en), group }));
 
@@ -182,10 +231,13 @@ export async function changeActivityType(env, { id, type } = {}, { fetchImpl = f
     if (!env.INTERVALS_API_KEY || !/^[a-zA-Z0-9_-]{1,80}$/.test(remote)) throw fail(L('Intervals.icu není připojené.', 'Intervals.icu isn\'t connected.'));
     const response = await fetchImpl('https://intervals.icu/api/v1/activity/' + encodeURIComponent(remote), {
       method: 'PUT', headers: { Authorization: intervalsAuthorization(env.INTERVALS_API_KEY), Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: entry[0] }), signal: AbortSignal.timeout(10000)
+      body: JSON.stringify({ type: intervalsTypeOf(entry[0]) }), signal: AbortSignal.timeout(10000)
     });
     if (!response.ok) throw fail(L('Intervals.icu změnu nepřijalo (HTTP ', 'Intervals.icu didn\'t accept the change (HTTP ') + response.status + ').', 502);
     payload.type = entry[0];
+    // Intervals.icu has it as a Workout: the next sync keeps Aurin's type (KEEP_TYPE_SQL).
+    if (AURIN_ONLY.has(entry[0])) payload.loadwiseType = entry[0];
+    else delete payload.loadwiseType;
     await env.DB.prepare('UPDATE health_datapoints SET payload_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(JSON.stringify(payload), row.id, env.USER_ID).run();
     return { status: 'ok', type: entry[0], sent: ['intervals'], kept: [] };
   }
