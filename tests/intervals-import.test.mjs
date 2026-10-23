@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createD1} from './helpers/d1.mjs';
 import {scopedDb} from '../src/tenancy.js';
 import legacy from '../src/index.js';
-import {initialImport,recentDashboardImport} from '../src/account-sync.js';
+import {initialImport,recentDashboardImport,googleFailure,syncReason} from '../src/account-sync.js';
 import {onboardingStatus, completeOnboarding} from '../src/onboarding.js';
 import {dashboardSyncStatus, startDashboardSync} from '../src/dashboard-sync.js';
 import {latestStoredWeight} from '../src/athlete-weight.js';
@@ -277,4 +277,18 @@ test('older Intervals.icu activities come one year a run until three empty years
   assert.equal((await run()).status,'done');
   assert.equal(windows.length,5);
   assert.equal(raw.sqlite.prepare("SELECT status FROM sync_status WHERE sync_name='intervals_history'").get().status,'done');
+});
+
+test('a failed sync part says what did not come, why, and when',async()=>{
+  assert.equal(googleFailure([{type:'sleep',status:'ok'},{type:'food',status:'error',message:'Google Health HTTP 429'},{type:'exercise',status:'error'},{type:'steps',status:'partial'}]),
+    'nestáhlo se: jídlo, tréninky (služba odmítla další dotazy, zkus to později); jen zčásti: kroky');
+  assert.equal(googleFailure([{type:'sleep',status:'ok'},{type:'food',status:'skipped'}]),null);
+  assert.equal(syncReason('The operation was aborted due to timeout'),'služba neodpověděla včas');
+  assert.equal(syncReason('Intervals wellness HTTP 503'),'služba měla výpadek');
+  assert.equal(syncReason('Something else'),null);
+  const {db,ctx,pending}=setup();
+  await startDashboardSync(db,ctx,async()=>[{source:'wellness',status:'error',message:'zdravotní hodnoty se do Intervals.icu neposlaly'}]);await Promise.all(pending);
+  const wellness=(await dashboardSyncStatus(db)).results.find(r=>r.source==='wellness');
+  assert.equal(wellness.message,'zdravotní hodnoty se do Intervals.icu neposlaly');
+  assert.ok(Date.parse(wellness.at)>Date.now()-60000);
 });

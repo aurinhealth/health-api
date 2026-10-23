@@ -23,7 +23,8 @@ export async function dashboardSyncStatus(db,name='dashboard_recent'){
     const entries=data.results?.length?data.results:[{source,status:run.status}];
     for(const [index,entry] of entries.entries()){
       const key=entry.source||source+':'+index,previous=latest.get(key);
-      if(!previous||time>=previous.time)latest.set(key,{time,result:run.status==='error'?{...entry,status:'error'}:entry});
+      // at: when this source's result came, so an old failure reads as old.
+      if(!previous||time>=previous.time)latest.set(key,{time,result:{...(run.status==='error'?{...entry,status:'error'}:entry),...(time?{at:new Date(time).toISOString()}:{})}});
     }
   }
   const results=[...latest.values()].map(r=>r.result);
