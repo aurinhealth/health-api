@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { connectTicket, readConnectTicket, handleNativeConnect } from "../src/native-connect.js";
 import { connectReturn, connectReturnUrl } from "../src/connect-return.js";
 import { isPublicPath } from "../src/dashboard-auth.js";
+import { handleGoogleOAuth } from "../src/google-oauth.js";
 import { createD1 } from "./helpers/d1.mjs";
 
 function connectEnv() {
@@ -52,7 +53,7 @@ test("the ticket continues straight on in a browser already signed in as that us
   // Used up: the same link never signs anyone in again.
   assert.equal((await handleNativeConnect(new Request(url), cenv, url, { user: { id: 3 }, signedIn: true })).headers.get("Location"), "loadwise://connected?event=expired");
   const google = new URL(origin + "/auth/app/connect?ticket=" + encodeURIComponent(await connectTicket(3, "google", env.SESSION_SECRET)));
-  assert.equal((await handleNativeConnect(new Request(google), cenv, google, { user: { id: 3 }, signedIn: true })).headers.get("Location"), "/oauth/google?consent=1&return=native");
+  assert.equal((await handleNativeConnect(new Request(google), cenv, google, { user: { id: 3 }, signedIn: true })).headers.get("Location"), "/oauth/google?consent=1&return=native&hl=cs");
   const bad = new URL(origin + "/auth/app/connect?ticket=nope.nope");
   assert.equal((await handleNativeConnect(new Request(bad), cenv, bad, {})).headers.get("Location"), "loadwise://connected?event=expired");
   assert.equal(isPublicPath("/auth/app/connect"), true);
@@ -75,7 +76,7 @@ test("another browser sees whose account it is and signs in only after confirmin
   assert.equal((await post("https://evil.example")).status, 403);
   const confirmed = await post(origin);
   assert.equal(confirmed.status, 303);
-  assert.equal(confirmed.headers.get("Location"), "/oauth/google?consent=1&return=native");
+  assert.equal(confirmed.headers.get("Location"), "/oauth/google?consent=1&return=native&hl=cs");
   assert.match(confirmed.headers.get("Set-Cookie"), /HttpOnly; Secure/);
   assert.equal((await post(origin)).headers.get("Location"), "loadwise://connected?event=expired");
 });
@@ -92,7 +93,7 @@ test("the confirm page lets Safari send its origin, and a same-site POST without
   assert.equal((await post({ Origin: "null" })).status, 403);
   const confirmed = await post({ Origin: "null", "Sec-Fetch-Site": "same-origin" });
   assert.equal(confirmed.status, 303);
-  assert.equal(confirmed.headers.get("Location"), "/oauth/google?consent=1&return=native");
+  assert.equal(confirmed.headers.get("Location"), "/oauth/google?consent=1&return=native&hl=cs");
 });
 
 test("the app's own sheet, which repeats the ticket in a header, skips the confirm page", async () => {
@@ -103,7 +104,7 @@ test("the app's own sheet, which repeats the ticket in a header, skips the confi
   assert.equal((await handleNativeConnect(new Request(url, { headers: { "X-Aurin-Connect": other } }), cenv, url, { user: null, signedIn: false })).status, 200);
   const direct = await handleNativeConnect(new Request(url, { headers: { "X-Aurin-Connect": ticket } }), cenv, url, { user: null, signedIn: false });
   assert.equal(direct.status, 303);
-  assert.equal(direct.headers.get("Location"), "/oauth/google?consent=1&return=native");
+  assert.equal(direct.headers.get("Location"), "/oauth/google?consent=1&return=native&hl=cs");
   assert.match(direct.headers.get("Set-Cookie"), /HttpOnly; Secure/);
 });
 
@@ -111,4 +112,16 @@ test("a native connection returns to the app", () => {
   assert.equal(connectReturn(new Request(origin + "/oauth/intervals?return=native")), "native");
   assert.equal(connectReturnUrl("native", "intervals"), "loadwise://connected?event=intervals");
   assert.equal(connectReturnUrl("native", "weird"), "loadwise://connected?event=unknown");
+});
+
+test("the app's language, not the browser's, chooses the confirm page and Google's consent page", async () => {
+  const cenv = connectEnv();
+  const ticket = await connectTicket(3, "google", env.SESSION_SECRET);
+  const url = new URL(origin + "/auth/app/connect?ticket=" + encodeURIComponent(ticket) + "&hl=en");
+  const page = await handleNativeConnect(new Request(url, { headers: { "Accept-Language": "cs-CZ" } }), cenv, url, { user: null, signedIn: false });
+  assert.match(await page.text(), /<html lang="en">[\s\S]*Continue/);
+  const sheet = await handleNativeConnect(new Request(url, { headers: { "X-Aurin-Connect": ticket } }), cenv, url, { user: null, signedIn: false });
+  assert.equal(sheet.headers.get("Location"), "/oauth/google?consent=1&return=native&hl=en");
+  const google = new URL((await handleGoogleOAuth(new Request("https://aurin.health/oauth/google?consent=1&return=native&hl=en"), { GOOGLE_CLIENT_ID: "id" }, "/oauth/google")).headers.get("Location"));
+  assert.equal(google.searchParams.get("hl"), "en");
 });
