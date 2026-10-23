@@ -141,6 +141,17 @@ test("load estimator uses multiple recent performances", () => {
   assert.equal(estimate.progression, "hold");
 });
 
+test("a one-arm cable exercise starts at half the two-arm weight", () => {
+  // 2026-10-23: 35 kg on the two-arm cable extension, yet 5 kg planned for the one-arm pushdown.
+  const two = (kg, reps) => ({ workout_date: "2026-10-17", type: "WORK", exercise: "Cable triceps extension", actual_kg: kg, actual_reps: reps, completed: 1, set_no: 1 });
+  const estimate = estimateStartingLoad({ exercise: "Cable Single Arm Rope Pushdown", history: [two(35, 12), two(35, 9)], targetReps: "8–12", fallbackKg: 6, today: "2026-10-23" });
+  assert.equal(estimate.source, "cross-exercise-estimate");
+  assert.equal(estimate.kg, 17.5);
+  // A one-leg machine still doesn't take its weight from the two-leg one.
+  const press = estimateStartingLoad({ exercise: "Single-Leg Press", history: [{ workout_date: "2026-10-17", type: "WORK", exercise: "Pivot leg press", actual_kg: 150, actual_reps: 10, completed: 1, set_no: 1 }], targetReps: "8–12", fallbackKg: 40, today: "2026-10-23" });
+  assert.notEqual(press.source, "cross-exercise-estimate");
+});
+
 test("double progression adds at least one real load step and takes one back after a miss", () => {
   const set = (kg, reps, rpe, date = "2026-09-22") => ({ workout_date: date, type: "WORK", exercise: "DB bench press", actual_kg: kg, actual_reps: reps, rpe, completed: 1, set_no: 1 });
   const estimate = history => estimateStartingLoad({ exercise: "DB bench press", history, targetReps: "6–10", fallbackKg: 16, today: "2026-09-25" });

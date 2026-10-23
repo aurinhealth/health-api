@@ -44,6 +44,21 @@ test("a gym session counts set by set against weight and rep range", () => {
   assert.equal(gymCompliance([]), null);
 });
 
+test("one exercise counts at most 150 % of its sets", () => {
+  const set = (exercise, plannedKg, plannedReps, actualKg, actualReps) => ({ type: "WORK", exercise, plannedKg, plannedReps, actualKg, actualReps, completed: true });
+  // 2026-10-23: the pushdown planned at 5 kg, done at 20 and 15 kg with two sets
+  // more, made a session with a skipped exercise 143 %.
+  const out = gymCompliance([
+    set("Low row", 52.5, "5–8", 52.5, 8), set("Low row", 52.5, "5–8", 52.5, 8),
+    set("Cable Single Arm Rope Pushdown", 5, "8–12", 20, 7), set("Cable Single Arm Rope Pushdown", 5, "8–12", 20, 7),
+    { type: "WORK", exercise: "Cable Single Arm Rope Pushdown", actualKg: 15, actualReps: 10, completed: true },
+    set("Dumbbell Cossack Squat", 10, "8–12", null, null), set("Dumbbell Cossack Squat", 10, "8–12", null, null)
+  ].map(r => r.exercise === "Dumbbell Cossack Squat" ? { ...r, completed: false } : r));
+  const by = Object.fromEntries(out.exercises.map(e => [e.name, e.percent]));
+  assert.equal(by["Cable Single Arm Rope Pushdown"], 150);
+  assert.equal(out.percent, Math.round((2 + 3 + 0) / 6 * 100));
+});
+
 test("the review chart's steps get numbers and the count in band", () => {
   const out = complianceSteps({ steps: [
     { role: "warmup", label: "Rozjetí", seconds: 600, planned: 600, lo: 150, hi: 195, watts: 175, status: "in" },
