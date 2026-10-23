@@ -4,7 +4,7 @@ import { searchRecipes } from "./personal-recipes.js";
 import { savePersonalFood, listPersonalFoods, searchFoodCatalog as searchPersonalFoods } from "./personal-foods.js";
 import { searchWorldFoods, barcodeKey, microsFor } from "./world-foods.js";
 
-import { readBarcodeWithAI, readFoodPhotoWithAI } from "./food-photo.js";
+import { readBarcodeWithAI, readFoodPhotoWithAI, readPackageFrontWithAI } from "./food-photo.js";
 import { foodIntake } from "./food-portions.js";
 import { productFromLabel } from "./food-sources.js";
 import { getCookbookRecipeByPage } from "./cookbook.js";
@@ -101,6 +101,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
     if(!env.OPENAI_API_KEY)return Response.json({status:'unavailable',message:L('AI teď není dostupná. Zadej hodnoty ručně.', 'AI isn\'t available right now. Enter the values by hand.')},{status:503});
     try{
       const body=await request.json().catch(()=>({}));
+      if(body.mode==='front'){const f=await readPackageFrontWithAI(env,{image:body.image});return Response.json(f.front?{status:'ok',...f.front}:{status:'unreadable',message:L('Název na obalu se nepodařilo přečíst. Doplň ho ručně.', 'The name on the package couldn\'t be read. Type it in.')},{headers:{'Cache-Control':'no-store'}});}
       if(body.mode==='barcode'){const b=await readBarcodeWithAI(env,{image:body.image});return Response.json(b.barcode?{status:'ok',barcode:b.barcode}:{status:'unreadable',message:L('Číslo pod čárovým kódem se nepodařilo přečíst. Vyfoť kód zblízka, nebo číslo opiš.', 'The number under the barcode couldn\'t be read. Take a close-up photo of the code or type the number.')},{headers:{'Cache-Control':'no-store'}});}
       const r=await readFoodPhotoWithAI(env,{image:body.image,mode:body.mode==='portion'?'portion':'label',language:env.INTERFACE_LANGUAGE});
       if(!r.result)return Response.json({status:'unreadable',message:L('Na fotce jsem hodnoty nepřečetl. Vyfoť tabulku zblízka a rovně, nebo hodnoty zadej ručně.', 'I couldn\'t read the values in the photo. Take a close, straight photo of the table or enter the values by hand.')},{headers:{'Cache-Control':'no-store'}});

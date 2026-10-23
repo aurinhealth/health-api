@@ -7,6 +7,10 @@ import SwiftUI
 /// read by AI.
 struct LabelCameraSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// The title and the line under the window: the nutrition table, or the
+    /// front of the package for the name and the brand.
+    var title = "ETIKETA"
+    var hint = "Vyfoť tabulku výživových údajů"
     let onImage: (UIImage) -> Void
     /// nil until the camera permission is known.
     @State private var cameraAllowed: Bool?
@@ -23,7 +27,7 @@ struct LabelCameraSheet: View {
             HStack {
                 circle("xmark", label: "Zavřít") { dismiss() }
                 Spacer()
-                Text("ETIKETA").font(.system(size: 12, weight: .medium)).tracking(1.9).foregroundStyle(Palette.muted)
+                Text(L10n.tr(title)).font(.system(size: 12, weight: .medium)).tracking(1.9).foregroundStyle(Palette.muted)
                 Spacer()
                 if cameraReady && BarcodeScanSheet.hasTorch {
                     circle(torch ? "flashlight.on.fill" : "flashlight.off.fill", label: torch ? "Zhasnout světlo" : "Rozsvítit světlo", on: torch) {
@@ -58,7 +62,7 @@ struct LabelCameraSheet: View {
             .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             .padding(.horizontal, 24).padding(.top, 28)
 
-            Text("Vyfoť tabulku výživových údajů").font(Typo.sentence(20)).foregroundStyle(Palette.ink.opacity(0.85))
+            Text(L10n.tr(hint)).font(Typo.sentence(20)).foregroundStyle(Palette.ink.opacity(0.85))
                 .multilineTextAlignment(.center).padding(.top, 22).padding(.horizontal, 24)
 
             HStack {

@@ -52,3 +52,13 @@ test("AI values are checked against their macros: kJ becomes kcal, impossible on
   assert.equal(beer.confidence, "low");
   assert.match(beer.warning, /nesedí/);
 });
+
+test('a looked-up serving keeps only its weight, never a 1 g piece', async () => {
+  const { servingWeight, productFromLookup } = await import('../src/food-ai.js');
+  assert.equal(servingWeight('1 burger (240 g)'), '240 g');
+  assert.equal(servingWeight('0,33 l'), '330 ml');
+  assert.equal(servingWeight('1 kus'), '');
+  assert.equal(servingWeight('1 g'), '');
+  const p = productFromLookup({ found: true, name: 'Tasty Cheese', brand: "McDonald's", nutrition_basis: 'g', calories: 250, protein_g: 13, carbs_g: 18, fat_g: 14, sugar_g: 4, fiber_g: 1, salt_g: 1.2, serving_size: '1 sendvič', package_size: '', confidence: 'medium', note: '' });
+  assert.equal(p.serving_size, '');
+});

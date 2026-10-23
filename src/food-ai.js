@@ -36,6 +36,15 @@ export const FOOD_LOOKUP_SCHEMA = {
 
 export const foodLookupInstructions = foodLookupInstructionsText();
 
+// A serving the editor can use: its weight in g or ml ("1 burger (240 g)" →
+// "240 g"). "1 kus" alone became a 1 g serving in the app, so it is dropped.
+export function servingWeight(value) {
+  const m = String(value || "").replace(/(\d),(\d)/g, "$1.$2").match(/(\d+(?:\.\d+)?)\s*(kg|g|ml|l)\b/i);
+  if (!m) return "";
+  const unit = m[2].toLowerCase(), n = Number(m[1]) * (unit === "kg" || unit === "l" ? 1000 : 1);
+  return n >= 2 && n <= 5000 ? String(Math.round(n * 10) / 10) + " " + (unit === "kg" || unit === "g" ? "g" : "ml") : "";
+}
+
 // The model's JSON answer as a product for the food editor, or null.
 export function productFromLookup(answer, { barcode = null, citations = [] } = {}) {
   let r = answer;
@@ -60,7 +69,7 @@ export function productFromLookup(answer, { barcode = null, citations = [] } = {
   return {
     name: String(r.name || "").trim().slice(0, 180), brand: String(r.brand || "").trim().slice(0, 120),
     barcode: normalizeBarcode(barcode), nutrition_basis: r.nutrition_basis === "ml" ? "ml" : "g", ...values,
-    serving_size: String(r.serving_size || "").slice(0, 60), quantity: String(r.package_size || "").slice(0, 100),
+    serving_size: servingWeight(r.serving_size), quantity: String(r.package_size || "").slice(0, 100),
     source: "ai", confidence: !warning && ["high", "medium", "low"].includes(r.confidence) ? r.confidence : "low",
     note: String(r.note || "").slice(0, 300), sources, ...(warning ? { warning } : {})
   };

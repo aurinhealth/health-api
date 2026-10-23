@@ -2782,6 +2782,8 @@
 "Vzdálenost %@ z plánovaných %@" = "Distance %@ of the planned %@";
 "vynecháno" = "skipped";
 "ETIKETA" = "LABEL";
+"PŘEDNÍ STRANA" = "FRONT";
+"Vyfoť přední stranu s názvem" = "Take a photo of the front with the name";
 "Vyfoť tabulku výživových údajů" = "Take a photo of the nutrition table";
 "Fotoaparát potřebuje přístup. Povol ho Aurinu v Nastavení iPhonu, nebo vyber fotku." = "The camera needs access. Allow it for Aurin in iPhone Settings, or choose a photo.";
 "Vyber fotku etikety z Fotek." = "Choose a photo of the label from Photos.";
