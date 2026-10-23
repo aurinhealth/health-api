@@ -287,6 +287,12 @@ const USER_JOBS = [
     await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/recent", { method: "POST" }), scoped, ctx);
     await forwardWatchWorkouts(scoped).catch(error => console.error("Watch workout forward failed", error.message));
   } },
+  // Hourly at :50 until it is done: one more year of older Intervals.icu activities
+  // (index.js syncIntervalsHistory), one request a run; then a single read of sync_status.
+  { name: "intervals-history", providers: ["intervals"], due: (cron, now) => minute(cron, now, m => m === 50), run: async (scoped, ctx) => {
+    const r = await legacyHealthApi.fetch(new Request("https://internal/sync/intervals/history", { method: "POST" }), scoped, ctx).then(r => r.json());
+    if (r.activities_saved) await bumpCacheVersion(scoped.DB);
+  } },
   // Hourly, half an hour after the Google Health sync: weight the same in the
   // app, Google Health and Intervals.icu, and Google wellness (sleep, steps,
   // heart rate, HRV, …) copied into Intervals.icu.
@@ -491,7 +497,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (googleOAuth) {if(url.pathname==="/oauth/google/callback"&&googleOAuth.status===302){await clearConnectionHealth(env,'google');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_google'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return googleOAuth;}
     const intervalsOAuth = await handleIntervalsOAuth(request, env, url.pathname);
     // A new Intervals.icu connection imports its history, the same as a pasted key.
-    if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&intervalsOAuth.status===302){await clearConnectionHealth(env,'intervals');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_intervals'").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return intervalsOAuth;}
+    if (intervalsOAuth) {if(url.pathname==="/oauth/intervals/callback"&&intervalsOAuth.status===302){await clearConnectionHealth(env,'intervals');await dashboardSyncStatus(env.DB);await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name IN ('initial_intervals','intervals_history')").bind(env.USER_ID).run();await initialImport(await connectionEnvironment(env),ctx);}return intervalsOAuth;}
     // A new Ultrahuman connection imports the ring's last two months (readiness's baseline).
     const ultrahumanOAuth = await handleUltrahumanOAuth(request, env, url.pathname);
     if (ultrahumanOAuth) {if(url.pathname==="/oauth/ultrahuman/callback"&&env.ULTRAHUMAN_TOKEN)ctx.waitUntil(syncUltrahuman(env,{days:FIRST_IMPORT_DAYS}).then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error("Ultrahuman first import failed",error.message)));return ultrahumanOAuth;}
@@ -1866,7 +1872,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     await saveConnectionSecret(env,'intervals',apiKey);
     await deleteConnectionSecret(env,'intervals_athlete');
     await clearConnectionHealth(env,'intervals');
-    await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name='initial_intervals'").bind(env.USER_ID).run();
+    await env.DB.prepare("DELETE FROM sync_status WHERE user_id=? AND sync_name IN ('initial_intervals','intervals_history')").bind(env.USER_ID).run();
     await initialImport(await connectionEnvironment(env),ctx);
     return Response.json({status:'ok',athleteId:athlete.id||null,message:'Intervals.icu je připojené'+(athlete.name?' ('+athlete.name+')':'')+'.'},{headers:{'Cache-Control':'no-store'}});
   }
