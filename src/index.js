@@ -67,6 +67,7 @@ export default {
       }
       if(url.pathname==='/sync/google/recent'&&request.method==='POST')return Response.json(await syncGoogleRecent(env));
       if(url.pathname==='/sync/intervals/recent'&&request.method==='POST')return syncIntervals(env,{activityDays:3,parts:url.searchParams.get('parts'),deleted:url.searchParams.get('deleted')});
+      if(url.pathname==='/sync/intervals/history'&&request.method==='POST')return Response.json(await syncIntervalsHistory(env));
       if(url.pathname==='/sync/match'&&request.method==='POST')return Response.json(await matchActivities(env));
 
       // Starting a sync changes data, so it takes POST only: a link or an image
@@ -1152,16 +1153,17 @@ async function removeIntervalsActivities(env, externalIds) {
 }
 
 // deleted: the ids an ACTIVITY_DELETED webhook named (intervals-webhook.js).
-async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,deleted=''}={}) {
+// window: {oldest, newest} instead of the last activityDays (syncIntervalsHistory).
+async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,deleted='',window=null}={}) {
   const named = String(deleted || '').split(',').filter(id => /^[a-zA-Z0-9_-]{1,80}$/.test(id)).map(id => 'activity:' + id);
   let removed = named.length ? await removeIntervalsActivities(env, named) : 0;
   const oldest =
-    dateDaysAgo(
+    window?.oldest || dateDaysAgo(
       activityDays
     );
 
   const newest =
-    dateDaysFromNow(1);
+    window?.newest || dateDaysFromNow(1);
 
   const activities =
     await intervalsGet(
@@ -1245,6 +1247,35 @@ async function syncIntervalsActivities(env,{activityDays=CONFIG.activityDays,del
 
     ...(removed ? { activities_removed: removed } : {})
   };
+}
+
+
+// ======================================================
+// INTERVALS ACTIVITY HISTORY
+// ======================================================
+// The sync above keeps the last year. Older activities come one year a run,
+// back from where the last run stopped, until three years in a row bring
+// nothing: Rekordy → Vše then reaches rides from earlier years
+// (fitness-insights.js). The step is kept in sync_status; a reconnect starts
+// it again.
+export const INTERVALS_HISTORY = 'intervals_history';
+const HISTORY_FLOOR = '2000-01-01', HISTORY_EMPTY_YEARS = 3;
+async function syncIntervalsHistory(env) {
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS sync_status (user_id INTEGER NOT NULL,sync_name TEXT NOT NULL,status TEXT,started_at TEXT,finished_at TEXT,details_json TEXT,updated_at TEXT,PRIMARY KEY(user_id,sync_name))").run();
+  const row = await env.DB.prepare("SELECT status,details_json FROM sync_status WHERE user_id=? AND sync_name=?").bind(env.USER_ID, INTERVALS_HISTORY).first();
+  let state = {}; try { state = JSON.parse(row?.details_json || '{}') || {}; } catch {}
+  if (row?.status === 'done') return { status: 'done', ...state };
+  const newest = state.before || dateDaysAgo(CONFIG.activityDays), oldest = dateDaysFromDate(newest, -365);
+  const result = await syncIntervalsActivities(env, { window: { oldest, newest } });
+  if (result.skipped) return { status: 'skipped', ...result };
+  const empty = result.activities_found ? 0 : (state.empty || 0) + 1;
+  const done = empty >= HISTORY_EMPTY_YEARS || oldest <= HISTORY_FLOOR;
+  const next = { before: oldest, empty, saved: (state.saved || 0) + result.activities_saved };
+  await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,finished_at,details_json,updated_at) VALUES(?,?,?,datetime('now'),?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status=excluded.status,finished_at=excluded.finished_at,details_json=excluded.details_json,updated_at=excluded.updated_at")
+    .bind(env.USER_ID, INTERVALS_HISTORY, done ? 'done' : 'running', JSON.stringify(next)).run();
+  // The year's activities against the watch's exercises from then.
+  if (result.activities_saved) await matchActivities(env).catch(error => console.error('Activity matching failed', error.message));
+  return { status: done ? 'done' : 'running', from: oldest, activities_saved: result.activities_saved };
 }
 
 

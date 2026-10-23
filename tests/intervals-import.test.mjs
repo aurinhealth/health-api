@@ -249,3 +249,32 @@ test('an activity deleted in Intervals.icu goes after a whole answer, and its wa
   await sync(env,ctx,'/sync/intervals/recent?parts=activities&deleted=i4');
   assert.deepEqual(ids(),['activity:i1','activity:i3']);
 });
+
+test('older Intervals.icu activities come one year a run until three empty years, and Rekordy → Vše counts them',async t=>{
+  const {raw,db,env,ctx}=setup();
+  const day=n=>new Date(Date.parse(localToday()+'T12:00:00Z')-n*86400000).toISOString().slice(0,10);
+  const old=day(800);
+  const windows=[];
+  t.mock.method(globalThis,'fetch',async url=>{
+    const u=new URL(String(url)),oldest=u.searchParams.get('oldest'),newest=u.searchParams.get('newest');
+    windows.push([oldest,newest]);
+    return Response.json(oldest<=old&&old<=newest?[{id:'r200',type:'Ride',name:'Long ride',start_date_local:old+'T07:00:00',distance:212000,moving_time:30000}]:[]);
+  });
+  const run=()=>sync(env,ctx,'/sync/intervals/history');
+  assert.equal((await run()).status,'running');
+  assert.deepEqual(windows[0],[day(730),day(365)]);
+  const second=await run();
+  assert.equal(second.activities_saved,1);
+  assert.equal(windows[1][1],windows[0][0]);
+  // The stored ride is the all-time record; the regular year window never had it.
+  const {loadFitnessInsights}=await import('../src/fitness-insights.js');
+  const trends=(await loadFitnessInsights(db,localToday())).records.trends;
+  assert.equal(trends.cardio.longestRide.change.all.value,212);
+  assert.equal(trends.periods.all.start,old);
+  // Three empty years in a row end it; after that no request is made.
+  for(let i=0;i<3;i++)await run();
+  assert.equal(windows.length,5);
+  assert.equal((await run()).status,'done');
+  assert.equal(windows.length,5);
+  assert.equal(raw.sqlite.prepare("SELECT status FROM sync_status WHERE sync_name='intervals_history'").get().status,'done');
+});
