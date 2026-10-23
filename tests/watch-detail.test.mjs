@@ -108,3 +108,13 @@ test("a phone walk without the GPS flag still gets its route, and its heart rate
   indoor.row("google-wearables", "exercise", GOOGLE_ID, "2026-10-13T06:00:00Z", "2026-10-13T06:30:00Z", { exercise: { ...walk.exercise, exerciseMetadata: { hasGps: false } } });
   await watchDetail(indoor.env, { source: "google-wearables", id: GOOGLE_ID, token: async () => "t", fetchImpl: () => assert.fail("no export") });
 });
+
+test("a workout read with reconcile is keyed by its start time and exported under its data point name", async () => {
+  const { env, row } = database();
+  const id = "exercise:2026-10-13T06:00:00Z", name = "users/378/dataTypes/exercise/dataPoints/591";
+  row("google-wearables", "exercise", id, "2026-10-13T06:00:00Z", "2026-10-13T06:30:00Z", { ...walk, dataPointName: name });
+  let asked;
+  const detail = await watchDetail(env, { source: "google-wearables", id, token: async () => "t", fetchImpl: async url => { asked = url; return new Response(tcx); } });
+  assert.equal(asked, "https://health.googleapis.com/v4/" + name + ":exportExerciseTcx?alt=media");
+  assert.equal(detail.watch.route, true);
+});
