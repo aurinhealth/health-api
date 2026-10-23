@@ -7,7 +7,7 @@ import legacy from "../src/index.js";
 import { KEEP_TYPE_SQL } from "../src/activity-type.js";
 import { mergeProposal, mergeWorkouts, keepWorkoutsApart, recorderOf } from "../src/workout-merge.js";
 import { buildCalendar } from "../src/app-calendar.js";
-import { googleExerciseActivity } from "../src/index.js";
+import { googleExerciseActivity, workoutHeartRate } from "../src/index.js";
 import { deleteActivity } from "../src/activity-edits.js";
 
 // The girlfriend's gym on 2026-10-17: Aurin on the iPhone and the Apple Watch's workout app.
@@ -138,4 +138,20 @@ test("a Google walk with only seconds counted as active keeps the length of its 
   assert.equal(Math.round(googleExerciseActivity(walk("15s")).durationHours * 60), 20);
   // A pause of a few minutes still counts only the active time.
   assert.equal(Math.round(googleExerciseActivity(walk("900s")).durationHours * 60), 15);
+});
+
+test("a workout that just ended gets its heart rate from Google now, once", async () => {
+  const { env, insert, raw } = setup();
+  const start = new Date(Date.now() - 30 * 60e3), end = new Date(Date.now() - 16 * 60e3), iso = d => d.toISOString().replace(/\.\d{3}Z$/, "Z");
+  insert({ source_family: "google-wearables", data_type: "exercise", external_id: "users/me/dataTypes/exercise/dataPoints/w1", start_time: iso(start), end_time: iso(end), payload: { exercise: { exerciseType: "WALKING" } } });
+  const asked = [];
+  const samples = Array.from({ length: 20 }, (_, i) => ({ name: "users/me/dataTypes/heart-rate/dataPoints/h" + i, heartRate: { beatsPerMinute: 100 + i, sampleTime: { physicalTime: iso(new Date(start.getTime() + i * 42e3)) } } }));
+  const fetchImpl = async url => { asked.push(String(url)); return Response.json({ dataPoints: samples }); };
+  assert.equal(await workoutHeartRate(env, "t", fetchImpl), 20);
+  assert.match(asked[0], /dataTypes\/heart-rate\/dataPoints:reconcile/);
+  assert.equal(new URL(asked[0]).searchParams.get("filter"), `heart_rate.sample_time.physical_time >= "${iso(start)}" AND heart_rate.sample_time.physical_time < "${iso(end)}"`, "only the workout's own minutes");
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM health_datapoints WHERE data_type='heart-rate'").get().n, 20);
+  // With the samples in, the next run asks nothing.
+  assert.equal(await workoutHeartRate(env, "t", fetchImpl), 0);
+  assert.equal(asked.length, 1);
 });

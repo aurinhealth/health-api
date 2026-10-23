@@ -27,11 +27,12 @@ export function thin(points, limit = MAX_POINTS) {
 // Track points of a TCX file: seconds from `start`, position, altitude, distance, heart rate.
 export function parseTcx(xml, start) {
   const t0 = Date.parse(start), out = [];
-  for (const m of String(xml || '').matchAll(/<Trackpoint>([\s\S]*?)<\/Trackpoint>/g)) {
-    const body = m[1], tag = name => { const x = new RegExp('<' + name + '>([^<]*)</' + name + '>').exec(body); return x ? x[1].trim() : null; };
+  // Tags may carry a namespace prefix (<ns:Trackpoint>) or attributes.
+  for (const m of String(xml || '').matchAll(/<(?:\w+:)?Trackpoint\b[^>]*>([\s\S]*?)<\/(?:\w+:)?Trackpoint>/g)) {
+    const body = m[1], tag = name => { const x = new RegExp('<(?:\\w+:)?' + name + '\\b[^>]*>([^<]*)</(?:\\w+:)?' + name + '>').exec(body); return x ? x[1].trim() : null; };
     const at = Date.parse(tag('Time') || ''), lat = n(tag('LatitudeDegrees')), lon = n(tag('LongitudeDegrees'));
     if (!Number.isFinite(at) || lat == null || lon == null || Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
-    const hr = n(/<HeartRateBpm>\s*<Value>([^<]*)<\/Value>/.exec(body)?.[1]);
+    const hr = n(/<(?:\w+:)?HeartRateBpm\b[^>]*>\s*<(?:\w+:)?Value>([^<]*)<\/(?:\w+:)?Value>/.exec(body)?.[1]);
     out.push({ t: Math.round((at - (Number.isFinite(t0) ? t0 : at)) / 1000), lat, lon, alt: n(tag('AltitudeMeters')), dist: n(tag('DistanceMeters')), hr: hr > 25 && hr < 250 ? hr : null });
   }
   return thin(out);
@@ -59,19 +60,22 @@ export async function storedHeartRate(db, userId, start, end) {
 // null without GPS, without the location permission or when Google refuses.
 export async function googleRoute(env, row, { token, fetchImpl = fetch } = {}) {
   const ex = parse(row.payload_json).exercise || {};
-  if (ex.exerciseMetadata?.hasGps !== true) return null;
+  // Workouts recorded on the phone may come without the flag: only a clear "no GPS" skips the file.
+  if (ex.exerciseMetadata?.hasGps === false) return null;
   const kept = await env.DB.prepare(`SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='${ROUTE_TYPE}' AND external_id=?`)
     .bind(env.USER_ID, row.external_id).first().catch(() => null);
   if (kept) return parse(kept.payload_json).points || null;
-  if (!token || !/^users\/[^/]+\/dataTypes\/exercise\/dataPoints\/[A-Za-z0-9_.-]+$/.test(String(row.external_id || ''))) return null;
+  if (!token) { console.error('Google route skipped: no location permission'); return null; }
+  if (!/^users\/[^/]+\/dataTypes\/exercise\/dataPoints\/[A-Za-z0-9_.-]+$/.test(String(row.external_id || ''))) { console.error('Google route skipped: unexpected data point name'); return null; }
   const response = await fetchImpl('https://health.googleapis.com/v4/' + row.external_id + ':exportExerciseTcx?alt=media', {
     headers: { Authorization: 'Bearer ' + await token() }, signal: AbortSignal.timeout(12000)
   }).catch(() => null);
-  if (!response?.ok) return null;
+  // Why a route is missing, for the Worker log (status and size only, never the route).
+  if (!response?.ok) { console.error('Google route not exported', response ? 'HTTP ' + response.status : 'no response'); return null; }
   const xml = await response.text();
   if (xml.length > 20 * 1024 * 1024) return null;
   const points = parseTcx(xml, row.start_time);
-  if (!points.length) return null;
+  if (!points.length) { console.error('Google route has no track points', xml.length + ' bytes'); return null; }
   await env.DB.prepare(`INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, start_time, end_time, payload_json)
     VALUES (?, 'google-wearables', '${ROUTE_TYPE}', ?, ?, ?, ?) ON CONFLICT (user_id, source_family, data_type, external_id) DO UPDATE SET payload_json=excluded.payload_json, updated_at=CURRENT_TIMESTAMP`)
     .bind(env.USER_ID, row.external_id, row.start_time, row.end_time, JSON.stringify({ points })).run().catch(() => {});
@@ -124,6 +128,8 @@ export async function watchDetail(env, { source, id, hrZones = [], token = null,
     ? thin(p.samples.heartRate.filter(x => Array.isArray(x) && n(x[0]) != null && n(x[1]) > 0))
     : await storedHeartRate(env.DB, env.USER_ID, start, end);
   const route = source === 'google-wearables' ? await googleRoute(env, row, { token, fetchImpl }) : null;
+  // Before Google's heart-rate samples arrive, the route's own heart rate stands in.
+  if (!heart.length && route?.some(p => p.hr)) heart.push(...route.filter(p => p.hr && p.t >= 0).map(p => [p.t, p.hr]));
   const elapsed = (Date.parse(end) - Date.parse(start)) / 1000;
   // Under half the span the active time is Google's mistake (index.js googleExerciseActivity).
   const active = seconds(ex.activeDuration), moving = active && !(elapsed > 0 && active < elapsed / 2) ? active : (elapsed > 0 ? elapsed : null);
@@ -158,7 +164,7 @@ export async function watchCopyOf(env, activityId) {
   const refs = [row?.matched_activity_id].filter(Boolean);
   const keys = [row?.external_id, ...ids].filter(Boolean).map(id => 'intervals:' + id);
   const copy = await env.DB.prepare(`SELECT source_family, external_id FROM health_datapoints WHERE user_id=? AND data_type='exercise' AND source_family IN ('google-wearables','apple-health')
-    AND matched_activity_id IN (${keys.map(() => '?').join(',')}) ORDER BY source_family='apple-health' DESC LIMIT 1`).bind(env.USER_ID, ...keys).first().catch(() => null);
+    AND matched_activity_id IN (${keys.map(() => '?').join(',')}) ORDER BY COALESCE(record_role,'')='duplicate', source_family='apple-health' DESC LIMIT 1`).bind(env.USER_ID, ...keys).first().catch(() => null);
   if (copy) return { source: copy.source_family, id: copy.external_id };
   const ref = refs.find(r => WATCH_FAMILIES.some(f => r.startsWith(f + ':')));
   if (!ref) return null;

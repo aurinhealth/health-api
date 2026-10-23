@@ -936,12 +936,45 @@ async function syncGoogleRecent(env){
   const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;if(!googleTypeAllowed(env,type))return{type,saved,status:'skipped'};try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(type==='exercise'?RECENT_EXERCISE_DAYS:2),googleSourceFamily(type,family),dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:skippedForPermission(env,error)?'skipped':'error',message:error.message};}}));
   // Food and drinks other apps logged in Google Health (google-food.js).
   results.push(await importGoogleFood(env,{token}).then(r=>({type:'food',...r}),error=>({type:'food',status:skippedForPermission(env,error)?'skipped':'error',message:error.message})));
+  // A fresh workout's heart rate now, not with the nightly run (workoutHeartRate).
+  if(googleTypeAllowed(env,'heart-rate'))results.push(await workoutHeartRate(env,token).then(saved=>({type:'workout-heart-rate',saved,status:'ok'}),error=>({type:'workout-heart-rate',status:skippedForPermission(env,error)?'skipped':'error',message:error.message})));
   // Data the user did not give permission for is not a failure.
   const result={status:results.some(r=>r.status!=='ok'&&r.status!=='skipped')?'partial':'ok',results};
   if(results.some(r=>r.type==='exercise'&&r.saved>0))await matchActivities(env,{days:14}).catch(error=>console.error('Activity matching failed',error.message));
   await ensureSyncStatusTable(env);
   await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,details_json,updated_at) VALUES(?,'google_recent',?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status=excluded.status,details_json=excluded.details_json,updated_at=excluded.updated_at").bind(env.USER_ID,result.status,JSON.stringify(result)).run();
   return result;
+}
+
+// Heart rate is read once a night (~50k samples a day), so a workout synced a
+// minute ago would show none until the morning. For workouts that ended in the
+// last 6 hours without samples, only their own minutes are read now; the
+// watch's samples may reach Google later, so it is tried again each run.
+const WORKOUT_HR_HOURS=6,WORKOUT_HR_MAX=3;
+export async function workoutHeartRate(env,token,fetchImpl=fetch){
+  const since=new Date(Date.now()-WORKOUT_HR_HOURS*3600e3).toISOString().replace(/\.\d{3}Z$/,'Z');
+  const rows=(await env.DB.prepare("SELECT start_time,end_time FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='exercise' AND end_time>=? AND COALESCE(record_role,'')!='duplicate' ORDER BY end_time DESC LIMIT ?").bind(env.USER_ID,since,WORKOUT_HR_MAX).all()).results||[];
+  let saved=0;
+  for(const r of rows){
+    const start=Date.parse(r.start_time),end=Date.parse(r.end_time);
+    if(!(end>start)||end-start>6*3600e3)continue;
+    const have=await env.DB.prepare("SELECT COUNT(*) AS n FROM health_datapoints WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<?").bind(env.USER_ID,r.start_time,r.end_time).first();
+    // About one sample a minute is enough for the chart and the zones.
+    if(Number(have?.n)>=(end-start)/60e3)continue;
+    const iso=ms=>new Date(ms).toISOString().replace(/\.\d{3}Z$/,'Z');
+    let pageToken=null;
+    for(let i=0;i<10;i++){
+      const params=new URLSearchParams({dataSourceFamily:'users/me/dataSourceFamilies/google-wearables',filter:`heart_rate.sample_time.physical_time >= "${iso(start)}" AND heart_rate.sample_time.physical_time < "${iso(end)}"`,pageSize:'1000'});
+      if(pageToken)params.set('pageToken',pageToken);
+      const response=await fetchImpl('https://health.googleapis.com/v4/users/me/dataTypes/heart-rate/dataPoints:reconcile?'+params,{headers:{Authorization:'Bearer '+token,Accept:'application/json'},signal:AbortSignal.timeout(12000)});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error('heart-rate HTTP '+response.status+': '+JSON.stringify(data).slice(0,200));
+      saved+=await saveGooglePointsBatch(env,'google-wearables','heart-rate',data.dataPoints||[]);
+      pageToken=data.nextPageToken||null;
+      if(!pageToken)break;
+    }
+  }
+  return saved;
 }
 
 async function readGoogleSyncState(env) {
