@@ -69,7 +69,7 @@ final class SettingsStore {
             if let roles = try? await roles {
                 internalTester = roles.internalTester
                 owner = roles.owner
-                if owner { pendingFoodSuggestions = (try? await api.foodSuggestions())?.counts?["pending"] ?? 0 }
+                if owner { pendingFoodSuggestions = (try? await api.foodSuggestions()).map { $0.pending.map { $0.values.reduce(0, +) } ?? $0.counts?["pending"] ?? 0 } ?? 0 }
                 if owner { pendingWaitlist = (try? await api.waitlist())?.pending.count ?? 0 }
             }
             errorMessage = nil

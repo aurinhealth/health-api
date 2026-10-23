@@ -7,11 +7,18 @@ struct FoodSuggestionsView: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
     @State private var status = "pending"
+    /// "correction" (Opravy) or "report" (Hlášení).
+    @State private var kind = "correction"
     @State private var list: FoodSuggestionList?
     @State private var error: String?
 
     var body: some View {
         SettingsPage(title: "Návrhy oprav") {
+            Picker("Druh", selection: $kind) {
+                Text(L10n.f("Opravy · %d", list?.pending?["correction"] ?? 0)).tag("correction")
+                Text(L10n.f("Hlášení · %d", list?.pending?["report"] ?? 0)).tag("report")
+            }
+            .pickerStyle(.segmented)
             Picker("Stav", selection: $status) {
                 Text(pendingTitle).tag("pending")
                 Text("Schválené").tag("approved")
@@ -28,9 +35,14 @@ struct FoodSuggestionsView: View {
                         ForEach(Array(list.suggestions.enumerated()), id: \.element.id) { index, suggestion in
                             if index > 0 { SettingsDivider() }
                             NavigationLink {
-                                FoodSuggestionDetail(suggestion: suggestion) { Task { await load() } }
+                                if suggestion.kind == "report" {
+                                    FoodReportDetail(report: suggestion) { Task { await load() } }
+                                } else {
+                                    FoodSuggestionDetail(suggestion: suggestion) { Task { await load() } }
+                                }
                             } label: {
-                                SettingsRow(title: suggestion.name, subtitle: FoodSuggestionDetail.summary(suggestion),
+                                SettingsRow(title: suggestion.name,
+                                            subtitle: suggestion.kind == "report" ? FoodReportDetail.summary(suggestion) : FoodSuggestionDetail.summary(suggestion),
                                             value: FoodSuggestionDetail.when(suggestion.createdAt))
                             }
                             .buttonStyle(.plain)
@@ -41,7 +53,7 @@ struct FoodSuggestionsView: View {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 24)
             }
         }
-        .task(id: status) { await load() }
+        .task(id: status + kind) { await load() }
     }
 
     private var pendingTitle: String {
@@ -51,9 +63,9 @@ struct FoodSuggestionsView: View {
 
     private func load() async {
         do {
-            let loaded = try await model.api.foodSuggestions(status: status)
+            let loaded = try await model.api.foodSuggestions(status: status, kind: kind)
             list = loaded
-            store.pendingFoodSuggestions = loaded.counts?["pending"] ?? store.pendingFoodSuggestions
+            store.pendingFoodSuggestions = loaded.pending.map { $0.values.reduce(0, +) } ?? loaded.counts?["pending"] ?? store.pendingFoodSuggestions
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -155,6 +167,98 @@ struct FoodSuggestionDetail: View {
         defer { working = false }
         do {
             try await model.api.decideFoodSuggestion(id: suggestion.id, decision: decision)
+            decided()
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// One report ("Hodnoty nesedí"): what is wrong, the note, the food's values;
+/// Opravit opens the editor and the fixed food goes to the common catalogue,
+/// settling every report of it; Zamítnout drops this one.
+struct FoodReportDetail: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let report: FoodSuggestion
+    let decided: () -> Void
+    @State private var working = false
+    @State private var fixing = false
+    @State private var error: String?
+
+    var body: some View {
+        SettingsPage(title: report.name) {
+            Text(([report.before["brand"]?.string, report.barcode.map { "EAN " + $0 }].compactMap { $0 }).joined(separator: " · "))
+                .font(Typo.caption).foregroundStyle(Palette.muted).frame(maxWidth: .infinity)
+            SettingsGroup(title: "Hlášení") {
+                SettingsRow(title: "Co nesedí", value: Self.reason(report.reason), chevron: false)
+                if let note = report.note {
+                    SettingsDivider()
+                    Text(verbatim: "„" + note + "“").font(.subheadline).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16).padding(.vertical, 14)
+                }
+                SettingsDivider()
+                SettingsRow(title: "Nahlášeno", value: L10n.f("%d×", report.reports ?? 1), chevron: false)
+                SettingsDivider()
+                SettingsRow(title: L10n.f("Uživatel %d", report.userId),
+                            value: report.fromUser.map { L10n.f("návrhy %d, schválené %d", $0.sent, $0.approved) }, chevron: false)
+            }
+            SettingsGroup(title: "Teď v katalogu") {
+                ForEach(Array(shown.enumerated()), id: \.offset) { index, field in
+                    if index > 0 { SettingsDivider() }
+                    SettingsRow(title: field.title, value: FoodSuggestionDetail.text(report.before[field.key], field.unit), chevron: false)
+                }
+            }
+            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            if report.status == "pending" {
+                HStack(spacing: 10) {
+                    Button { Task { await reject() } } label: {
+                        Text("Zamítnout").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
+                            .frame(maxWidth: .infinity).frame(height: 50)
+                            .overlay(Capsule().stroke(Palette.rust.opacity(0.5), lineWidth: 1))
+                    }
+                    Button { fixing = true } label: {
+                        Text("Opravit").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                            .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(working || product == nil)
+            }
+        }
+        .navigationDestination(isPresented: $fixing) {
+            if let product {
+                FoodProductEditor(product: product, saved: { _ in decided(); dismiss() },
+                                  save: { fixed in try await model.api.fixReportedFood(id: report.id, after: fixed) })
+            }
+        }
+    }
+
+    private var shown: [(key: String, title: String, unit: String)] {
+        FoodSuggestionDetail.fields.filter { FoodSuggestionDetail.text(report.before[$0.key], $0.unit) != nil && $0.key != "name" && $0.key != "brand" }
+    }
+
+    /// The reported food as the editor's starting point.
+    private var product: FoodProduct? {
+        guard let data = try? JSONEncoder().encode(JSONValue.object(report.before)) else { return nil }
+        return try? JSONDecoder().decode(FoodProduct.self, from: data)
+    }
+
+    static func reason(_ code: String?) -> String {
+        L10n.tr(FoodReportSheet.reasons.first { $0.code == code }?.title ?? "Něco jiného")
+    }
+
+    /// "Energie nebo živiny · 2×" for the list.
+    static func summary(_ r: FoodSuggestion) -> String {
+        reason(r.reason) + ((r.reports ?? 1) > 1 ? " · \(r.reports ?? 1)×" : "")
+    }
+
+    private func reject() async {
+        working = true
+        defer { working = false }
+        do {
+            try await model.api.decideFoodSuggestion(id: report.id, decision: "reject")
             decided()
             dismiss()
         } catch {
