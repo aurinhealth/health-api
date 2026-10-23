@@ -16,7 +16,7 @@ struct TrainingView: View {
                 ScreenBackground(glow: Palette.Glow.training)
                 if let training = model.training {
                     PageScroll {
-                        TrainingContent(training: training, addWorkout: { addingWorkout = true }, toast: $toast, pickDay: { calendarDay = $0 }, jumpDay: jumpDay)
+                        TrainingContent(training: training, addWorkout: { addingWorkout = true }, toast: $toast, pickDay: { calendarDay = $0 }, jumpDay: jumpDay, day: calendarDay)
                             .padding(.bottom, 100)
                     }
                     .refreshable { await model.refreshTraining() }
@@ -76,6 +76,8 @@ struct TrainingContent: View {
     var toast: Binding<PlanToast?> = .constant(nil)
     var pickDay: (String) -> Void = { _ in }
     var jumpDay: DayJump? = nil
+    /// The day chosen in the calendar; nil is today.
+    var day: String? = nil
     @State private var editing = false
     @State private var focusSheet = false
 
@@ -97,15 +99,21 @@ struct TrainingContent: View {
                 TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay)
                     .padding(.top, 18)
 
-                // The same Námaha detail as Dnes opens it.
-                RouteLink(route: .strain) { StrainHero(training: training) }
-                    .padding(.top, 26)
+                // Today's opens the same Námaha detail as Dnes; another day shows its own strain.
+                if shownDay == training.date {
+                    RouteLink(route: .strain) { StrainHero(training: training) }
+                        .padding(.top, 26)
+                } else {
+                    StrainHero(training: training, day: shownDay)
+                        .padding(.top, 26)
+                }
                 CoachTextCard(screen: "training").padding(.top, 18)
 
                 WeekStrainBars(days: training.days)
                     .padding(.top, 22)
 
-                if let next = training.next {
+                // The next session belongs to today, not to a day looked back at.
+                if shownDay == training.date, let next = training.next {
                     NextSession(session: next, today: training.date)
                         .padding(.top, 20)
                 }
@@ -128,6 +136,8 @@ struct TrainingContent: View {
         .padding(.top, 16)
         .sheet(isPresented: $focusSheet) { FocusSheet { Task { await model.refreshTraining() } } }
     }
+
+    private var shownDay: String { day ?? training.date }
 }
 
 // MARK: - Strain
@@ -135,17 +145,21 @@ struct TrainingContent: View {
 struct StrainHero: View {
     @Environment(AppModel.self) private var model
     let training: TrainingSnapshot
+    /// The day chosen in the calendar; nil is today.
+    var day: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                Text("Námaha dnes").font(Typo.body).foregroundStyle(Palette.muted)
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                Text(title).font(Typo.body).foregroundStyle(Palette.muted)
+                if isToday {
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                }
             }
             HStack(alignment: .lastTextBaseline, spacing: 14) {
-                Text(Fmt.decimal(training.strain.score ?? 0))
+                Text(score.map { Fmt.decimal($0) } ?? "–")
                     .font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5)
-                    .foregroundStyle(Palette.ink)
+                    .foregroundStyle(isAhead ? Palette.faint : Palette.ink)
                 if let note {
                     Pill(text: note, foreground: Palette.amber, background: Palette.amberSoft)
                 }
@@ -154,11 +168,37 @@ struct StrainHero: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+        .task(id: day) {
+            // A day before this week: its strain from Today of that day.
+            if let day, !isToday, !isAhead, weekDay == nil { await model.loadPastStrain(day) }
+        }
+    }
+
+    private var date: String { day ?? training.date }
+    private var isToday: Bool { date == training.date }
+    private var isAhead: Bool { date > training.date }
+    private var weekDay: TrainingSnapshot.Day? { training.days.first { $0.date == date } }
+
+    private var title: String {
+        if isToday { return L10n.tr("Námaha dnes") }
+        if AppModel.shift(training.date, by: -1) == date { return L10n.tr("Námaha včera") }
+        if AppModel.shift(training.date, by: 1) == date { return L10n.tr("Námaha zítra") }
+        return L10n.f("Námaha · %@", Fmt.dayShort(date, today: training.date))
+    }
+
+    /// Today's from the training answer; a past day of the week as its bar, an
+    /// older one as Today shows it; a day ahead its planned strain.
+    private var score: Double? {
+        if isToday { return training.strain.score ?? 0 }
+        if isAhead { return weekDay?.planned }
+        return weekDay.map { $0.strain ?? 0 } ?? model.pastStrain[date]
     }
 
     /// The same goal as Dnes and the Námaha detail (the range from readiness, whole numbers);
     /// without it, where today's plan takes the strain, called a plan as on Dnes.
+    /// Another day has no goal; a day ahead says its number is the plan.
     private var note: String? {
+        if !isToday { return isAhead && score != nil ? L10n.tr("plán") : nil }
         if let today = model.today, today.date == training.date, let t = today.strain.target {
             return L10n.f("cíl %@–%@", Fmt.int(t.low), Fmt.int(t.high))
         }
@@ -270,7 +310,8 @@ struct NextSession: View {
 
     private var when: String {
         let day = Fmt.capitalized(Fmt.relativeDay(session.date, today: today))
-        guard let time = ClockText.format(optional: session.time) else { return day }
+        // A plan without its own hour comes at midnight ("00:00"): only the day then.
+        guard session.time != "00:00", let time = ClockText.format(optional: session.time) else { return day }
         return session.date == today ? time : day + " " + time
     }
 

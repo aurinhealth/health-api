@@ -18,6 +18,9 @@ final class AppModel {
     var trainingError: String?
     /// The training calendar's days by date (Training → the strip and month).
     private(set) var calendar: [String: CalendarDay] = [:]
+    /// The strain of past days before this week, by date, as Today shows it for
+    /// that day (Training → the day chosen in the calendar).
+    private(set) var pastStrain: [String: Double] = [:]
     private(set) var health: HealthSnapshot?
     var healthError: String?
     private(set) var food: FoodSnapshot?
@@ -1109,6 +1112,14 @@ final class AppModel {
             if Self.isCancellation(error) || Outbox.isNoConnection(error) || (error as? APIError) == .unauthorized { return }
             notice = error.localizedDescription
         }
+    }
+
+    /// A past day's strain for Training's Námaha: the week's days come with the
+    /// training answer, an older day from Today of that day, once.
+    func loadPastStrain(_ date: String) async {
+        guard !demo, phase == .signedIn, pastStrain[date] == nil else { return }
+        guard let snapshot = try? await api.today(date: date), snapshot.date == date else { return }
+        pastStrain[date] = snapshot.strain.score ?? 0
     }
 
     func updateDrink(id: Int, ml: Int, kind: String) async -> Bool {
