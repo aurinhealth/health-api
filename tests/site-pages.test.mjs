@@ -7,7 +7,7 @@ import {overviewPage,privacyPage,termsPage,supportPage,healthDataPage,robotsTxt,
 test('the overview keeps what Google verification reads on the homepage',async()=>{
   const html=await overviewPage().text();
   assert.match(html,/<title>Aurin/);
-  // The disclosure is off the overview until Petr asks Google to verify the app; the switch brings it back.
+  // The disclosure is on the overview while Google verifies the app; the switch can take it off later.
   assert.equal(html.includes('Google Health data disclosure'),GOOGLE_DISCLOSURE_ON_HOME);
   for(const page of [overviewPage,privacyPage,termsPage,supportPage])assert.doesNotMatch(await page().text(),/sheet/i,'Google Sheets is gone; the public pages must not mention it');
   assert.match(googleDisclosure(),/may read fitness, health-metric, sleep, and nutrition data from Google Health/);
@@ -27,9 +27,9 @@ test('public pages use the app’s light palette',async()=>{
 });
 
 test('the overview follows the app section by section and every file it loads exists',async()=>{
-  const html=await overviewPage(new Request('https://petrfitnessdata.eu/')).text();
+  const html=await overviewPage(new Request('https://aurin.health/')).text();
   for(const id of ['spanek','pripravenost','zatez','trenink','posilovna','rezim','svaly','vyziva','kouc','propojeni','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
-  const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/petrfitnessdata\.eu)?\/site\/([^"?]+)(?:\?[^"]*)?"/g)].map(m=>m[1]))];
+  const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/aurin\.health)?\/site\/([^"?]+)(?:\?[^"]*)?"/g)].map(m=>m[1]))];
   assert.ok(files.includes('og-en.png'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
@@ -76,7 +76,7 @@ test('the numbers around the hero phone are the sample morning its screenshot sh
   assert.equal(Math.round((today.strain.training+today.strain.movement)*10)/10,today.strain.score);
 });
 
-const visit=(path,headers={})=>new Request('https://petrfitnessdata.eu'+path,{headers});
+const visit=(path,headers={})=>new Request('https://aurin.health'+path,{headers});
 
 test('the site is English whatever the browser says; privacy and terms also have Czech',async()=>{
   const lang=async (page,path,headers={})=>(await page(new Request('https://aurin.health'+path,{headers})).text()).match(/<html lang="(cs|en)"/)[1];
@@ -111,8 +111,10 @@ test('the privacy policy and support page cover what Google verification asks fo
   const limitedUse=[/Aurin’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="https:\/\/developers\.google\.com\/terms\/api-services-user-data-policy">Google API Services User Data Policy<\/a>, including the Limited Use requirements\./,
     /The use of information received from Google Health API and\/or Developer Tools will adhere to the <a href="https:\/\/developers\.google\.com\/health\/policies\/health-api-developer-user-data-policy">Google Health API Developer and User Data Policy<\/a>, including the Limited Use requirements\./];
   for(const statement of limitedUse){assert.match(home,statement);assert.match(privacy,statement);}
-  // The original disclosure stays word for word.
-  assert.match(home,/<p>Aurin \(Petr Fitness Data\) is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows\.<\/p>/);
+  // The disclosure stays word for word, under the app's one name, and names every optional permission.
+  assert.match(home,/<p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows\.<\/p>/);
+  assert.match(home,/Four optional permissions are requested separately: adding weight records to Google Health \(weight you log in Aurin or Intervals\.icu\), adding the workouts you finish in Aurin to Google Health, reading the GPS route of a workout to show its map, and reading your date of birth/);
+  assert.doesNotMatch(home+privacy,/Petr Fitness Data/);
   assert.match(home,/<p style="margin:0">The service can process training and fitness data from connected services, including Google Health data that the account owner has authorized, in order to provide these requested workflows\.<\/p>/);
   // Every party that receives data, how it is secured, and what happens on disconnecting and deleting.
   for(const party of ['Intervals.icu','OpenAI','Cloudflare','Open-Meteo'])assert.match(privacy,new RegExp('<strong>'+party.replace('.','\\.')+'</strong>'),party);
@@ -131,7 +133,7 @@ test('the privacy policy and support page cover what Google verification asks fo
 });
 
 test('the privacy policy names the controller and the contact',async()=>{
-  const page=async(fn,path,lang)=>(await fn(new Request('https://petrfitnessdata.eu'+path+'?lang='+lang))).text();
+  const page=async(fn,path,lang)=>(await fn(new Request('https://aurin.health'+path+'?lang='+lang))).text();
   const en=await page(privacyPage,'/privacy','en'),cs=await page(privacyPage,'/privacy','cs');
   assert.match(en,/The controller of your personal data is Petr Bouma/);
   assert.match(cs,/Správcem tvých osobních údajů je Petr Bouma/);
@@ -147,11 +149,11 @@ test('the privacy policy names the controller and the contact',async()=>{
 test('with open sign-up the privacy policy and support page no longer speak of invitations',async()=>{
   const invite=/invitation|pozvánk|pozvan/i;
   for(const [page,path] of [[privacyPage,'/privacy?lang=en'],[privacyPage,'/privacy?lang=cs'],[supportPage,'/support']]){
-    const req=()=>new Request('https://petrfitnessdata.eu'+path);
+    const req=()=>new Request('https://aurin.health'+path);
     assert.match(await page(req(),{apple:true,email:true}).text(),invite,path+' invite only');
     assert.doesNotMatch(await page(req(),{apple:true,email:true,open:true}).text(),invite,path+' open');
   }
-  const support=await supportPage(new Request('https://petrfitnessdata.eu/support'),{apple:true,email:true,open:true}).text();
+  const support=await supportPage(new Request('https://aurin.health/support'),{apple:true,email:true,open:true}).text();
   assert.match(support,/<strong>Continue with Apple<\/strong>, <strong>Continue with Google<\/strong> or <strong>Continue with e-mail<\/strong>/);
   assert.match(support,/Next time with Face ID/);
 });

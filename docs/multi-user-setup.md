@@ -7,7 +7,6 @@ Aplikace podporuje víc uživatelů. Každý se v aplikaci pro iPhone přihlašu
 1. **Google Cloud Console → APIs & Services → Credentials →** OAuth klient, jehož Client ID je v secretu `GOOGLE_CLIENT_ID`. Do *Authorized redirect URIs* přidej:
    - `https://aurin.health/auth/google/callback` (přihlášení z aplikace pro iPhone)
    - `https://aurin.health/oauth/google/callback` (připojení Google Health)
-   - totéž na `https://petrfitnessdata.eu/…` pro starší verze aplikace
 2. Správce aplikace je účet z `OWNER_EMAIL` ve `wrangler.jsonc`. Všechna data, která v aplikaci existovala před zavedením více uživatelů, patří tomuto účtu.
 
 Secret `ALLOWED_GOOGLE_EMAILS` už potřeba není.

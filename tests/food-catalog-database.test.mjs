@@ -178,7 +178,7 @@ test('migration-aware authenticated API pauses food operations only, then serves
   const entrypoint=(await import('../src/entrypoint.js')).default;
   _resetTenancyForTest();f.env.SESSION_SECRET='test-session-key';f.env.OWNER_EMAIL='owner@example.test';
   const cookie=(await sessionCookie(4,Math.floor(Date.now()/1000)+60,f.env.SESSION_SECRET)).split(';')[0];
-  const request=(path,body)=>new Request('https://petrfitnessdata.eu'+path,{method:'POST',headers:{Cookie:cookie,Origin:'https://petrfitnessdata.eu','Content-Type':'application/json'},body:JSON.stringify(body)});
+  const request=(path,body)=>new Request('https://aurin.health'+path,{method:'POST',headers:{Cookie:cookie,Origin:'https://aurin.health','Content-Type':'application/json'},body:JSON.stringify(body)});
   f.core.sqlite.exec("UPDATE schema_meta SET value='copying' WHERE key='food_catalog_state'");
   assert.equal((await entrypoint.fetch(request('/app/api/food/search',{barcode:product.barcode}),f.env,{waitUntil(){}})).status,503);
   assert.equal((await entrypoint.fetch(request('/app/api/profile',{sex:'female',age:30,height:165}),f.env,{waitUntil(){}})).status,200);
@@ -186,7 +186,7 @@ test('migration-aware authenticated API pauses food operations only, then serves
   const response=await entrypoint.fetch(request('/app/api/food/search',{barcode:product.barcode}),f.env,{waitUntil(){}});
   assert.equal(response.status,200);assert.equal((await response.json()).product.barcode,product.barcode);
   delete f.env.FOODS;assert.equal((await entrypoint.fetch(request('/app/api/food/search',{barcode:product.barcode}),f.env,{waitUntil(){}})).status,503);
-  const anonymous=await entrypoint.fetch(new Request('https://petrfitnessdata.eu/app/api/me'),f.env,{waitUntil(){}});assert.equal(anonymous.headers.get('X-Food-Catalog-Routing'),'1');_resetTenancyForTest();
+  const anonymous=await entrypoint.fetch(new Request('https://aurin.health/app/api/me'),f.env,{waitUntil(){}});assert.equal(anonymous.headers.get('X-Food-Catalog-Routing'),'1');_resetTenancyForTest();
 });
 
 test('remote canary cleanup is exact and provisioning preserves all 20 user database bindings',async()=>{
@@ -213,7 +213,7 @@ test('Cloudflare batch client keeps row values in structured parameters and reje
 test('live search smoke proves the Worker reads FOODS and cleans its exact canary even on a failed API response',async()=>{
   const f=setup();
   await smokeFoodCatalog({api:f.api,foods:'foods',oidcToken:'test-oidc',fetchImpl:async(url,options)=>{
-    assert.equal(url,'https://petrfitnessdata.eu/app/api/food/search');assert.equal(options.headers.Authorization,'Bearer test-oidc');
+    assert.equal(url,'https://aurin.health/app/api/food/search');assert.equal(options.headers.Authorization,'Bearer test-oidc');
     const barcode=JSON.parse(options.body).barcode;
     const row=f.foods.sqlite.prepare("SELECT food_key,product_json FROM shared_foods WHERE json_extract(product_json,'$.barcode')=?").get(barcode);
     return Response.json({status:'ok',candidates:[{...JSON.parse(row.product_json),catalog_id:row.food_key}]});

@@ -1,18 +1,17 @@
-// The server answers on aurin.health and on petrfitnessdata.eu, where older app builds and links
-// still go. OAuth redirects stay on the host the request came to: a sign-in or connection that
-// starts on one host ends there, because its state cookie lives on that host. Google, Intervals.icu
-// list the callbacks of both hosts. APP_ORIGIN overrides the host (local runs).
+// The server answers on aurin.health. OAuth redirects go back to it; APP_ORIGIN overrides the
+// host (the test server, local runs).
 export const SITE_ORIGIN = "https://aurin.health";
-export const LEGACY_ORIGIN = "https://petrfitnessdata.eu";
-export const SERVER_HOSTS = new Set(["aurin.health", "petrfitnessdata.eu"]);
+export const SERVER_HOSTS = new Set(["aurin.health"]);
 
 export function appOrigin(env, request) {
   if (env?.APP_ORIGIN) return env.APP_ORIGIN;
-  const host = request ? new URL(request.url).hostname : "";
-  return SERVER_HOSTS.has(host) ? `https://${host}` : LEGACY_ORIGIN;
+  return SITE_ORIGIN;
 }
 
-// www.aurin.health is only an alias of the site's home.
-export function wwwRedirect(url) {
-  return url.hostname === "www.aurin.health" ? Response.redirect(SITE_ORIGIN + url.pathname + url.search, 301) : null;
+// www.aurin.health is only an alias of the site's home, and petrfitnessdata.eu, the old address,
+// sends everything there until the domain is gone (308 keeps the method and body of a POST).
+const ALIASES = new Set(["www.aurin.health", "petrfitnessdata.eu", "www.petrfitnessdata.eu"]);
+export function wwwRedirect(url, method = "GET") {
+  if (!ALIASES.has(url.hostname)) return null;
+  return Response.redirect(SITE_ORIGIN + url.pathname + url.search, method === "GET" || method === "HEAD" ? 301 : 308);
 }

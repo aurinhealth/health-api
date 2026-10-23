@@ -23,9 +23,9 @@ test("Google Health tokens carry weight writing only when it was granted", () =>
 });
 
 test("connecting asks for Google Health and the workout route; 'extra' adds the optional scopes incrementally", async () => {
-  const plain = new URL((await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1"), google, "/oauth/google")).headers.get("Location"));
+  const plain = new URL((await handleGoogleOAuth(new Request("https://aurin.health/oauth/google?consent=1"), google, "/oauth/google")).headers.get("Location"));
   assert.deepEqual(plain.searchParams.get("scope").split(" "), [...HEALTH_SCOPES, EXTRA_SCOPES.location]);
-  const extra = new URL((await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1&extra=1"), google, "/oauth/google")).headers.get("Location"));
+  const extra = new URL((await handleGoogleOAuth(new Request("https://aurin.health/oauth/google?consent=1&extra=1"), google, "/oauth/google")).headers.get("Location"));
   assert.deepEqual(extra.searchParams.get("scope").split(" "), [...HEALTH_SCOPES, EXTRA_SCOPES.weightWrite, EXTRA_SCOPES.activityWrite, EXTRA_SCOPES.birthday, EXTRA_SCOPES.location]);
   assert.equal(extra.searchParams.get("include_granted_scopes"), "true");
 });
@@ -34,24 +34,24 @@ test("Google's consent screen comes only after the app's own disclosure and cons
   // Google Health data policy: the disclosure and consent in the app come right before Google's.
   // A visit without it (a bookmark, an old link) never reaches Google.
   for (const path of ["/oauth/google", "/oauth/google?extra=1", "/oauth/google?return=native"]) {
-    const response = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu" + path), google, "/oauth/google");
+    const response = await handleGoogleOAuth(new Request("https://aurin.health" + path), google, "/oauth/google");
     assert.equal(response.status, 400);
     assert.equal(response.headers.get("Location"), null);
   }
 });
 
 test("a Google Health connection started by one account is not stored for another signed in before the callback", async () => {
-  const start = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google?consent=1"), { ...google, USER_ID: 11 }, "/oauth/google");
+  const start = await handleGoogleOAuth(new Request("https://aurin.health/oauth/google?consent=1"), { ...google, USER_ID: 11 }, "/oauth/google");
   const state = new URL(start.headers.get("Location")).searchParams.get("state"), cookie = start.headers.get("Set-Cookie").split(";")[0];
   const db = createD1(), real = globalThis.fetch;
   let exchanged = false;
   globalThis.fetch = async () => { exchanged = true; return Response.json({ refresh_token: "r", scope: HEALTH_SCOPES.join(" ") }); };
   try {
-    const other = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google/callback?code=c&state=" + state, { headers: { Cookie: cookie } }), { ...google, DB: db, USER_ID: 22, CONNECTION_KEY: "x".repeat(32) }, "/oauth/google/callback");
+    const other = await handleGoogleOAuth(new Request("https://aurin.health/oauth/google/callback?code=c&state=" + state, { headers: { Cookie: cookie } }), { ...google, DB: db, USER_ID: 22, CONNECTION_KEY: "x".repeat(32) }, "/oauth/google/callback");
     assert.equal(other.status, 403);
     assert.equal(exchanged, false, "the code is never exchanged");
     // The account that started gets it.
-    const same = await handleGoogleOAuth(new Request("https://petrfitnessdata.eu/oauth/google/callback?code=c&state=" + state, { headers: { Cookie: cookie } }), { ...google, DB: db, USER_ID: 11, CONNECTION_KEY: "x".repeat(32) }, "/oauth/google/callback");
+    const same = await handleGoogleOAuth(new Request("https://aurin.health/oauth/google/callback?code=c&state=" + state, { headers: { Cookie: cookie } }), { ...google, DB: db, USER_ID: 11, CONNECTION_KEY: "x".repeat(32) }, "/oauth/google/callback");
     assert.equal(same.headers.get("Location"), "loadwise://connected?event=google");
   } finally { globalThis.fetch = real; }
   assert.deepEqual(db.sqlite.prepare("SELECT DISTINCT user_id FROM connection_credentials").all().map(r => r.user_id), [11]);

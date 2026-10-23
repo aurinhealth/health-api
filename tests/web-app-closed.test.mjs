@@ -4,7 +4,7 @@ import { closedToBrowser, webAppClosed } from "../src/web-app-closed.js";
 import { sessionCookie } from "../src/dashboard-auth.js";
 
 const env = { SESSION_SECRET: "test-session-secret" };
-const BASE = "https://petrfitnessdata.eu";
+const BASE = "https://aurin.health";
 const challenge = "a".repeat(43);
 const cookie = async () => (await sessionCookie(6, Math.floor(Date.now() / 1000) + 3600, env.SESSION_SECRET)).split(";")[0];
 const iPhone = { "X-Loadwise-Api": "1" };

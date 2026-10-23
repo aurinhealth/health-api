@@ -58,7 +58,7 @@ async function sign(alg, privateKey, data) {
 
 // Answers navigator.credentials.create(). Returns { credential, passkey }; keep
 // the passkey to sign in later.
-export async function createPasskey({ challenge, origin = "https://petrfitnessdata.eu", rpId = new URL(origin).hostname, alg = -7, flags = 0x45, signCount = 0, aaguid = new Uint8Array(16), userHandle = b64u(crypto.getRandomValues(new Uint8Array(32))), transports = ["internal", "hybrid"], fmt = "none", modulusLength, clientData = {}, credentialId = crypto.getRandomValues(new Uint8Array(16)) } = {}) {
+export async function createPasskey({ challenge, origin = "https://aurin.health", rpId = new URL(origin).hostname, alg = -7, flags = 0x45, signCount = 0, aaguid = new Uint8Array(16), userHandle = b64u(crypto.getRandomValues(new Uint8Array(32))), transports = ["internal", "hybrid"], fmt = "none", modulusLength, clientData = {}, credentialId = crypto.getRandomValues(new Uint8Array(16)) } = {}) {
   const { pair, cose } = await keyPair(alg, modulusLength);
   const authData = concat(await sha256(new TextEncoder().encode(rpId)), Uint8Array.of(flags), uint32(signCount), aaguid, Uint8Array.of(credentialId.length >> 8, credentialId.length & 255), credentialId, encodeCbor(cose));
   const clientDataJSON = new TextEncoder().encode(JSON.stringify({ type: "webauthn.create", challenge, origin, crossOrigin: false, ...clientData }));

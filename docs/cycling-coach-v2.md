@@ -4,7 +4,7 @@ Status: **ported to the multi-user workout library** (see docs/workout-library.m
 
 ## Goal
 
-Create an adaptive cycling coach for Petr Fitness Data that combines public, general principles seen in modern cycling platforms while keeping the implementation independent:
+Create an adaptive cycling coach for Aurin that combines public, general principles seen in modern cycling platforms while keeping the implementation independent:
 
 - **TrainerRoad-style concept:** compare current ability in an energy system with the challenge of the planned workout and progress difficulty sustainably.
 - **JOIN-style concept:** adapt around real availability, completed training, daily readiness/soreness and post-workout RPE.

@@ -7,13 +7,13 @@ import { emailConfigured, emailSender, signInCodeEmail, passkeyAddedEmail } from
 import { ensureTenancy, inviteUser, signInEmailUser, setUserDisabled, _resetTenancyForTest } from "../src/tenancy.js";
 import { resolvePrincipal } from "../src/dashboard-auth.js";
 
-const ORIGIN = "https://petrfitnessdata.eu";
+const ORIGIN = "https://aurin.health";
 const MIGRATION = ["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
 async function setup(extra = {}) {
   _resetTenancyForTest();
   const sent = [];
-  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@petrfitnessdata.eu", ...extra };
+  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" + sent.length }; } }, EMAIL_FROM: "noreply@aurin.health", ...extra };
   await ensureTenancy(env.DB, env);
   env.DB.sqlite.exec(MIGRATION);
   return { env, sent };
@@ -43,9 +43,9 @@ test("e-mail sign-in stays off until the binding and the sender address exist", 
   assert.equal(emailConfigured({}), false);
   assert.equal(emailConfigured({ EMAIL: { send() {} } }), false);
   assert.equal(emailConfigured({ EMAIL: { send() {} }, EMAIL_FROM: "not an address" }), false);
-  assert.equal(emailConfigured({ EMAIL_FROM: "noreply@petrfitnessdata.eu" }), false);
-  assert.equal(emailConfigured({ EMAIL: { send() {} }, EMAIL_FROM: " noreply@petrfitnessdata.eu " }), true);
-  assert.equal(emailSender({ EMAIL_FROM: " noreply@petrfitnessdata.eu " }), "noreply@petrfitnessdata.eu");
+  assert.equal(emailConfigured({ EMAIL_FROM: "noreply@aurin.health" }), false);
+  assert.equal(emailConfigured({ EMAIL: { send() {} }, EMAIL_FROM: " noreply@aurin.health " }), true);
+  assert.equal(emailSender({ EMAIL_FROM: " noreply@aurin.health " }), "noreply@aurin.health");
   const { env } = await setup({ EMAIL_FROM: "" });
   assert.equal((await start(env, "owner@example.com")).status, 404);
   assert.equal(await handleEmailLogin(request("/auth/google", {}), env, "/auth/google"), null);
@@ -58,7 +58,7 @@ test("an invited address gets a code and signs in with it once", async () => {
   assert.deepEqual(await response.json(), { status: "ok" });
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, "friend@example.com");
-  assert.deepEqual(sent[0].from, { email: "noreply@petrfitnessdata.eu", name: "Aurin" });
+  assert.deepEqual(sent[0].from, { email: "noreply@aurin.health", name: "Aurin" });
   const code = codeIn(sent[0]);
   assert.match(sent[0].subject, new RegExp("^" + code + " je tvůj kód"));
   assert.match(sent[0].html, new RegExp(code));

@@ -27,8 +27,8 @@ function googleFetch(token) {
 }
 // Google sign-in serves only the iPhone app: /auth/google?app=<43-character challenge>.
 const challenge = "c".repeat(43), appCookie = "pfd_google_login=s1.n1.verifier." + challenge;
-const start = (e, query = "?app=" + challenge) => handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/google" + query), e, "/auth/google");
-const callback = (query, cookie = appCookie) => new Request("https://petrfitnessdata.eu/auth/google/callback?" + query, { headers: { Cookie: cookie } });
+const start = (e, query = "?app=" + challenge) => handleGoogleLogin(new Request("https://aurin.health/auth/google" + query), e, "/auth/google");
+const callback = (query, cookie = appCookie) => new Request("https://aurin.health/auth/google/callback?" + query, { headers: { Cookie: cookie } });
 
 test("a client id pasted with spaces still reaches Google intact", async () => {
   const padded = { ...freshEnv(), GOOGLE_CLIENT_ID: " client-123 \n", GOOGLE_CLIENT_SECRET: " secret " };
@@ -49,7 +49,7 @@ test("login start requests only identity scopes with state, nonce and PKCE", asy
   const location = new URL(response.headers.get("Location"));
   assert.equal(location.origin, "https://accounts.google.com");
   assert.equal(location.searchParams.get("scope"), "openid email");
-  assert.equal(location.searchParams.get("redirect_uri"), "https://petrfitnessdata.eu/auth/google/callback");
+  assert.equal(location.searchParams.get("redirect_uri"), "https://aurin.health/auth/google/callback");
   assert.equal(location.searchParams.get("code_challenge_method"), "S256");
   const [state, nonce] = response.headers.get("Set-Cookie").split(";")[0].split("=")[1].split(".");
   assert.equal(location.searchParams.get("state"), state);
@@ -125,14 +125,14 @@ test("the iPhone app signs in through Safari and redeems the token with its veri
   assert.equal(back.status, 200);
   assert.ok(!back.headers.getSetCookie().some(c => c.startsWith("pfd_session=")), "Safari gets no session");
   const token = decodeURIComponent((await back.text()).match(/loadwise:\/\/auth\?token=([^"]+)"/)[1]);
-  const redeem = (body, headers = {}) => handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/app/session", { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) }), e, "/auth/app/session");
+  const redeem = (body, headers = {}) => handleGoogleLogin(new Request("https://aurin.health/auth/app/session", { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) }), e, "/auth/app/session");
   assert.equal((await redeem({ token, verifier: "w".repeat(43) })).status, 401);
   assert.equal((await redeem({ token: token.replace(/.$/, c => c === "A" ? "B" : "A"), verifier })).status, 401);
   assert.equal((await redeem({ token, verifier }, { Origin: "https://evil.example" })).status, 401);
   const ok = await redeem({ token, verifier });
   assert.equal(ok.status, 200);
   const session = ok.headers.getSetCookie().find(c => c.startsWith("pfd_session=")).split(";")[0];
-  const principal = await resolvePrincipal(new Request("https://petrfitnessdata.eu/app/api/daily", { headers: { Cookie: session } }), e, async () => { throw new Error("no"); });
+  const principal = await resolvePrincipal(new Request("https://aurin.health/app/api/daily", { headers: { Cookie: session } }), e, async () => { throw new Error("no"); });
   const owner = await e.DB.prepare("SELECT id FROM users WHERE email='owner@example.com'").first();
   assert.deepEqual(principal, { kind: "user", userId: owner.id, epoch: 0 });
   assert.equal(isPublicPath("/auth/app/session"), true);
@@ -150,7 +150,7 @@ test("a handoff token issued before signing out everywhere no longer signs in", 
     const back = await _finishLoginForTest(callback("code=c1&state=" + state, cookie), e, googleFetch(await idToken({ nonce })));
     return decodeURIComponent((await back.text()).match(/loadwise:\/\/auth\?token=([^"]+)"/)[1]);
   };
-  const redeem = token => handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/app/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, verifier }) }), e, "/auth/app/session");
+  const redeem = token => handleGoogleLogin(new Request("https://aurin.health/auth/app/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, verifier }) }), e, "/auth/app/session");
   const stale = await handoff();
   const owner = await e.DB.prepare("SELECT id FROM users WHERE email='owner@example.com'").first();
   assert.equal(await bumpSessionEpoch(e.DB, owner.id), 1);
@@ -159,7 +159,7 @@ test("a handoff token issued before signing out everywhere no longer signs in", 
   const ok = await redeem(await handoff());
   assert.equal(ok.status, 200);
   const session = ok.headers.getSetCookie().find(c => c.startsWith("pfd_session=")).split(";")[0];
-  const principal = await resolvePrincipal(new Request("https://petrfitnessdata.eu/app/api/daily", { headers: { Cookie: session } }), e, async () => { throw new Error("no"); });
+  const principal = await resolvePrincipal(new Request("https://aurin.health/app/api/daily", { headers: { Cookie: session } }), e, async () => { throw new Error("no"); });
   assert.deepEqual(principal, { kind: "user", userId: owner.id, epoch: 1 });
 });
 
@@ -170,7 +170,7 @@ test("a handoff token is not a session and sign-in without a valid app challenge
     assert.match(refused.headers.get("content-type"), /text\/html/);
     assert.equal(refused.headers.get("Set-Cookie"), null);
   }
-  const form = await handleGoogleLogin(new Request("https://petrfitnessdata.eu/auth/app/session", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "token=x&verifier=y" }), env, "/auth/app/session");
+  const form = await handleGoogleLogin(new Request("https://aurin.health/auth/app/session", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "token=x&verifier=y" }), env, "/auth/app/session");
   assert.equal(form.status, 401);
 });
 

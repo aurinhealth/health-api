@@ -10,7 +10,7 @@ import { aiAllowance, aiMonthlyLimitUsd } from "../src/ai-usage.js";
 import { localToday } from "../src/user-time.js";
 import { callOpenAI } from "../src/coach-assistant.js";
 
-const ORIGIN = "https://petrfitnessdata.eu";
+const ORIGIN = "https://aurin.health";
 const REVIEW = { APP_REVIEW_EMAIL: "Review@Example.com", APP_REVIEW_CODE: "246810" };
 const MIGRATION = ["0014_passkeys_email_codes.sql", "0027_email_code_limits.sql"].map(name => readFileSync(new URL("../migrations/" + name, import.meta.url), "utf8")).join("\n");
 
@@ -29,7 +29,7 @@ test("the fixed review code works until the end of APP_REVIEW_UNTIL (UTC) and ne
 async function reviewSetup(extra) {
   _resetTenancyForTest();
   const sent = [];
-  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" }; } }, EMAIL_FROM: "noreply@petrfitnessdata.eu", ...REVIEW, ...extra };
+  const env = { SESSION_SECRET: "test-secret-key", OWNER_EMAIL: "owner@example.com", DB: createD1(), EMAIL: { send: async message => { sent.push(message); return { messageId: "m" }; } }, EMAIL_FROM: "noreply@aurin.health", ...REVIEW, ...extra };
   await ensureTenancy(env.DB, env);
   env.DB.sqlite.exec(MIGRATION);
   await inviteUser(env.DB, "review@example.com", 1);

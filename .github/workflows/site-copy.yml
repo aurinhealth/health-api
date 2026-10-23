@@ -1,7 +1,7 @@
 name: Website copy
 
 # A reminder, never a failure: an app change that does not touch the website
-# gets a warning, so the overview on petrfitnessdata.eu keeps describing what
+# gets a warning, so the overview on aurin.health keeps describing what
 # the app does (see "The website follows the app" in CLAUDE.md).
 on:
   pull_request:

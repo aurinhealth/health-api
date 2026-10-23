@@ -9,7 +9,7 @@ import { isPublicPath, resolvePrincipal } from "../src/dashboard-auth.js";
 import { deleteAccount } from "../src/account-data.js";
 import { exportAccount } from "./helpers/account-export.mjs";
 
-const ORIGIN = "https://petrfitnessdata.eu";
+const ORIGIN = "https://aurin.health";
 const MIGRATION = readFileSync(new URL("../migrations/0014_passkeys_email_codes.sql", import.meta.url), "utf8");
 const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
 
@@ -51,7 +51,7 @@ test("a passkey added in Settings signs the user in", async () => {
   assert.equal(response.status, 200);
   assert.equal(body.name, "iPhone");
   assert.deepEqual(body.passkeys.map(p => p.name), ["iPhone"]);
-  assert.equal(publicKey.rp.id, "petrfitnessdata.eu");
+  assert.equal(publicKey.rp.id, "aurin.health");
   assert.equal(publicKey.user.name, "friend@example.com");
   assert.equal(publicKey.authenticatorSelection.userVerification, "required");
   assert.equal(publicKey.authenticatorSelection.residentKey, "required");
@@ -104,12 +104,12 @@ test("sign-in refuses other sites, unknown passkeys, a wrong account and blocked
   assert.equal((await handlePasskeyLogin(post("/auth/passkey/options", {}, { origin: "https://evil.example" }), env, "/auth/passkey/options")).status, 403);
   assert.equal((await handlePasskeyLogin(new Request(ORIGIN + "/auth/passkey/options"), env, "/auth/passkey/options")).status, 405);
   // The page of another origin cannot make a passkey answer for this one.
-  assert.equal((await signIn(env, passkey, { origin: "https://staging.petrfitnessdata.eu" })).status, 401);
+  assert.equal((await signIn(env, passkey, { origin: "https://staging.aurin.health" })).status, 401);
 
   const stranger = (await createPasskey({ challenge: "x" })).passkey;
   const unknown = await signIn(env, stranger);
   assert.equal(unknown.status, 401);
-  assert.deepEqual(await unknown.json(), { message: "Tenhle přístupový klíč Aurin nezná. Přihlas se jinak, třeba kódem z e-mailu.", unknownCredential: true, rpId: "petrfitnessdata.eu" });
+  assert.deepEqual(await unknown.json(), { message: "Tenhle přístupový klíč Aurin nezná. Přihlas se jinak, třeba kódem z e-mailu.", unknownCredential: true, rpId: "aurin.health" });
 
   assert.equal((await signIn(env, passkey, { userHandle: "c29tZW9uZS1lbHNl" })).status, 401);
   assert.equal((await signIn(env, passkey, { userHandle: null })).status, 401);
@@ -169,7 +169,7 @@ test("only the signed-in browser manages passkeys, and only its own", async () =
   assert.equal((await api(env, user, post("/app/api/passkeys/options", {}, { origin: "https://evil.example" }))).status, 403);
   const listed = await (await api(env, user, post("/app/api/passkeys"))).json();
   assert.deepEqual(listed.passkeys.map(p => p.id), [mine.id]);
-  assert.equal(listed.rpId, "petrfitnessdata.eu");
+  assert.equal(listed.rpId, "aurin.health");
   const remove = id => api(env, user, new Request(ORIGIN + "/app/api/passkeys?id=" + encodeURIComponent(id), { method: "DELETE", headers: { Origin: ORIGIN } }));
   const nothing = await remove(theirs.id);
   assert.equal((await listPasskeys(env.DB, other.id)).length, 1, "another user's passkey stays");
@@ -187,13 +187,13 @@ test("only the signed-in browser manages passkeys, and only its own", async () =
 
 test("adding a passkey e-mails the account owner when e-mail is set up", async () => {
   const sent = [], pending = [];
-  const env = await setup({ EMAIL: { send: async message => { sent.push(message); return { messageId: "m1" }; } }, EMAIL_FROM: "noreply@petrfitnessdata.eu" });
+  const env = await setup({ EMAIL: { send: async message => { sent.push(message); return { messageId: "m1" }; } }, EMAIL_FROM: "noreply@aurin.health" });
   const user = await member(env);
   await addPasskey(env, user, { ctx: { waitUntil: p => pending.push(p) } });
   await Promise.all(pending);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].to, "friend@example.com");
-  assert.deepEqual(sent[0].from, { email: "noreply@petrfitnessdata.eu", name: "Aurin" });
+  assert.deepEqual(sent[0].from, { email: "noreply@aurin.health", name: "Aurin" });
   assert.match(sent[0].subject, /přístupový klíč/);
   assert.match(sent[0].text, /„iPhone“/);
 });

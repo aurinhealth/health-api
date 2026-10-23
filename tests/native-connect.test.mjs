@@ -12,7 +12,7 @@ function connectEnv() {
 }
 
 const env = { SESSION_SECRET: "test-session-secret" };
-const origin = "https://petrfitnessdata.eu";
+const origin = "https://aurin.health";
 
 test("a connect ticket names the user and provider and expires", async () => {
   const ticket = await connectTicket(7, "intervals", env.SESSION_SECRET);

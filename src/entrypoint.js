@@ -395,7 +395,7 @@ const worker = {
   },
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const www = wwwRedirect(url);
+    const www = wwwRedirect(url, request.method);
     if (www) return www;
     // Static pages stay independent of storage availability.
     // Crawlers and link checkers ask with HEAD too; a 401 there keeps the site out of search.

@@ -201,7 +201,7 @@ export function environmentNotes(environment, sport = "ride", system = null, tag
 }
 
 // A catalog record in the shape the dashboard, ranking and Intervals use.
-export function buildWorkout({ id, sport = "ride", name, system, secondarySystem = null, structure, family = null, level = null, sourceName = "PFD Coach Lab", sourceKind = "original", sourceUrl = null, licenseNote = "Original structured workout for Petr Fitness Data.", attribution = null, citation = null, description = "", tags = [], cadence = null, indoorOnly = false, difficulty = null }) {
+export function buildWorkout({ id, sport = "ride", name, system, secondarySystem = null, structure, family = null, level = null, sourceName = "Aurin", sourceKind = "original", sourceUrl = null, licenseNote = "Original structured workout for Aurin.", attribution = null, citation = null, description = "", tags = [], cadence = null, indoorOnly = false, difficulty = null }) {
   const duration = Math.round(totalMinutes(structure));
   const zones = zoneMinutes(structure, zonesFor(sport));
   return {

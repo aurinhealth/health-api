@@ -46,10 +46,8 @@ final class APIClient: @unchecked Sendable {
     private let session: URLSession
     private let decoder = JSONDecoder()
 
-    /// The server's address (ServerChoice.swift). petrfitnessdata.eu, the old
-    /// one, still serves the live server for builds from before the move.
+    /// The server's address (ServerChoice.swift).
     static var server: URL { ServerChoice.current.url }
-    private static let legacyServer = URL(string: "https://petrfitnessdata.eu")!
 
     init(baseURL: URL? = nil) {
         self.fixedBaseURL = baseURL
@@ -59,24 +57,6 @@ final class APIClient: @unchecked Sendable {
         config.httpShouldSetCookies = true
         config.timeoutIntervalForRequest = 30
         session = URLSession(configuration: config)
-        Self.moveLegacySession(to: self.baseURL)
-    }
-
-    /// Builds from before the move kept the session cookie for petrfitnessdata.eu.
-    /// The server signs it without the host, so the same cookie keeps the user
-    /// signed in on the new address. It moves rather than copies, so a sign-out
-    /// on the new address stays a sign-out.
-    private static func moveLegacySession(to baseURL: URL) {
-        // Only onto the live server: the test server has sessions of its own.
-        guard let host = baseURL.host(), host == ServerChoice.live.url.host() else { return }
-        let storage = HTTPCookieStorage.shared
-        guard let old = storage.cookies(for: legacyServer)?.first(where: { $0.name == sessionCookie }) else { return }
-        storage.deleteCookie(old)
-        let current = (storage.cookies(for: baseURL) ?? []).contains { $0.name == sessionCookie }
-        guard !current, (old.expiresDate ?? .distantFuture) > Date() else { return }
-        var properties: [HTTPCookiePropertyKey: Any] = [.name: old.name, .value: old.value, .domain: host, .path: "/", .secure: "TRUE", HTTPCookiePropertyKey("HttpOnly"): "TRUE"]
-        if let expires = old.expiresDate { properties[.expires] = expires }
-        if let cookie = HTTPCookie(properties: properties) { storage.setCookie(cookie) }
     }
 
     var hasSession: Bool {

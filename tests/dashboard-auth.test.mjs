@@ -7,7 +7,7 @@ import { ensureTenancy, findUser, bumpSessionEpoch, _resetTenancyForTest } from 
 
 const env = { STRENGTH_API_KEY: "test-secret-key", SESSION_SECRET: "test-session-secret" };
 const rejectOidc = async () => { throw new Error("invalid"); };
-const req = (headers = {}) => new Request("https://petrfitnessdata.eu/app/api/daily", { headers });
+const req = (headers = {}) => new Request("https://aurin.health/app/api/daily", { headers });
 const future = () => Math.floor(Date.now() / 1000) + 60;
 
 test("personal data routes are not public", () => {
@@ -78,13 +78,13 @@ test("bearer comparison is exact", () => {
 
 test("changes made with the session come only from pages of this address", () => {
   const user = { kind: "user", userId: 7, epoch: 0 };
-  const change = (origin, method = "POST") => new Request("https://petrfitnessdata.eu/app/api/food/log", { method, headers: origin ? { Origin: origin } : {} });
-  assert.equal(foreignOriginChange(change("https://petrfitnessdata.eu"), user), false);
-  for (const method of ["PATCH", "PUT", "DELETE"]) assert.equal(foreignOriginChange(change("https://petrfitnessdata.eu", method), user), false, method);
+  const change = (origin, method = "POST") => new Request("https://aurin.health/app/api/food/log", { method, headers: origin ? { Origin: origin } : {} });
+  assert.equal(foreignOriginChange(change("https://aurin.health"), user), false);
+  for (const method of ["PATCH", "PUT", "DELETE"]) assert.equal(foreignOriginChange(change("https://aurin.health", method), user), false, method);
   // The browser counts the test copy as the same site and sends the cookie along.
-  assert.equal(foreignOriginChange(change("https://staging.petrfitnessdata.eu"), user), true);
+  assert.equal(foreignOriginChange(change("https://staging.aurin.health"), user), true);
   assert.equal(foreignOriginChange(change("https://example.com"), user), true);
-  assert.equal(foreignOriginChange(change("http://petrfitnessdata.eu"), user), true);
+  assert.equal(foreignOriginChange(change("http://aurin.health"), user), true);
   assert.equal(foreignOriginChange(change("null"), user), true);
   for (const method of ["POST", "PATCH", "PUT", "DELETE"]) assert.equal(foreignOriginChange(change(null, method), user), true, method);
   // Reading changes nothing.
@@ -122,12 +122,12 @@ test("sign out everywhere moves the epoch on, keeps this device signed in and si
   assert.equal(user.sessionEpoch, 0);
   const before = (await userSessionCookie(DB, 2, env.SESSION_SECRET)).split(";")[0];
   assert.equal((await resolvePrincipal(req({ Cookie: before }), env, rejectOidc)).epoch, 0);
-  const url = new URL("https://petrfitnessdata.eu/app/api/account/sign-out-everywhere");
-  const post = (origin = "https://petrfitnessdata.eu") => new Request(url, { method: "POST", headers: origin ? { Origin: origin } : {} });
+  const url = new URL("https://aurin.health/app/api/account/sign-out-everywhere");
+  const post = (origin = "https://aurin.health") => new Request(url, { method: "POST", headers: origin ? { Origin: origin } : {} });
   assert.equal((await handleSignOutEverywhere(post(), { ...e, RAW_DB: DB }, url, { signedIn: false })).status, 401);
   assert.equal((await handleSignOutEverywhere(post("https://evil.example"), { ...e, RAW_DB: DB }, url, { signedIn: true, user })).status, 403);
   assert.equal((await handleSignOutEverywhere(new Request(url), { ...e, RAW_DB: DB }, url, { signedIn: true, user })).status, 405);
-  assert.equal(await handleSignOutEverywhere(post(), e, new URL("https://petrfitnessdata.eu/app/api/me"), { signedIn: true, user }), null);
+  assert.equal(await handleSignOutEverywhere(post(), e, new URL("https://aurin.health/app/api/me"), { signedIn: true, user }), null);
   const response = await handleSignOutEverywhere(post(), { ...e, RAW_DB: DB }, url, { signedIn: true, user });
   assert.deepEqual(await response.json(), { status: "ok" });
   const after = response.headers.get("Set-Cookie").split(";")[0];
@@ -145,7 +145,7 @@ const NOW = 1_800_000_000;
 const DAY = 24 * 60 * 60;
 const cookieOf = header => header.split(";")[0];
 const payloadOf = header => JSON.parse(Buffer.from(cookieOf(header).slice("pfd_session=".length).split(".")[0], "base64url").toString());
-const apiRequest = cookie => new Request("https://petrfitnessdata.eu/app/api/today", { headers: cookie ? { Cookie: cookie } : {} });
+const apiRequest = cookie => new Request("https://aurin.health/app/api/today", { headers: cookie ? { Cookie: cookie } : {} });
 const okResponse = () => Response.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } });
 const hmac = async (payload, secret) => {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -189,7 +189,7 @@ test("a session used within the day, no session, an expired one and a sign-in an
   const recent = cookieOf(await sessionCookie(7, NOW - 3600 + SESSION_SECONDS, env.SESSION_SECRET, 0, NOW - 3600));
   assert.equal((await slidingSession(apiRequest(recent), okResponse(), env.SESSION_SECRET, NOW)).headers.get("Set-Cookie"), null);
   assert.equal((await slidingSession(apiRequest(null), okResponse(), env.SESSION_SECRET, NOW)).headers.get("Set-Cookie"), null);
-  const apiKey = new Request("https://petrfitnessdata.eu/app/api/today", { headers: { Authorization: "Bearer test-secret-key" } });
+  const apiKey = new Request("https://aurin.health/app/api/today", { headers: { Authorization: "Bearer test-secret-key" } });
   assert.equal((await slidingSession(apiKey, okResponse(), env.SESSION_SECRET, NOW)).headers.get("Set-Cookie"), null);
   // Expired: verifyDashboardSession reads the real clock, so a past exp is refused whatever "now" says.
   const expired = cookieOf(await sessionCookie(7, Math.floor(Date.now() / 1000) - 1, env.SESSION_SECRET, 0, NOW - 40 * DAY));
