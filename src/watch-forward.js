@@ -10,6 +10,7 @@
 import { sendActivity, ensureSyncTables } from "./sync-destinations.js";
 import { localDate } from "./user-time.js";
 import { L } from "./lang.js";
+import { typeName, watchType } from "./activity-type.js";
 
 const WAIT_MS = 2 * 3600000;
 const DAYS = 3;
@@ -37,8 +38,8 @@ export function watchActivity(row) {
   const active = Number(String(ex.activeDuration || "").replace(/s$/, ""));
   const minutes = Math.round((active > 0 ? active : (Date.parse(end) - Date.parse(start)) / 1000) / 60);
   if (!start || !(minutes > 0)) return null;
-  const type = TYPE[ex.exerciseType] || "Workout", m = ex.metricsSummary || {};
-  const name = String(ex.displayName || "").trim() || L(...(NAME[type] || ["Trénink", "Workout"]));
+  const type = TYPE[ex.exerciseType] || watchType(ex.exerciseType) || "Workout", m = ex.metricsSummary || {};
+  const name = String(ex.displayName || "").trim() || (NAME[type] ? L(...NAME[type]) : type !== "Workout" ? typeName(type) : L("Trénink", "Workout"));
   return {
     key: "apple:" + String(row.external_id).replace(/^apple:/, ""), sport: "", type, name, date: localDate(start), start, minutes,
     distance: m.distanceMeters, avgHr: m.averageHeartRateBeatsPerMinute, maxHr: m.maxHeartRateBeatsPerMinute, kcal: m.caloriesKcal

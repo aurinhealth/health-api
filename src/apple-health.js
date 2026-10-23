@@ -87,7 +87,11 @@ const EXERCISE = {
   highIntensityIntervalTraining: "HIIT", yoga: "YOGA", rowing: "ROWING", elliptical: "ELLIPTICAL",
   crossTraining: "CROSS_TRAINING", coreTraining: "CORE_TRAINING", pilates: "PILATES", soccer: "SOCCER",
   tennis: "TENNIS", crossCountrySkiing: "CROSS_COUNTRY_SKIING", downhillSkiing: "SKIING",
-  stairClimbing: "STAIR_CLIMBING", mixedCardio: "AEROBIC_WORKOUT", other: "EXERCISE"
+  stairClimbing: "STAIR_CLIMBING", mixedCardio: "AEROBIC_WORKOUT", other: "EXERCISE",
+  openWaterSwimming: "OPEN_WATER_SWIMMING", badminton: "BADMINTON", squash: "SQUASH", tableTennis: "TABLE_TENNIS",
+  pickleball: "PICKLEBALL", golf: "GOLF", hockey: "HOCKEY", rugby: "RUGBY", climbing: "ROCK_CLIMBING",
+  skatingSports: "ICE_SKATING", snowboarding: "SNOWBOARDING", surfingSports: "SURFING", sailing: "SAILING",
+  stairs: "STAIR_CLIMBING"
 };
 
 const num = (v, lo, hi) => { const n = Number(v); return v !== null && v !== "" && Number.isFinite(n) && n >= lo && n <= hi ? n : null; };

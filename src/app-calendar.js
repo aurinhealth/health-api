@@ -11,7 +11,7 @@ import { matchPlannedWorkouts } from "./plan-match.js";
 import { daySessions, dayPlanState } from "./app-training.js";
 import { localDate, localDateTime } from "./user-time.js";
 import { bilingual, L } from "./lang.js";
-import { groupOfType } from "./activity-type.js";
+import { groupOfType, typeName, watchType } from "./activity-type.js";
 import { mergeProposal, mergedSpan, sourcesOf } from "./workout-merge.js";
 import { intervalsOrigin } from "./activity-origin.js";
 
@@ -28,7 +28,6 @@ export function sportOf(text) {
 // name); only an unknown one is guessed from the type and the name.
 const sportOfActivity = (type, name) => groupOfType(type) ?? sportOf(type + " " + (name || ""));
 
-const GOOGLE_TYPES = { WALKING: "Walk", RUNNING: "Run", BIKING: "Ride", CYCLING: "Ride", MOUNTAIN_BIKING: "Ride", INDOOR_BIKING: "VirtualRide", TREADMILL_RUNNING: "VirtualRun", SWIMMING: "Swim", HIKING: "Hike", WEIGHTLIFTING: "WeightTraining", WEIGHTS: "WeightTraining", STRENGTH_TRAINING: "WeightTraining" };
 const NAMES = bilingual(
   { ride: "Kolo", run: "Běh", strength: "Posilovna", swim: "Plavání", walk: "Chůze", other: "Aktivita" },
   { ride: "Ride", run: "Run", strength: "Gym", swim: "Swim", walk: "Walk", other: "Activity" }
@@ -100,7 +99,7 @@ function googleSummary(row, metrics, span = null) {
 // A watch session from Google Health (also the walks it finds on its own).
 function googleActivity(row) {
   const p = parse(row.payload_json), ex = p.exercise || {}, metrics = ex.metricsSummary || {};
-  const type = GOOGLE_TYPES[String(ex.exerciseType || "")] || String(ex.exerciseType || "");
+  const type = watchType(ex.exerciseType) || "";
   const sport = sportOfActivity(type, ex.displayName);
   // Merged with another device's record (workout-merge.js): the time chosen then.
   const span = mergedSpan(p);
@@ -110,7 +109,7 @@ function googleActivity(row) {
   const local = (span ? localDateTime(span.start) : sessionLocalStart(row)) || "";
   return {
     row, id: String(row.external_id), sport, type: type || null, source: row.source_family, status: "done",
-    title: String(ex.displayName || NAMES[sport]).slice(0, 120),
+    title: String(ex.displayName || (type && type !== "Workout" ? typeName(type) : NAMES[sport])).slice(0, 120),
     date: local.slice(0, 10) || localDate(row.start_time),
     time: local.slice(11, 16) || null,
     minutes: round(minutes), km: meters > 0 ? round(meters / 1000, 1) : null,

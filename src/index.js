@@ -1,5 +1,5 @@
 import { L } from './lang.js';
-import { KEEP_TYPE_SQL } from "./activity-type.js";
+import { KEEP_TYPE_SQL, watchType } from "./activity-type.js";
 import { healthPointJson } from './health-point-json.js';
 import {localExportIndex} from './local-workouts.js';
 import {hasRecentActivityData} from './onboarding.js';
@@ -1715,22 +1715,9 @@ export function googleExerciseActivity(row) {
   const exercise = payload.exercise || {};
   const metrics = exercise.metricsSummary || {};
   const exerciseType = String(exercise.exerciseType || "EXERCISE");
-  const typeMap = {
-    WALKING: "Walk",
-    RUNNING: "Run",
-    BIKING: "Ride",
-    CYCLING: "Ride",
-    MOUNTAIN_BIKING: "Ride",
-    INDOOR_BIKING: "VirtualRide",
-    TREADMILL_RUNNING: "VirtualRun",
-    SWIMMING: "Swim",
-    HIKING: "Hike",
-    WEIGHTLIFTING: "WeightTraining",
-    WEIGHTS: "WeightTraining",
-    STRENGTH_TRAINING: "WeightTraining",
-    AEROBIC_WORKOUT: "Workout"
-  };
-  const type = typeMap[exerciseType] || exerciseType;
+  // Every watch sport as its Intervals.icu type (activity-type.js), so the row
+  // is named "Tenis", not "TENNIS"; one without a sport is a "Workout".
+  const type = watchType(exerciseType) || "Workout";
   const name = exercise.displayName || type;
   // Merged with another device's record (workout-merge.js): the time chosen then.
   const span = mergedSpan(payload);

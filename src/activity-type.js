@@ -73,6 +73,32 @@ const BY_TYPE = new Map(ACTIVITY_TYPES.map(t => [t[0], t]));
  *  type and the name). "Workout" says nothing, so its name decides. */
 export const groupOfType = type => (type === 'Workout' ? null : BY_TYPE.get(String(type || ''))?.[3] ?? null);
 export const typeName = type => { const t = BY_TYPE.get(type); return t ? L(t[1], t[2]) : type; };
+// A watch's sport (Google Health's exerciseType, and HealthKit's as
+// apple-health.js stores it) as an Intervals.icu type, for the sports whose
+// name differs. TABLE_TENNIS, KAYAKING and the like match by their name.
+const WATCH_TYPES = {
+  RUNNING: 'Run', TREADMILL_RUNNING: 'VirtualRun', TRAIL_RUNNING: 'TrailRun',
+  WALKING: 'Walk', TREADMILL_WALKING: 'Walk', HIKING: 'Hike', SNOWSHOEING: 'Snowshoe',
+  BIKING: 'Ride', CYCLING: 'Ride', ROAD_BIKING: 'Ride', INDOOR_BIKING: 'VirtualRide', STATIONARY_BIKING: 'VirtualRide', SPINNING: 'VirtualRide',
+  MOUNTAIN_BIKING: 'MountainBikeRide', E_BIKING: 'EBikeRide',
+  SWIMMING: 'Swim', SWIMMING_POOL: 'Swim', POOL_SWIMMING: 'Swim', OPEN_WATER_SWIMMING: 'OpenWaterSwim', SWIMMING_OPEN_WATER: 'OpenWaterSwim',
+  WEIGHTLIFTING: 'WeightTraining', WEIGHTS: 'WeightTraining', STRENGTH_TRAINING: 'WeightTraining', CORE_TRAINING: 'WeightTraining',
+  HIIT: 'HighIntensityIntervalTraining', HIGH_INTENSITY_INTERVAL_TRAINING: 'HighIntensityIntervalTraining',
+  ROWING_MACHINE: 'VirtualRow', INDOOR_ROWING: 'VirtualRow', STAIR_CLIMBING: 'StairStepper', STAIR_CLIMBER: 'StairStepper', STAIRS: 'StairStepper',
+  FOOTBALL: 'Soccer', ICE_HOCKEY: 'Hockey', FIELD_HOCKEY: 'Hockey',
+  CROSS_COUNTRY_SKIING: 'NordicSki', SKIING: 'AlpineSki', DOWNHILL_SKIING: 'AlpineSki', ALPINE_SKIING: 'AlpineSki', SNOWBOARDING: 'Snowboard',
+  ICE_SKATING: 'IceSkate', SKATING: 'IceSkate', INLINE_SKATING: 'InlineSkate', ROLLER_SKATING: 'InlineSkate', CLIMBING: 'RockClimbing',
+  SAILING: 'Sail', KITESURFING: 'Kitesurf', WINDSURFING: 'Windsurf', PADDLEBOARDING: 'StandUpPaddling', STAND_UP_PADDLEBOARDING: 'StandUpPaddling'
+};
+const BY_UPPER = new Map(ACTIVITY_TYPES.map(t => [t[0].toUpperCase(), t[0]]));
+/** The Intervals.icu type of a watch's sport, else null. A type the user
+ *  chose in Aurin (activity-type.js changeActivityType) is one already. */
+export const watchType = exerciseType => {
+  const s = String(exerciseType || '');
+  if (BY_TYPE.has(s)) return s;
+  return WATCH_TYPES[s] || BY_UPPER.get(s.replace(/_/g, '')) || null;
+};
+
 /** GET /app/api/activity/types: the list in the user's language. */
 export const activityTypes = () => ACTIVITY_TYPES.map(([type, cs, en, group]) => ({ type, name: L(cs, en), group }));
 
