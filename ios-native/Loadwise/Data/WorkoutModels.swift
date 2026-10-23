@@ -12,6 +12,8 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     let title: String
     /// ride, run, strength, swim, walk or other.
     let sport: String
+    /// On a done session: Intervals.icu's type ("Tennis"), for its icon.
+    var type: String? = nil
     let minutes: Int?
     let tss: Double?
     /// Intervals.icu activity id for GET /app/api/activity-detail.

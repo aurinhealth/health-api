@@ -142,13 +142,13 @@ struct StrainDetailContent: View {
         return Card(padding: 0) {
             VStack(spacing: 0) {
                 ForEach(done) { (s: WeekSession) in
-                    StrainRow(symbol: SportIcon.symbol(s.sport), color: Palette.amberBar, title: s.title, meta: meta(s),
+                    StrainRow(symbol: SportIcon.symbol(s.sport, type: s.type), color: Palette.amberBar, title: s.title, meta: meta(s),
                               value: share(split.training, s.tss, of: doneTss), planned: false, first: s.id == firstDone)
                 }
                 StrainRow(symbol: "shoeprints.fill", color: Palette.sand, title: L10n.tr("Pohyb během dne"), meta: movementMeta,
                           value: split.movement, planned: false, first: done.isEmpty)
                 ForEach(open) { (s: WeekSession) in
-                    StrainRow(symbol: SportIcon.symbol(s.sport), color: Palette.amberBar, title: s.title, meta: L10n.tr("v plánu"),
+                    StrainRow(symbol: SportIcon.symbol(s.sport, type: s.type), color: Palette.amberBar, title: s.title, meta: L10n.tr("v plánu"),
                               value: share(split.planned, s.tss, of: openTss), planned: true, first: false)
                 }
             }
