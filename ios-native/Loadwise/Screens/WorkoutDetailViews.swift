@@ -165,6 +165,7 @@ struct WeekSessionsList: View {
         // A gym session typed in by hand (Zapsat trénink) has no sheet yet:
         // its detail is the planned one, where it can move or be deleted.
         if s.kind == "planned", let id = s.eventId, id.hasPrefix("planned:local-"), s.sport == "strength" { return .planned(s) }
+        if s.kind == "activity" && s.sport == "strength" && s.status == "done" { return .gymSession(s) }
         if s.kind == "gym" || s.sport == "strength" { return .gym(s.date) }
         // An activity from another source (typed in) opens too: its
         // numbers from the list, with the ⋯ to delete it.

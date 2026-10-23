@@ -9,6 +9,9 @@ struct GymSessionView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let date: String
+    /// The done activity it was opened from: a day can have several lifting
+    /// sessions (two merged, one more), and ⋯ changes this one.
+    var session: WeekSession? = nil
     @State private var day: GymDay?
     @State private var loading = true
     @State private var saving = false
@@ -32,7 +35,16 @@ struct GymSessionView: View {
     @State private var editingKcal = false
 
     /// The lifting session from the watch or Intervals.icu that day.
-    private var doneSession: WeekSession? { model.doneStrengthSession(on: date) }
+    private var doneSession: WeekSession? { session.map(model.liveSession) ?? model.doneStrengthSession(on: date) }
+
+    /// What Smazat aktivitu and Upravit kalorie change: the done activity, so
+    /// deleting one of the day's sessions leaves the exercises with the others;
+    /// the plan saved in the app (gym:<date>, its sets hidden too) only without one.
+    private var editTarget: (id: String, app: Bool)? {
+        if let s = doneSession { return (s.id, s.id.hasPrefix("gym:")) }
+        if !(day?.exercises.isEmpty ?? true) { return ("gym:" + date, true) }
+        return nil
+    }
 
     /// What Změnit typ aktivity changes: the plan saved in the app, else the watch's or Intervals.icu's session.
     private var typeTarget: (id: String, type: String?, source: String?)? {
@@ -107,10 +119,10 @@ struct GymSessionView: View {
                     .accessibilityLabel("Změnit trénink")
                 }
                 // Done: the gym session was another sport (Crossfit, HIIT…).
-                if !model.demo && showsDone, let typeTarget {
+                if !model.demo && showsDone, let typeTarget, let editTarget {
                     Menu {
                         Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
-                        if typeTarget.source != "app" {
+                        if !editTarget.app {
                             Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
                         }
                         Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
@@ -122,7 +134,7 @@ struct GymSessionView: View {
                     .sheet(isPresented: $changingType) {
                         ActivityTypeSheet(activityId: typeTarget.id, current: typeTarget.type, source: typeTarget.source) { dismiss() }
                     }
-                    .activityEditing(id: typeTarget.id, title: day?.planName ?? doneSession?.title ?? L10n.tr("Posilovna"),
+                    .activityEditing(id: editTarget.id, title: day?.planName ?? doneSession?.title ?? L10n.tr("Posilovna"),
                                      kcal: doneSession?.kcal, edited: doneSession?.kcalEdited == true,
                                      deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
                 }

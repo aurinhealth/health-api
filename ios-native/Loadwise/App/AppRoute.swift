@@ -24,6 +24,9 @@ enum AppRoute: Hashable {
     /// Regenerace from the coach's card on Today (RecoveryViews.swift).
     case recoveryTime
     case gym(String)
+    /// The day's gym sheet opened from one of its done lifting activities: a
+    /// day can have several, and ⋯ Smazat aktivitu deletes this one.
+    case gymSession(WeekSession)
     case activity(WeekSession)
     case planned(WeekSession)
     case sleepSettings
@@ -76,7 +79,7 @@ enum AppRoute: Hashable {
     /// planned): switching tabs keeps it open instead of going back.
     var keepsPlace: Bool {
         switch self {
-        case .gym, .gymBuilder, .trainingMode, .liveGym, .planTemplate: return true
+        case .gym, .gymSession, .gymBuilder, .trainingMode, .liveGym, .planTemplate: return true
         default: return false
         }
     }
@@ -173,6 +176,7 @@ struct RouteScreen: View {
         case .strainDay(let date): StrainDetailView(date: date)
         case .recoveryTime: RecoveryTimeView()
         case .gym(let date): GymSessionView(date: date)
+        case .gymSession(let session): GymSessionView(date: session.date, session: session)
         case .activity(let session): ActivityDetailView(session: session)
         case .planned(let session): PlannedWorkoutView(session: session)
         case .sleepSettings: SleepSettingsView()
