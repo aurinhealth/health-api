@@ -59,15 +59,18 @@ export async function storedHeartRate(db, userId, start, end) {
 // The Google route of a workout: kept from an earlier read, else exported now.
 // null without GPS, without the location permission or when Google refuses.
 export async function googleRoute(env, row, { token, fetchImpl = fetch } = {}) {
-  const ex = parse(row.payload_json).exercise || {};
+  const payload = parse(row.payload_json), ex = payload.exercise || {};
+  // Points read with dataPoints:reconcile carry their name as dataPointName
+  // (the row is then keyed by its start time): the export needs that name.
+  const name = String(payload.dataPointName || row.external_id || '');
   // Workouts recorded on the phone may come without the flag: only a clear "no GPS" skips the file.
   if (ex.exerciseMetadata?.hasGps === false) return null;
   const kept = await env.DB.prepare(`SELECT payload_json FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='${ROUTE_TYPE}' AND external_id=?`)
     .bind(env.USER_ID, row.external_id).first().catch(() => null);
   if (kept) return parse(kept.payload_json).points || null;
   if (!token) { console.error('Google route skipped: no location permission'); return null; }
-  if (!/^users\/[^/]+\/dataTypes\/exercise\/dataPoints\/[A-Za-z0-9_.-]+$/.test(String(row.external_id || ''))) { console.error('Google route skipped: unexpected data point name'); return null; }
-  const response = await fetchImpl('https://health.googleapis.com/v4/' + row.external_id + ':exportExerciseTcx?alt=media', {
+  if (!/^users\/[^/]+\/dataTypes\/exercise\/dataPoints\/[A-Za-z0-9_.-]+$/.test(name)) { console.error('Google route skipped: unexpected data point name'); return null; }
+  const response = await fetchImpl('https://health.googleapis.com/v4/' + name + ':exportExerciseTcx?alt=media', {
     headers: { Authorization: 'Bearer ' + await token() }, signal: AbortSignal.timeout(12000)
   }).catch(() => null);
   // Why a route is missing, for the Worker log (status and size only, never the route).
