@@ -245,7 +245,19 @@ enum SportIcon {
         "Yoga": "figure.yoga", "Pilates": "figure.pilates", "Elliptical": "figure.elliptical", "StairStepper": "figure.stair.stepper",
         "Tennis": "figure.tennis", "Padel": "figure.tennis", "Squash": "figure.squash", "Badminton": "figure.badminton",
         "TableTennis": "figure.table.tennis", "Pickleball": "figure.pickleball",
-        "Soccer": "figure.soccer", "Hockey": "figure.hockey", "Rugby": "figure.rugby", "Golf": "figure.golf"
+        "Soccer": "figure.soccer", "Hockey": "figure.hockey", "Rugby": "figure.rugby", "Golf": "figure.golf",
+        "Basketball": "figure.basketball", "Volleyball": "figure.volleyball", "Handball": "figure.handball",
+        "Baseball": "figure.baseball", "Softball": "figure.softball", "AmericanFootball": "figure.american.football",
+        "AustralianFootball": "figure.australian.football", "Cricket": "figure.cricket", "Lacrosse": "figure.lacrosse",
+        "Racquetball": "figure.racquetball", "Boxing": "figure.boxing", "Kickboxing": "figure.kickboxing",
+        "MartialArts": "figure.martial.arts", "Wrestling": "figure.wrestling", "Fencing": "figure.fencing",
+        "Dance": "figure.dance", "Barre": "figure.barre", "TaiChi": "figure.taichi", "MindAndBody": "figure.mind.and.body",
+        "Flexibility": "figure.flexibility", "Cooldown": "figure.cooldown", "JumpRope": "figure.jumprope",
+        "StepTraining": "figure.step.training", "Gymnastics": "figure.gymnastics", "TrackAndField": "figure.track.and.field",
+        "Archery": "figure.archery", "Bowling": "figure.bowling", "Curling": "figure.curling", "DiscSports": "figure.disc.sports",
+        "EquestrianSports": "figure.equestrian.sports", "Fishing": "figure.fishing", "Hunting": "figure.hunting",
+        "WaterPolo": "figure.waterpolo", "WaterFitness": "figure.water.fitness", "Handcycle": "figure.hand.cycling",
+        "Wheelchair": "figure.roll", "Play": "figure.play", "FitnessGaming": "gamecontroller"
     ]
 }
 

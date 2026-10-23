@@ -161,7 +161,9 @@ export function appleRow(r, now = Date.now()) {
   if (type === "exercise") {
     const start = instant(r.start, now), end = instant(r.end, now);
     if (!span(start, end, 48)) return null;
-    const exerciseType = EXERCISE[String(r.activity || "")] || "EXERCISE";
+    // Any other HealthKit name as Google writes it (americanFootball → AMERICAN_FOOTBALL).
+    const activity = String(r.activity || "");
+    const exerciseType = EXERCISE[activity] || (/^[a-z][A-Za-z]{1,40}$/.test(activity) ? activity.replace(/[A-Z]/g, c => "_" + c).toUpperCase() : "EXERCISE");
     const metrics = {};
     const put = (key, v, lo, hi, round = true) => { const n = num(v, lo, hi); if (n != null) metrics[key] = round ? Math.round(n) : n; };
     put("caloriesKcal", r.kcal, 0, 20000);
