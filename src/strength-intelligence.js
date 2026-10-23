@@ -566,6 +566,16 @@ export function historyFamily(exercise) {
   return [exercise, ...Object.keys(EXERCISE_INTELLIGENCE).filter(name => name !== exercise && (name === root || EXERCISE_INTELLIGENCE[name].variantOf === root) && EXERCISE_INTELLIGENCE[name].loadUnit === meta.loadUnit && Boolean(EXERCISE_INTELLIGENCE[name].unilateral) === Boolean(meta.unilateral))];
 }
 
+// A one-arm cable exercise of a two-arm one (Cable Single Arm Rope Pushdown of
+// the Cable triceps extension): one arm pulls about half the stack of both.
+// Without it a one-arm variant fell back to the catalogue (5 kg planned after
+// 35 kg with both arms, 2026-10-23).
+function oneArmOf(from, to) {
+  const a = EXERCISE_INTELLIGENCE[from], b = EXERCISE_INTELLIGENCE[to];
+  return Boolean(a && b && !a.unilateral && b.unilateral && a.loadUnit === LOAD_UNITS.CABLE_STACK_KG && b.loadUnit === LOAD_UNITS.CABLE_STACK_KG && a.pattern === b.pattern
+    && (b.variantOf === from || (b.variants || []).includes(from) || (a.variants || []).includes(to)));
+}
+
 export function estimateStartingLoad({ exercise, history = [], targetReps = "8â€“15", fallbackKg = null, loadFactor = 1, today = null }) {
   exercise = normalizeExerciseName(exercise);
   const def = EXERCISE_INTELLIGENCE[exercise];
@@ -583,10 +593,13 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8â€
     if (kg == null) continue;
     const similarity = scoreSimilarity(name, exercise);
     const factor = transferFactor(name, exercise);
-    if (Boolean(EXERCISE_INTELLIGENCE[name].unilateral) !== Boolean(def.unilateral)) continue;
+    // A one-arm cable exercise takes half of its two-arm movement's stack;
+    // other one-side and two-side pairs aren't compared.
+    const half = oneArmOf(name, exercise);
+    if (!half && Boolean(EXERCISE_INTELLIGENCE[name].unilateral) !== Boolean(def.unilateral)) continue;
     // Only a variant of the same movement says anything about this one.
     if (factor == null || similarity < 0.75 && !(EXERCISE_INTELLIGENCE[name].variants || []).includes(exercise) && !(EXERCISE_INTELLIGENCE[exercise].variants || []).includes(name)) continue;
-    candidates.push({ name, kg, rpe: normalizeRpe(ref.rpe), reps: n(ref.actual_reps), similarity, factor, date: ref.workout_date });
+    candidates.push({ name, kg, rpe: normalizeRpe(ref.rpe), reps: n(ref.actual_reps), similarity, factor: half ? factor * 0.5 : factor, half, date: ref.workout_date });
   }
   candidates.sort((a, b) => b.similarity - a.similarity || String(b.date).localeCompare(String(a.date)));
   const ref = candidates[0];
@@ -595,7 +608,8 @@ export function estimateStartingLoad({ exercise, history = [], targetReps = "8â€
     kg *= progressionMultiplier(ref.reps, normalizeRpe(ref.rpe), targetReps);
     kg *= recoveryMultiplier(loadFactor);
     // Never far above the catalogue's start for an exercise not done yet.
-    if (fallbackKg != null && Number(fallbackKg) > 0) kg = Math.min(kg, Number(fallbackKg) * 2);
+    // Half of the athlete's own two-arm weight needs no such limit.
+    if (!ref.half && fallbackKg != null && Number(fallbackKg) > 0) kg = Math.min(kg, Number(fallbackKg) * 2);
     const rounded = resolveLoad(exercise, kg);
     return { kg: rounded, source: "cross-exercise-estimate", confidence: clamp(0.55 + ref.similarity * 0.45, 0.55, 1), referenceExercise: ref.name, referenceKg: ref.kg, referenceRpe: ref.rpe, referenceReps: ref.reps, referenceDate: ref.date, similarity: ref.similarity, transferFactor: ref.factor };
   }
