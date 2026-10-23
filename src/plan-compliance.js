@@ -7,7 +7,9 @@
 // sides it is the time, then the distance. A gym session is measured set by
 // set: a planned set done at its weight and within its rep range is 100 %,
 // fewer reps or less weight count less, more of either count more, a missed
-// set 0 and an extra one is added on top.
+// set 0 and an extra one is added on top. One exercise counts at most 150 %
+// of its sets, so a plan's weight far off the athlete's own (5 kg planned,
+// 20 kg lifted) doesn't outweigh the rest of the session.
 import { L } from "./lang.js";
 
 const num = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
@@ -43,6 +45,8 @@ const repRange = text => {
   return m ? { min: Number(m[1]), max: Number(m[2] || m[1]) } : null;
 };
 
+const EXERCISE_CAP = 1.5;
+
 // rows: the WORK rows of a gym plan (strength-history.js parseStrengthPlan):
 // {exercise, plannedKg, plannedReps, actualKg, actualReps, completed}.
 export function gymCompliance(rows = []) {
@@ -73,6 +77,7 @@ export function gymCompliance(rows = []) {
       exScore += repsPart * kgPart;
     }
     if (!exPlanned) continue;
+    exScore = Math.min(exScore, exPlanned * EXERCISE_CAP);
     score += exScore; planned += exPlanned; done += exDone;
     exercises.push({ name, plannedSets: exPlanned, doneSets: exDone, sets, percent: Math.round(exScore / exPlanned * 100) });
   }
