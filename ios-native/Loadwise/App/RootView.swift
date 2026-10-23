@@ -132,7 +132,7 @@ struct RootView: View {
                     .padding(.top, 8)
                     .animation(.snappy, value: model.syncStatus)
                 }
-                // A done activity sent to the apps from Synchronizace (SyncViews.swift).
+                // A done activity sent to the apps from Zdroje dat (Aurin posílá) (SyncViews.swift).
                 if let report = model.syncReport, !showSyncStatus {
                     SyncToastView(report: report) { showSyncStatus = true }
                         .padding(.horizontal, 16)

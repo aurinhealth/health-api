@@ -110,10 +110,6 @@ struct SettingsMenu: View {
                         }
                 }
                 SettingsDivider()
-                NavigationLink { SyncSettingsView(store: store) } label: {
-                    SettingsRow(icon: SettingsIcon(systemImage: "arrow.triangle.2.circlepath", color: Palette.green), title: "Synchronizace")
-                }
-                SettingsDivider()
                 NavigationLink { PrivacySettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "lock", color: Palette.muted), title: "Soukromí a data")
                 }

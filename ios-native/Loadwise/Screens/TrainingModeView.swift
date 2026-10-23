@@ -180,7 +180,7 @@ struct TrainingModeView: View {
         .confirmationDialog("Zahodit trénink?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Zahodit trénink", role: .destructive) { Task { await discard() } }
         } message: {
-            Text("Trénink zmizí z plánu dne, smažou se zapsané série i trénink uložený do Apple Zdraví.")
+            Text("Trénink zmizí z plánu dne, smažou se zapsané série i trénink uložený do Apple Health.")
         }
         .sheet(isPresented: $picking) {
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? [])) { name in
@@ -1142,7 +1142,7 @@ struct TrainingModeView: View {
                 return
             }
             await model.refreshTraining()
-            // To Intervals.icu and Google Health as chosen in Synchronizace;
+            // To Intervals.icu and Google Health as chosen in Zdroje dat (Aurin posílá);
             // Apple Health has the live workout already.
             let minutes = totals.map { max(1, $0.minutes) }
             await model.shareGym(day, date: date, start: minutes.map { Date().addingTimeInterval(-Double($0) * 60) }, minutes: minutes,

@@ -540,7 +540,7 @@ struct LiveGymView: View {
                 self.error = L10n.f("Trénink se nepodařilo uložit: %@", error.localizedDescription)
                 return
             }
-            // A session with sets goes to the apps chosen in Synchronizace.
+            // A session with sets goes to the apps chosen in Zdroje dat (Aurin posílá).
             await model.shareGym(next, date: date)
             await model.refreshTraining()
             if !names.isEmpty { rating = true; return }

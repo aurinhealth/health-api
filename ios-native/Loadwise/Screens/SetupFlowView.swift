@@ -122,7 +122,7 @@ struct SetupFlowView: View {
     // The same points as the web's consent (consentDataList in dashboard-client.js).
     private static let consentPoints: [(String, String)] = [
         ("Co", "Tep, variabilita tepu (HRV), spánek, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly."),
-        ("Odkud", "Ze služeb, které připojíš (Apple Zdraví, Google Health, Intervals.icu), a z toho, co zadáš sám."),
+        ("Odkud", "Ze služeb, které připojíš (Apple Health, Google Health, Intervals.icu), a z toho, co zadáš sám."),
         ("K čemu", "Jen k přehledům, výpočtům a plánům v Aurinu. Data neprodáváme a nepoužíváme k reklamě."),
         ("AI", "Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek jídla, společnosti OpenAI v USA."),
         ("Odvolání", "Smazáním účtu v Nastavení → Účet, kde si předtím můžeš stáhnout všechna svoje data.")
@@ -194,11 +194,11 @@ struct SetupFlowView: View {
         HStack(spacing: 12) {
             IntegrationIcon(id: "apple", size: 30)
             if appleWorking {
-                Text("Apple Zdraví").font(.body).foregroundStyle(Palette.ink)
+                Text("Apple Health").font(.body).foregroundStyle(Palette.ink)
                 Spacer()
                 ProgressView().padding(.trailing, 16)
             } else {
-                SettingsToggle(title: "Apple Zdraví", isOn: $appleOn).padding(.leading, -16)
+                SettingsToggle(title: "Apple Health", isOn: $appleOn).padding(.leading, -16)
             }
         }
         .padding(.leading, 16)
@@ -300,7 +300,7 @@ struct SetupFlowView: View {
             if let source = prefillSource {
                 HStack(spacing: 10) {
                     IntegrationIcon(id: source, size: 24)
-                    Text(source == "apple" ? "Z Apple Zdraví jsme vzali:" : "Z Google Health jsme vzali:")
+                    Text(source == "apple" ? "Z Apple Health jsme vzali:" : "Z Google Health jsme vzali:")
                         .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
@@ -403,7 +403,7 @@ struct SetupFlowView: View {
         }
     }
 
-    /// The "Apple Zdraví" switch: one iOS sheet for the health categories and
+    /// The "Apple Health" switch: one iOS sheet for the health categories and
     /// the profile, then the history loads in the background (AppleHealth).
     private func connectApple() async {
         guard health.isAvailable, !health.enabled, !appleWorking else { return }

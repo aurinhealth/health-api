@@ -11,7 +11,7 @@ struct ZonesDetailView: View {
             if let zones = training.zones {
                 ZonesDetailContent(zones: zones)
             } else {
-                Text("Čas v zónách zatím není k dispozici. Počítá se z celodenního tepu z Google Health nebo Apple Zdraví.")
+                Text("Čas v zónách zatím není k dispozici. Počítá se z celodenního tepu z Google Health nebo Apple Health.")
                     .font(Typo.body).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 60)

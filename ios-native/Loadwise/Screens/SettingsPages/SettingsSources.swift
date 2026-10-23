@@ -4,8 +4,8 @@ import UserNotifications
 // MARK: - Data sources
 
 /// Zdroje dat, laid out like Bevel's: the connected services as cards, each
-/// with "Spravovat" (permissions, sync, disconnect), "+" for the rest in
-/// sections, and syncing everything at the bottom.
+/// with its page (what Aurin reads and sends, permissions, sync, disconnect),
+/// "+" for the rest in sections, and syncing everything at the bottom.
 struct SourcesSettingsView: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
@@ -16,7 +16,14 @@ struct SourcesSettingsView: View {
     @State private var flow = ConnectFlowState()
     @State private var choosing: PriorityPart?
 
-    private var connected: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected == true } }
+    /// Apple Health also when Aurin only writes to it (Aurin posílá on its page).
+    private var connected: [ConnectionsResponse.Provider] {
+        var list = store.connections.filter { $0.connected == true }
+        if !list.contains(where: { $0.id == "apple" }) && !store.demo && AppleHealthExport.shared.isOn {
+            list.append(ConnectionsResponse.Provider(id: "apple", name: "Apple Health", connected: true, configured: true, missingPermissions: nil, metrics: nil, note: nil))
+        }
+        return list
+    }
     private var available: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected != true && $0.configured != false } }
 
     var body: some View {
@@ -93,15 +100,22 @@ struct SourcesSettingsView: View {
                 .buttonStyle(.plain)
                 .disabled(syncing || store.demo || connected.isEmpty)
                 // The last sync left a source out (src/dashboard-sync.js results, googleStatus).
-                if !syncing, let failed = store.sync?.failedSources, !failed.isEmpty {
+                // Each source that failed in the last day: what and when (src/dashboard-sync.js).
+                if !syncing, let failures = store.sync?.failures(), !failures.isEmpty {
                     SettingsDivider()
-                    SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.circle.fill", color: Palette.rust), title: "Poslední synchronizace s chybou",
-                                subtitle: failed.joined(separator: ", "), chevron: false)
+                    SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.circle.fill", color: Palette.rust), title: "Poslední synchronizace s chybou", chevron: false)
+                    ForEach(failures) { failure in
+                        let detail = [failure.message, failure.at.map(SourceActions.when)].compactMap { $0 }.joined(separator: " · ")
+                        SettingsRow(title: failure.name, subtitle: detail.isEmpty ? nil : detail, chevron: false)
+                    }
                 }
                 SettingsDivider()
                 SettingsToggle(title: "Sloučit stejné záznamy", subtitle: "Když stejnou noc nebo trénink pošle víc zdrojů, započítá se jednou.", isOn: .constant(true), disabled: true)
             }
 
+            if let message = store.errorMessage, !syncing {
+                Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
+            }
             if let message = actions.message {
                 Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -139,7 +153,13 @@ struct SourcesSettingsView: View {
         .buttonStyle(.plain)
     }
 
-    private var lastSync: String? { store.sync?.updatedAt.flatMap(SourceActions.when) }
+    /// The newest finished sync: a connected service's last good fetch (the server
+    /// fetches every few minutes by itself) or the end of "Synchronizovat vše".
+    private var lastSync: String? {
+        var times = connected.compactMap { $0.lastSuccessAt.flatMap(SourceActions.date) }
+        if store.sync?.status != "running", let end = store.sync?.finishedAt.flatMap(SourceActions.date) { times.append(end) }
+        return times.max().map(SourceActions.when)
+    }
 
     private func start(_ provider: String) {
         if provider == "apple" { connectingApple = true; return }

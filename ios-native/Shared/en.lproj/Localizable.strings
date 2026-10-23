@@ -508,7 +508,7 @@
 "Připravenost potřebuje aspoň 14 dní HRV nebo klidového tepu." = "Readiness needs at least 14 days of HRV or resting heart rate.";
 "Připravenost potřebuje dnešní noc a aspoň 14 dní HRV nebo klidového tepu." = "Readiness needs last night's data and at least 14 days of HRV or resting heart rate.";
 "Připravenost z HRV, tepu a spánku. Jedno číslo a jedna věta, co dnes dává smysl." = "Readiness from HRV, heart rate and sleep. One number and one sentence on what makes sense today.";
-"Aktivní výdej zatím není k dispozici. Bere se z Google Health nebo Apple Zdraví." = "Active energy isn't available yet. It comes from Google Health or Apple Health.";
+"Aktivní výdej zatím není k dispozici. Bere se z Google Health nebo Apple Health." = "Active energy isn't available yet. It comes from Google Health or Apple Health.";
 "Aktivní výdej dnes" = "Active energy today";
 "průměr %@ kcal za den" = "average %@ kcal a day";
 "Posledních 28 dní" = "Last 28 days";
@@ -521,7 +521,7 @@
 "doporučení WHO 150 min týdně · lehká aktivita %@" = "WHO recommends 150 min a week · light activity %@";
 "doporučení splněno" = "recommendation met";
 "chybí %@ min" = "%@ min to go";
-"Čas v zónách zatím není k dispozici. Počítá se z celodenního tepu z Google Health nebo Apple Zdraví." = "Time in zones isn't available yet. It's worked out from all-day heart rate in Google Health or Apple Health.";
+"Čas v zónách zatím není k dispozici. Počítá se z celodenního tepu z Google Health nebo Apple Health." = "Time in zones isn't available yet. It's worked out from all-day heart rate in Google Health or Apple Health.";
 "Aktivní minuty v zónách · tento týden" = "Active zone minutes · this week";
 "Poslední 4 týdny" = "Last 4 weeks";
 "čísla týdnů" = "week numbers";
@@ -840,7 +840,7 @@
 "Zdroj: %@" = "Source: %@";
 "Zdroje dat" = "Data sources";
 "Zdřímnutí" = "Naps";
-"Ze služeb, které připojíš (Apple Zdraví, Google Health, Intervals.icu), a z toho, co zadáš sám." = "The services you connect (Apple Health, Google Health, Intervals.icu) and what you enter yourself.";
+"Ze služeb, které připojíš (Apple Health, Google Health, Intervals.icu), a z toho, co zadáš sám." = "The services you connect (Apple Health, Google Health, Intervals.icu) and what you enter yourself.";
 "Zeptat se" = "Ask";
 "Zepředu" = "Front";
 "Zezadu" = "Back";
@@ -1494,7 +1494,7 @@
 "Zapsat posilovnu" = "Log gym session";
 
 /* Synchronizace (Screens/SyncViews.swift, App/AppleHealthExport.swift) */
-"Apple Zdraví" = "Apple Health";
+"Apple Health" = "Apple Health";
 "Okysličení krve" = "Blood oxygen";
 "Jídlo a kalorie" = "Food and calories";
 "Nic" = "None";
@@ -1516,9 +1516,9 @@
 "zápis váhy" = "logging weight";
 "zápis jídla" = "food logging";
 "Oprávnění Google jsou rozšířená." = "Google permissions are extended.";
-"Do Apple Zdraví jde jen to, co v Aurinu sám zapíšeš." = "Only what you enter in Aurin yourself goes to Apple Health.";
+"Do Apple Health jde jen to, co v Aurinu sám zapíšeš." = "Only what you enter in Aurin yourself goes to Apple Health.";
 "Váhu a jídlo zapsané v Aurinu." = "The weight and food entered in Aurin.";
-"Z Google Health a Apple Zdraví do wellness v Intervals.icu. Co tam už je odjinud, Aurin nepřepíše." = "From Google Health and Apple Health to Intervals.icu wellness. Aurin never overwrites what is already there from elsewhere.";
+"Z Google Health a Apple Health do wellness v Intervals.icu. Co tam už je odjinud, Aurin nepřepíše." = "From Google Health and Apple Health to Intervals.icu wellness. Aurin never overwrites what is already there from elsewhere.";
 "Odesláno do %@ %@" = "Sent to %@ %@";
 "aplikace" = "app";
 "aplikací" = "apps";
@@ -1526,7 +1526,7 @@
 "Odeslání" = "Sending";
 "Odesláno" = "Sent";
 "odešle se" = "will be sent";
-"Aurin nemá povolený zápis tréninků do Apple Zdraví. Povol ho v aplikaci Zdraví → profil → Aplikace → Aurin." = "Aurin isn't allowed to save workouts to Apple Health. Allow it in the Health app → your profile → Apps → Aurin.";
+"Aurin nemá povolený zápis tréninků do Apple Health. Povol ho v aplikaci Zdraví → profil → Aplikace → Aurin." = "Aurin isn't allowed to save workouts to Apple Health. Allow it in the Health app → your profile → Apps → Aurin.";
 
 /* Morning check-in on Today */
 "Jak se dnes cítíš?" = "How do you feel today?";
@@ -1600,7 +1600,7 @@
 "Tréninkové aplikace" = "Training apps";
 "Souhlasím se zpracováním zdravotních dat" = "I agree to the processing of my health data";
 "Zásady" = "Policy";
-"Z Apple Zdraví jsme vzali:" = "Taken from Apple Health:";
+"Z Apple Health jsme vzali:" = "Taken from Apple Health:";
 "Z Google Health jsme vzali:" = "Taken from Google Health:";
 "Narození" = "Born";
 "Rok" = "Year";
@@ -1808,7 +1808,7 @@
 "Prázdný trénink" = "Empty workout";
 "Rychlost" = "Speed";
 "Zahodit trénink?" = "Discard workout?";
-"Trénink zmizí z plánu dne, smažou se zapsané série i trénink uložený do Apple Zdraví." = "The workout leaves the day's plan; the logged sets and the workout saved to Apple Health will be deleted.";
+"Trénink zmizí z plánu dne, smažou se zapsané série i trénink uložený do Apple Health." = "The workout leaves the day's plan; the logged sets and the workout saved to Apple Health will be deleted.";
 "Spárovat se záznamem z hodinek" = "Pair with the watch's record";
 "Trénink smazán" = "Workout deleted";
 "Trénink zahozen" = "Workout discarded";
@@ -2052,7 +2052,7 @@
 "Aktivitu a kondici (kroky, vzdálenost, aktivní energii, tréninky), zdravotní měření (tep, HRV, okysličení krve, dech, VO₂max, váhu, výšku, tělesný tuk), spánek a záznamy jídla." = "Activity and fitness (steps, distance, active energy, workouts), health measurements (heart rate, HRV, blood oxygen, breathing, VO₂max, weight, height, body fat), sleep and food logs.";
 "Jen jídlo a pití, které zapíšeš v Aurinu." = "Only the food and drinks you log in Aurin.";
 "Tréninky, plán, zóny a váhu." = "Workouts, plan, zones and weight.";
-"Tréninky naplánované i odcvičené v Aurinu, kalorický cíl, váhu a denní hodnoty z Apple Zdraví a Google Health." = "Workouts planned and done in Aurin, calorie target, weight and daily values from Apple Health and Google Health.";
+"Tréninky naplánované i odcvičené v Aurinu, kalorický cíl, váhu a denní hodnoty z Apple Health a Google Health." = "Workouts planned and done in Aurin, calorie target, weight and daily values from Apple Health and Google Health.";
 "Spánek, klidový tep, HRV, VO₂max a teplotu z prstenu." = "Sleep, resting heart rate, HRV, VO₂max and temperature from the ring.";
 
 /* Deník, the habit journal (JournalViews.swift, JournalEditor.swift, JournalImpact.swift) */
@@ -2569,7 +2569,7 @@
 "připojeno, zatím neposílá tep" = "connected, no heart rate yet";
 "Teď měří" = "Measuring now";
 "snímač tepu" = "heart rate sensor";
-"přes Apple Zdraví" = "via Apple Health";
+"přes Apple Health" = "via Apple Health";
 "Skrýt trénink" = "Hide workout";
 "Skrýt série" = "Hide sets";
 "Ukázat série" = "Show sets";
@@ -2807,3 +2807,15 @@
 "Otočit fotoaparát" = "Switch camera";
 "Vyber fotku z Fotek." = "Choose a photo from Photos.";
 "Nejlepší série" = "Best sets";
+
+/* Zdroje dat: one page per service (reads and sends) */
+"Aurin posílá" = "Aurin sends";
+"Hotové tréninky" = "Finished workouts";
+"Co v Intervals.icu už je odjinud, Aurin nepřepíše." = "Aurin never overwrites what is already in Intervals.icu from elsewhere.";
+"Jen to, co odcvičíš nebo zapíšeš v Aurinu." = "Only what you do or log in Aurin.";
+"váhu" = "weight";
+"jídlo" = "food";
+"Posílat do Google Health" = "Send to Google Health";
+"Google se na své stránce zeptá, jestli může Aurin do Google Health zapisovat %@." = "Google will ask on its own page whether Aurin may write %@ to Google Health.";
+"Co Aurin čte, povoluješ na stránce Googlu." = "You choose what Aurin reads on Google's page.";
+"Upravit oprávnění Googlu" = "Edit Google permissions";

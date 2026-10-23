@@ -336,7 +336,7 @@ struct LogDrinkIntent: AppIntent {
 }
 
 /// "Zapsat váhu": a weigh-in the way Zdraví → Váha saves it (the outbox
-/// without signal, Apple Health when switched on in Synchronizace). The number
+/// without signal, Apple Health when switched on in Zdroje dat (Aurin posílá)). The number
 /// is in the app's units, kg or lb, like the sheet there.
 struct LogWeightIntent: AppIntent {
     static let title: LocalizedStringResource = "Zapsat váhu"

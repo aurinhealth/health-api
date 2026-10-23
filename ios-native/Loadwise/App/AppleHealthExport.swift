@@ -2,7 +2,7 @@ import Foundation
 import HealthKit
 import Observation
 
-/// Writing to Apple Health (Settings → Synchronizace → Apple Zdraví): done
+/// Writing to Apple Health (Zdroje dat → Apple Health → Aurin posílá): done
 /// workouts logged in Loadwise as HKWorkout, and the chosen health data the
 /// app itself has: the weight typed in, the day's food (energy and macros)
 /// and water. iOS asks for write permission only for the types switched on.
@@ -50,7 +50,7 @@ final class AppleHealthExport {
         if let data = try? JSONEncoder().encode(next) { UserDefaults.standard.set(data, forKey: Self.prefsKey) }
     }
 
-    /// From Synchronizace → Google Health: what really goes there (connected,
+    /// From Zdroje dat → Google Health → Aurin posílá: what really goes there (connected,
     /// switched on and with the permission to write it).
     func setGoogle(_ google: SyncDestination?) {
         var types = Set<String>()
@@ -112,7 +112,7 @@ final class AppleHealthExport {
     /// A done workout. nil when it went in, else the message for the sheet.
     func saveWorkout(_ activity: ActivityToSync) async -> String? {
         guard isAvailable else { return L10n.tr("Apple Health na tomhle zařízení není.") }
-        guard allowed(HKObjectType.workoutType()) else { return L10n.tr("Aurin nemá povolený zápis tréninků do Apple Zdraví. Povol ho v aplikaci Zdraví → profil → Aplikace → Aurin.") }
+        guard allowed(HKObjectType.workoutType()) else { return L10n.tr("Aurin nemá povolený zápis tréninků do Apple Health. Povol ho v aplikaci Zdraví → profil → Aplikace → Aurin.") }
         let end = (activity.start ?? Self.noon(activity.date)).addingTimeInterval(TimeInterval(activity.minutes * 60))
         let start = end.addingTimeInterval(-TimeInterval(activity.minutes * 60))
         let configuration = HKWorkoutConfiguration()

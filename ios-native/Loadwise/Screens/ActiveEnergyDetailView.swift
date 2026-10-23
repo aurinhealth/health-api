@@ -12,7 +12,7 @@ struct ActiveEnergyDetailView: View {
             if let active = training.activeCalories {
                 ActiveEnergyContent(active: active, today: training.date, calendar: model.calendar)
             } else {
-                Text("Aktivní výdej zatím není k dispozici. Bere se z Google Health nebo Apple Zdraví.")
+                Text("Aktivní výdej zatím není k dispozici. Bere se z Google Health nebo Apple Health.")
                     .font(Typo.body).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 60)

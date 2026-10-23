@@ -312,7 +312,7 @@ final class APIClient: @unchecked Sendable {
     }
 
     /// A session typed in: sport ride, run or gym; done (past) or planned (future).
-    /// A done one comes back with where it was sent (Synchronizace).
+    /// A done one comes back with where it was sent (Aurin posílá).
     @discardableResult
     func manualWorkout(name: String, date: String, sport: String, minutes: Int, completed: Bool, rpe: Int?, notes: String,
                        start: Date? = nil, heart: WindowHeartRate? = nil, pairWith: String? = nil) async throws -> ManualWorkoutResult {

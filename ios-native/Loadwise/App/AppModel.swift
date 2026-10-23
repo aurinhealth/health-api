@@ -103,7 +103,7 @@ final class AppModel {
     private(set) var outbox: [OutboxItem] = []
     /// A waiting write the server turned down, shown until tapped away.
     var outboxNote: String?
-    /// A done activity just sent to the apps chosen in Synchronizace: the
+    /// A done activity just sent to the apps chosen in Zdroje dat (Aurin posílá): the
     /// toast "Odesláno do 2 aplikací" and its sheet (SyncViews.swift).
     var syncReport: SyncReport?
     /// A deleted workout waiting a few seconds for "Zpět" (RootView): the
@@ -750,7 +750,7 @@ final class AppModel {
             food = snapshot
             foodBase = data
             settlingFood.removeAll { settled.contains($0.id) }
-            // The day's food and water to Apple Health when switched on in Synchronizace.
+            // The day's food and water to Apple Health when switched on in Zdroje dat (Aurin posílá).
             Task { await AppleHealthExport.shared.saveFoodDay(snapshot) }
             fetched[.food] = (Date(), shownDay)
             dataRevision += 1
@@ -984,7 +984,7 @@ final class AppModel {
         guard !demo else { return true }
         let date = Self.localDate(Date())
         let item = Self.weightItem(kg: kg, date: date)
-        // Apple Health gets it too when weight is switched on in Synchronizace.
+        // Apple Health gets it too when weight is switched on in Zdroje dat (Aurin posílá).
         Task { await AppleHealthExport.shared.saveWeight(kg: kg, date: date) }
         let sent = try await deliver(item)
         if sent && reload {
@@ -1004,7 +1004,7 @@ final class AppModel {
     // MARK: - Synchronizace
 
     /// The server destinations a done activity goes to (Google Health,
-    /// Intervals.icu), as last seen in Synchronizace: the toast lists
+    /// Intervals.icu), as last seen in Zdroje dat (Aurin posílá): the toast lists
     /// them as "odešle se" while there is no signal.
     static let activityDestinationsKey = "sync.activityDestinations"
 
@@ -1021,7 +1021,7 @@ final class AppModel {
     }
 
     /// A done activity (a gym session, a workout typed in) to the apps chosen
-    /// in Synchronizace; `sends` when the server already sent it (a manual
+    /// in Zdroje dat (Aurin posílá); `sends` when the server already sent it (a manual
     /// workout). Shows the toast when it went anywhere.
     /// `toApple` false when the workout is in Apple Health already.
     func shareActivity(_ activity: ActivityToSync, sends: [SyncSend]? = nil, apple toApple: Bool = true) async {

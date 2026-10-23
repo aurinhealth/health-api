@@ -111,7 +111,7 @@ struct AppleHealthSettings: View {
                 }
             }
             VStack(alignment: .leading, spacing: 10) {
-                Text("Oprávnění").font(.caption.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted).padding(.horizontal, 4)
+                Text("Aurin čte").font(.caption.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted).padding(.horizontal, 4)
                 AppleHealthCategoryList(chosen: $chosen)
                     .disabled(health.syncing || store.demo)
             }
@@ -121,7 +121,7 @@ struct AppleHealthSettings: View {
                     if health.enabled { health.disconnect(); Task { await store.load() } }
                     return
                 }
-                // Switched off on this iPhone (another sign-in, Synchronizace): a switch turned
+                // Switched off on this iPhone (another sign-in, Aurin posílá): a switch turned
                 // here means reading again, so it asks iOS and starts, instead of being forgotten.
                 if !health.enabled {
                     Task { _ = await health.connect(value, api: model.api); await store.load() }

@@ -126,7 +126,14 @@ final class SettingsStore {
         guard connections.contains(where: { $0.connected == true && $0.id != "apple" }) || connections.isEmpty else { return }
         do {
             try await api.startSync()
-            sync = try? await api.syncStatus()
+            // The server works on after answering: wait until it is done (at most a minute),
+            // so the time and the errors shown are the ones of this sync.
+            for _ in 0..<20 {
+                sync = try? await api.syncStatus()
+                guard sync?.status == "running" else { break }
+                try? await Task.sleep(for: .seconds(3))
+            }
+            if let response = try? await api.connections() { connections = response.providers }
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

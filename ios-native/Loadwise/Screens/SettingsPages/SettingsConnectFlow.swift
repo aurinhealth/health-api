@@ -24,10 +24,11 @@ final class SourceActions {
 
     /// "dnes 13:29" or "8. 10. 13:29" from the server's ISO or SQLite time.
     static func when(_ text: String) -> String? {
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = iso.date(from: text) ?? ISO8601DateFormatter().date(from: text) ?? sqlite.date(from: text)
-        guard let date else { return nil }
+        guard let parsed = date(text) else { return nil }
+        return when(parsed)
+    }
+
+    static func when(_ date: Date) -> String {
         // The time of day in the phone's 12/24-hour format.
         let time = ClockText.format(date)
         if Calendar.current.isDateInToday(date) { return L10n.tr("dnes") + " " + time }
@@ -35,6 +36,13 @@ final class SourceActions {
         out.locale = Fmt.locale
         out.dateFormat = L10n.isEnglish ? "MMM d," : "d. M."
         return out.string(from: date) + " " + time
+    }
+
+    /// An ISO time from the server, with or without fractions, or SQLite's.
+    static func date(_ text: String) -> Date? {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return iso.date(from: text) ?? ISO8601DateFormatter().date(from: text) ?? sqlite.date(from: text)
     }
 
     /// "2026-10-08 12:02:00" (SQLite CURRENT_TIMESTAMP, UTC).
@@ -134,7 +142,7 @@ struct ServiceConnectSheet: View {
         case "intervals":
             return Service(name: "Intervals.icu",
                            reads: L10n.tr("Tréninky, plán, zóny a váhu."),
-                           writes: L10n.tr("Tréninky naplánované i odcvičené v Aurinu, kalorický cíl, váhu a denní hodnoty z Apple Zdraví a Google Health."))
+                           writes: L10n.tr("Tréninky naplánované i odcvičené v Aurinu, kalorický cíl, váhu a denní hodnoty z Apple Health a Google Health."))
         case "whoop":
             return Service(name: "WHOOP",
                            reads: L10n.tr("Spánek a jeho fáze, klidový tep, HRV, dech a okysličení krve."),
