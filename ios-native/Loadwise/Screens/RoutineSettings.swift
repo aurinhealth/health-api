@@ -128,13 +128,13 @@ struct HeartRateSensorView: View {
             // During a workout: what the heart rate on top of it comes from.
             if live.running, let bpm = live.heartRate {
                 let fromSensor = sensor.liveBpm != nil
-                let source = (fromSensor ? sensor.savedName : live.heartSource) ?? L10n.tr("Apple Zdraví")
+                let source = (fromSensor ? sensor.savedName : live.heartSource) ?? L10n.tr("Apple Health")
                 SettingsGroup(title: "Teď měří") {
                     HStack(spacing: 12) {
                         SettingsIcon(systemImage: Self.icon(for: source, sensor: fromSensor), color: fromSensor ? Palette.rust : Palette.ink)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(source).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
-                            Text(fromSensor ? "snímač tepu" : "přes Apple Zdraví")
+                            Text(fromSensor ? "snímač tepu" : "přes Apple Health")
                                 .font(Typo.caption).foregroundStyle(Palette.muted)
                         }
                         Spacer(minLength: 8)

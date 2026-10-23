@@ -1432,7 +1432,7 @@ struct ManualWorkoutSheet: View {
                 dismiss()
                 return
             }
-            // Done: to the apps chosen in Synchronizace (the server sent its part already).
+            // Done: to the apps chosen in Zdroje dat (Aurin posílá) (the server sent its part already).
             let activity = ActivityToSync(key: result.activityKey ?? "manual:" + UUID().uuidString, sport: sport, name: title, date: date,
                                           start: start, minutes: minutes, notes: "", rpe: effort)
             await model.shareActivity(activity, sends: result.sends ?? [])

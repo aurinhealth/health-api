@@ -134,7 +134,7 @@ struct ServiceConnectSheet: View {
         case "intervals":
             return Service(name: "Intervals.icu",
                            reads: L10n.tr("Tréninky, plán, zóny a váhu."),
-                           writes: L10n.tr("Tréninky naplánované i odcvičené v Aurinu, kalorický cíl, váhu a denní hodnoty z Apple Zdraví a Google Health."))
+                           writes: L10n.tr("Tréninky naplánované i odcvičené v Aurinu, kalorický cíl, váhu a denní hodnoty z Apple Health a Google Health."))
         case "whoop":
             return Service(name: "WHOOP",
                            reads: L10n.tr("Spánek a jeho fáze, klidový tep, HRV, dech a okysličení krve."),

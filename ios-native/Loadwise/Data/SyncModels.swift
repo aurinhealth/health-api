@@ -105,7 +105,7 @@ enum SyncApp {
 
     static func name(_ id: String) -> String {
         switch id {
-        case "apple": return L10n.tr("Apple Zdraví")
+        case "apple": return L10n.tr("Apple Health")
         case "google": return "Google Health"
         case "intervals": return "Intervals.icu"
         case "wahoo": return "Wahoo"

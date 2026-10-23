@@ -187,7 +187,7 @@ test('the support page follows the app’s Settings and every page has the foote
 });
 
 test('the privacy policy says what Aurin writes to Apple Health, in both languages',async()=>{
-  assert.match(await privacyPage().text(),/<li>Writing to Apple Health, only if you turn it on \(Settings → Sync → Apple Health\)/);
+  assert.match(await privacyPage().text(),/<li>Writing to Apple Health, only if you turn it on \(Settings → Data sources → Apple Health\)/);
   assert.match(await privacyPage(new Request('https://aurin.health/privacy?lang=cs')).text(),/<li>Zápis do Apple Health, jen když ho zapneš/);
 });
 

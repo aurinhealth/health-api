@@ -1,10 +1,11 @@
 import SwiftUI
 
-// Settings → Synchronizace: where Loadwise sends what the user records.
-// A list of the apps it can send to (Apple Zdraví, Google Health,
-// Intervals.icu, Wahoo), each with its page: Posílat (planned workouts, done
-// activities, health data) and Stahovat (done activities). After a done
-// activity a toast says where it went; its sheet shows each app's state.
+// Where Aurin sends what the user records: Apple Health, Google Health,
+// Intervals.icu and Wahoo. Each service's page in Zdroje dat
+// (IntegrationDetailView) shows "Aurin posílá" (planned workouts, done
+// activities, health data) and the download of done activities under "Aurin
+// čte". After a done activity a toast says where it went; its sheet shows
+// each app's state.
 // Server side: src/sync-destinations.js; Apple Health: AppleHealthExport.swift.
 
 // MARK: - The data behind the screens
@@ -135,219 +136,118 @@ struct SyncAppIcon: View {
     }
 }
 
-// MARK: - Settings → Synchronizace
+// MARK: - A service's page in Zdroje dat: what Aurin reads and sends
 
-struct SyncSettingsView: View {
-    @Environment(AppModel.self) private var model
-    let store: SettingsStore
-    @State private var sync: SyncSettingsStore?
-
-    var body: some View {
-        SettingsPage(title: "Synchronizace") {
-            if let sync {
-                if let message = sync.message { Text(message).font(Typo.small).foregroundStyle(Palette.rust) }
-                SettingsGroup {
-                    ForEach(Array(sync.destinations.enumerated()), id: \.element.id) { index, destination in
-                        if index > 0 { SettingsDivider() }
-                        NavigationLink {
-                            SyncDestinationView(id: destination.id, sync: sync, store: store)
-                        } label: {
-                            SyncAppRow(id: destination.id, connected: SyncSettingsView.isConnected(destination))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            } else {
-                ProgressView().frame(maxWidth: .infinity)
-            }
-        }
-        .task {
-            if sync == nil {
-                let s = SyncSettingsStore(api: model.api, demo: model.demo)
-                sync = s
-                await s.load()
-            }
-        }
-    }
-
-    /// "Připojeno": the server has the connection; Apple Health when something is written or read.
-    @MainActor
-    static func isConnected(_ destination: SyncDestination) -> Bool {
-        if destination.id == "apple" {
-            return AppleHealthExport.shared.isOn || (AppleHealth.shared.enabled && AppleHealth.shared.categories.contains(.workouts))
-        }
-        return destination.connected == true
-    }
-}
-
-/// A row of the list: the tile, the name and "Připojeno" / "Připojit".
-struct SyncAppRow: View {
+/// "Tréninky" under Aurin čte: the done activities downloaded from the service.
+/// Apple Health's is the Tréninky switch of its reading, so it has none here.
+struct SyncPullToggle: View {
     let id: String
-    let connected: Bool
+    let sync: SyncSettingsStore
 
     var body: some View {
-        HStack(spacing: 12) {
-            SyncAppIcon(id: id)
-            Text(verbatim: SyncApp.name(id)).font(.body).foregroundStyle(Palette.ink)
-            Spacer(minLength: 8)
-            Text(connected ? "Připojeno" : "Připojit")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(connected ? Palette.green : Palette.blue)
-            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
-                .accessibilityHidden(true)
+        if id != "apple", let destination = sync.destination(id), destination.supports.pullActivities {
+            SettingsToggle(title: "Tréninky", isOn: SyncSendGroup.binding(id, \.pullActivities, sync: sync))
+                .disabled(sync.working == id)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .frame(minHeight: 50)
-        .contentShape(Rectangle())
     }
 }
 
-// MARK: - One app
-
-struct SyncDestinationView: View {
+/// "Aurin posílá": planned workouts, done workouts and health data. For
+/// Google a switch turned on without its write permission asks to go to
+/// Google's page right away (google-extra).
+struct SyncSendGroup: View {
     @Environment(AppModel.self) private var model
     let id: String
     let sync: SyncSettingsStore
     let store: SettingsStore
+    @State private var asking = false
     @State private var connecting = false
     @State private var note: String?
 
     private var destination: SyncDestination? { sync.destination(id) }
 
     var body: some View {
-        SettingsPage(title: SyncApp.name(id)) {
-            HStack(spacing: 14) {
-                SyncAppIcon(id: id, size: 56)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(verbatim: SyncApp.name(id)).font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
-                    if let destination {
-                        let on = SyncSettingsView.isConnected(destination)
-                        Text(on ? "Připojeno" : "Nepřipojeno").font(Typo.small).foregroundStyle(on ? Palette.green : Palette.muted)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 26) { content }
+            .sheet(isPresented: $asking) {
+                GoogleWriteSheet(missing: destination?.missingScopes ?? [], busy: connecting) { await extendGoogle() }
             }
-            if let message = sync.message { Text(message).font(Typo.small).foregroundStyle(Palette.rust) }
-            if let note { Text(note).font(Typo.small).foregroundStyle(Palette.muted) }
+    }
 
-            if let destination {
-                if destination.connected == false {
-                    connect(destination)
-                } else {
-                    if let missing = destination.missingScopes, !missing.isEmpty { googlePermission(missing) }
-                    sections(destination)
+    @ViewBuilder
+    private var content: some View {
+        if let destination, destination.supports.pushPlanned || destination.supports.pushActivities || destination.supports.health {
+            let s = destination.supports
+            let missing = destination.missingScopes ?? []
+            SettingsGroup(title: "Aurin posílá", footer: footer) {
+                if s.pushPlanned {
+                    SettingsToggle(title: "Plánované tréninky", isOn: binding(\.pushPlanned))
+                }
+                if s.pushActivities {
+                    if s.pushPlanned { SettingsDivider() }
+                    SettingsToggle(title: "Hotové tréninky", isOn: binding(\.pushActivities))
+                }
+                if s.health {
+                    if s.pushActivities || s.pushPlanned { SettingsDivider() }
+                    NavigationLink {
+                        SyncHealthView(id: id, sync: sync, saved: { await ask() })
+                    } label: {
+                        SettingsRow(title: "Zdravotní data", value: SyncApp.healthValue(destination.prefs.health, of: destination.healthTypes))
+                    }
+                    .buttonStyle(.plain)
+                }
+                // "Teď ne" on Google's question: the switch stays, so does the way to allow it.
+                if !missing.isEmpty {
+                    SettingsDivider()
+                    Button { asking = true } label: {
+                        SettingsRow(icon: SettingsIcon(systemImage: "exclamationmark.circle.fill", color: Palette.rust),
+                                    title: "Google zatím nepovolil zápis", subtitle: Self.scopeList(missing))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
+            .disabled(sync.working == id)
+            if let note { Text(note).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
+            if let message = sync.message { Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true) }
         }
     }
 
-    // MARK: Sections
-
-    @ViewBuilder
-    private func sections(_ destination: SyncDestination) -> some View {
-        let s = destination.supports
-        SettingsGroup(title: "Posílat") {
-            if s.pushPlanned {
-                SettingsToggle(title: "Plánované tréninky", isOn: binding(\.pushPlanned))
-                SettingsDivider()
-            }
-            if s.pushActivities {
-                SettingsToggle(title: "Hotové aktivity", isOn: binding(\.pushActivities))
-            }
-            if s.health {
-                if s.pushActivities || s.pushPlanned { SettingsDivider() }
-                NavigationLink {
-                    SyncHealthView(id: id, sync: sync)
-                } label: {
-                    SettingsRow(title: "Zdravotní data", value: SyncApp.healthValue(destination.prefs.health, of: destination.healthTypes))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .disabled(sync.working == id)
-        if s.pullActivities {
-            SettingsGroup(title: "Stahovat") {
-                if id == "apple" {
-                    SettingsToggle(title: "Hotové aktivity", isOn: applePull)
-                } else {
-                    SettingsToggle(title: "Hotové aktivity", isOn: binding(\.pullActivities))
-                }
-            }
+    private var footer: String? {
+        switch id {
+        case "intervals": return L10n.tr("Co v Intervals.icu už je odjinud, Aurin nepřepíše.")
+        default: return L10n.tr("Jen to, co odcvičíš nebo zapíšeš v Aurinu.")
         }
     }
 
     private func binding(_ key: WritableKeyPath<SyncPrefs, Bool>) -> Binding<Bool> {
+        Self.binding(id, key, sync: sync) { await ask() }
+    }
+
+    static func binding(_ id: String, _ key: WritableKeyPath<SyncPrefs, Bool>, sync: SyncSettingsStore, saved: @escaping () async -> Void = {}) -> Binding<Bool> {
         Binding(get: { sync.destination(id)?.prefs[keyPath: key] ?? false },
                 set: { value in
                     guard var prefs = sync.destination(id)?.prefs else { return }
                     prefs[keyPath: key] = value
-                    Task { [prefs] in await sync.save(id, prefs) }
-                })
-    }
-
-    /// Apple Health's download is the HealthKit reading of workouts (Zdroje dat → Apple Health).
-    private var applePull: Binding<Bool> {
-        Binding(get: { AppleHealth.shared.enabled && AppleHealth.shared.categories.contains(.workouts) },
-                set: { value in
-                    Task {
-                        let health = AppleHealth.shared
-                        if value {
-                            if health.enabled {
-                                await health.update(health.categories.union([.workouts]), api: model.api)
-                            } else {
-                                _ = await health.connect([.workouts], api: model.api)
-                            }
-                        } else {
-                            let rest = health.categories.subtracting([.workouts])
-                            if rest.isEmpty || !health.enabled { health.disconnect() } else { await health.update(rest, api: model.api) }
-                        }
-                        note = health.message
+                    Task { [prefs] in
+                        await sync.save(id, prefs)
+                        if value { await saved() }
                     }
                 })
     }
 
-    // MARK: Not connected
-
-    @ViewBuilder
-    private func connect(_ destination: SyncDestination) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(L10n.f("%@ zatím není připojené.", SyncApp.name(id))).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-            Text("Připoj ho a vyber, co do něj Aurin posílá.")
-                .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-            NavigationLink { SourcesSettingsView(store: store) } label: {
-                Text("Připojit ve Zdrojích dat").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                    .frame(maxWidth: .infinity).frame(height: 50)
-                    .background(Palette.button, in: Capsule())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    /// After a switch turned on: Google's question when a write permission is missing.
+    private func ask() async {
+        if id == "google", !(destination?.missingScopes ?? []).isEmpty { asking = true }
     }
 
-    // MARK: Google permissions
-
-    private func googlePermission(_ missing: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Google zatím nepovolil zápis").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-            Text(missing.map(Self.scopeName).joined(separator: ", "))
-                .font(Typo.small).foregroundStyle(Palette.muted)
-            Text("Google se zeptá na zápis váhy a tréninků a na čtení data narození a tras aktivit.")
-                .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-            PrimaryButton(title: L10n.tr("Rozšířit oprávnění Google"), busy: connecting) { Task { await extendGoogle() } }
-                .disabled(connecting)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    static func scopeList(_ missing: [String]) -> String {
+        missing.map(scopeName).joined(separator: ", ")
     }
 
     static func scopeName(_ scope: String) -> String {
         switch scope {
-        case "activityWrite": return L10n.tr("zápis tréninků")
-        case "weightWrite": return L10n.tr("zápis váhy")
-        case "nutritionWrite": return L10n.tr("zápis jídla")
+        case "activityWrite": return L10n.tr("tréninky")
+        case "weightWrite": return L10n.tr("váhu")
+        case "nutritionWrite": return L10n.tr("jídlo")
         default: return scope
         }
     }
@@ -358,6 +258,7 @@ struct SyncDestinationView: View {
         do {
             guard let event = try await model.connect(provider: "google-extra") else { return }
             note = event == "google" ? L10n.tr("Oprávnění Google jsou rozšířená.") : L10n.tr("Připojení se nedokončilo.")
+            asking = false
             await sync.load()
             await store.load()
         } catch {
@@ -366,11 +267,42 @@ struct SyncDestinationView: View {
     }
 }
 
+/// "Posílat do Google Health": Google asks on its own page for the writing.
+struct GoogleWriteSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let missing: [String]
+    let busy: Bool
+    let go: () async -> Void
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                IntegrationIcon(id: "aurin", size: 52)
+                Image(systemName: "arrow.right").font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.faint)
+                IntegrationIcon(id: "google", size: 52)
+            }
+            .padding(.top, 8)
+            Text("Posílat do Google Health").font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+                .multilineTextAlignment(.center)
+            Text(verbatim: L10n.f("Google se na své stránce zeptá, jestli může Aurin do Google Health zapisovat %@.", SyncSendGroup.scopeList(missing)))
+                .font(Typo.body).foregroundStyle(Palette.secondary).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            PrimaryButton(title: L10n.tr("Pokračovat na Google"), busy: busy) { Task { await go() } }
+                .disabled(busy)
+            Button("Teď ne") { dismiss() }.font(.subheadline.weight(.medium)).foregroundStyle(Palette.muted)
+        }
+        .padding(24)
+        .presentationDetents([.medium])
+        .presentationBackground(Palette.settingsBackground)
+    }
+}
+
 // MARK: - Zdravotní data
 
 struct SyncHealthView: View {
     let id: String
     let sync: SyncSettingsStore
+    var saved: () async -> Void = {}
 
     private var destination: SyncDestination? { sync.destination(id) }
 
@@ -405,9 +337,9 @@ struct SyncHealthView: View {
 
     private var footer: String? {
         switch id {
-        case "apple": return "Do Apple Zdraví jde jen to, co v Aurinu sám zapíšeš."
+        case "apple": return "Do Apple Health jde jen to, co v Aurinu sám zapíšeš."
         case "google": return "Váhu a jídlo zapsané v Aurinu."
-        case "intervals": return "Z Google Health a Apple Zdraví do wellness v Intervals.icu. Co tam už je odjinud, Aurin nepřepíše."
+        case "intervals": return "Z Google Health a Apple Health do wellness v Intervals.icu. Co tam už je odjinud, Aurin nepřepíše."
         default: return nil
         }
     }
@@ -425,7 +357,10 @@ struct SyncHealthView: View {
     private func set(_ health: SyncHealth) {
         guard var prefs = destination?.prefs else { return }
         prefs.health = health
-        Task { [prefs] in await sync.save(id, prefs) }
+        Task { [prefs] in
+            await sync.save(id, prefs)
+            if health.any { await saved() }
+        }
     }
 }
 

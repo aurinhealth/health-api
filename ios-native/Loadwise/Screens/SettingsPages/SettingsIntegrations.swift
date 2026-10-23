@@ -91,7 +91,8 @@ struct IntegrationIcon: View {
     }
 }
 
-/// "Spravovat": the state of one connection, its permissions, sync and disconnect.
+/// One service's page: what Aurin reads, what it sends, its permissions and
+/// sync, and disconnecting, all in one place.
 struct IntegrationDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -100,14 +101,15 @@ struct IntegrationDetailView: View {
     let actions: SourceActions
     @State private var flow = ConnectFlowState()
     @State private var syncing = false
+    @State private var sync: SyncSettingsStore?
 
     /// The live state after a reconnect or a sync.
     private var current: ConnectionsResponse.Provider { store.connections.first { $0.id == provider.id } ?? provider }
 
-    /// Google Health's permissions (src/google-scopes.js HEALTH_PERMISSIONS).
+    /// What Aurin reads from Google Health (src/google-scopes.js HEALTH_PERMISSIONS);
+    /// writing food is under Aurin posílá.
     static let googlePermissions: [(id: String, title: String)] = [
-        ("activity", "Aktivita a tréninky"), ("metrics", "Zdravotní měření"), ("sleep", "Spánek"),
-        ("nutritionRead", "Čtení jídla"), ("nutritionWrite", "Zápis jídla")
+        ("activity", "Aktivita a tréninky"), ("metrics", "Zdravotní měření"), ("sleep", "Spánek"), ("nutritionRead", "Jídlo")
     ]
 
     var body: some View {
@@ -116,75 +118,49 @@ struct IntegrationDetailView: View {
                 IntegrationIcon(id: current.id, size: 56)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(verbatim: current.name ?? current.id).font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
-                    Text(current.connected == true ? (current.problemText ?? L10n.tr("připojeno")) : L10n.tr("nepřipojeno"))
-                        .font(Typo.small).foregroundStyle(current.needsAttention ? Palette.rust : Palette.green)
+                    Text(verbatim: state).font(Typo.small).foregroundStyle(current.needsAttention ? Palette.rust : Palette.green)
                 }
             }
 
-            SettingsGroup(title: "Synchronizace") {
-                if let at = current.lastSuccessAt.flatMap(SourceActions.when) {
-                    SettingsRow(title: "Naposledy v pořádku", value: at, chevron: false)
-                    SettingsDivider()
-                }
-                if let error = current.lastError, current.needsReconnect == true {
-                    SettingsRow(title: "Poslední chyba", subtitle: error, chevron: false)
-                    SettingsDivider()
-                }
-                Button {
-                    Task { syncing = true; await store.syncNow(); await store.load(); syncing = false }
-                } label: {
-                    HStack {
-                        Text(syncing ? "Synchronizuji…" : "Synchronizovat znovu").font(.body).foregroundStyle(Palette.ink)
-                        Spacer()
-                        if syncing { ProgressView() } else { Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(Palette.faint) }
+            reads
+
+            if let sync { SyncSendGroup(id: current.id, sync: sync, store: store) }
+
+            if current.id != "apple" {
+                SettingsGroup {
+                    if let error = current.lastError, current.needsReconnect == true {
+                        SettingsRow(title: "Poslední chyba", subtitle: error, chevron: false)
+                        SettingsDivider()
                     }
-                    .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(syncing || store.demo)
-            }
-
-            if let metrics = current.metrics, !metrics.isEmpty {
-                SettingsGroup(title: "Co odsud bereme") {
-                    ForEach(Array(metrics.enumerated()), id: \.offset) { index, metric in
-                        if index > 0 { SettingsDivider() }
-                        SettingsRow(title: metric, chevron: false)
-                    }
-                }
-            }
-
-            if current.id == "google" {
-                let missing = Set((current.missingPermissions ?? []).compactMap(\.string))
-                SettingsGroup(title: "Oprávnění", footer: "Oprávnění se mění na stránce Googlu: zaškrtni, co má Aurin číst a zapisovat.") {
-                    ForEach(Array(Self.googlePermissions.enumerated()), id: \.offset) { index, permission in
-                        if index > 0 { SettingsDivider() }
-                        HStack {
-                            Text(permission.title).font(.body).foregroundStyle(Palette.ink)
-                            Spacer()
-                            Image(systemName: missing.contains(permission.id) ? "xmark.circle" : "checkmark.circle.fill")
-                                .foregroundStyle(missing.contains(permission.id) ? Palette.rust : Palette.green)
-                                .accessibilityLabel(missing.contains(permission.id) ? L10n.tr("nepovoleno") : L10n.tr("povoleno"))
+                    if current.id == "google" {
+                        let missing = !(current.missingPermissions ?? []).isEmpty
+                        Button { flow.start("google") } label: {
+                            SettingsRow(title: missing ? "Povolit chybějící" : "Upravit oprávnění Googlu", chevron: false, titleColor: Palette.blue)
                         }
-                        .padding(.horizontal, 16).frame(minHeight: 46)
+                        .buttonStyle(.plain)
+                        .disabled(actions.working != nil || store.demo)
+                        SettingsDivider()
+                    } else if current.id == "intervals" {
+                        Button { flow.start("intervals") } label: {
+                            SettingsRow(title: "Připojit znovu", chevron: false, titleColor: Palette.blue)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(actions.working != nil || store.demo)
+                        SettingsDivider()
                     }
-                    SettingsDivider()
-                    Button { flow.start("google") } label: {
-                        SettingsRow(icon: SettingsIcon(systemImage: "checklist", color: Palette.blue),
-                                    title: missing.isEmpty ? "Upravit oprávnění" : "Povolit chybějící", chevron: false)
+                    Button {
+                        Task { syncing = true; await store.syncNow(); await store.load(); syncing = false }
+                    } label: {
+                        HStack {
+                            Text(syncing ? "Synchronizuji…" : "Synchronizovat znovu").font(.body).foregroundStyle(Palette.ink)
+                            Spacer()
+                            if syncing { ProgressView() } else { Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(Palette.faint) }
+                        }
+                        .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(actions.working != nil || store.demo)
+                    .disabled(syncing || store.demo)
                 }
-            } else if current.id == "apple" {
-                AppleHealthSettings(store: store)
-            } else if current.id == "intervals" {
-                SettingsGroup(title: "Přístup") {
-                    Button { flow.start("intervals") } label: {
-                        SettingsRow(icon: SettingsIcon(systemImage: "link", color: Palette.rust), title: "Připojit znovu", chevron: false)
-                    }
-                    .buttonStyle(.plain)
-                }
-                .disabled(actions.working != nil || store.demo)
             }
 
             SettingsGroup {
@@ -200,6 +176,64 @@ struct IntegrationDetailView: View {
             }
         }
         .connectFlow($flow, actions: actions, store: store, disconnected: { dismiss() })
+        .task {
+            // The services Aurin also sends to (src/sync-destinations.js DESTINATIONS).
+            guard sync == nil, SyncApp.order.contains(current.id) else { return }
+            let s = SyncSettingsStore(api: model.api, demo: model.demo)
+            sync = s
+            await s.load()
+        }
+    }
+
+    /// "propojeno · před 2 min", or what is wrong.
+    private var state: String {
+        guard current.connected == true else { return L10n.tr("nepřipojeno") }
+        if let problem = current.problemText { return problem }
+        if let at = current.lastSuccessAt.flatMap(SourceActions.when) { return L10n.tr("propojeno") + " · " + at }
+        return L10n.tr("propojeno")
+    }
+
+    /// "Aurin čte": Google's permissions, Apple Health's switches, or what the service gives.
+    @ViewBuilder
+    private var reads: some View {
+        if current.id == "google" {
+            let missing = Set((current.missingPermissions ?? []).compactMap(\.string))
+            SettingsGroup(title: "Aurin čte", footer: L10n.tr("Co Aurin čte, povoluješ na stránce Googlu.")) {
+                ForEach(Array(Self.googlePermissions.enumerated()), id: \.offset) { index, permission in
+                    if index > 0 { SettingsDivider() }
+                    HStack {
+                        Text(permission.title).font(.body).foregroundStyle(Palette.ink)
+                        Spacer()
+                        Image(systemName: missing.contains(permission.id) ? "xmark.circle" : "checkmark")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(missing.contains(permission.id) ? Palette.rust : Palette.green)
+                            .accessibilityLabel(missing.contains(permission.id) ? L10n.tr("nepovoleno") : L10n.tr("povoleno"))
+                    }
+                    .padding(.horizontal, 16).frame(minHeight: 50)
+                }
+                if let sync, sync.destination("google")?.supports.pullActivities == true {
+                    SettingsDivider()
+                    SyncPullToggle(id: "google", sync: sync)
+                }
+            }
+        } else if current.id == "apple" {
+            AppleHealthSettings(store: store)
+        } else {
+            let metrics = current.metrics ?? []
+            let pull = sync?.destination(current.id)?.supports.pullActivities == true
+            if !metrics.isEmpty || pull {
+                SettingsGroup(title: "Aurin čte") {
+                    if let sync, pull {
+                        SyncPullToggle(id: current.id, sync: sync)
+                        if !metrics.isEmpty { SettingsDivider() }
+                    }
+                    ForEach(Array(metrics.enumerated()), id: \.offset) { index, metric in
+                        if index > 0 { SettingsDivider() }
+                        SettingsRow(title: metric, chevron: false)
+                    }
+                }
+            }
+        }
     }
 }
 

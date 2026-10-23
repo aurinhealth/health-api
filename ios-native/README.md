@@ -52,13 +52,13 @@ web app (`/app/api/today` for the Today screen), so the numbers match.
 - Settings (the "P" on Today), a closed menu with pages:
   - Profil: sex, age, height, heart rate, activity and the weight goal;
   - Cíle: main sport, weekly hours and the main event;
-  - Zdroje dat: connected sources and "Synchronizovat teď"; Apple Health
-    (HealthKit) with the areas it may read (App/AppleHealth.swift);
+  - Zdroje dat: connected sources and "Synchronizovat vše"; each service has
+    one page with what Aurin reads (Apple Health: the HealthKit areas,
+    App/AppleHealth.swift) and what it sends (Apple Health, Google Health,
+    Intervals.icu, Wahoo: planned workouts, done activities and the chosen
+    health data), its permissions, sync and Odpojit; after a done activity a
+    toast says where it went (Screens/SyncViews.swift, App/AppleHealthExport.swift);
   - Tréninkové zóny: run and bike separately, thresholds, presets and zones;
-  - Synchronizace: where Loadwise sends data (Apple Zdraví, Google Health,
-    Intervals.icu, Wahoo): planned workouts, done activities and the chosen
-    health data; after a done activity a toast says where it went
-    (Screens/SyncViews.swift, App/AppleHealthExport.swift);
   - Vzhled (automatic, light, dark), Jednotky, signing out.
 - "Prohlédnout ukázku" on the sign-in screen shows sample data without an
   account.

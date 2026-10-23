@@ -1,7 +1,7 @@
 import Foundation
 import HealthKit
 
-/// What the setup's "O tobě" page takes from Apple Health once "Apple Zdraví"
+/// What the setup's "O tobě" page takes from Apple Health once "Apple Health"
 /// is on in "Odkud brát data": sex and the year of birth (characteristics)
 /// and the latest height and weight. Read on the phone only; the profile the
 /// user confirms goes to the server as his own values.

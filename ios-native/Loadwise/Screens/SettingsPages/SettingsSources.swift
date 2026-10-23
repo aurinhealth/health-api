@@ -4,8 +4,8 @@ import UserNotifications
 // MARK: - Data sources
 
 /// Zdroje dat, laid out like Bevel's: the connected services as cards, each
-/// with "Spravovat" (permissions, sync, disconnect), "+" for the rest in
-/// sections, and syncing everything at the bottom.
+/// with its page (what Aurin reads and sends, permissions, sync, disconnect),
+/// "+" for the rest in sections, and syncing everything at the bottom.
 struct SourcesSettingsView: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
@@ -16,7 +16,14 @@ struct SourcesSettingsView: View {
     @State private var flow = ConnectFlowState()
     @State private var choosing: PriorityPart?
 
-    private var connected: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected == true } }
+    /// Apple Health also when Aurin only writes to it (Aurin posílá on its page).
+    private var connected: [ConnectionsResponse.Provider] {
+        var list = store.connections.filter { $0.connected == true }
+        if !list.contains(where: { $0.id == "apple" }) && !store.demo && AppleHealthExport.shared.isOn {
+            list.append(ConnectionsResponse.Provider(id: "apple", name: "Apple Health", connected: true, configured: true, missingPermissions: nil, metrics: nil, note: nil))
+        }
+        return list
+    }
     private var available: [ConnectionsResponse.Provider] { store.connections.filter { $0.connected != true && $0.configured != false } }
 
     var body: some View {
