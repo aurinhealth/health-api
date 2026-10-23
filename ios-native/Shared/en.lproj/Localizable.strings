@@ -864,6 +864,9 @@
 "Zátěž" = "Load";
 "Námaha" = "Strain";
 "Námaha dnes" = "Strain today";
+"Námaha včera" = "Strain yesterday";
+"Námaha zítra" = "Strain tomorrow";
+"Námaha · %@" = "Strain · %@";
 "Námaha po dnech tohoto týdne" = "Strain by day this week";
 "Zátěž po týdnech" = "Weekly load";
 "Zátěž týdne %@ z %@" = "Week load %@ of %@";
@@ -969,6 +972,7 @@
 "opakování" = "reps";
 "pauza" = "on a break";
 "plavání" = "swim";
+"plán" = "plan";
 "plán %@" = "plan %@";
 "plán navrhne jakoukoli váhu" = "the plan suggests any weight";
 "plán ~%@" = "plan ~%@";
