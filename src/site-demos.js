@@ -167,17 +167,17 @@ const strainMade = `<div class="dm pad">
 </div>`;
 
 // ---- Training week (TrainingCalendar.swift, PlanSessionActions.swift) ----
-// The day strip: green on plan, amber done differently, dashed grey upcoming, each done day with its
-// percent of the plan. Thursday's planned gym session turns done, its source and percent appear, and the
-// month opens under the handle.
+// The day strip: green on plan, amber done differently, dashed grey upcoming; the percent of the plan
+// shows in the day's list. Thursday's planned gym session turns done, its source and percent appear, and
+// the month opens under the handle.
 const pct = (p, attrs = '') => `<span class="pc ${p >= 85 && p <= 115 ? 'ok' : 'off'}"${attrs}>${p} %</span>`;
-const dayC = (d, num, sport, state, p = null) => `<div class="dc"><span class="wd">${d}</span><span class="ci ${state}">${ic(sport)}</span><span class="num dn">${num}</span>${p ? pct(p) : '<span class="pc"></span>'}</div>`;
+const dayC = (d, num, sport, state) => `<div class="dc"><span class="wd">${d}</span><span class="ci ${state}">${ic(sport)}</span><span class="num dn">${num}</span></div>`;
 const MONTH = [['', '', '', 1, 2, 3, 4], [5, 6, 7, 8, 9, 10, 11], [12, 13, 14, 15, 16, 17, 18], [19, 20, 21, 22, 23, 24, 25], [26, 27, 28, 29, 30, 31, '']];
 const monthState = d => d === '' ? '' : d > 8 ? (d % 7 === 2 ? '' : 'up') : d === 4 ? 'off' : d === 7 ? 'off' : d % 11 === 0 ? '' : d === 3 || d === 8 ? 'ok' : (d % 7 === 5 ? 'out' : 'ok');
 const monthSport = d => ['gym', 'bike', 'run', 'gym', 'bike', 'bike', 'run'][d % 7];
 const week = `<div class="dm pad wk">
 <div class="sl">Training · Week 41</div>
-<div class="strip">${dayC('M', 5, 'run', 'ok', 96)}${dayC('T', 6, 'bike', 'ok', 104)}${dayC('W', 7, 'bike', 'off', 128)}<div class="dc sel"><span class="wd today">T</span><span class="ci up"${at('1400:done')}>${ic('gym')}</span><span class="num dn">8</span>${pct(94, at('2200'))}</div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
+<div class="strip">${dayC('M', 5, 'run', 'ok')}${dayC('T', 6, 'bike', 'ok')}${dayC('W', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">T</span><span class="ci up"${at('1400:done')}>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
 <div class="handle"${at('4300:pull 5200-pull')}><i></i><span data-tx="0|Full month;4800|Less">Full month</span></div>
 <div class="month"${at('4800:open')}><div class="mh"><b>October</b><span class="mut s">12 activities · 14 h 20 min</span></div><div class="mg">${['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<span class="mw">${d}</span>`).join('')}${MONTH.flat().map((d, i) => `<span class="md${d === 8 ? ' sel' : ''}" style="--i:${i}"><span>${d}</span>${monthState(d) ? `<span class="ci ${monthState(d)}">${ic(monthSport(d))}</span>` : ''}</span>`).join('')}</div></div>
 <div class="day"><div class="row sp"><b>Today</b><span class="mut s">1 h 27 min · 840 kcal</span></div>
@@ -327,7 +327,7 @@ ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Bent-over r
 // Beside the phone: the confirmed workout lands in the week.
 const coachWeek = `<div class="dm pad wk"${at('10900')}>
 <div class="sl">Training · Week 41</div>
-<div class="strip">${dayC('M', 5, 'run', 'ok', 96)}${dayC('T', 6, 'bike', 'ok', 104)}${dayC('W', 7, 'bike', 'off', 128)}<div class="dc sel"><span class="wd today">T</span><span class="ci empty"${at('11600:up')}><span class="rest">–</span>${ic('gym')}</span><span class="num dn">8</span><span class="pc"></span></div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
+<div class="strip">${dayC('M', 5, 'run', 'ok')}${dayC('T', 6, 'bike', 'ok')}${dayC('W', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">T</span><span class="ci empty"${at('11600:up')}><span class="rest">–</span>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
 <div class="day"><div class="row sp"><b>Today</b><span class="mut s" data-tx="0|42 min · 520 kcal;12000|1 h 42 min · 520 kcal">42 min · 520 kcal</span></div>
 <div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span>${pct(98)}</div><span class="num">520<small>kcal</small></span></div>
 <div class="ar new"${at('12000')}><span class="ci up">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">Planned · 5:30 PM · 60 min</span></div>${ic('chev')}</div>

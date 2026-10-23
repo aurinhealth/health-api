@@ -105,7 +105,9 @@ struct TrainingCalendarCard: View {
             }
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $centered, anchor: .center)
-            .frame(height: 96)
+            // Room for the letter, the selected ring and the date; the percent
+            // of the plan shows in the ring's colour and in the day's list.
+            .frame(height: 108)
             .onAppear { proxy.scrollTo(day, anchor: .center) }
             .onChange(of: centered) { _, date in
                 // The day in the middle is the chosen one, as in a picker.
@@ -153,7 +155,7 @@ struct DayJump: Equatable {
 }
 
 /// One day of the strip: "P", the main sport in a circle in the plan's colour
-/// (as Tréninky týdne) and "9".
+/// (as Tréninky týdne; a done day in the colour of its percent) and "9".
 struct DayCircle: View {
     let date: String
     let today: String
@@ -179,11 +181,6 @@ struct DayCircle: View {
             Text(ISODay.day(date))
                 .font(Typo.number(15))
                 .foregroundStyle(selected ? Palette.ink : Palette.muted)
-            // The day's percent of the plan; the line stays for days without one.
-            Text(verbatim: style.percent.map { "\($0) %" } ?? " ")
-                .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                .foregroundStyle(style.percent.map(ComplianceScale.color) ?? .clear)
-                .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
