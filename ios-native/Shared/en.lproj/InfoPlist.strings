@@ -1,9 +1,11 @@
 /* The permission prompts in English; the Czech originals are in project.yml. */
 
-"NSCameraUsageDescription" = "Aurin reads the barcodes on food packaging so it can log the food in your diary, and takes the background photo for an image you share.";
-"NSPhotoLibraryUsageDescription" = "Aurin loads the photo of a meal, the gym or a background to share that you pick.";
+"NSCameraUsageDescription" = "Aurin reads the barcodes on food packaging so it can log the food in your diary, takes the background photo for an image you share and the photos you send to the coach.";
+"NSPhotoLibraryUsageDescription" = "Aurin loads the photo of a meal, the gym, for the coach or a background to share that you pick.";
 "NSLocationWhenInUseUsageDescription" = "Aurin uses your location only when you ask, to show the weather and let the coach advise training outdoors or indoors.";
 "NSHealthShareUsageDescription" = "Aurin reads sleep, workouts, heart rate, HRV, wrist temperature, steps, weight, food and water from other apps, for the journal mindful minutes, time in daylight, noise in sleep, symptoms and sexual activity and, with cycle tracking on, periods, ovulation tests and contraception from Apple Health to work out your recovery, strain and calorie target and fill in your journal.";
 "NSHealthUpdateUsageDescription" = "Aurin writes to Apple Health only what you log in the app yourself and turn on in Sync, such as workouts, weight, food and drinks.";
 "NSAlarmKitUsageDescription" = "Aurin wakes you at your alarm time, which it uses to work out your bedtime.";
 "NSBluetoothAlwaysUsageDescription" = "Aurin connects to the heart rate sensor you pair, to show your heart rate in workout mode.";
+"NSCalendarsFullAccessUsageDescription" = "Aurin uses the events in your calendar to see how much time you have for training each day and, if you turn it on, adds your planned workouts to it. Your events stay on your phone.";
+"NSCalendarsUsageDescription" = "Aurin uses the events in your calendar to see how much time you have for training each day and, if you turn it on, adds your planned workouts to it. Your events stay on your phone.";

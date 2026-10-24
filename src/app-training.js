@@ -194,7 +194,7 @@ export function profileIncomplete(saved) {
   return !sport || !goal;
 }
 
-export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {} }) {
+export function buildTraining({ date, days = [], health = {}, fitness = {}, insights = {}, coaches = {}, profile = {}, savedProfile, gym = {}, planRace = null }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const intervals = (Array.isArray(fitness.wellness) ? fitness.wellness : []).filter(r => r.id <= date);
   const rows = mergeWellnessRows(google, intervals);
@@ -329,7 +329,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     strain: { score: today.strain ?? null, target, band: strainBand(target) },
     days: week,
     next,
-    event: eventPlan(athleteFocus(profile, date).event, date),
+    event: eventPlan(athleteFocus(profile, date).event || planRace, date),
     form: lastPmc ? { fitness: round(lastPmc.fitness), fatigue: round(lastPmc.fatigue), form: tsb, zone: zone.key, label: zone.label, text: zone.text, series: pmc } : null,
     load: { weeks, intensity },
     acwr: workload.historyDays > 0 ? workload.acwr : null,
