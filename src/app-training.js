@@ -235,31 +235,45 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const target = remainingTss > 0 ? round(strainScore(loadNow + remainingTss * 2.5), 1) : today.planned;
   if (today.date) today.planned = target;
 
-  // The next session: one left today, else the first planned day after.
-  let next = null;
-  const ahead = [...new Set([...byDate.keys(), ...Object.keys(gym)])].filter(d => d >= date).sort();
-  for (const d of ahead) {
-    if (next) break;
-    const training = d === date ? { planned: remaining } : byDate.get(d)?.training;
-    const w = (training?.planned || []).find(Boolean);
+  // One planned workout as the app's card: a strength one carries the day's gym
+  // plan (its exercises), a gym plan alone is a session of its own.
+  const isStrength = w => /weight|strength|gym|posil|síl/i.test(String(w?.type || "") + " " + String(w?.name || ""));
+  const sessionOf = (d, w, plan) => {
+    const gymCard = !!plan?.exercises?.length;
+    const sport = gymCard ? "strength" : String(w?.type || "").toLowerCase() || null;
+    return {
+      date: d,
+      time: w ? clockOf(w.start) : null,
+      minutes: w && num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null,
+      title: (w?.name || plan?.name || w?.type || L("Trénink", "Workout")).trim(),
+      sport,
+      tss: round(num(w?.tss)),
+      strain: plannedStrain(num(w?.tss)),
+      exercises: gymCard ? plan.exercises.slice(0, 12) : [],
+      description: w?.description ? String(w.description).split("\n").map(s => s.trim()).filter(Boolean).slice(0, 3).join(" ").slice(0, 240) : null,
+      advice: d === date ? coachAdvice(coaches, sport) : null,
+      // The calendar event, so the app opens the same detail as from the week's list.
+      eventId: /^planned:/.test(String(w?.id || "")) ? String(w.id) : null
+    };
+  };
+  // The day's workouts in the calendar's order: those without an hour (midnight) first.
+  const sessionsOf = d => {
+    const planned = (d === date ? remaining : byDate.get(d)?.training?.planned || []).filter(Boolean);
     // Today's gym plan is done once a strength session was recorded.
     const plan = d === date && (todayTraining.completed || []).some(a => /weight|strength|gym/i.test(String(a?.type || ""))) ? null : gym[d];
-    if (w || plan?.exercises?.length) {
-      const minutes = w && num(w.durationHours) ? Math.round(num(w.durationHours) * 60) : null;
-      const isGym = !!plan?.exercises?.length && (!w || /weight|strength|gym|posil|síl/i.test(String(w.type || "") + " " + String(w.name || "")));
-      next = {
-        date: d,
-        time: w ? clockOf(w.start) : null,
-        minutes,
-        title: (w?.name || plan?.name || w?.type || L("Trénink", "Workout")).trim(),
-        sport: isGym ? "strength" : String(w?.type || "").toLowerCase() || null,
-        tss: round(num(w?.tss)),
-        strain: plannedStrain(num(w?.tss)),
-        exercises: isGym ? plan.exercises.slice(0, 12) : [],
-        description: w?.description ? String(w.description).split("\n").map(s => s.trim()).filter(Boolean).slice(0, 3).join(" ").slice(0, 240) : null,
-        advice: d === date ? coachAdvice(coaches) : null
-      };
-    }
+    const gymAt = plan?.exercises?.length ? planned.findIndex(isStrength) : -1;
+    const list = planned.map((w, i) => sessionOf(d, w, i === gymAt ? plan : null));
+    if (plan?.exercises?.length && gymAt < 0) list.unshift(sessionOf(d, null, plan));
+    const at = s => (s.time && s.time !== "00:00" ? s.time : "");
+    return list.map((s, i) => [s, i]).sort((a, b) => at(a[0]).localeCompare(at(b[0])) || a[1] - b[1]).map(([s]) => s);
+  };
+  // Every workout still left today (the app swipes between them); the next
+  // session is the first of them, else the first planned day after.
+  const todaySessions = sessionsOf(date);
+  let next = todaySessions[0] || null;
+  for (const d of [...new Set([...byDate.keys(), ...Object.keys(gym)])].filter(d => d > date).sort()) {
+    if (next) break;
+    next = sessionsOf(d)[0] || null;
   }
 
   // Form: fitness (CTL), fatigue (ATL) and their difference, 12 weeks.
@@ -329,6 +343,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
     strain: { score: today.strain ?? null, target, band: strainBand(target) },
     days: week,
     next,
+    todaySessions,
     event: eventPlan(athleteFocus(profile, date).event || planRace, date),
     form: lastPmc ? { fitness: round(lastPmc.fitness), fatigue: round(lastPmc.fatigue), form: tsb, zone: zone.key, label: zone.label, text: zone.text, series: pmc } : null,
     load: { weeks, intensity },
@@ -432,7 +447,10 @@ function strainBand(v) {
 }
 
 // The coach's first tip for today's session (coach-engine.js).
-function coachAdvice(coaches) {
-  const coach = (coaches.coaches || []).find(c => c && ["cycling", "gym"].includes(c.id) && Array.isArray(c.actions) && c.actions.length);
+// The coach of the session's sport: the cycling coach's words for a ride, the
+// gym coach's for strength; another sport has none.
+function coachAdvice(coaches, sport) {
+  const id = sport === "strength" ? "gym" : /ride|cycl/.test(String(sport || "")) ? "cycling" : null;
+  const coach = id && (coaches.coaches || []).find(c => c?.id === id && Array.isArray(c.actions) && c.actions.length);
   return coach ? String(coach.actions[0]).slice(0, 280) : null;
 }

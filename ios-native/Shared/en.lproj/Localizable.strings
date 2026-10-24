@@ -1492,6 +1492,7 @@
 "bez %@ navíc z hodinek" = "without %@ extra from the watch";
 "Začít posilovnu" = "Start gym session";
 "Zopakovat minulou" = "Repeat the last one";
+"Prázdný trénink v posilovně" = "Empty gym workout";
 "Zapsat posilovnu" = "Log gym session";
 
 /* Synchronizace (Screens/SyncViews.swift, App/AppleHealthExport.swift) */

@@ -832,6 +832,19 @@ struct TrainingModeView: View {
                     .frame(maxWidth: .infinity).frame(height: 50).background(Palette.card, in: Capsule())
             }
             .buttonStyle(.plain)
+            // The last workout's exercises with the next loads (GymLive.swift).
+            if day?.cancelled != true, let last = history.lastWorkoutDate(before: date) {
+                let count = history.lastWorkout(before: date).count
+                NavigationLink(value: AppRoute.liveGym(date, true)) {
+                    VStack(spacing: 2) {
+                        Label("Zopakovat minulou", systemImage: "arrow.counterclockwise").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        Text(verbatim: Fmt.capitalized(Fmt.relativeDay(last, today: date)) + " · " + String(count) + " " + Fmt.plural(count, "cvik", "cviky", "cviků"))
+                            .font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    .frame(maxWidth: .infinity).frame(height: 60).background(Palette.card, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
             Spacer()
         }
     }

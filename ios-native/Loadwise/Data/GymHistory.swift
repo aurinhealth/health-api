@@ -47,6 +47,11 @@ struct GymHistory: Codable, Equatable {
         return exercises.filter { (e: Exercise) -> Bool in e.sessions.first { $0.date < date }?.date == latest }.map(\.name)
     }
 
+    /// The day of the last workout before the day (Prázdný trénink → Zopakovat minulou).
+    func lastWorkoutDate(before date: String) -> String? {
+        exercises.compactMap { (e: Exercise) -> String? in e.sessions.first { $0.date < date }?.date }.max()
+    }
+
     /// Exercises done before the day, the most recent first (the search sheet).
     func recent(before date: String) -> [Exercise] {
         exercises.filter { (e: Exercise) -> Bool in e.sessions.contains { $0.date < date } }

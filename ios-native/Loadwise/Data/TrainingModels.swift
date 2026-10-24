@@ -7,6 +7,9 @@ struct TrainingSnapshot: Decodable, Equatable {
     let strain: Strain
     let days: [Day]
     let next: Session?
+    /// Every workout still left today, the Today card swipes between them
+    /// (older saved answers lack it).
+    let todaySessions: [Session]?
     let event: Event?
     let form: Form?
     let load: Load
@@ -51,6 +54,8 @@ struct TrainingSnapshot: Decodable, Equatable {
         let exercises: [String]
         let description: String?
         let advice: String?
+        /// "planned:<id>": the calendar event, to open the same detail as Tréninky týdne.
+        let eventId: String?
     }
 
     struct Phase: Decodable, Equatable, Identifiable {

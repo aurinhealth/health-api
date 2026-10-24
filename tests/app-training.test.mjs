@@ -79,6 +79,26 @@ test("A saved gym plan is a session with its exercises", () => {
   assert.deepEqual(t.next.exercises, ["Dřep", "Tlak na lavici"]);
 });
 
+test("Every workout left today is listed: the gym plan and a ride, each with its own coach", () => {
+  const strength = { name: "Strength — Full Body", type: "WeightTraining", start: DATE + "T00:00:00", durationHours: 70 / 60 };
+  const later = { ...ride, start: DATE + "T14:00:00Z" };
+  const both = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [strength, later], completed: [], matched: [] } } } : d);
+  const coaches = { coaches: [{ id: "cycling", actions: ["Drž vytrvalostní tempo."] }, { id: "gym", actions: ["Třetí den posilovny: méně sérií."] }] };
+  const t = buildTraining({ ...input, days: both, coaches, gym: { [DATE]: { name: "Celé tělo", exercises: ["Dřep", "Přítahy"] } } });
+  assert.deepEqual(t.todaySessions.map(s => s.sport), ["strength", "virtualride"]);
+  assert.deepEqual(t.todaySessions[0].exercises, ["Dřep", "Přítahy"]);
+  assert.equal(t.todaySessions[0].advice, "Třetí den posilovny: méně sérií.");
+  assert.equal(t.todaySessions[1].advice, "Drž vytrvalostní tempo.");
+  assert.equal(t.next.sport, "strength");
+  // A gym plan without a strength event on the calendar is a card of its own, before the ride.
+  const rideOnly = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [later], completed: [], matched: [] } } } : d);
+  const r = buildTraining({ ...input, days: rideOnly, coaches, gym: { [DATE]: { name: "Celé tělo", exercises: ["Dřep"] } } });
+  assert.deepEqual(r.todaySessions.map(s => [s.sport, s.title]), [["strength", "Celé tělo"], ["virtualride", "Sweet spot 3×12"]]);
+  // A run has no coach of its own: no cycling advice under it.
+  const run = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [{ name: "Běh", type: "Run", durationHours: 1 }], completed: [], matched: [] } } } : d);
+  assert.equal(buildTraining({ ...input, days: run, coaches }).next.advice, null);
+});
+
 test("Form, load per week, zones and VO2max", () => {
   const t = buildTraining(input);
   assert.equal(t.form.form, Math.round(t.form.fitness - t.form.fatigue));
