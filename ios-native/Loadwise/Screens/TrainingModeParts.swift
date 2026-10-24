@@ -414,11 +414,12 @@ struct HeartSourceButton: View {
 /// The small "i" beside an exercise in the rest: how it is done.
 struct SmallInfoButton: View {
     var label = "Technika"
+    var systemImage = "info"
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "info").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink)
+            Image(systemName: systemImage).font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink)
                 .frame(width: 30, height: 30).background(Palette.track, in: Circle())
         }
         .buttonStyle(.plain)
@@ -604,5 +605,90 @@ struct SwipeToDelete: ViewModifier {
     private func delete() {
         withAnimation(.snappy) { offset = 0 }
         onDelete()
+    }
+}
+
+/// Moje poznámka under an exercise's name: the note, or "+ Poznámka" to write
+/// one. A tap opens ExerciseNoteSheet.
+struct ExerciseNoteLine: View {
+    let note: String?
+    var compact = false
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        if let note {
+            let line = Label {
+                Text(note).lineLimit(compact ? 1 : 3).multilineTextAlignment(.leading)
+            } icon: {
+                Image(systemName: "note.text")
+            }
+            .font(compact ? Typo.small.weight(.medium) : .subheadline.weight(.medium))
+            .foregroundStyle(Palette.brown)
+            if let action {
+                Button(action: action) { line.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(L10n.tr("Upravit poznámku"))
+            } else {
+                line
+            }
+        } else if let action {
+            Button(action: action) {
+                Label("Poznámka", systemImage: "plus").font(.subheadline.weight(.medium)).foregroundStyle(Palette.muted)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.tr("Přidat poznámku ke cviku"))
+        }
+    }
+}
+
+/// Writing Moje poznámka of an exercise, e.g. how the machine is set.
+struct ExerciseNoteSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let exercise: String
+    @State private var text = ""
+    @State private var saving = false
+    @State private var error: String?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 10) {
+                TextField(L10n.tr("Třeba sedadlo 4, úzký úchop"), text: $text, axis: .vertical)
+                    .lineLimit(3...6)
+                    .focused($focused)
+                    .padding(14)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                Spacer()
+            }
+            .padding(20)
+            .background(Palette.background)
+            .navigationTitle(L10n.f("Poznámka · %@", exercise))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Uložit") { Task { await save() } }.fontWeight(.semibold).disabled(saving)
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .onAppear {
+            text = ExerciseNotes.shared.note(exercise) ?? ""
+            focused = true
+        }
+    }
+
+    private func save() async {
+        saving = true
+        defer { saving = false }
+        do {
+            try await ExerciseNotes.shared.save(text, for: exercise, api: model.api, demo: model.demo)
+            dismiss()
+        } catch {
+            self.error = L10n.f("Poznámku se nepodařilo uložit: %@", error.localizedDescription)
+        }
     }
 }

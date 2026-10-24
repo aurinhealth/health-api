@@ -2,14 +2,24 @@ import SwiftUI
 
 /// Nastavení → Pauzy v posilovně: how long the rest is between the sets of an
 /// exercise and before the next exercise (Režim tréninku counts it down).
+/// Between sets it follows the exercise unless a length is chosen.
 struct GymRestSettingsView: View {
     static let options: [Int] = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300]
+    /// "Podle cviku": the plan's rest for each exercise. The default, so a
+    /// length chosen here before stays.
+    static let byExercise = -1
+
+    /// The rest after a work set: the length chosen, else the plan's for the exercise.
+    static func between(_ set: GymSet, setting: Int) -> Int {
+        setting >= 0 ? setting : set.plannedRest ?? 90
+    }
 
     var body: some View {
         SettingsPage(title: "Pauzy v posilovně") { GymRestGroup() }
     }
 
     static func label(_ seconds: Int) -> String {
+        if seconds == byExercise { return L10n.tr("Podle cviku") }
         if seconds == 0 { return L10n.tr("bez pauzy") }
         if seconds < 60 { return "\(seconds) s" }
         return seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds / 60) min \(seconds % 60) s"
@@ -18,23 +28,23 @@ struct GymRestSettingsView: View {
 
 /// The two rests as menus: between the sets and before the next exercise.
 struct GymRestGroup: View {
-    @AppStorage("restSets") private var restSets = 90
+    @AppStorage("restSets") private var restSets = GymRestSettingsView.byExercise
     @AppStorage("restExercises") private var restExercises = 120
 
     var body: some View {
         SettingsGroup(title: "Délka pauzy") {
-            row("Mezi sériemi", $restSets)
+            row("Mezi sériemi", $restSets, options: [GymRestSettingsView.byExercise] + GymRestSettingsView.options)
             SettingsDivider()
             row("Před dalším cvikem", $restExercises)
         }
     }
 
-    private func row(_ title: String, _ value: Binding<Int>) -> some View {
+    private func row(_ title: String, _ value: Binding<Int>, options: [Int] = GymRestSettingsView.options) -> some View {
         HStack {
             Text(title).font(.body).foregroundStyle(Palette.ink)
             Spacer(minLength: 8)
             Picker(L10n.tr(title), selection: value) {
-                ForEach(GymRestSettingsView.options, id: \.self) { Text(GymRestSettingsView.label($0)).tag($0) }
+                ForEach(options, id: \.self) { Text(GymRestSettingsView.label($0)).tag($0) }
             }
             .pickerStyle(.menu)
             .tint(Palette.muted)

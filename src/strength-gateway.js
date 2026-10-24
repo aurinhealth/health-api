@@ -133,6 +133,8 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
       const gymPlan = await activePlan(env.DB, null, { gym: true }).catch(() => null);
       const phase = gymPlan ? gymPhaseFor(gymPlan, context.date, prefs?.days) : null;
       if (phase) options.planPhase = phase;
+      // A body-weight plan ignores the equipment chosen (Doma bez vybavení).
+      if (phase?.equipment) context.trainingSetup = { ...(context.trainingSetup || {}), equipment: phase.equipment, stations: [] };
     }
     // The athlete's thumbs up and down on exercises.
     const taste = await exercisePreferences(env.DB);

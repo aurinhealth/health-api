@@ -22,8 +22,28 @@ struct MetricDetailView: View {
     let metric: HealthMetric
     let health: HealthSnapshot
 
+    /// The coach about this value: today's number against the athlete's normal.
+    private var coach: CoachSubject {
+        switch metric {
+        case .hrv:
+            let h = health.hrv
+            var line: String? = h?.value.map { L10n.tr("Dnes") + " " + Fmt.int($0) + " ms" }
+            if let line0 = line, let low = h?.low, let high = h?.high { line = line0 + " · " + L10n.f("normál %@–%@ ms", Fmt.int(low), Fmt.int(high)) }
+            let isLow = h?.value != nil && h?.low != nil && h!.value! < h!.low!
+            return .metric(metric, line: line, low: isLow, date: health.date)
+        case .restingHR:
+            let r = health.restingHR
+            var line: String? = r?.value.map { L10n.tr("Dnes") + " " + Fmt.int($0) + " bpm" }
+            if let line0 = line, let base = r?.baseline { line = line0 + " · " + L10n.f("normál %@ bpm", Fmt.int(base)) }
+            let high = r?.value != nil && r?.baseline != nil && r!.value! > r!.baseline! + 3
+            return .metric(metric, line: line, low: high, date: health.date)
+        default:
+            return .metric(metric, line: nil, date: health.date)
+        }
+    }
+
     var body: some View {
-        DetailScreen(glow: Palette.Glow.health, title: metric.title) {
+        DetailScreen(glow: Palette.Glow.health, title: metric.title, coach: coach) {
             MetricDetailContent(metric: metric, health: health)
         }
     }
