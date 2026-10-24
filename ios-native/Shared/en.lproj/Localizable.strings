@@ -2977,4 +2977,15 @@
 "Mám dnešní trénink zkrátit?" = "Should I shorten today's session?";
 "Jak na zítřejší %@?" = "How should I approach tomorrow's %@?";
 "Co sníst dnes večer?" = "What should I eat tonight?";
+
+/* Details: kapitálky above the title and the coach (2026-10-24) */
+"Trénink · %@" = "Training · %@";
+"Trénink · dnes" = "Training · today";
+"Trénink · svaly" = "Training · muscles";
+"Které svaly můžu dnes trénovat?" = "Which muscles can I train today?";
+"Kdy budu zase odpočatý?" = "When will I be fresh again?";
+"Co mám dnes dát v posilovně?" = "What should I do in the gym today?";
+"Je moje dnešní námaha v pořádku?" = "Is my strain today about right?";
+"Mám dnes ještě trénovat?" = "Should I still train today?";
+"Jak naložit zbytek týdne?" = "How should I load the rest of the week?";
 "Původní rozložení" = "Reset";

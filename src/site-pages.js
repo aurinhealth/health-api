@@ -511,7 +511,7 @@ addEventListener('keydown',function(e){if(e.key==='Escape'&&card.classList.conta
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
 // for days by its URL, so ?v= goes up whenever og-en.png is rendered again.
-const SHARE_IMAGE = '/site/og-en.png?v=3';
+const SHARE_IMAGE = '/site/og-en.png?v=4';
 const SHARE_IMAGE_ALT = 'Aurin: Train for how you feel today. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null}) {

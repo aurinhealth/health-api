@@ -89,27 +89,7 @@ struct TodayContent: View {
     /// Everything above the widgets: the day, readiness, weather and the coach.
     @ViewBuilder private var header: some View {
         // B3 (Petr, 2026-10-15): the month as the title and the week below it.
-        HStack(spacing: 10) {
-            Text(verbatim: Fmt.monthTitle(today.date))
-                .font(Typo.sentence(30, relativeTo: .title))
-                .foregroundStyle(Palette.ink)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .accessibilityAddTraits(.isHeader)
-            Spacer()
-            if selectedDate != nil {
-                Button { Task { await model.showToday() } } label: {
-                    Label("Dnes", systemImage: "arrow.uturn.backward").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                        .padding(.horizontal, 10).frame(height: 30)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
-            CircleButton(systemImage: "square.and.arrow.up", label: "Sdílet", action: openShare)
-            CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: L10n.tr("Kouč"), action: openCoach)
-            Button(action: openSettings) { AvatarView(size: 36) }
-                .buttonStyle(.plain)
-            .accessibilityLabel("Profil a nastavení")
-        }
+        TabHeader(date: today.date, share: openShare, coach: openCoach, settings: openSettings)
         WeekStrip(date: today.date, week: today.week).padding(.top, 14)
 
         if selectedDate == nil && !model.demo {
@@ -237,8 +217,11 @@ struct WeekStrip: View {
     @Environment(AppModel.self) private var model
     let date: String
     let week: [TodaySnapshot.WeekDay]?
+    /// Food: the days of the next two weeks can be picked too.
+    var ahead = false
 
     private var today: String { AppModel.localDate(Date()) }
+    private var lastDay: String { ahead ? (AppModel.shift(today, by: AppModel.foodDaysAhead) ?? today) : today }
 
     /// The server's week, or Monday to Sunday without zones (an older server).
     private var days: [TodaySnapshot.WeekDay] {
@@ -254,17 +237,35 @@ struct WeekStrip: View {
     var body: some View {
         HStack(spacing: 0) {
             ForEach(days, id: \.date) { day in
-                Button { Task { await model.showDate(day.date) } } label: { cell(day) }
+                Button { Task { await pick(day.date) } } label: { cell(day) }
                     .buttonStyle(.plain)
-                    .disabled(day.date > today || model.demo || model.dayLocked)
+                    .disabled(day.date > lastDay || model.demo || model.dayLocked)
                     .frame(maxWidth: .infinity)
             }
         }
         .padding(.horizontal, -6)
     }
 
+    /// The readiness of the days around date, when Dnes holds that week.
+    static func week(of date: String, in today: TodaySnapshot?) -> [TodaySnapshot.WeekDay]? {
+        guard let week = today?.week, week.contains(where: { $0.date == date }) else { return nil }
+        return week
+    }
+
+    /// A day after today only on Food, as many days on as the arrows would go.
+    private func pick(_ day: String) async {
+        let from = model.selectedDate ?? today
+        if day > today, day > from {
+            await model.showDay(offset: ISODay.range(from, day).count - 1, ahead: true)
+        } else if day > today {
+            await model.showDay(offset: -(ISODay.range(day, from).count - 1), ahead: true)
+        } else {
+            await model.showDate(day)
+        }
+    }
+
     private func cell(_ day: TodaySnapshot.WeekDay) -> some View {
-        let isToday = day.date == today, selected = day.date == date, future = day.date > today
+        let isToday = day.date == today, selected = day.date == date, future = day.date > lastDay
         let color = ReadinessText.pill(day.zone)?.1
         return VStack(spacing: 5) {
             Text(verbatim: Fmt.weekdayShort(day.date)).font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.muted)
@@ -290,55 +291,73 @@ struct WeekStrip: View {
     }
 }
 
-/// "‹ Dnes" over "středa 14. října": the day as the screen's title, a day
-/// back and a day forward (not past today; Food goes two weeks ahead for
-/// planned and copied meals). Scrolled down, DayBar keeps the day on top.
-struct DayNavigator: View {
+/// The top of the four tabs (Petr, 2026-10-24): the month as the title, the
+/// tab's own button, Sdílet, Kouč and the account, the same on Dnes, Trénink,
+/// Jídlo and Zdraví. "Dnes" next to the month leads back from another day.
+struct TabHeader<Extra: View>: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dayPage) private var page
     let date: String
-    var ahead = false
-
-    private var today: String { AppModel.localDate(Date()) }
+    /// Trénink keeps its own day in the calendar: no "Dnes" here.
+    var followsDay = true
+    var share: () -> Void
+    var coach: () -> Void
+    var settings: () -> Void
+    @ViewBuilder var extra: Extra
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Button { Task { await model.showDay(offset: -1) } } label: {
-                    Image(systemName: "chevron.left").font(.system(size: 15, weight: .semibold)).frame(width: 28, height: 36)
+        HStack(spacing: 10) {
+            Text(verbatim: Fmt.monthTitle(date))
+                .font(Typo.sentence(30, relativeTo: .title))
+                .foregroundStyle(Palette.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .accessibilityAddTraits(.isHeader)
+            Spacer()
+            if followsDay, (page.map(\.selectedDate) ?? model.selectedDate) != nil {
+                Button { Task { await model.showToday() } } label: {
+                    Label("Dnes", systemImage: "arrow.uturn.backward").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 10).frame(height: 30)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
                 }
-                .foregroundStyle(Palette.muted)
-                .accessibilityLabel("Předchozí den")
-                Text(verbatim: Fmt.dayTitle(date, today: today))
-                    .font(Typo.sentence(30, relativeTo: .title))
-                    .foregroundStyle(Palette.ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .accessibilityAddTraits(.isHeader)
-                if Self.canGoForward(model: model, date: date, ahead: ahead) {
-                    Button { Task { await model.showDay(offset: 1, ahead: ahead) } } label: {
-                        Image(systemName: "chevron.right").font(.system(size: 15, weight: .semibold)).frame(width: 28, height: 36)
-                    }
-                    .foregroundStyle(Palette.muted)
-                    .accessibilityLabel("Další den")
-                }
-                if (page.map(\.selectedDate) ?? model.selectedDate) != nil {
-                    Button { Task { await model.showToday() } } label: {
-                        Text("Dnes").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                            .padding(.horizontal, 10).frame(height: 28)
-                            .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
-                    }
-                    .padding(.leading, 4)
-                }
+                .buttonStyle(.plain)
+                .disabled(model.demo || model.dayLocked)
             }
-            Text(verbatim: Fmt.daySubtitle(date, today: today))
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(Palette.muted)
-                .padding(.leading, 34)
+            extra
+            CircleButton(systemImage: "square.and.arrow.up", label: "Sdílet", action: share)
+            CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: L10n.tr("Kouč"), action: coach)
+            Button(action: settings) { AvatarView(size: 36) }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Profil a nastavení")
         }
-        .disabled(model.demo || model.dayLocked)
     }
+}
 
+extension TabHeader where Extra == EmptyView {
+    init(date: String, followsDay: Bool = true, share: @escaping () -> Void, coach: @escaping () -> Void, settings: @escaping () -> Void) {
+        self.init(date: date, followsDay: followsDay, share: share, coach: coach, settings: settings) { EmptyView() }
+    }
+}
+
+/// What the tab header's Sdílet, Kouč and account buttons open (RootView).
+struct TabActions {
+    var share: () -> Void = {}
+    var coach: () -> Void = {}
+    var settings: () -> Void = {}
+}
+
+private struct TabActionsKey: EnvironmentKey { nonisolated(unsafe) static let defaultValue = TabActions() }
+
+extension EnvironmentValues {
+    var tabActions: TabActions {
+        get { self[TabActionsKey.self] }
+        set { self[TabActionsKey.self] = newValue }
+    }
+}
+
+/// How far the day arrows go: not past today; Food goes two weeks ahead for
+/// planned and copied meals (DayBar, the day swipe).
+@MainActor
+enum DayNavigator {
     static func canGoForward(model: AppModel, date: String, ahead: Bool) -> Bool {
         guard ahead else { return model.selectedDate != nil }
         let last = AppModel.shift(AppModel.localDate(Date()), by: AppModel.foodDaysAhead) ?? date

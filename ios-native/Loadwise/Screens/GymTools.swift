@@ -18,8 +18,8 @@ struct TrainingTools: View {
             // Today's plan in the workout mode, or an empty workout there; the
             // last workout's exercises with the next loads (GymLive.swift).
             NavigationLink(value: AppRoute.trainingMode(today)) {
-                Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                    .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+                Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                    .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
             }
             .buttonStyle(.plain)
             NavigationLink(value: AppRoute.liveGym(today, true)) {
@@ -478,8 +478,8 @@ struct GymBuilderView: View {
                 Label("Uloženo do plánu i do Intervals.icu.", systemImage: "checkmark.circle.fill")
                     .font(Typo.bodyStrong).foregroundStyle(Palette.green).padding(.top, 22)
                 NavigationLink(value: AppRoute.trainingMode(isoDay)) {
-                    Text("Začít trénink").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                        .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                        .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 12)

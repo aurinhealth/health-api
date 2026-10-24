@@ -16,7 +16,7 @@ struct StrainDetailView: View {
     }
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: "Námaha") {
+        DetailScreen(glow: Palette.Glow.training, title: "Námaha", coach: .strain(date: date ?? model.selectedDate)) {
             if let today = shown {
                 StrainDetailContent(today: today, training: model.training, past: date != nil)
             } else {
@@ -72,8 +72,11 @@ struct StrainDetailContent: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(verbatim: isToday ? L10n.tr("Námaha") : L10n.f("Námaha · %@", Fmt.dayShort(today.date, today: AppModel.localDate(Date()))))
-                .font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink).padding(.top, 24)
+            // Kapitálky with the day and the serif title, as the other details (Petr, 2026-10-24).
+            SectionLabel(text: isToday ? L10n.tr("Trénink · dnes") : L10n.f("Trénink · %@", Fmt.dayShort(today.date, today: AppModel.localDate(Date()))))
+                .padding(.top, 24)
+            Text(verbatim: L10n.tr("Námaha"))
+                .font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
             dial
             if let target = today.strain.target {
                 SectionLabel(text: isToday ? "Dnešní cíl" : "Cíl dne").padding(.top, 30)

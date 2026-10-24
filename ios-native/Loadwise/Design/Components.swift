@@ -228,9 +228,16 @@ struct ChromeButton: View {
     var systemImage: String
     var label: String
     var text: String? = nil
+    var enabled = true
     var action: () -> Void
 
     var body: some View {
+        button
+            .disabled(!enabled)
+            .opacity(enabled ? 1 : 0.45)
+    }
+
+    @ViewBuilder private var button: some View {
         if let text {
             Button(action: action) {
                 Text(L10n.tr(text))
@@ -308,7 +315,25 @@ struct ChromeAction {
     var systemImage: String
     var label: String
     var text: String? = nil
+    /// Greyed and not tappable ("Uložit" with nothing changed).
+    var enabled = true
     var action: () -> Void
+}
+
+/// Behind the pinned bars once the page is scrolled: the paper colour over
+/// a blur, solid to below the bar's buttons and fading out under them, so the
+/// page's own title and text do not show through the bar's title.
+private struct PinnedBarBackground: View {
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial)
+            Palette.background.opacity(0.7)
+        }
+        .padding(.bottom, -18)
+        .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.72), .init(color: .black.opacity(0), location: 1)],
+                             startPoint: .top, endPoint: .bottom))
+        .ignoresSafeArea(edges: .top)
+    }
 }
 
 /// The pinned bar of a drill-down page: back on the left, the page's action
@@ -355,7 +380,7 @@ private struct PinnedTopBar: ViewModifier {
                         ChromeButton(systemImage: extra.systemImage, label: extra.label, text: extra.text, action: extra.action)
                     }
                     if let trailing {
-                        ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, action: trailing.action)
+                        ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled, action: trailing.action)
                     } else {
                         Color.clear.frame(width: 40, height: 40)
                     }
@@ -364,9 +389,7 @@ private struct PinnedTopBar: ViewModifier {
                 .padding(.top, 6)
                 .padding(.bottom, 10)
                 .background {
-                    Rectangle().fill(.ultraThinMaterial)
-                        .mask(LinearGradient(colors: [.black, .black, .black.opacity(0)], startPoint: .top, endPoint: .bottom))
-                        .ignoresSafeArea(edges: .top)
+                    PinnedBarBackground()
                         .opacity(scrolled ? 1 : 0)
                 }
             }
@@ -407,11 +430,7 @@ private struct TabTopBar<Bar: View>: ViewModifier {
                         .padding(.horizontal, 18)
                         .padding(.top, 6)
                         .padding(.bottom, 10)
-                        .background {
-                            Rectangle().fill(.ultraThinMaterial)
-                                .mask(LinearGradient(colors: [.black, .black, .black.opacity(0)], startPoint: .top, endPoint: .bottom))
-                                .ignoresSafeArea(edges: .top)
-                        }
+                        .background { PinnedBarBackground() }
                         .transition(.opacity)
                 }
             }

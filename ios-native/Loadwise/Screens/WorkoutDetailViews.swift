@@ -849,9 +849,9 @@ struct PlannedWorkoutView: View {
                 if session.sport == "strength", session.date == AppModel.localDate(Date()), !model.demo {
                     NavigationLink(value: AppRoute.trainingMode(session.date)) {
                         Label("Začít trénink", systemImage: "play.fill")
-                            .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                            .frame(maxWidth: .infinity).frame(height: 48)
-                            .background(Palette.button, in: Capsule())
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                            .frame(maxWidth: .infinity).frame(height: 54)
+                            .background(Palette.green, in: Capsule())
                     }
                     .buttonStyle(.plain)
                     .padding(.top, 28)
