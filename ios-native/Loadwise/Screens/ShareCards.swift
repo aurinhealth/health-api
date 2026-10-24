@@ -192,15 +192,19 @@ struct ShareBlockFrames: PreferenceKey {
 }
 
 extension View {
-    /// A block that moves on a photo: it reports its frame and takes its offset.
+    /// A block that moves on a photo: it takes its offset and reports its frame
+    /// where the layout put it. The frame is read outside the offset, so a moved
+    /// block still reports where it started and dragging doesn't count the
+    /// offset twice.
     func shareBlock(_ id: String, _ s: ShareStyle) -> some View {
         let offset = s.offsets[id] ?? .zero
-        return background {
-            GeometryReader { geo in
-                Color.clear.preference(key: ShareBlockFrames.self, value: [id: geo.frame(in: .named(ShareCard.space))])
+        return self
+            .offset(x: offset.width * s.u, y: offset.height * s.u)
+            .background {
+                GeometryReader { geo in
+                    Color.clear.preference(key: ShareBlockFrames.self, value: [id: geo.frame(in: .named(ShareCard.space))])
+                }
             }
-        }
-        .offset(x: offset.width * s.u, y: offset.height * s.u)
     }
 }
 

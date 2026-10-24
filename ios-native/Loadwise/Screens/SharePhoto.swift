@@ -238,7 +238,8 @@ struct SharePlaceView: View {
     let onUse: () -> Void
     /// Each block's frame where the layout put it, in points at this width.
     @State private var frames: [String: CGRect] = [:]
-    @State private var moving: (id: String, start: CGSize)?
+    /// The block under the finger: its offset and its frame (in hundredths) when the drag began.
+    @State private var moving: (id: String, start: CGSize, rect: CGRect)?
     @State private var guides = Guides()
 
     struct Guides: Equatable {
@@ -310,11 +311,12 @@ struct SharePlaceView: View {
         DragGesture(minimumDistance: 2)
             .onChanged { value in
                 if moving == nil {
-                    guard let id = block(at: value.startLocation, u: u) else { return }
-                    moving = (id, offsets[id] ?? .zero)
+                    guard let id = block(at: value.startLocation, u: u), let frame = frames[id] else { return }
+                    moving = (id, offsets[id] ?? .zero,
+                              CGRect(x: frame.minX / u, y: frame.minY / u, width: frame.width / u, height: frame.height / u))
                 }
-                guard let moving, let frame = frames[moving.id] else { return }
-                let r = CGRect(x: frame.minX / u, y: frame.minY / u, width: frame.width / u, height: frame.height / u)
+                guard let moving else { return }
+                let r = moving.rect
                 var dx = moving.start.width + value.translation.width / u
                 var dy = moving.start.height + value.translation.height / u
                 var shown = Guides()
