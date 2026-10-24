@@ -9,6 +9,10 @@ struct CoachView: View {
     /// The screen the coach was opened from and the day it shows (src/assistant-app-context.js).
     var view = "today"
     var date: String? = nil
+    /// Opened from a detail ("✦ Kouč"): what the athlete asks about (CoachFromDetail.swift).
+    var subject: CoachSubject? = nil
+    /// Opened from the coach's push: the chat it answered in.
+    var openChat: Int? = nil
     @State private var messages: [Bubble] = []
     @State private var chatId: Int?
     @State private var input = ""
@@ -67,6 +71,7 @@ struct CoachView: View {
                         // Lazy: a long chat lays out only the bubbles on screen.
                         LazyVStack(alignment: .leading, spacing: 14) {
                             if messages.isEmpty { welcome }
+                            else if let subject { CoachSubjectCard(subject: subject) }
                             ForEach(messages) { bubble in
                                 BubbleView(bubble: bubble,
                                            decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
@@ -132,6 +137,7 @@ struct CoachView: View {
         .tint(Palette.ink)
         .task {
             guard !model.demo, home == nil else { return }
+            if let openChat, chatId == nil { await open(openChat) }
             home = try? await model.api.coaches(date: AppModel.localDate(Date()))
             allowance = (try? await model.api.subscription())?.coachAllowance
             if allowance?.usedUp == true { usedUp = true }
@@ -140,7 +146,29 @@ struct CoachView: View {
 
     // MARK: Parts
 
-    private var welcome: some View {
+    @ViewBuilder private var welcome: some View {
+        if let subject {
+            VStack(alignment: .leading, spacing: 14) {
+                CoachSubjectCard(subject: subject)
+                SectionLabel(text: "Zkus třeba").padding(.top, 10)
+                ForEach(subject.questions.map(L10n.tr), id: \.self) { suggestion($0) }
+            }
+        } else {
+            dayWelcome
+        }
+    }
+
+    /// A question to try: sent as it is.
+    private func suggestion(_ q: String) -> some View {
+        Button { input = q; Task { await send() } } label: {
+            Text(q).font(.subheadline).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var dayWelcome: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let s = home?.morningSummary, let headline = s.headline {
                 Text(headline).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
@@ -165,14 +193,8 @@ struct CoachView: View {
             .buttonStyle(.plain)
             .padding(.top, 6)
             SectionLabel(text: "Zkus třeba").padding(.top, 6)
-            ForEach(["Jak mám dnes trénovat?", "Necítím se dobře, uprav mi týden.", "Co sníst před večerním tréninkem?", "Proč mám nízkou připravenost?"], id: \.self) { q in
-                Button { input = L10n.tr(q); Task { await send() } } label: {
-                    Text(q).font(.subheadline).foregroundStyle(Palette.ink)
-                        .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            }
+            // After a workout, on a low morning, the day before a hard session: about that.
+            ForEach(CoachSuggestions.forDay(today: model.today, sessions: model.training?.sessions ?? [], date: AppModel.localDate(Date())), id: \.self) { suggestion($0) }
         }
     }
 
@@ -316,7 +338,7 @@ struct CoachView: View {
         var unshown: String?
         var shownAt = Date.distantPast
         do {
-            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image) {
+            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image, appContext: subject?.appContext) {
                 switch event {
                 case .progress(let p): progress = p
                 case .answer(let a):
@@ -490,8 +512,20 @@ struct CoachView: View {
             let chat = try await model.api.chat(id: id)
             chatId = chat.id
             usedUp = allowance?.usedUp == true
+            // The proposals stay under the answer they came with, decided or still open.
+            let actions = chat.actions ?? []
             messages = chat.messages.map { m in
-                guard m.role == "user" else { return Bubble(mine: false, text: Self.withoutProposalNote(m.content)) }
+                guard m.role == "user" else {
+                    var bubble = Bubble(mine: false, text: Self.withoutProposalNote(m.content))
+                    if let id = m.serverId {
+                        bubble.actions = actions.filter { $0.messageId == id }
+                        for a in bubble.actions {
+                            guard let draft = a.draftId, let state = a.draftStatus, state != "draft" else { continue }
+                            bubble.decided[draft] = state == "confirmed" ? L10n.tr("Potvrzeno.") : state == "rejected" ? L10n.tr("Zamítnuto.") : L10n.tr("Návrh už neplatí.")
+                        }
+                    }
+                    return bubble
+                }
                 let photo = Self.withoutPhotoMark(m.content)
                 return Bubble(mine: true, text: photo.text, photoMark: photo.marked)
             }

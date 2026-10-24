@@ -100,7 +100,8 @@ import { handleGoogleLogin } from "./google-login.js";
 import { handleNativeConnect } from "./native-connect.js";
 import { reviewRefusal, isReviewAccount } from "./app-review.js";
 import { handleNativeAppleLogin } from "./apple-login.js";
-import { chatContext, appendChatTurn, listChats, readChat, deleteChat } from "./assistant-chats.js";
+import { chatContext, appendChatTurn, listChats, readChat, deleteChat, startChatWithCoach, lastAnswerId, ownedChat } from "./assistant-chats.js";
+import { COACH_REPLY_CATEGORY, PUSH_REPLY_CHARS, pushOpening, replyPush, failedReplyPush } from "./coach-push-reply.js";
 import { intervalsAuthorization, INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
 import { isStaging, markStaging } from "./staging.js";
 import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
@@ -683,7 +684,7 @@ async function coachPush(env, ctx) {
   if (nudge.swap) await updateAthleteState(db, { nudge: { ...nudge.swap, title: nudge.title, day: date, status: 'pending' } });
   let sent = 0;
   for (const device of devices) {
-    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : null, data: { coach: { kind: nudge.kind, date } } }).catch(error => ({ ok: false, error: error.message }));
+    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date } } }).catch(error => ({ ok: false, error: error.message }));
     if (result.ok) sent++;
     else if (result.gone) await deletePushToken(db, device.token);
     else console.error('Coach push not delivered', result.status || '', result.reason || result.error || '');
@@ -1776,7 +1777,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         // The active plan's sessions this week, the days the generator will follow.
         const targets=await computeWeekTargets(env,ctx,thisWeek,prefs).catch(()=>null);
         if(targets?.plan)coachCtx.trainingPlan={name:targets.plan.name,week:targets.plan.week,weeks:targets.plan.weeks,phase:targets.plan.phaseLabel||targets.plan.phase,sessions:(targets.items||[]).filter(x=>x.plan).map(x=>({date:x.date,sport:x.sport,kind:x.plan.kind,label:x.label,minutes:x.minutes}))};
-        Object.assign(coachCtx,{appContext:selected.appContext,selectedGym:selected.selectedGym,selectedDay:selected.selectedDay,selectedWeek:selected.selectedWeek});
+        Object.assign(coachCtx,{appContext:selected.appContext,selectedGym:selected.selectedGym,selectedDay:selected.selectedDay,selectedWeek:selected.selectedWeek},selected.selectedActivity?{selectedActivity:selected.selectedActivity}:{},selected.selectedSession?{selectedSession:selected.selectedSession}:{});
         const reviewDay=selected.appContext.date<=date&&selected.selectedDay?selected.appContext.date:date;
         const reviews=await rideReviewsForCoach(env,ctx,reviewDay===date?inputs.daily?.training:selected.selectedDay,reviewDay,inputs.fitness?.wellness,thresholds).catch(()=>[]);
         if(reviews.length)coachCtx.completedRideReviews=reviews;
@@ -1818,7 +1819,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       await env.DB.prepare("UPDATE coach_inbox SET status='expired' WHERE user_id=? AND status='draft' AND created_at<? AND draft_json LIKE '%\"coach_action\"%'").bind(env.USER_ID,dayStartSql(date)).run().catch(error=>console.error('Draft expiry failed',error.message));
       // A workout card keeps the context its quick changes check (coach-quick-change.js).
       const quick=actions.some(a=>a.type==='workout')?quickSnapshot(coachCtx,date):null;
-      for(const action of actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(own?{quick:own}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
+      // Each proposal points to the answer it came with, so a reopened chat shows it there.
+      const messageId=actions.length?await lastAnswerId(env.DB,chatId).catch(()=>null):null;
+      for(const action of actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(messageId?{messageId}:{}),...(own?{quick:own}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
       delete answer.memory;
       return {...answer,chatId,actions:proposals,coachAllowance,memorySaved:memory,memoryChanges:{saved:memory||null,...changes},costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
@@ -1833,6 +1836,36 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     try{return Response.json(await reply(null),{headers:{'Cache-Control':'no-store'}});}
     catch(error){if(error.limit)return Response.json({message:error.message},{status:error.status||429});console.error('Assistant request failed',error);return Response.json({message:L('AI odpověď se nepodařilo připravit.', 'The AI answer couldn\'t be prepared.')},{status:502});}
   }
+  // "Odpovědět" on a coach push (coach-push-reply.js): the answer is asked like
+  // any message in the chat that starts with that push, and comes back as a push.
+  // The phone waits for this request in the background (URLSession background
+  // upload), so the work ends with the response.
+  if(url.pathname==='/app/api/assistant/push-reply'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const raw=await request.text().catch(()=>'');
+    if(raw.length>8000)return Response.json({message:L('Požadavek je moc velký.', 'The request is too large.')},{status:413});
+    let body;try{body=JSON.parse(raw)||{};}catch{body={};}
+    const text=String(body.text||'').trim();
+    if(!text||text.length>PUSH_REPLY_CHARS)return Response.json({message:L('Odpověď je prázdná nebo moc dlouhá.', 'The reply is empty or too long.')},{status:400});
+    let chatId=(await ownedChat(env.DB,body.chatId).catch(()=>null))?.id??null;
+    if(!chatId){
+      const opening=pushOpening(body.title,body.body);
+      chatId=opening?await startChatWithCoach(env.DB,body.title,opening):null;
+    }
+    const askUrl=new URL('/app/api/assistant',url.origin);
+    const response=await handleDashboardApi(new Request(askUrl,{method:'POST',headers:{Origin:url.origin,'Content-Type':'application/json'},body:JSON.stringify({message:text,chatId,mode:'coach',appContext:{view:'today',date:localToday()}})}),env,ctx,askUrl,session).catch(error=>{console.error('Push reply failed',error.message);return null;});
+    const result=response?await response.json().catch(()=>null):null;
+    const answered=response?.ok&&result?.answer;
+    if(answered&&result.chatId)chatId=result.chatId;
+    const push=answered?replyPush(result,chatId):failedReplyPush(result?.message,chatId);
+    let sent=0;
+    for(const device of await listPushTokens(env.DB)){
+      const r=await sendPush(env,device,push.alert,{category:push.category,data:push.data}).catch(error=>({ok:false,error:error.message}));
+      if(r.ok)sent++;else if(r.gone)await deletePushToken(env.DB,device.token);else console.error('Coach reply push not delivered',r.status||'',r.reason||r.error||'');
+    }
+    return Response.json({status:answered?'ok':'error',chatId,sent},{headers:{'Cache-Control':'no-store'}});
+  }
   // The list of chats, one chat with its messages, and deleting a chat.
   if(url.pathname==='/app/api/assistant/chats'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
@@ -1846,6 +1879,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       await deleteChat(env.DB,chatPath[1]);return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});
     }
     const chat=await readChat(env.DB,chatPath[1]);
+    // The proposals made in this chat, with how they were decided.
+    if(chat){
+      await ensureCoachInboxTable(env.DB);
+      const rows=(await env.DB.prepare("SELECT id,status,draft_json FROM coach_inbox WHERE user_id=? AND draft_json LIKE ? AND created_at>=datetime('now','-90 days') ORDER BY id").bind(env.USER_ID,'%"chatId":'+chat.id+',"messageId"%').all().catch(()=>({results:[]}))).results||[];
+      chat.actions=rows.map(r=>{try{const d=JSON.parse(r.draft_json);return d.kind==='coach_action'&&d.chatId===chat.id&&d.messageId?{...d.action,draftId:r.id,draftStatus:r.status,messageId:d.messageId}:null;}catch{return null;}}).filter(Boolean);
+    }
     return chat?Response.json({status:'ok',chat},{headers:{'Cache-Control':'no-store'}}):Response.json({message:'Chat neexistuje.'},{status:404});
   }
   // "Vrátit" under a confirmed delete, merge or time change of a done activity.
