@@ -44,6 +44,8 @@ struct CoachView: View {
         var failed: [Int: String] = [:]
         /// A confirmed change of a done activity that "Vrátit" can take back.
         var undo: [Int: String] = [:]
+        /// The quick change a workout card is waiting for (Kratší, Lehčí…).
+        var adjusting: [Int: String] = [:]
         var visuals: [String] = []
         var memory: [CoachMemoryChip] = []
         /// Food read from a sentence, waiting for "Zapsat"; `logged` once decided.
@@ -70,6 +72,7 @@ struct CoachView: View {
                                            decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
                                            undoMemory: { chip in Task { await undo(chip, in: bubble.id) } },
                                            undoAction: { action in Task { await undo(action, in: bubble.id) } },
+                                           adjust: { action, chip, date in Task { await adjust(action, chip: chip, date: date, in: bubble.id) } },
                                            logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } })
                                     .id(bubble.id)
                             }
@@ -389,6 +392,23 @@ struct CoachView: View {
         }
     }
 
+    /// Kratší, Delší, Lehčí, Těžší, Jiný den or Vrátit on a workout card: the
+    /// server changes it by rules, no AI and no message counted.
+    private func adjust(_ action: CoachAction, chip: String, date: String?, in bubble: UUID) async {
+        guard let draftId = action.draftId, messages.first(where: { $0.id == bubble })?.adjusting[draftId] == nil else { return }
+        edit(bubble) { $0.failed[draftId] = nil; $0.adjusting[draftId] = chip }
+        do {
+            let answer = try await model.api.adjustCoachAction(draftId: draftId, chip: chip, date: date)
+            edit(bubble) { b in
+                b.adjusting[draftId] = nil
+                if let i = b.actions.firstIndex(where: { $0.draftId == draftId }) { b.actions[i] = answer.action }
+                if let saved = answer.memory?.saved { b.memory.append(CoachMemoryChip(kind: .saved, text: saved, showsText: true)) }
+            }
+        } catch {
+            edit(bubble) { $0.adjusting[draftId] = nil; $0.failed[draftId] = error.localizedDescription }
+        }
+    }
+
     /// "Vrátit" under a confirmed change of a done activity.
     private func undo(_ action: CoachAction, in bubble: UUID) async {
         guard let draftId = action.draftId, let token = messages.first(where: { $0.id == bubble })?.undo[draftId] else { return }
@@ -486,6 +506,7 @@ struct BubbleView: View {
     var decide: (CoachAction, Bool) -> Void
     var undoMemory: (CoachMemoryChip) -> Void = { _ in }
     var undoAction: (CoachAction) -> Void = { _ in }
+    var adjust: (CoachAction, String, String?) -> Void = { _, _, _ in }
     var logFood: ([(product: FoodProduct, amount: Double, meal: String)]?, String) -> Void = { _, _ in }
 
     var body: some View {
@@ -530,7 +551,9 @@ struct BubbleView: View {
                 ActionCard(action: action, result: action.draftId.flatMap { bubble.decided[$0] },
                            failure: action.draftId.flatMap { bubble.failed[$0] },
                            canUndo: action.draftId.map { bubble.undo[$0] != nil } ?? false,
-                           decide: { decide(action, $0) }, undo: { undoAction(action) })
+                           adjusting: action.draftId.flatMap { bubble.adjusting[$0] },
+                           decide: { decide(action, $0) }, undo: { undoAction(action) },
+                           adjust: { adjust(action, $0, $1) })
             }
             if let food = bubble.food {
                 FoodDraftCard(draft: food, logged: bubble.logged, ok: bubble.loggedOK, log: logFood)
@@ -541,14 +564,19 @@ struct BubbleView: View {
     }
 }
 
-/// A proposed change with "Potvrdit" and "Ne".
+/// A proposed change with "Potvrdit" and "Ne"; a workout also with Kratší,
+/// Delší, Lehčí, Těžší and Jiný den under them.
 struct ActionCard: View {
     let action: CoachAction
     let result: String?
     var failure: String? = nil
     var canUndo = false
+    /// The quick change on its way, the chip greys out the others meanwhile.
+    var adjusting: String? = nil
     var decide: (Bool) -> Void
     var undo: () -> Void = {}
+    var adjust: (String, String?) -> Void = { _, _ in }
+    @State private var pickingDay = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -561,6 +589,17 @@ struct ActionCard: View {
                 Text(detail).font(Typo.caption).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if let reason = action.reason { Text(reason).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
+            if result == nil, let change = action.quickChange {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark").font(.caption.weight(.bold))
+                    Text(verbatim: change).font(Typo.caption.weight(.medium))
+                    Text("·")
+                    Button { adjust("undo", nil) } label: { Text("Vrátit").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted) }
+                        .buttonStyle(.plain)
+                }
+                .foregroundStyle(Palette.green)
+                .disabled(adjusting != nil)
+            }
             if let result {
                 HStack(spacing: 6) {
                     if canUndo { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
@@ -584,6 +623,8 @@ struct ActionCard: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .disabled(adjusting != nil)
+                if let quick = action.quick { quickChoices(quick) }
                 if let failure {
                     Text(failure).font(Typo.caption).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
                 }
@@ -592,6 +633,56 @@ struct ActionCard: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Palette.amberSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    /// Kratší · Delší · Lehčí · Těžší, then Jiný den with the days ahead; a
+    /// choice that doesn't fit the day is grey.
+    @ViewBuilder private func quickChoices(_ quick: CoachAction.Quick) -> some View {
+        HStack(spacing: 6) {
+            chip("shorter", "Kratší", quick.shorter)
+            chip("longer", "Delší", quick.longer)
+            chip("easier", "Lehčí", quick.easier)
+            chip("harder", "Těžší", quick.harder)
+        }
+        chip("day", "Jiný den", quick.day, on: pickingDay) { pickingDay.toggle() }
+        if pickingDay {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 5) {
+                    ForEach(quick.days, id: \.self) { day in
+                        Button {
+                            pickingDay = false
+                            adjust("day", day.date)
+                        } label: {
+                            VStack(spacing: 1) {
+                                Text(verbatim: Fmt.weekdayShort(day.date)).font(Typo.caption.weight(.medium))
+                                Text(verbatim: Fmt.dayMonth(day.date)).font(.system(size: 10.5)).foregroundStyle(day.fits ? Palette.muted : Palette.ink.opacity(0.25))
+                            }
+                            .foregroundStyle(day.fits ? Palette.ink : Palette.ink.opacity(0.3))
+                            .frame(width: 52, height: 44)
+                            .background(day.fits ? Palette.card : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Palette.ink.opacity(0.1), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!day.fits || adjusting != nil)
+                    }
+                }
+            }
+        }
+    }
+
+    private func chip(_ id: String, _ title: String, _ enabled: Bool, on: Bool = false, action: (() -> Void)? = nil) -> some View {
+        Button { if let action { action() } else { adjust(id, nil) } } label: {
+            HStack(spacing: 5) {
+                if adjusting == id { ProgressView().controlSize(.mini) }
+                Text(L10n.tr(title)).font(.footnote.weight(.medium))
+            }
+            .foregroundStyle(on ? Palette.onButton : enabled ? Palette.ink : Palette.ink.opacity(0.3))
+            .padding(.horizontal, 12).frame(height: 30)
+            .background(on ? Palette.button : enabled ? Palette.card : Color.clear, in: Capsule())
+            .overlay(Capsule().stroke(on ? Color.clear : Palette.ink.opacity(0.1), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled || adjusting != nil)
     }
 }
 
