@@ -461,8 +461,8 @@ html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
 .month>div{min-height:0}.mh{display:flex;flex-direction:column;align-items:center;padding-top:6px}.mh b{font-size:14px}
 .mg{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:6px 0 4px;overflow:hidden;min-height:0}
 .mw{font-size:10.5px;font-weight:600;color:var(--muted);text-align:center}
-.md{display:flex;flex-direction:column;align-items:center;gap:1px;padding:2px 0;border-radius:9px;font-size:10.5px;min-height:36px}.md.sel{background:var(--track)}
-.md .ci{width:20px;height:20px;font-size:10px}.md .ci.up{outline-width:1.5px}
+.mg .md{display:flex;flex-direction:column;align-items:center;gap:1px;padding:2px 0;border-radius:9px;font-size:10.5px;min-height:36px}.mg .md.sel{background:var(--track)}
+.mg .md .ci{width:20px;height:20px;font-size:10px}.mg .md .ci.up{outline-width:1.5px}
 .day{margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}.day>.row{margin-bottom:4px}
 .ar{display:grid;grid-template-columns:36px 1fr auto;align-items:center;gap:10px;padding:8px 0}
 .ar .ci{width:34px;height:34px;font-size:15px}.ar b{display:block;font-size:14px}.ar .num{font-size:18px}.ar>.di{color:var(--muted)}
@@ -547,7 +547,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .kbar{display:block;height:6px;margin:10px 0 12px;border-radius:9px;background:var(--track);overflow:hidden}
 .kbar b{display:block;height:100%;width:var(--w);background:var(--amber-bar);border-radius:9px;transition:width 1.1s cubic-bezier(.16,1,.3,1)!important}
 .js .kbar b{opacity:1!important;transform:none!important}.kbar b.t,html:not(.js) .kbar b{width:${(1380 / 2650 * 100).toFixed(1)}%}
-.mac{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.mac .num.md{font-size:19px}.mac small{font-family:var(--num);font-size:12px;color:var(--muted)}
+.mac{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.mac>div{display:flex;flex-direction:column;gap:3px}.mac .num.md{font-size:19px}.mac small{font-family:var(--num);font-size:12px;color:var(--muted)}
 .mb{display:block;height:3px;margin-top:4px;border-radius:3px;background:var(--track);overflow:hidden}.mb b{display:block;height:100%;width:var(--w)}
 .coach{margin-top:14px;padding:12px 14px;border-radius:16px;background:var(--bg)}.ch4{display:flex;align-items:center;gap:6px;color:var(--indigo);font-weight:500;font-size:13.5px}
 .coach .sent{margin-top:4px;font-size:17px;line-height:1.3;min-height:3.9em}

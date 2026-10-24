@@ -34,13 +34,10 @@ p{margin:0}
 .pill-nav .links a{padding:7px 12px;border-radius:999px;color:var(--muted);text-decoration:none;font-size:14px;font-weight:500}
 .pill-nav .links a:hover{color:var(--text);background:var(--track)}
 
-/* The waitlist button: the app is not in the App Store yet; it opens an e-mail field (store()). */
-.store{display:inline-flex;align-items:center;gap:10px;height:56px;padding:0 28px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:17px;font-weight:600;box-shadow:0 14px 30px -12px rgba(21,20,15,.6)}
-.store svg{width:20px;height:20px;fill:currentColor}
-button.store{border:0;font:inherit;font-size:17px;font-weight:600;cursor:pointer}
+/* The waitlist: the app is not in the App Store yet; an e-mail field with its button (store()). */
 .wl{display:inline-flex;flex-direction:column;align-items:center;max-width:100%}
-.wl .field,.wl .done{display:none}
-.wl .field{align-items:center;gap:6px;height:56px;width:340px;max-width:100%;padding:0 6px 0 22px;border-radius:999px;background:var(--panel);box-shadow:0 0 0 1px var(--line),0 14px 30px -12px rgba(21,20,15,.35)}
+.wl .done{display:none}
+.wl .field{display:flex;align-items:center;gap:6px;height:56px;width:340px;max-width:100%;padding:0 6px 0 22px;border-radius:999px;background:var(--panel);box-shadow:0 0 0 1px var(--line),0 14px 30px -12px rgba(21,20,15,.35)}
 .wl input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:17px;color:var(--text)}
 .wl .go{flex:none;width:44px;height:44px;border:0;border-radius:50%;background:var(--button);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .wl .go svg,.wl .done svg{width:20px;height:20px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
@@ -48,12 +45,11 @@ button.store{border:0;font:inherit;font-size:17px;font-weight:600;cursor:pointer
 .wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:999px;background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:17px;font-weight:600}
 .wl .done svg{stroke:currentColor}
 .wl .err{margin-top:10px;font-size:15px;color:var(--rust)}.wl .err:empty{display:none}
-.wl.on .open,.wl.sent .open,.wl.sent .field{display:none}.wl.on .field{display:flex}.wl.sent .done{display:inline-flex}
+.wl.sent .field{display:none}.wl.sent .done{display:inline-flex}
 /* After joining: pass Aurin on (the phone's own sharing, or the link copied). Nothing about it is stored. */
 .wl .share{display:none;align-items:center;gap:8px;margin-top:12px;padding:8px 14px;border:0;border-radius:999px;background:transparent;font:inherit;font-size:15px;font-weight:600;color:var(--sec);cursor:pointer}
 .wl .share:hover{background:var(--panel)}.wl .share svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .wl.sent .share{display:inline-flex}
-html:not(.js) .wl .open{display:none}html:not(.js) .wl .field{display:flex}
 
 /* Grain over the whole page: printed paper rather than a flat screen. */
 .site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.05;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
@@ -297,13 +293,13 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 /* Motion, only with JS and without reduced motion: the headline rises word by word, the aurora drifts,
    content fades up as it scrolls in, a step's bar fills while it is shown and its piece floats. */
 @media (prefers-reduced-motion:no-preference){
-  .js .hero h1 .w>span{transform:translateY(105%);animation:rise 1.1s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(.15s + var(--i) * 90ms)}
+  .js .hero h1 .w>span{transform:translateY(105%);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(var(--i) * 40ms)}
   @keyframes rise{to{transform:none}}
-  .js .hero .lede,.js .hero .cta,.js .hero .kicker{opacity:0;animation:fade 1s .7s forwards}
-  .js .hero .kicker{animation-delay:.05s}.js .hero .cta{animation-delay:.9s}
-  .js .stage{opacity:0;transform:translateY(40px);animation:lift 1.3s cubic-bezier(.16,1,.3,1) .35s forwards}
+  .js .hero .lede,.js .hero .cta,.js .hero .kicker{opacity:0;animation:fade .5s .15s forwards}
+  .js .hero .kicker{animation-delay:0s}.js .hero .cta{animation-delay:.25s}
+  .js .stage{opacity:0;transform:translateY(40px);animation:lift 1s cubic-bezier(.16,1,.3,1) .2s forwards}
   .js .glass{opacity:0;animation:pop .9s cubic-bezier(.16,1,.3,1) forwards}
-  .js .glass.g1{animation-delay:1s}.js .glass.g2{animation-delay:1.15s}.js .glass.g3{animation-delay:1.3s}
+  .js .glass.g1{animation-delay:.6s}.js .glass.g2{animation-delay:.75s}.js .glass.g3{animation-delay:.9s}
   @keyframes fade{to{opacity:1}}
   @keyframes lift{to{opacity:1;transform:none}}
   @keyframes pop{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
@@ -401,7 +397,6 @@ const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 
 const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const SHARE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
 const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
-<button type="button" class="store open">Join the waitlist</button>
 <span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
 <span class="done" role="status">${CHECK}<span>You're on the list</span></span>
 <button type="button" class="share">${SHARE}<span>Know someone who trains? Share Aurin</span></button>
@@ -442,11 +437,10 @@ document.querySelectorAll('.chapter').forEach(function(ch){
  new IntersectionObserver(function(es){var on=es[0].isIntersecting;ch.classList.toggle('paused',!on);
   if(on&&!seen){seen=true;run(cur);}else if(!on&&seen){seen=false;clearTimeout(loop);units(cur).forEach(function(u){D.last(u);});}},{threshold:.35}).observe(ch.querySelector('.vis-wrap'));});
 document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelector('input'),err=f.querySelector('.err'),busy=false;
- f.querySelector('.open').addEventListener('click',function(){f.classList.add('on');input.focus();});
  f.addEventListener('submit',function(e){e.preventDefault();if(busy)return;var email=input.value.trim();err.textContent='';
   if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){err.textContent='Enter a valid email.';input.focus();return;}
   busy=true;fetch('/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})})
-  .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');f.classList.remove('on');})})
+  .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');})})
   .catch(function(x){err.textContent=x.message;}).then(function(){busy=false;});});
  var sh=f.querySelector('.share'),said=sh.querySelector('span');
  sh.addEventListener('click',function(){var link=location.origin+'/';
@@ -604,10 +598,10 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // The overview follows the app: Today in the hero, one morning said as a sentence, then a chapter per area
 // of the app (its words on one side, a phone with its screens on the other), the muscles, the connections,
 // privacy and questions. The numbers are one believable morning, the same everywhere.
-// Google's app verification reads this disclosure on the homepage. Petr took it off the overview
-// to keep the page clean (2026-10-15); before asking Google to verify the app, set this to true.
+// Google's app verification reads this disclosure on the homepage. Aurin is not going through Google's
+// verification (2026-10-24), so it stays off the overview; before asking Google to verify the app, set this to true.
 // The text stays word for word (tests/site-pages.test.mjs).
-export const GOOGLE_DISCLOSURE_ON_HOME = true;
+export const GOOGLE_DISCLOSURE_ON_HOME = false;
 export const googleDisclosure = () => `<div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
