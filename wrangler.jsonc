@@ -68,7 +68,10 @@
   "services": [
     { "binding": "USER_JOBS", "service": "health-api", "entrypoint": "UserJobs" }
   ],
-  "workers_dev": true,
+  // Only aurin.health: a workers.dev address would answer without the zone's
+  // Cloudflare rules (rate limiting, WAF), and preview versions share the live database.
+  "workers_dev": false,
+  "preview_urls": false,
   // The owner is the first admin; existing single-user data belongs to this account.
   "vars": {
     // Provisioned by scripts/provision-user-shards.mjs in the deploy jobs.
