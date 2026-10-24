@@ -2817,6 +2817,7 @@
 "Jen to, co odcvičíš nebo zapíšeš v Aurinu." = "Only what you do or log in Aurin.";
 "váhu" = "weight";
 "jídlo" = "food";
+"%@ teď posílá Aurin do Google Health. Sem je neposílá, aby se nezdvojily." = "Aurin now sends %@ to Google Health instead, so they aren't counted twice.";
 "Posílat do Google Health" = "Send to Google Health";
 "Google se na své stránce zeptá, jestli může Aurin do Google Health zapisovat %@." = "Google will ask on its own page whether Aurin may write %@ to Google Health.";
 "Co Aurin čte, povoluješ na stránce Googlu." = "You choose what Aurin reads on Google's page.";
