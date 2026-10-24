@@ -617,8 +617,8 @@ struct ActionCard: View {
     var adjusting: String? = nil
     var decide: (Bool) -> Void
     var undo: () -> Void = {}
-    var openPlan: () -> Void = {}
     var adjust: (String, String?) -> Void = { _, _ in }
+    var openPlan: () -> Void = {}
     @State private var pickingDay = false
 
     var body: some View {
