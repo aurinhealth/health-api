@@ -2844,6 +2844,11 @@
 "%d×" = "%d×";
 "Teď v katalogu" = "In the catalogue now";
 "Něco jiného" = "Something else";
+"běhů" = "runs";
+"jízd" = "rides";
+"Ukončí plán %@" = "Ends the plan %@";
+"Otevřít plán" = "Open the plan";
+"Tréninkový plán: %@" = "Training plan: %@";
 "Vybrat z Fotek" = "Choose from Photos";
 "Fotku se nepodařilo připravit. Zkus jinou." = "The photo couldn't be prepared. Try another one.";
 
