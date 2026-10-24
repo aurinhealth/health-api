@@ -924,7 +924,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li>You can also remove Aurin’s access at any time in your Google Account under <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>. Aurin then can no longer read or write your Google data.</li>
 ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID settings.</li>' : ''}
 <li>Technical logs are kept for a few days, and OpenAI keeps AI requests for up to 30 days under its API terms.</li>
-<li>An address on the waitlist stays there until testing ends, or until you ask us to remove it at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
+<li>An address on the waitlist stays there until testing ends, until you delete your Aurin account, or for 12 months at most, whichever comes first. You can also ask us to remove it sooner at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
 </ul>
 <p>The <a href="/support">Support</a> page explains step by step how to manage and delete your data.</p>
 <h2>Legal bases and your rights</h2>
@@ -1029,7 +1029,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li>Přístup Aurinu můžeš kdykoli odebrat i ve svém účtu Google v části <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>. Aurin pak už tvoje data z Googlu nepřečte ani nezapíše.</li>
 ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení svého Apple ID.</li>' : ''}
 <li>Technické záznamy se uchovávají několik dní a OpenAI podle svých podmínek API uchovává požadavky AI nejvýš 30 dní.</li>
-<li>E-mail ve waitlistu zůstane, dokud testování neskončí nebo dokud nás nepožádáš o jeho smazání na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
+<li>E-mail ve waitlistu zůstane, dokud testování neskončí, dokud nesmažeš účet v Aurinu, nebo nejdéle 12 měsíců, podle toho, co nastane dřív. O dřívější smazání nás můžeš požádat na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
 </ul>
 <p>Na stránce <a href="/support">Podpora</a> najdeš postup krok za krokem, jak data spravovat a smazat.</p>
 <h2>Právní základ a tvoje práva</h2>
