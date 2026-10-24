@@ -2848,4 +2848,4 @@
 "podle kalendáře" = "by your calendar";
 "%@ podle kalendáře, nastaveno %@" = "%1$@ by your calendar, set to %2$@";
 "Aurin nemá přístup ke kalendáři. Povol ho v Nastavení iPhonu → Aplikace → Aurin → Kalendáře." = "Aurin can't access your calendar. Allow it in iPhone Settings → Apps → Aurin → Calendars.";
-"Do kalendáře v iPhonu se tréninky nezapsaly: %@" = "The workouts weren't added to the iPhone calendar: %@";
+"Závod · %@" = "Race · %@";

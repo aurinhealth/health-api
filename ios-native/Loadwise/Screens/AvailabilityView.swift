@@ -210,8 +210,10 @@ struct AvailabilityView: View {
             if readCalendar {
                 SettingsDivider()
                 SettingsToggle(title: L10n.tr("Zapisovat tréninky"), isOn: Binding(get: { writeCalendar }, set: { on in
+                    if !on { CalendarTime.shared.removeMirrored() }
                     UserDefaults.standard.set(on, forKey: CalendarTime.writeKey)
                     writeCalendar = CalendarTime.shared.writes
+                    if on { Task { await CalendarTime.shared.mirror(api: model.api, force: true) } }
                 }), disabled: calendarBusy || saving)
                 if writeCalendar {
                     SettingsDivider()
@@ -239,6 +241,7 @@ struct AvailabilityView: View {
             await CalendarTime.shared.send(api: model.api, force: true)
         } else {
             readCalendar = false
+            if CalendarTime.shared.writes { CalendarTime.shared.removeMirrored() }
             do { try await CalendarTime.shared.stopReading(api: model.api) } catch { self.error = error.localizedDescription }
         }
         writeCalendar = CalendarTime.shared.writes

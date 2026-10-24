@@ -744,27 +744,10 @@ struct WeekPlanView: View {
                 sessions[i].status = .failed(error.localizedDescription)
             }
         }
-        writeToCalendar()
         await model.refreshTraining()
         await model.loadCalendar(from: weekStart, to: ISODay.shift(weekStart, 6), force: true)
-    }
-
-    /// "Zapisovat tréninky": the saved sessions go into the iPhone calendar too.
-    private func writeToCalendar() {
-        guard CalendarTime.shared.writes else { return }
-        let saved = sessions.filter { $0.status == .saved }
-        let workouts = saved.map { s in
-            let about = [sportLabel(s.sport), Fmt.duration(s.minutes), kindLabel(s.kind)].compactMap { $0 }.joined(separator: " · ")
-            let link = URL(string: s.sport == "gym" ? "loadwise://open/gym/" + s.date : "loadwise://open/training")
-            return CalendarTime.Workout(date: s.date, title: s.title, minutes: s.minutes,
-                                        notes: [about, s.workout?.description].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n"),
-                                        link: link)
-        }
-        do {
-            try CalendarTime.shared.write(workouts)
-        } catch {
-            self.error = L10n.f("Do kalendáře v iPhonu se tréninky nezapsaly: %@", error.localizedDescription)
-        }
+        // "Zapisovat tréninky": the saved week goes into the iPhone calendar too.
+        await CalendarTime.shared.mirror(api: model.api, force: true)
     }
 
     private func load() async {

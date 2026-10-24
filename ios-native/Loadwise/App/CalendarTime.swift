@@ -64,7 +64,7 @@ final class CalendarTime {
     func read(now: Date = Date()) -> [Day] {
         guard reads else { return [] }
         let cal = Calendar.current
-        let ours = Set(written.values.flatMap { $0 })
+        let ours = written
         var out: [Day] = []
         for i in 0..<Self.days {
             guard let day = cal.date(byAdding: .day, value: i, to: cal.startOfDay(for: now)) else { continue }
@@ -138,15 +138,6 @@ final class CalendarTime {
 
     // MARK: Writing
 
-    /// One workout for the calendar.
-    struct Workout {
-        let date: String
-        let title: String
-        let minutes: Int
-        let notes: String
-        let link: URL?
-    }
-
     /// The times of the day's workouts in its free time, one after another
     /// with the buffer between them; nil when the day was not read.
     func slots(date: String, minutes: [Int]) -> [(start: Date, end: Date)]? {
@@ -208,42 +199,139 @@ final class CalendarTime {
         return own
     }
 
-    private var written: [String: [String]] {
+    /// One thing for the calendar: a planned workout or a plan's race day.
+    struct Entry: Equatable {
+        /// The planned workout's id, or "race|<plan>".
+        let key: String
+        let date: String
+        let title: String
+        /// nil: all day (the race).
+        let minutes: Int?
+        /// "18:30" when the workout has its own time.
+        let time: String?
+        let notes: String
+        let link: URL?
+
+        var signature: String { [date, title, minutes.map(String.init) ?? "day", time ?? ""].joined(separator: "|") }
+    }
+
+    /// What Aurin wrote: the entry's key → [event id, signature].
+    private var mirrored: [String: [String]] {
         get { (defaults.dictionary(forKey: Self.eventsKey) as? [String: [String]]) ?? [:] }
         set { defaults.set(newValue, forKey: Self.eventsKey) }
     }
 
-    /// Puts the workouts into the calendar, each day's in its free time; the
-    /// workouts Aurin wrote for those days before are replaced.
-    func write(_ workouts: [Workout]) throws {
-        guard writes, !workouts.isEmpty else { return }
+    /// The events Aurin wrote do not count as busy.
+    private var written: Set<String> { Set(mirrored.values.compactMap(\.first)) }
+
+    /// The planned workouts of the next four weeks.
+    static let mirrorDays = 28
+    private var mirroredAt = Date.distantPast
+
+    /// "Zapisovat tréninky": every planned workout of the next four weeks
+    /// (Plán týdne, a training plan, the coach, Intervals.icu) and the race day
+    /// of a race plan go into the calendar; changed ones are moved, removed ones
+    /// go. At most every ten minutes unless `force`.
+    func mirror(api: APIClient, force: Bool = false) async {
+        guard writes, api.hasSession, force || Date().timeIntervalSince(mirroredAt) > 600 else { return }
+        let today = AppModel.localDate(Date())
+        let end = AppModel.shift(today, by: Self.mirrorDays - 1) ?? today
+        guard let calendar = try? await api.trainingCalendar(start: today, end: end) else { return }
+        let plans = try? await api.trainingPlans()
+        var entries: [Entry] = calendar.days.flatMap(\.activities).filter { $0.status == "planned" && $0.date >= today }.map { a in
+            let minutes = a.minutes.map { Int($0.rounded()) }.flatMap { $0 > 0 ? $0 : nil } ?? 60
+            return Entry(key: a.id, date: a.date, title: a.title, minutes: minutes, time: a.time,
+                         notes: [Self.sportLabel(a.sport), Fmt.duration(minutes)].compactMap { $0 }.joined(separator: " · "),
+                         link: URL(string: a.sport == "strength" ? "loadwise://open/gym/" + a.date : "loadwise://open/training"))
+        }
+        // A workout done today keeps its place in the calendar.
+        let done = Set(calendar.days.flatMap(\.activities).compactMap(\.plannedId))
+        for plan in [plans?.active, plans?.activeGym].compactMap({ $0 }) {
+            guard let race = plan.raceDate, race >= today else { continue }
+            entries.append(Entry(key: "race|" + plan.templateId, date: race, title: L10n.f("Závod · %@", plan.name), minutes: nil, time: nil,
+                                 notes: plan.raceKm.map { Fmt.decimal($0) + " km" } ?? "", link: URL(string: "loadwise://open/training")))
+        }
+        _ = read()
+        do {
+            try apply(entries, keep: done, today: today)
+            mirroredAt = Date()
+        } catch {
+            ErrorLog.add(path: "EventKit calendar", status: nil, message: error.localizedDescription)
+        }
+    }
+
+    private func apply(_ entries: [Entry], keep: Set<String>, today: String) throws {
         let calendar = try targetCalendar()
-        var ids = written
-        let byDate = Dictionary(grouping: workouts, by: \.date)
-        for (date, list) in byDate {
-            for id in ids[date] ?? [] {
-                if let old = store.event(withIdentifier: id) { try? store.remove(old, span: .thisEvent, commit: false) }
+        var known = mirrored
+        let wanted = Dictionary(entries.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        // Gone from the plan (past days stay as they were).
+        for (key, value) in known where wanted[key] == nil && !keep.contains(key) {
+            guard (value.last ?? "").prefix(10) >= today else { continue }
+            if let id = value.first, let old = store.event(withIdentifier: id) { try? store.remove(old, span: .thisEvent, commit: false) }
+            known[key] = nil
+        }
+        // New or changed, placed day by day.
+        for (date, list) in Dictionary(grouping: entries, by: \.date) {
+            let changed = list.filter { e in
+                guard let value = known[e.key], value.last == e.signature, let id = value.first else { return true }
+                return store.event(withIdentifier: id) == nil
             }
-            let times = slots(date: date, minutes: list.map(\.minutes)) ?? Self.fallback(date: date, minutes: list.map(\.minutes))
-            var made: [String] = []
-            for (w, time) in zip(list, times) {
+            guard !changed.isEmpty else { continue }
+            let untimed = changed.filter { $0.time == nil && $0.minutes != nil }
+            var free = (slots(date: date, minutes: untimed.compactMap(\.minutes)) ?? Self.fallback(date: date, minutes: untimed.compactMap(\.minutes)))[...]
+            for e in changed {
+                if let id = known[e.key]?.first, let old = store.event(withIdentifier: id) { try? store.remove(old, span: .thisEvent, commit: false) }
+                guard let day = DateFormatters.iso().date(from: e.date) else { continue }
                 let event = EKEvent(eventStore: store)
                 event.calendar = calendar
-                event.title = w.title
-                event.startDate = time.start
-                event.endDate = time.end
-                event.notes = w.notes
-                event.url = w.link
-                event.availability = .busy
+                event.title = e.title
+                event.notes = e.notes
+                event.url = e.link
+                if let minutes = e.minutes {
+                    let start: Date
+                    if let time = e.time, let at = Self.clock(time) {
+                        start = Calendar.current.startOfDay(for: day).addingTimeInterval(Double(at * 60))
+                    } else {
+                        start = free.popFirst()?.start ?? Calendar.current.startOfDay(for: day).addingTimeInterval(Double(Self.preferredStart * 60))
+                    }
+                    event.startDate = start
+                    event.endDate = start.addingTimeInterval(Double(minutes * 60))
+                    event.availability = .busy
+                } else {
+                    event.isAllDay = true
+                    event.startDate = Calendar.current.startOfDay(for: day)
+                    event.endDate = event.startDate
+                    event.availability = .free
+                }
                 try store.save(event, span: .thisEvent, commit: false)
-                if let id = event.eventIdentifier { made.append(id) }
+                if let id = event.eventIdentifier { known[e.key] = [id, e.signature] }
             }
-            ids[date] = made
         }
         try store.commit()
-        // Days long past are forgotten.
-        let oldest = AppModel.shift(AppModel.localDate(Date()), by: -30) ?? ""
-        written = ids.filter { $0.key >= oldest }
+        mirrored = known
+    }
+
+    /// "Zapisovat tréninky" off: the workouts Aurin wrote for today on go.
+    func removeMirrored() {
+        let today = AppModel.localDate(Date())
+        var known = mirrored
+        for (key, value) in known where (value.last ?? "").prefix(10) >= today {
+            if let id = value.first, let old = store.event(withIdentifier: id) { try? store.remove(old, span: .thisEvent, commit: false) }
+            known[key] = nil
+        }
+        try? store.commit()
+        mirrored = known
+    }
+
+    /// "18:30" → 1110.
+    private static func clock(_ text: String) -> Int? {
+        let parts = text.split(separator: ":").compactMap { Int($0) }
+        guard parts.count == 2, (0..<24).contains(parts[0]), (0..<60).contains(parts[1]) else { return nil }
+        return parts[0] * 60 + parts[1]
+    }
+
+    private static func sportLabel(_ sport: String) -> String? {
+        ["ride": "Kolo", "run": "Běh", "strength": "Posilovna", "gym": "Posilovna", "swim": "Plavání", "walk": "Chůze"][sport].map { L10n.tr($0) }
     }
 
     /// A day not read (beyond two weeks): from 17:00.
