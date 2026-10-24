@@ -2,6 +2,7 @@ import { L, bilingual } from './lang.js';
 import { personalBaseline } from "./recovery-model.js";
 import { normalizeAvailability, ensureWeekOverrides, weekStartOf, validDay } from './training-availability.js';
 import {trainingHistory,starterPlan} from './training-history.js';
+import { weekWithCalendar } from './calendar-free.js';
 // Weekly planner: which sports the athlete wants on which weekdays, the
 // weather location, and the role of each training day (long, quality, easy,
 // recovery, gym upper/full body) so the load is spread sensibly over the week.
@@ -75,7 +76,9 @@ export function sanitizeSessions(raw, days) {
   return out;
 }
 
-export async function getWeekPlan(db, date = null) {
+// With a date: that week's plan, each day's time capped by the iPhone
+// calendar's free time (calendar-free.js) unless `calendar` is false.
+export async function getWeekPlan(db, date = null, { calendar = true } = {}) {
   await ensure(db);
   const row = await db.prepare("SELECT prefs_json FROM week_plan_preferences WHERE user_id=?").bind(db.userId).first();
   let defaults; try { defaults = sanitizeWeekPlan(row ? JSON.parse(row.prefs_json) : {}); } catch { defaults = sanitizeWeekPlan({}); }
@@ -93,7 +96,8 @@ export async function getWeekPlan(db, date = null) {
   if (!date) return defaults;
   await ensureWeekOverrides(db);
   const override = await db.prepare('SELECT prefs_json FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).first();
-  return override ? { ...sanitizeWeekPlan({ ...defaults, ...JSON.parse(override.prefs_json) }), source: 'week' } : { ...defaults, source: 'default' };
+  const prefs = override ? { ...sanitizeWeekPlan({ ...defaults, ...JSON.parse(override.prefs_json) }), source: 'week' } : { ...defaults, source: 'default' };
+  return calendar ? weekWithCalendar(db, prefs, date) : prefs;
 }
 
 export async function saveWeekPlan(db, input, date = null) {
@@ -129,7 +133,7 @@ export function weekOverride(prefs, defaults = {}) {
 
 export async function addWeekSport(db,date,sport) {
   if(!validDay(date)||!PLANNER_SPORTS.includes(sport))throw new Error(L('Neplatný den nebo sport.', 'Invalid day or sport.'));
-  const prefs=await getWeekPlan(db,date),weekday=(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;
+  const prefs=await getWeekPlan(db,date,{calendar:false}),weekday=(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;
   if(!prefs.days[weekday].includes(sport)&&prefs.days[weekday].length<MAX_PER_DAY)prefs.days[weekday].push(sport);
   return saveWeekPlan(db,prefs,date);
 }

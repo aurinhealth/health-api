@@ -48,6 +48,8 @@ enum BackgroundRefresh {
         guard api.hasSession else { return false }
         let outcome = await AppleHealth.shared.run(api: api)
         let synced = outcome.ok
+        await CalendarTime.shared.send(api: api)
+        await CalendarTime.shared.mirror(api: api)
         guard always || outcome.changed else { return synced }
         guard !Task.isCancelled, let today = try? await api.today() else { return false }
         WidgetBridge.update(today)

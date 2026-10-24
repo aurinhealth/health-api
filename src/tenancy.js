@@ -41,6 +41,8 @@ export const PERSONAL_TABLES = {
   training_profile: {},
   week_plan_preferences: {},
   week_plan_overrides: {},
+  // The free minutes per day from the iPhone calendar (calendar-free.js).
+  calendar_free: { pk: ["user_id", "date"] },
   athlete_state: {},
   assistant_chats: {},
   assistant_messages: {},

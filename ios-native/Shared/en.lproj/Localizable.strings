@@ -2853,3 +2853,11 @@
 "Tep v intervalech" = "Heart rate in intervals";
 "Tempo v úsecích" = "Pace in efforts";
 "Tep v úsecích" = "Heart rate in efforts";
+"Kalendář v iPhonu" = "iPhone calendar";
+"Číst kalendář" = "Read calendar";
+"Zapisovat tréninky" = "Add workouts";
+"Kalendář" = "Calendar";
+"podle kalendáře" = "by your calendar";
+"%@ podle kalendáře, nastaveno %@" = "%1$@ by your calendar, set to %2$@";
+"Aurin nemá přístup ke kalendáři. Povol ho v Nastavení iPhonu → Aplikace → Aurin → Kalendáře." = "Aurin can't access your calendar. Allow it in iPhone Settings → Apps → Aurin → Calendars.";
+"Závod · %@" = "Race · %@";
