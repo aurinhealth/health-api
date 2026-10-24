@@ -625,7 +625,7 @@ final class APIClient: @unchecked Sendable {
 
     /// Sends a write that may have waited for signal (Outbox). A missing
     /// connection throws the URLError; an answer other than 2xx throws
-    /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx).
+    /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx; .outdated for 426).
     /// The server's answer (the new entry's id, for a meal or drink).
     @discardableResult
     func sendQueued(_ item: OutboxItem) async throws -> Data {
@@ -642,7 +642,7 @@ final class APIClient: @unchecked Sendable {
             // Too old an app: the write waits for the new version instead of being dropped.
             if http.statusCode == 426 {
                 onUpdateRequired?()
-                throw OutboxRefusal.retry(message)
+                throw OutboxRefusal.outdated(message)
             }
             // A timeout or too many requests at the server: later, as with a server error.
             if (400..<500).contains(http.statusCode), ![408, 429].contains(http.statusCode) { throw OutboxRefusal.rejected(message) }

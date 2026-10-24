@@ -214,8 +214,24 @@ struct SyncSendGroup: View {
     private var footer: String? {
         switch id {
         case "intervals": return L10n.tr("Co v Intervals.icu už je odjinud, Aurin nepřepíše.")
+        case "apple" where !Self.viaGoogle.isEmpty:
+            let list = ListFormatter()
+            list.locale = L10n.locale
+            let names = Self.viaGoogle.map(L10n.tr)
+            let text = L10n.f("%@ teď posílá Aurin do Google Health. Sem je neposílá, aby se nezdvojily.", list.string(from: names) ?? names.joined(separator: ", "))
+            return text.prefix(1).uppercased() + text.dropFirst()
         default: return L10n.tr("Jen to, co odcvičíš nebo zapíšeš v Aurinu.")
         }
+    }
+
+    /// What Apple Health has switched on but goes to Google Health instead (#386).
+    private static var viaGoogle: [String] {
+        let export = AppleHealthExport.shared
+        var names: [String] = []
+        if export.prefs.health.allows("nutrition") && export.viaGoogle.contains("nutrition") { names.append("jídlo") }
+        if export.prefs.health.allows("weight") && export.viaGoogle.contains("weight") { names.append("váhu") }
+        if export.prefs.pushActivities && export.viaGoogle.contains("activities") { names.append("tréninky") }
+        return names
     }
 
     private func binding(_ key: WritableKeyPath<SyncPrefs, Bool>) -> Binding<Bool> {
