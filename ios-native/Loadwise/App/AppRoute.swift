@@ -179,7 +179,7 @@ struct RouteScreen: View {
         case .gymSession(let session): GymSessionView(date: session.date, session: session)
         case .activity(let session): ActivityDetailView(session: session)
         case .planned(let session): PlannedWorkoutView(session: session)
-        case .sleepSettings: SleepSettingsView()
+        case .sleepSettings: SleepSettingsView(route: true)
         case .gymBuilder: GymBuilderView(date: AppModel.localDate(Date()))
         case .exerciseLibrary: ExerciseLibraryView()
         case .library: TrainingLibraryView()
