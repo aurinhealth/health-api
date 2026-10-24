@@ -47,6 +47,8 @@ struct CoachMemoryChip: Identifiable, Equatable {
     let text: String
     var from: String? = nil
     var undone = false
+    /// A memory from the card's quick changes says what it remembered.
+    var showsText = false
 }
 
 /// What the coach read from "K obědu jsem měl kuře s rýží": the day and the
@@ -102,6 +104,61 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     /// workout: the session the server prepared for the card, a ride or run
     /// (POST /app/api/workouts/generate) or the gym exercises (/gym/generate).
     var preview: Preview? = nil
+    /// plan: the multi-week plan the coach proposes, its race or start and
+    /// what its card shows (src/coach-actions.js, coachPlanPreview).
+    var planName: String? = nil
+    var weeksCount: Int? = nil
+    var raceDate: String? = nil
+    var raceKm: Double? = nil
+    var startDate: String? = nil
+    var firstDay: String? = nil
+    var trainingPlan: ProposedPlan? = nil
+
+    struct ProposedPlan: Decodable, Equatable {
+        struct Week: Decodable, Equatable {
+            let week: Int
+            let phase: String
+            let minutes: Int
+            var race: Bool? = nil
+        }
+        /// The running plan of the same kind that starting this one ends.
+        struct Replaces: Decodable, Equatable {
+            let name: String
+            var week: Int? = nil
+            var weeksCount: Int? = nil
+            var started: Bool? = nil
+        }
+        let weeks: [Week]
+        /// Training days, 0 = Monday; none for a gym plan.
+        var days: [Int]? = nil
+        var sessions: Int? = nil
+        /// Minutes a usual week, the lightest and the longest.
+        var minutes: [Int]? = nil
+        var replaces: Replaces? = nil
+    }
+
+    /// workout: Kratší, Delší, Lehčí, Těžší and the days for Jiný den
+    /// (src/coach-quick-change.js); `quickChange` is the last one made.
+    var quick: Quick? = nil
+    var quickChange: String? = nil
+
+    struct Quick: Decodable, Equatable {
+        let shorter: Bool
+        let longer: Bool
+        let easier: Bool
+        let harder: Bool
+        let day: Bool
+        let days: [Day]
+
+        struct Day: Decodable, Equatable, Hashable {
+            let date: String
+            let fits: Bool
+        }
+    }
+    /// In a reopened chat (GET /app/api/assistant/chats/:id): the answer it came
+    /// with and how it was decided (draft, confirmed, rejected, expired).
+    var messageId: Int? = nil
+    var draftStatus: String? = nil
 
     struct Preview: Decodable, Equatable {
         var workout: LibraryWorkout? = nil
@@ -125,6 +182,7 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "workout":
             let sportName = L10n.tr(["ride": "jízda", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? "trénink")
             return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { " · " + Fmt.duration(Int($0)) } ?? "") + " · " + day
+        case "plan": return L10n.f("Tréninkový plán: %@", planName ?? "")
         case "gym_swap": return L10n.f("V posilovně vyměnit %@ za %@", fromExercise ?? L10n.tr("cvik"), toExercise ?? L10n.tr("jiný"))
         case "activity_delete": return L10n.tr("Smazat aktivitu")
         case "activity_merge": return L10n.tr("Sloučit 2 aktivity")
@@ -176,13 +234,19 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
     let role: String
     let content: String
     let createdAt: String?
+    /// The server's id, which a proposal points to (CoachAction.messageId).
+    var serverId: Int? = nil
     var id: String { role + "|" + (createdAt ?? "") + "|" + String(content.prefix(40)) }
+
+    enum CodingKeys: String, CodingKey { case role, content, createdAt, serverId = "id" }
 }
 
 struct ChatDetail: Decodable, Equatable {
     let id: Int
     let title: String?
     let messages: [ChatMessage]
+    /// The proposals made in this chat.
+    var actions: [CoachAction]? = nil
 }
 
 /// GET /app/api/coaches?date= (src/coach-engine.js), the coach's home.

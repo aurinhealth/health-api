@@ -13,7 +13,18 @@ extension AppModel {
 
     func loadMuscles() async {
         guard !demo else { return }
-        if let fresh = try? await api.muscles() { muscleFatigue = fresh }
+        if let fresh = try? await api.muscles() {
+            muscleFatigue = fresh
+            musclesAt = Date()
+        }
+    }
+
+    /// Not loaded yet, older than five minutes, or a gym day was saved since:
+    /// the widgets, the screen and the gym builder load them again.
+    var musclesStale: Bool {
+        guard !demo else { return false }
+        guard muscleFatigue != nil, let at = musclesAt else { return true }
+        return Date().timeIntervalSince(at) > 300
     }
 }
 
@@ -119,7 +130,7 @@ struct MusclesWidget: View {
                 }
             }
         }
-        .task { if model.muscleFatigue == nil { await model.loadMuscles() } }
+        .task { if model.musclesStale { await model.loadMuscles() } }
     }
 
     @ViewBuilder private func content(_ data: MuscleFatigue) -> some View {
@@ -255,7 +266,7 @@ struct MusclesView: View {
 
     private func load() async {
         guard !model.demo else { return }
-        do { model.muscleFatigue = try await model.api.muscles(); error = nil } catch {
+        do { model.muscleFatigue = try await model.api.muscles(); model.musclesAt = Date(); error = nil } catch {
             if model.muscleFatigue == nil { self.error = error.localizedDescription }
         }
     }
@@ -541,7 +552,7 @@ struct MuscleDetailView: View {
     }
 
     private func load() async {
-        if model.muscleFatigue == nil { await model.loadMuscles() }
+        if model.musclesStale { await model.loadMuscles() }
         guard !model.demo else { detail = DemoData.muscleDetail(id); return }
         do { detail = try await model.api.muscleDetail(id: id) } catch { self.error = error.localizedDescription }
     }

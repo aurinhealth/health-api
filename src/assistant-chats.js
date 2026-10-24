@@ -17,7 +17,7 @@ export function chatTitle(message) {
 
 const validId = id => Number.isInteger(Number(id)) && Number(id) > 0;
 
-async function ownedChat(db, id) {
+export async function ownedChat(db, id) {
   if (!validId(id)) return null;
   return db.prepare('SELECT id,title,created_at,updated_at FROM assistant_chats WHERE user_id=? AND id=?').bind(db.userId, Number(id)).first();
 }
@@ -55,8 +55,25 @@ export async function readChat(db, id) {
   await ensureAssistantChats(db);
   const chat = await ownedChat(db, id);
   if (!chat) return null;
-  const rows = (await db.prepare('SELECT role,content,created_at FROM assistant_messages WHERE user_id=? AND chat_id=? ORDER BY id').bind(db.userId, chat.id).all()).results || [];
-  return { id: chat.id, title: chat.title, updatedAt: chat.updated_at, messages: rows.map(r => ({ role: r.role, content: r.content, createdAt: r.created_at })) };
+  const rows = (await db.prepare('SELECT id,role,content,created_at FROM assistant_messages WHERE user_id=? AND chat_id=? ORDER BY id').bind(db.userId, chat.id).all()).results || [];
+  return { id: chat.id, title: chat.title, updatedAt: chat.updated_at, messages: rows.map(r => ({ id: r.id, role: r.role, content: r.content, createdAt: r.created_at })) };
+}
+
+// A chat that starts with the coach's own push ("Tři krátké noci za sebou"),
+// for the athlete's answer written in the notification.
+export async function startChatWithCoach(db, title, text) {
+  await ensureAssistantChats(db);
+  const created = await db.prepare('INSERT INTO assistant_chats(user_id,title) VALUES(?,?)').bind(db.userId, chatTitle(title || text)).run();
+  const id = created.meta?.last_row_id;
+  await db.prepare('INSERT INTO assistant_messages(chat_id,user_id,role,content) VALUES(?,?,?,?)').bind(id, db.userId, 'assistant', String(text || '').slice(0, MAX_CONTENT)).run();
+  return id;
+}
+
+// The id of the chat's last answer, which the proposals made with it point to.
+export async function lastAnswerId(db, chatId) {
+  if (!validId(chatId)) return null;
+  const row = await db.prepare("SELECT MAX(id) AS id FROM assistant_messages WHERE user_id=? AND chat_id=? AND role='assistant'").bind(db.userId, Number(chatId)).first();
+  return row?.id ?? null;
 }
 
 export async function deleteChat(db, id) {

@@ -14,6 +14,7 @@ export { withHeartRateLoad };
 import { recoveryToday } from "./recovery-today.js";
 import { cycleState, askPeriodToday, cycleTrainingCaution } from "./cycle-model.js";
 import { isHardSession } from "./session-intensity.js";
+import { heatAdvice, indoorText } from "./heat-advice.js";
 
 const STEP_GOAL = 10000;
 
@@ -261,6 +262,8 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
     status: pill.taken ? "done" : "planned"
   }] : [];
   const byTime = (a, b) => String(a.time || "99").localeCompare(String(b.time || "99"));
+  // Horko (heat-advice.js): a ride or run still ahead, outdoors, on a hot day.
+  const heatOf = s => s.status !== "planned" ? null : heatAdvice({ sport: s.sport, weather: forecast, time: s.time, indoor: indoorText(s.title + " " + (s.type || "")) })?.short || null;
   const planItems = [
     ...[...done, ...open].map(s => easy(s, {
       kind: "workout",
@@ -273,6 +276,7 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
       // "done", "planned" or "missed" (a past day's plan nothing was done for).
       status: s.status,
       session: s,
+      ...(heatOf(s) ? { heat: heatOf(s) } : {}),
       // What a done session added to the day's strain (Den: "+5,1 tréninkem"),
       // from its TSS the same way the plan's strain is estimated.
       ...(s.status === "done" && plannedStrain(num(s.tss)) != null ? { strain: plannedStrain(num(s.tss)) } : {})
