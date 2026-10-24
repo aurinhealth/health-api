@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// The AI coach: today's summary and what matters, then a chat. Answers stream
 /// in as they are written; changes the coach proposes wait for "Potvrdit".
@@ -18,7 +19,12 @@ struct CoachView: View {
     /// The coach needs Loadwise Pro (402): the offer instead of an error.
     @State private var needsSubscription = false
     /// The question that asked for the AI consent: sent again once it is given.
-    @State private var unsent: (bubble: UUID, text: String)?
+    @State private var unsent: (bubble: UUID, text: String, photo: UIImage?)?
+    /// One photo for the next message, taken or picked next to the field.
+    @State private var photo: UIImage?
+    @State private var cameraOpen = false
+    @State private var galleryOpen = false
+    @State private var galleryItem: PhotosPickerItem?
     @State private var home: CoachesSnapshot?
     @State private var showChats = false
     @State private var showMemory = false
@@ -46,6 +52,9 @@ struct CoachView: View {
         var loggedOK = false
         /// A quiet line from the app (how many messages are left), not the coach.
         var note = false
+        /// The photo sent with this question; a reopened chat has only `photoMark`.
+        var photo: UIImage? = nil
+        var photoMark = false
     }
 
     var body: some View {
@@ -100,6 +109,21 @@ struct CoachView: View {
                 }
             }
             .sheet(isPresented: $showChats) { ChatsSheet { id in Task { await open(id) } } }
+            .fullScreenCover(isPresented: $cameraOpen) {
+                CameraPicker { image in
+                    cameraOpen = false
+                    if let image { photo = image }
+                }
+                .ignoresSafeArea()
+            }
+            .photosPicker(isPresented: $galleryOpen, selection: $galleryItem, matching: .images)
+            .onChange(of: galleryItem) {
+                guard let item = galleryItem else { return }
+                Task {
+                    if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) { photo = image }
+                    galleryItem = nil
+                }
+            }
             .navigationDestination(isPresented: $showMemory) { CoachMemoryView() }
         }
         .tint(Palette.ink)
@@ -159,7 +183,7 @@ struct CoachView: View {
     private var consentCard: some View {
         Card {
             Text("Kouč používá AI").font(.headline)
-            Text("Aby mohl odpovídat, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data.")
+            Text("Aby mohl odpovídat, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, a fotky, které mu pošleš, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data.")
                 .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             Button {
                 Task {
@@ -172,6 +196,7 @@ struct CoachView: View {
                             unsent = nil
                             messages.removeAll { $0.id == question.bubble }
                             input = question.text
+                            photo = question.photo
                             await send()
                         }
                     } catch { self.error = error.localizedDescription }
@@ -194,10 +219,14 @@ struct CoachView: View {
 
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 10) {
+            photoMenu
             HStack(alignment: .bottom, spacing: 8) {
-                TextField(usedUp ? CoachAllowance.placeholder : L10n.tr("Napiš kouči…"), text: $input, axis: .vertical)
-                    .lineLimit(1...5)
-                    .focused($focused)
+                VStack(alignment: .leading, spacing: 8) {
+                    if let photo { photoThumb(photo) }
+                    TextField(usedUp ? CoachAllowance.placeholder : L10n.tr("Napiš kouči…"), text: $input, axis: .vertical)
+                        .lineLimit(1...5)
+                        .focused($focused)
+                }
                 // From 75 % on: how many are left, until the new week.
                 if let allowance, allowance.near, !allowance.usedUp, !usedUp {
                     Text(allowance.counter).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).fixedSize()
@@ -210,7 +239,7 @@ struct CoachView: View {
                 Image(systemName: "arrow.up").font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.onButton)
                     .frame(width: 40, height: 40).background(Palette.button, in: Circle())
             }
-            .disabled(sending || usedUp || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.demo)
+            .disabled(sending || usedUp || (input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil) || model.demo)
             .accessibilityLabel("Odeslat")
         }
         .disabled(usedUp)
@@ -219,15 +248,46 @@ struct CoachView: View {
         .background(.ultraThinMaterial)
     }
 
+    /// The camera next to the field: take a photo or pick one. One photo a message.
+    private var photoMenu: some View {
+        Menu {
+            Button { cameraOpen = true } label: { Label(L10n.tr("Vyfotit"), systemImage: "camera") }
+            Button { galleryOpen = true } label: { Label(L10n.tr("Vybrat z Fotek"), systemImage: "photo") }
+        } label: {
+            Image(systemName: "camera").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink)
+                .frame(width: 40, height: 40).background(Palette.card, in: Circle())
+        }
+        .disabled(photo != nil || sending || model.demo)
+        .opacity(photo != nil ? 0.35 : 1)
+        .accessibilityLabel(L10n.tr("Přidat fotku"))
+    }
+
+    /// The photo waiting above the text, with × to take it away.
+    private func photoThumb(_ image: UIImage) -> some View {
+        Image(uiImage: image).resizable().scaledToFill()
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(alignment: .topTrailing) {
+                Button { photo = nil } label: {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 20, height: 20).background(Color.black.opacity(0.65), in: Circle())
+                }
+                .padding(4)
+                .accessibilityLabel(L10n.tr("Odebrat fotku"))
+            }
+    }
+
     // MARK: Actions
 
     private func send() async {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        let picture = photo
         // The demo has no account to ask with.
-        guard !text.isEmpty, !sending, !usedUp, !model.demo else { return }
+        guard !text.isEmpty || picture != nil, !sending, !usedUp, !model.demo else { return }
         input = ""
+        photo = nil
         error = nil
-        let mine = Bubble(mine: true, text: text)
+        let mine = Bubble(mine: true, text: text, photo: picture)
         messages.append(mine)
         let reply = Bubble(mine: false, text: "")
         messages.append(reply)
@@ -236,13 +296,24 @@ struct CoachView: View {
         sending = true
         progress = "Kouč přemýšlí…"
         defer { sending = false; progress = nil }
+        // Made smaller first: the server takes one JPEG up to about 1.8 MB.
+        var image: String?
+        if let picture {
+            guard let jpeg = await picture.jpegForUpload(side: 1600) else {
+                messages.removeAll { $0.id == id || $0.id == mine.id }
+                input = text
+                error = L10n.tr("Fotku se nepodařilo připravit. Zkus jinou.")
+                return
+            }
+            image = "data:image/jpeg;base64," + jpeg.base64EncodedString()
+        }
         // The answer streams in a few words at a time; the bubble shows it at
         // most ten times a second, so a long answer does not re-lay the chat
         // with every word. The last text always shows.
         var unshown: String?
         var shownAt = Date.distantPast
         do {
-            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date) {
+            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image) {
                 switch event {
                 case .progress(let p): progress = p
                 case .answer(let a):
@@ -280,7 +351,7 @@ struct CoachView: View {
             messages.removeAll { $0.id == id && $0.text.isEmpty && $0.food == nil }
         } catch APIError.aiConsentRequired {
             messages.removeAll { $0.id == id }
-            unsent = (mine.id, text)
+            unsent = (mine.id, text, picture)
             needsConsent = true
         } catch APIError.subscriptionRequired {
             messages.removeAll { $0.id == id }
@@ -289,6 +360,7 @@ struct CoachView: View {
             // The question stays in the field for next week.
             messages.removeAll { $0.id == id || $0.id == mine.id }
             input = text
+            photo = picture
             if let a { allowance = a }
             usedUp = true
         } catch {
@@ -387,12 +459,22 @@ struct CoachView: View {
         text.replacingOccurrences(of: #"\s*\[(?:Návrhy|Proposals): [^\]]*\]\s*$"#, with: "", options: .regularExpression)
     }
 
+    /// The server keeps "[Fotka] " where a photo was sent; the photo itself is not kept.
+    static func withoutPhotoMark(_ text: String) -> (text: String, marked: Bool) {
+        for mark in ["[Fotka] ", "[Photo] "] where text.hasPrefix(mark) { return (String(text.dropFirst(mark.count)), true) }
+        return (text, false)
+    }
+
     private func open(_ id: Int) async {
         do {
             let chat = try await model.api.chat(id: id)
             chatId = chat.id
             usedUp = allowance?.usedUp == true
-            messages = chat.messages.map { Bubble(mine: $0.role == "user", text: $0.role == "user" ? $0.content : Self.withoutProposalNote($0.content)) }
+            messages = chat.messages.map { m in
+                guard m.role == "user" else { return Bubble(mine: false, text: Self.withoutProposalNote(m.content)) }
+                let photo = Self.withoutPhotoMark(m.content)
+                return Bubble(mine: true, text: photo.text, photoMark: photo.marked)
+            }
         } catch {
             self.error = error.localizedDescription
         }
@@ -408,6 +490,17 @@ struct BubbleView: View {
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
+            if let photo = bubble.photo {
+                Image(uiImage: photo).resizable().scaledToFill()
+                    .frame(width: 210, height: 210)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .accessibilityLabel(L10n.tr("Fotka"))
+            } else if bubble.photoMark {
+                Label(L10n.tr("Fotka"), systemImage: "photo")
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(Palette.card, in: Capsule())
+            }
             if bubble.note {
                 Text(bubble.text).font(Typo.caption).foregroundStyle(Palette.muted)
                     .multilineTextAlignment(.center).frame(maxWidth: .infinity)

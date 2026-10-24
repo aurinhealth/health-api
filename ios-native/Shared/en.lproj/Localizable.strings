@@ -45,7 +45,7 @@
 "AI kouč" = "AI coach";
 "AI potravinu nenašla. Zadej ji ručně." = "AI couldn't find this food. Enter it manually.";
 "AI ten kód nezná." = "AI doesn't know this code.";
-"Aby mohl odpovídat, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data." = "To answer, Aurin sends the health data it needs, including data from your connected watches and rings, to OpenAI in the USA. You can turn this off anytime in Settings → Privacy & data.";
+"Aby mohl odpovídat, pošle Aurin potřebné údaje o zdraví, včetně dat z připojených hodinek a prstenů, a fotky, které mu pošleš, společnosti OpenAI v USA. Jde to kdykoli vypnout v Nastavení → Soukromí a data." = "To answer, Aurin sends the health data it needs, including data from your connected watches and rings, and the photos you send it to OpenAI in the USA. You can turn this off anytime in Settings → Privacy & data.";
 "Akorát" = "Just right";
 "Aktivita a cíl" = "Activity and goal";
 "Aktivní" = "Active";
@@ -236,7 +236,7 @@
 "Kdy jít spát?" = "When to go to bed?";
 "Kdy mám čas" = "When I have time";
 "Kdykoli" = "Anytime";
-"Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek jídla, společnosti OpenAI v USA." = "When you use an AI feature (the assistant, food recognition from photos, workout and week reviews), Aurin sends the data it needs, including health data and food photos, to OpenAI in the USA.";
+"Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA." = "When you use an AI feature (the assistant, food recognition from photos, workout and week reviews), Aurin sends the data it needs, including health data and the photos you send, to OpenAI in the USA.";
 "Klidový tep" = "Resting heart rate";
 "Klidový tep po dnech" = "Resting heart rate by day";
 "Knihovna" = "Library";
@@ -255,7 +255,7 @@
 "Kouč přemýšlí…" = "Coach is thinking…";
 "Kouč teď neodpověděl." = "The coach didn't answer.";
 "Kouč čte tvůj den…" = "Coach is reading your day…";
-"Kouč, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál." = "The coach, food photo reading and food lookup send the data they need to AI. Without consent, the rest of the app keeps working.";
+"Kouč včetně fotek v chatu, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál." = "The coach including photos in the chat, food photo reading and food lookup send the data they need to AI. Without consent, the rest of the app keeps working.";
 "Kuřecí rizoto" = "Chicken risotto";
 "Květina" = "Flower";
 "Kyslík v krvi" = "Blood oxygen";
@@ -2750,7 +2750,7 @@
 "Upraveno i v kalendáři." = "Changed in the calendar too.";
 "Upraveno. Tréninky níže jsou podle kontroly." = "Done. The sessions below follow the check.";
 "Posílat data do AI funkcí" = "Send data to the AI features";
-"Kouč a rozpoznání jídla pošlou potřebné údaje o zdraví společnosti OpenAI v USA. Jde to vypnout v Nastavení." = "The coach and food recognition send the health data they need to OpenAI in the USA. You can turn this off in Settings.";
+"Kouč a rozpoznání jídla pošlou potřebné údaje o zdraví a fotky, které jim pošleš, společnosti OpenAI v USA. Jde to vypnout v Nastavení." = "The coach and food recognition send the health data they need and the photos you send them to OpenAI in the USA. You can turn this off in Settings.";
 "Vybrat fotku" = "Choose photo";
 "Na fotce jsem kód nenašel." = "No barcode found in the photo.";
 
@@ -2842,3 +2842,5 @@
 "%d×" = "%d×";
 "Teď v katalogu" = "In the catalogue now";
 "Něco jiného" = "Something else";
+"Vybrat z Fotek" = "Choose from Photos";
+"Fotku se nepodařilo připravit. Zkus jinou." = "The photo couldn't be prepared. Try another one.";

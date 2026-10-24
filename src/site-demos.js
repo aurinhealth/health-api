@@ -17,6 +17,7 @@ const P = {
   minus: '<path d="M5 12h14"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  camera: '<path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.2l1.6-2.2h5.4L16.3 7h2.2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"/><circle cx="12" cy="12.8" r="3.4"/>',
   chev: '<path d="m9 6 6 6-6 6"/>',
   moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" fill="currentColor" stroke="none"/>',
   sun: '<circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>',
@@ -321,7 +322,7 @@ ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Bent-over r
 <div class="conf"${at('10600')}>${ic('check')}Proposal confirmed.</div>
 </div>
 </div>
-<div class="inp"><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
+<div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
 </div>`;
 
 // Beside the phone: the confirmed workout lands in the week.
@@ -626,6 +627,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .conf{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;font-weight:500;color:var(--green)}
 .js .conf:not(.in){display:none}
 .inp{display:flex;align-items:center;gap:10px;padding:10px 0 34px}.inp .mut{flex:1;padding:12px 14px;border-radius:20px;background:var(--panel)}
+.inp .cam{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--panel)}
 .snd{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--button);color:var(--on-button)}
 @media (prefers-reduced-motion:reduce){.cam .scan,.dots i,.btn .sp1{animation:none}}
 `;
