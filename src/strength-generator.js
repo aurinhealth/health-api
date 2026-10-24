@@ -1457,8 +1457,12 @@ export function generateStrengthPlan(context, options = {}) {
     }
   } else if (planPhase) {
     // A training plan's phase (training-plans.js): its exercises, each the first
-    // of its alternatives the athlete's equipment allows.
-    exercises = [...new Set(planPhase.exercises.map(slot => [].concat(slot).find(name => EXERCISES[name] && availableAt(name) && fitsEquipment(name, context.trainingSetup) && !excluded.has(name) && !disliked.has(name))).filter(Boolean))].slice(0, maxExercises);
+    // of its alternatives the athlete's equipment allows. When none of them
+    // fits, an exercise for the same muscle that does, so the movement stays
+    // in the session instead of dropping out.
+    const usable = name => EXERCISES[name] && availableAt(name) && fitsEquipment(name, context.trainingSetup) && !excluded.has(name) && !disliked.has(name);
+    const sameMuscle = slot => { const muscle = EXERCISES[[].concat(slot).find(name => EXERCISES[name])]?.muscle; return muscle ? Object.keys(EXERCISES).filter(name => EXERCISES[name].muscle === muscle && usable(name)).sort((a, b) => EXERCISES[a].fatigue - EXERCISES[b].fatigue)[0] : null; };
+    exercises = [...new Set(planPhase.exercises.map(slot => [].concat(slot).find(usable) || sameMuscle(slot)).filter(Boolean))].slice(0, maxExercises);
   } else {
     exercises = chosen.exercises.filter(ex => !excluded.has(ex)&&fitsEquipment(ex,context.trainingSetup)).slice(0, maxExercises);
   }

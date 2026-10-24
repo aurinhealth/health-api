@@ -5,6 +5,7 @@ import { gymTypes } from "./activity-type.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { getCapabilities } from "./workout-library.js";
 import { athleteThresholds } from "./intervals-athlete.js";
+import { latestStoredWeight } from "./athlete-weight.js";
 import { getWeekPlan, planWeekRoles } from "./week-planner.js";
 import { getAthleteState } from "./athlete-state.js";
 import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan } from "./training-plans.js";
@@ -14,6 +15,8 @@ import { localToday } from "./user-time.js";
 import { mondayOfDate, shiftDate } from "./dashboard-shared.js";
 import { gymCompliance } from "./plan-compliance.js";
 
+// The athlete's weight in kg from a stored weight row, or null.
+export const weightKg=row=>Number(row?.value_numeric)>30?Number(row.value_numeric):null;
 // The active training plan in a week (training-plans.js): how many quality
 // days and what load the week planner makes, and its sessions on the chips.
 export async function planForWeek(env,ctx,start){
@@ -28,8 +31,8 @@ export async function planForWeek(env,ctx,start){
   }
   const pw=plan&&!plan.pauseFrom?planWeek(plan,start):null;
   if(!pw)return {plan:null,pw:null,roles:{},load:null,apply:t=>t};
-  const [thresholds,capabilities]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),getCapabilities(env.DB,plan.sport).catch(()=>({}))]);
-  const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities};
+  const [thresholds,capabilities,weight]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),getCapabilities(env.DB,plan.sport).catch(()=>({})),plan.sport==='ride'?latestStoredWeight(env.DB).catch(()=>null):null]);
+  const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities,ftp:Number(thresholds.ftp)||null,weight:weightKg(weight)};
   return {plan,pw,roles:{quality:planQuality(pw),prefer:plan.sport},load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options)};
 }
 // The endurance and the gym plan with the athlete's status applied: sick,

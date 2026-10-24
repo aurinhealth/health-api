@@ -249,6 +249,36 @@ struct PinnedExercises: Decodable {
 struct FitnessInsights: Decodable {
     let cardioFocus: CardioFocus?
     let records: Records?
+    /// Race times from the threshold pace, efforts and races from FTP (src/race-estimate.js).
+    var estimates: Estimates? = nil
+
+    struct Estimates: Decodable {
+        let run: Run?
+        let ride: Ride?
+    }
+
+    struct Run: Decodable {
+        let thresholdPace: Double?
+        let races: [RunRace]
+    }
+
+    struct RunRace: Decodable {
+        let km: Double
+        let seconds: Int
+        let pace: Double
+    }
+
+    struct Ride: Decodable {
+        let ftp: Double?
+        let efforts: [Effort]
+        let races: [PlanRace?]?
+    }
+
+    struct Effort: Decodable {
+        let minutes: Int
+        let watts: Int
+        let wkg: Double?
+    }
 
     struct CardioFocus: Decodable {
         let days: Int?

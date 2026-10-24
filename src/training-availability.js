@@ -19,7 +19,9 @@ export function parseTimeWindow(value) {
 export function normalizeAvailability(days = []) {
   return Array.from({ length: 7 }, (_, i) => {
     const raw = days[i] || {};
-    const minutes = raw.minutes == null || raw.minutes === '' ? null : Number(raw.minutes);
+    // A week capped by the calendar (calendar-free.js) saves the athlete's own time.
+    const own = 'ownMinutes' in raw ? raw.ownMinutes : raw.minutes;
+    const minutes = own == null || own === '' ? null : Number(own);
     if (minutes != null && (!Number.isFinite(minutes) || minutes < 0 || minutes > 1440)) throw new Error(L('Dostupný čas musí být mezi 0 a 24 hodinami.', 'Available time must be between 0 and 24 hours.'));
     // Preserve a legacy clock window's duration when no budget was saved,
     // then retire clock positions and sport preferences from availability.

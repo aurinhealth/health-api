@@ -798,6 +798,43 @@ final class SnapshotTests: XCTestCase {
         try render("plan-result", glow: Palette.Glow.today, height: 1150) {
             NavigationStack { PlanResultContent(result: result, plans: plans).padding(.horizontal, 24) }.environment(model)
         }
+
+        // A cycling race: the countdown on Training and the race's power and time.
+        let gfWeeks = ["base", "base", "build", "recovery", "build", "build", "build", "recovery", "peak", "peak", "taper", "race"].enumerated().map { i, p in
+            #"{"week":\#(i + 1),"phase":"\#(p)","phaseLabel":"\#(p)","load":1,"keys":["Sweet spot 3×15"],"longMinutes":null,"race":\#(p == "race")}"#
+        }.joined(separator: ",")
+        let gf = #"{"id":"ride-granfondo","sport":"ride","name":"Gran fondo","goal":"Dlouhý závod 100–200 km","description":"","level":"intermediate","weeksCount":12,"days":[3,6],"race":{"km":160,"options":[100,160,200],"kind":"granfondo"},"weeks":[\#(gfWeeks)]}"#
+        let raceDay = ISODay.shift(APIClient.localToday(), 9)
+        let ridePlan = #"{"templates":[\#(gf)],"active":{"id":8,"templateId":"ride-granfondo","name":"Gran fondo","startDate":"2026-10-19","raceDate":"\#(raceDay)","raceKm":160,"week":11,"weeksCount":12,"phaseLabel":"Ladění","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"completion":{"1":100,"2":92,"3":88,"4":100,"5":76,"6":95,"7":90,"8":100,"9":84,"10":97},"race":{"km":160,"kind":"granfondo","minutes":298,"low":163,"high":188,"share":70,"estimated":false},"template":\#(gf)},"activeGym":null,"started":null}"#
+        let ride = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(ridePlan.utf8)).active)
+        try render("plan-race-card", glow: Palette.Glow.training, height: 330) { ActivePlanSummary(active: ride).padding(24) }
+        try render("plan-race-ride", glow: Palette.Glow.training, height: 700) {
+            NavigationStack { ActivePlanContent(active: ride, preview: nil, week: nil).padding(.horizontal, 24) }.environment(model)
+        }
+        // A running race with a goal time: the goal, the estimate and the wheels to change it.
+        let half = #"{"id":"run-half","sport":"run","name":"Půlmaraton","goal":"Půlmaraton v cílovém čase","description":"","level":"intermediate","weeksCount":10,"days":[4,5],"race":{"km":21.1,"options":null},"weeks":[\#(weeks)]}"#
+        let runPlan = #"{"templates":[\#(half)],"active":{"id":9,"templateId":"run-half","name":"Půlmaraton","startDate":"2026-10-19","raceDate":"2027-04-04","raceKm":21.1,"week":6,"weeksCount":10,"phaseLabel":"Budování","started":true,"paused":false,"shiftedWeeks":0,"returning":false,"target":6120,"race":{"km":21.1,"estimate":6190,"estimateStart":6270,"target":6120,"goalPace":290,"verdict":"bold"},"template":\#(half)},"activeGym":null,"started":null}"#
+        let run = try XCTUnwrap(try decoder.decode(TrainingPlans.self, from: Data(runPlan.utf8)).active)
+        try render("plan-race-run", glow: Palette.Glow.training, height: 700) {
+            NavigationStack { ActivePlanContent(active: run, preview: nil, week: nil, editGoal: {}).padding(.horizontal, 24) }.environment(model)
+        }
+        try render("plan-goal-time", height: 620) { GoalTimeSheet(km: 21.1, estimate: 6270, weeks: 10, initial: 6120) { _ in } }
+        // A gym plan with its strength tests, and its result with the lifts before and after.
+        let testKeys = "\"Dřep, bench, mrtvý tah: odhad maxima\",\"3× týdně\"", workKeys = "\"3× týdně\",\"5 × 5\",\"RPE 8\""
+        let strengthWeeks = (1...12).map { (i: Int) -> String in
+            let test = i == 1 || i == 12
+            let phase = test ? "test" : i == 4 || i == 8 ? "recovery" : "build", label = test ? "Test síly" : "Síla", keys = test ? testKeys : workKeys
+            return #"{"week":\#(i),"phase":"\#(phase)","phaseLabel":"\#(label)","load":1,"keys":[\#(keys)],"longMinutes":null,"race":false}"#
+        }.joined(separator: ",")
+        let strength = try decoder.decode(TrainingPlans.Template.self, from: Data(#"{"id":"gym-strength","sport":"gym","name":"Síla","goal":"Těžší dřep, bench a mrtvý tah","description":"12 týdnů, tři tréninky týdně.","level":"intermediate","weeksCount":12,"days":[3,4],"race":null,"tests":true,"weeks":[\#(strengthWeeks)]}"#.utf8))
+        try render("plan-gym-strength", height: 1500) {
+            NavigationStack { PlanDetailView(template: strength, active: nil, days: [0, 2, 4]) }.environment(model)
+        }
+        let gymResultJSON = #"{"id":10,"templateId":"gym-strength","name":"Síla","sport":"gym","startDate":"2026-10-19","endDate":"2027-01-10","ftpStart":null,"ftpEnd":null,"ctlStart":null,"ctlEnd":null,"sessionsDone":33,"sessionsPlanned":34,"minutesDone":0,"minutesPlanned":null,"completion":{"1":100,"2":100,"3":67,"4":100,"5":100,"6":100,"7":100,"8":100,"9":67,"10":100,"11":100,"12":100},"weeks":[\#(strengthWeeks)],"next":[],"lifts":[{"exercise":"Barbell back squat","before":136,"after":148},{"exercise":"Barbell bench press","before":104,"after":110},{"exercise":"Barbell Deadlift","before":158,"after":171}]}"#
+        let gymResult = try decoder.decode(PlanResult.self, from: Data(gymResultJSON.utf8))
+        try render("plan-result-gym", glow: Palette.Glow.today, height: 1100) {
+            NavigationStack { PlanResultContent(result: gymResult).padding(.horizontal, 24) }.environment(model)
+        }
     }
 
     private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, @ViewBuilder _ content: () -> V) throws {
