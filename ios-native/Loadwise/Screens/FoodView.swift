@@ -101,6 +101,7 @@ struct FoodContent: View {
     let food: FoodSnapshot
     var add: (String) -> Void = { _ in }
     var scan: () -> Void = {}
+    @Environment(\.tabActions) private var actions
     @State private var editing = false
 
     var body: some View {
@@ -124,11 +125,12 @@ struct FoodContent: View {
     }
 
     @ViewBuilder private var content: some View {
-        HStack {
-            DayNavigator(date: food.date, ahead: true)
-            Spacer()
+        // The same top as Dnes (TabHeader), with the barcode; the week reaches two weeks ahead.
+        TabHeader(date: food.date, share: actions.share, coach: actions.coach, settings: actions.settings) {
             CircleButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
         }
+        WeekStrip(date: food.date, week: WeekStrip.week(of: food.date, in: page.map(\.today) ?? model.today), ahead: true)
+            .padding(.top, 14)
 
         HStack(alignment: .lastTextBaseline, spacing: 12) {
             Text(Fmt.int(food.kcal ?? 0)).font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5).foregroundStyle(Palette.ink)
@@ -136,7 +138,7 @@ struct FoodContent: View {
                 Text(L10n.f("z %@\nkcal", Fmt.int(target))).font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(1)
             }
         }
-        .padding(.top, 34)
+        .padding(.top, 30)
         // An earlier day shows only its data; a day ahead keeps its sentence.
         let day = page.map(\.selectedDate) ?? model.selectedDate
         if day.map({ $0 > AppModel.localDate(Date()) }) ?? true {

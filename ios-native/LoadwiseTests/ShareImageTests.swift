@@ -155,7 +155,7 @@ final class ShareImageTests: XCTestCase {
         }
     }
 
-    /// A photo behind the numbers, the numbers moved up to the middle.
+    /// A photo behind the numbers, one number moved up to the middle.
     func testPhotoBehindTheImage() throws {
         let size = CGSize(width: 900, height: 1200)
         let photo = UIGraphicsImageRenderer(size: size).image { context in
@@ -168,7 +168,7 @@ final class ShareImageTests: XCTestCase {
         options.variant = 2
         options.clear = true
         let card = ShareCard(kind: .activity, options: options, workout: gym, photo: photo,
-                             offsets: [ShareBlock.bottom: CGSize(width: 0, height: -60)])
+                             offsets: [ShareBlock.piece("Čas"): CGSize(width: 0, height: -60)])
         let image = try XCTUnwrap(ShareExport.image(card, clear: false))
         XCTAssertEqual(image.size.width * image.scale, 1080)
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)

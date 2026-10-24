@@ -223,6 +223,8 @@ struct GymSetRow: View {
 struct RestRing: View {
     let end: Date
     let total: Int
+    /// The last seconds that tick show in amber.
+    @AppStorage(GymSignals.countdownKey) private var countdown = 3
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -238,7 +240,7 @@ struct RestRing: View {
                     Text("Pauza").font(Typo.small).foregroundStyle(Palette.muted)
                     Text(String(format: "%d:%02d", left / 60, left % 60))
                         .font(Typo.number(64)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
-                        .foregroundStyle(left == 0 ? Palette.green : Palette.ink)
+                        .foregroundStyle(left == 0 ? Palette.green : countdown > 0 && left <= countdown ? Palette.amber : Palette.ink)
                     Text(L10n.f("z %@", String(format: "%d:%02d", total / 60, total % 60))).font(Typo.small).foregroundStyle(Palette.muted)
                 }
             }
@@ -390,21 +392,29 @@ struct HeartSourceButton: View {
         let measuring = live.heartRate != nil || sensor.liveBpm != nil
         // A paired sensor connected before Začít trénink counts too.
         let on = measuring || sensor.connected
+        let bpm = live.heartRate ?? sensor.liveBpm
         Button(action: action) {
-            Image(systemName: on ? "heart.fill" : "heart.slash")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(on ? Palette.rust : Palette.faint)
-                .frame(width: 36, height: 36)
-                // The whole circle takes the tap, not only the heart's outline.
-                .contentShape(Circle())
-                .overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
-                .overlay(alignment: .topTrailing) {
-                    if measuring || sensor.connected {
-                        Circle().fill(Palette.green).frame(width: 9, height: 9)
-                            .overlay(Circle().stroke(Palette.background, lineWidth: 2))
-                            .offset(x: -1, y: 1)
-                    }
+            HStack(spacing: 6) {
+                Image(systemName: on ? "heart.fill" : "heart.slash")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(on ? Palette.rust : Palette.faint)
+                if let bpm {
+                    Text(verbatim: "\(Int(bpm.rounded()))").font(Typo.number(18)).monospacedDigit().foregroundStyle(Palette.ink)
                 }
+            }
+            .padding(.horizontal, 12)
+            .frame(minWidth: 44)
+            .frame(height: 34)
+            // The whole capsule takes the tap, not only the heart's outline.
+            .contentShape(Capsule())
+            .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+            .overlay(alignment: .topTrailing) {
+                if measuring || sensor.connected {
+                    Circle().fill(Palette.green).frame(width: 9, height: 9)
+                        .overlay(Circle().stroke(Palette.background, lineWidth: 2))
+                        .offset(x: -1, y: 1)
+                }
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(measuring ? "Tep se měří" : "Tep se neměří"))

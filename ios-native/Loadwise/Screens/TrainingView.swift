@@ -78,15 +78,16 @@ struct TrainingContent: View {
     var jumpDay: DayJump? = nil
     /// The day chosen in the calendar; nil is today.
     var day: String? = nil
+    @Environment(\.tabActions) private var actions
     @State private var editing = false
     @State private var focusSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
-                HStack {
-                    SectionLabel(text: L10n.f("Trénink · týden %@", String(training.week)))
-                    Spacer()
+                // The same top as Dnes (TabHeader), with Zapsat trénink; the calendar picks the day.
+                TabHeader(date: day ?? training.date, followsDay: false,
+                          share: actions.share, coach: actions.coach, settings: actions.settings) {
                     CircleButton(systemImage: "plus", label: L10n.tr("Zapsat trénink"), action: addWorkout)
                 }
 
@@ -311,9 +312,9 @@ struct NextSession: View {
             }
             if session.sport == "strength" && session.date == today {
                 NavigationLink(value: AppRoute.trainingMode(session.date)) {
-                    Text("Začít trénink").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                        .frame(maxWidth: .infinity).frame(height: 52)
-                        .background(Palette.button, in: Capsule())
+                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                        .frame(maxWidth: .infinity).frame(height: 54)
+                        .background(Palette.green, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 4)

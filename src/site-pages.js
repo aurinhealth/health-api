@@ -511,7 +511,7 @@ addEventListener('keydown',function(e){if(e.key==='Escape'&&card.classList.conta
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
 // for days by its URL, so ?v= goes up whenever og-en.png is rendered again.
-const SHARE_IMAGE = '/site/og-en.png?v=3';
+const SHARE_IMAGE = '/site/og-en.png?v=4';
 const SHARE_IMAGE_ALT = 'Aurin: Train for how you feel today. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null}) {
@@ -637,13 +637,13 @@ export function overviewPage(request) {
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
       ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them, add or remove a set, swap an exercise when its machine is taken, keep your own note on how to set it up, and start.', 6000],
       ['training-set', 'tmTick', 380, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets.', 6000],
-      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, as long as the exercise needs, longer after squats than after curls. It stays on your lock screen and shows what comes next.', 13500],
+      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, as long as the exercise needs, longer after squats than after curls. It stays on your lock screen and shows what comes next. The last seconds count down with a vibration you feel even with the phone on the bench, or a tone if you like.', 13500],
       ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired when you finish, saved to Apple Health. Then say how it went.', 6000]]],
     ['vyziva', 'Nutrition', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
       ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
       ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000]]],
     ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout, or send a photo of a plan from your trainer. Tap Coach on a workout, an exercise or your HRV to ask about just that, or reply straight from its notification. When it proposes a workout, confirm it and it lands in your plan.', 15000]]]];
+      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout, or send a photo of a plan from your trainer. Tap Coach on a workout, an exercise or your HRV to ask about just that, or reply straight from its notification. When it proposes a workout or a whole plan for your race, confirm it and it lands in your plan.', 15000]]]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {
@@ -924,7 +924,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li>You can also remove Aurin’s access at any time in your Google Account under <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>. Aurin then can no longer read or write your Google data.</li>
 ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID settings.</li>' : ''}
 <li>Technical logs are kept for a few days, and OpenAI keeps AI requests for up to 30 days under its API terms.</li>
-<li>An address on the waitlist stays there until testing ends, or until you ask us to remove it at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
+<li>An address on the waitlist stays there until testing ends, until you delete your Aurin account, or for 12 months at most, whichever comes first. You can also ask us to remove it sooner at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
 </ul>
 <p>The <a href="/support">Support</a> page explains step by step how to manage and delete your data.</p>
 <h2>Legal bases and your rights</h2>
@@ -1029,7 +1029,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li>Přístup Aurinu můžeš kdykoli odebrat i ve svém účtu Google v části <a href="${GOOGLE_CONNECTIONS}">Aplikace a služby třetích stran</a>. Aurin pak už tvoje data z Googlu nepřečte ani nezapíše.</li>
 ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení svého Apple ID.</li>' : ''}
 <li>Technické záznamy se uchovávají několik dní a OpenAI podle svých podmínek API uchovává požadavky AI nejvýš 30 dní.</li>
-<li>E-mail ve waitlistu zůstane, dokud testování neskončí nebo dokud nás nepožádáš o jeho smazání na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
+<li>E-mail ve waitlistu zůstane, dokud testování neskončí, dokud nesmažeš účet v Aurinu, nebo nejdéle 12 měsíců, podle toho, co nastane dřív. O dřívější smazání nás můžeš požádat na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</li>
 </ul>
 <p>Na stránce <a href="/support">Podpora</a> najdeš postup krok za krokem, jak data spravovat a smazat.</p>
 <h2>Právní základ a tvoje práva</h2>

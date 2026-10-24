@@ -32,7 +32,8 @@ struct ShareSheet: View {
     /// The photo the flow opens with: one picked from Photos, or the current one to move its numbers.
     @State private var flowPhoto: UIImage?
 
-    init(source: Source) {
+    /// start: the page to open on (Jídlo opens on food, Trénink on the last workout).
+    init(source: Source, start: ShareKind? = nil) {
         self.source = source
         switch source {
         case .today(let today):
@@ -40,7 +41,7 @@ struct ShareSheet: View {
             _day = State(initialValue: day)
             _food = State(initialValue: ShareFood(date: today.date, nutrition: today.nutrition))
             _workout = State(initialValue: day.workouts.last)
-            _kind = State(initialValue: .day)
+            _kind = State(initialValue: start == .activity && day.workouts.isEmpty ? .day : start ?? .day)
         case .activity(let session, let detail):
             _workout = State(initialValue: ShareWorkout(session: session, detail: detail))
             _kind = State(initialValue: .activity)

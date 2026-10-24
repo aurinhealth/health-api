@@ -53,25 +53,45 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
 
     /// In the app the pill reminder and the server's pushes show as a banner;
     /// the other reminders stay quiet as before.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         let content = notification.request.content
-        if content.categoryIdentifier == Reminders.pillCategory { return [.banner, .sound, .list] }
-        // The server's pushes (the morning readiness, the coach), also while the
-        // app is open: opening the app uploads the night, which sends the morning
-        // push at once, and with no options iOS dropped it without a trace.
-        return notification.request.trigger is UNPushNotificationTrigger || content.userInfo["coach"] != nil ? [.banner, .list] : []
+        let options: UNNotificationPresentationOptions
+        if content.categoryIdentifier == Reminders.pillCategory {
+            options = [.banner, .sound, .list]
+        } else {
+            // The server's pushes (the morning readiness, the coach), also while the
+            // app is open: opening the app uploads the night, which sends the morning
+            // push at once, and with no options iOS dropped it without a trace.
+            options = notification.request.trigger is UNPushNotificationTrigger || content.userInfo["coach"] != nil ? [.banner, .list] : []
+        }
+        DispatchQueue.main.async { completionHandler(options) }
     }
 
     /// "Vzato" logs the pill of the reminder's day at this time; "Za 30
     /// minut" asks again later.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    ///
+    /// The completion handler goes back to iOS on the main thread: called from
+    /// the async version's background thread, UIKit took the app's snapshot
+    /// there and the app crashed after a tap on a notification.
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
+        let api = self.api
+        Task { @MainActor in
+            await Self.handle(response, api: api)
+            completionHandler()
+        }
+    }
+
+    @MainActor
+    private static func handle(_ response: UNNotificationResponse, api: APIClient) async {
         let content = response.notification.request.content
         if CoachPush.categories.contains(content.categoryIdentifier) || content.userInfo["coach"] != nil {
             await CoachPush.answer(response, api: api)
             return
         }
         if let product = FoodPush.product(from: content.userInfo) {
-            await MainActor.run { FoodPush.shared.product = product }
+            FoodPush.shared.product = product
             return
         }
         guard content.categoryIdentifier == Reminders.pillCategory else { return }

@@ -132,6 +132,20 @@ struct CoachSubject: Equatable {
                             symbol: "waveform.path.ecg", color: Palette.green, questions: questions)
     }
 
+    /// Trénink → Únava svalů.
+    static func muscles(date: String?) -> CoachSubject {
+        CoachSubject(kind: .metric, title: MuscleFatigue.title, metric: "muscles", date: date, view: "training",
+                     symbol: "figure.strengthtraining.traditional", color: Palette.indigo,
+                     questions: ["Které svaly můžu dnes trénovat?", "Kdy budu zase odpočatý?", "Co mám dnes dát v posilovně?"])
+    }
+
+    /// Dnes or Trénink → Námaha.
+    static func strain(date: String?) -> CoachSubject {
+        CoachSubject(kind: .metric, title: L10n.tr("Námaha"), metric: "strain", date: date, view: "training",
+                     symbol: "flame", color: Palette.amber,
+                     questions: ["Je moje dnešní námaha v pořádku?", "Mám dnes ještě trénovat?", "Jak naložit zbytek týdne?"])
+    }
+
     /// Zdraví → Spánek.
     static func sleep(line: String?, date: String?) -> CoachSubject {
         CoachSubject(kind: .metric, title: L10n.tr("Spánek"), line: line, metric: "sleep", date: date, view: "health",

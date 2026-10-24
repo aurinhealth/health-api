@@ -9,11 +9,14 @@ struct SleepSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var store: SettingsStore?
     var given: SettingsStore? = nil
+    /// Opened from Zdraví or Dnes (AppRoute): the app's round back button and
+    /// Uložit in glass, as the other pages there; from Settings the system bar.
+    var route = false
 
     var body: some View {
         Group {
             if let store = given ?? store {
-                SleepSettingsForm(store: store)
+                SleepSettingsForm(store: store, route: route)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Palette.settingsBackground.ignoresSafeArea())
@@ -31,6 +34,7 @@ struct SleepSettingsView: View {
 struct SleepSettingsForm: View {
     @Environment(AppModel.self) private var model
     let store: SettingsStore
+    var route = false
     /// 0 = by age and the day (automatic); else minutes.
     @State private var goal = 0
     @State private var workAlarm = false
@@ -48,6 +52,8 @@ struct SleepSettingsForm: View {
 
     var body: some View {
         SettingsPage(title: L10n.tr("Spánek")) {
+            // Room under the pinned back button.
+            if route { Color.clear.frame(height: 30) }
             if let tonight = model.health?.sleep.tonight, tonight.bedtime != nil, tonight.wake != nil {
                 SleepPlanner(tonight: tonight, usual: model.health?.sleep.regularity?.bedtime, saving: plannerSaving,
                              weekendMorning: Self.weekendMorning(after: tonight.date),
@@ -94,7 +100,7 @@ struct SleepSettingsForm: View {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust)
             }
         }
-        .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
+        .modifier(SleepSaveChrome(route: route, enabled: changes != original, saving: store.saving) { Task { await save() } })
         .onAppear(perform: fill)
         .task { if model.health == nil { await model.refreshHealth() } }
         .onChange(of: systemAlarm) { _, on in Task { await syncAlarm(on) } }
@@ -246,5 +252,28 @@ struct SleepSettingsCard: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityHint("Otevře plán spánku")
+    }
+}
+
+/// Uložit: in the system bar in Settings, in glass beside the round back
+/// button when the page is opened from a card.
+private struct SleepSaveChrome: ViewModifier {
+    let route: Bool
+    let enabled: Bool
+    let saving: Bool
+    let save: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if route {
+            content
+                .floatingBack(title: "Spánek",
+                              trailing: ChromeAction(systemImage: "checkmark", label: "Uložit", text: "Uložit", enabled: enabled && !saving, action: save),
+                              pinTitle: true) { dismiss() }
+                .toolbar(.hidden, for: .navigationBar)
+        } else {
+            content.toolbar { SaveButton(enabled: enabled, saving: saving, action: save) }
+        }
     }
 }

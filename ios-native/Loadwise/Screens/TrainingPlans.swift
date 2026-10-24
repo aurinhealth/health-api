@@ -507,6 +507,36 @@ struct TrainingPlanTile: View {
     }
 }
 
+/// The running plan opened from the coach's chat: the plans load first, then
+/// the same screen as Training's tile opens.
+struct TrainingPlanRouteView: View {
+    @Environment(AppModel.self) private var model
+    @State private var plans: TrainingPlans?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let plans, let gym = plans.activeGym, plans.active == nil {
+                PlanDetailView(template: gym.template, active: gym)
+            } else if let plans, plans.active != nil {
+                ActivePlanView(plans: plans)
+            } else {
+                DetailScreen(glow: Palette.Glow.training, title: L10n.tr("Tréninkový plán")) {
+                    if failed {
+                        Text("Plán se nepodařilo načíst.").font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 24)
+                    } else {
+                        ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+                    }
+                }
+            }
+        }
+        .task {
+            guard !model.demo, plans == nil else { return }
+            do { plans = try await model.api.trainingPlans() } catch { failed = true }
+        }
+    }
+}
+
 /// The active plan on Training: its name, the weeks as small bars (past ones
 /// coloured by how much was done) and this week's key sessions.
 struct ActivePlanSummary: View {

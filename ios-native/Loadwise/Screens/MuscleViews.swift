@@ -277,9 +277,11 @@ struct MusclesView: View {
     @State private var explaining = false
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.training, title: MuscleFatigue.title) {
+        DetailScreen(glow: Palette.Glow.training, title: MuscleFatigue.title, coach: .muscles(date: model.selectedDate)) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(verbatim: MuscleFatigue.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 24)
+                // Kapitálky and the serif title, as the other details (Petr, 2026-10-24).
+                SectionLabel(text: "Trénink · svaly").padding(.top, 24)
+                Text(verbatim: MuscleFatigue.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 6)
                 Picker("Pohled", selection: $tab) {
                     Text("Odpočinek").tag(0)
                     Text("Tento týden").tag(1)

@@ -415,6 +415,7 @@ final class AppModel {
         AvatarStore.remove()
         defaults.removeObject(forKey: Self.displayNameKey)
         SnapshotCache.clear()
+        CoachPick.forget()
         today = nil; training = nil; health = nil; food = nil
         calendar = [:]
         todayBase = nil
@@ -1524,6 +1525,7 @@ final class AppModel {
 
     private func clearLocal(expired: Bool) {
         SnapshotCache.clear()
+        CoachPick.forget()
         GymDayCache.clear()
         CoachTextMemory.values = [:]
         WeekPlanDraftMemory.drafts = [:]

@@ -264,13 +264,14 @@ struct JournalSettingsView: View {
 }
 
 /// Posilovna: what the workouts are made for (goal, experience, stretching),
-/// the rests and the heart-rate strap. The equipment stays in Trénink, where
+/// the rests, their sound and vibration, and the heart-rate strap. The equipment stays in Trénink, where
 /// the workouts are made from it.
 struct GymSettingsView: View {
     var body: some View {
         SettingsPage(title: "Posilovna") {
             GymPreferencesGroup()
             GymRestGroup()
+            GymSignalsGroup()
             SettingsGroup {
                 NavigationLink { HeartRateSensorView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "sensor.tag.radiowaves.forward", color: Palette.rust), title: "Snímač tepu")

@@ -145,7 +145,8 @@ const gauge = (size, start) => {
 <circle cx="${size / 2}" cy="${size / 2}" r="${r}" class="gs" style="--d:${f(8.4)}px;--c:${c.toFixed(1)}px" stroke-dasharray="${f(8.4)} ${c.toFixed(1)}"${at(String(start))}/></g></svg>`;
 };
 const strainScreen = `<div class="app glow-training">${STATUS}
-<div class="nav"><span class="cb">${ic('chev', 'flip')}</span></div>
+<div class="nav c"><span class="cb">${ic('chev', 'flip')}</span><span class="pill grn">${ic('spark')}Coach</span></div>
+<div class="sl">Training · today</div>
 <div class="sent title">Strain</div>
 <div class="gwrap">${gauge(190, 300)}<div class="gc"><span class="num g"${n(0, 8.4, 300, 1600, '1')}>8.4</span><span class="mut s">target 11–14 · of 21</span></div><div class="gl"><span>0</span><span>21</span></div></div>
 <div class="center"><span class="pill amb"${at('1700')}>moderate</span></div>
@@ -591,7 +592,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .nav{display:flex;align-items:center;gap:12px;height:48px}.nav.c{justify-content:space-between}
 .cb{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 20%,transparent);font-size:15px}
 .nt b{display:block;font-size:17px}
-.app .title{font-size:34px;margin:6px 0 4px}.app .title2{font-size:34px;margin-top:6px}
+.app .title{font-size:32px;margin:6px 0 4px}.app .sl+.title{margin-top:0}.nav .pill{height:32px;gap:5px;padding:0 12px}.nav .pill svg{width:13px;height:13px}.app .title2{font-size:34px;margin-top:6px}
 .app .card{margin-top:10px;border-radius:22px;background:var(--panel);box-shadow:0 10px 15px -10px rgba(0,0,0,.08),0 1px 1px rgba(0,0,0,.04)}
 .app .sl.pad2{margin:18px 0 0}.center{display:flex;justify-content:center}.center.col{flex-direction:column;align-items:center;margin-top:18px}
 .gwrap{position:relative;width:190px;margin:4px auto 0}.gauge{display:block;height:auto}
