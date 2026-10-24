@@ -1733,13 +1733,11 @@ export async function heartRateInWindows(db, userId, windows) {
   if (!asked.length) return out;
   const one = `SELECT ? AS i, AVG(bpm) AS bpm, COUNT(*) AS n FROM (SELECT ${SAMPLE_BPM} AS bpm FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', 'heart-rate-5min') AND sample_time >= ? AND sample_time <= ?) WHERE bpm BETWEEN 30 AND 240`;
   // Stored times are RFC 3339 UTC without milliseconds; they compare as text.
-  // D1 binds at most 100 values a statement: 20 windows (80) per query.
-  for (let k = 0; k < asked.length; k += 20) {
-    const part = asked.slice(k, k + 20);
-    const rows = (await db.prepare(part.map(() => one).join(" UNION ALL "))
-      .bind(...part.flatMap(([[start, end], i]) => [i, userId, utcSecond(start), utcSecond(end)])).all()).results || [];
-    for (const r of rows) if (Number(r.n) >= 3) out[Number(r.i)] = Math.round(Number(r.bpm));
-  }
+  // One statement a window, all in one batch: D1 refuses a UNION ALL of more
+  // than a few SELECTs ("too many terms in compound SELECT"), which stopped the
+  // nights of two weeks from going to Intervals.icu.
+  const results = await db.batch(asked.map(([[start, end], i]) => db.prepare(one).bind(i, userId, utcSecond(start), utcSecond(end))));
+  for (const result of results || []) for (const r of result?.results || []) if (Number(r.n) >= 3) out[Number(r.i)] = Math.round(Number(r.bpm));
   return out;
 }
 
