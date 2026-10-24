@@ -1,4 +1,5 @@
 import {assertAIAccess} from './subscription.js';
+import { assertAiTotal } from './ai-total.js';
 import { weekCheckForCoach } from './week-check.js';
 import { buildCyclingCoachV2, CYCLING_COACH_V2_META } from "./cycling-coach-v2.js";
 import { withFocus } from "./athlete-focus.js";
@@ -349,6 +350,8 @@ const timeoutFor=maxOutputTokens=>maxOutputTokens>TASK_LIMITS.planning?TASK_TIME
 export function aiFailureText(status){return 'AI '+status+': '+(status===429?L('AI je teď přetížená. Zkus to za chvíli.', 'The AI is busy right now. Try again in a moment.'):status>=500?L('AI služba není dostupná.', 'The AI service isn\'t available.'):L('AI požadavek se nepodařil.', 'The AI request failed.'));}
 export async function callOpenAI(env, { instructions, input, maxOutputTokens = 5000, tools = null, format = null, model = null, reasoningEffort = 'low',onText=null,feature=null,timeoutMs=null }) {
   await assertAIAccess(env);
+  // All users together under the day's emergency brake (ai-total.js).
+  await assertAiTotal(env);
   if (!env.OPENAI_API_KEY) throw new Error(L('AI teď není dostupná.', 'AI isn\'t available right now.'));
   // Refused at once when the limit is already spent, then checked again with
   // the slot held: the calls running beside this one count at their reservation.
@@ -443,7 +446,7 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
 }
 
 // The parts of the coach's context that differ between two messages a minute apart.
-export const COACH_MOMENT_KEYS=['now','userInitiated','appContext','selectedGym','selectedDay','selectedWeek','workoutLibraryRecommendations'];
+export const COACH_MOMENT_KEYS=['now','userInitiated','appContext','selectedGym','selectedDay','selectedActivity','selectedSession','selectedWeek','workoutLibraryRecommendations'];
 export async function askCoach(env, message, context, {model = null, focus = null, task = assistantTask(message), actions = false,concise=false,onAnswer=null,image=null} = {}) {
   if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')};
   const started = Date.now();

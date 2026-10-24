@@ -9,8 +9,8 @@ import UIKit
 // 2. the server answers with loadwise://auth?token=<short-lived token>,
 // 3. the app trades the token plus the verifier behind the challenge for the
 //    session cookie at POST /auth/app/session.
-// The cookie lands in HTTPCookieStorage.shared and URLSession sends it with
-// every API call.
+// The cookie lands in HTTPCookieStorage.shared, which URLSession sends with
+// every API call, and SessionKeychain keeps it in the Keychain.
 @MainActor
 final class AuthService: NSObject, ASWebAuthenticationPresentationContextProviding {
     private let api: APIClient

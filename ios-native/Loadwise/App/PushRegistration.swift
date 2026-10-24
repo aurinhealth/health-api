@@ -34,7 +34,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Crashes from MetricKit for "Nahlásit problém" (CrashReports.swift).
         CrashReports.shared.start()
         let center = UNUserNotificationCenter.current()
-        center.setNotificationCategories([Reminders.pillNotificationCategory, CoachPush.category])
+        center.setNotificationCategories([Reminders.pillNotificationCategory, CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory])
         center.delegate = self
         return true
     }
@@ -66,7 +66,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// minut" asks again later.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         let content = response.notification.request.content
-        if content.categoryIdentifier == CoachPush.categoryID {
+        if CoachPush.categories.contains(content.categoryIdentifier) || content.userInfo["coach"] != nil {
             await CoachPush.answer(response, api: api)
             return
         }
@@ -84,6 +84,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         default:
             break
         }
+    }
+
+    /// iOS woke the app for the background upload of a reply to the coach (CoachReplyUpload).
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+        CoachReplyUpload.shared.finished(identifier, completionHandler)
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
@@ -179,26 +184,76 @@ enum PushRegistration {
 
 /// The coach's push "Zítřejší práh vyměním za lehkou jízdu 60 min?" with
 /// "Vyměnit" and "Nechat" (src/coach-push.js), answered without opening the
-/// app; a short notification says how a swap went.
+/// app; a short notification says how a swap went. Every coach push has
+/// "Odpovědět": the text goes to the coach (CoachReplyUpload), who answers
+/// with a push of his own (src/coach-push-reply.js); one proposal in it gets
+/// "Potvrdit" and "Ne". A tap on an answer opens its chat.
 enum CoachPush {
     static let categoryID = "COACH_SWAP"
+    static let replyCategoryID = "COACH_REPLY"
+    static let actionCategoryID = "COACH_ACTION"
+    static let categories: Set<String> = [categoryID, replyCategoryID, actionCategoryID]
     private static let swapAction = "COACH_SWAP_YES"
     private static let keepAction = "COACH_SWAP_NO"
+    private static let replyAction = "COACH_REPLY_TEXT"
+    private static let confirmAction = "COACH_ACTION_YES"
+    private static let rejectAction = "COACH_ACTION_NO"
+
+    private static var reply: UNTextInputNotificationAction {
+        UNTextInputNotificationAction(identifier: replyAction, title: L10n.tr("Odpovědět"), options: [],
+                                      textInputButtonTitle: L10n.tr("Odeslat"), textInputPlaceholder: L10n.tr("Napiš kouči…"))
+    }
 
     static var category: UNNotificationCategory {
         UNNotificationCategory(identifier: categoryID, actions: [
             UNNotificationAction(identifier: swapAction, title: L10n.tr("Vyměnit"), options: []),
-            UNNotificationAction(identifier: keepAction, title: L10n.tr("Nechat"), options: [])
+            UNNotificationAction(identifier: keepAction, title: L10n.tr("Nechat"), options: []),
+            reply
+        ], intentIdentifiers: [], options: [])
+    }
+
+    static var replyCategory: UNNotificationCategory {
+        UNNotificationCategory(identifier: replyCategoryID, actions: [reply], intentIdentifiers: [], options: [])
+    }
+
+    static var actionCategory: UNNotificationCategory {
+        UNNotificationCategory(identifier: actionCategoryID, actions: [
+            UNNotificationAction(identifier: confirmAction, title: L10n.tr("Potvrdit"), options: []),
+            UNNotificationAction(identifier: rejectAction, title: L10n.tr("Ne"), options: []),
+            reply
         ], intentIdentifiers: [], options: [])
     }
 
     static func answer(_ response: UNNotificationResponse, api: APIClient) async {
-        let coach = response.notification.request.content.userInfo["coach"] as? [String: Any]
-        guard let date = coach?["date"] as? String else { return }
+        let content = response.notification.request.content
+        let coach = content.userInfo["coach"] as? [String: Any]
+        let chatId = (coach?["chatId"] as? NSNumber)?.intValue
         switch response.actionIdentifier {
+        case replyAction:
+            guard let text = (response as? UNTextInputNotificationResponse)?.userText.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else { return }
+            // The coach takes a while: the upload goes on in the background.
+            CoachReplyUpload.shared.send(text: text, title: content.title, body: content.body, chatId: chatId, api: api)
+        case confirmAction, rejectAction:
+            guard let draft = (coach?["draftId"] as? NSNumber)?.intValue else { return }
+            let confirm = response.actionIdentifier == confirmAction
+            let note = UNMutableNotificationContent()
+            do {
+                let result = try await api.decideCoachAction(draftId: draft, confirm: confirm)
+                guard confirm else { return }
+                note.title = L10n.tr("Hotovo")
+                note.body = result.message ?? L10n.tr("Změna je v plánu.")
+            } catch {
+                note.title = L10n.tr("Změna neprošla")
+                note.body = error.localizedDescription
+            }
+            if let chatId { note.userInfo = ["coach": ["kind": "reply", "chatId": chatId] as [String: Any]] }
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "aurin-coach-action", content: note, trigger: nil))
         case keepAction:
+            guard let date = coach?["date"] as? String else { return }
             _ = try? await api.answerCoachNudge(date: date, decision: "keep")
         case swapAction:
+            guard let date = coach?["date"] as? String else { return }
             let content = UNMutableNotificationContent()
             do {
                 let nudge = try await api.answerCoachNudge(date: date, decision: "swap")
@@ -210,10 +265,67 @@ enum CoachPush {
                 content.body = error.localizedDescription
             }
             try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "aurin-coach-swap", content: content, trigger: nil))
+        case UNNotificationDefaultActionIdentifier:
+            // Tapping an answer opens its chat; the coach's own message opens the app on Dnes.
+            if let chatId { await MainActor.run { CoachPushOpen.shared.chat = chatId } }
         default:
-            // Tapping the message opens the app on Dnes.
             break
         }
+    }
+}
+
+/// The chat RootView opens for a tapped answer of the coach.
+@MainActor @Observable
+final class CoachPushOpen {
+    static let shared = CoachPushOpen()
+    var chat: Int?
+}
+
+/// The sheet item of that chat (RootView).
+struct CoachChatRef: Identifiable {
+    let id: Int
+}
+
+/// "Odpovědět" sends the text in a background upload: iOS keeps the request
+/// open while the coach thinks (up to three minutes) even when the app is
+/// suspended, and the server sends his answer as a push
+/// (POST /app/api/assistant/push-reply).
+final class CoachReplyUpload: NSObject, URLSessionDelegate, @unchecked Sendable {
+    static let shared = CoachReplyUpload()
+    static let identifier = (Bundle.main.bundleIdentifier ?? "aurin") + ".coach-reply"
+    private let lock = NSLock()
+    private var done: (@Sendable () -> Void)?
+
+    private lazy var session: URLSession = {
+        let config = URLSessionConfiguration.background(withIdentifier: Self.identifier)
+        config.httpCookieStorage = .shared
+        config.httpCookieAcceptPolicy = .always
+        config.httpShouldSetCookies = true
+        config.timeoutIntervalForRequest = 200
+        config.sessionSendsLaunchEvents = true
+        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    }()
+
+    func send(text: String, title: String, body: String, chatId: Int?, api: APIClient) {
+        var payload: JSONObject = ["text": .string(text), "title": .string(title), "body": .string(body)]
+        if let chatId { payload["chatId"] = .number(Double(chatId)) }
+        guard let request = try? api.pushReplyRequest(), let data = try? JSONEncoder().encode(payload) else { return }
+        // A background upload goes from a file.
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("coach-reply-\(UUID().uuidString).json")
+        guard (try? data.write(to: file)) != nil else { return }
+        session.uploadTask(with: request, fromFile: file).resume()
+    }
+
+    /// iOS relaunched the app for the session's events: done once they are delivered.
+    func finished(_ identifier: String, _ completion: @escaping @Sendable () -> Void) {
+        guard identifier == Self.identifier else { completion(); return }
+        lock.lock(); done = completion; lock.unlock()
+        _ = session
+    }
+
+    func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        lock.lock(); let completion = done; done = nil; lock.unlock()
+        DispatchQueue.main.async { completion?() }
     }
 }
 

@@ -16,6 +16,9 @@ struct RootView: View {
     /// A food the owner fixed, opened from its push (FoodPush).
     @State private var foodPush = FoodPush.shared
     @State private var fixedFood: FoodProduct?
+    /// The coach's chat answered from a push, opened from its notification (CoachPush).
+    @State private var coachPush = CoachPushOpen.shared
+    @State private var coachChat: CoachChatRef?
     /// Scrolled down: the tab bar is only the open section's icon and "+".
     @State private var compactBar = false
     /// Opened with a tap while the page still glides: it stays open until the
@@ -199,6 +202,7 @@ struct RootView: View {
             }
             .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showCoach) { CoachView(view: coachView, date: model.selectedDate).dynamicTypeSize(Self.textSizes) }
+            .sheet(item: $coachChat) { ref in CoachView(openChat: ref.id).dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet().dynamicTypeSize(Self.textSizes) }
             .sheet(item: $quickFood) { start in
                 AddFoodSheet(meal: MealSlot.now(slots: model.food?.mealSlots), start: start)
@@ -221,6 +225,11 @@ struct RootView: View {
                 // Added from the push goes to today, like "+".
                 .onAppear { model.writesToday = true }
                 .onDisappear { model.writesToday = false }
+            }
+            .onChange(of: coachPush.chat, initial: true) { _, chat in
+                guard let chat else { return }
+                coachPush.chat = nil
+                closeSheets { coachChat = CoachChatRef(id: chat) }
             }
             .onChange(of: foodPush.product, initial: true) { _, product in
                 guard let product else { return }
@@ -289,13 +298,14 @@ struct RootView: View {
 
     /// Closes whatever sheet was open, then opens the next thing.
     private func closeSheets(then next: @escaping () -> Void) {
-        let covered = showAdd || showSettings || showCoach || showSyncStatus || quickFood != nil || fixedFood != nil
+        let covered = showAdd || showSettings || showCoach || showSyncStatus || quickFood != nil || fixedFood != nil || coachChat != nil
         showAdd = false
         showSettings = false
         showCoach = false
         showSyncStatus = false
         quickFood = nil
         fixedFood = nil
+        coachChat = nil
         // One sheet at a time: the new one opens once the old has closed.
         DispatchQueue.main.asyncAfter(deadline: .now() + (covered ? 0.45 : 0)) { next() }
     }
