@@ -25,7 +25,8 @@ enum APIError: LocalizedError, Equatable {
 }
 
 /// The Loadwise server (the Cloudflare Worker in src/). The session is the
-/// pfd_session cookie, which URLSession keeps in the shared cookie storage.
+/// pfd_session cookie, which URLSession keeps in the shared cookie storage for
+/// this run of the app and SessionKeychain keeps in the Keychain.
 final class APIClient: @unchecked Sendable {
     static let sessionCookie = "pfd_session"
     /// The version of the server's API this app reads, sent as X-Loadwise-Api.
@@ -57,10 +58,13 @@ final class APIClient: @unchecked Sendable {
         config.httpShouldSetCookies = true
         config.timeoutIntervalForRequest = 30
         session = URLSession(configuration: config)
+        SessionKeychain.start()
     }
 
+    /// The cookie in storage is a copy without an expiry date; the Keychain knows when it runs out.
     var hasSession: Bool {
-        (HTTPCookieStorage.shared.cookies(for: baseURL) ?? []).contains {
+        let expires = baseURL.host().flatMap(SessionKeychain.expires) ?? .distantFuture
+        return expires > Date() && (HTTPCookieStorage.shared.cookies(for: baseURL) ?? []).contains {
             $0.name == Self.sessionCookie && ($0.expiresDate ?? .distantFuture) > Date()
         }
     }
@@ -588,6 +592,7 @@ final class APIClient: @unchecked Sendable {
         for cookie in HTTPCookieStorage.shared.cookies(for: baseURL) ?? [] where cookie.name == Self.sessionCookie {
             HTTPCookieStorage.shared.deleteCookie(cookie)
         }
+        if let host = baseURL.host() { SessionKeychain.delete(host) }
     }
 
     // MARK: - Plumbing
