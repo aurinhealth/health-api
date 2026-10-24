@@ -84,8 +84,24 @@ final class APIClient: @unchecked Sendable {
 
     // MARK: - Coach
 
+    /// "Odpovědět" on a coach push: the request CoachReplyUpload sends in the
+    /// background (POST /app/api/assistant/push-reply, the session cookie and
+    /// the app's language and zone like every request).
+    func pushReplyRequest() throws -> URLRequest {
+        var request = makeRequest("/app/api/assistant/push-reply", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 200
+        // A background session may leave the shared cookies out: the session goes along by hand.
+        for (name, value) in HTTPCookie.requestHeaderFields(with: HTTPCookieStorage.shared.cookies(for: baseURL) ?? []) {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
+        return request
+    }
+
     /// Asks the coach; yields the answer as it grows and the final result.
-    func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil, image: String? = nil) -> AsyncThrowingStream<AssistantEvent, Error> {
+    /// `appContext` replaces the screen and day when the coach is asked about a
+    /// detail (CoachSubject.appContext).
+    func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil, image: String? = nil, appContext: JSONObject? = nil) -> AsyncThrowingStream<AssistantEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -94,7 +110,7 @@ final class APIClient: @unchecked Sendable {
                     request.setValue("application/x-ndjson, application/json", forHTTPHeaderField: "Accept")
                     request.timeoutInterval = 180
                     var body: JSONObject = ["message": .string(message), "stream": .bool(true), "mode": .string("auto"),
-                                            "appContext": .object(["view": .string(view), "date": .string(date ?? Self.localToday())])]
+                                            "appContext": .object(appContext ?? ["view": .string(view), "date": .string(date ?? Self.localToday())])]
                     if let chatId { body["chatId"] = .number(Double(chatId)) }
                     if let image { body["image"] = .string(image) }
                     request.httpBody = try JSONEncoder().encode(body)

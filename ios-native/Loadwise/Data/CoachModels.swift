@@ -122,6 +122,10 @@ struct CoachAction: Decodable, Equatable, Identifiable {
             let fits: Bool
         }
     }
+    /// In a reopened chat (GET /app/api/assistant/chats/:id): the answer it came
+    /// with and how it was decided (draft, confirmed, rejected, expired).
+    var messageId: Int? = nil
+    var draftStatus: String? = nil
 
     struct Preview: Decodable, Equatable {
         var workout: LibraryWorkout? = nil
@@ -196,13 +200,19 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
     let role: String
     let content: String
     let createdAt: String?
+    /// The server's id, which a proposal points to (CoachAction.messageId).
+    var serverId: Int? = nil
     var id: String { role + "|" + (createdAt ?? "") + "|" + String(content.prefix(40)) }
+
+    enum CodingKeys: String, CodingKey { case role, content, createdAt, serverId = "id" }
 }
 
 struct ChatDetail: Decodable, Equatable {
     let id: Int
     let title: String?
     let messages: [ChatMessage]
+    /// The proposals made in this chat.
+    var actions: [CoachAction]? = nil
 }
 
 /// GET /app/api/coaches?date= (src/coach-engine.js), the coach's home.

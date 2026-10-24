@@ -277,6 +277,7 @@ struct TrainingModeView: View {
                 if set != nil {
                     CircleButton(systemImage: "arrow.triangle.swap", label: L10n.tr("Nahradit cvik")) { swapping = exercise.name }
                 }
+                CoachCircleButton(subject: .exercise(exercise, set: set, date: date))
                 CircleButton(systemImage: "chart.bar", label: L10n.tr("Historie cviku")) { historyFor = exercise.name }
                 CircleButton(systemImage: "info", label: L10n.tr("Technika")) { technique = exercise.name }
             }
