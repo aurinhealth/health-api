@@ -426,6 +426,8 @@ struct FoodAmountView: View {
     /// What the AI was unsure about, after a photo.
     var note: String? = nil
     var editing = false
+    /// Opened from the push that the owner fixed it ("Opraveno").
+    var fixed = false
     var done: () -> Void = {}
     /// Another meal than the one the food was opened for.
     @State private var chosenMeal: String?
@@ -469,7 +471,7 @@ struct FoodAmountView: View {
                     if product.source == "ai-estimate" { AIEstimateTag() }
                     HStack(spacing: 8) {
                         if let brand = current.brand { Text(brand).font(Typo.small).foregroundStyle(Palette.muted) }
-                        if product.canReport && (product.reported == true || reportedNow) { ReportedTag() }
+                        if fixed { FixedTag() } else if product.canReport && (product.reported == true || reportedNow) { ReportedTag() }
                     }
                 }
                 // The same card as after a scan (BarcodeScanSheet): the values, then the wheel.
@@ -607,7 +609,7 @@ struct FoodAmountView: View {
         if let message = await model.logFood(product: corrected, amount: value, meal: target) {
             error = message
         } else {
-            if changed { sendCorrection(corrected) }
+            if changed { sendCorrection(corrected) } else { model.thankForLabel(corrected) }
             done()
         }
     }
@@ -767,6 +769,16 @@ struct ReportedTag: View {
             .font(.caption2.weight(.semibold)).foregroundStyle(Palette.amber).lineLimit(1)
             .padding(.horizontal, 8).padding(.vertical, 3)
             .background(Palette.amber.opacity(0.16), in: Capsule())
+    }
+}
+
+/// "Opraveno": the owner approved a report or a correction of this food.
+struct FixedTag: View {
+    var body: some View {
+        Label("Opraveno", systemImage: "checkmark").labelStyle(.titleAndIcon)
+            .font(.caption2.weight(.semibold)).foregroundStyle(Palette.green).lineLimit(1)
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(Palette.green.opacity(0.16), in: Capsule())
     }
 }
 

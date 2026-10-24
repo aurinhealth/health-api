@@ -23,7 +23,9 @@ test("a correction waits for the owner, who sees what changes and approves it in
   assert.equal(suggestions[0].userId, 3);
   assert.deepEqual(suggestions[0].fromUser, { sent: 1, approved: 0 });
 
-  await decideFoodSuggestion(raw, scopedDb(raw, 1), { id: sent.id, decision: "approve" });
+  const decided = await decideFoodSuggestion(raw, scopedDb(raw, 1), { id: sent.id, decision: "approve" });
+  assert.deepEqual(decided.notify.users, [{ userId: 3, kind: "correction" }]);
+  assert.equal(decided.notify.product.serving_size, "19 g");
   const found = await searchFoodCatalog(b, "", before.barcode);
   assert.equal(found[0].serving_size, "19 g");
   assert.equal(found[0].serving_name, "sušenka");
@@ -40,7 +42,7 @@ test("a rejected suggestion changes nothing; a newer one replaces the pending on
   assert.equal(suggestions.length, 1);
   assert.equal(suggestions[0].id, second.id);
   assert.notEqual(first.id, second.id);
-  await decideFoodSuggestion(raw, scopedDb(raw, 1), { id: second.id, decision: "reject" });
+  assert.equal((await decideFoodSuggestion(raw, scopedDb(raw, 1), { id: second.id, decision: "reject" })).notify, null, "a rejection says nothing");
   assert.equal((await searchFoodCatalog(scopedDb(raw, 4), "", before.barcode)).length, 0);
   for (let i = 0; i < DAILY_SUGGESTIONS; i++) {
     try { await saveFoodSuggestion(a, { before: { ...before, barcode: String(8590000000000 + i) }, after: { ...after, barcode: String(8590000000000 + i) } }); } catch {}
@@ -83,7 +85,10 @@ test("a report without values marks the food for everyone until the owner fixes 
 
   // Approving needs the corrected values; it settles both reports.
   await assert.rejects(decideFoodSuggestion(raw, scopedDb(raw, 1), { id: sent.id, decision: "approve" }), e => e.status === 400);
-  await decideFoodSuggestion(raw, scopedDb(raw, 1), { id: sent.id, decision: "approve", after: { ...world, calories_100g: 207 } });
+  const decided = await decideFoodSuggestion(raw, scopedDb(raw, 1), { id: sent.id, decision: "approve", after: { ...world, calories_100g: 207 } });
+  // Both reporters hear about it, with the fixed food.
+  assert.deepEqual(decided.notify.users, [{ userId: 3, kind: "report" }, { userId: 4, kind: "report" }]);
+  assert.equal(decided.notify.product.calories_100g, 207);
   assert.equal((await listFoodSuggestions(raw, { kind: "report" })).suggestions.length, 0);
   assert.equal((await markReported(raw, [world], 3))[0].reported, undefined);
   assert.equal((await searchFoodCatalog(b, "", world.barcode))[0].calories_100g, 207);

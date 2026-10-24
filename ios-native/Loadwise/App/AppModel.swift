@@ -109,6 +109,14 @@ final class AppModel {
     /// A deleted workout waiting a few seconds for "Zpět" (RootView): the
     /// deletion reaches the server and Apple Health only after that.
     var undoToast: PlanToast?
+    /// "Uloženo. Díky, teď ho najdou i ostatní." after a food read from its
+    /// label: it enters the common catalogue at once (src/personal-foods.js).
+    var thanks: String?
+
+    func thankForLabel(_ product: FoodProduct) {
+        guard !demo, product.source == "package_label", !product.perPortion, product.origin == nil else { return }
+        thanks = L10n.tr("Uloženo. Díky, teď ho najdou i ostatní.")
+    }
 
     /// hide: the planned event that leaves the week and the calendar at once;
     /// "Zpět" brings it back with the next load.

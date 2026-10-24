@@ -10,6 +10,7 @@ import { productFromLabel } from "./food-sources.js";
 import { getCookbookRecipeByPage } from "./cookbook.js";
 import { queueFoodGoogle, processFoodGoogle } from "./food-google-sync.js";
 import { lookupFoodWithAI, estimateFoodWithAI } from "./food-ai.js";
+import { sendFoodApproved } from "./push.js";
 import { saveFoodSuggestion, listFoodSuggestions, decideFoodSuggestion, saveFoodReport, markReported } from "./food-suggestions.js";
 import { listFluids, foodDrinks, dayActivityHours, hydrationTarget, hydrationMl, addFluid, updateFluid, deleteFluid, bulkFluids, FluidInputError } from "./fluids.js";
 import { mealConsumedAt } from "./food-log.js";
@@ -84,7 +85,10 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
       const body=await request.json().catch(()=>({}));
       if(url.pathname==='/app/api/food/suggestions')return Response.json(await saveFoodSuggestion(env.DB,body),{headers:{'Cache-Control':'no-store'}});
       if(!owner)return Response.json({message:L('Nenalezeno.', 'Not found.')},{status:404});
-      return Response.json(await decideFoodSuggestion(raw,env.DB,body),{headers:{'Cache-Control':'no-store'}});
+      const {notify,...decided}=await decideFoodSuggestion(raw,env.DB,body);
+      // The authors hear the food is fixed (push.js); the owner's answer doesn't wait for Apple.
+      if(notify?.users?.length){const sending=sendFoodApproved(env,raw,notify).catch(error=>console.warn('food push',error?.message));if(ctx?.waitUntil)ctx.waitUntil(sending);else await sending;}
+      return Response.json(decided,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:error.status||500});}
   }
   // A food not saved yet: AI looks up its label values on the web. Only a

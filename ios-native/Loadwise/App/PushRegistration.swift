@@ -70,6 +70,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             await CoachPush.answer(response, api: api)
             return
         }
+        if let product = FoodPush.product(from: content.userInfo) {
+            await MainActor.run { FoodPush.shared.product = product }
+            return
+        }
         guard content.categoryIdentifier == Reminders.pillCategory else { return }
         let date = content.userInfo["date"] as? String ?? AppModel.localDate(Date())
         switch response.actionIdentifier {
@@ -210,5 +214,22 @@ enum CoachPush {
             // Tapping the message opens the app on Dnes.
             break
         }
+    }
+}
+
+/// "Díky za nahlášení!" or "Tvoje oprava platí.": the owner approved the
+/// user's report or correction of a food (src/push.js sendFoodApproved). A tap
+/// opens the corrected food, marked "Opraveno" (RootView).
+@MainActor @Observable
+final class FoodPush {
+    static let shared = FoodPush()
+    /// The food to open, until RootView has opened it.
+    var product: FoodProduct?
+
+    nonisolated static func product(from userInfo: [AnyHashable: Any]) -> FoodProduct? {
+        guard let food = userInfo["food"] as? [String: Any], let product = food["product"],
+              JSONSerialization.isValidJSONObject(product),
+              let data = try? JSONSerialization.data(withJSONObject: product) else { return nil }
+        return try? JSONDecoder().decode(FoodProduct.self, from: data)
     }
 }

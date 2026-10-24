@@ -139,7 +139,7 @@ export async function listFoodSuggestions(raw, { status = "pending", kind = "cor
 export async function decideFoodSuggestion(raw, catalog, { id, decision, after: corrected }) {
   if (!["approve", "reject"].includes(decision)) throw fail(L("Neplatné rozhodnutí.", "Invalid decision."));
   await ensure(raw);
-  const row = await raw.prepare("SELECT id,after_json,status,kind,ref FROM food_suggestions WHERE id=?").bind(Number(id) || 0).first();
+  const row = await raw.prepare("SELECT id,user_id,after_json,status,kind,ref FROM food_suggestions WHERE id=?").bind(Number(id) || 0).first();
   if (!row) throw fail(L("Návrh nebyl nalezen.", "The suggestion wasn't found."), 404);
   if (row.status !== "pending") throw fail(L("O návrhu už je rozhodnuto.", "The suggestion has already been decided."), 409);
   let after = JSON.parse(row.after_json);
@@ -149,9 +149,18 @@ export async function decideFoodSuggestion(raw, catalog, { id, decision, after: 
       throw fail(L("Doplň platné nutriční hodnoty.", "Fill in valid nutrition values."));
     after = fixed;
   }
-  if (decision === "approve") await saveSharedFood(catalog, after, null, { verified: true });
+  // Who hears about it (push.js sendFoodApproved): the author of this one and
+  // everyone whose pending report of the same food it settles. A rejection says nothing.
+  let notify = null;
+  if (decision === "approve") {
+    const shared = await saveSharedFood(catalog, after, null, { verified: true });
+    const reporters = row.ref ? (await raw.prepare("SELECT DISTINCT user_id FROM food_suggestions WHERE kind='report' AND status='pending' AND ref=? AND id<>?").bind(row.ref, row.id).all()).results || [] : [];
+    const users = [{ userId: Number(row.user_id), kind: row.kind || "correction" }];
+    for (const r of reporters) if (!users.some(u => u.userId === Number(r.user_id))) users.push({ userId: Number(r.user_id), kind: "report" });
+    notify = { users: users.filter(u => u.userId > 0), product: shared || after };
+  }
   const status = decision === "approve" ? "approved" : "rejected";
   await raw.prepare("UPDATE food_suggestions SET status=?, after_json=?, decided_at=CURRENT_TIMESTAMP WHERE id=? AND status='pending'").bind(status, JSON.stringify(after), row.id).run();
   if (decision === "approve" && row.ref) await raw.prepare("UPDATE food_suggestions SET status='approved', decided_at=CURRENT_TIMESTAMP WHERE kind='report' AND status='pending' AND ref=?").bind(row.ref).run();
-  return { status: "ok", id: row.id, decision: status };
+  return { status: "ok", id: row.id, decision: status, notify };
 }

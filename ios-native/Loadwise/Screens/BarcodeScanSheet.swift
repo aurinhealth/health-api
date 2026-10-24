@@ -415,6 +415,7 @@ struct BarcodeScanSheet: View {
         if let message = await model.logFood(product: p, amount: value, meal: target) {
             error = message
         } else {
+            model.thankForLabel(p)
             dismiss()
             onLogged()
         }
