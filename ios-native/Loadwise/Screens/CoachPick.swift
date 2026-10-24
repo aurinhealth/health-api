@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 
 // MARK: - Aktivita dne (GET/POST /app/api/coach/pick, src/coach-pick.js)
 
@@ -75,18 +76,35 @@ struct CoachPick: Decodable, Equatable {
     }
 
     /// The day's pick as last fetched (also in the background), when it is today's.
+    /// Read from disk once and then kept in memory: Today makes a new card on
+    /// every redraw, and reading the file there held up the main thread.
     static var stored: CoachPick? {
-        guard let saved = SnapshotCache.load(CoachPick.self, key: cacheKey)?.value,
-              saved.date == AppModel.localDate(Date()) else { return nil }
-        return saved
+        let today = AppModel.localDate(Date())
+        let pick = memo.withLockUnchecked { $0 } ?? SnapshotCache.load(CoachPick.self, key: cacheKey)?.value
+        if let pick { remember(pick) }
+        return pick?.date == today ? pick : nil
     }
+
+    /// The pick just fetched, for the next card.
+    static func remember(_ pick: CoachPick) {
+        memo.withLockUnchecked { $0 = pick }
+    }
+
+    /// Signing out: the next account starts without it.
+    static func forget() {
+        memo.withLockUnchecked { $0 = nil }
+    }
+
+    private static let memo = OSAllocatedUnfairLock<CoachPick?>(uncheckedState: nil)
 
     static let cacheKey = "activity-of-the-day"
 }
 
 extension APIClient {
     func coachPick() async throws -> CoachPick {
-        try await get("/app/api/coach/pick", cacheKey: CoachPick.cacheKey)
+        let pick: CoachPick = try await get("/app/api/coach/pick", cacheKey: CoachPick.cacheKey)
+        CoachPick.remember(pick)
+        return pick
     }
 
     func chooseCoachPick(kind: String, top: String?) async throws {
