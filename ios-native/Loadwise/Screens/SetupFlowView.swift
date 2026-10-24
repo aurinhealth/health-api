@@ -124,7 +124,7 @@ struct SetupFlowView: View {
         ("Co", "Tep, variabilita tepu (HRV), spánek, váha a tělesný tuk, jídlo a pití, tréninky a jak ti šly."),
         ("Odkud", "Ze služeb, které připojíš (Apple Health, Google Health, Intervals.icu), a z toho, co zadáš sám."),
         ("K čemu", "Jen k přehledům, výpočtům a plánům v Aurinu. Data neprodáváme a nepoužíváme k reklamě."),
-        ("AI", "Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek jídla, společnosti OpenAI v USA."),
+        ("AI", "Když použiješ AI funkci (asistent, rozpoznání jídla z fotky, hodnocení tréninku a týdne), pošle Aurin potřebné údaje, včetně údajů o zdraví a fotek, které pošleš, společnosti OpenAI v USA."),
         ("Odvolání", "Smazáním účtu v Nastavení → Účet, kde si předtím můžeš stáhnout všechna svoje data.")
     ]
 
@@ -238,7 +238,7 @@ struct SetupFlowView: View {
                 Link("Zásady", destination: Self.privacyURL).font(Typo.bodyStrong).foregroundStyle(Palette.blue)
             }
             checkbox("Posílat data do AI funkcí",
-                     note: "Kouč a rozpoznání jídla pošlou potřebné údaje o zdraví společnosti OpenAI v USA. Jde to vypnout v Nastavení.",
+                     note: "Kouč a rozpoznání jídla pošlou potřebné údaje o zdraví a fotky, které jim pošleš, společnosti OpenAI v USA. Jde to vypnout v Nastavení.",
                      isOn: $agreeAI)
         }
     }

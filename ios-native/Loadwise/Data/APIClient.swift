@@ -85,7 +85,7 @@ final class APIClient: @unchecked Sendable {
     // MARK: - Coach
 
     /// Asks the coach; yields the answer as it grows and the final result.
-    func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil) -> AsyncThrowingStream<AssistantEvent, Error> {
+    func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil, image: String? = nil) -> AsyncThrowingStream<AssistantEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -96,6 +96,7 @@ final class APIClient: @unchecked Sendable {
                     var body: JSONObject = ["message": .string(message), "stream": .bool(true), "mode": .string("auto"),
                                             "appContext": .object(["view": .string(view), "date": .string(date ?? Self.localToday())])]
                     if let chatId { body["chatId"] = .number(Double(chatId)) }
+                    if let image { body["image"] = .string(image) }
                     request.httpBody = try JSONEncoder().encode(body)
                     let (bytes, response) = try await session.bytes(for: request)
                     let http = response as? HTTPURLResponse

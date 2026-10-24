@@ -159,6 +159,9 @@ import { loadThresholdSessions } from "./threshold-check-state.js";
 import { performanceTrends, intervalsCurves, recentIntervals } from "./performance-trends.js";
 // The largest request body the coach route reads (POST /app/api/assistant).
 const ASSISTANT_REQUEST_CHARS=64000;
+// One photo with a message: a JPEG the app has made smaller, as a data URL.
+const ASSISTANT_IMAGE_CHARS=2500000;
+const validCoachImage=image=>/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(image)&&image.length<=ASSISTANT_IMAGE_CHARS;
 const numOrNull=v=>v!=null&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
 const isPro=env=>subscriptionStatus(env).then(s=>s.plan==='ai').catch(()=>false);
 
@@ -1615,18 +1618,24 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     // What the request carries reaches the coach's prompt, so its size is capped
     // (a message of 4000 characters, the app's context and a chat id fit many times).
     const raw=await request.text().catch(()=>'');
-    if(raw.length>ASSISTANT_REQUEST_CHARS)return Response.json({message:L('Požadavek je moc velký.', 'The request is too large.')},{status:413});
+    if(raw.length>ASSISTANT_REQUEST_CHARS+ASSISTANT_IMAGE_CHARS)return Response.json({message:L('Požadavek je moc velký.', 'The request is too large.')},{status:413});
     let body;try{body=JSON.parse(raw)||{};}catch{body={};}
-    const message=String(body.message||'').trim();
+    // At most one photo, sent to the AI with this message only and never stored.
+    const image=body.image==null?null:String(body.image);
+    if(image!=null&&!validCoachImage(image))return Response.json({message:L('Fotku se nepodařilo poslat. Zkus jinou.', 'The photo couldn\'t be sent. Try another one.')},{status:400});
+    if(raw.length-(image?.length||0)>ASSISTANT_REQUEST_CHARS)return Response.json({message:L('Požadavek je moc velký.', 'The request is too large.')},{status:413});
+    const message=String(body.message||'').trim()||(image?L('Podívej se na fotku.', 'Have a look at the photo.'):'');
     if(!message||message.length>4000)return Response.json({message:L('Zadej požadavek do 4000 znaků.', 'Enter a request of up to 4,000 characters.')},{status:400});
+    // The chat keeps only a mark where the photo was.
+    const saved=image?L('[Fotka] ', '[Photo] ')+message:message;
     // A lasting preference is saved only once the request has been answered.
     const memory=explicitPreference(message),athleteState=await getAthleteState(env.DB);
     const saveMemory=()=>memory?updateAthleteState(env.DB,{memory}).catch(error=>{console.error('Preference save failed',error.message);}):null;
     // Each answer belongs to a chat; without a known chat id a new chat starts.
-    const remember=async answer=>appendChatTurn(env.DB,body.chatId,message,answer).catch(error=>{console.error('Chat save failed',error.message);return null;});
+    const remember=async answer=>appendChatTurn(env.DB,body.chatId,saved,answer).catch(error=>{console.error('Chat save failed',error.message);return null;});
     if(!env.OPENAI_API_KEY){if(!memory)return Response.json({status:'unavailable',message:L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')},{status:503});await saveMemory();return Response.json({status:'ok',answer:L('Zapamatoval jsem si: ','I\'ll remember: ')+memory,memorySaved:memory,chatId:await remember('Zapamatoval jsem si: '+memory)});}
     // "Měl jsem snickers": a draft of food entries to confirm, not a coach answer.
-    if(body.mode!=='coach'&&isFoodLogMessage(message)){
+    if(body.mode!=='coach'&&!image&&isFoodLogMessage(message)){
       try{const draft=await buildFoodDraft(env,message,localToday());if(draft.items.length){const answer=foodDraftSummary(draft);return Response.json({status:'ok',kind:'food_draft',draft,answer,chatId:await remember(answer)},{headers:{'Cache-Control':'no-store'}});}}
       catch(error){console.error('Food sentence failed',error.message);}
     }
@@ -1636,7 +1645,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     catch(error){if(error.coachAllowance)return Response.json({status:'coach_allowance_used',message:error.message,coachAllowance:error.coachAllowance},{status:429,headers:{'Cache-Control':'no-store'}});console.error('Coach allowance read failed',error.message);claim={kind:'message'};}
     // The chat so far decides the depth too: a follow-up keeps the topic's context.
     const date=localToday(),appContext=assistantAppContext(body.appContext,date),conversation=await chatContext(env.DB,body.chatId).catch(()=>[]);
-    const task=assistantTask(message,body.appContext?appContext:null,conversation),started=Date.now();
+    // A photo needs the full context: a plan on it becomes workout cards.
+    const asked=assistantTask(message,body.appContext?appContext:null,conversation),task=image&&['simple','quick','adjustment'].includes(asked)?'planning':asked,started=Date.now();
     const availabilityMinutes=Number.isFinite(Number(body.availabilityMinutes))?Number(body.availabilityMinutes):null;
     const manualReadiness=Number.isFinite(Number(body.manualReadiness))?Number(body.manualReadiness):null;
     // The goal and the preferences are the athlete's saved ones: the request
@@ -1683,7 +1693,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const libraryAsk=chatLibraryQuery({message,date,inputs,sport,todayCoach:coachCtx.cyclingCoachV2,availabilityMinutes});
       const library=task==='planning'||task==='block'?athleteState.status==='active'?await searchWorkoutLibrary(env.DB,libraryAsk.query,libraryAsk.filters):{workouts:[]}:{workouts:[]};
       coachCtx.workoutLibraryRecommendations=(library.workouts||[]).map(w=>({id:w.id,name:w.name,sport:w.sport||sport,source:w.source_name,sourceKind:w.source_kind,system:w.primary_system,durationMinutes:w.duration_minutes,targetLoad:w.target_load,difficulty:w.difficulty,suitability:w.suitability,challengeGap:w.challenge_gap,structure:w.intervals_description,reasons:w.reasons}));
-      const contextMs=Date.now()-started,answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer});
+      const contextMs=Date.now()-started,answer=await askCoach(env,message,coachCtx,{focus,actions:true,task,onAnswer,image});
       onProgress(L('Kontroluji návrhy pro aplikaci…', 'Checking the proposals for the app…'));
       coachCtx.userMessage=message;coachCtx.appContext=coachCtx.appContext||appContext;coachCtx.gymPlan=appContext.sport==='gym'?selected?.gymPlan:inputs.gym;
       const actions=validateCoachActions(answer.actions,coachCtx,date,{userInitiated:true}),proposals=[];await ensureCoachInboxTable(env.DB);
