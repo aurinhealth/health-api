@@ -719,6 +719,9 @@ final class AppModel {
             // moved or deleted session, or a new activity, stayed as it was.
             let today = Self.localDate(Date())
             await loadCalendar(from: ISODay.shift(today, -14), to: ISODay.shift(today, 28), force: true)
+            // A workout planned or moved anywhere reaches the iPhone calendar at once.
+            let client = api
+            Task { await CalendarTime.shared.mirror(api: client, force: true) }
         } catch APIError.unauthorized {
             signOut(expired: true)
         } catch {

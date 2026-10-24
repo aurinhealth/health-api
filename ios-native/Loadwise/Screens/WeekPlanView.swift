@@ -746,8 +746,6 @@ struct WeekPlanView: View {
         }
         await model.refreshTraining()
         await model.loadCalendar(from: weekStart, to: ISODay.shift(weekStart, 6), force: true)
-        // "Zapisovat tréninky": the saved week goes into the iPhone calendar too.
-        await CalendarTime.shared.mirror(api: model.api, force: true)
     }
 
     private func load() async {
