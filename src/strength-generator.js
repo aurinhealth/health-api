@@ -1378,10 +1378,12 @@ export function templateStrengthPlan(context, template, options = {}) {
   }
   if (!rows.some(r => r[0] === 'WORK')) throw new Error(L('Trénink nemá žádný cvik.', 'The workout has no exercise.'));
   configureStrengthCoaching(rows, EXERCISES, { factor, recoveryScore: context?.adaptive?.recovery?.score ?? null, firstSession });
-  const timing = estimateStrengthTiming(rows, EXERCISES, 600);
+  // The workout's own length, else the time its exercises take.
+  const estimated = estimateStrengthTiming(rows, EXERCISES, 60).estimatedMinutes;
+  const timing = estimateStrengthTiming(rows, EXERCISES, Number(template.minutes) || estimated);
   snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
   // The warm-up, the cardio and the stretching as in a generated plan (Posilovna).
-  const routines = planRoutines(rows, name => EXERCISES[name]?.muscle, context?.trainingSetup || {}, Number(template.minutes) || timing.estimatedMinutes || 60);
+  const routines = planRoutines(rows, name => EXERCISES[name]?.muscle, context?.trainingSetup || {}, timing.requestedMinutes || 60);
   const from = String(options.fromName || '').trim();
   const rationale = (from ? L('Trénink ti posílá ' + from + '. ', from + ' sent you this workout. ') : '') + L('Cviky, série a opakování zůstaly, váhy jsou podle tvých tréninků a dnešní připravenosti.', 'The exercises, sets and reps stay; the weights follow your own workouts and today\'s readiness.') + (firstSession ? ' ' + L('První trénink v aplikaci: váhy jsou opatrný odhad, uprav je tak, aby ti zbyla 2–3 opakování v rezervě.', 'Your first workout in the app: the weights are a careful estimate; adjust them so you keep 2–3 reps in reserve.') : '');
   return { date: context.date, planName: String(template.name || L('Trénink', 'Workout')).slice(0, 80), deload: null, rationale, timing, focusMuscles: [], loadFactor: factor, protectedLegs: false, recentCompletedSets: history.length, loadEstimates, rows, template: true, ...routines };

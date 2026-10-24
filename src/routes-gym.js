@@ -3,7 +3,7 @@
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
 import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts } from "./strength-generator.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { cardioFor, cardioMode, cardioOptions, cardioType, planRoutines, routineSize, stretchingFor, typicalExtraMinutes, warmupFor } from "./stretching.js";
+import { cardioFor, cardioMode, cardioOptions, cardioType, planRoutines, routineSize, stretchingFor, typicalExtraMinutes, warmupFor, withRoutines } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
@@ -151,6 +151,8 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       const muscles=Object.fromEntries([...names].map(name=>[name,exerciseMuscles(name)]));
       // The athlete's equipment, so the coach swaps exercises only for ones it allows.
       const setup=await trainingSetup(env.DB).catch(()=>null),equipment=setup?{equipment:setup.equipment||null,stations:setup.stations||[]}:null;
+      // An older plan without its warm-up, cardio and stretching gets them from Posilovna.
+      if(data.stored)data.values=withRoutines(data.values,setup,name=>EXERCISES[name]?.muscle);
       return Response.json({...data,history,muscles,equipment,storage:"d1"},{headers:{"Cache-Control":"no-store"}});
     }
     if (request.method === "POST") {
