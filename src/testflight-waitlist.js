@@ -47,6 +47,21 @@ export async function handleWaitlistSignup(request, env, pathname) {
   return json({ status: "ok" });
 }
 
+// Storage limitation (privacy policy): an address leaves both lists (this one
+// and signup_waitlist, tenancy.js) a year after it joined or was invited.
+export const WAITLIST_MONTHS = 12;
+export async function forgetOldWaitlist(db) {
+  let removed = 0;
+  for (const sql of [
+    `DELETE FROM testflight_waitlist WHERE COALESCE(invited_at, created_at) < datetime('now', '-${WAITLIST_MONTHS} months')`,
+    `DELETE FROM signup_waitlist WHERE created_at < datetime('now', '-${WAITLIST_MONTHS} months')`
+  ]) {
+    try { removed += Number((await db.prepare(sql).run())?.meta?.changes) || 0; }
+    catch (error) { if (!/no such table/i.test(String(error?.message))) throw error; }
+  }
+  return removed;
+}
+
 // The owner's list: who waits, who was invited, and how full the group is
 // (null when the key is missing or Apple doesn't answer).
 export async function listWaitlist(db, env, fetcher = fetch) {
