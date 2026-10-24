@@ -35,7 +35,7 @@ struct LiveGymView: View {
     @State private var saveTask: Task<Void, Never>?
     @State private var confirmClose = false
     @State private var discarded = false
-    @AppStorage("restSets") private var restSets = 90
+    @AppStorage("restSets") private var restSets = GymRestSettingsView.byExercise
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -402,7 +402,7 @@ struct LiveGymView: View {
         day = next
         // Into a drop set straight away, no rest.
         let intoDrop = upcoming.flatMap { row in next.exercises.flatMap(\.sets).first(where: { $0.row == row }) }?.drop == true
-        let rest = intoDrop ? 0 : set.warmup ? 60 : restSets
+        let rest = intoDrop ? 0 : set.warmup ? 60 : GymRestSettingsView.between(set, setting: restSets)
         if rest > 0 {
             let following: GymSet? = upcoming.flatMap { row in next.exercises.flatMap { $0.sets }.first { $0.row == row } }
             restNext = following.map { Self.describe($0) }
