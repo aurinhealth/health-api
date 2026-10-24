@@ -287,6 +287,9 @@ struct ActivityDetailView: View {
                 HStack {
                     SectionLabel(text: Fmt.weekdayShort(session.date) + " " + Fmt.dayMonth(session.date) + (session.time.map { " · " + ClockText.format($0) } ?? ""))
                     Spacer()
+                    if session.status == "done" {
+                        CoachPill(subject: .activity(model.liveSession(session))).padding(.trailing, 4)
+                    }
                     if session.status == "done", detail != nil {
                         Button { sharing = true } label: {
                             Image(systemName: "square.and.arrow.up").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
@@ -792,7 +795,12 @@ struct PlannedWorkoutView: View {
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: session.title) {
             VStack(alignment: .leading, spacing: 0) {
-                SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (shownTime.map { " · " + ClockText.format($0) } ?? "")).padding(.top, 24)
+                HStack {
+                    SectionLabel(text: Fmt.capitalized(Fmt.relativeDay(session.date, today: AppModel.localDate(Date()))) + (shownTime.map { " · " + ClockText.format($0) } ?? ""))
+                    Spacer()
+                    if session.status != "done" { CoachPill(subject: .planned(session)) }
+                }
+                .padding(.top, 24)
                 Text(session.title).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 HStack(spacing: 18) {
                     if let m = session.minutes { meta("Délka", Fmt.duration(m)) }

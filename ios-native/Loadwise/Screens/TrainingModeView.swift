@@ -261,6 +261,7 @@ struct TrainingModeView: View {
                 Text(exercise.name).font(Typo.sentence(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
+                CoachCircleButton(subject: .exercise(exercise, set: set, date: date))
                 CircleButton(systemImage: "chart.bar", label: L10n.tr("Historie cviku")) { historyFor = exercise.name }
                 CircleButton(systemImage: "info", label: L10n.tr("Technika")) { technique = exercise.name }
             }

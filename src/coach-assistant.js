@@ -443,7 +443,7 @@ export function coachAnswerText(text,{actions=false,incomplete=false}={}){
 }
 
 // The parts of the coach's context that differ between two messages a minute apart.
-export const COACH_MOMENT_KEYS=['now','userInitiated','appContext','selectedGym','selectedDay','selectedWeek','workoutLibraryRecommendations'];
+export const COACH_MOMENT_KEYS=['now','userInitiated','appContext','selectedGym','selectedDay','selectedActivity','selectedSession','selectedWeek','workoutLibraryRecommendations'];
 export async function askCoach(env, message, context, {model = null, focus = null, task = assistantTask(message), actions = false,concise=false,onAnswer=null} = {}) {
   if (!env.OPENAI_API_KEY) return {status: 'unavailable', message: L('AI teď není dostupná. Zkus to později.', 'AI isn\'t available right now. Try again later.')};
   const started = Date.now();
