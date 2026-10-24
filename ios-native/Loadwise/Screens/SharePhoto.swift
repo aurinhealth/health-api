@@ -226,9 +226,9 @@ struct ShareCameraView: View {
 
 // MARK: - Moving the numbers
 
-/// The photo with the image on it: a block of numbers dragged with a finger
-/// stays inside the picture, below the header, and settles on the edges and
-/// the middle.
+/// The photo with the image on it: each number dragged with a finger stays
+/// inside the picture, below the header, and settles on the edges and the
+/// middle. Původní rozložení puts them all back.
 struct SharePlaceView: View {
     @Environment(\.dismiss) private var dismiss
     let card: (CGFloat, [String: CGSize]) -> ShareCard
@@ -263,6 +263,17 @@ struct SharePlaceView: View {
                 HStack {
                     ShareRoundButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
                     Spacer()
+                    if !offsets.isEmpty {
+                        Button {
+                            withAnimation(.snappy) { offsets = [:] }
+                        } label: {
+                            Label(L10n.tr("Původní rozložení"), systemImage: "arrow.counterclockwise")
+                                .font(.subheadline.weight(.medium)).foregroundStyle(.white)
+                                .padding(.horizontal, 14).frame(height: 40)
+                                .background(Color.white.opacity(0.12), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(.horizontal, 18).padding(.top, 6)
 
@@ -302,6 +313,16 @@ struct SharePlaceView: View {
                     p.addLine(to: CGPoint(x: 100 * u, y: y * u))
                 }
                 .stroke(Palette.amber, style: dash)
+            }
+            // The number under the finger.
+            if let moving, let frame = frames[moving.id] {
+                let o = offsets[moving.id] ?? .zero
+                let box = frame.offsetBy(dx: o.width * u, dy: o.height * u).insetBy(dx: -6, dy: -6)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Palette.amber.opacity(0.1))
+                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Palette.amber, lineWidth: 1.5))
+                    .frame(width: box.width, height: box.height)
+                    .offset(x: box.minX, y: box.minY)
             }
         }
         .allowsHitTesting(false)
