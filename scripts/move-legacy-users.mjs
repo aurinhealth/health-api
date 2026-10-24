@@ -60,6 +60,7 @@ async function tableInfo(api, db, table) {
   const columns = await rows(api, db, `PRAGMA table_info(${name(table)})`);
   return {
     columns: columns.map(c => c.name),
+    definitions: new Map(columns.map(c => [c.name, c])),
     key: columns.filter(c => c.pk > 0).sort((a, b) => a.pk - b.pk).map(c => c.name)
   };
 }
@@ -81,13 +82,18 @@ export async function personalTables(api, core, shard) {
     let create = [];
     if (there.has(table)) {
       const shardColumns = new Set((await tableInfo(api, shard, table)).columns);
-      const missing = info.columns.filter(c => !shardColumns.has(c));
-      if (missing.length) throw new Error(`The user database lacks columns of ${table}: ${missing.join(', ')}`);
+      // A column the app added later (ALTER TABLE in its ensure… helper) that
+      // this shard never needed yet comes along with the same definition.
+      for (const column of info.columns.filter(c => !shardColumns.has(c))) {
+        const { type, notnull, dflt_value: fallback } = info.definitions.get(column);
+        if (notnull && fallback == null) throw new Error(`The user database lacks column ${table}.${column}, which has no default`);
+        create.push(`ALTER TABLE ${name(table)} ADD COLUMN ${name(column)}${type ? ' ' + type : ''}${notnull ? ' NOT NULL' : ''}${fallback != null ? ' DEFAULT ' + fallback : ''}`);
+      }
     } else {
       create = [sql.replace(/^CREATE TABLE\s+/i, 'CREATE TABLE IF NOT EXISTS '),
         ...indexes.filter(i => i.tbl_name === table).map(i => i.sql.replace(/^CREATE (UNIQUE )?INDEX\s+(?!IF NOT EXISTS)/i, 'CREATE $1INDEX IF NOT EXISTS '))];
     }
-    tables.push({ name: table, columns: info.columns, key, create });
+    tables.push({ name: table, columns: info.columns, key, create, missing: !there.has(table) });
   }
   return tables;
 }
@@ -150,7 +156,7 @@ export function requests(statements) {
 // Integer ids travel with their rows (assistant_messages point at their
 // chat's id): another account's row with the same id would keep the copy out.
 export async function idClashes(api, core, shard, table, userId) {
-  if (table.key.join() !== 'id' || table.create.length) return 0;
+  if (table.key.join() !== 'id' || table.missing) return 0;
   const range = (await rows(api, core, `SELECT MIN(id) AS low, MAX(id) AS high FROM ${name(table.name)} WHERE user_id=?`, [userId]))[0];
   if (range?.low == null) return 0;
   const found = await rows(api, shard, `SELECT COUNT(*) AS n FROM ${name(table.name)} WHERE id BETWEEN ? AND ? AND user_id<>?`, [range.low, range.high, userId]);
@@ -215,6 +221,8 @@ export async function moveLegacyUsers({ api, plan, ids, apply, log = console.log
       total += n;
       if (n && await idClashes(api, core, shard, table, userId)) throw new Error(`${table.name}: ids of account ${userId} are taken in ${target.name}; nothing was moved`);
     }
+    const added = tables.reduce((n, t) => n + t.create.filter(sql => /^ALTER/.test(sql)).length, 0);
+    if (added) log(`${target.name} gets ${added} columns it lacks (${tables.filter(t => t.create.some(sql => /^ALTER/.test(sql))).map(t => t.name).join(', ')})`);
     log(`Account ${userId} → ${target.name}: ${total} rows in ${tables.filter(t => t.rows).length} tables (${tables.filter(t => t.rows).map(t => `${t.name} ${t.rows}`).join(', ')})`);
     if (!apply) continue;
 
