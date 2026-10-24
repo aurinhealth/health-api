@@ -679,6 +679,8 @@ struct TrainingModeView: View {
                 PrimaryButton(title: L10n.tr("Dokončit trénink"), systemImage: "flag.checkered", busy: saving) { Task { await finish() } }
                     .disabled(saving)
             }
+            // The muscles with this workout counted (loaded again once it is saved).
+            if finishedSession, let muscles = model.muscles { WorkoutFatigueCard(data: muscles).padding(.top, 6) }
         }
     }
 
@@ -1209,6 +1211,7 @@ struct TrainingModeView: View {
                 return
             }
             await model.refreshTraining()
+            await model.loadMuscles()
             // To Intervals.icu and Google Health as chosen in Zdroje dat (Aurin posílá);
             // Apple Health has the live workout already.
             let minutes = totals.map { max(1, $0.minutes) }

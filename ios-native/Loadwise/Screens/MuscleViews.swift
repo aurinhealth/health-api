@@ -100,6 +100,48 @@ private struct TiredLine: View {
     }
 }
 
+/// Trénink dokončen: the muscles after the workout just saved, on the figure
+/// (the 3D one once loaded), the most tired with when they are rested; a tap opens Svaly.
+struct WorkoutFatigueCard: View {
+    @Environment(AppModel.self) private var model
+    let data: MuscleFatigue
+
+    var body: some View {
+        RouteLink(route: .muscles) {
+            Card {
+                HStack {
+                    Text(verbatim: MuscleFatigue.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                }
+                Group {
+                    if let figure = MuscleModelStore.shared.figure {
+                        MuscleFigureFixedPair(figure: figure, colors: data.figureColors, labels: false).allowsHitTesting(false)
+                    } else {
+                        MuscleFigurePair(colors: data.figureColors, spacing: 4)
+                    }
+                }
+                .frame(height: 230).frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(data.tired.prefix(4)) { TiredLine(muscle: $0, today: data.date) }
+                }
+                HStack(spacing: 14) {
+                    key("unavené", Palette.rust)
+                    key("zotavuje se", Palette.amberBar)
+                }
+            }
+        }
+        .task { if model.musclesStale { await model.loadMuscles() } }
+    }
+
+    private func key(_ title: String, _ color: Color) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted)
+        }
+    }
+}
+
 extension MuscleFatigue {
     /// "Horní část těla" or, with nothing whole ready, "Odpočinek".
     var headline: String { readyTitle ?? L10n.tr("Den na odpočinek") }
