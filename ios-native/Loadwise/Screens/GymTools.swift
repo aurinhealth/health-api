@@ -281,7 +281,7 @@ struct GymBuilderView: View {
                 if let fresh = try? await model.api.gymEquipment() { equipment = fresh }
             }
             if !model.demo, catalog.isEmpty { catalog = (try? await model.api.gymExercises()) ?? [] }
-            if template == nil, model.muscleFatigue == nil { await model.loadMuscles() }
+            if template == nil, model.musclesStale { await model.loadMuscles() }
             // What is rested today picks the focus, until the athlete picks one.
             if template == nil, proposal == nil, focus == "auto", !focusPreset, let preset = model.muscles?.focus {
                 focusPreset = true

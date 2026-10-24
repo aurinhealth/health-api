@@ -87,7 +87,7 @@ struct FoodDraftCard: View {
     private var dayLabel: String {
         let today = AppModel.localDate(Date())
         if draft.date == today { return L10n.tr("dnes") }
-        if draft.date == AppModel.localDate(Date().addingTimeInterval(-86_400)) { return L10n.tr("včera") }
+        if draft.date == AppModel.shift(today, by: -1) { return L10n.tr("včera") }
         return draft.date
     }
 

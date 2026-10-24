@@ -81,7 +81,7 @@ struct SyncStatus: Decodable, Equatable {
     /// Sources whose last sync failed within the last day; an older failure
     /// was followed by syncs that went fine, so it is no longer shown.
     func failures(now: Date = Date()) -> [Failure] {
-        let names = ["google": "Google Health", "intervals": "Intervals.icu", "weight": L10n.tr("váha"), "wellness": "wellness",
+        let names = ["google": "Google Health", "intervals": "Intervals.icu", "weight": L10n.tr("váha"), "wellness": L10n.tr("zdravotní hodnoty"),
                      "exports": L10n.tr("export tréninků"), "matching": L10n.tr("párování aktivit")]
         var failed = (results ?? []).filter { $0.status == "error" || $0.status == "partial" }
         if (googleStatus == "error" || googleStatus == "partial") && !failed.contains(where: { $0.source == "google" }) {

@@ -30,7 +30,7 @@ export const KINDS = ["recovery", "endurance", "long", "tempo", "sweet_spot", "t
 // The generator's focus for a kind (cycling-coach-v2.js reads goal.focus).
 export const FOCUS_OF = { recovery: "recovery", endurance: "endurance", long: "long_endurance", tempo: "tempo", sweet_spot: "sweet_spot", threshold: "threshold", vo2max: "vo2max" };
 export const MIN_MINUTES = { ride: 30, run: 20, gym: 30 };
-const MAX_MINUTES = { ride: 300, run: 150, gym: 90 };
+export const MAX_MINUTES = { ride: 300, run: 150, gym: 90 };
 const DEFAULT_MINUTES = { ride: 60, run: 45, gym: 60 };
 
 export const KIND_LABELS = () => ({
@@ -221,7 +221,7 @@ export async function proposeWeekAI(env, facts, { prefs = null, focus = null, us
 
 // ---- One session: "Upravit s AI" ----
 
-const HARDER = { recovery: "endurance", endurance: "tempo", long: "long", tempo: "sweet_spot", sweet_spot: "threshold", threshold: "vo2max", vo2max: "vo2max" };
+export const HARDER = { recovery: "endurance", endurance: "tempo", long: "long", tempo: "sweet_spot", sweet_spot: "threshold", threshold: "vo2max", vo2max: "vo2max" };
 export const EASIER = { vo2max: "threshold", threshold: "sweet_spot", sweet_spot: "endurance", tempo: "endurance", long: "endurance", endurance: "recovery", recovery: "recovery" };
 
 // The kind a generated workout is (its library system), for "Těžší"/"Lehčí".

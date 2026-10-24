@@ -59,8 +59,9 @@ export async function getWorkout(db, id) {
   if (builtInById().has(id)) return builtInById().get(id);
   // The threshold tests (threshold-check.js) are planned by id, never picked by the generator.
   if (/^test-/.test(String(id))) return getTestWorkout(id);
-  // Race day of a running plan (training-plans.js): "race-run-<km>-<minutes>".
-  if (/^race-run-/.test(String(id))) return raceWorkout(id);
+  // Race day of a running or cycling plan (training-plans.js): "race-run-<km>-<minutes>",
+  // "race-ride-<race>-<km>-<minutes>".
+  if (/^race-(run|ride)-/.test(String(id))) return raceWorkout(id);
   // "own-<id>": a ride or run from the athlete's Moje tréninky as it was planned
   // that time (planned_own_workouts, workout-templates.js, its minutes at the
   // athlete's pace); days planned before those copies read the saved workout.

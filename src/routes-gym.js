@@ -8,6 +8,7 @@ import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
 import { pinnedExercises, savePinnedExercises } from "./pinned-exercises.js";
+import { exerciseNotes, saveExerciseNote } from "./exercise-notes.js";
 import { gymExerciseCatalog, gymAlternatives } from "./gym-catalog.js";
 import { EXERCISE_STATIONS, stationSections } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
@@ -98,6 +99,15 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
   if(url.pathname==='/app/api/gym/pinned'&&request.method==='PUT'){
     let body;try{body=await request.json();}catch{return Response.json({status:'error',error:L('Neplatný požadavek.','Invalid request.')},{status:400});}
     try{return Response.json(await savePinnedExercises(env.DB,body));}
+    catch(error){return Response.json({status:'error',error:error.message},{status:400});}
+  }
+  // Moje poznámka: the athlete's notes on exercises, one each.
+  if(url.pathname==='/app/api/gym/notes'&&request.method==='GET'){
+    return Response.json({status:'ok',notes:await exerciseNotes(env.DB)},{headers:{'Cache-Control':'no-store'}});
+  }
+  if(url.pathname==='/app/api/gym/notes'&&request.method==='PUT'){
+    let body;try{body=await request.json();}catch{return Response.json({status:'error',error:L('Neplatný požadavek.','Invalid request.')},{status:400});}
+    try{return Response.json(await saveExerciseNote(env.DB,body));}
     catch(error){return Response.json({status:'error',error:error.message},{status:400});}
   }
   // Levá a pravá strana: one-sided exercises, the last session's sides.

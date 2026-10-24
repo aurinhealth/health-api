@@ -8,7 +8,8 @@ struct SleepDetailView: View {
     @State private var detail: NightDetail?
 
     var body: some View {
-        DetailScreen(glow: Palette.Glow.health, title: "Spánek") {
+        DetailScreen(glow: Palette.Glow.health, title: "Spánek",
+                     coach: .sleep(line: health.sleep.night?.minutes.map { L10n.tr("Dnes") + " " + Fmt.duration(Int($0)) }, date: health.date)) {
             SleepDetailContent(health: health, detail: detail)
         }
         .task {

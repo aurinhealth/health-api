@@ -59,6 +59,8 @@ final class AppModel {
     /// Svaly (MuscleViews.swift): loaded by the widgets, the screen and the
     /// gym builder, whichever comes first.
     var muscleFatigue: MuscleFatigue?
+    /// When the muscles came from the server; nil after a gym day was saved (musclesStale).
+    @ObservationIgnored var musclesAt: Date?
     /// Apple Health's cycle data went to the server in this run of the app.
     @ObservationIgnored var cycleHealthSynced = false
 
@@ -506,6 +508,11 @@ final class AppModel {
         if announce { syncStatus = .syncing }
         if Self.accountUnconfirmed { await loadAccountInitial() }
         await sendOutbox()
+        // The free time from the iPhone calendar, before Aktivita dne is made.
+        await CalendarTime.shared.send(api: api)
+        // The planned workouts into the iPhone calendar, alongside Today.
+        let mirror = api
+        Task { await CalendarTime.shared.mirror(api: mirror) }
         let health = AppleHealth.shared
         // Until a late-morning sync, last night and the morning's HRV from the
         // watch go out before Today is computed, waiting at most 8 s. Later in
@@ -531,6 +538,9 @@ final class AppModel {
             }
             async let status = try? api.athleteStatus()
             if selectedDate == nil, let today {
+                // Muscles and older days' strain follow new workouts too.
+                if !pastStrain.isEmpty { let days = Array(pastStrain.keys); Task { for day in days { await self.loadPastStrain(day, again: true) } } }
+                if muscleFatigue != nil, musclesStale { Task { await self.loadMuscles() } }
                 async let cycle: Void = loadCycle()
                 await Reminders.reschedule(from: today)
                 WidgetBridge.update(today)
@@ -659,6 +669,8 @@ final class AppModel {
     /// from the widget) goes out either way.
     func refreshOnReturn() async {
         guard !demo, phase == .signedIn else { return }
+        // Google Health may have been disconnected meanwhile: then Apple Health gets the food, weight and workouts again.
+        Task { await loadGoogleSync() }
         if !offline && fresh(.today, day: shownDay) {
             await sendOutbox(reloadToday: true)
         } else {
@@ -714,6 +726,9 @@ final class AppModel {
             // moved or deleted session, or a new activity, stayed as it was.
             let today = Self.localDate(Date())
             await loadCalendar(from: ISODay.shift(today, -14), to: ISODay.shift(today, 28), force: true)
+            // A workout planned or moved anywhere reaches the iPhone calendar at once.
+            let client = api
+            Task { await CalendarTime.shared.mirror(api: client, force: true) }
         } catch APIError.unauthorized {
             signOut(expired: true)
         } catch {
@@ -936,6 +951,9 @@ final class AppModel {
                     continue
                 }
                 break
+            } catch OutboxRefusal.outdated {
+                // Waits for the new version of the app, however long that takes.
+                break
             } catch {
                 // Still no signal (or the session ended): the rest waits.
                 if Outbox.isNoConnection(error) { offline = true }
@@ -1118,11 +1136,24 @@ final class AppModel {
         gymSaving.insert(date)
         defer { gymSaving.remove(date) }
         var next: GymDay? = day
+        func item(_ day: GymDay) -> OutboxItem {
+            OutboxItem(path: "/app/api/gym", method: "POST", body: OutboxItem.json(APIClient.gymBody(day, date: date)),
+                       label: L10n.tr("Posilovna"), key: "gym:" + date)
+        }
         while let current = next {
             gymPending[date] = nil
-            let item = OutboxItem(path: "/app/api/gym", method: "POST", body: OutboxItem.json(APIClient.gymBody(current, date: date)),
-                                  label: L10n.tr("Posilovna"), key: "gym:" + date)
-            _ = try await deliver(item)
+            do {
+                _ = try await deliver(item(current))
+            } catch {
+                // Sets ticked while this save failed still go out, with the outbox's retries.
+                if let newer = gymPending.removeValue(forKey: date) {
+                    enqueue(item(newer))
+                    Task { await sendOutbox() }
+                }
+                throw error
+            }
+            // The muscles count this workout at their next load.
+            musclesAt = nil
             next = gymPending[date]
         }
     }
@@ -1164,8 +1195,9 @@ final class AppModel {
 
     /// A past day's strain for Training's Námaha: the week's days come with the
     /// training answer, an older day from Today of that day, once.
-    func loadPastStrain(_ date: String) async {
-        guard !demo, phase == .signedIn, pastStrain[date] == nil else { return }
+    /// again: once more with Today's load, so a workout that came later counts.
+    func loadPastStrain(_ date: String, again: Bool = false) async {
+        guard !demo, phase == .signedIn, again || pastStrain[date] == nil else { return }
         guard let snapshot = try? await api.today(date: date), snapshot.date == date else { return }
         pastStrain[date] = snapshot.strain.score ?? 0
     }
@@ -1536,6 +1568,9 @@ final class AppModel {
         selectedDate = nil
         fetched = [:]
         athleteStatus = nil
+        muscleFatigue = nil
+        musclesAt = nil
+        pastStrain = [:]
         phase = .signedOut
     }
 }

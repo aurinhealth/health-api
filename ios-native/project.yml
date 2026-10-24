@@ -85,14 +85,17 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         # The permission prompts in Czech, the development language; the phone's
         # language picks the text from Shared/{cs,en}.lproj/InfoPlist.strings.
-        NSCameraUsageDescription: Aurin čte čárové kódy na obalech potravin, aby je mohl zapsat do jídelníčku, a fotí pozadí obrázku ke sdílení.
-        NSPhotoLibraryUsageDescription: Aurin načte fotku jídla, posilovny nebo pozadí ke sdílení, kterou vybereš.
+        NSCameraUsageDescription: Aurin čte čárové kódy na obalech potravin, aby je mohl zapsat do jídelníčku, fotí pozadí obrázku ke sdílení a fotky, které pošleš kouči.
+        NSPhotoLibraryUsageDescription: Aurin načte fotku jídla, posilovny, pro kouče nebo pozadí ke sdílení, kterou vybereš.
         NSLocationWhenInUseUsageDescription: Aurin vezme polohu jen když o to požádáš, aby ukázal počasí a kouč poradil trénink venku nebo uvnitř.
         NSHealthShareUsageDescription: Aurin čte z Apple Health spánek, tréninky, tep, HRV, teplotu zápěstí, kroky, váhu, jídlo a pití z jiných aplikací, pro deník všímavost, čas na denním světle, hluk ve spánku, příznaky a sexuální aktivitu a se zapnutým sledováním cyklu i menstruaci, ovulační testy a antikoncepci, aby spočítal regeneraci, zátěž a kalorický cíl a vyplnil deník.
         # Settings → Zdroje dat → Apple Health writes workouts, weight, food and water (App/AppleHealthExport.swift).
         NSHealthUpdateUsageDescription: Aurin do Apple Health zapíše jen to, co v aplikaci sám zaznamenáš a v Synchronizaci zapneš, například tréninky, váhu, jídlo a pití.
         # Nastavení → Snímač tepu: a Bluetooth chest strap or band for Režim tréninku (App/HeartRateSensor.swift).
         NSBluetoothAlwaysUsageDescription: Aurin se připojí ke snímači tepu, který si spáruješ, aby v režimu tréninku ukázal tep.
+        # Kdy mám čas → Kalendář v iPhonu (App/CalendarTime.swift): only the free minutes per day reach the server.
+        NSCalendarsFullAccessUsageDescription: Aurin podle událostí v kalendáři pozná, kolik máš ten den času na trénink, a když to zapneš, zapíše do něj naplánované tréninky. Události zůstávají v telefonu.
+        NSCalendarsUsageDescription: Aurin podle událostí v kalendáři pozná, kolik máš ten den času na trénink, a když to zapneš, zapíše do něj naplánované tréninky. Události zůstávají v telefonu.
         # iOS 26 AlarmKit: the alarm from Nastavení → Spánek rings like the Clock's.
         NSAlarmKitUsageDescription: Aurin tě vzbudí v čase budíku, podle kterého počítá večerku.
         # Built with the iOS 26 SDK for AlarmKit, the app keeps its own design.
