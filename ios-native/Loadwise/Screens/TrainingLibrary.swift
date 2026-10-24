@@ -167,7 +167,7 @@ struct GymLibrarySection: View {
             SectionLabel(text: "Cviky").padding(.top, 26)
             ExerciseCatalog()
         }
-        .task { if model.muscleFatigue == nil { await model.loadMuscles() } }
+        .task { if model.musclesStale { await model.loadMuscles() } }
     }
 }
 
@@ -733,7 +733,7 @@ struct ExerciseCatalog: View {
             }
         }
         .task {
-            if model.muscleFatigue == nil { await model.loadMuscles() }
+            if model.musclesStale { await model.loadMuscles() }
             await load()
         }
         .sheet(item: $open) { ex in ExerciseSheet(exercise: ex) }

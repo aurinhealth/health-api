@@ -17,6 +17,7 @@ const P = {
   minus: '<path d="M5 12h14"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  camera: '<path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.2l1.6-2.2h5.4L16.3 7h2.2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"/><circle cx="12" cy="12.8" r="3.4"/>',
   chev: '<path d="m9 6 6 6-6 6"/>',
   moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" fill="currentColor" stroke="none"/>',
   sun: '<circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>',
@@ -317,11 +318,11 @@ const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="sent an">Strength, full body</div>
 ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Bent-over rows', '3×10 · 50 kg'], ['Romanian deadlift', '3×8 · 70 kg']].map(([a, b]) => `<div class="ar2"><span>${a}</span><span>${b}</span></div>`).join('')}
 <span class="mut s">+1 more · 1 h</span>
-<div class="ab"${at('10600:gone')}><span class="ok"${at('10200:press 10600-press')}>Confirm</span><span class="no">No</span></div>
+<div class="ab"${at('10600:gone')}><span class="ok"${at('10200:press 10600-press')}>Confirm</span><span class="no">No</span><i class="br"></i>${['Shorter', 'Longer', 'Easier', 'Harder'].map(x => `<span class="q">${x}</span>`).join('')}<i class="br"></i><span class="q">Another day</span></div>
 <div class="conf"${at('10600')}>${ic('check')}Proposal confirmed.</div>
 </div>
 </div>
-<div class="inp"><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
+<div class="inp"><span class="cam">${ic('camera')}</span><span class="mut">Message the coach…</span><span class="snd">${ic('up')}</span></div>
 </div>`;
 
 // Beside the phone: the confirmed workout lands in the week.
@@ -621,11 +622,13 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .al{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600}.an{font-size:22px;margin:6px 0 4px}
 .ar2{display:flex;justify-content:space-between;padding:6px 0;border-top:1px solid var(--line);font-size:12.5px}
 .ab{display:flex;gap:8px;margin-top:10px}.ab span{display:grid;place-items:center;height:34px;padding:0 18px;border-radius:99px;font-size:13.5px;font-weight:600;transition:transform .2s}
+.ab{flex-wrap:wrap}.ab .br{flex-basis:100%;height:0;margin-top:-2px}.ab .q{height:30px;padding:0 11px;font-size:12.5px;font-weight:500;background:var(--panel);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 10%,transparent)}
 .ab .ok{background:var(--button);color:var(--on-button)}.ab .no{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 20%,transparent)}.ab .ok.press{transform:scale(.92)}
 .ab.gone{display:none}.js .ab[data-at]:not(.gone){opacity:1;transform:none}.js .ab .ok[data-at]{opacity:1!important;transform:none!important}.js .ab .ok.press{transform:scale(.92)!important}
 .conf{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;font-weight:500;color:var(--green)}
 .js .conf:not(.in){display:none}
 .inp{display:flex;align-items:center;gap:10px;padding:10px 0 34px}.inp .mut{flex:1;padding:12px 14px;border-radius:20px;background:var(--panel)}
+.inp .cam{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--panel)}
 .snd{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--button);color:var(--on-button)}
 @media (prefers-reduced-motion:reduce){.cam .scan,.dots i,.btn .sp1{animation:none}}
 `;

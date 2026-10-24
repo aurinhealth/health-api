@@ -46,7 +46,7 @@ test("the sentence is parsed by the light model with a JSON schema", async () =>
 
 test("the assistant returns a food draft instead of logging the sentence", () => {
   const entry = readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8");
-  assert.match(entry, /if\(body\.mode!=='coach'&&isFoodLogMessage\(message\)\)/);
+  assert.match(entry, /if\(body\.mode!=='coach'&&!image&&isFoodLogMessage\(message\)\)/);
 });
 
 test("English food sentences go to the food draft too; questions and training do not", () => {

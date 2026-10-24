@@ -47,6 +47,8 @@ struct CoachMemoryChip: Identifiable, Equatable {
     let text: String
     var from: String? = nil
     var undone = false
+    /// A memory from the card's quick changes says what it remembered.
+    var showsText = false
 }
 
 /// What the coach read from "K obědu jsem měl kuře s rýží": the day and the
@@ -135,6 +137,29 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         var replaces: Replaces? = nil
     }
 
+    /// workout: Kratší, Delší, Lehčí, Těžší and the days for Jiný den
+    /// (src/coach-quick-change.js); `quickChange` is the last one made.
+    var quick: Quick? = nil
+    var quickChange: String? = nil
+
+    struct Quick: Decodable, Equatable {
+        let shorter: Bool
+        let longer: Bool
+        let easier: Bool
+        let harder: Bool
+        let day: Bool
+        let days: [Day]
+
+        struct Day: Decodable, Equatable, Hashable {
+            let date: String
+            let fits: Bool
+        }
+    }
+    /// In a reopened chat (GET /app/api/assistant/chats/:id): the answer it came
+    /// with and how it was decided (draft, confirmed, rejected, expired).
+    var messageId: Int? = nil
+    var draftStatus: String? = nil
+
     struct Preview: Decodable, Equatable {
         var workout: LibraryWorkout? = nil
         var plan: GymPreviewResponse.Plan? = nil
@@ -209,13 +234,19 @@ struct ChatMessage: Decodable, Equatable, Identifiable {
     let role: String
     let content: String
     let createdAt: String?
+    /// The server's id, which a proposal points to (CoachAction.messageId).
+    var serverId: Int? = nil
     var id: String { role + "|" + (createdAt ?? "") + "|" + String(content.prefix(40)) }
+
+    enum CodingKeys: String, CodingKey { case role, content, createdAt, serverId = "id" }
 }
 
 struct ChatDetail: Decodable, Equatable {
     let id: Int
     let title: String?
     let messages: [ChatMessage]
+    /// The proposals made in this chat.
+    var actions: [CoachAction]? = nil
 }
 
 /// GET /app/api/coaches?date= (src/coach-engine.js), the coach's home.
