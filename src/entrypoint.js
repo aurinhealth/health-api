@@ -108,6 +108,7 @@ import { wwwRedirect } from "./app-origin.js";
 import { internalHeaders } from "./internal-auth.js";
 import { deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
 import { forgetExpiredAiLimits } from "./ai-limit-memory.js";
+import { withPlainErrors } from "./error-text.js";
 import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.js";
 import { handleIntervalsWebhook } from "./intervals-webhook.js";
 import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
@@ -553,7 +554,8 @@ export default {
     // Server errors are counted for the owner's morning e-mail (ops-report.js); 503 is a planned "try again".
     const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", `${request.method} ${routeName(new URL(request.url).pathname)}`, message));
     try {
-      const response = await worker.fetch(request, env, ctx);
+      // A database or code error never reaches the app word for word (error-text.js).
+      const response = await withPlainErrors(request, await worker.fetch(request, env, ctx));
       if (response.status >= 500 && response.status !== 503) count(`HTTP ${response.status}`);
       return isStaging(env) ? markStaging(response) : response;
     } catch (error) { count(error); throw error; }
