@@ -112,6 +112,7 @@ struct InsightsView: View {
             gym(insights)
         } else {
             focusCard(insights)
+            if current == .run { runEstimates(insights) } else { rideEstimates(insights) }
             cardio(insights, current)
         }
     }
@@ -273,6 +274,58 @@ struct InsightsView: View {
             }
             .padding(.top, 8)
         }
+    }
+
+    /// Běh: the race times the threshold pace gives (5 km to the marathon).
+    @ViewBuilder
+    private func runEstimates(_ insights: FitnessInsights) -> some View {
+        if let run = insights.estimates?.run, !run.races.isEmpty {
+            SectionLabel(text: "Odhad času na závod").padding(.top, 24)
+            Card {
+                ForEach(Array(run.races.enumerated()), id: \.offset) { index, race in
+                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    recordRow(Self.raceName(race.km), value: raceTime(race.seconds), detail: Units.paceText(race.pace))
+                }
+            }
+            .padding(.top, 8)
+            Text(verbatim: L10n.f("Z tvého prahového tempa %@. Maraton platí jen s dlouhými běhy kolem dvou hodin.", Units.paceText(run.thresholdPace)))
+                .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 8).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Kolo: what FTP gives for 5, 20 and 60 minutes, and two races.
+    @ViewBuilder
+    private func rideEstimates(_ insights: FitnessInsights) -> some View {
+        if let ride = insights.estimates?.ride, !ride.efforts.isEmpty {
+            SectionLabel(text: "Odhad výkonu").padding(.top, 24)
+            Card {
+                ForEach(Array(ride.efforts.enumerated()), id: \.offset) { index, effort in
+                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    recordRow("\(effort.minutes) min", value: "\(effort.watts) W",
+                              detail: [effort.wkg.map { Fmt.decimal($0, digits: 1) + " W/kg" }, effort.minutes == 60 ? "FTP" : nil].compactMap { $0 }.joined(separator: " · "))
+                }
+            }
+            .padding(.top, 8)
+            Text(verbatim: L10n.f("Z tvého FTP %@ W.", Fmt.int(ride.ftp))).font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 8)
+            let races = (ride.races ?? []).compactMap { $0 }.filter { $0.minutes != nil && $0.low != nil && $0.high != nil }
+            if !races.isEmpty {
+                SectionLabel(text: "Na závod").padding(.top, 24)
+                Card {
+                    ForEach(Array(races.enumerated()), id: \.offset) { index, race in
+                        if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                        recordRow(L10n.tr(race.kind == "tt" ? "Časovka" : "Gran fondo") + " " + raceDistance(race.km), value: "~" + planDuration(race.minutes ?? 0),
+                                  detail: "\(race.low ?? 0)–\(race.high ?? 0) W")
+                    }
+                }
+                .padding(.top, 8)
+                Text("Čas na rovině bez větru, s tvou váhou a silničním kolem. Kopce a terén ho prodlouží.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 8).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private static func raceName(_ km: Double) -> String {
+        km == 21.1 ? L10n.tr("Půlmaraton") : km == 42.2 ? L10n.tr("Maraton") : raceDistance(km)
     }
 
     /// 1, 3 and 6 months, this year and all; this year until another is picked.
