@@ -173,8 +173,15 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 /* Connections: a row of the services the app connects; picking one says what Aurin reads from it and
    what it sends back. They take turns until one is picked. */
 .connect{padding:150px 0 0}
-.connect .intro{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:end}
-.connect .intro .sub{margin:0}
+.connect .intro,.real .intro{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:end}
+.connect .intro .sub,.real .intro .sub{margin:0}
+
+/* Real days: the owner's own screens from the app (dark mode, his data), not the sample day. */
+.real{padding:150px 0 0}
+.real .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;align-items:start;margin-top:56px;padding:0;list-style:none}
+.real figure{margin:0}
+.real img{display:block;width:100%;height:auto;border-radius:22px;background:var(--button);box-shadow:0 24px 50px -24px rgba(21,20,15,.55)}
+.real figcaption{margin-top:14px;font-size:15px;line-height:1.45;color:var(--sec)}
 .connect .box{margin-top:48px}
 .flow{position:relative;aspect-ratio:1000/440;border-radius:24px;background:var(--panel2);overflow:hidden}
 .fc{position:absolute;left:0;top:0;width:1000px;height:440px;zoom:var(--fz,1)}
@@ -353,8 +360,9 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
   .vis .device,.flip .vis .device{left:59px;top:0}
   .part,.flip .part{left:30px;width:380px;top:auto!important;bottom:-24px}
   .ch .steps{max-width:none;margin-top:44px}
-  .mu,.connect .intro,.faq{grid-template-columns:1fr;gap:32px}
-  .muscles,.connect,.privacy,#faq{padding-top:110px}
+  .mu,.connect .intro,.real .intro,.faq{grid-template-columns:1fr;gap:32px}
+  .muscles,.connect,.real,.privacy,#faq{padding-top:110px}
+  .real .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
   .faq .side{position:static}
   .privacy .ink{padding:48px 32px}
 }
@@ -370,6 +378,10 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
   .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
   .panels{padding:20px}
   .privacy .ink{padding:40px 24px;border-radius:24px}
+  /* Real days scroll sideways inside their row, the page itself does not. */
+  .real .cards{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;margin:40px -16px 0;padding:0 16px 8px;scrollbar-width:none}
+  .real .cards::-webkit-scrollbar{display:none}
+  .real .cards li{flex:0 0 74%;scroll-snap-align:start}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 `;
@@ -601,6 +613,14 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // Google's app verification reads this disclosure on the homepage. Aurin is not going through Google's
 // verification (2026-10-24), so it stays off the overview; before asking Google to verify the app, set this to true.
 // The text stays word for word (tests/site-pages.test.mjs).
+// Real days on the overview: the owner's own screens (dark mode, October 2026), saved from his posts.
+const REAL_DAYS = [
+  ['october', 664, 852, 'October in Aurin’s training calendar: 40 activities, 35 h 8 min, 18,156 kcal, an icon for every ride, gym session and walk', 'October in one screen: 40 activities from Wahoo, the watch and the gym log.'],
+  ['ride-summary', 664, 987, 'An indoor ride from Wahoo in Aurin: 1 h 30 min, 43.8 km, 74 TSS, NP 183 W, recovery 12 h, with the power graph', 'A ride straight from Wahoo: power, load and 12 hours to recover.'],
+  ['weekcheck', 664, 732, 'Aurin’s week check: your body is tired after the last few days, I’d move the ride on Sunday to Monday. Buttons Keep and Edit.', 'After a tired week, the week check moved Sunday’s ride to Monday.'],
+  ['quads-strength', 664, 892, 'Aurin’s quads screen: 66 % rested, strength up 73 % in 5 weeks, estimated leg press max 291 kg', 'Leg press estimated max up 73 % in five weeks, from the sets already logged.'],
+];
+
 export const GOOGLE_DISCLOSURE_ON_HOME = false;
 export const googleDisclosure = () => `<div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
@@ -792,6 +812,13 @@ ${flow}
 <div class="legend" aria-hidden="true"><span><i class="in"></i>Into Aurin</span><span><i class="out"></i>Sent back</span><span class="tip">Pick a service to see what it carries</span></div>
 <div class="panels">${panels}</div>
 </div>
+</div></section>
+
+<section id="skutecne" class="real"><div class="wrap">
+<div class="intro reveal"><div><div class="eyebrow">Real days</div><h2 class="big">Not a demo.</h2></div><p class="sub">These are the founder’s own screens from October: real rides, real gym sessions and one tired week.</p></div>
+<ul class="cards reveal">
+${REAL_DAYS.map(([name, w, h, alt, say]) => `<li><figure><img src="/site/real/${name}.webp" alt="${alt}" width="${w}" height="${h}" loading="lazy" decoding="async"><figcaption>${say}</figcaption></figure></li>`).join('')}
+</ul>
 </div></section>
 
 <section id="soukromi" class="privacy"><div class="wrap">

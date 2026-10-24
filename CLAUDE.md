@@ -20,6 +20,8 @@ availability) updates the overview in the same pull request. The site is in Engl
   `scripts/render-muscles-site.mjs` (the licensed model never goes on the website). When a screen
   they show changes, take them again; the numbers around the hero phone follow the sample day
   (`DemoData.swift`, `tests/site-pages.test.mjs`).
+- One section, "Real days" (`REAL_DAYS`, `public/site/real/`), shows the owner's own dark-mode screens from his posts
+  instead of the sample day; it is the only place where real data appears.
 - Colours come from the light palette in `ios-native/Shared/Palette.swift`.
 - After changing the hero, render the share image `public/site/og-en.png` (1200×630) again.
 - The privacy policy and the terms also have a Czech version (`?lang=cs`, linked from the page and the
