@@ -85,6 +85,7 @@ struct TrainingModeView: View {
                 .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             VStack(alignment: .leading, spacing: 0) {
                 header
+                if let day, !finishedSession, current(day) != nil { tools }
                 if loading && day == nil {
                     Spacer()
                     ProgressView().frame(maxWidth: .infinity)
@@ -235,8 +236,6 @@ struct TrainingModeView: View {
                 }
                 Spacer(minLength: 4)
                 if !finishedSession, current(day) != nil {
-                    HeartSourceButton(live: live) { sensors = true }
-                    CircleButton(systemImage: "list.bullet", label: L10n.tr("Upravit plán")) { editing = true }
                     if started {
                         Button { Task { await finish() } } label: {
                             Text("Dokončit").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.onButton)
@@ -250,6 +249,19 @@ struct TrainingModeView: View {
                 Spacer()
             }
         }
+    }
+
+    /// Under the header: sound and vibration, the heart rate, and the plan.
+    private var tools: some View {
+        HStack(spacing: 8) {
+            GymSignalsMenu()
+            HeartSourceButton(live: live) { sensors = true }
+            Spacer(minLength: 4)
+            Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")) }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.tr("Upravit plán"))
+        }
+        .padding(.top, 12)
     }
 
     private func title(_ day: GymDay) -> String {
@@ -585,10 +597,16 @@ struct TrainingModeView: View {
             }
         }
         .task(id: end) {
-            let wait = end.timeIntervalSinceNow
-            if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
-            guard !Task.isCancelled, restEnd == end else { return }
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            // Each whole second to the end: the last ones tick (Nastavení → Posilovna).
+            while true {
+                let left = end.timeIntervalSinceNow
+                let second = max(0, left.rounded(.up) - 1)
+                if left > second { try? await Task.sleep(for: .seconds(left - second)) }
+                guard !Task.isCancelled, restEnd == end else { return }
+                if second == 0 { break }
+                if GymSignals.counts(Int(second)) { GymSignals.play(.tick) }
+            }
+            GymSignals.play(.end)
             // The rest is over: the screen turns to the set.
             restEnd = nil
         }

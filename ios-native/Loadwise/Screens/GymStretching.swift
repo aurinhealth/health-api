@@ -285,7 +285,6 @@ struct StretchTimerView: View {
     @State private var moving = true
     @State private var paused = false
     @State private var finished = false
-    @State private var beeps = 0
 
     static let moveSeconds = 5
 
@@ -294,9 +293,10 @@ struct StretchTimerView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            HStack {
+            HStack(spacing: 10) {
                 Text(verbatim: "\(min(index + 1, holds.count))/\(holds.count)").font(Typo.caption).foregroundStyle(Palette.muted)
                 Spacer()
+                if !finished { GymSignalsMenu() }
                 Button { dismiss() } label: {
                     Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).frame(width: 36, height: 36)
                 }
@@ -321,7 +321,8 @@ struct StretchTimerView: View {
                         .rotationEffect(.degrees(-90))
                         .animation(.linear(duration: 1), value: left)
                     VStack(spacing: 2) {
-                        Text(verbatim: "\(left)").font(Typo.number(54)).foregroundStyle(Palette.ink).monospacedDigit()
+                        Text(verbatim: "\(left)").font(Typo.number(54)).monospacedDigit()
+                            .foregroundStyle(!moving && GymSignals.counts(left) ? Palette.amber : Palette.ink)
                         Text(moving ? "Připrav se" : kind == .stretching ? "Drž" : "Cvič").font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                 }
@@ -345,7 +346,6 @@ struct StretchTimerView: View {
         }
         .padding(20)
         .background(Palette.background.ignoresSafeArea())
-        .sensoryFeedback(.success, trigger: beeps)
         .task { await run() }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
@@ -368,15 +368,20 @@ struct StretchTimerView: View {
         while !finished, !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
             guard !paused, !finished else { continue }
-            if left > 1 { left -= 1; continue }
-            if moving, let hold { moving = false; left = hold.item.seconds; beeps += 1 } else { next() }
+            if left > 1 {
+                left -= 1
+                // The last seconds of a move tick; getting ready stays quiet.
+                if !moving, GymSignals.counts(left) { GymSignals.play(.tick) }
+                continue
+            }
+            if moving, let hold { moving = false; left = hold.item.seconds; GymSignals.play(.start) } else { next() }
         }
     }
 
     /// The hold is over (or skipped): its stretch is ticked after its last hold.
     private func next() {
         if let hold, hold.closesItem { onItemDone(hold.item.id) }
-        beeps += 1
+        GymSignals.play(.end)
         if index + 1 >= holds.count { finished = true; return }
         index += 1
         moving = true
