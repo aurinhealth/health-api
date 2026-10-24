@@ -181,7 +181,7 @@ test("a large account is deleted in chunks, never with one DELETE over all its r
   addSamples(db, 4, 7);
   const deletes = [];
   const prepare = db.prepare;
-  db.prepare = sql => { if (/^\s*DELETE FROM (?!users|account_deletions)/.test(sql)) deletes.push(sql); return prepare(sql); };
+  db.prepare = sql => { if (/^\s*DELETE FROM (?!users|account_deletions|testflight_waitlist|signup_waitlist)/.test(sql)) deletes.push(sql); return prepare(sql); };
   const result = await deleteAccount({ DB: scopedDb(db, 3), USER_ID: 3 }, user, { fetchImpl: async () => new Response(""), chunkRows: 5 });
   assert.equal(result.pending, false);
   assert.equal(result.deleted.health_datapoints, 24);
@@ -299,4 +299,24 @@ test("accounts nobody signed in to for two years are picked for deletion, never 
   await deleteAccount(scoped, picked[1], { fetchImpl: async () => ({ ok: true }) });
   assert.equal(count(db, "users", 7), 0);
   assert.deepEqual((await inactiveAccounts(db, env, { now: new Date("2026-10-08T06:00:00Z") })).map(u => u.id), [4]);
+});
+
+test("deleting the account takes its address off both waitlists, others stay", async () => {
+  const db = database();
+  db.sqlite.exec("CREATE TABLE testflight_waitlist (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, invited_at TEXT)");
+  db.sqlite.exec(readFileSync(new URL("../migrations/0024_signup_waitlist.sql", import.meta.url), "utf8"));
+  for (const email of ["a@example.com", "b@example.com"]) {
+    db.sqlite.prepare("INSERT INTO testflight_waitlist (email) VALUES (?)").run(email);
+    db.sqlite.prepare("INSERT INTO signup_waitlist (email) VALUES (?)").run(email);
+  }
+  await deleteAccount({ DB: scopedDb(db, 3), RAW_DB: db, USER_ID: 3 }, user, { fetchImpl: async () => new Response("{}") });
+  for (const table of ["testflight_waitlist", "signup_waitlist"]) {
+    assert.deepEqual(db.sqlite.prepare(`SELECT email FROM ${table}`).all().map(r => r.email), ["b@example.com"]);
+  }
+});
+
+test("deleting the account works before any waitlist exists", async () => {
+  const db = database();
+  const result = await deleteAccount({ DB: scopedDb(db, 3), RAW_DB: db, USER_ID: 3 }, user, { fetchImpl: async () => new Response("{}") });
+  assert.equal(result.status, "ok");
 });

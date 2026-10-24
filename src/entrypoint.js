@@ -121,7 +121,7 @@ import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './us
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
 import { handleEmailLogin } from "./email-login.js";
-import { handleWaitlistSignup } from "./testflight-waitlist.js";
+import { handleWaitlistSignup, forgetOldWaitlist } from "./testflight-waitlist.js";
 import { emailConfigured } from "./email-sender.js";
 import { needsAIAccess } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems } from "./connection-health.js";
@@ -385,6 +385,8 @@ const worker = {
     }
     // Remembered AI limits of deleted accounts whose week and month are over (ai-limit-memory.js).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetExpiredAiLimits(env.DB).catch(error => console.error("AI limit memory cleanup failed", error.message));
+    // Waitlist addresses older than a year (testflight-waitlist.js, privacy policy).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 7) await forgetOldWaitlist(env.DB).catch(error => console.error("Waitlist cleanup failed", error.message));
     // Connection keys saved before CONNECTION_KEY existed get it (connection-secrets.js).
     if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await migrateConnectionSecrets(env).then(result => { if (result.migrated || result.failed) console.log("Connection key migration", result); }).catch(error => console.error("Connection key migration failed", error.message));
     // Yesterday's failed syncs, broken connections and server errors, to the owner (ops-report.js);
