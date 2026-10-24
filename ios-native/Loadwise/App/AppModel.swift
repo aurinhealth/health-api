@@ -508,6 +508,11 @@ final class AppModel {
         if announce { syncStatus = .syncing }
         if Self.accountUnconfirmed { await loadAccountInitial() }
         await sendOutbox()
+        // The free time from the iPhone calendar, before Aktivita dne is made.
+        await CalendarTime.shared.send(api: api)
+        // The planned workouts into the iPhone calendar, alongside Today.
+        let mirror = api
+        Task { await CalendarTime.shared.mirror(api: mirror) }
         let health = AppleHealth.shared
         // Until a late-morning sync, last night and the morning's HRV from the
         // watch go out before Today is computed, waiting at most 8 s. Later in
@@ -721,6 +726,9 @@ final class AppModel {
             // moved or deleted session, or a new activity, stayed as it was.
             let today = Self.localDate(Date())
             await loadCalendar(from: ISODay.shift(today, -14), to: ISODay.shift(today, 28), force: true)
+            // A workout planned or moved anywhere reaches the iPhone calendar at once.
+            let client = api
+            Task { await CalendarTime.shared.mirror(api: client, force: true) }
         } catch APIError.unauthorized {
             signOut(expired: true)
         } catch {
