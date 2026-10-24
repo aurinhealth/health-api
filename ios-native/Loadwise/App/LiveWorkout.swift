@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import HealthKit
 import Observation
@@ -308,10 +309,12 @@ final class LiveWorkout: NSObject {
             // Strength training about 5 MET, 4 above rest: active kcal = 4 × kg × hours.
             kcal = 4.0 * weightKg * Date().timeIntervalSince(start) / 3600
         }
-        if sensor.liveBpm == nil, let latest = await latestHeartRate(since: Date().addingTimeInterval(-120)) {
-            if builder == nil { note(latest.bpm) }
+        if sensor.liveBpm == nil {
+            let latest = await latestHeartRate(since: Date().addingTimeInterval(-120))
+            if builder == nil, let latest { note(latest.bpm) }
             // The live session's beats come from a device iOS reads (AirPods, the watch).
-            if heartRate != nil { heartSource = latest.source }
+            // AirPods leave no name on the beats: the headphones playing now say it.
+            if heartRate != nil { heartSource = latest?.source ?? (builder != nil ? Self.heartHeadphones() : nil) }
         }
         // Nothing has measured the heart for a minute (AirPods or the watch taken
         // off, the strap out of range): no number rather than the last one forever.
@@ -353,6 +356,14 @@ final class LiveWorkout: NSObject {
         hrSum += bpm; hrCount += 1
         avgHeartRate = hrSum / Double(hrCount)
         maxHeartRate = max(maxHeartRate ?? 0, bpm)
+    }
+
+    /// The connected headphones that measure heart rate (AirPods Pro, Powerbeats
+    /// Pro), by model rather than the owner's name for them.
+    private static func heartHeadphones() -> String? {
+        let bluetooth: Set<AVAudioSession.Port> = [.bluetoothA2DP, .bluetoothHFP, .bluetoothLE]
+        let names = AVAudioSession.sharedInstance().currentRoute.outputs.filter { bluetooth.contains($0.portType) }.map(\.portName)
+        return ["AirPods Pro", "Powerbeats Pro"].first { model in names.contains { $0.localizedCaseInsensitiveContains(model) } }
     }
 
     /// The newest beat in Apple Health and what measured it (the device's name,

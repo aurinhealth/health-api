@@ -2844,6 +2844,11 @@
 "%d×" = "%d×";
 "Teď v katalogu" = "In the catalogue now";
 "Něco jiného" = "Something else";
+"běhů" = "runs";
+"jízd" = "rides";
+"Ukončí plán %@" = "Ends the plan %@";
+"Otevřít plán" = "Open the plan";
+"Tréninkový plán: %@" = "Training plan: %@";
 "Vybrat z Fotek" = "Choose from Photos";
 "Fotku se nepodařilo připravit. Zkus jinou." = "The photo couldn't be prepared. Try another one.";
 
@@ -2983,3 +2988,4 @@
 "Je moje dnešní námaha v pořádku?" = "Is my strain today about right?";
 "Mám dnes ještě trénovat?" = "Should I still train today?";
 "Jak naložit zbytek týdne?" = "How should I load the rest of the week?";
+"Původní rozložení" = "Reset";
