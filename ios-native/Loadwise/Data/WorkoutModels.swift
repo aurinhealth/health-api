@@ -706,6 +706,8 @@ struct ActivityDetail: Decodable, Equatable {
 struct PlannedWorkout: Decodable, Equatable {
     let source: String?
     let workout: Workout
+    /// Today's ride or run outdoors on a hot day: how to adjust it (src/heat-advice.js).
+    var heat: String? = nil
 
     struct Step: Decodable, Equatable {
         let durationSeconds: Double?

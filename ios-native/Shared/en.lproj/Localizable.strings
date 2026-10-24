@@ -2846,3 +2846,10 @@
 "Něco jiného" = "Something else";
 "Vybrat z Fotek" = "Choose from Photos";
 "Fotku se nepodařilo připravit. Zkus jinou." = "The photo couldn't be prepared. Try another one.";
+
+/* Minule vs dnes (src/activity-compare.js) */
+"Minule vs dnes" = "Last time vs today";
+"Výkon v intervalech" = "Power in intervals";
+"Tep v intervalech" = "Heart rate in intervals";
+"Tempo v úsecích" = "Pace in efforts";
+"Tep v úsecích" = "Heart rate in efforts";
