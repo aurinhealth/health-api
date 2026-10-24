@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { handleEmailLogin, sendCode, codesPerDay, openCodesPerDay } from "../src/email-login.js";
-import { emailConfigured, emailSender, signInCodeEmail, passkeyAddedEmail } from "../src/email-sender.js";
+import { emailConfigured, emailSender, signInCodeEmail, passkeyAddedEmail, emailChangedEmail } from "../src/email-sender.js";
+import { withTimeZone } from "../src/user-time.js";
 import { ensureTenancy, inviteUser, signInEmailUser, setUserDisabled, _resetTenancyForTest } from "../src/tenancy.js";
 import { resolvePrincipal } from "../src/dashboard-auth.js";
 
@@ -153,8 +154,17 @@ test("e-mail texts in Czech and English", () => {
   assert.match(cs.text, /Platí 10 minut/);
   assert.equal(en.subject, "042137 is your Aurin sign-in code");
   const notice = passkeyAddedEmail("en", "Apple Passwords (iPhone)", new Date("2026-10-07T08:00:00Z"));
-  assert.match(notice.text, /“Apple Passwords \(iPhone\)” was added to your Aurin account on 7 October 2026 at 10:00/);
+  assert.match(notice.text, /“Apple Passwords \(iPhone\)” was added to your Aurin account on 7 October 2026 at 10:00 CEST\./);
+  assert.match(passkeyAddedEmail("cs", "iPhone", new Date("2026-10-07T08:00:00Z")).text, /7\. října 2026 v 10:00 SELČ/);
   assert.match(passkeyAddedEmail("cs", "<b>x</b>").html, /&lt;b&gt;x&lt;\/b&gt;/);
+});
+
+test("security notices tell the time in the user's own zone and name it", async () => {
+  const at = new Date("2026-10-07T08:00:00Z");
+  assert.match(passkeyAddedEmail("en", "iPhone", at, "America/New_York").text, /on 7 October 2026 at 04:00 GMT-4\./);
+  assert.match(await withTimeZone("Europe/London", () => passkeyAddedEmail("en", "iPhone", at).text), /at 09:00 BST\./);
+  assert.match(emailChangedEmail("en", "new@example.com", at, "Asia/Tokyo").text, /on 7 October 2026 at 17:00 GMT\+9\./);
+  assert.match(emailChangedEmail("cs", "new@example.com", at).text, /se 7\. října 2026 v 10:00 SELČ změnil/);
 });
 
 test("App Review: the review address gets the fixed code, which still needs sending and works once", async () => {

@@ -251,8 +251,9 @@ export async function handleEmailChange(request, env, url, session, ctx) {
   return response;
 }
 
-export async function notifyOldAddress(env, { previous, email }, lang, ctx) {
+// zone: the account's time zone when someone else (an admin) made the change.
+export async function notifyOldAddress(env, { previous, email }, lang, ctx, zone) {
   if (!emailConfigured(env) || !previous) return;
-  const notice = sendEmail(env, { to: previous, ...emailChangedEmail(lang, email) }).catch(error => console.error("E-mail change notice failed", error?.code || error?.message));
+  const notice = sendEmail(env, { to: previous, ...emailChangedEmail(lang, email, new Date(), zone) }).catch(error => console.error("E-mail change notice failed", error?.code || error?.message));
   if (ctx?.waitUntil) ctx.waitUntil(notice); else await notice;
 }
