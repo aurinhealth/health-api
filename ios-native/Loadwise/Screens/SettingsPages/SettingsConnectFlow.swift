@@ -73,8 +73,8 @@ struct ConnectTarget: Identifiable {
 }
 
 extension View {
-    func connectFlow(_ flow: Binding<ConnectFlowState>, actions: SourceActions, store: SettingsStore, disconnected: @escaping () -> Void = {}) -> some View {
-        modifier(ConnectFlowSheets(flow: flow, actions: actions, store: store, disconnected: disconnected))
+    func connectFlow(_ flow: Binding<ConnectFlowState>, actions: SourceActions, store: SettingsStore, connected: @escaping () async -> Void = {}, disconnected: @escaping () -> Void = {}) -> some View {
+        modifier(ConnectFlowSheets(flow: flow, actions: actions, store: store, connected: connected, disconnected: disconnected))
     }
 }
 
@@ -83,12 +83,14 @@ struct ConnectFlowSheets: ViewModifier {
     @Binding var flow: ConnectFlowState
     let actions: SourceActions
     let store: SettingsStore
+    /// After the service is connected again, for what the page loads itself.
+    let connected: () async -> Void
     let disconnected: () -> Void
 
     func body(content: Content) -> some View {
         content
             .sheet(item: $flow.connecting) { target in
-                ServiceConnectSheet(target: target) { actions.message = nil; await store.load() }
+                ServiceConnectSheet(target: target) { actions.message = nil; await store.load(); await connected() }
             }
             .confirmationDialog(L10n.f("Odpojit %@?", flow.disconnecting?.name ?? ""),
                                 isPresented: Binding(get: { flow.disconnecting != nil }, set: { if !$0 { flow.disconnecting = nil } }),

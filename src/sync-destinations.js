@@ -1,7 +1,7 @@
 import { L } from './lang.js';
 import { intervalsTypeOf } from './activity-type.js';
 import { intervalsAuthorization } from './intervals-auth.js';
-import { localDateTime } from './user-time.js';
+import { localDateTime, zonedTime, zoneOffsetMs } from './user-time.js';
 import { grantedExtras, hasGoogleScope, HEALTH_PERMISSIONS } from './google-scopes.js';
 // Synchronizace: where Loadwise sends what the user records, chosen per
 // destination in the app (Settings → Synchronizace): Apple Health (written by
@@ -251,10 +251,12 @@ async function pushIntervals(env, row, { fetchImpl }) {
 const GOOGLE_EXERCISE = /^users\/[^/]+\/dataTypes\/exercise\/dataPoints\/[^/?#]+$/;
 const googleExerciseType = sport => ({ gym: 'STRENGTH_TRAINING', strength: 'STRENGTH_TRAINING', run: 'RUNNING', ride: 'BIKING', walk: 'WALKING', swim: 'SWIMMING', yoga: 'YOGA' }[sport] || 'EXERCISE');
 const GOOGLE_OUT = { Run: 'RUNNING', TrailRun: 'RUNNING', VirtualRun: 'TREADMILL_RUNNING', Walk: 'WALKING', Hike: 'HIKING', Ride: 'BIKING', VirtualRide: 'INDOOR_BIKING', MountainBikeRide: 'MOUNTAIN_BIKING', GravelRide: 'BIKING', EBikeRide: 'BIKING', WeightTraining: 'STRENGTH_TRAINING', Crossfit: 'STRENGTH_TRAINING', Swim: 'SWIMMING', OpenWaterSwim: 'SWIMMING', Yoga: 'YOGA' };
+export const utcOffset = at => Math.round(zoneOffsetMs(at) / 1000) + 's';
 export function googleExercise(activity) {
-  const start = new Date(activity.startUtc ? Date.parse(activity.startUtc) : Date.parse(activity.startLocal + 'Z'));
+  const start = new Date(activity.startUtc ? Date.parse(activity.startUtc) : zonedTime(activity.startLocal));
   const end = new Date(+start + activity.minutes * 60000);
-  const exercise = { interval: { startTime: start.toISOString(), endTime: end.toISOString() }, exerciseType: GOOGLE_OUT[activity.type] || googleExerciseType(activity.sport), displayName: activity.name.slice(0, 80), activeDuration: activity.minutes * 60 + 's' };
+  // Without the offsets Google Health shows the workout at UTC (01:17 in Prague as 23:17 the day before).
+  const exercise = { interval: { startTime: start.toISOString(), startUtcOffset: utcOffset(start), endTime: end.toISOString(), endUtcOffset: utcOffset(end) }, exerciseType: GOOGLE_OUT[activity.type] || googleExerciseType(activity.sport), displayName: activity.name.slice(0, 80), activeDuration: activity.minutes * 60 + 's' };
   if (activity.notes) exercise.notes = activity.notes.slice(0, 1000);
   return { exercise };
 }

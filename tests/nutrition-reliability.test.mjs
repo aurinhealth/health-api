@@ -45,6 +45,8 @@ test('a meal logged at a local time goes to Google at that time in the user\'s z
   assert.equal(at('2026-10-19T07:30:00'),'2026-10-19T05:30:00.000Z');
   assert.equal(at('2026-10-26T07:30:00'),'2026-10-26T06:30:00.000Z');
   assert.equal(at('2026-10-19T07:30:00','America/New_York'),'2026-10-19T11:30:00.000Z');
+  // The offset makes Google Health show the meal on the day it was eaten, not at UTC.
+  assert.deepEqual(withTimeZone('Europe/Prague',()=>{const i=foodGooglePayload({consumed_date:'2026-10-24',consumed_at:'2026-10-24T00:30:00',recipe_title:'X',note:'{}'}).nutritionLog.interval;return [i.startTime,i.startUtcOffset,i.endUtcOffset];}),['2026-10-23T22:30:00.000Z','7200s','7200s']);
   // No time at all keeps the day's fallback.
   assert.equal(withTimeZone('Europe/Prague',()=>foodGooglePayload({consumed_date:'2026-10-19',consumed_at:null,recipe_title:'X',note:'{}'}).nutritionLog.interval.startTime),'2026-10-19T12:00:00.000Z');
 });

@@ -175,7 +175,8 @@ struct IntegrationDetailView: View {
                 Text(message).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .connectFlow($flow, actions: actions, store: store, disconnected: { dismiss() })
+        // Aurin posílá shows what Google allows to write: reload it after a new consent.
+        .connectFlow($flow, actions: actions, store: store, connected: { await sync?.load() }, disconnected: { dismiss() })
         .task {
             // The services Aurin also sends to (src/sync-destinations.js DESTINATIONS).
             guard sync == nil, SyncApp.order.contains(current.id) else { return }
