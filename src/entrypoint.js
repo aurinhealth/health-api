@@ -9,6 +9,7 @@ import {deletePersonalFood} from './personal-foods.js';
 import {retryWorkoutExports,syncLocalWorkout,completeLocalWorkout,storeLocalEvent} from './local-workouts.js';
 import {heartRateWindow,heartRateKcal,watchWorkoutIn} from './manual-heart-rate.js';
 import {latestStoredWeight} from './athlete-weight.js';
+import {runRaceSeconds,rideRace,runEstimates,rideEstimates,goalVerdict} from './race-estimate.js';
 import app from "./strength-gateway.js";
 import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
@@ -137,7 +138,7 @@ import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, remembe
 import { shiftDate, googleHealthFor, dashboardProfile, mondayOfDate, dayStartSql, mapLimit, userWeekStart } from "./dashboard-shared.js";
 import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
-import { planningHistory, planForWeek, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans } from "./plan-context.js";
+import { planningHistory, planForWeek, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor } from "./coach-ride-reviews.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
 import { ownFitness, watchOnlyFitness, fitnessDays } from "./own-fitness.js";
@@ -826,6 +827,39 @@ function withSportDays(prefs,sport,chosen){
   for(const i of chosen)days[i].push(sport);
   return {days,added:[]};
 }
+// A race plan's race: a running race's estimate now (from the threshold pace)
+// and the goal time, how bold it is; a cycling race's power and time
+// (race-estimate.js). Null for a plan without a race.
+function raceInfo(template,km,{thresholds={},weight=null,target=null,estimateStart=null,weeks=null}={}){
+  if(!template?.race||!(Number(km)>0))return null;
+  if(template.sport==='ride'&&template.race.ride){const r=rideRace(template.race.ride,Number(km),{ftp:Number(thresholds.ftp)||null,weight});return r?{km:Number(km),kind:r.kind,minutes:r.minutes,low:r.low,high:r.high,share:r.share,estimated:r.estimated}:null;}
+  const estimate=runRaceSeconds(Number(km),thresholds.runThresholdPace),goal=Number(target)>0?Math.round(Number(target)):null;
+  return {km:Number(km),estimate,estimateStart:Number(estimateStart)>0?Math.round(Number(estimateStart)):null,target:goal,goalPace:goal?Math.round(goal/Number(km)):null,verdict:goal&&estimate?goalVerdict(goal,estimate,weeks??template.weeks.length):null};
+}
+// A finished gym plan: the estimated max (Epley, sets up to 12 repetitions)
+// of its most trained exercises in its first two weeks (or the eight weeks
+// before) against its last three, the sessions done and each week done in %.
+async function gymPlanResult(env,today){
+  const plan=await finishedPlan(env.DB,today,{gym:true});
+  if(!plan)return null;
+  const template=getTemplate(plan.templateId),end=shiftDate(plan.endDate,1);
+  const [rows,prefs]=await Promise.all([
+    env.DB.prepare("SELECT workout_date,exercise,actual_kg,actual_reps FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' AND workout_date>=? AND workout_date<?").bind(env.USER_ID,shiftDate(plan.startDate,-56),end).all().then(r=>r.results||[]).catch(()=>[]),
+    getWeekPlan(env.DB).catch(()=>({}))
+  ]);
+  const sets=rows.map(r=>({date:String(r.workout_date||'').slice(0,10),exercise:String(r.exercise||'').trim(),kg:Number(r.actual_kg),reps:Number(r.actual_reps)})).filter(r=>r.exercise&&r.date);
+  const e1rm=r=>r.kg>0&&r.reps>=1&&r.reps<=12?r.kg*(1+(r.reps===1?0:r.reps/30)):0;
+  const inPlan=sets.filter(r=>r.date>=plan.startDate),doneDates=[...new Set(inPlan.map(r=>r.date))];
+  const count=new Map();for(const r of inPlan)count.set(r.exercise,(count.get(r.exercise)||0)+1);
+  const best=(name,from,to)=>Math.max(0,...sets.filter(r=>r.exercise===name&&r.date>=from&&r.date<to).map(e1rm));
+  const lifts=[...count].sort((a,b)=>b[1]-a[1]).map(([name])=>{
+    const early=best(name,plan.startDate,shiftDate(plan.startDate,14))||best(name,shiftDate(plan.startDate,-56),plan.startDate),late=best(name,shiftDate(end,-21),end);
+    return early&&late?{exercise:name,before:Math.round(early*2)/2,after:Math.round(late*2)/2}:null;
+  }).filter(Boolean).slice(0,3);
+  const completion=planCompletion(plan,{days:sportDays(prefs.days,'gym'),doneDates,today:shiftDate(end,1)});
+  const next=planTemplates().filter(t=>t.sport==='gym'&&t.id!==template.id).slice(0,2).map(t=>({id:t.id,name:t.name,goal:t.goal}));
+  return {id:plan.id,templateId:template.id,name:template.name,sport:'gym',startDate:plan.firstDay||plan.startDate,endDate:plan.endDate,ftpStart:null,ftpEnd:null,ctlStart:null,ctlEnd:null,sessionsDone:doneDates.length,sessionsPlanned:template.weeks.reduce((a,w)=>a+(w.gym?.sessions||0),0),minutesDone:0,minutesPlanned:null,completion,weeks:templateSummary(template).weeks,next,lifts};
+}
 // A finished ride or run plan: FTP and fitness at the start and now, the
 // sessions and time done against the estimate, each week done in %.
 async function planResult(env,ctx,today){
@@ -1460,7 +1494,13 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   }
   if(url.pathname==='/app/api/fitness-insights'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
-    try{return Response.json(await loadFitnessInsights(env.DB,localToday()),{headers:{'Cache-Control':'no-store'}});}
+    try{
+      // Beside the records: race times from the threshold pace and efforts from FTP (race-estimate.js).
+      const [insights,thresholds,weight]=await Promise.all([loadFitnessInsights(env.DB,localToday()),cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),latestStoredWeight(env.DB,env.USER_ID).catch(()=>null)]);
+      const kg=weightKg(weight),ftp=Number(thresholds.ftp)||null,ride=rideEstimates(ftp,kg);
+      if(ride)ride.races=[['tt',40],['granfondo',160]].map(([kind,km])=>rideRace(kind,km,{ftp,weight:kg}));
+      return Response.json({...insights,estimates:{run:runEstimates(thresholds.runThresholdPace),ride}},{headers:{'Cache-Control':'no-store'}});
+    }
     catch(error){return Response.json({status:'error',message:error.message},{status:500})}
   }
   // Trénink → Svaly: how tired each muscle is and when it is rested (src/muscle-fatigue.js).
@@ -1500,7 +1540,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   // one with how much of each past week was done, and a finished plan's result.
   // POST {action:'start',templateId,startDate?,days?,raceDate?,raceKm?}, {action:'stop'},
   // {action:'edit',date,op,to?,minutes?}, {action:'weekDays',days}, {action:'reschedule',startDate},
-  // {action:'close',id} (the result seen), {action:'proposal'|'undo'}.
+  // {action:'close',id} (the result seen), {action:'proposal'|'undo'},
+  // {action:'target',targetSeconds} (a running race's goal time; start takes targetSeconds too).
   if(url.pathname==='/app/api/plans'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{
@@ -1530,36 +1571,60 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           await savePlanState(env.DB,{...plan,startDate:when.startDate,firstDay:when.firstDay||null,edits:null,weekDays:null,moves:null,lightWeeks:null,shiftedWeeks:null,proposal:null,undo:null,reviewed:null});
         }
         else if(body.action==='close')await closePlanResult(env.DB,body.id);
+        // A running race plan's goal time (seconds, or null to follow the estimate).
+        else if(body.action==='target'){
+          const plan=await current(),template=getTemplate(plan.templateId);
+          if(template.sport!=='run'||!template.race)throw new Error(L('Cílový čas má jen běžecký plán se závodem.', 'Only a running race plan has a goal time.'));
+          const t=body.targetSeconds==null?null:Math.round(Number(body.targetSeconds));
+          if(t!=null&&!(t>=600&&t<=86400))throw new Error(L('Zadej cílový čas.', 'Enter a goal time.'));
+          await savePlanState(env.DB,{...plan,target:t});
+        }
         else if(body.action==='start'){
           const template=getTemplate(String(body.templateId||''));
           if(!template)throw new Error(L('Neznámý plán.', 'Unknown plan.'));
           const when=planStart(template,{today,raceDate:body.raceDate?String(body.raceDate):null,startDate:!template.race&&body.startDate?String(body.startDate):null});
           // The days the athlete chose for the sport, or (too few days in the usual week) the freest days added.
           const prefs=await getWeekPlan(env.DB),chosen=chosenDays(body.days);
-          const need=chosen&&template.sport!=='gym'?withSportDays(prefs,template.sport,chosen):planDays(template,prefs);
+          const need=chosen?withSportDays(prefs,template.sport,chosen):planDays(template,prefs);
           if(need.added.length||chosen)await saveWeekPlan(env.DB,{...prefs,days:need.days});
           // What the result compares with at the end: FTP, fitness and the estimate now.
           const [thresholds,ctl]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),currentCtl(env,ctx)]);
           const estimate=planPreview(template,{ctl,days:sportDays(need.days,template.sport),firstDay:when.firstDay,startDate:when.startDate,availability:prefs.availability});
-          await startPlan(env.DB,{templateId:template.id,startDate:when.startDate,raceDate:when.raceDate,raceKm:body.raceKm,state:{firstDay:when.firstDay||null,start:{ftp:Number(thresholds.ftp)||null,ctl:ctl??null,sessions:estimate.totals.sessions,minutes:estimate.totals.minutes}}});
+          // A running race: the goal time (10 minutes to a day) and the estimate it started from.
+          const km=template.race?(template.race.options?.includes(Number(body.raceKm))?Number(body.raceKm):template.race.km):null;
+          const target=template.sport==='run'&&km&&Number(body.targetSeconds)>=600&&Number(body.targetSeconds)<=86400?Math.round(Number(body.targetSeconds)):null;
+          const raceEstimate=template.sport==='run'&&km?runRaceSeconds(km,thresholds.runThresholdPace):null;
+          await startPlan(env.DB,{templateId:template.id,startDate:when.startDate,raceDate:when.raceDate,raceKm:body.raceKm,state:{firstDay:when.firstDay||null,target,start:{ftp:Number(thresholds.ftp)||null,ctl:ctl??null,sessions:estimate.totals.sessions,minutes:estimate.totals.minutes,...(raceEstimate?{estimate:raceEstimate}:{})}}});
           started={firstWeek:when.firstWeek,addedDays:chosen?[]:need.added};
         }
         else throw new Error(L('Neznámá akce.', 'Unknown action.'));
       }
       else if(request.method!=='GET')return Response.json({message:'Method not allowed'},{status:405});
       const {active,gym}=await syncedPlans(env,today);
-      let summary=active?planSummary(active,today):null,finished=null;
+      let summary=active?planSummary(active,today):null,gymSummary=gym?planSummary(gym,today):null,finished=null,finishedGym=null;
       if(summary?.started){
         const prefs=await getWeekPlan(env.DB).catch(()=>({}));
         summary.completion=planCompletion(active,{days:sportDays(prefs.days,active.sport),doneDates:await planSportDates(env,active.sport,active.startDate,mondayOfDate(today)).catch(()=>[]),today});
       }
+      if(gymSummary?.started){
+        const prefs=await getWeekPlan(env.DB).catch(()=>({}));
+        const rows=await env.DB.prepare("SELECT DISTINCT substr(workout_date,1,10) AS d FROM strength_sets WHERE user_id=? AND completed=1 AND workout_date>=? AND workout_date<?").bind(env.USER_ID,gym.startDate,mondayOfDate(today)).all().then(r=>r.results||[]).catch(()=>[]);
+        gymSummary.completion=planCompletion(gym,{days:sportDays(prefs.days,'gym'),doneDates:rows.map(r=>r.d),today});
+      }
+      // The race: the estimate and goal of a running race, a cycling race's power and time.
+      const template=active&&getTemplate(active.templateId);
+      if(summary&&template?.race){
+        const [thresholds,weight]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),template.sport==='ride'?latestStoredWeight(env.DB,env.USER_ID).catch(()=>null):null]);
+        summary.race=raceInfo(template,active.raceKm||template.race.km,{thresholds,weight:weightKg(weight),target:active.target,estimateStart:active.start?.estimate,weeks:template.weeks.length-Math.max(0,summary.week-1)});
+      }
       if(!active)finished=await planResult(env,ctx,today).catch(error=>{console.error('Plan result failed',error.message);return null;});
-      return Response.json({status:'ok',templates:planTemplates().map(templateSummary),active:summary,activeGym:gym?planSummary(gym,today):null,...(finished?{finished}:{}),...(started?{started}:{})},{headers:{'Cache-Control':'no-store'}});
+      if(!gym)finishedGym=await gymPlanResult(env,today).catch(error=>{console.error('Gym plan result failed',error.message);return null;});
+      return Response.json({status:'ok',templates:planTemplates().map(templateSummary),active:summary,activeGym:gymSummary,...(finished?{finished}:{}),...(finishedGym?{finishedGym}:{}),...(started?{started}:{})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   // What a plan will look like before it starts: its weeks with sessions and
   // time, and the totals (training-plans.js planPreview).
-  // GET ?templateId=&startDate=&days=1,3,5,6&raceDate=
+  // GET ?templateId=&startDate=&days=1,3,5,6&raceDate=&raceKm=&targetSeconds=
   if(url.pathname==='/app/api/plans/preview'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     try{
@@ -1572,7 +1637,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const prefs=await getWeekPlan(env.DB),chosen=chosenDays(url.searchParams.get('days')?.split(','));
       const days=chosen||sportDays(planDays(template,prefs).days,template.sport);
       const preview=planPreview(template,{ctl:await currentCtl(env,ctx),days,firstDay:when.firstDay,startDate:when.startDate,availability:prefs.availability});
-      return Response.json({status:'ok',...preview,firstWeek:when.firstWeek,raceDate:when.raceDate},{headers:{'Cache-Control':'no-store'}});
+      // A race plan: the race's estimate (a running race) or power and time (a cycling race) for ?raceKm=.
+      let race=null;
+      if(template.race){
+        const km=template.race.options?.includes(Number(url.searchParams.get('raceKm')))?Number(url.searchParams.get('raceKm')):running?.raceKm||template.race.km;
+        const [thresholds,weight]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),template.sport==='ride'?latestStoredWeight(env.DB,env.USER_ID).catch(()=>null):null]);
+        const target=Number(url.searchParams.get('targetSeconds'))>0?Number(url.searchParams.get('targetSeconds')):running?.target??null;
+        race=raceInfo(template,km,{thresholds,weight:weightKg(weight),target,weeks:template.weeks.length-(when.firstWeek||1)+1});
+      }
+      return Response.json({status:'ok',...preview,firstWeek:when.firstWeek,raceDate:when.raceDate,...(race?{race}:{})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   // One week of the active ride or run plan: its sessions with their steps,
