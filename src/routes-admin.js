@@ -4,9 +4,9 @@ import { verifyGitHubActionsToken } from "./github-oidc.js";
 import { saveCookbook } from "./cookbook.js";
 import { internalHeaders } from "./internal-auth.js";
 import { listUsersAndInvites, inviteUser, removeInvite, changeUserEmail, setUserDisabled } from "./tenancy.js";
-import { emailChangeRefusal, notifyOldAddress, requestLanguage } from "./email-login.js";
-import { L } from "./lang.js";
-import { localToday } from "./user-time.js";
+import { emailChangeRefusal, notifyOldAddress } from "./email-login.js";
+import { L, storedLanguage } from "./lang.js";
+import { localToday, storedTimeZone } from "./user-time.js";
 import { listWaitlist, decideWaitlist } from "./testflight-waitlist.js";
 
 export async function handleAdminApi(request, env, url, session, ctx) {
@@ -37,7 +37,9 @@ export async function handleAdminApi(request, env, url, session, ctx) {
     if (url.pathname === "/app/api/admin/users/email" && request.method === "POST") {
       const changed = await changeUserEmail(db, env, body.id, body.email);
       if (changed.error) return emailChangeRefusal(changed.error);
-      await notifyOldAddress(env, changed, requestLanguage(request), ctx);
+      // In the user's language and zone, not the admin's.
+      const [language, zone] = await Promise.all([storedLanguage(db, body.id, { fresh: true }), storedTimeZone(db, body.id, { fresh: true })]);
+      await notifyOldAddress(env, changed, language, ctx, zone);
       return Response.json({status:"ok",email:changed.email,message:L("E-mail je změněný. Uživatel se přihlásí novou adresou.", "The email is changed. The user signs in with the new address.")});
     }
     if (url.pathname === "/app/api/admin/users" && request.method === "POST") { await setUserDisabled(db, env, body.id, body.disabled === true); return Response.json({status:"ok",message:body.disabled===true?L("Přístup je zablokovaný.", "Access is blocked."):L("Přístup je obnovený.", "Access is restored.")}); }

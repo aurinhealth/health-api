@@ -1,6 +1,8 @@
 // E-mails the app sends itself (sign-in codes, a new passkey notice) through
 // Cloudflare Email Service. Off until the Worker has the EMAIL binding and the
 // EMAIL_FROM secret, an address on a domain onboarded in Email Service → Email Sending.
+import { dateFormat } from "./date-format.js";
+import { timeZone } from "./user-time.js";
 
 export function emailSender(env) {
   const value = String(env?.EMAIL_FROM || "").trim();
@@ -64,6 +66,12 @@ export function emailChangeCodeEmail(lang, code) {
   return { subject: t.subject(code), text: `${t.intro}\n\n${code}\n\n${t.outro}\n`, html: htmlEmail(lang === "en" ? "en" : "cs", [t.intro, t.outro], code) };
 }
 
+// When a security notice happened, in the user's own zone (user-time.js) and named,
+// "7 October 2026 at 10:00 CEST", so nobody abroad reads Prague time as their own.
+function noticeTime(en, date, zone) {
+  return dateFormat(en ? "en-GB" : "cs-CZ", { timeZone: zone, day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit", timeZoneName: "short" }).format(date);
+}
+
 const CHANGED_TEXT = {
   cs: {
     subject: "E-mail tvého účtu Aurin se změnil",
@@ -76,9 +84,9 @@ const CHANGED_TEXT = {
 };
 
 // Goes to the old address, so a change nobody asked for does not go unnoticed.
-export function emailChangedEmail(lang, address, date = new Date()) {
+export function emailChangedEmail(lang, address, date = new Date(), zone = timeZone()) {
   const en = lang === "en";
-  const when = new Intl.DateTimeFormat(en ? "en-GB" : "cs-CZ", { timeZone: "Europe/Prague", dateStyle: "long", timeStyle: "short" }).format(date);
+  const when = noticeTime(en, date, zone);
   const t = CHANGED_TEXT[en ? "en" : "cs"], paragraphs = t.body(address, when);
   return { subject: t.subject, text: paragraphs.join("\n\n") + "\n", html: htmlEmail(en ? "en" : "cs", paragraphs) };
 }
@@ -94,9 +102,9 @@ const PASSKEY_TEXT = {
   }
 };
 
-export function passkeyAddedEmail(lang, name, date = new Date()) {
+export function passkeyAddedEmail(lang, name, date = new Date(), zone = timeZone()) {
   const en = lang === "en";
-  const when = new Intl.DateTimeFormat(en ? "en-GB" : "cs-CZ", { timeZone: "Europe/Prague", dateStyle: "long", timeStyle: "short" }).format(date);
+  const when = noticeTime(en, date, zone);
   const t = PASSKEY_TEXT[en ? "en" : "cs"], paragraphs = t.body(name, when);
   return { subject: t.subject, text: paragraphs.join("\n\n") + "\n", html: htmlEmail(en ? "en" : "cs", paragraphs) };
 }
