@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
-import { apnsJwt, pkcs8FromP8, sendPush, sendMorningReadiness, handlePushToken, savePushToken, listPushTokens, readinessMessage, hasLastNight, inMorningWindow, pushConfigured, APNS_TOPIC, _resetPushForTest } from "../src/push.js";
+import { apnsJwt, pkcs8FromP8, sendPush, sendMorningReadiness, handlePushToken, savePushToken, listPushTokens, readinessMessage, hasLastNight, sendFoodApproved, foodApprovedMessage, inMorningWindow, pushConfigured, APNS_TOPIC, _resetPushForTest } from "../src/push.js";
 import { withLang } from "../src/lang.js";
 import { withTimeZone } from "../src/user-time.js";
 
@@ -286,4 +286,28 @@ test("no night by 10:00 sends one line about the missing data, only to someone w
   const fresh = setup();
   await savePushToken(fresh.env.DB, TOKEN_A);
   assert.equal((await sendMorningReadiness(fresh.env, { readiness: () => null, now: new Date("2026-10-12T08:15:00Z"), fetchImpl })).reason, "no-score");
+});
+
+test("an approved food fix reaches each author's phones in their language, with the food to open", async () => {
+  const { raw, env, userId } = setup({ language: "en" });
+  await savePushToken(env.DB, TOKEN_A);
+  await savePushToken(scopedDb(raw, userId + 1000), TOKEN_B);
+  const { calls, fetchImpl } = fakeApns();
+  const product = { name: "Tyčinka Margot", brand: "Orion", barcode: "8594001234567", nutrition_basis: "g", calories_100g: 207, protein_100g: 10, carbs_100g: 36, fat_100g: 9, micros_100g: { iron: 1 }, source: "shared" };
+  const result = await sendFoodApproved(env, raw, { users: [{ userId, kind: "report" }, { userId: userId + 1000, kind: "correction" }, { userId: 99999, kind: "report" }], product }, { fetchImpl });
+  assert.equal(result.sent, 2);
+  const [en, cs] = calls.map(c => c.body);
+  assert.equal(en.aps.alert.title, "Tyčinka Margot");
+  assert.match(en.aps.alert.body, /^Thanks for the report/);
+  assert.match(cs.aps.alert.body, /^Tvoje oprava platí/);
+  assert.equal(en.food.kind, "report");
+  assert.equal(en.food.product.calories_100g, 207);
+  assert.equal(en.food.product.micros_100g, undefined, "vitamins stay out of the 4 KB");
+  assert.equal(en.food.product.source, "shared");
+});
+
+test("an approved food fix sends nothing without the APNs secrets", async () => {
+  const { raw, env, userId } = setup({ secrets: false });
+  assert.equal((await sendFoodApproved(env, raw, { users: [{ userId, kind: "report" }], product: { name: "x" } })).reason, "not-configured");
+  assert.match(withLang("cs", () => foodApprovedMessage("correction", { name: "Kofola" })).body, /Tvoje oprava/);
 });

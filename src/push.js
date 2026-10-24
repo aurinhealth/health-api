@@ -209,3 +209,40 @@ export async function sendMorningReadiness(env, { readiness, now = new Date(), f
     return { sent, removed, date, text };
   }));
 }
+
+// ---- A food the owner fixed ---------------------------------------------------
+
+// The owner approved a correction or a report (food-suggestions.js): each
+// author gets one push in their language, titled with the food; a tap opens
+// the corrected food (the app's FoodPush). raw is the unscoped central DB,
+// where every user's push tokens are.
+export function foodApprovedMessage(kind, product) {
+  return {
+    title: String(product?.name || "").slice(0, 80) || L("Potravina", "Food"),
+    body: kind === "report"
+      ? L("Díky za nahlášení! Hodnoty jsou opravené a teď je vidí všichni.", "Thanks for the report! The values are fixed and everyone sees them now.")
+      : L("Tvoje oprava platí. V Aurinu ji teď vidí všichni.", "Your correction is approved. Everyone in Aurin sees it now.")
+  };
+}
+
+const PUSH_PRODUCT_FIELDS = ["name", "brand", "barcode", "nutrition_basis", "serving_size", "serving_name", "quantity", "catalog_key", "calories_100g", "protein_100g", "carbs_100g", "sugars_100g", "fat_100g", "fiber_100g", "salt_100g"];
+
+export async function sendFoodApproved(env, raw, { users = [], product } = {}, { fetchImpl = fetch } = {}) {
+  if (!pushConfigured(env) || !raw || !product?.name) return { sent: 0, reason: "not-configured" };
+  // Apple takes 4 KB: the food's label values, without vitamins.
+  const food = Object.fromEntries(PUSH_PRODUCT_FIELDS.filter(k => product[k] != null).map(k => [k, product[k]]));
+  food.source = "shared";
+  let sent = 0;
+  for (const { userId, kind } of users) {
+    const devices = (await raw.prepare("SELECT token, environment FROM push_tokens WHERE user_id=?").bind(userId).all().catch(() => ({ results: [] }))).results || [];
+    if (!devices.length) continue;
+    const alert = await withLang(await storedLanguage(raw, userId), () => foodApprovedMessage(kind, product));
+    for (const device of devices) {
+      const result = await sendPush(env, device, alert, { fetchImpl, data: { food: { kind, product: food } } }).catch(error => ({ ok: false, error: error.message }));
+      if (result.ok) sent++;
+      else if (result.gone) await raw.prepare("DELETE FROM push_tokens WHERE user_id=? AND token=?").bind(userId, device.token).run();
+      else console.error("Food push not delivered", result.status || "", result.reason || result.error || "");
+    }
+  }
+  return { sent };
+}

@@ -30,7 +30,9 @@ const allowed = [/FROM workout_shares WHERE id=\?"$/, /^"DELETE FROM push_tokens
   // the route refuses anyone else.
   /FROM food_suggestions s WHERE s\.status=\?/, /^"SELECT status, COUNT\(\*\) AS n FROM food_suggestions WHERE kind=\? GROUP BY status"$/,
   /^"SELECT kind, COUNT\(\*\) AS n FROM food_suggestions WHERE status='pending' GROUP BY kind"$/,
-  /^"SELECT id,after_json,status,kind,ref FROM food_suggestions WHERE id=\?"$/, /^"UPDATE food_suggestions SET status=\?, after_json=\?, decided_at=CURRENT_TIMESTAMP WHERE id=\? AND status='pending'"$/,
+  /^"SELECT id,user_id,after_json,status,kind,ref FROM food_suggestions WHERE id=\?"$/,
+  // The owner's approval: who reported the same food, for the push (push.js sendFoodApproved).
+  /^"SELECT DISTINCT user_id FROM food_suggestions WHERE kind='report' AND status='pending' AND ref=\? AND id<>\?"$/, /^"UPDATE food_suggestions SET status=\?, after_json=\?, decided_at=CURRENT_TIMESTAMP WHERE id=\? AND status='pending'"$/,
   // Fixing a reported food settles every user's report of it.
   /^"UPDATE food_suggestions SET status='approved', decided_at=CURRENT_TIMESTAMP WHERE kind='report' AND status='pending' AND ref=\?"$/];
 

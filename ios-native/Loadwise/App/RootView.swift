@@ -13,6 +13,9 @@ struct RootView: View {
     /// Přidat jídlo and Vyfotit jídlo from the icon's menu.
     @State private var quickFood: FoodStart?
     @State private var quickActions = QuickActions.shared
+    /// A food the owner fixed, opened from its push (FoodPush).
+    @State private var foodPush = FoodPush.shared
+    @State private var fixedFood: FoodProduct?
     /// Scrolled down: the tab bar is only the open section's icon and "+".
     @State private var compactBar = false
     /// Opened with a tap while the page still glides: it stays open until the
@@ -140,6 +143,14 @@ struct RootView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
+                // A food read from its label is in the common catalogue (AppModel.thankForLabel).
+                if let thanks = model.thanks {
+                    ThanksToast(text: thanks) { model.thanks = nil }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, toastInset)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(1)
+                }
                 // A deletion with its "Zpět" (AppModel.deleteLater).
                 if let toast = model.undoToast {
                     PlanToastView(toast: toast) {
@@ -201,6 +212,27 @@ struct RootView: View {
                 quickActions.pick = nil
                 run(pick.id)
             }
+            .sheet(item: $fixedFood) { product in
+                NavigationStack {
+                    FoodAmountView(product: product, meal: MealSlot.now(slots: model.food?.mealSlots), fixed: true, done: { fixedFood = nil })
+                }
+                .dynamicTypeSize(Self.textSizes)
+                .presentationBackground(Palette.background)
+                // Added from the push goes to today, like "+".
+                .onAppear { model.writesToday = true }
+                .onDisappear { model.writesToday = false }
+            }
+            .onChange(of: foodPush.product, initial: true) { _, product in
+                guard let product else { return }
+                foodPush.product = nil
+                closeSheets { fixedFood = product }
+            }
+            .animation(.snappy, value: model.thanks)
+            .task(id: model.thanks) {
+                guard let shown = model.thanks else { return }
+                try? await Task.sleep(for: .seconds(4))
+                if model.thanks == shown { model.thanks = nil }
+            }
             .animation(.snappy, value: model.syncReport?.id)
             .animation(.snappy, value: model.undoToast?.id)
             .animation(.snappy, value: barHidden)
@@ -252,16 +284,20 @@ struct RootView: View {
     /// An item of the icon's menu (QuickActions): what it opens, over
     /// whatever sheet was open.
     private func run(_ id: String) {
-        let covered = showAdd || showSettings || showCoach || showSyncStatus || quickFood != nil
+        closeSheets { Task { await open(id) } }
+    }
+
+    /// Closes whatever sheet was open, then opens the next thing.
+    private func closeSheets(then next: @escaping () -> Void) {
+        let covered = showAdd || showSettings || showCoach || showSyncStatus || quickFood != nil || fixedFood != nil
         showAdd = false
         showSettings = false
         showCoach = false
         showSyncStatus = false
         quickFood = nil
+        fixedFood = nil
         // One sheet at a time: the new one opens once the old has closed.
-        DispatchQueue.main.asyncAfter(deadline: .now() + (covered ? 0.45 : 0)) {
-            Task { await open(id) }
-        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (covered ? 0.45 : 0)) { next() }
     }
 
     private func open(_ id: String) async {
@@ -395,6 +431,26 @@ struct SyncPill: View {
 }
 
 /// A waiting write the server turned down; a tap puts it away.
+/// A short thank-you at the bottom, gone after a few seconds or a tap.
+struct ThanksToast: View {
+    let text: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        Button(action: dismiss) {
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.green)
+                Text(verbatim: text).font(Typo.bodyStrong).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16).frame(minHeight: 48)
+            .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct OutboxNote: View {
     let text: String
     let dismiss: () -> Void
