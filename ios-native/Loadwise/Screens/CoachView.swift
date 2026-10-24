@@ -78,7 +78,8 @@ struct CoachView: View {
                                            undoMemory: { chip in Task { await undo(chip, in: bubble.id) } },
                                            undoAction: { action in Task { await undo(action, in: bubble.id) } },
                                            adjust: { action, chip, date in Task { await adjust(action, chip: chip, date: date, in: bubble.id) } },
-                                           logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } })
+                                           logFood: { items, meal in Task { await logFood(items, meal: meal, in: bubble.id) } },
+                                           openPlan: openPlan)
                                     .id(bubble.id)
                             }
                             if let progress, sending {
@@ -394,6 +395,12 @@ struct CoachView: View {
         }
     }
 
+    /// "Otevřít plán" under a started plan: the chat closes on the plan in Training.
+    private func openPlan() {
+        dismiss()
+        model.open(.trainingPlan)
+    }
+
     private func edit(_ id: UUID, _ change: (inout Bubble) -> Void) {
         guard let i = messages.firstIndex(where: { $0.id == id }) else { return }
         change(&messages[i])
@@ -542,6 +549,7 @@ struct BubbleView: View {
     var undoAction: (CoachAction) -> Void = { _ in }
     var adjust: (CoachAction, String, String?) -> Void = { _, _, _ in }
     var logFood: ([(product: FoodProduct, amount: Double, meal: String)]?, String) -> Void = { _, _ in }
+    var openPlan: () -> Void = {}
 
     var body: some View {
         VStack(alignment: bubble.mine ? .trailing : .leading, spacing: 8) {
@@ -587,7 +595,7 @@ struct BubbleView: View {
                            canUndo: action.draftId.map { bubble.undo[$0] != nil } ?? false,
                            adjusting: action.draftId.flatMap { bubble.adjusting[$0] },
                            decide: { decide(action, $0) }, undo: { undoAction(action) },
-                           adjust: { adjust(action, $0, $1) })
+                           adjust: { adjust(action, $0, $1) }, openPlan: openPlan)
             }
             if let food = bubble.food {
                 FoodDraftCard(draft: food, logged: bubble.logged, ok: bubble.loggedOK, log: logFood)
@@ -610,19 +618,22 @@ struct ActionCard: View {
     var decide: (Bool) -> Void
     var undo: () -> Void = {}
     var adjust: (String, String?) -> Void = { _, _ in }
+    var openPlan: () -> Void = {}
     @State private var pickingDay = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let preview = action.preview, action.type == "workout", preview.workout != nil || preview.plan != nil {
                 WorkoutPreviewBlock(action: action, preview: preview)
+            } else if action.type == "plan" {
+                PlanProposalBlock(action: action, decided: result != nil)
             } else {
                 Label(action.title, systemImage: "wand.and.stars").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
             }
             if let detail = action.detail, !detail.isEmpty {
                 Text(detail).font(Typo.caption).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            if let reason = action.reason { Text(reason).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
+            if let reason = action.reason, action.type != "plan" { Text(reason).font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true) }
             if result == nil, let change = action.quickChange {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark").font(.caption.weight(.bold))
@@ -645,6 +656,16 @@ struct ActionCard: View {
                     }
                 }
                 .foregroundStyle(Palette.green)
+                if action.type == "plan", failure == nil {
+                    Button(action: openPlan) {
+                        HStack(spacing: 4) {
+                            Text("Otevřít plán")
+                            Image(systemName: "chevron.right").font(.caption2.weight(.bold))
+                        }
+                        .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
+                    }
+                    .buttonStyle(.plain)
+                }
             } else if action.draftId != nil {
                 HStack(spacing: 8) {
                     Button { decide(true) } label: {
@@ -717,6 +738,89 @@ struct ActionCard: View {
         }
         .buttonStyle(.plain)
         .disabled(!enabled || adjusting != nil)
+    }
+}
+
+/// The plan the coach proposes: its name, the weeks as bars, the race or the
+/// start, the length, the sessions and time a week, the days, and the running
+/// plan it would end (mockups/kouc-plan).
+struct PlanProposalBlock: View {
+    let action: CoachAction
+    var decided = false
+
+    private var dayNames: [String] { L10n.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["po", "út", "st", "čt", "pá", "so", "ne"] }
+
+    var body: some View {
+        let card = action.trainingPlan
+        VStack(alignment: .leading, spacing: 8) {
+            Label(L10n.tr("Tréninkový plán"), systemImage: "calendar").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+            Text(verbatim: action.planName ?? "").font(Typo.sentence(22)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+            if let weeks = card?.weeks, !weeks.isEmpty {
+                PlanWeeksChart(bars: weeks.map { PlanWeeksChart.Bar(week: $0.week, phase: $0.race == true ? "race" : $0.phase, value: Double(max($0.minutes, 1)), minutes: $0.minutes, done: nil) }, compact: true)
+            }
+            VStack(spacing: 0) {
+                ForEach(rows, id: \.0) { row in
+                    HStack {
+                        Text(verbatim: row.0).foregroundStyle(Palette.secondary)
+                        Spacer(minLength: 8)
+                        Text(verbatim: row.1).foregroundStyle(Palette.ink).fontWeight(.medium).monospacedDigit()
+                    }
+                    .font(Typo.caption)
+                    .padding(.vertical, 7)
+                    .overlay(alignment: .top) { Rectangle().fill(Palette.ink.opacity(0.1)).frame(height: 1) }
+                }
+            }
+            if let days = card?.days, !days.isEmpty {
+                HStack(spacing: 5) {
+                    ForEach(0..<7, id: \.self) { i in
+                        let on = days.contains(i)
+                        Text(verbatim: dayNames[i])
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(on ? Palette.onButton : Palette.faint)
+                            .frame(width: 30, height: 26)
+                            .background(on ? Palette.button : Palette.ink.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(days.map { dayNames[$0] }.joined(separator: ", "))
+            }
+            if !decided, let old = card?.replaces {
+                Label(L10n.f("Ukončí plán %@", old.name) + (old.started == true ? (old.week.map { w in " (\(w)/\(old.weeksCount ?? w))" } ?? "") : ""), systemImage: "exclamationmark.triangle")
+                    .font(Typo.caption.weight(.medium)).foregroundStyle(Palette.amber)
+                    .padding(.horizontal, 10).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Palette.amber.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+        }
+    }
+
+    /// "Závod: ne 21. 3. · 21,1 km", "Délka: 12 týdnů od 28. 12.", "Týdně: 4 běhy · 3–6 h".
+    private var rows: [(String, String)] {
+        var out: [(String, String)] = []
+        let day = { (d: String) in Fmt.weekdayShort(d) + " " + Fmt.dayMonth(d) }
+        let weeks = action.weeksCount ?? action.trainingPlan?.weeks.count ?? 0
+        let length = String(weeks) + " " + Fmt.plural(weeks, "týden", "týdny", "týdnů")
+        if let race = action.raceDate {
+            out.append((L10n.tr("Závod"), day(race) + (action.raceKm.map { " · " + Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) + " km" } ?? "")))
+            out.append((L10n.tr("Délka"), length + (action.startDate.map { " " + L10n.f("od %@", Fmt.dayMonth(action.firstDay ?? $0)) } ?? "")))
+        } else {
+            if let start = action.firstDay ?? action.startDate { out.append((L10n.tr("Začátek"), day(start))) }
+            out.append((L10n.tr("Délka"), length))
+        }
+        if let card = action.trainingPlan, let n = card.sessions, n > 0 {
+            let what: String = switch action.sport {
+            case "run": Fmt.plural(n, "běh", "běhy", "běhů")
+            case "ride": Fmt.plural(n, "jízda", "jízdy", "jízd")
+            default: Fmt.plural(n, "trénink", "tréninky", "tréninků")
+            }
+            var text = String(n) + " " + what
+            if let m = card.minutes, let lo = m.first, let hi = m.last, hi > 0 {
+                let h = { (x: Int) in String(format: "%.0f", (Double(x) / 60).rounded()) }
+                text += " · " + (h(lo) == h(hi) ? h(hi) : h(lo) + "–" + h(hi)) + " h"
+            }
+            out.append((L10n.tr("Týdně"), text))
+        }
+        return out
     }
 }
 

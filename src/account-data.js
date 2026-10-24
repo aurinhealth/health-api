@@ -126,6 +126,15 @@ export async function purgeUserData(db, userId, { deadline = Date.now() + REQUES
   return { done: true, deleted, chunks };
 }
 
+// Both lists (testflight-waitlist.js, tenancy.js signup_waitlist); a list not made yet is skipped.
+async function forgetWaitlistEmail(db, email) {
+  const address = String(email || "").trim().toLowerCase();
+  if (!db || !address) return;
+  for (const table of ["testflight_waitlist", "signup_waitlist"]) {
+    await db.prepare(`DELETE FROM ${table} WHERE email = ?`).bind(address).run().catch(error => { if (!missingTable(error)) console.error("Waitlist address not removed", table, error.message); });
+  }
+}
+
 export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = REQUEST_BUDGET_MS, chunkRows = DELETE_CHUNK_ROWS } = {}) {
   if (!user?.id || Number(user.id) !== Number(env.USER_ID)) throw new Error(L("Účet se nepodařilo ověřit.", "The account couldn't be verified."));
   if (user.isOwner) throw new Error(L("Účet správce nejde smazat: patří k němu data a nastavení aplikace.", "The admin account can't be deleted: the app's data and settings belong to it."));
@@ -145,6 +154,8 @@ export async function deleteAccount(env, user, { fetchImpl = fetch, budgetMs = R
     env.DB.prepare("INSERT INTO account_deletions(user_id) VALUES(?) ON CONFLICT(user_id) DO NOTHING").bind(env.USER_ID),
     env.DB.prepare("DELETE FROM users WHERE id = ?").bind(env.USER_ID)
   ]);
+  // The address leaves the website's waitlist and the list for a free place too.
+  await forgetWaitlistEmail(env.RAW_DB || env.DB, user.email);
   let purge;
   try {
     purge = await purgeUserData(env.DB, env.USER_ID, { deadline: Date.now() + budgetMs, chunkRows });

@@ -42,7 +42,7 @@ import {syncWellnessToIntervals} from './wellness-sync.js';
 import {forwardWatchWorkouts} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport} from './coach-assistant.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
-import { validateCoachActions, actionSafetyContext, actionsNote } from './coach-actions.js';
+import { validateCoachActions, actionSafetyContext, actionsNote, coachPlanTemplates } from './coach-actions.js';
 import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
@@ -112,6 +112,7 @@ import { wwwRedirect } from "./app-origin.js";
 import { internalHeaders } from "./internal-auth.js";
 import { deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
 import { forgetExpiredAiLimits } from "./ai-limit-memory.js";
+import { withPlainErrors } from "./error-text.js";
 import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.js";
 import { handleIntervalsWebhook } from "./intervals-webhook.js";
 import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
@@ -125,7 +126,7 @@ import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './us
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
 import { handleEmailLogin } from "./email-login.js";
-import { handleWaitlistSignup } from "./testflight-waitlist.js";
+import { handleWaitlistSignup, forgetOldWaitlist } from "./testflight-waitlist.js";
 import { emailConfigured } from "./email-sender.js";
 import { needsAIAccess } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems } from "./connection-health.js";
@@ -394,6 +395,8 @@ const worker = {
     }
     // Remembered AI limits of deleted accounts whose week and month are over (ai-limit-memory.js).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetExpiredAiLimits(env.DB).catch(error => console.error("AI limit memory cleanup failed", error.message));
+    // Waitlist addresses older than a year (testflight-waitlist.js, privacy policy).
+    if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 7) await forgetOldWaitlist(env.DB).catch(error => console.error("Waitlist cleanup failed", error.message));
     // Connection keys saved before CONNECTION_KEY existed get it (connection-secrets.js).
     if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await migrateConnectionSecrets(env).then(result => { if (result.migrated || result.failed) console.log("Connection key migration", result); }).catch(error => console.error("Connection key migration failed", error.message));
     // Yesterday's failed syncs, broken connections and server errors, to the owner (ops-report.js);
@@ -562,7 +565,8 @@ export default {
     // Server errors are counted for the owner's morning e-mail (ops-report.js); 503 is a planned "try again".
     const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", `${request.method} ${routeName(new URL(request.url).pathname)}`, message));
     try {
-      const response = await worker.fetch(request, env, ctx);
+      // A database or code error never reaches the app word for word (error-text.js).
+      const response = await withPlainErrors(request, await worker.fetch(request, env, ctx));
       if (response.status >= 500 && response.status !== 503) count(`HTTP ${response.status}`);
       return isStaging(env) ? markStaging(response) : response;
     } catch (error) { count(error); throw error; }
@@ -834,6 +838,19 @@ function withSportDays(prefs,sport,chosen){
   const days=Array.from({length:7},(_,i)=>(prefs?.days?.[i]||[]).filter(x=>x!==sport));
   for(const i of chosen)days[i].push(sport);
   return {days,added:[]};
+}
+// What the coach's plan card shows (type=plan): each week's time and phase
+// (planPreview), the sessions and time a week, the training days, and the
+// running plan of the same kind (ride/run or gym) that starting it ends.
+async function coachPlanPreview(env,ctx,a){
+  const template=getTemplate(a.planId);if(!template)return null;
+  const [prefs,ctl,plans]=await Promise.all([getWeekPlan(env.DB),currentCtl(env,ctx),syncedPlans(env,localToday()).catch(()=>({}))]);
+  const days=a.days||sportDays(planDays(template,prefs).days,template.sport);
+  const preview=planPreview(template,{ctl,days,firstDay:a.firstDay||null,startDate:a.startDate,availability:prefs.availability});
+  const full=preview.weeks.filter(w=>!w.race&&w.phase!=='recovery'&&w.phase!=='taper'),minutes=(full.length?full:preview.weeks).map(w=>w.minutes);
+  const running=template.sport==='gym'?plans.gym:plans.active,current=running&&getTemplate(running.templateId)?planSummary(running,localToday()):null;
+  return {weeks:preview.weeks.map(w=>({week:w.week,phase:w.phase,minutes:w.minutes,race:w.race})),days:template.sport==='gym'?[]:days,sessions:Math.max(...preview.weeks.map(w=>w.sessions)),minutes:[Math.min(...minutes),Math.max(...minutes)],endDate:preview.endDate,
+    ...(current?{replaces:{name:current.name,week:current.week,weeksCount:current.weeksCount,started:current.started}}:{})};
 }
 // A race plan's race: a running race's estimate now (from the threshold pace)
 // and the goal time, how bold it is; a cycling race's power and time
@@ -1776,6 +1793,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         Object.assign(coachCtx,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,weather:{...(prefs.weather||{}),...openWeekWeather},coachProposals:earlierProposals},safety);
         // The active plan's sessions this week, the days the generator will follow.
         const targets=await computeWeekTargets(env,ctx,thisWeek,prefs).catch(()=>null);
+        // The multi-week plans the coach can start from the chat (type=plan).
+        coachCtx.planTemplates=coachPlanTemplates();
         if(targets?.plan)coachCtx.trainingPlan={name:targets.plan.name,week:targets.plan.week,weeks:targets.plan.weeks,phase:targets.plan.phaseLabel||targets.plan.phase,sessions:(targets.items||[]).filter(x=>x.plan).map(x=>({date:x.date,sport:x.sport,kind:x.plan.kind,label:x.label,minutes:x.minutes}))};
         Object.assign(coachCtx,{appContext:selected.appContext,selectedGym:selected.selectedGym,selectedDay:selected.selectedDay,selectedWeek:selected.selectedWeek},selected.selectedActivity?{selectedActivity:selected.selectedActivity}:{},selected.selectedSession?{selectedSession:selected.selectedSession}:{});
         const reviewDay=selected.appContext.date<=date&&selected.selectedDay?selected.appContext.date:date;
@@ -1804,6 +1823,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         a.preview=await workoutPreview(env,ctx,a).catch(error=>{console.error('Workout preview failed',error.message);return null;});
         delete a.block;
       }
+      // A proposed plan carries what its card shows: the weeks with their time,
+      // the days it trains on and the running plan it would end.
+      for(const a of actions)if(a.type==='plan')a.trainingPlan=await coachPlanPreview(env,ctx,a).catch(error=>{console.error('Plan preview failed',error.message);return null;});
       // A proposal the checks dropped leaves no "below is the workout" without a card.
       const dropped=(Array.isArray(answer.actions)?answer.actions.length:0)-actions.length;
       if(dropped>0)answer.answer=String(answer.answer||'').trimEnd()+L('\n\n'+(dropped===1?'Jeden návrh':'Některé návrhy')+' neprošl'+(dropped===1?'':'y')+' kontrolou aplikace (den, délka, sport nebo stav), proto tu chybí. Napiš, co upravit, a připravím nový.','\n\n'+(dropped===1?'One proposal':'Some proposals')+' didn\'t pass the app\'s checks (day, length, sport or status), so '+(dropped===1?'it is':'they are')+' missing here. Tell me what to change and I\'ll prepare a new one.');
@@ -1925,6 +1947,16 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           if(!validTrainingDay(a.date)||a.date<localToday())throw new Error(L('Do minulého dne už nelze přidat sport.', 'You can\'t add a sport to a past day.'));
           result={date:a.date,prefs:await addWeekSport(env.DB,a.date,a.sport)};
         }
+        // The plan starts as from Trénink → Plány, with the coach's template, race date and days.
+        else if(a.type==='plan'){
+          assertTrainingAllowed(await getAthleteState(env.DB));
+          const template=getTemplate(a.planId);if(!template)throw new Error(L('Neznámý plán.', 'Unknown plan.'));
+          const today=localToday(),startUrl=new URL('https://internal/app/api/plans');
+          const start={action:'start',templateId:template.id,...(template.race?{raceDate:a.raceDate,raceKm:a.raceKm}:a.requestedStart&&a.requestedStart>=today?{startDate:a.requestedStart}:{}),...(a.days?{days:a.days}:{})};
+          const saved=await handleDashboardApi(new Request(startUrl,{method:'POST',headers:{Origin:startUrl.origin,'Content-Type':'application/json'},body:JSON.stringify(start)}),env,ctx,startUrl,{signedIn:true});
+          const savedBody=await saved.json().catch(()=>({}));if(!saved.ok)throw new Error(savedBody.message||L('Plán se nepodařilo založit.', 'The plan couldn\'t be started.'));
+          result={status:'ok',sport:template.sport,active:template.sport==='gym'?savedBody.activeGym:savedBody.active};
+        }
         else if(a.type==='activity_kcal'){result=await setActivityKcal(env,{id:a.activityId,kcal:a.kcal});await bumpCacheVersion(env.DB);}
         // Done activities in Aurin only; the result carries the "Vrátit" token (activity-chat-edits.js).
         else if(a.type==='activity_delete'){result=await hideActivity(env,a.activityId);await bumpCacheVersion(env.DB);}
@@ -1973,7 +2005,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         }
       }
       await env.DB.prepare('UPDATE coach_inbox SET status=?,confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(body.decision==='confirm'?'confirmed':'rejected',env.USER_ID,row.id).run();
-      const done={week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
+      const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
       return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):done||L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result,undo:result?.undo||null},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:409})}
   }
@@ -2221,16 +2253,19 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const dates=[];for(let d=start;d<=end;d=shiftDate(d,1))dates.push(d);
       const read=path=>app.fetch(new Request('https://internal'+path,{headers:internalAuth}),env,ctx).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
-      const [days,gym,health,fitness,insights,coaches,profiles]=await Promise.all([
+      const [days,gym,health,fitness,insights,coaches,profiles,plans]=await Promise.all([
         cached(env,ctx,'training-days:'+start+':'+date,()=>mapLimit(dates,3,async d=>({date:d,daily:await read('/analysis/daily?date='+d)})),{ttl:120}),
         trainingGymPlans(env,start,end).catch(()=>({})),
         googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:180',()=>api('/app/api/fitness?days=180')).catch(()=>({})),
         loadFitnessInsights(env.DB,date).catch(()=>({})),
-        api('/app/api/coaches?date='+date),loadProfiles(env.DB,env.USER_ID).catch(()=>({saved:null,effective:null}))
+        api('/app/api/coaches?date='+date),loadProfiles(env.DB,env.USER_ID).catch(()=>({saved:null,effective:null})),
+        syncedPlans(env,date).catch(()=>({}))
       ]);
+      // Without a main race in the profile, the race of the running plan is the one Training counts down to.
+      const planTemplate=plans.active&&getTemplate(plans.active.templateId),planRace=planTemplate?.race&&plans.active.raceDate>=date?{name:planTemplate.name,date:plans.active.raceDate}:null;
       // The saved profile says whether the athlete has set a focus yet ("Nastav si zaměření a cíle").
-      return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profiles.effective||{},savedProfile:profiles.saved}),{headers:{'Cache-Control':'no-store'}});
+      return Response.json(buildTraining({date,days,gym,health,fitness,insights,coaches,profile:profiles.effective||{},savedProfile:profiles.saved,planRace}),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
