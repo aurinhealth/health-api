@@ -9,7 +9,7 @@ import Security
 /// daily refresh) goes to the Keychain the moment it lands.
 enum SessionKeychain {
     private static let service = "health.aurin.session"
-    /// Set once the cookies from before the Keychain moved in; after that, a
+    /// Set once a sign-in went into the Keychain on this iPhone; after that, a
     /// cookie on disk without its Keychain copy came from a backup.
     private static let movedKey = "session.keychain.v1"
     private static let lock = NSRecursiveLock()
@@ -37,15 +37,20 @@ enum SessionKeychain {
                 keep(cookie)
             }
         }
-        UserDefaults.standard.set(true, forKey: movedKey)
         for server in ServerChoice.allCases {
             if let host = server.url.host() { restore(host) }
         }
         observer = NotificationCenter.default.addObserver(forName: .NSHTTPCookieManagerCookiesChanged, object: HTTPCookieStorage.shared, queue: nil) { _ in
-            lock.lock()
-            defer { lock.unlock() }
-            for cookie in sessionCookies() where cookie.expiresDate != nil { keep(cookie) }
+            sync()
         }
+    }
+
+    /// A fresh cookie from the server into the Keychain (the storage tells of
+    /// a change on its own time; the tests call this directly).
+    static func sync() {
+        lock.lock()
+        defer { lock.unlock() }
+        for cookie in sessionCookies() where cookie.expiresDate != nil { keep(cookie) }
     }
 
     /// When the session the Keychain holds for `host` runs out; nil without one.
@@ -75,9 +80,12 @@ enum SessionKeychain {
         (HTTPCookieStorage.shared.cookies ?? []).filter { $0.name == APIClient.sessionCookie }
     }
 
-    /// The cookie into the Keychain, and a copy without an expiry date in its place.
+    /// The cookie into the Keychain, and a copy without an expiry date in its
+    /// place. When the Keychain refuses it, the cookie stays as it is, so the
+    /// sign-in survives the next launch.
     private static func keep(_ cookie: HTTPCookie) {
-        write(Stored(value: cookie.value, expires: cookie.expiresDate, path: cookie.path), host: cookie.domain)
+        guard write(Stored(value: cookie.value, expires: cookie.expiresDate, path: cookie.path), host: cookie.domain) else { return }
+        UserDefaults.standard.set(true, forKey: movedKey)
         HTTPCookieStorage.shared.deleteCookie(cookie)
         if let copy = memoryCookie(host: cookie.domain, value: cookie.value, path: cookie.path) {
             HTTPCookieStorage.shared.setCookie(copy)
@@ -125,12 +133,15 @@ enum SessionKeychain {
         return try? JSONDecoder().decode(Stored.self, from: data)
     }
 
-    private static func write(_ stored: Stored, host: String) {
-        guard let data = try? JSONEncoder().encode(stored) else { return }
+    @discardableResult
+    private static func write(_ stored: Stored, host: String) -> Bool {
+        guard let data = try? JSONEncoder().encode(stored) else { return false }
         let attributes: [String: Any] = [kSecValueData as String: data,
                                          kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly]
-        if SecItemUpdate(query(host) as CFDictionary, attributes as CFDictionary) == errSecItemNotFound {
-            SecItemAdd(query(host).merging(attributes) { $1 } as CFDictionary, nil)
+        var status = SecItemUpdate(query(host) as CFDictionary, attributes as CFDictionary)
+        if status == errSecItemNotFound {
+            status = SecItemAdd(query(host).merging(attributes) { $1 } as CFDictionary, nil)
         }
+        return status == errSecSuccess
     }
 }
