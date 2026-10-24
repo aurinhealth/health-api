@@ -111,6 +111,9 @@ struct StartPlanSheet: View {
     @State private var days: [Int] = []
     @State private var raceDate = Date()
     @State private var raceKm: Double = 0
+    /// A running race's goal time in seconds; nil follows the estimate.
+    @State private var target: Int?
+    @State private var pickingGoal = false
     @State private var preview: PlanPreview?
     @State private var busy = false
     @State private var error: String?
@@ -126,23 +129,37 @@ struct StartPlanSheet: View {
         } ?? ISODay.shift(today, 7)
         return Array(Set((0...3).map { ISODay.shift(today, $0) } + [next])).sorted()
     }
-    private var key: String { [start, days.map(String.init).joined(separator: ","), AppModel.localDate(raceDate), String(raceKm)].joined(separator: "|") }
+    private var key: String { [start, days.map(String.init).joined(separator: ","), AppModel.localDate(raceDate), String(raceKm), String(target ?? 0)].joined(separator: "|") }
 
     var body: some View {
         NavigationStack {
             SettingsPage(title: L10n.f("Začít %@", template.name)) {
                 if let race = template.race {
-                    SettingsGroup(title: L10n.tr("Závod")) {
+                    SettingsGroup(title: L10n.tr("Závod"), footer: raceNote) {
                         DatePicker("Datum závodu", selection: $raceDate, in: Date()..., displayedComponents: .date)
                             .environment(\.locale, Fmt.locale)
                             .padding(.horizontal, 16).frame(minHeight: 50)
                         if let options = race.options, options.count > 1 {
                             SettingsDivider()
-                            Picker("Vzdálenost", selection: $raceKm) {
-                                ForEach(options, id: \.self) { Text(Units.distanceText($0)).tag($0) }
+                            Picker(L10n.tr(race.kind == "climb" ? "Délka stoupání" : "Vzdálenost"), selection: $raceKm) {
+                                ForEach(options, id: \.self) { Text(raceDistance($0)).tag($0) }
                             }
                             .pickerStyle(.segmented)
                             .padding(16)
+                        }
+                        if template.sport == "run" {
+                            SettingsDivider()
+                            Button { pickingGoal = true } label: {
+                                HStack {
+                                    Text("Cílový čas").font(.body).foregroundStyle(Palette.ink)
+                                    Spacer()
+                                    Text(verbatim: (target ?? preview?.race?.estimate).map(raceTime) ?? "–")
+                                        .font(.body).foregroundStyle(target == nil ? Palette.muted : Palette.ink)
+                                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                                }
+                                .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 } else {
@@ -209,6 +226,10 @@ struct StartPlanSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
             }
+            .sheet(isPresented: $pickingGoal) {
+                GoalTimeSheet(km: raceKm > 0 ? raceKm : template.race?.km ?? 10, estimate: preview?.race?.estimate, weeks: preview?.weeks.count ?? template.weeksCount, initial: target) { target = $0 }
+                    .presentationDetents([.medium, .large])
+            }
             .sheet(isPresented: $pickingDate) {
                 VStack(spacing: 16) {
                     DatePicker("Začátek", selection: $picked, in: Date()...(Calendar.current.date(byAdding: .day, value: 120, to: Date()) ?? Date()), displayedComponents: .date)
@@ -233,7 +254,8 @@ struct StartPlanSheet: View {
             try? await Task.sleep(nanoseconds: 250_000_000)
             if Task.isCancelled { return }
             do {
-                let fresh = try await model.api.trainingPlanPreview(templateId: template.id, startDate: template.race == nil ? start : nil, days: days.isEmpty ? nil : days, raceDate: template.race == nil ? nil : AppModel.localDate(raceDate))
+                let fresh = try await model.api.trainingPlanPreview(templateId: template.id, startDate: template.race == nil ? start : nil, days: days.isEmpty ? nil : days, raceDate: template.race == nil ? nil : AppModel.localDate(raceDate),
+                                                                     raceKm: template.race == nil ? nil : raceKm, targetSeconds: target)
                 preview = fresh
                 if days.isEmpty { days = fresh.days }
                 error = nil
@@ -244,6 +266,21 @@ struct StartPlanSheet: View {
     }
 
     private var weekdays: [String] { L10n.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"] }
+
+    /// Under the race: a running race's estimate and goal pace, a cycling race's power and time.
+    private var raceNote: String? {
+        guard let race = preview?.race else { return nil }
+        if template.sport == "run" {
+            guard let estimate = race.estimate else { return L10n.tr("Odhad času se ukáže, až bude známé tvoje prahové tempo.") }
+            let pace = Units.paceText(Double(target ?? estimate) / max(race.km, 1))
+            return L10n.f("Teď zhruba %@. Cílové tempo %@, plán ho během týdnů zpřesní.", raceTime(estimate), pace)
+        }
+        guard let low = race.low, let high = race.high, let minutes = race.minutes else { return nil }
+        var text = L10n.f("Na závod %@ W, odhad času %@.", "\(low)–\(high)", "~" + planDuration(minutes))
+        if race.kind == "climb" { text += " " + L10n.tr("Odhad platí pro stoupání se sklonem 6 %.") }
+        if race.estimated == true { text += " " + L10n.tr("Bez FTP počítám s 2,5 W/kg.") }
+        return text
+    }
 
     private var buttonTitle: String {
         if template.race != nil { return L10n.tr("Začít plán") }
@@ -283,6 +320,7 @@ struct StartPlanSheet: View {
         if template.race != nil {
             body["raceDate"] = .string(AppModel.localDate(raceDate))
             body["raceKm"] = .number(raceKm)
+            if let target { body["targetSeconds"] = .number(Double(target)) }
         } else {
             body["startDate"] = .string(start)
         }
@@ -294,6 +332,95 @@ struct StartPlanSheet: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// A running race's goal time on wheels: the estimate now, the goal pace and
+/// how bold the goal is for the weeks the plan has.
+struct GoalTimeSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let km: Double
+    let estimate: Int?
+    let weeks: Int
+    let initial: Int?
+    let save: (Int?) -> Void
+    @State private var hours = 0
+    @State private var minutes = 0
+    @State private var seconds = 0
+
+    private var goal: Int { hours * 3600 + minutes * 60 + seconds }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 0) {
+                    wheel($hours, 0..<10, "h")
+                    wheel($minutes, 0..<60, "min")
+                    wheel($seconds, 0..<60, "s")
+                }
+                .frame(height: 170)
+                VStack(spacing: 0) {
+                    row(L10n.tr("Teď zhruba"), estimate.map(raceTime) ?? "–")
+                    SettingsDivider()
+                    row(L10n.tr("Cílové tempo"), Units.paceText(Double(goal) / max(km, 1)))
+                }
+                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                if let verdict = GoalTimeSheet.verdict(goal: goal, estimate: estimate, weeks: weeks) {
+                    Text(verbatim: verdict.0).font(Typo.small).foregroundStyle(verdict.1).fixedSize(horizontal: false, vertical: true)
+                }
+                if estimate != nil {
+                    Button { save(nil); dismiss() } label: {
+                        Text("Podle odhadu").font(Typo.bodyStrong).foregroundStyle(Palette.amber)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .navigationTitle(L10n.tr("Cílový čas"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Hotovo") { save(goal >= 600 ? goal : nil); dismiss() }.disabled(goal < 600)
+                }
+            }
+        }
+        .onAppear {
+            let value = initial ?? estimate ?? Int(km * 360)
+            hours = value / 3600
+            minutes = value % 3600 / 60
+            seconds = value % 60
+        }
+    }
+
+    /// The goal against the estimate, as the server judges it (race-estimate.js goalVerdict).
+    static func verdict(goal: Int, estimate: Int?, weeks: Int) -> (String, Color)? {
+        guard let estimate, estimate > 0, goal >= 600 else { return nil }
+        let faster = Double(estimate - goal) / Double(estimate), months = max(1, Double(weeks) / 4.3)
+        let span = "\(weeks) " + Fmt.plural(weeks, "týden", "týdny", "týdnů"), gap = raceTime(abs(estimate - goal))
+        if faster <= 0 { return (L10n.tr("Pomalejší než tvůj odhad: zvládneš ho s rezervou."), Palette.green) }
+        if faster <= 0.01 * months { return (L10n.f("O %@ rychleji než teď: reálný cíl na %@.", gap, span), Palette.green) }
+        if faster <= 0.02 * months { return (L10n.f("O %@ rychleji než teď: odvážný, ale reálný cíl na %@.", gap, span), Palette.amber) }
+        return (L10n.f("O %@ rychleji než teď: na %@ hodně odvážné, zkus pomalejší cíl.", gap, span), Palette.rust)
+    }
+
+    private func wheel(_ value: Binding<Int>, _ range: Range<Int>, _ unit: String) -> some View {
+        Picker(unit, selection: value) {
+            ForEach(range, id: \.self) { n in Text(verbatim: unit == "h" ? "\(n) h" : String(format: "%02d", n) + " " + unit).tag(n) }
+        }
+        .pickerStyle(.wheel)
+        .frame(maxWidth: .infinity)
+        .clipped()
+    }
+
+    private func row(_ title: String, _ value: String) -> some View {
+        HStack {
+            Text(verbatim: title).font(.body).foregroundStyle(Palette.ink)
+            Spacer()
+            Text(verbatim: value).font(.body).foregroundStyle(Palette.muted)
+        }
+        .padding(.horizontal, 16).frame(minHeight: 50)
     }
 }
 
@@ -313,6 +440,7 @@ struct ActivePlanView: View {
     @State private var choosing = false
     @State private var rescheduling = false
     @State private var editingDays = false
+    @State private var editingGoal = false
     @State private var error: String?
 
     private var active: TrainingPlans.Active? { plans.active }
@@ -324,7 +452,8 @@ struct ActivePlanView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     BackSlot { dismiss() }
                     if let active {
-                        ActivePlanContent(active: active, preview: preview, week: week, error: error, editDays: { editingDays = true }) { await reload() }
+                        ActivePlanContent(active: active, preview: preview, week: week, error: error, editDays: { editingDays = true },
+                                          editGoal: active.template.sport == "run" && active.race != nil ? { editingGoal = true } : nil) { await reload() }
                     }
                 }
                 .padding(.horizontal, 24)
@@ -351,6 +480,23 @@ struct ActivePlanView: View {
         .sheet(isPresented: $rescheduling, onDismiss: { Task { await reload() } }) { ReschedulePlanSheet() }
         .sheet(isPresented: $editingDays, onDismiss: { Task { await reload() } }) {
             if let week { WeekDaysSheet(week: week, usual: preview?.days.count ?? week.sessions.count) }
+        }
+        .sheet(isPresented: $editingGoal) {
+            if let active, let race = active.race {
+                GoalTimeSheet(km: race.km, estimate: race.estimate, weeks: max(1, active.weeksCount - max(0, active.week - 1)), initial: race.target) { value in
+                    Task { await saveGoal(value) }
+                }
+                .presentationDetents([.medium, .large])
+            }
+        }
+    }
+
+    private func saveGoal(_ seconds: Int?) async {
+        do {
+            _ = try await model.api.trainingPlanAction(["action": .string("target"), "targetSeconds": seconds.map { JSONValue.number(Double($0)) } ?? JSONValue.null])
+            await reload()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 
@@ -390,6 +536,8 @@ struct ActivePlanContent: View {
     let week: PlanWeekDetail?
     var error: String? = nil
     var editDays: () -> Void = {}
+    /// A running race plan: change the goal time.
+    var editGoal: (() -> Void)? = nil
     var reload: () async -> Void = {}
     @State private var allWeeks = false
 
@@ -405,6 +553,9 @@ struct ActivePlanContent: View {
             PlanWeeksChart(bars: PlanWeeksChart.bars(weeks: active.template.weeks, preview: preview, active: active), current: active.started ? active.week : 0)
         }
         .padding(.top, 16)
+        if let race = active.race {
+            if active.template.sport == "run" { runGoal(race).padding(.top, 12) } else { rideRace(race).padding(.top, 12) }
+        }
 
         if active.started, active.paused != true, let week {
             SectionLabel(text: L10n.tr("Tento týden") + " · " + Fmt.dayMonth(week.monday) + "–" + Fmt.dayMonth(ISODay.shift(week.monday, 6))).padding(.top, 26)
@@ -453,6 +604,72 @@ struct ActivePlanContent: View {
         }
         .padding(.top, 10)
         if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
+        }
+    }
+
+    /// A running race: the goal, the estimate now and how far it moved since the start.
+    private func runGoal(_ race: PlanRace) -> some View {
+        Card {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Cíl").font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(verbatim: race.target.map(raceTime) ?? "–").font(Typo.number(26)).foregroundStyle(Palette.ink)
+                    if let pace = race.goalPace { Text(verbatim: Units.paceText(Double(pace))).font(Typo.caption).foregroundStyle(Palette.muted) }
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Teď zhruba").font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(verbatim: race.estimate.map(raceTime) ?? "–").font(Typo.number(26)).foregroundStyle(Palette.ink)
+                    if let now = race.estimate, let start = race.estimateStart, now != start {
+                        Text(verbatim: L10n.f(now < start ? "o %@ rychleji než na startu" : "o %@ pomaleji než na startu", raceTime(abs(start - now))))
+                            .font(Typo.caption).foregroundStyle(now < start ? Palette.green : Palette.muted)
+                    }
+                }
+            }
+            // From the estimate at the start towards the goal.
+            if let goal = race.target, let now = race.estimate, let start = race.estimateStart, start > goal {
+                let part = min(1, max(0, Double(start - now) / Double(start - goal)))
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Palette.track)
+                        Capsule().fill(Palette.amberBar).frame(width: max(6, geo.size.width * part))
+                    }
+                }
+                .frame(height: 8)
+                HStack {
+                    Text("start").font(Typo.caption).foregroundStyle(Palette.faint)
+                    Spacer()
+                    Text(verbatim: L10n.tr("cíl") + (active.raceDate.map { " " + Fmt.dayMonth($0) } ?? "")).font(Typo.caption).foregroundStyle(Palette.faint)
+                }
+            }
+            if let editGoal {
+                Button(action: editGoal) {
+                    Text(verbatim: L10n.tr(race.target == nil ? "Zadat cílový čas" : "Změnit cílový čas")).font(Typo.bodyStrong).foregroundStyle(Palette.amber)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// A cycling race: its power and time on its course.
+    @ViewBuilder private func rideRace(_ race: PlanRace) -> some View {
+        if let low = race.low, let high = race.high, let minutes = race.minutes {
+            Card {
+                WidgetHeader(title: L10n.tr("Závod"), color: Palette.green, trailing: active.raceDate.map { Fmt.dayMonth($0) })
+                Text(verbatim: active.template.name + " " + raceDistance(race.km)).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
+                HStack(alignment: .top, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: "\(low)–\(high) W").font(Typo.number(24)).foregroundStyle(Palette.ink)
+                        Text(verbatim: race.kind == "granfondo" ? "65–75 % FTP" : race.kind == "mtb" ? "70–80 % FTP" : "\(race.share ?? 100) % FTP").font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: "~" + planDuration(minutes)).font(Typo.number(24)).foregroundStyle(Palette.ink)
+                        Text("odhad času").font(Typo.caption).foregroundStyle(Palette.muted)
+                    }
+                }
+                Text(verbatim: L10n.tr(race.kind == "climb" ? "Odhad pro stoupání se sklonem 6 % bez větru." : race.kind == "mtb" ? "Odhad pro terén bez velkých kopců, kopce ho prodlouží." : "Odhad na rovině bez větru, kopce ho prodlouží."))
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -935,6 +1152,23 @@ struct PlanResultContent: View {
                         }
                         .padding(.top, 16)
                     }
+                    // A gym plan: the estimated max of its main lifts at the start and the end.
+                    if let lifts = result.lifts, !lifts.isEmpty {
+                        Card {
+                            VStack(spacing: 0) {
+                                ForEach(Array(lifts.enumerated()), id: \.element.id) { index, lift in
+                                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                                    let gain = lift.after - lift.before
+                                    compare(Fmt.capitalized(lift.exercise), Units.weightText(lift.before, digits: lift.before.rounded() == lift.before ? 0 : 1),
+                                            Units.weightText(lift.after, digits: lift.after.rounded() == lift.after ? 0 : 1),
+                                            (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(lift.before, 1) * 100) + " %", gain >= 0 ? Palette.green : Palette.rust)
+                                }
+                                Text("Odhad maxima z nejlepší série do 12 opakování.").font(Typo.caption).foregroundStyle(Palette.muted)
+                                    .frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 4)
+                            }
+                        }
+                        .padding(.top, 16)
+                    }
                     Card {
                         VStack(spacing: 0) {
                             if let a = result.ctlStart, let b = result.ctlEnd {
@@ -944,8 +1178,10 @@ struct PlanResultContent: View {
                             let planned = result.sessionsPlanned ?? 0
                             let pct = planned > 0 ? min(100, result.sessionsDone * 100 / planned) : nil
                             compare("Tréninky", nil, planned > 0 ? L10n.f("%@ z %@", String(result.sessionsDone), String(planned)) : String(result.sessionsDone), pct.map { "\($0) %" }, pct.map(PlanColors.done) ?? Palette.muted)
-                            Rectangle().fill(Palette.hairline).frame(height: 1)
-                            compare("Čas", nil, planDuration(result.minutesDone), result.minutesPlanned.map { L10n.f("z %@", planDuration($0)) }, Palette.muted)
+                            if result.sport != "gym" {
+                                Rectangle().fill(Palette.hairline).frame(height: 1)
+                                compare("Čas", nil, planDuration(result.minutesDone), result.minutesPlanned.map { L10n.f("z %@", planDuration($0)) }, Palette.muted)
+                            }
                         }
                     }
                     .padding(.top, 12)
@@ -959,7 +1195,9 @@ struct PlanResultContent: View {
                             ForEach(Array(result.next.enumerated()), id: \.element.id) { index, next in
                                 if index > 0 { SettingsDivider() }
                                 if let template = plans.templates.first(where: { $0.id == next.id }) {
-                                    NavigationLink { PlanPreviewView(template: template, done: { Task { await close() } }) } label: {
+                                    NavigationLink {
+                                        if template.sport == "gym" { PlanDetailView(template: template, active: nil) } else { PlanPreviewView(template: template, done: { Task { await close() } }) }
+                                    } label: {
                                         HStack {
                                             VStack(alignment: .leading, spacing: 2) {
                                                 Text(next.name).font(.body).foregroundStyle(Palette.ink)

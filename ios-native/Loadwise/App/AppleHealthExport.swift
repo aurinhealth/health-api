@@ -242,7 +242,9 @@ final class AppleHealthExport {
         guard isAvailable, prefs.health.allows("nutrition") || prefs.health.allows("water") else { return }
         guard food.date <= AppModel.localDate(Date()) else { return }
         let start = Self.dayStart(food.date)
-        let end = min(Date(), start.addingTimeInterval(86400 - 1))
+        // The day's last second, also on the 23- and 25-hour days of a clock change.
+        let next = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86400)
+        let end = min(Date(), next.addingTimeInterval(-1))
         guard end > start else { return }
         var totals: [(String, HKQuantityTypeIdentifier, HKUnit, Double)] = []
         // What other apps wrote to Apple Health (and Aurin read back) is theirs:

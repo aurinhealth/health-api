@@ -84,8 +84,24 @@ final class APIClient: @unchecked Sendable {
 
     // MARK: - Coach
 
+    /// "Odpovědět" on a coach push: the request CoachReplyUpload sends in the
+    /// background (POST /app/api/assistant/push-reply, the session cookie and
+    /// the app's language and zone like every request).
+    func pushReplyRequest() throws -> URLRequest {
+        var request = makeRequest("/app/api/assistant/push-reply", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 200
+        // A background session may leave the shared cookies out: the session goes along by hand.
+        for (name, value) in HTTPCookie.requestHeaderFields(with: HTTPCookieStorage.shared.cookies(for: baseURL) ?? []) {
+            request.setValue(value, forHTTPHeaderField: name)
+        }
+        return request
+    }
+
     /// Asks the coach; yields the answer as it grows and the final result.
-    func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil) -> AsyncThrowingStream<AssistantEvent, Error> {
+    /// `appContext` replaces the screen and day when the coach is asked about a
+    /// detail (CoachSubject.appContext).
+    func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil, image: String? = nil, appContext: JSONObject? = nil) -> AsyncThrowingStream<AssistantEvent, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -94,8 +110,9 @@ final class APIClient: @unchecked Sendable {
                     request.setValue("application/x-ndjson, application/json", forHTTPHeaderField: "Accept")
                     request.timeoutInterval = 180
                     var body: JSONObject = ["message": .string(message), "stream": .bool(true), "mode": .string("auto"),
-                                            "appContext": .object(["view": .string(view), "date": .string(date ?? Self.localToday())])]
+                                            "appContext": .object(appContext ?? ["view": .string(view), "date": .string(date ?? Self.localToday())])]
                     if let chatId { body["chatId"] = .number(Double(chatId)) }
+                    if let image { body["image"] = .string(image) }
                     request.httpBody = try JSONEncoder().encode(body)
                     let (bytes, response) = try await session.bytes(for: request)
                     let http = response as? HTTPURLResponse
@@ -138,6 +155,16 @@ final class APIClient: @unchecked Sendable {
         let r: Response = try await send("/app/api/assistant/action", method: "POST",
                                          body: ["draftId": JSONValue.number(Double(draftId)), "decision": .string(confirm ? "confirm" : "reject")])
         return (r.message, r.undo)
+    }
+
+    /// Kratší, Delší, Lehčí, Těžší, Jiný den ("day" with `date`) or "undo" on a
+    /// coach's workout card: the card as changed, and what the coach remembered.
+    func adjustCoachAction(draftId: Int, chip: String, date: String? = nil) async throws -> (action: CoachAction, memory: AssistantResult.MemoryChanges?) {
+        struct Response: Decodable { let action: CoachAction; let memoryChanges: AssistantResult.MemoryChanges? }
+        var body: JSONObject = ["draftId": .number(Double(draftId)), "decision": .string("adjust"), "chip": .string(chip)]
+        if let date { body["date"] = .string(date) }
+        let r: Response = try await send("/app/api/assistant/action", method: "POST", body: body)
+        return (r.action, r.memoryChanges)
     }
 
     /// "Vrátit" under a confirmed delete, merge or time change of a done activity.
@@ -279,8 +306,18 @@ final class APIClient: @unchecked Sendable {
         try await get("/app/api/activity-detail/watch?source=" + Self.query(ref.source) + "&id=" + Self.query(ref.id))
     }
 
-    func plannedWorkout(eventId: String) async throws -> PlannedWorkout {
-        try await get("/app/api/workouts/planned?id=" + Self.query(eventId))
+    /// The day and time ask for the heat advice of today's session.
+    func plannedWorkout(eventId: String, date: String? = nil, time: String? = nil) async throws -> PlannedWorkout {
+        var path = "/app/api/workouts/planned?id=" + Self.query(eventId)
+        if let date { path += "&date=" + Self.query(date) }
+        if let time { path += "&time=" + Self.query(time) }
+        return try await get(path)
+    }
+
+    /// "Minule vs dnes": the same workout done before (src/activity-compare.js).
+    func activityComparison(id: String) async throws -> ActivityComparison? {
+        let response: ActivityComparisonResponse = try await get("/app/api/activity-compare?id=" + Self.query(id))
+        return response.comparison
     }
 
     func movePlanned(eventId: String, to date: String) async throws {
@@ -625,7 +662,7 @@ final class APIClient: @unchecked Sendable {
 
     /// Sends a write that may have waited for signal (Outbox). A missing
     /// connection throws the URLError; an answer other than 2xx throws
-    /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx).
+    /// OutboxRefusal (.rejected for 4xx, never accepted; .retry for 5xx; .outdated for 426).
     /// The server's answer (the new entry's id, for a meal or drink).
     @discardableResult
     func sendQueued(_ item: OutboxItem) async throws -> Data {
@@ -642,7 +679,7 @@ final class APIClient: @unchecked Sendable {
             // Too old an app: the write waits for the new version instead of being dropped.
             if http.statusCode == 426 {
                 onUpdateRequired?()
-                throw OutboxRefusal.retry(message)
+                throw OutboxRefusal.outdated(message)
             }
             // A timeout or too many requests at the server: later, as with a server error.
             if (400..<500).contains(http.statusCode), ![408, 429].contains(http.statusCode) { throw OutboxRefusal.rejected(message) }
