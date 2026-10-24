@@ -102,10 +102,21 @@ test("an id another account holds in the shard stops the move before anything ch
   assert.equal(count(two, "SELECT COUNT(*) AS n FROM health_datapoints WHERE user_id=1"), 0);
 });
 
-test("a shard without a column the central table has is refused", async () => {
-  const { two, ids, api } = setup();
+test("a column the shard lacks is added before the copy; one without a default is refused", async () => {
+  const { central, two, ids, api } = setup();
   two.exec("DROP TABLE sync_status; CREATE TABLE sync_status (user_id INTEGER NOT NULL, sync_name TEXT NOT NULL, PRIMARY KEY(user_id, sync_name))");
-  await assert.rejects(moveLegacyUsers({ api, plan, ids, apply: false, log: () => {} }), /lacks columns of sync_status: state/);
+  const lines = [];
+  await moveLegacyUsers({ api, plan, ids, apply: false, log: l => lines.push(l) });
+  assert.match(lines.join("\n"), /health-data-users-002 gets 1 columns it lacks \(sync_status\)/);
+  assert.equal(two.prepare("PRAGMA table_info(sync_status)").all().length, 2, "a dry run changes nothing");
+  await moveLegacyUsers({ api, plan, ids, apply: true, log: () => {} });
+  assert.equal(two.prepare("SELECT state FROM sync_status WHERE user_id=1").get().state, "ok");
+  assert.equal(count(central, "SELECT COUNT(*) AS n FROM sync_status"), 0);
+
+  const other = setup();
+  other.central.exec("ALTER TABLE assistant_chats ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0; CREATE TABLE coach_picks (user_id INTEGER NOT NULL, date TEXT NOT NULL, kind TEXT NOT NULL, PRIMARY KEY(user_id, date))");
+  other.two.exec("CREATE TABLE coach_picks (user_id INTEGER NOT NULL, date TEXT NOT NULL, PRIMARY KEY(user_id, date))");
+  await assert.rejects(moveLegacyUsers({ api: other.api, plan, ids: other.ids, apply: false, log: () => {} }), /lacks column coach_picks.kind, which has no default/);
 });
 
 test("inserts stay under D1's parameter limit", () => {
