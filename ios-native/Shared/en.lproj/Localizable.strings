@@ -1053,6 +1053,7 @@
 "vypnutá" = "off";
 "vysoká" = "high";
 "váha" = "weight";
+"zdravotní hodnoty" = "health values";
 "víc než 10 h" = "more than 10 h";
 "věc" = "item";
 "věcí" = "items";
@@ -2060,7 +2061,6 @@
 "Jak se cítíš?" = "How do you feel?";
 "Hodně špatně" = "Very bad";
 "Špatně" = "Bad";
-"Normálně" = "Okay";
 "Dobře" = "Good";
 "Výborně" = "Great";
 "Dnes už neukazovat" = "Hide for today";
