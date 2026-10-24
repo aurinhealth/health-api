@@ -17,6 +17,8 @@ struct CoachPick: Decodable, Equatable {
         var workout: LibraryWorkout? = nil
         /// The gym proposal, ready to save (or the day's plan already stored).
         var gym: Gym? = nil
+        /// A ride or run outdoors on a hot day: how to adjust it (src/heat-advice.js).
+        var heat: String? = nil
         var id: String { kind }
 
         struct Gym: Decodable, Equatable {
@@ -230,6 +232,7 @@ struct CoachPickCard: View {
             }
         }
         PickDetails(option: best)
+        if let heat = best.heat { HeatLine(text: heat) }
         if let reason = best.reason {
             Text(verbatim: reason).font(Typo.sentence(18)).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
         }

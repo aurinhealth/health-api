@@ -141,6 +141,8 @@ import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchSchedul
 import { planningHistory, planForWeek, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor } from "./coach-ride-reviews.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
+import { activityCompareRoute } from "./activity-compare.js";
+import { heatAdvice } from "./heat-advice.js";
 import { ownFitness, watchOnlyFitness, fitnessDays } from "./own-fitness.js";
 import { handleStrengthAutomation, handleAdminApi } from "./routes-admin.js";
 import { handleAccountApi } from "./routes-account.js";
@@ -1041,11 +1043,17 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const signature=pickSignature(ranked);
       let details=await storedDetails(env.DB,env.USER_ID,date,signature).catch(()=>null);
       if(!details){details=await pickDetails(env,ctx,ranked,date,gym);await storeDetails(env.DB,env.USER_ID,date,signature,details).catch(()=>{});}
-      const less=await lessKinds(env.DB,env.USER_ID).catch(()=>[]);
+      const [less,place]=await Promise.all([lessKinds(env.DB,env.USER_ID).catch(()=>[]),todayPlace(env,ctx,date)]);
+      // Horko (heat-advice.js) at a ride or run outdoors: the workout's place, else the forecast's advice.
+      const heatFor=(kind,workout)=>{
+        if(!['ride','run'].includes(kind))return null;
+        const indoor=workout?.environment?workout.environment==='indoor':environmentFor(date,kind,place.forecast).environment==='indoor';
+        return heatAdvice({sport:kind,weather:place.forecast,indoor})?.text||null;
+      };
       const options=ranked.options.filter(o=>o.best||!less.includes(o.kind)).map(o=>{
-        const d=details[o.kind];if(!d)return o;
+        const d=details[o.kind],heat=heatFor(o.kind,d?.workout);if(!d)return heat?{...o,heat}:o;
         const detail=d.minutes?d.minutes+' min'+(o.detail.includes(' · ')?o.detail.slice(o.detail.indexOf(' · ')):''):o.detail;
-        return {...o,detail,lines:d.lines,...(d.workout?{workout:d.workout}:{}),...(d.gym?{gym:d.gym}:{})};
+        return {...o,detail,lines:d.lines,...(d.workout?{workout:d.workout}:{}),...(d.gym?{gym:d.gym}:{}),...(heat?{heat}:{})};
       });
       return Response.json({status:'ok',date,...ranked,options,less,chosen:dayChoice({chosen:state.chosen,planned})},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
@@ -1919,6 +1927,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     return Response.json(detail,{headers:{'Cache-Control':'private, no-store'}});
   }
 
+  // "Minule vs dnes" of a done ride or run (activity-compare.js).
+  if(url.pathname==='/app/api/activity-compare'&&request.method==='GET'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    return activityCompareRoute(env,ctx,url);
+  }
   // "Splnění plánu" of a done ride, run or gym day (plan-compliance-route.js).
   if(url.pathname==='/app/api/plan-compliance'&&request.method==='GET'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
@@ -2555,7 +2568,10 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       const thresholds=await cached(env,ctx,'thresholds',()=>athleteThresholds(env)),w=library?renderForEnvironment(library,link.environment==='indoor'?'indoor':'outdoor'):plannedEventWorkout(event),kind=w.sport==='run'?'run':'ride';
       let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}
       w.steps=kind==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones,hrZones:thresholds.runHrZones?.length?thresholds.runHrZones:thresholds.hrZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones,hrZones:thresholds.hrZones});
-      return Response.json({status:'ok',source:library?'library':'intervals',workout:w,athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
+      // Horko (heat-advice.js) for today's ride or run outdoors, at its time (?date=&time= from the app).
+      const day=url.searchParams.get('date'),time=url.searchParams.get('time');
+      const heat=day===localToday()&&w.environment!=='indoor'?heatAdvice({sport:w.sport,weather:(await todayPlace(env,ctx,day)).forecast,time:/^\d{1,2}:\d{2}/.test(time||'')?time:null})?.text||null:null;
+      return Response.json({status:'ok',source:library?'library':'intervals',workout:w,...(heat?{heat}:{}),athlete:{ftp:thresholds.ftp,indoorFtp:rideFtpFor(thresholds,'indoor').ftp,indoorFtpEstimated:rideFtpFor(thresholds,'indoor').estimated,runThresholdPace:thresholds.runThresholdPace}},{headers:{'Cache-Control':'no-store'}});
     }
     // The library's day: the coach of the week plan's role and the day's time
     // and the search's filters, as the list and the AI's own workout use them.
