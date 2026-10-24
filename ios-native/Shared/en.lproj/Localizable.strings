@@ -2841,3 +2841,10 @@
 "%d×" = "%d×";
 "Teď v katalogu" = "In the catalogue now";
 "Něco jiného" = "Something else";
+
+/* Minule vs dnes (src/activity-compare.js) */
+"Minule vs dnes" = "Last time vs today";
+"Výkon v intervalech" = "Power in intervals";
+"Tep v intervalech" = "Heart rate in intervals";
+"Tempo v úsecích" = "Pace in efforts";
+"Tep v úsecích" = "Heart rate in efforts";

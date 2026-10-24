@@ -315,7 +315,8 @@ struct ActivityDetailView: View {
                     ActivityRouteMap(detail: detail, localRoute: localRoute)
                     ActivityDetailContent(detail: detail, kcal: countedKcal, kcalNote: kcalNote,
                                           compliance: session.plannedId == nil ? nil : AnyView(ActivityComplianceSection(session: session)),
-                                          rating: model.demo ? nil : AnyView(FeedbackRow(session: session, reload: feedbackClosed) { feedback = true }))
+                                          rating: model.demo ? nil : AnyView(FeedbackRow(session: session, reload: feedbackClosed) { feedback = true }),
+                                          comparison: comparisonSection)
                     // Device calories that look like a measurement error (src/activity-energy-check.js).
                     if !model.demo { KcalCheck(session: model.liveSession(session), date: session.date) }
                 } else if basicOnly {
@@ -339,6 +340,12 @@ struct ActivityDetailView: View {
             ActivityTypeSheet(activityId: session.id, current: detail?.activity.type, source: typeSource) { dismiss() }
         }
         .task { await load() }
+    }
+
+    /// "Minule vs dnes" of a ride or run from Intervals.icu (its work intervals).
+    private var comparisonSection: AnyView? {
+        guard let id = session.activityId, session.sport == "ride" || session.sport == "run" else { return nil }
+        return AnyView(ActivityComparisonSection(activityId: id))
     }
 
     /// Where Změnit typ aktivity goes: Intervals.icu, or the watch's own record
@@ -464,18 +471,21 @@ struct ActivityDetailContent: View {
     var compliance: AnyView?
     /// "Jak to šlo?" under the numbers (and the plan's percent).
     var rating: AnyView?
+    /// "Minule vs dnes" under them: the same workout done before.
+    var comparison: AnyView?
     /// The minute the finger is on, shared by the power and heart-rate charts.
     @State private var cursor: Double?
     /// The charts' points, made once: dragging the cursor redraws the body every frame.
     private let watts: [StreamChart.Sample]
     private let hr: [StreamChart.Sample]
 
-    init(detail: ActivityDetail, kcal: Double? = nil, kcalNote: String? = nil, compliance: AnyView? = nil, rating: AnyView? = nil) {
+    init(detail: ActivityDetail, kcal: Double? = nil, kcalNote: String? = nil, compliance: AnyView? = nil, rating: AnyView? = nil, comparison: AnyView? = nil) {
         self.detail = detail
         self.kcal = kcal
         self.kcalNote = kcalNote
         self.compliance = compliance
         self.rating = rating
+        self.comparison = comparison
         watts = Self.samples("watts", in: detail)
         hr = Self.samples("heartrate", in: detail)
     }
@@ -504,6 +514,7 @@ struct ActivityDetailContent: View {
             .padding(.top, 22)
             if let compliance { compliance.padding(.top, 18) }
             if let rating { rating.padding(.top, compliance == nil ? 18 : 12) }
+            if let comparison { comparison }
 
             let span = max(watts.last?.minute ?? 0, hr.last?.minute ?? 0, 1)
             if watts.count > 10 {
@@ -801,6 +812,7 @@ struct PlannedWorkoutView: View {
                     if timeEditable { timeMeta }
                 }
                 .padding(.top, 16)
+                if let heat = plan?.heat { HeatLine(text: heat).padding(.top, 14) }
                 if ratable {
                     FeedbackRow(session: session, workoutId: libraryId, reload: ratingClosed) { rating = true }.padding(.top, 16)
                 }
@@ -870,7 +882,8 @@ struct PlannedWorkoutView: View {
         }
         .task {
             guard let id = session.eventId, !model.demo, plan == nil else { return }
-            plan = try? await model.api.plannedWorkout(eventId: id)
+            let today = session.date == AppModel.localDate(Date())
+            plan = try? await model.api.plannedWorkout(eventId: id, date: today ? session.date : nil, time: today ? shownTime : nil)
         }
     }
 

@@ -279,8 +279,18 @@ final class APIClient: @unchecked Sendable {
         try await get("/app/api/activity-detail/watch?source=" + Self.query(ref.source) + "&id=" + Self.query(ref.id))
     }
 
-    func plannedWorkout(eventId: String) async throws -> PlannedWorkout {
-        try await get("/app/api/workouts/planned?id=" + Self.query(eventId))
+    /// The day and time ask for the heat advice of today's session.
+    func plannedWorkout(eventId: String, date: String? = nil, time: String? = nil) async throws -> PlannedWorkout {
+        var path = "/app/api/workouts/planned?id=" + Self.query(eventId)
+        if let date { path += "&date=" + Self.query(date) }
+        if let time { path += "&time=" + Self.query(time) }
+        return try await get(path)
+    }
+
+    /// "Minule vs dnes": the same workout done before (src/activity-compare.js).
+    func activityComparison(id: String) async throws -> ActivityComparison? {
+        let response: ActivityComparisonResponse = try await get("/app/api/activity-compare?id=" + Self.query(id))
+        return response.comparison
     }
 
     func movePlanned(eventId: String, to date: String) async throws {
