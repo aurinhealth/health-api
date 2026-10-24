@@ -9,6 +9,8 @@ struct RootView: View {
     @State private var showAdd = false
     @State private var showSettings = false
     @State private var showCoach = false
+    /// Sdílet in the header of Trénink, Jídlo and Zdraví (Dnes has its own).
+    @State private var showShare = false
     @State private var showSyncStatus = false
     /// Přidat jídlo and Vyfotit jídlo from the icon's menu.
     @State private var quickFood: FoodStart?
@@ -68,10 +70,14 @@ struct RootView: View {
     @ViewBuilder private func tabScreen(_ tab: AppTab) -> some View {
         switch tab {
         case .today: TodayView(openSettings: { showSettings = true }, openCoach: { showCoach = true })
-        case .training: TrainingView()
-        case .food: FoodView()
-        case .health: HealthView()
+        case .training: TrainingView().environment(\.tabActions, tabActions)
+        case .food: FoodView().environment(\.tabActions, tabActions)
+        case .health: HealthView().environment(\.tabActions, tabActions)
         }
+    }
+
+    private var tabActions: TabActions {
+        TabActions(share: { showShare = true }, coach: { showCoach = true }, settings: { showSettings = true })
     }
 
     @ViewBuilder private var screens: some View {
@@ -202,6 +208,12 @@ struct RootView: View {
             }
             .sheet(isPresented: $showSettings) { SettingsView().dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showCoach) { CoachView(view: coachView, date: model.selectedDate).dynamicTypeSize(Self.textSizes) }
+            .sheet(isPresented: $showShare) {
+                if let today = model.today {
+                    ShareSheet(source: .today(today), start: model.tab == .food ? .food : model.tab == .training ? .activity : nil)
+                        .dynamicTypeSize(Self.textSizes)
+                }
+            }
             .sheet(item: $coachChat) { ref in CoachView(openChat: ref.id).dynamicTypeSize(Self.textSizes) }
             .sheet(isPresented: $showSyncStatus, onDismiss: { model.syncReport = nil }) { SyncStatusSheet().dynamicTypeSize(Self.textSizes) }
             .sheet(item: $quickFood) { start in
@@ -526,7 +538,7 @@ struct TabBar: View {
     static func symbol(_ tab: AppTab) -> String {
         switch tab {
         case .today: return "sun.max"
-        case .training: return "waveform.path.ecg"
+        case .training: return "figure.run"
         case .food: return "fork.knife"
         case .health: return "heart"
         }
@@ -543,13 +555,22 @@ struct TabBar: View {
         .accessibilityLabel("Přidat záznam")
     }
 
+    /// The icon with the section's name under it (Petr, 2026-10-24); the open
+    /// one in ink and a touch bolder.
     private func item(_ value: AppTab, _ label: String) -> some View {
-        Button { tab = value } label: {
-            Image(systemName: Self.symbol(value))
-                .font(.system(size: 20, weight: .regular))
-                .foregroundStyle(tab == value ? Palette.ink : Palette.faint)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
+        let open = tab == value
+        return Button { tab = value } label: {
+            VStack(spacing: 3) {
+                Image(systemName: Self.symbol(value))
+                    .font(.system(size: 19, weight: open ? .semibold : .regular))
+                    .frame(height: 22)
+                Text(L10n.tr(label))
+                    .font(.system(size: 10, weight: open ? .semibold : .medium))
+                    .lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .foregroundStyle(open ? Palette.ink : Palette.faint)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
         }
         .accessibilityLabel(L10n.tr(label))
         .accessibilityAddTraits(tab == value ? .isSelected : [])

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { handleWorkoutTemplatesApi, publicSharePage, cleanTemplate, templateFromRows } from "../src/workout-templates.js";
-import { templateStrengthPlan } from "../src/strength-generator.js";
+import { templateStrengthPlan, EXERCISES } from "../src/strength-generator.js";
+import { readRoutines, withRoutines } from "../src/stretching.js";
+import { planValues } from "../src/gym-plan-store.js";
 import { enduranceStructure, enduranceSystem, zwoFile } from "../src/endurance-templates.js";
 import { getWorkout, catalog } from "../src/workout-library.js";
 
@@ -130,6 +132,25 @@ test("planned for the athlete, a shared workout keeps its exercises and sets but
   // The warm-up and the stretching come with a saved workout too.
   assert.ok(plan.warmup.items.length && plan.stretching.items.length);
   assert.equal(plan.spare, null);
+  // Its length is the time its exercises take, never the old 600-minute limit.
+  assert.ok(plan.timing.requestedMinutes > 0 && plan.timing.requestedMinutes < 120);
+  assert.equal(templateStrengthPlan({ date: "2026-10-13", athleteState: {}, strength: { recentCompletedSets: [] } }, cleanTemplate({ ...legs, minutes: 45 })).timing.requestedMinutes, 45);
+});
+
+test("a saved workout planned before it got its routines is read with Posilovna's warm-up, cardio and stretching", () => {
+  const plan = templateStrengthPlan({ date: "2026-10-24", athleteState: {}, strength: { recentCompletedSets: [] } }, cleanTemplate(legs));
+  const old = planValues({ ...plan, warmup: null, stretching: null, cardio: null, spare: null });
+  old[4] = ["Časový limit (min)", 600, "Odhad (min)", 57];
+  assert.deepEqual(old[5], []);
+  const read = withRoutines(old, { warmup: true, stretching: true, cardio: "end", cardioType: "treadmill" }, name => EXERCISES[name]?.muscle);
+  const routines = readRoutines(read);
+  assert.ok(routines.warmup.items.length && routines.stretching.items.length);
+  assert.deepEqual(routines.cardio, { type: "treadmill", start: null, end: 10 });
+  assert.deepEqual(read[4], ["Časový limit (min)", 57, "Odhad (min)", 57]);
+  assert.deepEqual(read.slice(6), old.slice(6));
+  // A plan that has them stays as it is.
+  const current = planValues(plan);
+  assert.deepEqual(withRoutines(current, { warmup: false }, name => EXERCISES[name]?.muscle), current);
 });
 
 const ride = { sport: "ride", name: "Sweet spot 3×15", blocks: [

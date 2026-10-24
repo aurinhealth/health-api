@@ -71,12 +71,16 @@ struct HealthContent: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dayPage) private var page
     let health: HealthSnapshot
+    @Environment(\.tabActions) private var actions
     @State private var editing = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
-                DayNavigator(date: health.date)
+                // The same top as Dnes (TabHeader) and its week.
+                TabHeader(date: health.date, share: actions.share, coach: actions.coach, settings: actions.settings)
+                WeekStrip(date: health.date, week: WeekStrip.week(of: health.date, in: page.map(\.today) ?? model.today))
+                    .padding(.top, 14)
 
                 RouteLink(route: .readiness) { ReadinessCard(readiness: health.readiness) }
                     .padding(.top, 24)

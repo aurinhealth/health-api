@@ -188,8 +188,9 @@ struct GymSessionView: View {
                 }
                 GymPartsCard(day: day, date: date).padding(.top, 18)
                 NavigationLink(value: AppRoute.trainingMode(date)) {
-                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                        .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+                    // Green as in Režim tréninku: the one button that starts recording.
+                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                        .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 16)

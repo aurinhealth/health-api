@@ -65,6 +65,8 @@ enum AppRoute: Hashable {
     case journal(String)
     case journalImpact
     case journalItem(String, String)
+    /// The running plan, from "Otevřít plán" under a plan the coach started.
+    case trainingPlan
 
     /// The tab a deep link (loadwise://open/sleep) opens the route on.
     var tab: AppTab {
@@ -179,7 +181,7 @@ struct RouteScreen: View {
         case .gymSession(let session): GymSessionView(date: session.date, session: session)
         case .activity(let session): ActivityDetailView(session: session)
         case .planned(let session): PlannedWorkoutView(session: session)
-        case .sleepSettings: SleepSettingsView()
+        case .sleepSettings: SleepSettingsView(route: true)
         case .gymBuilder: GymBuilderView(date: AppModel.localDate(Date()))
         case .exerciseLibrary: ExerciseLibraryView()
         case .library: TrainingLibraryView()
@@ -202,6 +204,7 @@ struct RouteScreen: View {
         case .journal(let date): JournalView(date: date)
         case .journalImpact: JournalImpactView()
         case .journalItem(let key, let metric): JournalItemView(key: key, metric: metric)
+        case .trainingPlan: TrainingPlanRouteView()
         }
     }
 }
