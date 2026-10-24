@@ -66,10 +66,12 @@ enum OutboxRefusal: LocalizedError {
     case rejected(String)
     /// 5xx: maybe later.
     case retry(String)
+    /// 426: this build is too old; the write waits for the new version and never counts as a failure.
+    case outdated(String)
 
     var errorDescription: String? {
         switch self {
-        case .rejected(let message), .retry(let message): return message
+        case .rejected(let message), .retry(let message), .outdated(let message): return message
         }
     }
 }
