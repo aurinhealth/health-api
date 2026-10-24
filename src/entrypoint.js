@@ -67,6 +67,7 @@ import { renderForEnvironment } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
 import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
+import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
 import { getChecks, upcomingTest } from './threshold-check.js';
 import { getAthleteState, updateAthleteState, explicitPreference, assertTrainingAllowed, proactiveAdvice, memoryList, memoryCheck, memoryChanges } from './athlete-state.js';
@@ -1490,10 +1491,23 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       else if(request.method==='DELETE'){if(!start)throw new Error(L('Vyber týden.', 'Choose a week.'));if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});prefs=await resetWeekPlan(env.DB,start);}
       else if(request.method==='GET')prefs=await getWeekPlan(env.DB,start);
       else return Response.json({message:'Method not allowed'},{status:405});
+      // A saved week answers as it reads, capped by the calendar.
+      if(request.method==='POST'&&start)prefs=await getWeekPlan(env.DB,start);
       const monday=start?mondayOfDate(start):mondayOfDate(localToday());
       const targets=await computeWeekTargets(env,ctx,monday,prefs).catch(error=>({status:'error',message:error.message,items:[]}));
       const historyEstimate=activityHistoryEstimate(await planningHistory(env,localToday(),21),localToday());
       return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days,(await planForWeek(env,ctx,monday)).roles),start:monday,targets,historyEstimate},{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
+  }
+  // Free time from the iPhone calendar (calendar-free.js): POST {days:[{date,minutes}]}
+  // with only the minutes per day, DELETE when "Číst kalendář" is turned off.
+  if(url.pathname==='/app/api/calendar-free'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      if(request.method==='POST'){const body=await request.json().catch(()=>({}));const days=await saveCalendarFree(env.DB,body.days,localToday());return Response.json({status:'ok',days},{headers:{'Cache-Control':'no-store'}});}
+      if(request.method==='DELETE'){await clearCalendarFree(env.DB);return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});}
+      return Response.json({message:'Method not allowed'},{status:405});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   // Training plans (training-plans.js): the plans to choose from, the active

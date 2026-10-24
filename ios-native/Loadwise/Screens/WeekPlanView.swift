@@ -3,7 +3,8 @@ import SwiftUI
 // Plán týdne: the athlete places sports on days ("Rozvrhnu sám") or lets the
 // AI lay out the week ("Navrhne AI"). Either way the sessions are built as
 // previews first; each can be opened, made longer or shorter, moved inside or
-// changed with the AI, and "Uložit do kalendáře" schedules them all.
+// changed with the AI, and "Uložit do kalendáře" schedules them all, and with
+// "Zapisovat tréninky" also puts them into the iPhone calendar (CalendarTime).
 
 private func sportLabel(_ sport: String) -> String {
     ["ride": "Kolo", "run": "Běh", "gym": "Posilovna", "strength": "Posilovna", "walk": "Chůze", "swim": "Plavání", "stretch": "Protažení"][sport].map { L10n.tr($0) } ?? Fmt.capitalized(sport)
@@ -262,15 +263,16 @@ struct WeekPlanView: View {
 
     private var timeSummary: String? {
         guard let prefs = plan?.prefs else { return nil }
-        let total = WeekPlanPrefs.minutes(prefs).filter { $0 > 0 }.reduce(0, +)
+        let total = WeekPlanPrefs.available(prefs).filter { $0 > 0 }.reduce(0, +)
         var parts = [total > 0 ? Fmt.duration(total) : L10n.tr("Nenastaveno")]
-        parts.append(WeekPlanPrefs.source(prefs) == "week" ? L10n.tr("upraveno jen pro tento týden") : L10n.tr("podle tvého běžného týdne"))
+        parts.append(WeekPlanPrefs.followsCalendar(prefs) ? L10n.tr("podle kalendáře")
+                     : WeekPlanPrefs.source(prefs) == "week" ? L10n.tr("upraveno jen pro tento týden") : L10n.tr("podle tvého běžného týdne"))
         if let t = plan?.targets, t.recovery == true { parts.append(L10n.tr("odpočinkový týden")) }
         return parts.joined(separator: " · ")
     }
 
     private func dayMinutes(_ w: Int) -> Int {
-        WeekPlanPrefs.minutes(plan?.prefs)[w]
+        WeekPlanPrefs.available(plan?.prefs)[w]
     }
 
     private func date(_ w: Int) -> String { ISODay.shift(weekStart, w) }
@@ -579,7 +581,7 @@ struct WeekPlanView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Fmt.capitalized(Fmt.dayHeading(s.date))).font(Typo.caption).foregroundStyle(Palette.muted)
                     Text(s.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(2)
-                    Text([Fmt.duration(s.minutes), s.environment.map { L10n.tr($0 == "indoor" ? "uvnitř" : "venku") }, kindLabel(s.kind)]
+                    Text([Fmt.duration(s.minutes), slot(s), s.environment.map { L10n.tr($0 == "indoor" ? "uvnitř" : "venku") }, kindLabel(s.kind)]
                         .compactMap { $0 }.joined(separator: " · "))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     if case .failed(let message) = s.status {
@@ -604,6 +606,14 @@ struct WeekPlanView: View {
                 }
             }
         }
+    }
+
+    /// "18:30–19:15": the session's time in the day's free time, when the
+    /// calendar is read; a day's sessions follow one another.
+    private func slot(_ s: WeekSessionDraft) -> String? {
+        let day = sessions.filter { $0.date == s.date }
+        guard let index = day.firstIndex(where: { $0.id == s.id }) else { return nil }
+        return CalendarTime.shared.slotText(date: s.date, minutes: day.map(\.minutes), index: index)
     }
 
     /// "Odebrat z plánu": the session goes. "Jen odebrat" keeps the rest as it
@@ -734,8 +744,27 @@ struct WeekPlanView: View {
                 sessions[i].status = .failed(error.localizedDescription)
             }
         }
+        writeToCalendar()
         await model.refreshTraining()
         await model.loadCalendar(from: weekStart, to: ISODay.shift(weekStart, 6), force: true)
+    }
+
+    /// "Zapisovat tréninky": the saved sessions go into the iPhone calendar too.
+    private func writeToCalendar() {
+        guard CalendarTime.shared.writes else { return }
+        let saved = sessions.filter { $0.status == .saved }
+        let workouts = saved.map { s in
+            let about = [sportLabel(s.sport), Fmt.duration(s.minutes), kindLabel(s.kind)].compactMap { $0 }.joined(separator: " · ")
+            let link = URL(string: s.sport == "gym" ? "loadwise://open/gym/" + s.date : "loadwise://open/training")
+            return CalendarTime.Workout(date: s.date, title: s.title, minutes: s.minutes,
+                                        notes: [about, s.workout?.description].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n"),
+                                        link: link)
+        }
+        do {
+            try CalendarTime.shared.write(workouts)
+        } catch {
+            self.error = L10n.f("Do kalendáře v iPhonu se tréninky nezapsaly: %@", error.localizedDescription)
+        }
     }
 
     private func load() async {
@@ -743,6 +772,7 @@ struct WeekPlanView: View {
         let start = weekStart
         loading = true
         defer { loading = false }
+        await CalendarTime.shared.send(api: model.api)
         do {
             let p = try await model.api.weekPlan(start: start)
             guard start == weekStart else { return }
