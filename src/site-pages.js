@@ -178,7 +178,7 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 
 /* A real day: one of the owner's own screens (dark mode, his data) beside the sample day, as a small card. */
 .rd{display:flex;gap:18px;align-items:center;max-width:480px;margin:28px 0 0;padding:14px;border-radius:22px;background:var(--panel);box-shadow:0 0 0 1px var(--line),0 18px 40px -26px rgba(60,40,10,.4)}
-.rd a{flex:none;display:block;width:112px;border-radius:14px;overflow:hidden;background:var(--button)}
+.rd a{flex:none;display:block;width:112px;border-radius:14px;overflow:hidden;background:var(--track);box-shadow:0 0 0 1px var(--line)}
 .rd img{display:block;width:100%;height:auto}
 .rd figcaption{font-size:15px;line-height:1.45;color:var(--sec)}
 .rd b{display:block;margin-bottom:4px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--tone,var(--green))}
@@ -612,13 +612,13 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // Google's app verification reads this disclosure on the homepage. Aurin is not going through Google's
 // verification (2026-10-24), so it stays off the overview; before asking Google to verify the app, set this to true.
 // The text stays word for word (tests/site-pages.test.mjs).
-// Real days: the owner's own screens (dark mode, October 2026, saved from his posts), one beside the
-// sample day in the part of the overview it belongs to: [image, width, height, alt, caption].
+// Real days: the owner's own screens (light mode, October 2026), one beside the sample day in the part
+// of the overview it belongs to: [image, width, height, alt, caption].
 const REAL_DAYS = {
-  zatez: ['ride-summary', 664, 987, 'An indoor ride from Wahoo in Aurin: 1 h 30 min, 43.8 km, 74 TSS, NP 183 W, recovery 12 h, with the power graph', 'A ride straight from Wahoo: power, load and 12 hours to recover.'],
-  trenink: ['weekcheck', 664, 732, 'Aurin’s week check: your body is tired after the last few days, I’d move the ride on Sunday to Monday. Buttons Keep and Edit.', 'After a tired week, the week check moved Sunday’s ride to Monday.'],
-  svaly: ['quads-strength', 664, 892, 'Aurin’s quads screen: 66 % rested, strength up 73 % in 5 weeks, estimated leg press max 291 kg', 'Leg press estimated max up 73 % in five weeks, from the sets already logged.'],
-  propojeni: ['october', 664, 852, 'October in Aurin’s training calendar: 40 activities, 35 h 8 min, 18,156 kcal, an icon for every ride, gym session and walk', '40 activities in October, from Wahoo, the watch and the gym log, nothing typed twice.'],
+  zatez: ['ride-summary', 664, 1149, 'An indoor ride from Wahoo in Aurin: 1 h 30 min, 43.8 km, 74 TSS, NP 183 W, recovery 12 h, with the power graph', 'A ride straight from Wahoo: power, load and 12 hours to recover.'],
+  trenink: ['october', 664, 832, 'October 2026 in Aurin’s training calendar: 47 activities, 40 h 14 min, 20,099 kcal, the time of each day’s ride, gym session or walk', 'October in one screen: 47 activities and 40 hours, rest days included.'],
+  svaly: ['quads-strength', 664, 932, 'Aurin’s quads screen: 43 % rested, strength up 73 % in 6 weeks, estimated leg press max 291 kg', 'Leg press estimated max up 73 % in six weeks, from the sets already logged.'],
+  propojeni: ['ride-day', 664, 716, 'A day in Aurin: an indoor ride from Wahoo and two walks from Google Health, 2 h 17 min and 1,375 kcal', 'One day from two sources: the ride from Wahoo, the walks from the watch, nothing typed twice.'],
 };
 const realDay = id => {
   const [name, w, h, alt, say] = REAL_DAYS[id];
