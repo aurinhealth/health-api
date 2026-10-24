@@ -6,6 +6,7 @@ import { kcalTargets } from './activity-edits.js';
 import { isHardSession, isHardKind } from './session-intensity.js';
 import { trimGymPlan } from './gym-trim.js';
 import { parseStrengthPlan } from './strength-history.js';
+import { planTemplates, getTemplate, planStart } from './training-plans.js';
 import { actionInstructions } from './private/coach-actions.js';
 export { actionInstructions };
 
@@ -14,11 +15,13 @@ export const COACH_VISUALS=['form','recovery','sleep','nutrition','week','traini
 // The kind of ride or run a proposed workout is (week-ai.js KINDS), so the
 // prepared workout is the one the answer talks about.
 export const WORKOUT_KINDS=['recovery','endurance','long','tempo','sweet_spot','threshold','vo2max'];
-export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['forget','update'],properties:{forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','activityId','otherActivityId','time','kcal','gymFocus','insisted'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},gymFocus:{type:'string',enum:['','upper','lower']},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'}}}}}}};
+export const COACH_ACTION_FORMAT={type:'json_schema',name:'coach_reply',strict:true,schema:{type:'object',additionalProperties:false,required:['answer','visuals','actions','memory'],properties:{answer:{type:'string'},memory:{type:'object',additionalProperties:false,required:['forget','update'],properties:{forget:{type:'array',items:{type:'string'}},update:{type:'array',items:{type:'object',additionalProperties:false,required:['from','to'],properties:{from:{type:'string'},to:{type:'string'}}}}}},visuals:{type:'array',items:{type:'string',enum:COACH_VISUALS}},actions:{type:'array',items:{type:'object',additionalProperties:false,required:['type','eventId','date','sport','minutes','status','statusUntil','reason','fromExercise','toExercise','workoutId','kind','activityId','otherActivityId','time','kcal','gymFocus','insisted','planId','days','raceKm'],properties:{type:{type:'string',enum:['status','move','rest','workout','gym_swap','week_sport','activity_kcal','activity_delete','activity_merge','activity_time','plan']},eventId:{type:'string'},date:{type:'string'},sport:{type:'string',enum:['ride','run','gym','']},minutes:{type:'integer'},status:{type:'string',enum:['active','sick','injured','on_break','']},statusUntil:{type:'string'},reason:{type:'string'},fromExercise:{type:'string'},toExercise:{type:'string'},workoutId:{type:'string'},kind:{type:'string',enum:['',...WORKOUT_KINDS]},gymFocus:{type:'string',enum:['','upper','lower']},insisted:{type:'boolean'},activityId:{type:'string'},otherActivityId:{type:'string'},time:{type:'string'},kcal:{type:'integer'},planId:{type:'string'},days:{type:'array',items:{type:'integer'}},raceKm:{type:'number'}}}}}}};
 export const ACTION_INSTRUCTIONS=actionInstructions();
 // Words the athlete must have used before the coach may propose Sick or Injured.
 export const SICK_WORDS=/nemoc|horeč|horec|sick|chřip|chrip|nachl|rým|covid|vir[oó]z|viros|teplot|\bill\b|illness|unwell|fever|\bflu\b|\bcold\b|virus|sore throat|temperature/i;
 export const INJURY_WORDS=/zran|bol[eíe]|bolest|injur|natáh|natah|podvrt|výron|vyron|nateklé|natekl|\bpain|\bhurt|sprain|swollen|pulled/i;
+// The multi-week plans the coach can start (training-plans.js), as the coach sees them.
+export const coachPlanTemplates=()=>planTemplates().map(t=>({id:t.id,sport:t.sport,name:t.name,goal:t.goal,weeks:t.weeks.length,daysPerWeek:t.days,level:t.level,...(t.race?{raceKm:t.race.km,...(t.race.options?{raceKmOptions:t.race.options}:{})}:{})}));
 const SHORT_DAYS=['ne','po','út','st','čt','pá','so'],SHORT_DAYS_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MONTHS_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const shortDate=d=>!validDay(d)?'':L(SHORT_DAYS[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+'. '+Number(d.slice(5,7))+'.',SHORT_DAYS_EN[new Date(d+'T12:00:00Z').getUTCDay()]+' '+Number(d.slice(8))+' '+MONTHS_EN[Number(d.slice(5,7))-1]);
 const SPORT_NAMES=()=>L({ride:'kolo',run:'běh',gym:'gym'},{ride:'ride',run:'run',gym:'gym'}),STATUS_NAMES=()=>L({active:'Aktivní',sick:'Nemoc',injured:'Zranění',on_break:'Pauza'},{active:'Active',sick:'Sick',injured:'Injured',on_break:'Rest'});
@@ -29,6 +32,7 @@ export function actionSummary(a){
   if(a.type==='activity_merge')return L('Sloučit ','Merge ')+(a.activityName||'')+' + '+(a.otherName||'')+' ('+shortDate(a.date)+')';
   if(a.type==='activity_time')return L('Posunout ','Move ')+(a.activityName||L('aktivitu','the activity'))+' ('+shortDate(a.date)+L(') na ',') to ')+a.time;
   if(a.type==='activity_kcal')return L('Kalorie ','Calories of ')+(a.activityName||L('aktivity','the activity'))+' ('+shortDate(a.date)+'): '+a.kcal+' kcal';
+  if(a.type==='plan')return L('Založit plán ','Start the plan ')+(a.planName||'')+(a.raceDate?L(' (závod ',' (race on ')+shortDate(a.raceDate)+')':a.startDate?L(' (od ',' (from ')+shortDate(a.firstDay||a.startDate)+')':'');
   if(a.type==='gym_swap')return L('Vyměnit ','Swap ')+a.fromExercise+' → '+a.toExercise+' ('+shortDate(a.date)+')';
   if(a.type==='week_sport')return L('Přidat '+SPORT_NAMES()[a.sport]+' do týdenního plánu na ','Add a '+SPORT_NAMES()[a.sport]+' to the week plan on ')+shortDate(a.date);
   if(a.type==='status')return L('Stav ','Status ')+STATUS_NAMES()[a.status]+(a.statusUntil?L(' (znovu Aktivní od ',' (back to Active from ')+shortDate(a.statusUntil)+')':'');
@@ -86,6 +90,7 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
   // Five cards: a tired weekend needs today's ride, Saturday's tempo and both gym days, a gym block three days (Coach evaluation runs 25–30, S27 and S28).
   const list=(Array.isArray(actions)?actions:[]).slice(0,5),first=a=>['move','rest'].includes(a?.type)?0:1;
   const out=new Array(list.length);
+  const taken=()=>out.flat().filter(Boolean);
   for(const i of [...list.keys()].sort((i,j)=>first(list[i])-first(list[j])||i-j))out[i]=check(list[i]);
   const kept=out.flat();
   // A new ride or run on a day the plan has one of the same sport replaces it:
@@ -123,6 +128,18 @@ export function validateCoachActions(actions,context,today,{userInitiated=false}
       const other=targets.get(String(a.otherActivityId||''));
       if(!other||other.id===activity.id||/^gym:/.test(String(other.id)))return [];
       return [{...base,otherActivityId:String(other.id),otherName:name(other)}];
+    }
+    // A multi-week plan the athlete asked for in the chat: a known template, a
+    // race date (race plans) or a start the plan rules accept, the days of the
+    // week within the plan's range (else the week plan's days), one per answer.
+    if(a.type==='plan'){
+      const template=getTemplate(String(a.planId||''));
+      if(!userInitiated||!template||trainingStatus(context.athleteState).paused||taken().some(x=>x.type==='plan'))return [];
+      let when;try{when=planStart(template,{today,raceDate:template.race&&validDay(a.date)?a.date:null,startDate:!template.race&&validDay(a.date)&&a.date>today?a.date:null});}catch{return [];}
+      const days=[...new Set((Array.isArray(a.days)?a.days:[]).map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<=6))].sort();
+      const chosen=template.sport!=='gym'&&days.length>=template.days[0]&&days.length<=template.days[1]?days:null;
+      const raceKm=template.race?.options?.includes(Number(a.raceKm))?Number(a.raceKm):template.race?.km??null;
+      return [{type:'plan',planId:template.id,sport:template.sport,planName:template.name,weeksCount:template.weeks.length,date:when.raceDate&&template.race?when.raceDate:when.firstDay||when.startDate,startDate:when.startDate,...(when.firstDay?{firstDay:when.firstDay}:{}),...(template.race?{raceDate:when.raceDate,raceKm}:{}),...(!template.race&&validDay(a.date)&&a.date>today?{requestedStart:a.date}:{}),...(chosen?{days:chosen}:{}),reason}];
     }
     if(a.type==='week_sport'&&!trainingStatus(context.athleteState).paused&&validDay(a.date)&&a.date>=today&&['ride','run','gym'].includes(a.sport)){
       return [{type:'week_sport',date:a.date,sport:a.sport,reason}];

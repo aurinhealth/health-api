@@ -643,7 +643,7 @@ export function overviewPage(request) {
       ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
       ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000]]],
     ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout. When it proposes a workout, confirm it and it lands in your plan.', 15000]]]];
+      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout. When it proposes a workout or a whole plan for your race, confirm it and it lands in your plan.', 15000]]]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {

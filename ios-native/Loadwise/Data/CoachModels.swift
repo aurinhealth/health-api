@@ -102,6 +102,38 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     /// workout: the session the server prepared for the card, a ride or run
     /// (POST /app/api/workouts/generate) or the gym exercises (/gym/generate).
     var preview: Preview? = nil
+    /// plan: the multi-week plan the coach proposes, its race or start and
+    /// what its card shows (src/coach-actions.js, coachPlanPreview).
+    var planName: String? = nil
+    var weeksCount: Int? = nil
+    var raceDate: String? = nil
+    var raceKm: Double? = nil
+    var startDate: String? = nil
+    var firstDay: String? = nil
+    var trainingPlan: ProposedPlan? = nil
+
+    struct ProposedPlan: Decodable, Equatable {
+        struct Week: Decodable, Equatable {
+            let week: Int
+            let phase: String
+            let minutes: Int
+            var race: Bool? = nil
+        }
+        /// The running plan of the same kind that starting this one ends.
+        struct Replaces: Decodable, Equatable {
+            let name: String
+            var week: Int? = nil
+            var weeksCount: Int? = nil
+            var started: Bool? = nil
+        }
+        let weeks: [Week]
+        /// Training days, 0 = Monday; none for a gym plan.
+        var days: [Int]? = nil
+        var sessions: Int? = nil
+        /// Minutes a usual week, the lightest and the longest.
+        var minutes: [Int]? = nil
+        var replaces: Replaces? = nil
+    }
 
     struct Preview: Decodable, Equatable {
         var workout: LibraryWorkout? = nil
@@ -125,6 +157,7 @@ struct CoachAction: Decodable, Equatable, Identifiable {
         case "workout":
             let sportName = L10n.tr(["ride": "jízda", "run": "běh", "gym": "posilovna"][sport ?? ""] ?? "trénink")
             return L10n.f("Naplánovat: %@", workoutName ?? sportName) + (minutes.map { " · " + Fmt.duration(Int($0)) } ?? "") + " · " + day
+        case "plan": return L10n.f("Tréninkový plán: %@", planName ?? "")
         case "gym_swap": return L10n.f("V posilovně vyměnit %@ za %@", fromExercise ?? L10n.tr("cvik"), toExercise ?? L10n.tr("jiný"))
         case "activity_delete": return L10n.tr("Smazat aktivitu")
         case "activity_merge": return L10n.tr("Sloučit 2 aktivity")
