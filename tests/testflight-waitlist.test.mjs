@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { createD1 } from "./helpers/d1.mjs";
-import { handleWaitlistSignup, listWaitlist, decideWaitlist, ascToken, TESTER_LIMIT } from "../src/testflight-waitlist.js";
+import { handleWaitlistSignup, listWaitlist, decideWaitlist, ascToken, TESTER_LIMIT, forgetOldWaitlist } from "../src/testflight-waitlist.js";
 
 const origin = "https://aurin.health";
 const signup = (env, email, headers = {}) => handleWaitlistSignup(new Request(origin + "/waitlist", { method: "POST",
@@ -85,4 +85,17 @@ test("the App Store Connect token is an ES256 JWT that verifies with the key", a
   assert.deepEqual(part(h), { alg: "ES256", kid: "K1", typ: "JWT" });
   assert.deepEqual(part(p), { iss: "I1", iat: 1_700_000_000, exp: 1_700_001_200, aud: "appstoreconnect-v1" });
   assert.ok(await webcrypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, publicKey, Buffer.from(s, "base64url"), new TextEncoder().encode(h + "." + p)));
+});
+
+test("addresses a year on the lists are forgotten, newer ones stay", async () => {
+  const db = createD1();
+  assert.equal(await forgetOldWaitlist(db), 0);
+  await signup({ DB: db, SESSION_SECRET: "s" }, "new@example.com");
+  db.sqlite.exec(`INSERT INTO testflight_waitlist (email, created_at) VALUES ('old@example.com', datetime('now', '-13 months'));
+    INSERT INTO testflight_waitlist (email, status, created_at, invited_at) VALUES ('invited@example.com', 'invited', datetime('now', '-14 months'), datetime('now', '-2 months'));
+    CREATE TABLE signup_waitlist (email TEXT PRIMARY KEY, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+    INSERT INTO signup_waitlist (email, created_at) VALUES ('full@example.com', datetime('now', '-13 months')), ('later@example.com', datetime('now'));`);
+  assert.equal(await forgetOldWaitlist(db), 2);
+  assert.deepEqual(db.sqlite.prepare("SELECT email FROM testflight_waitlist ORDER BY email").all().map(r => r.email), ["invited@example.com", "new@example.com"]);
+  assert.deepEqual(db.sqlite.prepare("SELECT email FROM signup_waitlist").all().map(r => r.email), ["later@example.com"]);
 });

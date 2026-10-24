@@ -187,6 +187,8 @@ struct TodaySnapshot: Decodable, Equatable {
         var strain: Double? = nil
         /// Bedtime: the planned wake time, the end of the dashed night ahead.
         var end: String? = nil
+        /// A ride or run still ahead outdoors on a hot day: "Horko 30 °C · …" (src/heat-advice.js).
+        var heat: String? = nil
 
         struct Eased: Decodable, Equatable {
             let title: String

@@ -361,6 +361,20 @@ export function readRoutines(values) {
   } catch { return { warmup: null, stretching: null }; }
 }
 
+// A plan stored before saved workouts got their routines (or with a length
+// of 600 min, the old saved-workout limit) is read with the warm-up, the
+// cardio and the stretching from today's Posilovna and its real length.
+export function withRoutines(values, setup, muscleOf) {
+  if (!Array.isArray(values) || values[ROUTINES_ROW + 1]?.[0] !== 'Typ') return values;
+  const out = values.map(r => Array.isArray(r) ? [...r] : r), timing = out[4];
+  const limit = Number(timing?.[1]), estimate = Number(timing?.[3]);
+  if (timing?.[0] === 'Časový limit (min)' && limit > 180 && estimate > 0) out[4] = [timing[0], estimate, timing[2], estimate];
+  if (out[ROUTINES_ROW]?.[0] === ROUTINES_LABEL || out[ROUTINES_ROW]?.length) return out;
+  const minutes = Number(out[4]?.[1]) > 0 ? Number(out[4][1]) : 60;
+  out[ROUTINES_ROW] = routinesRow(planRoutines(out.slice(ROUTINES_ROW + 2).filter(r => r?.[1]), muscleOf, setup || {}, minutes));
+  return out;
+}
+
 // Typical minutes the warm-up, the cardio and the stretching add to each
 // session length, for the length picker before a plan exists (a full-body
 // session; 0 when off).

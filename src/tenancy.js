@@ -41,6 +41,8 @@ export const PERSONAL_TABLES = {
   training_profile: {},
   week_plan_preferences: {},
   week_plan_overrides: {},
+  // The free minutes per day from the iPhone calendar (calendar-free.js).
+  calendar_free: { pk: ["user_id", "date"] },
   athlete_state: {},
   assistant_chats: {},
   assistant_messages: {},
@@ -71,6 +73,8 @@ export const PERSONAL_TABLES = {
   workout_ratings: {},
   // Exercises pinned to the top of Rekordy (pinned-exercises.js).
   pinned_exercises: { pk: ["user_id", "exercise"] },
+  // The athlete's own notes on exercises (exercise-notes.js).
+  exercise_notes: { pk: ["user_id", "exercise"] },
   // Synchronizace: where the user sends data and what each send did (sync-destinations.js).
   sync_preferences: {},
   sync_sends: {},
@@ -186,9 +190,10 @@ const UPGRADE_BUDGET_MS = 20 * 1000;
 const COPY_CHUNK_ROWS = 5000;
 
 // Workers Builds preview versions share the production database, so only the
-// production hostnames (and cron runs, which previews never get) may upgrade it.
+// production hostname (and cron runs, which previews never get) may upgrade it.
+// The workers.dev address is off (wrangler.jsonc workers_dev).
 // The test server has its own database and upgrades it from its APP_ORIGIN.
-const PRODUCTION_HOSTS = new Set(["aurin.health", "health-api.chelseafc-czsk.workers.dev"]);
+const PRODUCTION_HOSTS = new Set(["aurin.health"]);
 export function mayUpgradeFrom(request, env = {}) {
   if (!request) return true;
   const host = new URL(request.url).hostname;

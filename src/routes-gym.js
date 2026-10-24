@@ -3,11 +3,12 @@
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
 import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts } from "./strength-generator.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { cardioFor, cardioMode, cardioOptions, cardioType, planRoutines, routineSize, stretchingFor, typicalExtraMinutes, warmupFor } from "./stretching.js";
+import { cardioFor, cardioMode, cardioOptions, cardioType, planRoutines, routineSize, stretchingFor, typicalExtraMinutes, warmupFor, withRoutines } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
 import { pinnedExercises, savePinnedExercises } from "./pinned-exercises.js";
+import { exerciseNotes, saveExerciseNote } from "./exercise-notes.js";
 import { gymExerciseCatalog, gymAlternatives } from "./gym-catalog.js";
 import { EXERCISE_STATIONS, stationSections } from "./gym-equipment.js";
 import { equipmentCatalog, detectGymEquipment } from "./gym-equipment-ai.js";
@@ -100,6 +101,15 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
     try{return Response.json(await savePinnedExercises(env.DB,body));}
     catch(error){return Response.json({status:'error',error:error.message},{status:400});}
   }
+  // Moje poznámka: the athlete's notes on exercises, one each.
+  if(url.pathname==='/app/api/gym/notes'&&request.method==='GET'){
+    return Response.json({status:'ok',notes:await exerciseNotes(env.DB)},{headers:{'Cache-Control':'no-store'}});
+  }
+  if(url.pathname==='/app/api/gym/notes'&&request.method==='PUT'){
+    let body;try{body=await request.json();}catch{return Response.json({status:'error',error:L('Neplatný požadavek.','Invalid request.')},{status:400});}
+    try{return Response.json(await saveExerciseNote(env.DB,body));}
+    catch(error){return Response.json({status:'error',error:error.message},{status:400});}
+  }
   // Levá a pravá strana: one-sided exercises, the last session's sides.
   if(url.pathname==='/app/api/gym/sides'&&request.method==='GET'){
     const history=await getStrengthHistory(env.DB,500).catch(()=>[]);
@@ -151,6 +161,8 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       const muscles=Object.fromEntries([...names].map(name=>[name,exerciseMuscles(name)]));
       // The athlete's equipment, so the coach swaps exercises only for ones it allows.
       const setup=await trainingSetup(env.DB).catch(()=>null),equipment=setup?{equipment:setup.equipment||null,stations:setup.stations||[]}:null;
+      // An older plan without its warm-up, cardio and stretching gets them from Posilovna.
+      if(data.stored)data.values=withRoutines(data.values,setup,name=>EXERCISES[name]?.muscle);
       return Response.json({...data,history,muscles,equipment,storage:"d1"},{headers:{"Cache-Control":"no-store"}});
     }
     if (request.method === "POST") {

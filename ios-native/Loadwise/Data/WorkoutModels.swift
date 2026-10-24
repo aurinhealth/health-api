@@ -234,12 +234,15 @@ struct GymDay: Decodable, Equatable {
     }
 
     /// Swaps an exercise for another in the sets not done yet.
-    mutating func replace(exercise: String, with name: String) {
+    /// With kg (the load estimated for the new exercise) its sets take it;
+    /// a warm-up's weight is left empty.
+    mutating func replace(exercise: String, with name: String, kg: String? = nil) {
         for index in values.indices where index >= Self.firstSetRow {
             guard values[index].count > 1, values[index][1].string == exercise else { continue }
             if values[index].count > 8, Self.isDone(values[index][8].string) { continue }
             values[index][1] = .string(name)
-            set(row: index, column: 3, "")
+            let warmup = (cell(values[index], 0) ?? "").uppercased() == "WARMUP"
+            set(row: index, column: 3, warmup ? "" : kg ?? "")
         }
     }
 
@@ -527,6 +530,12 @@ struct GymSet: Equatable, Identifiable {
     var id: Int { row }
     /// A work set: not a warm-up nor a drop set (counts, progression, history).
     var work: Bool { !warmup && !drop }
+    /// The rest the plan gives after this set, "[Pauza 150 s]" in its note
+    /// (src/strength-timing.js: by the kind of exercise and the gym goal).
+    var plannedRest: Int? {
+        guard let note, let range = note.range(of: #"\[Pauza (\d+) s\]"#, options: .regularExpression) else { return nil }
+        return Int(note[range].filter(\.isNumber))
+    }
 }
 
 struct GymTechnique: Decodable, Equatable {
@@ -706,6 +715,8 @@ struct ActivityDetail: Decodable, Equatable {
 struct PlannedWorkout: Decodable, Equatable {
     let source: String?
     let workout: Workout
+    /// Today's ride or run outdoors on a hot day: how to adjust it (src/heat-advice.js).
+    var heat: String? = nil
 
     struct Step: Decodable, Equatable {
         let durationSeconds: Double?

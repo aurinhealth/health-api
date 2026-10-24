@@ -39,6 +39,8 @@ struct DetailScreen<Content: View>: View {
     var glow: Color = Palette.Glow.health
     /// Shown in the pinned bar once the page is scrolled.
     var title: String? = nil
+    /// "✦ Kouč" beside the back button: the coach about this detail.
+    var coach: CoachSubject? = nil
     @ViewBuilder var content: Content
     @Environment(\.dismiss) private var dismiss
 
@@ -47,7 +49,11 @@ struct DetailScreen<Content: View>: View {
             ScreenBackground(glow: glow)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    BackSlot { dismiss() }
+                    HStack {
+                        BackSlot { dismiss() }
+                        Spacer()
+                        if let coach { CoachPill(subject: coach) }
+                    }
                     content
                 }
                 .padding(.horizontal, 24)

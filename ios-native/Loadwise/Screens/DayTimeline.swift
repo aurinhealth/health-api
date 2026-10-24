@@ -168,17 +168,21 @@ struct DayTimeline: View {
                 }
             }
         } else {
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.status == "missed" ? Palette.muted : Palette.ink).lineLimit(2)
-                    if let eased = item.eased {
-                        Text(eased.title).font(Typo.caption).foregroundStyle(Palette.muted).strikethrough()
-                    } else if let detail = item.detail {
-                        Text(detail).font(Typo.caption).foregroundStyle(Palette.muted)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.title).font(Typo.bodyStrong).foregroundStyle(item.status == "missed" ? Palette.muted : Palette.ink).lineLimit(2)
+                        if let eased = item.eased {
+                            Text(eased.title).font(Typo.caption).foregroundStyle(Palette.muted).strikethrough()
+                        } else if let detail = item.detail {
+                            Text(detail).font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
                     }
+                    Spacer(minLength: 8)
+                    workoutTrailing(item)
                 }
-                Spacer(minLength: 8)
-                workoutTrailing(item)
+                // Horko: a ride or run still ahead outdoors on a hot day (src/heat-advice.js).
+                if let heat = item.heat, item.eased == nil { HeatLine(text: heat, compact: true) }
             }
         }
     }
