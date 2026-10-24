@@ -607,7 +607,7 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // Google's app verification reads this disclosure on the homepage. Petr took it off the overview
 // to keep the page clean (2026-10-15); before asking Google to verify the app, set this to true.
 // The text stays word for word (tests/site-pages.test.mjs).
-export const GOOGLE_DISCLOSURE_ON_HOME = true;
+export const GOOGLE_DISCLOSURE_ON_HOME = false;
 export const googleDisclosure = () => `<div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>
