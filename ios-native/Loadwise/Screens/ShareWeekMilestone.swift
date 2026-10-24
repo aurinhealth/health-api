@@ -287,10 +287,10 @@ struct ShareWeekCard: View {
             VStack(spacing: 0) {
                 ForEach(Array(week.days.enumerated()), id: \.offset) { i, day in
                     dayRow(day, longest: longest)
-                        .overlay(alignment: .top) { if i > 0 { Rectangle().fill(s.t.line(0.08)).frame(height: 1) } }
+                        .overlay(alignment: .top) { s.divider(i) }
+                        .sharePiece(day.date, s)
                 }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 7)
         }
@@ -392,12 +392,12 @@ struct ShareWeekCard: View {
                             let tone = ShareWeek.tone(stat.label)
                             s.number(stat.label, stat.value, stat.unit, size: 12,
                                      color: tone == .ink || tone == .indigo ? nil : ShareMetric(key: "", label: "", value: "", tone: tone).color(s.t))
+                                .sharePiece(stat.id, s)
                                 .frame(width: u * 43, alignment: .leading)
                         }
                     }
                 }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 9)
         }
@@ -428,9 +428,8 @@ struct ShareWeekCard: View {
             }
             Spacer(minLength: 0)
             VStack(alignment: .leading, spacing: u * 4.4) {
-                ForEach(keys, id: \.self) { compareRow($0) }
+                ForEach(keys, id: \.self) { compareRow($0).sharePiece($0, s) }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .padding(.horizontal, u * 7)
             HStack(spacing: u * 4) {
                 legend(s.t.ink, "tento týden")
@@ -533,9 +532,8 @@ struct ShareMilestoneCard: View {
             }
             Spacer(minLength: 0)
             HStack(alignment: .top, spacing: u * 9) {
-                ForEach(stats) { s.number($0.label, $0.value, $0.unit, size: 7.4) }
+                ForEach(stats) { s.number($0.label, $0.value, $0.unit, size: 7.4).sharePiece($0.id, s) }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
         }

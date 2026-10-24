@@ -1,0 +1,58 @@
+name: Move legacy accounts
+
+# One-off: moves the accounts from before user data routing (route 'legacy',
+# history in the central database health-data) to the user data databases in
+# the EU (scripts/move-legacy-users.mjs). Run it on staging first, without
+# "apply" for the counts. Production asks for the same approval as a deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Server"
+        type: choice
+        options: [staging, production]
+        default: staging
+      apply:
+        description: "Move (off: only count)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  move:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment: ${{ inputs.target == 'production' && 'production' || 'staging' }}
+    # Never alongside a deploy or the backup of the same server.
+    concurrency:
+      group: ${{ inputs.target == 'production' && 'production-deploy' || 'staging-deploy' }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Check out the private AI prompts
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: shaarkyn/aurin-prompts
+          token: ${{ secrets.PROMPTS_REPO_TOKEN }}
+          path: src/private
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22"
+
+      - name: Move legacy accounts
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TARGET: ${{ inputs.target }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          args=()
+          [ "$TARGET" = staging ] && args+=(--staging)
+          [ "$APPLY" = true ] && args+=(--apply)
+          node scripts/move-legacy-users.mjs "${args[@]}"

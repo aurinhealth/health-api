@@ -29,7 +29,7 @@ struct ShareCard: View {
     private var onPhoto: Bool { photo != nil || overCamera }
 
     private var s: ShareStyle {
-        ShareStyle(u: width / 100, t: ShareTheme(dark: options.dark, clear: options.clear || onPhoto), offsets: onPhoto ? offsets : [:])
+        ShareStyle(u: width / 100, t: ShareTheme(dark: options.dark, clear: options.clear || onPhoto), offsets: onPhoto ? offsets : [:], movable: onPhoto)
     }
 
     var body: some View {
@@ -98,6 +98,13 @@ struct ShareStyle {
     let t: ShareTheme
     /// The blocks moved on a photo, by id (ShareBlock), in hundredths of the width.
     var offsets: [String: CGSize] = [:]
+    /// On a photo each number moves on its own, so the lines between them go.
+    var movable = false
+
+    /// The line over a row, from the second row on.
+    @ViewBuilder func divider(_ index: Int) -> some View {
+        if index > 0, !movable { Rectangle().fill(t.line(0.08)).frame(height: 1) }
+    }
 
     func serif(_ size: CGFloat) -> Font { .custom("InstrumentSerif-Regular", fixedSize: u * size) }
     func news(_ size: CGFloat) -> Font { .custom("Newsreader-Regular", fixedSize: u * size) }
@@ -176,11 +183,12 @@ struct ShareStyle {
     }
 }
 
-/// The parts of an image the user can drag on a photo: the numbers at the
-/// bottom and the big number or picture at the top.
+/// The parts of an image the user can drag on a photo: the big number or
+/// picture at the top, each number (piece) or the numbers together at the bottom.
 enum ShareBlock {
     static let top = "top"
     static let bottom = "bottom"
+    static func piece(_ key: String) -> String { "piece." + key }
 }
 
 /// Each movable block's frame where the layout put it, before its offset.
@@ -192,15 +200,24 @@ struct ShareBlockFrames: PreferenceKey {
 }
 
 extension View {
-    /// A block that moves on a photo: it reports its frame and takes its offset.
+    /// A block that moves on a photo: it takes its offset and reports its frame
+    /// where the layout put it. The frame is read outside the offset, so a moved
+    /// block still reports where it started and dragging doesn't count the
+    /// offset twice.
     func shareBlock(_ id: String, _ s: ShareStyle) -> some View {
         let offset = s.offsets[id] ?? .zero
-        return background {
-            GeometryReader { geo in
-                Color.clear.preference(key: ShareBlockFrames.self, value: [id: geo.frame(in: .named(ShareCard.space))])
+        return self
+            .offset(x: offset.width * s.u, y: offset.height * s.u)
+            .background {
+                GeometryReader { geo in
+                    Color.clear.preference(key: ShareBlockFrames.self, value: [id: geo.frame(in: .named(ShareCard.space))])
+                }
             }
-        }
-        .offset(x: offset.width * s.u, y: offset.height * s.u)
+    }
+
+    /// One number (or row) that moves on its own on a photo.
+    func sharePiece(_ key: String, _ s: ShareStyle) -> some View {
+        shareBlock(ShareBlock.piece(key), s)
     }
 }
 
@@ -334,10 +351,10 @@ struct ShareDayCard: View {
                         if let p = m.progress { s.bar(p, m.color(s.t), height: 1.6) }
                     }
                     .padding(.vertical, u * 3.2)
-                    .overlay(alignment: .top) { if i > 0 { Rectangle().fill(s.t.line(0.08)).frame(height: 1) } }
+                    .overlay(alignment: .top) { s.divider(i) }
+                    .sharePiece(m.id, s)
                 }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
@@ -366,11 +383,10 @@ struct ShareDayCard: View {
                 HStack(alignment: .top) {
                     ForEach(Array(list.dropFirst().prefix(3).enumerated()), id: \.element.id) { i, m in
                         if i > 0 { Spacer(minLength: u * 2) }
-                        s.number(m.label, m.value, m.unit, size: 7.4)
+                        s.number(m.label, m.value, m.unit, size: 7.4).sharePiece(m.id, s)
                     }
                 }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
@@ -734,10 +750,9 @@ struct ShareActivityCard: View {
             HStack(alignment: .top) {
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, stat in
                     if i > 0 { Spacer(minLength: u * 2) }
-                    s.number(stat.label, stat.value, stat.unit, size: 10)
+                    s.number(stat.label, stat.value, stat.unit, size: 10).sharePiece(stat.id, s)
                 }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
@@ -764,11 +779,11 @@ struct ShareActivityCard: View {
             .padding(.top, u * 20)
             VStack(alignment: .leading, spacing: u * 4) {
                 Text(verbatim: workout.title).font(s.news(9)).foregroundStyle(s.t.ink).lineLimit(2).minimumScaleFactor(0.6)
+                    .sharePiece("title", s)
                 HStack(spacing: u * (list.count < 3 ? 12 : 6)) {
-                    ForEach(list) { s.number($0.label, $0.value, $0.unit, size: list.count < 3 ? 11 : 8) }
+                    ForEach(list) { s.number($0.label, $0.value, $0.unit, size: list.count < 3 ? 11 : 8).sharePiece($0.id, s) }
                 }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
@@ -814,11 +829,10 @@ struct ShareActivityCard: View {
                 HStack(alignment: .top) {
                     ForEach(Array(list.enumerated()), id: \.element.id) { i, stat in
                         if i > 0 { Spacer(minLength: u * 2) }
-                        s.number(stat.label, stat.value, stat.unit, size: 8)
+                        s.number(stat.label, stat.value, stat.unit, size: 8).sharePiece(stat.id, s)
                     }
                 }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
@@ -838,12 +852,12 @@ struct ShareActivityCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(list.enumerated()), id: \.element.id) { i, stat in
                     s.number(stat.label, stat.value, stat.unit, size: list.count > 3 ? 15 : 18)
+                        .sharePiece(stat.id, s)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, u * 3.2)
-                        .overlay(alignment: .top) { if i > 0 { Rectangle().fill(s.t.line(0.08)).frame(height: 1) } }
+                        .overlay(alignment: .top) { s.divider(i) }
                 }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 7)
@@ -1030,9 +1044,9 @@ struct ShareFoodCard: View {
                         }
                         s.bar(p.progress, p.color)
                     }
+                    .sharePiece(p.id, s)
                 }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 10)
@@ -1078,10 +1092,10 @@ struct ShareFoodCard: View {
                             Text(verbatim: Fmt.int((arc.to - arc.from) * 100) + " %").font(s.serif(9)).foregroundStyle(arc.part.color)
                             Text(L10n.tr(arc.part.key)).font(s.sans(3.4)).foregroundStyle(s.t.muted)
                         }
+                        .sharePiece(arc.id, s)
                     }
                 }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 12)
@@ -1128,11 +1142,11 @@ struct ShareFoodCard: View {
                             s.value(a.0, a.1, size: list.count > 3 ? 7.6 : 9).lineLimit(1)
                             Text(L10n.tr(part.key)).font(s.sans(3.2)).foregroundStyle(s.t.muted).padding(.top, -u * 1)
                         }
+                        .sharePiece(part.id, s)
                         .frame(maxWidth: .infinity)
                     }
                 }
             }
-            .shareBlock(ShareBlock.bottom, s)
             .frame(maxHeight: .infinity, alignment: .bottom)
             .padding(.horizontal, u * 7)
             .padding(.bottom, u * 8)
