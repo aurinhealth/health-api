@@ -584,20 +584,15 @@ struct TechniqueSheet: View {
         .padding(.top, 6)
     }
 
-    /// Photos of the start and end position, swiped between; without them a
-    /// still from the exercise's video.
+    /// Photos of the start and end position, swiped between; without them two
+    /// frames YouTube takes from the video itself (at a quarter and three
+    /// quarters of it), not the author's thumbnail with its text on top.
     @ViewBuilder private var photo: some View {
         if let photos = technique?.photos, photos.count >= 2 {
             ExercisePhotos(urls: photos.compactMap { URL(string: $0) })
-        } else if let id = videoId, let url = URL(string: "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg") {
-            AsyncImage(url: url) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Rectangle().fill(Palette.track)
-            }
-            .frame(maxWidth: .infinity)
-            .aspectRatio(16 / 9, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        } else if let id = videoId {
+            ExercisePhotos(urls: ["hq1", "hq3"].compactMap { URL(string: "https://i.ytimg.com/vi/" + id + "/" + $0 + ".jpg") },
+                           labeled: false, aspect: 16 / 9)
         }
     }
 
@@ -809,6 +804,8 @@ struct ExercisePhotos: View {
     let urls: [URL]
     /// Začátek and Konec on the photos (a stretch's two photos are one position).
     var labeled = true
+    /// 16:9 for video frames: the bars YouTube pads them with fall outside.
+    var aspect: CGFloat = 3 / 2
     @State private var page = 0
 
     var body: some View {
@@ -836,7 +833,7 @@ struct ExercisePhotos: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .aspectRatio(3 / 2, contentMode: .fit)
+            .aspectRatio(aspect, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             HStack(spacing: 8) {
                 ForEach(0..<urls.count, id: \.self) { i in
