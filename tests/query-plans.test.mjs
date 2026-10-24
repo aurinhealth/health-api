@@ -66,7 +66,9 @@ test("Trénink → Svaly reads the last week's activities through an index", asy
 test("a workout's or night's heart rate reads only its own window through the index", async () => {
   const { db, plans } = datapoints();
   await heartRateInWindows(db, 1, [{ start: "2026-10-08T05:00:00Z", end: "2026-10-08T06:00:00Z" }, { start: "2026-10-07T22:00:00Z", end: "2026-10-08T06:00:00Z" }]);
-  assert.equal(plans.length, 1);
+  // One SELECT per window (D1 refuses long UNION ALLs), each through the index.
+  assert.equal(plans.length, 2);
   assert.deepEqual(scans(plans), []);
-  assert.ok(plans[0].plan.filter(d => /data_type=\? AND sample_time>\? AND sample_time<\?/.test(d)).length === 2, plans[0].plan.join("; "));
+  for (const p of plans) assert.ok(p.plan.some(d => /data_type=\? AND sample_time>\? AND sample_time<\?/.test(d)), p.plan.join("; "));
+  assert.ok(plans.every(p => !/UNION/i.test(p.sql)));
 });
