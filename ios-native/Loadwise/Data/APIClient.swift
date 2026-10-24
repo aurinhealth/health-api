@@ -140,6 +140,16 @@ final class APIClient: @unchecked Sendable {
         return (r.message, r.undo)
     }
 
+    /// Kratší, Delší, Lehčí, Těžší, Jiný den ("day" with `date`) or "undo" on a
+    /// coach's workout card: the card as changed, and what the coach remembered.
+    func adjustCoachAction(draftId: Int, chip: String, date: String? = nil) async throws -> (action: CoachAction, memory: AssistantResult.MemoryChanges?) {
+        struct Response: Decodable { let action: CoachAction; let memoryChanges: AssistantResult.MemoryChanges? }
+        var body: JSONObject = ["draftId": .number(Double(draftId)), "decision": .string("adjust"), "chip": .string(chip)]
+        if let date { body["date"] = .string(date) }
+        let r: Response = try await send("/app/api/assistant/action", method: "POST", body: body)
+        return (r.action, r.memoryChanges)
+    }
+
     /// "Vrátit" under a confirmed delete, merge or time change of a done activity.
     func undoActivityChange(token: String) async throws {
         let _: JSONValue = try await send("/app/api/activity/undo", method: "POST", body: ["token": JSONValue.string(token)])

@@ -42,6 +42,7 @@ import {forwardWatchWorkouts} from './watch-forward.js';
 import {askCoach,coachContext,lightModel,assistantTask,engineSport} from './coach-assistant.js';
 import {assistantAppContext,selectedAssistantContext} from './assistant-app-context.js';
 import { validateCoachActions, actionSafetyContext, actionsNote } from './coach-actions.js';
+import { QUICK_CHIPS, quickSnapshot, quickOptions, quickChange, previewFollows, scaleGymRows, quickMemory, quickEntry } from './coach-quick-change.js';
 import { buildReviewInput, reviewDay, dayReadiness, usageCost } from "./coach-review.js";
 import { trendFacts } from "./trend-facts.js";
 import { workloadMetrics } from "./workload-ratio.js";
@@ -1710,7 +1711,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const coachAllowance=await recordCoachMessage(env,chatId,claim).catch(error=>{console.error('Coach message not counted',error.message);return null;});
       // Proposals from earlier days no longer show up as open.
       await env.DB.prepare("UPDATE coach_inbox SET status='expired' WHERE user_id=? AND status='draft' AND created_at<? AND draft_json LIKE '%\"coach_action\"%'").bind(env.USER_ID,dayStartSql(date)).run().catch(error=>console.error('Draft expiry failed',error.message));
-      for(const action of actions){const draft={kind:'coach_action',action,chatId};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();proposals.push({...action,draftId:ins.meta?.last_row_id});}
+      // A workout card keeps the context its quick changes check (coach-quick-change.js).
+      const quick=actions.some(a=>a.type==='workout')?quickSnapshot(coachCtx,date):null;
+      for(const action of actions){const own=action.type==='workout'?quick:null,draft={kind:'coach_action',action,chatId,...(own?{quick:own}:{})};const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'cycling',message,JSON.stringify(draft)).run();const options=own?quickOptions(action,own):null;proposals.push({...action,draftId:ins.meta?.last_row_id,...(options?{quick:options}:{})});}
       delete answer.memory;
       return {...answer,chatId,actions:proposals,coachAllowance,memorySaved:memory,memoryChanges:{saved:memory||null,...changes},costUsd:usageCost(answer.model,answer.usage),timings:{contextMs,modelMs:answer.ms,totalMs:Date.now()-started}};
     };
@@ -1756,6 +1759,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       if(!row)throw new Error(L('Návrh neexistuje.', 'The proposal doesn\'t exist.'));
       const draft=JSON.parse(row.draft_json);if(draft.kind!=='coach_action')throw new Error(L('Neplatný návrh.', 'Invalid proposal.'));
       if(row.status!=='draft')return Response.json({status:'ok',message:L('Návrh už byl vyřízen.', 'The proposal has already been handled.')});
+      // Kratší, Delší, Lehčí, Těžší, Jiný den and Zpět: the card changes by rules,
+      // without the AI and without counting as a message.
+      if(body.decision==='adjust')return Response.json(await adjustCoachDraft(env,ctx,row,draft,body),{headers:{'Cache-Control':'no-store'}});
       if(!['confirm','reject'].includes(body.decision))throw new Error(L('Potvrď nebo odmítni návrh.', 'Confirm or reject the proposal.'));
       let result=null;
       if(body.decision==='confirm'){
@@ -2454,6 +2460,53 @@ async function pickDetails(env,ctx,ranked,date,gymPlan){
     }catch(error){console.error('Activity of the day',o.kind,error?.message||error);}
   }));
   return out;
+}
+// One quick change of a coach's workout card: the action changed, its preview
+// built again, the draft saved. The same change a third time in a month is
+// remembered (coach-quick-change.js).
+async function adjustCoachDraft(env,ctx,row,draft,body){
+  const a=draft.action,chip=String(body.chip||'');
+  if(a?.type!=='workout'||!QUICK_CHIPS.includes(chip))throw new Error(L('Tenhle návrh se upravit nedá.', 'This proposal can\'t be changed.'));
+  if(!validTrainingDay(a.date)||a.date<localToday())throw new Error(L('Návrh je určený pro minulý den. Požádej o nový návrh.', 'The proposal is for a past day. Ask for a new proposal.'));
+  let next,change=null;
+  if(chip==='undo'){if(!draft.original)throw new Error(L('Není co vrátit.', 'There is nothing to undo.'));next=draft.original;}
+  else{
+    ({action:next,change}=quickChange(a,chip,draft.quick,{date:String(body.date||'')}));
+    if(next.sport==='gym'&&!next.trim&&['easier','harder'].includes(chip))next.preview=await scaledGymPreview(env,a.preview,next.loadStep-(a.loadStep||0));
+    else{
+      next.preview=await workoutPreview(env,ctx,next);
+      if(next.sport==='gym'&&!next.trim&&next.loadStep)next.preview=await scaledGymPreview(env,next.preview,next.loadStep);
+      if(!previewFollows(chip,a,next))throw new Error(chip==='harder'?L('Těžší trénink pro tenhle den generátor nepřipravil.', 'The generator didn\'t prepare a harder session for this day.'):L('Lehčí trénink se nepodařilo připravit.', 'Could not prepare an easier session.'));
+    }
+    next.quickChange=change;
+  }
+  const history=chip==='undo'?(draft.quickChanges||[]):[...(draft.quickChanges||[]),quickEntry(chip,next.date,row.id)];
+  const saved={...draft,action:next,original:chip==='undo'?null:draft.original||a,quickChanges:history};
+  const updated=await env.DB.prepare("UPDATE coach_inbox SET draft_json=? WHERE user_id=? AND id=? AND status='draft'").bind(JSON.stringify(saved),env.USER_ID,row.id).run();
+  if(updated.meta?.changes!==1)throw new Error(L('Návrh už byl vyřízen.', 'The proposal has already been handled.'));
+  // Earlier changes of this month's cards, for "the same choice a third time".
+  let memory=null;
+  if(chip!=='undo'&&chip!=='day'){
+    const rows=await env.DB.prepare("SELECT id,draft_json FROM coach_inbox WHERE user_id=? AND id<>? AND created_at>=datetime('now','-30 days') AND draft_json LIKE '%\"quickChanges\"%'").bind(env.USER_ID,row.id).all().catch(()=>({results:[]}));
+    const earlier=(rows.results||[]).flatMap(r=>{try{return JSON.parse(r.draft_json).quickChanges||[];}catch{return [];}});
+    const state=await getAthleteState(env.DB).catch(()=>({memories:[]}));
+    memory=quickMemory(chip,next.date,[...earlier,...history],state.memories||[]);
+    if(memory)await updateAthleteState(env.DB,{memory}).catch(error=>{console.error('Quick change memory failed',error.message);memory=null;});
+  }
+  const options=quickOptions(next,draft.quick);
+  return {status:'ok',action:{...next,draftId:row.id,...(options?{quick:options}:{})},...(memory?{memoryChanges:{saved:memory,forgotten:[],updated:[]}}:{})};
+}
+// A gym preview with its loads a step lighter or heavier, saved as a new gym
+// draft so "Zpět" still confirms the one before.
+async function scaledGymPreview(env,preview,step){
+  if(!preview?.draftId||!preview.plan?.rows)throw new Error(L('Gym plán se nepodařilo připravit. Požádej o nový návrh.', 'The gym plan couldn\'t be prepared. Ask for a new proposal.'));
+  const row=await env.DB.prepare('SELECT draft_json FROM coach_inbox WHERE user_id=? AND id=?').bind(env.USER_ID,Number(preview.draftId)).first();
+  const gym=row?JSON.parse(row.draft_json):null;
+  if(gym?.kind!=='gym_preview'||!gym.plan?.rows)throw new Error(L('Gym plán se nepodařilo připravit. Požádej o nový návrh.', 'The gym plan couldn\'t be prepared. Ask for a new proposal.'));
+  const rows=scaleGymRows(gym.plan.rows,step);
+  if(JSON.stringify(rows)===JSON.stringify(gym.plan.rows))throw new Error(L('Váhy už upravit nejde.', 'The weights can\'t be changed.'));
+  const ins=await env.DB.prepare('INSERT INTO coach_inbox(user_id,channel,message,draft_json) VALUES(?,?,?,?)').bind(env.USER_ID,'gym',L('Úprava návrhu kouče','Coach proposal changed'),JSON.stringify({...gym,plan:{...gym.plan,rows}})).run();
+  return {...preview,draftId:ins.meta?.last_row_id,plan:{...preview.plan,rows:scaleGymRows(preview.plan.rows,step)}};
 }
 async function workoutPreview(env,ctx,a){
   // The day's own plan shortened (coach-actions.js): its rows as they will be saved.

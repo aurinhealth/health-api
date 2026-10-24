@@ -171,7 +171,7 @@ struct MemoryChipView: View {
     private var label: String {
         if chip.undone { return L10n.tr("Vráceno") }
         switch chip.kind {
-        case .saved: return L10n.tr("Zapamatováno")
+        case .saved: return chip.showsText ? L10n.f("Zapamatováno: %@", chip.text) : L10n.tr("Zapamatováno")
         case .forgotten: return L10n.f("Zapomenuto: %@", chip.text)
         case .updated: return L10n.f("Upraveno: %@", chip.text)
         }
