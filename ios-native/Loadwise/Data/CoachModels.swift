@@ -47,6 +47,8 @@ struct CoachMemoryChip: Identifiable, Equatable {
     let text: String
     var from: String? = nil
     var undone = false
+    /// A memory from the card's quick changes says what it remembered.
+    var showsText = false
 }
 
 /// What the coach read from "K obědu jsem měl kuře s rýží": the day and the
@@ -102,6 +104,24 @@ struct CoachAction: Decodable, Equatable, Identifiable {
     /// workout: the session the server prepared for the card, a ride or run
     /// (POST /app/api/workouts/generate) or the gym exercises (/gym/generate).
     var preview: Preview? = nil
+    /// workout: Kratší, Delší, Lehčí, Těžší and the days for Jiný den
+    /// (src/coach-quick-change.js); `quickChange` is the last one made.
+    var quick: Quick? = nil
+    var quickChange: String? = nil
+
+    struct Quick: Decodable, Equatable {
+        let shorter: Bool
+        let longer: Bool
+        let easier: Bool
+        let harder: Bool
+        let day: Bool
+        let days: [Day]
+
+        struct Day: Decodable, Equatable, Hashable {
+            let date: String
+            let fits: Bool
+        }
+    }
 
     struct Preview: Decodable, Equatable {
         var workout: LibraryWorkout? = nil
