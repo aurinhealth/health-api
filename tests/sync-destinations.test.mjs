@@ -72,8 +72,11 @@ test("a done activity: the gym's own start in the user's zone, noon without one"
   assert.equal(a.startLocal, "2026-10-10T18:05:00");
   assert.equal(a.startUtc, "2026-10-10T16:05:00.000Z");
   assert.equal(normalizeActivity({ ...activity, start: undefined }).startLocal, "2026-10-10T12:00:00");
+  // A workout after midnight stays on its own day in Google Health: the offset goes with it.
+  assert.deepEqual(googleExercise({ ...a, startUtc: "2026-10-23T23:17:00.000Z", minutes: 30 }).exercise.interval, { startTime: "2026-10-23T23:17:00.000Z", startUtcOffset: "7200s", endTime: "2026-10-23T23:47:00.000Z", endUtcOffset: "7200s" });
+  assert.equal(googleExercise({ ...a, startUtc: null, startLocal: "2026-10-10T12:00:00" }).exercise.interval.startTime, "2026-10-10T10:00:00.000Z");
   assert.throws(() => normalizeActivity({ ...activity, minutes: 0 }));
-  assert.deepEqual(googleExercise(a).exercise, { interval: { startTime: "2026-10-10T16:05:00.000Z", endTime: "2026-10-10T17:07:00.000Z" }, exerciseType: "STRENGTH_TRAINING", displayName: "Push", activeDuration: "3720s", notes: "Bench 4 × 8" });
+  assert.deepEqual(googleExercise(a).exercise, { interval: { startTime: "2026-10-10T16:05:00.000Z", startUtcOffset: "7200s", endTime: "2026-10-10T17:07:00.000Z", endUtcOffset: "7200s" }, exerciseType: "STRENGTH_TRAINING", displayName: "Push", activeDuration: "3720s", notes: "Bench 4 × 8" });
 });
 
 test("Intervals.icu gets the activity as a manual one, recorded; a retry updates it", async () => {
