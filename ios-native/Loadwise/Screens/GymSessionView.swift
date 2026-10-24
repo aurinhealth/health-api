@@ -532,6 +532,7 @@ struct TechniqueSheet: View {
     @State private var error: String?
     /// 0: the photo and how it's done, 1: the video.
     @State private var page = 0
+    @State private var writingNote = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -555,7 +556,9 @@ struct TechniqueSheet: View {
         }
         .presentationDetents([.large])
         .presentationBackground(Palette.background)
+        .sheet(isPresented: $writingNote) { ExerciseNoteSheet(exercise: exercise) }
         .task {
+            await ExerciseNotes.shared.load(api: model.api, demo: model.demo)
             guard !model.demo else { error = "V ukázce se technika nenačítá."; return }
             do { technique = try await model.api.gymTechnique(exercise: exercise) } catch { self.error = error.localizedDescription }
         }
@@ -567,6 +570,7 @@ struct TechniqueSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             if let t = technique {
                 photo
+                ownNote
                 if let muscles = t.muscles, !muscles.isEmpty {
                     Text(muscles.joined(separator: " · ")).font(Typo.small).foregroundStyle(Palette.muted)
                 }
@@ -579,6 +583,30 @@ struct TechniqueSheet: View {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust)
             } else {
                 ProgressView().frame(maxWidth: .infinity).padding(.top, 40)
+            }
+        }
+        .padding(.top, 6)
+    }
+
+    /// Moje poznámka: the athlete's note on the exercise, the pencil changes it.
+    private var ownNote: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SectionLabel(text: "Moje poznámka")
+            if let note = ExerciseNotes.shared.note(exercise) {
+                Button { writingNote = true } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "note.text").foregroundStyle(Palette.brown)
+                        Text(note).font(Typo.body).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "pencil").foregroundStyle(Palette.muted)
+                    }
+                    .padding(14)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(L10n.tr("Upravit poznámku"))
+            } else {
+                ExerciseNoteLine(note: nil) { writingNote = true }
             }
         }
         .padding(.top, 6)
@@ -656,6 +684,8 @@ struct AlternativesSheet: View {
     var choose: (String) -> Void
     /// The whole alternative (its estimated load), for a proposal not saved yet.
     var chooseAlternative: ((GymAlternative) -> Void)? = nil
+    /// Only the first few (Režim tréninku: three), each with its estimated load.
+    var limit: Int? = nil
     @State private var items: [GymAlternative] = []
     @State private var loading = true
     @State private var technique: String?
@@ -674,7 +704,7 @@ struct AlternativesSheet: View {
             }
             PageScroll {
                 VStack(spacing: 0) {
-                    ForEach(items) { alt in
+                    ForEach(limit.map { Array(items.prefix($0)) } ?? items) { alt in
                         Button {
                             choose(alt.name)
                             chooseAlternative?(alt)
@@ -686,7 +716,13 @@ struct AlternativesSheet: View {
                                     Text([alt.muscle, alt.station, alt.note].compactMap { $0 }.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
                                 }
                                 Spacer()
-                                Image(systemName: "arrow.triangle.swap").foregroundStyle(Palette.faint)
+                                if limit != nil {
+                                    if let kg = alt.kg, kg > 0 {
+                                        Text(GymCoach.shown(kg) + " " + Units.weightUnit).font(Typo.number(21)).foregroundStyle(Palette.ink)
+                                    }
+                                } else {
+                                    Image(systemName: "arrow.triangle.swap").foregroundStyle(Palette.faint)
+                                }
                             }
                             .padding(.vertical, 12)
                             .contentShape(Rectangle())

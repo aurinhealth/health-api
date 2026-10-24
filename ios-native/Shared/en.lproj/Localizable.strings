@@ -2841,3 +2841,11 @@
 "%d×" = "%d×";
 "Teď v katalogu" = "In the catalogue now";
 "Něco jiného" = "Something else";
+"Podle cviku" = "By exercise";
+"Hotové série zůstanou u cviku %@." = "The sets done stay with %@.";
+"Upravit poznámku" = "Edit the note";
+"Přidat poznámku ke cviku" = "Add a note to the exercise";
+"Třeba sedadlo 4, úzký úchop" = "e.g. seat 4, narrow grip";
+"Poznámka · %@" = "Note · %@";
+"Poznámku se nepodařilo uložit: %@" = "The note couldn't be saved: %@";
+"Moje poznámka" = "My note";

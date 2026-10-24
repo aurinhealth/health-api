@@ -21,7 +21,7 @@ struct TrainingModeView: View {
     @State private var intensityFor: SetRef?
     /// Sets whose letter was chosen here: shown solid, not as the plan's.
     @State private var picked: Set<Int> = []
-    @AppStorage("restSets") private var restSets = 90
+    @AppStorage("restSets") private var restSets = GymRestSettingsView.byExercise
     @AppStorage("restExercises") private var restExercises = 120
     @State private var restEnd: Date?
     @State private var restTotal = 90
@@ -37,6 +37,11 @@ struct TrainingModeView: View {
     @State private var zoneLows: [Double] = []
     @State private var technique: String?
     @State private var historyFor: String?
+    /// The exercise to swap ("Nahradit cvik"), its sets still to do.
+    @State private var swapping: String?
+    /// The exercise whose Moje poznámka is being written.
+    @State private var noteFor: String?
+    private var notes: ExerciseNotes { .shared }
     @State private var saving = false
     @State private var rating = false
     /// Dokončit trénink was tapped: the summary shows the totals.
@@ -199,6 +204,14 @@ struct TrainingModeView: View {
             NavigationStack { HeartRateSensorView() }
                 .presentationDetents([.medium, .large])
         }
+        .sheet(item: Binding(get: { swapping.map { Named(name: $0) } }, set: { swapping = $0?.name })) { item in
+            AlternativesSheet(date: date, exercise: item.name, inPlan: day?.exercises.map(\.name) ?? [],
+                              footnote: L10n.f("Hotové série zůstanou u cviku %@.", item.name), choose: { _ in },
+                              chooseAlternative: { alt in Task { await swapExercise(item.name, for: alt) } }, limit: 3)
+        }
+        .sheet(item: Binding(get: { noteFor.map { Named(name: $0) } }, set: { noteFor = $0?.name })) { item in
+            ExerciseNoteSheet(exercise: item.name)
+        }
         .sheet(isPresented: $editing) {
             if let day {
                 PlanEditorSheet(day: day, catalog: catalog, date: date, current: index,
@@ -261,10 +274,15 @@ struct TrainingModeView: View {
                 Text(exercise.name).font(Typo.sentence(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
+                if set != nil {
+                    CircleButton(systemImage: "arrow.triangle.swap", label: L10n.tr("Nahradit cvik")) { swapping = exercise.name }
+                }
                 CircleButton(systemImage: "chart.bar", label: L10n.tr("Historie cviku")) { historyFor = exercise.name }
                 CircleButton(systemImage: "info", label: L10n.tr("Technika")) { technique = exercise.name }
             }
             .padding(.top, 18)
+
+            ExerciseNoteLine(note: notes.note(exercise.name)) { noteFor = exercise.name }.padding(.top, 8)
 
             chips(day, exercise, set)
 
@@ -459,12 +477,16 @@ struct TrainingModeView: View {
                                 Text(next.name)
                                     .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
                                 Text(nextLoad(next)).font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
+                                ExerciseNoteLine(note: notes.note(next.name), compact: true).padding(.top, 2)
                             }
                             Spacer(minLength: 4)
                         }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    if next.sets.contains(where: { !$0.done }) {
+                        SmallInfoButton(label: "Nahradit cvik", systemImage: "arrow.triangle.swap") { swapping = next.name }
+                    }
                     SmallInfoButton { technique = next.name }
                     foldButton("next")
                 }
@@ -903,6 +925,7 @@ struct TrainingModeView: View {
         if model.demo { day = DemoData.gym; history = DemoGymHistory.history; loading = false; startAtFirstOpen(); restoreMinimized(); return }
         loading = true
         defer { loading = false }
+        Task { [api = model.api] in await ExerciseNotes.shared.load(api: api, demo: false) }
         do {
             day = try await model.gymDay(date: date)
             original = day
@@ -986,6 +1009,31 @@ struct TrainingModeView: View {
             self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
         }
         await loadMuscles(edited)
+    }
+
+    /// "Nahradit cvik": its sets still to do become the alternative, with
+    /// its estimated load; the done ones stay recorded under the old name.
+    /// A rest under way goes on.
+    private func swapExercise(_ name: String, for alt: GymAlternative) async {
+        guard var next = day else { return }
+        let rows = Set(next.exercises.filter { $0.name == name }.flatMap(\.sets).filter { !$0.done }.map(\.row))
+        let onScreen = next.exercises[safe: index]?.name == name
+        next.replace(exercise: name, with: alt.name, kg: alt.kg.flatMap { $0 > 0 ? GymCoach.kgText($0) : nil })
+        day = next
+        // The exercise on screen stays on screen, now as the alternative.
+        if onScreen, let at = next.exercises.firstIndex(where: { $0.sets.contains { rows.contains($0.row) } }) {
+            index = at
+            if let exercise = next.exercises[safe: at] { prefill(nextSet(exercise), in: exercise) }
+        }
+        syncActivity()
+        guard !model.demo else { return await loadMuscles(next) }
+        do {
+            try await model.saveGym(next, date: date)
+            error = nil
+        } catch {
+            self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
+        }
+        await loadMuscles(next)
     }
 
     /// An exercise added on the way (or the first one of an empty workout),
@@ -1282,7 +1330,7 @@ struct TrainingModeView: View {
         // A set ticked in the table before "Začít trénink" starts the workout too.
         if !started { Task { await start() } }
         // The last set of the exercise: on to the next one after a longer rest.
-        var rest = set.warmup ? 60 : restSets
+        var rest = set.warmup ? 60 : GymRestSettingsView.between(set, setting: restSets)
         let otherSide = set.side == "L" && next.exercises[safe: index]?.sets.contains { $0.number == set.number && $0.side == "P" && !$0.done } == true
         // A drop set after it: straight on with the lighter weight.
         let intoDrop = next.exercises[safe: index]?.sets.first(where: { $0.row > set.row && !$0.done })?.drop == true
@@ -1294,7 +1342,7 @@ struct TrainingModeView: View {
         } else if !set.warmup, let turn = Self.supersetTurn(next.exercises, from: index) {
             // A superset: A1, B1, A2, B2…, the rest only after each round.
             index = turn.index
-            rest = turn.rest == .none ? 0 : turn.rest == .round ? restSets : restExercises
+            rest = turn.rest == .none ? 0 : turn.rest == .round ? GymRestSettingsView.between(set, setting: restSets) : restExercises
         } else if let exercise = next.exercises[safe: index], exercise.sets.allSatisfy(\.done) {
             // On to the next exercise with sets left, after the longer rest.
             if let after = next.exercises.indices.first(where: { $0 > index && next.exercises[$0].sets.contains { !$0.done } }) {
