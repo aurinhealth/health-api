@@ -12,6 +12,7 @@
 import { L } from './lang.js';
 import { localToday } from "./user-time.js";
 import { isReviewAccount, REVIEW_AI_MONTHLY_LIMIT_USD } from "./app-review.js";
+import { addAiSpend } from "./ai-total.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
@@ -177,6 +178,8 @@ export async function recordAiUsage(env, { feature = null, model = null, usage =
     // An unknown model counts at the default model's price, so it cannot slip past the limit.
     const cost = usageCost(model, usage, webSearches) ?? usageCost("gpt-6-sol", usage, webSearches) ?? 0;
     const values = [feature, model, n(usage.input_tokens) || 0, n(usage.output_tokens) || 0, cost, cachedTokens(usage)];
+    // All users' total of the day (ai-total.js), the owner's included.
+    await addAiSpend(env, cost);
     if (slotId) {
       const settled = await env.DB.prepare("UPDATE ai_usage SET feature = ?, model = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, cached_tokens = ? WHERE id = ? AND user_id = ? AND model = 'pending'")
         .bind(...values, slotId, env.USER_ID).run();

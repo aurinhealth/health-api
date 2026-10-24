@@ -89,6 +89,10 @@
     "AI_MONTHLY_LIMIT_USD": "10",
     // A daily guard against abuse on the AI around the coach (food, plans, reviews); the coach chat is not in it.
     "AI_DAILY_LIMIT_USD": "1",
+    // All users together in a UTC day (src/ai-total.js): an e-mail to the owner past
+    // the alert; past the limit AI waits until the next day for everyone but the owner.
+    "AI_TOTAL_DAILY_ALERT_USD": "30",
+    "AI_TOTAL_DAILY_LIMIT_USD": "200",
     // The weekly allowance of messages to the coach (src/coach-allowance.js): per week,
     // extra ones to finish a conversation, and how many messages of a conversation
     // after a workout count as one. The trial will use 15 a week.
@@ -150,6 +154,8 @@
         "OPEN_SIGNUP": "true",
         "AI_MONTHLY_LIMIT_USD": "10",
         "AI_DAILY_LIMIT_USD": "1",
+        "AI_TOTAL_DAILY_ALERT_USD": "30",
+        "AI_TOTAL_DAILY_LIMIT_USD": "200",
         "COACH_WEEKLY_MESSAGES": "30",
         "COACH_EXTRA_MESSAGES": "2",
         "COACH_WORKOUT_CHAT_MESSAGES": "5",
