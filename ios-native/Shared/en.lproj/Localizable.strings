@@ -2978,6 +2978,19 @@
 "Jak na zítřejší %@?" = "How should I approach tomorrow's %@?";
 "Co sníst dnes večer?" = "What should I eat tonight?";
 
+/* Sound and vibration in Režim tréninku (GymSignals.swift) */
+"Zvuk a vibrace" = "Sound and vibration";
+"Vibrace" = "Vibration";
+"Zvuk" = "Sound";
+"Odpočet" = "Countdown";
+"Vypnuto" = "Off";
+"Poslední 3 s" = "Last 3 s";
+"Posledních %@ s" = "Last %@ s";
+"Konec pauzy, rozcvička a protažení." = "Rest end, warm-up and stretching.";
+"Signály" = "Signals";
+"Jen vibrace" = "Vibration only";
+"Vibrace a zvuk" = "Vibration and sound";
+"Ticho" = "Silent";
 /* Details: kapitálky above the title and the coach (2026-10-24) */
 "Trénink · %@" = "Training · %@";
 "Trénink · dnes" = "Training · today";

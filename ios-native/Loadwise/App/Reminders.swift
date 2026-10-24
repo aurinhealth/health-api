@@ -193,7 +193,7 @@ enum Reminders {
     }
 
     /// The end of a rest in Režim tréninku, so it sounds with the phone locked
-    /// too (in the app a vibration says it). nil cancels it.
+    /// too (in the app GymSignals says it). nil cancels it.
     /// The newest call wins: an older one still asking iOS (a rest skipped or
     /// extended meanwhile) plans nothing.
     @MainActor static func restEnds(at end: Date?) async {
@@ -208,7 +208,8 @@ enum Reminders {
         let content = UNMutableNotificationContent()
         content.title = L10n.tr("Konec pauzy")
         content.body = L10n.tr("Další série.")
-        content.sound = .default
+        // Ticho (Nastavení → Posilovna, the Vibrace button): no sound, which on iOS also means no vibration.
+        content.sound = GymSignals.vibration || GymSignals.sound ? .default : nil
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: end.timeIntervalSinceNow, repeats: false)
         try? await center.add(UNNotificationRequest(identifier: restId, content: content, trigger: trigger))
     }

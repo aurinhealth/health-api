@@ -637,7 +637,7 @@ export function overviewPage(request) {
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
       ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them, add or remove a set, swap an exercise when its machine is taken, keep your own note on how to set it up, and start.', 6000],
       ['training-set', 'tmTick', 380, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets.', 6000],
-      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, as long as the exercise needs, longer after squats than after curls. It stays on your lock screen and shows what comes next.', 13500],
+      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, as long as the exercise needs, longer after squats than after curls. It stays on your lock screen and shows what comes next. The last seconds count down with a vibration you feel even with the phone on the bench, or a tone if you like.', 13500],
       ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume and new records when you finish, saved to Apple Health. Then say how it went.', 6000]]],
     ['vyziva', 'Nutrition', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
       ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],

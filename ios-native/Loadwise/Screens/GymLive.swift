@@ -274,7 +274,7 @@ struct LiveGymView: View {
             let wait = end.timeIntervalSinceNow
             if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
             guard !Task.isCancelled, restEnd == end else { return }
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            GymSignals.play(.end)
             restEnd = nil
         }
     }
