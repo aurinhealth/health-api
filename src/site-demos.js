@@ -71,12 +71,17 @@ const AURIN = '<span class="lg au"><svg viewBox="6 10 88 80"><path d="M6 46A36 3
 const STATUS = '<div class="sb"><span>9:41</span><span class="sbi"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx=".7"/><rect x="5" y="5.5" width="3" height="6.5" rx=".7"/><rect x="10" y="3" width="3" height="9" rx=".7"/><rect x="15" y="0" width="3" height="12" rx=".7"/></svg><svg viewBox="0 0 24 12"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor"/><rect x="2" y="2" width="16" height="8" rx="1.8"/><rect x="22" y="4" width="1.5" height="4" rx=".7"/></svg></span></div>';
 
 // ---- Sleep (SleepPlanner.swift, HealthDetails.swift) ----
-// The night: stages in the app's indigo shades, the hypnogram drawing itself, the length counting up.
+// The night: stages in the app's indigo shades, the stages through the night one row each (Hypnogram), the
+// length counting up. NIGHT is the sample night's segments (DemoData.night): stage, start, end in minutes.
+const NIGHT = [['l', 0, 12], ['d', 12, 40], ['l', 40, 62], ['r', 62, 74], ['a', 74, 77], ['l', 77, 100], ['d', 100, 130],
+  ['l', 130, 158], ['r', 158, 178], ['l', 178, 210], ['d', 210, 228], ['l', 228, 262], ['r', 262, 284], ['a', 284, 290],
+  ['l', 290, 330], ['d', 330, 337], ['l', 337, 370], ['r', 370, 400], ['a', 400, 405], ['l', 405, 436], ['r', 436, 446], ['a', 446, 449]];
 const sleepNight = `<div class="dm pad">
 <div class="sl">Sleep · Thursday night</div>
 <div class="row base"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="pill ind"${at('1300')}>score 82</span></div>
-<svg class="hyp" viewBox="0 0 340 70" aria-hidden="true"><path pathLength="1"${at('300')} d="M2 20 H22 V34 H48 V58 H86 V34 H110 V8 H126 V34 H150 V58 H176 V34 H204 V8 H226 V34 H252 V46 H262 V34 H286 V8 H312 V20 H338"/></svg>
-<div class="stg">${[['Deep', '1:23', 19, 'd'], ['REM', '1:34', 22, 'r'], ['Light', '4:15', 59, 'l'], ['Awake', '0:17', 4, 'a']].map(([k, v, p, c], i) => `<div class="sr"><span>${k}</span><i class="bar"><b class="${c}" style="--w:${p}%"${at(String(900 + i * 220))}></b></i><span class="num">${v}</span><span class="mut">${p} %</span></div>`).join('')}</div>
+<div class="hg" aria-hidden="true"><div class="hgl"><span>Awake</span><span>REM</span><span>Light</span><span>Deep</span></div><div class="hgt">${NIGHT.map(([t, s, e], i) => `<i class="${t}" style="left:${(s / 449 * 100).toFixed(2)}%;width:${Math.max(0.5, (e - s) / 449 * 100).toFixed(2)}%"${at(String(300 + i * 60))}></i>`).join('')}</div></div>
+<div class="hgx" aria-hidden="true"><span>11:48 PM</span><span>7:02 AM</span></div>
+<div class="stg">${[['Deep', '1:23', 83, '19 %', 'd'], ['REM', '1:34', 94, '22 %', 'r'], ['Light', '4:15', 255, '59 %', 'l'], ['Awake', '0:17', 17, '3×', 'a']].map(([k, v, m, p, c], i) => `<div class="sr"><span>${k}</span><i class="bar"><b class="${c}" style="--w:${(m / 255 * 100).toFixed(1)}%"${at(String(900 + i * 220))}></b></i><span class="num">${v}</span><span class="mut">${p}</span></div>`).join('')}</div>
 </div>`;
 
 // "Why 8 h 30": the need for tonight built up row by row.
@@ -375,13 +380,13 @@ export const demoCss = `
 .wait{transition:opacity .45s ease,transform .55s cubic-bezier(.16,1,.3,1)}
 
 /* Sleep. */
-.hyp{display:block;width:100%;height:62px;margin:10px 0 6px}
-.hyp path{fill:none;stroke:var(--indigo);stroke-width:2.2;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:0}
-.js .hyp path{opacity:1!important;transform:none!important;stroke-dashoffset:1;transition:stroke-dashoffset 1.8s ease}.js .hyp path.in{stroke-dashoffset:0}
+.hg{display:grid;grid-template-columns:44px 1fr;gap:6px;margin:12px 0 2px}.hgl{display:grid;grid-template-rows:repeat(4,18px);font-size:11px;color:var(--muted);align-items:center}
+.hgt{position:relative;height:72px}.hgt i{position:absolute;height:13px;border-radius:3px}.hgt .a{top:2.5px;background:#E0A46A}.hgt .r{top:20.5px;background:#7C74E8}.hgt .l{top:38.5px;background:#A9B8EC}.hgt .d{top:56.5px;background:#3B3A99}
+.hgx{display:flex;justify-content:space-between;margin:0 0 12px 50px;font-size:11px;color:var(--faint,var(--muted))}
 .stg{display:grid;gap:7px}.sr{display:grid;grid-template-columns:52px 1fr 40px 38px;align-items:center;gap:8px;font-size:13.5px}.sr .num{font-size:17px;text-align:right}.sr .mut{font-size:12px;text-align:right}
 .bar{display:block;height:7px;border-radius:9px;background:var(--track);overflow:hidden}.bar b{display:block;height:100%;width:var(--w);border-radius:9px;transition:width 1s cubic-bezier(.16,1,.3,1)!important}
 .js .bar b:not(.in){opacity:1!important;transform:none!important;width:0}
-.bar .d{background:var(--indigo)}.bar .r{background:color-mix(in srgb,var(--indigo) 70%,#fff)}.bar .l{background:color-mix(in srgb,var(--indigo) 42%,#fff)}.bar .a{background:var(--amber-bar)}
+.bar .d{background:#3B3A99}.bar .r{background:#7C74E8}.bar .l{background:#A9B8EC}.bar .a{background:#E0A46A}
 .tot{display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}.tot .sent{font-size:19px}.tot .num{font-size:30px;color:var(--indigo)}
 .dialbox{padding-bottom:12px}
 .dial{position:relative;width:250px;height:250px;margin:0 auto;touch-action:none}

@@ -496,7 +496,7 @@ struct AppTour: View {
         case .training: TrainingContent(training: DemoData.training).padding(.top, 54)
         case .food: FoodContent(food: DemoData.food).padding(.top, 54)
         case .health: HealthContent(health: DemoData.health).padding(.horizontal, 24).padding(.top, 70)
-        case .sleep: detail { SleepDetailContent(health: DemoData.health, detail: nil) }
+        case .sleep: detail { SleepDetailContent(health: DemoData.health, detail: DemoData.night) }
         }
     }
 

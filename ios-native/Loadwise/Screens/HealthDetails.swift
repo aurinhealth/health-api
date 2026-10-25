@@ -13,7 +13,8 @@ struct SleepDetailView: View {
             SleepDetailContent(health: health, detail: detail)
         }
         .task {
-            guard !model.demo, detail == nil, health.sleep.night != nil else { return }
+            guard detail == nil, health.sleep.night != nil else { return }
+            if model.demo { detail = DemoData.night; return }
             detail = try? await model.api.night(date: health.date)
         }
     }
