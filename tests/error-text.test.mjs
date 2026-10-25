@@ -25,3 +25,23 @@ test("texts written for the user and successful answers pass unchanged", async (
   assert.equal(await withPlainErrors(request(), html), html);
   assert.equal(technicalText("Pro dnešek toho bylo s AI hodně. Pokračovat můžeš zítra."), false);
 });
+
+test("the user databases' guards, a missing secret, a broken body and runtime errors stay in the log", async () => {
+  for (const message of [
+    "A query cannot join central and user databases or the food catalogue",
+    "A batch must belong to one database",
+    "A routed database cannot be dumped",
+    "dump is not available on a user-scoped database",
+    "A user id is required for database access",
+    "OWNER_EMAIL is not configured",
+    "Unexpected token 'x', \"xx\" is not valid JSON",
+    "Unexpected end of JSON input",
+    "Too many subrequests.",
+    "Network connection lost.",
+    "internal error; reference = 0123abcd",
+  ]) {
+    const response = await withPlainErrors(request("en"), Response.json({ message }, { status: 400 }));
+    assert.equal((await response.json()).message, "Something went wrong. Try again in a moment.", message);
+  }
+  for (const text of ["Zapsat jde jen dnešek a dny před ním.", "Only today and earlier days can be logged.", "Rides and runs are planned from My workouts.", "Trénink jde naplánovat jen na dnešek nebo později."]) assert.equal(technicalText(text), false, text);
+});
