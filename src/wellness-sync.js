@@ -28,7 +28,7 @@ const DAILY = {
   "daily-vo2-max": "vo2max",
   "body-fat": "bodyFat"
 };
-const ROUND = { restingHR: 0, hrv: 1, spO2: 1, respiration: 1, vo2max: 1, bodyFat: 1, steps: 0, sleepSecs: 0, avgSleepingHR: 0 };
+const ROUND = { restingHR: 0, hrv: 1, hrvSDNN: 1, spO2: 1, respiration: 1, vo2max: 1, bodyFat: 1, steps: 0, sleepSecs: 0, avgSleepingHR: 0 };
 const TOLERANCE = { steps: 1, sleepSecs: 60 };
 
 const round = (field, v) => { const m = 10 ** ROUND[field]; return Math.round(Number(v) * m) / m; };
@@ -40,10 +40,12 @@ export async function googleWellness(db, userId, oldest, sleepSessions = []) {
   const days = {};
   const put = (day, field, value) => { if (Number.isFinite(Number(value)) && Number(value) > 0) (days[day] ||= {})[field] = round(field, value); };
   const types = Object.keys(DAILY);
-  const rows = (await db.prepare(`SELECT data_type, sample_time, value_numeric FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables', 'google-sources', 'apple-health')
+  const rows = (await db.prepare(`SELECT data_type, sample_time, value_numeric, payload_json FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables', 'google-sources', 'apple-health')
     AND data_type IN (${types.map(() => "?").join(", ")}) AND value_numeric IS NOT NULL AND sample_time >= ? AND (record_role IS NULL OR record_role != 'duplicate') ORDER BY sample_time`)
     .bind(userId, ...types, oldest).all()).results || [];
-  for (const r of rows) put(localDate(r.sample_time), DAILY[r.data_type], r.value_numeric);
+  // Intervals.icu's hrv is rMSSD; Apple Health's own HRV is SDNN, which has a field of its own.
+  const field = r => r.data_type === "daily-heart-rate-variability" && /"metric":"sdnn"/.test(String(r.payload_json || "")) ? "hrvSDNN" : DAILY[r.data_type];
+  for (const r of rows) put(localDate(r.sample_time), field(r), r.value_numeric);
   const steps = (await db.prepare(`SELECT start_time, value_numeric FROM health_datapoints WHERE user_id = ? AND source_family IN ('google-wearables','apple-health') AND data_type = 'steps'
     AND record_role = 'primary' AND start_time >= ?`).bind(userId, oldest).all()).results || [];
   const stepsPerDay = {};

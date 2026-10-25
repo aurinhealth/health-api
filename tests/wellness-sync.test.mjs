@@ -76,3 +76,15 @@ test("Synchronizace: only the chosen health data goes to Intervals.icu", async (
   await saveSyncPrefs(d, 7, "intervals", { health: ["weight"] });
   assert.equal((await syncWellnessToIntervals(env, { fetchImpl, sleepSessions: async () => sleep })).reason, "off");
 });
+
+test("Apple Health's SDNN goes to Intervals.icu's hrvSDNN, rMSSD stays hrv", async () => {
+  const d = db();
+  const add = (date, value, metric) => d.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, sample_time, value_numeric, payload_json) VALUES (7, 'apple-health', 'daily-heart-rate-variability', ?, ?, ?, ?)")
+    .run("apple:hrv:" + date, date, value, JSON.stringify({ dailyHeartRateVariability: { date: {}, averageHeartRateVariabilityMilliseconds: value, ...(metric ? { metric } : {}) }, source: "apple-health" }));
+  add("2026-10-02", 48.2, "sdnn");
+  add("2026-10-03", 61.5, "rmssd");
+  const days = await googleWellness(d, 7, "2026-09-25", []);
+  assert.deepEqual(days["2026-10-02"], { hrvSDNN: 48.2 });
+  assert.deepEqual(days["2026-10-03"], { hrv: 61.5 });
+  assert.equal(days["2026-10-01"].hrv, 64.4, "Google's HRV is rMSSD");
+});
