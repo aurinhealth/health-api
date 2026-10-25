@@ -34,7 +34,7 @@ struct FoodProductEditor: View {
             VStack(alignment: .leading, spacing: 22) {
                 ZStack {
                     Text("Upravit produkt").font(.headline).foregroundStyle(Palette.ink)
-                    HStack { CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }; Spacer() }
+                    HStack { BackSlot { dismiss() }; Spacer() }
                 }
                 if !product.perPortion {
                     SettingsGroup(title: "Porce") {
@@ -75,6 +75,7 @@ struct FoodProductEditor: View {
             .padding(24)
         }
         .background(Palette.background.ignoresSafeArea())
+        .floatingBack(title: "Upravit produkt") { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear(perform: fill)
     }

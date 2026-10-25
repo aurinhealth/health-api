@@ -59,7 +59,7 @@ struct DetailScreen<Content: View>: View {
                     content
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 16)
+                .padding(.top, 24)
                 .padding(.bottom, 100)
             }
         }
