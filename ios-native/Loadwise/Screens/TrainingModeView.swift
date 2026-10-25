@@ -220,7 +220,7 @@ struct TrainingModeView: View {
         // "Vybrat jiný cvik": any exercise from the catalog takes its sets still to do.
         .sheet(item: Binding(get: { replacing.map { Named(name: $0) } }, set: { replacing = $0?.name })) { item in
             GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? []),
-                              title: "Vybrat jiný cvik", replaces: true) { name in
+                              title: "Vybrat jiný cvik", eyebrow: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(item.name))) { name in
                 let kg = GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name }).work.first?.kg
                 let alt = GymAlternative(name: name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil, kg: kg)
                 Task { await swapExercise(item.name, for: alt) }

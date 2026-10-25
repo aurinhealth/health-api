@@ -2870,6 +2870,7 @@
 "Podle cviku" = "By exercise";
 "Hotové série zůstanou u cviku %@." = "Sets you’ve done stay with %@.";
 "Vybrat jiný cvik" = "Choose another exercise";
+"Místo cviku %@" = "Instead of %@";
 "Zbývá %@ série" = "%@ set left";
 "Zbývají %@ série" = "%@ sets left";
 "Zbývá %@ sérií" = "%@ sets left";

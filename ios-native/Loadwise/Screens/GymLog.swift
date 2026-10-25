@@ -510,7 +510,9 @@ struct GymCoachLine: View {
 // MARK: - Adding an exercise
 
 /// Search the exercises: the recent ones first with how they went last time
-/// ("minule 82,5 kg × 6"), the catalog while searching.
+/// ("minule 82,5 kg × 6"), the catalog while searching or with a muscle
+/// picked. Cards like Nahradit cvik's; "Vybrat jiný cvik" says over the title
+/// which exercise the pick replaces.
 struct GymExerciseSearch: View {
     @Environment(\.dismiss) private var dismiss
     let date: String
@@ -519,9 +521,11 @@ struct GymExerciseSearch: View {
     let used: Set<String>
     /// "Vybrat jiný cvik" in Režim tréninku: the pick takes the place of an exercise.
     var title = "Přidat cvik"
-    var replaces = false
+    /// Over the title: "Místo cviku Cable rear delt fly".
+    var eyebrow: String? = nil
     let pick: (String) -> Void
     @State private var query = ""
+    @State private var muscle: String?
     @State private var technique: String?
 
     struct Item: Identifiable {
@@ -532,22 +536,23 @@ struct GymExerciseSearch: View {
 
     private var items: [Item] {
         let words = ExerciseCatalog.fold(query).split(separator: " ").map(String.init)
-        let matches: (String) -> Bool = { text in
-            let folded = ExerciseCatalog.fold(text)
+        let matches: (String) -> Bool = { name in
+            let entry = catalog.first { $0.name == name }
+            if let muscle, !(entry.map { ExerciseCatalog.works($0, muscle) } ?? false) { return false }
+            let folded = ExerciseCatalog.fold([name, entry?.muscle ?? "", entry?.station ?? ""].joined(separator: " "))
             return words.allSatisfy { folded.contains($0) }
         }
         var out: [Item] = []
         var seen = Set<String>()
         for exercise in history.recent(before: date) {
-            let entry = catalog.first { $0.name == exercise.name }
-            guard !seen.contains(exercise.name), matches([exercise.name, entry?.muscle ?? "", entry?.station ?? ""].joined(separator: " ")),
+            guard !seen.contains(exercise.name), matches(exercise.name),
                   let last = exercise.sessions.first(where: { $0.date < date }) else { continue }
             out.append(Item(name: exercise.name, caption: GymCoach.lastText(last)))
             seen.insert(exercise.name)
         }
-        if !words.isEmpty || out.isEmpty {
+        if !words.isEmpty || muscle != nil || out.isEmpty {
             for entry in catalog where !seen.contains(entry.name) && entry.fits != false {
-                guard matches([entry.name, entry.muscle ?? "", entry.station ?? ""].joined(separator: " ")) else { continue }
+                guard matches(entry.name) else { continue }
                 out.append(Item(name: entry.name, caption: [entry.muscle, entry.station].compactMap { $0?.nilIfBlank }.joined(separator: " · ")))
                 seen.insert(entry.name)
             }
@@ -556,65 +561,116 @@ struct GymExerciseSearch: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(L10n.tr(title)).font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
-                Spacer()
-                Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
-            }
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
-                TextField("Hledat cvik nebo stroj", text: $query)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 42)
-            .background(Palette.track, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            if query.isEmpty && !history.recent(before: date).isEmpty {
-                SectionLabel(text: "Naposledy")
-            }
-            PageScroll {
-                LazyVStack(spacing: 0) {
-                    ForEach(items) { (item: Item) in
-                        HStack(spacing: 12) {
-                            Button {
-                                pick(item.name)
-                                dismiss()
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "dumbbell.fill").font(.system(size: 13)).foregroundStyle(Palette.muted)
-                                        .frame(width: 34, height: 34).background(Palette.track, in: Circle())
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(item.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                                        if !item.caption.isEmpty {
-                                            Text(item.caption).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                                        }
-                                    }
-                                    Spacer(minLength: 8)
-                                    if used.contains(item.name) { Text("v tréninku").font(Typo.caption).foregroundStyle(Palette.faint) }
-                                    Image(systemName: replaces ? "arrow.triangle.swap" : "plus").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.amberBar)
-                                }
-                                .padding(.vertical, 10)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            ExerciseInfoButton(name: item.name) { technique = item.name }
-                        }
-                        .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
-                    }
-                    if items.isEmpty {
-                        Text("Nic se nenašlo.").font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 20)
-                    }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 8) {
+                header
+                searchField.padding(.top, 8)
+                chips.padding(.top, 4)
+                if query.isEmpty && muscle == nil && !history.recent(before: date).isEmpty {
+                    SectionLabel(text: "Naposledy").padding(.horizontal, 4).padding(.top, 8)
+                }
+                ForEach(items) { (item: Item) in
+                    card(item)
+                }
+                if items.isEmpty {
+                    Text("Nic se nenašlo.").font(Typo.small).foregroundStyle(Palette.muted).padding(.top, 20)
+                        .frame(maxWidth: .infinity)
                 }
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 20)
         }
-        .padding(24)
+        .scrollDismissesKeyboard(.interactively)
+        .background(alignment: .top) {
+            RadialGradient(colors: [Palette.amberSoft, Palette.background.opacity(0)], center: .top, startRadius: 0, endRadius: 320)
+                .frame(height: 260).ignoresSafeArea().allowsHitTesting(false)
+        }
         .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
         .presentationBackground(Palette.background)
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
             TechniqueSheet(exercise: item.name)
         }
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                if let eyebrow { SectionLabel(text: eyebrow) }
+                Text(L10n.tr(title)).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            CircleButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
+            TextField("Hledat cvik nebo stroj", text: $query)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 44)
+        .background(Palette.track, in: Capsule())
+    }
+
+    private var chips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip(L10n.tr("Vše"), muscle == nil) { muscle = nil }
+                ForEach(BodyFigure.muscles.indices, id: \.self) { i in
+                    let id = BodyFigure.muscles[i].id
+                    chip(BodyFigure.label(id), muscle == id) { muscle = muscle == id ? nil : id }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.horizontal, -20)
+    }
+
+    private func chip(_ text: String, _ on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(verbatim: text).font(.footnote.weight(.medium))
+                .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                .padding(.horizontal, 12).frame(height: 30)
+                .background(on ? Palette.button : Palette.track, in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func card(_ item: Item) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                pick(item.name)
+                dismiss()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "dumbbell.fill").font(.system(size: 15)).foregroundStyle(Palette.amber)
+                        .frame(width: 40, height: 40).background(Palette.amberSoft, in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: ExerciseCatalog.shownName(item.name))
+                            .font(Typo.bodyStrong.weight(.semibold)).foregroundStyle(Palette.ink)
+                            .multilineTextAlignment(.leading)
+                        let caption = [item.caption.nilIfBlank, used.contains(item.name) ? L10n.tr("v tréninku") : nil]
+                            .compactMap { $0 }.joined(separator: " · ")
+                        if !caption.isEmpty {
+                            Text(verbatim: caption).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 4)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            SmallInfoButton(label: L10n.f("Jak na %@", item.name)) { technique = item.name }
+        }
+        .padding(.leading, 12).padding(.trailing, 12).padding(.vertical, 10)
+        .cardSurface(cornerRadius: 20)
     }
 }
 
