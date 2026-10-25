@@ -26,9 +26,10 @@ import SwiftUI
         case end
     }
 
-    static func play(_ signal: Signal) {
+    /// `withSound` false: the tones are already planned (`planRest`).
+    static func play(_ signal: Signal, withSound: Bool = true) {
         if vibration { vibrate(signal) }
-        if sound { beep(signal) }
+        if sound, withSound { beep(signal) }
     }
 
     /// A tick in the countdown when `left` seconds remain.
@@ -92,7 +93,8 @@ import SwiftUI
         case .end: [(0, 1_320, 0.3), (0.5, 1_320, 0.3)]
         }
         let session = AVAudioSession.sharedInstance()
-        guard let format, let buffer = buffer(tones, format: format) else { return }
+        // A planned rest is playing: its own tones say it.
+        guard !resting, let format, let buffer = buffer(tones, format: format) else { return }
         do {
             try session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
             try session.setActive(true)
@@ -111,12 +113,72 @@ import SwiftUI
         let call = release
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
-            guard call == release else { return }
+            guard call == release, !resting else { return }
             player.stop()
             audio.stop()
             try? session.setActive(false, options: .notifyOthersOnDeactivation)
         }
     }
+
+    /// The rest's countdown and end planned on the sound's own clock, so they
+    /// sound with the phone locked too (the app may play audio in the
+    /// background). Over the music without making it quieter: a rest is long.
+    /// False when nothing was planned (sound off): the caller sounds the end itself.
+    @discardableResult
+    static func planRest(until end: Date) -> Bool {
+        stopRest()
+        let left = end.timeIntervalSinceNow
+        guard sound, left > 0.3, let format else { return false }
+        var tones: [(at: Double, hz: Double, length: Double)] = []
+        for second in stride(from: countdown, through: 1, by: -1) where Double(second) < left {
+            tones.append((left - Double(second), 880, 0.08))
+        }
+        tones += [(left, 1_320, 0.3), (left + 0.5, 1_320, 0.3)]
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
+            try session.setActive(true)
+            if !audio.attachedNodes.contains(player) {
+                audio.attach(player)
+                audio.connect(player, to: audio.mainMixerNode, format: format)
+            }
+            if !audio.isRunning { try audio.start() }
+        } catch {
+            return false
+        }
+        player.stop()
+        for tone in tones {
+            // Each tone alone, at its time from the start of the player.
+            guard let buffer = buffer([(0, tone.hz, tone.length)], format: format) else { continue }
+            player.scheduleBuffer(buffer, at: AVAudioTime(sampleTime: AVAudioFramePosition(tone.at * format.sampleRate), atRate: format.sampleRate))
+        }
+        player.play()
+        resting = true
+        plannedEnd = end
+        release += 1
+        let call = release
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(left + 2))
+            guard call == release else { return }
+            stopRest()
+        }
+        return true
+    }
+
+    /// The rest skipped or changed: its planned tones stop. With `end`, only
+    /// that rest's (a newer rest may already be planned).
+    static func stopRest(_ end: Date? = nil) {
+        guard resting, end == nil || end == plannedEnd else { return }
+        resting = false
+        plannedEnd = nil
+        release += 1
+        player.stop()
+        audio.stop()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    private static var resting = false
+    private static var plannedEnd: Date?
 
     /// The tones with the silence between them, as one sound.
     private static func buffer(_ tones: [(at: Double, hz: Double, length: Double)], format: AVAudioFormat) -> AVAudioPCMBuffer? {

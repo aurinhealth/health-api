@@ -114,6 +114,8 @@ targets:
         UIBackgroundModes:
           - fetch
           - bluetooth-central
+          # The rest's countdown and end tones with the phone locked (GymSignals.planRest).
+          - audio
         BGTaskSchedulerPermittedIdentifiers:
           - eu.petrfitnessdata.loadwise.native.refresh
         # Sdílet → Instagram Stories (ShareExport.instagram) with the Meta app ID.

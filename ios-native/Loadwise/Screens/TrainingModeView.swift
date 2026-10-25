@@ -597,16 +597,22 @@ struct TrainingModeView: View {
             }
         }
         .task(id: end) {
+            // The tones are planned ahead, so they sound with the phone locked too.
+            let planned = GymSignals.planRest(until: end)
             // Each whole second to the end: the last ones tick (Nastavení → Posilovna).
             while true {
                 let left = end.timeIntervalSinceNow
                 let second = max(0, left.rounded(.up) - 1)
                 if left > second { try? await Task.sleep(for: .seconds(left - second)) }
-                guard !Task.isCancelled, restEnd == end else { return }
+                guard !Task.isCancelled, restEnd == end else {
+                    // Skipped or changed: its tones stop (a new end plans its own).
+                    if restEnd != end { GymSignals.stopRest(end) }
+                    return
+                }
                 if second == 0 { break }
-                if GymSignals.counts(Int(second)) { GymSignals.play(.tick) }
+                if GymSignals.counts(Int(second)) { GymSignals.play(.tick, withSound: !planned) }
             }
-            GymSignals.play(.end)
+            GymSignals.play(.end, withSound: !planned)
             // The rest is over: the screen turns to the set.
             restEnd = nil
         }
