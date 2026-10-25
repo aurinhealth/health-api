@@ -700,6 +700,7 @@ struct ActionCard: View {
                 .buttonStyle(.plain)
                 .disabled(adjusting != nil)
                 if let quick = action.quick { quickChoices(quick) }
+                if adjusting != nil { CoachThinkingLine(text: L10n.tr("Kouč upravuje trénink…")).padding(.top, 2) }
                 if let failure {
                     Text(failure).font(Typo.caption).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
                 }
@@ -959,6 +960,20 @@ struct CoachThinking: View {
         .cardSurface(cornerRadius: 18)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.trailing, 40)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text)
+    }
+}
+
+/// The same inside a card that has its own background: dots and the text, no bubble.
+struct CoachThinkingLine: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            CoachDots()
+            Text(text).font(Typo.small).foregroundStyle(Palette.muted)
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(text)
     }

@@ -311,6 +311,7 @@ struct WeekPlanView: View {
             }
             .disabled(working || open == 0 || model.demo)
             .padding(.top, 20)
+            if working { CoachThinking(text: L10n.tr("Kouč sestavuje tréninky…")).padding(.top, 12) }
         }
     }
 
@@ -433,6 +434,7 @@ struct WeekPlanView: View {
             }
             .disabled(working || model.demo)
             .padding(.top, 18)
+            if working { CoachThinking(text: L10n.tr("Kouč navrhuje týden…")).padding(.top, 12) }
         }
     }
 
@@ -496,6 +498,7 @@ struct WeekPlanView: View {
                 .buttonStyle(.plain)
                 .disabled(working || saving || correction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.demo)
             }
+            if working { CoachThinking(text: L10n.tr("Kouč upravuje návrh…")).padding(.top, 10) }
         }
     }
 
@@ -820,7 +823,7 @@ struct WeekSessionDetailView: View {
                 }
 
                 if busy || session.status == .building {
-                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, 30)
+                    CoachThinking(text: L10n.tr("Kouč upravuje trénink…")).padding(.vertical, 12)
                 } else if let gym = session.gym {
                     Card {
                         ForEach(Array(gym.exercises.enumerated()), id: \.offset) { _, e in

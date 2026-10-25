@@ -317,12 +317,7 @@ struct WorkoutLibrarySection: View {
                     SecondaryButton(title: "Jiný návrh") { Task { await compose(variant: composeVariant + 1) } }
                 }
             } else {
-                Card {
-                    Label("Skládám trénink podle tvého výběru…", systemImage: "sparkles")
-                        .font(Typo.small).foregroundStyle(Palette.secondary)
-                    RoundedRectangle(cornerRadius: 6).fill(Palette.ink.opacity(0.08)).frame(height: 36)
-                }
-                .accessibilityLabel(Text("Skládám trénink podle tvého výběru…"))
+                CoachThinking(text: L10n.tr("Skládám trénink podle tvého výběru…"))
             }
         }
         .padding(.top, 24)

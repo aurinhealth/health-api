@@ -1158,11 +1158,7 @@ struct FeedbackSheet: View {
 
     @ViewBuilder private var coachNote: some View {
         if waiting {
-            HStack(spacing: 10) {
-                ProgressView()
-                Text("Trenér píše zpětnou vazbu…").font(Typo.small).foregroundStyle(Palette.muted)
-            }
-            .padding(.top, 8)
+            CoachThinking(text: L10n.tr("Trenér píše zpětnou vazbu…")).padding(.top, 8)
         } else if let text = reflection?.text {
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel(text: "Trenér")

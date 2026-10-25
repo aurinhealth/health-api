@@ -72,7 +72,9 @@ struct AddFoodSheet: View {
                     }
                     .padding(.top, 18)
                     if readingPhoto {
-                        HStack(spacing: 8) { ProgressView(); Text("Čtu fotku…").font(Typo.small).foregroundStyle(Palette.muted) }.padding(.top, 12)
+                        CoachThinking(text: L10n.tr("AI čte fotku…")).padding(.top, 12)
+                    } else if lookingUp {
+                        CoachThinking(text: L10n.tr("AI dohledává potravinu…")).padding(.top, 12)
                     }
 
                     if let message {
@@ -101,7 +103,7 @@ struct AddFoodSheet: View {
                                             Text("Dohledat „\(query)“ pomocí AI").font(Typo.caption).foregroundStyle(Palette.muted)
                                         }
                                         Spacer()
-                                        if lookingUp { ProgressView() } else { Image(systemName: "sparkles").foregroundStyle(Palette.green) }
+                                        if lookingUp { CoachDots() } else { Image(systemName: "sparkles").foregroundStyle(Palette.green) }
                                     }
                                     .padding(.vertical, 14)
                                     .contentShape(Rectangle())

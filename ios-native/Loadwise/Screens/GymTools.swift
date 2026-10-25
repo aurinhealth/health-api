@@ -402,6 +402,7 @@ struct GymBuilderView: View {
             }
             .disabled(busy != nil || model.demo || (focus == "muscles" && muscles.isEmpty))
             .padding(.top, 22)
+            if busy == "preview" { CoachThinking(text: L10n.tr("Kouč sestavuje trénink…")).padding(.top, 12) }
             if model.demo { Text("V ukázce se trénink nesestavuje.").font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 8) }
         }
     }
@@ -438,6 +439,7 @@ struct GymBuilderView: View {
             }
             .disabled(busy != nil || model.demo)
             .padding(.top, 22)
+            if busy == "preview" { CoachThinking(text: L10n.tr("Kouč sestavuje trénink…")).padding(.top, 12) }
             if model.demo { Text("V ukázce se trénink neplánuje.").font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 8) }
         }
     }
@@ -489,18 +491,22 @@ struct GymBuilderView: View {
                         .font(.body)
                         .padding(.horizontal, 14).padding(.vertical, 11)
                         .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .opacity(busy == "adjust" ? 0.45 : 1)
                     Button { Task { await adjust() } } label: {
-                        Group { if busy == "adjust" { ProgressView() } else { Image(systemName: "arrow.up") } }
+                        Image(systemName: "arrow.up")
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(Palette.onButton)
                             .frame(width: 44, height: 44)
                             .background(Palette.button, in: Circle())
                     }
                     .disabled(wish.trimmingCharacters(in: .whitespaces).isEmpty || busy != nil)
+                    .opacity(busy == "adjust" ? 0.35 : 1)
                     .accessibilityLabel("Upravit trénink")
                 }
                 .padding(.top, 10)
-                if let answer { Text(answer).font(Typo.small).foregroundStyle(Palette.green).fixedSize(horizontal: false, vertical: true).padding(.top, 8) }
+                // What the coach is doing until his answer comes; the buttons below wait dimmed.
+                if busy == "adjust" { CoachThinking(text: L10n.tr("Kouč upravuje trénink…")).padding(.top, 12) }
+                if let answer, busy != "adjust" { Text(answer).font(Typo.small).foregroundStyle(Palette.green).fixedSize(horizontal: false, vertical: true).padding(.top, 8) }
 
                 PrimaryButton(title: busy == "confirm" ? "Ukládám…" : "Uložit do plánu", systemImage: "checkmark", busy: busy == "confirm") {
                     Task { await confirm() }
@@ -514,6 +520,8 @@ struct GymBuilderView: View {
                     }
                     .disabled(busy != nil)
                     .padding(.top, 10)
+                    // "Jiný návrh": the coach builds another one.
+                    if busy == "preview" { CoachThinking(text: L10n.tr("Kouč sestavuje trénink…")).padding(.top, 12) }
                 } else {
                     SecondaryButton(title: "Změnit den", systemImage: "calendar") { proposal = nil; answer = nil }
                         .disabled(busy != nil)
