@@ -314,10 +314,10 @@ const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
 <div class="msgs">
 <div class="u"${at('300')}>How should I train today?</div>
-<div class="dots"${at('1100 2300-in')}><i></i><i></i><i></i></div>
+<div class="dots"${at('1100 2300-in')}><i></i><i></i><i></i><span>Coach is thinking…</span></div>
 <div class="c1"${at('2300')}><span data-type="2300,2200">Readiness is 78 and HRV is above normal for the third day. Your legs are rested since Monday, so today is a good day for strength.</span></div>
 <div class="u"${at('5300')}>I’d like a gym workout this evening, about an hour.</div>
-<div class="dots"${at('6100 7200-in')}><i></i><i></i><i></i></div>
+<div class="dots"${at('6100 7200-in')}><i></i><i></i><i></i><span>Coach is thinking…</span></div>
 <div class="c1"${at('7200')}><span data-type="7200,900">Here’s a full-body session for 5:30 PM:</span></div>
 <div class="act"${at('8400')}>
 <div class="al">${ic('wand')}Schedule · Thu 8/10</div>
@@ -626,7 +626,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .msgs{flex:1;display:flex;flex-direction:column;gap:12px;padding:10px 0;justify-content:flex-start}
 .msgs .u{align-self:flex-end;max-width:80%;padding:10px 14px;border-radius:18px;background:var(--button);color:var(--on-button);font-size:15.5px}
 .msgs .c1{align-self:flex-start;max-width:86%;padding:12px 16px;border-radius:18px;background:var(--panel);font-size:15.5px;line-height:1.45}
-.dots{align-self:flex-start;display:flex;gap:4px;padding:14px 16px;border-radius:18px;background:var(--panel)}.dots i{width:7px;height:7px;border-radius:50%;background:var(--muted);animation:blink 1s infinite}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+.dots{align-self:flex-start;display:flex;align-items:center;gap:5px;padding:14px 16px;border-radius:18px;background:var(--panel)}.dots i{width:7px;height:7px;border-radius:50%;background:var(--text);animation:blink 1s infinite}.dots span{margin-left:7px;font-size:13px;color:var(--muted)}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
 @keyframes blink{50%{opacity:.25}}
 .js .dots[data-at]:not(.in){display:none}
 .act{align-self:stretch;padding:14px;border-radius:16px;background:color-mix(in srgb,var(--amber-soft) 60%,transparent)}
