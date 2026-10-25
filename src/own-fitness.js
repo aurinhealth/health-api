@@ -45,7 +45,7 @@ export async function loadAthlete(env,to,ctx=null){
     rowsOf(env.DB.prepare("SELECT value_numeric FROM health_datapoints WHERE user_id=? AND data_type='daily-resting-heart-rate' AND sample_time>=? AND value_numeric>0").bind(env.USER_ID,shiftDate(to,-30)).all()).then(r=>r.map(x=>Number(x.value_numeric)).sort((a,b)=>a-b))
   ]);
   const age=Number(profile?.age)||null;
-  return {ftp:thresholds.ftp,lthr:thresholds.lthr,maxHr:thresholds.maxHr||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||(rest.length?rest[Math.floor(rest.length/2)]:null),sex:profile?.sex||null};
+  return {ftp:thresholds.ftp,lthr:thresholds.lthr,maxHr:thresholds.maxHr||Number(profile?.hrmax)||(age?Math.round(208-0.7*age):null),restHr:thresholds.restHr||Number(profile?.rhr)||(rest.length?rest[Math.floor(rest.length/2)]:null),sex:profile?.sex||null};
 }
 // With Intervals.icu connected: the load of the workouts only the watch
 // recorded (Apple Health, Google Health) or Wahoo brought, as rows to add to its CTL and ATL

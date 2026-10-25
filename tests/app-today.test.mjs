@@ -307,6 +307,11 @@ test("a watch gym session without TSS gets one from its heart rate, so the strai
   assert.equal(out[2].tss, undefined);
   // Without a resting or max heart rate nothing is guessed.
   assert.equal(withHeartRateLoad(training, [], {}, "2026-10-17"), training);
+  // The profile's own max and resting heart rate (Tep a aktivita) are enough, without a birth date.
+  const own = withHeartRateLoad(training, [], { hrmax: 188, rhr: 52 }, "2026-10-17").completed;
+  assert.ok(own[0].tss > 0 && own[0].tssFromHeartRate);
+  const lower = withHeartRateLoad(training, wellness, { age: 35, hrmax: 200 }, "2026-10-17").completed;
+  assert.ok(lower[0].tss < out[0].tss, "a higher max heart rate from the profile wins over the age estimate");
 });
 
 test("the day's strain counts the training and the steps when the zones saw little (Petr, 2026-10-18)", async () => {

@@ -39,13 +39,14 @@ function actualStrain(row, done = []) {
 
 // A watch workout without a TSS (a gym session, Apple Health, Google) gets
 // one from its average heart rate, so the strain detail can split the day
-// between training and movement (StrainDetailView). Resting HR is the median
-// of the last 30 days, max HR the profile's or from age (Tanaka).
+// between training and movement (StrainDetailView). Resting and max HR are the
+// profile's (Tep a aktivita: rhr, hrmax), else the median of the last 30 days
+// and from age (Tanaka).
 export function withHeartRateLoad(training, wellness, profile, date) {
   const completed = Array.isArray(training?.completed) ? training.completed : [];
   const rest = (Array.isArray(wellness) ? wellness : []).filter(r => r && r.id <= date && r.id >= shift(date, -30)).map(r => num(r.restingHR)).filter(v => v > 0).sort((a, b) => a - b);
   const age = num(profile?.age);
-  const athlete = { restHr: num(profile?.restHr) || (rest.length ? rest[Math.floor(rest.length / 2)] : null), maxHr: num(profile?.maxHr) || (age ? Math.round(208 - 0.7 * age) : null), sex: profile?.sex || null };
+  const athlete = { restHr: num(profile?.restHr ?? profile?.rhr) || (rest.length ? rest[Math.floor(rest.length / 2)] : null), maxHr: num(profile?.maxHr ?? profile?.hrmax) || (age ? Math.round(208 - 0.7 * age) : null), sex: profile?.sex || null };
   if (!athlete.restHr || !athlete.maxHr || !completed.some(a => num(a?.tss) == null)) return training;
   return {
     ...training,
@@ -160,7 +161,12 @@ export function daySessions(d, date, training = {}, gymDay = null) {
     const fit = plan ? adherenceOf(a, plan, gymSets) : gymSets ? adherenceOf(a, {}, gymSets) : { adherence: "offplan" };
     sessions.push({ ...(plan?.id ? { ...session, plannedId: String(plan.id) } : session), ...fit });
   }
-  for (const w of planned) if (!matchedIds.has(w.id) && !(d < date && completed.length)) sessions.push(sessionOf(w, d, d < date ? "missed" : "planned"));
+  // On a past day a plan counts as done by an activity of its sport that no other
+  // plan took (pairing can miss one), or by a stub without a sport; a walk does
+  // not do a ride.
+  const unpaired = completed.filter(a => !pairedIds.has(String(a.id ?? "")));
+  const doneLike = w => unpaired.some(a => sportOf(a) === sportOf(w) || sportOf(a) === "other");
+  for (const w of planned) if (!matchedIds.has(w.id) && !(d < date && doneLike(w))) sessions.push(sessionOf(w, d, d < date ? "missed" : "planned"));
   if (gymPlan) sessions.push({ id: "gym:" + d, kind: "gym", status: gymLogged ? "done" : d < date ? "missed" : "planned", date: d, time: null, title: gymPlan.name || L("Posilovna", "Gym"), sport: gymPlan.type ? groupOfType(gymPlan.type) || "other" : "strength", ...(gymPlan.type ? { type: gymPlan.type } : {}), minutes: null, tss: null, activityId: null, eventId: null, ...(gymLogged ? adherenceOf({}, {}, gymPlan) : {}) });
   return { sessions, planned, completed, gymPlan, gymLogged, pTss, cTss };
 }

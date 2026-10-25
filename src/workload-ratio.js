@@ -12,7 +12,9 @@
 // ACWR (Hulin et al. 2014, Gabbett 2016) here is the rolling-average variant,
 // not the exponentially weighted one: the mean daily load of the last 7 days
 // (acute, today included) over the mean of the last 28 days (chronic, the
-// acute week included). It is null with fewer than MIN_HISTORY_DAYS days since
+// acute week included); with less history, the mean of the days since the first
+// load, so 21 days of the same load are 1.0 and not 1.33 (the days before
+// anything was recorded are no rest days). It is null with fewer than MIN_HISTORY_DAYS days since
 // the first load on record (the 28-day mean is not representative yet) or
 // with a chronic load of 0.
 //   < 0.8 low · 0.8–1.3 sweet spot · 1.3–1.5 elevated · > 1.5 high
@@ -100,7 +102,8 @@ export function acwrZone(value) {
 export function acwr(loads, historyDays = loads?.length || 0) {
   const xs = (Array.isArray(loads) ? loads : []).map(v => num(v) || 0);
   if (xs.length < CHRONIC_DAYS) return { value: null, zone: null, acute: null, chronic: null };
-  const acute = mean(xs.slice(-ACUTE_DAYS)), chronic = mean(xs.slice(-CHRONIC_DAYS));
+  const span = Math.min(CHRONIC_DAYS, Math.max(ACUTE_DAYS, historyDays));
+  const acute = mean(xs.slice(-ACUTE_DAYS)), chronic = mean(xs.slice(-span));
   const value = historyDays >= MIN_HISTORY_DAYS && chronic > 0 ? round(acute / chronic, 2) : null;
   return { value, zone: acwrZone(value), acute: round(acute, 1), chronic: round(chronic, 1) };
 }
