@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FoodView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.tabActions) private var actions
     @State private var adding: AddFoodTarget?
     @State private var scanning = false
 
@@ -28,7 +29,9 @@ struct FoodView: View {
                 .tabTopBar {
                     DayBar(date: food.date, ahead: true)
                     Spacer(minLength: 0)
-                    ChromeButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód") { scanning = true }
+                    HeaderCapsule(coach: actions.coach, settings: actions.settings) {
+                        HeaderIcon(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód") { scanning = true }
+                    }
                 }
             } else if let message = model.foodError {
                 VStack(spacing: 16) {

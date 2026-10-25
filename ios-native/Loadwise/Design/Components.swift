@@ -255,6 +255,8 @@ struct ChromeButton: View {
     var label: String
     var text: String? = nil
     var enabled = true
+    /// The tabs' pinned bar uses the header capsule's height (HeaderCapsule).
+    var height: CGFloat = 40
     var action: () -> Void
 
     var body: some View {
@@ -270,7 +272,7 @@ struct ChromeButton: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Palette.ink)
                     .padding(.horizontal, 14)
-                    .frame(height: 40)
+                    .frame(height: height)
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)

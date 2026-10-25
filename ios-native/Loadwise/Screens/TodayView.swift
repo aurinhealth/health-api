@@ -28,11 +28,7 @@ struct TodayView: View {
                 .tabTopBar {
                     DayBar(date: today.date)
                     Spacer(minLength: 0)
-                    ChromeButton(systemImage: "square.and.arrow.up", label: "Sdílet") { sharing = true }
-                    ChromeButton(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: openCoach)
-                    Button(action: openSettings) { AvatarView(size: 36) }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Profil a nastavení")
+                    HeaderCapsule(share: { sharing = true }, coach: openCoach, settings: openSettings)
                 }
             } else if let message = model.errorMessage {
                 VStack(spacing: 16) {
@@ -292,9 +288,9 @@ struct WeekStrip: View {
 }
 
 /// The top of the four tabs (Petr, 2026-10-25): the month as the title and one
-/// glass capsule on the right, the same on Dnes, Trénink, Jídlo and Zdraví: the
-/// tab's own button (Sdílet only on Dnes, the barcode on Jídlo), Kouč and the
-/// account. "Dnes" next to it leads back from another day, on every tab.
+/// glass capsule on the right (HeaderCapsule), the same on Dnes, Trénink, Jídlo
+/// and Zdraví. "Dnes" next to it leads back from another day, on every tab. The
+/// capsule sits on the middle of the month's letters, not of its line.
 struct TabHeader<Extra: View>: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dayPage) private var page
@@ -308,6 +304,8 @@ struct TabHeader<Extra: View>: View {
     var coach: () -> Void
     var settings: () -> Void
     @ViewBuilder var extra: Extra
+    /// Newsreader's capital height at 30 points.
+    @ScaledMetric(relativeTo: .title) private var capHeight: CGFloat = 20.4
 
     var body: some View {
         HStack(spacing: 8) {
@@ -315,6 +313,7 @@ struct TabHeader<Extra: View>: View {
                 .font(Typo.sentence(30, relativeTo: .title))
                 .foregroundStyle(Palette.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
+                .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 4)
             if let back = backToToday {
@@ -330,19 +329,7 @@ struct TabHeader<Extra: View>: View {
                 .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
                 .disabled(model.demo || (followsDay && model.dayLocked))
             }
-            HStack(spacing: 0) {
-                extra
-                if let share { HeaderIcon(systemImage: "square.and.arrow.up", label: "Sdílet", action: share) }
-                HeaderIcon(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: coach)
-                Button(action: settings) { AvatarView(size: 32) }
-                    .buttonStyle(.plain)
-                    .padding(.leading, 2)
-                    .accessibilityLabel("Profil a nastavení")
-            }
-            .padding(.horizontal, 4)
-            .frame(height: 42)
-            .chromeGlass(in: Capsule())
-            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            HeaderCapsule(share: share, coach: coach, settings: settings) { extra }
         }
     }
 
@@ -360,7 +347,44 @@ extension TabHeader where Extra == EmptyView {
     }
 }
 
-/// One icon in the tab header's glass capsule (TabHeader).
+/// The tab header's glass capsule: the tab's own button (Sdílet only on Dnes,
+/// the barcode on Jídlo), Kouč and the account. The pinned bar shows the same
+/// capsule once the header has scrolled away (Petr, 2026-10-25).
+struct HeaderCapsule<Extra: View>: View {
+    var share: (() -> Void)? = nil
+    var coach: () -> Void
+    var settings: () -> Void
+    @ViewBuilder var extra: Extra
+
+    var body: some View {
+        HStack(spacing: 0) {
+            extra
+            if let share { HeaderIcon(systemImage: "square.and.arrow.up", label: "Sdílet", action: share) }
+            HeaderIcon(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: coach)
+            Button(action: settings) { AvatarView(size: 37) }
+                .buttonStyle(.plain)
+                .padding(.leading, 2)
+                .accessibilityLabel("Profil a nastavení")
+        }
+        .padding(.horizontal, 5)
+        .frame(height: TabChrome.height)
+        .chromeGlass(in: Capsule())
+        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+    }
+}
+
+extension HeaderCapsule where Extra == EmptyView {
+    init(share: (() -> Void)? = nil, coach: @escaping () -> Void, settings: @escaping () -> Void) {
+        self.init(share: share, coach: coach, settings: settings) { EmptyView() }
+    }
+}
+
+/// The height of the tab header's capsule and of the day in the pinned bar.
+enum TabChrome {
+    static let height: CGFloat = 48
+}
+
+/// One icon in the tab header's glass capsule (HeaderCapsule).
 struct HeaderIcon: View {
     let systemImage: String
     let label: String
@@ -369,9 +393,9 @@ struct HeaderIcon: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundStyle(Palette.ink)
-                .frame(width: 36, height: 36)
+                .frame(width: 42, height: 42)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -437,7 +461,7 @@ struct DayCapsule: View {
         HStack(spacing: 8) {
             HStack(spacing: 0) {
                 Button { move(-1) } label: {
-                    Image(systemName: "chevron.left").frame(width: 30, height: 40).contentShape(Rectangle())
+                    Image(systemName: "chevron.left").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
                 }
                 .accessibilityLabel("Předchozí den")
                 Text(verbatim: Fmt.dayShort(date, today: today))
@@ -445,7 +469,7 @@ struct DayCapsule: View {
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
                 Button { move(1) } label: {
-                    Image(systemName: "chevron.right").frame(width: 30, height: 40).contentShape(Rectangle())
+                    Image(systemName: "chevron.right").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
                 }
                 .opacity(canGoForward ? 1 : 0.25)
                 .disabled(!canGoForward)
@@ -459,7 +483,7 @@ struct DayCapsule: View {
             .chromeGlass(in: Capsule())
             .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
             if date != today {
-                ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes", action: showToday)
+                ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes", height: TabChrome.height, action: showToday)
             }
         }
         // While the sync pill shows (RootView), it takes the day's place.
