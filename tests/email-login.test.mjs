@@ -19,7 +19,7 @@ async function setup(extra = {}) {
   env.DB.sqlite.exec(MIGRATION);
   return { env, sent };
 }
-const request = (path, body, { origin = ORIGIN, lang, ip } = {}) => new Request(ORIGIN + path, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", ...(lang ? { "X-Interface-Language": lang } : {}), ...(ip ? { "CF-Connecting-IP": ip } : {}) }, body: JSON.stringify(body) });
+const request = (path, body, { origin = ORIGIN, lang, ip, cookie } = {}) => new Request(ORIGIN + path, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json", ...(lang ? { "X-Interface-Language": lang } : {}), ...(ip ? { "CF-Connecting-IP": ip } : {}), ...(cookie ? { Cookie: cookie } : {}) }, body: JSON.stringify(body) });
 async function start(env, email, options) {
   const pending = [];
   const response = await handleEmailLogin(request("/auth/email/start", { email }, options), env, "/auth/email/start", { waitUntil: p => pending.push(p) });
@@ -329,4 +329,34 @@ test("a right code is no failure: nineteen wrong ones and a sign-in leave ninete
   }
   assert.equal((await guess(codeIn(sent.at(-1)), t0 + 5 * 61_000)).status, 200);
   assert.equal(env.DB.sqlite.prepare("SELECT fail_count FROM email_login_codes").get().fail_count, 19);
+});
+
+test("a stranger's wrong codes lock out only devices that never signed in with the address", async () => {
+  const { env, sent } = await setup();
+  const t0 = Date.parse("2026-10-07T08:00:00Z");
+  // The owner's phone signed in once and keeps the device cookie (also after signing out).
+  await at(t0, () => start(env, "owner@example.com", { ip: "192.0.2.1" }));
+  const first = await at(t0 + 1000, () => verify(env, "owner@example.com", codeIn(sent.at(-1)), { ip: "192.0.2.1" }));
+  assert.equal(first.status, 200);
+  const cookie = first.headers.getSetCookie().find(c => c.startsWith("aurin_known=")).split(";")[0];
+  assert.match(first.headers.getSetCookie().find(c => c.startsWith("aurin_known=")), /HttpOnly; Secure; SameSite=Lax/);
+  // A stranger spends the address's codes and wrong tries from many callers.
+  let caller = 0;
+  for (let round = 0; round < 5; round++) {
+    const time = t0 + 120_000 + round * 61_000;
+    await sendCode(env, "owner@example.com", "cs", { now: time });
+    const wrong = codeIn(sent.at(-1)) === "000000" ? "111111" : "000000";
+    for (let i = 0; i < 4; i++) await at(time + 1000, () => verify(env, "owner@example.com", wrong, { ip: "198.51.100." + (++caller) }));
+  }
+  const later = t0 + 10 * 61_000;
+  assert.equal((await at(later, () => verify(env, "owner@example.com", "123456", { ip: "198.51.100.200" }))).status, 429, "the stranger stays locked");
+  assert.equal(await sendCode(env, "owner@example.com", "cs", { now: later }), false, "no code for a device without the cookie");
+  // The owner's phone still gets a code and signs in.
+  const before = sent.length;
+  await at(later, () => start(env, "owner@example.com", { ip: "192.0.2.1", cookie }));
+  assert.equal(sent.length, before + 1);
+  assert.equal((await at(later + 1000, () => verify(env, "owner@example.com", codeIn(sent.at(-1)), { ip: "192.0.2.1", cookie }))).status, 200);
+  // A cookie made for another address, or forged, counts for nothing.
+  const forged = "aurin_known=" + "a".repeat(24) + ".bad";
+  assert.equal((await at(later + 120_000, () => verify(env, "owner@example.com", "123456", { ip: "192.0.2.9", cookie: forged }))).status, 429);
 });
