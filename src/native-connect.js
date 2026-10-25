@@ -3,17 +3,16 @@
 // share the app's session cookie, so:
 // 1. the app asks POST /app/api/connect/start for a short-lived signed ticket,
 // 2. the sheet opens /auth/app/connect?ticket=…, which signs the browser in as
-//    the same user and continues to /oauth/<provider>?return=native. A browser
-//    signed in as someone else, or not at all, first sees whose account it is
-//    and confirms with a POST: a ticket link sent by another user could
-//    otherwise sign the reader in as that user and put their Google data in
-//    the sender's account. The app's own sheet sends the ticket again in the
-//    X-Aurin-Connect header, which a link opened anywhere else cannot, so it
-//    skips that page. Each ticket works once,
+//    the same user and continues to /oauth/<provider>?return=native. Only the
+//    app's own sheet gets through: it sends the ticket again in the
+//    X-Aurin-Connect header (iOS 17.4+, the app's minimum), which a link opened
+//    anywhere else cannot. A ticket link sent by another user would otherwise
+//    sign the reader in as that user and put their health data in the sender's
+//    account (pentest 2026-10-25, L4), so such a link only expires. A browser
+//    already signed in as the ticket's user also continues. Each ticket works once,
 // 3. the provider's callback ends at loadwise://connected?event=…, which
 //    closes the sheet (connect-return.js).
 import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
-import { findUser } from "./tenancy.js";
 import { L, lang } from "./lang.js";
 
 const TICKET_SECONDS = 120;
@@ -51,35 +50,12 @@ async function useTicket(db, ticket) {
   return Number(used?.meta?.changes) > 0;
 }
 
-// The confirm button's POST: Origin is this site, or Safari sent "null" but
-// Sec-Fetch-Site (which no page can set) says the form was on this site.
-export function postedFromHere(request, url) {
-  const origin = request.headers.get("Origin");
-  if (origin === url.origin) return true;
-  return (origin === null || origin === "null") && request.headers.get("Sec-Fetch-Site") === "same-origin";
-}
-
-const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const expired = () => new Response(null, { status: 302, headers: { Location: "loadwise://connected?event=expired", "Cache-Control": "no-store" } });
 
 // The app's language rides along from /app/api/connect/start (hl=en|cs): the
 // browser's own language can differ from the one chosen in Aurin.
 const pageLang = (url, request) => ["en", "cs"].includes(url.searchParams.get("hl")) ? url.searchParams.get("hl")
   : /^en\b/i.test(request.headers.get("Accept-Language") || "") ? "en" : "cs";
-
-function confirmPage(request, ticketText, ticket, email, hl) {
-  const en = hl === "en";
-  const service = ticket.provider.startsWith("google") ? "Google Health" : ticket.provider === "ultrahuman" ? "Ultrahuman" : ticket.provider === "whoop" ? "WHOOP" : ticket.provider === "wahoo" ? "Wahoo" : "Intervals.icu";
-  const t = en
-    ? { title: "Connect " + service, body: "Connect " + service + " to the Aurin account", note: "If this isn't your account, close this page.", go: "Continue", lang: "en" }
-    : { title: "Připojit " + service, body: "Připojit " + service + " k účtu Aurin", note: "Pokud to není tvůj účet, zavři tuto stránku.", go: "Pokračovat", lang: "cs" };
-  const html = `<!doctype html><html lang="${t.lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(t.title)}</title>
-<style>body{font:17px -apple-system,system-ui,sans-serif;margin:0;padding:32px 20px;background:#fff;color:#111}@media(prefers-color-scheme:dark){body{background:#000;color:#eee}}main{max-width:420px;margin:auto}b{word-break:break-all}p.n{opacity:.7;font-size:15px}button{width:100%;padding:14px;border:0;border-radius:12px;background:#0a84ff;color:#fff;font:600 17px -apple-system,system-ui,sans-serif;margin-top:16px}</style></head>
-<body><main><p>${escapeHtml(t.body)}</p><p><b>${escapeHtml(email)}</b></p><p class="n">${escapeHtml(t.note)}</p>
-<form method="post" action="/auth/app/connect"><input type="hidden" name="ticket" value="${escapeHtml(ticketText)}"><input type="hidden" name="hl" value="${t.lang}"><button type="submit">${escapeHtml(t.go)}</button></form></main></body></html>`;
-  // same-origin, not no-referrer: with no-referrer the browser posts the form with "Origin: null".
-  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "same-origin" } });
-}
 
 async function continueToProvider(env, ticket, hl) {
   if (!(await useTicket(env.DB, ticket))) return expired();
@@ -110,17 +86,7 @@ export async function handleNativeConnect(request, env, url, { user, signedIn })
     if (signedIn && Number(user?.id) === ticket.uid) return continueToProvider(env, ticket, hl);
     // Opened by the app's own sheet (Auth.swift): nobody else's link can add this header.
     if (request.headers.get("X-Aurin-Connect") === ticketText) return continueToProvider(env, ticket, hl);
-    const owner = await findUser(env.DB, ticket.uid, env).catch(() => null);
-    if (!owner) return expired();
-    return confirmPage(request, ticketText, ticket, owner.email, hl);
-  }
-  if (url.pathname === "/auth/app/connect" && request.method === "POST") {
-    // Only the confirm button on this site's own page, never a form posted from elsewhere.
-    if (!postedFromHere(request, url)) return Response.json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, { status: 403 });
-    const form = await request.formData().catch(() => null);
-    const ticket = await readConnectTicket(form?.get("ticket"), sessionSecret(env));
-    if (!ticket) return expired();
-    return continueToProvider(env, ticket, form?.get("hl") === "en" ? "en" : "cs");
+    return expired();
   }
   return null;
 }

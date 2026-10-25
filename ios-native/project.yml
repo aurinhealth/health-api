@@ -5,7 +5,9 @@ name: Loadwise
 options:
   bundleIdPrefix: eu.petrfitnessdata
   deploymentTarget:
-    iOS: "17.0"
+    # 17.4: the connect sheet sends its ticket in a header (Auth.swift), the
+    # only way into /auth/app/connect (src/native-connect.js).
+    iOS: "17.4"
   createIntermediateGroups: true
   # Czech is the source language; en.lproj (Shared/) holds the English.
   developmentLanguage: cs
