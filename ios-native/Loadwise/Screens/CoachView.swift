@@ -73,7 +73,7 @@ struct CoachView: View {
                             if messages.isEmpty { welcome }
                             else if let subject { CoachSubjectCard(subject: subject) }
                             ForEach(messages) { bubble in
-                                BubbleView(bubble: bubble,
+                                BubbleView(bubble: bubble, writing: sending && bubble.id == messages.last?.id && !bubble.mine,
                                            decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
                                            undoMemory: { chip in Task { await undo(chip, in: bubble.id) } },
                                            undoAction: { action in Task { await undo(action, in: bubble.id) } },
@@ -82,8 +82,9 @@ struct CoachView: View {
                                            openPlan: openPlan)
                                     .id(bubble.id)
                             }
-                            if let progress, sending {
-                                HStack(spacing: 8) { ProgressView(); Text(progress).font(Typo.caption).foregroundStyle(Palette.muted) }
+                            // Until the first words arrive: the coach's bubble with dots and what he is doing.
+                            if let progress, sending, waiting {
+                                CoachThinking(text: progress).id("thinking")
                             }
                             if needsConsent { consentCard }
                             if needsSubscription { AISubscriptionCard { Paywall.present(model) } }
@@ -95,6 +96,7 @@ struct CoachView: View {
                     }
                     .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages) { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
+                    .onChange(of: sending) { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
                 }
                 inputBar
             }
@@ -243,6 +245,12 @@ struct CoachView: View {
         }
     }
 
+    /// The answer being prepared has no words yet (nor a food card).
+    private var waiting: Bool {
+        guard let last = messages.last, !last.mine else { return true }
+        return last.text.isEmpty && last.food == nil
+    }
+
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 10) {
             photoMenu
@@ -322,7 +330,7 @@ struct CoachView: View {
         // By id, not index: the list may change while the answer streams in.
         let id = reply.id
         sending = true
-        progress = "Kouč přemýšlí…"
+        progress = L10n.tr("Kouč přemýšlí…")
         defer { sending = false; progress = nil }
         // Made smaller first: the server takes one JPEG up to about 1.8 MB.
         var image: String?
@@ -546,6 +554,8 @@ struct CoachView: View {
 
 struct BubbleView: View {
     let bubble: CoachView.Bubble
+    /// The coach is still writing this answer: a dot pulses in its corner.
+    var writing = false
     var decide: (CoachAction, Bool) -> Void
     var undoMemory: (CoachMemoryChip) -> Void = { _ in }
     var undoAction: (CoachAction) -> Void = { _ in }
@@ -581,6 +591,10 @@ struct BubbleView: View {
                     CoachMarkdown(text: bubble.text)
                         .equatable()
                         .padding(.horizontal, 16).padding(.vertical, 14)
+                        // In the corner, so the bubble keeps its size when the dot goes.
+                        .overlay(alignment: .bottomTrailing) {
+                            if writing { CoachDots(count: 1).padding(.trailing, 9).padding(.bottom, 7) }
+                        }
                         .cardSurface(cornerRadius: 18)
                         .textSelection(.enabled)
                 }
@@ -922,5 +936,52 @@ struct ChatsSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// The coach's bubble while he prepares an answer: three dots and, smaller,
+/// what he is doing ("Kouč přemýšlí…", then the server's steps).
+struct CoachThinking: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            CoachDots()
+            Text(text).font(Typo.small).foregroundStyle(Palette.muted)
+                .contentTransition(.opacity)
+                .animation(.easeInOut(duration: 0.25), value: text)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .cardSurface(cornerRadius: 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, 40)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text)
+    }
+}
+
+/// Dots that light up one after another; still with Reduce Motion.
+struct CoachDots: View {
+    var count = 3
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(paused: reduceMotion)) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 5) {
+                ForEach(0..<count, id: \.self) { i in
+                    Circle().fill(Palette.ink)
+                        .frame(width: 7, height: 7)
+                        .opacity(reduceMotion ? 0.55 : opacity(t, i))
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// Each dot brightens in turn, once a second.
+    private func opacity(_ t: TimeInterval, _ i: Int) -> Double {
+        let phase = (t - Double(i) * 0.18).truncatingRemainder(dividingBy: 1.0)
+        return 0.25 + 0.75 * max(0, sin(phase * .pi))
     }
 }
