@@ -59,6 +59,14 @@ enum DemoData {
 {"date": "2026-10-08", "values": [["ADAPTIVNÍ SILOVÝ TRÉNINK"], ["Celé tělo  •  08. 10. 2026"], ["Datum", "2026-10-08", "Plán", "Celé tělo", "Nohy", "NORMÁLNĚ", "Load", "0,95"], ["Poznámka", "Nohy od pondělí v klidu, v sobotu delší běh: dřep ve střední zátěži."], [], [], ["Typ", "Cvik", "Série", "Plán kg", "Plán reps", "Skutečně kg", "Skutečně reps", "RPE", "Hotovo", "Poznámka", "Video", "Do selhání", "Supersérie"], ["WARMUP", "Dřep", "1", "40", "8", "40", "8", "", "TRUE", "", "", "FALSE", ""], ["WORK", "Dřep", "1", "80", "6-8", "80", "8", "7", "TRUE", "", "", "FALSE", ""], ["WORK", "Dřep", "2", "80", "6-8", "", "", "", "FALSE", "", "", "FALSE", ""], ["WORK", "Dřep", "3", "80", "6-8", "", "", "", "FALSE", "", "", "FALSE", ""], ["WORK", "Tlak na lavici", "1", "62,5", "8-10", "", "", "", "FALSE", "", "", "FALSE", "A"], ["WORK", "Tlak na lavici", "2", "62,5", "8-10", "", "", "", "FALSE", "", "", "FALSE", "A"], ["WORK", "Přítahy v předklonu", "1", "50", "10", "", "", "", "FALSE", "", "", "FALSE", "A"], ["WORK", "Přítahy v předklonu", "2", "50", "10", "", "", "", "FALSE", "", "", "FALSE", "A"]]}
 """#
 
+    /// Sample Spánek → the night's stages in the shape of /app/api/night (the same night as health:
+    /// 83 min deep, 94 REM, 255 light, 17 awake); the website draws the same night (src/site-demos.js).
+    static let night: NightDetail = decode(nightJSON)
+
+    private static let nightJSON = #"""
+{"night":{"bedClock":1428,"wakeClock":422,"segments":[{"type":"LIGHT","s":0,"e":12},{"type":"DEEP","s":12,"e":40},{"type":"LIGHT","s":40,"e":62},{"type":"REM","s":62,"e":74},{"type":"AWAKE","s":74,"e":77},{"type":"LIGHT","s":77,"e":100},{"type":"DEEP","s":100,"e":130},{"type":"LIGHT","s":130,"e":158},{"type":"REM","s":158,"e":178},{"type":"LIGHT","s":178,"e":210},{"type":"DEEP","s":210,"e":228},{"type":"LIGHT","s":228,"e":262},{"type":"REM","s":262,"e":284},{"type":"AWAKE","s":284,"e":290},{"type":"LIGHT","s":290,"e":330},{"type":"DEEP","s":330,"e":337},{"type":"LIGHT","s":337,"e":370},{"type":"REM","s":370,"e":400},{"type":"AWAKE","s":400,"e":405},{"type":"LIGHT","s":405,"e":436},{"type":"REM","s":436,"e":446},{"type":"AWAKE","s":446,"e":449}],"hr":null,"stats":{"wakeups":3,"avgHr":null,"lowHr":null,"lowHrAt":null,"hrv":null,"hrvLow":null,"hrvHigh":null}}}
+"""#
+
     /// Sample Trénink → Svaly in the shape of /app/api/muscles (generated with
     /// src/muscle-fatigue.js from a made-up leg day, upper-body day and run).
     static let muscles: MuscleFatigue = {

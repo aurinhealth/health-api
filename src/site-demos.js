@@ -71,24 +71,29 @@ const AURIN = '<span class="lg au"><svg viewBox="6 10 88 80"><path d="M6 46A36 3
 const STATUS = '<div class="sb"><span>9:41</span><span class="sbi"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx=".7"/><rect x="5" y="5.5" width="3" height="6.5" rx=".7"/><rect x="10" y="3" width="3" height="9" rx=".7"/><rect x="15" y="0" width="3" height="12" rx=".7"/></svg><svg viewBox="0 0 24 12"><rect x=".5" y=".5" width="20" height="11" rx="3" fill="none" stroke="currentColor"/><rect x="2" y="2" width="16" height="8" rx="1.8"/><rect x="22" y="4" width="1.5" height="4" rx=".7"/></svg></span></div>';
 
 // ---- Sleep (SleepPlanner.swift, HealthDetails.swift) ----
-// The night: stages in the app's indigo shades, the hypnogram drawing itself, the length counting up.
+// The night: stages in the app's indigo shades, the stages through the night one row each (Hypnogram), the
+// length counting up. NIGHT is the sample night's segments (DemoData.night): stage, start, end in minutes.
+const NIGHT = [['l', 0, 12], ['d', 12, 40], ['l', 40, 62], ['r', 62, 74], ['a', 74, 77], ['l', 77, 100], ['d', 100, 130],
+  ['l', 130, 158], ['r', 158, 178], ['l', 178, 210], ['d', 210, 228], ['l', 228, 262], ['r', 262, 284], ['a', 284, 290],
+  ['l', 290, 330], ['d', 330, 337], ['l', 337, 370], ['r', 370, 400], ['a', 400, 405], ['l', 405, 436], ['r', 436, 446], ['a', 446, 449]];
 const sleepNight = `<div class="dm pad">
 <div class="sl">Sleep · Thursday night</div>
 <div class="row base"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="pill ind"${at('1300')}>score 82</span></div>
-<svg class="hyp" viewBox="0 0 340 70" aria-hidden="true"><path pathLength="1"${at('300')} d="M2 20 H22 V34 H48 V58 H86 V34 H110 V8 H126 V34 H150 V58 H176 V34 H204 V8 H226 V34 H252 V46 H262 V34 H286 V8 H312 V20 H338"/></svg>
-<div class="stg">${[['Deep', '1:23', 19, 'd'], ['REM', '1:34', 22, 'r'], ['Light', '4:15', 59, 'l'], ['Awake', '0:17', 4, 'a']].map(([k, v, p, c], i) => `<div class="sr"><span>${k}</span><i class="bar"><b class="${c}" style="--w:${p}%"${at(String(900 + i * 220))}></b></i><span class="num">${v}</span><span class="mut">${p} %</span></div>`).join('')}</div>
+<div class="hg" aria-hidden="true"><div class="hgl"><span>Awake</span><span>REM</span><span>Light</span><span>Deep</span></div><div class="hgt">${NIGHT.map(([t, s, e], i) => `<i class="${t}" style="left:${(s / 449 * 100).toFixed(2)}%;width:${Math.max(0.5, (e - s) / 449 * 100).toFixed(2)}%"${at(String(300 + i * 60))}></i>`).join('')}</div></div>
+<div class="hgx" aria-hidden="true"><span>11:48 PM</span><span>7:02 AM</span></div>
+<div class="stg">${[['Deep', '1:23', 83, '19 %', 'd'], ['REM', '1:34', 94, '22 %', 'r'], ['Light', '4:15', 255, '59 %', 'l'], ['Awake', '0:17', 17, '3×', 'a']].map(([k, v, m, p, c], i) => `<div class="sr"><span>${k}</span><i class="bar"><b class="${c}" style="--w:${(m / 255 * 100).toFixed(1)}%"${at(String(900 + i * 220))}></b></i><span class="num">${v}</span><span class="mut">${p}</span></div>`).join('')}</div>
 </div>`;
 
 // "Why 8 h 30": the need for tonight built up row by row.
 const sleepNeed = `<div class="dm pad">
-<div class="row sp"><div class="sl">Why <span${n(480, 510, 600, 2600, 'hm')}>8 h 30</span></div><span class="mut s">tonight</span></div>
-<div class="list">
-<div class="li"${at('100')}><span>Your goal</span><b class="mono">8 h 00</b></div>
-<div class="li"${at('900')}><span>Today’s strain</span><b class="mono ind">+15 min</b></div>
-<div class="li"${at('1700')}><span>Sleep debt</span><b class="mono ind">+30 min</b></div>
-<div class="li"${at('2500')}><span>Nap</span><b class="mono grn">−15 min</b></div>
-</div>
-<div class="tot"${at('3300')}><span class="sent">Go to bed at</span><span class="num">10:10 PM</span></div>
+<div class="sl">Need and debt</div>
+<div class="nd"><div class="row sp base"><b class="nt">Need for tonight</b><span class="num md"${n(480, 510, 600, 2600, 'hmc')}>8:30</span></div>
+<div class="nr"${at('100')}><span>Baseline for your age</span><span class="mono">8:00</span></div>
+<div class="nr"${at('900')}><span>Today’s strain</span><span class="mono">+ 0:15</span></div>
+<div class="nr"${at('1700')}><span>Paying back debt</span><span class="mono">+ 0:30</span></div>
+<div class="nr"${at('2500')}><span>Naps</span><span class="mono">− 0:15</span></div>
+<div class="row sp base ndd"${at('3300')}><b class="nt">Sleep debt over 7 days</b><span class="num md amb">4:51</span></div>
+<i class="kbar"><b style="--w:82%"${at('3300')}></b></i></div>
 </div>`;
 
 // The bedtime dial: 24 h, midnight on top, the night arc in indigo from the moon to the sun. It turns on its
@@ -120,11 +125,11 @@ const tonight = `<div class="dm pad">
 const range = (pos, color, start) => `<i class="rb"><b></b><u style="--x:${pos}%;--c:var(--${color})"${at(String(start))}></u></i>`;
 const HIST = [65, 69, 60, 82, 67, 71, 62, 53, 75, 80, 63, 54, 77, 78];
 const readyParts = `<div class="dm pad">
-<div class="row sp"><div class="sl">Last 14 days</div><span class="mut s">average 68</span></div>
-<div class="hist">${HIST.map((v, i) => `<i style="--h:${v}%;--c:var(--${v >= 67 ? 'green' : v >= 34 ? 'amber-bar' : 'rust'})"${i === 13 ? ' class="today"' : ''}${at(String(100 + i * 70))}></i>`).join('')}</div>
-<div class="row base"><span class="num big"${n(0, 78, 1200, 1300, 'i')}>78</span><span class="pill grn"${at('2300')}>high</span><span class="mut s">today</span></div>
-${[['Sleep', '7:12', 'your normal 7:53–9:11 h', 'rust', 12, '−4 points'], ['Resting heart rate', '48 bpm', 'your normal 50–54 /min', 'green', 8, '+3 points'], ['HRV', '64 ms', 'your normal 55–61 ms', 'green', 72, '+9 points']]
-    .map(([k, v, nm, c, x, pt], i) => `<div class="pr2"${at(String(2600 + i * 700))}><div><b>${k}</b><span class="mut s">${nm}</span></div><span class="num md">${v}</span>${range(x, c, 2900 + i * 700)}<span class="pts" style="color:var(--${c})">${pt}</span></div>`).join('')}
+<div class="sl">Readiness</div>
+<div class="row base"><span class="num big"${n(0, 78, 200, 1300, 'i')}>78</span><span class="pill grn"${at('1300')}>high</span></div>
+<div class="sl">What makes up today’s score</div>
+${[['Sleep', '7:12', 'your normal 7:53–9:11 h', '↓ below normal', 'rust', 12, '−4 readiness points'], ['Resting heart rate', '48 bpm', 'your normal 50–54 /min', '↓ below normal', 'green', 20, '+3 readiness points'], ['HRV', '64 ms', 'your normal 55–61 ms', '↑ above normal', 'green', 83, '+9 readiness points']]
+    .map(([k, v, nm, dir, c, x, pt], i) => `<div class="pr3"${at(String(1600 + i * 700))}><div class="row sp base"><b>${k}</b><span class="num md">${v}</span></div><div class="row sp"><span class="mut s">${nm}</span><span class="s" style="color:var(--${c})">${dir}</span></div>${range(x, c, 1900 + i * 700)}<span class="pts" style="color:var(--${c})">${pt}</span></div>`).join('')}
 </div>`;
 
 const journal = `<div class="dm pad">
@@ -274,11 +279,10 @@ ${[['Squat', 1], ['Bench press', 1], ['Bent-over rows', 0]].map(([k, up], i) => 
 
 // ---- Food (Widgets.swift FoodWidget, FoodView.swift, BarcodeScanSheet.swift, PortionWheel chips) ----
 const foodTarget = `<div class="dm pad">
-<div class="row sp"><span class="wh"><i style="background:var(--amber-bar)"></i>Food and drinks</span><span class="amb s b"${at('1500')}>+350 training</span></div>
-<div class="row base"><span class="num big2">1,380</span><span class="num faint md">/ <span${n(2300, 2650, 1500, 1100, 'i')}>2,650</span> kcal</span></div>
-<i class="kbar"><b style="--w:${1380 / 2300 * 100}%" class="k1"${at('1500:t')}></b></i>
-<div class="mac">${[['Protein', 112, 150, 'brown'], ['Carbs', 205, 330, 'amber-bar'], ['Fat', 37, 80, 'gold'], ['Water', '1.8', '2.5 l', 'blue']].map(([k, v, t, c]) => `<div><span class="mut s">${k}</span><span class="num md">${v}<small> / ${t}</small></span><i class="mb"><b style="--w:${typeof v === 'number' ? v / t * 100 : 72}%;background:var(--${c})"></b></i></div>`).join('')}</div>
+<div class="row base"><span class="num big">1,380</span><span class="fo mut">of <span${n(2300, 2650, 1500, 1100, 'i')}>2,650</span><br>kcal</span></div>
 <div class="coach"${at('2400')}><div class="ch4">${ic('spark')}Coach</div><p class="sent" data-type="2700,3000">Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.</p></div>
+<div class="mac3">${[['Carbs', 177, 330, 'carbs'], ['Protein', 84, 150, 'protein'], ['Fat', 36, 80, 'fat']].map(([k, v, t, c]) => `<div><span class="mut s"><i style="background:var(--${c})"></i>${k}</span><span class="num md">${v}<small> / ${t} g</small></span><i class="mb"><b style="--w:${v / t * 100}%;background:var(--${c})"></b></i></div>`).join('')}</div>
+<div class="mut s alln">All nutrients ›</div>
 </div>`;
 
 // AddFoodSheet.swift ("Co přidáme?": the meal, the search, six tiles, the foods list), then BarcodeScanSheet.swift:
@@ -375,13 +379,13 @@ export const demoCss = `
 .wait{transition:opacity .45s ease,transform .55s cubic-bezier(.16,1,.3,1)}
 
 /* Sleep. */
-.hyp{display:block;width:100%;height:62px;margin:10px 0 6px}
-.hyp path{fill:none;stroke:var(--indigo);stroke-width:2.2;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:0}
-.js .hyp path{opacity:1!important;transform:none!important;stroke-dashoffset:1;transition:stroke-dashoffset 1.8s ease}.js .hyp path.in{stroke-dashoffset:0}
+.hg{display:grid;grid-template-columns:44px 1fr;gap:6px;margin:12px 0 2px}.hgl{display:grid;grid-template-rows:repeat(4,18px);font-size:11px;color:var(--muted);align-items:center}
+.hgt{position:relative;height:72px}.hgt i{position:absolute;height:13px;border-radius:3px}.hgt .a{top:2.5px;background:#E0A46A}.hgt .r{top:20.5px;background:#7C74E8}.hgt .l{top:38.5px;background:#A9B8EC}.hgt .d{top:56.5px;background:#3B3A99}
+.hgx{display:flex;justify-content:space-between;margin:0 0 12px 50px;font-size:11px;color:var(--faint,var(--muted))}
 .stg{display:grid;gap:7px}.sr{display:grid;grid-template-columns:52px 1fr 40px 38px;align-items:center;gap:8px;font-size:13.5px}.sr .num{font-size:17px;text-align:right}.sr .mut{font-size:12px;text-align:right}
 .bar{display:block;height:7px;border-radius:9px;background:var(--track);overflow:hidden}.bar b{display:block;height:100%;width:var(--w);border-radius:9px;transition:width 1s cubic-bezier(.16,1,.3,1)!important}
 .js .bar b:not(.in){opacity:1!important;transform:none!important;width:0}
-.bar .d{background:var(--indigo)}.bar .r{background:color-mix(in srgb,var(--indigo) 70%,#fff)}.bar .l{background:color-mix(in srgb,var(--indigo) 42%,#fff)}.bar .a{background:var(--amber-bar)}
+.bar .d{background:#3B3A99}.bar .r{background:#7C74E8}.bar .l{background:#A9B8EC}.bar .a{background:#E0A46A}
 .tot{display:flex;justify-content:space-between;align-items:baseline;margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}.tot .sent{font-size:19px}.tot .num{font-size:30px;color:var(--indigo)}
 .dialbox{padding-bottom:12px}
 .dial{position:relative;width:250px;height:250px;margin:0 auto;touch-action:none}
@@ -412,7 +416,11 @@ export const demoCss = `
 .js .rb u{opacity:1!important;transform:none!important}.rb u.in,html:not(.js) .rb u{left:var(--x)}
 .hist{display:flex;align-items:flex-end;gap:4px;height:70px;margin-bottom:10px}.hist i{flex:1;height:var(--h);border-radius:3px 3px 1px 1px;background:var(--c);opacity:.78;transform-origin:bottom;transition:transform .6s cubic-bezier(.16,1,.3,1),opacity .3s!important}
 .hist i.today{opacity:1}.js .hist i.wait:not(.in){transform:scaleY(0)}
-.pr2{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:10px;padding:8px 0 4px;border-top:1px solid var(--line)}.pr2 b{display:block;font-size:14px}.pr2 .num.md{font-size:20px}.pr2 .rb{grid-column:1;margin:6px 0}.pr2 .pts{grid-column:2;margin:0}
+.pr2{display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:10px;padding:8px 0 4px;border-top:1px solid var(--line)}.pr2 b{display:block;font-size:14px}.pr2 .num.md{font-size:20px}.pr2 .rb{grid-column:1;margin:6px 0}.pr2 .nd{padding:14px 16px;border-radius:16px;background:var(--panel2,color-mix(in srgb,var(--text) 3%,transparent))}.nt{font-weight:500;font-size:15px}.nr{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);padding:3px 0}
+.ndd{margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}.num.amb{color:var(--amber)}.nd .kbar{margin-top:8px}.nd .kbar b{width:0}.nd .kbar b.in,html:not(.js) .nd .kbar b{width:var(--w)}
+.pr3{padding:10px 0 12px;border-top:1px solid var(--line)}.pr3:first-of-type{border-top:0}.pr3 b{font-weight:500;font-size:15px}.pr3 .num.md{font-size:20px}.pr3 .rb{margin:10px 0 8px}
+.fo{font-size:12.5px;line-height:1.3;margin-left:10px}.mac3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}.mac3>div{display:flex;flex-direction:column;gap:3px}.mac3 .mut i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}.mac3 small{font-family:var(--num);font-size:12px;color:var(--muted)}.alln{margin-top:12px}
+.pts{grid-column:2;margin:0}
 .pts{display:table;margin-left:auto;padding:3px 10px;border-radius:999px;background:color-mix(in srgb,var(--text) 6%,transparent);font-size:12px;font-weight:500}
 .jt{display:flex;flex-wrap:wrap;gap:6px}
 .jc{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px 0 6px;border-radius:999px;background:var(--bg);font-size:13px}
