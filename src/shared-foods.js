@@ -37,7 +37,8 @@ export async function ensureFoodReports(db){await db.prepare('CREATE TABLE IF NO
 export async function removeFoodContribution(db,personalId){
   await ensure(db);const old=await db.prepare('SELECT catalog_id FROM food_contributions WHERE user_id=? AND personal_id=?').bind(db.userId,String(personalId)).first();
   await db.prepare('DELETE FROM food_contributions WHERE user_id=? AND personal_id=?').bind(db.userId,String(personalId)).run();
-  if(old)await db.prepare('DELETE FROM shared_foods WHERE food_key=? AND NOT EXISTS (SELECT 1 FROM food_contributions WHERE user_id IS NOT NULL AND catalog_id=?)').bind(old.catalog_id,old.catalog_id).run();
+  // A food the owner verified stays for everyone, whoever logged the same values before or after.
+  if(old)await db.prepare("DELETE FROM shared_foods WHERE food_key=? AND COALESCE(json_extract(product_json,'$.label_verified'),0)!=1 AND NOT EXISTS (SELECT 1 FROM food_contributions WHERE user_id IS NOT NULL AND catalog_id=?)").bind(old.catalog_id,old.catalog_id).run();
 }
 export async function reportFood(db,{catalogId,reason}){
   await ensure(db);if(!/^[a-f0-9]{64}$/.test(String(catalogId||'')))throw new Error(L('Neplatná položka katalogu.', 'Invalid catalog item.'));

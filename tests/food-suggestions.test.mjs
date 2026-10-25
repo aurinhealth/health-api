@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
 import { saveFoodSuggestion, listFoodSuggestions, decideFoodSuggestion, DAILY_SUGGESTIONS } from "../src/food-suggestions.js";
-import { savePersonalFood, searchFoodCatalog } from "../src/personal-foods.js";
+import { savePersonalFood, deletePersonalFood, searchFoodCatalog } from "../src/personal-foods.js";
 import { productFromLabel } from "../src/food-sources.js";
 
 const before = { name: "Mini Oreos", brand: "Oreo", barcode: "7622202354892", nutrition_basis: "g", serving_size: "1 g", calories_100g: 474, protein_100g: 5.3, carbs_100g: 68, fat_100g: 20 };
@@ -92,4 +92,20 @@ test("a report without values marks the food for everyone until the owner fixes 
   assert.equal((await listFoodSuggestions(raw, { kind: "report" })).suggestions.length, 0);
   assert.equal((await markReported(raw, [world], 3))[0].reported, undefined);
   assert.equal((await searchFoodCatalog(b, "", world.barcode))[0].calories_100g, 207);
+});
+
+test("a verified food stays verified for everyone when another user logs, changes or deletes the same values", async () => {
+  const raw = createD1(), a = scopedDb(raw, 3), b = scopedDb(raw, 4), c = scopedDb(raw, 5);
+  const sent = await saveFoodSuggestion(a, { before, after });
+  await decideFoodSuggestion(raw, scopedDb(raw, 1), { id: sent.id, decision: "approve" });
+  const verified = async () => (await searchFoodCatalog(c, "", before.barcode)).find(f => f.serving_size === "19 g");
+  assert.equal((await verified())?.confidence, "verified");
+  // The same values saved as b's own food, twice, then changed and deleted.
+  const own = await savePersonalFood(b, after);
+  await savePersonalFood(b, { ...after, id: own.id });
+  assert.equal((await verified())?.confidence, "verified");
+  await savePersonalFood(b, { ...after, id: own.id, calories_100g: 480 });
+  assert.equal((await verified())?.confidence, "verified");
+  await deletePersonalFood(b, own.id);
+  assert.equal((await verified())?.confidence, "verified");
 });
