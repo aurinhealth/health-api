@@ -137,11 +137,11 @@
           "migrations_dir": "migrations"
         }
       ],
-      // The world food catalogue is read-only and the same for both servers.
+      // A copy of the read-only world food catalogue in the test account's own bucket.
       "r2_buckets": [
         {
           "binding": "FOOD_CATALOG_R2",
-          "bucket_name": "loadwise-food-catalog"
+          "bucket_name": "aurin-food-catalog"
         }
       ],
       // Bindings are not inherited: the test server sends its own sign-in codes.

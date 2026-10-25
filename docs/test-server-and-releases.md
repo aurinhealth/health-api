@@ -102,7 +102,7 @@ staging.aurin.health, and the live zone only has a DNS-only CNAME `staging` to t
 The address, the app's server switch, OAuth return addresses and the coach evaluation stay as they were.
 The test server sends its e-mails from noreply@aurin-staging.com (Email Sending works only on the account's own zones).
 The read-only world catalogue and the muscle figure are copied into the test account's own
-`loadwise-food-catalog` bucket; without them food search skips the world catalogue there.
+`aurin-food-catalog` bucket; without them food search skips the world catalogue there.
 
 Optional: a separate Cloudflare token for `production` and `backup`, so one can be revoked alone; the
 backup needs only D1 and R2, not Workers Scripts.
