@@ -137,6 +137,8 @@ test("a red or sick morning never keeps 'stick to the plan', and new numbers wri
   assert.doesNotMatch(red.recommendation, /dodržet|VO2/);
   assert.match(withLang("cs", () => readinessSummary(summary, { zone: "green", flags: ["respiration_elevated"] }, null, true)).recommendation, /bez intenzity/);
   assert.equal(readinessSummary(summary, { zone: "green", flags: [] }, null, true), summary);
+  // A red day whose training is already done: rest for the rest of the day, not "take a rest day".
+  assert.match(withLang("cs", () => readinessSummary(summary, { zone: "red", flags: [] }, null, false, true)).recommendation, /trénink máš za sebou/);
   // The AI's text on a red day that still pushes the plan is not shown.
   const env = owner();
   const r = await screenText(env, { screen: "today", load: async () => today({ readiness: { score: 25, zone: "red", flags: [] } }), ask: reply("Klidně se drž plánu, VO2max zvládneš.", "Jeď intervaly.") });
