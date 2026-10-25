@@ -50,14 +50,27 @@ struct MealDetailView: View {
             }
         }
         .confirmationDialog(L10n.f("Smazat %@?", BulkMoveSheet.items(selected.count)), isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Smazat", role: .destructive) { Task { _ = await run("delete") } }
+            Button("Smazat", role: .destructive) {
+                Task { if let failed = await run("delete") { model.notice = failed } }
+            }
         }
     }
 
     /// Sends the change for the ticked foods; nil when it worked, else the message.
+    /// A food logged here and not on the server yet is deleted from the phone's
+    /// queue; copied or moved once it went out, else nothing moves and it is said.
     private func run(_ action: String, date: String? = nil, mealType: String? = nil) async -> String? {
-        let ids = selected.filter { $0 > 0 }
-        if action == "delete" { for id in selected where id < 0 { await model.deleteFood(id: id) } }
+        var ids = Set(selected.filter { $0 > 0 })
+        if action == "delete" {
+            for id in selected where id < 0 { await model.deleteFood(id: id) }
+        } else {
+            for id in selected where id < 0 {
+                guard let sent = await model.sentFoodId(id) else {
+                    return L10n.tr("Některá jídla se ještě neuložila na server. Zkus to znovu, až budeš mít signál.")
+                }
+                ids.insert(sent)
+            }
+        }
         if !model.demo, !ids.isEmpty {
             do {
                 _ = try await model.api.bulkFood(action, ids: Array(ids), date: date, mealType: mealType)

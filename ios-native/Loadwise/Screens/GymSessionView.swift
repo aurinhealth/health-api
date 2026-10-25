@@ -253,18 +253,30 @@ struct GymSessionView: View {
     /// The exercises in order, a superset's together under its mark.
     private func exerciseCards(_ day: GymDay) -> some View {
         let all = day.exercises
-        let list: [GymExercise] = ExerciseOrder.grouped(all.map { $0.superset }).map { all[$0] }
-        let groups: [String?] = list.map { $0.superset }
+        let list: [KeyedExercise] = ExerciseOrder.grouped(all.map { $0.superset }).map { KeyedExercise(all, at: $0) }
+        let groups: [String?] = list.map { $0.exercise.superset }
         return VStack(spacing: 12) {
             ForEach(ExerciseOrder.runs(groups), id: \.lowerBound) { (run: Range<Int>) in
                 if let letter = ExerciseOrder.letter(groups[run.lowerBound]) {
                     SupersetGroup(letter: letter, spacing: 12) {
-                        ForEach(list[run]) { (exercise: GymExercise) in card(day, exercise) }
+                        ForEach(list[run], id: \.key) { (item: KeyedExercise) in card(day, item.exercise) }
                     }
                 } else {
-                    ForEach(list[run]) { (exercise: GymExercise) in card(day, exercise) }
+                    ForEach(list[run], id: \.key) { (item: KeyedExercise) in card(day, item.exercise) }
                 }
             }
+        }
+    }
+
+    /// An exercise named by its name and which time it comes in the plan, not by
+    /// its first row (GymExercise.id): a set added or removed in an exercise above
+    /// moves the rows, and the weights typed here must stay.
+    private struct KeyedExercise {
+        let key: String
+        let exercise: GymExercise
+        init(_ all: [GymExercise], at index: Int) {
+            exercise = all[index]
+            key = exercise.name + "#" + String(all[..<index].filter { $0.name == all[index].name }.count)
         }
     }
 
@@ -430,7 +442,8 @@ struct ExerciseCard: View {
                 .accessibilityLabel("Možnosti cviku")
             }
             VStack(spacing: 6) {
-                ForEach(exercise.sets) { set in
+                // By place in the exercise: rows renumbered elsewhere keep what is typed.
+                ForEach(Array(exercise.sets.enumerated()), id: \.offset) { _, set in
                     // Swiped left: just this set goes away.
                     SetRow(set: set, failure: failure.contains(set.row), onDone: { kg, reps, rpe in onSet(set, kg, reps, rpe) }, onUndo: { onUndo(set) })
                         .modifier(SwipeToDelete(enabled: onRemoveSet != nil) { onRemoveSet?(set) })
@@ -486,8 +499,15 @@ struct SetRow: View {
         }
         .opacity(set.done ? 0.75 : 1)
         .onAppear { fill(set) }
-        // The plan reloads after a swap or a save: show what is stored now.
-        .onChange(of: set) { _, next in fill(next) }
+        // The plan reloads after a swap or a save: show what is stored now. Only
+        // the row number changed (a set added or removed in another exercise):
+        // what is typed and not ticked yet stays.
+        .onChange(of: set) { old, next in if Self.stored(old) != Self.stored(next) { fill(next) } }
+    }
+
+    /// What a set holds apart from its row.
+    private static func stored(_ s: GymSet) -> [String?] {
+        [s.kg, s.reps, s.rpe, s.done ? "done" : nil, s.number, s.plannedKg, s.plannedReps, s.note, s.side, s.drop ? "drop" : nil, s.warmup ? "warmup" : nil, s.intensity]
     }
 
     private func fill(_ set: GymSet) {

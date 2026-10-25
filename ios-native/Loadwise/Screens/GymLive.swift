@@ -483,7 +483,7 @@ struct LiveGymView: View {
         restEnd = nil
         if !model.demo {
             do {
-                try await model.api.discardGym(date: date)
+                try await model.discardGym(date: date)
             } catch {
                 discarded = false
                 self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
