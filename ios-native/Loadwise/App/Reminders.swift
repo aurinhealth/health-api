@@ -209,7 +209,8 @@ enum Reminders {
         content.title = L10n.tr("Konec pauzy")
         content.body = L10n.tr("Další série.")
         // Ticho (Nastavení → Posilovna, the Vibrace button): no sound, which on iOS also means no vibration.
-        content.sound = GymSignals.vibration || GymSignals.sound ? .default : nil
+        // With Zvuk on the planned tones say it (GymSignals.planRest), so the alert stays quiet.
+        content.sound = GymSignals.vibration && !GymSignals.sound ? .default : nil
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: end.timeIntervalSinceNow, repeats: false)
         try? await center.add(UNNotificationRequest(identifier: restId, content: content, trigger: trigger))
     }
