@@ -76,7 +76,7 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .aurora::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 60%,var(--bg))}
 
 /* Hero: the line on the left, the app's Today on the right with three numbers floating beside it. */
-.hero{position:relative;margin-top:-76px;padding:136px 0 72px;overflow:clip}
+.hero{position:relative;margin-top:-76px;padding:136px 0 72px;overflow-x:clip}
 .hero .grid{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);align-items:center;gap:32px}
 .kicker{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:color-mix(in srgb,var(--panel) 60%,transparent);border:1px solid var(--line);font-size:14px;font-weight:600;color:var(--sec)}
 .kicker i{width:8px;height:8px;border-radius:50%;background:var(--green)}
@@ -278,6 +278,7 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 /* Footer: the mark and the line from the hero, then three short groups, then who runs Aurin. */
 .site-foot{border-top:1px solid var(--line);padding:56px 0 36px;color:var(--muted);font-size:14px}
 .site-foot .top{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:32px}
+.site-foot li[lang]{white-space:nowrap}
 .site-foot .brand{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
 .site-foot .brand p{font:400 22px/1.2 Newsreader,"New York",Georgia,serif;color:var(--text);letter-spacing:-.01em;max-width:320px}
 .site-foot h3{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}

@@ -166,7 +166,7 @@ const strainScreen = `<div class="app glow-training">${STATUS}
 // Beside the phone: what adds up to today's strain, and where it should land.
 const strainMade = `<div class="dm pad">
 <div class="row sp"><div class="sl">What it’s made of</div><span class="mut s">target 11–14</span></div>
-<div class="tgt"><i><b class="band"></b><b class="fill"${at('400:a 1700:b 3000:c')}></b></i><span class="num"${n(0, 5.1, 400, 900, '1')}${n(5.1, 8.4, 1700, 900, '1')}${n(8.4, 16.7, 3000, 900, '1')}>16.7</span></div>
+<div class="tgt"><i><b class="band"></b><b class="fill"${at('400:a 1700:b 3000:c')}></b></i><span class="num"${n(0, 5.1, 400, 900, '1')}${n(5.1, 8.4, 1700, 900, '1')}${n(8.4, 13.1, 3000, 900, '1')}>13.1</span></div>
 <div class="mi"${at('400')}><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM · 42 min · 48 TSS</span></div><span class="num">5.1</span></div>
 <div class="mi"${at('1700')}><span class="sq sand">${ic('steps')}</span><div><b>Movement through the day</b><span class="mut s"><span${n(0, 6420, 1700, 1100, 'i')}>6,420</span> steps</span></div><span class="num">3.3</span></div>
 <div class="mi plan"${at('3000')}><span class="sq dash">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">5:30 PM · in plan</span></div><span class="num faint">+8.3</span></div>
@@ -187,7 +187,7 @@ const week = `<div class="dm pad wk">
 <div class="strip">${dayC('M', 5, 'run', 'ok')}${dayC('T', 6, 'bike', 'ok')}${dayC('W', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">T</span><span class="ci up"${at('1400:done')}>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
 <div class="handle"${at('4300:pull 5200-pull')}><i></i><span data-tx="0|Full month;4800|Less">Full month</span></div>
 <div class="month"${at('4800:open')}><div class="mh"><b>October</b><span class="mut s">12 activities · 14 h 20 min</span></div><div class="mg">${['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<span class="mw">${d}</span>`).join('')}${MONTH.flat().map((d, i) => `<span class="md${d === 8 ? ' sel' : ''}" style="--i:${i}"><span>${d}</span>${monthState(d) ? `<span class="ci ${monthState(d)}">${ic(monthSport(d))}</span>` : ''}</span>`).join('')}</div></div>
-<div class="day"><div class="row sp"><b>Today</b><span class="mut s">1 h 27 min · 840 kcal</span></div>
+<div class="day"><div class="row sp"><b>Today</b><span class="mut s">1 h 29 min · 840 kcal</span></div>
 <div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="src">${logo('apple')}Apple Health</span><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span>${pct(98)}</div><span class="num">520<small>kcal</small></span></div>
 <div class="ar"><span class="ci up"${at('1400:done')}>${ic('gym')}</span><div><b>Strength, full body</b><span class="src"${at('2200')}>${AURIN}Aurin, Apple Watch</span><span class="mut s" data-tx="0|Planned · 5:30 PM · 45 min;1400|Strength · 5:30 PM · 47 min">Planned · 5:30 PM · 45 min</span>${pct(94, at('2200'))}</div><span class="num"${at('2200')}>320<small>kcal</small></span></div>
 </div></div>`;
@@ -229,10 +229,10 @@ const setRow = (label, last, kg, reps, letter, state, attrs = '') => `<div class
 const tmTable = `<div class="dm pad tm">
 <div class="sent h">Squat</div>
 <div class="th2"><span>Sets</span><span>Last time</span><span>kg</span><span>Reps</span><span></span><span></span></div>
-${setRow('W', '40 × 8', '40', '8', '<i class="ip w">W</i>', 'done')}
-${setRow('1', '77.5 × 8', '80', '8', '<i class="ip m">M</i>', 'done')}
-<div class="st cur"><span class="sl2">2</span><span class="mut s">77.5 × 8</span><span class="v num ed"><span data-tx="0|80;1100|82.5">80</span></span><span class="v num ed"><span data-tx="0|8;1900|6">8</span></span><span class="lt"><i class="ip dash" data-tx="0|H;2700|F">H</i></span><span class="tk"></span></div>
-${setRow('3', '77.5 × 8', '80', '6-8', '<i class="ip dash">H</i>', 'next')}
+${setRow('W', '—', '40', '8', '<i class="ip w">W</i>', 'done')}
+${setRow('1', '—', '80', '8', '<i class="ip m">M</i>', 'done')}
+<div class="st cur"><span class="sl2">2</span><span class="mut s">—</span><span class="v num ed">80</span><span class="v num ed"><span data-tx="0|6-8;1900|8">6-8</span></span><span class="lt"><i class="ip dash" data-tx="0|H;2700|F">H</i></span><span class="tk"></span></div>
+${setRow('3', '—', '80', '6-8', '<i class="ip dash">H</i>', 'next')}
 <div class="st next add"${at('3500')}><span class="sl2">4</span><span class="mut s">—</span><span class="v num">80</span><span class="v num">6-8</span><span class="lt"><i class="ip none"></i></span><span class="tk"></span></div>
 <div class="row gap"><span class="pb"${at('3300:press 3600-press')}>${ic('plus')}Sets</span><span class="pb">${ic('minus')}Sets</span><span class="pb">Plates: 20 + 10 per side</span></div>
 </div>`;
@@ -240,9 +240,9 @@ ${setRow('3', '77.5 × 8', '80', '6-8', '<i class="ip dash">H</i>', 'next')}
 const LETTERS = [['W', 'Warm-up', 'muted'], ['T', 'Technique', 'blue'], ['E', 'Easy', 'green'], ['M', 'Moderate', 'indigo'], ['H', 'High', 'amber'], ['F', 'Failure', 'red'], ['PR', 'Personal record', 'gold'], ['D', 'Drop set', 'pink']];
 const tmTick = `<div class="dm pad tm">
 <div class="row sp"><div class="sent h">Squat</div><span class="tag rust">${ic('flame')}To failure</span></div>
-${setRow('1', '77.5 × 8', '80', '8', '<i class="ip m">M</i>', 'done')}
-<div class="st cur"${at('3600-cur 3600:done')}><span class="sl2">2</span><span class="mut s">77.5 × 8</span><span class="v num">82.5</span><span class="v num">6</span><span class="lt"><i class="ip dash"${at('2300:f')} data-tx="0|H;2300|F">H</i></span><span class="tk"></span></div>
-<div class="st next"${at('3800-next 3800:cur')}><span class="sl2">3</span><span class="mut s">77.5 × 8</span><span class="v num">80</span><span class="v num">6-8</span><span class="lt"><i class="ip dash">H</i></span><span class="tk"></span></div>
+${setRow('1', '—', '80', '8', '<i class="ip m">M</i>', 'done')}
+<div class="st cur"${at('3600-cur 3600:done')}><span class="sl2">2</span><span class="mut s">—</span><span class="v num">80</span><span class="v num">8</span><span class="lt"><i class="ip dash"${at('2300:f')} data-tx="0|H;2300|F">H</i></span><span class="tk"></span></div>
+<div class="st next"${at('3800-next 3800:cur')}><span class="sl2">3</span><span class="mut s">—</span><span class="v num">80</span><span class="v num">6-8</span><span class="lt"><i class="ip dash">H</i></span><span class="tk"></span></div>
 <div class="lpick"${at('700:in 2600-in')}>${LETTERS.map(([l, name, c]) => `<span class="lr"${l === 'F' ? at('1700:on') : ''}><i class="ip" style="--c:var(--${c})">${l}</i>${name}</span>`).join('')}</div>
 <div class="btn dark"${at('3300:press 3600-press')}>${ic('check')}Set done</div>
 </div>`;
@@ -253,7 +253,7 @@ const tmRest = `<div class="dm pad tm rest">
 <div class="ring"><svg viewBox="0 0 200 200" aria-hidden="true"><circle cx="100" cy="100" r="84" class="rt"/><circle cx="100" cy="100" r="84" class="ra" stroke-dasharray="${RING.toFixed(1)}" data-ring="90,82,0,8000,90;97,92,8200,5000,105" style="stroke-dashoffset:0"/></svg>
 <div class="rc"><span class="mut s">Rest</span><span class="num rd"${n(90, 82, 0, 8000, 'ms')}${n(97, 92, 8200, 5000, 'ms')}>1:30</span><span class="mut s" data-tx="0|of 1:30;8000|of 1:45">of 1:30</span></div></div>
 <div class="row gap c3"><span class="pb2">−15 s</span><span class="pb2"${at('7700:press 8000-press')}>+15 s</span><span class="pb2">Skip</span></div>
-<div class="nowc"><span class="mut s">Now</span><div class="row sp"><b>Squat · set 3</b><span class="num md">80 kg × 8</span></div><span class="mut s">Last time 77.5 × 8</span></div>
+<div class="nowc"><span class="mut s">Now</span><div class="row sp"><b>Squat · set 3</b><span class="num md">80 kg × 8</span></div></div>
 </div>`;
 
 // The finish screen (TrainingModeView.swift summary): what you did, a record, the changes, the muscles it tired, saved to Health.
@@ -262,7 +262,7 @@ const doneScreen = `<div class="app glow-training">${STATUS}
 <div class="center col"><div class="sl">Workout done</div><div class="sent title2">Full body</div></div>
 <div class="grid3">${[['Time', '47 min', 0, 47, 'min'], ['Calories', '412 kcal', 0, 412, 'kcal'], ['Avg HR', '128 bpm', 0, 128, 'bpm'], ['Sets', '9', 0, 9, ''], ['Volume', '4.2 t', 0, 4.2, 't', '+0.6 t'], ['Max HR', '164 bpm', 0, 164, 'bpm']]
     .map(([k, v, f, t, u, d], i) => `<div><span class="mut s">${k}</span><span class="num tv"><span${n(f, t, 300 + i * 120, 1100, u === 't' ? '1' : 'i')}>${String(t)}</span>${u ? ' ' + u : ''}</span>${d ? `<span class="grn s"${at('1600')}>${d}</span>` : ''}</div>`).join('')}</div>
-<div class="card rec"${at('1900')}><span class="sc amb">${ic('spark')}</span><div><b>New record</b><span class="mut s">Squat 82.5 × 6</span></div></div>
+<div class="card rec"${at('1900')}><span class="sc amb">${ic('spark')}</span><div><b>New record</b><span class="mut s">Squat 80 × 8</span></div></div>
 <div class="card chg"${at('2500')}>${[['Squat', '3 × 80 kg', '+2.5 kg', 'grn'], ['Bench press', '2 × 62.5 kg', '+1 reps', 'grn'], ['Bent-over rows', '2 × 50 kg', '=', 'mut']].map(([a, b, c, k]) => `<div class="li"><div><b>${a}</b><span class="mut s">${b}</span></div><span class="${k} s b">${c}</span></div>`).join('')}</div>
 <div class="card mf"${at('2800')}><img src="/site/muscles/f00.webp" alt="" width="34" height="53"><div><b>Muscle fatigue</b><span class="mut s">Quads and glutes rested in 2 days</span></div><span class="mut">${ic('chev')}</span></div>
 <div class="card hk"${at('3400')}><span class="rust">${ic('heart')}</span><b>Saved to Apple Health</b><span class="grn">${ic('check')}</span></div>
@@ -320,7 +320,7 @@ const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="dots"${at('6100 7200-in')}><i></i><i></i><i></i></div>
 <div class="c1"${at('7200')}><span data-type="7200,900">Here’s a full-body session for 5:30 PM:</span></div>
 <div class="act"${at('8400')}>
-<div class="al">${ic('wand')}Schedule · Thu 8/10</div>
+<div class="al">${ic('wand')}Schedule · Thu October 8</div>
 <div class="sent an">Strength, full body</div>
 ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Bent-over rows', '3×10 · 50 kg'], ['Romanian deadlift', '3×8 · 70 kg']].map(([a, b]) => `<div class="ar2"><span>${a}</span><span>${b}</span></div>`).join('')}
 <span class="mut s">+1 more · 1 h</span>
@@ -441,8 +441,8 @@ export const demoCss = `
 .tgt .band{position:absolute;left:${(11.4 / 21 * 100).toFixed(1)}%;width:${(3 / 21 * 100).toFixed(1)}%;top:0;bottom:0;background:color-mix(in srgb,var(--green) 45%,transparent)}
 .tgt .fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:9px;background:var(--amber-bar);transition:width .9s cubic-bezier(.16,1,.3,1)!important}
 .js .tgt .fill{opacity:1!important;transform:none!important}.tgt .fill.a{width:${(5.1 / 21 * 100).toFixed(1)}%}.tgt .fill.b{width:${(8.4 / 21 * 100).toFixed(1)}%}
-.tgt .fill.c{width:${(16.7 / 21 * 100).toFixed(1)}%;background:linear-gradient(90deg,var(--amber-bar) ${(8.4 / 16.7 * 100).toFixed(1)}%,color-mix(in srgb,var(--amber-bar) 35%,transparent) 0)}
-html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
+.tgt .fill.c{width:${(13.1 / 21 * 100).toFixed(1)}%;background:linear-gradient(90deg,var(--amber-bar) ${(8.4 / 13.1 * 100).toFixed(1)}%,color-mix(in srgb,var(--amber-bar) 35%,transparent) 0)}
+html:not(.js) .tgt .fill{width:${(13.1 / 21 * 100).toFixed(1)}%}
 .tgt .num{font-size:28px;min-width:48px;text-align:right}
 .mi{display:grid;grid-template-columns:36px 1fr auto;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line)}.mi b{display:block;font-size:14px}.mi>.num{font-size:20px}
 .sq{display:grid;place-items:center;width:36px;height:36px;border-radius:11px;color:#fff;font-size:18px}.sq.amb{background:var(--amber-bar)}.sq.sand{background:#E6D3B5;color:#8A6D3B}.sq.dash{border:1.5px dashed var(--amber-bar);color:var(--amber-bar)}

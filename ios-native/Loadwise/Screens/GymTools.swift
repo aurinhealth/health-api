@@ -248,6 +248,12 @@ struct GymBuilderView: View {
 
     private var isoDay: String { AppModel.localDate(day) }
 
+    /// The first day it offers: today, or the sample day in the demo (the website's screenshots).
+    private var firstDay: Date {
+        if model.demo, let d = Self.isoFormatter.date(from: DemoData.today.date) { return d }
+        return Calendar.current.startOfDay(for: Date())
+    }
+
     /// No place saved yet: the plan would be body weight only without asking.
     private var needsPlace: Bool {
         !model.demo && template == nil && equipment != nil && (equipment?.places ?? []).isEmpty
@@ -271,7 +277,7 @@ struct GymBuilderView: View {
             }
         }
         .task {
-            if let d = Self.isoFormatter.date(from: date), d >= Calendar.current.startOfDay(for: Date()) { day = d }
+            if model.demo { day = firstDay } else if let d = Self.isoFormatter.date(from: date), d >= firstDay { day = d }
             if let minutes = template?.template.minutes { self.minutes = minutes }
             // Read again on every return, so a list changed in Vybavení shows here (after its save).
             if !model.demo {
@@ -336,7 +342,7 @@ struct GymBuilderView: View {
             if let data = model.muscles { musclesCard(data).padding(.top, 20) }
             SectionLabel(text: "Kdy a jak dlouho").padding(.top, 26)
             Card {
-                DatePicker("Den", selection: $day, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
+                DatePicker("Den", selection: $day, in: firstDay..., displayedComponents: .date)
                     .environment(\.locale, Fmt.locale)
                 Picker("Délka", selection: $minutes) {
                     ForEach([30, 45, 60, 75, 90, 120], id: \.self) { Text("\($0)").tag($0) }
@@ -400,9 +406,8 @@ struct GymBuilderView: View {
             PrimaryButton(title: busy == "preview" ? "Sestavuji…" : "Navrhnout trénink", systemImage: "sparkles", busy: busy == "preview") {
                 if needsPlace { askPlace = true } else { Task { await preview() } }
             }
-            .disabled(busy != nil || model.demo || (focus == "muscles" && muscles.isEmpty))
+            .disabled(busy != nil || (focus == "muscles" && muscles.isEmpty))
             .padding(.top, 22)
-            if model.demo { Text("V ukázce se trénink nesestavuje.").font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 8) }
         }
     }
 
@@ -641,6 +646,8 @@ struct GymBuilderView: View {
     }
 
     private func preview() async {
+        // The demo has no server to put a workout together; it says so on the tap.
+        guard !model.demo else { error = L10n.tr("V ukázce se trénink nesestavuje."); return }
         await run("preview") {
             var next = try await model.api.previewGym(date: isoDay, minutes: minutes,
                                                       focus: focus == "upper" || focus == "lower" ? focus : nil,
