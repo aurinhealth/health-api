@@ -33,8 +33,7 @@ The generated config preserves the environment, routes, assets and other setting
 Deploy using this generated config. Plain `wrangler deploy` does not include
 the new bindings and must not be used once accounts have shard assignments.
 
-The jobs wait for a routing-aware Worker (`X-Storage-Routing: 1` on an anonymous
-401 response), verify a synthetic negative-user row in each shard, remove the
+The jobs wait for the Worker to finish its upgrade (an anonymous 401 response), verify a synthetic negative-user row in each shard, remove the
 exact canary, and activate allocation. Activation first pins any accounts created
 during deployment to legacy. Later deploys do not pin newly created accounts to
 legacy or overwrite capacity/draining settings. Missing schema/API permission

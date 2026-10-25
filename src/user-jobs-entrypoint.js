@@ -3,12 +3,17 @@
 // the full per-invocation limits (database queries, subrequests, CPU) instead
 // of sharing one cron run's (entrypoint.js fanOutUserJobs).
 import { WorkerEntrypoint } from "cloudflare:workers";
-import { runUserJobsInvocation } from "./entrypoint.js";
+import { runUserJobsInvocation, runIntervalsWebhookInvocation } from "./entrypoint.js";
 
 export class UserJobs extends WorkerEntrypoint {
   // { ok: true }, or { ok: false, error } when the user's own jobs failed:
   // only a call that did not go through rejects.
   async run(message) {
     return runUserJobsInvocation(this.env, this.ctx, message);
+  }
+
+  // One athlete's Intervals.icu webhook changes ({ athlete, parts, kinds, deleted }).
+  async intervalsWebhook(message) {
+    return runIntervalsWebhookInvocation(this.env, this.ctx, message);
   }
 }

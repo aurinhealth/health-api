@@ -1814,6 +1814,12 @@
 "Trénink zmizí z plánu dne, smažou se zapsané série i trénink uložený do Apple Health." = "The workout leaves the day's plan; the logged sets and the workout saved to Apple Health will be deleted.";
 "Spárovat se záznamem z hodinek" = "Pair with the watch's record";
 "Trénink smazán" = "Workout deleted";
+"Aktivita smazána" = "Activity deleted";
+"Jen v Aurinu. Intervals.icu ji dál má." = "Only in Aurin. Intervals.icu still has it.";
+"Jen v Aurinu. Strava ji dál má." = "Only in Aurin. Strava still has it.";
+"Jen v Aurinu. Wahoo ji dál má." = "Only in Aurin. Wahoo still has it.";
+"Jen v Aurinu. Apple Health ji dál má." = "Only in Aurin. Apple Health still has it.";
+"Jen v Aurinu. Google Health ji dál má." = "Only in Aurin. Google Health still has it.";
 "Trénink zahozen" = "Workout discarded";
 "Levá strana dala o %@ opakování míň. Pravou dělej jen tolik co levou, ať se rozdíl nezvětšuje." = "Your left side did %@ fewer reps. Do only as many with the right, so the gap doesn't grow.";
 "Pravá strana dala o %@ opakování míň. Levou dělej jen tolik co pravou, ať se rozdíl nezvětšuje." = "Your right side did %@ fewer reps. Do only as many with the left, so the gap doesn't grow.";
@@ -3008,3 +3014,4 @@
 "Mám dnes ještě trénovat?" = "Should I still train today?";
 "Jak naložit zbytek týdne?" = "How should I load the rest of the week?";
 "Původní rozložení" = "Reset";
+"Některá jídla se ještě neuložila na server. Zkus to znovu, až budeš mít signál." = "Some foods aren't saved on the server yet. Try again once you have signal.";

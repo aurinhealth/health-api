@@ -6,7 +6,7 @@
 // (disconnectIntervalsApp), which also stops the webhooks.
 import { saveConnectionSecret } from "./connection-secrets.js";
 import { INTERVALS_TOKEN_PREFIX } from "./intervals-auth.js";
-import { connectReturn, connectReturnUrl, oauthStateValue, startedBy } from "./connect-return.js";
+import { connectReturn, connectReturnUrl, oauthStateValue, pkceChallenge, pkceVerifier, startedBy } from "./connect-return.js";
 import { appOrigin } from "./app-origin.js";
 
 const STATE_COOKIE = "pfd_intervals_oauth_state";
@@ -27,19 +27,21 @@ const back = (location, cookie = clearState) => new Response(null, { status: 302
 export async function handleIntervalsOAuth(request, env, pathname, fetchImpl = fetch) {
   if (pathname === "/oauth/intervals" && request.method === "GET") {
     if (!intervalsOAuthConfigured(env)) return back(connectReturnUrl(connectReturn(request), "intervals-failed"));
-    const state = crypto.randomUUID();
+    const state = crypto.randomUUID(), verifier = pkceVerifier();
     const u = new URL("https://intervals.icu/oauth/authorize");
     u.searchParams.set("client_id", String(env.INTERVALS_CLIENT_ID).trim());
     u.searchParams.set("redirect_uri", redirectUri(env, request));
     u.searchParams.set("scope", INTERVALS_SCOPES.join(","));
     u.searchParams.set("state", state);
-    return back(u.toString(), STATE_COOKIE + "=" + oauthStateValue(state, request, env) + "; Max-Age=600; Path=/oauth/intervals; Secure; HttpOnly; SameSite=Lax");
+    u.searchParams.set("code_challenge", await pkceChallenge(verifier));
+    u.searchParams.set("code_challenge_method", "S256");
+    return back(u.toString(), STATE_COOKIE + "=" + oauthStateValue(state, request, env, verifier) + "; Max-Age=600; Path=/oauth/intervals; Secure; HttpOnly; SameSite=Lax");
   }
   if (pathname !== "/oauth/intervals/callback" || request.method !== "GET") return null;
   const url = new URL(request.url), code = url.searchParams.get("code"), state = url.searchParams.get("state");
   const m = (request.headers.get("Cookie") || "").match(new RegExp("(?:^|;\\s*)" + STATE_COOKIE + "=([^;]+)"));
-  const [expected, to, uid] = decodeURIComponent(m?.[1] || "").split(".");
-  if (!state || state !== expected) return back(connectReturnUrl("settings", "intervals-failed"));
+  const [expected, to, uid, verifier] = decodeURIComponent(m?.[1] || "").split(".");
+  if (!state || state !== expected || !verifier) return back(connectReturnUrl("settings", "intervals-failed"));
   // Started by another account than the one signed in now: its keys are not stored here.
   if (!startedBy(uid, env)) return back(connectReturnUrl(to, "intervals-failed"));
   if (url.searchParams.get("error") || !code) return back(connectReturnUrl(to, "intervals-cancelled"));
@@ -47,7 +49,7 @@ export async function handleIntervalsOAuth(request, env, pathname, fetchImpl = f
   const response = await fetchImpl("https://intervals.icu/api/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-    body: new URLSearchParams({ client_id: String(env.INTERVALS_CLIENT_ID).trim(), client_secret: String(env.INTERVALS_CLIENT_SECRET).trim(), code, redirect_uri: redirectUri(env, request) })
+    body: new URLSearchParams({ client_id: String(env.INTERVALS_CLIENT_ID).trim(), client_secret: String(env.INTERVALS_CLIENT_SECRET).trim(), code, redirect_uri: redirectUri(env, request), code_verifier: verifier })
   }).catch(() => null);
   const data = response ? await response.json().catch(() => ({})) : {};
   if (!response?.ok || !data.access_token) {

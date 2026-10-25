@@ -27,7 +27,7 @@ test("Google sign-in, Google Health and Intervals.icu send their callback to the
     // The token exchange repeats the same redirect_uri, as the provider requires.
     let sent = null;
     const fetchImpl = async (_url, init) => { sent = new URLSearchParams(init.body).get("redirect_uri"); return Response.json({}, { status: 400 }); };
-    await handleIntervalsOAuth(new Request(origin + "/oauth/intervals/callback?code=c&state=s", { headers: { Cookie: "pfd_intervals_oauth_state=s.settings.7" } }), env, "/oauth/intervals/callback", fetchImpl);
+    await handleIntervalsOAuth(new Request(origin + "/oauth/intervals/callback?code=c&state=s", { headers: { Cookie: "pfd_intervals_oauth_state=s.settings.7.v" } }), env, "/oauth/intervals/callback", fetchImpl);
     assert.equal(sent, origin + "/oauth/intervals/callback");
   }
 });

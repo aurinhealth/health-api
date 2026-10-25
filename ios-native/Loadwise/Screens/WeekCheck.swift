@@ -241,6 +241,7 @@ struct WeekCheckCard: View {
     @State private var check: WeekCheck?
     @State private var busy = false
     @State private var error: String?
+    var top: CGFloat = 0
 
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
@@ -252,6 +253,7 @@ struct WeekCheckCard: View {
                                  onKeep: { Task { await decide(check, apply: false) } },
                                  onApply: { Task { await decide(check, apply: true) } })
                     .disabled(model.demo)
+                    .padding(.top, top)
             }
         }
         .task {

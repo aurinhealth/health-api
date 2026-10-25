@@ -224,7 +224,7 @@ enum PlanSessionActions {
     }
 }
 
-/// The result of a move or a cancel at the bottom of Training, with "Zpět".
+/// The result of a move or a cancel at the bottom of Training, with "Vrátit".
 /// A cancel reaches the server only when the toast goes away without the
 /// undo (commit); a move is done at once and its undo moves it back.
 final class PlanToast: Identifiable {
@@ -269,7 +269,7 @@ struct PlanToastView: View {
                 Text(verbatim: toast.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
                 Spacer(minLength: 8)
                 Button(action: onUndo) {
-                    Label("Zpět", systemImage: "arrow.uturn.backward")
+                    Label("Vrátit", systemImage: "arrow.uturn.backward")
                         .font(Typo.bodyStrong)
                         .foregroundStyle(Palette.amber)
                         .frame(minHeight: 32)

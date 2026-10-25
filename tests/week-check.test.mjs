@@ -134,3 +134,13 @@ test("the plan of the week follows the state: strained holds the load, one quali
   assert.deepEqual(kinds(1), ["threshold", "endurance"]);
   assert.deepEqual(kinds(2), ["endurance", "endurance"]);
 });
+
+test("next week's check carries the rest of this week's plan into the form", () => {
+  const next = [S("n1", "2026-10-26", "ride", 90, "VO2max 5×4"), S("n2", "2026-10-27", "ride", 90, "Threshold 3×12"), S("n3", "2026-10-28", "ride", 120, "Endurance")];
+  const start = { date: "2026-10-20", ctl: 50, atl: 50 }, check = sessions => checkWeek({ today, from: "2026-10-26", to: "2026-11-01", sessions, start, strain: { level: 0 }, moveUntil: "2026-11-01" });
+  const alone = check(next), carried = check([...next, ...week.map(s => ({ ...s, fixed: true }))]);
+  const monday = r => r.forecast.find(f => f.date === "2026-10-26").tsb;
+  assert.ok(monday(carried) < monday(alone) - 10, "this week's load lowers Monday's form");
+  assert.ok(carried.forecast.every(f => f.date >= "2026-10-26"), "only next week's days are checked");
+  assert.ok(carried.changes.every(c => c.id.startsWith("n")), "this week's sessions stay as they are");
+});

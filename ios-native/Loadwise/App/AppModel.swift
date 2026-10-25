@@ -26,8 +26,8 @@ final class AppModel {
     private(set) var food: FoodSnapshot?
     var foodError: String?
     /// A write or a refresh that failed while data is on screen: shown on top
-    /// of every tab until tapped away (the screens' own errors show only
-    /// without data).
+    /// of every tab for 6 s or until tapped away (the screens' own errors show
+    /// only without data).
     var notice: String?
     private(set) var loading = false
     /// Loading with no day on screen yet: the day arrows and swipes wait. With
@@ -121,19 +121,27 @@ final class AppModel {
     }
 
     /// hide: the planned event that leaves the week and the calendar at once;
-    /// "Zpět" brings it back with the next load.
-    func deleteLater(_ title: String, hide eventId: String? = nil, commit: @escaping () async -> Void) {
+    /// activity: the done activity that leaves the week, the calendar and the
+    /// day. "Vrátit" brings either back with the next load.
+    func deleteLater(_ title: String, note: String? = nil, hide eventId: String? = nil, activity: String? = nil, commit: @escaping () async -> Void) {
         if let eventId {
             training?.sessions?.removeAll { $0.eventId == eventId }
             for (day, value) in calendar where value.activities.contains(where: { $0.eventId == eventId }) {
                 calendar[day]?.activities.removeAll { $0.eventId == eventId }
             }
         }
-        let undo: () async -> Void = eventId == nil ? {} : { [weak self] in
+        if let activity {
+            training?.sessions?.removeAll { $0.id == activity }
+            for (day, value) in calendar where value.activities.contains(where: { $0.id == activity }) {
+                calendar[day]?.activities.removeAll { $0.id == activity }
+            }
+            today?.plan.removeAll { $0.session?.id == activity }
+        }
+        let undo: () async -> Void = eventId == nil && activity == nil ? {} : { [weak self] in
             await self?.refreshTraining()
             await self?.refresh()
         }
-        undoToast = PlanToast(title: title, note: nil, cancelled: true, undo: undo, commit: commit)
+        undoToast = PlanToast(title: title, note: note, cancelled: true, undo: undo, commit: commit)
     }
     /// The Today and Food answers as they came, under the waiting writes.
     @ObservationIgnored private var todayBase: Data?
@@ -988,6 +996,12 @@ final class AppModel {
 
     /// A meal or drink logged on the phone (negative local id) as the server
     /// knows it: nil while it still waits to be sent, its server id once sent.
+    /// A food logged on this phone (a negative id): its id on the server once it
+    /// went out, nil while it still waits for signal.
+    func sentFoodId(_ localId: Int) async -> Int? {
+        localId > 0 ? localId : await serverId(of: localId)
+    }
+
     private func serverId(of localId: Int) async -> Int? {
         // On its way right now: its answer brings the id.
         while let sending = sendingItem, outbox.first(where: { $0.id == sending })?.overlay?.id == localId {
@@ -1160,6 +1174,37 @@ final class AppModel {
     }
     @ObservationIgnored private var gymSaving: Set<String> = []
     @ObservationIgnored private var gymPending: [String: GymDay] = [:]
+
+    /// Zahodit trénink: the day's sets still waiting (the next sheet, the
+    /// outbox, the copy kept without signal) leave with it, and a save already
+    /// on its way lands first, so nothing sent later brings the workout back.
+    /// When the server refuses, what waited goes back to the outbox.
+    func discardGym(date: String) async throws {
+        guard !demo else { return }
+        let key = "gym:" + date
+        gymPending[date] = nil
+        var waiting = outbox.filter { $0.key == key }
+        outbox.removeAll { $0.key == key }
+        saveOutbox()
+        let cached = GymDayCache.load(date: date)
+        let ids = Set(waiting.map(\.id))
+        for _ in 0..<150 {
+            guard gymSaving.contains(date) || sendingItem.map(ids.contains) == true else { break }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        // A save that found no signal meanwhile waits in the outbox again: it goes too.
+        waiting += outbox.filter { $0.key == key }
+        outbox.removeAll { $0.key == key }
+        saveOutbox()
+        GymDayCache.remove(date: date)
+        do {
+            try await api.discardGym(date: date)
+        } catch {
+            if let newest = waiting.last, !outbox.contains(where: { $0.key == key }) { enqueue(newest) }
+            if let cached { GymDayCache.save(cached, date: date) }
+            throw error
+        }
+    }
 
     /// A day's gym sheet: the one waiting to be sent, the server's, or the
     /// last one seen on the phone when there is no signal.
@@ -1489,7 +1534,7 @@ final class AppModel {
     func logout() async {
         if !demo {
             // While the session still works: no more pushes to this phone.
-            await PushRegistration.unregister(api: api)
+            if !(await PushRegistration.unregister(api: api)) { PushRegistration.leavePushService() }
             await api.logout()
         }
         signOut()

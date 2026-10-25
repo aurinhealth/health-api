@@ -160,7 +160,7 @@ struct RootView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                         .zIndex(1)
                 }
-                // A deletion with its "Zpět" (AppModel.deleteLater).
+                // A deletion with its "Vrátit" (AppModel.deleteLater).
                 if let toast = model.undoToast {
                     PlanToastView(toast: toast) {
                         model.undoToast = nil
@@ -263,7 +263,15 @@ struct RootView: View {
                 guard let current = model.undoToast else { return }
                 try? await Task.sleep(for: .seconds(6))
                 if model.undoToast?.id == current.id { model.undoToast = nil }
-                if let commit = current.settle(undo: false) { await commit() }
+                // Its own task: hiding the toast ends this one, which cut the
+                // deletion short and left "zrušeno" on top.
+                if let commit = current.settle(undo: false) { Task { await commit() } }
+            }
+            // A failure on top goes away on its own after a while, or with a tap.
+            .task(id: model.notice) {
+                guard let shown = model.notice else { return }
+                try? await Task.sleep(for: .seconds(6))
+                if model.notice == shown { model.notice = nil }
             }
             // The toast goes away on its own unless its sheet is open.
             .task(id: model.syncReport?.id) {

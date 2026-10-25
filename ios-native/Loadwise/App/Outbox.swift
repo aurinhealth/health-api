@@ -167,6 +167,10 @@ enum GymDayCache {
         return GymDay(date: date, values: values, cancelled: nil)
     }
 
+    static func remove(date: String) {
+        try? FileManager.default.removeItem(at: directory.appending(path: date + ".json"))
+    }
+
     static func clear() {
         try? FileManager.default.removeItem(at: directory)
     }

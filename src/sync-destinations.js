@@ -65,7 +65,7 @@ const DEFAULTS = {
 };
 
 // Intervals.icu wellness field → the health type that allows it.
-const WELLNESS_TYPE = { restingHR: 'restingHR', hrv: 'hrv', spO2: 'spO2', respiration: 'respiration', vo2max: 'vo2max', bodyFat: 'bodyFat', steps: 'steps', sleepSecs: 'sleep', avgSleepingHR: 'sleep', weight: 'weight' };
+const WELLNESS_TYPE = { restingHR: 'restingHR', hrv: 'hrv', hrvSDNN: 'hrv', spO2: 'spO2', respiration: 'respiration', vo2max: 'vo2max', bodyFat: 'bodyFat', steps: 'steps', sleepSecs: 'sleep', avgSleepingHR: 'sleep', weight: 'weight' };
 
 const KEY = /^[A-Za-z0-9:._-]{3,120}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;

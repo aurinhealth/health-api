@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { adherenceOf, buildTraining, eventPlan, formZone, isoWeek, plannedStrain, weekStart } from "../src/app-training.js";
+import { adherenceOf, buildTraining, daySessions, eventPlan, formZone, isoWeek, plannedStrain, weekStart } from "../src/app-training.js";
 
 const DATE = "2026-10-08"; // Thursday, week 41
 const day = n => new Date(Date.parse(DATE + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
@@ -258,4 +258,13 @@ test("the Training screen says while the athlete has no focus and goal yet", asy
   // Without a saved profile given, the profile itself is judged.
   assert.equal(buildTraining({ ...input, profile: { mainSport: "cycling", sportGoal: "závod" } }).profileIncomplete, false);
   assert.equal(buildTraining(input).profileIncomplete, true);
+});
+
+test("A missed ride stays on a past day where only a walk was done; a ride done without pairing still counts", () => {
+  const walk = { id: "w1", type: "Walk", name: "Procházka", durationHours: 0.5, start: day(-2) + "T09:00:00Z" };
+  const rideDone = { id: "r1", type: "Ride", name: "Jízda", durationHours: 1, start: day(-2) + "T16:00:00Z" };
+  const plan = { id: "planned:9", name: "Tempo", type: "Ride", tss: 70 };
+  const on = completed => daySessions(day(-2), DATE, { planned: [plan], completed, matched: [] }).sessions.map(s => [s.kind, s.status]);
+  assert.deepEqual(on([walk]), [["activity", "done"], ["planned", "missed"]]);
+  assert.deepEqual(on([walk, rideDone]), [["activity", "done"], ["activity", "done"]]);
 });

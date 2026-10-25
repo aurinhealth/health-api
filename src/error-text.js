@@ -1,8 +1,10 @@
 // An error answer whose text came from the server's insides (a database or
 // JavaScript error that a route passed on as error.message) gets a plain
 // sentence instead; the original goes to the log only. Texts written for the
-// user pass unchanged, so only what looks technical is replaced.
-const TECHNICAL = /\b(SQLITE_\w+|D1_\w+|no such (table|column)|Unscoped query|syntax error|constraint failed|UNIQUE constraint|FOREIGN KEY|TypeError|ReferenceError|SyntaxError|RangeError|is not a function|is not defined|Cannot read propert|undefined|null is not|NaN|stack|at \w+ \(|SELECT |INSERT |UPDATE |DELETE FROM)\b/;
+// user pass unchanged, so only what looks technical is replaced: also the
+// guards of the user databases (tenancy.js, user-data-routing.js), a missing
+// secret, a request body that isn't JSON and Cloudflare's own runtime errors.
+const TECHNICAL = /\b(SQLITE_\w+|D1_\w+|no such (table|column)|Unscoped query|syntax error|constraint failed|UNIQUE constraint|FOREIGN KEY|TypeError|ReferenceError|SyntaxError|RangeError|is not a function|is not defined|Cannot read propert|undefined|null is not|NaN|stack|at \w+ \(|SELECT |INSERT |UPDATE |DELETE FROM)\b|user id is required|central and user databases|must belong to one database|cannot be dumped|dump is not available|is not configured|Unexpected (token|end of JSON)|is not valid JSON|JSON at position|Too many subrequests|Network connection lost|internal error; reference/;
 
 export function technicalText(text) {
   return typeof text === "string" && TECHNICAL.test(text);

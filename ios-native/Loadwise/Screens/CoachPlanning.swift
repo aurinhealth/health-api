@@ -17,6 +17,9 @@ struct CoachCheckInCard: View {
     /// After switching to Nemoc: until when, and how many sessions went.
     @State private var switched: (until: String?, cancelled: Int)?
     @State private var swapError: String?
+    /// The gap above the card, only while it shows: an empty stack with a
+    /// padding left a hole on Today.
+    var top: CGFloat = 0
 
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
@@ -32,6 +35,7 @@ struct CoachCheckInCard: View {
                         .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     SecondaryButton(title: "Zpět na Trénink", systemImage: "arrow.uturn.backward") { Task { await backToTraining() } }
                 }
+                .padding(.top, top)
             } else if let advice {
                 Card {
                     WidgetHeader(title: "Kouč", color: Palette.amberBar)
@@ -90,6 +94,7 @@ struct CoachCheckInCard: View {
                         }
                     }
                 }
+                .padding(.top, top)
             }
         }
         // On the stack, so the sheet stays while the card turns into the done card.
@@ -211,6 +216,7 @@ struct WeekRevisionCard: View {
     @State private var revision: WeekRevision?
     @State private var busy = false
     @State private var error: String?
+    var top: CGFloat = 0
 
     var body: some View {
         // A stack, not a Group: on an empty Group the task never runs.
@@ -242,6 +248,7 @@ struct WeekRevisionCard: View {
                         .disabled(busy || model.demo)
                     }
                 }
+                .padding(.top, top)
             }
         }
         .task {

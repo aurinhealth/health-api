@@ -243,6 +243,32 @@ async function forWahooUser(env, wahooUser, fn) {
     return result;
   }, await accountUsers(env, "wahoo", wahooUser));
 }
+// Each athlete of a webhook in an invocation of their own (UserJobs), so a big
+// batch never runs one invocation over its limits and loses the changes after
+// the answer went out (deletions too). Without the binding (tests, local runs),
+// or when the call did not go through, the work runs here.
+async function intervalsWebhookFor(env, ctx, message) {
+  const binding = env.USER_JOBS && typeof env.USER_JOBS.intervalsWebhook === "function" ? env.USER_JOBS : null;
+  if (binding) {
+    try {
+      const result = await binding.intervalsWebhook(message);
+      if (result?.ok === false) console.error("Intervals.icu webhook failed", message.athlete, result.error);
+      return result;
+    } catch (error) { console.error("Intervals.icu webhook invocation failed", message.athlete, error.message); }
+  }
+  return forIntervalsAthlete(env, ctx, message.athlete, message.parts, message.kinds, message.deleted);
+}
+// The UserJobs entrypoint's webhook call: one athlete's changes, in a fresh invocation.
+export async function runIntervalsWebhookInvocation(env, ctx, { athlete, parts = [], kinds = [], deleted = [] } = {}) {
+  try {
+    await ensureTenancy(env.DB, env);
+    useCookbookDatabase(env.DB);
+    await forIntervalsAthlete(env, ctx, String(athlete || ""), parts, kinds, deleted);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error?.message || String(error) };
+  }
+}
 async function forIntervalsAthlete(env, ctx, athlete, parts, kinds, deleted = []) {
   return forEachUser(env, ["intervals"], async scoped => {
     if (!scoped.INTERVALS_ATHLETE_ID || scoped.INTERVALS_ATHLETE_ID !== athlete) return null;
@@ -428,10 +454,7 @@ const worker = {
     if (!principal && url.pathname === "/automation/coach-eval") principal = await coachEvalPrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
     if (!isPublic && !principal) {
-      const response = unauthorizedResponse();
-      if (env.USER_DATA_ROUTING === 'true') response.headers.set('X-Storage-Routing', '1');
-      if (env.FOOD_CATALOG_ROUTING === 'true') response.headers.set('X-Food-Catalog-Routing', '1');
-      return response;
+      return unauthorizedResponse();
     }
     let user = null;
     if (principal?.kind === "user") {
@@ -493,7 +516,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Wahoo's webhook: a finished workout of whoever is connected to that Wahoo account.
     if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forWahooUser(rawEnv, wahooUser, fn));
     // Intervals.icu's webhooks: what changed for an athlete connected with OAuth.
-    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds, deleted) => forIntervalsAthlete(rawEnv, ctx, athlete, parts, kinds, deleted));
+    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds, deleted) => intervalsWebhookFor(rawEnv, ctx, { athlete, parts, kinds, deleted }));
     // Passkeys in the iPhone app: the app's associated domain (apple-app-site-association.js).
     const siteAssociation = appleAppSiteAssociation(request, rawEnv, url.pathname);
     if (siteAssociation) return siteAssociation;
@@ -1934,12 +1957,18 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const row=await env.DB.prepare('SELECT * FROM coach_inbox WHERE user_id=? AND id=?').bind(env.USER_ID,Number(body.draftId)).first();
       if(!row)throw new Error(L('Návrh neexistuje.', 'The proposal doesn\'t exist.'));
       const draft=JSON.parse(row.draft_json);if(draft.kind!=='coach_action')throw new Error(L('Neplatný návrh.', 'Invalid proposal.'));
-      if(row.status!=='draft')return Response.json({status:'ok',message:L('Návrh už byl vyřízen.', 'The proposal has already been handled.')});
+      if(row.status!=='draft'&&(row.status!=='applying'||body.decision==='adjust'))return Response.json({status:'ok',message:L('Návrh už byl vyřízen.', 'The proposal has already been handled.')});
       // Kratší, Delší, Lehčí, Těžší, Jiný den and Zpět: the card changes by rules,
       // without the AI and without counting as a message.
       if(body.decision==='adjust')return Response.json(await adjustCoachDraft(env,ctx,row,draft,body),{headers:{'Cache-Control':'no-store'}});
       if(!['confirm','reject'].includes(body.decision))throw new Error(L('Potvrď nebo odmítni návrh.', 'Confirm or reject the proposal.'));
+      // Taken before anything is done, so a double tap or a confirm from the push
+      // and the app at once acts only once; a claim older than two minutes is a
+      // request that died midway. A change that fails puts the proposal back.
+      const claimed=await env.DB.prepare("UPDATE coach_inbox SET status='applying',confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=? AND (status='draft' OR (status='applying' AND confirmed_at<datetime('now','-2 minutes')))").bind(env.USER_ID,row.id).run();
+      if(claimed.meta?.changes!==1)return Response.json({status:'ok',message:L('Návrh už byl vyřízen.', 'The proposal has already been handled.')});
       let result=null;
+      try{
       if(body.decision==='confirm'){
         const a=draft.action;
         // A proposed end date applies only while it is still in the future.
@@ -2014,6 +2043,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           else if(a.type==='rest')result=await deletePlannedEvent(env,a);
         }
       }
+      }catch(error){await env.DB.prepare("UPDATE coach_inbox SET status='draft',confirmed_at=NULL WHERE user_id=? AND id=? AND status='applying'").bind(env.USER_ID,row.id).run().catch(()=>null);throw error;}
       await env.DB.prepare('UPDATE coach_inbox SET status=?,confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(body.decision==='confirm'?'confirmed':'rejected',env.USER_ID,row.id).run();
       const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
       return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):done||L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result,undo:result?.undo||null},{headers:{'Cache-Control':'no-store'}});

@@ -1200,7 +1200,7 @@ struct TrainingModeView: View {
         live.reset()
         model.deleteLater(L10n.tr("Trénink zahozen")) {
             if !model.demo {
-                do { try await model.api.discardGym(date: date) } catch { model.notice = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription) }
+                do { try await model.discardGym(date: date) } catch { model.notice = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription) }
                 await model.refreshTraining()
                 await model.refresh()
             }

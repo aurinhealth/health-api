@@ -37,12 +37,13 @@ function allWeekActivities(week){
   }
   return out;
 }
-// FTP-free load of a watch workout: resting HR (median of 30 days), max HR
-// from age (Tanaka) and sex, as own-fitness.js loadAthlete has them.
+// FTP-free load of a watch workout: resting and max HR from the profile (rhr,
+// hrmax), else the median of 30 days and from age (Tanaka), and sex, as
+// own-fitness.js loadAthlete has them.
 function hrAthlete(health,profile,date){
   const rest=(Array.isArray(health?.wellness)?health.wellness:[]).filter(r=>{const age=diffDays(date,r.id);return age!=null&&age>=0&&age<=30;}).map(r=>n(r.restingHR)).filter(v=>v>0).sort((a,b)=>a-b);
   const age=n(profile?.age);
-  return {restHr:rest.length?rest[Math.floor(rest.length/2)]:null,maxHr:age?Math.round(208-0.7*age):null,sex:profile?.sex||null};
+  return {restHr:n(profile?.rhr)||(rest.length?rest[Math.floor(rest.length/2)]:null),maxHr:n(profile?.hrmax)||(age?Math.round(208-0.7*age):null),sex:profile?.sex||null};
 }
 function withHeartRateLoad(activities,athlete){
   if(!athlete.restHr||!athlete.maxHr)return activities;
