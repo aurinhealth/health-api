@@ -456,7 +456,7 @@ struct WidgetSectionTile: View {
         .background(LinearGradient(colors: [section.color.opacity(0.24), section.color.opacity(0.06)],
                                    startPoint: .topLeading, endPoint: .bottomTrailing),
                     in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .accessibilityElement(children: .combine)
     }
 }

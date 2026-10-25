@@ -18,7 +18,7 @@ struct FocusPromptCard: View {
                 Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
             }
             .padding(14)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .cardSurface(cornerRadius: 18)
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.amber.opacity(0.35), lineWidth: 1))
             .contentShape(Rectangle())
         }
@@ -68,7 +68,7 @@ struct FocusSheet: View {
                     }
                     .padding(.horizontal, 18)
                     .padding(.vertical, 4)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .cardSurface(cornerRadius: 22)
                     .disabled(loading || saving)
                     .sensoryFeedback(.selection, trigger: minutes)
 

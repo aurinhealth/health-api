@@ -138,7 +138,7 @@ struct JournalEditorView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 16).padding(.vertical, 2)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
     }
 
     private func row(_ item: JournalItem) -> some View {

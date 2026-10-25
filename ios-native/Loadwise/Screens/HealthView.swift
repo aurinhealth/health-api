@@ -78,7 +78,7 @@ struct HealthContent: View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
                 // The same top as Dnes (TabHeader) and its week.
-                TabHeader(date: health.date, share: actions.share, coach: actions.coach, settings: actions.settings)
+                TabHeader(date: health.date, coach: actions.coach, settings: actions.settings)
                 WeekStrip(date: health.date, week: WeekStrip.week(of: health.date, in: page.map(\.today) ?? model.today))
                     .padding(.top, 14)
 

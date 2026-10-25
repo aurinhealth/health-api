@@ -349,7 +349,7 @@ private struct ReminderDayOverview: View {
         }
         .frame(height: 112)
         .padding(16)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         .accessibilityHidden(true)
     }

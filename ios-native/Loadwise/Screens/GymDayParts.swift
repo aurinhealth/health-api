@@ -330,7 +330,7 @@ struct GymCardioSheet: View {
                             .accessibilityAddTraits(option.id == type ? .isSelected : [])
                         }
                     }
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .cardSurface(cornerRadius: 22)
                     Stepper(value: $minutes, in: 5...60, step: 5) {
                         HStack {
                             Text("Délka").font(.body).foregroundStyle(Palette.ink)
@@ -339,7 +339,7 @@ struct GymCardioSheet: View {
                         }
                     }
                     .padding(.horizontal, 16).frame(minHeight: 52)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .cardSurface(cornerRadius: 22)
                 }
                 .padding(20)
             }

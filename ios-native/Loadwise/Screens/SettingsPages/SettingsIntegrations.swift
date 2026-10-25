@@ -17,7 +17,7 @@ struct IntegrationTile: View {
         }
         .padding(.vertical, 16).padding(.horizontal, 6)
         .frame(maxWidth: .infinity)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -47,7 +47,7 @@ struct IntegrationCard: View {
                 .background(provider.needsAttention ? Palette.rust : working ? Palette.ink.opacity(0.07) : Palette.greenSoft, in: Capsule())
         }
         .padding(14)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         .contentShape(Rectangle())
     }

@@ -291,50 +291,91 @@ struct WeekStrip: View {
     }
 }
 
-/// The top of the four tabs (Petr, 2026-10-24): the month as the title, the
-/// tab's own button, Sdílet, Kouč and the account, the same on Dnes, Trénink,
-/// Jídlo and Zdraví. "Dnes" next to the month leads back from another day.
+/// The top of the four tabs (Petr, 2026-10-25): the month as the title and one
+/// glass capsule on the right, the same on Dnes, Trénink, Jídlo and Zdraví: the
+/// tab's own button (Sdílet only on Dnes, the barcode on Jídlo), Kouč and the
+/// account. "Dnes" next to it leads back from another day, on every tab.
 struct TabHeader<Extra: View>: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dayPage) private var page
     let date: String
-    /// Trénink keeps its own day in the calendar: no "Dnes" here.
+    /// Trénink keeps its own day in the calendar: it passes showToday instead.
     var followsDay = true
-    var share: () -> Void
+    /// Trénink on another day than today: back to today in its calendar.
+    var showToday: (() -> Void)? = nil
+    /// Sdílet, only on Dnes.
+    var share: (() -> Void)? = nil
     var coach: () -> Void
     var settings: () -> Void
     @ViewBuilder var extra: Extra
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Text(verbatim: Fmt.monthTitle(date))
                 .font(Typo.sentence(30, relativeTo: .title))
                 .foregroundStyle(Palette.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .accessibilityAddTraits(.isHeader)
-            Spacer()
-            if followsDay, (page.map(\.selectedDate) ?? model.selectedDate) != nil {
-                Button { Task { await model.showToday() } } label: {
-                    Label("Dnes", systemImage: "arrow.uturn.backward").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                        .padding(.horizontal, 10).frame(height: 30)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+            Spacer(minLength: 4)
+            if let back = backToToday {
+                Button(action: back) {
+                    Label("Dnes", systemImage: "arrow.uturn.backward")
+                        .font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .lineLimit(1).fixedSize()
+                        .padding(.horizontal, 12).frame(height: 36)
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .disabled(model.demo || model.dayLocked)
+                .chromeGlass(in: Capsule())
+                .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+                .disabled(model.demo || (followsDay && model.dayLocked))
             }
-            extra
-            CircleButton(systemImage: "square.and.arrow.up", label: "Sdílet", action: share)
-            CircleButton(systemImage: "bubble.left.and.text.bubble.right", label: L10n.tr("Kouč"), action: coach)
-            Button(action: settings) { AvatarView(size: 36) }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Profil a nastavení")
+            HStack(spacing: 0) {
+                extra
+                if let share { HeaderIcon(systemImage: "square.and.arrow.up", label: "Sdílet", action: share) }
+                HeaderIcon(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: coach)
+                Button(action: settings) { AvatarView(size: 32) }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 2)
+                    .accessibilityLabel("Profil a nastavení")
+            }
+            .padding(.horizontal, 4)
+            .frame(height: 42)
+            .chromeGlass(in: Capsule())
+            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
         }
+    }
+
+    private var backToToday: (() -> Void)? {
+        if !followsDay { return showToday }
+        guard (page.map(\.selectedDate) ?? model.selectedDate) != nil else { return nil }
+        return { Task { await model.showToday() } }
     }
 }
 
 extension TabHeader where Extra == EmptyView {
-    init(date: String, followsDay: Bool = true, share: @escaping () -> Void, coach: @escaping () -> Void, settings: @escaping () -> Void) {
-        self.init(date: date, followsDay: followsDay, share: share, coach: coach, settings: settings) { EmptyView() }
+    init(date: String, followsDay: Bool = true, showToday: (() -> Void)? = nil, share: (() -> Void)? = nil,
+         coach: @escaping () -> Void, settings: @escaping () -> Void) {
+        self.init(date: date, followsDay: followsDay, showToday: showToday, share: share, coach: coach, settings: settings) { EmptyView() }
+    }
+}
+
+/// One icon in the tab header's glass capsule (TabHeader).
+struct HeaderIcon: View {
+    let systemImage: String
+    let label: String
+    var action: () -> Void = {}
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Palette.ink)
+                .frame(width: 36, height: 36)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.tr(label))
     }
 }
 
@@ -595,7 +636,7 @@ struct KeyNumbers: View {
                 PartUnavailableNote(text: "Spánek se teď nepodařilo načíst")
             }
         }
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
     }
 

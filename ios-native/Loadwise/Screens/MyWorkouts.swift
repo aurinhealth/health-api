@@ -77,7 +77,7 @@ struct MyWorkoutsView: View {
                             }
                         }
                         .padding(.horizontal, 14)
-                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .cardSurface(cornerRadius: 20)
                         .padding(.top, 10)
                     }
                     if friends {
@@ -387,7 +387,7 @@ struct SharedWorkoutView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .cardSurface(cornerRadius: 20)
                 .padding(.top, 18)
                 Text("Váhy se ti spočítají podle tvých tréninků a toho, jak jsi odpočatý.")
                     .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)

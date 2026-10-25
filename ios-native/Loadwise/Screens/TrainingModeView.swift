@@ -377,7 +377,7 @@ struct TrainingModeView: View {
             tableActions(exercise, set)
         }
         .padding(.vertical, 12).padding(.horizontal, 4)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("session")) } action: { tableFrame = $0 }
         .padding(.top, 14)
     }
@@ -511,7 +511,7 @@ struct TrainingModeView: View {
                     .padding(.horizontal, 16).padding(.bottom, 10)
                 }
             }
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .cardSurface(cornerRadius: 22)
         } else if index > 0 {
             Button { move(-1) } label: {
                 Label("Předchozí cvik", systemImage: "chevron.left").font(Typo.bodyStrong).foregroundStyle(Palette.muted)
@@ -588,7 +588,7 @@ struct TrainingModeView: View {
                     if unfolded.contains("now") { RestSetsList(exercise: exercise, last: last) }
                 }
                 .padding(16)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .cardSurface(cornerRadius: 22)
             }
             nextExercise(day)
             let progress = GymSessionMath.muscleProgress(day.exercises, muscles: muscles)
@@ -747,7 +747,7 @@ struct TrainingModeView: View {
             Spacer()
         }
         .padding(16)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
     }
 
     struct ExerciseChange: Identifiable {
@@ -775,7 +775,7 @@ struct TrainingModeView: View {
                 ForEach(changes) { item in changeRow(item, first: item.id == changes.first?.id) }
             }
             .padding(.horizontal, 16)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .cardSurface(cornerRadius: 22)
         }
     }
 
@@ -799,7 +799,7 @@ struct TrainingModeView: View {
             Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)
         }
         .padding(16)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
     }
 
     /// "4 × 80 kg": the work sets and their top weight.

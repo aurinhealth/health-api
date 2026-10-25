@@ -411,8 +411,7 @@ struct OfflineBanner: View {
             .font(.footnote.weight(.medium))
             .foregroundStyle(Palette.ink)
             .padding(.horizontal, 14).frame(height: 32)
-            .background(.ultraThinMaterial, in: Capsule())
-            .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+            .chromeGlass(in: Capsule())
             .allowsHitTesting(false)
     }
 }
@@ -466,7 +465,7 @@ struct ThanksToast: View {
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 16).frame(minHeight: 48)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .chromeGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
         }
         .buttonStyle(.plain)
@@ -484,8 +483,7 @@ struct OutboxNote: View {
                 .foregroundStyle(Palette.rust)
                 .multilineTextAlignment(.leading)
                 .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(.ultraThinMaterial, in: Capsule())
-                .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                .chromeGlass(in: Capsule())
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 20)

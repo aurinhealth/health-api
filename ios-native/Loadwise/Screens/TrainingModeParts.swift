@@ -284,7 +284,7 @@ struct HeartRecoveryCard: View {
             }
         }
         .padding(16)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
     }
 }
 
@@ -332,7 +332,7 @@ struct MuscleProgressCard: View {
             }
         }
         .padding(16)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
     }
 
     /// The light grey of a muscle still to come today.
@@ -376,7 +376,7 @@ struct ZoneMinutesCard: View {
             }
         }
         .padding(16)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
     }
 }
 
@@ -479,7 +479,7 @@ struct MinimizedGymBar: View {
                 Image(systemName: "chevron.up").font(.footnote.weight(.semibold)).foregroundStyle(Palette.muted)
             }
             .padding(.leading, 10).padding(.trailing, 16).padding(.vertical, 9)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .cardSurface(cornerRadius: 22)
             .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
         }
         .buttonStyle(.plain)

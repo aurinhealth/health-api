@@ -10,6 +10,10 @@ enum Palette {
     /// Settings pages: flat, a touch greyer than the other screens.
     static let settingsBackground = Color(light: 0xF1EDE5, dark: 0x0A0B0C)
     static let card = Color(light: 0xFBFAF7, dark: 0x1C1E1F)
+    /// The top of a card, a touch lighter, and its lit top edge (cardSurface):
+    /// the cards look like the glass of the bars and stay solid.
+    static let cardLift = Color(light: 0xFFFFFF, dark: 0x25282A)
+    static let cardEdge = Color(light: 0xFFFFFF, dark: 0x3A3E40)
     static let ink = Color(light: 0x1B1A17, dark: 0xECEAE6)
     static let secondary = Color(light: 0x3B3832, dark: 0xD9D6D0)
     static let muted = Color(light: 0x6D6A63, dark: 0x9AA39F)

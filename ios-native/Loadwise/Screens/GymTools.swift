@@ -68,7 +68,7 @@ struct ToolTile: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .cardSurface(cornerRadius: 20)
         .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
     }
 }
@@ -99,7 +99,7 @@ struct LibraryWidget: View {
             }
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .cardSurface(cornerRadius: 22)
             .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
         }
         .accessibilityElement(children: .ignore)
@@ -327,7 +327,7 @@ struct GymBuilderView: View {
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
             }
             .padding(14)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .cardSurface(cornerRadius: 18)
         }
     }
 
@@ -393,7 +393,7 @@ struct GymBuilderView: View {
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
                 }
                 .padding(14)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .cardSurface(cornerRadius: 18)
             }
             .padding(.top, 16)
 
@@ -818,7 +818,7 @@ struct EquipmentView: View {
             .accessibilityAddTraits(place.favorite == true ? .isSelected : [])
         }
         .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 10)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? Palette.green : .clear, lineWidth: 1.5))
         .accessibilityAddTraits(on ? .isSelected : [])
     }
@@ -1042,7 +1042,7 @@ struct ChoiceCard: View {
                     .font(.system(size: 22)).foregroundStyle(selected ? Palette.green : Palette.faint)
             }
             .padding(.horizontal, 16).padding(.vertical, 13)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .cardSurface(cornerRadius: 18)
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(selected ? Palette.green : .clear, lineWidth: 1.5))
             .contentShape(Rectangle())
         }

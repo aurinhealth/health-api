@@ -1170,7 +1170,7 @@ struct FeedbackSheet: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .cardSurface(cornerRadius: 18)
             .padding(.top, 8)
         }
     }
@@ -1431,7 +1431,7 @@ struct ManualWorkoutSheet: View {
                 Text(windowText).font(Typo.caption).foregroundStyle(Palette.muted)
             }
             .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .cardSurface(cornerRadius: 18)
         } else {
             // No watch on: how hard it felt stands in for the heart rate.
             SettingsGroup(title: "Náročnost") {

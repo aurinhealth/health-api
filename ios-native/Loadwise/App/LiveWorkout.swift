@@ -574,7 +574,7 @@ struct LiveWorkoutStrip: View {
                     .accessibilityLabel(L10n.f("Zóna %@", String(zone + 1)))
                 }
             }
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .cardSurface(cornerRadius: 22)
         }
         .accessibilityElement(children: .combine)
     }

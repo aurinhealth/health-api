@@ -85,7 +85,7 @@ struct SleepPlanner: View {
                             .accessibilityElement(children: .combine)
                         }
                     }
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .cardSurface(cornerRadius: 22)
                 }
             }
         }
@@ -183,7 +183,7 @@ struct SleepPlanner: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
         .accessibilityElement(children: .combine)
     }
 

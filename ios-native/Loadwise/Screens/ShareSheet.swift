@@ -536,7 +536,7 @@ struct ShareEditView: View {
                 .overlay(alignment: .top) { if i > 0 { Rectangle().fill(Palette.hairline).frame(height: 1).padding(.leading, 40) } }
             }
         }
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
     }
 
     private func chipOn(_ row: String, _ chip: String) -> Bool {

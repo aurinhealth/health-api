@@ -73,7 +73,7 @@ struct LibraryTile: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .cardSurface(cornerRadius: 18)
             .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
         }
         .accessibilityElement(children: .combine)
@@ -114,7 +114,7 @@ struct LibrarySportPanel: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .cardSurface(cornerRadius: 18)
             .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
         }
         .accessibilityElement(children: .combine)
@@ -139,7 +139,7 @@ struct GymLibrarySection: View {
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
                 }
                 .padding(14)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .cardSurface(cornerRadius: 18)
             }
             .padding(.top, 18)
 
@@ -159,7 +159,7 @@ struct GymLibrarySection: View {
                         Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
                     }
                     .padding(14)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .cardSurface(cornerRadius: 18)
                 }
                 .padding(.top, 12)
             }

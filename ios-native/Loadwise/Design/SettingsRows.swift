@@ -18,7 +18,7 @@ struct SettingsGroup<Content: View>: View {
                     .accessibilityAddTraits(.isHeader)
             }
             VStack(spacing: 0) { content }
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .cardSurface(cornerRadius: 22)
             if let footer {
                 Text(footer).font(Typo.caption).foregroundStyle(Palette.muted)
                     .padding(.horizontal, 4)
@@ -225,7 +225,7 @@ struct PillToggle: View {
         .toggleStyle(LoadwiseToggleStyle())
         .disabled(disabled)
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(isOn ? Palette.green.opacity(0.5) : Palette.hairline, lineWidth: 1))
     }
 }

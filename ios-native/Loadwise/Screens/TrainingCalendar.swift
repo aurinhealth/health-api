@@ -58,7 +58,7 @@ struct TrainingCalendarCard: View {
             }
         }
         .padding(.vertical, 14)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .cardSurface(cornerRadius: 24)
         .shadow(color: .black.opacity(0.04), radius: 10, y: 6)
         .simultaneousGesture(
             DragGesture(minimumDistance: 24).onEnded { value in

@@ -238,7 +238,7 @@ struct InsightsView: View {
                 Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
             }
             .padding(14)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .cardSurface(cornerRadius: 20)
         }
         .buttonStyle(.plain)
     }

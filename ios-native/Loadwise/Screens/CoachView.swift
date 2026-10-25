@@ -260,7 +260,8 @@ struct CoachView: View {
                 }
             }
             .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .chromeGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
             Button { Task { await send() } } label: {
                 Image(systemName: "arrow.up").font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.onButton)
                     .frame(width: 40, height: 40).background(Palette.button, in: Circle())
@@ -271,7 +272,6 @@ struct CoachView: View {
         .disabled(usedUp)
         .opacity(usedUp ? 0.55 : 1)
         .padding(.horizontal, 16).padding(.vertical, 10)
-        .background(.ultraThinMaterial)
     }
 
     /// The camera next to the field: take a photo or pick one. One photo a message.
@@ -281,8 +281,10 @@ struct CoachView: View {
             Button { galleryOpen = true } label: { Label(L10n.tr("Vybrat z Fotek"), systemImage: "photo") }
         } label: {
             Image(systemName: "camera").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink)
-                .frame(width: 40, height: 40).background(Palette.card, in: Circle())
+                .frame(width: 40, height: 40).contentShape(Circle())
         }
+        .chromeGlass(in: Circle())
+        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
         .disabled(photo != nil || sending || model.demo)
         .opacity(photo != nil ? 0.35 : 1)
         .accessibilityLabel(L10n.tr("Přidat fotku"))
@@ -579,7 +581,7 @@ struct BubbleView: View {
                     CoachMarkdown(text: bubble.text)
                         .equatable()
                         .padding(.horizontal, 16).padding(.vertical, 14)
-                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .cardSurface(cornerRadius: 18)
                         .textSelection(.enabled)
                 }
             }

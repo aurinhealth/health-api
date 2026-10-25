@@ -155,7 +155,7 @@ struct AvailabilityView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 4)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         .disabled(saving || loading)
         .sensoryFeedback(.selection, trigger: minutes)

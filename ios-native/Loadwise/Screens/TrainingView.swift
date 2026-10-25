@@ -16,7 +16,8 @@ struct TrainingView: View {
                 ScreenBackground(glow: Palette.Glow.training)
                 if let training = model.training {
                     PageScroll {
-                        TrainingContent(training: training, addWorkout: { addingWorkout = true }, toast: $toast, pickDay: { calendarDay = $0 }, jumpDay: jumpDay, day: calendarDay)
+                        TrainingContent(training: training, addWorkout: { addingWorkout = true },
+                                        showToday: { jumpDay = DayJump(date: training.date) }, toast: $toast, pickDay: { calendarDay = $0 }, jumpDay: jumpDay, day: calendarDay)
                             .padding(.bottom, 100)
                     }
                     .refreshable { await model.refreshTraining() }
@@ -27,7 +28,6 @@ struct TrainingView: View {
                                    move: { jumpDay = DayJump(date: ISODay.shift(day, $0)) },
                                    showToday: { jumpDay = DayJump(date: training.date) })
                         Spacer(minLength: 0)
-                        ChromeButton(systemImage: "plus", label: "Zapsat trénink") { addingWorkout = true }
                     }
                 } else if let message = model.trainingError {
                     VStack(spacing: 16) {
@@ -73,6 +73,8 @@ struct TrainingContent: View {
     @Environment(AppModel.self) private var model
     let training: TrainingSnapshot
     var addWorkout: () -> Void = {}
+    /// "Dnes" in the header: the calendar back on today.
+    var showToday: () -> Void = {}
     var toast: Binding<PlanToast?> = .constant(nil)
     var pickDay: (String) -> Void = { _ in }
     var jumpDay: DayJump? = nil
@@ -85,11 +87,11 @@ struct TrainingContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !editing {
-                // The same top as Dnes (TabHeader), with Zapsat trénink; the calendar picks the day.
+                // The same top as Dnes (TabHeader); the calendar picks the day, "Dnes" brings it back.
+                // Zapsat trénink ručně is in the tools below and in "+" (Petr, 2026-10-25).
                 TabHeader(date: day ?? training.date, followsDay: false,
-                          share: actions.share, coach: actions.coach, settings: actions.settings) {
-                    CircleButton(systemImage: "plus", label: L10n.tr("Zapsat trénink"), action: addWorkout)
-                }
+                          showToday: shownDay == training.date ? nil : showToday,
+                          coach: actions.coach, settings: actions.settings)
 
                 // Until the main sport and goal are set (FocusSheet.swift).
                 if training.profileIncomplete == true {
@@ -99,6 +101,14 @@ struct TrainingContent: View {
 
                 TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay)
                     .padding(.top, 18)
+
+                // Right under the week (Petr, 2026-10-25): every workout left today,
+                // else the next planned day's, with Začít trénink. It belongs to
+                // today, not to a day looked back at.
+                if shownDay == training.date, !upcoming.isEmpty {
+                    TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [])
+                        .padding(.top, 14)
+                }
 
                 // Today's opens the same Námaha detail as Dnes, a past day its own;
                 // a day ahead has no detail yet.
@@ -116,13 +126,6 @@ struct TrainingContent: View {
 
                 WeekStrainBars(days: training.days)
                     .padding(.top, 22)
-
-                // The next session belongs to today, not to a day looked back at:
-                // every workout left today, else the next planned day's.
-                if shownDay == training.date, !upcoming.isEmpty {
-                    TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [])
-                        .padding(.top, 24)
-                }
 
                 if let event = training.event {
                     EventCard(event: event)

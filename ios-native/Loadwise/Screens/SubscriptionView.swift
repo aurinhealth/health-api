@@ -71,7 +71,7 @@ struct ProSettingsRow: View {
                 RadialGradient(colors: [(hasPro ? AurinMark.goldTop : AurinMark.amber).opacity(0.18), .clear],
                                center: .leading, startRadius: 0, endRadius: 180),
                 in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .cardSurface(cornerRadius: 18)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -131,7 +131,7 @@ struct SubscriptionView: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, minHeight: 106, alignment: .leading)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .cardSurface(cornerRadius: 20)
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(feature.title + (unlocked ? "" : ", " + L10n.tr("není v tarifu")))
                 }

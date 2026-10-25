@@ -59,7 +59,7 @@ struct PlanComplianceCard: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .cardSurface(cornerRadius: 22)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -326,7 +326,7 @@ struct GymComplianceSection: View {
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .cardSurface(cornerRadius: 22)
                     if let exercises = compliance.exercises, !exercises.isEmpty {
                         Card {
                             VStack(spacing: 0) {

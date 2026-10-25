@@ -126,8 +126,8 @@ struct FoodContent: View {
 
     @ViewBuilder private var content: some View {
         // The same top as Dnes (TabHeader), with the barcode; the week reaches two weeks ahead.
-        TabHeader(date: food.date, share: actions.share, coach: actions.coach, settings: actions.settings) {
-            CircleButton(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
+        TabHeader(date: food.date, coach: actions.coach, settings: actions.settings) {
+            HeaderIcon(systemImage: "barcode.viewfinder", label: "Skenovat čárový kód", action: scan)
         }
         WeekStrip(date: food.date, week: WeekStrip.week(of: food.date, in: page.map(\.today) ?? model.today), ahead: true)
             .padding(.top, 14)
