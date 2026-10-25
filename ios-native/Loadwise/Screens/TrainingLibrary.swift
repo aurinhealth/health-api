@@ -821,6 +821,24 @@ struct ExerciseCatalog: View {
     static func fold(_ text: String) -> String {
         text.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "cs_CZ"))
     }
+
+    /// A catalog name as a sentence: "Cable Single Arm Rear Delt Row" from the
+    /// exercise database reads "Cable single arm rear delt row", like "Face
+    /// pull". Names already written so, letters (EZ, DB, V) and digits stay.
+    static func shownName(_ name: String) -> String {
+        let words = name.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        let titled = words.dropFirst().filter { $0.first?.isLetter == true }
+        guard titled.count >= 2, titled.allSatisfy({ $0.first?.isUppercase == true }) else { return name }
+        // "Single-Arm" as a part of a word too: "Single-arm cable fly".
+        let lower: (String) -> String = { part in
+            part.count > 1 && part.dropFirst().allSatisfy({ !$0.isUppercase && !$0.isNumber }) ? part.lowercased() : part
+        }
+        return words.enumerated().map { index, word in
+            word.split(separator: "-", omittingEmptySubsequences: false).enumerated().map { at, part in
+                index == 0 && at == 0 ? String(part) : lower(String(part))
+            }.joined(separator: "-")
+        }.joined(separator: " ")
+    }
 }
 
 /// One exercise: the muscles on the figure, then its technique.

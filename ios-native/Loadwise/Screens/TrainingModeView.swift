@@ -39,6 +39,8 @@ struct TrainingModeView: View {
     @State private var historyFor: String?
     /// The exercise to swap ("Nahradit cvik"), its sets still to do.
     @State private var swapping: String?
+    /// "Vybrat jiný cvik" for this exercise: the whole catalog.
+    @State private var replacing: String?
     /// The exercise whose Moje poznámka is being written.
     @State private var noteFor: String?
     private var notes: ExerciseNotes { .shared }
@@ -207,8 +209,22 @@ struct TrainingModeView: View {
         }
         .sheet(item: Binding(get: { swapping.map { Named(name: $0) } }, set: { swapping = $0?.name })) { item in
             AlternativesSheet(date: date, exercise: item.name, inPlan: day?.exercises.map(\.name) ?? [],
-                              footnote: L10n.f("Hotové série zůstanou u cviku %@.", item.name), choose: { _ in },
-                              chooseAlternative: { alt in Task { await swapExercise(item.name, for: alt) } }, limit: 3)
+                              subtitle: swapSubtitle(item.name),
+                              footnote: L10n.f("Hotové série zůstanou u cviku %@.", ExerciseCatalog.shownName(item.name)), choose: { _ in },
+                              chooseAlternative: { alt in Task { await swapExercise(item.name, for: alt) } }, limit: 3,
+                              chooseOther: {
+                                  // After this sheet is gone: one sheet at a time.
+                                  Task { try? await Task.sleep(for: .milliseconds(450)); replacing = item.name }
+                              })
+        }
+        // "Vybrat jiný cvik": any exercise from the catalog takes its sets still to do.
+        .sheet(item: Binding(get: { replacing.map { Named(name: $0) } }, set: { replacing = $0?.name })) { item in
+            GymExerciseSearch(date: date, history: history, catalog: catalog, used: Set(day?.exercises.map(\.name) ?? []),
+                              title: "Vybrat jiný cvik", eyebrow: L10n.f("Místo cviku %@", ExerciseCatalog.shownName(item.name))) { name in
+                let kg = GymCoach.suggest(name, history: history, before: date, catalog: catalog.first { $0.name == name }).work.first?.kg
+                let alt = GymAlternative(name: name, muscle: nil, sets: nil, reps: nil, note: nil, station: nil, kg: kg)
+                Task { await swapExercise(item.name, for: alt) }
+            }
         }
         .sheet(item: Binding(get: { noteFor.map { Named(name: $0) } }, set: { noteFor = $0?.name })) { item in
             ExerciseNoteSheet(exercise: item.name)
@@ -1049,6 +1065,15 @@ struct TrainingModeView: View {
             self.error = L10n.f("Plán se nepodařilo uložit: %@", error.localizedDescription)
         }
         await loadMuscles(edited)
+    }
+
+    /// Under the name in "Nahradit cvik": its muscle and the sets still to do.
+    private func swapSubtitle(_ name: String) -> String? {
+        let left = day?.exercises.filter { $0.name == name }.flatMap(\.sets).filter { !$0.done && !$0.warmup }.count ?? 0
+        let sets = left > 0 ? L10n.f(Fmt.plural(left, "Zbývá %@ série", "Zbývají %@ série", "Zbývá %@ sérií"), String(left)) : nil
+        let muscle = catalog.first { $0.name == name }?.muscle?.nilIfBlank
+        let line = [muscle, sets].compactMap { $0 }.joined(separator: " · ")
+        return line.isEmpty ? nil : line
     }
 
     /// "Nahradit cvik": its sets still to do become the alternative, with
