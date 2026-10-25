@@ -13,15 +13,17 @@ import { rideFtpFor } from './intervals-athlete.js';
 import { parseFit, fitStreams } from './fit-file.js';
 import { thin, zoneBounds, zoneSeconds, storedHeartRate } from './watch-detail.js';
 import { wahooFileUrl } from './wahoo.js';
+import { fetchPublic } from './public-fetch.js';
 
 const STREAMS = 'activity-streams';
 const MAX_FILE = 20 * 1024 * 1024;
 const n = v => v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : null;
 const parse = json => { try { return JSON.parse(json || '{}'); } catch { return {}; } };
 
+// The link comes from Wahoo (or a webhook body), so only a public https address is fetched.
 async function download(url, fetchImpl) {
   if (!url) return null;
-  const response = await fetchImpl(url, { signal: AbortSignal.timeout(12000) }).catch(() => null);
+  const response = await fetchPublic(url, { signal: AbortSignal.timeout(12000) }, fetchImpl, { https: true }).catch(() => null);
   if (!response?.ok || Number(response.headers.get('content-length') || 0) > MAX_FILE) return null;
   const bytes = new Uint8Array(await response.arrayBuffer().catch(() => new ArrayBuffer(0)));
   return bytes.length && bytes.length <= MAX_FILE ? bytes : null;

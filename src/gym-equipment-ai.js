@@ -6,6 +6,7 @@ import { L } from "./lang.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { METAGYM_KUTNA_HORA, OTHER_STATIONS, OTHER_STATION_IDS, stationPicker } from "./gym-equipment.js";
 import { validFoodImage } from "./food-photo.js";
+import { fetchPublic, publicUrl } from "./public-fetch.js";
 import { instructions } from './private/gym-equipment-ai.js';
 
 // Generic names and groups, in the order the app lists them.
@@ -113,17 +114,10 @@ export function galleryLink(html, base) {
   return null;
 }
 
-// Only public web pages: no local or private addresses.
-function publicUrl(link) {
-  let u; try { u = new URL(link); } catch { return null; }
-  if (!/^https?:$/.test(u.protocol) || /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|\[|169\.254\.)/i.test(u.hostname) || !u.hostname.includes(".")) return null;
-  return u.href;
-}
-
 async function fetchPage(link, fetchImpl) {
   try {
-    const r = await fetchImpl(link, { headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; AurinBot/1.0; +https://aurin.health)" }, redirect: "follow", signal: AbortSignal.timeout(8000) });
-    if (!r.ok || !/html/i.test(r.headers.get("content-type") || "")) return "";
+    const r = await fetchPublic(link, { headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 (compatible; AurinBot/1.0; +https://aurin.health)" }, signal: AbortSignal.timeout(8000) }, fetchImpl);
+    if (!r?.ok || !/html/i.test(r.headers.get("content-type") || "")) return "";
     return (await r.text()).slice(0, 1_500_000);
   } catch { return ""; }
 }
@@ -136,7 +130,7 @@ export async function websitePhotos(link, fetchImpl = fetch) {
   let photos = pageImages(html, page);
   const gallery = photos.length < 8 ? galleryLink(html, page) : null;
   if (gallery) photos = [...new Set([...photos, ...pageImages(await fetchPage(gallery, fetchImpl), gallery)])];
-  return photos.slice(0, 8);
+  return photos.filter(photo => publicUrl(photo)).slice(0, 8);
 }
 
 export async function detectGymEquipment(env, { images = [], url = "" } = {}, fetchImpl = fetch) {

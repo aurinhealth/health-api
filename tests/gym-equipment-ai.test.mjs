@@ -65,3 +65,17 @@ test("website photos: page plus gallery, at most 8, no private addresses", async
   assert.deepEqual(await websitePhotos("http://127.0.0.1/admin", fetchImpl), []);
   assert.deepEqual(await websitePhotos("http://localhost:8787/", fetchImpl), []);
 });
+
+test("website photos: a redirect to a private address is not followed", async () => {
+  const seen = [];
+  const fetchImpl = async (url, init) => {
+    seen.push(url);
+    assert.equal(init.redirect, "manual");
+    if (url === "https://gym.cz/") return new Response(null, { status: 302, headers: { location: "http://169.254.169.254/latest/" } });
+    if (url === "https://ok.cz/") return new Response(null, { status: 301, headers: { location: "/home" } });
+    return new Response(`<img src="/a.jpg"><img src="http://10.0.0.5/b.jpg">`, { headers: { "content-type": "text/html" } });
+  };
+  assert.deepEqual(await websitePhotos("https://gym.cz/", fetchImpl), []);
+  assert.deepEqual(seen, ["https://gym.cz/"]);
+  assert.deepEqual(await websitePhotos("https://ok.cz/", fetchImpl), ["https://ok.cz/a.jpg"]);
+});

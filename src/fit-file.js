@@ -17,10 +17,24 @@ function read(view, at, size, base, little) {
   return v === (signed ? 2 ** (size * 8 - 1) - 1 : 2 ** (size * 8) - 1) ? null : v;
 }
 
+// Unpacked at most MAX_UNPACKED bytes, so a small file cannot grow without end.
+const MAX_UNPACKED = 64 * 1024 * 1024;
 async function unpacked(bytes) {
   if (bytes[0] !== 0x1f || bytes[1] !== 0x8b || typeof DecompressionStream !== 'function') return bytes;
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')).getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > MAX_UNPACKED) { await reader.cancel(); return new Uint8Array(0); }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const c of chunks) { out.set(c, at); at += c.length; }
+  return out;
 }
 
 // [{ t (s from the first record), time (Unix s), lat, lon, alt, dist, speed, hr, cadence, watts }]
