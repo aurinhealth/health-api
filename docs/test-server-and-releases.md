@@ -100,7 +100,9 @@ The zone aurin.health stays in the live account. staging.aurin.health reaches th
 through Cloudflare for SaaS: the test account has a small zone of its own, aurin-staging.com, whose custom hostname is
 staging.aurin.health, and the live zone only has a DNS-only CNAME `staging` to that zone's fallback origin.
 The address, the app's server switch, OAuth return addresses and the coach evaluation stay as they were.
-The test server sends its e-mails from noreply@aurin-staging.com (Email Sending works only on the account's own zones).
+The test account is on Workers Free: Email Sending needs Workers Paid, so the test server sends no
+e-mails and its e-mail sign-in stays hidden (Apple and Google sign-in work). Free also limits a request
+to 10 ms of CPU and the account to 100,000 requests a day, so a heavy screen can fail there and not live.
 The read-only world catalogue and the muscle figure are copied into the test account's own
 `aurin-food-catalog` bucket; without them food search skips the world catalogue there.
 

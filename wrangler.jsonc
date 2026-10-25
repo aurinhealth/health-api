@@ -144,17 +144,15 @@
           "bucket_name": "aurin-food-catalog"
         }
       ],
-      // Bindings are not inherited: the test server sends its own sign-in codes.
-      "send_email": [
-        { "name": "EMAIL" }
-      ],
+      // No send_email: Email Sending needs the Workers Paid plan, and the test account
+      // is on Free. E-mail sign-in stays hidden there (src/email-sender.js); Apple and
+      // Google sign-in work.
       "services": [
         { "binding": "USER_JOBS", "service": "health-api-staging", "entrypoint": "UserJobs" }
       ],
       "vars": {
         "ENVIRONMENT": "staging",
         "APP_ORIGIN": "https://staging.aurin.health",
-        "EMAIL_FROM": "noreply@aurin-staging.com",
         "USER_DATA_ROUTING": "true",
         "FOOD_CATALOG_ROUTING": "true",
         "USER_DATA_SHARD_COUNT": "2",
