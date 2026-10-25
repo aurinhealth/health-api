@@ -1,6 +1,6 @@
 // Push notifications to the iPhone app through Apple's push service (APNs):
 // the morning readiness, once a day after the night's data has arrived
-// ("Připravenost 72 · dnes klidně intervaly"). The app registers its device
+// ("Připravenost 72 · Dnes klidně naplno", the night's numbers, today's plan). The app registers its device
 // token (POST /app/api/push/token) when notifications are allowed and the
 // "Ranní připravenost" switch in Settings → Oznámení is on, and removes it
 // (DELETE) when the switch goes off or the user signs out.
@@ -125,15 +125,16 @@ const apnsHost = (env, environment) => env.APNS_SANDBOX === "1" || env.APNS_SAND
 const DEAD_TOKEN = new Set(["BadDeviceToken", "Unregistered", "DeviceTokenNotForTopic", "ExpiredToken"]);
 
 // One alert to one device: {ok}, {ok:false, gone:true} for a dead token.
-// alert: a text, or {title, body}; category names the phone's buttons for it
-// (the coach's "Vyměnit" / "Nechat"), data rides along for them.
-export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null } = {}) {
+// alert: a text, or {title, subtitle, body}; category names the phone's buttons
+// for it (the coach's "Vyměnit" / "Nechat"), data rides along for them;
+// mutable lets the app's notification extension add an image (the ring).
+export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null, mutable = false } = {}) {
   if (!pushConfigured(env)) return { ok: false, skipped: true };
   const jwt = await apnsJwt(env, now);
   const response = await fetchImpl(`https://${apnsHost(env, device.environment)}/3/device/${device.token}`, {
     method: "POST",
     headers: { authorization: "bearer " + jwt, "apns-topic": APNS_TOPIC, "apns-push-type": "alert", "apns-priority": "10", "content-type": "application/json" },
-    body: JSON.stringify({ ...(data || {}), aps: { alert, sound: "default", ...(category ? { category } : {}) } })
+    body: JSON.stringify({ ...(data || {}), aps: { alert, sound: "default", ...(category ? { category } : {}), ...(mutable ? { "mutable-content": 1 } : {}) } })
   });
   if (response.status === 200) return { ok: true };
   const reason = await response.json().then(x => x?.reason || null).catch(() => null);
@@ -142,20 +143,53 @@ export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Da
   return { ok: false, status: response.status, reason, gone: response.status === 410 || DEAD_TOKEN.has(reason) };
 }
 
-// The readiness and one short piece of advice from its zone.
-// Signs of illness (breathing or temperature up), a sick check-in or a paused
-// athlete never get "intervals are fine".
-export function readinessMessage({ score, zone, flags = [], checkin = null, athleteState = null }) {
+// The morning push (Petr, 2026-10-25): the readiness with one piece of advice
+// from its zone as the title ("Readiness 66 · Go easier today"), the night's
+// numbers against the athlete's normal as the subtitle ("Sleep 6:40 · HRV
+// −14% · Resting HR +2") and what to do with today's planned sessions as the
+// body. Signs of illness (breathing or temperature up), a sick check-in or a
+// paused athlete never get "go hard". `zone` is the colour of the ring the
+// app's notification extension draws (ios-native ReadinessNotification).
+export function readinessMessage({ score, zone, flags = [], missing = [], checkin = null, athleteState = null, sleep = null, hrv = null, restingHR = null, planned = [] }) {
   const sick = checkin === "sick" || (flags || []).includes("checkin_sick"), signs = (flags || []).some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f));
-  const head = L("Připravenost", "Readiness") + " " + Math.round(Number(score));
-  if (sick || (athleteState && athleteState !== "active")) return head + " · " + L("dnes odpočinek", "rest today");
-  if (signs) return head + " · " + L("dech nebo teplota jsou vyšší, dnes bez intenzity", "breathing or temperature is up, no intensity today");
-  const advice = {
-    green: L("dnes klidně intervaly", "intervals are fine today"),
-    yellow: L("dnes spíš lehčeji, bez intervalů", "go easier today, skip the intervals"),
-    red: L("dnes odpočinek nebo jen lehký pohyb", "rest or only light movement today")
+  const rest = sick || (athleteState && athleteState !== "active");
+  const shown = rest ? "red" : signs && zone === "green" ? "yellow" : zone;
+  const advice = rest ? L("Dnes odpočinek", "Rest today") : signs ? L("Dnes bez intenzity", "No intensity today") : {
+    green: L("Dnes klidně naplno", "Go hard today"),
+    yellow: L("Dnes spíš lehčeji", "Go easier today"),
+    red: L("Dnes odpočinek", "Rest today")
   }[zone];
-  return advice ? head + " · " + advice : head;
+  const title = L("Připravenost", "Readiness") + " " + Math.round(Number(score)) + (advice ? " · " + advice : "");
+  const subtitle = nightNumbers({ sleep, hrv, restingHR, noSleep: (missing || []).includes("sleep") }) || undefined;
+  const sessions = (planned || []).filter(s => s && s.title).slice(0, 2);
+  const names = sessions.map(s => s.title).join(", ");
+  const sport = sessions.length === 1 ? sessions[0].sport : null;
+  let body;
+  if ((missing || []).includes("sleep")) body = L("Otevři Aurin, ať se noc nahraje; skóre se může změnit.", "Open Aurin to sync last night; the score may change.");
+  else if (rest) body = names ? L(`${names} dnes vynech a dej tělu klid.`, `Skip today's ${names} and let your body recover.`) : L("Dej tělu klid.", "Let your body recover today.");
+  else if (signs) body = L("Může to být začátek nemoci. Dnes odpočívej a napiš kouči, jak se cítíš.", "Could be the start of an illness. Rest today and tell the coach how you feel.");
+  else if (zone === "green") body = names ? L(`Dnešní plán: ${names}. Tělo je připravené, do toho.`, `Today's plan: ${names}. Your body is ready, go for it.`) : L("Nic naplánováno. Dobrý den na těžší trénink.", "Nothing planned. A good day for a harder session.");
+  else if (zone === "yellow") body = !names ? L("Nic naplánováno. Když budeš trénovat, tak lehce: Z2 nebo lehká posilovna.", "Nothing planned. If you train, keep it easy: Z2 or a light gym session.")
+    : sport === "strength" ? L(`Dnešní plán: ${names}. Lehčí váhy, skonči 2–3 opakování před selháním.`, `Today's plan: ${names}. Lighter weights, stop 2–3 reps before failure.`)
+    : sport === "ride" || sport === "run" ? L(`Dnešní plán: ${names}. Raději lehce v Z2, intervaly jindy.`, `Today's plan: ${names}. Keep it easy in Z2 instead, intervals another day.`)
+    : L(`Dnešní plán: ${names}. Dnes v klidnějším tempu.`, `Today's plan: ${names}. Take it easier than usual.`);
+  else if (zone === "red") body = names ? L(`${names} dnes vynech. Nanejvýš procházka nebo lehké protažení.`, `Skip today's ${names}. A walk or easy mobility at most.`) : L("Nanejvýš procházka nebo lehké protažení.", "A walk or easy mobility at most.");
+  return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, zone: shown || null };
+}
+
+// "Sleep 6:40 · HRV −14% · Resting HR +2": the night, and HRV and resting
+// heart rate against their baseline (the plain value until it has one).
+const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n);
+export function nightNumbers({ sleep = null, hrv = null, restingHR = null, noSleep = false } = {}) {
+  const parts = [];
+  const minutes = Number(sleep?.minutes);
+  if (minutes > 0) parts.push(L("Spánek", "Sleep") + " " + Math.floor(minutes / 60) + ":" + String(Math.round(minutes % 60)).padStart(2, "0"));
+  const h = Number(hrv?.value), hb = Number(hrv?.baseline);
+  if (h > 0) parts.push("HRV " + (hb > 0 ? signed(Math.round((h / hb - 1) * 100)) + L(" %", "%") : Math.round(h) + " ms"));
+  const r = Number(restingHR?.value), rb = Number(restingHR?.baseline);
+  if (r > 0) parts.push(L("Klidový tep", "Resting HR") + " " + (rb > 0 ? signed(Math.round(r - rb)) : Math.round(r)));
+  if (noSleep && !(minutes > 0)) parts.push(L("spánek zatím chybí", "no sleep yet"));
+  return parts.join(" · ");
 }
 
 // Did the Apple Health upload bring the night that ended today?
@@ -169,8 +203,8 @@ export function hasLastNight(records, now = new Date()) {
 // only when today's readiness has a score (or, in the last hour, a line that
 // the night hasn't arrived when yesterday had one). readiness(date) computes it
 // (entrypoint.js: as /app/api/today does) and runs only when everything else
-// allows a push.
-export async function sendMorningReadiness(env, { readiness, now = new Date(), fetchImpl = fetch } = {}) {
+// allows a push; details(date) the push's numbers and plan, once it goes out.
+export async function sendMorningReadiness(env, { readiness, details = null, now = new Date(), fetchImpl = fetch } = {}) {
   if (!pushConfigured(env) || !env.DB) return { sent: 0, reason: "not-configured" };
   const db = env.DB;
   const [language, zone] = await Promise.all([storedLanguage(db, db.userId ?? env.USER_ID), storedTimeZone(db, db.userId ?? env.USER_ID)]);
@@ -196,17 +230,24 @@ export async function sendMorningReadiness(env, { readiness, now = new Date(), f
     // The day is claimed before sending, so an upload and the cron at the same moment send one push.
     const claim = await db.prepare("INSERT INTO push_log(user_id,kind,local_date) VALUES(?,?,?) ON CONFLICT(user_id,kind,local_date) DO NOTHING").bind(db.userId, MORNING_READINESS, date).run();
     if (!Number(claim?.meta?.changes)) return { sent: 0, reason: "already-sent" };
-    text ||= readinessMessage(value);
+    // A scored morning carries its score and ring colour for the app's
+    // notification extension (mutable-content lets it add the ring).
+    // details(date) adds the night, the baselines and today's plan (entrypoint.js todayReadiness).
+    const more = text || typeof details !== "function" ? null : await Promise.resolve().then(() => details(date)).catch(() => null);
+    const full = more ? { ...value, sleep: more.sleep ?? null, hrv: more.hrv ?? null, restingHR: more.restingHR ?? null, planned: more.planned || [] } : value;
+    const message = text ? null : readinessMessage(full);
+    const alert = text || message.alert;
+    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true } : {};
     let sent = 0, removed = 0;
     for (const device of devices) {
-      const result = await sendPush(env, device, text, { fetchImpl, now: now.getTime() }).catch(error => ({ ok: false, error: error.message }));
+      const result = await sendPush(env, device, alert, { fetchImpl, now: now.getTime(), ...extra }).catch(error => ({ ok: false, error: error.message }));
       if (result.ok) sent++;
       else if (result.gone) removed += await deletePushToken(db, device.token);
       else console.error("Push not delivered", result.status || "", result.reason || result.error || "");
     }
     // Nothing reached a phone (APNs down, a network error): a later sync tries again.
     if (!sent) await db.prepare("DELETE FROM push_log WHERE user_id=? AND kind=? AND local_date=?").bind(db.userId, MORNING_READINESS, date).run();
-    return { sent, removed, date, text };
+    return { sent, removed, date, text: alert };
   }));
 }
 

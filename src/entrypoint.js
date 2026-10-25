@@ -601,20 +601,28 @@ async function milestoneInputs(env,today){
 // Today's readiness exactly as /app/api/today computes it (buildToday), from
 // only the inputs it needs. fresh skips the short-lived cache: right after an
 // Apple Health upload the cached copies are older than the night just sent.
-async function todayReadiness(env, ctx, date, { fresh = false } = {}) {
+// plan adds what the morning push tells (push.js readinessMessage): the night,
+// HRV and resting heart rate against their baseline and the sessions still
+// planned today (Intervals.icu, the app's gym plan), as Today shows them.
+async function todayReadiness(env, ctx, date, { fresh = false, plan = false } = {}) {
   const internalAuth = internalHeaders();
   const read = path => app.fetch(new Request('https://internal' + path, { headers: internalAuth }), env, ctx).then(r => r.ok ? r.json() : {}).catch(() => ({}));
   const internal = path => handleDashboardApi(new Request('https://internal' + path), env, ctx, new URL('https://internal' + path)).then(r => r.ok ? r.json() : {}).catch(() => ({}));
   const from = shiftDate(date, -30), to = shiftDate(date, 1);
-  const [health, fitness, sleep, profile, checkin] = await Promise.all([
+  const [health, fitness, sleep, profile, checkin, daily, gym] = await Promise.all([
     (fresh ? googleDashboard(env.DB, date) : googleHealthFor(env, ctx, date)).catch(() => ({})),
     (fresh ? internal('/app/api/fitness?days=90') : cached(env, ctx, 'fitness:90', () => internal('/app/api/fitness?days=90'))).catch(() => ({})),
     read('/health/sleep?start=' + from + '&end=' + to).then(d => intervalsSleep(env,ctx,d,from, to)).catch(() => ({})),
     dashboardProfile(env).catch(() => null),
-    readinessCheckin(env.DB, date).catch(() => null)
+    readinessCheckin(env.DB, date).catch(() => null),
+    plan ? read('/analysis/daily?date=' + date) : null,
+    plan ? trainingGymPlans(env, date, date).catch(() => ({})) : null
   ]);
   if (date === localToday() && profile) ctx.waitUntil(lockReadiness(env.DB, { date, health, fitness, sleep, profile }).catch(() => false));
-  return buildToday({ date, hour: localHour(), health, fitness, sleep, profile: profile || {}, checkin }).readiness;
+  const today = buildToday({ date, hour: localHour(), daily: daily || {}, health, fitness, sleep, profile: profile || {}, checkin, gym: gym?.[date] || null });
+  if (!plan) return today.readiness;
+  const planned = (today.plan || []).filter(i => i.kind === 'workout' && i.status === 'planned').map(i => ({ title: i.title, sport: i.sport }));
+  return { ...today.readiness, sleep: today.sleep, hrv: today.hrv, restingHR: today.restingHR, planned };
 }
 
 // Deník's "Co na tebe působí": the morning metrics (readiness, HRV, resting
@@ -641,7 +649,9 @@ async function morningPush(env, ctx, options = {}) {
   // Settings → Oznámení → Ranní připravenost off; the phone keeps its token for the coach.
   const state = await getAthleteState(env.DB).catch(() => null);
   if (state?.notify?.morning === false) return { sent: 0, reason: 'off' };
-  return sendMorningReadiness(env, { readiness: async date => { const r = await todayReadiness(env, ctx, date, options); return r ? { ...r, athleteState: state?.status || null } : r; } });
+  const withState = r => r ? { ...r, athleteState: state?.status || null } : r;
+  // The night, the baselines and today's plan only once the push goes out.
+  return sendMorningReadiness(env, { readiness: async date => withState(await todayReadiness(env, ctx, date, options)), details: async date => withState(await todayReadiness(env, ctx, date, { ...options, plan: true })) });
 }
 
 // The coach's own push (coach-push.js), checked with the morning push: a time
