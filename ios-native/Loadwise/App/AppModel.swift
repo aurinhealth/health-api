@@ -26,8 +26,8 @@ final class AppModel {
     private(set) var food: FoodSnapshot?
     var foodError: String?
     /// A write or a refresh that failed while data is on screen: shown on top
-    /// of every tab until tapped away (the screens' own errors show only
-    /// without data).
+    /// of every tab for 8 s or until tapped away (the screens' own errors show
+    /// only without data).
     var notice: String?
     private(set) var loading = false
     /// Loading with no day on screen yet: the day arrows and swipes wait. With
@@ -121,19 +121,27 @@ final class AppModel {
     }
 
     /// hide: the planned event that leaves the week and the calendar at once;
-    /// "Zpět" brings it back with the next load.
-    func deleteLater(_ title: String, hide eventId: String? = nil, commit: @escaping () async -> Void) {
+    /// activity: the done activity that leaves the week, the calendar and the
+    /// day. "Vrátit" brings either back with the next load.
+    func deleteLater(_ title: String, note: String? = nil, hide eventId: String? = nil, activity: String? = nil, commit: @escaping () async -> Void) {
         if let eventId {
             training?.sessions?.removeAll { $0.eventId == eventId }
             for (day, value) in calendar where value.activities.contains(where: { $0.eventId == eventId }) {
                 calendar[day]?.activities.removeAll { $0.eventId == eventId }
             }
         }
-        let undo: () async -> Void = eventId == nil ? {} : { [weak self] in
+        if let activity {
+            training?.sessions?.removeAll { $0.id == activity }
+            for (day, value) in calendar where value.activities.contains(where: { $0.id == activity }) {
+                calendar[day]?.activities.removeAll { $0.id == activity }
+            }
+            today?.plan.removeAll { $0.session?.id == activity }
+        }
+        let undo: () async -> Void = eventId == nil && activity == nil ? {} : { [weak self] in
             await self?.refreshTraining()
             await self?.refresh()
         }
-        undoToast = PlanToast(title: title, note: nil, cancelled: true, undo: undo, commit: commit)
+        undoToast = PlanToast(title: title, note: note, cancelled: true, undo: undo, commit: commit)
     }
     /// The Today and Food answers as they came, under the waiting writes.
     @ObservationIgnored private var todayBase: Data?

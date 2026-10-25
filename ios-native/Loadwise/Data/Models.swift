@@ -12,7 +12,7 @@ struct TodaySnapshot: Decodable, Equatable {
     let restingHR: RestingHR?
     let summary: Summary?
     let nutrition: Nutrition
-    let plan: [PlanItem]
+    var plan: [PlanItem]
     let tonight: Tonight?
     let steps: Steps
     let weight: Weight?
