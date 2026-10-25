@@ -243,6 +243,32 @@ async function forWahooUser(env, wahooUser, fn) {
     return result;
   }, await accountUsers(env, "wahoo", wahooUser));
 }
+// Each athlete of a webhook in an invocation of their own (UserJobs), so a big
+// batch never runs one invocation over its limits and loses the changes after
+// the answer went out (deletions too). Without the binding (tests, local runs),
+// or when the call did not go through, the work runs here.
+async function intervalsWebhookFor(env, ctx, message) {
+  const binding = env.USER_JOBS && typeof env.USER_JOBS.intervalsWebhook === "function" ? env.USER_JOBS : null;
+  if (binding) {
+    try {
+      const result = await binding.intervalsWebhook(message);
+      if (result?.ok === false) console.error("Intervals.icu webhook failed", message.athlete, result.error);
+      return result;
+    } catch (error) { console.error("Intervals.icu webhook invocation failed", message.athlete, error.message); }
+  }
+  return forIntervalsAthlete(env, ctx, message.athlete, message.parts, message.kinds, message.deleted);
+}
+// The UserJobs entrypoint's webhook call: one athlete's changes, in a fresh invocation.
+export async function runIntervalsWebhookInvocation(env, ctx, { athlete, parts = [], kinds = [], deleted = [] } = {}) {
+  try {
+    await ensureTenancy(env.DB, env);
+    useCookbookDatabase(env.DB);
+    await forIntervalsAthlete(env, ctx, String(athlete || ""), parts, kinds, deleted);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error?.message || String(error) };
+  }
+}
 async function forIntervalsAthlete(env, ctx, athlete, parts, kinds, deleted = []) {
   return forEachUser(env, ["intervals"], async scoped => {
     if (!scoped.INTERVALS_ATHLETE_ID || scoped.INTERVALS_ATHLETE_ID !== athlete) return null;
@@ -493,7 +519,7 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Wahoo's webhook: a finished workout of whoever is connected to that Wahoo account.
     if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forWahooUser(rawEnv, wahooUser, fn));
     // Intervals.icu's webhooks: what changed for an athlete connected with OAuth.
-    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds, deleted) => forIntervalsAthlete(rawEnv, ctx, athlete, parts, kinds, deleted));
+    if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds, deleted) => intervalsWebhookFor(rawEnv, ctx, { athlete, parts, kinds, deleted }));
     // Passkeys in the iPhone app: the app's associated domain (apple-app-site-association.js).
     const siteAssociation = appleAppSiteAssociation(request, rawEnv, url.pathname);
     if (siteAssociation) return siteAssociation;

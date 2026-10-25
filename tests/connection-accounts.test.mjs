@@ -6,7 +6,7 @@ import { ensureTenancy, scopedDb, PERSONAL_TABLES, _resetTenancyForTest } from "
 import { saveConnectionSecret, deleteConnectionSecret } from "../src/connection-secrets.js";
 import { deleteAccount } from "../src/account-data.js";
 import { CENTRAL_PERSONAL_TABLES } from "../src/user-data-routing.js";
-import worker from "../src/entrypoint.js";
+import worker, { runIntervalsWebhookInvocation } from "../src/entrypoint.js";
 
 // Webhooks find their user by the account they name (connection_accounts),
 // not by decrypting every user's keys: that hit the 1000 queries an invocation
@@ -69,6 +69,23 @@ test("a webhook reaches its user with the same few queries whether there are 5 u
   }
   assert.deepEqual(counts[300], counts[5]);
   assert.ok(counts[300].every(n => n <= 15), JSON.stringify(counts));
+});
+
+test("each athlete of an Intervals.icu webhook gets an invocation of their own; a refused call runs here", async () => {
+  const env = await setup(3);
+  const calls = [];
+  env.USER_JOBS = { intervalsWebhook: async message => { calls.push(message); if (message.athlete === "i5003") throw new Error("over the limit"); return { ok: true }; } };
+  const both = new Request("https://aurin.health/webhooks/intervals", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer isec" },
+    body: JSON.stringify({ events: [{ athlete_id: "i5002", type: "FITNESS_UPDATED" }, { athlete_id: "i5003", type: "FITNESS_UPDATED" }] }) });
+  assert.equal((await deliver(env, both)).status, 200);
+  assert.deepEqual(calls.map(c => c.athlete).sort(), ["i5002", "i5003"]);
+  assert.deepEqual(calls[0].kinds, ["wellness"]);
+  // i5002's invocation did the work (not here); i5003's call failed, so it ran here.
+  assert.equal(cacheVersion(env, 2), 0);
+  assert.ok(cacheVersion(env, 3) > 0);
+  // The invocation itself (UserJobs.intervalsWebhook).
+  assert.deepEqual(await runIntervalsWebhookInvocation({ ...env, USER_JOBS: undefined }, { waitUntil() {} }, calls[0]), { ok: true });
+  assert.ok(cacheVersion(env, 2) > 0);
 });
 
 test("a connection from before the table is found by its keys once, then by its row", async () => {
