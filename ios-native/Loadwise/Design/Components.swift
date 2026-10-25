@@ -409,7 +409,8 @@ private struct PinnedTopBar: ViewModifier {
                     }
                     if let trailing {
                         ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled, action: trailing.action)
-                    } else {
+                    } else if extra == nil {
+                        // Balances the back button; "Vybrat" alone sits at the edge itself.
                         Color.clear.frame(width: 40, height: 40)
                     }
                 }
