@@ -133,7 +133,7 @@
         {
           "binding": "DB",
           "database_name": "health-data-staging",
-          "database_id": "406eb5d6-2fa8-478a-85ba-be274632ef4a",
+          "database_id": "5d0d935f-a587-4bf5-8264-e290c11eb001",
           "migrations_dir": "migrations"
         }
       ],
