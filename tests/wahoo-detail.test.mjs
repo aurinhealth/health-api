@@ -65,6 +65,9 @@ test("a FIT file gives a record a second: compressed timestamps, positions, gaps
   const gz = new Uint8Array(await new Response(new Blob([fitFile(START, 30)]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
   assert.equal((await parseFit(gz)).length, 30);
   assert.deepEqual(await parseFit(new Uint8Array([1, 2, 3])), []);
+  // A small file that would unpack past the limit is not read.
+  const bomb = new Uint8Array(await new Response(new Blob([new Uint8Array(80 * 1024 * 1024)]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+  assert.deepEqual(await parseFit(bomb), []);
 });
 
 test("a Wahoo ride opens with its power and heart-rate curves from the FIT file, read once", async () => {
