@@ -2868,7 +2868,11 @@
 "Aurin nemá přístup ke kalendáři. Povol ho v Nastavení iPhonu → Aplikace → Aurin → Kalendáře." = "Aurin can't access your calendar. Allow it in iPhone Settings → Apps → Aurin → Calendars.";
 "Závod · %@" = "Race · %@";
 "Podle cviku" = "By exercise";
-"Hotové série zůstanou u cviku %@." = "The sets done stay with %@.";
+"Hotové série zůstanou u cviku %@." = "Sets you’ve done stay with %@.";
+"Vybrat jiný cvik" = "Choose another exercise";
+"Zbývá %@ série" = "%@ set left";
+"Zbývají %@ série" = "%@ sets left";
+"Zbývá %@ sérií" = "%@ sets left";
 "Upravit poznámku" = "Edit the note";
 "Přidat poznámku ke cviku" = "Add a note to the exercise";
 "Třeba sedadlo 4, úzký úchop" = "e.g. seat 4, narrow grip";

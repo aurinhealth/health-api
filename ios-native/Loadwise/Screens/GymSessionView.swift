@@ -669,6 +669,9 @@ struct TechniqueSheet: View {
     }
 }
 
+/// "Nahradit cvik": the replacements as cards (the dumbbell, a short line on
+/// how it differs, the estimated load, "i"), and in Režim tréninku "Vybrat jiný
+/// cvik" for any exercise from the catalog.
 struct AlternativesSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -676,64 +679,58 @@ struct AlternativesSheet: View {
     let exercise: String
     /// The proposal's other exercises (not saved yet), so they are not offered.
     var inPlan: [String] = []
+    /// Under the exercise's name: "Zadní ramena · Zbývají 2 série".
+    var subtitle: String? = nil
     var footnote: String? = "Nahradí jen série, které ještě nejsou hotové."
     var choose: (String) -> Void
     /// The whole alternative (its estimated load), for a proposal not saved yet.
     var chooseAlternative: ((GymAlternative) -> Void)? = nil
     /// Only the first few (Režim tréninku: three), each with its estimated load.
     var limit: Int? = nil
+    /// "Vybrat jiný cvik": the whole catalog instead (the sheet closes first).
+    var chooseOther: (() -> Void)? = nil
     @State private var items: [GymAlternative] = []
     @State private var loading = true
     @State private var technique: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(L10n.f("Místo: %@", exercise)).font(Typo.sentence(24, relativeTo: .title2)).foregroundStyle(Palette.ink)
-                Spacer()
-                Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
-            }
-            if loading {
-                ProgressView().frame(maxWidth: .infinity).padding(.top, 30)
-            } else if items.isEmpty {
-                Text("Žádná náhrada se nenašla.").font(Typo.small).foregroundStyle(Palette.muted)
-            }
-            PageScroll {
-                VStack(spacing: 0) {
-                    ForEach(limit.map { Array(items.prefix($0)) } ?? items) { alt in
-                        Button {
-                            choose(alt.name)
-                            chooseAlternative?(alt)
-                            dismiss()
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(alt.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
-                                    Text([alt.muscle, alt.station, alt.note].compactMap { $0 }.joined(separator: " · ")).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(2)
-                                }
-                                Spacer()
-                                if limit != nil {
-                                    if let kg = alt.kg, kg > 0 {
-                                        Text(GymCoach.shown(kg) + " " + Units.weightUnit).font(Typo.number(21)).foregroundStyle(Palette.ink)
-                                    }
-                                } else {
-                                    Image(systemName: "arrow.triangle.swap").foregroundStyle(Palette.faint)
-                                }
-                            }
-                            .padding(.vertical, 12)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.trailing, 36)
-                        .overlay(alignment: .trailing) { ExerciseInfoButton(name: alt.name) { technique = alt.name } }
-                        .overlay(alignment: .bottom) { Rectangle().fill(Palette.hairline).frame(height: 1) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                header.padding(.bottom, 4)
+                if loading {
+                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, 30)
+                } else if items.isEmpty {
+                    Text("Žádná náhrada se nenašla.").font(Typo.small).foregroundStyle(Palette.muted).padding(.vertical, 8)
+                }
+                ForEach(limit.map { Array(items.prefix($0)) } ?? items) { alt in
+                    card(alt)
+                }
+                if let chooseOther {
+                    SecondaryButton(title: "Vybrat jiný cvik", systemImage: "magnifyingglass") {
+                        dismiss()
+                        chooseOther()
                     }
+                    .padding(.top, 2)
+                }
+                if let footnote {
+                    Label(L10n.tr(footnote), systemImage: "checkmark")
+                        .font(Typo.caption).foregroundStyle(Palette.faint)
+                        .frame(maxWidth: .infinity)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 6)
                 }
             }
-            if let footnote { Text(footnote).font(Typo.caption).foregroundStyle(Palette.faint) }
+            .padding(.horizontal, 20)
+            .padding(.top, 24)
+            .padding(.bottom, 20)
         }
-        .padding(24)
+        .scrollBounceBehavior(.basedOnSize)
+        .background(alignment: .top) {
+            RadialGradient(colors: [Palette.amberSoft, Palette.background.opacity(0)], center: .top, startRadius: 0, endRadius: 320)
+                .frame(height: 260).ignoresSafeArea().allowsHitTesting(false)
+        }
         .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
         .presentationBackground(Palette.background)
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
             TechniqueSheet(exercise: item.name)
@@ -743,6 +740,71 @@ struct AlternativesSheet: View {
             guard !model.demo else { return }
             items = (try? await model.api.gymAlternatives(date: date, exercise: exercise, inPlan: inPlan)) ?? []
         }
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                SectionLabel(text: "Nahradit cvik")
+                Text(verbatim: ExerciseCatalog.shownName(exercise))
+                    .font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let subtitle {
+                    Text(verbatim: subtitle).font(Typo.body).foregroundStyle(Palette.muted)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            CircleButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private func card(_ alt: GymAlternative) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                choose(alt.name)
+                chooseAlternative?(alt)
+                dismiss()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "dumbbell.fill").font(.system(size: 16)).foregroundStyle(Palette.amber)
+                        .frame(width: 44, height: 44).background(Palette.amberSoft, in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verbatim: ExerciseCatalog.shownName(alt.name))
+                            .font(Typo.bodyStrong.weight(.semibold)).foregroundStyle(Palette.ink)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let line = Self.shortLine(alt) {
+                            Text(verbatim: line).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    if limit != nil, let kg = alt.kg, kg > 0 {
+                        NumberText(value: GymCoach.shown(kg), unit: Units.weightUnit, size: 24).fixedSize()
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            SmallInfoButton(label: L10n.f("Jak na %@", alt.name)) { technique = alt.name }
+        }
+        .padding(.leading, 13).padding(.trailing, 12).padding(.vertical, 12)
+        .cardSurface(cornerRadius: 22)
+    }
+
+    /// One short line on the alternative: the catalog's note without the
+    /// muscle it starts with and the "kg = …" hint ("one-arm row with the elbow
+    /// high and out"), else its station without the count ("Kladky").
+    static func shortLine(_ alt: GymAlternative) -> String? {
+        let note = alt.note ?? ""
+        let afterMuscle = note.split(separator: ";", maxSplits: 1).count > 1 ? String(note.split(separator: ";", maxSplits: 1)[1]) : note
+        let parts = afterMuscle.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.lowercased().hasPrefix("kg =") && !$0.lowercased().hasPrefix("kg=") }
+        let text = parts.joined(separator: ", ")
+        if !text.isEmpty, text.lowercased() != alt.muscle?.lowercased() { return Fmt.capitalized(text) }
+        let station = (alt.station ?? "").replacingOccurrences(of: #"\s*\(\d+×\)"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
+        return station.isEmpty ? alt.muscle?.nilIfBlank : station
     }
 }
 

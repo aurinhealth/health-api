@@ -517,6 +517,9 @@ struct GymExerciseSearch: View {
     let history: GymHistory
     let catalog: [GymCatalogExercise]
     let used: Set<String>
+    /// "Vybrat jiný cvik" in Režim tréninku: the pick takes the place of an exercise.
+    var title = "Přidat cvik"
+    var replaces = false
     let pick: (String) -> Void
     @State private var query = ""
     @State private var technique: String?
@@ -555,7 +558,7 @@ struct GymExerciseSearch: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Přidat cvik").font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
+                Text(L10n.tr(title)).font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
                 Spacer()
                 Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted)
             }
@@ -590,7 +593,7 @@ struct GymExerciseSearch: View {
                                     }
                                     Spacer(minLength: 8)
                                     if used.contains(item.name) { Text("v tréninku").font(Typo.caption).foregroundStyle(Palette.faint) }
-                                    Image(systemName: "plus").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.amberBar)
+                                    Image(systemName: replaces ? "arrow.triangle.swap" : "plus").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.amberBar)
                                 }
                                 .padding(.vertical, 10)
                                 .contentShape(Rectangle())
