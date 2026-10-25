@@ -5,7 +5,7 @@ import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { googleToken } from "../src/index.js";
 import { connectionStatus } from "../src/connections.js";
-import { markConnectionBroken, markConnectionOk, clearConnectionHealth, readConnectionHealth, connectionProblems } from "../src/connection-health.js";
+import { markConnectionBroken, markConnectionOk, clearConnectionHealth, readConnectionHealth, connectionProblems, withoutBrokenConnections } from "../src/connection-health.js";
 
 const envFor = (db, extra = {}) => ({ DB: scopedDb(db, 4), USER_ID: 4, GOOGLE_CLIENT_ID: "id", GOOGLE_CLIENT_SECRET: "secret", GOOGLE_REFRESH_TOKEN: "refresh", INTERVALS_API_KEY: "key", ...extra });
 async function withFetch(answer, fn) {
@@ -16,7 +16,7 @@ async function withFetch(answer, fn) {
 
 test("a revoked Google grant marks Google for reconnecting; the next token clears it", async () => {
   const db = createD1(), env = envFor(db);
-  await withFetch(() => Response.json({ error: "invalid_grant", error_description: "Token has been expired or revoked." }, { status: 400 }), () => assert.rejects(googleToken(env), /invalid or expired/));
+  await withFetch(() => Response.json({ error: "invalid_grant", error_description: "Token has been expired or revoked." }, { status: 400 }), () => assert.rejects(googleToken(env), /vypršel nebo byl odebrán|expired or was revoked/));
   let health = await readConnectionHealth(env);
   assert.equal(health.google.needsReconnect, true);
   assert.equal(health.google.lastError, "Token has been expired or revoked.");
@@ -77,4 +77,19 @@ test("Today carries the connection problems it is given", async () => {
   const problem = { provider: "intervals", name: "Intervals.icu", needsReconnect: true, missingPermissions: [], message: "x" };
   assert.deepEqual(buildToday({ date: "2026-10-09", connectionProblems: [problem] }).connectionProblems, [problem]);
   assert.deepEqual(buildToday({ date: "2026-10-09" }).connectionProblems, []);
+});
+
+test("the cron leaves a refused Google or Intervals.icu connection out, except once an hour", async () => {
+  const db = createD1(), env = envFor(db, { CONNECTED_PROVIDERS: ["google", "intervals"] });
+  const at = minute => new Date(Date.UTC(2026, 9, 25, 7, minute));
+  assert.equal(await withoutBrokenConnections(env, at(5)), env);
+  await markConnectionBroken(env, "google", "Token has been expired or revoked.");
+  const resting = await withoutBrokenConnections(env, at(5));
+  assert.deepEqual(resting.CONNECTED_PROVIDERS, ["intervals"]);
+  assert.equal(resting.GOOGLE_REFRESH_TOKEN, undefined);
+  assert.equal(resting.INTERVALS_API_KEY, "key");
+  // The top of the hour tries it again; a success clears the mark.
+  assert.deepEqual((await withoutBrokenConnections(env, at(0))).CONNECTED_PROVIDERS, ["google", "intervals"]);
+  await markConnectionOk(env, "google");
+  assert.deepEqual((await withoutBrokenConnections(env, at(5))).CONNECTED_PROVIDERS, ["google", "intervals"]);
 });

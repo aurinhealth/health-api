@@ -76,6 +76,23 @@ export async function readConnectionHealth(env) {
   return out;
 }
 
+// Google Health and Intervals.icu sync every few minutes. A connection the
+// service refused waits for the user to connect again (which clears the mark),
+// so the cron leaves it out except at the top of each hour, in case the key was
+// replaced by hand or the refusal passes. Without this a revoked Google grant
+// failed 60+ times a day per user in the owner's morning e-mail.
+const RESTING = { google: "GOOGLE_REFRESH_TOKEN", intervals: "INTERVALS_API_KEY" };
+export async function withoutBrokenConnections(env, now = new Date()) {
+  const connected = env?.CONNECTED_PROVIDERS || [];
+  if (now.getUTCMinutes() === 0 || !Object.keys(RESTING).some(p => connected.includes(p))) return env;
+  const health = await readConnectionHealth(env);
+  const broken = Object.keys(RESTING).filter(p => connected.includes(p) && health[p].needsReconnect);
+  if (!broken.length) return env;
+  const out = { ...env, CONNECTED_PROVIDERS: connected.filter(p => !broken.includes(p)) };
+  for (const p of broken) delete out[RESTING[p]];
+  return out;
+}
+
 // The connected providers that need the user: access refused, or Google
 // permissions left unticked. Shown on Today and in Settings.
 export function connectionProblems(status) {
