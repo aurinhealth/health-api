@@ -258,3 +258,32 @@ test("the plan's step kinds (intensity=) decide Wahoo's warm-up, rests and cool-
   assert.deepEqual(plan.intervals.map(i => i.intensity_type || i.intervals.map(x => x.intensity_type).join("/")), ["wu", "map/rest", "cd"]);
   assert.equal(plan.intervals[1].exit_trigger_value, 3);
 });
+
+test("a gym session ahead never makes the export retry ask Intervals.icu for the thresholds", async () => {
+  const { db } = setup();
+  let asked = 0;
+  const intervals = async url => { if (String(url).includes("intervals.icu")) asked++; return Response.json({}); };
+  const wahoo = api(), fetchImpl = (url, opts) => String(url).includes("intervals.icu") ? intervals(url) : wahoo.fetchImpl(url, opts);
+  const e = env(db, undefined, { INTERVALS_API_KEY: "k" });
+  await storeLocalEvent(db, { external_id: "manual:gym7654321", category: "WORKOUT", name: "Posilovna", type: "WeightTraining", start_date_local: "2026-10-16T17:00:00", moving_time: 3600 });
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = intervals;
+  try {
+    for (let i = 0; i < 3; i++) assert.deepEqual(await retryWahooExports(e, { fetchImpl, now: NOW }), []);
+    // Plánované tréninky off: the ride stays in the app, and nothing is asked either.
+    await saveSyncPrefs(db, 1, "wahoo", { pushPlanned: false });
+    await storeLocalEvent(db, { external_id: "manual:ride7654321", category: "WORKOUT", name: "Zítra", type: "Ride", start_date_local: "2026-10-15T17:00:00", moving_time: 3600 });
+    for (let i = 0; i < 2; i++) await retryWahooExports(e, { fetchImpl, now: NOW });
+  } finally { globalThis.fetch = realFetch; }
+  assert.equal(asked, 0);
+});
+
+test("two sends of the same new plan at once make it on Wahoo only once", async () => {
+  const { db } = setup();
+  const e = env(db);
+  const local = await storeLocalEvent(db, { external_id: "manual:twice12345", category: "WORKOUT", name: "Tempo", type: "Ride", start_date_local: "2099-01-01T12:00:00", moving_time: 3600 });
+  const { calls, fetchImpl } = api();
+  const results = await Promise.all([syncWahooWorkout(e, local.id, { fetchImpl, now: NOW, thresholds: {} }), syncWahooWorkout(e, local.id, { fetchImpl, now: NOW, thresholds: {} })]);
+  assert.deepEqual(results.map(r => r.status).sort(), ["pending", "synced"]);
+  assert.deepEqual(calls.filter(c => c.method === "POST").map(c => c.path), ["/v1/plans", "/v1/workouts"]);
+});
