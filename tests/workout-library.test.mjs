@@ -128,7 +128,7 @@ test("Intervals text expresses repeats, short steps and cadence", () => {
   assert.match(intervalsText([step(10, 75), rep(5, [step(3, 105), step(2, 70)]), step(8, 72)], { sport: "run" }), /Main Set 5x\n- 3m 105% Pace intensity=interval\n- 2m 70% Pace intensity=recovery/);
 });
 
-test("the planned event reads like IcuSync: kinds, one focus line with watts, carbs and a start time", () => {
+test("the planned event reads like IcuSync: kinds, one focus line with watts, carbs and the start time given", () => {
   const w = byId("pfd-vo2-5x4x112-90");
   const event = buildIntervalsEvent(w, "2026-10-19", "indoor", { thresholds: { ftp: 260, indoorFtp: 260 }, startTime: "20:00" });
   assert.equal(event.start_date_local, "2026-10-19T20:00:00");
@@ -139,9 +139,9 @@ test("the planned event reads like IcuSync: kinds, one focus line with watts, ca
   assert.equal(steps, "Warmup");
   assert.doesNotMatch(event.description, /ERG|ventilátor/);
   assert.match(event.description, /Main Set 5x\n- 4m 112% .*intensity=interval/);
-  // Without a time it still gets one; an easy short ride needs no carbs.
+  // Without a time it has none (midnight, as the gym); an easy short ride needs no carbs.
   const easy = buildIntervalsEvent(CYCLING_WORKOUTS.find(x => x.primary_system === "recovery" && x.duration_minutes <= 60), "2026-10-19");
-  assert.equal(easy.start_date_local, "2026-10-19T17:00:00");
+  assert.equal(easy.start_date_local, "2026-10-19T00:00:00");
   assert.equal(easy.carbs_per_hour, undefined);
 });
 

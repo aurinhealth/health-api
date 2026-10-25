@@ -4,31 +4,29 @@ import UIKit
 
 // MARK: - Training → tools
 
-/// Training: the gym (the workout mode and the equipment), then one library
-/// for ride, run and gym workouts.
+/// Training: an empty gym workout, then one library for ride, run and gym
+/// workouts and the tools.
 struct TrainingTools: View {
     let today: String
+    /// Today's card has the gym plan and its Start workout: no second way in here.
+    var gymPlanned = false
     var addWorkout: () -> Void = {}
 
     private let columns = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionLabel(text: "Posilovna")
-            // Today's plan in the workout mode, or an empty workout there; the
-            // last workout's exercises with the next loads (GymLive.swift).
-            NavigationLink(value: AppRoute.trainingMode(today)) {
-                Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                    .frame(maxWidth: .infinity).frame(height: 54).background(Palette.green, in: Capsule())
+            // The workout mode without a plan: exercises added one by one,
+            // built, or the last workout again (TrainingModeView, Prázdný trénink).
+            if !gymPlanned {
+                NavigationLink(value: AppRoute.trainingMode(today)) {
+                    Label("Prázdný trénink v posilovně", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 46)
+                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            NavigationLink(value: AppRoute.liveGym(today, true)) {
-                Label("Zopakovat minulou", systemImage: "arrow.counterclockwise").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                    .frame(maxWidth: .infinity).frame(height: 46)
-                    .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
-                    .contentShape(Capsule())
-            }
-            .buttonStyle(.plain)
             LibraryWidget()
             LazyVGrid(columns: columns, spacing: 10) {
                 tile(.weekPlan, "calendar.badge.plus", "Plán týdne", Palette.green)

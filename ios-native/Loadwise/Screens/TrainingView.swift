@@ -117,9 +117,10 @@ struct TrainingContent: View {
                 WeekStrainBars(days: training.days)
                     .padding(.top, 22)
 
-                // The next session belongs to today, not to a day looked back at.
-                if shownDay == training.date, let next = training.next {
-                    NextSession(session: next, today: training.date)
+                // The next session belongs to today, not to a day looked back at:
+                // every workout left today, else the next planned day's.
+                if shownDay == training.date, !upcoming.isEmpty {
+                    TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [])
                         .padding(.top, 24)
                 }
 
@@ -128,7 +129,8 @@ struct TrainingContent: View {
                         .padding(.top, 28)
                 }
 
-                TrainingTools(today: training.date, addWorkout: addWorkout)
+                TrainingTools(today: training.date, gymPlanned: upcoming.contains { $0.date == training.date && $0.sport == "strength" },
+                              addWorkout: addWorkout)
                     .padding(.top, 28)
             }
 
@@ -143,6 +145,12 @@ struct TrainingContent: View {
     }
 
     private var shownDay: String { day ?? training.date }
+
+    /// Today's workouts still to do, else the next planned one (older answers: only that).
+    private var upcoming: [TrainingSnapshot.Session] {
+        if let today = training.todaySessions, !today.isEmpty { return today }
+        return training.next.map { [$0] } ?? []
+    }
 }
 
 // MARK: - Strain
@@ -277,13 +285,93 @@ struct WeekStrainBars: View {
 
 // MARK: - Next session
 
+/// Today's workouts in one card that swipes between them, with the dots under
+/// it (as a stack of widgets on the Home Screen); a single workout, or the
+/// next planned day's, is the card alone.
+struct TodaySessions: View {
+    let sessions: [TrainingSnapshot.Session]
+    let today: String
+    /// The week's sessions: a card opens the same detail as Tréninky týdne.
+    let week: [WeekSession]
+    @State private var current: Int?
+
+    var body: some View {
+        if sessions.count == 1, let session = sessions.first {
+            NextSession(session: session, today: today, route: route(session))
+        } else {
+            VStack(spacing: 12) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(alignment: .top, spacing: 24) {
+                        ForEach(Array(sessions.enumerated()), id: \.offset) { index, session in
+                            NextSession(session: session, today: today, route: route(session), fill: true)
+                                .frame(maxHeight: .infinity)
+                                .containerRelativeFrame(.horizontal)
+                                .id(index)
+                        }
+                    }
+                    // The cards as tall as the tallest, their shadow inside the scroll.
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 24)
+                    .scrollTargetLayout()
+                }
+                .scrollTargetBehavior(.viewAligned)
+                .scrollPosition(id: $current)
+                .padding(.bottom, -24)
+                HStack(spacing: 7) {
+                    ForEach(sessions.indices, id: \.self) { index in
+                        Circle()
+                            .fill(index == (current ?? 0) ? Palette.ink : Palette.faint.opacity(0.35))
+                            .frame(width: 7, height: 7)
+                            .onTapGesture { withAnimation { current = index } }
+                    }
+                }
+                .accessibilityHidden(true)
+            }
+        }
+    }
+
+    /// The gym plan opens the gym day, a planned ride or run its detail.
+    private func route(_ s: TrainingSnapshot.Session) -> AppRoute? {
+        let match = week.first { w in
+            if let id = s.eventId { return w.eventId == id }
+            return s.sport == "strength" && w.kind == "gym" && w.date == s.date
+        }
+        if let match { return WeekSessionsList.destination(match) }
+        return s.sport == "strength" ? .gym(s.date) : nil
+    }
+}
+
 struct NextSession: View {
     let session: TrainingSnapshot.Session
     let today: String
+    /// Where a tap on the card opens (Start workout keeps its own tap).
+    var route: AppRoute? = nil
+    /// In the swiping card: as tall as the tallest of today's.
+    var fill = false
 
     // Its own card, so the gym tools below (today's) don't read as its buttons.
     var body: some View {
         Card {
+            if let route {
+                RouteLink(route: route) { info }
+            } else {
+                info
+            }
+            if session.sport == "strength" && session.date == today {
+                NavigationLink(value: AppRoute.trainingMode(session.date)) {
+                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
+                        .frame(maxWidth: .infinity).frame(height: 54)
+                        .background(Palette.green, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
+            if fill { Spacer(minLength: 0) }
+        }
+    }
+
+    private var info: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 Label {
                     Text(verbatim: when.uppercased(with: Fmt.locale))
@@ -294,6 +382,9 @@ struct NextSession: View {
                 .foregroundStyle(Palette.muted)
                 Spacer(minLength: 8)
                 Text(meta).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1)
+                if route != nil {
+                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                }
             }
             HStack(spacing: 12) {
                 PlanStateIcon(symbol: SportIcon.symbol(session.sport ?? "other"), state: .upcoming, size: 40)
@@ -310,16 +401,9 @@ struct NextSession: View {
                 Text(advice).font(Typo.small).foregroundStyle(Palette.green)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if session.sport == "strength" && session.date == today {
-                NavigationLink(value: AppRoute.trainingMode(session.date)) {
-                    Label("Začít trénink", systemImage: "play.fill").font(Typo.bodyStrong).foregroundStyle(Palette.onAccent)
-                        .frame(maxWidth: .infinity).frame(height: 54)
-                        .background(Palette.green, in: Capsule())
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 4)
-            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private var when: String {
