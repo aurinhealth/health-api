@@ -8,6 +8,7 @@ import SwiftUI
 struct MyWorkoutsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.scenePhase) private var phase
     let friends: Bool
     @State private var workouts: [SavedWorkout] = []
     @State private var loaded = false
@@ -89,7 +90,10 @@ struct MyWorkoutsView: View {
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
             }
         }
-        .task { await load() }
+        // Fresh from the server on every visit, on coming back to the app and on
+        // a pull: a workout deleted or changed on another device is gone here too.
+        .task(id: phase) { if phase == .active { await load() } }
+        .refreshable { await load() }
         .sheet(item: $editing) { target in
             if (target.workout?.sport ?? target.sport) == "gym" {
                 WorkoutEditorSheet(workout: target.workout) { stored($0) }
