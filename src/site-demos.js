@@ -251,7 +251,7 @@ const tmRest = `<div class="dm pad tm rest">
 <div class="nowc"><span class="mut s">Now</span><div class="row sp"><b>Squat · set 3</b><span class="num md">80 kg × 8</span></div><span class="mut s">Last time 77.5 × 8</span></div>
 </div>`;
 
-// The finish screen (TrainingModeView.swift summary): what you did, a record, the changes, saved to Health.
+// The finish screen (TrainingModeView.swift summary): what you did, a record, the changes, the muscles it tired, saved to Health.
 const doneScreen = `<div class="app glow-training">${STATUS}
 <div class="nav"><span class="cb">${ic('x')}</span><div class="nt"><b>Full body</b><span class="mut s">3 exercises · 9/9 sets</span></div></div>
 <div class="center col"><div class="sl">Workout done</div><div class="sent title2">Full body</div></div>
@@ -259,7 +259,8 @@ const doneScreen = `<div class="app glow-training">${STATUS}
     .map(([k, v, f, t, u, d], i) => `<div><span class="mut s">${k}</span><span class="num tv"><span${n(f, t, 300 + i * 120, 1100, u === 't' ? '1' : 'i')}>${String(t)}</span>${u ? ' ' + u : ''}</span>${d ? `<span class="grn s"${at('1600')}>${d}</span>` : ''}</div>`).join('')}</div>
 <div class="card rec"${at('1900')}><span class="sc amb">${ic('spark')}</span><div><b>New record</b><span class="mut s">Squat 82.5 × 6</span></div></div>
 <div class="card chg"${at('2500')}>${[['Squat', '3 × 80 kg', '+2.5 kg', 'grn'], ['Bench press', '2 × 62.5 kg', '+1 reps', 'grn'], ['Bent-over rows', '2 × 50 kg', '=', 'mut']].map(([a, b, c, k]) => `<div class="li"><div><b>${a}</b><span class="mut s">${b}</span></div><span class="${k} s b">${c}</span></div>`).join('')}</div>
-<div class="card hk"${at('3100')}><span class="rust">${ic('heart')}</span><b>Saved to Apple Health</b><span class="grn">${ic('check')}</span></div>
+<div class="card mf"${at('2800')}><img src="/site/muscles/f00.webp" alt="" width="34" height="53"><div><b>Muscle fatigue</b><span class="mut s">Quads and glutes rested in 2 days</span></div><span class="mut">${ic('chev')}</span></div>
+<div class="card hk"${at('3400')}><span class="rust">${ic('heart')}</span><b>Saved to Apple Health</b><span class="grn">${ic('check')}</span></div>
 <div class="btn dark big2">${ic('thumb')}Rate</div>
 </div>`;
 
@@ -611,6 +612,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .rec{display:flex;align-items:center;gap:12px;padding:14px 16px!important}.sc{display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--amber-soft);font-size:16px}.rec b{display:block}
 .chg{padding:2px 16px!important}.chg .li{min-height:52px}.chg b{display:block;font-size:14.5px}
 .hk{display:flex;align-items:center;gap:10px;padding:14px 16px!important}.hk b{flex:1}
+.mf{display:flex;align-items:center;gap:12px;padding:10px 16px!important}.mf img{flex:none;width:34px;height:auto}.mf div{flex:1}.mf b{display:block}
 .big2{height:50px;margin-top:14px}
 .chat{display:flex;flex-direction:column}.chat .nav b{font-size:17px}
 .msgs{flex:1;display:flex;flex-direction:column;gap:12px;padding:10px 0;justify-content:flex-start}
