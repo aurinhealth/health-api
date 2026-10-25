@@ -97,10 +97,10 @@ the same name); `production` and `backup` keep the live account's. `scripts/prov
 stops a staging deploy whose token still sees `health-data`, its user databases or `petrfitness-foods`.
 
 The zone aurin.health stays in the live account. staging.aurin.health reaches the test account's Worker
-through Cloudflare for SaaS: the test account has a small zone of its own whose custom hostname is
+through Cloudflare for SaaS: the test account has a small zone of its own, aurin-staging.com, whose custom hostname is
 staging.aurin.health, and the live zone only has a DNS-only CNAME `staging` to that zone's fallback origin.
 The address, the app's server switch, OAuth return addresses and the coach evaluation stay as they were.
-The test server sends its e-mails from the test zone (Email Sending works only on the account's own zones).
+The test server sends its e-mails from noreply@aurin-staging.com (Email Sending works only on the account's own zones).
 The read-only world catalogue and the muscle figure are copied into the test account's own
 `loadwise-food-catalog` bucket; without them food search skips the world catalogue there.
 
