@@ -100,22 +100,34 @@ struct ThresholdCheckCard: View {
     @State private var typed: [String: String] = [:]
     @State private var busy = false
     @State private var error: String?
+    var top: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: 12) {
-            if let check {
-                ForEach(check.results, id: \.sport) { result($0, current: check.current) }
-                ForEach(check.manual, id: \.sport) { manual($0) }
-                ForEach(check.scheduled, id: \.sport) { planned($0) }
-                ForEach(check.offers) { offer($0) }
+        VStack(spacing: 0) {
+            if shows {
+                VStack(spacing: 12) {
+                    if let check {
+                        ForEach(check.results, id: \.sport) { result($0, current: check.current) }
+                        ForEach(check.manual, id: \.sport) { manual($0) }
+                        ForEach(check.scheduled, id: \.sport) { planned($0) }
+                        ForEach(check.offers) { offer($0) }
+                    }
+                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                }
+                .padding(.top, top)
             }
-            if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
         }
         .task {
             guard !model.demo else { return }
             if let kept = ThresholdCheckMemory.kept, Date().timeIntervalSince(kept.at) < 15 * 60 { check = kept.check; return }
             await load()
         }
+    }
+
+    private var shows: Bool {
+        if error != nil { return true }
+        guard let check else { return false }
+        return !(check.results.isEmpty && check.manual.isEmpty && check.scheduled.isEmpty && check.offers.isEmpty)
     }
 
     private func load() async {
