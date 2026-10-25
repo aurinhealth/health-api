@@ -615,6 +615,7 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // Real days: the owner's own screens (light mode, October 2026), one beside the sample day in the part
 // of the overview it belongs to: [image, width, height, alt, caption].
 const REAL_DAYS = {
+  spanek: ['sleep-night', 664, 1080, 'A night in Aurin: 5 h 51 min asleep, score 65, from 11:52 PM to 6:02 AM, with deep, REM and light sleep through the night', 'A short night as it was: 5 h 51 min, a quarter of it deep sleep.'],
   zatez: ['ride-summary', 664, 1149, 'An indoor ride from Wahoo in Aurin: 1 h 30 min, 43.8 km, 74 TSS, NP 183 W, recovery 12 h, with the power graph', 'A ride straight from Wahoo: power, load and 12 hours to recover.'],
   trenink: ['october', 664, 832, 'October 2026 in Aurin’s training calendar: 47 activities, 40 h 14 min, 20,099 kcal, the time of each day’s ride, gym session or walk', 'October in one screen: 47 activities and 40 hours, rest days included.'],
   svaly: ['quads-strength', 664, 932, 'Aurin’s quads screen: 43 % rested, strength up 73 % in 6 weeks, estimated leg press max 291 kg', 'Leg press estimated max up 73 % in six weeks, from the sets already logged.'],
