@@ -7,7 +7,8 @@ Two servers run the same code with separate data:
 | Worker | `health-api` | `health-api-staging` |
 | Address | aurin.health | staging.aurin.health |
 | Central database | `health-data` + 20 user databases | `health-data-staging` + 2 user databases |
-| Food catalogue | `petrfitness-foods` | `petrfitness-foods-staging`; the read-only world catalogue in R2 is shared |
+| Cloudflare account | the live account (zone aurin.health) | its own account, see below |
+| Food catalogue | `petrfitness-foods` | `petrfitness-foods-staging`; a copy of the read-only world catalogue in its own R2 bucket |
 | Deployed by | `vydat.yml` (or `deploy-worker.yml` by hand, target production) | every push to main (`deploy-worker.yml`) |
 
 Nothing is copied between them. The test server's pages carry a "TEST · staging" badge and
@@ -51,13 +52,14 @@ through, so a workflow edited on a branch gets none of them:
 | Environment | Secrets | Jobs | Rules |
 | --- | --- | --- | --- |
 | `production` | `CLOUDFLARE_API_TOKEN` | `deploy-worker.yml` deploy with target production (also from Vydat), `food-micros.yml` | the owner approves; main only |
-| `staging` | `CLOUDFLARE_API_TOKEN` | `deploy-worker.yml` deploy to the test server (every push to main) | main only |
+| `staging` | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (the test account's) | `deploy-worker.yml` deploy to the test server (every push to main) | main only |
 | `backup` | `CLOUDFLARE_API_TOKEN` | `db-backup.yml` (Sunday nights) | main only, no approval: the night run would wait for it while holding `production-deploy` and block every deploy |
 | `testflight` | `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8` | `ios-testflight.yml` on main and by hand, Vydat's pick and release | main only |
 | `testflight-pr` | the same four | `ios-testflight.yml` on a pull request that changes it | the owner approves; any branch |
 
 `PROMPTS_REPO_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` stay repository secrets: the pull requests' tests need
-the prompts on every branch, and the account ID opens nothing. The prompts token should be a fine-grained
+the prompts on every branch, and the account ID opens nothing. The repository's account ID is the live
+account's; the `staging` environment overrides it with the test account's. The prompts token should be a fine-grained
 token that can only read `shaarkyn/aurin-prompts`.
 
 A Vydat run asks for one approval (the deploy). A pull request that changes `ios-testflight.yml` asks twice,
@@ -85,11 +87,25 @@ In Settings → Environments:
       a pull request, with the owner on the bypass list. "main only" protects only as long as nobody else
       can push to main.
 
-Optional: a separate Cloudflare token for each environment, so one can be revoked alone; the backup
-needs only D1 and R2, not Workers Scripts. Cloudflare's Workers and D1 permissions cover the whole
-account, so a staging token can still change the live Worker; only a separate Cloudflare account for the
-test server would really split them. For the same reason, `deploy-worker.yml` run by hand from main with
-target staging and a typed commit runs that commit's scripts with the staging token.
+### The test server's own Cloudflare account
+
+Cloudflare's Workers and D1 permissions cover a whole account, so the test server lives in a Cloudflare
+account of its own: a token made there (the `staging` environment's, or a short-lived one for a pentest)
+cannot reach the live Worker or databases. The `staging` environment therefore has its own
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (an environment secret wins over the repository secret of
+the same name); `production` and `backup` keep the live account's. `scripts/provision-user-shards.mjs`
+stops a staging deploy whose token still sees `health-data`, its user databases or `petrfitness-foods`.
+
+The zone aurin.health stays in the live account. staging.aurin.health reaches the test account's Worker
+through Cloudflare for SaaS: the test account has a small zone of its own whose custom hostname is
+staging.aurin.health, and the live zone only has a DNS-only CNAME `staging` to that zone's fallback origin.
+The address, the app's server switch, OAuth return addresses and the coach evaluation stay as they were.
+The test server sends its e-mails from the test zone (Email Sending works only on the account's own zones).
+The read-only world catalogue and the muscle figure are copied into the test account's own
+`loadwise-food-catalog` bucket; without them food search skips the world catalogue there.
+
+Optional: a separate Cloudflare token for `production` and `backup`, so one can be revoked alone; the
+backup needs only D1 and R2, not Workers Scripts.
 
 Required reviewers and branch rules cost nothing on a public repository like this one. On a private
 repository GitHub's docs ask for GitHub Pro, Team or Enterprise for environments, their secrets and branch

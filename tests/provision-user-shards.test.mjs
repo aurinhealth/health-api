@@ -48,6 +48,15 @@ test('provisioning reuses existing EU databases and creates only missing names',
   await assert.rejects(provisionDatabases({accountId:'a'.repeat(32),token:'test-token',plan,fetchImpl:async()=>Response.json({success:false},{status:403})}),/HTTP 403/);
 });
 
+test('the test server refuses a Cloudflare account that also holds the live databases', async () => {
+  const plan = shardPlan(config(),'staging'), live = shardPlan(config());
+  const accountWith = extra => async url => Response.json({success:true,result:url.includes('?') ? [{name:plan.core.database_name,uuid:plan.core.database_id},...extra] : {name:plan.shards[0].name,uuid:'s',jurisdiction:'eu'},result_info:{total_pages:1}});
+  for (const name of [live.core.database_name, live.shards[0].name, 'petrfitness-foods']) {
+    await assert.rejects(provisionDatabases({accountId:'a'.repeat(32),token:'t',plan,fetchImpl:accountWith([{name,uuid:'live'}])}),/sees the live databases/);
+  }
+  await assert.rejects(provisionDatabases({accountId:'a'.repeat(32),token:'t',plan:live,fetchImpl:accountWith([])}),/identity mismatch/);
+});
+
 test('cutover pins preexisting accounts once; rerunning activation does not pin future new users to legacy', () => {
   const db = createD1(); db.sqlite.exec("CREATE TABLE users(id INTEGER PRIMARY KEY); CREATE TABLE user_data_routes(user_id INTEGER PRIMARY KEY,shard_key TEXT); CREATE TABLE schema_meta(key TEXT PRIMARY KEY,value TEXT,updated_at TEXT); INSERT INTO schema_meta VALUES('user_data_sharding_enabled','0',NULL); INSERT INTO users VALUES(1),(2)");
   db.sqlite.exec(ACTIVATION_SQL);

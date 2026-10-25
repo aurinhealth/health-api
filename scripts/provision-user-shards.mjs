@@ -71,6 +71,12 @@ export async function provisionDatabases({ accountId, token, plan, fetchImpl = f
     if (page >= (data.result_info?.total_pages || 1)) break;
     if (page >= 100) throw new Error('Too many database pages');
   }
+  // The test server has a Cloudflare account of its own, so its token cannot
+  // reach the live data. If the live databases show up here, the staging
+  // environment still holds the live account's token or ID.
+  if (plan.core.database_name === 'health-data-staging' && all.some(d => d.name === 'health-data' || d.name?.startsWith('health-data-users-') || d.name === 'petrfitness-foods')) {
+    throw new Error('The test server token sees the live databases; give the GitHub environment staging the test account token and ID');
+  }
   const databases = [];
   const core = all.find(d => d.uuid === plan.core.database_id);
   if (!core || core.name !== plan.core.database_name) throw new Error('Central database identity mismatch');
