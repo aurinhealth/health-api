@@ -114,15 +114,18 @@ export function strainOf({ today, readiness = null, past = [], efforts = [], tsb
 export const formFloor = level => [-30, -25, -20][Math.max(0, Math.min(2, level || 0))];
 
 // sessions: [{ id, date, sport, minutes, kind, tss, name, fixed? }] from
-// `from` on (fixed ones count but don't change); done: { date: tss } of the
+// `from` on (fixed ones count but don't change; those between today and a
+// later `from`, the rest of this week before the next, carry the form into
+// it and stay as they are); done: { date: tss } of the
 // days already behind (today included); start: the wellness row to carry the
 // form from; freeOn(date): true when the day may take a moved session;
 // morning: today's own rules (readiness) apply.
 export function checkWeek({ today, from, to, sessions = [], done = {}, start = null, strain = { level: 0, chips: [] }, readiness = null, freeOn = () => true, morning = false, moveUntil = null }) {
   let list = sessions.filter(s => s.date >= from && s.date <= to).map(s => ({ ...s, kind: s.kind || kindOfPlanned(s) }));
+  const carried = sessions.filter(s => s.date >= today && s.date < from).map(s => ({ ...s, kind: s.kind || kindOfPlanned(s) }));
   const changes = [], changed = new Set();
   const level = strain?.level || 0, floor = formFloor(level);
-  const loads = () => { const out = { ...done }; for (const s of list) out[s.date] = (out[s.date] || 0) + sessionLoad(s); return out; };
+  const loads = () => { const out = { ...done }; for (const s of [...carried, ...list]) out[s.date] = (out[s.date] || 0) + sessionLoad(s); return out; };
   const forecast = () => forecastForm(start, loads(), to).filter(f => f.date >= from);
   const open = s => !s.fixed && !changed.has(s.id);
   const add = (s, change) => { changes.push({ id: s.id, date: s.date, sport: s.sport, from: { name: s.name || null, minutes: num(s.minutes), kind: s.kind || null }, ...change }); changed.add(s.id); };

@@ -57,14 +57,17 @@ test("ACWR is null with under 21 days of history or no chronic load", () => {
   assert.equal(acwr(loads, 20).zone, null);
   // The means are still there to show.
   assert.equal(acwr(loads, 20).acute, 50);
-  assert.equal(acwr(loads, 21).value, round2(50 / (1000 / 28)));
+  // The chronic mean over the 21 days since the first load, not 28 with a week of zeros.
+  assert.equal(acwr(loads, 21).value, round2(50 / (1000 / 21)));
+  assert.equal(acwr([...repeat(7, 0), ...repeat(21, 40)], 21).value, 1);
   // All zero.
   assert.deepEqual(acwr(repeat(28, 0), 40), { value: null, zone: null, acute: 0, chronic: 0 });
   // Fewer than 28 days of series.
   assert.equal(acwr(repeat(10, 50), 30).value, null);
   // From rows: history counts from the first load, not the length of the series.
   assert.equal(workloadMetrics(rows([...repeat(22, 0), ...repeat(20, 50)]), DATE).acwr.value, null);
-  assert.equal(workloadMetrics(rows([...repeat(21, 0), ...repeat(21, 50)]), DATE).acwr.value, round2(50 / (21 * 50 / 28)));
+  // 21 days of the same load: no overload (it was 1.33 when the days before the first load counted as rest).
+  assert.equal(workloadMetrics(rows([...repeat(21, 0), ...repeat(21, 50)]), DATE).acwr.value, 1);
 });
 
 test("ACWR zones: < 0.8 low, 0.8–1.3 sweet spot, 1.3–1.5 elevated, > 1.5 high", () => {
