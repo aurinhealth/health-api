@@ -36,6 +36,7 @@ targets:
         buildPhase: resources
     dependencies:
       - target: LoadwiseWidgets
+      - target: LoadwiseNotifications
     # The App Group the home-screen widgets read Today from (WidgetBridge).
     # HealthKit: Apple Health is read on the phone (App/AppleHealth.swift),
     # with background delivery so new nights and workouts sync on their own.
@@ -162,6 +163,30 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  # The morning readiness push gets its coloured ring before iOS shows it
+  # (NotificationService.swift, src/push.js readinessMessage), embedded in the app.
+  LoadwiseNotifications:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: LoadwiseNotifications
+      - path: Loadwise/Resources/Fonts/InstrumentSerif-Regular.ttf
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: eu.petrfitnessdata.loadwise.native.notifications
+        PRODUCT_NAME: LoadwiseNotifications
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: YES
+    info:
+      path: LoadwiseNotifications/Info.plist
+      properties:
+        CFBundleDisplayName: Aurin
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
   LoadwiseTests:
     type: bundle.unit-test
     platform: iOS

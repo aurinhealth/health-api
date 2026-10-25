@@ -167,6 +167,7 @@ jobs:
           # app; Sideloadly re-signs with the user's Apple ID and keeps them.
           app=ipa/Payload/Loadwise.app
           codesign --force --sign - --entitlements LoadwiseWidgets/LoadwiseWidgets.entitlements "$app/PlugIns/LoadwiseWidgets.appex"
+          codesign --force --sign - "$app/PlugIns/LoadwiseNotifications.appex"
           codesign --force --sign - --entitlements Loadwise/Loadwise.entitlements "$app"
           (cd ipa && zip -qry "$GITHUB_WORKSPACE/Aurin-unsigned.ipa" Payload)
 

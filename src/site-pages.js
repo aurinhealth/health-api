@@ -651,7 +651,7 @@ export function overviewPage(request) {
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
     ['pripravenost', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
-      ['readiness-parts', 'readyParts', 70, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal.', 7000],
+      ['readiness-parts', 'readyParts', 70, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal. The morning notification brings the same numbers and what to do with today’s workout.', 7000],
       ['journal-impact', 'journal', 110, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000]]],
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],

@@ -5,4 +5,5 @@ build/
 ipa/
 Loadwise/Loadwise.entitlements
 LoadwiseWidgets/Info.plist
+LoadwiseNotifications/Info.plist
 LoadwiseWidgets/LoadwiseWidgets.entitlements
