@@ -129,7 +129,7 @@ import { handleEmailLogin } from "./email-login.js";
 import { handleWaitlistSignup, forgetOldWaitlist } from "./testflight-waitlist.js";
 import { emailConfigured } from "./email-sender.js";
 import { needsAIAccess } from "./ai-routes.js";
-import { clearConnectionHealth, connectionProblems } from "./connection-health.js";
+import { clearConnectionHealth, connectionProblems, withoutBrokenConnections } from "./connection-health.js";
 import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { handlePushToken, sendMorningReadiness, hasLastNight, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS } from "./push.js";
@@ -317,7 +317,7 @@ export function dueUserJobs(cron, now) { return USER_JOBS.filter(job => job.due(
 // One user's due jobs, in the user's language, units and time zone; a failing
 // job does not stop the next one.
 export async function runUserJobs(env, ctx, { cron, scheduledTime }, user, names) {
-  const scoped = await connectionEnvironment(await userDataEnvironment(env, user));
+  const scoped = await withoutBrokenConnections(await connectionEnvironment(await userDataEnvironment(env, user)), new Date(scheduledTime || Date.now()));
   const connected = scoped.CONNECTED_PROVIDERS || [];
   const jobs = USER_JOBS.filter(job => names.includes(job.name) && (job.push || job.providers.some(p => connected.includes(p))));
   if (!jobs.length) return;

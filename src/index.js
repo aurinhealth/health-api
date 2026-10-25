@@ -379,9 +379,8 @@ export async function googleToken(env, scopes = healthScopes(env)) {
     // A revoked or expired grant asks the user to connect Google again (connection-health.js).
     if (isGoogleAuthFailure(data)) await markConnectionBroken(env, "google", data.error_description || data.error);
     if (data?.error === "invalid_grant") {
-      throw new Error(
-        "Google OAuth refresh token is invalid or expired. Reauthorize at /oauth/google and replace the GOOGLE_REFRESH_TOKEN secret with the newly issued token."
-      );
+      // The user's own grant (the owner's legacy secret only without one): only connecting again helps.
+      throw new Error(L("Přístup ke Google Health vypršel nebo byl odebrán. Připoj Google Health znovu v Aurinu: Nastavení → Zdroje dat.", "Google Health access expired or was revoked. Connect Google Health again in Aurin: Settings → Data sources."));
     }
     throw new Error("Google OAuth error: " + JSON.stringify(data));
   }
