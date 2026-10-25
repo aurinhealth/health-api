@@ -28,12 +28,12 @@ struct ActivityEditing: ViewModifier {
                                 titleVisibility: .visible, presenting: options) { o in
                 switch o.kind {
                 case "app":
-                    Button("Smazat", role: .destructive) { Task { await delete(everywhere: true) } }
+                    Button("Smazat", role: .destructive) { Task { await delete(o, everywhere: true) } }
                 case "intervals":
-                    Button("Smazat jen v Aurinu", role: .destructive) { Task { await delete(everywhere: false) } }
-                    Button("Smazat i v Intervals.icu", role: .destructive) { Task { await delete(everywhere: true) } }
+                    Button("Smazat jen v Aurinu", role: .destructive) { Task { await delete(o, everywhere: false) } }
+                    Button("Smazat i v Intervals.icu", role: .destructive) { Task { await delete(o, everywhere: true) } }
                 default:
-                    Button("Smazat jen v Aurinu", role: .destructive) { Task { await delete(everywhere: false) } }
+                    Button("Smazat jen v Aurinu", role: .destructive) { Task { await delete(o, everywhere: false) } }
                 }
                 Button("Zrušit", role: .cancel) {}
             } message: { o in
@@ -73,16 +73,34 @@ struct ActivityEditing: ViewModifier {
         catch { self.error = error.localizedDescription; deleting = false }
     }
 
-    private func delete(everywhere: Bool) async {
-        do {
-            try await model.api.deleteActivity(id: id, everywhere: everywhere)
-            deleting = false
+    /// Gone from the screens now, from the server after "Vrátit" had its 6 s
+    /// (AppModel.deleteLater); the toast says where the activity stays.
+    private func delete(_ o: ActivityDeleteOptions, everywhere: Bool) async {
+        let model = model
+        let id = id
+        let note = Self.stays(o, everywhere: everywhere)
+        deleting = false
+        model.deleteLater(L10n.tr("Aktivita smazána"), note: note, activity: id) {
+            do {
+                try await model.api.deleteActivity(id: id, everywhere: everywhere)
+            } catch {
+                model.notice = error.localizedDescription
+            }
             await model.refreshTraining()
             await model.refresh()
-            onDeleted()
-        } catch {
-            deleting = false
-            self.error = error.localizedDescription
+        }
+        onDeleted()
+    }
+
+    /// Where a deleted activity still is, under "Aktivita smazána".
+    static func stays(_ o: ActivityDeleteOptions, everywhere: Bool) -> String? {
+        if o.kind == "app" || (o.kind == "intervals" && everywhere) { return nil }
+        switch o.kind == "intervals" ? "intervals" : o.source ?? "" {
+        case "intervals": return L10n.tr("Jen v Aurinu. Intervals.icu ji dál má.")
+        case "strava": return L10n.tr("Jen v Aurinu. Strava ji dál má.")
+        case "wahoo": return L10n.tr("Jen v Aurinu. Wahoo ji dál má.")
+        case "apple": return L10n.tr("Jen v Aurinu. Apple Health ji dál má.")
+        default: return L10n.tr("Jen v Aurinu. Google Health ji dál má.")
         }
     }
 
