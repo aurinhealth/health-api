@@ -204,6 +204,6 @@ test('authenticated API requests route writes and caches; a missing shard return
   assert.equal(rows(core,'dashboard_profile',3).length,0);
   assert.equal(rows(shards[1],'dashboard_profile',3).length,0);
   const anonymous = await entrypoint.fetch(new Request('https://aurin.health/app/api/me'),env,{waitUntil(){}});
-  assert.equal(anonymous.status,401); assert.equal(anonymous.headers.get('X-Storage-Routing'),'1');
+  assert.equal(anonymous.status,401); assert.equal(anonymous.headers.get('X-Storage-Routing'),null);
   _resetTenancyForTest();
 });

@@ -23,8 +23,8 @@ After provisioning user shards, `scripts/provision-food-catalog.mjs` creates or
 reuses the separately named EU database, applies `food-migrations`, and appends
 its binding and ID to `wrangler.runtime.jsonc`. Every generated database ID must
 be distinct; an unexpected existing database/jurisdiction causes a failure.
-The jobs deploy this config and wait for `X-Food-Catalog-Routing: 1` on the
-anonymous API response before running `--migrate`.
+The jobs deploy this config and wait for the anonymous API response (401)
+before running `--migrate`.
 
 The directory keys are on central `schema_meta`:
 

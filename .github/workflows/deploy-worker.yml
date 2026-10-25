@@ -269,11 +269,11 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 60); do
-            # Anonymous /app/api/me answers 401 only once the new version is
-            # live and the upgrade is done (503 while upgrading; the previous
-            # version may still answer for a few seconds after the deploy).
-            code="$(curl -sS -D "$RUNNER_TEMP/routing-headers" -o /dev/null -w '%{http_code}' "https://$HOST/app/api/me" || true)"
-            if [ "$code" = "401" ] && grep -qiE '^x-storage-routing: 1' "$RUNNER_TEMP/routing-headers" && grep -qiE '^x-food-catalog-routing: 1' "$RUNNER_TEMP/routing-headers"; then echo "API ready"; exit 0; fi
+            # Anonymous /app/api/me answers 401 once the upgrade is done (503
+            # while upgrading). The answer carries no routing headers: they
+            # told the internet how the data is split (pentest 2026-10-25).
+            code="$(curl -sS -o /dev/null -w '%{http_code}' "https://$HOST/app/api/me" || true)"
+            if [ "$code" = "401" ]; then echo "API ready"; exit 0; fi
             echo "Waiting for the new version and database upgrade (HTTP $code, attempt $attempt)"; sleep 10
           done
           echo "Database upgrade did not finish in time"; exit 1
