@@ -50,8 +50,8 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     /// sheet, back at loadwise://connected?event=… (src/connect-return.js).
     func connect(provider: String) async throws -> String {
         let link = try await api.connectLink(provider: provider)
-        // The ticket again as a header: the server then skips its "is this your
-        // account?" page, which only a link opened elsewhere needs (src/native-connect.js).
+        // The ticket again as a header: without it the server lets nobody in, so a
+        // ticket link sent to someone else expires (src/native-connect.js).
         let ticket = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "ticket" })?.value
         let callback = try await openBrowser(link, headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
         return URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "event" })?.value ?? "unknown"
@@ -71,7 +71,7 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
             session.presentationContextProvider = self
             // Keep Google's own cookies, so the account picker remembers the user.
             session.prefersEphemeralWebBrowserSession = false
-            if #available(iOS 17.4, *), !headers.isEmpty { session.additionalHeaderFields = headers }
+            if !headers.isEmpty { session.additionalHeaderFields = headers }
             self.session = session
             session.start()
         }
