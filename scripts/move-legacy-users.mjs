@@ -6,9 +6,12 @@
 //   1. copy the account's rows of every personal table to the chosen shard,
 //   2. point the account's route at the shard (from then on the Worker reads
 //      and writes there),
-//   3. copy again for whatever the app wrote in between,
+//   3. copy the rows whose key the shard lacks (what the app wrote in
+//      between),
 //   4. delete from the central database each row the shard now holds (the
 //      same key, or the same row where a table has no key).
+// An account already on a shard that still has central rows (a run cut off
+// after step 2) gets steps 3 and 4.
 //
 //   node scripts/move-legacy-users.mjs [--staging]           dry run: counts only
 //   node scripts/move-legacy-users.mjs [--staging] --apply   move
@@ -176,13 +179,29 @@ export async function copyAccount(api, core, shard, tables, userId) {
 
 const keyOf = (columns, row) => JSON.stringify(columns.map(c => row[c]));
 
-// Deletes from the central database each row the shard holds; returns the
-// counts of rows deleted and left per table.
-export async function deleteCovered(api, core, shard, tables, userId) {
+// After the switch: copies each central row whose key the shard lacks (what
+// the app wrote during the first copy; a key the shard has is newer there),
+// then deletes from the central database each row the shard holds. Returns
+// per table the rows copied, deleted and left.
+export async function settleAccount(api, core, shard, tables, userId) {
   const result = [];
   for (const table of tables) {
     const held = new Set();
-    for await (const page of accountRows(api, shard, table, userId)) for (const row of page) held.add(keyOf(table.key, row));
+    const readShard = async () => {
+      held.clear();
+      for await (const page of accountRows(api, shard, table, userId)) for (const row of page) held.add(keyOf(table.key, row));
+    };
+    await readShard();
+    const missing = [];
+    for await (const page of accountRows(api, core, table, userId)) {
+      for (const row of page) if (!held.has(keyOf(table.key, row))) missing.push(row);
+    }
+    if (missing.length) {
+      for (let i = 0; i < missing.length; i += PAGE_ROWS) {
+        for (const request of requests(insertStatements(table, missing.slice(i, i + PAGE_ROWS)))) await api.batch(shard, request);
+      }
+      await readShard();
+    }
     let left = 0;
     const doomed = [];
     for await (const page of accountRows(api, core, table, userId)) {
@@ -197,17 +216,55 @@ export async function deleteCovered(api, core, shard, tables, userId) {
       statements.push({ sql: `DELETE FROM ${name(table.name)} WHERE user_id=? AND rowid IN (${ids.map(() => '?').join(',')})`, params: [userId, ...ids] });
     }
     for (let i = 0; i < statements.length; i += 50) await api.batch(core, statements.slice(i, i + 50));
-    result.push({ table: table.name, deleted: doomed.length, left });
+    result.push({ table: table.name, copied: missing.length, deleted: doomed.length, left });
   }
   return result;
+}
+
+function settled(log, userId, database, result) {
+  const deleted = result.reduce((s, r) => s + r.deleted, 0), copied = result.reduce((s, r) => s + r.copied, 0);
+  const left = result.filter(r => r.left);
+  log(`Account ${userId}: ${copied} late rows copied, ${deleted} rows deleted from the central database` + (left.length ? `; left there (no matching row in ${database}): ${left.map(r => `${r.table} ${r.left}`).join(', ')}` : ''));
+  return { deleted, left };
+}
+
+// Accounts already routed to a shard that still have personal rows in the
+// central database (a move cut off after the switch).
+async function leftoverAccounts(api, core, plan, ids) {
+  const list = `(${Object.keys(PERSONAL_TABLES).map(t => `'${name(t)}'`).join(',')})`;
+  const present = (await rows(api, core, `SELECT name FROM sqlite_master WHERE type='table' AND name IN ${list}`)).map(r => r.name);
+  const users = new Set();
+  for (const table of present) {
+    for (const row of await rows(api, core, `SELECT DISTINCT user_id FROM ${name(table)}`)) users.add(Number(row.user_id));
+  }
+  const routes = new Map((await rows(api, core, USER_ROUTES_SQL)).map(r => [Number(r.user_id), r]));
+  const found = [];
+  for (const userId of [...users].sort((x, y) => x - y)) {
+    const route = routes.get(userId);
+    if (!route || route.shard_key === 'legacy' || !Number.isSafeInteger(userId)) continue;
+    let binding;
+    try { binding = routeBinding(route); } catch { continue; }
+    const target = plan.shards.find(s => s.key === route.shard_key && s.binding === binding);
+    if (target && ids[target.name] && ids[target.name] !== core) found.push({ userId, target, shard: ids[target.name] });
+  }
+  return found;
 }
 
 export async function moveLegacyUsers({ api, plan, ids, apply, log = console.log }) {
   const core = plan.core.database_id;
   const legacy = (await rows(api, core, USER_ROUTES_SQL + " WHERE r.shard_key='legacy' ORDER BY r.user_id")).map(r => Number(r.user_id));
-  if (!legacy.length) { log('No account is on the legacy route.'); return []; }
-  log(`Accounts on the legacy route: ${legacy.join(', ')}`);
+  const leftovers = await leftoverAccounts(api, core, plan, ids);
+  if (!legacy.length && !leftovers.length) { log('No account is on the legacy route.'); return []; }
+  if (legacy.length) log(`Accounts on the legacy route: ${legacy.join(', ')}`);
   const moved = [];
+  for (const { userId, target, shard } of leftovers) {
+    const tables = await personalTables(api, core, shard);
+    log(`Account ${userId} is on ${target.name} but still has rows in the central database`);
+    if (!apply) continue;
+    const creates = tables.flatMap(t => t.create).map(sql => ({ sql, params: [] }));
+    if (creates.length) await api.batch(shard, creates);
+    moved.push({ userId, shard: target.name, ...settled(log, userId, target.name, await settleAccount(api, core, shard, tables, userId)) });
+  }
   for (const userId of legacy) {
     if (!Number.isSafeInteger(userId)) throw new Error('Unexpected user id');
     const target = await chooseShard(api, core, plan);
@@ -232,12 +289,7 @@ export async function moveLegacyUsers({ api, plan, ids, apply, log = console.log
     const switched = await api.query(core, "UPDATE user_data_routes SET shard_key=? WHERE user_id=? AND shard_key='legacy'", [target.key, userId]);
     if (Number(switched.meta?.changes) !== 1) throw new Error(`The route of account ${userId} changed meanwhile; its rows stay in the central database`);
     log(`Account ${userId} now reads and writes ${target.name}`);
-    await copyAccount(api, core, shard, tables, userId);
-    const result = await deleteCovered(api, core, shard, tables, userId);
-    const deleted = result.reduce((s, r) => s + r.deleted, 0);
-    const left = result.filter(r => r.left);
-    log(`Account ${userId}: ${deleted} rows deleted from the central database` + (left.length ? `; left there (no matching row in ${target.name}): ${left.map(r => `${r.table} ${r.left}`).join(', ')}` : ''));
-    moved.push({ userId, shard: target.name, deleted, left });
+    moved.push({ userId, shard: target.name, ...settled(log, userId, target.name, await settleAccount(api, core, shard, tables, userId)) });
   }
   if (!apply) log('Dry run. Run again with apply to move the accounts.');
   return moved;

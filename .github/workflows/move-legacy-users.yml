@@ -23,7 +23,8 @@ permissions:
 jobs:
   move:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    # About an hour per million rows; GitHub stops a job after six hours.
+    timeout-minutes: 350
     environment: ${{ inputs.target == 'production' && 'production' || 'staging' }}
     # Never alongside a deploy or the backup of the same server.
     concurrency:
