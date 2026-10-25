@@ -32,12 +32,16 @@ test("only live hosts, and the test server on its own address, may upgrade their
 test("the test server shares no data, background jobs or sign-in keys with the live server", () => {
   const live = config, stage = config.env.staging;
   assert.equal(stage.name, "health-api-staging");
-  assert.equal(new URL(STAGING.APP_ORIGIN).hostname, stage.routes[0].pattern);
+  assert.equal(new URL(STAGING.APP_ORIGIN).hostname + "/*", stage.routes[0].pattern);
+  // Its own Cloudflare account: the route sits on that account's zone, never on aurin.health.
+  assert.equal(stage.routes[0].zone_name, "aurin-staging.com");
   const ids = new Set(live.d1_databases.map(d => d.database_id));
   assert.ok(stage.d1_databases.every(d => !ids.has(d.database_id) && d.database_name.includes("staging")));
   assert.equal(stage.services.find(s => s.binding === "USER_JOBS").service, "health-api-staging");
   // Bindings and vars are not inherited by a wrangler environment: each one the live server has is set here too.
-  for (const key of ["send_email", "r2_buckets", "services"]) assert.ok(stage[key]?.length, key);
+  for (const key of ["r2_buckets", "services"]) assert.ok(stage[key]?.length, key);
+  // The test account is on Workers Free, where Email Sending is not available.
+  assert.equal(stage.send_email, undefined);
   for (const key of Object.keys(live.vars)) if (key !== "USER_DATA_SHARD_COUNT") assert.ok(key in STAGING, key);
   const workflow = readFileSync(new URL("../.github/workflows/deploy-worker.yml", import.meta.url), "utf8");
   assert.match(workflow, /for name in SESSION_SECRET CONNECTION_KEY; do/);

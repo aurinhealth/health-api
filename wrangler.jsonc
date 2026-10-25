@@ -117,8 +117,13 @@
     // Internal testers switch to it in the app (Nastavení → Testování → Server).
     "staging": {
       "name": "health-api-staging",
+      // The test server lives in a Cloudflare account of its own, so its token
+      // cannot reach the live data. aurin.health stays in the live account:
+      // staging.aurin.health is a Cloudflare for SaaS custom hostname of that
+      // account's zone aurin-staging.com, and the live zone only has a DNS-only
+      // CNAME to it (docs/test-server-and-releases.md).
       "routes": [
-        { "pattern": "staging.aurin.health", "custom_domain": true }
+        { "pattern": "staging.aurin.health/*", "zone_name": "aurin-staging.com" }
       ],
       "workers_dev": false,
       "placement": {
@@ -128,28 +133,26 @@
         {
           "binding": "DB",
           "database_name": "health-data-staging",
-          "database_id": "406eb5d6-2fa8-478a-85ba-be274632ef4a",
+          "database_id": "5d0d935f-a587-4bf5-8264-e290c11eb001",
           "migrations_dir": "migrations"
         }
       ],
-      // The world food catalogue is read-only and the same for both servers.
+      // A copy of the read-only world food catalogue in the test account's own bucket.
       "r2_buckets": [
         {
           "binding": "FOOD_CATALOG_R2",
-          "bucket_name": "loadwise-food-catalog"
+          "bucket_name": "aurin-food-catalog"
         }
       ],
-      // Bindings are not inherited: the test server sends its own sign-in codes.
-      "send_email": [
-        { "name": "EMAIL" }
-      ],
+      // No send_email: Email Sending needs the Workers Paid plan, and the test account
+      // is on Free. E-mail sign-in stays hidden there (src/email-sender.js); Apple and
+      // Google sign-in work.
       "services": [
         { "binding": "USER_JOBS", "service": "health-api-staging", "entrypoint": "UserJobs" }
       ],
       "vars": {
         "ENVIRONMENT": "staging",
         "APP_ORIGIN": "https://staging.aurin.health",
-        "EMAIL_FROM": "noreply@aurin.health",
         "USER_DATA_ROUTING": "true",
         "FOOD_CATALOG_ROUTING": "true",
         "USER_DATA_SHARD_COUNT": "2",
