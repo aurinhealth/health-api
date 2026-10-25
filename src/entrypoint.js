@@ -1934,12 +1934,18 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const row=await env.DB.prepare('SELECT * FROM coach_inbox WHERE user_id=? AND id=?').bind(env.USER_ID,Number(body.draftId)).first();
       if(!row)throw new Error(L('Návrh neexistuje.', 'The proposal doesn\'t exist.'));
       const draft=JSON.parse(row.draft_json);if(draft.kind!=='coach_action')throw new Error(L('Neplatný návrh.', 'Invalid proposal.'));
-      if(row.status!=='draft')return Response.json({status:'ok',message:L('Návrh už byl vyřízen.', 'The proposal has already been handled.')});
+      if(row.status!=='draft'&&(row.status!=='applying'||body.decision==='adjust'))return Response.json({status:'ok',message:L('Návrh už byl vyřízen.', 'The proposal has already been handled.')});
       // Kratší, Delší, Lehčí, Těžší, Jiný den and Zpět: the card changes by rules,
       // without the AI and without counting as a message.
       if(body.decision==='adjust')return Response.json(await adjustCoachDraft(env,ctx,row,draft,body),{headers:{'Cache-Control':'no-store'}});
       if(!['confirm','reject'].includes(body.decision))throw new Error(L('Potvrď nebo odmítni návrh.', 'Confirm or reject the proposal.'));
+      // Taken before anything is done, so a double tap or a confirm from the push
+      // and the app at once acts only once; a claim older than two minutes is a
+      // request that died midway. A change that fails puts the proposal back.
+      const claimed=await env.DB.prepare("UPDATE coach_inbox SET status='applying',confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=? AND (status='draft' OR (status='applying' AND confirmed_at<datetime('now','-2 minutes')))").bind(env.USER_ID,row.id).run();
+      if(claimed.meta?.changes!==1)return Response.json({status:'ok',message:L('Návrh už byl vyřízen.', 'The proposal has already been handled.')});
       let result=null;
+      try{
       if(body.decision==='confirm'){
         const a=draft.action;
         // A proposed end date applies only while it is still in the future.
@@ -2014,6 +2020,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           else if(a.type==='rest')result=await deletePlannedEvent(env,a);
         }
       }
+      }catch(error){await env.DB.prepare("UPDATE coach_inbox SET status='draft',confirmed_at=NULL WHERE user_id=? AND id=? AND status='applying'").bind(env.USER_ID,row.id).run().catch(()=>null);throw error;}
       await env.DB.prepare('UPDATE coach_inbox SET status=?,confirmed_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?').bind(body.decision==='confirm'?'confirmed':'rejected',env.USER_ID,row.id).run();
       const done={plan:L('Plán založen','Plan started'),week_sport:L('Přidáno do týdenního plánu','Added to the week plan'),activity_delete:L('Smazáno','Deleted'),activity_merge:L('Sloučeno','Merged'),activity_time:L('Upraveno','Changed')}[draft.action?.type];
       return Response.json({status:'ok',message:body.decision==='reject'?L('Návrh odmítnut.', 'Proposal rejected.'):done||L('Návrh potvrzen.', 'Proposal confirmed.'),action:draft.action,result,undo:result?.undo||null},{headers:{'Cache-Control':'no-store'}});

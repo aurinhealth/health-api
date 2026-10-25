@@ -17,6 +17,8 @@ struct CoachView: View {
     @State private var chatId: Int?
     @State private var input = ""
     @State private var sending = false
+    /// Proposals whose Potvrdit or Odmítnout is on its way: a second tap does nothing.
+    @State private var deciding: Set<Int> = []
     @State private var progress: String?
     @State private var error: String?
     @State private var needsConsent = false
@@ -409,7 +411,9 @@ struct CoachView: View {
     }
 
     private func decide(_ action: CoachAction, confirm: Bool, in bubble: UUID) async {
-        guard let draftId = action.draftId else { return }
+        guard let draftId = action.draftId, !deciding.contains(draftId) else { return }
+        deciding.insert(draftId)
+        defer { deciding.remove(draftId) }
         do {
             edit(bubble) { $0.failed[draftId] = nil }
             let answer = try await model.api.decideCoachAction(draftId: draftId, confirm: confirm)

@@ -236,6 +236,21 @@ test('assistant proposals are kept as drafts of this chat',()=>{
   assert.match(entry,/UPDATE coach_inbox SET status='expired' WHERE user_id=\? AND status='draft' AND created_at<\?/);
 });
 
+test('a proposal is confirmed once: the claim comes before the change, a failure puts it back',async()=>{
+  const entry=readFileSync(new URL('../src/entrypoint.js',import.meta.url),'utf8');
+  const route=entry.slice(entry.indexOf("url.pathname==='/app/api/assistant/action'"));
+  const claim=route.indexOf("SET status='applying'"),first=route.indexOf("if(body.decision==='confirm'){");
+  assert.ok(claim>0&&claim<first,'claimed before any action runs');
+  assert.match(route,/if\(claimed\.meta\?\.changes!==1\)return Response\.json\(\{status:'ok',message:L\('Návrh už byl vyřízen\./);
+  assert.match(route,/catch\(error\)\{await env\.DB\.prepare\("UPDATE coach_inbox SET status='draft',confirmed_at=NULL WHERE user_id=\? AND id=\? AND status='applying'"\)/);
+  // The claim itself: of two at once only one gets the row.
+  const {createD1}=await import('./helpers/d1.mjs');const db=createD1();
+  db.sqlite.exec("CREATE TABLE coach_inbox (id INTEGER PRIMARY KEY, user_id INTEGER, status TEXT, confirmed_at TEXT)");db.sqlite.exec("INSERT INTO coach_inbox VALUES (1,1,'draft',NULL)");
+  const sql=route.slice(route.indexOf('"UPDATE coach_inbox SET status=\'applying\'')+1);const statement=sql.slice(0,sql.indexOf('"'));
+  const tries=await Promise.all([1,2].map(()=>db.prepare(statement).bind(1,1).run()));
+  assert.deepEqual(tries.map(t=>t.meta.changes).sort(),[0,1]);
+});
+
 test('the coach picks at most two known pictures for an answer',()=>{
   const r=coachAnswerText(JSON.stringify({answer:'Forma roste.',visuals:['form','bogus','sleep','zones'],actions:[]}),{actions:true});
   assert.deepEqual(r.visuals,['form','sleep']);
