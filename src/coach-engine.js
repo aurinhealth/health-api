@@ -7,6 +7,7 @@ import { buildRideReview } from './ride-review.js';
 import { buildGymReview } from './gym-review.js';
 import { buildRunReview } from './run-review.js';
 import { workloadCaution } from './workload-ratio.js';
+import { typeName } from './activity-type.js';
 const n=v=>v!=null&&v!==''&&Number.isFinite(Number(v))?Number(v):null;
 const txt=v=>String(v||'');
 const isBike=x=>/ride|cycling|bike|kolo/i.test(txt(x?.name)+' '+txt(x?.type));
@@ -31,15 +32,37 @@ function rideFuel(hours,hard){
 const sportTitle=(base,focus)=>base+(focus?.sportLabel?' · '+focus.sportLabel:'');
 // What today actually holds: the Intervals.icu plan plus the app's own gym plan for the day.
 // The morning advice speaks only about these sessions, by name, or says the day is free.
-function planToday(planned,todayGym){
+// A gym session done today (a watch's or logged in the app) is the day's gym plan.
+function planToday(planned,todayGym,gymDone=false){
   const gymLeft=Boolean(todayGym?.exercises?.length&&!todayGym.exercises.every(e=>e.sets.every(x=>x.completed)));
-  const endurance=planned.filter(p=>!isGym(p)&&txt(p.name).trim()),gym=gymLeft||planned.some(isGym);
+  const endurance=planned.filter(p=>!isGym(p)&&txt(p.name).trim()),gym=!gymDone&&(gymLeft||planned.some(isGym));
   const names=[...endurance.map(p=>txt(p.name).trim()),...(gym?[planned.find(isGym)?.name?txt(planned.find(isGym).name).trim():L('Posilovna','Gym')]:[])];
   return {endurance,hard:endurance.find(isHard)||null,easy:endurance.find(p=>!isHard(p))||null,gym,names,empty:!names.length};
 }
 const quoted=name=>L('„'+name+'“','"'+name+'"');
-function morningAdvice({plan,low,heavy,sleepLow}){
+// A done workout in words: its own name, else its type ("Posilovna", not "WeightTraining").
+const activityName=a=>txt(a?.name&&a.name!==a.type?a.name:a?.type&&a.type!=='Workout'?typeName(a.type):'').trim()||L('Trénink','Workout');
+const clock=min=>{const m=Math.round(min);return m>=60?Math.floor(m/60)+' h'+(m%60?' '+m%60+' min':''):m+' min';};
+// What today already holds: the workouts done (a watch's or one typed in), and a
+// gym session logged in the app without a watch workout.
+function doneToday(completed,todayGym){
+  const done=completed.filter(a=>a&&(n(a.durationHours)||0)>=0.15);
+  const names=done.map(activityName),minutes=done.reduce((sum,a)=>sum+(n(a.durationHours)||0)*60,0);
+  const sets=(todayGym?.exercises||[]).flatMap(e=>e.sets||[]);
+  const appGym=sets.length>0&&sets.every(x=>x.completed);
+  if(appGym&&!done.some(isGym))names.push(L('Posilovna','Gym'));
+  return {names,minutes,any:names.length>0,gym:appGym||done.some(isGym)};
+}
+function morningAdvice({plan,low,heavy,sleepLow,done}){
   const parts=[];
+  // The day's training is behind: the rest of it is for recovery, not for a walk instead of training.
+  if(plan.empty&&done.any){
+    const did=L('Dnešní trénink ('+done.names.join(', ')+') máš za sebou. ','Today\'s training ('+done.names.join(', ')+') is done. ');
+    if(sleepLow)return did+L('Po kratší noci už nic dalšího nepřidávej: najez se s dostatkem bílkovin a sacharidů, pij a jdi dnes dřív spát.','After a short night, don\'t add anything else: eat enough protein and carbs, drink and go to bed earlier tonight.');
+    if(low)return did+L('Při nízké formě už nic dalšího nepřidávej; tělo potřebuje dohnat únavu, takže jídlo, protažení a spánek.','With your form this low, don\'t add anything else; your body needs to absorb the fatigue, so food, stretching and sleep.');
+    if(heavy)return did+L('Po včerejší velké zátěži už nic dalšího nepřidávej: jídlo, protažení a spánek stačí.','After yesterday\'s big load, don\'t add anything else: food, stretching and sleep are enough.');
+    return did+L('Zbytek dne patří regeneraci: pořádné jídlo s bílkovinami, pití a spánek.','The rest of the day is for recovery: a proper meal with protein, fluids and sleep.');
+  }
   if(low){
     if(plan.empty)return sleepLow?L('Dnes nemáš nic v plánu, a to se po kratší noci hodí. Dej si procházku nebo lehké protažení, jez pravidelně a jdi dnes dřív spát.','Nothing is planned today, which suits a short night. Go for a walk or stretch lightly, eat regularly and go to bed earlier tonight.'):L('Dnes nemáš nic v plánu, a to se při nízké formě hodí. Lehký pohyb a protažení stačí, tělo potřebuje dohnat únavu.','Nothing is planned today, which suits your low form. Light movement and stretching are enough; your body needs to absorb the fatigue.');
     if(plan.hard)parts.push(L('U ','For ')+quoted(plan.hard.name)+L(' uber jeden hlavní úsek nebo jeď úseky o 5 % níž; když se při rozcvičení necítíš, dej místo něj lehký trénink.',' drop one main effort or hold the efforts 5% lower; if the warm-up feels bad, do an easy session instead.'));
@@ -59,8 +82,8 @@ function morningAdvice({plan,low,heavy,sleepLow}){
 }
 // caution: the workload line (workload-ratio.js workloadCaution) when the
 // acute:chronic ratio is above 1.5 or the week's monotony above 2.0.
-function morningSummary({date,sleep,fitness,yesterday,planned,policy,todayGym,caution}){
-  const facts=[],previous=yesterday?.training?.completed||[],plan=planToday(planned,todayGym);
+function morningSummary({date,sleep,fitness,yesterday,planned,policy,todayGym,caution,completed=[]}){
+  const facts=[],previous=yesterday?.training?.completed||[],done=doneToday(completed,todayGym),plan=planToday(planned,todayGym,done.gym);
   if(sleep.last!=null){
     const delta=sleep.avg==null?null:Math.round(sleep.last-sleep.avg);
     facts.push(L('Spánek ','Sleep ')+Math.floor(Math.round(sleep.last)/60)+' h '+Math.round(sleep.last)%60+' min'+(delta!=null&&Math.abs(delta)>=30?' ('+Math.abs(delta)+' min '+(delta<0?L('méně než obvykle','less than usual'):L('více než obvykle','more than usual'))+')':'')+'.');
@@ -70,10 +93,12 @@ function morningSummary({date,sleep,fitness,yesterday,planned,policy,todayGym,ca
   if(n(fitness.tsb)!=null)facts.push(L('Aktuální forma ','Current form ')+Math.round(n(fitness.tsb))+'.');
   if(caution)facts.push(caution);
   if(!facts.length&&!policy.paused)return null;
-  facts.push(plan.empty?L('Dnes nemáš nic v plánu.','Nothing planned today.'):L('Dnes v plánu: ','Planned today: ')+plan.names.join(', ')+'.');
+  if(done.any)facts.push(L('Dnes hotovo: ','Done today: ')+done.names.join(', ')+(done.minutes>0?' · '+clock(done.minutes):'')+'.');
+  if(!plan.empty)facts.push(L(done.any?'Ještě v plánu: ':'Dnes v plánu: ',done.any?'Still planned: ':'Planned today: ')+plan.names.join(', ')+'.');
+  else if(!done.any)facts.push(L('Dnes nemáš nic v plánu.','Nothing planned today.'));
   const sleepLow=sleep.last!=null&&sleep.last<360,low=sleepLow||n(fitness.tsb)!=null&&n(fitness.tsb)<-25,heavy=load.reduce((a,b)=>a+b,0)>150||minutes>=180;
-  const next=policy.paused?policy.guidance[0]:morningAdvice({plan,low,heavy,sleepLow});
-  return {date,headline:policy.paused?policy.label+L(' · dnešní přehled',' · today\'s overview'):low&&plan.empty?L('Den na odpočinek','A day to recover'):low?L('Dnes s větší rezervou','Take it easier today'):heavy?L('Navazujeme na náročný včerejšek','Following a demanding yesterday'):L('Jak dnes začít','How to start today'),text:facts.join(' '),recommendation:next,plan:{empty:plan.empty,names:plan.names},sleepSync:{tracked:Boolean(sleep.tracked),today:Boolean(sleep.today),wokeAt:sleep.wokeAt||null}};
+  const next=policy.paused?policy.guidance[0]:morningAdvice({plan,low,heavy,sleepLow,done});
+  return {date,headline:policy.paused?policy.label+L(' · dnešní přehled',' · today\'s overview'):plan.empty&&done.any?L('Teď regenerace','Time to recover'):low&&plan.empty?L('Den na odpočinek','A day to recover'):low?L('Dnes s větší rezervou','Take it easier today'):heavy?L('Navazujeme na náročný včerejšek','Following a demanding yesterday'):L('Jak dnes začít','How to start today'),text:facts.join(' '),recommendation:next,plan:{empty:plan.empty,names:plan.names},sleepSync:{tracked:Boolean(sleep.tracked),today:Boolean(sleep.today),wokeAt:sleep.wokeAt||null}};
 }
 const dec=(v,d=1)=>{const s=String(Math.round(v*10**d)/10**d);return L(s.replace('.',','),s);};
 const pctRange=(lo,hi)=>hi!=null&&hi!==lo?Math.round(lo)+'–'+Math.round(hi)+' % FTP':Math.round(lo)+' % FTP';
@@ -136,7 +161,7 @@ function nutritionCoach(c,done,paused){
   else if(intake>0)actions.push(L('Zapsáno ','Logged ')+Math.round(intake)+L(' kcal. Denní cíl zatím není k dispozici.',' kcal. The daily goal is not available yet.'));
   if(fuel)actions.push(L('Na '+Math.round(hours*60)+'min jízdu počítej s '+fuel+'. Palivo během aktivity je součástí denního příjmu.','For a '+Math.round(hours*60)+'-minute ride, plan on '+fuel+'. Fuel during the activity counts toward your daily intake.'));
   if(done.length){
-    const energy=done.map(a=>n(a.calories)).filter(v=>v!=null),names=done.map(a=>a.name||a.type).join(', '),kcal=energy.length?Math.round(energy.reduce((a,b)=>a+b,0)):null;
+    const energy=done.map(a=>n(a.calories)).filter(v=>v!=null),names=done.map(activityName).join(', '),kcal=energy.length?Math.round(energy.reduce((a,b)=>a+b,0)):null;
     actions.push(L('Po aktivitě '+names+(kcal!=null?' · '+kcal+' kcal zaznamenaného výdeje':'')+': doplň běžné jídlo s bílkovinami a sacharidy. Výdej už je započtený v denním cíli.','After '+names+(kcal!=null?' · '+kcal+' kcal of recorded expenditure':'')+': have a regular meal with protein and carbs. The expenditure is already included in your daily goal.'));
   }
   const protein=n(c.nutrition?.macros?.protein_g??c.nutrition?.macros?.proteinGrams),loggedProtein=n(c.food.protein_g);
@@ -189,5 +214,5 @@ export function buildCoachCouncil(input){
   if(input.gymReview&&!reviews.some(r=>r.sets))reviews.push(gymReviewCard(input.gymReview,input.gym.values?.[2]?.[3]||null,'gym-'+date));
   const fuel=nutritionCoach(c,completed.filter(a=>isBike(a)||isGym(a)),policy.paused);
   if(fuel)coaches.push(fuel);
-  return {version:'adaptive-coach-council-v4',generatedAt:new Date().toISOString(),morningSummary:input.ahead?null:morningSummary({date,sleep:c.sleep,fitness:c.fitness,yesterday:input.yesterday,planned,policy,todayGym:c.todayGym,caution:workloadCaution(input.workload)}),priorities:coaches.map(c=>c.headline+': '+c.actions[0]).slice(0,3),coaches,reviews};
+  return {version:'adaptive-coach-council-v4',generatedAt:new Date().toISOString(),morningSummary:input.ahead?null:morningSummary({date,sleep:c.sleep,fitness:c.fitness,yesterday:input.yesterday,planned,policy,todayGym:c.todayGym,caution:workloadCaution(input.workload),completed}),priorities:coaches.map(c=>c.headline+': '+c.actions[0]).slice(0,3),coaches,reviews};
 }

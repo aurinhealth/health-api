@@ -4,6 +4,7 @@ import { createD1 } from './helpers/d1.mjs';
 import { scopedDb } from '../src/tenancy.js';
 import { getAthleteState,updateAthleteState } from '../src/athlete-state.js';
 import { buildCoachCouncil } from '../src/coach-engine.js';
+import { withLang } from '../src/lang.js';
 import { planValues } from '../src/gym-plan-store.js';
 import { todayGymContext,prepareGymSwap,applyGymSwap } from '../src/coach-gym-adjustment.js';
 import { validateCoachActions } from '../src/coach-actions.js';
@@ -90,6 +91,23 @@ test('morning summary combines fresh sleep, yesterday load and current form with
   const waiting=buildCoachCouncil({date,sleepSessions:[{date:'2026-10-03',durationMin:420}],fitness:{tsb:-5}}).morningSummary.sleepSync;
   assert.deepEqual(waiting,{tracked:true,today:false,wokeAt:null});
   assert.equal(buildCoachCouncil({date,fitness:{tsb:-5}}).morningSummary.sleepSync.tracked,false);
+});
+test('morning summary counts a workout already done today instead of saying nothing is planned',()=>{
+  // Petr 2026-10-25: a gym session from the watch (no name, only its type), the ride moved to tomorrow, a short night.
+  const daily={training:{planned:[],completed:[{id:'apple-health:1',type:'WeightTraining',durationHours:1.1,calories:463}]}};
+  const r=withLang('en',()=>buildCoachCouncil({date,sleepSessions:[{date,durationMin:319}],fitness:{tsb:22},daily}));
+  const s=r.morningSummary;
+  assert.doesNotMatch(s.text,/Nothing planned/);assert.match(s.text,/Done today: Gym · 1 h 6 min\./);
+  assert.equal(s.headline,'Time to recover');assert.match(s.recommendation,/^Today's training \(Gym\) is done\. After a short night/);assert.doesNotMatch(s.recommendation,/walk/);
+  // The refuel line names the workout in words, not its type.
+  assert.match(r.priorities.join(' '),/After Gym · 463 kcal/);assert.doesNotMatch(r.priorities.join(' '),/WeightTraining/);
+  // A gym plan done with the watch is not still planned; a ride left for later still is.
+  const both=buildCoachCouncil({date,sleepSessions:[{date,durationMin:470}],fitness:{tsb:-5},daily:{training:{planned:[{id:3,name:'Full body',type:'WeightTraining'},{id:4,name:'Endurance',type:'Ride'}],completed:[{id:'g',type:'WeightTraining',durationHours:1}]}}}).morningSummary;
+  assert.match(both.text,/Dnes hotovo: Posilovna · 1 h\. Ještě v plánu: Endurance\./);
+  // A gym session logged in the app without a watch workout counts too.
+  const finished={values:planValues({date,rows:[make('DB Arnold press',true),make('Low row',true)]}),history:[]};
+  const app=buildCoachCouncil({date,sleepSessions:[{date,durationMin:470}],fitness:{tsb:-5},gym:finished}).morningSummary;
+  assert.match(app.text,/Dnes hotovo: Posilovna\./);assert.match(app.recommendation,/^Dnešní trénink \(Posilovna\) máš za sebou\. Zbytek dne patří regeneraci/);
 });
 test('partial structured answer handles quotes, Unicode and unfinished escapes',()=>{
   assert.equal(partialCoachAnswer('{"answer":"Ahoj\\nZměň \\"cvik\\"'),'Ahoj\nZměň "cvik"');
