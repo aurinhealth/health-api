@@ -4,7 +4,10 @@
 // active users, invited addresses and the owner. POST /auth/email/verify
 // { email, code } signs in. A code is valid for 10 minutes and allows 5 tries, and after
 // 20 wrong codes in a day (UTC) an address is locked until midnight. An address gets at most
-// one code a minute and 10 a day. One caller (an IPv4 address or an IPv6 /64, ip-rate-limit.js)
+// one code a minute and 10 a day. A device that once signed in with the address (the signed
+// KNOWN_COOKIE, set at sign-in and kept through "Odhlásit se") is not held by that lock or by
+// the 10 a day: a stranger who spends them on someone's address locks out only the devices
+// that never signed in with it. Such a device has its own 10 codes and 20 tries a day. One caller (an IPv4 address or an IPv6 /64, ip-rate-limit.js)
 // starts at most 5 sign-ins a minute, 30 an hour and 50 a day, and checks at most 10 codes a
 // minute, 30 an hour and 100 a day. All codes together stay under EMAIL_CODES_PER_DAY (500) a
 // day, of which addresses that get a code only through OPEN_SIGNUP use at most four fifths,
@@ -43,6 +46,23 @@ const LOCKED_TODAY = () => L("Na tenhle e-mail bylo zadáno příliš mnoho špa
 const REVIEW_LOCKED = () => L("Na tenhle e-mail bylo zadáno příliš mnoho špatných kódů.", "Too many wrong codes were entered for this email.");
 const today = now => new Date(now).toISOString().slice(0, 10);
 
+// The device a code was used on: "<nonce>.<signature of the address and the nonce>".
+export const KNOWN_COOKIE = "aurin_known";
+const KNOWN_SECONDS = 365 * 24 * 60 * 60;
+const MAX_KNOWN_TRIES_PER_DAY = 20;
+const knownSignature = (env, email, nonce) => signText("known-device:" + email + ":" + nonce, sessionSecret(env));
+async function knownCookie(env, email) {
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, "0")).join("");
+  return KNOWN_COOKIE + "=" + nonce + "." + await knownSignature(env, email, nonce) + "; Path=/auth/email; Max-Age=" + KNOWN_SECONDS + "; HttpOnly; Secure; SameSite=Lax";
+}
+// The nonce when the request comes from a device that signed in with this address, else null.
+export async function knownDevice(request, env, email) {
+  const value = String(request.headers.get("Cookie") || "").split(/;\s*/).find(c => c.startsWith(KNOWN_COOKIE + "="))?.slice(KNOWN_COOKIE.length + 1) || "";
+  const [nonce, signature] = value.split(".");
+  if (!/^[0-9a-f]{24}$/.test(nonce || "") || !signature) return null;
+  return timingSafeEqualString(signature, await knownSignature(env, email, nonce)) ? nonce : null;
+}
+
 const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
 export function requestLanguage(request) {
@@ -58,15 +78,16 @@ export async function handleEmailLogin(request, env, pathname, ctx) {
   const body = await request.json().catch(() => ({}));
   const email = normalizeEmail(body?.email);
   if (email.length > 254 || !EMAIL_PATTERN.test(email)) return json({ message: L("Zadej platný e-mail.", "Enter a valid email.") }, 400);
+  const known = await knownDevice(request, env, email);
   if (pathname === "/auth/email/start") {
     if (!(await allowClient(env.DB, request, sessionSecret(env), "email", Date.now(), START_LIMITS))) return json({ message: TOO_MANY() }, 429);
     // Whether a code goes out (and how long that takes) stays out of the answer.
-    const work = sendCode(env, email, requestLanguage(request)).catch(error => console.error("Sign-in code e-mail failed", error?.code || error?.message));
+    const work = sendCode(env, email, requestLanguage(request), { known }).catch(error => console.error("Sign-in code e-mail failed", error?.code || error?.message));
     if (ctx?.waitUntil) ctx.waitUntil(work); else await work;
     return json({ status: "ok" });
   }
   if (!(await allowClient(env.DB, request, sessionSecret(env), "email-verify", Date.now(), VERIFY_LIMITS))) return json({ message: TOO_MANY() }, 429);
-  return verifyCode(env, email, body?.code);
+  return verifyCode(env, email, body?.code, known);
 }
 
 function randomCode() {
@@ -102,20 +123,24 @@ async function fixedReviewCode(db, env, email, now) {
 }
 
 // Returns true when a code went out.
-export async function sendCode(env, email, lang = "cs", { now = Date.now(), code } = {}) {
+export async function sendCode(env, email, lang = "cs", { now = Date.now(), code, known = null } = {}) {
   const access = await emailCodeAccess(env.DB, env, email);
   if (!access) return false;
   const sent = code || await fixedReviewCode(env.DB, env, email, now) || randomCode();
-  return claimAndSend(env.DB, env, email, sent, "email-code", signInCodeEmail(lang, sent), now, { open: access === "open" });
+  return claimAndSend(env.DB, env, email, sent, "email-code", signInCodeEmail(lang, sent), now, { open: access === "open", known });
 }
 
 // `open`: the address gets a code only because anyone may sign up, so it draws on the open share.
 // `change`: a code for moving an account to this address, which draws on its own budget only.
-async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false } = {}) {
+// `known`: the nonce of a device that signed in with the address (knownDevice); it has its own
+// day's codes instead of the address's, and the address's lock does not hold it.
+async function claimAndSend(db, env, email, code, purpose, message, now, { open = false, change = false, known = null } = {}) {
   const seconds = Math.floor(now / 1000), day = today(now);
   // The address's own limits are checked first, so a code it would not get spends no budget.
   const current = await db.prepare("SELECT sent_at, day, day_count, fail_day, fail_count FROM email_login_codes WHERE email=?").bind(email).first();
-  if (current && (current.sent_at > seconds - RESEND_SECONDS || (current.day === day && current.day_count >= MAX_SENDS_PER_DAY) || (current.fail_day === day && current.fail_count >= MAX_FAILED_PER_DAY))) return false;
+  if (current && current.sent_at > seconds - RESEND_SECONDS) return false;
+  if (!known && current && ((current.day === day && current.day_count >= MAX_SENDS_PER_DAY) || (current.fail_day === day && current.fail_count >= MAX_FAILED_PER_DAY))) return false;
+  if (known && !(await allowRequest(db, "email-known-codes:" + known, { day: MAX_SENDS_PER_DAY }, now))) return false;
   // All codes together: the budget of a day, so an open sign-up cannot turn the sender into a spam
   // source. The open share is claimed first: a refusal there never takes from the shared budget.
   if (change) {
@@ -133,7 +158,7 @@ async function claimAndSend(db, env, email, code, purpose, message, now, { open 
     ON CONFLICT(email) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0, sent_at = excluded.sent_at,
       day_count = CASE WHEN day = excluded.day THEN day_count + 1 ELSE 1 END, day = excluded.day
     WHERE email_login_codes.sent_at <= ? AND (email_login_codes.day IS NOT excluded.day OR email_login_codes.day_count < ?)`)
-      .bind(email, hash, seconds + CODE_SECONDS, seconds, day, seconds - RESEND_SECONDS, MAX_SENDS_PER_DAY)
+      .bind(email, hash, seconds + CODE_SECONDS, seconds, day, seconds - RESEND_SECONDS, known ? Number.MAX_SAFE_INTEGER : MAX_SENDS_PER_DAY)
   ]);
   if (!(Number(claimed.meta?.changes) > 0)) return false;
   await db.prepare("DELETE FROM email_login_codes WHERE sent_at < ?").bind(seconds - STALE_SECONDS).run().catch(() => {});
@@ -154,26 +179,32 @@ export const codesPerDay = env => { const n = Number(env?.EMAIL_CODES_PER_DAY); 
 export const openCodesPerDay = env => { const all = codesPerDay(env); return all - Math.ceil(all * RESERVED_SHARE); };
 export const changeCodesPerDay = env => { const n = Number(env?.EMAIL_CHANGE_CODES_PER_DAY); return Number.isInteger(n) && n > 0 ? n : DEFAULT_CHANGE_CODES_PER_DAY; };
 
-async function verifyCode(env, email, input) {
-  const refused = await useCode(env.DB, env, email, input, "email-code");
+async function verifyCode(env, email, input, known = null) {
+  const refused = await useCode(env.DB, env, email, input, "email-code", known);
   if (refused) return refused;
   const user = await signInEmailUser(env.DB, env, email);
   if (!user) return json({ message: L("Tento e-mail nemá do Aurinu přístup.", "This email doesn't have access to Aurin.") }, 403);
-  return signedInResponse(user.id, env, { status: "ok", created: user.created });
+  // This device signed in with the address: a stranger's wrong codes no longer lock it out.
+  const response = await signedInResponse(user.id, env, { status: "ok", created: user.created });
+  response.headers.append("Set-Cookie", await knownCookie(env, email));
+  return response;
 }
 
 // Checks and uses up a code; returns the refusal, or null when the code was right.
-async function useCode(db, env, email, input, purpose) {
+async function useCode(db, env, email, input, purpose, known = null) {
   const code = String(input || "").replace(/[\s-]/g, "");
   if (!/^\d{6}$/.test(code)) return json({ message: L("Kód má šest číslic.", "The code has six digits.") }, 400);
   const time = Date.now(), now = Math.floor(time / 1000), day = today(time);
+  // A known device: its own tries a day instead of the address's lock.
+  if (known && !(await allowRequest(db, "email-known-tries:" + known, { day: MAX_KNOWN_TRIES_PER_DAY }, time))) return json({ message: LOCKED_TODAY() }, 429);
   // Every try is counted before the comparison, for the code and for the address's day, so
   // parallel guesses cannot get past either limit; a right code takes its try back below.
   const row = await db.prepare(`UPDATE email_login_codes SET attempts = attempts + 1,
       fail_count = CASE WHEN fail_day IS ? THEN fail_count + 1 ELSE 1 END, fail_day = ?
     WHERE email = ? AND code_hash IS NOT NULL AND expires_at > ? AND attempts < ? AND (fail_day IS NOT ? OR fail_count < ?)
-    RETURNING code_hash, attempts`).bind(day, day, email, now, MAX_ATTEMPTS, day, MAX_FAILED_PER_DAY).first();
+    RETURNING code_hash, attempts`).bind(day, day, email, now, MAX_ATTEMPTS, day, known ? Number.MAX_SAFE_INTEGER : MAX_FAILED_PER_DAY).first();
   if (!row) {
+    if (known) return json({ message: EXPIRED() }, 400);
     const locked = await db.prepare("SELECT email FROM email_login_codes WHERE email = ? AND fail_day = ? AND fail_count >= ?").bind(email, day, MAX_FAILED_PER_DAY).first();
     return locked ? json({ message: LOCKED_TODAY() }, 429) : json({ message: EXPIRED() }, 400);
   }
