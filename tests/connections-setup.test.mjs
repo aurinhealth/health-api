@@ -196,3 +196,37 @@ test("no calories are written to Intervals.icu", () => {
 
 test("without Intervals.icu the fitness and form cards say where the numbers come from", () => {
 });
+
+test("Google Health and Intervals.icu connections use PKCE: the code is exchanged only with the verifier from the HttpOnly cookie", async () => {
+  const s256 = async verifier => Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier))).toString("base64url");
+  const env = { DB: createD1(), USER_ID: 5, CONNECTION_KEY: "x".repeat(32), GOOGLE_CLIENT_ID: "gid", GOOGLE_CLIENT_SECRET: "gsecret", INTERVALS_CLIENT_ID: "cid", INTERVALS_CLIENT_SECRET: "secret" };
+  for (const [name, start, callback, tokenUrl, answer] of [
+    ["google", "/oauth/google?consent=1", "/oauth/google/callback", "https://oauth2.googleapis.com/token", { refresh_token: "r", scope: HEALTH_SCOPES.join(" ") }],
+    ["intervals", "/oauth/intervals", "/oauth/intervals/callback", "https://intervals.icu/api/oauth/token", { access_token: "t", athlete: { id: "i1" } }],
+  ]) {
+    const handle = (request, fetchImpl) => name === "google" ? handleGoogleOAuth(request, env, new URL(request.url).pathname) : handleIntervalsOAuth(request, env, new URL(request.url).pathname, fetchImpl);
+    const started = await handle(new Request("https://aurin.health" + start));
+    const to = new URL(started.headers.get("Location")), cookie = started.headers.get("Set-Cookie").split(";")[0];
+    assert.equal(to.searchParams.get("code_challenge_method"), "S256", name);
+    const verifier = decodeURIComponent(cookie.split("=")[1]).split(".")[3];
+    assert.match(verifier, /^[A-Za-z0-9_-]{43}$/, name);
+    assert.equal(to.searchParams.get("code_challenge"), await s256(verifier), name);
+    assert.ok(!to.toString().includes(verifier), name + ": the verifier never leaves the cookie");
+
+    let sent = [], real = globalThis.fetch;
+    const fetchImpl = async (url, init) => { sent.push({ url, body: new URLSearchParams(String(init.body)) }); return Response.json(answer); };
+    globalThis.fetch = fetchImpl;
+    try {
+      const query = "?code=c&state=" + to.searchParams.get("state");
+      // A state cookie from before PKCE (no verifier) starts again; the code is never exchanged.
+      const old = cookie.slice(0, cookie.lastIndexOf("."));
+      const refused = await handle(new Request("https://aurin.health" + callback + query, { headers: { Cookie: old } }), fetchImpl);
+      assert.ok(refused.status === 400 || /failed/.test(refused.headers.get("Location") || ""), name);
+      assert.equal(sent.length, 0, name);
+      const ok = await handle(new Request("https://aurin.health" + callback + query, { headers: { Cookie: cookie } }), fetchImpl);
+      assert.equal(ok.headers.get("Location"), "loadwise://connected?event=" + name);
+      assert.equal(sent[0].url, tokenUrl);
+      assert.equal(sent[0].body.get("code_verifier"), verifier, name);
+    } finally { globalThis.fetch = real; }
+  }
+});
