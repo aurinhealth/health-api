@@ -339,7 +339,8 @@ const setExport = (db, userId, localId, fields) => {
 };
 
 // Sends one planned workout (local_workouts id) to Wahoo, changes or removes
-// it there. `thresholds` gives the FTP and threshold pace for the plan's targets.
+// it there. `thresholds` gives the FTP and threshold pace for the plan's targets,
+// or is a function that asks for them only when a plan is about to go out.
 export async function syncWahooWorkout(env, localId, { fetchImpl = fetch, now = Date.now(), thresholds = null } = {}) {
   if (!readWahooTokens(env)) return { status: 'not_connected' };
   const db = env.DB, userId = env.USER_ID ?? db.userId;
@@ -358,7 +359,11 @@ export async function syncWahooWorkout(env, localId, { fetchImpl = fetch, now = 
   if (row.status === 'completed' && workoutId) { await setExport(db, userId, row.id, { status: 'synced', revision: row.revision }); return { status: 'synced', eventId: exported.remote_id }; }
   const claimed = await db.prepare("UPDATE workout_exports SET status='running',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='wahoo' AND (status!='running' OR updated_at<datetime('now','-5 minutes'))").bind(userId, row.id).run();
   if (exported && !claimed.meta?.changes) return { status: 'pending' };
-  if (!exported) await setExport(db, userId, row.id, { status: 'running', revision: 0 });
+  // The first send claims its row too: of two at once, only one makes the plan.
+  if (!exported) {
+    const made = await db.prepare("INSERT INTO workout_exports(user_id,local_id,provider,status,revision) VALUES(?,?,'wahoo','running',0) ON CONFLICT(user_id,local_id,provider) DO NOTHING").bind(userId, row.id).run();
+    if (!made.meta?.changes) return { status: 'pending' };
+  }
   try {
     let remote = exported?.remote_id || null;
     if (row.status === 'deleted') {
@@ -366,6 +371,7 @@ export async function syncWahooWorkout(env, localId, { fetchImpl = fetch, now = 
       if (planId) await wahooApi(env, '/v1/plans/' + encodeURIComponent(planId), { method: 'DELETE', fetchImpl, now });
       remote = null;
     } else {
+      if (typeof thresholds === 'function') thresholds = await thresholds();
       const plan = wahooPlan(event, { ftp: thresholds?.ftp ? (/virtual/i.test(event.type) ? thresholds.indoorFtp || Math.round(thresholds.ftp * .95) : thresholds.ftp) : null, thresholdPace: thresholds?.runThresholdPace || null });
       const updated = new Date(now).toISOString(), starts = startsAt(event), minutes = Math.max(1, Math.round(n(event.moving_time, 3600) / 60));
       const workout = { 'workout[name]': plan.header.name, 'workout[workout_type_id]': String(typeId(event.type, /virtual/i.test(event.type))), 'workout[starts]': starts, 'workout[minutes]': String(minutes) };
@@ -405,16 +411,23 @@ export async function retryWahooExports(env, { limit = 4, fetchImpl = fetch, now
   if (!readWahooTokens(env)) return [];
   const db = env.DB, userId = env.USER_ID ?? db.userId, today = localToday(new Date(now));
   const until = new Date(Date.parse(today + 'T12:00:00Z') + 14 * 86400000).toISOString().slice(0, 10);
-  const due = (await db.prepare(`SELECT l.id FROM local_workouts l LEFT JOIN workout_exports e ON e.user_id=l.user_id AND e.local_id=l.id AND e.provider='wahoo'
+  const due = (await db.prepare(`SELECT l.id,l.event_json FROM local_workouts l LEFT JOIN workout_exports e ON e.user_id=l.user_id AND e.local_id=l.id AND e.provider='wahoo'
     WHERE l.user_id=? AND (((e.local_id IS NULL OR (e.status='off' AND e.remote_id IS NULL)) AND l.status='scheduled' AND substr(json_extract(l.event_json,'$.start_date_local'),1,10) BETWEEN ? AND ?)
       OR ${exportDue('e.')})
     ORDER BY l.updated_at LIMIT 20`).bind(userId, today, until).all().catch(() => ({ results: [] }))).results || [];
   const results = [];
-  // The FTP and threshold pace for the targets, asked for only when something goes out.
-  if (due.length && !thresholds) thresholds = await athleteThresholds(env, fetchImpl).catch(() => null);
-  for (const { id } of due) {
+  // The FTP and threshold pace for the targets come from Intervals.icu, asked
+  // for only when a plan really goes out, once a run: every five minutes for a
+  // gym session or a plan Wahoo is not to get would spend Intervals.icu's
+  // daily limit (the reads go through its cache, intervals-reads.js).
+  let asked = null;
+  const targets = thresholds || (() => (asked ||= athleteThresholds(env).catch(() => null)));
+  for (const { id, event_json } of due) {
     if (results.filter(r => r.status !== 'skipped' && r.status !== 'off').length >= limit) break;
-    results.push(await syncWahooWorkout(env, id, { fetchImpl, now, thresholds }));
+    // A gym session or a nutrition plan never goes to Wahoo.
+    let event = null; try { event = JSON.parse(event_json || '{}'); } catch { event = null; }
+    if (!exportable(event)) continue;
+    results.push(await syncWahooWorkout(env, id, { fetchImpl, now, thresholds: targets }));
   }
   return results;
 }
