@@ -119,6 +119,29 @@ test("a column the shard lacks is added before the copy; one without a default i
   await assert.rejects(moveLegacyUsers({ api: other.api, plan, ids: other.ids, apply: false, log: () => {} }), /lacks column coach_picks.kind, which has no default/);
 });
 
+test("a move cut off after the switch is finished: late rows copied, the central copy deleted", async () => {
+  const { central, two, ids, api } = setup();
+  central.exec("UPDATE user_data_routes SET shard_key='data-002' WHERE user_id=1");
+  // The first copy got only part of the rows; the app wrote one row on the shard since.
+  two.exec("CREATE TABLE assistant_chats (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, title TEXT)");
+  two.exec("INSERT INTO health_datapoints (id, user_id, data_type, external_id, value) SELECT id, user_id, data_type, external_id, value FROM (SELECT 1 AS id, 1 AS user_id, 'hr' AS data_type, 'x1' AS external_id, 99 AS value)");
+  two.exec("INSERT INTO sync_status VALUES (1, 'oura', 'newer')");
+  const lines = [];
+  await moveLegacyUsers({ api, plan, ids, apply: false, log: l => lines.push(l) });
+  assert.ok(lines.includes("Account 1 is on health-data-users-002 but still has rows in the central database"));
+  assert.equal(count(central, "SELECT COUNT(*) AS n FROM health_datapoints WHERE user_id=1"), 600, "a dry run changes nothing");
+  const moved = await moveLegacyUsers({ api, plan, ids, apply: true, log: () => {} });
+  assert.equal(moved[0].userId, 1);
+  assert.deepEqual(moved[0].left, []);
+  for (const table of ["health_datapoints", "assistant_chats", "assistant_messages", "sync_status"]) {
+    assert.equal(count(central, `SELECT COUNT(*) AS n FROM ${table} WHERE user_id=1`), 0, table);
+  }
+  assert.equal(count(two, "SELECT COUNT(*) AS n FROM health_datapoints WHERE user_id=1"), 600);
+  assert.equal(two.prepare("SELECT value FROM health_datapoints WHERE id=1").get().value, 99, "the shard's row stays");
+  assert.equal(two.prepare("SELECT state FROM sync_status WHERE user_id=1").get().state, "newer");
+  assert.equal(count(two, "SELECT COUNT(*) AS n FROM assistant_messages WHERE user_id=1"), 2);
+});
+
 test("inserts stay under D1's parameter limit", () => {
   const table = { name: "t", columns: Array.from({ length: 12 }, (_, i) => "c" + i) };
   const page = Array.from({ length: 50 }, () => Object.fromEntries(table.columns.map(c => [c, 1])));
