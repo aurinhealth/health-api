@@ -270,7 +270,7 @@ struct RootView: View {
             // A failure on top goes away on its own after a while, or with a tap.
             .task(id: model.notice) {
                 guard let shown = model.notice else { return }
-                try? await Task.sleep(for: .seconds(8))
+                try? await Task.sleep(for: .seconds(6))
                 if model.notice == shown { model.notice = nil }
             }
             // The toast goes away on its own unless its sheet is open.

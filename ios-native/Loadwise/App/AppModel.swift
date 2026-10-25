@@ -26,7 +26,7 @@ final class AppModel {
     private(set) var food: FoodSnapshot?
     var foodError: String?
     /// A write or a refresh that failed while data is on screen: shown on top
-    /// of every tab for 8 s or until tapped away (the screens' own errors show
+    /// of every tab for 6 s or until tapped away (the screens' own errors show
     /// only without data).
     var notice: String?
     private(set) var loading = false
