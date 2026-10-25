@@ -186,7 +186,7 @@ test('migration-aware authenticated API pauses food operations only, then serves
   const response=await entrypoint.fetch(request('/app/api/food/search',{barcode:product.barcode}),f.env,{waitUntil(){}});
   assert.equal(response.status,200);assert.equal((await response.json()).product.barcode,product.barcode);
   delete f.env.FOODS;assert.equal((await entrypoint.fetch(request('/app/api/food/search',{barcode:product.barcode}),f.env,{waitUntil(){}})).status,503);
-  const anonymous=await entrypoint.fetch(new Request('https://aurin.health/app/api/me'),f.env,{waitUntil(){}});assert.equal(anonymous.headers.get('X-Food-Catalog-Routing'),'1');_resetTenancyForTest();
+  const anonymous=await entrypoint.fetch(new Request('https://aurin.health/app/api/me'),f.env,{waitUntil(){}});assert.equal(anonymous.status,401);assert.equal(anonymous.headers.get('X-Food-Catalog-Routing'),null);_resetTenancyForTest();
 });
 
 test('remote canary cleanup is exact and provisioning preserves all 20 user database bindings',async()=>{

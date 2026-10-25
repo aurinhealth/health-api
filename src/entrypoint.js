@@ -454,10 +454,7 @@ const worker = {
     if (!principal && url.pathname === "/automation/coach-eval") principal = await coachEvalPrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
     if (!isPublic && !principal) {
-      const response = unauthorizedResponse();
-      if (env.USER_DATA_ROUTING === 'true') response.headers.set('X-Storage-Routing', '1');
-      if (env.FOOD_CATALOG_ROUTING === 'true') response.headers.set('X-Food-Catalog-Routing', '1');
-      return response;
+      return unauthorizedResponse();
     }
     let user = null;
     if (principal?.kind === "user") {
