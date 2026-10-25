@@ -18,6 +18,7 @@ struct ProfileSettingsView: View {
     @State private var age = ""
     @State private var height = ""
     @State private var original: JSONObject = [:]
+    @State private var filled = false
     @State private var copied = false
     @State private var confirmOthers = false
     @State private var signingOutOthers = false
@@ -109,7 +110,8 @@ struct ProfileSettingsView: View {
             }
         }
         .toolbar { SaveButton(enabled: changes != original, saving: store.saving) { Task { await save() } } }
-        .onAppear(perform: fill)
+        // Once: back from Změnit e-mail, Face ID or Smazat účet, what was typed stays.
+        .onAppear { if !filled { fill(); filled = true } }
         .confirmationDialog("Odhlásit ostatní zařízení?", isPresented: $confirmOthers, titleVisibility: .visible) {
             Button("Odhlásit", role: .destructive) { Task { await signOutOthers() } }
             Button("Zrušit", role: .cancel) {}

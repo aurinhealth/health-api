@@ -173,14 +173,26 @@ enum PushRegistration {
     }
 
     /// Removes the phone's token from the server (the switch off, "Odhlásit se").
-    static func unregister(api: APIClient) async {
-        guard let token = UserDefaults.standard.string(forKey: sentKey), api.hasSession else { return }
+    /// False when the server still has it.
+    @discardableResult
+    static func unregister(api: APIClient) async -> Bool {
+        guard let token = UserDefaults.standard.string(forKey: sentKey), api.hasSession else { return true }
         do {
             try await api.removePushToken(token)
             UserDefaults.standard.removeObject(forKey: sentKey)
+            return true
         } catch {
             // Tried again on the next refresh.
+            return false
         }
+    }
+
+    /// Signing out without signal: the server could not be told, so the phone
+    /// leaves Apple's push service and the old account's pushes no longer reach
+    /// the lock screen (Apple then answers the server that the token is gone).
+    /// The next sign-in registers again.
+    static func leavePushService() {
+        UIApplication.shared.unregisterForRemoteNotifications()
     }
 
     /// The server sends only the pushes whose switch is on; told when a switch changed.
