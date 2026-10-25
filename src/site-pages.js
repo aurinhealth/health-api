@@ -627,7 +627,7 @@ const realDay = id => {
   return `<figure class="rd reveal"><a href="/site/real/${name}.webp" target="_blank" rel="noopener"><img src="/site/real/${name}.webp" alt="${alt}" width="${w}" height="${h}" loading="lazy" decoding="async"></a><figcaption><b>From a real day</b>${say}</figcaption></figure>`;
 };
 
-export const GOOGLE_DISCLOSURE_ON_HOME = false;
+export const GOOGLE_DISCLOSURE_ON_HOME = true;
 export const googleDisclosure = () => `<div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
 <p>With your authorization, the service may read fitness, health-metric, sleep, and nutrition data from Google Health. It may also add nutrition logs to Google Health when you ask the service to record food or drinks. This data is used only for the requested training and nutrition features.</p>

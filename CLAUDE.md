@@ -29,7 +29,7 @@ availability) updates the overview in the same pull request. The site is in Engl
 - The privacy, terms and support pages are legal texts that Google verification reads: change them only
   when the way data is handled changes. The Google Health disclosure stays word for word
   (`googleDisclosure` in `src/site-pages.js`, `tests/site-pages.test.mjs`) and names every optional Google
-  permission the app asks for. It goes on the overview only while Google verifies the app (`GOOGLE_DISCLOSURE_ON_HOME`), which is not planned now.
+  permission the app asks for. It goes on the overview only while Google verifies the app (`GOOGLE_DISCLOSURE_ON_HOME`); verification was submitted on 2026-10-25.
 - The app and the site are only Aurin on aurin.health. petrfitnessdata.eu (the old address) only redirects
   there; the bundle IDs `eu.petrfitnessdata.*` cannot change and are never shown as a name.
 
