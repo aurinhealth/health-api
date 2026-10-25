@@ -364,7 +364,7 @@ struct GoalTimeSheet: View {
                     SettingsDivider()
                     row(L10n.tr("Cílové tempo"), Units.paceText(Double(goal) / max(km, 1)))
                 }
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .cardSurface(cornerRadius: 22)
                 if let verdict = GoalTimeSheet.verdict(goal: goal, estimate: estimate, weeks: weeks) {
                     Text(verbatim: verdict.0).font(Typo.small).foregroundStyle(verdict.1).fixedSize(horizontal: false, vertical: true)
                 }

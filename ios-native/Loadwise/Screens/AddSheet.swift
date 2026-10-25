@@ -36,15 +36,9 @@ struct AddSheet: View {
                 // No title: the tiles say what "+" is for.
                 HStack(alignment: .center) {
                     Spacer()
-                    Button { editing = true } label: {
-                        Image(systemName: "pencil").font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.ink)
-                            .frame(width: 34, height: 34)
-                            .overlay(Circle().stroke(Palette.ink.opacity(0.16), lineWidth: 1))
-                            .contentShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.tr("Upravit +"))
-                    Button("Zavřít") { dismiss() }.font(.subheadline).foregroundStyle(Palette.muted).padding(.leading, 10)
+                    ChromeButton(systemImage: "pencil", label: "Upravit +") { editing = true }
+                    ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+                        .padding(.leading, 6)
                 }
 
                 if PlusLayout(rawValue: layout) == .free {
@@ -82,7 +76,7 @@ struct AddSheet: View {
         .scrollBounceBehavior(.basedOnSize)
         .presentationDetents([.height(sheetHeight)])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         // What "+" adds goes to today, also while the screens show another day.
         .onAppear { model.writesToday = true }
         .onDisappear { model.writesToday = false }

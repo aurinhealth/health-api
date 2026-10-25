@@ -88,7 +88,7 @@ struct JournalImpactView: View {
             }
         }
         .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 16)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
     }
 
     private func fewDays(_ list: [JournalImpact.Waiting]) -> some View {

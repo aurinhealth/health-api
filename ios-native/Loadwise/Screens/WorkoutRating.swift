@@ -170,7 +170,7 @@ struct FeedbackRow: View {
                 Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
             }
             .padding(.horizontal, 16).frame(minHeight: 54)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .cardSurface(cornerRadius: 18)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

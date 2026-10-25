@@ -557,7 +557,7 @@ struct NumberStepper: View {
         .foregroundStyle(Palette.ink)
         .buttonStyle(.plain)
         .padding(.horizontal, 16).padding(.vertical, 10)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .accessibilityElement(children: .combine)
         .accessibilityAdjustableAction { direction in
             switch direction {

@@ -481,7 +481,7 @@ struct DrinkFigurePicker: View {
                         }
                         .padding(.vertical, 10)
                         .frame(maxWidth: .infinity)
-                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .cardSurface(cornerRadius: 18)
                         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.blue, lineWidth: on ? 2.5 : 0))
                         .overlay(alignment: .topTrailing) {
                             if on {

@@ -9,9 +9,35 @@ struct Card<Content: View>: View {
         VStack(alignment: .leading, spacing: 12) { content }
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .cardSurface(cornerRadius: 22)
             .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
             .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+    }
+}
+
+extension View {
+    /// A card's fill (Petr, 2026-10-25): solid, so its numbers read well, but lit
+    /// like the glass of the bars: lighter at the top, with a light top edge.
+    func cardSurface(cornerRadius: CGFloat = 22) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return background(LinearGradient(colors: [Palette.cardLift, Palette.card], startPoint: .top, endPoint: .center), in: shape)
+            .overlay(
+                shape.strokeBorder(LinearGradient(colors: [Palette.cardEdge, Palette.cardEdge.opacity(0)], startPoint: .top, endPoint: .center), lineWidth: 1)
+                    .allowsHitTesting(false)
+            )
+    }
+
+    /// A sheet over the app: the system's glass on iOS 26, the paper colour before it.
+    @ViewBuilder func glassSheetBackground() -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26, *) {
+            self
+        } else {
+            presentationBackground(Palette.background)
+        }
+        #else
+        presentationBackground(Palette.background)
+        #endif
     }
 }
 

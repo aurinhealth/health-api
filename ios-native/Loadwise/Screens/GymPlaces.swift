@@ -138,7 +138,7 @@ struct GymPlaceView: View {
                 row(station)
             }
         }
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .frame(maxWidth: .infinity)
     }
 
@@ -268,7 +268,7 @@ struct StationSheet: View {
                         }
                     }
                     .padding(.horizontal, 14)
-                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .cardSurface(cornerRadius: 18)
                     .padding(.top, 10)
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
@@ -478,7 +478,7 @@ struct AddGymSheet: View {
             SecondaryButton(title: "Zkusit znovu") { result = nil }
         }
         .padding(16)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
     }
 
     /// "Přibude: Kladky, Leg press" in the app's order of stations.
@@ -527,7 +527,7 @@ struct AddGymSheet: View {
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true) }
             }
             .padding(16)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .cardSurface(cornerRadius: 22)
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Palette.green, lineWidth: 1.5))
 
             if !detectOnly {
@@ -538,7 +538,7 @@ struct AddGymSheet: View {
                     Label("Vybrat sám", systemImage: "pencil").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
-                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                        .cardSurface(cornerRadius: 22)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

@@ -159,7 +159,7 @@ struct CoachTextCard: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
         // Another day: its text at once, not faded over the one before (inside

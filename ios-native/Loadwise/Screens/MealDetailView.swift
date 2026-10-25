@@ -263,7 +263,7 @@ struct FoodEntryCard: View {
             Text(Self.extras(entry)).font(Typo.caption).foregroundStyle(Palette.muted)
         }
         .padding(14)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)

@@ -287,7 +287,7 @@ struct PlanToastView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
     }
 }

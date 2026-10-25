@@ -209,7 +209,7 @@ struct CoachPickCard: View {
                     }
                 }
                 .padding(18).frame(maxWidth: .infinity, alignment: .leading)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .cardSurface(cornerRadius: 24)
                 .transition(.opacity)
             } else if declined {
                 HStack(spacing: 10) {
@@ -380,7 +380,7 @@ struct CoachPickView: View {
                 .frame(maxWidth: .infinity).padding(.top, 6)
         }
         .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 8)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
         .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .onTapGesture { withAnimation(.snappy) { open = expanded ? nil : option.id } }
         .contextMenu {

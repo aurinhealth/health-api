@@ -698,7 +698,7 @@ struct CycleSettingsView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
     }
 
     /// On: Health's permission sheet, then what Health knows fills the setup.
@@ -929,7 +929,7 @@ struct PillReminderView: View {
                     .frame(maxWidth: .infinity)
             }
             .padding(.vertical, 6)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .cardSurface(cornerRadius: 18)
             .onChange(of: time) { _, new in
                 guard loaded else { return }
                 save(["pillReminderTime": .string(clock(new))])

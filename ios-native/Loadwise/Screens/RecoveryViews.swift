@@ -237,7 +237,7 @@ struct RecoveryRoutineView: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .cardSurface(cornerRadius: 22)
                 .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
                 .padding(.top, 22)
 
@@ -331,7 +331,7 @@ struct RecoveryRoutineView: View {
                 .frame(maxWidth: .infinity)
         }
         .padding(18)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
         .shadow(color: .black.opacity(0.05), radius: 15, y: 10)
     }
 

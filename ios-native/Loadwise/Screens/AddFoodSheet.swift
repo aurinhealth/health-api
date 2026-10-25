@@ -181,7 +181,7 @@ struct AddFoodSheet: View {
             }
             .foregroundStyle(Palette.ink)
             .frame(maxWidth: .infinity).frame(height: 72)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .cardSurface(cornerRadius: 18)
         }
         .buttonStyle(.plain)
     }

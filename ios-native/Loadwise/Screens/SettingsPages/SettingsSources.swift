@@ -46,7 +46,7 @@ struct SourcesSettingsView: View {
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .cardSurface(cornerRadius: 18)
             }
             VStack(spacing: 10) {
                 ForEach(connected) { provider in

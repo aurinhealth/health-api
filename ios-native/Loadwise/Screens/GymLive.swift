@@ -208,7 +208,7 @@ struct LiveGymView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .cardSurface(cornerRadius: 18)
         .contentShape(Rectangle())
     }
 
@@ -268,7 +268,7 @@ struct LiveGymView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .cardSurface(cornerRadius: 22)
         .shadow(color: .black.opacity(0.12), radius: 16, y: 6)
         .task(id: end) {
             let wait = end.timeIntervalSinceNow
@@ -308,7 +308,7 @@ struct LiveGymView: View {
                         }
                         .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .cardSurface(cornerRadius: 18)
                     }
                 }
                 .padding(.top, 14)

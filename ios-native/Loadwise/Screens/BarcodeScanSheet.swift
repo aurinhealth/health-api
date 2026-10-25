@@ -258,7 +258,7 @@ struct BarcodeScanSheet: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .cardSurface(cornerRadius: 28)
     }
 
     /// "1 sušenka = 19 g · 90 kcal"; a serving stored as 1 g (or none) gets "Upravit".

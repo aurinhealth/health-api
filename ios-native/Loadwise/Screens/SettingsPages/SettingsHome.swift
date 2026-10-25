@@ -60,7 +60,7 @@ struct SettingsProfileCard: View {
             .padding(.horizontal, 18).padding(.vertical, 16)
             .background(RadialGradient(colors: [Palette.amber.opacity(0.16), .clear], center: .topLeading, startRadius: 0, endRadius: 220),
                         in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .cardSurface(cornerRadius: 24)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -120,7 +120,7 @@ struct SettingsGoalsCard: View {
                 }
             }
             .padding(.horizontal, 12).padding(.top, 14).padding(.bottom, 16)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .cardSurface(cornerRadius: 24)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -200,7 +200,7 @@ struct SettingsSectionTiles: View {
             }
             .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
             .padding(14)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .cardSurface(cornerRadius: 20)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
