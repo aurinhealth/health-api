@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HealthView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.tabActions) private var actions
 
     var body: some View {
         NavigationStack(path: model.path(.health)) {
@@ -16,6 +17,7 @@ struct HealthView: View {
                     .tabTopBar {
                         DayBar(date: health.date)
                         Spacer(minLength: 0)
+                        HeaderCapsule(coach: actions.coach, settings: actions.settings)
                     }
                 } else if let message = model.healthError {
                     VStack(spacing: 16) {

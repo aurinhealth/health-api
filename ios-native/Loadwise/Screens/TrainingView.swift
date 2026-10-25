@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TrainingView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.tabActions) private var actions
     @State private var addingWorkout = false
     /// A moved or cancelled session with its undo (Tréninky týdne).
     @State private var toast: PlanToast?
@@ -28,6 +29,7 @@ struct TrainingView: View {
                                    move: { jumpDay = DayJump(date: ISODay.shift(day, $0)) },
                                    showToday: { jumpDay = DayJump(date: training.date) })
                         Spacer(minLength: 0)
+                        HeaderCapsule(coach: actions.coach, settings: actions.settings)
                     }
                 } else if let message = model.trainingError {
                     VStack(spacing: 16) {
