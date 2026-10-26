@@ -352,7 +352,9 @@ extension TabHeader where Extra == EmptyView {
 /// the barcode on Jídlo), Kouč and the account. The pinned bar shows the same
 /// capsule once the header has scrolled away (Petr, 2026-10-25). The same
 /// visible gap between every icon, the account and the left edge (Petr,
-/// 2026-10-26): each icon is as wide as its symbol, with half a gap on each side.
+/// 2026-10-26): each icon is as wide as its symbol plus padding. SF Symbols keep
+/// about 2.5 pt of their own space at each side, so the padding next to the
+/// account and the left edge is larger (measured on the CI screenshots).
 struct HeaderCapsule<Extra: View>: View {
     var share: (() -> Void)? = nil
     var coach: () -> Void
@@ -366,10 +368,10 @@ struct HeaderCapsule<Extra: View>: View {
             HeaderIcon(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: coach)
             Button(action: settings) { AvatarView(size: 37) }
                 .buttonStyle(.plain)
-                .padding(.leading, HeaderIcon.gap / 2)
+                .padding(.leading, 9.5)
                 .accessibilityLabel("Profil a nastavení")
         }
-        .padding(.leading, HeaderIcon.gap / 2)
+        .padding(.leading, 10)
         .padding(.trailing, (TabChrome.height - 37) / 2)
         .frame(height: TabChrome.height)
         .chromeGlass(in: Capsule())
@@ -390,8 +392,9 @@ enum TabChrome {
 
 /// One icon in the tab header's glass capsule (HeaderCapsule).
 struct HeaderIcon: View {
-    /// The visible gap between two items of the capsule.
-    static let gap: CGFloat = 14
+    /// Space on each side of the symbol: with the symbols' own sides a visible
+    /// gap of 18 pt between two icons.
+    static let padding: CGFloat = 6.5
     let systemImage: String
     let label: String
     var action: () -> Void = {}
@@ -401,7 +404,7 @@ struct HeaderIcon: View {
             Image(systemName: systemImage)
                 .font(.system(size: 19, weight: .medium))
                 .foregroundStyle(Palette.ink)
-                .padding(.horizontal, Self.gap / 2)
+                .padding(.horizontal, Self.padding)
                 .frame(height: 42)
                 .contentShape(Rectangle())
         }
