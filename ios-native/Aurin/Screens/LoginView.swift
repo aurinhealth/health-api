@@ -103,7 +103,7 @@ struct LoginView: View {
                     // While the server signs in with what Apple returned.
                     if model.signingInWith == .apple {
                         Capsule().fill(colorScheme == .dark ? Color.white : Color.black)
-                            .overlay(ProgressView().tint(colorScheme == .dark ? .black : .white))
+                            .overlay(ProgressView().tint(colorScheme == .dark ? Color.black : Color.white))
                     }
                 }
                 .disabled(model.signingIn)

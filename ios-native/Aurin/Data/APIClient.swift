@@ -680,15 +680,10 @@ final class APIClient: @unchecked Sendable {
         request.timeoutInterval = 20
         let (data, response) = try await load(request)
         guard let http = response as? HTTPURLResponse else { throw OutboxRefusal.retry(L10n.tr("Server neodpověděl.")) }
+        if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            let message = json?["message"] as? String
-            if http.statusCode == 401 {
-                // A refused sign-in (/auth/…) says why; elsewhere 401 is an expired session.
-                if json?["unknownCredential"] as? Bool == true { throw APIError.unknownPasskey(message ?? "") }
-                if let message, http.url?.path().hasPrefix("/auth/") == true { throw APIError.message(message) }
-                throw APIError.unauthorized
-            } ?? L10n.f("Server odpověděl chybou %@.", String(http.statusCode))
+            let message = json?["message"] as? String ?? L10n.f("Server odpověděl chybou %@.", String(http.statusCode))
             // Too old an app: the write waits for the new version instead of being dropped.
             if http.statusCode == 426 {
                 onUpdateRequired?()
@@ -784,10 +779,15 @@ final class APIClient: @unchecked Sendable {
 
     private func check(_ response: URLResponse, _ data: Data) throws {
         guard let http = response as? HTTPURLResponse else { throw APIError.message(L10n.tr("Server neodpověděl.")) }
-        if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let message = json?["message"] as? String
+            if http.statusCode == 401 {
+                // A refused sign-in (/auth/…) says why; elsewhere 401 is an expired session.
+                if json?["unknownCredential"] as? Bool == true { throw APIError.unknownPasskey(message ?? "") }
+                if let message, http.url?.path().hasPrefix("/auth/") == true { throw APIError.message(message) }
+                throw APIError.unauthorized
+            }
             if http.statusCode == 426 {
                 onUpdateRequired?()
                 throw APIError.updateRequired(message ?? L10n.tr("Tahle verze Aurinu už není podporovaná. Nainstaluj novější verzi."))
