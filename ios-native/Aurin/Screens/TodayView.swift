@@ -364,7 +364,7 @@ struct HeaderCapsule<Extra: View>: View {
     var body: some View {
         HStack(spacing: 0) {
             extra
-            if let share { HeaderIcon(systemImage: "square.and.arrow.up", label: "Sdílet", action: share) }
+            if let share { HeaderIcon(systemImage: "square.and.arrow.up", label: "Sdílet", lift: HeaderIcon.shareLift, action: share) }
             HeaderIcon(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: coach)
             Button(action: settings) { AvatarView(size: 37) }
                 .buttonStyle(.plain)
@@ -395,8 +395,13 @@ struct HeaderIcon: View {
     /// Space on each side of the symbol: with the symbols' own sides a visible
     /// gap of 18 pt between two icons.
     static let padding: CGFloat = 6.5
+    /// The share symbol's box sits low, its arrow tip is thin: drawn at the
+    /// centre it looked lower than Kouč and the barcode (Petr, 2026-10-26).
+    /// Raised so its top meets theirs (measured 1.2 pt low on build 227).
+    static let shareLift: CGFloat = 1.5
     let systemImage: String
     let label: String
+    var lift: CGFloat = 0
     var action: () -> Void = {}
 
     var body: some View {
@@ -404,6 +409,7 @@ struct HeaderIcon: View {
             Image(systemName: systemImage)
                 .font(.system(size: 19, weight: .medium))
                 .foregroundStyle(Palette.ink)
+                .offset(y: -lift)
                 .padding(.horizontal, Self.padding)
                 .frame(height: 42)
                 .contentShape(Rectangle())
