@@ -3038,6 +3038,17 @@
 "Vlastní cvik" = "Your own move";
 "Na každou stranu" = "Each side";
 "Po cvicích" = "After the exercises";
+"Probíhá trénink" = "Workout in progress";
+"%@ z %@ sérií" = "%@ of %@ sets";
+"série %@ z %@" = "set %@ of %@";
+"další: %@" = "next: %@";
+"Jak na tenhle cvik správně?" = "How do I do this exercise right?";
+"Stačí mi tahle pauza?" = "Is this rest long enough?";
+"Mám v další sérii přidat?" = "Should I go heavier on the next set?";
+"Kolik mám dát na %@?" = "How heavy should I go on %@?";
+"Můžu dnes %@ vynechat?" = "Can I skip %@ today?";
+"Byla váha u %@ správná?" = "Was the weight right on %@?";
+"Jak se mi zatím trénink daří?" = "How is my workout going so far?";
 
 /* Plate loader (PlateLoader.swift) */
 "Klávesnice" = "Keypad";
