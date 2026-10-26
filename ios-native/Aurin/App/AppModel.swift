@@ -324,6 +324,8 @@ final class AppModel {
         if let first = shown?.trimmingCharacters(in: .whitespaces).first {
             defaults.set(String(first).uppercased(), forKey: Self.accountInitialKey)
         }
+        // The photo the account keeps on the server, or this phone's going up.
+        await AvatarStore.sync(api: api)
     }
 
     /// The name the user typed in Profil (kept in the profile on the server too).
