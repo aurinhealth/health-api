@@ -341,7 +341,10 @@ const setExport = (db, userId, localId, fields) => {
 // Sends one planned workout (local_workouts id) to Wahoo, changes or removes
 // it there. `thresholds` gives the FTP and threshold pace for the plan's targets,
 // or is a function that asks for them only when a plan is about to go out.
-export async function syncWahooWorkout(env, localId, { fetchImpl = fetch, now = Date.now(), thresholds = null } = {}) {
+// `force` is the user's own "Send again" (planned-send.js): it goes out even
+// when Wahoo already has it or Plánované tréninky is off, and a plan deleted
+// on Wahoo's side is made again.
+export async function syncWahooWorkout(env, localId, { fetchImpl = fetch, now = Date.now(), thresholds = null, force = false } = {}) {
   if (!readWahooTokens(env)) return { status: 'not_connected' };
   const db = env.DB, userId = env.USER_ID ?? db.userId;
   const row = await db.prepare('SELECT * FROM local_workouts WHERE user_id=? AND id=?').bind(userId, String(localId).replace(/^planned:/, '')).first().catch(() => null);
@@ -350,9 +353,9 @@ export async function syncWahooWorkout(env, localId, { fetchImpl = fetch, now = 
   if (!exportable(event)) return { status: 'skipped' };
   const exported = await exportRow(db, userId, row.id);
   const [planId, workoutId] = String(exported?.remote_id || '').split(':');
-  if (exported?.status === 'synced' && exported.revision === row.revision) return { status: 'synced', eventId: exported.remote_id };
+  if (!force && exported?.status === 'synced' && exported.revision === row.revision) return { status: 'synced', eventId: exported.remote_id };
   // Only what is still ahead goes out; something already there is still changed or removed.
-  if (!workoutId && (row.status !== 'scheduled' || eventDay(event) < localToday(new Date(now)) || !(await readSyncPrefs(db, userId, SOURCE)).pushPlanned)) {
+  if (!workoutId && (row.status !== 'scheduled' || eventDay(event) < localToday(new Date(now)) || (!force && !(await readSyncPrefs(db, userId, SOURCE)).pushPlanned))) {
     if (exported) await setExport(db, userId, row.id, { status: 'off', revision: row.revision });
     return { status: 'off' };
   }
@@ -376,18 +379,20 @@ export async function syncWahooWorkout(env, localId, { fetchImpl = fetch, now = 
       const updated = new Date(now).toISOString(), starts = startsAt(event), minutes = Math.max(1, Math.round(n(event.moving_time, 3600) / 60));
       const workout = { 'workout[name]': plan.header.name, 'workout[workout_type_id]': String(typeId(event.type, /virtual/i.test(event.type))), 'workout[starts]': starts, 'workout[minutes]': String(minutes) };
       const file = { 'plan[file]': planFile(plan), 'plan[filename]': 'aurin-' + row.id + '.json', 'plan[provider_updated_at]': updated };
-      let plannedId = planId;
-      if (plannedId) await wahooApi(env, '/v1/plans/' + encodeURIComponent(plannedId), { method: 'PUT', form: file, fetchImpl, now });
-      else {
+      // Deleted on Wahoo's side (404): sent again by hand, it is made anew.
+      const gone = error => force && error?.status === 404;
+      let plannedId = planId, doneId = workoutId;
+      // A plan made anew gets its workout anew too.
+      if (plannedId) await wahooApi(env, '/v1/plans/' + encodeURIComponent(plannedId), { method: 'PUT', form: file, fetchImpl, now }).catch(error => { if (gone(error)) plannedId = doneId = ''; else throw error; });
+      if (!plannedId) {
         const saved = await wahooApi(env, '/v1/plans', { method: 'POST', form: { ...file, 'plan[external_id]': row.id }, fetchImpl, now });
         if (saved?.id == null) throw new Error(L('Wahoo nepotvrdilo uložení plánu.', 'Wahoo didn\'t confirm the plan.'));
         plannedId = String(saved.id);
         // Kept at once: a lost answer to the workout must not make a second plan.
         await setExport(db, userId, row.id, { remote_id: plannedId + ':' });
       }
-      let doneId = workoutId;
-      if (doneId) await wahooApi(env, '/v1/workouts/' + encodeURIComponent(doneId), { method: 'PUT', form: workout, fetchImpl, now });
-      else {
+      if (doneId) await wahooApi(env, '/v1/workouts/' + encodeURIComponent(doneId), { method: 'PUT', form: workout, fetchImpl, now }).catch(error => { if (gone(error)) doneId = ''; else throw error; });
+      if (!doneId) {
         const saved = await wahooApi(env, '/v1/workouts', { method: 'POST', form: { ...workout, 'workout[workout_token]': row.id, 'workout[plan_id]': plannedId }, fetchImpl, now });
         if (saved?.id == null) throw new Error(L('Wahoo nepotvrdilo uložení tréninku.', 'Wahoo didn\'t confirm the workout.'));
         doneId = String(saved.id);

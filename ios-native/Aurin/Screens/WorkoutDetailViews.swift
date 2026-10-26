@@ -839,7 +839,7 @@ struct PlannedWorkoutView: View {
                     }
                     .padding(.top, 10)
                     if let workout = plan?.workout, session.sport == "ride" || session.sport == "run", !model.demo {
-                        WatchWorkoutButton(workout: workout, title: session.title).padding(.top, 18)
+                        SendToButton(workout: workout, session: session).padding(.top, 18)
                     }
                     if let id = session.eventId, session.sport == "ride" || session.sport == "run" {
                         PlannedTemplateButtons(eventId: id, date: session.date).padding(.top, 10)

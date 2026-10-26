@@ -42,15 +42,18 @@ export async function syncLocalWorkout(env,id,fetchImpl=fetch){
   if(['not_connected','off'].includes(intervals.status)&&['synced','error'].includes(wahoo.status))return {...wahoo,destination:'wahoo'};
   return {...intervals,wahoo:wahoo.status};
 }
-async function syncIntervalsWorkout(env,id,fetchImpl=fetch){
+// `force` is the user's own "Send again" (planned-send.js): it goes out even
+// when Intervals.icu already has it or Plánované tréninky is off, and an event
+// deleted there is made again.
+export async function syncIntervalsWorkout(env,id,fetchImpl=fetch,{force=false}={}){
   const db=env.DB,row=await localWorkout(db,id);
   if(!row)return {status:'not_found'};
   if(!env.INTERVALS_API_KEY)return {status:'not_connected',message:L('Trénink je uložený v aplikaci. Intervals.icu není připojeno.', 'The workout is saved in the app. Intervals.icu isn\'t connected.')};
   const exported=await db.prepare("SELECT * FROM workout_exports WHERE user_id=? AND local_id=? AND provider='intervals'").bind(db.userId,row.id).first();
-  if(exported?.revision===row.revision&&exported.status==='synced')return {status:'synced',eventId:exported.remote_id};
+  if(!force&&exported?.revision===row.revision&&exported.status==='synced')return {status:'synced',eventId:exported.remote_id};
   // Settings → Synchronizace → Intervals.icu → Plánované tréninky off: new plans
   // stay in the app; one already there is still updated or removed.
-  if(!exported?.remote_id&&!(await readSyncPrefs(db,db.userId??env.USER_ID,'intervals')).pushPlanned){
+  if(!force&&!exported?.remote_id&&!(await readSyncPrefs(db,db.userId??env.USER_ID,'intervals')).pushPlanned){
     await db.prepare("UPDATE workout_exports SET status='off',updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND local_id=? AND provider='intervals' AND status!='running'").bind(db.userId,row.id).run();
     return {status:'off',message:L('Trénink je uložený v aplikaci. Posílání plánu do Intervals.icu je vypnuté.', 'The workout is saved in the app. Sending the plan to Intervals.icu is off.')};
   }
@@ -70,8 +73,10 @@ async function syncIntervalsWorkout(env,id,fetchImpl=fetch){
     }else{
       // Keep a provider event id through date/environment edits.
       const {id:ignoredId,...providerEvent}=event;void ignoredId;
-      const url=remoteId?'https://intervals.icu/api/v1/athlete/0/events/'+encodeURIComponent(remoteId):'https://intervals.icu/api/v1/athlete/0/events/bulk?upsert=true';
-      const r=await fetchImpl(url,{method:remoteId?'PUT':'POST',headers,body:JSON.stringify(remoteId?providerEvent:[providerEvent])});
+      const put=remoteId=>fetchImpl(remoteId?'https://intervals.icu/api/v1/athlete/0/events/'+encodeURIComponent(remoteId):'https://intervals.icu/api/v1/athlete/0/events/bulk?upsert=true',{method:remoteId?'PUT':'POST',headers,body:JSON.stringify(remoteId?providerEvent:[providerEvent])});
+      let r=await put(remoteId);
+      // Deleted in Intervals.icu (404): sent again by hand, it is made anew.
+      if(force&&remoteId&&r.status===404)r=await put(null);
       if(!r.ok)throw new Error('Intervals.icu HTTP '+r.status);
       const data=await r.json(),saved=Array.isArray(data)?data[0]:data;
       if(saved?.id==null)throw new Error(L('Intervals.icu nepotvrdilo uložení.', 'Intervals.icu didn\'t confirm the save.'));remoteId=String(saved.id);
