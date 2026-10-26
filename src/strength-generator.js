@@ -17,7 +17,7 @@ const availableAt = hasKnownStations;
 import { sportMuscleLoad, strengthCoverage } from './strength-balance.js';
 import { trainingStatus } from './training-status.js';
 import { configureStrengthCoaching, estimateStrengthTiming } from './strength-timing.js';
-import { cardioFor, planRoutines, stretchingFor, warmupFor, routineSize } from './stretching.js';
+import { cardioFor, planRoutines, routinesFor, routineSize } from './stretching.js';
 
 const DEFAULT_EXECUTION = "BILATERAL";
 
@@ -1383,7 +1383,7 @@ export function templateStrengthPlan(context, template, options = {}) {
   const timing = estimateStrengthTiming(rows, EXERCISES, Number(template.minutes) || estimated);
   snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
   // The warm-up, the cardio and the stretching as in a generated plan (Posilovna).
-  const routines = planRoutines(rows, name => EXERCISES[name]?.muscle, context?.trainingSetup || {}, timing.requestedMinutes || 60);
+  const routines = planRoutines(rows, name => EXERCISES[name]?.muscle, context?.trainingSetup || {}, timing.requestedMinutes || 60, { date: context.date, sport: context.profile?.mainSport || context.trainingSetup?.history?.mainSport || '' });
   const from = String(options.fromName || '').trim();
   const rationale = (from ? L('Trénink ti posílá ' + from + '. ', from + ' sent you this workout. ') : '') + L('Cviky, série a opakování zůstaly, váhy jsou podle tvých tréninků a dnešní připravenosti.', 'The exercises, sets and reps stay; the weights follow your own workouts and today\'s readiness.') + (firstSession ? ' ' + L('První trénink v aplikaci: váhy jsou opatrný odhad, uprav je tak, aby ti zbyla 2–3 opakování v rezervě.', 'Your first workout in the app: the weights are a careful estimate; adjust them so you keep 2–3 reps in reserve.') : '');
   return { date: context.date, planName: String(template.name || L('Trénink', 'Workout')).slice(0, 80), deload: null, rationale, timing, focusMuscles: [], loadFactor: factor, protectedLegs: false, recentCompletedSets: history.length, loadEstimates, rows, template: true, ...routines };
@@ -1543,7 +1543,9 @@ export function generateStrengthPlan(context, options = {}) {
   const muscleOf = name => EXERCISES[name]?.muscle;
   let warmup = null, stretching = null;
   const size = routineSize(requestedMinutes);
-  const routinesNow = () => { const stations = context.trainingSetup?.stations; warmup = withWarmup ? warmupFor(rows, muscleOf, { ...size.warmup, stations }) : null; stretching = withStretching ? stretchingFor(rows, muscleOf, { ...size.stretching, stations }) : null; };
+  // Built for the day and the main sport, as long as Posilovna says (or an own one).
+  const routineOptions = { date: context.date, sport: context.profile?.mainSport || context.trainingSetup?.history?.mainSport || '' };
+  const routinesNow = () => { const all = routinesFor(rows, muscleOf, context.trainingSetup || {}, requestedMinutes, routineOptions); warmup = withWarmup ? all.warmup : null; stretching = withStretching ? all.stretching : null; };
   routinesNow();
   const measure = () => estimateStrengthTiming(rows, EXERCISES, requestedMinutes);
   let timing = measure();
@@ -1583,7 +1585,7 @@ export function generateStrengthPlan(context, options = {}) {
   snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
   assignIntensities(rows, { phaseRpe: planPhase?.rpe });
   if(!rows.some(r=>r[0]==='WORK'))throw new Error(L('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v průvodci.', 'No suitable exercise was found for this equipment. Adjust your equipment in the setup guide.'));
-  return { date: context.date, planName: (focusMuscles ? L('Cílený trénink · ', 'Targeted workout · ') + focusLabels : planPhase ? planPhase.name : chosen.name) + (deload ? L(' · odlehčený týden', ' · deload week') : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + (planPhase ? planPhase.rationale + ' ' : '') + rationale + L(' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', ' Time plan: about ' + timing.estimatedMinutes + ' of ' + requestedMinutes + ' minutes including warm-up, rests, machine setup and a buffer.') + extraText, timing: { ...timing, routineSeconds: (warmup?.seconds || 0) + (stretching?.seconds || 0) }, warmup, stretching, spare: planRoutines(rows, muscleOf, context.trainingSetup || {}, requestedMinutes).spare, cardio: cardioFor(context.trainingSetup || {}, size.cardio), goal, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
+  return { date: context.date, planName: (focusMuscles ? L('Cílený trénink · ', 'Targeted workout · ') + focusLabels : planPhase ? planPhase.name : chosen.name) + (deload ? L(' · odlehčený týden', ' · deload week') : ''), deload, rationale: (deload ? deload.reason + ' ' : '') + (planPhase ? planPhase.rationale + ' ' : '') + rationale + L(' Časový plán: přibližně ' + timing.estimatedMinutes + ' z ' + requestedMinutes + ' minut včetně rozcvičení, pauz, nastavování strojů a rezervy.', ' Time plan: about ' + timing.estimatedMinutes + ' of ' + requestedMinutes + ' minutes including warm-up, rests, machine setup and a buffer.') + extraText, timing: { ...timing, routineSeconds: (warmup?.seconds || 0) + (stretching?.seconds || 0) }, warmup, stretching, spare: planRoutines(rows, muscleOf, context.trainingSetup || {}, requestedMinutes, routineOptions).spare, cardio: cardioFor(context.trainingSetup || {}, size.cardio), goal, focusMuscles: focusMuscles || [], loadFactor: factor, protectedLegs: chosen.protectedLegs, recentCompletedSets: history.length, recentCompletedWorkoutCount: chosen.recentWorkoutCount, balance:{sportMuscleLoad:Object.fromEntries(sportLoad),strengthCoverage:strengthCoverage(context,EXERCISES)}, adaptive: { volumeModifier, recoveryScore: context?.adaptive?.recovery?.score ?? null, legReadiness: context?.adaptive?.legReadiness ?? null }, loadEstimates, rows };
 }
 
 export { EXERCISES };

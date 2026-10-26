@@ -3,7 +3,7 @@
 import { trainingSetup, updateTrainingSetup } from "./onboarding.js";
 import { fitsEquipment, EXERCISES, recommendedGoal, gymDayFacts } from "./strength-generator.js";
 import { buildStrengthContext } from "./strength-context.js";
-import { cardioFor, cardioMode, cardioOptions, cardioType, planRoutines, routineSize, stretchingFor, typicalExtraMinutes, warmupFor, withRoutines } from "./stretching.js";
+import { cardioFor, cardioMode, cardioOptions, cardioType, myRoutinesView, routineMoves, routinesFor, routineSize, typicalExtraMinutes, withRoutines } from "./stretching.js";
 import app from "./strength-gateway.js";
 import { bumpCacheVersion } from "./api-cache.js";
 import { exercisePreferences, recentWorkoutRatings } from "./exercise-feedback.js";
@@ -27,6 +27,16 @@ import { localToday } from "./user-time.js";
 import { shiftDate } from "./dashboard-shared.js";
 import { ensureCoachInboxTable } from "./coach-inbox.js";
 
+// The main sport: the profile's, else the one the training history shows.
+async function mainSportOf(env,training){
+  const { loadEffectiveProfile }=await import('./profile-suggestions.js');
+  const profile=await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null);
+  return profile?.mainSport&&profile.mainSport!=='auto'?profile.mainSport:training?.history?.mainSport||'';
+}
+// The minutes an own routine takes, for the length picker's "+N min".
+const ownMinutes=(training,kind)=>training[kind+'Routine']&&training[kind+'Routine']!=='auto'?myRoutinesView(training)[kind].find(r=>r.id===training[kind+'Routine'])?.minutes||null:null;
+const lengthOf=v=>Number.isFinite(Number(v))&&v!=='auto'?Number(v):'auto';
+
 // Equipment, exercises, alternatives, history, estimates, muscles and the adjusted plan.
 export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth){
   // The athlete's gym: the stations it has (equipment "custom"), and AI that
@@ -40,12 +50,26 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       catch(error){return Response.json({message:error.message},{status:400});}
     }
   }
+  // The moves an own warm-up or stretching is put together from.
+  if(url.pathname==='/app/api/gym/routine-moves'&&request.method==='GET')return Response.json({status:'ok',...routineMoves()},{headers:{'Cache-Control':'no-store'}});
+  // One day's warm-up or stretching chosen in the workout: automatic with a length
+  // (auto, or 5–30 min) or an own one, for the exercises of the day's plan.
+  if(url.pathname==='/app/api/gym/routine'&&request.method==='GET'){
+    const date=String(url.searchParams.get('date')||''),kind=url.searchParams.get('kind');
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!['warmup','stretching'].includes(kind))return Response.json({message:L('Neplatný požadavek.', 'Invalid request.')},{status:400});
+    const [plan,setup]=await Promise.all([readGymPlan(env.DB,date),trainingSetup(env.DB).catch(()=>({}))]);
+    if(!plan.stored)return Response.json({message:L('Na tento den není gym plán.', 'There is no gym plan for this day.')},{status:404});
+    const values=withRoutines(plan.values,setup,name=>EXERCISES[name]?.muscle),minutes=Number(values[4]?.[1])>0?Number(values[4][1]):60;
+    const choice={length:url.searchParams.get('length')||'auto',routine:url.searchParams.get('routine')||'auto'};
+    const all=routinesFor(values.slice(7).filter(r=>r?.[1]),name=>EXERCISES[name]?.muscle,setup,minutes,{date,sport:await mainSportOf(env,setup),override:{[kind]:choice}});
+    return all[kind]?Response.json({status:'ok',kind,routine:all[kind]},{headers:{'Cache-Control':'no-store'}}):Response.json({message:L('Plán nemá žádný cvik.', 'The plan has no exercise.')},{status:404});
+  }
   // Trénink na míru (Nastavení → Posilovna): the goal, the experience (auto
   // from the training history unless chosen), the warm-up and the stretching.
   if(url.pathname==='/app/api/gym/preferences'){
     // The goal "auto" follows the main sport (profile, else the training history).
-    const sport=async training=>{const { loadEffectiveProfile }=await import('./profile-suggestions.js');const profile=await loadEffectiveProfile(env.DB,env.USER_ID).catch(()=>null);return profile?.mainSport&&profile.mainSport!=='auto'?profile.mainSport:training.history?.mainSport||'';};
-    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.experienceBySport?.strength?.autoLevel||'beginner',experienceBySport:training.experienceBySport,warmup:training.warmup!==false,warmupCardio:['start','both'].includes(cardioMode(training)),cardio:cardioMode(training),cardioType:cardioType(training),cardioOptions:cardioOptions(training.stations),stretching:training.stretching!==false,extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,cardio:cardioMode(training),stretching:training.stretching!==false})},{headers:{'Cache-Control':'no-store'}});
+    const sport=training=>mainSportOf(env,training);
+    const reply=async training=>Response.json({status:'ok',goal:training.goal||'auto',recommendedGoal:recommendedGoal(await sport(training),training.experience),experience:training.experienceMode==='manual'?training.experience:'auto',autoExperience:training.experienceBySport?.strength?.autoLevel||'beginner',experienceBySport:training.experienceBySport,warmup:training.warmup!==false,warmupCardio:['start','both'].includes(cardioMode(training)),cardio:cardioMode(training),cardioType:cardioType(training),cardioOptions:cardioOptions(training.stations),stretching:training.stretching!==false,warmupLength:lengthOf(training.warmupLength),stretchingLength:lengthOf(training.stretchingLength),warmupRoutine:training.warmupRoutine||'auto',stretchingRoutine:training.stretchingRoutine||'auto',myRoutines:myRoutinesView(training),extraMinutes:typicalExtraMinutes({warmup:training.warmup!==false,cardio:cardioMode(training),stretching:training.stretching!==false,warmupMinutes:ownMinutes(training,'warmup')||(lengthOf(training.warmupLength)!=='auto'?training.warmupLength:null),stretchingMinutes:ownMinutes(training,'stretching')||(lengthOf(training.stretchingLength)!=='auto'?training.stretchingLength:null)})},{headers:{'Cache-Control':'no-store'}});
     if(request.method==='GET')return reply(await trainingSetup(env.DB));
     if(request.method==='POST'){
       if(!session.signedIn||request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
@@ -58,6 +82,12 @@ export async function handleGymToolsApi(request,env,ctx,url,session,internalAuth
       if(typeof body.warmupCardio==='boolean'){input.warmupCardio=body.warmupCardio;if(body.cardio==null)input.cardio=body.warmupCardio?'start':'none';}
       if(['none','start','end','both'].includes(body.cardio))input.cardio=body.cardio;
       if(typeof body.cardioType==='string'&&body.cardioType.trim())input.cardioType=body.cardioType.trim().slice(0,40);
+      // The own warm-ups and stretchings (each kind replaced whole), the one used by default and the automatic length.
+      if(body.myRoutines&&typeof body.myRoutines==='object'){const old=(await trainingSetup(env.DB)).myRoutines||{};input.myRoutines={warmup:Array.isArray(body.myRoutines.warmup)?body.myRoutines.warmup:old.warmup,stretching:Array.isArray(body.myRoutines.stretching)?body.myRoutines.stretching:old.stretching};}
+      for(const kind of ['warmup','stretching']){
+        if(body[kind+'Routine']!=null)input[kind+'Routine']=String(body[kind+'Routine']);
+        if(body[kind+'Length']!=null)input[kind+'Length']=body[kind+'Length'];
+      }
       const training=await updateTrainingSetup(env.DB,input);await bumpCacheVersion(env.DB);
       return reply(training);
     }
@@ -271,9 +301,10 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       // With the size and the cardio choice the proposal had, not the defaults.
       if(Array.isArray(body.rows)){
         const size=routineSize(Number(draft.minutes)||60),setup=await trainingSetup(env.DB).catch(()=>null);
-        if(plan.warmup)plan.warmup=warmupFor(plan.rows,muscleOf,{...size.warmup,stations:setup?.stations})||plan.warmup;
-        if(plan.stretching)plan.stretching=stretchingFor(plan.rows,muscleOf,{...size.stretching,stations:setup?.stations})||plan.stretching;
-        if(plan.spare)plan.spare=planRoutines(plan.rows,muscleOf,{...setup,warmup:!plan.spare.warmup,stretching:!plan.spare.stretching},Number(draft.minutes)||60).spare;
+        const all=routinesFor(plan.rows,muscleOf,setup||{},Number(draft.minutes)||60,{date:plan.date,sport:await mainSportOf(env,setup)});
+        if(plan.warmup)plan.warmup=all.warmup||plan.warmup;
+        if(plan.stretching)plan.stretching=all.stretching||plan.stretching;
+        if(plan.spare)plan.spare={warmup:plan.spare.warmup?all.warmup:null,stretching:plan.spare.stretching?all.stretching:null};
         if(setup)plan.cardio=cardioFor(setup,size.cardio);
       }
       if((await readGymPlan(env.DB,plan.date)).stored)throw new Error(L('Na tento den již existuje gym plán. Otevři jej a uprav ho.', 'A gym plan already exists for this day. Open it and edit it.'));
