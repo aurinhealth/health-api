@@ -14,10 +14,57 @@ enum GymSessionMath {
 
     /// The weight and reps of the work set done just before this one (on the
     /// same side by sides): the next set starts from them, as typed. Warm-ups
-    /// keep their own plan.
-    static func carried(_ set: GymSet, in exercise: GymExercise) -> (kg: String?, reps: String?)? {
-        guard set.work, let before = exercise.sets.last(where: { $0.work && $0.done && $0.row < set.row && $0.side == set.side }) else { return nil }
+    /// keep their own plan. When that set went off the plan (adjustment) the
+    /// next one takes the new weight and the plan's reps, unless the athlete
+    /// kept the weight (keep: the rows of the sets whose change was declined).
+    static func carried(_ set: GymSet, in exercise: GymExercise, keep: Set<Int> = []) -> (kg: String?, reps: String?)? {
+        guard let before = previous(set, in: exercise) else { return nil }
+        if !keep.contains(before.row), let change = adjustment(set, after: before) { return (change.kg, nil) }
         return (before.kg?.nilIfBlank, before.reps?.nilIfBlank)
+    }
+
+    /// The work set done just before this one, on the same side by sides.
+    static func previous(_ set: GymSet, in exercise: GymExercise) -> GymSet? {
+        guard set.work else { return nil }
+        return exercise.sets.last { $0.work && $0.done && $0.row < set.row && $0.side == set.side }
+    }
+
+    /// A set's weight moved by how the set before went against the plan.
+    struct Adjustment: Equatable {
+        let kg: String
+        let lighter: Bool
+    }
+
+    /// Short of the plan's reps, or to failure on a lighter plan (F on M):
+    /// the weight the estimated max allows for the plan's reps and letter, to
+    /// the nearest 2.5 kg. Well over the reps, or far easier than planned (E on
+    /// H): one 2.5 kg step up. Otherwise nil: the next set copies this one.
+    static func adjustment(_ set: GymSet, after before: GymSet) -> Adjustment? {
+        guard set.work, before.work, before.done,
+              let kg = before.kg.flatMap(LiftWeight.number), kg > 0,
+              let done = before.reps.flatMap(LiftWeight.number), done > 0,
+              let range = repRange(set.plannedReps ?? before.plannedReps) else { return nil }
+        // Reps in reserve: 10 − the letter's RPE (M 7.5 → 2.5, F → 0).
+        let planned = 10 - (GymIntensity.letter(set.intensity).flatMap(GymIntensity.rpe).flatMap { Double($0) } ?? 8)
+        let rpe = GymIntensity.letter(before.intensity).flatMap(GymIntensity.rpe).flatMap { Double($0) } ?? before.rpe.flatMap(LiftWeight.number)
+        let reserve = rpe.map { 10 - $0 } ?? planned
+        if done < Double(range.lo) || reserve + 2 <= planned {
+            let best = kg * (1 + (done + reserve) / 30)
+            let fits = GymCoach.roundLoad(best / (1 + (Double(range.lo) + planned) / 30))
+            guard fits < kg, fits > 0 else { return nil }
+            return Adjustment(kg: GymCoach.kgText(fits), lighter: true)
+        }
+        if done >= Double(range.hi + 2) || (done >= Double(range.hi) && reserve >= planned + 2) {
+            return Adjustment(kg: GymCoach.kgText(GymCoach.roundLoad(kg + GymCoach.step)), lighter: false)
+        }
+        return nil
+    }
+
+    /// "8–12" → 8...12, "12" → 12...12.
+    static func repRange(_ text: String?) -> (lo: Int, hi: Int)? {
+        let numbers = (text ?? "").split { !$0.isNumber }.compactMap { Int($0) }
+        guard let lo = numbers.first, lo > 0 else { return nil }
+        return (lo, max(lo, numbers.last ?? lo))
     }
 
     /// "8,4" (tonnes) or "18,5" (thousands of pounds), with its unit.
@@ -105,6 +152,28 @@ enum GymSessionMath {
 }
 
 /// One row of the exercise's set table.
+/// The ✦ line over the set at hand when the set before moved its weight
+/// (GymSessionMath.adjustment), with "Nechat 12,5" to go on as before.
+struct AdjustmentNote: View {
+    let text: String
+    let keep: String
+    let onKeep: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "sparkles").font(.caption.weight(.semibold)).foregroundStyle(Palette.green)
+            Text(text).font(Typo.caption).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button(action: onKeep) {
+                Text(keep).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.green).lineLimit(1)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(Palette.greenSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
 struct GymSetRow: View {
     enum Phase { case done, current, next }
 
@@ -521,6 +590,8 @@ struct MinimizedGymBar: View {
 struct RestSetsList: View {
     let exercise: GymExercise
     let last: GymHistory.Session?
+    /// Done sets whose change to the next weight was declined.
+    var keep: Set<Int> = []
     var onWeight: ((String) -> Void)? = nil
     @State private var typed = ""
     @FocusState private var focused: Bool
@@ -537,7 +608,7 @@ struct RestSetsList: View {
             .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
             .padding(.top, 12).padding(.bottom, 4)
             ForEach(exercise.sets) { s in
-                let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise)
+                let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise, keep: keep)
                 let kg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg) ?? "–"
                 let reps: String = (s.done ? s.reps : carry?.reps ?? s.plannedReps)?.nilIfBlank ?? "–"
                 Rectangle().fill(Palette.hairline).frame(height: 1)
