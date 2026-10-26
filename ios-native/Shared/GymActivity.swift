@@ -16,6 +16,12 @@ struct GymActivityAttributes: ActivityAttributes {
         var setLabel: String
         /// "80 kg × 8".
         var load: String
+        /// The two parts of the load for the Dynamic Island: "80 kg" (nil without a
+        /// weight) and "8".
+        var weight: String?
+        var reps: String?
+        /// "3/4" of a work set (nil for a warm-up or a drop set).
+        var setShort: String?
         /// The next exercise: "Bench · 60 kg × 10".
         var then: String?
         /// The sheet row of the set, for Série hotová.
