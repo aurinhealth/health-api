@@ -26,6 +26,23 @@ export function environmentFor(date, sport, weather = null) {
   const indoor = poor || (sport === 'ride' && winter);
   return { environment: indoor ? 'indoor' : 'outdoor', reason: poor ? L('Předpověď nepřeje venkovnímu tréninku.', 'The forecast isn\'t good for training outdoors.') : indoor ? L('V zimním období preferuji indoor kolo.', 'In winter I prefer indoor riding.') : weather ? L('Podle dostupné předpovědi.', 'Based on the available forecast.') : L('Předpověď není dostupná; volba vychází z ročního období.', 'No forecast is available; the choice is based on the season.') };
 }
+// The reason for one day's place in the weather's detail: what decided it,
+// with its number ("High of 6°, too cold outside.", "Dry, high of 14°.").
+export function weatherReason(date, sport, weather) {
+  const e = environmentFor(date, sport, weather);
+  if (!weather) return e.reason;
+  const n = v => Number.isFinite(Number(v)) && v !== null ? Math.round(Number(v)) : null;
+  const max = n(weather.max), wind = n(weather.wind), chance = n(weather.rainProb), rain = Number(weather.rain);
+  const mm = Number.isFinite(rain) ? String(Math.round(rain * 10) / 10) : null;
+  if (Number(weather.code) >= 95) return L('Hlásí bouřky.', 'Storms are forecast.');
+  if (max != null && max < (sport === 'ride' ? 8 : 0)) return L('Nejvýš ' + max + '°, venku je zima.', 'High of ' + max + '°, too cold outside.');
+  if (wind != null && wind >= (sport === 'ride' ? 35 : 50)) return L('Vítr až ' + wind + ' km/h.', 'Wind up to ' + wind + ' km/h.');
+  if (mm != null && rain >= 3) return L('Naprší ' + mm.replace('.', ',') + ' mm.', mm + ' mm of rain.');
+  if (chance != null && chance >= 70) return L('Déšť na ' + chance + ' %.', chance + ' % chance of rain.');
+  if (e.environment === 'indoor') return e.reason;
+  if (max == null) return e.reason;
+  return chance != null && chance >= 30 ? L('Nejvýš ' + max + '°, déšť na ' + chance + ' %.', 'High of ' + max + '°, ' + chance + ' % chance of rain.') : L('Sucho, nejvýš ' + max + '°.', 'Dry, high of ' + max + '°.');
+}
 // Weather is fetched on the server as well as in the calendar. Client data is
 // never the authority for training or health constraints. With the WeatherKit
 // key (env) it comes from Apple Weather (weatherkit.js), else from Open-Meteo.

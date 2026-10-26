@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dailyFromWeatherKit, hourlyFromWeatherKit, wmoCode, weatherKitWeek, weatherKitJwt, weatherKitConfigured } from '../src/weatherkit.js';
-import { pickHours, weekWeather } from '../src/adaptive-week.js';
+import { dailyFromWeatherKit, detailFromWeatherKit as dailyDetail, hourlyFromWeatherKit, wmoCode, weatherKitWeek, weatherKitJwt, weatherKitConfigured } from '../src/weatherkit.js';
+import { pickHours, weekWeather, weatherReason } from '../src/adaptive-week.js';
 import { withTimeZone } from '../src/user-time.js';
 
 const p8 = async () => {
@@ -72,4 +72,29 @@ test('a failed Apple forecast leaves the week without weather', async () => {
   console.error = () => {};
   try { assert.deepEqual(await weekWeather({ latitude: 1, longitude: 2 }, '2026-10-26', env), {}); }
   finally { globalThis.fetch = original; console.error = error; }
+});
+
+test('the detail: now, the hours from now and seven days with their hours', () => withTimeZone('Europe/Prague', () => {
+  const hours = [];
+  for (let d = 0; d < 9; d++) for (let h = 0; h < 24; h++) {
+    const at = Date.UTC(2026, 9, 26 + d, h - 1);
+    hours.push({ forecastStart: new Date(at).toISOString().replace('.000', ''), temperature: 10 + h / 10, conditionCode: 'Cloudy', precipitationChance: 0.25 });
+  }
+  const days = Array.from({ length: 9 }, (_, d) => ({ forecastStart: new Date(Date.UTC(2026, 9, 25 + d, 23)).toISOString().replace('.000', ''), conditionCode: 'Clear', temperatureMax: 12, temperatureMin: 3, precipitationChance: 0.1 }));
+  const now = Date.UTC(2026, 9, 26, 13, 20); // 14:20 in Prague
+  const detail = dailyDetail({ currentWeather: { temperature: 12.6, conditionCode: 'PartlyCloudy' }, forecastDaily: { days }, forecastHourly: { hours } }, '2026-10-26', now);
+  assert.deepEqual(detail.now, { temp: 13, code: 2 });
+  assert.equal(detail.next[0].hour, 14);
+  assert.equal(detail.next.at(-1).hour, 23);
+  assert.deepEqual(detail.next[0], { hour: 14, temp: 11, code: 3, rainProb: 25 });
+  assert.deepEqual(detail.week.map(d => d.date), ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31', '2026-11-01']);
+  assert.deepEqual(detail.week[1].hours.map(h => h.hour), Array.from({ length: 17 }, (_, i) => i + 6));
+}));
+
+test('the reason names what decided the day', () => {
+  assert.match(weatherReason('2026-10-28', 'ride', { max: 6, wind: 10, rain: 0, rainProb: 10, code: 3 }), /Nejvýš 6°, venku je zima/);
+  assert.match(weatherReason('2026-10-28', 'run', { max: 12, wind: 60, rain: 0, rainProb: 10, code: 3 }), /Vítr až 60 km\/h/);
+  assert.match(weatherReason('2026-10-28', 'run', { max: 12, wind: 10, rain: 4.5, rainProb: 90, code: 61 }), /Naprší 4,5 mm/);
+  assert.match(weatherReason('2026-10-28', 'run', { max: 12, wind: 10, rain: 0.5, rainProb: 40, code: 61 }), /Nejvýš 12°, déšť na 40 %/);
+  assert.match(weatherReason('2026-10-28', 'run', { max: 20, wind: 10, rain: 0, rainProb: 20, code: 99 }), /bouřky/);
 });

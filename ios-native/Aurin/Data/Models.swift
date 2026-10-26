@@ -253,11 +253,35 @@ struct TodaySnapshot: Decodable, Equatable {
         var hours: [Hour]? = nil
         /// "apple": Apple Weather's forecast, credited with its mark and legal link.
         var source: String? = nil
+        /// The detail, from Apple Weather only: the temperature now, the hours
+        /// from now to the end of today and the next seven days.
+        var now: Now? = nil
+        var next: [Hour]? = nil
+        var week: [Day]? = nil
 
         struct Hour: Decodable, Equatable {
             let hour: Int
             let temp: Double
             let code: Double?
+            /// Chance of rain, %.
+            var rainProb: Double? = nil
+        }
+
+        struct Now: Decodable, Equatable {
+            let temp: Double
+            let code: Double?
+        }
+
+        /// One day of the week: its range, its hours (6–22 h) and where a ride and a run belong.
+        struct Day: Decodable, Equatable {
+            let date: String
+            let code: Double?
+            let max: Double?
+            let min: Double?
+            let rainProb: Double?
+            let hours: [Hour]?
+            let ride: Advice?
+            let run: Advice?
         }
     }
 

@@ -104,3 +104,32 @@ export async function weatherKitHours(env, location, date, fetchImpl = fetch) {
   const data = await weather(env, location, { dataSets: "forecastHourly", hourlyStart: bound(shift(date, -1)), hourlyEnd: bound(shift(date, 2)) }, fetchImpl);
   return hourlyFromWeatherKit(data);
 }
+
+// The weather's detail in the app (WeatherDetails): the temperature now, the
+// hours from now to the end of today, and the next seven days, each with its
+// hours from 6 to 22 h. Hours: {hour, temp, code, rainProb}.
+const DAY_FROM = 6, DAY_TO = 22;
+export function detailFromWeatherKit(data, start, now = Date.now()) {
+  const end = shift(start, 6), days = dailyFromWeatherKit(data, start, end);
+  const hours = (data?.forecastHourly?.hours || []).map(h => {
+    const at = Date.parse(h.forecastStart), local = localDateTime(h.forecastStart), chance = num(h.precipitationChance);
+    return { at, date: local.slice(0, 10), hour: Number(local.slice(11, 13)), temp: num(h.temperature), code: wmoCode(h.conditionCode), rainProb: chance == null ? null : Math.round(chance * 100) };
+  }).filter(h => Number.isFinite(h.at) && h.temp != null).sort((a, b) => a.at - b.at);
+  const out = h => ({ hour: h.hour, temp: Math.round(h.temp), code: h.code, rainProb: h.rainProb });
+  const current = data?.currentWeather, temp = num(current?.temperature);
+  return {
+    now: temp == null ? null : { temp: Math.round(temp), code: wmoCode(current.conditionCode) },
+    // From the hour that is running now.
+    next: hours.filter(h => h.date === start && h.at > now - 3600000).map(out),
+    week: Object.keys(days).sort().map(date => ({ date, ...days[date], hours: hours.filter(h => h.date === date && h.hour >= DAY_FROM && h.hour <= DAY_TO).map(out) }))
+  };
+}
+
+export async function weatherKitDetail(env, location, date, fetchImpl = fetch) {
+  const data = await weather(env, location, {
+    dataSets: "currentWeather,forecastDaily,forecastHourly",
+    dailyStart: bound(shift(date, -1)), dailyEnd: bound(shift(date, 8)),
+    hourlyStart: bound(shift(date, -1)), hourlyEnd: bound(shift(date, 8))
+  }, fetchImpl);
+  return detailFromWeatherKit(data, date);
+}
