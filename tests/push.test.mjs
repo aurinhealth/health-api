@@ -263,7 +263,8 @@ test("the push goes out with the numbers and plan details(date) adds", async () 
   const { calls, fetchImpl } = fakeApns();
   let detailed = 0;
   const details = () => { detailed++; return { score: null, sleep: { minutes: 485 }, hrv: { value: 61, baseline: 56 }, restingHR: { value: 50, baseline: 52 }, planned: [{ title: "Threshold 4×8 min", sport: "ride" }] }; };
-  assert.equal((await sendMorningReadiness(env, { readiness: () => ({ score: 84, zone: "green", missing: ["sleep"] }), details, now: MORNING, fetchImpl })).reason, "waiting-for-sleep");
+  // The score and what it lacks go with the reason (sync_status morning_push).
+  assert.deepEqual(await sendMorningReadiness(env, { readiness: () => ({ score: 84, zone: "green", missing: ["sleep"] }), details, now: MORNING, fetchImpl }), { sent: 0, reason: "waiting-for-sleep", score: 84, missing: ["sleep"] });
   assert.equal(detailed, 0);
   await sendMorningReadiness(env, { readiness: () => ({ score: 84, zone: "green" }), details, now: MORNING, fetchImpl });
   assert.deepEqual(calls[0].body.aps.alert, { title: "Readiness 84 · Go hard today", subtitle: "Sleep 8:05 · HRV +9% · Resting HR −2", body: "Today's plan: Threshold 4×8 min. Your body is ready, go for it." });
