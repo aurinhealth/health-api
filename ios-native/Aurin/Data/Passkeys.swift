@@ -183,7 +183,7 @@ final class PasskeyService: NSObject, ASAuthorizationControllerDelegate, ASAutho
     /// One passkey the server does not know.
     nonisolated static func reportUnknown(rpId: String, credentialID: Data) {
         guard #available(iOS 26.0, *) else { return }
-        Task { try? await ASCredentialUpdater().reportUnknownPublicKeyCredential(relyingParty: rpId, credentialID: credentialID) }
+        Task { try? await ASCredentialUpdater().reportUnknownPublicKeyCredential(relyingPartyIdentifier: rpId, credentialID: credentialID) }
     }
 
     /// Only the account's passkeys the server lists stay in the Passwords app.
@@ -200,7 +200,7 @@ final class PasskeyService: NSObject, ASAuthorizationControllerDelegate, ASAutho
 
     nonisolated private static func report(rpId: String, userHandle: Data, accepted: [Data]) {
         guard #available(iOS 26.0, *) else { return }
-        Task { try? await ASCredentialUpdater().reportAllAcceptedPublicKeyCredentials(relyingParty: rpId, userHandle: userHandle, acceptedCredentialIDs: accepted) }
+        Task { try? await ASCredentialUpdater().reportAllAcceptedPublicKeyCredentials(relyingPartyIdentifier: rpId, userHandle: userHandle, acceptedCredentialIDs: accepted) }
     }
 
     // MARK: - The system sheet
