@@ -1,9 +1,9 @@
 # Generated on the CI runner by XcodeGen and xcodebuild.
-Loadwise.xcodeproj/
-Loadwise/Info.plist
+Aurin.xcodeproj/
+Aurin/Info.plist
 build/
 ipa/
-Loadwise/Loadwise.entitlements
-LoadwiseWidgets/Info.plist
-LoadwiseNotifications/Info.plist
-LoadwiseWidgets/LoadwiseWidgets.entitlements
+Aurin/Aurin.entitlements
+AurinWidgets/Info.plist
+AurinNotifications/Info.plist
+AurinWidgets/AurinWidgets.entitlements

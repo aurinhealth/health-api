@@ -17,8 +17,12 @@ let forcedJwksAt = 0;
 // with APPLE_TEAM_ID, APPLE_KEY_ID and APPLE_PRIVATE_KEY set, the authorization code is also
 // traded for a refresh token, which deleting the account revokes (App Store rule 5.1.1(v)).
 // The body must be JSON, so another site cannot post a form here to sign someone in.
-const APP_BUNDLE_ID = "eu.petrfitnessdata.loadwise.native";
+const APP_BUNDLE_ID = "health.aurin.app";
+// The app before it became its own Aurin app (Loadwise's ID): still signs in
+// until the testers have moved (navody/nove-id-aplikace-aurin.md, step 9).
+export const LEGACY_APP_BUNDLE_ID = "eu.petrfitnessdata.loadwise.native";
 export const appBundleId = env => String(env?.APPLE_APP_BUNDLE_ID || APP_BUNDLE_ID).trim();
+const appBundleIds = env => [appBundleId(env), LEGACY_APP_BUNDLE_ID];
 const canRevoke = env => Boolean(env?.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY);
 const appJson = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -32,7 +36,7 @@ export async function handleNativeAppleLogin(request, env, pathname, { fetchImpl
   const token = String(body?.identityToken || ""), nonce = String(body?.nonce || "");
   if (!token || token.length > 8000 || nonce.length < 16 || nonce.length > 200) return appJson({ message: L("Neplatný požadavek.", "Invalid request.") }, 400);
   let claims;
-  try { claims = await verifyAppleIdToken(token, appBundleId(env), await sha256Hex(nonce), fetchImpl); }
+  try { claims = await verifyAppleIdToken(token, appBundleIds(env), await sha256Hex(nonce), fetchImpl); }
   catch (error) { console.error("Apple app ID token rejected", error.message); return appJson({ error: "failed", message: L("Účet Apple se nepodařilo ověřit.", "Couldn't verify your Apple account.") }, 401); }
   const verified = claims.email_verified === true || claims.email_verified === "true";
   await ensureTenancy(env.DB, env, { request });
@@ -44,18 +48,19 @@ export async function handleNativeAppleLogin(request, env, pathname, { fetchImpl
   const code = String(body?.authorizationCode || "");
   if (saveRefreshToken && canRevoke(env) && code && code.length < 2000) {
     try {
-      const refresh = await exchangeAppCode(env, code, fetchImpl);
+      const refresh = await exchangeAppCode(env, code, fetchImpl, String(claims.aud));
       if (refresh) await saveRefreshToken(user, refresh);
     } catch (error) { console.error("Apple refresh token not stored", error.message); }
   }
   return signedInResponse(user.id, env, { status: "ok" });
 }
 
-async function exchangeAppCode(env, code, fetchImpl) {
+// client: the app that signed in (its bundle ID, the token's audience).
+async function exchangeAppCode(env, code, fetchImpl, client = appBundleId(env)) {
   const response = await fetchImpl(APPLE + "/auth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: appBundleId(env), client_secret: await appleClientSecret(env, undefined, appBundleId(env)), code, grant_type: "authorization_code" })
+    body: new URLSearchParams({ client_id: client, client_secret: await appleClientSecret(env, undefined, client), code, grant_type: "authorization_code" })
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error("Apple token HTTP " + response.status + " " + (data.error || ""));
@@ -104,7 +109,8 @@ export async function verifyAppleIdToken(token, audience, nonce, fetchImpl = fet
   const header = decodeJson(parts[0]), claims = decodeJson(parts[1]);
   if (header.alg !== "RS256" || !header.kid) throw new Error("Unsupported ID token algorithm");
   if (claims.iss !== APPLE) throw new Error("Invalid issuer");
-  if (claims.aud !== audience) throw new Error("Invalid audience");
+  // audience: one client ID, or several (the app and its former ID).
+  if (![].concat(audience).includes(claims.aud)) throw new Error("Invalid audience");
   if (!Number.isFinite(claims.exp) || claims.exp <= Math.floor(Date.now() / 1000)) throw new Error("Expired ID token");
   if (claims.nonce !== nonce) throw new Error("Invalid nonce");
   if (!claims.sub) throw new Error("Missing subject");

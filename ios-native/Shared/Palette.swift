@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-// Colour tokens from the design (artifact "Loadwise iOS návrh"): a warm paper
+// Colour tokens from the design (artifact "Aurin iOS návrh"): a warm paper
 // light mode and an almost black dark mode. Every token has both variants, so
 // views never check the colour scheme themselves. In Shared, so the widgets
 // use the same colours.

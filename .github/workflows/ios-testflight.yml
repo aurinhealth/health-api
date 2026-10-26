@@ -119,14 +119,14 @@ jobs:
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          xcodebuild -project Loadwise.xcodeproj -scheme Loadwise -configuration Release \
-            -destination 'generic/platform=iOS' -archivePath build/Loadwise.xcarchive \
+          xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/Aurin.xcarchive \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             CODE_SIGNING_ALLOWED=NO archive
-          app=build/Loadwise.xcarchive/Products/Applications/Loadwise.app
-          codesign --force --sign - --entitlements LoadwiseWidgets/LoadwiseWidgets.entitlements "$app/PlugIns/LoadwiseWidgets.appex"
-          codesign --force --sign - "$app/PlugIns/LoadwiseNotifications.appex"
-          codesign --force --sign - --entitlements Loadwise/Loadwise.entitlements "$app"
+          app=build/Aurin.xcarchive/Products/Applications/Aurin.app
+          codesign --force --sign - --entitlements AurinWidgets/AurinWidgets.entitlements "$app/PlugIns/AurinWidgets.appex"
+          codesign --force --sign - "$app/PlugIns/AurinNotifications.appex"
+          codesign --force --sign - --entitlements Aurin/Aurin.entitlements "$app"
           echo "version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Info.plist")" >> "$GITHUB_OUTPUT"
 
       # Cloud-managed Apple Distribution certificate, App Store profiles
@@ -153,7 +153,7 @@ jobs:
           </dict>
           </plist>
           EOF
-          xcodebuild -exportArchive -archivePath build/Loadwise.xcarchive \
+          xcodebuild -exportArchive -archivePath build/Aurin.xcarchive \
             -exportOptionsPlist build/ExportOptions.plist -exportPath build/export \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
@@ -210,7 +210,7 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
-          BUNDLE_ID: eu.petrfitnessdata.loadwise.native
+          BUNDLE_ID: health.aurin.app
           MARKETING_VERSION: ${{ needs.testflight.outputs.version }}
           BUILD_NUMBER: ${{ github.run_number }}
         run: |

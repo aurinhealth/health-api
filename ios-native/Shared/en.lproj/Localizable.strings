@@ -1,4 +1,4 @@
-/* English for Loadwise. Each key is the Czech text (Czech is the source language). */
+/* English for Aurin. Each key is the Czech text (Czech is the source language). */
 
 "%@ %@ v %@ %@. Série jsou uložené i pro příští plán." = "%1$@ %2$@ across %3$@ %4$@. Your sets are saved for the next plan too.";
 "%@ %@ za 2 měsíce" = "%@ %@ in 2 months";

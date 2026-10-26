@@ -58,7 +58,7 @@ jobs:
         run: |
           brew install xcodegen
           xcodegen generate
-          cat Loadwise/Loadwise.entitlements
+          cat Aurin/Aurin.entitlements
 
       - name: Pick a simulator
         id: sim
@@ -71,14 +71,14 @@ jobs:
           print(pick["udid"])')
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
-      # Unit tests render the screens to PNG (LoadwiseTests/SnapshotTests.swift).
+      # Unit tests render the screens to PNG (AurinTests/SnapshotTests.swift).
       - name: Test and render screens
         env:
           TEST_RUNNER_SNAPSHOT_DIR: ${{ github.workspace }}/screens
         run: |
           mkdir -p "$GITHUB_WORKSPACE/screens"
           set -o pipefail
-          xcodebuild -project Loadwise.xcodeproj -scheme Loadwise -configuration Debug \
+          xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Debug \
             -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/build.log"
 
@@ -98,7 +98,7 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Concurrency warnings: $total"
-          sed -E 's#^.*/(Loadwise|Shared|LoadwiseWidgets|LoadwiseTests)/#\1/#' "$RUNNER_TEMP/concurrency.txt" | head -300
+          sed -E 's#^.*/(Aurin|Shared|AurinWidgets|AurinTests)/#\1/#' "$RUNNER_TEMP/concurrency.txt" | head -300
 
       # The real app on the simulator with sample data, as the phone shows it.
       # The app follows the phone's language, so the English simulator is told Czech.
@@ -107,11 +107,11 @@ jobs:
           udid=${{ steps.sim.outputs.udid }}
           xcrun simctl boot "$udid" || true
           xcrun simctl bootstatus "$udid" -b
-          xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Loadwise.app
+          xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/Aurin.app
           for mode in light dark; do
             xcrun simctl ui "$udid" appearance "$mode"
             for tab in today training health food; do
-              xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -tab "$tab" -AppleLanguages "(cs)"
+              xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(cs)"
               sleep 6
               xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/simulator-$tab-$mode.png"
             done
@@ -129,28 +129,28 @@ jobs:
           # the first screens came out dark or dimmed halfway through the change.
           sleep 10
           for tab in today training health food; do
-            xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en
             sleep 6
             xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/$tab.png"
           done
           # Screens one tap deeper, opened as their link would (-open; simctl openurl
           # stops on the system's "Open in Aurin?" question): readiness, strain, muscles, the gym session.
           for route in readiness strain muscles gym/2026-10-08; do
-            xcrun simctl launch --terminate-running-process "$udid" eu.petrfitnessdata.loadwise.native -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en
+            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open "$route" -AppleLanguages "(en)" -AppleLocale en_US -language en
             sleep 7
             xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site/${route%%/*}.png"
           done
 
       # Before a release (Vydat checks this run): the app tapped through like a
       # person would, from a new phone's sign-in into the sample data and across
-      # the main screens (LoadwiseUITests/SmokeTests.swift). Fails on a crash or a
+      # the main screens (AurinUITests/SmokeTests.swift). Fails on a crash or a
       # missing screen; a screenshot of each step goes to smoke/.
       - name: Smoke test of the main screens
         env:
           TEST_RUNNER_SMOKE_DIR: ${{ github.workspace }}/screens/smoke
         run: |
-          xcrun simctl uninstall "${{ steps.sim.outputs.udid }}" eu.petrfitnessdata.loadwise.native || true
-          xcodebuild -project Loadwise.xcodeproj -scheme LoadwiseSmoke -configuration Debug \
+          xcrun simctl uninstall "${{ steps.sim.outputs.udid }}" health.aurin.app || true
+          xcodebuild -project Aurin.xcodeproj -scheme AurinSmoke -configuration Debug \
             -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO test
 
@@ -158,17 +158,17 @@ jobs:
       - name: Build for iPhone
         if: github.event_name != 'pull_request'
         run: |
-          xcodebuild -project Loadwise.xcodeproj -scheme Loadwise -configuration Release \
+          xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO build
           mkdir -p ipa/Payload
-          cp -R build/Build/Products/Release-iphoneos/Loadwise.app ipa/Payload/
+          cp -R build/Build/Products/Release-iphoneos/Aurin.app ipa/Payload/
           # Ad-hoc signatures carry the App Group the widgets share with the
           # app; Sideloadly re-signs with the user's Apple ID and keeps them.
-          app=ipa/Payload/Loadwise.app
-          codesign --force --sign - --entitlements LoadwiseWidgets/LoadwiseWidgets.entitlements "$app/PlugIns/LoadwiseWidgets.appex"
-          codesign --force --sign - "$app/PlugIns/LoadwiseNotifications.appex"
-          codesign --force --sign - --entitlements Loadwise/Loadwise.entitlements "$app"
+          app=ipa/Payload/Aurin.app
+          codesign --force --sign - --entitlements AurinWidgets/AurinWidgets.entitlements "$app/PlugIns/AurinWidgets.appex"
+          codesign --force --sign - "$app/PlugIns/AurinNotifications.appex"
+          codesign --force --sign - --entitlements Aurin/Aurin.entitlements "$app"
           (cd ipa && zip -qry "$GITHUB_WORKSPACE/Aurin-unsigned.ipa" Payload)
 
       - name: Upload the app

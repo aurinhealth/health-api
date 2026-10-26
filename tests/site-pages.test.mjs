@@ -64,7 +64,7 @@ test('every public page carries a link preview with the share image and icons',a
 // The phones show the app's sample morning (screenshots from ios-native.yml), so the numbers floating
 // around the hero phone come from the same sample day (DemoData.swift) and change with it.
 test('the numbers around the hero phone are the sample morning its screenshot shows',async()=>{
-  const demo=readFileSync(new URL('../ios-native/Loadwise/Data/DemoData.swift',import.meta.url),'utf8');
+  const demo=readFileSync(new URL('../ios-native/Aurin/Data/DemoData.swift',import.meta.url),'utf8');
   const today=JSON.parse(demo.match(/json = """\n([\s\S]*?)\n    """/)[1]);
   const html=await overviewPage().text();
   const clock=m=>Math.floor(m/60)+':'+String(m%60).padStart(2,'0');
@@ -171,7 +171,7 @@ test('the terms say who runs Aurin, that it is not medical care, and name no int
 
 test('the support page follows the app’s Settings and every page has the footer groups',async()=>{
   const read=path=>readFileSync(new URL('../ios-native/'+path,import.meta.url),'utf8');
-  const settings=read('Loadwise/Screens/SettingsView.swift'),strings=read('Shared/en.lproj/Localizable.strings');
+  const settings=read('Aurin/Screens/SettingsView.swift'),strings=read('Shared/en.lproj/Localizable.strings');
   const en=label=>strings.match(new RegExp('^"'+label+'" = "([^"]+)";','m'))?.[1];
   for(const title of ['Zdroje dat','Soukromí a data','Nahlásit problém','Kontaktovat nás'])assert.match(settings,new RegExp('title: "'+title+'"'),title);
   const support=await supportPage().text();
@@ -204,7 +204,7 @@ test('robots.txt and the sitemap list the public pages on the host they are serv
 test('the connections use the app’s own logos and only the services the app offers',async()=>{
   const html=await overviewPage().text();
   const section=html.slice(html.indexOf('<section id="propojeni"'),html.indexOf('<section id="soukromi"'));
-  const asset=path=>readFileSync(new URL('../ios-native/Loadwise/Resources/Assets.xcassets/'+path,import.meta.url));
+  const asset=path=>readFileSync(new URL('../ios-native/Aurin/Resources/Assets.xcassets/'+path,import.meta.url));
   const site=file=>readFileSync(new URL('../public/site/logos/'+file,import.meta.url));
   for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg'],['whoop.svg','WhoopLogo.imageset/whoop-black.svg'],['wahoo.png','WahooLogo.imageset/wahoo-wordmark-white.png']]){
     assert.ok(site(file).equals(asset(source)),file+' is the app’s logo, unchanged');
@@ -212,13 +212,13 @@ test('the connections use the app’s own logos and only the services the app of
   }
   assert.deepEqual([...section.matchAll(/id="tab-(\w+)"/g)].map(m=>m[1]),['apple','google','intervals','ultrahuman','whoop','wahoo']);
   assert.doesNotMatch(section,/strava|garmin|oura/i,'only services the app offers');
-  const sync=readFileSync(new URL('../ios-native/Loadwise/Screens/SyncViews.swift',import.meta.url),'utf8');
+  const sync=readFileSync(new URL('../ios-native/Aurin/Screens/SyncViews.swift',import.meta.url),'utf8');
   for(const id of ['apple','google','intervals'])assert.match(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
   for(const id of ['ultrahuman','whoop'])assert.doesNotMatch(sync,new RegExp('SyncDestination\\(id: "'+id+'"'),id);
   assert.match(section,/nothing, Aurin only reads the ring/);
   assert.match(section,/nothing, Aurin only reads WHOOP/);
   // Wahoo gets the planned workouts, as its connect sheet says (SettingsConnectFlow.swift).
-  const connect=readFileSync(new URL('../ios-native/Loadwise/Screens/SettingsPages/SettingsConnectFlow.swift',import.meta.url),'utf8');
+  const connect=readFileSync(new URL('../ios-native/Aurin/Screens/SettingsPages/SettingsConnectFlow.swift',import.meta.url),'utf8');
   assert.match(connect,/Tréninky naplánované v Aurinu, do ELEMNT a KICKR/);
   assert.match(section,/planned workouts, to ELEMNT and KICKR/);
 });

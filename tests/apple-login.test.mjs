@@ -36,7 +36,7 @@ test("the client secret is an ES256 JWT for Apple, signed with the .p8 key", asy
   const jwt = await appleClientSecret({ ...apple, APPLE_PRIVATE_KEY: pem.replace(/\n/g, "\\n") }, 1_800_000_000);
   const [h, p, s] = jwt.split(".");
   assert.deepEqual(JSON.parse(Buffer.from(h, "base64url")), { alg: "ES256", kid: "KEY1234567" });
-  assert.deepEqual(JSON.parse(Buffer.from(p, "base64url")), { iss: "TEAM123456", iat: 1_800_000_000, exp: 1_800_000_300, aud: "https://appleid.apple.com", sub: "eu.petrfitnessdata.loadwise.native" });
+  assert.deepEqual(JSON.parse(Buffer.from(p, "base64url")), { iss: "TEAM123456", iat: 1_800_000_000, exp: 1_800_000_300, aud: "https://appleid.apple.com", sub: "health.aurin.app" });
   assert.ok(await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, ec.publicKey, Buffer.from(s, "base64url"), new TextEncoder().encode(h + "." + p)));
 });
 
@@ -64,7 +64,7 @@ test("the app signs in with Apple natively and keeps the token that deleting the
   assert.equal(isPublicPath("/auth/app/apple"), true);
   const env = await withUsers();
   await env.DB.prepare("INSERT INTO user_invites(email) VALUES ('friend@example.com')").run();
-  const token = await idToken({ aud: "eu.petrfitnessdata.loadwise.native", nonce: await hex(APP_NONCE) });
+  const token = await idToken({ aud: "health.aurin.app", nonce: await hex(APP_NONCE) });
   const seen = {}, saved = [];
   const ok = await nativeRequest(env, { identityToken: token, authorizationCode: "code-1", nonce: APP_NONCE, name: "Jana  Nová" }, { fetchImpl: nativeFetch({}, seen), saveRefreshToken: async (user, value) => saved.push([user.email, value]) });
   assert.equal(ok.status, 200);
@@ -72,10 +72,10 @@ test("the app signs in with Apple natively and keeps the token that deleting the
   assert.equal((await env.DB.prepare("SELECT name FROM users WHERE email='friend@example.com'").first()).name, "Jana Nová");
   assert.deepEqual(saved, [["friend@example.com", "apple-refresh-1"]]);
   const exchange = seen.calls.find(c => c.url.endsWith("/auth/token")).body;
-  assert.equal(exchange.get("client_id"), "eu.petrfitnessdata.loadwise.native");
+  assert.equal(exchange.get("client_id"), "health.aurin.app");
   assert.equal(exchange.get("code"), "code-1");
   const sub = JSON.parse(Buffer.from(exchange.get("client_secret").split(".")[1], "base64url")).sub;
-  assert.equal(sub, "eu.petrfitnessdata.loadwise.native");
+  assert.equal(sub, "health.aurin.app");
 
   const revoked = {};
   assert.equal(await revokeApple({ ...apple, APPLE_REFRESH_TOKEN: "apple-refresh-1" }, nativeFetch({}, revoked)), "revoked");
@@ -84,12 +84,22 @@ test("the app signs in with Apple natively and keeps the token that deleting the
   assert.equal(await revokeApple({ ...apple }), "none");
 });
 
+test("the Loadwise app still signs in with Apple and exchanges its code as itself", async () => {
+  const env = await withUsers();
+  await env.DB.prepare("INSERT INTO user_invites(email) VALUES ('friend@example.com')").run();
+  const token = await idToken({ aud: "eu.petrfitnessdata.loadwise.native", nonce: await hex(APP_NONCE) });
+  const seen = {};
+  const ok = await nativeRequest(env, { identityToken: token, authorizationCode: "code-2", nonce: APP_NONCE }, { fetchImpl: nativeFetch({}, seen), saveRefreshToken: async () => {} });
+  assert.equal(ok.status, 200);
+  assert.equal(seen.calls.find(c => c.url.endsWith("/auth/token")).body.get("client_id"), "eu.petrfitnessdata.loadwise.native");
+});
+
 test("the app's Apple sign-in refuses a web token, a wrong nonce, a form post and an uninvited e-mail", async () => {
   const env = await withUsers();
   const fetchImpl = nativeFetch({});
   const web = await idToken({ nonce: await hex(APP_NONCE) });
   assert.equal((await nativeRequest(env, { identityToken: web, nonce: APP_NONCE }, { fetchImpl })).status, 401);
-  const app = await idToken({ aud: "eu.petrfitnessdata.loadwise.native", nonce: await hex(APP_NONCE) });
+  const app = await idToken({ aud: "health.aurin.app", nonce: await hex(APP_NONCE) });
   assert.equal((await nativeRequest(env, { identityToken: app, nonce: APP_NONCE + "x" }, { fetchImpl })).status, 401);
   assert.equal((await nativeRequest(env, { identityToken: app, nonce: APP_NONCE }, { fetchImpl, headers: { "Content-Type": "text/plain" } })).status, 415);
   const denied = await nativeRequest(env, { identityToken: app, nonce: APP_NONCE }, { fetchImpl });

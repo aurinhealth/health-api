@@ -34,7 +34,7 @@ test("a current app, a garbled header and requests without it", () => {
 
 // Raising MIN_APP_API without the app would lock out even the newest build.
 test("the app in ios-native/ is built for at least the minimum API", () => {
-  const client = readFileSync(new URL("../ios-native/Loadwise/Data/APIClient.swift", import.meta.url), "utf8");
+  const client = readFileSync(new URL("../ios-native/Aurin/Data/APIClient.swift", import.meta.url), "utf8");
   const level = Number(/static let apiLevel = (\d+)/.exec(client)?.[1]);
   assert.ok(level >= MIN_APP_API, `apiLevel ${level} < MIN_APP_API ${MIN_APP_API}`);
   assert.match(client, new RegExp(`forHTTPHeaderField: "${APP_API_HEADER}"`));

@@ -4,16 +4,18 @@
 // APPLE_TEAM_ID is the Apple Developer team of the app (App Store Connect →
 // Membership, ten characters); without it the file is not served and the
 // app's passkey buttons fall back to the e-mail sign-in.
-export const APP_BUNDLE_ID = "eu.petrfitnessdata.loadwise.native";
+export const APP_BUNDLE_ID = "health.aurin.app";
+// Loadwise's ID, until the testers have moved to the Aurin app.
+export const LEGACY_APP_BUNDLE_ID = "eu.petrfitnessdata.loadwise.native";
 const PATH = "/.well-known/apple-app-site-association";
 
 export function appleAppSiteAssociationBody(env = {}) {
   const team = String(env.APPLE_TEAM_ID || "").trim();
   if (!/^[A-Z0-9]{10}$/.test(team)) return null;
-  const app = team + "." + APP_BUNDLE_ID;
+  const apps = [APP_BUNDLE_ID, LEGACY_APP_BUNDLE_ID].map(id => team + "." + id);
   // applinks: a shared workout's link (/t/<id>, workout-templates.js) opens
   // the app when it is installed (applinks:aurin.health in project.yml).
-  return { webcredentials: { apps: [app] }, applinks: { details: [{ appIDs: [app], components: [{ "/": "/t/*", comment: "Shared workouts" }] }] } };
+  return { webcredentials: { apps }, applinks: { details: [{ appIDs: apps, components: [{ "/": "/t/*", comment: "Shared workouts" }] }] } };
 }
 
 // The answer for the file, null for every other path.

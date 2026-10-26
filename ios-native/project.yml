@@ -1,9 +1,9 @@
-# XcodeGen spec for the native Loadwise app (SwiftUI). The Xcode project is
+# XcodeGen spec for the native Aurin app (SwiftUI). The Xcode project is
 # generated from this file on the GitHub macOS runner (`xcodegen generate`),
 # so nobody needs a Mac or a committed .xcodeproj.
-name: Loadwise
+name: Aurin
 options:
-  bundleIdPrefix: eu.petrfitnessdata
+  bundleIdPrefix: health.aurin
   deploymentTarget:
     # 17.4: the connect sheet sends its ticket in a header (Auth.swift), the
     # only way into /auth/app/connect (src/native-connect.js).
@@ -21,11 +21,11 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ""
 targets:
-  Loadwise:
+  Aurin:
     type: application
     platform: iOS
     sources:
-      - path: Loadwise
+      - path: Aurin
       - path: Shared
       # The privacy manifest App Store Connect checks (UserDefaults, file dates, the data sent to the server).
       - path: Privacy/App/PrivacyInfo.xcprivacy
@@ -37,19 +37,19 @@ targets:
         type: file
         buildPhase: resources
     dependencies:
-      - target: LoadwiseWidgets
-      - target: LoadwiseNotifications
+      - target: AurinWidgets
+      - target: AurinNotifications
     # The App Group the home-screen widgets read Today from (WidgetBridge).
     # HealthKit: Apple Health is read on the phone (App/AppleHealth.swift),
     # with background delivery so new nights and workouts sync on their own.
     entitlements:
-      path: Loadwise/Loadwise.entitlements
+      path: Aurin/Aurin.entitlements
       properties:
         # Sign in with Apple (LoginView); App Store rule 4.8 asks for it next to Google.
         com.apple.developer.applesignin:
           - Default
         com.apple.security.application-groups:
-          - group.eu.petrfitnessdata.loadwise
+          - group.health.aurin
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
         com.apple.developer.healthkit.background-delivery: true
@@ -68,9 +68,9 @@ targets:
         aps-environment: production
     settings:
       base:
-        # Its own bundle ID (eu.petrfitnessdata.loadwise was the retired Capacitor shell).
-        PRODUCT_BUNDLE_IDENTIFIER: eu.petrfitnessdata.loadwise.native
-        PRODUCT_NAME: Loadwise
+        # Aurin's own app (2026-11): Loadwise's eu.petrfitnessdata.loadwise.native was retired.
+        PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app
+        PRODUCT_NAME: Aurin
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # The icons of Settings → Ikona aplikace (AppIcon-*.appiconset), for setAlternateIconName.
@@ -80,7 +80,7 @@ targets:
         # Instagramu" (ShareExport.instagram) stays hidden while it is empty.
         META_APP_ID: "1387617773155698"
     info:
-      path: Loadwise/Info.plist
+      path: Aurin/Info.plist
       properties:
         CFBundleDisplayName: Aurin
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -105,7 +105,7 @@ targets:
         UIDesignRequiresCompatibility: true
         # loadwise://open/sleep: the widgets open a screen of the app.
         CFBundleURLTypes:
-          - CFBundleURLName: eu.petrfitnessdata.loadwise.native
+          - CFBundleURLName: health.aurin.app
             CFBundleURLSchemes:
               - loadwise
         # Posilovna naživo and Režim tréninku on the lock screen and in the Dynamic Island (App/GymLiveActivity.swift).
@@ -120,7 +120,7 @@ targets:
           # The rest's countdown and end tones with the phone locked (GymSignals.planRest).
           - audio
         BGTaskSchedulerPermittedIdentifiers:
-          - eu.petrfitnessdata.loadwise.native.refresh
+          - health.aurin.app.refresh
         # Sdílet → Instagram Stories (ShareExport.instagram) with the Meta app ID.
         LSApplicationQueriesSchemes:
           - instagram-stories
@@ -135,11 +135,11 @@ targets:
           - Newsreader-Regular.ttf
           - Newsreader-Italic.ttf
   # Home-screen and lock-screen widgets (WidgetKit), embedded in the app.
-  LoadwiseWidgets:
+  AurinWidgets:
     type: app-extension
     platform: iOS
     sources:
-      - path: LoadwiseWidgets
+      - path: AurinWidgets
       - path: Shared
         # Siri phrases belong to the app's AurinShortcuts only.
         excludes:
@@ -147,18 +147,18 @@ targets:
       - path: Privacy/Widgets/PrivacyInfo.xcprivacy
         buildPhase: resources
     entitlements:
-      path: LoadwiseWidgets/LoadwiseWidgets.entitlements
+      path: AurinWidgets/AurinWidgets.entitlements
       properties:
         com.apple.security.application-groups:
-          - group.eu.petrfitnessdata.loadwise
+          - group.health.aurin
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: eu.petrfitnessdata.loadwise.native.widgets
-        PRODUCT_NAME: LoadwiseWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.widgets
+        PRODUCT_NAME: AurinWidgets
         TARGETED_DEVICE_FAMILY: "1"
         SKIP_INSTALL: YES
     info:
-      path: LoadwiseWidgets/Info.plist
+      path: AurinWidgets/Info.plist
       properties:
         CFBundleDisplayName: Aurin
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -167,21 +167,21 @@ targets:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
   # The morning readiness push gets its coloured ring before iOS shows it
   # (NotificationService.swift, src/push.js readinessMessage), embedded in the app.
-  LoadwiseNotifications:
+  AurinNotifications:
     type: app-extension
     platform: iOS
     sources:
-      - path: LoadwiseNotifications
-      - path: Loadwise/Resources/Fonts/InstrumentSerif-Regular.ttf
+      - path: AurinNotifications
+      - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
         buildPhase: resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: eu.petrfitnessdata.loadwise.native.notifications
-        PRODUCT_NAME: LoadwiseNotifications
+        PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.notifications
+        PRODUCT_NAME: AurinNotifications
         TARGETED_DEVICE_FAMILY: "1"
         SKIP_INSTALL: YES
     info:
-      path: LoadwiseNotifications/Info.plist
+      path: AurinNotifications/Info.plist
       properties:
         CFBundleDisplayName: Aurin
         CFBundleShortVersionString: $(MARKETING_VERSION)
@@ -189,48 +189,48 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
-  LoadwiseTests:
+  AurinTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: LoadwiseTests
+      - path: AurinTests
     dependencies:
-      - target: Loadwise
+      - target: Aurin
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: eu.petrfitnessdata.loadwise.native.tests
+        PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.tests
   # The smoke test before a release: the app tapped through on the simulator (ios-native.yml).
-  LoadwiseUITests:
+  AurinUITests:
     type: bundle.ui-testing
     platform: iOS
     sources:
-      - path: LoadwiseUITests
+      - path: AurinUITests
     dependencies:
-      - target: Loadwise
+      - target: Aurin
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: eu.petrfitnessdata.loadwise.native.uitests
-        TEST_TARGET_NAME: Loadwise
+        PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.uitests
+        TEST_TARGET_NAME: Aurin
 schemes:
-  Loadwise:
+  Aurin:
     build:
       targets:
-        Loadwise: all
-        LoadwiseTests: [test]
+        Aurin: all
+        AurinTests: [test]
     test:
       targets:
-        - LoadwiseTests
+        - AurinTests
       # The tests check the Czech source texts; the simulator itself speaks English.
       language: cs
   # Its own scheme, so the unit tests and screen renders run as before.
-  LoadwiseSmoke:
+  AurinSmoke:
     build:
       targets:
-        Loadwise: all
-        LoadwiseUITests: [test]
+        Aurin: all
+        AurinUITests: [test]
     test:
       targets:
-        - LoadwiseUITests
+        - AurinUITests
       language: cs
