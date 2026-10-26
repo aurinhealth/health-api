@@ -196,7 +196,7 @@ struct BarcodeScanSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             switch state {
             case .searching:
-                HStack { ProgressView(); Text("Hledám \(code ?? "")…").font(Typo.small).foregroundStyle(Palette.muted) }
+                CoachThinkingLine(text: L10n.f("Hledám %@…", code ?? ""))
             case .found:
                 if let product {
                     VStack(alignment: .leading, spacing: 2) {

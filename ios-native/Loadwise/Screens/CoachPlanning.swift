@@ -315,7 +315,7 @@ struct DayReviewView: View {
             VStack(alignment: .leading, spacing: 0) {
                 SectionLabel(text: L10n.tr("Kouč") + " · " + Fmt.dayHeading(date)).padding(.top, 24)
                 if loading {
-                    HStack(spacing: 8) { ProgressView(); Text("Kouč čte tvůj den…").font(Typo.small).foregroundStyle(Palette.muted) }.padding(.top, 30)
+                    CoachThinking(text: L10n.tr("Kouč čte tvůj den…")).padding(.top, 24)
                 } else if let error {
                     Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
                 } else if let review {

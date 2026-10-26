@@ -524,6 +524,7 @@ struct AddGymSheet: View {
                 .disabled(busy)
                 PrimaryButton(title: L10n.tr(busy ? "Poznávám…" : "Poznat"), busy: busy) { Task { await detect() } }
                     .disabled(busy || model.demo || (photos.isEmpty && !cleanUrl.hasPrefix("http")))
+                if busy { CoachThinkingLine(text: L10n.tr("AI poznává vybavení…")) }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true) }
             }
             .padding(16)
