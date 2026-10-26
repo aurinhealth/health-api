@@ -162,8 +162,9 @@
         "OPEN_SIGNUP": "true",
         "AI_MONTHLY_LIMIT_USD": "10",
         "AI_DAILY_LIMIT_USD": "1",
-        "AI_TOTAL_DAILY_ALERT_USD": "30",
-        "AI_TOTAL_DAILY_LIMIT_USD": "200",
+        // Testing costs at most 1 USD of AI a day, the owner included (src/ai-total.js).
+        "AI_TOTAL_DAILY_ALERT_USD": "1",
+        "AI_TOTAL_DAILY_LIMIT_USD": "1",
         "COACH_WEEKLY_MESSAGES": "30",
         "COACH_EXTRA_MESSAGES": "2",
         "COACH_WORKOUT_CHAT_MESSAGES": "5",

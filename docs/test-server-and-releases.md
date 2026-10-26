@@ -130,3 +130,5 @@ e.g. `S02,S04`.
 Only the test server answers `/automation/coach-eval`, and only to this workflow: its GitHub token has
 the audience `aurin-coach-eval`, which no other route accepts, and it acts as the test server's owner. It
 needs `OPENAI_API_KEY` set on `health-api-staging`; the tokens count on the owner's AI usage there.
+The test server's AI brake (`AI_TOTAL_DAILY_LIMIT_USD`, 1 USD a day) holds the owner there too, so a
+full run can stop on HTTP 429 once the day's dollar is spent; run fewer scenarios or wait for the next UTC day.

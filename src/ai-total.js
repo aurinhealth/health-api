@@ -2,9 +2,12 @@
 // (ai_usage sits in each user's own database). AI_TOTAL_DAILY_ALERT_USD: once
 // the day passes it, the owner gets one e-mail and nothing stops.
 // AI_TOTAL_DAILY_LIMIT_USD: the emergency brake; past it AI waits until the
-// next UTC day for everyone but the owner. Either unset or not a number is off.
+// next UTC day for everyone but the owner. On the test server the brake holds
+// the owner too: there it caps what testing costs (wrangler.jsonc env.staging).
+// Either unset or not a number is off.
 import { L } from "./lang.js";
 import { emailConfigured, sendEmail } from "./email-sender.js";
+import { isStaging } from "./staging.js";
 
 const n = v => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 const utcDay = (now = new Date()) => now.toISOString().slice(0, 10);
@@ -23,7 +26,7 @@ export async function aiSpentTodayAll(db, now = new Date()) {
 // Before a model call: refused once the day's total reached the brake.
 export async function assertAiTotal(env, now = new Date()) {
   const limit = n(env?.AI_TOTAL_DAILY_LIMIT_USD), db = central(env);
-  if (limit == null || limit < 0 || env.USER_IS_OWNER === true || !db) return;
+  if (limit == null || limit < 0 || (env.USER_IS_OWNER === true && !isStaging(env)) || !db) return;
   const spent = await aiSpentTodayAll(db, now).catch(error => { console.error("AI total read failed", error?.message || error); return 0; });
   if (spent < limit) return;
   const error = new Error(L("AI je dnes přetížená. Zkus to prosím zítra.", "The AI is overloaded today. Please try again tomorrow."));
