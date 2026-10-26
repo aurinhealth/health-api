@@ -1276,7 +1276,7 @@ export function supportPage(request, {apple = false, email = false, open = false
 <ol>
 <li>Open <strong>Settings → Privacy &amp; data</strong>.</li>
 <li>If you want to keep a copy, first choose <strong>Download my data</strong>.</li>
-<li>Choose <strong>Delete account</strong>, type DELETE to confirm and choose <strong>Delete</strong>.</li>
+<li>Choose <strong>Delete account</strong>, confirm with <strong>Delete account</strong> and then with Face ID or your phone’s passcode.</li>
 </ol>
 <p>Aurin immediately and permanently deletes your account and all its data: profile, food, workouts, sleep and health data, connections, passkeys and assistant history. It also gives up its access to your Google Account and clears its copy on your device. Database backups are overwritten within 30 days. Data already in Apple Health, Intervals.icu or Google Health stays there. More in the <a href="/privacy">Privacy Policy</a>.</p>`
   });

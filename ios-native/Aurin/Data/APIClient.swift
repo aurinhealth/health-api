@@ -252,7 +252,7 @@ final class APIClient: @unchecked Sendable {
         return url
     }
 
-    /// Deletes the account and everything in it (the user typed SMAZAT).
+    /// Deletes the account and everything in it (confirmed in Soukromí a data with Face ID or the code).
     func deleteAccount() async throws {
         let _: JSONValue = try await send("/app/api/account/delete", method: "POST", body: ["confirm": JSONValue.string("SMAZAT")])
         signOut()

@@ -6,6 +6,7 @@
 "NSHealthShareUsageDescription" = "Aurin reads sleep, workouts, heart rate, HRV, wrist temperature, steps, weight, food and water from other apps, for the journal mindful minutes, time in daylight, noise in sleep, symptoms and sexual activity and, with cycle tracking on, periods, ovulation tests and contraception from Apple Health to work out your recovery, strain and calorie target and fill in your journal.";
 "NSHealthUpdateUsageDescription" = "Aurin writes to Apple Health only what you log in the app yourself and turn on in Sync, such as workouts, weight, food and drinks.";
 "NSAlarmKitUsageDescription" = "Aurin wakes you at your alarm time, which it uses to work out your bedtime.";
+"NSFaceIDUsageDescription" = "Aurin asks for Face ID before it deletes your account.";
 "NSBluetoothAlwaysUsageDescription" = "Aurin connects to the heart rate sensor you pair, to show your heart rate in workout mode.";
 "NSCalendarsFullAccessUsageDescription" = "Aurin uses the events in your calendar to see how much time you have for training each day and, if you turn it on, adds your planned workouts to it. Your events stay on your phone.";
 "NSCalendarsUsageDescription" = "Aurin uses the events in your calendar to see how much time you have for training each day and, if you turn it on, adds your planned workouts to it. Your events stay on your phone.";

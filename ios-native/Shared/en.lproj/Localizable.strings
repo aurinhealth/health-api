@@ -440,7 +440,8 @@
 "Prahy a zóny se po uložení pošlou do Intervals.icu" = "Thresholds and zones are sent to Intervals.icu after saving";
 "Pravidelnost · %@ nocí" = "Consistency · %@ nights";
 "Pražský půlmaraton" = "Chicago Marathon";
-"Pro potvrzení napiš SMAZAT." = "Type DELETE to confirm.";
+"Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit." = "Everything Aurin keeps for you goes and can't be restored.";
+"Smazat účet Aurin" = "Delete your Aurin account";
 "Probrat" = "Discuss";
 "Probuzení" = "Woke up";
 "Procvičí hlavně: %@" = "Mainly works: %@";
@@ -599,7 +600,6 @@
 "Režim tréninku" = "Workout mode";
 "Rozcvičovací série" = "Warm-up set";
 "Ručně" = "Manual";
-"SMAZAT" = "DELETE";
 "Sacharidy" = "Carbs";
 "Sdílet soubor s daty" = "Share data file";
 "Sedavá práce" = "Desk job";
@@ -1087,7 +1087,6 @@
 "± %lld min" = "± %lld min";
 "Únava" = "Fatigue";
 "Úseky" = "Laps";
-"Účet zůstal: pro smazání je potřeba napsat SMAZAT." = "Your account stays: type DELETE to delete it.";
 "Čaj" = "Tea";
 "Čas" = "Time";
 "Čas do postele" = "Bedtime";
@@ -1606,6 +1605,7 @@
 "Z Apple Health jsme vzali:" = "Taken from Apple Health:";
 "Z Google Health jsme vzali:" = "Taken from Google Health:";
 "Narození" = "Born";
+"Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení." = "Aurin needs your age, height and weight to work out calories, strain and recovery.";
 "Rok" = "Year";
 
 /* Training: the focus card and sheet (FocusSheet) */
