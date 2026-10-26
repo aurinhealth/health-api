@@ -39,6 +39,17 @@ test("past the day's brake AI waits for everyone but the owner", async () => {
   });
 });
 
+test("on the test server the brake holds the owner too", async () => {
+  const db = grantAiConsent(createD1(), 9, 8);
+  await withOpenAI(async calls => {
+    const env = envFor(db, 9, { AI_TOTAL_DAILY_LIMIT_USD: "1", USER_IS_OWNER: true, ENVIRONMENT: "staging" });
+    await callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" });
+    await callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" });
+    await assert.rejects(callOpenAI(env, { feature: "food-lookup", instructions: "x", input: "y" }), error => error.limit === true && error.status === 429);
+    assert.equal(calls(), 2);
+  });
+});
+
 test("the owner gets one e-mail the first time the day passes the alert", async () => {
   const db = grantAiConsent(createD1(), 7, 8), mail = mailer();
   await withOpenAI(async () => {
