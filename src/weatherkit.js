@@ -41,13 +41,13 @@ export async function weatherKitJwt(env, now = Date.now()) {
 // Apple's condition codes as the nearest WMO code (WeatherText in the app, environmentFor).
 const WMO = {
   Clear: 0, Hot: 0, Frigid: 0, MostlyClear: 1, PartlyCloudy: 2, Breezy: 2, Windy: 2,
-  MostlyCloudy: 3, Cloudy: 3, Foggy: 45, Haze: 45, Smoky: 45, BlowingDust: 45,
-  Drizzle: 51, FreezingDrizzle: 56, Rain: 61, HeavyRain: 65, FreezingRain: 66, Sleet: 66,
+  MostlyCloudy: 3, Cloudy: 3, Fog: 45, Foggy: 45, Haze: 45, Smoke: 45, Smoky: 45, Dust: 45, BlowingDust: 45,
+  Drizzle: 51, FreezingDrizzle: 56, Rain: 61, MixedRainfall: 61, HeavyRain: 65, FreezingRain: 66, Sleet: 66,
   Flurries: 71, Snow: 73, HeavySnow: 75, BlowingSnow: 75, Blizzard: 75,
-  SunShowers: 80, ScatteredShowers: 80, Showers: 80, SunFlurries: 85,
+  SunShowers: 80, ScatteredShowers: 80, Showers: 80, SunFlurries: 85, SnowShowers: 85, ScatteredSnowShowers: 85,
   MixedRainAndSnow: 85, MixedRainAndSleet: 85, MixedSnowAndSleet: 85, WintryMix: 85,
-  IsolatedThunderstorms: 95, ScatteredThunderstorms: 95, Thunderstorms: 95, StrongStorms: 95,
-  Hail: 96, TropicalStorm: 99, Hurricane: 99
+  IsolatedThunderstorms: 95, ScatteredThunderstorms: 95, Thunderstorm: 95, Thunderstorms: 95, StrongStorms: 95,
+  SevereThunderstorm: 99, Hail: 96, TropicalStorm: 99, Hurricane: 99, Tornado: 99
 };
 export const wmoCode = condition => WMO[condition] ?? null;
 

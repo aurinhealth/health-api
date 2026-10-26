@@ -8,8 +8,9 @@ import MapKit
 // "Poloha pro počasí" to choose the place (Apple Maps search, saved as
 // prefs.location of the usual week plan).
 
-/// Apple Weather's credit, which WeatherKit asks for wherever its forecast
-/// shows: the " Weather" mark and the link to its other data sources.
+/// Apple Weather's credit: the " Weather" mark and the link to its other
+/// data sources, in the weather's detail one tap from Today's card (Petr,
+/// 2026-10-26: no mark on Today).
 enum AppleWeather {
     static let legalPage = URL(string: "https://weatherkit.apple.com/legal-attribution.html")!
 
@@ -123,7 +124,6 @@ struct TodayWeatherCard: View {
                         Text("Nastavit polohu pro počasí").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
                     }
                     Spacer(minLength: 0)
-                    if AppleWeather.credited(weather) { AppleWeatherMark() }
                 }
                 .contentShape(Rectangle())
             }
