@@ -3049,3 +3049,18 @@
 "Můžu dnes %@ vynechat?" = "Can I skip %@ today?";
 "Byla váha u %@ správná?" = "Was the weight right on %@?";
 "Jak se mi zatím trénink daří?" = "How is my workout going so far?";
+
+/* Plate loader (PlateLoader.swift) */
+"Klávesnice" = "Keypad";
+"%@ · série %@" = "%@ · set %@";
+"Prázdná tyč %@ kg" = "Empty %@ kg bar";
+"Bez kotoučů" = "No plates";
+"%@ na stranu + tyč %@ kg" = "%@ per side + %@ kg bar";
+"%@ na stranu" = "%@ per side";
+"Sundat kotouč %@ kg" = "Take off the %@ kg plate";
+"Přidat kotouče" = "Add plates";
+"Přidat kotouč %@ kg" = "Add a %@ kg plate";
+"Tyč" = "Bar";
+"Tyč %@ kg" = "Bar %@ kg";
+"Bez tyče" = "No bar";
+"Naložit kotouče" = "Load plates";
