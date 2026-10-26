@@ -43,6 +43,8 @@ struct TrainingModeView: View {
     @State private var replacing: String?
     /// The exercise whose Moje poznámka is being written.
     @State private var noteFor: String?
+    /// The barbell set whose plates are being loaded.
+    @State private var loadingBar: PlateTarget?
     private var notes: ExerciseNotes { .shared }
     @State private var saving = false
     @State private var rating = false
@@ -228,6 +230,9 @@ struct TrainingModeView: View {
         }
         .sheet(item: Binding(get: { noteFor.map { Named(name: $0) } }, set: { noteFor = $0?.name })) { item in
             ExerciseNoteSheet(exercise: item.name)
+        }
+        .sheet(item: $loadingBar) { target in
+            PlateLoaderSheet(title: target.title, startKg: target.kg) { total in loaded(total, on: target) }
         }
         .sheet(isPresented: $editing) {
             if let day {
@@ -419,13 +424,20 @@ struct TrainingModeView: View {
         let shownReps: String = (s.done ? s.reps : carry?.reps ?? s.plannedReps) ?? ""
         // By sides the number shows on the L row only.
         let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) : carriedLetter(s, in: exercise) ?? s.intensity
+        var plateTap: (() -> Void)? = nil
+        if loadsPlates(exercise) {
+            let target = PlateTarget(id: s.row, exercise: exercise.name, title: s.warmup ? exercise.name : L10n.f("%@ · série %@", exercise.name, s.number),
+                                     kg: LiftWeight.number(LiftWeight.kgText(kg.isEmpty ? shownKg : kg)))
+            plateTap = { loadingBar = target }
+        }
         return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
                          kgText: $kg, repsText: $reps, repsHint: s.plannedReps,
                          drop: s.drop, intensity: letter, planned: !s.done && !picked.contains(s.row),
                          onIntensity: { intensityFor = SetRef(id: s.row) },
-                         onEdit: s.done ? { k, r in Task { await editDone(s, kg: k, reps: r) } } : nil) {
+                         onEdit: s.done ? { k, r in Task { await editDone(s, kg: k, reps: r) } } : nil,
+                         onKgTap: plateTap) {
             switch phase {
             case .done: Task { await undo(s) }
             case .current: Task { await complete(s) }
@@ -444,6 +456,21 @@ struct TrainingModeView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10).padding(.top, 8)
+    }
+
+    /// A barbell in kilograms: its weight is loaded as plates.
+    private func loadsPlates(_ exercise: GymExercise) -> Bool {
+        !Units.imperial && uses(exercise, "barbells")
+    }
+
+    /// The bar loaded: the set at hand takes the weight, and so do the work
+    /// sets still to do (a warm-up keeps it to itself).
+    private func loaded(_ total: Double, on target: PlateTarget) {
+        let text = GymCoach.kgText(total)
+        kg = LiftWeight.shown(text) ?? text
+        guard let exercise = day?.exercises.first(where: { $0.name == target.exercise }),
+              exercise.sets.first(where: { $0.row == target.id })?.work == true else { return }
+        Task { await setWeight(text, of: exercise) }
     }
 
     /// "Kotouče: 20 + 10 na stranu" for a barbell lift.

@@ -3023,3 +3023,18 @@
 "AI čte fotku…" = "AI is reading the photo…";
 "AI dohledává potravinu…" = "AI is looking up the food…";
 "AI poznává vybavení…" = "AI is recognising the equipment…";
+
+/* Plate loader (PlateLoader.swift) */
+"Klávesnice" = "Keypad";
+"%@ · série %@" = "%@ · set %@";
+"Prázdná tyč %@ kg" = "Empty %@ kg bar";
+"Bez kotoučů" = "No plates";
+"%@ na stranu + tyč %@ kg" = "%@ per side + %@ kg bar";
+"%@ na stranu" = "%@ per side";
+"Sundat kotouč %@ kg" = "Take off the %@ kg plate";
+"Přidat kotouče" = "Add plates";
+"Přidat kotouč %@ kg" = "Add a %@ kg plate";
+"Tyč" = "Bar";
+"Tyč %@ kg" = "Bar %@ kg";
+"Bez tyče" = "No bar";
+"Naložit kotouče" = "Load plates";
