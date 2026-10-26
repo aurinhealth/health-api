@@ -35,9 +35,11 @@ enum BackgroundRefresh {
         let work = Task { @MainActor in
             task.setTaskCompleted(success: await refresh(api: api, widgets: true))
         }
-        task.expirationHandler = {
+        // iOS calls this on a queue of its own, not the main thread
+        // (assumeIsolated here stopped the app), so it hops there.
+        task.expirationHandler = { @Sendable in
             work.cancel()
-            MainActor.assumeIsolated { AppleHealth.shared.abandon() }
+            Task { @MainActor in AppleHealth.shared.abandon() }
         }
     }
 
