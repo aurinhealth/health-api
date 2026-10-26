@@ -132,7 +132,7 @@ import { needsAIAccess } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems, withoutBrokenConnections } from "./connection-health.js";
 import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
-import { handlePushToken, sendMorningReadiness, hasLastNight, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS } from "./push.js";
+import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS } from "./push.js";
 import { coachNudge, swapOffer, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
@@ -671,10 +671,22 @@ async function morningPush(env, ctx, options = {}) {
   if (!pushConfigured(env)) return { sent: 0, reason: 'not-configured' };
   // Settings → Oznámení → Ranní připravenost off; the phone keeps its token for the coach.
   const state = await getAthleteState(env.DB).catch(() => null);
-  if (state?.notify?.morning === false) return { sent: 0, reason: 'off' };
+  if (state?.notify?.morning === false) { await morningPushNote(env, { reason: 'off' }); return { sent: 0, reason: 'off' }; }
   const withState = r => r ? { ...r, athleteState: state?.status || null } : r;
   // The night, the baselines and today's plan only once the push goes out.
-  return sendMorningReadiness(env, { readiness: async date => withState(await todayReadiness(env, ctx, date, options)), details: async date => withState(await todayReadiness(env, ctx, date, { ...options, plan: true })) });
+  // Each check in the window leaves why no push went out (sync_status
+  // morning_push): "started" left alone means the run was cut off.
+  await morningPushNote(env, { reason: 'started' });
+  const result = await sendMorningReadiness(env, { readiness: async date => withState(await todayReadiness(env, ctx, date, options)), details: async date => withState(await todayReadiness(env, ctx, date, { ...options, plan: true })) })
+    .catch(async error => { await morningPushNote(env, { reason: 'error', message: String(error?.message || error).slice(0, 200) }); throw error; });
+  await morningPushNote(env, result);
+  return result;
+}
+// Outside the window nothing is written, so the last morning's reason stays.
+async function morningPushNote(env, result) {
+  if (!env.DB || result?.reason === 'outside-window' || !inMorningWindow(localHour())) return;
+  const note = { at: new Date().toISOString(), reason: result?.reason || (result?.sent ? 'sent' : 'not-sent'), ...(result?.score !== undefined ? { score: result.score } : {}), ...(result?.missing ? { missing: result.missing } : {}), ...(result?.message ? { message: result.message } : {}), ...(result?.sent !== undefined ? { sent: result.sent } : {}) };
+  await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,details_json,updated_at) VALUES(?,'morning_push',?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status=excluded.status,details_json=excluded.details_json,updated_at=excluded.updated_at").bind(env.DB.userId ?? env.USER_ID, note.reason, JSON.stringify(note)).run().catch(() => null);
 }
 
 // The coach's own push (coach-push.js), checked with the morning push: a time
