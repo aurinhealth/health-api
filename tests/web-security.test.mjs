@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { secured, SECURITY_HEADERS } from "../src/web-security.js";
+import { secured, SECURITY_HEADERS, scriptPolicy } from "../src/web-security.js";
+import { overviewPage, privacyPage } from "../src/site-pages.js";
 
 const ctx = { waitUntil() {} };
 const app = {
@@ -84,4 +85,26 @@ test("the static files get the same headers (public/_headers)", () => {
   assert.deepEqual(sent, SECURITY_HEADERS);
   assert.match(SECURITY_HEADERS["Strict-Transport-Security"], /includeSubDomains/);
   assert.match(SECURITY_HEADERS["Permissions-Policy"], /camera=\(\)/);
+});
+
+test("no script runs unless the page names it", async () => {
+  assert.match(SECURITY_HEADERS["Content-Security-Policy"], /; script-src 'none'$/);
+  // The hash is the browser's: SHA-256 of what stands between the tags, as crypto.subtle gives it.
+  for (const code of ["", "abc", "x".repeat(55), "y".repeat(56), "ž".repeat(300), "location.href='/'"]) {
+    const digest = Buffer.from(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(code))).toString("base64");
+    assert.equal(scriptPolicy(`<p><script>${code}</script></p>`), `frame-ancestors 'none'; base-uri 'self'; object-src 'none'; script-src 'sha256-${digest}'`);
+  }
+  assert.match(scriptPolicy("<p>no scripts</p>"), /script-src 'none'$/);
+  assert.doesNotMatch(scriptPolicy('<script type="application/ld+json">{}</script>'), /sha256/);
+});
+
+test("the website runs its own scripts and only them", async () => {
+  for (const response of [overviewPage(), privacyPage()]) {
+    const policy = response.headers.get("Content-Security-Policy"), html = await response.text();
+    assert.equal(policy, scriptPolicy(html), "every inline script of the page, nothing more");
+    assert.equal(policy.match(/'sha256-/g).length, 3);
+    assert.doesNotMatch(policy, /unsafe-inline|unsafe-eval/);
+    // An inline handler would need 'unsafe-hashes'; the pages use addEventListener.
+    assert.doesNotMatch(html, /<[a-z]+[^<>]*\son[a-z]+=/i);
+  }
 });

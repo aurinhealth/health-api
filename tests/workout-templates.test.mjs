@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import { handleWorkoutTemplatesApi, publicSharePage, cleanTemplate, templateFromRows } from "../src/workout-templates.js";
+import { scriptPolicy } from "../src/web-security.js";
 import { templateStrengthPlan, EXERCISES } from "../src/strength-generator.js";
 import { readRoutines, withRoutines } from "../src/stretching.js";
 import { planValues } from "../src/gym-plan-store.js";
@@ -115,7 +116,11 @@ test("the link's page shows the workout and its preview image to anyone", async 
   // A name can't inject markup into the page.
   const evil = await call(raw, 1, "POST", "/app/api/shares", { ...legs, name: "<script>x</script>" });
   const evilUrl = new URL(ORIGIN + "/t/" + evil.body.id);
-  assert.doesNotMatch(await (await publicSharePage(new Request(evilUrl), raw, evilUrl)).text(), /<script>x/);
+  const evilPage = await publicSharePage(new Request(evilUrl), raw, evilUrl);
+  assert.doesNotMatch(await evilPage.text(), /<script>x/);
+  // Only the page's own script may run (web-security.js).
+  for (const response of [pageResponse, evilPage]) assert.match(response.headers.get("Content-Security-Policy"), /script-src 'sha256-[^' ]+'$/);
+  assert.equal(pageResponse.headers.get("Content-Security-Policy"), scriptPolicy(html));
 });
 
 test("planned for the athlete, a shared workout keeps its exercises and sets but not anyone's weights", () => {

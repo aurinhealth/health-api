@@ -8,6 +8,7 @@
 import {themeTokens} from './design-system.js';
 import {icon, ICON_PATHS} from './icons.js';
 import {DEMOS, SCREENS, demoCss, demoScript} from './site-demos.js';
+import {scriptPolicy} from './web-security.js';
 import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
 
@@ -583,7 +584,7 @@ ${body}
 ${demoScript}
 ${siteScript}
 </body></html>`;
-  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate'}});
+  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(demoScript + siteScript)}});
 }
 
 // Pages take the request (to pick the host, and ?lang=cs on the pages that have Czech) or nothing
