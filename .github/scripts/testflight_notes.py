@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
 """TestFlight "What to Test" notes for the build just uploaded.
 
-The notes are written by hand, in Czech, in each pull request's description:
+The notes are written by hand in each pull request's description, in Czech
+and in English (the app's TestFlight information has both languages):
 
   ## TestFlight
   **Co je nového**
   - Jídlo a pití se uloží hned a okno se zavře okamžitě.
   **Co otestovat**
   - Přidej jídlo a hned ho smaž přes Vrátit.
+  **What's new**
+  - Food and drinks save at once and the sheet closes right away.
+  **What to test**
+  - Add a food and delete it straight away with Undo.
 
 A pull request with nothing for testers says "Nic k otestování" in that
-section instead.
+section instead. The notes file holds the Czech text, then a line
+"--- English ---" and the English text; a file without that line (text typed
+in by hand) goes to every language as it is.
 
   testflight_notes.py write BASE_SHA OUT_FILE
       Collects the TestFlight sections of the pull requests merged since
@@ -24,7 +31,8 @@ section instead.
 
   testflight_notes.py upload NOTES_FILE
       Waits until App Store Connect lists the build, then sets the notes as
-      "What to Test" in every language of the app's TestFlight information.
+      "What to Test" in every language of the app's TestFlight information:
+      Czech in cs, English in the others.
       Needs ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_PATH, BUNDLE_ID,
       MARKETING_VERSION and BUILD_NUMBER in the environment.
 
@@ -46,12 +54,22 @@ import base64, json, os, re, subprocess, sys, time, unicodedata, urllib.error, u
 LIMIT = 4000  # App Store Connect's limit for whatsNew
 API = "https://api.appstoreconnect.apple.com/v1"
 NEW, TEST = "Co je nového", "Co otestovat"
+NEW_EN, TEST_EN = "What's new", "What to test"
+HEADINGS = {h.lower(): h for h in (NEW, TEST, NEW_EN, TEST_EN)}
 NOTHING = "nic k otestování"
+ENGLISH = "--- English ---"  # splits the notes file into Czech and English
 EXAMPLE = f"""## TestFlight
 **{NEW}**
 - Jídlo a pití se uloží hned a okno se zavře okamžitě.
 **{TEST}**
-- Přidej jídlo a hned ho smaž přes Vrátit."""
+- Přidej jídlo a hned ho smaž přes Vrátit.
+**{NEW_EN}**
+- Food and drinks save at once and the sheet closes right away.
+**{TEST_EN}**
+- Add a food and delete it straight away with Undo."""
+# What a build says when the pull requests give nothing to quote: (cs, en).
+OTHERS = {"cs": "Další drobné úpravy.", "en": "Other small improvements."}
+NONE = {"cs": "Drobné úpravy, nic nového k otestování.", "en": "Small fixes, nothing new to test."}
 
 
 def git(*args):
@@ -59,28 +77,29 @@ def git(*args):
 
 
 def section(body):
-    """The pull request's TestFlight section: (new, test) bullet lists,
-    ([], []) when it says there is nothing to test, None when it is missing."""
+    """The pull request's TestFlight section: {heading: bullet list} for the
+    four headings (empty lists when it says there is nothing to test), None
+    when it is missing."""
     lines = (body or "").replace("\r", "").split("\n")
     start = next((i for i, l in enumerate(lines) if re.match(r"#{2,3}\s*TestFlight\s*$", l.strip(), re.I)), None)
     if start is None:
         return None
-    lists, current, text = {NEW: [], TEST: []}, None, []
+    lists, current, text = {h: [] for h in HEADINGS.values()}, None, []
     for raw in lines[start + 1:]:
         line = raw.strip()
-        if re.match(r"#{1,3}\s", line) and not re.match(r"#{1,3}\s*(co je nového|co otestovat)", line, re.I):
+        if re.match(r"#{1,3}\s", line) and not re.match(r"#{1,3}\s*(co je nového|co otestovat|what's new|what to test)", line, re.I):
             break  # the next section of the description
         if line.startswith("---") or line.startswith("🤖"):
             break  # the attribution footer
-        heading = re.sub(r"[#*_:\s]+", " ", line).strip().lower()
-        if heading in (NEW.lower(), TEST.lower()):
-            current = NEW if heading == NEW.lower() else TEST
+        heading = re.sub(r"[#*_:\s]+", " ", line.replace("’", "'")).strip().lower()
+        if heading in HEADINGS:
+            current = HEADINGS[heading]
         elif re.match(r"[-*•]\s+", line) and current:
             lists[current].append(re.sub(r"^[-*•]\s+", "", line).replace("**", "").replace("`", ""))
         text.append(line)
-    if not lists[NEW] and not lists[TEST]:
-        return ([], []) if NOTHING in " ".join(text).lower() else None
-    return lists[NEW], lists[TEST]
+    if not any(lists.values()):
+        return lists if NOTHING in " ".join(text).lower() else None
+    return lists
 
 
 def pull_request(number):
@@ -101,30 +120,42 @@ def plain(line):
     return re.sub(r"\s+([,.;:])", r"\1", re.sub(r"\s{2,}", " ", line)).strip()
 
 
-def render(entries):
-    """entries: (title, section) per pull request, newest first."""
+def render_one(entries, lang):
+    """One language's notes; entries: (title, section) per pull request, newest first."""
+    new_h, test_h = (NEW, TEST) if lang == "cs" else (NEW_EN, TEST_EN)
     new, test, untold = [], [], False
     for _, sec in entries:
-        if sec is None:
+        if sec is None or (any(sec.values()) and not sec[new_h] and not sec[test_h]):
+            # No section (from before it existed), or one without this
+            # language: the title isn't quoted, only counted.
             untold = True
-        else:
-            new += [plain(l) for l in sec[0]]
-            test += [plain(l) for l in sec[1]]
+        elif sec:
+            new += [plain(l) for l in sec[new_h]]
+            test += [plain(l) for l in sec[test_h]]
     if untold:
-        # A pull request without the section (from before it existed): its
-        # title is often English, so it is only counted, never quoted.
-        new.append("Další drobné úpravy.")
+        new.append(OTHERS[lang])
     if not new and not test:
-        return "Drobné úpravy, nic nového k otestování."
+        return NONE[lang]
     parts = []
     if new:
-        parts.append(NEW + "\n" + "\n".join("• " + l for l in new))
+        parts.append(new_h + "\n" + "\n".join("• " + l for l in new))
     if test:
-        parts.append(TEST + "\n" + "\n".join("• " + l for l in test))
+        parts.append(test_h + "\n" + "\n".join("• " + l for l in test))
     text = "\n\n".join(parts)
     if len(text) > LIMIT:
         text = text[: LIMIT - 1].rsplit("\n", 1)[0] + "\n…"
     return text
+
+
+def render(entries):
+    """The notes file: Czech, the ENGLISH line, English."""
+    return render_one(entries, "cs") + "\n\n" + ENGLISH + "\n\n" + render_one(entries, "en")
+
+
+def languages(notes):
+    """{"cs": text, "en": text} from a notes file; one text for both without ENGLISH."""
+    cs, sep, en = notes.partition("\n" + ENGLISH + "\n")
+    return {"cs": cs.strip()[:LIMIT], "en": (en if sep else cs).strip()[:LIMIT]}
 
 
 def notes_since(base):
@@ -149,11 +180,19 @@ def check():
     if sec is None:
         sys.exit("::error::Popis PR nemá sekci TestFlight pro testery. Přidej ji do popisu "
                  "(česky, bez čísel PR a názvů v kódu), nebo do ní napiš „Nic k otestování“:\n\n" + EXAMPLE)
-    lines = sec[0] + sec[1]
-    if lines and not re.search(r"[ěščřžýáíéůúťďň]", " ".join(lines), re.I):
-        sys.exit("::error::Sekce TestFlight má být česky (Co je nového / Co otestovat).")
-    if sec[0] and not sec[1]:
+    czech, english = sec[NEW] + sec[TEST], sec[NEW_EN] + sec[TEST_EN]
+    lines = czech + english
+    if english and not czech:
+        sys.exit(f"::error::Sekce TestFlight potřebuje i českou část ({NEW} / {TEST}).")
+    if czech and not re.search(r"[ěščřžýáíéůúťďň]", " ".join(czech), re.I):
+        sys.exit("::error::Česká část sekce TestFlight má být česky (Co je nového / Co otestovat).")
+    if sec[NEW] and not sec[TEST]:
         sys.exit(f"::error::Sekce TestFlight potřebuje i „{TEST}“: konkrétní kroky v aplikaci.")
+    if czech and not english:
+        sys.exit(f"::error::Sekce TestFlight potřebuje i anglickou verzi pod „**{NEW_EN}**“ a „**{TEST_EN}**“ "
+                 "(stejné body anglicky, pro testery s angličtinou):\n\n" + EXAMPLE)
+    if sec[NEW_EN] and not sec[TEST_EN]:
+        sys.exit(f"::error::Anglická část sekce TestFlight potřebuje i „{TEST_EN}“.")
     symbols = sorted({c for c in " ".join(lines) if unicodedata.category(c) == "So"})
     if symbols:
         sys.exit("::error::App Store Connect v sekci TestFlight nepřijme znaky " + " ".join(symbols) + ", napiš je slovy.")
@@ -209,9 +248,12 @@ def app_id():
 
 
 def set_notes(app, build, notes):
+    """notes: the notes file's text; Czech goes to cs, English to every other language."""
+    texts = languages(notes)
     locales = {loc["attributes"]["locale"] for loc in call("GET", f"/apps/{app}/betaAppLocalizations")["data"]} or {"cs"}
     existing = {loc["attributes"]["locale"]: loc["id"] for loc in call("GET", f"/builds/{build}/betaBuildLocalizations")["data"]}
     for locale in sorted(locales):
+        notes = texts["cs" if locale.startswith("cs") else "en"]
         if locale in existing:
             call("PATCH", f"/betaBuildLocalizations/{existing[locale]}",
                  {"data": {"type": "betaBuildLocalizations", "id": existing[locale], "attributes": {"whatsNew": notes}}})
@@ -243,7 +285,7 @@ def released():
 
 
 def release(notes_file):
-    notes = open(notes_file, encoding="utf-8").read().strip()[:LIMIT]
+    notes = open(notes_file, encoding="utf-8").read()
     env = os.environ
     app = app_id()
     builds = call("GET", f"/builds?filter[app]={app}&filter[version]={env['BUILD_NUMBER']}")["data"]
@@ -271,7 +313,7 @@ def release(notes_file):
 
 
 def upload(notes_file):
-    notes = open(notes_file, encoding="utf-8").read().strip()[:LIMIT]
+    notes = open(notes_file, encoding="utf-8").read()
     env = os.environ
     app = app_id()
     query = (f"/builds?filter[app]={app}&filter[version]={env['BUILD_NUMBER']}"
