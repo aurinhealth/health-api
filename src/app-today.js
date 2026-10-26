@@ -3,7 +3,7 @@
 // requests; the app gets them here, computed with the shared recovery model
 // (recovery-model.js), so both show the same readiness, sleep and strain.
 // Pure: GET /app/api/today loads the inputs and passes them in.
-import { environmentFor } from "./adaptive-week.js";
+import { environmentFor, weatherReason } from "./adaptive-week.js";
 import { sleepNeedFor, bedtimePlan, heartRateLoad, strainScore, dayStrainParts, hrvMetric, weekSleepDebt } from "./recovery-model.js";
 import { readinessFor, primaryNights, sleepIndexFor } from "./readiness.js";
 import { localDate, localDateTime } from "./user-time.js";
@@ -103,6 +103,18 @@ export function todayWeather(location, forecast, date) {
     rain: round(num(w?.rain), 1),
     rainProb: round(num(w?.rainProb)),
     hours: Array.isArray(w?.hours) && w.hours.length ? w.hours : null,
+    // "apple": the forecast is Apple Weather's, which the app credits (weatherkit.js).
+    source: w?.source === "apple" ? "apple" : null,
+    // The detail (weatherkit.js detailFromWeatherKit): the temperature now, the
+    // hours from now, and seven days with their hours and where to train.
+    now: Number.isFinite(Number(w?.now?.temp)) ? { temp: round(num(w.now.temp)), code: round(num(w.now.code)) } : null,
+    next: Array.isArray(w?.next) && w.next.length ? w.next : null,
+    week: Array.isArray(w?.week) && w.week.length ? w.week.map(d => ({
+      date: d.date, code: round(num(d.code)), max: round(num(d.max)), min: round(num(d.min)), rainProb: round(num(d.rainProb)),
+      hours: Array.isArray(d.hours) ? d.hours : [],
+      ride: { environment: environmentFor(d.date, "ride", d).environment, reason: weatherReason(d.date, "ride", d) },
+      run: { environment: environmentFor(d.date, "run", d).environment, reason: weatherReason(d.date, "run", d) }
+    })) : null,
     outdoor: advice("ride"),
     outdoorRun: advice("run")
   };

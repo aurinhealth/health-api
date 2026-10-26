@@ -558,6 +558,10 @@
 "Pravděpodobnost srážek" = "Chance of rain";
 "Kde dnes trénovat" = "Where to train today";
 "Poloha pro počasí" = "Location for weather";
+"Další zdroje dat" = "Other data sources";
+"Dnes po hodinách" = "Today, hour by hour";
+"Déšť" = "Rain";
+"Ukáže hodiny dne" = "Shows the day's hours";
 "Město nebo obec" = "City or town";
 "Výsledky" = "Results";
 "Nic jsme nenašli. Zkus jiný název." = "Nothing found. Try another name.";

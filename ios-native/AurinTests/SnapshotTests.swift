@@ -677,6 +677,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(AppRoute(url: URL(string: "loadwise://open/active-energy")!), .activeEnergy)
         let weather = try XCTUnwrap(DemoData.today.weather)
         XCTAssertEqual(weather.place, "Praha")
+        XCTAssertTrue(AppleWeather.credited(weather))
         XCTAssertEqual(WeatherText.symbol(weather.code), "cloud.sun.fill")
         XCTAssertEqual(WeatherText.symbol(95), "cloud.bolt.rain.fill")
         XCTAssertEqual(WeatherText.description(63), "déšť")

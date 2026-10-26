@@ -10,6 +10,7 @@ import { getWeekPlan, planWeekRoles } from "./week-planner.js";
 import { getAthleteState } from "./athlete-state.js";
 import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan } from "./training-plans.js";
 import { weekWeather, dayHours } from "./adaptive-week.js";
+import { weatherKitConfigured, weatherKitDetail } from "./weatherkit.js";
 import { ensureGymPlans } from "./gym-plan-store.js";
 import { localToday } from "./user-time.js";
 import { mondayOfDate, shiftDate } from "./dashboard-shared.js";
@@ -71,16 +72,22 @@ export async function todayPlace(env,ctx,date){
     if(!location)return {location:null,forecast:null};
     const monday=mondayOfDate(date);
     const week=await cached(env,ctx,'weather:'+location.latitude+','+location.longitude+':'+monday,async()=>{
-      const w=await weekWeather(location,monday);
+      const w=await weekWeather(location,monday,env);
       if(!Object.keys(w).length)throw new Error('no forecast');
       return w;
     },{ttl:1800}).catch(()=>({}));
     const hours=await cached(env,ctx,'weather-hours:'+location.latitude+','+location.longitude+':'+date,async()=>{
-      const h=await dayHours(location,date);
+      const h=await dayHours(location,date,env);
       if(!h.length)throw new Error('no forecast');
       return h;
     },{ttl:1800}).catch(()=>[]);
-    return {location,forecast:week?.[date]?{...week[date],hours}:null};
+    // The detail's hours and week, only from Apple Weather.
+    const detail=weatherKitConfigured(env)?await cached(env,ctx,'weather-detail:'+location.latitude+','+location.longitude+':'+date,async()=>{
+      const d=await weatherKitDetail(env,location,date);
+      if(!d.week.length)throw new Error('no forecast');
+      return d;
+    },{ttl:1800}).catch(()=>null):null;
+    return {location,forecast:week?.[date]?{...week[date],hours,...(detail||{})}:null};
   }catch{return {location:null,forecast:null};}
 }
 

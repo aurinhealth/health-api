@@ -20,7 +20,7 @@ Vygenerovat tréninky (vedle tlačítka je „i“ s vysvětlením) připraví r
 
 Rozpracovat plánované vytvoří konkrétní alternativy pro již naplánované sporty, aniž by přidávalo další událost do stejného dne. Změny existujícího plánu lze probrat s asistentem nebo provést běžným ovládáním kalendáře.
 
-Předpověď Open-Meteo se načítá i na serveru. Pro kolo se od listopadu do února preferuje indoor, stejně jako při nízké teplotě, silném větru nebo dešti. Automatická indoor jednotka má nejvýše 90 minut. Bez předpovědi se jasně uvádí sezónní odhad. Uživatel může v jednotlivém generátoru výslovně zvolit prostředí.
+Předpověď Apple Weather (WeatherKit, bez klíče Open-Meteo) se načítá i na serveru. Pro kolo se od listopadu do února preferuje indoor, stejně jako při nízké teplotě, silném větru nebo dešti. Automatická indoor jednotka má nejvýše 90 minut. Bez předpovědi se jasně uvádí sezónní odhad. Uživatel může v jednotlivém generátoru výslovně zvolit prostředí.
 
 ## Plán týdne a Doporučené tréninky
 

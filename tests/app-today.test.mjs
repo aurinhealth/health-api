@@ -223,7 +223,7 @@ test("Today's weather at the week plan's place with the indoor/outdoor advice", 
   const location = { name: "Brno", latitude: 49.1951, longitude: 16.6068, source: "search" };
   const sunny = buildToday({ ...input, location, forecast: { code: 1, max: 18.4, min: 7.2, wind: 12, rain: 0, rainProb: 10 } });
   assert.deepEqual(sunny.weather, {
-    place: "Brno", code: 1, max: 18, min: 7, wind: 12, rain: 0, rainProb: 10, hours: null,
+    place: "Brno", code: 1, max: 18, min: 7, wind: 12, rain: 0, rainProb: 10, hours: null, source: null, now: null, next: null, week: null,
     outdoor: { environment: "outdoor", reason: "Podle dostupné předpovědi." },
     outdoorRun: { environment: "outdoor", reason: "Podle dostupné předpovědi." }
   });
@@ -233,6 +233,18 @@ test("Today's weather at the week plan's place with the indoor/outdoor advice", 
   assert.equal(wet.weather.rain, 6.4);
   const hourly = buildToday({ ...input, location, forecast: { code: 1, max: 18, min: 7, hours: [{ hour: 8, temp: 9, code: 3 }] } });
   assert.deepEqual(hourly.weather.hours, [{ hour: 8, temp: 9, code: 3 }]);
+  // Apple Weather's detail: the temperature now, the hours from now and the week with where to train.
+  const detail = buildToday({ ...input, location, forecast: { code: 1, max: 18, min: 7, source: "apple", now: { temp: 15.4, code: 2 }, next: [{ hour: 15, temp: 15, code: 2, rainProb: 10 }],
+    week: [{ date: "2026-10-28", code: 3, max: 6, min: 1, wind: 10, rain: 0, rainProb: 10, hours: [{ hour: 6, temp: 1, code: 3, rainProb: 0 }] }] } }).weather;
+  assert.deepEqual(detail.now, { temp: 15, code: 2 });
+  assert.equal(detail.next.length, 1);
+  assert.equal(detail.week[0].ride.environment, "indoor");
+  assert.match(detail.week[0].ride.reason, /Nejvýš 6°/);
+  assert.equal(detail.week[0].run.environment, "outdoor");
+  assert.match(detail.week[0].run.reason, /Sucho, nejvýš 6°/);
+  assert.equal(detail.week[0].hours.length, 1);
+  // Apple Weather's forecast is marked, so the app credits it.
+  assert.equal(buildToday({ ...input, location, forecast: { code: 1, max: 18, min: 7, source: "apple" } }).weather.source, "apple");
   // A place without a forecast: the season decides, the numbers stay empty.
   const offline = buildToday({ ...input, location, forecast: null });
   assert.equal(offline.weather.place, "Brno");
