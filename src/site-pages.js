@@ -878,7 +878,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
   const methods = {en: (apple ? 'Apple, ' : '') + (email ? 'Google, a passkey or a one-time code sent to your email' : 'Google or a passkey'), cs: (apple ? 'přes Apple, ' : '') + (email ? 'přes Google, přístupovým klíčem nebo jednorázovým kódem z e-mailu' : 'přes Google nebo přístupovým klíčem')};
   return doc(request, '/privacy', {cs: 'Zásady ochrany soukromí', en: 'Privacy Policy'}, {
     en: `<p class="muted">Last updated: ${UPDATED.en}</p>
-<p><strong>Aurin</strong> (formerly Loadwise, aurin.health) is a personal service for training, recovery and nutrition. The controller of your personal data is Petr Bouma, a private individual in the Czech Republic (the operator, “we” below). You can reach the operator at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin is currently in testing: access is by invitation to the testers from the waitlist, through Apple’s TestFlight.'}</p>
+<p><strong>Aurin</strong> (aurin.health) is a personal service for training, recovery and nutrition. The controller of your personal data is Petr Bouma, a private individual in the Czech Republic (the operator, “we” below). You can reach the operator at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin is currently in testing: access is by invitation to the testers from the waitlist, through Apple’s TestFlight.'}</p>
 <h2>In short</h2>
 <ul>
 <li>We use your data only to provide the Aurin features you use.</li>
@@ -983,7 +983,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <h2>Contact</h2>
 <p>For questions about this policy or your data, or to exercise your rights, write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>`,
     cs: `<p class="muted">Poslední změna: ${UPDATED.cs}</p>
-<p><strong>Aurin</strong> (dříve Loadwise, aurin.health) je osobní služba pro trénink, regeneraci a výživu. Správcem tvých osobních údajů je Petr Bouma, soukromá osoba v České republice (dále provozovatel nebo „my“). Provozovatele zastihneš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin je zatím v testování: přístup dostávají pozvaní testeři z waitlistu přes TestFlight od Applu.'}</p>
+<p><strong>Aurin</strong> (aurin.health) je osobní služba pro trénink, regeneraci a výživu. Správcem tvých osobních údajů je Petr Bouma, soukromá osoba v České republice (dále provozovatel nebo „my“). Provozovatele zastihneš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin je zatím v testování: přístup dostávají pozvaní testeři z waitlistu přes TestFlight od Applu.'}</p>
 <h2>Ve zkratce</h2>
 <ul>
 <li>Tvoje data používáme jen k funkcím Aurinu, které používáš.</li>
