@@ -3023,3 +3023,18 @@
 "AI čte fotku…" = "AI is reading the photo…";
 "AI dohledává potravinu…" = "AI is looking up the food…";
 "AI poznává vybavení…" = "AI is recognising the equipment…";
+
+/* Warm-up and stretching: own routines, length, after the exercises */
+"Ve výchozím stavu" = "By default";
+"Moje rozcvičky" = "My warm-ups";
+"Moje protažení" = "My stretching";
+"Moje rozcvička" = "My warm-up";
+"Nová rozcvička" = "New warm-up";
+"Nové protažení" = "New stretching";
+"Smazat rozcvičku" = "Delete warm-up";
+"Smazat protažení" = "Delete stretching";
+"Přidat z knihovny" = "Add from library";
+"Přidat vlastní" = "Add your own";
+"Vlastní cvik" = "Your own move";
+"Na každou stranu" = "Each side";
+"Po cvicích" = "After the exercises";
