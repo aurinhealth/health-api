@@ -71,12 +71,12 @@ export async function todayPlace(env,ctx,date){
     if(!location)return {location:null,forecast:null};
     const monday=mondayOfDate(date);
     const week=await cached(env,ctx,'weather:'+location.latitude+','+location.longitude+':'+monday,async()=>{
-      const w=await weekWeather(location,monday);
+      const w=await weekWeather(location,monday,env);
       if(!Object.keys(w).length)throw new Error('no forecast');
       return w;
     },{ttl:1800}).catch(()=>({}));
     const hours=await cached(env,ctx,'weather-hours:'+location.latitude+','+location.longitude+':'+date,async()=>{
-      const h=await dayHours(location,date);
+      const h=await dayHours(location,date,env);
       if(!h.length)throw new Error('no forecast');
       return h;
     },{ttl:1800}).catch(()=>[]);

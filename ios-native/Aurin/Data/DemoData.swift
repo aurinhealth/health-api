@@ -151,7 +151,7 @@ enum DemoData {
         {"date":"2026-09-17","value":83.0},{"date":"2026-09-19","value":83.2},{"date":"2026-09-21","value":82.9},{"date":"2026-09-23","value":83.1},
         {"date":"2026-09-25","value":82.7},{"date":"2026-09-27","value":82.9},{"date":"2026-09-29","value":82.6},{"date":"2026-10-01","value":82.8},
         {"date":"2026-10-03","value":82.5},{"date":"2026-10-05","value":82.7},{"date":"2026-10-07","value":82.4}] },
-      "weather": { "place": "Praha", "code": 2, "max": 14, "min": 6, "wind": 18, "rain": 0.4, "rainProb": 30,
+      "weather": { "place": "Praha", "code": 2, "max": 14, "min": 6, "wind": 18, "rain": 0.4, "rainProb": 30, "source": "apple",
         "outdoor": { "environment": "outdoor", "reason": "Podle dostupné předpovědi." },
         "outdoorRun": { "environment": "outdoor", "reason": "Podle dostupné předpovědi." } }
     }

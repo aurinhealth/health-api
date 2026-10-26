@@ -117,7 +117,7 @@ test('the privacy policy and support page cover what Google verification asks fo
   assert.doesNotMatch(home+privacy,/Petr Fitness Data/);
   assert.match(home,/<p style="margin:0">The service can process training and fitness data from connected services, including Google Health data that the account owner has authorized, in order to provide these requested workflows\.<\/p>/);
   // Every party that receives data, how it is secured, and what happens on disconnecting and deleting.
-  for(const party of ['Intervals.icu','OpenAI','Cloudflare','Open-Meteo'])assert.match(privacy,new RegExp('<strong>'+party.replace('.','\\.')+'</strong>'),party);
+  for(const party of ['Intervals.icu','OpenAI','Cloudflare','Apple Weather'])assert.match(privacy,new RegExp('<strong>'+party.replace('.','\\.')+'</strong>'),party);
   // ChatGPT is no recipient: users cannot connect it to their data, and the assistant goes through OpenAI.
   assert.doesNotMatch(privacy,/ChatGPT/);
   assert.match(privacy,/encrypted at rest/);

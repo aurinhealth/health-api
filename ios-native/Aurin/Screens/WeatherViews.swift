@@ -1,12 +1,37 @@
 import SwiftUI
 import CoreLocation
+import MapKit
 
 // Weather on Today: the forecast for the place of the week plan
-// (GET /app/api/today → weather, src/app-today.js todayWeather) with the
-// coach's advice where to train, and "Poloha pro počasí" to choose the place
-// (Open-Meteo geocoding, saved as prefs.location of the usual week plan).
+// (GET /app/api/today → weather, src/app-today.js todayWeather; Apple Weather
+// through src/weatherkit.js) with the coach's advice where to train, and
+// "Poloha pro počasí" to choose the place (Apple Maps search, saved as
+// prefs.location of the usual week plan).
 
-/// Texts and symbols for Open-Meteo's forecast (WMO weather codes).
+/// Apple Weather's credit, which WeatherKit asks for wherever its forecast
+/// shows: the " Weather" mark and the link to its other data sources.
+enum AppleWeather {
+    static let legalPage = URL(string: "https://weatherkit.apple.com/legal-attribution.html")!
+
+    static func credited(_ weather: TodaySnapshot.Weather?) -> Bool { weather?.source == "apple" }
+}
+
+/// " Weather", the mark beside Apple Weather's forecast.
+struct AppleWeatherMark: View {
+    var size: CGFloat = 11
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Image(systemName: "apple.logo").font(.system(size: size, weight: .medium))
+            Text(verbatim: "Weather").font(.system(size: size, weight: .medium))
+        }
+        .foregroundStyle(Palette.faint)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: "Apple Weather"))
+    }
+}
+
+/// Texts and symbols for the forecast (WMO weather codes; the server turns Apple's conditions into them).
 enum WeatherText {
     static func symbol(_ code: Double?) -> String {
         guard let code else { return "cloud.sun.fill" }
@@ -98,6 +123,7 @@ struct TodayWeatherCard: View {
                         Text("Nastavit polohu pro počasí").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
                     }
                     Spacer(minLength: 0)
+                    if AppleWeather.credited(weather) { AppleWeatherMark() }
                 }
                 .contentShape(Rectangle())
             }
@@ -198,6 +224,16 @@ struct WeatherDetails: View {
                 }
             }
             .buttonStyle(.plain)
+
+            if AppleWeather.credited(weather) {
+                HStack {
+                    AppleWeatherMark(size: 13)
+                    Spacer()
+                    Link("Další zdroje dat", destination: AppleWeather.legalPage)
+                        .font(Typo.caption).foregroundStyle(Palette.blue)
+                }
+                .padding(.horizontal, 4)
+            }
         }
     }
 
@@ -208,8 +244,8 @@ struct WeatherDetails: View {
     }
 }
 
-/// A place from Open-Meteo's geocoding search.
-struct GeoPlace: Decodable, Identifiable, Hashable {
+/// A place from the search (Apple Maps) or the iPhone's location.
+struct GeoPlace: Identifiable, Hashable {
     let name: String
     let latitude: Double
     let longitude: Double
@@ -223,23 +259,27 @@ struct GeoPlace: Decodable, Identifiable, Hashable {
         return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
-    private struct Response: Decodable {
-        let results: [GeoPlace]?
-    }
-
-    /// Up to 8 places for the name, straight from Open-Meteo (no key needed).
+    /// Up to 8 towns and cities for the name, from Apple Maps. Nothing found is
+    /// an empty list, not a failure.
     static func search(_ name: String) async throws -> [GeoPlace] {
-        guard var components = URLComponents(string: "https://geocoding-api.open-meteo.com/v1/search") else { return [] }
-        components.queryItems = [
-            URLQueryItem(name: "name", value: name),
-            URLQueryItem(name: "count", value: "8"),
-            URLQueryItem(name: "language", value: L10n.isEnglish ? "en" : "cs"),
-            URLQueryItem(name: "format", value: "json")
-        ]
-        guard let url = components.url else { return [] }
-        let (data, response) = try await URLSession.shared.data(from: url)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw URLError(.badServerResponse) }
-        return try JSONDecoder().decode(Response.self, from: data).results ?? []
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = name
+        request.resultTypes = .address
+        let items: [MKMapItem]
+        do {
+            items = try await MKLocalSearch(request: request).start().mapItems
+        } catch let error as MKError where error.code == .placemarkNotFound {
+            return []
+        }
+        var places: [GeoPlace] = []
+        for item in items {
+            let mark = item.placemark
+            guard let title = mark.locality ?? item.name, !title.isEmpty else { continue }
+            let place = GeoPlace(name: title, latitude: mark.coordinate.latitude, longitude: mark.coordinate.longitude,
+                                 admin1: mark.administrativeArea, country: mark.country)
+            if !places.contains(where: { $0.name == place.name && $0.detail == place.detail }) { places.append(place) }
+        }
+        return Array(places.prefix(8))
     }
 }
 

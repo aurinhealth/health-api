@@ -544,7 +544,7 @@
 "mrholení" = "drizzle";
 "déšť" = "rain";
 "sněžení" = "snow";
-"přeháňky" = "showers";
+"přeháňky" = "rain showers";
 "sněhové přeháňky" = "snow showers";
 "bouřky" = "thunderstorms";
 "Počasí" = "Weather";
@@ -557,6 +557,7 @@
 "Pravděpodobnost srážek" = "Chance of rain";
 "Kde dnes trénovat" = "Where to train today";
 "Poloha pro počasí" = "Location for weather";
+"Další zdroje dat" = "Other data sources";
 "Město nebo obec" = "City or town";
 "Výsledky" = "Results";
 "Nic jsme nenašli. Zkus jiný název." = "Nothing found. Try another name.";

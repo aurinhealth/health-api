@@ -103,6 +103,8 @@ export function todayWeather(location, forecast, date) {
     rain: round(num(w?.rain), 1),
     rainProb: round(num(w?.rainProb)),
     hours: Array.isArray(w?.hours) && w.hours.length ? w.hours : null,
+    // "apple": the forecast is Apple Weather's, which the app credits (weatherkit.js).
+    source: w?.source === "apple" ? "apple" : null,
     outdoor: advice("ride"),
     outdoorRun: advice("run")
   };

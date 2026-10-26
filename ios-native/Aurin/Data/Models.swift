@@ -233,7 +233,7 @@ struct TodaySnapshot: Decodable, Equatable {
         let series: [Point]
     }
 
-    /// The forecast for today from Open-Meteo (src/app-today.js todayWeather).
+    /// The forecast for today from Apple Weather (src/app-today.js todayWeather, src/weatherkit.js).
     struct Weather: Decodable, Equatable {
         let place: String?
         /// WMO weather code.
@@ -251,6 +251,8 @@ struct TodaySnapshot: Decodable, Equatable {
         let outdoorRun: Advice?
         /// A few hours of the day (8, 11, 14, 17, 20 h).
         var hours: [Hour]? = nil
+        /// "apple": Apple Weather's forecast, credited with its mark and legal link.
+        var source: String? = nil
 
         struct Hour: Decodable, Equatable {
             let hour: Int
