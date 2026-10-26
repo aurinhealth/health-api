@@ -60,8 +60,6 @@ struct SetupFlowView: View {
                     // Without the consent the app cannot be used: the way out is signing out.
                     if page == .consent {
                         Button("Odhlásit") { Task { await model.logout() } }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                    } else if page == .about && ready {
-                        Button("Teď ne") { model.needsSetup = false }.font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                     }
                 }
                 .frame(height: 40)
@@ -75,10 +73,12 @@ struct SetupFlowView: View {
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }
                 PrimaryButton(title: buttonTitle, busy: saving || appleWorking) { Task { await next() } }
-                    .disabled(saving || appleWorking || !ready || (page == .about && sex.isEmpty) || (page != .about && consentNeeded && !agree))
+                    .disabled(saving || appleWorking || !ready || (page == .about && !aboutComplete) || (page != .about && consentNeeded && !agree))
                 if page == .sources {
+                    // "Teď ne" skips connecting, not "O tobě": without age, height and
+                    // weight nothing (calories, strain, recovery) can be worked out.
                     Button(L10n.tr(consentNeeded ? "Odhlásit se" : "Teď ne")) {
-                        if consentNeeded { Task { await model.logout() } } else { model.needsSetup = false }
+                        if consentNeeded { Task { await model.logout() } } else { withAnimation { index += 1 } }
                     }
                     .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                     .frame(maxWidth: .infinity).frame(height: 44)
@@ -153,6 +153,11 @@ struct SetupFlowView: View {
     @ViewBuilder
     private var sourcesPage: some View {
         title("Odkud brát data")
+        if ready { sourceGroups } else { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
+    }
+
+    @ViewBuilder
+    private var sourceGroups: some View {
         SectionLabel(text: "Zdravotní data").padding(.top, 6)
         SettingsGroup {
             if health.isAvailable {
@@ -306,7 +311,18 @@ struct SetupFlowView: View {
                 .padding(.horizontal, 16).padding(.vertical, 12)
                 SettingsDivider()
             }
-            SettingsPicker(title: "Pohlaví", selection: $sex, options: [("male", "Muž"), ("female", "Žena")])
+            HStack(spacing: 12) {
+                Text("Pohlaví").font(.body).foregroundStyle(Palette.ink)
+                Spacer(minLength: 8)
+                Picker("Pohlaví", selection: $sex) {
+                    Text("Muž").tag("male")
+                    Text("Žena").tag("female")
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 170)
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 50)
             SettingsDivider()
             SettingsField(title: "Narození", text: $birthYear, keyboard: .numberPad, placeholder: "Rok")
             SettingsDivider()
@@ -315,6 +331,17 @@ struct SetupFlowView: View {
             SettingsField(title: "Váha", text: $weightText, unit: Units.weightUnit, keyboard: .decimalPad)
         }
         .onChange(of: birthYear) { _, value in birthYear = String(value.filter(\.isNumber).prefix(4)) }
+        Text("Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení.")
+            .font(Typo.small).foregroundStyle(Palette.muted)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 4)
+    }
+
+    /// Sex, a plausible year of birth, height and weight: "Hotovo" waits for all four.
+    private var aboutComplete: Bool {
+        guard !sex.isEmpty, let year = Int(birthYear), year > 1900, year <= Self.currentYear - 10 else { return false }
+        guard let height = Self.number(heightText), height > 0, let weight = Self.number(weightText), weight > 0 else { return false }
+        return true
     }
 
     private func title(_ text: String) -> some View {
@@ -346,8 +373,11 @@ struct SetupFlowView: View {
         guard !loaded else { return }
         loaded = true
         let api = model.api
+        // All three at once, and the page shows when all have answered, so the
+        // services do not pop in one after another.
         async let status = try? api.setupStatus()
         async let consent = try? api.healthConsentNeeded()
+        async let connections = try? api.connections()
         let s = await status
         consentNeeded = await consent ?? false
         if let s {
@@ -359,9 +389,9 @@ struct SetupFlowView: View {
             apply(s)
         }
         appleOn = health.isAvailable
+        if let list = await connections { providers = list.providers }
         ready = true
         guard !consentOnly else { return }
-        await loadProviders()
         if providers.contains(where: { $0.connected == true }) { syncRun += 1 }
     }
 

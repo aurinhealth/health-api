@@ -113,7 +113,9 @@ export const PERSONAL_TABLES = {
   journal_settings: {},
   journal_entries: { pk: ["user_id", "date", "item_key"] },
   // The app's own settings, kept for a new install (app-settings.js).
-  app_settings: {}
+  app_settings: {},
+  // The profile photo (profile-photo.js).
+  profile_photos: {}
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 
