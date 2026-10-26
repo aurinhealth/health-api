@@ -121,9 +121,11 @@
       // cannot reach the live data. aurin.health stays in the live account:
       // staging.aurin.health is a Cloudflare for SaaS custom hostname of that
       // account's zone aurin-staging.com, and the live zone only has a DNS-only
-      // CNAME to it (docs/test-server-and-releases.md).
+      // CNAME to it (docs/test-server-and-releases.md). A custom hostname reaches a
+      // Worker only through the zone's catch-all route; a route naming the hostname
+      // never matches and the request falls through to the empty origin (HTTP 522).
       "routes": [
-        { "pattern": "staging.aurin.health/*", "zone_name": "aurin-staging.com" }
+        { "pattern": "*/*", "zone_name": "aurin-staging.com" }
       ],
       "workers_dev": false,
       "placement": {
