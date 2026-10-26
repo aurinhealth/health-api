@@ -128,6 +128,8 @@ struct GymSetRow: View {
     var onIntensity: (() -> Void)? = nil
     /// A ticked set's weight and reps changed afterwards (shown kg, reps).
     var onEdit: ((String, String) -> Void)? = nil
+    /// A barbell's weight: tapping it loads plates (PlateLoaderSheet) instead of typing.
+    var onKgTap: (() -> Void)? = nil
     var toggle: () -> Void = {}
 
     private enum Field { case kg, reps }
@@ -203,6 +205,16 @@ struct GymSetRow: View {
                 .focused($focus, equals: field)
                 .frame(width: 64, height: 34)
                 .background(focus == field ? Palette.card : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else if field == .kg, state == .current, let onKgTap {
+            Button(action: onKgTap) {
+                Text(binding?.wrappedValue.nilIfBlank ?? (value.isEmpty ? "–" : value))
+                    .font(Typo.number(22))
+                    .foregroundStyle(Palette.ink)
+                    .frame(width: 64, height: 34)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.tr("Naložit kotouče"))
         } else if let binding, state == .current {
             TextField("–", text: binding, prompt: Text(verbatim: hint?.nilIfBlank ?? "–").foregroundStyle(Palette.faint))
                 .keyboardType(keyboard)
