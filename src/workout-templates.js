@@ -10,6 +10,7 @@
 // The link opens the iPhone app (universal link /t/<id>) or, without it, the
 // page below; /t/<id>/og.png is the preview image the app drew when sharing.
 import { L, lang } from "./lang.js";
+import { scriptPolicy } from "./web-security.js";
 import { exerciseMuscles } from "./fitness-insights.js";
 import { buildStrengthContext } from "./strength-context.js";
 import { templateStrengthPlan } from "./strength-generator.js";
@@ -418,7 +419,7 @@ ${endurance ? intervalGraph(template) : ""}
 <a class="button ghost" href="/t/${share.id}/workout.zwo">${t("Stáhnout .zwo pro Zwift", "Download .zwo for Zwift")}</a>` : ""}`;
   // Without the app the scheme does nothing: the page stays, so it shows the way to the app.
   const script = `<script>document.getElementById("open").addEventListener("click",function(){setTimeout(function(){if(!document.hidden){${store ? `location.href=${JSON.stringify(store)}` : `document.getElementById("noapp").hidden=false`}}},1500)})</script>`;
-  return new Response(page({ en, title: share.name, description, head, body: body + script }), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" } });
+  return new Response(page({ en, title: share.name, description, head, body: body + script }), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300", "Content-Security-Policy": scriptPolicy(script) } });
 }
 
 // The sections as bars over time, coloured by zone, like the app's chart.

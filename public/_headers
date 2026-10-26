@@ -5,5 +5,5 @@
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
-  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; script-src 'none'
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()

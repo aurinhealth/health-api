@@ -1,4 +1,5 @@
 import test from "node:test";
+import { scriptPolicy } from "../src/web-security.js";
 import assert from "node:assert/strict";
 import { handleGoogleLogin, verifyGoogleIdToken, _finishLoginForTest, _resetJwksCacheForTest } from "../src/google-login.js";
 import { resolvePrincipal, isPublicPath } from "../src/dashboard-auth.js";
@@ -73,7 +74,11 @@ test("the owner's Google account is bound to their user and the callback hands o
   const response = await _finishLoginForTest(callback("code=c1&state=s1"), e, googleFetch(await idToken()));
   assert.equal(response.status, 200);
   assert.ok(!response.headers.getSetCookie().some(c => c.startsWith("pfd_session=")));
-  assert.match(await response.text(), /loadwise:\/\/auth\?token=/);
+  const html = await response.text();
+  assert.match(html, /loadwise:\/\/auth\?token=/);
+  // The page's own script opens the app; nothing else on it may run.
+  assert.equal(response.headers.get("Content-Security-Policy"), scriptPolicy(html));
+  assert.match(response.headers.get("Content-Security-Policy"), /script-src 'sha256-/);
   const owner = await e.DB.prepare("SELECT id, google_sub FROM users WHERE email='owner@example.com'").first();
   assert.equal(owner.google_sub, "google-owner");
 });

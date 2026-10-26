@@ -1,4 +1,5 @@
 import { signText, userSessionCookie, sessionSecret, sessionEpochOf, timingSafeEqualString } from "./dashboard-auth.js";
+import { scriptPolicy } from "./web-security.js";
 import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
 import { appOrigin } from "./app-origin.js";
 import { L } from "./lang.js";
@@ -117,11 +118,12 @@ function appError(code) {
 }
 
 // Safari asks before opening another app, so the page keeps a button for it.
+const OPEN_APP_SCRIPT = "<script>location.href=document.getElementById(\"open\").href</script>";
 function appReturnPage(token) {
   const link = APP_RETURN_URL + "?token=" + encodeURIComponent(token);
-  const headers = new Headers({ "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer" });
+  const headers = new Headers({ "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer", "Content-Security-Policy": scriptPolicy(OPEN_APP_SCRIPT) });
   headers.append("Set-Cookie", STATE_COOKIE + "=; Max-Age=0; Path=/auth/google; Secure; HttpOnly; SameSite=Lax");
-  return new Response("<!doctype html><html lang=\"" + L("cs", "en") + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + L("Přihlášení hotovo", "Signed in") + "</h1><p>" + L("Vrať se do aplikace Aurin.", "Go back to the Aurin app.") + "</p><p><a id=\"open\" href=\"" + esc(link) + "\" style=\"display:inline-block;padding:12px 18px;border-radius:10px;background:#9ec5ff;color:#0a0d12;text-decoration:none;font-weight:600\">" + L("Otevřít aplikaci", "Open the app") + "</a></p><script>location.href=document.getElementById(\"open\").href</script></body></html>", { status: 200, headers });
+  return new Response("<!doctype html><html lang=\"" + L("cs", "en") + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + L("Přihlášení hotovo", "Signed in") + "</h1><p>" + L("Vrať se do aplikace Aurin.", "Go back to the Aurin app.") + "</p><p><a id=\"open\" href=\"" + esc(link) + "\" style=\"display:inline-block;padding:12px 18px;border-radius:10px;background:#9ec5ff;color:#0a0d12;text-decoration:none;font-weight:600\">" + L("Otevřít aplikaci", "Open the app") + "</a></p>" + OPEN_APP_SCRIPT + "</body></html>", { status: 200, headers });
 }
 
 // The app's web view trades the handoff token and its verifier for a session.
