@@ -111,7 +111,7 @@ struct CoachSubject: Equatable {
     /// resting before the next one (`exercise` is the one on the screen, which
     /// after the last set of an exercise is already the next one). The server
     /// reads the sets done so far from the saved day.
-    static func workout(_ day: GymDay, exercise: GymExercise, resting: Bool, restSeconds: Int, date: String) -> CoachSubject {
+    @MainActor static func workout(_ day: GymDay, exercise: GymExercise, resting: Bool, restSeconds: Int, date: String) -> CoachSubject {
         let done: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
         let total: Int = day.exercises.reduce(0) { $0 + $1.workCount }
         let title = (day.planName?.nilIfBlank ?? L10n.tr("Posilovna")) + " · " + L10n.f("%@ z %@ sérií", String(done), String(total))
