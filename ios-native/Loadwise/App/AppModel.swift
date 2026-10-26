@@ -397,6 +397,8 @@ final class AppModel {
         if let account { checkAccount(account) }
         phase = .signedIn
         await loadAccountInitial(account)
+        // The settings this account kept (a new install, another account before).
+        await SettingsBackup.restore(api: api)
         // Back in the account that read Apple Health before signing out.
         if !Self.accountUnconfirmed {
             await AppleHealth.shared.resume(account: defaults.string(forKey: AvatarStore.emailKey), api: api)
@@ -1585,6 +1587,8 @@ final class AppModel {
             AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
             forgetAccountData()
             ErrorLog.clear()
+            // The next account looks for its own kept settings.
+            SettingsBackup.forget()
             for key in [AvatarStore.nameKey, AvatarStore.emailKey, AvatarStore.idKey, Self.displayNameKey, Self.accountUncheckedKey] { UserDefaults.standard.removeObject(forKey: key) }
             AvatarStore.remove()
         }
