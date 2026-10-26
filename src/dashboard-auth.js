@@ -204,10 +204,11 @@ async function dashboardHmac(value, secret) {
   const sig = await crypto.subtle.sign("HMAC",key,new TextEncoder().encode(value));
   return base64url(new Uint8Array(sig));
 }
+// b is the secret (or the expected value): the time depends only on its
+// length, so a wrong guess learns neither its content nor its length.
 export function timingSafeEqualString(a,b) {
   a=String(a); b=String(b);
-  if (a.length !== b.length) return false;
-  let x=0; for(let i=0;i<a.length;i++) x |= a.charCodeAt(i)^b.charCodeAt(i); return x===0;
+  let x=a.length^b.length; for(let i=0;i<b.length;i++) x |= (a.charCodeAt(i)|0)^b.charCodeAt(i); return x===0;
 }
 function base64url(bytes) {
   let s=""; for(const b of bytes) s+=String.fromCharCode(b);

@@ -18,3 +18,10 @@ test("redirects are checked hop by hop and limited", async () => {
   const ok = async url => url === "https://a.cz/" ? new Response(null, { status: 302, headers: { location: "https://b.cz/f" } }) : new Response("fit");
   assert.equal(await (await fetchPublic("https://a.cz/", {}, ok)).text(), "fit");
 });
+
+test("a local address written as a number, in octal or hex is still local", async () => {
+  // The URL parser turns every IPv4 spelling into the dotted form before the check (security review 2026-10-25).
+  for (const link of ["http://0177.0.0.1/", "http://2130706433/", "http://0x7f.1/", "http://127.1/", "http://0251.0376.0251.0376/", "http://[::ffff:127.0.0.1]/", "http://0xa9fea9fe/"]) {
+    assert.equal(publicUrl(link), null, link);
+  }
+});

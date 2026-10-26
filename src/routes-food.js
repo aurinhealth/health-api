@@ -61,7 +61,7 @@ export async function handleFoodApi(request,env,ctx,url,session,internalAuth){
     // the read-only world catalogue in R2. A food users saved or corrected
     // replaces the world record with the same barcode.
     try {const body=await request.json(),name=String(body.name||'').slice(0,180),barcode=String(body.barcode||'').slice(0,24),[saved,world]=await Promise.all([Promise.all([searchPersonalFoods(env.DB,name,barcode),barcode?[]:searchRecipes(env.DB,name)]).then(([foods,recipes])=>[...foods,...recipes]),searchWorldFoods(env,{name,barcode}).catch(error=>{console.error('world foods',error?.message);return [];})]),codes=new Set(saved.map(p=>barcodeKey(p.barcode)).filter(Boolean)),candidates=await markReported(env.RAW_DB||env.DB,[...saved,...world.filter(p=>!codes.has(barcodeKey(p.barcode)))],env.USER_ID);return Response.json({status:'ok',candidates,product:candidates[0]||null},{headers:{'Cache-Control':'no-store'}});}
-    catch(error){return Response.json({message:L('Uložené potraviny se nepodařilo načíst. Zkus to znovu nebo zadej hodnoty z etikety.', 'Saved foods couldn\'t be loaded. Try again or enter the values from the label.'),detail:String(error.message).slice(0,160)},{status:500});}
+    catch(error){console.error('Food search failed',error.message);return Response.json({message:L('Uložené potraviny se nepodařilo načíst. Zkus to znovu nebo zadej hodnoty z etikety.', 'Saved foods couldn\'t be loaded. Try again or enter the values from the label.')},{status:500});}
   }
   // "Navrhnout opravu pro všechny": a correction of a catalogue food for the
   // owner to approve; the owner lists and decides them (food-suggestions.js).

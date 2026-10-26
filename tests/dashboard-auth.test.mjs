@@ -74,6 +74,14 @@ test("bearer comparison is exact", () => {
   assert.equal(timingSafeEqualString("Bearer abd", "Bearer abc"), false);
   assert.equal(timingSafeEqualString("Bearer ab", "Bearer abc"), false);
   assert.equal(timingSafeEqualString("", "Bearer abc"), false);
+  assert.equal(timingSafeEqualString("Bearer abcd", "Bearer abc"), false);
+  assert.equal(timingSafeEqualString("Bearer abc\u0000", "Bearer abc"), false);
+  // The secret is the second argument: a guess of any length reads only as many characters as it has.
+  let reads = 0;
+  const secret = "s".repeat(40), original = String.prototype.charCodeAt;
+  String.prototype.charCodeAt = function (i) { reads++; return original.call(this, i); };
+  try { timingSafeEqualString("x".repeat(500), secret); timingSafeEqualString("y", secret); } finally { String.prototype.charCodeAt = original; }
+  assert.equal(reads, 4 * secret.length);
 });
 
 test("changes made with the session come only from pages of this address", () => {
