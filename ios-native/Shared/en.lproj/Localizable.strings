@@ -3038,3 +3038,6 @@
 "Vlastní cvik" = "Your own move";
 "Na každou stranu" = "Each side";
 "Po cvicích" = "After the exercises";
+"Série %@ šla lehce, %@ z %@. Další těžší." = "Set %@ was easy, %@ of %@. The next one heavier.";
+"Série %@ do selhání na %@ z %@. Další lehčeji." = "Set %@ went to failure at %@ of %@. The next one lighter.";
+"Série %@ jen na %@ z %@. Další lehčeji." = "Set %@ only reached %@ of %@. The next one lighter.";
