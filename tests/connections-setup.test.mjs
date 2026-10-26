@@ -119,7 +119,7 @@ test("Intervals.icu takes a personal API key or an access token from its own sig
 
 test("Intervals.icu connects with one button once its app is registered", async () => {
   const db = createD1();
-  const env = { DB: db, STRENGTH_API_KEY: "k", USER_ID: 5, INTERVALS_CLIENT_ID: " cid ", INTERVALS_CLIENT_SECRET: "secret" };
+  const env = { DB: db, CONNECTION_KEY: "connection-key-for-tests-0123456789abcdef", USER_ID: 5, INTERVALS_CLIENT_ID: " cid ", INTERVALS_CLIENT_SECRET: "secret" };
   // Not registered: the key form stays the way in.
   const off = await handleIntervalsOAuth(new Request("https://aurin.health/oauth/intervals?return=native"), { ...env, INTERVALS_CLIENT_ID: "" }, "/oauth/intervals");
   assert.equal(off.headers.get("Location"), "loadwise://connected?event=intervals-failed");

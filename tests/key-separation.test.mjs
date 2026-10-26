@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { createD1 } from "./helpers/d1.mjs";
-import { saveConnectionSecret, connectionEnvironment, migrateConnectionSecrets } from "../src/connection-secrets.js";
+import { saveConnectionSecret, connectionEnvironment } from "../src/connection-secrets.js";
 import { internalHeaders, isInternalCall } from "../src/internal-auth.js";
 import gateway from "../src/strength-gateway.js";
 
@@ -33,58 +33,27 @@ test("with CONNECTION_KEY, connection keys are encrypted with it and bound to th
   assert.ok(errors.mock.callCount() >= 4);
 });
 
-test("keys saved before CONNECTION_KEY stay readable and the cron moves them over to it", async () => {
-  const DB = createD1();
-  const before = { DB, STRENGTH_API_KEY: OWNER_KEY, USER_ID: 3 };
-  await saveConnectionSecret(before, "google", "old-google-token");
-  await saveConnectionSecret(before, "intervals", "old-intervals-key");
-  await saveConnectionSecret({ ...before, USER_ID: 4 }, "intervals", "other-user-key");
-  assert.ok(stored(DB).every(row => !row.encrypted.startsWith("v2.")));
-  assert.equal((await connectionEnvironment({ ...before, CONNECTION_KEY })).GOOGLE_REFRESH_TOKEN, "old-google-token");
-  // Nothing happens until CONNECTION_KEY is set.
-  assert.deepEqual(await migrateConnectionSecrets({ DB, STRENGTH_API_KEY: OWNER_KEY }), { migrated: 0, failed: 0 });
-  assert.deepEqual(await migrateConnectionSecrets({ DB, STRENGTH_API_KEY: OWNER_KEY, CONNECTION_KEY }), { migrated: 3, failed: 0 });
-  assert.ok(stored(DB).every(row => row.encrypted.startsWith("v2.")));
-  assert.deepEqual(await migrateConnectionSecrets({ DB, STRENGTH_API_KEY: OWNER_KEY, CONNECTION_KEY }), { migrated: 0, failed: 0 });
-  // From then on the owner API key guards nobody's keys and can be replaced.
-  const after = await connectionEnvironment({ DB, CONNECTION_KEY, USER_ID: 3 });
-  assert.equal(after.GOOGLE_REFRESH_TOKEN, "old-google-token");
-  assert.equal(after.INTERVALS_API_KEY, "old-intervals-key");
-  assert.equal((await connectionEnvironment({ DB, CONNECTION_KEY, USER_ID: 4 })).INTERVALS_API_KEY, "other-user-key");
-});
-
-test("the migration keeps a key the user saved while it ran", async () => {
-  const DB = createD1(), before = { DB, STRENGTH_API_KEY: OWNER_KEY, USER_ID: 5 };
-  await saveConnectionSecret(before, "google", "old-token");
-  // The user connects again between the migration's read and its write.
-  const racing = { ...DB, prepare(sql) {
-    const statement = DB.prepare(sql);
-    if (!sql.startsWith("SELECT user_id")) return statement;
-    return { bind: (...args) => ({ all: async () => { const rows = await statement.bind(...args).all(); await saveConnectionSecret({ ...before, CONNECTION_KEY }, "google", "new-token"); return rows; } }) };
-  } };
-  assert.deepEqual(await migrateConnectionSecrets({ DB: racing, STRENGTH_API_KEY: OWNER_KEY, CONNECTION_KEY }), { migrated: 0, failed: 0 });
-  assert.equal((await connectionEnvironment({ DB, CONNECTION_KEY, USER_ID: 5 })).GOOGLE_REFRESH_TOKEN, "new-token");
-});
-
-test("a key that does not decrypt counts as not connected instead of failing every request", async t => {
+test("a key in the old format (encrypted with the owner API key) no longer opens", async t => {
   t.mock.method(console, "error", () => {});
   const DB = createD1();
-  await saveConnectionSecret({ DB, STRENGTH_API_KEY: OWNER_KEY, USER_ID: 6 }, "google", "token");
   await saveConnectionSecret({ DB, CONNECTION_KEY, USER_ID: 6 }, "intervals", "key");
-  const wrong = await connectionEnvironment({ DB, STRENGTH_API_KEY: "another-key", CONNECTION_KEY, USER_ID: 6 });
-  assert.deepEqual(wrong.CONNECTED_PROVIDERS, ["intervals"]);
-  // The migration leaves such a row alone.
-  const row = stored(DB).find(r => r.provider === "google").encrypted;
-  assert.deepEqual(await migrateConnectionSecrets({ DB, STRENGTH_API_KEY: "another-key", CONNECTION_KEY }), { migrated: 0, failed: 1 });
-  assert.equal(stored(DB).find(r => r.provider === "google").encrypted, row);
+  // How the old format looked: iv.cipher, AES-GCM with SHA-256 of STRENGTH_API_KEY, no user binding.
+  const key = await crypto.subtle.importKey("raw", await crypto.subtle.digest("SHA-256", new TextEncoder().encode(OWNER_KEY)), "AES-GCM", false, ["encrypt"]);
+  const iv = crypto.getRandomValues(new Uint8Array(12)), b64 = bytes => Buffer.from(bytes).toString("base64");
+  const old = b64(iv) + "." + b64(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode("token")));
+  DB.sqlite.prepare("INSERT INTO connection_credentials VALUES (6, 'google', ?, '2026-10-01')").run(old);
+  const resolved = await connectionEnvironment({ DB, STRENGTH_API_KEY: OWNER_KEY, CONNECTION_KEY, USER_ID: 6 });
+  assert.deepEqual(resolved.CONNECTED_PROVIDERS, ["intervals"]);
+  assert.equal(resolved.GOOGLE_REFRESH_TOKEN, undefined);
 });
 
-test("a CONNECTION_KEY too short to be a key is not used", async t => {
+test("without a usable CONNECTION_KEY nothing is saved", async t => {
   const errors = t.mock.method(console, "error", () => {});
-  const DB = createD1(), env = { DB, STRENGTH_API_KEY: OWNER_KEY, CONNECTION_KEY: "short", USER_ID: 7 };
-  await saveConnectionSecret(env, "google", "token");
-  assert.ok(!stored(DB)[0].encrypted.startsWith("v2."));
-  assert.equal((await connectionEnvironment(env)).GOOGLE_REFRESH_TOKEN, "token");
+  for (const env of [{ STRENGTH_API_KEY: OWNER_KEY }, { STRENGTH_API_KEY: OWNER_KEY, CONNECTION_KEY: "short" }]) {
+    const DB = createD1();
+    await assert.rejects(saveConnectionSecret({ DB, ...env, USER_ID: 7 }, "google", "token"), /Connection security is missing|Chybí zabezpečení propojení/);
+    assert.deepEqual(stored(DB), []);
+  }
   assert.ok(errors.mock.callCount() <= 1);
 });
 

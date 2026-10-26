@@ -11,8 +11,8 @@ function credentialsDb(){
 
 test('saved provider credentials are encrypted and loaded only for their user',async()=>{
  const DB=credentialsDb();
- const alice={DB,STRENGTH_API_KEY:'encryption-key',USER_ID:1};
- const bob={DB,STRENGTH_API_KEY:'encryption-key',USER_ID:2};
+ const alice={DB,CONNECTION_KEY:'connection-key-for-tests-0123456789abcdef',USER_ID:1};
+ const bob={DB,CONNECTION_KEY:'connection-key-for-tests-0123456789abcdef',USER_ID:2};
  await saveConnectionSecret(alice,'google','alice-google-secret');await saveConnectionSecret(alice,'intervals','alice-intervals-secret');
  assert.ok([...DB.rows.values()].every(r=>!r.encrypted.includes('alice-')));
  const resolved=await connectionEnvironment(alice);
@@ -24,7 +24,7 @@ test('saved provider credentials are encrypted and loaded only for their user',a
 });
 
 test('disconnecting removes only that provider',async()=>{
- const DB=credentialsDb(),env={DB,STRENGTH_API_KEY:'k',USER_ID:3};
+ const DB=credentialsDb(),env={DB,CONNECTION_KEY:'connection-key-for-tests-0123456789abcdef',USER_ID:3};
  await saveConnectionSecret(env,'google','g');await saveConnectionSecret(env,'intervals','i');
  await deleteConnectionSecret(env,'intervals');
  const resolved=await connectionEnvironment(env);
@@ -33,7 +33,7 @@ test('disconnecting removes only that provider',async()=>{
 });
 
 test('credentials cannot be saved without a signed-in user',async()=>{
- await assert.rejects(saveConnectionSecret({DB:credentialsDb(),STRENGTH_API_KEY:'k'},'google','x'));
+ await assert.rejects(saveConnectionSecret({DB:credentialsDb(),CONNECTION_KEY:'connection-key-for-tests-0123456789abcdef'},'google','x'));
 });
 
 test('connection status does not mistake client configuration for consent or expose credentials',async()=>{

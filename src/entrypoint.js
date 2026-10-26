@@ -15,7 +15,7 @@ import { foodRecommend } from "./food-recommend.js";
 import { buildCoachCouncil } from "./coach-engine.js";
 import { connectionStatus } from "./connections.js";
 import { saveSourcePriority } from "./source-priority.js";
-import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, migrateConnectionSecrets, backfillConnectionAccounts } from "./connection-secrets.js";
+import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, backfillConnectionAccounts } from "./connection-secrets.js";
 import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
 import { cached, bumpCacheVersion } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
@@ -423,8 +423,6 @@ const worker = {
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 5) await forgetExpiredAiLimits(env.DB).catch(error => console.error("AI limit memory cleanup failed", error.message));
     // Waitlist addresses older than a year (testflight-waitlist.js, privacy policy).
     if (controller.cron === "* * * * *" && new Date().getUTCHours() === 2 && new Date().getUTCMinutes() % 10 === 7) await forgetOldWaitlist(env.DB).catch(error => console.error("Waitlist cleanup failed", error.message));
-    // Connection keys saved before CONNECTION_KEY existed get it (connection-secrets.js).
-    if (controller.cron === "* * * * *" && new Date().getUTCMinutes() % 5 === 0) await migrateConnectionSecrets(env).then(result => { if (result.migrated || result.failed) console.log("Connection key migration", result); }).catch(error => console.error("Connection key migration failed", error.message));
     // Yesterday's failed syncs, broken connections and server errors, to the owner (ops-report.js);
     // only from the live server.
     if (!isStaging(env) && (controller.cron === "* * * * *" && new Date().getUTCHours() === 6 && new Date().getUTCMinutes() % 10 === 0)) await sendDailyOpsReport(env).catch(error => console.error("Daily ops report failed", error.message));

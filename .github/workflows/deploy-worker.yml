@@ -150,8 +150,9 @@ jobs:
             *) echo "::error::Commit ${REF::7} není v main ($status), na ostrý server jde jen main."; exit 1 ;;
           esac
 
-      # Sign-ins are signed with SESSION_SECRET only (src/dashboard-auth.js).
-      # Without it nobody could sign in, so nothing is deployed.
+      # Sign-ins are signed with SESSION_SECRET only (src/dashboard-auth.js) and
+      # the connections are encrypted with CONNECTION_KEY only (connection-secrets.js).
+      # Without them nobody could sign in or connect, so nothing is deployed.
       - name: Check Worker secrets
         if: env.TARGET == 'production'
         env:
@@ -160,7 +161,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@4.147.0 secret list | node scripts/require-secrets.mjs SESSION_SECRET
+          npx --yes wrangler@4.147.0 secret list | node scripts/require-secrets.mjs SESSION_SECRET CONNECTION_KEY
 
       # The test server's own database starts empty: the tables that predate
       # the migrations first (a no-op once they exist).
