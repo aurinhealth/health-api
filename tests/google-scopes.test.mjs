@@ -60,7 +60,7 @@ test("a Google Health connection started by one account is not stored for anothe
 
 test("granted scopes are stored per user and offered in the connection status", async () => {
   const db = createD1();
-  const env = { DB: db, STRENGTH_API_KEY: "k", USER_ID: 4, ...google };
+  const env = { DB: db, CONNECTION_KEY: "connection-key-for-tests-0123456789abcdef", USER_ID: 4, ...google };
   await saveConnectionSecret(env, "google", "refresh");
   await saveConnectionSecret(env, "google_scopes", [...HEALTH_SCOPES, EXTRA_SCOPES.birthday].join(" "));
   const resolved = await connectionEnvironment(env);
