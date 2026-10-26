@@ -255,6 +255,7 @@ struct ChromeButton: View {
     var label: String
     var text: String? = nil
     var enabled = true
+    var tint: Color? = nil
     /// The tabs' pinned bar uses the header capsule's height (HeaderCapsule).
     var height: CGFloat = 40
     var action: () -> Void
@@ -282,7 +283,7 @@ struct ChromeButton: View {
             Button(action: action) {
                 Image(systemName: systemImage)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Palette.ink)
+                    .foregroundStyle(tint ?? Palette.ink)
                     .frame(width: 40, height: 40)
                     .contentShape(Circle())
             }
@@ -345,6 +346,8 @@ struct ChromeAction {
     var text: String? = nil
     /// Greyed and not tappable ("Uložit" with nothing changed).
     var enabled = true
+    /// The symbol's colour when it is not the ink (the rust flag of a food).
+    var tint: Color? = nil
     var action: () -> Void
 }
 
@@ -408,13 +411,16 @@ private struct PinnedTopBar: ViewModifier {
                         ChromeButton(systemImage: extra.systemImage, label: extra.label, text: extra.text, action: extra.action)
                     }
                     if let trailing {
-                        ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled, action: trailing.action)
-                    } else {
+                        ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled,
+                                     tint: trailing.tint, action: trailing.action)
+                    } else if extra == nil {
+                        // Balances the back button; "Vybrat" alone sits at the edge itself.
                         Color.clear.frame(width: 40, height: 40)
                     }
                 }
                 .padding(.horizontal, 22)
-                .padding(.top, 6)
+                // On the line of the page's own title row (24 pt down, 36 pt high).
+                .padding(.top, 22)
                 .padding(.bottom, 10)
                 .background {
                     PinnedBarBackground()

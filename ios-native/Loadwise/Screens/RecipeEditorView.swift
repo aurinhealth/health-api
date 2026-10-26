@@ -40,7 +40,7 @@ struct RecipeEditorView: View {
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 18) {
-                CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }
+                BackSlot { dismiss() }
                 Text("Nový recept").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 SettingsGroup {
                     SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: "Kuřecí rizoto")
@@ -92,6 +92,7 @@ struct RecipeEditorView: View {
             .padding(24)
         }
         .background(Palette.background.ignoresSafeArea())
+        .floatingBack { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $picking) {
             IngredientPicker { product in

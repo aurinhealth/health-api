@@ -53,7 +53,7 @@ struct SleepSettingsForm: View {
     var body: some View {
         SettingsPage(title: L10n.tr("Spánek")) {
             // Room under the pinned back button.
-            if route { Color.clear.frame(height: 30) }
+            if route { Color.clear.frame(height: 46) }
             if let tonight = model.health?.sleep.tonight, tonight.bedtime != nil, tonight.wake != nil {
                 SleepPlanner(tonight: tonight, usual: model.health?.sleep.regularity?.bedtime, saving: plannerSaving,
                              weekendMorning: Self.weekendMorning(after: tonight.date),

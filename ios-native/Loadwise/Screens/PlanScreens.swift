@@ -457,7 +457,7 @@ struct ActivePlanView: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 16)
+                .padding(.top, 24)
                 .padding(.bottom, 100)
             }
             .refreshable { await reload() }
@@ -1108,7 +1108,7 @@ struct PlanResultView: View {
                     PlanResultContent(result: result, plans: plans) { await close() }
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 16)
+                .padding(.top, 24)
                 .padding(.bottom, 100)
             }
         }

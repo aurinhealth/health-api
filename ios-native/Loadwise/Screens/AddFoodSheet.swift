@@ -455,19 +455,7 @@ struct FoodAmountView: View {
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 16) {
-                HStack {
-                    CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }
-                    Spacer()
-                    if product.canReport && !model.demo {
-                        Button { reporting = true } label: {
-                            Image(systemName: mine ? "flag.fill" : "flag").font(.system(size: 19, weight: .medium))
-                                .foregroundStyle(Palette.rust).frame(width: 44, height: 44, alignment: .trailing)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(mine)
-                        .accessibilityLabel(L10n.tr(mine ? "Nahlášeno" : "Hodnoty nesedí"))
-                    }
-                }
+                BackSlot { dismiss() }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(current.name).font(Typo.sentence(28, relativeTo: .title2)).foregroundStyle(Palette.ink)
                     if product.source == "ai-estimate" { AIEstimateTag() }
@@ -544,6 +532,10 @@ struct FoodAmountView: View {
             .padding(24)
         }
         .background(Palette.background.ignoresSafeArea())
+        .floatingBack(trailing: product.canReport && !model.demo
+                      ? ChromeAction(systemImage: mine ? "flag.fill" : "flag", label: mine ? "Nahlášeno" : "Hodnoty nesedí",
+                                     enabled: !mine, tint: Palette.rust) { reporting = true }
+                      : nil) { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear(perform: fill)
         .sheet(isPresented: $reporting) {
@@ -699,7 +691,7 @@ struct ManualFoodView: View {
     var body: some View {
         PageScroll {
             VStack(alignment: .leading, spacing: 20) {
-                CircleButton(systemImage: "chevron.left", label: "Zpět") { dismiss() }
+                BackSlot { dismiss() }
                 Text("Zadat ručně").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 SettingsGroup(title: "Jedna porce") {
                     SettingsField(title: "Název", text: $name, keyboard: .default, placeholder: "Kuřecí rizoto")
@@ -723,6 +715,7 @@ struct ManualFoodView: View {
             .padding(24)
         }
         .background(Palette.background.ignoresSafeArea())
+        .floatingBack { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
     }
 

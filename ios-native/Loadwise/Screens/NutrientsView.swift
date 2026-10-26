@@ -10,20 +10,14 @@ struct NutrientsView: View {
     @State private var week = false
     @State private var page: NutrientsPage?
     @State private var error: String?
+    @State private var editing = false
 
     var body: some View {
         ZStack {
             ScreenBackground(glow: Palette.Glow.food)
             PageScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    NutrientsTopBar(title: "Živiny", back: { dismiss() }) {
-                        if page?.pro == true {
-                            NavigationLink { NutrientFavoritesView(items: page?.items ?? [], chosen: page?.favorites ?? []) } label: {
-                                Text("Upravit").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
-                            }
-                            .accessibilityLabel("Upravit živiny na Jídle")
-                        }
-                    }
+                    NutrientsTopBar(title: "Živiny", back: { dismiss() })
                     if let page {
                         NutrientsContent(page: page, week: $week, date: date).padding(.top, 20)
                     } else if let error {
@@ -36,7 +30,10 @@ struct NutrientsView: View {
                 .padding(.bottom, 100)
             }
         }
+        .floatingBack(title: "Živiny",
+                      trailing: page?.pro == true ? ChromeAction(systemImage: "slider.horizontal.3", label: "Upravit živiny na Jídle", text: "Upravit") { editing = true } : nil) { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(isPresented: $editing) { NutrientFavoritesView(items: page?.items ?? [], chosen: page?.favorites ?? []) }
         .task(id: week) { await load() }
     }
 
@@ -199,6 +196,7 @@ struct NutrientDetailView: View {
                 .padding(.bottom, 100)
             }
         }
+        .floatingBack(title: detail?.name) { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
         .task {
             do { detail = try await model.api.nutrientDetail(key: key, date: date) }
@@ -267,7 +265,7 @@ struct NutrientsTopBar<Trailing: View>: View {
             Spacer()
             SectionLabel(text: title).lineLimit(1)
             Spacer()
-            trailing().frame(minWidth: 52, minHeight: 36, alignment: .trailing)
+            trailing().frame(minWidth: 36, minHeight: 36, alignment: .trailing)
         }
     }
 }
@@ -297,6 +295,7 @@ struct NutrientFavoritesView: View {
                 .padding(.bottom, 100)
             }
         }
+        .floatingBack(title: "Na obrazovce Jídlo") { dismiss() }
         .toolbar(.hidden, for: .navigationBar)
         .onChange(of: chosen) { _, keys in
             Task {
