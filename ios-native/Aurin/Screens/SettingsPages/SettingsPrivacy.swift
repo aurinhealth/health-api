@@ -87,7 +87,12 @@ struct PrivacySettingsView: View {
             return
         }
         do {
+            let passkey = await model.api.passkeyHandle()
             try await model.api.deleteAccount()
+            // The account's passkeys leave the Passwords app with it.
+            if let passkey { PasskeyService.forgetAccount(rpId: passkey.rpId, userHandle: passkey.userHandle) }
+            PasskeyService.remember(false)
+            AvatarStore.remove()
             model.signOut()
         } catch {
             self.error = error.localizedDescription

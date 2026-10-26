@@ -72,7 +72,7 @@ struct LoginView: View {
                 .padding(.bottom, 22)
 
                 if let message = model.errorMessage {
-                    // A failed Google sign-in (not invited, cancelled, expired) says why here.
+                    // A failed sign-in (not invited, cancelled, expired, an unknown passkey) says why here.
                     Label(message, systemImage: "exclamationmark.circle.fill")
                         .font(Typo.small).foregroundStyle(Palette.rust)
                         .fixedSize(horizontal: false, vertical: true)
@@ -99,6 +99,13 @@ struct LoginView: View {
                 .signInWithAppleButtonStyle(colorScheme == .dark ? .white : .black)
                 .frame(height: 52)
                 .clipShape(Capsule())
+                .overlay {
+                    // While the server signs in with what Apple returned.
+                    if model.signingInWith == .apple {
+                        Capsule().fill(colorScheme == .dark ? Color.white : Color.black)
+                            .overlay(ProgressView().tint(colorScheme == .dark ? .black : .white))
+                    }
+                }
                 .disabled(model.signingIn)
                 .accessibilityLabel(L10n.tr("Pokračovat přes Apple"))
                 Button {
@@ -106,7 +113,7 @@ struct LoginView: View {
                     Task { await model.signIn() }
                 } label: {
                     HStack(spacing: 10) {
-                        if model.signingIn { ProgressView().tint(Palette.ink) } else { Text(verbatim: "G").font(.system(size: 17, weight: .bold)) }
+                        if model.signingInWith == .google { ProgressView().tint(Palette.ink) } else { Text(verbatim: "G").font(.system(size: 17, weight: .bold)) }
                         Text("Pokračovat přes Google")
                     }
                     .modifier(SignInButtonLook())
@@ -122,9 +129,12 @@ struct LoginView: View {
                 if ServerChoice.current.passkeys && PasskeyService.mayHaveOne {
                     // A passkey was made on this phone (Data/Passkeys.swift).
                     Button { Task { await signInWithPasskey() } } label: {
-                        Label("Přihlásit přes passkey", systemImage: "faceid")
-                            .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                            .frame(maxWidth: .infinity).frame(height: 44)
+                        HStack(spacing: 8) {
+                            if model.signingInWith == .passkey { ProgressView().tint(Palette.ink) } else { Image(systemName: "faceid") }
+                            Text("Přihlásit přes passkey")
+                        }
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 44)
                     }
                     .disabled(model.signingIn)
                     .padding(.top, 4)
@@ -136,16 +146,18 @@ struct LoginView: View {
         .sheet(isPresented: $emailLogin) { EmailLoginSheet() }
     }
 
-    /// The passkey sheet; when it fails for any reason but a cancel, the e-mail
-    /// code takes over without a message.
+    /// The passkey sheet. A failure says why above the buttons (a passkey of a
+    /// deleted account, a refused signature); only a cancel stays silent.
     private func signInWithPasskey() async {
         model.errorMessage = nil
         do {
             try await model.signInWithPasskey()
         } catch is CancellationError {
             // The user closed the sheet.
+        } catch APIError.unknownPasskey {
+            model.errorMessage = L10n.tr("Tenhle přístupový klíč patří k účtu, který už neexistuje. Přihlas se jinak, iPhone ho přestane nabízet.")
         } catch {
-            emailLogin = true
+            model.errorMessage = error.localizedDescription
         }
     }
 }

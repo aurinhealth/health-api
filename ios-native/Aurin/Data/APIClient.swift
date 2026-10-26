@@ -11,6 +11,8 @@ enum APIError: LocalizedError, Equatable {
     case subscriptionRequired(String)
     /// This week's messages to the coach are used up (429 coach_allowance_used).
     case coachAllowanceUsed(String, CoachAllowance?)
+    /// The passkey used to sign in belongs to no account (401 unknownCredential, src/passkeys.js).
+    case unknownPasskey(String)
 
     var errorDescription: String? {
         switch self {
@@ -20,6 +22,7 @@ enum APIError: LocalizedError, Equatable {
         case .updateRequired(let text): return text
         case .subscriptionRequired(let text): return text
         case .coachAllowanceUsed(let text, _): return text
+        case .unknownPasskey(let text): return text
         }
     }
 }
@@ -677,10 +680,15 @@ final class APIClient: @unchecked Sendable {
         request.timeoutInterval = 20
         let (data, response) = try await load(request)
         guard let http = response as? HTTPURLResponse else { throw OutboxRefusal.retry(L10n.tr("Server neodpověděl.")) }
-        if http.statusCode == 401 { throw APIError.unauthorized }
         guard (200..<300).contains(http.statusCode) else {
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-            let message = json?["message"] as? String ?? L10n.f("Server odpověděl chybou %@.", String(http.statusCode))
+            let message = json?["message"] as? String
+            if http.statusCode == 401 {
+                // A refused sign-in (/auth/…) says why; elsewhere 401 is an expired session.
+                if json?["unknownCredential"] as? Bool == true { throw APIError.unknownPasskey(message ?? "") }
+                if let message, http.url?.path().hasPrefix("/auth/") == true { throw APIError.message(message) }
+                throw APIError.unauthorized
+            } ?? L10n.f("Server odpověděl chybou %@.", String(http.statusCode))
             // Too old an app: the write waits for the new version instead of being dropped.
             if http.statusCode == 426 {
                 onUpdateRequired?()

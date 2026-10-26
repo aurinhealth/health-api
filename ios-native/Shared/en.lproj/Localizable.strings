@@ -1598,6 +1598,7 @@
 "Zapnout" = "Turn on";
 "Přístupový klíč se nepodařilo ověřit. Zkus to znovu." = "The passkey couldn't be verified. Try again.";
 "Přístupový klíč se nepodařilo vytvořit." = "The passkey couldn't be created.";
+"Tenhle přístupový klíč patří k účtu, který už neexistuje. Přihlas se jinak, iPhone ho přestane nabízet." = "This passkey belongs to an account that no longer exists. Sign in another way; your iPhone will stop offering it.";
 "Odkud brát data" = "Where to take data from";
 "Tréninkové aplikace" = "Training apps";
 "Souhlasím se zpracováním zdravotních dat" = "I agree to the processing of my health data";

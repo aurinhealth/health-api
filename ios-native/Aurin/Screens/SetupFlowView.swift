@@ -153,6 +153,11 @@ struct SetupFlowView: View {
     @ViewBuilder
     private var sourcesPage: some View {
         title("Odkud brát data")
+        if ready { sourceGroups } else { ProgressView().frame(maxWidth: .infinity).padding(.top, 40) }
+    }
+
+    @ViewBuilder
+    private var sourceGroups: some View {
         SectionLabel(text: "Zdravotní data").padding(.top, 6)
         SettingsGroup {
             if health.isAvailable {
@@ -346,8 +351,11 @@ struct SetupFlowView: View {
         guard !loaded else { return }
         loaded = true
         let api = model.api
+        // All three at once, and the page shows when all have answered, so the
+        // services do not pop in one after another.
         async let status = try? api.setupStatus()
         async let consent = try? api.healthConsentNeeded()
+        async let connections = try? api.connections()
         let s = await status
         consentNeeded = await consent ?? false
         if let s {
@@ -359,9 +367,9 @@ struct SetupFlowView: View {
             apply(s)
         }
         appleOn = health.isAvailable
+        if let list = await connections { providers = list.providers }
         ready = true
         guard !consentOnly else { return }
-        await loadProviders()
         if providers.contains(where: { $0.connected == true }) { syncRun += 1 }
     }
 
