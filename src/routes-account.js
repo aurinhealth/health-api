@@ -17,7 +17,6 @@ import { emailConfigured } from "./email-sender.js";
 import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 import { internalTester } from "./staging.js";
-import { appSettings, saveAppSettings } from "./app-settings.js";
 
 export async function handleAccountApi(request,env,ctx,url,session,internalAuth){
   if (url.pathname === "/app/api/me" && request.method === "GET") {
@@ -25,15 +24,6 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     const apple = session.user ? await appleIdentity(env.RAW_DB, session.user.id) : null;
     const passkeys = session.user ? await listPasskeys(env.RAW_DB, session.user.id) : [];
     return Response.json({status:"ok",user:session.user||null,missingProviders:missingProviders(env),onboarding,ai,consent,apple,passkeys,emailLogin:emailConfigured(env),internalTester:internalTester(env,session.user)},{headers:{"Cache-Control":"no-store"}});
-  }
-  // The app's own settings, kept with the account for a new install (app-settings.js).
-  if(url.pathname==='/app/api/app-settings'){
-    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
-    if(request.method==='GET')return Response.json({status:'ok',...await appSettings(env.DB)},{headers:{'Cache-Control':'no-store'}});
-    if(request.method!=='PUT')return Response.json({message:'Method not allowed'},{status:405});
-    let body;try{body=await request.json();}catch{return Response.json({message:L('Neplatný požadavek.','Invalid request.')},{status:400});}
-    try{return Response.json(await saveAppSettings(env.DB,body),{headers:{'Cache-Control':'no-store'}});}
-    catch(error){return Response.json({message:error.message},{status:400});}
   }
   // Consent to health data (required) and to AI with OpenAI (optional); consent.js.
   if(url.pathname==='/app/api/consent'&&request.method==='POST'){

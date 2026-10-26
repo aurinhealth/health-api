@@ -111,9 +111,7 @@ export const PERSONAL_TABLES = {
   // Deník, the habit journal (journal-store.js): the pinned and own items, and
   // the answers per day and item.
   journal_settings: {},
-  journal_entries: { pk: ["user_id", "date", "item_key"] },
-  // The app's own settings, kept for a new install (app-settings.js).
-  app_settings: {}
+  journal_entries: { pk: ["user_id", "date", "item_key"] }
 };
 const PERSONAL_TABLE_PATTERN = new RegExp("\\b(" + Object.keys(PERSONAL_TABLES).join("|") + ")\\b", "i");
 

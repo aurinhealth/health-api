@@ -288,22 +288,11 @@ struct RootView: View {
                 async let account: Void = model.loadAccountInitial()
                 async let google: Void = model.loadGoogleSync()
                 _ = await (setup, account, google)
-                // A fresh install takes back the settings the account kept.
-                if !model.demo { await SettingsBackup.restore(api: model.api) }
             }
             // Back in the app: new data, and what waited for signal (and water
             // added from the widget) goes out.
             .onChange(of: scenePhase) { _, phase in
-                if phase == .background, !model.demo {
-                    BackgroundRefresh.schedule()
-                    // The settings changed here go to the account (SettingsBackup.swift).
-                    let api = model.api
-                    Task {
-                        let time = FinishInBackground("settings")
-                        await SettingsBackup.send(api: api)
-                        time.end()
-                    }
-                }
+                if phase == .background, !model.demo { BackgroundRefresh.schedule() }
                 // The icon's menu in the language and order of the moment.
                 if phase == .background { QuickActions.update(model.today); model.left() }
                 guard phase == .active else { return }
