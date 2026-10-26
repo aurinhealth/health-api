@@ -24,14 +24,16 @@ export const SECURITY_HEADERS = {
 // scripts run, by their SHA-256 (the browser hashes what stands between
 // <script> and </script>). Pass the code's own script constants, never the
 // page with the user's text in it. A JSON-LD block is data and needs no hash.
+// `origins` are sites whose scripts the page loads (Cloudflare Turnstile).
 const policies = new Map();
-export function scriptPolicy(markup) {
-  if (!policies.has(markup)) {
+export function scriptPolicy(markup, origins = []) {
+  const key = origins.join(" ") + "\n" + markup;
+  if (!policies.has(key)) {
     const hashes = [...markup.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(([, code]) => `'sha256-${sha256Base64(code)}'`);
     if (policies.size > 50) policies.clear();
-    policies.set(markup, `${BASE_POLICY}; script-src ${hashes.join(" ") || "'none'"}`);
+    policies.set(key, `${BASE_POLICY}; script-src ${[...hashes, ...origins].join(" ") || "'none'"}`);
   }
-  return policies.get(markup);
+  return policies.get(key);
 }
 
 // SHA-256 without crypto.subtle, which only answers asynchronously; pages are

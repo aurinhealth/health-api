@@ -33,18 +33,35 @@ export function waitlistEmail(value) {
 
 // POST /waitlist from the website. The answer is the same whether the address
 // was new or already listed, so the form tells nobody who signed up.
-export async function handleWaitlistSignup(request, env, pathname) {
+// Cloudflare Turnstile shows that a person sent the form (security review 2026-10-25): a bot
+// without its token no longer uses up the day's 300 for everyone. TURNSTILE_SECRET_KEY is a
+// Worker secret; without it (the test server) the form works as before and the log says so.
+export async function handleWaitlistSignup(request, env, pathname, fetchImpl = fetch) {
   if (pathname !== "/waitlist") return null;
   if (request.method !== "POST") return json({ message: "Use POST." }, 405);
   if (request.headers.get("Origin") !== new URL(request.url).origin) return json({ message: "Invalid request origin." }, 403);
   const body = await request.json().catch(() => ({}));
   const email = waitlistEmail(body?.email);
   if (!email) return json({ message: "Enter a valid email." }, 400);
-  if (!(await allowClient(env.DB, request, sessionSecret(env), "waitlist", Date.now(), { minute: 3, hour: 10 }))
-    || !(await allowRequest(env.DB, "waitlist:all", { day: 300 }))) return json({ message: "Too many tries. Try again later." }, 429);
+  if (!(await allowClient(env.DB, request, sessionSecret(env), "waitlist", Date.now(), { minute: 3, hour: 10 }))) return json({ message: "Too many tries. Try again later." }, 429);
+  if (!(await humanSent(env, request, body?.token, fetchImpl))) return json({ message: "We couldn't check that you're human. Try again." }, 403);
+  if (!(await allowRequest(env.DB, "waitlist:all", { day: 300 }))) return json({ message: "Too many tries. Try again later." }, 429);
   await ensure(env.DB);
   await env.DB.prepare("INSERT INTO testflight_waitlist(email) VALUES(?) ON CONFLICT(email) DO NOTHING").bind(email).run();
   return json({ status: "ok" });
+}
+
+async function humanSent(env, request, token, fetchImpl) {
+  const secret = String(env.TURNSTILE_SECRET_KEY || "");
+  if (!secret) { console.error("TURNSTILE_SECRET_KEY is not set; waitlist sign-up not checked"); return true; }
+  if (typeof token !== "string" || !token || token.length > 2048) return false;
+  const form = new FormData();
+  form.set("secret", secret); form.set("response", token);
+  const ip = request.headers.get("CF-Connecting-IP");
+  if (ip) form.set("remoteip", ip);
+  const result = await fetchImpl("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body: form })
+    .then(r => r.json()).catch(error => { console.error("Turnstile check failed", error.message); return null; });
+  return result?.success === true && result.action === "waitlist";
 }
 
 // Storage limitation (privacy policy): an address leaves both lists (this one
