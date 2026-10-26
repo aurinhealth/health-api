@@ -236,6 +236,15 @@ export async function handleWorkoutTemplatesApi(request, env, url, session = {})
       if (!w || !structure.length) return json({ message: L("Trénink nemá úseky, které by šly uložit.", "The workout has no sections to save.") }, 404);
       return json({ status: "ok", template: templateFromStructure(w.sport === "run" ? "run" : "ride", w.name, structure) });
     }
+    // "Send to" → Zwift, MyWhoosh: the planned ride as a .zwo file.
+    if (path === "/app/api/my-workouts/from-planned.zwo" && request.method === "GET") {
+      const w = await plannedWorkout(env, String(url.searchParams.get("id") || ""));
+      let structure = [];
+      try { structure = JSON.parse(w?.structure_json || "[]"); } catch { /* none */ }
+      if (!w || w.sport === "run" || !structure.length) return json({ message: L("Tenhle trénink jako soubor pro Zwift nejde.", "This workout can't be made into a Zwift file.") }, 404);
+      const template = templateFromStructure("ride", w.name, structure);
+      return new Response(zwoFile(template), { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "no-store" } });
+    }
     // A ride or run put together from the athlete's words; nothing is saved.
     if (path === "/app/api/my-workouts/describe" && request.method === "POST") {
       const sport = body.sport === "run" ? "run" : "ride", words = text(body.text, 400);

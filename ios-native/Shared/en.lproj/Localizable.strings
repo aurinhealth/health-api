@@ -3064,3 +3064,13 @@
 "Tyč %@ kg" = "Bar %@ kg";
 "Bez tyče" = "No bar";
 "Naložit kotouče" = "Load plates";
+"Odeslat do" = "Send to";
+"Odeslat znovu" = "Send again";
+"Aplikace Cvičení" = "Workout app";
+"soubor .zwo" = ".zwo file";
+"Připoj Wahoo nebo Intervals.icu v Nastavení." = "Connect Wahoo or Intervals.icu in Settings.";
+"Odesláno · %@" = "Sent · %@";
+"Odesílá se" = "Sending";
+"Nedorazilo" = "Didn’t arrive";
+"Je v kalendáři Intervals.icu" = "In your Intervals.icu calendar";
+"Neodesláno" = "Not sent";
