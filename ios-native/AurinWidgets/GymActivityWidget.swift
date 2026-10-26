@@ -6,8 +6,9 @@ import WidgetKit
 /// The gym Live Activity: on the lock screen a card, light or dark as the phone, with the workout's
 /// clock, heart rate and kcal, the rest counting down with the next set (+30 s,
 /// Přeskočit pauzu), then the set with Série hotová; in the Dynamic Island the
-/// rest's countdown. The buttons run in the app (GymActivityInbox). Once the
-/// rest's end passes, the activity is stale and shows the set.
+/// rest's countdown, or during the set "×8" by the dumbbell and "80 kg" (or
+/// "2/4"). The buttons run in the app (GymActivityInbox). Once the rest's end
+/// passes, the activity is stale and shows the set.
 struct GymActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: GymActivityAttributes.self) { context in
@@ -38,7 +39,15 @@ struct GymActivityWidget: Widget {
                     .environment(\.colorScheme, .dark)
                 }
             } compactLeading: {
-                if let bpm = context.state.heartRate {
+                // During the set the reps sit by the dumbbell ("×8"), the weight on the right.
+                if !resting, let reps = context.state.reps {
+                    HStack(spacing: 4) {
+                        Image(systemName: "dumbbell.fill").font(.system(size: 13)).foregroundStyle(Palette.amberBar)
+                        Text("×" + reps).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white).monospacedDigit()
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                    }
+                    .frame(maxWidth: 58, alignment: .leading)
+                } else if let bpm = context.state.heartRate {
                     HStack(spacing: 4) {
                         Image(systemName: "heart.fill").font(.system(size: 11)).foregroundStyle(Palette.rust)
                         Text("\(bpm)").font(.system(size: 13, weight: .semibold)).foregroundStyle(.white).monospacedDigit()
@@ -49,9 +58,12 @@ struct GymActivityWidget: Widget {
             } compactTrailing: {
                 if resting, let start = context.state.restStart, let end = context.state.restEnd {
                     GymRestTimer(start: start, end: end, size: 17).frame(maxWidth: 46)
-                } else {
-                    Text(context.state.load).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
-                        .frame(maxWidth: 72)
+                } else if let short = context.state.reps != nil ? (context.state.weight ?? context.state.setShort) : context.state.load {
+                    // "250,5 kg" shrinks rather than being cut; without a weight, "2/4".
+                    Text(short).font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(context.state.weight == nil && context.state.reps != nil ? Palette.muted : .white)
+                        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                        .frame(maxWidth: 58, alignment: .trailing)
                 }
             } minimal: {
                 if resting, let start = context.state.restStart, let end = context.state.restEnd {

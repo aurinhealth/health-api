@@ -66,6 +66,9 @@ enum GymLiveActivity {
             exercise: exercise.name,
             setLabel: set.warmup ? L10n.tr("rozcvička") : set.drop ? L10n.tr("dropset") : setLine(set, of: exercise.workCount),
             load: load(set, in: exercise),
+            weight: loadParts(set, in: exercise).weight,
+            reps: loadParts(set, in: exercise).reps,
+            setShort: set.warmup || set.drop ? nil : "\(set.number)/\(exercise.workCount)",
             then: then,
             row: set.row,
             segments: list.map { e in e.sets.isEmpty ? 0 : Double(e.sets.filter(\.done).count) / Double(e.sets.count) },
@@ -78,9 +81,15 @@ enum GymLiveActivity {
 
     /// "80 kg × 8": what the set before was done with, else the plan.
     static func load(_ set: GymSet, in exercise: GymExercise) -> String {
+        let parts = loadParts(set, in: exercise)
+        return (parts.weight.map { $0 + " × " } ?? "") + (parts.reps ?? "")
+    }
+
+    /// "80 kg" and "8" of "80 kg × 8".
+    static func loadParts(_ set: GymSet, in exercise: GymExercise) -> (weight: String?, reps: String?) {
         let carry = GymSessionMath.carried(set, in: exercise)
-        let weight: String = LiftWeight.shown(carry?.kg ?? set.plannedKg ?? set.kg).map { $0 + " " + Units.weightUnit + " × " } ?? ""
-        return weight + (carry?.reps ?? set.plannedReps ?? set.reps ?? "")
+        let weight = LiftWeight.shown(carry?.kg ?? set.plannedKg ?? set.kg).map { $0 + " " + Units.weightUnit }
+        return (weight, (carry?.reps ?? set.plannedReps ?? set.reps)?.nilIfBlank)
     }
 
     /// "3 z 5 cviků", "exercise 3 of 5".
