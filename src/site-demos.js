@@ -217,10 +217,10 @@ const gymParts = `<div class="dm pad">
 <div class="tl s mut"><span>Warm-up +5 min</span><span>Lifting 45 min</span><span>Stretching +8 min</span></div>
 <div class="row sp"><span class="sl">Today’s workout</span><span class="s gro" data-tx="0|Reorder;2600|Done;4600|Reorder">Reorder</span></div>
 <div class="gparts"${at('2600:reo 3500:swap 4600-reo')}>
-${part('p1', 'run', 'amb', 'Warm-up', 'Mobility · 5 min', true)}
+${part('p1', 'run', 'amb', 'Warm-up', 'Automatic · 5 min', true)}
 ${part('p2', 'bike', 'rust', 'Cardio', 'Exercise bike · 10 min', 'flip')}
 ${part('p3', 'gym', 'amb2', 'Exercises', '5 exercises · 45 min', null)}
-${part('p4', 'flex', 'ind', 'Stretching', '8 min', true)}
+${part('p4', 'flex', 'ind', 'Stretching', 'Automatic · 8 min', true)}
 </div>
 </div>`;
 

@@ -49,15 +49,24 @@ enum GymDayPart: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// One day's parts: their order, those turned off and each cardio's machine and minutes.
+/// One day's parts: their order, those turned off, each cardio's machine and minutes,
+/// and a warm-up or stretching chosen for the day (another length or an own one).
 struct GymDayParts: Codable, Equatable {
     var order: [GymDayPart]
     var off: [GymDayPart]
     var cardio: [String: Choice]
+    var routines: [String: Routine]? = nil
 
     struct Choice: Codable, Equatable {
         var type: String
         var minutes: Int
+    }
+
+    /// The choice (an own routine's id, else automatic with a length; nil = auto) and what it made.
+    struct Routine: Codable, Equatable {
+        var routine: String?
+        var length: Int?
+        var moves: GymStretching
     }
 
     static let storageKey = "gym.day.parts"
@@ -137,8 +146,8 @@ struct GymDayParts: Codable, Equatable {
     /// The moves of a part (a cardio part is one timed item).
     func routine(_ part: GymDayPart, day: GymDay) -> GymStretching? {
         switch part {
-        case .warmup: return day.warmup
-        case .stretching: return day.stretching
+        case .warmup: return routines?[part.rawValue]?.moves ?? day.warmup
+        case .stretching: return routines?[part.rawValue]?.moves ?? day.stretching
         case .exercises: return nil
         case .cardioStart, .cardioEnd:
             let c = choice(part)
@@ -150,6 +159,16 @@ struct GymDayParts: Codable, Equatable {
     }
 
     func minutes(_ part: GymDayPart, day: GymDay) -> Int { routine(part, day: day)?.minutes ?? 0 }
+
+    /// "Automaticky · 6 min", "Legs · 7 min", "Rotoped · 10 min".
+    func subtitle(_ part: GymDayPart, day: GymDay) -> String {
+        if part.isCardio {
+            let c = choice(part)
+            return GymCardio.name(c.type) + " · \(c.minutes) min"
+        }
+        let name = routine(part, day: day)?.name?.nilIfBlank ?? L10n.tr("Automaticky")
+        return name + " · \(minutes(part, day: day)) min"
+    }
 
     /// Moves `part` to where `target` is.
     mutating func move(_ part: GymDayPart, to target: GymDayPart) {
@@ -166,14 +185,16 @@ struct GymDayParts: Codable, Equatable {
     }
 }
 
-/// Dnešní trénink: the parts in order, each with its switch and the cardio's Změnit;
-/// Upravit pořadí shows arrows that move a part up or down.
+/// Dnešní trénink: the parts in order, each with its switch; a tap on a part
+/// changes it for the day (the cardio's machine and minutes, the warm-up's or
+/// stretching's kind and length). Upravit pořadí shows arrows that move a part up or down.
 struct GymPartsCard: View {
     let day: GymDay
     let date: String
     @Environment(AppModel.self) private var model
     @AppStorage(GymDayParts.storageKey) private var stored = ""
     @State private var editing: GymDayPart?
+    @State private var choosing: GymDayPart?
     @State private var reordering = false
     @State private var options: [GymPreferences.CardioOption] = []
 
@@ -201,6 +222,9 @@ struct GymPartsCard: View {
         .sheet(item: $editing) { part in
             GymCardioSheet(choice: parts.choice(part), options: options) { choice in update { $0.cardio[part.rawValue] = choice } }
         }
+        .sheet(item: $choosing) { part in
+            GymRoutineSheet(part: part, day: day, date: date)
+        }
         .task {
             guard !model.demo, options.isEmpty else { return }
             if let loaded = try? await model.api.gymPreferences().cardioOptions { options = loaded }
@@ -216,45 +240,51 @@ struct GymPartsCard: View {
     private func row(_ part: GymDayPart, first: Bool, last: Bool) -> some View {
         let on = parts.isOn(part)
         return HStack(spacing: 10) {
-            Image(systemName: symbol(part)).font(.system(size: 15, weight: .medium)).foregroundStyle(color(part))
-                .frame(width: 34, height: 34)
-                .background(color(part).opacity(0.14), in: Circle())
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title(part)).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
-                Text(verbatim: subtitle(part)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+            Button { open(part) } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: symbol(part)).font(.system(size: 15, weight: .medium)).foregroundStyle(color(part))
+                        .frame(width: 34, height: 34)
+                        .background(color(part).opacity(0.14), in: Circle())
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title(part)).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
+                        HStack(spacing: 3) {
+                            Text(verbatim: subtitle(part)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                            if part != .exercises && !reordering {
+                                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.faint)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    Spacer(minLength: 6)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 6)
+            .buttonStyle(.plain)
+            .disabled(part == .exercises || reordering || !on)
             if reordering {
                 HStack(spacing: 8) {
                     arrow(part, up: true).disabled(first).opacity(first ? 0.3 : 1)
                     arrow(part, up: false).disabled(last).opacity(last ? 0.3 : 1)
                 }
-            } else {
-                if part.isCardio {
-                    Button { editing = part } label: {
-                        Text("Změnit").font(.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-                            .padding(.horizontal, 10).frame(height: 28)
-                            .background(Palette.track, in: Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!on)
-                }
-                if part != .exercises {
-                    Toggle(isOn: Binding(get: { on }, set: { value in
-                        update { p in p.off.removeAll { $0 == part }; if !value { p.off.append(part) } }
-                    })) { EmptyView() }
-                        .toggleStyle(AurinToggleStyle())
-                        .fixedSize()
-                        .accessibilityLabel(Text(title(part)))
-                }
+            } else if part != .exercises {
+                Toggle(isOn: Binding(get: { on }, set: { value in
+                    update { p in p.off.removeAll { $0 == part }; if !value { p.off.append(part) } }
+                })) { EmptyView() }
+                    .toggleStyle(AurinToggleStyle())
+                    .fixedSize()
+                    .accessibilityLabel(Text(title(part)))
             }
         }
         .padding(.horizontal, 8)
         .frame(minHeight: 56)
-        .contentShape(Rectangle())
         .opacity(on || reordering ? 1 : 0.45)
         .accessibilityElement(children: .contain)
+    }
+
+    /// A tap on a part: the cardio's machine and minutes, the warm-up's or stretching's kind and length.
+    private func open(_ part: GymDayPart) {
+        if part.isCardio { editing = part } else if part != .exercises { choosing = part }
     }
 
     private func arrow(_ part: GymDayPart, up: Bool) -> some View {
@@ -284,11 +314,8 @@ struct GymPartsCard: View {
             let count = day.exercises.count
             let word = count == 1 ? L10n.f("%@ cvik", String(count)) : (2...4).contains(count) ? L10n.f("%@ cviky", String(count)) : L10n.f("%@ cviků", String(count))
             return day.plannedMinutes.map { word + " · \($0) min" } ?? word
-        case .cardioStart, .cardioEnd:
-            let c = parts.choice(part)
-            return GymCardio.name(c.type) + " · \(c.minutes) min"
         default:
-            return "\(parts.minutes(part, day: day)) min"
+            return parts.subtitle(part, day: day)
         }
     }
 
@@ -362,5 +389,147 @@ struct GymCardioSheet: View {
         var list = options.isEmpty ? GymCardio.all.map { GymPreferences.CardioOption(id: $0, name: GymCardio.name($0)) } : options
         if !list.contains(where: { $0.id == type }) { list.insert(GymPreferences.CardioOption(id: type, name: GymCardio.name(type)), at: 0) }
         return list
+    }
+}
+
+/// Rozcvička or Protažení for the day: automatic with a length (Auto is sized to
+/// the workout) or one of the athlete's own; the moves it makes below. Hotovo
+/// keeps the choice for the day, Nastavení → Posilovna stays as it was.
+struct GymRoutineSheet: View {
+    let part: GymDayPart
+    let day: GymDay
+    let date: String
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage(GymDayParts.storageKey) private var stored = ""
+    @State private var mine: [GymPreferences.MyRoutine] = []
+    /// The own routine's id; nil for the automatic one.
+    @State private var routine: String?
+    /// The automatic one's minutes; nil for Auto.
+    @State private var length: Int?
+    @State private var moves: GymStretching?
+    @State private var loading = false
+    @State private var changed = false
+    @State private var error: String?
+
+    static let lengths = [0, 5, 10, 15]
+
+    private var kind: GymRoutineKind { part.kind }
+    private var parts: GymDayParts { GymDayParts.resolved(day, stored: stored, date: date) }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(spacing: 0) {
+                        option(nil, title: L10n.tr("Automaticky"), minutes: nil)
+                        ForEach(mine) { own in
+                            SettingsDivider()
+                            option(own.id, title: own.name, minutes: own.minutes)
+                        }
+                    }
+                    .cardSurface(cornerRadius: 22)
+                    if routine == nil {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Délka").font(.body).foregroundStyle(Palette.ink)
+                            Picker("Délka", selection: Binding(get: { length ?? 0 }, set: { value in choose(nil, length: value == 0 ? nil : value) })) {
+                                ForEach(Self.lengths, id: \.self) { m in
+                                    Text(verbatim: m == 0 ? L10n.tr("Auto") : "\(m) min").tag(m)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .padding(16)
+                        .cardSurface(cornerRadius: 22)
+                    }
+                    if let moves, !moves.items.isEmpty {
+                        SectionLabel(text: "Dnes").padding(.top, 4)
+                        VStack(spacing: 0) {
+                            ForEach(Array(moves.items.enumerated()), id: \.offset) { index, item in
+                                if index > 0 { SettingsDivider() }
+                                HStack(spacing: 8) {
+                                    Text(verbatim: item.name).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
+                                    Spacer(minLength: 6)
+                                    Text(verbatim: item.duration).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1)
+                                }
+                                .padding(.horizontal, 16).frame(minHeight: 46)
+                            }
+                        }
+                        .cardSurface(cornerRadius: 22)
+                        .opacity(loading ? 0.5 : 1)
+                    }
+                    if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+                }
+                .padding(20)
+            }
+            .background(Palette.background)
+            .navigationTitle(Text(kind.title))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Hotovo") { save(); dismiss() }.disabled(loading)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .task { await load() }
+    }
+
+    private func option(_ id: String?, title: String, minutes: Int?) -> some View {
+        Button { choose(id, length: id == nil ? length : nil) } label: {
+            HStack(spacing: 8) {
+                Text(verbatim: title).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
+                Spacer(minLength: 6)
+                if let minutes { Text(verbatim: "\(minutes) min").font(.subheadline).foregroundStyle(Palette.muted) }
+                if routine == id {
+                    Image(systemName: "checkmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.amber)
+                }
+            }
+            .padding(.horizontal, 16).frame(minHeight: 48)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(routine == id ? .isSelected : [])
+    }
+
+    /// The day's choice so far, and the athlete's own routines to pick from.
+    private func load() async {
+        let current = parts.routines?[part.rawValue]
+        routine = current?.routine
+        length = current?.length
+        moves = parts.routine(part, day: day)
+        guard !model.demo, let prefs = try? await model.api.gymPreferences() else { return }
+        mine = prefs.routines(kind)
+        // A plan made with an own routine: that one is ticked.
+        if current == nil, let name = moves?.name, let own = mine.first(where: { $0.name == name }) { routine = own.id }
+    }
+
+    /// Another kind or length: the server builds it for the day's exercises.
+    private func choose(_ id: String?, length minutes: Int?) {
+        guard id != routine || minutes != length else { return }
+        routine = id
+        length = minutes
+        changed = true
+        guard !model.demo else { return }
+        loading = true
+        Task {
+            do {
+                moves = try await model.api.gymRoutine(date: date, kind: kind, length: minutes, routine: id)
+                error = nil
+            } catch {
+                self.error = error.localizedDescription
+            }
+            loading = false
+        }
+    }
+
+    private func save() {
+        guard changed, let moves else { return }
+        var next = parts
+        var routines = next.routines ?? [:]
+        routines[part.rawValue] = GymDayParts.Routine(routine: routine, length: length, moves: moves)
+        next.routines = routines
+        stored = GymDayParts.saving(next, date: date, into: stored)
     }
 }

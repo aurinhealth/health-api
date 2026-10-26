@@ -36,4 +36,23 @@ final class GymDayPartsTests: XCTestCase {
         parts.step(.warmup, by: 1, day: d)
         XCTAssertEqual(parts.visible(d), [.cardioStart, .warmup, .stretching, .exercises, .cardioEnd])
     }
+
+    func testADayKeepsItsOwnWarmupAndShowsItsName() {
+        let d = day(routines: #"{"warmup":{"minutes":7,"name":"Legs","items":[{"id":"own-1","name":"Rotoped","seconds":300,"sides":false}]},"stretching":"# + routine + #"}"#)
+        var parts = GymDayParts.defaults(d)
+        XCTAssertEqual(parts.subtitle(.warmup, day: d), "Legs · 7 min")
+        XCTAssertEqual(parts.subtitle(.stretching, day: d), L10n.tr("Automaticky") + " · 5 min")
+        let ten = GymStretching(minutes: 10, items: [GymStretching.Item(id: "squat", name: "Dřep", seconds: 40, sides: false)])
+        parts.routines = ["warmup": GymDayParts.Routine(routine: nil, length: 10, moves: ten)]
+        XCTAssertEqual(parts.routine(.warmup, day: d), ten)
+        // Kept on the phone with the day's other choices (the last week's days only).
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        let today = f.string(from: Date())
+        let stored = GymDayParts.saving(parts, date: today, into: "")
+        let back = GymDayParts.resolved(d, stored: stored, date: today)
+        XCTAssertEqual(back.routines?["warmup"]?.length, 10)
+        XCTAssertEqual(back.minutes(.warmup, day: d), 10)
+    }
 }

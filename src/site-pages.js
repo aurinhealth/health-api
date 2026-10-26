@@ -540,7 +540,7 @@ addEventListener('keydown',function(e){if(e.key==='Escape'&&card.classList.conta
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
 // for days by its URL, so ?v= goes up whenever og-en.png is rendered again.
-const SHARE_IMAGE = '/site/og-en.png?v=6';
+const SHARE_IMAGE = '/site/og-en.png?v=7';
 const SHARE_IMAGE_ALT = 'Aurin: Train for how you feel today. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null}) {
@@ -677,7 +677,7 @@ export function overviewPage(request) {
       ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon or a gran fondo, a strength plan, or let the AI plan the week. A busy day in your calendar gets a shorter workout, and when the load adds up, the coach proposes moving or easing a session. A finished workout shows how much of the plan you did.', 8000]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
-      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, and move them into the order you like. Then start.', 7000]]],
+      ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Then start.', 7000]]],
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
       ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them, add or remove a set, swap an exercise for a similar one or any other when its machine is taken, keep your own note on how to set it up, and start.', 6000],
       ['training-set', 'tmTick', 380, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets.', 6000],
@@ -878,7 +878,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
   const methods = {en: (apple ? 'Apple, ' : '') + (email ? 'Google, a passkey or a one-time code sent to your email' : 'Google or a passkey'), cs: (apple ? 'přes Apple, ' : '') + (email ? 'přes Google, přístupovým klíčem nebo jednorázovým kódem z e-mailu' : 'přes Google nebo přístupovým klíčem')};
   return doc(request, '/privacy', {cs: 'Zásady ochrany soukromí', en: 'Privacy Policy'}, {
     en: `<p class="muted">Last updated: ${UPDATED.en}</p>
-<p><strong>Aurin</strong> (formerly Loadwise, aurin.health) is a personal service for training, recovery and nutrition. The controller of your personal data is Petr Bouma, a private individual in the Czech Republic (the operator, “we” below). You can reach the operator at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin is currently in testing: access is by invitation to the testers from the waitlist, through Apple’s TestFlight.'}</p>
+<p><strong>Aurin</strong> (aurin.health) is a personal service for training, recovery and nutrition. The controller of your personal data is Petr Bouma, a private individual in the Czech Republic (the operator, “we” below). You can reach the operator at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin is currently in testing: access is by invitation to the testers from the waitlist, through Apple’s TestFlight.'}</p>
 <h2>In short</h2>
 <ul>
 <li>We use your data only to provide the Aurin features you use.</li>
@@ -983,7 +983,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <h2>Contact</h2>
 <p>For questions about this policy or your data, or to exercise your rights, write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>`,
     cs: `<p class="muted">Poslední změna: ${UPDATED.cs}</p>
-<p><strong>Aurin</strong> (dříve Loadwise, aurin.health) je osobní služba pro trénink, regeneraci a výživu. Správcem tvých osobních údajů je Petr Bouma, soukromá osoba v České republice (dále provozovatel nebo „my“). Provozovatele zastihneš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin je zatím v testování: přístup dostávají pozvaní testeři z waitlistu přes TestFlight od Applu.'}</p>
+<p><strong>Aurin</strong> (aurin.health) je osobní služba pro trénink, regeneraci a výživu. Správcem tvých osobních údajů je Petr Bouma, soukromá osoba v České republice (dále provozovatel nebo „my“). Provozovatele zastihneš na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.${open ? '' : ' Aurin je zatím v testování: přístup dostávají pozvaní testeři z waitlistu přes TestFlight od Applu.'}</p>
 <h2>Ve zkratce</h2>
 <ul>
 <li>Tvoje data používáme jen k funkcím Aurinu, které používáš.</li>

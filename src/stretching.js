@@ -234,11 +234,74 @@ function workedMuscles(rows, muscleOf) {
 const possible = (catalog, stations) => Array.isArray(stations)
   ? catalog.filter(s => (s.needs || []).every(id => stations.includes(id)))
   : catalog.filter(s => !s.needs);
-// The catalog's moves that fit the worked muscles best (a move's first muscle counts fully).
-function bestFor(catalog, sets, count) {
-  const score = s => s.muscles.reduce((sum, m, i) => sum + (sets.get(m) || 0) * (i ? 0.5 : 1), 0);
-  return catalog.map((s, order) => ({ s, score: score(s), order })).filter(x => x.score > 0)
-    .sort((a, b) => b.score - a.score || a.order - b.order).slice(0, count).map(x => x.s);
+// Moves that suit the main sport besides the day's muscles: a cyclist sits bent
+// forward for hours (hip flexors, hamstrings, chest, upper back), a runner needs
+// calves, hips and the back of the legs, a triathlete swims too (lats, chest).
+const SPORT_MOVES = {
+  cycling: { warmup: ['open_book', 'hip_flexor_rock', 'cat_cow', 'worlds_greatest'], stretching: ['hip_flexor', 'hamstring', 'figure_four', 'chest', 'cat'] },
+  running: { warmup: ['leg_swings', 'hip_circles', 'walking_knee_hugs', 'single_leg_balance', 'band_ankle'], stretching: ['calf', 'hip_flexor', 'hamstring', 'quad', 'figure_four'] },
+  triathlon: { warmup: ['arm_circles', 'leg_swings', 'open_book', 'hip_flexor_rock'], stretching: ['hip_flexor', 'calf', 'hamstring', 'lat', 'chest'] }
+};
+/** The catalog's moves that fit, best first: the worked muscles (a move's first muscle counts fully) and the main sport's moves. */
+function ranked(catalog, sets, sportIds = []) {
+  const fit = s => s.muscles.reduce((sum, m, i) => sum + (sets.get(m) || 0) * (i ? 0.5 : 1), 0);
+  const top = Math.max(0, ...catalog.map(fit));
+  const bonus = Math.max(1, top * 0.5);
+  return catalog.map((s, order) => ({ s, score: fit(s) + (sportIds.includes(s.id) ? bonus : 0), order })).filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score || a.order - b.order);
+}
+// A small seeded random, so a day's routine stays the same however often it is built.
+function seeded(text) {
+  let h = 2166136261;
+  for (const c of String(text)) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return () => {
+    h = (h + 0x6D2B79F5) | 0;
+    let t = Math.imul(h ^ (h >>> 15), 1 | h);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+/**
+ * The moves in the order they are taken: without a date the best fits; with a
+ * date the moves that fit well (at least 40 % of the best) are drawn by the
+ * date, likelier the better they fit, so the same kind of session gets other
+ * moves on another day. The rest follow, best first.
+ */
+function inTurn(catalog, sets, { date, sport, kind } = {}) {
+  const list = ranked(catalog, sets, SPORT_MOVES[sport]?.[kind] || []);
+  if (!date || list.length < 2) return list;
+  const good = list.filter(x => x.score >= list[0].score * 0.4), rest = list.slice(good.length);
+  const random = seeded(date + '|' + kind), drawn = [];
+  while (good.length) {
+    let pick = random() * good.reduce((sum, x) => sum + x.score, 0), i = 0;
+    while (i < good.length - 1 && (pick -= good[i].score) > 0) i++;
+    drawn.push(good.splice(i, 1)[0]);
+  }
+  return [...drawn, ...rest];
+}
+/**
+ * `count` moves, or with `minutes` as many as fill that time (`finish` already
+ * counted in): best fit first. A short list repeats its moves in rounds to fill it.
+ */
+function pickMoves(catalog, sets, { count, minutes, finishSeconds = 0, ...turn }) {
+  const order = inTurn(catalog, sets, turn);
+  let picked;
+  if (minutes > 0) {
+    const target = minutes * 60 - finishSeconds;
+    picked = [];
+    let total = 0;
+    for (const x of order) {
+      if (total >= target - 20) break;
+      picked.push({ ...x, rounds: 1 });
+      total += itemSeconds({ ...x.s, rounds: 1 });
+    }
+    for (let i = 0; picked.length && total < target - 20 && i < 40; i++) {
+      const x = picked[i % picked.length];
+      total += itemSeconds({ ...x.s, rounds: 1 });
+      x.rounds++;
+    }
+  } else picked = order.slice(0, count).map(x => ({ ...x, rounds: 1 }));
+  return picked.sort((a, b) => b.score - a.score || a.order - b.order).map(x => ({ ...x.s, rounds: x.rounds }));
 }
 function routine(items) {
   const seconds = items.reduce((sum, s) => sum + itemSeconds(s), 0);
@@ -266,10 +329,10 @@ export function routineSize(minutes) {
  * cardio first only when `cardio` is true; the cardio is its own part now,
  * see cardioFor). Null without work sets.
  */
-export function warmupFor(rows, muscleOf, { count = 4, cardioSeconds = CARDIO.seconds, cardio = false, stations } = {}) {
+export function warmupFor(rows, muscleOf, { count = 4, cardioSeconds = CARDIO.seconds, cardio = false, stations, minutes, date, sport } = {}) {
   const sets = workedMuscles(rows, muscleOf);
   if (!sets.size) return null;
-  return routine([...(cardio ? [{ ...CARDIO, seconds: cardioSeconds, rounds: 1 }] : []), ...bestFor(possible(WARMUPS, stations), sets, count).map(s => ({ ...s, rounds: 1 }))]);
+  return routine([...(cardio ? [{ ...CARDIO, seconds: cardioSeconds, rounds: 1 }] : []), ...pickMoves(possible(WARMUPS, stations), sets, { count, minutes, date, sport, kind: 'warmup' })]);
 }
 
 /**
@@ -277,20 +340,94 @@ export function warmupFor(rows, muscleOf, { count = 4, cardioSeconds = CARDIO.se
  * main muscle): the muscles with the most sets first, `count` stretches and
  * the child's pose. Null without any work set.
  */
-export function stretchingFor(rows, muscleOf, { count = 4, doubled = 2, stations } = {}) {
+export function stretchingFor(rows, muscleOf, { count = 4, doubled = 2, stations, minutes, date, sport } = {}) {
   const sets = workedMuscles(rows, muscleOf);
   if (!sets.size) return null;
-  const picked = bestFor(possible(STRETCHES, stations), sets, count).map((s, i) => ({ ...s, rounds: i < doubled ? 2 : 1 }));
-  return routine([...picked, { ...FINISH, rounds: 1 }]);
+  const finish = { ...FINISH, rounds: 1 };
+  const moves = pickMoves(possible(STRETCHES, stations), sets, { count, minutes, finishSeconds: itemSeconds(finish), date, sport, kind: 'stretching' });
+  const picked = minutes > 0 ? moves : moves.map((s, i) => ({ ...s, rounds: i < doubled ? 2 : 1 }));
+  return routine([...picked, finish]);
+}
+
+// The athlete's own warm-ups and stretchings (Nastavení → Posilovna): each a
+// name and moves, a move from the catalog by its id or their own with a name,
+// seconds and sides. Up to 10 of each, 20 moves in one.
+const ROUTINE_KINDS = ['warmup', 'stretching'];
+const catalogOf = kind => kind === 'warmup' ? WARMUPS : [...STRETCHES, FINISH];
+const cleanText = (v, max) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+export function normalizeMyRoutines(input) {
+  const out = {};
+  for (const kind of ROUTINE_KINDS) {
+    const list = Array.isArray(input?.[kind]) ? input[kind] : [];
+    const ids = new Set();
+    out[kind] = list.slice(0, 10).map((r, n) => {
+      const items = (Array.isArray(r?.items) ? r.items : []).slice(0, 20).map(item => {
+        if (item?.move && catalogOf(kind).some(s => s.id === item.move)) return { move: String(item.move) };
+        const name = cleanText(item?.name, 60), seconds = Math.round(Number(item?.seconds));
+        return name && seconds >= 5 && seconds <= 3600 ? { name, seconds, sides: item.sides === true } : null;
+      }).filter(Boolean);
+      let id = /^[A-Za-z0-9_-]{1,40}$/.test(String(r?.id || '')) ? String(r.id) : kind + '-' + (n + 1);
+      while (ids.has(id)) id += 'x';
+      ids.add(id);
+      return items.length ? { id, name: cleanText(r?.name, 40) || L('Moje', 'Mine') + ' ' + (n + 1), items } : null;
+    }).filter(Boolean);
+  }
+  return out;
+}
+/** One own warm-up or stretching as a routine, as the generated ones. */
+export function ownRoutine(kind, saved) {
+  if (!saved?.items?.length) return null;
+  const catalog = catalogOf(kind);
+  const items = saved.items.map((item, i) => {
+    const move = item.move && catalog.find(s => s.id === item.move);
+    return move ? { ...move, rounds: 1 } : { id: 'own-' + (i + 1), cs: item.name, en: item.name, seconds: item.seconds, sides: !!item.sides, rounds: 1, stepsCs: [], stepsEn: [] };
+  });
+  return { ...routine(items), own: saved.id, name: saved.name };
+}
+/** The own routines with their minutes and their moves named, for the app. */
+export function myRoutinesView(setup = {}) {
+  const mine = normalizeMyRoutines(setup.myRoutines);
+  return Object.fromEntries(ROUTINE_KINDS.map(kind => [kind, mine[kind].map(r => {
+    const built = ownRoutine(kind, r);
+    return { id: r.id, name: r.name, minutes: built.minutes, items: r.items.map((item, i) => ({ ...item, name: built.items[i].name, seconds: built.items[i].seconds, sides: built.items[i].sides })) };
+  })]));
+}
+/** The moves to build an own routine from (all of them; `needs` lists the equipment). */
+export function routineMoves() {
+  const view = s => ({ id: s.id, name: L(s.cs, s.en), seconds: s.seconds, sides: s.sides, needs: s.needs || [], photos: s.photo ? [0, 1].map(i => PHOTO_BASE + s.photo + '/' + i + '.jpg') : [], ...(s.video ? { video: s.video } : {}) });
+  return { warmup: WARMUPS.map(view), stretching: [...STRETCHES, FINISH].map(view) };
+}
+/** A length from the settings or the app: 5–30 minutes, else auto (null). */
+export function routineLength(value) {
+  const n = Math.round(Number(value));
+  return value !== 'auto' && n >= 5 && n <= 30 ? n : null;
+}
+
+/**
+ * The warm-up and the stretching for the work sets, on or off: an own routine
+ * when the setup picks one (`warmupRoutine`), else built for the muscles, the
+ * main sport and the date, as long as the setup's length (`warmupLength`) or
+ * sized to the session. `override` changes one day: {warmup: {length, routine}}.
+ */
+export function routinesFor(rows, muscleOf, setup = {}, minutes = 60, { date, sport, override = {} } = {}) {
+  const size = routineSize(minutes), stations = setup?.stations, mine = normalizeMyRoutines(setup?.myRoutines);
+  const build = (kind, make, sized) => {
+    const choice = { routine: setup?.[kind + 'Routine'], length: setup?.[kind + 'Length'], ...override[kind] };
+    const own = choice.routine && choice.routine !== 'auto' ? mine[kind].find(r => r.id === choice.routine) : null;
+    if (own) return ownRoutine(kind, own);
+    const length = routineLength(choice.length);
+    return make(rows, muscleOf, { ...sized, stations, date, sport, ...(length ? { minutes: length } : {}) });
+  };
+  return { warmup: build('warmup', warmupFor, size.warmup), stretching: build('stretching', stretchingFor, size.stretching) };
 }
 
 /**
  * The warm-up and the stretching of a plan as the setup wants them (null when
  * turned off), and the ones turned off as `spare`, offered switched off.
  */
-export function planRoutines(rows, muscleOf, setup = {}, minutes = 60) {
-  const size = routineSize(minutes), stations = setup?.stations;
-  const all = { warmup: warmupFor(rows, muscleOf, { ...size.warmup, stations }), stretching: stretchingFor(rows, muscleOf, { ...size.stretching, stations }) };
+export function planRoutines(rows, muscleOf, setup = {}, minutes = 60, options = {}) {
+  const size = routineSize(minutes);
+  const all = routinesFor(rows, muscleOf, setup, minutes, options);
   const on = { warmup: setup?.warmup !== false, stretching: setup?.stretching !== false };
   const spare = { warmup: on.warmup ? null : all.warmup, stretching: on.stretching ? null : all.stretching };
   return { warmup: on.warmup ? all.warmup : null, stretching: on.stretching ? all.stretching : null, spare: spare.warmup || spare.stretching ? spare : null, cardio: cardioFor(setup || {}, size.cardio) };
@@ -336,7 +473,7 @@ export function cardioFor(setup = {}, size = routineSize(60).cardio) {
 // ["Rozcvička a protažení", "{warmup:{minutes,items}, stretching:{minutes,items}, cardio:{type,start,end}}"].
 export const ROUTINES_ROW = 5;
 export const ROUTINES_LABEL = 'Rozcvička a protažení';
-const stored = r => r?.items?.length ? { minutes: r.minutes, items: r.items } : null;
+const stored = r => r?.items?.length ? { minutes: r.minutes, items: r.items, ...(r.name ? { name: String(r.name) } : {}) } : null;
 const storedCardio = c => c && (c.start || c.end) ? { type: String(c.type || 'exercise_bike'), start: Number(c.start) || null, end: Number(c.end) || null } : null;
 // A part turned off in Posilovna is still stored (`spare`) and listed in `off`,
 // so the app offers it switched off and it can be turned on for the day.
@@ -378,7 +515,7 @@ export function withRoutines(values, setup, muscleOf) {
 // Typical minutes the warm-up, the cardio and the stretching add to each
 // session length, for the length picker before a plan exists (a full-body
 // session; 0 when off).
-export function typicalExtraMinutes({ warmup = true, warmupCardio = true, cardio, stretching = true } = {}) {
+export function typicalExtraMinutes({ warmup = true, warmupCardio = true, cardio, stretching = true, warmupMinutes = null, stretchingMinutes = null } = {}) {
   const rows = ['chest', 'back', 'quads', 'hamstrings', 'shoulders', 'glutes'].map(m => ['WORK', m]);
   const muscleOf = name => name;
   const mode = cardioMode({ cardio, warmupCardio });
@@ -386,9 +523,9 @@ export function typicalExtraMinutes({ warmup = true, warmupCardio = true, cardio
     const size = routineSize(minutes);
     const parts = cardioFor({ cardio: mode }, size.cardio);
     return [minutes, {
-      warmup: warmup ? warmupFor(rows, muscleOf, size.warmup).minutes : 0,
+      warmup: warmup ? warmupMinutes || warmupFor(rows, muscleOf, size.warmup).minutes : 0,
       cardio: (parts?.start || 0) + (parts?.end || 0),
-      stretching: stretching ? stretchingFor(rows, muscleOf, size.stretching).minutes : 0
+      stretching: stretching ? stretchingMinutes || stretchingFor(rows, muscleOf, size.stretching).minutes : 0
     }];
   }));
 }

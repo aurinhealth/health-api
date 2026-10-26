@@ -3,7 +3,8 @@ import SwiftUI
 /// Režim tréninku → Upravit plán: the exercises in their order with how far
 /// each is, to drag into another order, swipe away, give a set more or fewer,
 /// swap for another, join into a superset, or add one from the catalog.
-/// "Uložit" hands the changed day back.
+/// "Uložit" hands the changed day back. Po cvicích turns the stretching and the
+/// cardio at the end on or off for the day (and changes them) right away.
 struct PlanEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State var day: GymDay
@@ -16,6 +17,9 @@ struct PlanEditorSheet: View {
     let save: (GymDay) -> Void
     @State private var adding = false
     @State private var swapping: String?
+    @AppStorage(GymDayParts.storageKey) private var dayParts = ""
+    @State private var cardioEditing: GymDayPart?
+    @State private var choosing: GymDayPart?
 
     init(day: GymDay, catalog: [GymCatalogExercise], date: String? = nil, current: Int? = nil,
          go: ((GymDay, String) -> Void)? = nil, save: @escaping (GymDay) -> Void) {
@@ -48,6 +52,14 @@ struct PlanEditorSheet: View {
                     }
                     .disabled(catalog.isEmpty)
                 }
+                if let date {
+                    Section {
+                        if day.stretching != nil { afterRow(.stretching, date: date) }
+                        afterRow(.cardioEnd, date: date)
+                    } header: {
+                        Text("Po cvicích")
+                    }
+                }
             }
             .environment(\.editMode, .constant(.active))
             .navigationTitle(day.planName?.nilIfBlank ?? L10n.tr("Plán tréninku"))
@@ -65,6 +77,18 @@ struct PlanEditorSheet: View {
                     }
                 }
             }
+            .sheet(item: $cardioEditing) { part in
+                if let date {
+                    GymCardioSheet(choice: GymDayParts.resolved(day, stored: dayParts, date: date).choice(part), options: []) { choice in
+                        var next = GymDayParts.resolved(day, stored: dayParts, date: date)
+                        next.cardio[part.rawValue] = choice
+                        dayParts = GymDayParts.saving(next, date: date, into: dayParts)
+                    }
+                }
+            }
+            .sheet(item: $choosing) { part in
+                if let date { GymRoutineSheet(part: part, day: day, date: date) }
+            }
             .sheet(isPresented: $adding) {
                 ExercisePicker(catalog: catalog, used: Set(day.exercises.map(\.name))) { ex in
                     day.insertExercise(ex.name, sets: Self.count(ex.sets) ?? 3, reps: ex.reps?.string ?? "10", catalog: catalog, sides: GymSides.oneSided(ex.name))
@@ -72,6 +96,39 @@ struct PlanEditorSheet: View {
             }
         }
         .presentationDetents([.large])
+    }
+
+    /// Protažení or Kardio after the exercises: its switch, and a tap changes it.
+    private func afterRow(_ part: GymDayPart, date: String) -> some View {
+        let parts = GymDayParts.resolved(day, stored: dayParts, date: date)
+        let on = parts.isOn(part)
+        return HStack(spacing: 12) {
+            Button { if part.isCardio { cardioEditing = part } else { choosing = part } } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(part == .stretching ? "Protažení" : "Kardio").font(.body).foregroundStyle(Palette.ink)
+                    if on {
+                        HStack(spacing: 3) {
+                            Text(verbatim: parts.subtitle(part, day: day)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.faint)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!on)
+            Toggle(isOn: Binding(get: { on }, set: { value in
+                var next = parts
+                next.off.removeAll { $0 == part }
+                if !value { next.off.append(part) }
+                dayParts = GymDayParts.saving(next, date: date, into: dayParts)
+            })) { EmptyView() }
+                .toggleStyle(AurinToggleStyle())
+                .fixedSize()
+                .accessibilityLabel(Text(part == .stretching ? "Protažení" : "Kardio"))
+        }
     }
 
     private func row(_ offset: Int, _ exercise: GymExercise) -> some View {

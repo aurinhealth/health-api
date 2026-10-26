@@ -5,12 +5,14 @@ import SwiftUI
 // to tick, each move's photos and steps behind "i", and a timer that leads
 // through every hold.
 
-/// The warm-up or the stretching: its moves in order.
-struct GymStretching: Decodable, Equatable {
+/// The warm-up or the stretching: its moves in order, and the name of an own one
+/// ("Legs"; nil for the automatic one).
+struct GymStretching: Codable, Equatable {
     let minutes: Int
     let items: [Item]
+    var name: String? = nil
 
-    struct Item: Decodable, Equatable, Identifiable {
+    struct Item: Codable, Equatable, Identifiable {
         let id: String
         let name: String
         let seconds: Int
@@ -73,9 +75,10 @@ struct GymStretching: Decodable, Equatable {
         return try? JSONDecoder().decode(Routines.self, from: data)
     }
 
-    init(minutes: Int, items: [Item]) {
+    init(minutes: Int, items: [Item], name: String? = nil) {
         self.minutes = minutes
         self.items = items
+        self.name = name
     }
 
     /// Every hold in order: each round, on each side.
@@ -125,6 +128,14 @@ enum GymRoutineKind {
         case .warmup: return "Rozcvička hotová"
         case .stretching: return "Protažení hotovo"
         case .cardio: return "Kardio hotové"
+        }
+    }
+    /// The server's name of the part (warmup, stretching).
+    var id: String {
+        switch self {
+        case .warmup: return "warmup"
+        case .stretching: return "stretching"
+        case .cardio: return "cardio"
         }
     }
     /// Ticks kept apart: the warm-up and the stretching can share a move.
@@ -411,6 +422,64 @@ struct GymPreferences: Decodable, Equatable {
     var stretching: Bool
     /// Typical minutes the routines add to each session length ("60" → warm-up and stretching).
     var extraMinutes: [String: Extra]?
+    /// The automatic routines' length: "auto" or minutes.
+    var warmupLength: JSONValue?
+    var stretchingLength: JSONValue?
+    /// The own routine used by default ("auto": the automatic one).
+    var warmupRoutine: String?
+    var stretchingRoutine: String?
+    /// The athlete's own warm-ups and stretchings.
+    var myRoutines: MyRoutines?
+
+    struct MyRoutines: Decodable, Equatable {
+        var warmup: [MyRoutine] = []
+        var stretching: [MyRoutine] = []
+    }
+
+    /// An own warm-up or stretching: moves from the catalog (`move`) or own ones.
+    struct MyRoutine: Decodable, Equatable, Identifiable, Hashable {
+        var id: String
+        var name: String
+        var minutes: Int?
+        var items: [MyItem]
+    }
+
+    struct MyItem: Decodable, Equatable, Hashable {
+        var move: String?
+        var name: String
+        var seconds: Int
+        var sides: Bool?
+
+        /// As the server saves it: a catalog move by its id, an own one whole.
+        var json: JSONValue {
+            if let move { return .object(["move": .string(move)]) }
+            return .object(["name": .string(name), "seconds": .number(Double(seconds)), "sides": .bool(sides == true)])
+        }
+
+        /// "30 s", "20 s na stranu", "5 min".
+        var duration: String {
+            let time = seconds >= 120 && seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds) s"
+            return time + (sides == true ? " " + L10n.tr("na stranu") : "")
+        }
+    }
+
+    func routines(_ kind: GymRoutineKind) -> [MyRoutine] {
+        kind == .warmup ? myRoutines?.warmup ?? [] : myRoutines?.stretching ?? []
+    }
+
+    /// The minutes of the automatic one, nil for auto.
+    func length(_ kind: GymRoutineKind) -> Int? {
+        if case .number(let n) = kind == .warmup ? warmupLength : stretchingLength { return Int(n) }
+        return nil
+    }
+
+    /// The own routine used by default, nil for the automatic one.
+    func routine(_ kind: GymRoutineKind) -> String? {
+        let id = kind == .warmup ? warmupRoutine : stretchingRoutine
+        return id == "auto" ? nil : id
+    }
+
+    func isOn(_ kind: GymRoutineKind) -> Bool { kind == .warmup ? warmup != false : stretching }
 
     struct Extra: Decodable, Equatable {
         let warmup: Int
@@ -435,17 +504,46 @@ extension APIClient {
     func saveGymPreferences(_ changes: JSONObject) async throws -> GymPreferences {
         try await send("/app/api/gym/preferences", method: "POST", body: changes)
     }
+
+    /// One day's warm-up or stretching: automatic with a length (nil: sized to
+    /// the workout) or an own one (GET /app/api/gym/routine).
+    func gymRoutine(date: String, kind: GymRoutineKind, length: Int?, routine: String?) async throws -> GymStretching {
+        struct Reply: Decodable { let routine: GymStretching }
+        let r: Reply = try await get("/app/api/gym/routine?date=" + date + "&kind=" + kind.id + "&length=" + (length.map(String.init) ?? "auto")
+                                     + "&routine=" + Self.query(routine ?? "auto"))
+        return r.routine
+    }
+
+    /// The moves an own warm-up or stretching is put together from.
+    func gymRoutineMoves() async throws -> GymRoutineMoves {
+        try await get("/app/api/gym/routine-moves")
+    }
 }
 
-/// Cíl, Zkušenost, Rozcvička, Kardio, Druh kardia and Protažení: each saved as soon as it changes.
+struct GymRoutineMoves: Decodable, Equatable {
+    var warmup: [Move] = []
+    var stretching: [Move] = []
+
+    struct Move: Decodable, Equatable, Identifiable {
+        let id: String
+        let name: String
+        let seconds: Int
+        let sides: Bool
+        var needs: [String]? = nil
+        var photos: [String]? = nil
+    }
+
+    func moves(_ kind: GymRoutineKind) -> [Move] { kind == .warmup ? warmup : stretching }
+}
+
+/// Cíl, Zkušenost, Kardio and Druh kardia: each saved as soon as it changes;
+/// Rozcvička and Protažení open their own page (GymRoutineSettingsView).
 struct GymPreferencesGroup: View {
     @Environment(AppModel.self) private var model
     @State private var prefs: GymPreferences?
     @State private var goal = "auto"
-    @State private var warmup = true
     @State private var cardio = "start"
     @State private var cardioType = "exercise_bike"
-    @State private var stretching = true
     @State private var error: String?
 
     static let goals = [("strength", "Síla"), ("strength_muscle", "Síla a svaly"), ("muscle", "Svaly"), ("muscle_fitness", "Svaly a kondice"), ("fitness", "Kondice")]
@@ -458,10 +556,8 @@ struct GymPreferencesGroup: View {
         }
         .task { await load() }
         .onChange(of: goal) { _, value in goalChanged(value) }
-        .onChange(of: warmup) { _, value in warmupChanged(value) }
         .onChange(of: cardio) { _, value in cardioChanged(value) }
         .onChange(of: cardioType) { _, value in cardioTypeChanged(value) }
-        .onChange(of: stretching) { _, value in stretchingChanged(value) }
     }
 
     private var group: some View {
@@ -471,7 +567,7 @@ struct GymPreferencesGroup: View {
             NavigationLink { ExperienceSettingsView() } label: { SettingsRow(title: "Zkušenost", value: experienceValue) }
                 .buttonStyle(.plain)
             SettingsDivider()
-            SettingsToggle(title: "Rozcvička", isOn: $warmup)
+            routineLink(.warmup)
             SettingsDivider()
             VStack(alignment: .leading, spacing: 10) {
                 Text("Kardio").font(.body).foregroundStyle(Palette.ink)
@@ -486,7 +582,7 @@ struct GymPreferencesGroup: View {
             SettingsPicker(title: "Druh kardia", selection: $cardioType, options: cardioOptions)
                 .disabled(cardio == "none")
             SettingsDivider()
-            SettingsToggle(title: "Protažení", isOn: $stretching)
+            routineLink(.stretching)
         }
         .disabled(prefs == nil && !model.demo)
     }
@@ -501,9 +597,18 @@ struct GymPreferencesGroup: View {
         return options.map { ($0.id, $0.name) }
     }
 
-    private func warmupChanged(_ value: Bool) {
-        let saved: Bool = prefs?.warmup != false
-        save(["warmup": .bool(value)], unchanged: saved == value)
+    private func routineLink(_ kind: GymRoutineKind) -> some View {
+        NavigationLink { GymRoutineSettingsView(kind: kind) } label: {
+            SettingsRow(title: kind.title, value: routineValue(kind))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// "Automaticky", an own routine's name or "Vypnuto".
+    private func routineValue(_ kind: GymRoutineKind) -> String {
+        guard let prefs else { return L10n.tr("Automaticky") }
+        if !prefs.isOn(kind) { return L10n.tr("Vypnuto") }
+        return prefs.routine(kind).flatMap { id in prefs.routines(kind).first { $0.id == id }?.name } ?? L10n.tr("Automaticky")
     }
 
     private func cardioChanged(_ value: String) {
@@ -514,10 +619,6 @@ struct GymPreferencesGroup: View {
     private func cardioTypeChanged(_ value: String) {
         let saved: String? = prefs?.cardioType
         save(["cardioType": .string(value)], unchanged: saved == value)
-    }
-
-    private func stretchingChanged(_ value: Bool) {
-        save(["stretching": .bool(value)], unchanged: prefs?.stretching == value)
     }
 
     /// "podle sportu · síla a svaly": what the main sport recommends.
@@ -542,10 +643,8 @@ struct GymPreferencesGroup: View {
     private func apply(_ value: GymPreferences) {
         prefs = value
         goal = value.goal
-        warmup = value.warmup != false
         cardio = value.cardioMode
         cardioType = value.cardioType ?? value.cardioOptions?.first?.id ?? "exercise_bike"
-        stretching = value.stretching
     }
 
     private func save(_ change: JSONObject, unchanged: Bool) {
