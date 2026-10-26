@@ -119,7 +119,7 @@ import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
 import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman, FIRST_IMPORT_DAYS } from "./ultrahuman.js";
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
 import { wahooDetail } from "./wahoo-detail.js";
-import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, readWahooTokens, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
+import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
 import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
 import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
@@ -310,9 +310,15 @@ const USER_JOBS = [
   // Every hour at :20: the ring's last three days from Ultrahuman (the night lands in the morning).
   { name: "ultrahuman", providers: ["ultrahuman"], due: (cron, now) => minute(cron, now, m => m === 20), run: async scoped => { const r = await syncUltrahuman(scoped, { days: 3 }); if (r.saved) await bumpCacheVersion(scoped.DB); } },
   // Wahoo: plans not sent yet every five minutes; done workouts come by the webhook, and every
-  // three hours a look in case one was missed (the Sandbox allows 250 requests a day for the app).
+  // three hours a look in case one was missed (the Sandbox allows 250 requests a day for the app),
+  // every hour on a day with a ride or run planned that Wahoo has not brought yet (wahooRideExpected).
   { name: "wahoo-exports", providers: ["wahoo"], due: every5, run: scoped => retryWahooExports(scoped) },
-  { name: "wahoo", providers: ["wahoo"], due: (cron, now) => minute(cron, now, (m, h) => m === 35 && h % 3 === 0), run: async scoped => { const r = await syncWahoo(scoped, { days: 2, maxPages: 1 }); if (r.saved) { await matchActivities(scoped, { days: 3 }).catch(() => null); await bumpCacheVersion(scoped.DB); } } },
+  { name: "wahoo", providers: ["wahoo"], due: (cron, now) => minute(cron, now, m => m === 35), run: async (scoped, ctx, controller) => {
+    const now = controller?.scheduledTime || Date.now();
+    if (new Date(now).getUTCHours() % 3 !== 0 && !(await wahooRideExpected(scoped, { now }))) return;
+    const r = await syncWahoo(scoped, { days: 2, maxPages: 1 });
+    if (r.saved) { await matchActivities(scoped, { days: 3 }).catch(() => null); await bumpCacheVersion(scoped.DB); }
+  } },
   { name: "whoop", providers: ["whoop"], due: (cron, now) => minute(cron, now, m => m === 25), run: async scoped => { const r = await syncWhoop(scoped, { days: 3 }); if (r.saved) await bumpCacheVersion(scoped.DB); } },
   // Every 5 minutes for a personal API key; an OAuth connection gets
   // webhooks (/webhooks/intervals), so only a look every 6 hours in case

@@ -11,7 +11,9 @@ test("each minute names the jobs due then: syncing always, the rest on their min
   assert.ok(dueUserJobs("* * * * *", at(10, 20)).includes("ultrahuman"));
   assert.ok(dueUserJobs("* * * * *", at(10, 25)).includes("whoop"));
   assert.ok(dueUserJobs("* * * * *", at(9, 35)).includes("wahoo"));
-  assert.ok(!dueUserJobs("* * * * *", at(10, 35)).includes("wahoo"));
+  // Every hour at :35; off the three-hour mark it reads Wahoo only on a day with a ride planned (wahooRideExpected).
+  assert.ok(dueUserJobs("* * * * *", at(10, 35)).includes("wahoo"));
+  assert.ok(!dueUserJobs("* * * * *", at(10, 36)).includes("wahoo"));
   assert.deepEqual(dueUserJobs("5 1 * * *", at(1, 5)), ["sync"]);
   assert.ok(dueUserJobs("* * * * *", at(10, 5)).includes("coach-push"));
   assert.ok(!dueUserJobs("* * * * *", at(10, 6)).includes("coach-push"));
