@@ -87,7 +87,7 @@ struct TrainingModeView: View {
                 .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
             VStack(alignment: .leading, spacing: 0) {
                 header
-                if let day, !finishedSession, current(day) != nil { tools }
+                if let day, !finishedSession, let exercise = current(day) { tools(day, exercise) }
                 if loading && day == nil {
                     Spacer()
                     ProgressView().frame(maxWidth: .infinity)
@@ -267,12 +267,13 @@ struct TrainingModeView: View {
         }
     }
 
-    /// Under the header: sound and vibration, the heart rate, and the plan.
-    private var tools: some View {
+    /// Under the header: sound and vibration, the heart rate, the coach and the plan.
+    private func tools(_ day: GymDay, _ exercise: GymExercise) -> some View {
         HStack(spacing: 8) {
             GymSignalsMenu()
             HeartSourceButton(live: live) { sensors = true }
             Spacer(minLength: 4)
+            CoachPill(subject: .workout(day, exercise: exercise, resting: restEnd != nil, restSeconds: restTotal, date: date), height: 34)
             Button { editing = true } label: { ToolChip(systemImage: "list.bullet", title: L10n.tr("Plán")) }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.tr("Upravit plán"))
@@ -305,7 +306,6 @@ struct TrainingModeView: View {
                 if set != nil {
                     CircleButton(systemImage: "arrow.triangle.swap", label: L10n.tr("Nahradit cvik")) { swapping = exercise.name }
                 }
-                CoachCircleButton(subject: .exercise(exercise, set: set, date: date))
                 CircleButton(systemImage: "chart.bar", label: L10n.tr("Historie cviku")) { historyFor = exercise.name }
                 CircleButton(systemImage: "info", label: L10n.tr("Technika")) { technique = exercise.name }
             }

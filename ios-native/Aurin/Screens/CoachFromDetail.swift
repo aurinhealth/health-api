@@ -1,13 +1,15 @@
 import SwiftUI
 
 /// What the athlete asks the coach about from a detail screen ("Zeptat se
-/// kouče"): a done activity, a planned session, a gym exercise or a health
-/// value. It goes to the server as appContext.subject
+/// kouče"): a done activity, a planned session, a gym exercise, a health
+/// value or the gym workout under way in Režim tréninku. It goes to the server as appContext.subject
 /// (src/assistant-app-context.js), which finds its numbers in storage; the
 /// chat shows it on a card with questions to try.
 struct CoachSubject: Equatable {
-    enum Kind: String { case activity, planned, exercise, metric }
+    enum Kind: String { case activity, planned, exercise, metric, workout }
     let kind: Kind
+    /// The line above the title on the card.
+    var label = "Ptáš se na"
     var id: String? = nil
     /// The title on the card ("Kolo · tempo").
     let title: String
@@ -26,6 +28,8 @@ struct CoachSubject: Equatable {
     let color: Color
     /// Czech keys, translated where they are shown and sent.
     let questions: [String]
+    /// Režim tréninku: where in the workout the athlete is (assistantAppContext live).
+    var live: JSONObject? = nil
 
     var appContext: JSONObject {
         var subject: JSONObject = ["kind": .string(kind.rawValue), "title": .string(title)]
@@ -34,6 +38,7 @@ struct CoachSubject: Equatable {
         var context: JSONObject = ["view": .string(view), "date": .string(date ?? AppModel.localDate(Date())), "subject": .object(subject)]
         if let sport { context["sport"] = .string(sport) }
         if let exercise { context["exercise"] = .string(exercise) }
+        if let live { context["live"] = .object(live) }
         return context
     }
 
@@ -101,19 +106,40 @@ struct CoachSubject: Equatable {
                             date: s.date, sport: serverSport(s.sport), symbol: symbol(s.sport), color: color(s.sport), questions: questions)
     }
 
-    /// Režim tréninku → the exercise being done; `set` is the next set.
-    static func exercise(_ exercise: GymExercise, set: GymSet?, date: String) -> CoachSubject {
-        let work = exercise.sets.filter(\.work)
-        var parts: [String?] = []
-        if let set, set.work, let n = Int(set.number) {
-            parts.append(L10n.f("Série %@ z %@", String(n), String(Set(work.map(\.number)).count)))
+    /// Režim tréninku → "Kouč" by the plan: the whole workout and where in it
+    /// the athlete is. Doing a set, resting between the sets of an exercise, or
+    /// resting before the next one (`exercise` is the one on the screen, which
+    /// after the last set of an exercise is already the next one). The server
+    /// reads the sets done so far from the saved day.
+    static func workout(_ day: GymDay, exercise: GymExercise, resting: Bool, restSeconds: Int, date: String) -> CoachSubject {
+        let done: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
+        let total: Int = day.exercises.reduce(0) { $0 + $1.workCount }
+        let title = (day.planName?.nilIfBlank ?? L10n.tr("Posilovna")) + " · " + L10n.f("%@ z %@ sérií", String(done), String(total))
+        let set = exercise.sets.first { !$0.done }
+        let setNumber = set.flatMap { $0.work ? Int($0.number) : nil }
+        let setLine = setNumber.map { L10n.f("série %@ z %@", String($0), String(exercise.workCount)) }
+        let phase = !resting ? "set" : exercise.sets.contains(where: \.done) ? "rest" : "restBeforeExercise"
+        let previous = day.exercises.last { $0.name != exercise.name && $0.sets.contains(where: \.done) }?.name
+        let line: String
+        let questions: [String]
+        switch phase {
+        case "set":
+            line = Self.line([exercise.name, setLine.map(Fmt.capitalized), set.map { GymLiveActivity.load($0, in: exercise) }])
+            questions = ["Jak na tenhle cvik správně?", "Bolí mě při něm, co místo něj?", "Čím nahradit tenhle cvik?"]
+        case "rest":
+            line = L10n.tr("Pauza") + " · " + L10n.f("další: %@", Self.line([exercise.name, setLine]))
+            questions = ["Stačí mi tahle pauza?", "Mám v další sérii přidat?", "Bolí mě při něm, co místo něj?"]
+        default:
+            line = L10n.tr("Pauza") + " · " + L10n.f("další: %@", Self.line([exercise.name, set.map { GymLiveActivity.load($0, in: exercise) }]))
+            questions = [L10n.f("Kolik mám dát na %@?", exercise.name), L10n.f("Můžu dnes %@ vynechat?", exercise.name),
+                         previous.map { L10n.f("Byla váha u %@ správná?", $0) } ?? "Jak se mi zatím trénink daří?"]
         }
-        if let set, let kg = set.kg ?? set.plannedKg, let reps = set.reps ?? set.plannedReps, !kg.isEmpty, !reps.isEmpty {
-            parts.append(kg + " kg × " + reps)
-        }
-        return CoachSubject(kind: .exercise, title: exercise.name, line: line(parts), date: date, sport: "gym", exercise: exercise.name,
-                            view: "workouts", symbol: "dumbbell", color: Palette.indigo,
-                            questions: ["Čím nahradit tenhle cvik?", "Bolí mě při něm, co místo něj?", "Kolik mám dát příště?"])
+        var live: JSONObject = ["phase": .string(phase), "exercise": .string(exercise.name)]
+        if let setNumber { live["set"] = .number(Double(setNumber)) }
+        if resting, restSeconds > 0 { live["restSeconds"] = .number(Double(restSeconds)) }
+        if let previous { live["previousExercise"] = .string(previous) }
+        return CoachSubject(kind: .workout, label: "Probíhá trénink", title: title, line: line, date: date, sport: "gym", exercise: exercise.name,
+                            view: "workouts", symbol: "dumbbell", color: Palette.indigo, questions: questions, live: live)
     }
 
     /// Zdraví → a value's detail; `low` when it is under the athlete's normal.
@@ -157,6 +183,8 @@ struct CoachSubject: Equatable {
 struct CoachPill: View {
     @Environment(AppModel.self) private var model
     let subject: CoachSubject
+    /// 34 beside the chips of Režim tréninku.
+    var height: CGFloat = 32
     @State private var open = false
 
     var body: some View {
@@ -164,29 +192,10 @@ struct CoachPill: View {
             Button { open = true } label: {
                 Label("Kouč", systemImage: "sparkles")
                     .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.green)
-                    .padding(.horizontal, 12).frame(height: 32)
+                    .padding(.horizontal, 12).frame(height: height)
                     .background(Palette.greenSoft, in: Capsule())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(L10n.tr("Zeptat se kouče"))
-            .sheet(isPresented: $open) { CoachView(view: subject.view, date: subject.date, subject: subject) }
-        }
-    }
-}
-
-/// The round button beside an exercise in Režim tréninku.
-struct CoachCircleButton: View {
-    @Environment(AppModel.self) private var model
-    let subject: CoachSubject
-    @State private var open = false
-
-    var body: some View {
-        if !model.demo {
-            Button { open = true } label: {
-                Image(systemName: "sparkles").font(.system(size: 15, weight: .medium)).foregroundStyle(Palette.green)
-                    .frame(width: 36, height: 36)
-                    .overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
-            }
             .accessibilityLabel(L10n.tr("Zeptat se kouče"))
             .sheet(isPresented: $open) { CoachView(view: subject.view, date: subject.date, subject: subject) }
         }
@@ -202,7 +211,7 @@ struct CoachSubjectCard: View {
             Image(systemName: subject.symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(subject.color)
                 .frame(width: 34, height: 34).background(subject.color.opacity(0.14), in: Circle())
             VStack(alignment: .leading, spacing: 1) {
-                Text("Ptáš se na").font(Typo.caption).foregroundStyle(Palette.muted)
+                Text(verbatim: L10n.tr(subject.label)).font(Typo.caption).foregroundStyle(Palette.muted)
                 Text(subject.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
                 if let line = subject.line, !line.isEmpty {
                     Text(line).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)

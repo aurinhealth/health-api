@@ -2,7 +2,8 @@ import { validDay, weekStartOf } from './training-availability.js';
 import { todayGymContext } from './coach-gym-adjustment.js';
 import { compactActivity } from './coach-assistant.js';
 
-const SUBJECT_KINDS=['activity','planned','exercise','metric'];
+const SUBJECT_KINDS=['activity','planned','exercise','metric','workout'];
+const LIVE_PHASES=['set','rest','restBeforeExercise'];
 const text=(v,max)=>typeof v==='string'&&v.trim()?v.replace(/[\u0000-\u001f]/g,' ').trim().slice(0,max):null;
 
 // What the athlete asks about from a detail screen ("Zeptat se kouče"): a done
@@ -15,16 +16,27 @@ function screenSubject(raw){
   return {kind:raw.kind,id,title:text(raw.title,120),metric};
 }
 
+// Režim tréninku: where in the gym workout under way the athlete is (doing a
+// set, resting between sets, resting before the next exercise). The sets done
+// come from the saved day (selectedGym), never from here.
+function liveWorkout(raw){
+  if(!raw||typeof raw!=='object'||!LIVE_PHASES.includes(raw.phase))return null;
+  const whole=(v,max)=>Number.isInteger(v)&&v>0&&v<=max?v:null;
+  const live={phase:raw.phase,exercise:text(raw.exercise,120),set:whole(raw.set,100),restSeconds:whole(raw.restSeconds,3600),previousExercise:text(raw.previousExercise,120)};
+  return Object.fromEntries(Object.entries(live).filter(([,v])=>v!=null));
+}
+
 // The browser identifies the screen. Training results always come from storage.
 export function assistantAppContext(input, today) {
   const raw=input&&typeof input==='object'?input:{};
   const view=['today','workouts','training','health','nutrition','settings'].includes(raw.view)?raw.view:'today';
   const date=validDay(raw.date)?raw.date:today;
   const subject=screenSubject(raw.subject);
+  const live=liveWorkout(raw.live);
   return {view,date,weekStart:weekStartOf(validDay(raw.weekStart)?raw.weekStart:date),
     sport:['ride','run','gym'].includes(raw.sport)?raw.sport:null,
     exercise:typeof raw.exercise==='string'?raw.exercise.trim().slice(0,120):null,
-    ...(subject?{subject}:{})};
+    ...(subject?{subject}:{}),...(live?{live}:{})};
 }
 
 // The done activity or the planned session the detail screen shows, found in
