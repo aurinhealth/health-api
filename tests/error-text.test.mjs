@@ -45,3 +45,13 @@ test("the user databases' guards, a missing secret, a broken body and runtime er
   }
   for (const text of ["Zapsat jde jen dnešek a dny před ním.", "Only today and earlier days can be logged.", "Rides and runs are planned from My workouts.", "Trénink jde naplánovat jen na dnešek nebo později."]) assert.equal(technicalText(text), false, text);
 });
+
+test("another service's quoted answer and a technical detail stay in the log too", async () => {
+  const quoted = await withPlainErrors(request("en"), Response.json({ status: "error", message: 'Intervals.icu HTTP 500: {"error":"db timeout","trace":"x"}' }, { status: 500 }));
+  assert.deepEqual(await quoted.json(), { status: "error", message: "Something went wrong. Try again in a moment." });
+  const detail = await withPlainErrors(request(), Response.json({ message: "Uložené potraviny se nepodařilo načíst.", detail: "D1_ERROR: no such column: kcal" }, { status: 500 }));
+  assert.deepEqual(await detail.json(), { message: "Uložené potraviny se nepodařilo načíst." });
+  // The service's status alone, in a sentence written for the user, stays.
+  assert.equal(technicalText("Intervals.icu rejected the move (HTTP 422)."), false);
+  assert.equal(technicalText("Intervals.icu HTTP 503"), false);
+});
