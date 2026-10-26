@@ -70,6 +70,8 @@ test("a sync skips Google data the user gave no permission for and still ends ok
     assert.equal(body.status, "ok");
     const health = calls.filter(url => url.includes("health.googleapis.com"));
     assert.ok(health.some(url => url.includes("/dataTypes/steps/")) && health.some(url => url.includes("/dataTypes/sleep/")));
+    // Today's minutes in heart-rate zones come every few minutes, not only with the night's run.
+    assert.ok(health.some(url => url.includes("/dataTypes/time-in-heart-rate-zone/")));
     for (const type of ["weight", "daily-resting-heart-rate", "daily-heart-rate-variability"]) {
       assert.ok(!health.some(url => url.includes(`/dataTypes/${type}/`)), type);
       assert.equal(body.results.find(r => r.type === type).status, "skipped");

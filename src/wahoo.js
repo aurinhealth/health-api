@@ -227,6 +227,20 @@ export async function syncWahoo(env, { days = 3, fetchImpl = fetch, now = Date.n
   return { status: 'ok', saved };
 }
 
+// Wahoo's webhook does not always come (a ride on 2026-10-26 reached Aurin
+// only when the app was opened, 1 h 40 min later). On a day with a ride or a
+// run planned and nothing from Wahoo yet, the scheduled look runs every hour
+// instead of every three (entrypoint.js), within the Sandbox's daily requests.
+export async function wahooRideExpected(env, { now = Date.now() } = {}) {
+  const today = localToday(new Date(now)), next = new Date(Date.parse(today + 'T12:00:00Z') + 86400000).toISOString().slice(0, 10);
+  const row = await env.DB.prepare(`SELECT
+      EXISTS (SELECT 1 FROM health_datapoints WHERE user_id = ? AND source_family IN ('intervals','local') AND data_type = 'planned-workout' AND start_time >= ? AND start_time < ?
+        AND (json_extract(payload_json, '$.type') LIKE '%Ride%' OR json_extract(payload_json, '$.type') LIKE '%Run%')) AS planned,
+      EXISTS (SELECT 1 FROM health_datapoints WHERE user_id = ? AND source_family = 'wahoo' AND data_type = 'activity' AND start_time >= ? AND start_time < ?) AS done`)
+    .bind(env.USER_ID ?? env.DB.userId, today, next, env.USER_ID ?? env.DB.userId, today, next).first().catch(() => null);
+  return Boolean(row?.planned) && !row?.done;
+}
+
 // POST /webhooks/wahoo: a finished workout. `forUser(wahooUserId, fn)` runs fn
 // with the env of the Aurin user connected to that Wahoo account. Anything
 // else than our token is refused; a workout of nobody we know is acknowledged,

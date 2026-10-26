@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
 import legacy from "../src/index.js";
-import { handleWahooOAuth, handleWahooWebhook, wahooActivityRow, wahooPlan, syncWahoo, syncWahooWorkout, retryWahooExports, disconnectWahoo } from "../src/wahoo.js";
+import { handleWahooOAuth, handleWahooWebhook, wahooActivityRow, wahooPlan, syncWahoo, syncWahooWorkout, retryWahooExports, disconnectWahoo, wahooRideExpected } from "../src/wahoo.js";
 import { storeLocalEvent, syncLocalWorkout, editLocalWorkout } from "../src/local-workouts.js";
 import { saveSyncPrefs, syncOverview } from "../src/sync-destinations.js";
 import { connectionStatus } from "../src/connections.js";
@@ -286,4 +286,18 @@ test("two sends of the same new plan at once make it on Wahoo only once", async 
   const results = await Promise.all([syncWahooWorkout(e, local.id, { fetchImpl, now: NOW, thresholds: {} }), syncWahooWorkout(e, local.id, { fetchImpl, now: NOW, thresholds: {} })]);
   assert.deepEqual(results.map(r => r.status).sort(), ["pending", "synced"]);
   assert.deepEqual(calls.filter(c => c.method === "POST").map(c => c.path), ["/v1/plans", "/v1/workouts"]);
+});
+
+test("the hourly look for a Wahoo ride runs only on a day with a ride planned and nothing from Wahoo yet", async () => {
+  const { raw, db } = setup();
+  const e = env(db), now = Date.parse("2026-10-26T18:35:00Z");
+  const add = (family, type, id, start, payload) => raw.sqlite.prepare("INSERT INTO health_datapoints (user_id, source_family, data_type, external_id, start_time, payload_json, record_role) VALUES (1, ?, ?, ?, ?, ?, 'primary')").run(family, type, id, start, JSON.stringify(payload));
+  const expected = () => withTimeZone("Europe/Prague", () => wahooRideExpected(e, { now }));
+  assert.equal(await expected(), false, "nothing planned");
+  add("local", "planned-workout", "planned:local-gym", "2026-10-26T00:00:00", { type: "WeightTraining", name: "Upper body" });
+  assert.equal(await expected(), false, "a gym plan does not need Wahoo");
+  add("local", "planned-workout", "planned:local-ride", "2026-10-26T00:00:00", { type: "Ride", name: "Recovery with spin-ups" });
+  assert.equal(await expected(), true);
+  add("wahoo", "activity", "wahoo:1", "2026-10-26T18:16:00", { type: "VirtualRide" });
+  assert.equal(await expected(), false, "the ride has come");
 });
