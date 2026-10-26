@@ -84,14 +84,11 @@ test("the app signs in with Apple natively and keeps the token that deleting the
   assert.equal(await revokeApple({ ...apple }), "none");
 });
 
-test("the Loadwise app still signs in with Apple and exchanges its code as itself", async () => {
+test("the old Loadwise app no longer signs in with Apple", async () => {
   const env = await withUsers();
-  await env.DB.prepare("INSERT INTO user_invites(email) VALUES ('friend@example.com')").run();
   const token = await idToken({ aud: "eu.petrfitnessdata.loadwise.native", nonce: await hex(APP_NONCE) });
-  const seen = {};
-  const ok = await nativeRequest(env, { identityToken: token, authorizationCode: "code-2", nonce: APP_NONCE }, { fetchImpl: nativeFetch({}, seen), saveRefreshToken: async () => {} });
-  assert.equal(ok.status, 200);
-  assert.equal(seen.calls.find(c => c.url.endsWith("/auth/token")).body.get("client_id"), "eu.petrfitnessdata.loadwise.native");
+  const refused = await nativeRequest(env, { identityToken: token, authorizationCode: "code-2", nonce: APP_NONCE }, { fetchImpl: nativeFetch({}), saveRefreshToken: async () => {} });
+  assert.equal(refused.status, 401);
 });
 
 test("the app's Apple sign-in refuses a web token, a wrong nonce, a form post and an uninvited e-mail", async () => {

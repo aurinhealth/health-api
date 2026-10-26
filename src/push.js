@@ -16,9 +16,6 @@ const shiftDay = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days
 
 // The app's bundle id (ios-native/project.yml), the topic every push names.
 export const APNS_TOPIC = "health.aurin.app";
-// Loadwise's ID: tokens of the app installed before the Aurin app took over
-// get their push under it (Apple answers DeviceTokenNotForTopic to the new one).
-export const LEGACY_APNS_TOPIC = "eu.petrfitnessdata.loadwise.native";
 export const MORNING_READINESS = "morning-readiness";
 // Not before 5:00 and not after 11:00 in the user's zone.
 export const MORNING_FROM_HOUR = 5;
@@ -143,7 +140,6 @@ export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Da
   const reason = await response.json().then(x => x?.reason || null).catch(() => null);
   // A refused provider token is made again next time.
   if (response.status === 403 && /ProviderToken/.test(String(reason))) cachedJwt = null;
-  if (reason === "DeviceTokenNotForTopic" && topic === APNS_TOPIC) return sendPush(env, device, alert, { fetchImpl, now, category, data, mutable, topic: LEGACY_APNS_TOPIC });
   return { ok: false, status: response.status, reason, gone: response.status === 410 || DEAD_TOKEN.has(reason) };
 }
 
