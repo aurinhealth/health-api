@@ -101,9 +101,13 @@ test("no script runs unless the page names it", async () => {
 test("the website runs its own scripts and only them", async () => {
   for (const response of [overviewPage(), privacyPage()]) {
     const policy = response.headers.get("Content-Security-Policy"), html = await response.text();
-    assert.equal(policy, scriptPolicy(html), "every inline script of the page, nothing more");
+    // Every inline script of the page, nothing more, and Cloudflare Turnstile's own script.
+    assert.equal(policy, scriptPolicy(html, ["https://challenges.cloudflare.com"]));
+    assert.match(html, /<script src="https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js\?render=explicit&onload=aurinTurnstile" async defer><\/script>/);
     assert.equal(policy.match(/'sha256-/g).length, 3);
     assert.doesNotMatch(policy, /unsafe-inline|unsafe-eval/);
+    // Each inline script is valid JavaScript (a quote escaped once too few in a template breaks the whole page).
+    for (const [, code] of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) assert.doesNotThrow(() => new Function(code));
     // An inline handler would need 'unsafe-hashes'; the pages use addEventListener.
     assert.doesNotMatch(html, /<[a-z]+[^<>]*\son[a-z]+=/i);
   }

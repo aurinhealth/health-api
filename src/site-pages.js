@@ -52,6 +52,8 @@ p{margin:0}
 .wl .share{display:none;align-items:center;gap:8px;margin-top:12px;padding:8px 14px;border:0;border-radius:999px;background:transparent;font:inherit;font-size:15px;font-weight:600;color:var(--sec);cursor:pointer}
 .wl .share:hover{background:var(--panel)}.wl .share svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .wl.sent .share{display:inline-flex}
+/* Cloudflare's "Verify you are human", only when Cloudflare asks for it. */
+.wl .ts{display:flex;justify-content:center}.wl .ts iframe{margin-top:12px}.wl.sent .ts{display:none}
 
 /* Grain over the whole page: printed paper rather than a flat screen. */
 .site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.05;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
@@ -409,8 +411,13 @@ const LOCK = '<svg class="icon lock" viewBox="0 0 24 24" aria-hidden="true"><rec
 const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const SHARE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+// Cloudflare Turnstile's widget "Aurin web" (aurin.health and staging.aurin.health); the site key is public.
+const TURNSTILE_SITE_KEY = '0x4AAAAAAFmRgmk4ncclmfIi';
+const TURNSTILE = 'https://challenges.cloudflare.com';
+const turnstileScript = `<script src="${TURNSTILE}/turnstile/v0/api.js?render=explicit&onload=aurinTurnstile" async defer></script>`;
 const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
 <span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
+<span class="ts" data-key="${TURNSTILE_SITE_KEY}"></span>
 <span class="done" role="status">${CHECK}<span>You're on the list</span></span>
 <button type="button" class="share">${SHARE}<span>Know someone who trains? Share Aurin</span></button>
 <span class="err" role="alert"></span>
@@ -449,12 +456,21 @@ document.querySelectorAll('.chapter').forEach(function(ch){
  if(multi)ch.classList.add('auto','paused');
  new IntersectionObserver(function(es){var on=es[0].isIntersecting;ch.classList.toggle('paused',!on);
   if(on&&!seen){seen=true;run(cur);}else if(!on&&seen){seen=false;clearTimeout(loop);units(cur).forEach(function(u){D.last(u);});}},{threshold:.35}).observe(ch.querySelector('.vis-wrap'));});
-document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelector('input'),err=f.querySelector('.err'),busy=false;
+window.aurinTurnstile=function(){dispatchEvent(new Event('aurin:turnstile'));};
+// Cloudflare Turnstile checks that a person sends the form (src/testflight-waitlist.js): unseen for most,
+// a "Verify you are human" box under the field when Cloudflare isn't sure. It starts on the first touch
+// of the form; a send waits for its token, and each token goes with one send only.
+document.querySelectorAll('form.wl').forEach(function(f){var input=f.querySelector('input'),err=f.querySelector('.err'),ts=f.querySelector('.ts'),busy=false,wid=null,token='',waiting=false,touched=false;
+ function human(){touched=true;if(wid!==null||!window.turnstile)return;wid=turnstile.render(ts,{sitekey:ts.dataset.key,action:'waitlist',appearance:'interaction-only',
+  callback:function(t){token=t;if(waiting){waiting=false;send();}},'expired-callback':function(){token='';},'error-callback':function(){token='';if(waiting){waiting=false;busy=false;err.textContent='We couldn\\'t check that you\\'re human. Try again.';}}});}
+ f.addEventListener('focusin',human);addEventListener('aurin:turnstile',function(){if(touched)human();});
+ function send(){var t=token;token='';
+  fetch('/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:input.value.trim(),token:t})})
+  .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');})})
+  .catch(function(x){err.textContent=x.message;}).then(function(){busy=false;if(wid!==null&&!f.classList.contains('sent'))turnstile.reset(wid);});}
  f.addEventListener('submit',function(e){e.preventDefault();if(busy)return;var email=input.value.trim();err.textContent='';
   if(!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)){err.textContent='Enter a valid email.';input.focus();return;}
-  busy=true;fetch('/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})})
-  .then(function(r){return r.json().catch(function(){return {};}).then(function(b){if(!r.ok)throw new Error(b.message||'Something went wrong. Try again.');f.classList.add('sent');})})
-  .catch(function(x){err.textContent=x.message;}).then(function(){busy=false;});});
+  busy=true;human();if(token||wid===null)send();else waiting=true;});
  var sh=f.querySelector('.share'),said=sh.querySelector('span');
  sh.addEventListener('click',function(){var link=location.origin+'/';
   if(navigator.share)navigator.share({title:'Aurin',text:'Aurin reads your sleep, HRV and workouts and tells you how hard to train today. Free to test on iPhone:',url:link}).catch(function(){});
@@ -583,8 +599,9 @@ ${body}
 </div></footer>
 ${demoScript}
 ${siteScript}
+${turnstileScript}
 </body></html>`;
-  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(demoScript + siteScript)}});
+  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(demoScript + siteScript, [TURNSTILE])}});
 }
 
 // Pages take the request (to pick the host, and ?lang=cs on the pages that have Czech) or nothing
@@ -926,7 +943,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li><strong>Wahoo</strong>, if you connect it: the rides and runs you plan in Aurin, with their steps and targets, so they appear on your ELEMNT and KICKR. Wahoo handles this data under its own privacy policy.</li>
 <li><strong>Google Health</strong>: the food and drinks you log and, if you allow it, your weight and the workouts you finish in Aurin.</li>
 <li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data, including data from a connected Ultrahuman Ring or WHOOP. OpenAI processes it on our behalf under its API data processing terms: it does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse, unless the law requires it to keep it longer.</li>
-<li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''}</li>
+<li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''} On the website, Cloudflare Turnstile checks that the waitlist form is sent by a person. For that it reads technical details of your browser and sets no tracking cookies.</li>
 <li><strong>Apple</strong>, if you allow notifications (Settings → Notifications): your iPhone’s notification token and the text of each notification, such as the morning readiness or a note from the coach, which Apple’s push service delivers to your iPhone. Turning notifications off or signing out removes the token.</li>
 <li><strong>Apple</strong>, when we add you to the testers from the waitlist: your email address, so that TestFlight emails you how to install Aurin. Apple handles it under its own privacy policy.</li>
 <li><strong>Open-Meteo</strong> gets only the place you choose for the weather in your training plan: a place you search for, or your location rounded to about 1 km if you allow it. Without that the app shows no weather.</li>
@@ -1031,7 +1048,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li><strong>Wahoo</strong>, když ho připojíš: jízdy a běhy, které naplánuješ v Aurinu, s jejich úseky a cíli, aby se objevily v ELEMNT a KICKR. Wahoo s nimi nakládá podle svých zásad ochrany osobních údajů.</li>
 <li><strong>Google Health</strong>: jídlo a pití, které zapíšeš, a když to povolíš, i tvoje váha a tréninky, které v Aurinu dokončíš.</li>
 <li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě, včetně dat z připojeného prstenu Ultrahuman nebo WHOOPu. OpenAI je zpracovává naším jménem podle svých podmínek zpracování dat přes API: data poslaná přes API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití, pokud mu zákon neukládá uchovat je déle.</li>
-<li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''}</li>
+<li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''} Na webu Cloudflare Turnstile ověřuje, že formulář čekací listiny posílá člověk. Čte k tomu technické údaje o prohlížeči a nenastavuje sledovací cookies.</li>
 <li><strong>Apple</strong>, když povolíš oznámení (Nastavení → Oznámení): token tvého iPhonu pro oznámení a text každého oznámení, třeba ranní připravenosti nebo zprávy od kouče, které Applova služba pro oznámení doručí do tvého iPhonu. Vypnutím oznámení nebo odhlášením se token smaže.</li>
 <li><strong>Apple</strong>, když tě z waitlistu přidáme k testerům: tvůj e-mail, aby ti TestFlight poslal, jak Aurin nainstalovat. Apple s ním nakládá podle svých zásad ochrany soukromí.</li>
 <li><strong>Open-Meteo</strong> dostane jen místo, které vybereš pro počasí v plánu tréninků: vyhledané místo, nebo tvou polohu zaokrouhlenou zhruba na 1 km, pokud ji povolíš. Bez toho aplikace počasí neukazuje.</li>

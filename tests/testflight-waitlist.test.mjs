@@ -5,8 +5,8 @@ import { createD1 } from "./helpers/d1.mjs";
 import { handleWaitlistSignup, listWaitlist, decideWaitlist, ascToken, TESTER_LIMIT, forgetOldWaitlist } from "../src/testflight-waitlist.js";
 
 const origin = "https://aurin.health";
-const signup = (env, email, headers = {}) => handleWaitlistSignup(new Request(origin + "/waitlist", { method: "POST",
-  headers: { Origin: origin, "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.9", ...headers }, body: JSON.stringify({ email }) }), env, "/waitlist");
+const signup = (env, email, headers = {}, token, fetchImpl) => handleWaitlistSignup(new Request(origin + "/waitlist", { method: "POST",
+  headers: { Origin: origin, "Content-Type": "application/json", "CF-Connecting-IP": "203.0.113.9", ...headers }, body: JSON.stringify({ email, token }) }), env, "/waitlist", fetchImpl);
 
 async function keyPem() {
   const pair = await webcrypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
@@ -98,4 +98,33 @@ test("addresses a year on the lists are forgotten, newer ones stay", async () =>
   assert.equal(await forgetOldWaitlist(db), 2);
   assert.deepEqual(db.sqlite.prepare("SELECT email FROM testflight_waitlist ORDER BY email").all().map(r => r.email), ["invited@example.com", "new@example.com"]);
   assert.deepEqual(db.sqlite.prepare("SELECT email FROM signup_waitlist").all().map(r => r.email), ["later@example.com"]);
+});
+
+test("with Turnstile on, only a form a person sent is stored, and a bot doesn't use up the day for everyone", async t => {
+  t.mock.method(console, "error", () => {});
+  const calls = [];
+  const cloudflare = async (url, init) => {
+    calls.push({ url, secret: init.body.get("secret"), response: init.body.get("response"), ip: init.body.get("remoteip") });
+    const token = init.body.get("response");
+    if (token === "down") throw new Error("network");
+    return Response.json(token === "good" ? { success: true, action: "waitlist" } : token === "other" ? { success: true, action: "login" } : { success: false });
+  };
+  const env = { DB: createD1(), SESSION_SECRET: "s", TURNSTILE_SECRET_KEY: "secret" };
+  const codes = [];
+  for (const [i, token] of [undefined, "bad", "other", "down", "good"].entries()) {
+    codes.push((await signup(env, `p${i}@x.cz`, { "CF-Connecting-IP": "203.0.113." + i }, token, cloudflare)).status);
+  }
+  assert.deepEqual(codes, [403, 403, 403, 403, 200]);
+  assert.equal(calls.length, 4, "no token, no call to Cloudflare");
+  assert.deepEqual(calls.at(-1), { url: "https://challenges.cloudflare.com/turnstile/v0/siteverify", secret: "secret", response: "good", ip: "203.0.113.4" });
+  assert.deepEqual((await listWaitlist(env.DB, {})).pending.map(p => p.email), ["p4@x.cz"]);
+  // Only the one that passed counts towards the day's 300 for everyone.
+  assert.equal(env.DB.sqlite.prepare("SELECT day_count FROM request_limits WHERE key = 'waitlist:all'").get().day_count, 1);
+});
+
+test("without TURNSTILE_SECRET_KEY (the test server) the form works as before", async t => {
+  const errors = t.mock.method(console, "error", () => {});
+  const env = { DB: createD1(), SESSION_SECRET: "s" };
+  assert.equal((await signup(env, "a@x.cz", {}, undefined, () => { throw new Error("no call"); })).status, 200);
+  assert.match(String(errors.mock.calls[0].arguments[0]), /TURNSTILE_SECRET_KEY/);
 });
