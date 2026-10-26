@@ -20,7 +20,7 @@ Services it needs from outside (OpenAI, push, Google) are Worker secrets set by 
 ## The app
 
 One TestFlight build serves both groups. The app talks to the live server unless an internal tester
-switches it in Nastavení → Testování → Server (`ios-native/Loadwise/Data/ServerChoice.swift`). The row
+switches it in Nastavení → Testování → Server (`ios-native/Aurin/Data/ServerChoice.swift`). The row
 shows for the owner and the e-mails in the live Worker's secret `INTERNAL_TESTERS` (comma separated),
 and for everyone on the test server (`internalTester` in `/app/api/me`, `src/staging.js`). Each server
 keeps its own session cookie and its own Apple Health last sync; passkeys work only on the live server

@@ -1,7 +1,7 @@
 // Live demos on the overview: pieces of the app rebuilt in HTML so they can move. They stand beside a chapter's
 // phone in place of a still cut from the screenshot, and on three steps (strain, a finished workout, the coach)
 // they are the phone's screen itself. Each one follows the app's own view (named in its comment) and the sample
-// day (ios-native/Loadwise/Data/DemoData.swift, in English through DemoEnglish.swift): change it when that view
+// day (ios-native/Aurin/Data/DemoData.swift, in English through DemoEnglish.swift): change it when that view
 // or that day changes.
 //
 // A demo plays a timeline when its step comes on. Elements say what happens to them and when, in ms from the

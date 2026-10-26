@@ -1,4 +1,4 @@
-# Loadwise for iPhone (native)
+# Aurin for iPhone (native)
 
 The native SwiftUI app with the new design. It reads the same server as the
 web app (`/app/api/today` for the Today screen), so the numbers match.
@@ -79,7 +79,7 @@ change in `ios-native/`. It:
 1. generates the Xcode project from `project.yml` with XcodeGen;
 2. runs the tests, which render the screens to PNG in light and dark mode;
 3. takes simulator screenshots of the running app;
-4. builds `Loadwise-native-unsigned.ipa`.
+4. builds `Aurin-native-unsigned.ipa`.
 
 Download the artifacts under Actions → the run → Artifacts.
 
@@ -97,7 +97,7 @@ and new builds arrive on their own. Builds expire after 90 days.
 
 ## Install with Sideloadly (free Apple ID)
 
-1. Open `Loadwise-native-unsigned.ipa` in Sideloadly and sign it with your
+1. Open `Aurin-native-unsigned.ipa` in Sideloadly and sign it with your
    Apple ID.
 2. With a free Apple ID the app runs for 7 days, then install it again.
 3. Turn on Developer Mode on the phone.

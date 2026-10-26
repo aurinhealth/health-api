@@ -15,7 +15,10 @@ import { localDate, localHour, localToday, storedTimeZone, withTimeZone } from "
 const shiftDay = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 
 // The app's bundle id (ios-native/project.yml), the topic every push names.
-export const APNS_TOPIC = "eu.petrfitnessdata.loadwise.native";
+export const APNS_TOPIC = "health.aurin.app";
+// Loadwise's ID: tokens of the app installed before the Aurin app took over
+// get their push under it (Apple answers DeviceTokenNotForTopic to the new one).
+export const LEGACY_APNS_TOPIC = "eu.petrfitnessdata.loadwise.native";
 export const MORNING_READINESS = "morning-readiness";
 // Not before 5:00 and not after 11:00 in the user's zone.
 export const MORNING_FROM_HOUR = 5;
@@ -128,18 +131,19 @@ const DEAD_TOKEN = new Set(["BadDeviceToken", "Unregistered", "DeviceTokenNotFor
 // alert: a text, or {title, subtitle, body}; category names the phone's buttons
 // for it (the coach's "Vyměnit" / "Nechat"), data rides along for them;
 // mutable lets the app's notification extension add an image (the ring).
-export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null, mutable = false } = {}) {
+export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null, mutable = false, topic = APNS_TOPIC } = {}) {
   if (!pushConfigured(env)) return { ok: false, skipped: true };
   const jwt = await apnsJwt(env, now);
   const response = await fetchImpl(`https://${apnsHost(env, device.environment)}/3/device/${device.token}`, {
     method: "POST",
-    headers: { authorization: "bearer " + jwt, "apns-topic": APNS_TOPIC, "apns-push-type": "alert", "apns-priority": "10", "content-type": "application/json" },
+    headers: { authorization: "bearer " + jwt, "apns-topic": topic, "apns-push-type": "alert", "apns-priority": "10", "content-type": "application/json" },
     body: JSON.stringify({ ...(data || {}), aps: { alert, sound: "default", ...(category ? { category } : {}), ...(mutable ? { "mutable-content": 1 } : {}) } })
   });
   if (response.status === 200) return { ok: true };
   const reason = await response.json().then(x => x?.reason || null).catch(() => null);
   // A refused provider token is made again next time.
   if (response.status === 403 && /ProviderToken/.test(String(reason))) cachedJwt = null;
+  if (reason === "DeviceTokenNotForTopic" && topic === APNS_TOPIC) return sendPush(env, device, alert, { fetchImpl, now, category, data, mutable, topic: LEGACY_APNS_TOPIC });
   return { ok: false, status: response.status, reason, gone: response.status === 410 || DEAD_TOKEN.has(reason) };
 }
 

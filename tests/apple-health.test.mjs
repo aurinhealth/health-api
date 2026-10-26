@@ -72,7 +72,7 @@ test("an Apple night with its time in bed has a real efficiency, latency and wak
 });
 
 test("the iPhone app keeps in-bed samples and gives breathing and oxygen to the night's wake-up day", () => {
-  const swift = readFileSync(new URL("../ios-native/Loadwise/App/AppleHealth.swift", import.meta.url), "utf8");
+  const swift = readFileSync(new URL("../ios-native/Aurin/App/AppleHealth.swift", import.meta.url), "utf8");
   assert.match(swift, /var inBed: Bool\? = nil/);
   assert.match(swift, /record\.inBed = true/);
   assert.match(swift, /nightly\(\.respiratoryRate,/);

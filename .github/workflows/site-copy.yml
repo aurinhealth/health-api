@@ -8,7 +8,7 @@ on:
     branches:
       - main
     paths:
-      - "ios-native/Loadwise/**"
+      - "ios-native/Aurin/**"
       - "ios-native/Shared/**"
 
 permissions:

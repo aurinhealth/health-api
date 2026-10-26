@@ -4,7 +4,7 @@ import Foundation
 /// Today into the shared App Group, the widgets only read it (they have no
 /// session of their own).
 struct WidgetSnapshot: Codable, Equatable {
-    static let group = "group.eu.petrfitnessdata.loadwise"
+    static let group = "group.health.aurin"
     static let key = "widgetSnapshot"
 
     var date: String

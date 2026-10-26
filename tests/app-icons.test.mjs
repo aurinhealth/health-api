@@ -1,10 +1,10 @@
-// Settings → Ikona aplikace (ios-native/Loadwise/Screens/SettingsPages/SettingsAppIcon.swift):
+// Settings → Ikona aplikace (ios-native/Aurin/Screens/SettingsPages/SettingsAppIcon.swift):
 // every alternate icon has its 1024 px icon set and its picker preview, and the other way round.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 
-const assets = new URL("../ios-native/Loadwise/Resources/Assets.xcassets/", import.meta.url);
+const assets = new URL("../ios-native/Aurin/Resources/Assets.xcassets/", import.meta.url);
 const ids = dir => readdirSync(new URL(dir, assets)).filter(name => !name.endsWith(".json"));
 const icons = ids(".").filter(name => name.startsWith("AppIcon-")).map(name => name.slice("AppIcon-".length, -".appiconset".length));
 const previews = ids("IconPreview/").map(name => name.slice(0, -".imageset".length));
@@ -43,7 +43,7 @@ test("the icon sets and previews name their PNG and have the sizes Xcode expects
 });
 
 test("the picker's styles and Pro icons all have icons", () => {
-  const swift = readFileSync(new URL("../ios-native/Loadwise/Screens/SettingsPages/SettingsAppIcon.swift", import.meta.url), "utf8");
+  const swift = readFileSync(new URL("../ios-native/Aurin/Screens/SettingsPages/SettingsAppIcon.swift", import.meta.url), "utf8");
   const styles = [...swift.matchAll(/Style\(key: "([a-z-]+)"/g)].map(m => m[1]);
   assert.deepEqual(styles, ["badge", "track"]);
   const slots = ["run", "run-gold", "ride", "ride-gold", "gym", "gym-gold", "spring", "summer", "autumn", "winter", "streak"];

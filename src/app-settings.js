@@ -3,7 +3,7 @@
 // user leaves the app, and a fresh install takes them back after signing in,
 // so deleting the app, a new iPhone or a new app keeps them. The server only
 // stores them: one opaque property list per user, made and read by the app
-// (ios-native/Loadwise/App/SettingsBackup.swift).
+// (ios-native/Aurin/App/SettingsBackup.swift).
 import { L } from './lang.js';
 
 export const MAX_SETTINGS_BYTES = 64 * 1024;

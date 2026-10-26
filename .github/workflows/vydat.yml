@@ -75,7 +75,7 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
-          BUNDLE_ID: eu.petrfitnessdata.loadwise.native
+          BUNDLE_ID: health.aurin.app
           EXTERNAL_GROUP: ${{ vars.EXTERNAL_GROUP }}
         shell: bash
         run: |
@@ -189,7 +189,7 @@ jobs:
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
-          BUNDLE_ID: eu.petrfitnessdata.loadwise.native
+          BUNDLE_ID: health.aurin.app
           BUILD_NUMBER: ${{ needs.pick.outputs.build }}
           EXTERNAL_GROUP: ${{ vars.EXTERNAL_GROUP }}
         run: |

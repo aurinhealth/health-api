@@ -10,7 +10,7 @@ import { allowClient, allowRequest } from "./ip-rate-limit.js";
 import { sessionSecret } from "./dashboard-auth.js";
 
 export const TESTER_LIMIT = 20;
-export const BUNDLE_ID = "eu.petrfitnessdata.loadwise.native";
+export const BUNDLE_ID = "health.aurin.app";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ASC = "https://api.appstoreconnect.apple.com/v1";
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
