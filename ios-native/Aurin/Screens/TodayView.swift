@@ -350,7 +350,11 @@ extension TabHeader where Extra == EmptyView {
 
 /// The tab header's glass capsule: the tab's own button (Sdílet only on Dnes,
 /// the barcode on Jídlo), Kouč and the account. The pinned bar shows the same
-/// capsule once the header has scrolled away (Petr, 2026-10-25).
+/// capsule once the header has scrolled away (Petr, 2026-10-25). The same
+/// visible gap between every icon, the account and the left edge (Petr,
+/// 2026-10-26): each icon is as wide as its symbol plus padding. SF Symbols keep
+/// about 2.5 pt of their own space at each side, so the padding next to the
+/// account and the left edge is larger (measured on the CI screenshots).
 struct HeaderCapsule<Extra: View>: View {
     var share: (() -> Void)? = nil
     var coach: () -> Void
@@ -364,10 +368,11 @@ struct HeaderCapsule<Extra: View>: View {
             HeaderIcon(systemImage: "bubble.left.and.text.bubble.right", label: "Kouč", action: coach)
             Button(action: settings) { AvatarView(size: 37) }
                 .buttonStyle(.plain)
-                .padding(.leading, 2)
+                .padding(.leading, 9.5)
                 .accessibilityLabel("Profil a nastavení")
         }
-        .padding(.horizontal, 5)
+        .padding(.leading, 10)
+        .padding(.trailing, (TabChrome.height - 37) / 2)
         .frame(height: TabChrome.height)
         .chromeGlass(in: Capsule())
         .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
@@ -387,6 +392,9 @@ enum TabChrome {
 
 /// One icon in the tab header's glass capsule (HeaderCapsule).
 struct HeaderIcon: View {
+    /// Space on each side of the symbol: with the symbols' own sides a visible
+    /// gap of 18 pt between two icons.
+    static let padding: CGFloat = 6.5
     let systemImage: String
     let label: String
     var action: () -> Void = {}
@@ -394,10 +402,11 @@ struct HeaderIcon: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: 19, weight: .medium))
                 .foregroundStyle(Palette.ink)
-                .frame(width: 42, height: 42)
-                .contentShape(Circle())
+                .padding(.horizontal, Self.padding)
+                .frame(height: 42)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(label))
