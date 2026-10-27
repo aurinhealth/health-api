@@ -6,7 +6,9 @@ final class WatchSnapshotTests: XCTestCase {
     @MainActor
     func testSampleDay() throws {
         let today = DemoData.today
-        let s = WatchBridge.snapshot(today, health: DemoData.health)
+        var s = WatchBridge.snapshot(today, health: DemoData.health)
+        // Whole seconds: a fraction can come back a hair different from JSON.
+        s.updated = Date(timeIntervalSince1970: 1_791_450_000)
         XCTAssertEqual(s.date, today.date)
         XCTAssertEqual(s.readiness, 78)
         XCTAssertEqual(s.sleep?.minutes, 432)
