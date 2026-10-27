@@ -292,6 +292,17 @@ final class SnapshotTests: XCTestCase {
 
     func testSignInScreen() throws {
         try render("login", height: 844) { LoginView().environment(AppModel()) }
+        // The welcome's pages as they end, in Czech and in English.
+        for language in ["cs", "en"] {
+            L10n.setLanguage(language)
+            for page in WelcomePage.allCases {
+                try render("welcome-\(page.rawValue)-\(language)", glow: page.glow, height: 700) {
+                    WelcomePageView(page: page, active: false, still: true).padding(24).environment(\.locale, L10n.locale)
+                }
+            }
+        }
+        L10n.setLanguage("cs")
+        UserDefaults.standard.removeObject(forKey: "AppleLanguages")
     }
 
     func testDemoDataDecodes() {

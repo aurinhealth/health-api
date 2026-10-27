@@ -3099,3 +3099,28 @@
 "pod %@ nízká" = "below %@ low";
 "prům. %@" = "avg %@";
 "%@ cíl" = "%@ goal";
+
+/* The welcome before the sign-in (WelcomePages.swift, LoginView.swift) */
+"Pojďme na to" = "Get started";
+"Strana %@ z %@" = "Page %1$@ of %2$@";
+"Kouč, který zná " = "A coach that knows ";
+"tvůj spánek." = "how you slept.";
+"Každé ráno víš, kolik tělo dnes zvládne." = "Know every morning how much your body can take today.";
+"Tréninky podle únavy, svalů a vybavení, které máš." = "Workouts built around your fatigue, muscles and equipment.";
+"Vyfoť talíř nebo naskenuj kód. Hodnoty doplní AI." = "Snap your plate or scan a barcode. AI fills in the values.";
+"Večerka podle budíku a spánku, který dnes potřebuješ." = "A bedtime from your alarm and the sleep you need tonight.";
+"Zeptej se na cokoli. Zná tvůj spánek, trénink i jídlo." = "Ask anything. It knows your sleep, training and food.";
+"Dobrá noc, třetí den. " = "Good night, third day in a row. ";
+"Dnes klidně naplno do síly." = "Go all in on strength today.";
+"Dřep" = "Squat";
+"Minulá noc" = "Last night";
+"Špatná noc. Dneska nohy?" = "Bad night. Legs today?";
+"Připravenost je 61 po 5 h 40 spánku. " = "Readiness is 61 after 5 h 40 of sleep. ";
+"Nohy nech, jen lehčeji:" = "Keep legs, go lighter:";
+" dřep 3 × 8 se 70 kg." = " squat 3 × 8 at 70 kg.";
+"Nohy, lehčeji" = "Legs, lighter";
+"Tvoje data pracují jen pro tebe." = "Your data works only for you.";
+"Nikdy je neprodáváme ani nepoužíváme k reklamě." = "We never sell it or use it for ads.";
+"Pokračováním souhlasíš s [podmínkami](https://aurin.health/terms?lang=cs) a [zásadami ochrany soukromí](https://aurin.health/privacy?lang=cs)." = "By continuing you agree to the [Terms](https://aurin.health/terms) and [Privacy Policy](https://aurin.health/privacy).";
+"Výživa" = "Nutrition";
+"Z fotky" = "From a photo";
