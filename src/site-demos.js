@@ -350,11 +350,11 @@ const actReadiness = `<div class="dm wc">
 <div class="w-two"><div class="wcard w-sm"${rise(250)}><span class="mut w-s2">Sleep</span><span class="num w-v">7:12</span>${range(16, 'amber-bar', 700)}<span class="w-nt2 amb2">89% of need</span></div>
 <div class="wcard w-sm"${rise(400)}><span class="mut w-s2">HRV</span><span class="num w-v">64<small>ms</small></span>${range(83, 'green', 700)}<span class="w-nt2 grn">above normal</span></div></div>
 </div>`;
-// Training: the rest ring counting down, the plate loader's bar (80 kg: 25 + 5 a side), the sets ticked off, the muscles.
+// Training: the rest ring counting down (half a minute of it, so the still frame keeps time on the clock), the plate loader's bar (80 kg: 25 + 5 a side), the sets ticked off, the muscles.
 const W_SETS = [['W', 40, true], ['1', 80, true], ['2', 80, true], ['3', 80, false]];
 const actTraining = `<div class="dm wc">
-<div class="wcard row w-rest"${rise(0)}><svg class="w-ring" viewBox="0 0 132 132" aria-hidden="true"><circle cx="66" cy="66" r="57" class="w-trk"/><circle cx="66" cy="66" r="57" class="w-arc" stroke-dasharray="358.1" data-ring="83,0,0,83000,90" transform="rotate(-90 66 66)"/></svg>
-<span class="w-rt"><span class="mut s">Rest</span><span class="num"${n(83, 0, 0, 83000, 'ms')}>1:23</span><span class="mut s">of 1:30</span></span>
+<div class="wcard row w-rest"${rise(0)}><svg class="w-ring" viewBox="0 0 132 132" aria-hidden="true"><circle cx="66" cy="66" r="57" class="w-trk"/><circle cx="66" cy="66" r="57" class="w-arc" stroke-dasharray="358.1" data-ring="83,53,0,30000,90" transform="rotate(-90 66 66)"/></svg>
+<span class="w-rt"><span class="mut s">Rest</span><span class="num"${n(83, 53, 0, 30000, 'ms')}>1:23</span><span class="mut s">of 1:30</span></span>
 <div><span class="mut w-s2">Now</span><b class="w-ex">Squat · set 3</b><span class="num w-kg">80 kg × 8</span><span class="row w-gap6"><span class="w-chip">−15 s</span><span class="w-chip">+15 s</span></span></div></div>
 <div class="wcard"${rise(150)}><div class="row sp base"><span class="num w-kg2">80 kg</span><span class="mut s">25 + 5 per side + bar 20 kg</span></div>
 <div class="w-barbell" aria-hidden="true"><i class="w-rod"></i><i class="w-sleeve"></i><i class="w-collar"></i><span class="w-plate w-p25"${at('600')}>25</span><span class="w-plate w-p5"${at('850')}>5</span></div></div>
