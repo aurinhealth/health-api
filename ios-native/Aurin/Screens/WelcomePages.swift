@@ -15,7 +15,7 @@ enum WelcomePage: Int, CaseIterable, Identifiable {
         case .opening: return ""
         case .readiness: return "Připravenost"
         case .training: return "Trénink"
-        case .food: return "Jídlo"
+        case .food: return "Výživa"
         case .sleep: return "Spánek"
         case .coach: return "Kouč"
         }
@@ -288,8 +288,8 @@ private struct WelcomeTraining: View {
             HStack(spacing: 16) {
                 RestRing(end: play.start.addingTimeInterval(83), total: 90)
                     .frame(width: 220, height: 220)
-                    .scaleEffect(0.54)
-                    .frame(width: 119, height: 119)
+                    .scaleEffect(0.48)
+                    .frame(width: 106, height: 106)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Teď").font(Typo.small).foregroundStyle(Palette.muted)
                     Text(verbatim: L10n.tr("Dřep") + " · " + L10n.f("série %@", "3")).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
@@ -302,29 +302,67 @@ private struct WelcomeTraining: View {
                 }
                 Spacer(minLength: 0)
             }
-            .welcomeCard(padding: 14)
+            .welcomeCard(padding: 12)
             .rises(play, delay: 0)
 
+            loadedBar
+                .welcomeCard(padding: 14)
+                .rises(play, delay: 0.15)
+
             HStack(spacing: 12) {
-                VStack(spacing: 7) {
+                VStack(spacing: 5) {
                     ForEach(sets.indices, id: \.self) { i in
                         setRow(sets[i], index: i)
                     }
                 }
                 .welcomeCard(padding: 12)
-                .rises(play, delay: 0.2)
+                .rises(play, delay: 0.3)
 
                 VStack(spacing: 6) {
                     MuscleFigurePair(colors: play.shown ? ["quads": Palette.rust, "chest": Palette.amberBar] : [:], spacing: 2)
-                        .frame(height: 112)
+                        .frame(height: 92)
                         .animation(.easeInOut(duration: 0.8).delay(1.0), value: play.shown)
                     Text(verbatim: L10n.tr("Stehna") + " · " + L10n.tr("Hrudník"))
                         .font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
                 }
                 .welcomeCard(padding: 12)
-                .frame(width: 136)
-                .rises(play, delay: 0.35)
+                .frame(width: 124)
+                .rises(play, delay: 0.45)
             }
+        }
+    }
+
+    /// The plate loader's bar with 80 kg: the plates slide on one after another.
+    private var loadedBar: some View {
+        let plates: [Double] = PlateLoad.plates(for: 80, bar: 20)
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(verbatim: "80 kg").font(Typo.number(24)).foregroundStyle(Palette.ink)
+                Spacer(minLength: 8)
+                Text(L10n.f("%@ na stranu + tyč %@ kg", plates.map { GymCoach.shown($0) }.joined(separator: " + "), GymCoach.shown(20)))
+                    .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 3, style: .continuous).fill(PlateLoaderSheet.metal).frame(height: 10)
+                HStack(spacing: 2) {
+                    Rectangle().fill(PlateLoaderSheet.metal).frame(width: 64, height: 6)
+                    RoundedRectangle(cornerRadius: 2, style: .continuous).fill(PlateLoaderSheet.metal).frame(width: 7, height: 22)
+                    ForEach(Array(plates.enumerated()), id: \.offset) { i, plate in
+                        let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        Text(verbatim: GymCoach.shown(plate))
+                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                            .frame(width: PlateLoaderSheet.width(plate) * 0.7, height: PlateLoaderSheet.height(plate) * 0.42)
+                            .background(shape.fill(PlateLoaderSheet.fill(plate)))
+                            .overlay(shape.stroke(PlateLoaderSheet.line(plate), lineWidth: 1.2))
+                            .offset(x: play.shown ? 0 : 180)
+                            .opacity(play.shown ? 1 : 0)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.75).delay(0.6 + Double(i) * 0.25), value: play.shown)
+                    }
+                }
+            }
+            .frame(height: 78)
+            .clipped()
         }
     }
 
@@ -354,7 +392,7 @@ private struct WelcomeTraining: View {
             .opacity(set.done && !play.shown ? 0 : 1)
             .animation(.spring(response: 0.35, dampingFraction: 0.5).delay(0.5 + Double(index) * 0.22), value: play.shown)
         }
-        .padding(.horizontal, 8).frame(height: 30)
+        .padding(.horizontal, 8).frame(height: 26)
         .background(set.done ? Color.clear : Palette.amberSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(set.done ? Color.clear : Palette.amberBar, lineWidth: 1.2))
     }
@@ -364,78 +402,35 @@ private struct WelcomeTraining: View {
 
 private struct WelcomeFood: View {
     let play: WelcomePlay
+    @AppStorage(DrinkFigureKind.storageKey) private var figureRaw = DrinkFigureKind.fallback.rawValue
+
+    private var lunch: FoodSnapshot.Meal? { DemoData.food.meals.first { $0.type == "lunch" } }
 
     var body: some View {
         VStack(spacing: 12) {
+            if let lunch {
+                // Výživa's own meal row: the photo's food is already in it.
+                MealRow(meal: lunch)
+                    .padding(.horizontal, 16).padding(.vertical, 2)
+                    .welcomeCard(padding: 0)
+                    .overlay(alignment: .topLeading) {
+                        Label("Z fotky", systemImage: "sparkles")
+                            .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.amber)
+                            .padding(.horizontal, 10).frame(height: 24)
+                            .background(Palette.amberSoft, in: Capsule())
+                            .offset(x: 12, y: -12)
+                            .scaleEffect(play.shown ? 1 : 0.6, anchor: .leading).opacity(play.shown ? 1 : 0)
+                            .animation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.8), value: play.shown)
+                    }
+                    .allowsHitTesting(false)
+                    .rises(play, delay: 0)
+                    .padding(.top, 12)
+            }
             HStack(spacing: 12) {
-                plate.rises(play, delay: 0)
-                today.rises(play, delay: 0.15)
+                barcode.rises(play, delay: 0.2)
+                drinks.rises(play, delay: 0.35)
             }
-            .frame(height: 176)
-            HStack(spacing: 12) {
-                barcode.rises(play, delay: 0.3)
-                drinks.rises(play, delay: 0.45)
-            }
-            .frame(height: 140)
-        }
-    }
-
-    /// The lunch photo with the scan's corners closing on it.
-    private var plate: some View {
-        VStack(spacing: 8) {
-            ZStack {
-                Circle().fill(Palette.cardLift).overlay(Circle().stroke(Palette.ink.opacity(0.1), lineWidth: 1))
-                Circle().fill(Palette.sand.opacity(0.45)).padding(12)
-                Ellipse().fill(Color(light: 0xEAD7B0, dark: 0xCDB98E)).frame(width: 34, height: 26).offset(x: -11, y: -4)
-                Ellipse().fill(Color(light: 0xC98A5C, dark: 0xB07A50)).frame(width: 30, height: 22).offset(x: 11, y: 6)
-                Circle().fill(Color(light: 0x8AA58C, dark: 0x7A957C)).frame(width: 15, height: 15).offset(x: 4, y: -18)
-                Circle().fill(Color(light: 0xC9614B, dark: 0xB4553F)).frame(width: 9, height: 9).offset(x: -12, y: 15)
-                ScanCorners()
-                    .stroke(Palette.amberBar, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .padding(-8)
-                    .scaleEffect(play.shown ? 1 : 1.3)
-                    .opacity(play.shown ? 1 : 0)
-                    .animation(.spring(response: 0.5, dampingFraction: 0.6).delay(0.5), value: play.shown)
-            }
-            .frame(width: 92, height: 92)
-            .padding(.top, 6)
-            VStack(spacing: 1) {
-                Text("Rýže s kuřecím masem").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
-                    .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.85)
-                Text(verbatim: "640 kcal").font(Typo.caption).foregroundStyle(Palette.muted)
-            }
-            .opacity(play.shown ? 1 : 0)
-            .animation(.easeOut(duration: 0.4).delay(1.0), value: play.shown)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .welcomeCard(padding: 10)
-    }
-
-    private var today: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Dnes").font(Typo.small).foregroundStyle(Palette.muted)
-            Color.clear.frame(width: 0, height: 0)
-                .counting(play.shown ? 1380 : 0)
-                .font(Typo.number(42)).monospacedDigit().foregroundStyle(Palette.ink)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .animation(.easeOut(duration: 1.4).delay(0.4), value: play.shown)
-            Text(L10n.f("z %@ kcal", Fmt.int(2650))).font(Typo.caption).foregroundStyle(Palette.muted)
-            Spacer(minLength: 8)
-            HStack(spacing: 8) {
-                macro("Sacharidy", 177 / 330, Palette.carbs)
-                macro("Bílkoviny", 84 / 150, Palette.protein)
-                macro("Tuky", 36 / 80, Palette.fat)
-            }
-            .animation(.easeOut(duration: 1.2).delay(0.6), value: play.shown)
-        }
-        .frame(maxHeight: .infinity, alignment: .top)
-        .welcomeCard(padding: 14)
-    }
-
-    private func macro(_ title: String, _ fraction: Double, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(LocalizedStringKey(title)).font(.system(size: 10, weight: .medium)).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
-            ProgressLine(fraction: play.shown ? fraction : 0, color: color, height: 4)
+            .frame(height: 164)
         }
     }
 
@@ -450,13 +445,19 @@ private struct WelcomeFood: View {
                             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Palette.ink.opacity(0.08), lineWidth: 1))
                         HStack(spacing: 2) {
                             ForEach(Array([2, 1, 3, 1, 2, 1, 1, 3, 2, 1, 2, 3, 1].enumerated()), id: \.offset) { _, w in
-                                Rectangle().fill(Palette.ink).frame(width: CGFloat(w), height: 38)
+                                Rectangle().fill(Palette.ink).frame(width: CGFloat(w), height: 44)
                             }
                         }
+                        ScanCorners()
+                            .stroke(Palette.amberBar, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .padding(8)
+                            .scaleEffect(play.shown ? 1 : 1.25)
+                            .opacity(play.shown ? 1 : 0)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.6).delay(0.6), value: play.shown)
                         Capsule().fill(AurinMark.amber)
-                            .frame(height: 2).padding(.horizontal, 12)
+                            .frame(height: 2).padding(.horizontal, 16)
                             .shadow(color: AurinMark.amber.opacity(0.9), radius: 5)
-                            .offset(y: CGFloat(play.live ? sin(t * 2.2) : 0) * (geo.size.height / 2 - 10))
+                            .offset(y: CGFloat(play.live ? sin(t * 2.2) : 0) * (geo.size.height / 2 - 14))
                     }
                 }
             }
@@ -465,45 +466,24 @@ private struct WelcomeFood: View {
         .welcomeCard(padding: 14)
     }
 
-    /// Pití: the water's level as a slow wave, how much is left under it.
+    /// Pití with the figure chosen in Nastavení (the whale until then), filling up.
     private var drinks: some View {
-        TimelineView(.animation(paused: !play.live)) { context in
-            let t = play.elapsed(context.date)
-            ZStack(alignment: .topLeading) {
-                Canvas { ctx, size in
-                    let rise = play.shown ? min(1, max(0, (t - 0.6) / 1.4)) : 0
-                    let level = size.height * (1 - 0.15 - 0.47 * rise)
-                    var wave = Path()
-                    wave.move(to: CGPoint(x: 0, y: size.height))
-                    for x in stride(from: 0, through: size.width, by: 4) {
-                        wave.addLine(to: CGPoint(x: x, y: level + CGFloat(sin(Double(x) / 26 + t * 2) * 4)))
-                    }
-                    wave.addLine(to: CGPoint(x: size.width, y: size.height))
-                    wave.closeSubpath()
-                    ctx.fill(wave, with: .linearGradient(Gradient(colors: [Palette.blue.opacity(0.55), Palette.blue]),
-                                                         startPoint: CGPoint(x: 0, y: level), endPoint: CGPoint(x: 0, y: size.height)))
-                }
-                HStack {
-                    Circle().fill(Palette.blue).frame(width: 8, height: 8)
-                    Text("Pití").font(Typo.small.weight(.medium)).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Image(systemName: "plus").font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
-                        .frame(width: 28, height: 28).background(Palette.blue, in: Circle())
-                }
-                .padding(12)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(verbatim: Units.volumeText(1500)).font(Typo.number(26))
-                    Text(L10n.f("zbývá %@", Units.volumeText(1100))).font(Typo.caption.weight(.medium)).opacity(0.9)
-                }
-                .foregroundStyle(.white)
-                .padding(14)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Circle().fill(Palette.blue).frame(width: 8, height: 8)
+                Text("Pití").font(Typo.small.weight(.medium)).foregroundStyle(Palette.ink)
+            }
+            DrinkFigure(kind: DrinkFigureKind.from(figureRaw), fraction: play.shown ? 1500 / 2600 : 0, size: 84, animate: play.live)
+                .frame(maxWidth: .infinity)
+                .animation(.easeInOut(duration: 1.6).delay(0.6), value: play.shown)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(verbatim: Units.volumeText(1500)).font(Typo.number(22)).foregroundStyle(Palette.ink)
+                Text(L10n.f("zbývá %@", Units.volumeText(1100))).font(Typo.caption).foregroundStyle(Palette.muted)
+                    .lineLimit(1).minimumScaleFactor(0.8)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .cardSurface(cornerRadius: 22)
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: .black.opacity(0.06), radius: 18, y: 10)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .welcomeCard(padding: 14)
     }
 }
 
