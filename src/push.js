@@ -196,7 +196,9 @@ export function readinessMessage({ score, zone, flags = [], missing = [], checki
   else if (level === "red") body = names ? L(`${names} dnes vynech. Nanejvýš procházka nebo lehké protažení.`, `Skip today's ${names}. A walk or easy mobility at most.`) : L("Nanejvýš procházka nebo lehké protažení.", "A walk or easy mobility at most.");
   if (body && !saveFor && signals.length) body = reasonsSentence(signals) + " " + body;
   if (body && injury) body += " " + L(`Pamatuj: ${injury}.`, `Keep in mind: ${injury}.`).replace(/\.\.$/, ".");
-  return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, zone: shown || null };
+  // What the days before, the journal, an injury or tomorrow changed: Today's coach card says the same (app-today.js).
+  const changed = weighed && (signals.length || saveFor || injury) ? { headline: advice, recommendation: body } : null;
+  return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, zone: shown || null, ...(changed ? { changed } : {}) };
 }
 
 // "Sleep 6:40 · HRV −14% · Resting HR +2": the night, and HRV and resting

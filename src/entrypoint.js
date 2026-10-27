@@ -666,12 +666,13 @@ async function todayReadiness(env, ctx, date, { fresh = false, plan = false } = 
 // the last week's activities of any sport, tired legs (Trénink → Svaly), the
 // days before with a yellow or red readiness, the form, alcohol in yesterday's
 // journal, and tomorrow's planned sessions from Intervals.icu.
-async function morningContext(env, { date, health, fitness, sleep, profile, read }) {
+// Today (/app/api/today) passes the training doses and tomorrow's day it already read.
+async function morningContext(env, { date, health, fitness, sleep, profile, read, doses: loaded, tomorrowDaily: next }) {
   const tomorrowDate = shiftDate(date, 1);
   const [doses, journal, tomorrowDaily] = await Promise.all([
-    loadTrainingDoses(env.DB).catch(() => null),
+    loaded !== undefined ? loaded : loadTrainingDoses(env.DB).catch(() => null),
     journalForCoach(env.DB, date).catch(() => null),
-    read('/analysis/daily?date=' + tomorrowDate)
+    next !== undefined ? next : read('/analysis/daily?date=' + tomorrowDate)
   ]);
   const activities = (doses?.activities || []).filter(a => a.date).map(a => ({ date: a.date, kind: a.kind, minutes: a.minutes }));
   const legs = doses ? muscleFatigue({ ...doses, now: Date.now() }).groups.find(g => g.id === 'legs')?.state || null : null;
@@ -2236,9 +2237,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
       const problems=connectionProblems(status);
       if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
+      // The morning push's advice (push.js), so Today's coach card says the same.
+      const morning=isToday?await Promise.all([getAthleteState(env.DB).catch(()=>null),morningContext(env,{date,health,fitness,sleep,profile,doses:training,tomorrowDaily:tomorrow})])
+        .then(([state,m])=>({...m,athleteState:state?.status||null,context:m.context?{...m.context,memories:state?.memories||[]}:null})).catch(()=>null):null;
       applyEnergyBudget(daily,profile,health);
       return Response.json(withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
-        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess},unavailable:todayUnavailable(failed)}),training),{headers:{'Cache-Control':'no-store'}});
+        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess},unavailable:todayUnavailable(failed),morning}),training),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
