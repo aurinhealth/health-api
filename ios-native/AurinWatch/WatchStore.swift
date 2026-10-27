@@ -9,6 +9,9 @@ final class WatchStore: NSObject, ObservableObject {
     private static let savedKey = "watchSnapshot"
 
     @Published private(set) var snapshot: WatchSnapshot?
+    /// Settings → Apple Watch on the iPhone.
+    @Published private(set) var settings: WatchSettings = UserDefaults.standard.data(forKey: WatchSettings.contextKey)
+        .flatMap(WatchSettings.decode) ?? WatchSettings()
 
     override init() {
         super.init()
@@ -48,6 +51,13 @@ final class WatchStore: NSObject, ObservableObject {
         snapshot = value
         UserDefaults.standard.set(data, forKey: Self.savedKey)
         WatchAlarm.shared.schedule()
+    }
+
+    func receive(settings data: Data) {
+        guard let value = WatchSettings.decode(data) else { return }
+        UserDefaults.standard.set(data, forKey: WatchSettings.contextKey)
+        if settings != value { settings = value }
+        WatchAlarm.shared.fromPhone(value.alarmOnWatch)
     }
 
     /// A drink of water from the Food page: shown at once, sent to the iPhone
@@ -111,8 +121,10 @@ extension WatchStore: WCSessionDelegate {
         let context = session.receivedApplicationContext
         let data = context[WatchSnapshot.contextKey] as? Data
         let gym = context[WatchGym.replyKey] as? Data
+        let settings = context[WatchSettings.contextKey] as? Data
         let empty = context.isEmpty
         Task { @MainActor in
+            if let settings { WatchStore.shared.receive(settings: settings) }
             if let gym { GymStore.shared.received(gym) }
             if let data { WatchStore.shared.receive(data) } else if !empty { WatchStore.shared.receive(nil) }
             WatchStore.shared.ask()
@@ -122,8 +134,10 @@ extension WatchStore: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         let data = applicationContext[WatchSnapshot.contextKey] as? Data
         let gym = applicationContext[WatchGym.replyKey] as? Data
+        let settings = applicationContext[WatchSettings.contextKey] as? Data
         let empty = applicationContext.isEmpty
         Task { @MainActor in
+            if let settings { WatchStore.shared.receive(settings: settings) }
             if let gym { GymStore.shared.received(gym) }
             if data != nil || empty { WatchStore.shared.receive(data) }
         }

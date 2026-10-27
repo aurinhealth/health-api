@@ -18,10 +18,12 @@ final class WatchAlarm: NSObject, ObservableObject {
     @Published var onWatch: Bool = UserDefaults.standard.bool(forKey: WatchAlarm.onKey) {
         didSet {
             UserDefaults.standard.set(onWatch, forKey: Self.onKey)
-            tellPhone()
+            if !quiet { tellPhone() }
             schedule()
         }
     }
+    /// Set from the iPhone: no message back.
+    private var quiet = false
     /// gentle, rising or strong.
     @Published var haptic: String = UserDefaults.standard.string(forKey: WatchAlarm.hapticKey) ?? "rising" {
         didSet { UserDefaults.standard.set(haptic, forKey: Self.hapticKey) }
@@ -99,6 +101,14 @@ final class WatchAlarm: NSObject, ObservableObject {
         session = nil
         ringing = false
         schedule(at: Date().addingTimeInterval(Self.snooze))
+    }
+
+    /// Settings → Apple Watch → Rings on, changed on the iPhone.
+    func fromPhone(_ on: Bool) {
+        guard onWatch != on else { return }
+        quiet = true
+        onWatch = on
+        quiet = false
     }
 
     /// A wake time moved by the crown, saved on the iPhone; shown at once.

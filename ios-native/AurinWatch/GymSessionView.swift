@@ -82,7 +82,12 @@ struct GymSessionView: View {
             now = date
             if let end = restEnd, end <= date {
                 restEnd = nil
-                WKInterfaceDevice.current().play(.stop)
+                // Settings → Apple Watch → When rest ends.
+                switch WatchStore.shared.settings.restEnd {
+                case "none": break
+                case "tap": WKInterfaceDevice.current().play(.directionUp)
+                default: WKInterfaceDevice.current().play(.stop)
+                }
             }
         }
     }

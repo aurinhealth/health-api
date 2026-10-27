@@ -13,6 +13,8 @@ final class WatchBridge: NSObject {
     private var today: TodaySnapshot?
     private var health: HealthSnapshot?
     private var training: TrainingSnapshot?
+    /// When the watch last got Today, for Settings → Apple Watch.
+    private(set) var lastSent: Date?
     /// The profile's wake times for the watch's alarm (Settings → Sleep).
     private var profile: JSONObject?
     private var healthLoaded: Date?
@@ -108,7 +110,24 @@ final class WatchBridge: NSObject {
         if let today, let data = Self.snapshot(today, health: health, training: training, profile: profile).encoded() { context[WatchSnapshot.contextKey] = data }
         if let gym = gymContext { context[WatchGym.replyKey] = gym }
         guard !context.isEmpty else { return }
+        context[WatchSettings.contextKey] = Self.settings.encoded()
         try? session.updateApplicationContext(context)
+        lastSent = Date()
+    }
+
+    /// Settings → Apple Watch, kept on the iPhone and sent with every Today.
+    static var settings: WatchSettings {
+        get { UserDefaults.standard.data(forKey: WatchSettings.contextKey).flatMap(WatchSettings.decode) ?? WatchSettings() }
+        set {
+            UserDefaults.standard.set(newValue.encoded(), forKey: WatchSettings.contextKey)
+            shared.sendContext()
+        }
+    }
+
+    /// Settings → Apple Watch: paired, the app installed, in reach now.
+    var watchState: (paired: Bool, installed: Bool, reachable: Bool) {
+        guard let session, session.activationState == .activated else { return (false, false, false) }
+        return (session.isPaired, session.isWatchAppInstalled, session.isReachable)
     }
 
     /// The saved Today when the app was woken only for the watch.

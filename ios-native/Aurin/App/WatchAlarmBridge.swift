@@ -42,6 +42,7 @@ extension WatchBridge {
     /// iPhone again, when it was the one that rang before.
     func alarmOnWatch(_ on: Bool) async {
         let defaults = UserDefaults.standard
+        if Self.settings.alarmOnWatch != on { Self.settings.alarmOnWatch = on }
         if on {
             guard defaults.bool(forKey: "systemAlarm") else { return }
             SystemAlarm.cancel()

@@ -19,6 +19,10 @@ struct AurinWatchApp: App {
                     }
                 }
         }
+        // The coach's pushes from the iPhone, in the watch's own look.
+        WKNotificationScene(controller: CoachNotificationController.self, category: "COACH_SWAP")
+        WKNotificationScene(controller: CoachNotificationController.self, category: "COACH_REPLY")
+        WKNotificationScene(controller: CoachNotificationController.self, category: "COACH_ACTION")
     }
 }
 
@@ -27,7 +31,7 @@ struct WatchRoot: View {
     @ObservedObject private var alarm = WatchAlarm.shared
 
     var body: some View {
-        // By the crown: readiness, the day's training (TrainingPage), food and drink (FoodPage).
+        // By the crown: readiness, then the day's training (TrainingPage) and food and drink (FoodPage).
         NavigationStack {
             TabView {
                 if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(Date()) {
@@ -35,8 +39,14 @@ struct WatchRoot: View {
                 } else {
                     WaitingView(stale: store.snapshot != nil)
                 }
-                TrainingPage()
-                FoodPage()
+                // The rest in the order Settings → Apple Watch on the iPhone gives.
+                ForEach(store.settings.pages.filter { $0 != "readiness" }, id: \.self) { page in
+                    switch page {
+                    case "training": TrainingPage()
+                    case "food": FoodPage()
+                    default: EmptyView()
+                    }
+                }
             }
             .tabViewStyle(.verticalPage)
             // Here, not inside a page: the vertical pages are lazy, and a

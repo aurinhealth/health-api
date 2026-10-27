@@ -3082,3 +3082,14 @@
 "Nedorazilo" = "Didn’t arrive";
 "Je v kalendáři Intervals.icu" = "In your Intervals.icu calendar";
 "Neodesláno" = "Not sent";
+"Stránky" = "Pages";
+"Mezi stránkami se na hodinkách přechází korunkou. Pořadí změníš přetažením." = "Turn the crown to move between pages. Drag to change the order.";
+"Když skončí pauza" = "When rest ends";
+"Ťuknutí a zvuk" = "Tap and beep";
+"Jen ťuknutí" = "Tap only";
+"Budík zvoní na" = "Rings on";
+"iPhonu" = "iPhone";
+"Zvoní jen jedno zařízení. Čas budíku je stejný jako v Nastavení → Spánek." = "Only one device rings. The wake time is the one in Settings → Sleep.";
+"Hodinky nejsou spárované s tímto iPhonem." = "No Apple Watch is paired with this iPhone.";
+"Aurin na hodinkách ještě není. Nainstaluj ho v aplikaci Watch v iPhonu." = "Aurin isn't on your watch yet. Install it in the Watch app on your iPhone.";
+"Připojeno · data poslaná %@" = "Connected · synced %@";
