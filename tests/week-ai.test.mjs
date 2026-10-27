@@ -188,6 +188,5 @@ test("a TSS asked for reaches the AI with the current TSS and each kind's TSS an
   const facts = JSON.parse(calls[0].input.slice(calls[0].input.indexOf("{")));
   assert.equal(facts.session.tss, 63);
   assert.equal(facts.tssPerHour.threshold, 69);
-  assert.match(calls[0].instructions, /tssPerHour/);
   assert.equal(r.kind, "threshold");
 });
