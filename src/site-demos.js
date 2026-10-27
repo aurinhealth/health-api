@@ -23,6 +23,7 @@ const P = {
   sun: '<circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>',
   run: '<circle cx="14.5" cy="4.5" r="1.8" fill="currentColor" stroke="none"/><path d="M7 21l3.5-6 3 2.5V22M9.5 11l2.5-3.5 4 1.5 2 3.5M12 7.5l-1 5.5 2.5 2"/>',
   bike: '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 9h6l3.5 7.5M9 9 12 16.5h-1M14 5.5h2.5"/>',
+  lift: '<circle cx="12" cy="4.2" r="1.9" fill="currentColor" stroke="none"/><path d="M3 9h18M4.5 7v4M19.5 7v4M8 9l1.5 3.5H12h2.5L16 9M12 12.5v3.5l-3.5 5M12 16l3.5 5"/>',
   gym: '<path d="M3 9.5v5M6 7v10M18 7v10M21 9.5v5M6 12h12"/>',
   flex: '<circle cx="12" cy="4.5" r="1.8" fill="currentColor" stroke="none"/><path d="M5 11h14M12 7.5v6.5l-4 6M12 14l4 6"/>',
   spark: '<path d="M12 3.5l1.8 5.2 5.2 1.8-5.2 1.8-1.8 5.2-1.8-5.2L5 10.5l5.2-1.8Z" fill="currentColor" stroke="none"/><path d="M19 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7Z" fill="currentColor" stroke="none"/>',
@@ -360,7 +361,7 @@ const plate = (p, when) => `<span class="w-plate w-p${plateCls(p)}"${when ? at(S
 // Label, kg, reps, the row's timeline: W and 1 done already, 2 the set at hand until Set done, 3 after it.
 const G_ROWS = [['W', 40, 300, ' w-did'], ['1', 80, 450, ' w-did'], ['2', 80, 1500, ' w-now', '1500-w-now 1500:w-did'], ['3', 80, 0, '', '1500:w-now']];
 const gymRow = ([l, kg, done, cls, when]) => `<div class="w-row${cls}"${when ? at(when) : ''}><span class="w-l">${l}</span><span class="w-lt">—</span>
-<span class="w-f num">${l === '3' ? `<b data-tx="0|80;5200|85">80</b>${tap(2300, 2600)}` : kg}</span><span class="w-f num">8</span><i class="w-rate"></i>
+<span class="w-f num">${l === '3' ? `<b data-tx="0|80;5200|85">80</b>${tap(2300, 2600)}` : kg}</span><span class="w-f num">8</span><i class="w-rate${l === '1' ? ' w-m">M' : '">'}</i>
 <span class="w-sq">${done ? `<i class="w-ok"${at(String(done))}>${ic('check')}</i>` : ''}</span></div>`;
 const actTraining = `<div class="dm wc w-train">
 <div class="wcard w-gym"${rise(0)}><div class="row sp w-gh"><b>Squat</b><span class="mut s">Exercise 1 of 3</span></div>
@@ -377,11 +378,11 @@ ${G_ROWS.map(gymRow).join('\n')}
 // Nutrition: Výživa's lunch row with the photo's food in it, the barcode being scanned and the drinks filling up.
 const actFood = `<div class="dm wc">
 <div class="wcard w-meal"${rise(0)}><span class="pill amb pop w-badge"${at('800')}>${ic('spark')}From a photo</span>
-<div class="row sp base"><b>Lunch <span class="mut s">12:30 PM</span></b><span><span class="num md">845</span> <span class="mut s">/ 800 kcal</span></span></div>
+<div class="w-mr"><div><div class="row base w-mh"><b>Lunch</b><span class="w-ft s">12:30 PM</span><span class="num md">845</span><span class="num w-ft">/ 800 kcal</span></div>
 ${[['Carbs', 88, 100, 'carbs'], ['Protein', 61, 45, 'protein'], ['Fat', 26, 24, 'fat']].map(([k, v, t, c], i) => `<div class="w-mac"><span class="mut s"><i style="background:var(--${c})"></i>${k}</span><i class="bar"><b style="--w:${Math.min(100, v / t * 100).toFixed(0)}%;background:var(--${c})"${at(String(500 + i * 150))}></b></i><span class="s mono">${v} / ${t} g</span></div>`).join('')}
-<span class="mut s">Chicken with rice, Plain Greek yogurt</span></div>
+<span class="mut s">Chicken with rice, Plain Greek yogurt</span></div><span class="w-plus">${ic('plus')}</span></div></div>
 <div class="w-two"><div class="wcard w-scan"${rise(200)}><span class="mut w-s2">Barcode</span><span class="w-code" aria-hidden="true">${[2, 1, 3, 1, 2, 1, 1, 3, 2, 1, 2, 3, 1].map(w => `<i style="width:${w}px"></i>`).join('')}<u class="w-corners"${at('600')}></u><b class="w-beam"></b></span></div>
-<div class="wcard w-drink"${rise(350)}><span class="row w-s2"><i class="w-dot"></i>Drinks</span><svg class="w-whale" viewBox="0 0 84 56" aria-hidden="true"><defs><clipPath id="wh"><path d="M6 30C10 14 30 8 46 12c8 2 14 6 18 12l12-10c2-2 5 0 4 3l-5 13 5 13c1 3-2 5-4 3L64 36c-6 10-20 16-34 14C16 48 4 42 6 30z"/></clipPath></defs><g clip-path="url(#wh)"><rect width="84" height="56" fill="var(--track)"/><rect class="w-water" y="0" width="84" height="56"${at('600')}/></g><circle cx="22" cy="27" r="2.4" fill="var(--text)"/></svg>
+<div class="wcard w-drink"${rise(350)}><span class="row w-s2"><i class="w-dot"></i>Drinks</span><svg class="w-whale" viewBox="0 0 110 110" aria-hidden="true"><defs><clipPath id="wh"><ellipse cx="50" cy="62" rx="38" ry="28"/><path d="M80 58C92 52 96 40 104 30C106 40 104 48 100 52C106 54 108 62 106 70C98 64 92 64 84 70Z"/></clipPath></defs><g clip-path="url(#wh)"><rect width="110" height="110" fill="#EAF3F9"/><g class="w-water"${at('600')}><path class="w-wv" d="M0 0 q13.75 -3.25 27.5 0 t27.5 0 q13.75 -3.25 27.5 0 t27.5 0 q13.75 -3.25 27.5 0 t27.5 0 q13.75 -3.25 27.5 0 t27.5 0 V60 H0Z" fill="#4FA3D9"/><path class="w-wv w-wv2" d="M0 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 V60 H0Z" transform="translate(0 6)" fill="#2E86C1" fill-opacity=".35"/></g></g><g fill="none" stroke="#1B4F72" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="50" cy="62" rx="38" ry="28"/><path d="M80 58C92 52 96 40 104 30C106 40 104 48 100 52C106 54 108 62 106 70C98 64 92 64 84 70"/><path d="M22 70Q32 76 42 70" stroke-width="2"/></g><circle cx="30" cy="56" r="3.6" fill="#1B1A17"/><circle cx="31.2" cy="54.8" r="1.1" fill="#fff"/></svg>
 <span class="row base"><span class="num md">1,500 ml</span><span class="mut s">1,100 ml to go</span></span></div></div>
 </div>`;
 // Sleep: the bedtime from the alarm, tonight's choice and last night drawn stage by stage.
@@ -399,7 +400,7 @@ const actCoach = `<div class="dm wc coach2">
 <div class="w-q"${rise(100)}>Bad night. Legs today?</div>
 <div class="dots"${at('700 1600-in')}><i></i><i></i><i></i></div>
 <div class="wcard w-a"${at('1600')}><p class="sent">${typed.map(([x, start, len], i) => `<span${i === 1 ? ' class="grn w-it"' : ''} data-type="${start},${len}">${x}</span>`).join('')}</p></div>
-<div class="wcard row w-wo"${at(String(typed[2][1] + typed[2][2] + 200))}><span class="ib amb">${ic('gym')}</span><div><b>Legs, lighter</b><span class="mut s">40 min · 4 exercises</span></div><span class="w-add">Add</span></div>
+<div class="wcard row w-wo"${at(String(typed[2][1] + typed[2][2] + 200))}><span class="ib amb">${ic('lift')}</span><div><b>Legs, lighter</b><span class="mut s">40 min · 4 exercises</span></div><span class="w-add">Add</span></div>
 </div>`;
 export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach});
 
@@ -720,7 +721,7 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .w-row.w-th{height:20px;font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);opacity:.8}.w-th span:nth-child(3),.w-th span:nth-child(4){text-align:center}
 .w-l{font-size:14px;font-weight:600;color:var(--sec)}.w-lt{font-size:13px;color:var(--muted);opacity:.7}
 .w-f b{font-weight:400}.w-f{position:relative;display:grid;place-items:center;height:34px;border-radius:8px;font-size:22px;transition:background .35s}
-.w-rate{width:34px;height:22px;border-radius:99px;border:1.5px dashed color-mix(in srgb,var(--muted) 70%,transparent)}
+.w-rate.w-m{display:grid;place-items:center;border:1.5px solid var(--indigo);font-size:11px;font-weight:700;font-style:normal;color:var(--text)}.w-rate{width:34px;height:22px;border-radius:99px;border:1.5px dashed color-mix(in srgb,var(--muted) 70%,transparent)}
 .w-sq{position:relative;width:26px;height:26px;border-radius:8px;box-shadow:inset 0 0 0 1.5px var(--line);transition:box-shadow .35s}
 .w-row:not(.w-now):not(.w-did) .w-l,.w-row:not(.w-now):not(.w-did) .w-f{color:var(--muted);opacity:.55}
 .w-row.w-now{background:var(--track);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--amber) 55%,transparent)}
@@ -754,9 +755,9 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 /* Where a finger taps: a soft ring that comes and goes. */
 .w-tap{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;pointer-events:none;background:color-mix(in srgb,var(--text) 14%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--text) 22%,transparent);transition:opacity .2s,transform .3s cubic-bezier(.34,1.6,.5,1)!important}
 .js .wc .w-tap.wait:not(.in),.w-tap:not(.in){opacity:0;transform:scale(.5)}
-.wc .w-meal{position:relative;padding-top:20px}.wc .w-badge{position:absolute;left:12px;top:-12px;gap:5px;transform-origin:left}
+.wc .w-meal{position:relative;padding-top:20px}.w-mr{display:grid;grid-template-columns:minmax(0,1fr) 32px;gap:12px;align-items:start}.w-mh{gap:6px}.w-mh b{font-size:16px;font-weight:600}.w-mh .md{margin-left:auto}.w-ft{color:var(--muted);opacity:.85}.num.w-ft{font-size:14px}.w-plus{display:grid;place-items:center;width:32px;height:32px;margin-top:2px;border-radius:50%;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 20%,transparent);font-size:14px}.w-plus .di{stroke-width:2.6}.wc .w-badge{position:absolute;left:12px;top:-12px;gap:5px;transform-origin:left}
 .w-mac{display:grid;grid-template-columns:76px 1fr 74px;align-items:center;gap:10px;margin:6px 0}.w-mac .s{text-align:right}.w-mac>.s:first-child{text-align:left;display:flex;align-items:center;gap:6px}.w-mac i:not(.bar){width:6px;height:6px;border-radius:50%}
-.w-mac .bar{height:5px}.wc .w-meal>.mut:last-child{display:block;margin-top:4px}
+.w-mac .bar{height:5px}.wc .w-mr>div>.mut:last-child{display:block;margin-top:4px}
 .wc .w-scan,.wc .w-drink{display:flex;flex-direction:column;gap:8px;min-height:164px}
 .w-code{position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:2px;border-radius:14px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
 .w-code>i{height:44px;background:var(--text)}
@@ -770,15 +771,17 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .opener.on .w-code .w-beam{animation:scanbeam 2.85s ease-in-out infinite}
 @keyframes scanbeam{0%,100%{transform:translateY(-26px)}50%{transform:translateY(26px)}}
 .w-drink .w-dot{width:8px;height:8px;border-radius:50%;background:var(--blue)}.w-drink .w-s2{gap:6px;font-weight:500}
-.w-whale{display:block;width:96px;height:64px;margin:0 auto}.w-whale .w-water{fill:color-mix(in srgb,var(--blue) 70%,#7FC4EA);transform:translateY(100%);transition:transform 1.6s ease-in-out!important}
-.w-whale .w-water.in,html:not(.js) .w-whale .w-water{transform:translateY(42%)}.js .w-whale .w-water.wait:not(.in){opacity:1}
+.w-whale{display:block;width:84px;height:84px;margin:0 auto}.w-whale .w-water{transform:translateY(92px);transition:transform 1.6s ease-in-out!important}
+.w-whale .w-water.in,html:not(.js) .w-whale .w-water{transform:translateY(56px)}.js .w-whale .w-water.wait:not(.in){opacity:1}
+.w-wv{animation:w-wave 3s linear infinite}.w-wv2{animation-duration:4.4s}@keyframes w-wave{to{transform:translateX(-55px)}}.w-wv2{animation-name:w-wave2}@keyframes w-wave2{from{transform:translate(0,6px)}to{transform:translate(-36.67px,6px)}}
+@media (prefers-reduced-motion:reduce){.w-wv{animation:none}}
 .w-drink .row.base{flex-wrap:wrap;column-gap:6px}.w-drink .row.base .mut{white-space:nowrap}
 .wc .th .di{font-size:12px}.wc .chips3 .ch3{border-radius:16px;transition:background .35s,border-color .35s}.wc .ch3 b{font-weight:600;font-size:15px}
 .wc .hg{margin-bottom:0}.hgt.w-draw{transition:clip-path 1.6s ease-in-out!important;clip-path:inset(0 0 0 0)}.js .hgt.w-draw.wait:not(.in){opacity:1;transform:none;clip-path:inset(0 100% 0 0)}
 .coach2{gap:12px}.coach2 .w-q{justify-self:end;padding:10px 14px;border-radius:18px;background:var(--button);color:var(--on-button);font-size:16px}
 .coach2 .dots{box-shadow:0 16px 36px -12px rgba(60,45,20,.22)}.coach2 .dots:not(.in){display:none}html:not(.js) .coach2 .dots{display:none}
 .coach2 .w-a{margin-right:30px}.coach2 .w-a .sent{font-size:18px;line-height:1.35}
-.coach2 .w-wo{gap:12px;padding:12px}.coach2 .w-wo .ib{width:40px;height:40px;border-radius:12px}.coach2 .w-wo>div{flex:1;display:flex;flex-direction:column}
+.coach2 .w-wo{gap:12px;padding:12px}.coach2 .w-wo .ib{width:40px;height:40px;border-radius:12px;font-size:21px}.coach2 .w-wo>div{flex:1;display:flex;flex-direction:column}
 .coach2 .w-add{display:inline-flex;align-items:center;height:34px;padding:0 16px;border-radius:99px;background:var(--button);color:var(--on-button);font-size:13px;font-weight:600}
 @media (prefers-reduced-motion:reduce){.opener.on .w-code .w-beam{animation:none}}
 `;
