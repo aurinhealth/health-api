@@ -592,13 +592,22 @@ export default {
     // Server errors are counted for the owner's morning e-mail (ops-report.js); 503 is a planned "try again".
     const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", `${request.method} ${routeName(new URL(request.url).pathname)}`, message));
     try {
+      const answered = await worker.fetch(request, env, ctx);
+      // The owner's report names why (the route's own error text), before it is made plain.
+      if (answered.status >= 500 && answered.status !== 503) count(await serverErrorReason(answered));
       // A database or code error never reaches the app word for word (error-text.js).
-      const response = await withPlainErrors(request, await worker.fetch(request, env, ctx));
-      if (response.status >= 500 && response.status !== 503) count(`HTTP ${response.status}`);
+      const response = await withPlainErrors(request, answered);
       return isStaging(env) ? markStaging(response) : response;
     } catch (error) { count(error); throw error; }
   }
 };
+
+// "HTTP 500: D1_ERROR: …" from a JSON error answer's message, else the status alone.
+async function serverErrorReason(response) {
+  const body = /^application\/json/i.test(response.headers.get("Content-Type") || "") ? await response.clone().json().catch(() => null) : null;
+  const why = [body?.message, body?.error, body?.detail].find(v => typeof v === "string" && v.trim());
+  return `HTTP ${response.status}` + (why ? ": " + why : "");
+}
 
 async function staticRoute(url, request, env) {
   if (url.pathname === "/") return overviewPage(request);
