@@ -350,26 +350,29 @@ const actReadiness = `<div class="dm wc">
 <div class="w-two"><div class="wcard w-sm"${rise(250)}><span class="mut w-s2">Sleep</span><span class="num w-v">7:12</span>${range(16, 'amber-bar', 700)}<span class="w-nt2 amb2">89% of need</span></div>
 <div class="wcard w-sm"${rise(400)}><span class="mut w-s2">HRV</span><span class="num w-v">64<small>ms</small></span>${range(83, 'green', 700)}<span class="w-nt2 grn">above normal</span></div></div>
 </div>`;
-// Training: the rest ring counting down (half a minute of it, so the still frame keeps time on the clock), the sets
-// ticked off one by one, then the next set's weight tapped: the plate loader (PlateLoader.swift) slides up with the
-// bar loaded for 80 kg (25 + 5 a side), a tap on the 2.5 disc puts a pair on, Done, and the set says 85 kg.
-const W_SETS = [['W', 40, 500], ['1', 80, 720], ['2', 80, 940], ['3', 80, 1700]];
+// Training: Training mode's table of sets (TrainingModeView.swift, GymSetRow in TrainingModeParts.swift). Set 2
+// is ticked off with Set done and set 3 comes up; a tap on its weight slides up the plate loader (PlateLoader.swift)
+// with the bar loaded for 80 kg (25 + 5 a side), a tap on the 2.5 disc puts a pair on, Done, and set 3 says 85.
 const tap = (on, off) => `<i class="w-tap"${at(`${on} ${off}-in`)}></i>`;
 const DISCS = [25, 20, 15, 10, 5, 2.5, 1.25];
 const plateCls = p => String(p).replace('.', '-');
+const plate = (p, when) => `<span class="w-plate w-p${plateCls(p)}"${when ? at(String(when)) : ''}>${p}</span>`;
+// Label, kg, reps, the row's timeline: W and 1 done already, 2 the set at hand until Set done, 3 after it.
+const G_ROWS = [['W', 40, 300, ' w-did'], ['1', 80, 450, ' w-did'], ['2', 80, 1500, ' w-now', '1500-w-now 1500:w-did'], ['3', 80, 0, '', '1500:w-now']];
+const gymRow = ([l, kg, done, cls, when]) => `<div class="w-row${cls}"${when ? at(when) : ''}><span class="w-l">${l}</span><span class="w-lt">—</span>
+<span class="w-f num">${l === '3' ? `<b data-tx="0|80;5200|85">80</b>${tap(2300, 2600)}` : kg}</span><span class="w-f num">8</span><i class="w-rate"></i>
+<span class="w-sq">${done ? `<i class="w-ok"${at(String(done))}>${ic('check')}</i>` : ''}</span></div>`;
 const actTraining = `<div class="dm wc w-train">
-<div class="wcard row w-rest"${rise(0)}><svg class="w-ring" viewBox="0 0 132 132" aria-hidden="true"><circle cx="66" cy="66" r="57" class="w-trk"/><circle cx="66" cy="66" r="57" class="w-arc" stroke-dasharray="358.1" data-ring="83,53,0,30000,90" transform="rotate(-90 66 66)"/></svg>
-<span class="w-rt"><span class="mut s">Rest</span><span class="num"${n(83, 53, 0, 30000, 'ms')}>1:23</span><span class="mut s">of 1:30</span></span>
-<div><span class="mut w-s2">Now</span><b class="w-ex">Squat · set 3</b><span class="num w-kg">80 kg × 8</span><span class="row w-gap6"><span class="w-chip">−15 s</span><span class="w-chip">+15 s</span></span></div></div>
-<div class="w-two sets"><div class="wcard"${rise(150)}>${W_SETS.map(([l, kg, done], i) => `<div class="w-set${i === 3 ? ' w-now' : ''}"${i === 3 ? at('1700-w-now') : ''}><span class="${l === 'W' ? 'amb' : 'mut'}">${l}</span><span>${kg} kg × 8</span><span class="w-tk"><i class="w-ok"${at(String(done))}>${ic('check')}</i>${i === 3 ? tap(1450, 1750) : ''}</span></div>`).join('')}
-<div class="w-set w-now w-next"${at('1900')}><span class="mut">4</span><span class="w-kgt"><b data-tx="0|80 kg;5300|85 kg">80 kg</b> × 8${tap(2450, 2750)}</span><span class="w-tk"></span></div></div>
-<div class="wcard w-fig2"${rise(300)}><img src="/site/muscles/f00.webp" alt="" width="640" height="1000" loading="lazy"${at('1000')}><span class="mut s">Quads · Chest</span></div></div>
-<div class="w-loader"${at('2800 5200-in')}><div class="row sp w-sh"><span class="mut">Keypad</span><span class="mut">Squat</span><b class="grn">Done${tap(4850, 5150)}</b></div>
-<div class="w-big"><span class="num"${n(80, 85, 3950, 450, 'i')}>80</span><span class="mut">kg</span></div>
-<div class="mut s w-sum" data-tx="0|25 + 5 per side + 20 kg bar;3950|25 + 5 + 2.5 per side + 20 kg bar">25 + 5 per side + 20 kg bar</div>
-<div class="w-barbell" aria-hidden="true"><i class="w-rod"></i><span class="w-end">20</span><i class="w-collar"></i><span class="w-plate w-p25">25</span><span class="w-plate w-p5">5</span><span class="w-plate w-p2-5"${at('3950')}>2.5</span></div>
+<div class="wcard w-gym"${rise(0)}><div class="row sp w-gh"><b>Squat</b><span class="mut s">Exercise 1 of 3</span></div>
+<div class="w-row w-th"><span>Sets</span><span>Last time</span><span>kg</span><span>Reps</span><i></i><i></i></div>
+${G_ROWS.map(gymRow).join('\n')}
+<div class="w-go">${ic('check')}Set done${tap(1200, 1500)}</div></div>
+<div class="w-loader"${at('2700 5000-in')}><div class="row sp w-sh"><span class="mut">Keypad</span><span class="mut">Squat</span><b class="grn">Done${tap(4650, 4950)}</b></div>
+<div class="w-big"><span class="num"${n(80, 85, 3850, 450, 'i')}>80</span><span class="mut">kg</span></div>
+<div class="mut s w-sum" data-tx="0|25 + 5 per side + 20 kg bar;3850|25 + 5 + 2.5 per side + 20 kg bar">25 + 5 per side + 20 kg bar</div>
+<div class="w-barbell" aria-hidden="true"><i class="w-rod"></i><span class="w-end">20</span><i class="w-collar"></i>${plate(25)}${plate(5)}${plate(2.5, 3850)}</div>
 <div class="mut s w-addl">Add plates</div>
-<div class="w-discs">${DISCS.map(p => `<span class="w-disc w-p${plateCls(p)}">${p}${p === 25 || p === 5 ? '<b>×1</b>' : p === 2.5 ? `<b${at('3950')}>×1</b>${tap(3700, 4000)}` : ''}</span>`).join('')}</div></div>
+<div class="w-discs">${DISCS.map(p => `<span class="w-disc w-p${plateCls(p)}">${p}${p === 25 || p === 5 ? '<b>×1</b>' : p === 2.5 ? `<b${at('3850')}>×1</b>${tap(3600, 3900)}` : ''}</span>`).join('')}</div></div>
 </div>`;
 // Nutrition: Výživa's lunch row with the photo's food in it, the barcode being scanned and the drinks filling up.
 const actFood = `<div class="dm wc">
@@ -711,27 +714,36 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .wc .w-sm{display:flex;flex-direction:column;gap:2px}.wc .num.w-v{font-size:36px;line-height:1.1}.wc .num.w-v small{font-size:13px}
 .w-s2{font-size:14px}.w-nt2{font-size:12.5px;font-weight:500}.amb2{color:var(--amber-bar)}
 .js .wc .pop.wait:not(.in){transform:scale(.6)}
-.wc .w-rest{gap:16px;padding:12px 16px}.wc .w-ring{flex:none;width:106px;height:106px}.wc .w-ring circle{fill:none;stroke-width:8}.wc .w-ring .w-trk{stroke:var(--track)}.wc .w-ring .w-arc{stroke:var(--green);stroke-linecap:round}
-.wc .w-rest{position:relative}.wc .w-rt{position:absolute;left:16px;width:106px;display:flex;flex-direction:column;align-items:center;line-height:1.1}.wc .w-rt .num{font-size:34px;line-height:1}.wc .w-rt .s{font-size:11px}
-.wc .w-rest>div{display:flex;flex-direction:column}.wc .w-ex{font-size:15px}.wc .num.w-kg{font-size:30px;line-height:1.2}.wc .num.w-kg2{font-size:24px}
-.w-gap6{gap:6px;margin-top:6px}.w-chip{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:99px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 14%,transparent);font-size:12.5px;font-weight:500}
+/* Training mode's sets: SETS · LAST TIME · KG · REPS, the rating oval and the tick square; the set at hand outlined. */
+.wc .w-gym{padding:14px 10px 12px}.w-gh{padding:0 8px 8px;align-items:baseline}.w-gh b{font-family:Newsreader,"New York",Georgia,serif;font-size:24px;font-weight:400}
+.w-row{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr) 56px 44px 34px 28px;align-items:center;gap:6px;height:44px;padding:0 8px;border-radius:12px;box-shadow:inset 0 0 0 1.5px transparent;transition:background .35s,box-shadow .35s}
+.w-row.w-th{height:20px;font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);opacity:.8}.w-th span:nth-child(3),.w-th span:nth-child(4){text-align:center}
+.w-l{font-size:14px;font-weight:600;color:var(--sec)}.w-lt{font-size:13px;color:var(--muted);opacity:.7}
+.w-f b{font-weight:400}.w-f{position:relative;display:grid;place-items:center;height:34px;border-radius:8px;font-size:22px;transition:background .35s}
+.w-rate{width:34px;height:22px;border-radius:99px;border:1.5px dashed color-mix(in srgb,var(--muted) 70%,transparent)}
+.w-sq{position:relative;width:26px;height:26px;border-radius:8px;box-shadow:inset 0 0 0 1.5px var(--line);transition:box-shadow .35s}
+.w-row:not(.w-now):not(.w-did) .w-l,.w-row:not(.w-now):not(.w-did) .w-f{color:var(--muted);opacity:.55}
+.w-row.w-now{background:var(--track);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--amber) 55%,transparent)}
+.w-now .w-l{color:var(--amber)}.w-now .w-f{background:var(--panel)}.w-now .w-sq{box-shadow:inset 0 0 0 1.5px var(--amber)}
+.w-ok{position:absolute;inset:0;display:grid;place-items:center;border-radius:8px;background:var(--green);color:var(--on-button);font-size:14px;transition:transform .45s cubic-bezier(.34,1.6,.5,1),opacity .3s!important}.w-ok .di{stroke-width:2.6}.js .w-ok.wait:not(.in){transform:scale(.3)}
+.w-go{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;height:46px;margin:12px 0 0;border-radius:99px;background:var(--button);color:var(--on-button);font-size:15px;font-weight:600}
 /* The plate loader, slid up over the lower cards as in the app. */
 .dm.wc.w-train{position:relative;overflow:hidden;width:calc(100% + 60px);margin:-30px -30px -64px;padding:30px 30px 64px}
-.w-loader{position:absolute;left:30px;right:30px;bottom:58px;z-index:3;padding:14px 18px 18px;border-radius:26px;background:var(--bg);box-shadow:0 -14px 40px -14px rgba(60,45,20,.35);transform:translateY(calc(100% + 64px));transition:transform .6s cubic-bezier(.2,.9,.25,1)!important}
+.w-loader{position:absolute;left:30px;right:30px;top:30px;bottom:64px;z-index:3;display:flex;flex-direction:column;justify-content:center;padding:14px 18px 18px;border-radius:22px;background:var(--bg);box-shadow:0 -14px 40px -14px rgba(60,45,20,.35);transform:translateY(calc(100% + 64px));transition:transform .6s cubic-bezier(.2,.9,.25,1)!important}
 .js .w-loader.wait:not(.in){opacity:1;transform:translateY(calc(100% + 64px))}.w-loader.in{transform:none}
 .w-sh{font-size:14px}.w-sh b{position:relative;font-weight:600}
 .w-big{display:flex;align-items:baseline;justify-content:center;gap:6px;margin-top:6px}.w-big .num{font-size:54px;line-height:1}.w-big .mut{font-size:18px;font-weight:500}
 .w-sum{text-align:center;margin-top:2px}
-.w-barbell{position:relative;height:100px;margin:10px -18px 0;overflow:hidden}
-.w-barbell>*{position:absolute;top:50%;transform:translateY(-50%)}
-.w-barbell .w-rod{left:70px;right:12px;height:12px;border-radius:4px;background:var(--metal)}
-.w-barbell .w-end{left:0;width:56px;height:14px;border-radius:0 4px 4px 0;display:grid;place-items:center;font-size:10px;font-weight:600;color:#fff;background:var(--plate-1-25);box-shadow:inset 0 0 0 1.2px var(--plate-1-25-line)}
-.w-barbell .w-collar{left:58px;width:8px;height:24px;border-radius:2px;background:var(--metal)}
-.w-plate{display:grid;place-items:center;border-radius:5px;color:#fff;font-size:10px;font-weight:600;transition:transform .55s cubic-bezier(.34,1.4,.5,1),opacity .35s!important}
-.w-plate.w-p25{left:68px;width:19px;height:92px;background:var(--plate-25);box-shadow:inset 0 0 0 1.2px var(--plate-25-line)}
-.w-plate.w-p5{left:89px;width:17px;height:62px;background:var(--plate-5);box-shadow:inset 0 0 0 1.2px var(--plate-5-line)}
-.w-plate.w-p2-5{left:108px;width:16px;height:53px;font-size:8.5px;background:var(--plate-2-5);box-shadow:inset 0 0 0 1.2px var(--plate-2-5-line)}
-.js .w-plate.wait:not(.in){opacity:0;transform:translate(160px,-50%)}
+/* The bar from the side, as PlateLoader.swift lays it out: the bar's end, the collar, then the plates two points apart. */
+.w-barbell{position:relative;display:flex;align-items:center;gap:2px;height:100px;margin:10px -18px 0;overflow:hidden}
+.w-barbell .w-rod{position:absolute;left:56px;right:12px;top:50%;height:12px;margin-top:-6px;border-radius:4px;background:var(--metal)}
+.w-barbell .w-end{position:relative;flex:none;width:52px;height:13px;border-radius:0 4px 4px 0;display:grid;place-items:center;font-size:9.5px;font-weight:600;color:#fff;background:var(--plate-1-25);box-shadow:inset 0 0 0 1.2px var(--plate-1-25-line)}
+.w-barbell .w-collar{position:relative;flex:none;width:8px;height:24px;border-radius:2px;background:var(--metal)}
+.w-plate{position:relative;flex:none;display:grid;place-items:center;border-radius:5px;color:#fff;font-size:10px;font-weight:600;background:var(--c);box-shadow:inset 0 0 0 1.2px var(--l);transition:transform .55s cubic-bezier(.34,1.4,.5,1),opacity .35s!important}
+.w-plate.w-p25{width:21px;height:92px;--c:var(--plate-25);--l:var(--plate-25-line)}
+.w-plate.w-p5{width:19px;height:62px;--c:var(--plate-5);--l:var(--plate-5-line)}
+.w-plate.w-p2-5{width:18px;height:53px;font-size:8.5px;--c:var(--plate-2-5);--l:var(--plate-2-5-line)}
+.js .w-plate.wait:not(.in){opacity:0;transform:translateX(160px)}
 .w-addl{margin-top:6px;font-weight:600}
 .w-discs{display:flex;justify-content:space-between;margin-top:8px}
 .w-disc{position:relative;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;color:#fff;font-size:11px;font-weight:600;background:var(--c);box-shadow:inset 0 0 0 1.2px var(--l)}
@@ -742,15 +754,6 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 /* Where a finger taps: a soft ring that comes and goes. */
 .w-tap{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;pointer-events:none;background:color-mix(in srgb,var(--text) 14%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--text) 22%,transparent);transition:opacity .2s,transform .3s cubic-bezier(.34,1.6,.5,1)!important}
 .js .wc .w-tap.wait:not(.in),.w-tap:not(.in){opacity:0;transform:scale(.5)}
-.w-kgt{position:relative}.w-kgt b{font-weight:500}.w-kgt .w-tap{left:20px}
-.w-next.wait{transition:opacity .4s,transform .5s cubic-bezier(.16,1,.3,1)}
-.wc .sets{grid-template-columns:minmax(0,1fr) 124px}.wc .sets>.wcard:first-child{display:grid;gap:5px;padding:12px}
-.w-set{display:grid;grid-template-columns:16px 1fr 20px;align-items:center;gap:8px;height:28px;padding:0 8px;border-radius:10px;font-size:14px;font-weight:500;font-variant-numeric:tabular-nums}
-.w-set>span:first-child{font-size:12px;font-weight:600}.w-set.w-now{background:color-mix(in srgb,var(--amber-soft) 60%,transparent);box-shadow:inset 0 0 0 1.2px var(--amber-bar)}
-.w-set .w-tk{position:relative;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--text) 20%,transparent)}
-.w-ok{position:absolute;inset:0;display:grid;place-items:center;border-radius:50%;background:var(--green);color:var(--on-button);font-size:11px;transition:transform .45s cubic-bezier(.34,1.6,.5,1),opacity .3s!important}.js .w-ok.wait:not(.in){transform:scale(.3)}
-.wc .w-fig2{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;padding:10px}.wc .w-fig2 img{width:auto;height:112px}
-.js .wc .w-fig2 img.wait:not(.in){transform:none;filter:grayscale(1);opacity:.5}.wc .w-fig2 img{transition:filter .8s,opacity .8s}
 .wc .w-meal{position:relative;padding-top:20px}.wc .w-badge{position:absolute;left:12px;top:-12px;gap:5px;transform-origin:left}
 .w-mac{display:grid;grid-template-columns:76px 1fr 74px;align-items:center;gap:10px;margin:6px 0}.w-mac .s{text-align:right}.w-mac>.s:first-child{text-align:left;display:flex;align-items:center;gap:6px}.w-mac i:not(.bar){width:6px;height:6px;border-radius:50%}
 .w-mac .bar{height:5px}.wc .w-meal>.mut:last-child{display:block;margin-top:4px}
