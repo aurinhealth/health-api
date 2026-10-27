@@ -178,7 +178,7 @@ struct SettingsSectionTiles: View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: cycle ? 3 : 4), alignment: .leading, spacing: 10) {
             tile("Spánek", "moon.fill", Palette.indigo) { SleepSettingsView(given: store) }
             tile("Posilovna", "dumbbell.fill", Palette.brown) { GymSettingsView() }
-            tile("Jídlo a pití", "fork.knife", Palette.amber) { FoodDrinkSettingsView() }
+            tile("Výživa", "fork.knife", Palette.amber) { FoodDrinkSettingsView() }
             tile("Deník", "book.closed.fill", Palette.indigo) { JournalSettingsView() }
             if cycle {
                 tile("Cyklus", "calendar", Palette.pink) { CycleSettingsView() }
@@ -282,10 +282,10 @@ struct GymSettingsView: View {
     }
 }
 
-/// Jídlo a pití: the meals of the day, the favourite drinks and the figure.
+/// Výživa: the meals of the day, the favourite drinks and the figure.
 struct FoodDrinkSettingsView: View {
     var body: some View {
-        SettingsPage(title: "Jídlo a pití") {
+        SettingsPage(title: "Výživa") {
             SettingsGroup {
                 NavigationLink { MealSlotsSettingsView() } label: {
                     SettingsRow(icon: SettingsIcon(systemImage: "fork.knife", color: Palette.amber), title: "Jídla dne")
