@@ -438,10 +438,11 @@ extension APIClient {
     /// and length as the athlete or the AI chose them, or an existing workout
     /// made `resizeTo` minutes long.
     func generateWeekSession(date: String, sport: String, minutes: Int, environment: String?, focus: String?,
-                             resize workoutId: String? = nil) async throws -> GeneratedWorkout {
+                             insisted: Bool = false, resize workoutId: String? = nil) async throws -> GeneratedWorkout {
         var body: JSONObject = ["date": .string(date), "sport": .string(sport), "environment": .string(environment ?? "auto"),
                                 "availabilityMinutes": .number(Double(minutes)), "userInitiated": .bool(true)]
         if let focus { body["focus"] = .string(focus) }
+        if insisted { body["insisted"] = .bool(true) }
         if let workoutId { body["workoutId"] = .string(workoutId); body["resizeTo"] = .number(Double(minutes)) }
         return try await send("/app/api/workouts/generate", method: "POST", body: body)
     }
@@ -483,6 +484,7 @@ extension APIClient {
                                 "environment": .string(session.environment ?? "outdoor")]
         if let kind = session.kind { body["kind"] = .string(kind) }
         if let system = session.workout?.primary_system { body["system"] = .string(system) }
+        if let tss = session.workout?.target_load { body["tss"] = .number(tss) }
         if let chip { body["chip"] = .string(chip) }
         if let text { body["text"] = .string(text) }
         body["others"] = .array(others.map { o in
