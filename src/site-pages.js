@@ -618,7 +618,7 @@ function pageLang(request, czech = false) {
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '26. října 2026', en: '26 October 2026'};
+const UPDATED = {cs: '27. října 2026', en: '27 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -891,8 +891,8 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <p><strong>Codes sent by email.</strong> When you ask for a sign-in code, we send a six-digit code to the address you entered, if it has access to Aurin. We keep only a keyed hash of the code for 10 minutes, and counters that limit how many codes and attempts an address gets; these counters are deleted two days after the last code. A code sent to a new address also confirms changing your account’s email in Settings → Account; the old address then gets a notice of the change.</p>` : ''}
 <p><strong>Google Health</strong>, only if you connect it and allow it on Google’s consent screen:</p>
 <ul>
-<li>activity and fitness: steps, distance, floors, active minutes, active zone minutes, active energy burned, time in heart rate zones, sedentary periods and exercise sessions, including the GPS route of a workout recorded with GPS, kept to show its map;</li>
-<li>health metrics and measurements: heart rate, resting heart rate, heart rate variability, oxygen saturation, respiratory rate, VO2 max, weight, height and body fat;</li>
+<li>activity and fitness: steps, distance, floors, active minutes, active zone minutes, active energy burned, total calories burned, time in heart rate zones, sedentary periods and exercise sessions, including the GPS route of a workout recorded with GPS, kept to show its map;</li>
+<li>health metrics and measurements: heart rate, resting heart rate, heart rate variability, oxygen saturation, respiratory rate, skin temperature during sleep, VO2 max, weight, height and body fat;</li>
 <li>sleep: sleep sessions and sleep stages;</li>
 <li>nutrition: food and drink logs.</li>
 </ul>
@@ -921,9 +921,11 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <ul>
 <li>We read Google Health data to show and evaluate your activity, health metrics, sleep and nutrition in Aurin.</li>
 <li>We write to Google Health only the food and drinks you log in Aurin and, if you allow it, the weight you record in Aurin or Intervals.icu and the workouts you finish in Aurin.</li>
-<li>We transfer Google user data only to the services listed under “Who receives your data”, only to provide features you use and with your consent. Beyond that, only for security purposes, to comply with the law, or as part of a merger, acquisition or sale of the service after your explicit consent.</li>
+<li>We transfer Google user data only to provide features you use, and only to: Intervals.icu, if you connect it (a daily wellness copy: sleep, average sleeping heart rate, steps, resting heart rate, heart rate variability, oxygen saturation, respiration, VO2 max and body fat); OpenAI, when you use an AI feature after giving its separate consent (only the part of the data that request needs, such as last night’s sleep and heart rate variability when you ask the coach about today’s training; OpenAI processes it on our behalf, does not use it to train its models and keeps it for up to 30 days to detect abuse); and Cloudflare, which hosts Aurin and stores its database. Beyond that, only for security purposes, to comply with the law, or as part of a merger, acquisition or sale of the service after your explicit consent.</li>
 <li>We do not sell Google user data, do not use or transfer it for advertising, and do not transfer it to advertising platforms, data brokers or information resellers.</li>
-<li>We do not use Google user data to train AI models or to determine creditworthiness or for lending.</li>
+<li>Aurin also calculates values from Google user data, such as the readiness score, training load, calorie targets and sleep and recovery trends. These derived and aggregated values are used only for the same features, go to no one beyond the services above, even when aggregated or anonymized, and are deleted together with the raw data.</li>
+<li>We do not use Google user data, raw, aggregated or anonymized, to develop, improve or train AI models, our own or anyone else’s, nor to determine creditworthiness or for lending.</li>
+<li>Google user data is protected as described under “Storage and security” and kept and deleted as described under “How long we keep data and how to delete it”.</li>
 <li>No one reads your data unless you ask us to (for example, to help with a problem), it is needed for security purposes such as investigating abuse, or it is required by law. For internal operations we use only aggregated, anonymized data.</li>
 </ul>
 <p>Aurin’s use and transfer to any other app of information received from Google APIs will adhere to the <a href="${API_POLICY}">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
@@ -996,8 +998,8 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <p><strong>Kódy e-mailem.</strong> Když si řekneš o kód pro přihlášení, pošleme šestimístný kód na zadanou adresu, pokud má do Aurinu přístup. Uchováváme jen jeho otisk vytvořený tajným klíčem, a to 10 minut, a počítadla, která omezují, kolik kódů a pokusů adresa dostane; ta se smažou dva dny po posledním kódu. Kód poslaný na novou adresu potvrzuje i změnu e-mailu účtu v Nastavení → Účet; na starou adresu pak přijde upozornění.</p>` : ''}
 <p><strong>Google Health</strong>, jen když ho připojíš a povolíš na obrazovce souhlasu Google:</p>
 <ul>
-<li>aktivita a kondice: kroky, vzdálenost, patra, aktivní minuty, minuty v aktivních zónách, aktivní energie, čas v tepových zónách, období nečinnosti a tréninky, u tréninku s GPS i jeho trasa, kterou uchováváme, abychom ukázali mapu;</li>
-<li>zdravotní měření: tep, klidový tep, variabilita srdečního tepu (HRV), okysličení krve, dechová frekvence, VO₂max, váha, výška a tělesný tuk;</li>
+<li>aktivita a kondice: kroky, vzdálenost, patra, aktivní minuty, minuty v aktivních zónách, aktivní energie, celkový výdej energie, čas v tepových zónách, období nečinnosti a tréninky, u tréninku s GPS i jeho trasa, kterou uchováváme, abychom ukázali mapu;</li>
+<li>zdravotní měření: tep, klidový tep, variabilita srdečního tepu (HRV), okysličení krve, dechová frekvence, teplota kůže ve spánku, VO₂max, váha, výška a tělesný tuk;</li>
 <li>spánek: spánky a spánkové fáze;</li>
 <li>výživa: záznamy jídla a pití.</li>
 </ul>
@@ -1026,9 +1028,11 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <ul>
 <li>Data z Google Health čteme, abychom ti v Aurinu ukázali a vyhodnotili aktivitu, zdravotní měření, spánek a výživu.</li>
 <li>Do Google Health zapisujeme jen jídlo a pití, které zapíšeš v Aurinu, a když to povolíš, i váhu zapsanou v Aurinu nebo Intervals.icu a tréninky, které v Aurinu dokončíš.</li>
-<li>Data z Googlu předáváme jen službám z části Kdo data dostává, jen kvůli funkcím, které používáš, a s tvým souhlasem. Jinak už jen kvůli bezpečnosti, kvůli povinnosti ze zákona nebo při fúzi, akvizici či prodeji služby, a to po tvém výslovném souhlasu.</li>
+<li>Data z Googlu předáváme jen kvůli funkcím, které používáš, a jen těmto službám: Intervals.icu, když ho připojíš (denní kopie wellness: spánek, průměrný tep ve spánku, kroky, klidový tep, variabilita srdečního tepu, okysličení krve, dechová frekvence, VO₂max a tělesný tuk); OpenAI, když použiješ AI funkci a dal jsi k tomu samostatný souhlas (jen tu část dat, kterou daný požadavek potřebuje, třeba poslední spánek a variabilitu tepu, když se kouče ptáš na dnešní trénink; OpenAI je zpracovává naším jménem, nepoužívá je k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití); a Cloudflare, který Aurin provozuje a ukládá jeho databázi. Jinak už jen kvůli bezpečnosti, kvůli povinnosti ze zákona nebo při fúzi, akvizici či prodeji služby, a to po tvém výslovném souhlasu.</li>
 <li>Data z Googlu neprodáváme, nepoužíváme ani nepředáváme k reklamě a nepředáváme je reklamním platformám, obchodníkům s daty ani jiným přeprodejcům informací.</li>
-<li>Data z Googlu nepoužíváme k trénování modelů AI ani k posuzování úvěruschopnosti nebo půjček.</li>
+<li>Z dat z Googlu Aurin také počítá další hodnoty, třeba připravenost, tréninkovou zátěž, cíle kalorií a trendy spánku a regenerace. Tyto odvozené a souhrnné hodnoty slouží jen ke stejným funkcím, nedostane je nikdo mimo výše uvedené služby, ani souhrnné či anonymizované, a mažou se spolu s původními daty.</li>
+<li>Data z Googlu, původní, souhrnná ani anonymizovaná, nepoužíváme k vývoji, zlepšování ani trénování modelů AI, našich ani cizích, ani k posuzování úvěruschopnosti nebo půjček.</li>
+<li>Data z Googlu chráníme tak, jak popisuje část Uložení a zabezpečení, a uchováváme a mažeme je podle části Jak dlouho data uchováváme a jak je smazat.</li>
 <li>Tvoje data nikdo nečte, pokud o to nepožádáš (třeba při řešení problému), pokud to nevyžaduje bezpečnost, například vyšetřování zneužití, nebo zákon. Pro interní provoz používáme jen souhrnná anonymizovaná data.</li>
 </ul>
 <p>Použití a předání informací získaných z Google API jiné aplikaci se řídí <a href="${API_POLICY}">zásadami Google API Services User Data Policy</a> včetně požadavků na omezené použití (Limited Use).</p>
