@@ -57,12 +57,12 @@ const merge = html => html.replace(/ data-n="([^"]*)" data-n="/g, ' data-n="$1;'
 
 // The service logos (the app's own files in public/site/logos/), as the app's IntegrationIcon draws them.
 const LOGO = {
-  apple: '<img src="/site/logos/apple-health.png" alt="" width="15" height="15">',
-  google: '<img src="/site/logos/google-health.png" alt="" width="15" height="15" class="pad">',
-  intervals: '<img src="/site/logos/intervals.svg" alt="" width="15" height="15">',
-  ultrahuman: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="15" height="15"></span>',
-  whoop: '<img src="/site/logos/whoop.svg" alt="" width="15" height="15">',
-  wahoo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="15" height="15"></span>',
+  apple: '<img src="/site/logos/apple-health.png" alt="" width="15" height="15" loading="lazy">',
+  google: '<img src="/site/logos/google-health.png" alt="" width="15" height="15" loading="lazy" class="pad">',
+  intervals: '<img src="/site/logos/intervals.svg" alt="" width="15" height="15" loading="lazy">',
+  ultrahuman: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="15" height="15" loading="lazy"></span>',
+  whoop: '<img src="/site/logos/whoop.svg" alt="" width="15" height="15" loading="lazy">',
+  wahoo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="15" height="15" loading="lazy"></span>',
 };
 const logo = id => `<span class="lg">${LOGO[id]}</span>`;
 // The Aurin mark, as the app's own source tile for what it recorded.
@@ -104,11 +104,11 @@ const dial = `<div class="dm pad dialbox">
 <svg viewBox="0 0 300 300" aria-hidden="true"><circle class="trk" cx="150" cy="150" r="126"/><path class="arc" d=""/>
 ${[0, 3, 6, 9, 12, 15, 18, 21].map(h => { const a = h / 24 * 2 * Math.PI; return `<text x="${(150 + 98 * Math.sin(a)).toFixed(1)}" y="${(150 - 98 * Math.cos(a) + 4).toFixed(1)}">${h}</text>`; }).join('')}
 <circle class="usual" cx="${(150 + 143 * Math.sin(1428 / 1440 * 2 * Math.PI)).toFixed(1)}" cy="${(150 - 143 * Math.cos(1428 / 1440 * 2 * Math.PI)).toFixed(1)}" r="3"/></svg>
-<div class="ctr"><span class="num len">8 h 30</span><span class="mut s">sleep</span></div>
-<button type="button" class="hd moon" aria-label="Bedtime">${ic('moon')}</button><button type="button" class="hd sun" aria-label="Wake up">${ic('sun')}</button>
+<div class="ctr" aria-hidden="true"><span class="num len">8 h 30</span><span class="mut s">sleep</span></div>
+<button type="button" class="hd moon" role="slider" aria-label="Bedtime" aria-valuemin="0" aria-valuemax="1435">${ic('moon')}</button><button type="button" class="hd sun" role="slider" aria-label="Wake up" aria-valuemin="0" aria-valuemax="1435">${ic('sun')}</button>
 </div>
-<div class="tiles"><div class="tile"><div class="th ind">${ic('moon')}Bedtime</div><span class="num bed">10:10 PM</span></div><div class="tile"><div class="th amb">${ic('sun')}Wake up</div><span class="num wake">7:15 AM</span></div></div>
-<p class="hint">Drag the moon or the sun</p>
+<div class="tiles" aria-hidden="true"><div class="tile"><div class="th ind">${ic('moon')}Bedtime</div><span class="num bed">10:10 PM</span></div><div class="tile"><div class="th amb">${ic('sun')}Wake up</div><span class="num wake">7:15 AM</span></div></div>
+<p class="hint" aria-hidden="true">Drag the moon or the sun</p>
 </div>`;
 
 // "Tonight I want": the pick moves, and the bedtime follows it.
@@ -265,7 +265,7 @@ const doneScreen = `<div class="app glow-training">${STATUS}
     .map(([k, v, f, t, u, d], i) => `<div><span class="mut s">${k}</span><span class="num tv"><span${n(f, t, 300 + i * 120, 1100, u === 't' ? '1' : 'i')}>${String(t)}</span>${u ? ' ' + u : ''}</span>${d ? `<span class="grn s"${at('1600')}>${d}</span>` : ''}</div>`).join('')}</div>
 <div class="card rec"${at('1900')}><span class="sc amb">${ic('spark')}</span><div><b>New record</b><span class="mut s">Squat 82.5 × 6</span></div></div>
 <div class="card chg"${at('2500')}>${[['Squat', '3 × 80 kg', '+2.5 kg', 'grn'], ['Bench press', '2 × 62.5 kg', '+1 reps', 'grn'], ['Bent-over rows', '2 × 50 kg', '=', 'mut']].map(([a, b, c, k]) => `<div class="li"><div><b>${a}</b><span class="mut s">${b}</span></div><span class="${k} s b">${c}</span></div>`).join('')}</div>
-<div class="card mf"${at('2800')}><img src="/site/muscles/f00.webp" alt="" width="34" height="53"><div><b>Muscle fatigue</b><span class="mut s">Quads and glutes rested in 2 days</span></div><span class="mut">${ic('chev')}</span></div>
+<div class="card mf"${at('2800')}><img src="/site/muscles/f00.webp" alt="" width="34" height="53" loading="lazy"><div><b>Muscle fatigue</b><span class="mut s">Quads and glutes rested in 2 days</span></div><span class="mut">${ic('chev')}</span></div>
 <div class="card hk"${at('3400')}><span class="rust">${ic('heart')}</span><b>Saved to Apple Health</b><span class="grn">${ic('check')}</span></div>
 <div class="btn dark big2">${ic('thumb')}Rate</div>
 </div>`;
@@ -837,7 +837,10 @@ function dial(d,wake,sleep){wake=((wake%1440)+1440)%1440;d.dataset.wake=Math.rou
  var bed=wake-r5(sleep/.936),a=pt(bed,126),b=pt(wake,126),span=((wake-bed)%1440+1440)%1440,box=d.closest('.dm');
  d.querySelector('.arc').setAttribute('d','M'+a[0].toFixed(1)+' '+a[1].toFixed(1)+'A126 126 0 '+(span>720?1:0)+' 1 '+b[0].toFixed(1)+' '+b[1].toFixed(1));
  var w=250/300;[['.moon',a],['.sun',b]].forEach(function(h){var el=d.querySelector(h[0]);el.style.transform='translate('+(h[1][0]*w).toFixed(1)+'px,'+(h[1][1]*w).toFixed(1)+'px)';});
- var s=r5(sleep);d.querySelector('.len').textContent=fmt(s,'hm');box.querySelector('.bed').textContent=clock(bed);box.querySelector('.wake').textContent=clock(wake);}
+ var s=r5(sleep);d.querySelector('.len').textContent=fmt(s,'hm');box.querySelector('.bed').textContent=clock(bed);box.querySelector('.wake').textContent=clock(wake);
+ var mo=d.querySelector('.moon'),su=d.querySelector('.sun'),tl=fmt(s,'hm');
+ mo.setAttribute('aria-valuenow',((Math.round(bed)%1440)+1440)%1440);mo.setAttribute('aria-valuetext','Bedtime '+clock(bed)+', '+tl+' of sleep');
+ su.setAttribute('aria-valuenow',Math.round(wake));su.setAttribute('aria-valuetext','Wake up '+clock(wake)+', '+tl+' of sleep');}
 function minutesAt(d,e){var r=d.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,a=Math.atan2(x,-y);return r5(((a/(2*Math.PI))*1440+1440)%1440);}
 function setFrom(d,h,m){var wake=+d.dataset.wake,sleep=+d.dataset.sleep;
  if(h.classList.contains('sun'))dial(d,m,sleep);else{var inBed=((wake-m)%1440+1440)%1440;dial(d,wake,Math.min(720,Math.max(300,r5(inBed*.936))));}}

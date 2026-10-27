@@ -17,11 +17,14 @@ palette changes, change `design-system.js` and this file together.
    people, no UI the app doesn't have.
 2. **One idea per section.** One eyebrow, one headline (a short sentence with a full stop), one line under it,
    one phone. The steps inside a section carry the detail.
-3. **Colour means a part of the app.** The page itself is paper and ink. Green, amber, indigo and rust appear
-   only where that part of the app appears: readiness, strain/food, sleep, tired muscles.
+3. **Colour means a part of the app.** The page itself is paper and ink, and green is the site's one accent: eyebrows,
+   step numbers, links, labels, focus. Amber, indigo and rust appear only in data: the app's screens and demos,
+   the numbers they carry (sleep 7:12 in indigo), the bars, dots and lines of a chart or the connections. Never
+   on link text, eyebrows or labels.
 4. **Warm, not clinical.** Paper instead of white, serif headlines, soft tinted glows. Never cold grey, never
    neon on black.
-5. **Light only.** The site has one look and no theme switch. It follows the app's light screenshots.
+5. **Light only, for now.** The site has one look and no theme switch. It follows the app's light screenshots;
+   a dark version needs CI to take the dark screenshots too (see "Dark mode, next" below).
 6. **The welcome sets the tone.** The hero, the openings of the parts, the privacy lock and the end take the look
    and motion of the app's welcome before the sign-in (`WelcomePages.swift`): the logo rising behind spreading
    rings, a sunrise tint, the app's own cards rising into place one after another.
@@ -42,11 +45,11 @@ palette changes, change `design-system.js` and this file together.
 | `--on-button` | #F3EFE8 | Text on the ink pill |
 | `--primary` / `--green` | #1F6B52 | Links, focus ring, readiness |
 | `--green-soft` | #D3EADF | Success fills (waitlist "done") |
-| `--amber` | #A35A12 | Strain, gym and food eyebrows and text |
+| `--amber` | #A35A12 | Strain, gym and food numbers and text inside the app's screens and demos |
 | `--amber-bar` | #C4782A | Strain bars, "recovering" muscles |
 | `--indigo` | #4F46C8 | Sleep and the coach |
 | `--rust` | #B4532F | Tired muscles, warnings (shapes and bars) |
-| `--rust-ink` | #A3482A | The muscles eyebrow and other small rust text (5.2:1 on paper) |
+| `--rust-ink` | #A3482A | Small rust text inside data, such as form errors (5.2:1 on paper) |
 | `--red` (add) | #C2362B | Form errors only (from `Palette.red`) |
 | `--protein` `--carbs` `--fat` | #2F7FD8 · #D98A06 · #7C5CE0 | Macros, only next to food data |
 | `--logo-load` `--logo-recovery` | #F2B46B · #3FA383 | The Aurin mark, nothing else |
@@ -55,7 +58,7 @@ palette changes, change `design-system.js` and this file together.
 | `--metal` `--plate-25` `--plate-5` | #BDB7AC · #C98A7C · #AEB2B9 | The plate loader's bar and plates, with their `-line` outlines |
 | `--glow-today` `-health` `-training` `-food` | #DCEBE2 · #E3E6F3 · #F3E3C6 · #F2E4D0 | The soft glow behind each section's phone |
 
-Each section sets two variables, `--tone` (its eyebrow and accent) and `--glow` (the tint behind the phone):
+Each section sets two variables, `--tone` (the bar under its active step) and `--glow` (the tint behind the phone):
 readiness, training and the coach are green on `glow-today`; each part's opening is tinted with its welcome page's glow (readiness `glow-today`, training `glow-training`, nutrition `glow-food`, sleep `glow-health`, coach `glow-coach`); sleep is indigo on `glow-health`; strain and the
 gym are amber on `glow-training`; food is amber on `glow-food`; muscles are rust (`--rust-ink` for the eyebrow).
 
@@ -67,33 +70,46 @@ For a future dark band (for example the final call to action), the app's dark va
 
 ## Typography
 
-- **Headlines (h1, h2, the logo word):** Newsreader 400, self-hosted (`/site/fonts/newsreader.woff2`), fallback
-  `"New York", Georgia, serif`. Letter-spacing -0.02em, line-height 1.02. Never bold: the serif carries the voice.
-- **Everything else:** the system face (`-apple-system, BlinkMacSystemFont, Inter, "Segoe UI", system-ui`), so
-  the site reads like iOS. Weights 400 body, 500 links and nav, 600 buttons, numbers and h3, 700 only for
-  eyebrows.
+- **One serif on the site: Newsreader 400** for h1, h2, step titles, the opener lines, the logo word and the
+  footer line. Self-hosted (`/site/fonts/newsreader.woff2`), token `--serif`, fallback `"New York", Georgia, serif`.
+  Letter-spacing -0.02em, line-height 1.02. Never bold: the serif carries the voice. The italic in the hero is
+  Newsreader too.
+- **Instrument Serif lives only inside the app's screens** that `site-demos.js` rebuilds (the dial, the readiness
+  number, the demo cards), because the app sets its numbers in it (`Typography.swift`). The site's own text never
+  uses it.
+- **Everything else:** the system face (`--sans`: `-apple-system, BlinkMacSystemFont, Inter, "Segoe UI",
+  system-ui`), so the site reads like iOS. Weights 400 body, 500 links and nav, 600 buttons, numbers and h3, 700
+  only for eyebrows.
 - **Numbers:** system face, 600, letter-spacing -0.03em, `font-variant-numeric: tabular-nums`.
 
-| Step | Size / line height | Use |
-|---|---|---|
-| display | clamp(48px, 8vw, 96px) / 1.02 | The hero headline only |
-| h2 | clamp(36px, 5vw, 64px) / 1.02 | Section headlines |
-| h3 | 22px / 1.25, 600 | Step titles, card titles, policy headings |
-| lede | 20px / 1.5 | The hero line and section sub-lines |
-| body | 17px / 1.5 | Default text (site base) |
-| small | 14px / 1.45 | Nav links, chips, footer |
-| meta | 13px | Glass card labels, chips |
-| eyebrow | 13px, 700, 0.18em, uppercase | The label above each section headline, in `--tone` |
-| metric | 30px, 600, -0.03em | Numbers in the hero cards |
+**The scale** (`--fs-*` in `design-system.js`). The site's own text uses these eight sizes and nothing else;
+headlines grow fluidly with the window, but only between two neighbouring steps. The app's screens rebuilt in
+`site-demos.js` keep the app's own sizes, since they copy the app. `tests/design-tokens.test.mjs` checks it.
 
-Text blocks stay under 640px wide (60-70 characters). Headlines are one short sentence that ends with a full
-stop: "Know when to push." not "Smart Strain Tracking".
+| Token | Size | Use |
+|---|---|---|
+| `--fs-12` | 12px | Eyebrows (700, 0.18em, uppercase), step numbers, footer headings and base line, flow labels |
+| `--fs-14` | 14px | Nav links, chips, notes under the waitlist, hero card labels, legends, footer links, legal small print |
+| `--fs-17` | 17px | Body (site base), step text, real-day captions, buttons, FAQ answers |
+| `--fs-20` | 20px | Ledes and section sub-lines (17 on phones), FAQ questions, service names, legal h2 |
+| `--fs-28` | 28px | Step titles, the opener lines (20 on phones), the mid-page call, hero card numbers, the logo word |
+| `--fs-44` | 44px | h2 on phones, the smallest hero headline, legal h1 |
+| `--fs-64` | 64px | h2 on computers (`clamp(44, 5vw, 64)`), the part titles on phones |
+| `--fs-88` | 88px | The hero headline (`clamp(44, 6.4vw, 88)`) and the part titles (`clamp(64, 7vw, 88)`) |
+
+Body text never goes under 17px; anything under it is a label, not a paragraph. Text blocks stay under 640px
+wide (60-70 characters). Headlines are one short sentence that ends with a full stop: "Know when to push." not
+"Smart Strain Tracking".
 
 ## Spacing and layout
 
 - Scale (4-based): 4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 160.
 - Content width 1160px (`.wrap`), side gutter 24px, 16px under 480px.
 - Section padding 128-160px on computers, 80px on phones.
+- On phones and tablets (under 960px) the hero drops the sun, since the mark is already in the nav; under 560px
+  the app's Today comes right under the line and the waitlist field follows the phone, so the product is above the
+  fold. The hero's three glass numbers sit in a fixed-size rig with the phone that scales down with the column,
+  so they never leave it; the coach's card sits under the phone, never over its tab bar.
 - The hero is split: the sun (the mark in its rings), the kicker and the welcome's line "A coach that knows *how
   you slept.*" (the last words in green italic) on the left, the app's Today on the right with up to three glass
   numbers, all over the sunrise tint.
@@ -114,14 +130,16 @@ stop: "Know when to push." not "Smart Strain Tracking".
 
 ## Shape and depth
 
-- Radius: 8 (inputs inside cards, small tiles), 16 (bubbles, popovers), 22 (lifted app parts, glass cards),
-  28-32 (big boxes, the muscle card, the hub), 999 (buttons, nav, chips, the kicker). The phone keeps its
-  real 58px corner.
-- Shadows are warm (brown-tinted, never pure black) and used for things that float:
-  - floating part: `0 40px 80px -30px rgba(60,40,10,.5), 0 2px 8px rgba(0,0,0,.06)`
-  - ink button: `0 14px 30px -12px rgba(21,20,15,.6)`
-  - nav pill and small floats: `0 8px 30px rgba(60,45,20,.08)`
-  - flat cards have no shadow, only `--line`.
+- **Corners** (`--r-*`): 8 (fields inside cards, small tiles), 12 (thumbnails such as the real-day screen),
+  16 (bubbles, the connection nodes, inner panels), 22 (the app's cards, glass cards, lifted app parts, big boxes:
+  the connections, the panels, the muscle card), `--r-pill` (buttons, nav, chips, the kicker). The phone keeps its
+  real 58px corner, thin bars 2px.
+- **Two shadows**, warm (brown-tinted, never pure black):
+  - `--shadow-card`: a card resting on the paper (a 1px `--line` ring and a hairline shadow). Panels, real-day
+    cards, chips that travel the connections, the picked service.
+  - `--shadow-float`: anything floating over the page: the nav, the progress pill, the hero's glass numbers, the
+    lifted app parts, the muscle bubble and card, the waitlist field (with a `--line` ring), the lock.
+  - The phone keeps its own titanium shadow; the ink pill and glows are not shadows.
 - Blur (glass) only on things that sit over moving content: the nav pill, the three hero cards, the muscle
   bubble. Nowhere else.
 - Gradients only in these places: the sunrise behind the hero and the end, the parts' and sections' glows, the
@@ -134,11 +152,16 @@ stop: "Know when to push." not "Smart Strain Tracking".
 - **Waitlist field:** the same pill as a `--panel` field with a round ink "go" button inside; after sending it
   turns into a green-soft "You're on the list" pill. Error text in `--red` under the field, never only colour.
   When the app is in the App Store this becomes the official App Store badge plus the ink pill "Download".
-- **Secondary button:** transparent, 1px `--line`, 48px, `--text`. Hover: `--track` fill.
+- **Secondary button (`.ghost`):** transparent, 1px `--line`, 48px, `--text`, 17px 600, a trailing arrow. Hover:
+  `--track` fill.
+- **Mid-page call (`.mid`):** after the last part (the coach), one Newsreader line "Try it on your own mornings."
+  and a secondary button down to the waitlist at the end. Light on purpose: the ink pill stays the hero's and
+  the end's.
 - **Link:** `--primary-text`, underline on hover; a trailing chevron icon when it leads to another page.
 - **Nav:** a floating pill 12px from the top, sticky: the mark and the word Aurin in Newsreader, 4 section
   links in `--muted`, a small ink pill "Join the waitlist" on the right that appears once the hero's own button
-  has scrolled away (one waitlist button on screen at a time). Under 960px the links go; under 560px the logo
+  has scrolled away (one waitlist button on screen at a time: it hides while the hero's or the end's field or the
+  mid-page call is in view). Under 960px the links go; under 560px the logo
   and a smaller pill stay, so the page's one action is always a tap away.
 - **Kicker:** a small glassy pill above the hero headline with a green dot ("For iPhone · now in TestFlight"). The
   site never sells the app as free: it is in testing, and the price after the release is not set.
@@ -179,6 +202,15 @@ stop: "Know when to push." not "Smart Strain Tracking".
 - **Share image:** `public/site/og-en.png`, 1200×630, re-rendered whenever the hero changes.
 - **Motion:** slow and soft (`cubic-bezier(.16,1,.3,1)`, 400-600ms); the phone stands up as you scroll, words of
   the headline rise one by one. Everything respects `prefers-reduced-motion` with a still version.
+
+## Dark mode, next
+
+Not built yet. The tokens are named by role, so a dark theme is a second `:root` block under
+`prefers-color-scheme: dark` with the app's dark values (`Palette.swift`: background #0A0B0C, card #1C1E1F, ink
+#ECEAE6, green #8FE6C4, amber #F2B46B, indigo #A5A1FF), the shadows turned to light rings, and the glows dimmed.
+What holds it back is the pictures: the phones show light screenshots, which would glare on a dark page. It
+needs CI to take the dark screenshots of the sample day as well (`ios-native.yml`), saved beside the light
+ones and picked with `<picture>` and `prefers-color-scheme`, and the "From a real day" cards in dark too.
 
 ## Voice
 

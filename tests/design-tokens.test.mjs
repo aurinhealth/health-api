@@ -51,11 +51,19 @@ test('theme layers take small font sizes from the type scale',()=>{
       .replace(/\.info-tip\{[^}]*\}/,'');               // the (i) glyph inside its 17px circle
     for(const m of src.matchAll(/font(?:-size)?:[^;"'}]*?(\d+(?:\.\d+)?)px/g))if(+m[1]<15)found.push(file+' '+m[0]);
   }
-  assert.deepEqual(found,[],'use var(--fs-caption|meta|small|body) instead');
+  assert.deepEqual(found,[],'use var(--fs-12|14|17) instead');
 });
 
-test('the type scale keeps secondary text at 14px',async()=>{
+test('the site keeps to its type scale, corners and two shadows (DESIGN.md)',async()=>{
   const html=await overviewPage().text();
-  assert.match(html,/--fs-small:14px/);
-  assert.match(html,/--fs-body:15px/);
+  assert.match(html,/--fs-12:12px;--fs-14:14px;--fs-17:17px;--fs-20:20px;--fs-28:28px;--fs-44:44px;--fs-64:64px;--fs-88:88px;/);
+  // The site's own styles (not the app's screens rebuilt in site-demos.js) take sizes, corners and shadows from tokens.
+  const src=readFileSync(new URL('../src/site-pages.js',import.meta.url),'utf8');
+  const css=src.slice(src.indexOf('const siteCss = `'),src.indexOf('`;',src.indexOf('const siteCss = `')));
+  assert.deepEqual([...css.matchAll(/font(?:-size)?:[^;}]*?\d+(?:\.\d+)?px/g)].map(m=>m[0]),[],'use var(--fs-…)');
+  // The phone keeps its real corners (58, 49, 44) and thin bars keep 2px.
+  assert.deepEqual([...css.matchAll(/border-radius:(\d+)px/g)].map(m=>+m[1]).filter(r=>![2,44,49,58].includes(r)),[],'use var(--r-…)');
+  // Shadows: the two tokens, the phone's own, rings and glows drawn with box-shadow.
+  const shadows=[...css.matchAll(/box-shadow:([^;}]*)/g)].map(m=>m[1]).filter(v=>/rgba\(/.test(v)&&!/inset 0 0 0 1px rgba\(255,255,255,\.7\)/.test(v));
+  assert.deepEqual(shadows,[],'use var(--shadow-card) or var(--shadow-float)');
 });
