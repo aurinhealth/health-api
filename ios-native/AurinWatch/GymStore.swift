@@ -181,7 +181,7 @@ extension WatchGym {
         return nil
     }
 
-    var started: Bool { exercises.contains { $0.lifts.contains(\.done) } }
+    var started: Bool { exercises.contains { $0.lifts.contains(where: \.done) } }
     var allDone: Bool { current == nil }
 
     /// kg × reps of the work sets done.
