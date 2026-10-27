@@ -14,9 +14,6 @@ struct ReadinessHome: View {
             VStack(alignment: .leading, spacing: 0) {
                 NavigationLink(value: Page.why) {
                     VStack(alignment: .leading, spacing: 0) {
-                        Text(W.tr("Připravenost", "Readiness"))
-                            .font(.system(size: 13))
-                            .foregroundStyle(W.muted)
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(s.readiness.map { String($0) } ?? "–")
                                 .font(W.serif(52))
@@ -59,6 +56,8 @@ struct ReadinessHome: View {
                 .buttonStyle(.plain)
             }
         }
+        // "Readiness" next to the clock, where the scrolling page can't hide it.
+        .navigationTitle(W.tr("Připravenost", "Readiness"))
         .navigationDestination(for: Page.self) { page in
             switch page {
             case .why: WhyDetail(s: s)

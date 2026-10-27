@@ -29,12 +29,21 @@ struct HistoryPage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(header)
-                .font(W.label(10))
-                .tracking(0.6)
-                .foregroundStyle(metric.color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            HStack(spacing: 4) {
+                Text(header)
+                    .font(W.label(10))
+                    .tracking(0.6)
+                    .foregroundStyle(metric.color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Spacer(minLength: 2)
+                if band != nil {
+                    RoundedRectangle(cornerRadius: 2).fill(metric.color.opacity(0.35)).frame(width: 9, height: 5)
+                    Text(W.tr("normál", "normal"))
+                        .font(W.label(8))
+                        .foregroundStyle(metric.color)
+                }
+            }
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(days.average.map(format) ?? "–")
                     .font(W.serif(28))
@@ -42,7 +51,6 @@ struct HistoryPage: View {
                 Text(metric.unit + " " + W.tr("průměr", "avg"))
                     .font(.system(size: 11))
                     .foregroundStyle(W.secondary)
-                Spacer(minLength: 2)
                 if let need {
                     Text(W.tr("potřeba", "need") + " " + W.clock(minutes: need))
                         .font(.system(size: 11, weight: .semibold))
@@ -54,19 +62,28 @@ struct HistoryPage: View {
                 }
             }
             if spans.count > 1 { picker.padding(.top, 2) }
-            chart.padding(.top, 4)
-            Spacer(minLength: 2)
+            chart
+                .padding(.top, 6)
+                .frame(minHeight: 34, maxHeight: 64)
+                .layoutPriority(-1)
             if shown == 90 {
                 Text(trend)
-                    .font(W.news(12))
+                    .font(.system(size: 11))
                     .foregroundStyle(W.secondary)
-                    .lineLimit(3)
+                    .lineLimit(2)
                     .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
             } else {
                 Tiles(items: tiles, color: sleep ? W.amber : metric.color)
+                    .padding(.top, 4)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Clear of the back button above and the page dots on the right;
+        // the chart gives way on a small watch.
+        .padding(.top, 8)
+        .padding(.trailing, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     private var header: String {
@@ -99,30 +116,34 @@ struct HistoryPage: View {
         sleep ? W.clock(minutes: value) : W.number(value)
     }
 
-    /// The second half of the span against the first.
-    private var change: (String, Color)? {
+    /// The last week of the span against its first: the number by the
+    /// average and the sentence under 90 days say the same.
+    private var diff: Double? {
         guard days.count >= 4 else { return nil }
-        let half = days.count / 2
-        guard let before = Array(days.prefix(half)).average, let after = Array(days.suffix(days.count - half)).average else { return nil }
-        let diff = (after - before).rounded()
-        let good = metric.higherIsBetter ? diff >= 0 : diff <= 0
-        return (W.change(diff), diff == 0 ? W.muted : good ? W.green : W.amber)
+        let part = Swift.min(7, days.count / 2)
+        guard let before = Array(days.prefix(part)).average, let after = Array(days.suffix(part)).average else { return nil }
+        return after - before
+    }
+
+    private var change: (String, Color)? {
+        guard let diff else { return nil }
+        let value = sleep ? diff : diff.rounded()
+        if abs(value) < (sleep ? 5 : 1) { return (W.change(0), W.muted) }
+        let good = metric.higherIsBetter ? value > 0 : value < 0
+        return (sleep ? W.minutesChange(value) : W.change(value), good ? W.green : W.amber)
     }
 
     private var trend: String {
-        let weeks = days.weekly
-        guard let first = weeks.first?.value, let last = weeks.last?.value, weeks.count > 2 else { return "" }
-        let diff = last - first
-        let flat = abs(diff) < (sleep ? 10 : 1.5)
+        guard let diff else { return "" }
         let lead = W.tr("Průměry týdnů. ", "Weekly averages. ")
-        if flat { return lead + W.tr("Drží se stejně.", "Holding steady.") }
+        if abs(diff) < (sleep ? 10 : 1.5) { return lead + W.tr("Drží se stejně.", "Holding steady.") }
         switch metric {
         case .restingHR:
-            return lead + (diff < 0 ? W.tr("Klesá: kondice se zlepšuje.", "Going down: your fitness is improving.")
-                                    : W.tr("Stoupá: hlídej regeneraci.", "Going up: watch your recovery."))
+            return lead + (diff < 0 ? W.tr("Klesá, kondice roste.", "Going down: fitness up.")
+                                    : W.tr("Stoupá, hlídej regeneraci.", "Going up: mind recovery."))
         case .hrv:
-            return lead + (diff > 0 ? W.tr("Stoupá: tělo se zotavuje dobře.", "Going up: you recover well.")
-                                    : W.tr("Klesá: hlídej regeneraci.", "Going down: watch your recovery."))
+            return lead + (diff > 0 ? W.tr("Stoupá, regenerace dobrá.", "Going up: recovering well.")
+                                    : W.tr("Klesá, hlídej regeneraci.", "Going down: mind recovery."))
         case .sleep:
             return lead + (diff > 0 ? W.tr("Spíš víc.", "You sleep more.") : W.tr("Spíš méně.", "You sleep less."))
         }
@@ -160,48 +181,43 @@ struct HistoryPage: View {
         normal.map { sleep ? ($0.lowerBound / 60)...($0.upperBound / 60) : $0 }
     }
 
-    /// Three round values from below the lowest to above the highest point and the normal.
-    private var ticks: [Double] {
+    /// The chart's range: the points and the normal with a little room.
+    private var domain: ClosedRange<Double> {
         let values = plots.map(\.value) + (band.map { [$0.lowerBound, $0.upperBound] } ?? [])
-        guard let lo = values.min(), let hi = values.max() else { return [0, 1, 2] }
-        let step = Swift.max(niceStep((hi - lo) / 2), sleep ? 1 : 2)
-        var low = (lo / step).rounded(.down) * step
-        var high = (hi / step).rounded(.up) * step
-        if high - low < 2 * step { high = low + 2 * step }
-        // An even span, so the middle tick is round too.
-        if Int(((high - low) / step).rounded()) % 2 == 1 { high += step }
-        if sleep { low = Swift.max(0, low) }
-        return [low, (low + high) / 2, high]
+        guard var lo = values.min(), var hi = values.max() else { return 0...1 }
+        if hi - lo < (sleep ? 1 : 4) { let mid = (lo + hi) / 2; lo = mid - (sleep ? 0.5 : 2); hi = mid + (sleep ? 0.5 : 2) }
+        let pad = (hi - lo) * 0.12
+        return Swift.max(0, lo - pad)...(hi + pad)
     }
 
-    private func niceStep(_ raw: Double) -> Double {
-        guard raw > 0 else { return 1 }
-        let power = pow(10, (log10(raw)).rounded(.down))
-        let unit = raw / power
-        return (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * power
+    /// Two or three round values inside the range, for the labels on the right.
+    private var ticks: [Double] {
+        let d = domain
+        let steps = [0.1, 1, 10, 100, 1000].flatMap { power in [1.0, 2, 2.5, 5].map { $0 * power } }
+        for step in steps {
+            let first = (d.lowerBound / step).rounded(.up) * step
+            let values = stride(from: first, through: d.upperBound, by: step).map { $0 }
+            if values.count <= 3, values.count >= 2 { return values }
+        }
+        return [d.lowerBound, d.upperBound]
     }
 
-    private func axisLabel(_ date: Date?, last: Date) -> String {
-        guard let date else { return "" }
-        return abs(date.timeIntervalSince(last)) < 3600 ? W.tr("Dnes", "Today") : W.axisDate(date, month: shown == 90)
+    private func axisLabel(_ date: Date, last: Date) -> String {
+        abs(date.timeIntervalSince(last)) < 3600 ? W.tr("Dnes", "Today") : W.axisDate(date, month: shown == 90)
+    }
+
+    private func tickLabel(_ value: Double) -> String {
+        W.number(value, digits: value.rounded() == value ? 0 : 1) + (sleep ? "h" : "")
     }
 
     private var chart: some View {
         let plots = plots
         let ticks = ticks
+        let domain = domain
         let first = plots.first?.date ?? Date()
         let last = plots.last?.date ?? Date()
         let middle = first.addingTimeInterval(last.timeIntervalSince(first) / 2)
-        return VStack(alignment: .trailing, spacing: 1) {
-            if band != nil {
-                HStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 2).fill(metric.color.opacity(0.35)).frame(width: 10, height: 6)
-                    Text(W.tr("tvůj normál", "your normal"))
-                        .font(W.label(8))
-                        .foregroundStyle(metric.color)
-                }
-                .padding(.trailing, 22)
-            }
+        return VStack(spacing: 2) {
             Chart {
                 if let band {
                     RectangleMark(xStart: .value("Od", first), xEnd: .value("Do", last),
@@ -225,28 +241,33 @@ struct HistoryPage: View {
                         .symbolSize(28)
                 }
             }
-            .chartYScale(domain: ticks[0]...ticks[2])
+            .chartYScale(domain: domain)
+            // Bars of a night below the range end at its edge.
+            .clipped()
             .chartYAxis {
                 AxisMarks(position: .trailing, values: ticks) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 3]))
                         .foregroundStyle(W.track)
                     AxisValueLabel {
-                        Text(W.number(value.as(Double.self) ?? 0) + (sleep ? "h" : ""))
+                        Text(tickLabel(value.as(Double.self) ?? 0))
                             .font(.system(size: 8.5))
                             .foregroundStyle(W.muted)
                     }
                 }
             }
-            .chartXAxis {
-                AxisMarks(values: [first, middle, last]) { value in
-                    AxisValueLabel {
-                        Text(axisLabel(value.as(Date.self), last: last))
-                            .font(.system(size: 8.5))
-                            .foregroundStyle(W.muted)
-                    }
-                }
+            // The dates under the chart, the last one always "Today".
+            .chartXAxis(.hidden)
+            HStack(spacing: 0) {
+                Text(axisLabel(first, last: last))
+                Spacer(minLength: 2)
+                Text(axisLabel(middle, last: last))
+                Spacer(minLength: 2)
+                Text(W.tr("Dnes", "Today"))
             }
-            .frame(height: 62)
+            .font(.system(size: 8.5))
+            .foregroundStyle(W.muted)
+            .lineLimit(1)
+            .padding(.trailing, 20)
         }
     }
 }

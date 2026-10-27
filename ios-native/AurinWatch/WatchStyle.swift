@@ -196,7 +196,9 @@ struct Tiles: View {
             ForEach(Array(items.prefix(3).enumerated()), id: \.offset) { index, item in
                 VStack(spacing: 2) {
                     Text(item.value)
-                        .font(W.serif(item.value.count < 4 ? 19 : 15))
+                        // Numbers in the serif, words ("short", "high") in the system font.
+                        .font(item.value.contains(where: \.isLetter) ? .system(size: 13, weight: .semibold)
+                              : W.serif(item.value.count < 4 ? 19 : 15))
                         .foregroundStyle(W.ink)
                         .lineLimit(1)
                         .minimumScaleFactor(0.6)

@@ -12,18 +12,18 @@ struct DetailPage<RingContent: View>: View {
         VStack(spacing: 0) {
             ring
             Text(title)
-                .font(W.serif(19))
+                .font(W.serif(21))
                 .foregroundStyle(W.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .padding(.top, 4)
             Text(note)
-                .font(W.news(12.5))
+                .font(.system(size: 12))
                 .foregroundStyle(W.secondary)
                 .multilineTextAlignment(.center)
-                .lineLimit(3)
+                .lineLimit(2)
                 .minimumScaleFactor(0.8)
-            Spacer(minLength: 4)
+            Spacer(minLength: 8)
             if !tiles.isEmpty { Tiles(items: tiles, color: color) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
