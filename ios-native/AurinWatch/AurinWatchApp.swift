@@ -23,12 +23,17 @@ struct WatchRoot: View {
     @EnvironmentObject private var store: WatchStore
 
     var body: some View {
+        // By the crown: readiness, then the day's training (TrainingPage).
         NavigationStack {
-            if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(Date()) {
-                ReadinessHome(s: snapshot)
-            } else {
-                WaitingView(stale: store.snapshot != nil)
+            TabView {
+                if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(Date()) {
+                    ReadinessHome(s: snapshot)
+                } else {
+                    WaitingView(stale: store.snapshot != nil)
+                }
+                TrainingPage()
             }
+            .tabViewStyle(.verticalPage)
         }
     }
 }
@@ -55,5 +60,6 @@ struct WaitingView: View {
         }
         .padding(.horizontal, 6)
         .containerBackground(W.glow(W.Glow.readiness), for: .navigation)
+        .containerBackground(W.glow(W.Glow.readiness), for: .tabView)
     }
 }

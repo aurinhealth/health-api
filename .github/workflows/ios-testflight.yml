@@ -126,9 +126,21 @@ jobs:
           app=build/Aurin.xcarchive/Products/Applications/Aurin.app
           codesign --force --sign - --entitlements AurinWidgets/AurinWidgets.entitlements "$app/PlugIns/AurinWidgets.appex"
           codesign --force --sign - "$app/PlugIns/AurinNotifications.appex"
-          codesign --force --sign - "$app/Watch/AurinWatch.app"
+          codesign --force --sign - --entitlements AurinWatch/AurinWatch.entitlements "$app/Watch/AurinWatch.app"
           codesign --force --sign - --entitlements Aurin/Aurin.entitlements "$app"
           echo "version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Info.plist")" >> "$GITHUB_OUTPUT"
+
+      # The Apple Watch app's ID needs HealthKit for its gym workout; the
+      # export below makes its profile but adds no capability to an ID it
+      # already registered.
+      - name: Turn on HealthKit for the watch app
+        if: steps.secrets.outputs.ready == 'true'
+        working-directory: .
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
+        run: python3 .github/scripts/asc_capability.py health.aurin.app.watchkitapp HEALTHKIT
 
       # Cloud-managed Apple Distribution certificate, App Store profiles
       # created on the fly, and the upload straight to App Store Connect.

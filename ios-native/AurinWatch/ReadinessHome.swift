@@ -33,6 +33,7 @@ struct ReadinessHome: View {
             }
         }
         .containerBackground(W.glow(W.Glow.readiness), for: .navigation)
+        .containerBackground(W.glow(W.Glow.readiness), for: .tabView)
     }
 
     // MARK: Readiness

@@ -14,6 +14,8 @@ final class WatchBridge: NSObject {
     private var health: HealthSnapshot?
     private var healthLoaded: Date?
     private var loadingHealth = false
+    /// The gym days the watch works on (WatchGymBridge.swift).
+    var gymDays: [String: GymDay] = [:]
 
     private var session: WCSession? { WCSession.isSupported() ? WCSession.default : nil }
 
@@ -155,9 +157,22 @@ extension WatchBridge: WCSessionDelegate {
         }
     }
 
-    /// The watch app opened and asks for the newest data.
+    /// The watch app opened and asks for the newest data, the day's gym
+    /// plan, or sends a set it finished.
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
+        let gymDate = message[WatchGym.requestKey] as? String
+        let done = (message[WatchGym.doneKey] as? Data).flatMap(WatchGym.Done.decode)
         Task { @MainActor in
+            if let gymDate {
+                let gym = await loadGym(date: gymDate)
+                replyHandler(gym?.encoded().map { [WatchGym.replyKey: $0] } ?? [:])
+                return
+            }
+            if let done {
+                await applyGym(done)
+                replyHandler(["ok": true])
+                return
+            }
             restore()
             if let today, let data = Self.snapshot(today, health: health).encoded() {
                 replyHandler([WatchSnapshot.contextKey: data])
@@ -165,5 +180,11 @@ extension WatchBridge: WCSessionDelegate {
                 replyHandler([:])
             }
         }
+    }
+
+    /// A set sent while the iPhone was out of reach.
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        guard let done = (userInfo[WatchGym.doneKey] as? Data).flatMap(WatchGym.Done.decode) else { return }
+        Task { @MainActor in await applyGym(done) }
     }
 }
