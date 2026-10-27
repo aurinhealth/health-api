@@ -136,6 +136,9 @@ struct TodaySnapshot: Decodable, Equatable {
     struct RestingHR: Decodable, Equatable {
         let value: Double?
         let baseline: Double?
+        /// The athlete's usual range (the Apple Watch app's "Your normal"); nil from an older server.
+        var low: Double? = nil
+        var high: Double? = nil
         let series: [Point]
     }
 

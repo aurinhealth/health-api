@@ -767,6 +767,8 @@ final class AppModel {
             guard selectedDate == day else { return }
             health = value
             fetched[.health] = (Date(), shownDay)
+            // The 90 days of resting HR and HRV for the Apple Watch app.
+            if day == nil { WatchBridge.shared.update(value) }
             dataRevision += 1
             healthError = nil
             _ = noteConnection(nil)

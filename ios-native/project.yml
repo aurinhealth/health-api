@@ -27,6 +27,8 @@ targets:
     sources:
       - path: Aurin
       - path: Shared
+      # What the iPhone sends the Apple Watch app (App/WatchBridge.swift).
+      - path: WatchShared
       # The privacy manifest App Store Connect checks (UserDefaults, file dates, the data sent to the server).
       - path: Privacy/App/PrivacyInfo.xcprivacy
         buildPhase: resources
@@ -39,6 +41,12 @@ targets:
     dependencies:
       - target: AurinWidgets
       - target: AurinNotifications
+      # The Apple Watch app, in the app's Watch folder ("Embed Watch Content").
+      - target: AurinWatch
+        embed: true
+        copy:
+          destination: productsDirectory
+          subpath: $(CONTENTS_FOLDER_PATH)/Watch
     # The App Group the home-screen widgets read Today from (WidgetBridge).
     # HealthKit: Apple Health is read on the phone (App/AppleHealth.swift),
     # with background delivery so new nights and workouts sync on their own.
@@ -190,6 +198,38 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+  # The Apple Watch app (AurinWatch/): Today from the iPhone over
+  # WatchConnectivity (WatchStore), embedded in the app and installed with it.
+  AurinWatch:
+    type: application
+    platform: watchOS
+    # 10: the vertical pages of a detail and their coloured backgrounds.
+    deploymentTarget: "10.0"
+    sources:
+      - path: AurinWatch
+      - path: WatchShared
+      - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
+        buildPhase: resources
+      - path: Aurin/Resources/Fonts/Newsreader-Regular.ttf
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.watchkitapp
+        PRODUCT_NAME: AurinWatch
+        TARGETED_DEVICE_FAMILY: "4"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SKIP_INSTALL: YES
+    info:
+      path: AurinWatch/Info.plist
+      properties:
+        CFBundleDisplayName: Aurin
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: health.aurin.app
+        UIAppFonts:
+          - InstrumentSerif-Regular.ttf
+          - Newsreader-Regular.ttf
   AurinTests:
     type: bundle.unit-test
     platform: iOS

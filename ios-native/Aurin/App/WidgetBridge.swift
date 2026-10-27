@@ -2,7 +2,7 @@ import Foundation
 import WidgetKit
 
 /// Hands Today to the home-screen widgets (AurinWidgets) via the App Group,
-/// and to the menu on the app's icon (QuickActions).
+/// to the menu on the app's icon (QuickActions) and to the Apple Watch (WatchBridge).
 enum WidgetBridge {
     static func update(_ today: TodaySnapshot) {
         let next = today.plan.first { $0.kind == "workout" && !$0.done }
@@ -18,7 +18,10 @@ enum WidgetBridge {
                                       bedtime: today.tonight?.bedtime, nextTitle: next?.title, nextTime: next?.time)
         snapshot.save()
         WidgetCenter.shared.reloadAllTimelines()
-        Task { @MainActor in QuickActions.update(today) }
+        Task { @MainActor in
+            QuickActions.update(today)
+            WatchBridge.shared.update(today)
+        }
     }
 
     /// Redraws the widgets in a new language or new units.
@@ -29,6 +32,9 @@ enum WidgetBridge {
     static func clear() {
         WidgetSnapshot.clear()
         WidgetCenter.shared.reloadAllTimelines()
-        Task { @MainActor in QuickActions.clear() }
+        Task { @MainActor in
+            QuickActions.clear()
+            WatchBridge.shared.clear()
+        }
     }
 }
