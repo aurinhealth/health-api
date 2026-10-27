@@ -89,7 +89,7 @@ enum GymText {
         let work = e.lifts.filter(\.work)
         let sets = Set(work.map(\.number)).count
         let reps = work.first?.plannedReps ?? work.first?.reps.map(String.init)
-        return e.name + (sets > 0 ? " \(sets) × " + (reps ?? "–") : "")
+        return e.title + (sets > 0 ? " \(sets) × " + (reps ?? "–") : "")
     }
 
     /// 77.5 as "77,5" in Czech, 80 as "80".

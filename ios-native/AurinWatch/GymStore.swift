@@ -30,7 +30,7 @@ final class GymStore: ObservableObject {
         loading = true
         session.sendMessage([WatchGym.requestKey: date], replyHandler: { reply in
             let data = reply[WatchGym.replyKey] as? Data
-            Task { @MainActor in GymStore.shared.received(data, date: date) }
+            Task { @MainActor in GymStore.shared.received(data) }
         }, errorHandler: { _ in
             Task { @MainActor in
                 GymStore.shared.loading = false
@@ -39,7 +39,9 @@ final class GymStore: ObservableObject {
         })
     }
 
-    private func received(_ data: Data?, date: String) {
+    /// A plan from the iPhone: the answer to load or to a change, or sent on
+    /// its own when the iPhone saved the day (WatchStore forwards it).
+    func received(_ data: Data?) {
         loading = false
         guard let data, var fresh = WatchGym.decode(data) else {
             failed = gym == nil
@@ -47,6 +49,7 @@ final class GymStore: ObservableObject {
         }
         failed = false
         // Sets done on the watch that the iPhone has not written yet stay done.
+        guard fresh.date == WatchStore.localDate(Date()) else { return }
         if let gym, gym.date == fresh.date {
             for e in fresh.exercises.indices {
                 for l in fresh.exercises[e].lifts.indices {
@@ -82,6 +85,49 @@ final class GymStore: ObservableObject {
             })
         } else {
             session.transferUserInfo(message)
+        }
+    }
+
+    /// A change from the menu (a set or an exercise added, removed or
+    /// swapped); the iPhone writes it into the sheet and answers with the new plan.
+    func change(_ kind: WatchGym.Change.Kind, exercise: Int, option: WatchGym.Option? = nil) {
+        guard let gym, let data = WatchGym.Change(date: gym.date, kind: kind, exercise: exercise, option: option).encoded() else { return }
+        let session = WCSession.default
+        guard WCSession.isSupported(), session.activationState == .activated, session.isReachable else {
+            failedChange = true
+            return
+        }
+        changing = true
+        session.sendMessage([WatchGym.changeKey: data], replyHandler: { reply in
+            let data = reply[WatchGym.replyKey] as? Data
+            Task { @MainActor in
+                GymStore.shared.changing = false
+                GymStore.shared.received(data)
+            }
+        }, errorHandler: { _ in
+            Task { @MainActor in
+                GymStore.shared.changing = false
+                GymStore.shared.failedChange = true
+            }
+        })
+    }
+
+    @Published private(set) var changing = false
+    /// A change the iPhone did not take (out of reach): the screen says so once.
+    @Published var failedChange = false
+
+    /// Exercises to swap in or to add, from the iPhone.
+    func options(exercise: String?, query: String?) async -> [WatchGym.Option] {
+        guard let gym, let data = WatchGym.OptionsRequest(date: gym.date, exercise: exercise, query: query).encoded() else { return [] }
+        let session = WCSession.default
+        guard WCSession.isSupported(), session.activationState == .activated, session.isReachable else { return [] }
+        return await withCheckedContinuation { continuation in
+            session.sendMessage([WatchGym.optionsKey: data], replyHandler: { reply in
+                let list = (reply[WatchGym.optionsKey] as? Data).flatMap { try? JSONDecoder().decode([WatchGym.Option].self, from: $0) }
+                continuation.resume(returning: list ?? [])
+            }, errorHandler: { _ in
+                continuation.resume(returning: [])
+            })
         }
     }
 

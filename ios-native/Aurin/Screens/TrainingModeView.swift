@@ -141,6 +141,11 @@ struct TrainingModeView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .task { await load() }
+        // A set or a change from the Apple Watch (WatchGymBridge.swift).
+        .onReceive(NotificationCenter.default.publisher(for: .watchGym)) { note in
+            guard let change = note.object as? WatchBridge.GymChange, change.date == date else { return }
+            day = change.day
+        }
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true
             GymActivityInbox.handler = { activityAction($0) }

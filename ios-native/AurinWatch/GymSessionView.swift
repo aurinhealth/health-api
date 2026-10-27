@@ -46,14 +46,21 @@ struct GymSessionView: View {
                 }
             }
             .sheet(isPresented: $list) {
-                GymExerciseList(current: exercise) { picked in
-                    exercise = picked
-                    restEnd = nil
-                    list = false
-                } end: {
-                    list = false
-                    summary = true
+                NavigationStack {
+                    GymExerciseList(current: exercise) { picked in
+                        exercise = picked
+                        restEnd = nil
+                        list = false
+                    } end: {
+                        list = false
+                        summary = true
+                    }
                 }
+            }
+            .alert(W.tr("iPhone je mimo dosah", "iPhone out of reach"), isPresented: $store.failedChange) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(W.tr("Změnu plánu udělá iPhone. Měj ho u sebe a zkus to znovu.", "Your iPhone makes plan changes. Keep it close and try again."))
             }
         }
         .task {
@@ -84,13 +91,17 @@ struct GymSessionView: View {
         let ex = gym.exercises[e]
         return ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(ex.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                    Spacer(minLength: 4)
+                Text(ex.title).font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
+                HStack(spacing: 4) {
+                    roundButton("minus") { store.change(.removeSet, exercise: e) }
                     Text(label(lift, in: ex)).font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
-                        .lineLimit(1)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                        .frame(maxWidth: .infinity)
+                    roundButton("plus") { store.change(.addSet, exercise: e) }
                 }
+                .disabled(store.changing)
                 HStack(spacing: 6) {
                     tile(GymText.kg(kg), unit: "kg", field: .kg)
                         .digitalCrownRotation($kg, from: 0, through: 500, by: 2.5, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
@@ -133,6 +144,15 @@ struct GymSessionView: View {
         }
         if let side = lift.side { text += " · " + (side == "L" ? "L" : W.tr("P", "R")) }
         return text
+    }
+
+    private func roundButton(_ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 12, weight: .bold)).foregroundStyle(W.ink)
+                .frame(width: 28, height: 28)
+                .background(W.tile, in: Circle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func tile(_ value: String, unit: String, field: Field) -> some View {
@@ -208,7 +228,7 @@ struct GymSessionView: View {
             }
             .frame(width: 92, height: 92)
             if let gym = store.gym, let lift = currentLift(in: gym), let e = gym.exercises.first(where: { $0.lifts.contains { $0.row == lift.row } }) {
-                Text(W.tr("Další: ", "Next: ") + e.name + " · " + GymText.kg(lift.kg ?? 0) + " kg × \(lift.reps ?? 0)")
+                Text(W.tr("Další: ", "Next: ") + e.title + " · " + GymText.kg(lift.kg ?? 0) + " kg × \(lift.reps ?? 0)")
                     .font(.system(size: 11)).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
             }
             HStack(spacing: 4) {
@@ -238,12 +258,14 @@ struct GymSessionView: View {
     }
 }
 
-/// ≡: the exercises with their sets, one to jump to, and the end of the workout.
+/// ≡: the exercises with their sets, one to jump to; swipe for Swap and
+/// Remove, Add exercise at the end, and the end of the workout.
 struct GymExerciseList: View {
     @ObservedObject private var store = GymStore.shared
     let current: Int
     let pick: (Int) -> Void
     let end: () -> Void
+    @State private var swap: Int?
 
     var body: some View {
         List {
@@ -252,22 +274,108 @@ struct GymExerciseList: View {
                     ForEach(Array(gym.exercises.enumerated()), id: \.offset) { index, e in
                         Button { pick(index) } label: {
                             HStack {
-                                Text(e.name).foregroundStyle(index == current ? W.amber : W.ink).lineLimit(1)
+                                Text(e.title).foregroundStyle(index == current ? W.amber : W.ink).lineLimit(2)
                                 Spacer(minLength: 4)
                                 let work = e.lifts.filter(\.work)
                                 Text("\(work.filter(\.done).count)/\(work.count)").foregroundStyle(W.secondary)
                             }
                             .font(.system(size: 14))
                         }
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                store.change(.removeExercise, exercise: index)
+                            } label: {
+                                Label(W.tr("Odebrat", "Remove"), systemImage: "trash")
+                            }
+                            Button {
+                                swap = index
+                            } label: {
+                                Label(W.tr("Vyměnit", "Swap"), systemImage: "arrow.triangle.2.circlepath")
+                            }
+                            .tint(W.indigo)
+                        }
+                    }
+                    NavigationLink {
+                        GymOptionsView(title: W.tr("Přidat cvik", "Add exercise"), exercise: nil) { option in
+                            store.change(.addExercise, exercise: max(0, gym.exercises.count - 1), option: option)
+                        }
+                    } label: {
+                        Label(W.tr("Přidat cvik", "Add exercise"), systemImage: "plus").foregroundStyle(W.green)
                     }
                 } header: {
                     Text(W.tr("Cviky", "Exercises"))
+                } footer: {
+                    Text(W.tr("Potáhni cvik doleva: vyměnit nebo odebrat.", "Swipe an exercise left to swap or remove it."))
                 }
             }
             Button(role: .destructive) { end() } label: {
                 Text(W.tr("Ukončit trénink", "End workout"))
             }
         }
+        .navigationDestination(item: $swap) { index in
+            if let e = store.gym?.exercises[safe: index] {
+                GymOptionsView(title: W.tr("Vyměnit cvik", "Swap exercise"), exercise: e.name) { option in
+                    store.change(.swap, exercise: index, option: option)
+                }
+            }
+        }
+    }
+}
+
+extension Array {
+    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
+}
+
+/// Exercises from the iPhone to swap in (similar to the one swapped) or to
+/// add; Search takes a name said or written on the watch.
+struct GymOptionsView: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    let exercise: String?
+    let chosen: (WatchGym.Option) -> Void
+    @State private var options: [WatchGym.Option] = []
+    @State private var loading = true
+    @State private var query = ""
+
+    var body: some View {
+        List {
+            TextField(W.tr("Hledat", "Search"), text: $query)
+                .onSubmit { Task { await load() } }
+            if loading {
+                ProgressView().frame(maxWidth: .infinity)
+            } else if options.isEmpty {
+                Text(W.tr("Nic jsem nenašel. Měj iPhone u sebe.", "Nothing found. Keep your iPhone close."))
+                    .font(.system(size: 13)).foregroundStyle(W.secondary)
+            }
+            ForEach(options) { option in
+                Button {
+                    chosen(option)
+                    dismiss()
+                } label: {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(option.shown).font(.system(size: 14)).foregroundStyle(W.ink).lineLimit(2)
+                        if let line = line(option) {
+                            Text(line).font(.system(size: 11)).foregroundStyle(W.secondary)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(title)
+        .task { await load() }
+    }
+
+    private func line(_ o: WatchGym.Option) -> String? {
+        var parts: [String] = []
+        if let sets = o.sets { parts.append("\(sets) × " + (o.reps ?? "–")) }
+        if let kg = o.kg, kg > 0 { parts.append(GymText.kg(kg) + " kg") }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private func load() async {
+        loading = true
+        options = await GymStore.shared.options(exercise: exercise, query: query.isEmpty ? nil : query)
+        loading = false
     }
 }
 
@@ -298,7 +406,7 @@ struct GymSummary: View {
                     ForEach(gym.exercises.filter { $0.lifts.contains { $0.done && $0.work } }, id: \.name) { e in
                         let done = e.lifts.filter { $0.done && $0.work }
                         HStack {
-                            Text(e.name).lineLimit(1)
+                            Text(e.title).lineLimit(1)
                             Spacer(minLength: 4)
                             Text("\(done.count) × \(done.last?.reps ?? 0) · " + GymText.kg(done.map { $0.kg ?? 0 }.max() ?? 0) + " kg")
                                 .foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)

@@ -62,8 +62,10 @@ extension WatchStore: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         let context = session.receivedApplicationContext
         let data = context[WatchSnapshot.contextKey] as? Data
+        let gym = context[WatchGym.replyKey] as? Data
         let empty = context.isEmpty
         Task { @MainActor in
+            if let gym { GymStore.shared.received(gym) }
             if let data { WatchStore.shared.receive(data) } else if !empty { WatchStore.shared.receive(nil) }
             WatchStore.shared.ask()
         }
@@ -71,7 +73,18 @@ extension WatchStore: WCSessionDelegate {
 
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         let data = applicationContext[WatchSnapshot.contextKey] as? Data
-        Task { @MainActor in WatchStore.shared.receive(data) }
+        let gym = applicationContext[WatchGym.replyKey] as? Data
+        let empty = applicationContext.isEmpty
+        Task { @MainActor in
+            if let gym { GymStore.shared.received(gym) }
+            if data != nil || empty { WatchStore.shared.receive(data) }
+        }
+    }
+
+    /// The iPhone saved today's gym (Training mode, or a change from here).
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        guard let gym = message[WatchGym.replyKey] as? Data else { return }
+        Task { @MainActor in GymStore.shared.received(gym) }
     }
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {

@@ -13,8 +13,12 @@ struct WatchGym: Codable, Equatable, Sendable {
     var exercises: [Exercise]
 
     struct Exercise: Codable, Equatable, Sendable {
+        /// As in the sheet; changes name it.
         var name: String
+        /// As the app shows it (the English name in English).
+        var shown: String?
         var lifts: [Lift]
+        var title: String { shown ?? name }
     }
 
     /// One row of the sheet: a set, or one side of a set done by sides.
@@ -43,9 +47,40 @@ struct WatchGym: Codable, Equatable, Sendable {
         var reps: Int
     }
 
+    /// A change of the plan from the watch (the menu under ≡); the iPhone
+    /// writes it into the sheet and answers with the new plan.
+    struct Change: Codable, Equatable, Sendable {
+        enum Kind: String, Codable, Sendable { case addSet, removeSet, removeExercise, swap, addExercise }
+        var date: String
+        var kind: Kind
+        /// The exercise's place in `exercises`.
+        var exercise: Int
+        /// The new exercise of swap and addExercise.
+        var option: Option?
+    }
+
+    /// An exercise offered for a swap or to add, with what it would start from.
+    struct Option: Codable, Equatable, Sendable, Identifiable {
+        var name: String
+        var shown: String
+        var kg: Double?
+        var sets: Int?
+        var reps: String?
+        var id: String { name }
+    }
+
+    /// What the watch asks to choose from: similar to `exercise`, or matching `query`.
+    struct OptionsRequest: Codable, Equatable, Sendable {
+        var date: String
+        var exercise: String?
+        var query: String?
+    }
+
     static let requestKey = "gymRequest"
     static let replyKey = "gym"
     static let doneKey = "gymDone"
+    static let changeKey = "gymChange"
+    static let optionsKey = "gymOptions"
 
     func encoded() -> Data? { try? JSONEncoder().encode(self) }
     static func decode(_ data: Data) -> WatchGym? { try? JSONDecoder().decode(WatchGym.self, from: data) }
@@ -54,4 +89,14 @@ struct WatchGym: Codable, Equatable, Sendable {
 extension WatchGym.Done {
     func encoded() -> Data? { try? JSONEncoder().encode(self) }
     static func decode(_ data: Data) -> WatchGym.Done? { try? JSONDecoder().decode(WatchGym.Done.self, from: data) }
+}
+
+extension WatchGym.Change {
+    func encoded() -> Data? { try? JSONEncoder().encode(self) }
+    static func decode(_ data: Data) -> WatchGym.Change? { try? JSONDecoder().decode(WatchGym.Change.self, from: data) }
+}
+
+extension WatchGym.OptionsRequest {
+    func encoded() -> Data? { try? JSONEncoder().encode(self) }
+    static func decode(_ data: Data) -> WatchGym.OptionsRequest? { try? JSONDecoder().decode(WatchGym.OptionsRequest.self, from: data) }
 }

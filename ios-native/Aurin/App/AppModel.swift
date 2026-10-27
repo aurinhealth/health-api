@@ -1156,6 +1156,7 @@ final class AppModel {
     func saveGym(_ day: GymDay, date: String) async throws {
         guard !demo else { return }
         GymDayCache.save(day, date: date)
+        WatchBridge.shared.gymSaved(day, date: date)
         // One save of a day at a time. Sets ticked meanwhile go out after it,
         // only the newest sheet, so an older sheet can never land last.
         if gymSaving.contains(date) { gymPending[date] = day; return }

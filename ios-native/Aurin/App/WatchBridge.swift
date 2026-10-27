@@ -44,6 +44,7 @@ final class WatchBridge: NSObject {
         today = nil
         health = nil
         healthLoaded = nil
+        gymDays = [:]
         guard let session, session.activationState == .activated else { return }
         try? session.updateApplicationContext([:])
     }
@@ -67,9 +68,16 @@ final class WatchBridge: NSObject {
         }
     }
 
-    private func send() {
-        guard watchReady, let session, let today, let data = Self.snapshot(today, health: health).encoded() else { return }
-        try? session.updateApplicationContext([WatchSnapshot.contextKey: data])
+    private func send() { sendContext() }
+
+    /// Today and today's gym (WatchGymBridge.swift) as the application context.
+    func sendContext() {
+        guard watchReady, let session else { return }
+        var context: [String: Any] = [:]
+        if let today, let data = Self.snapshot(today, health: health).encoded() { context[WatchSnapshot.contextKey] = data }
+        if let gym = gymContext { context[WatchGym.replyKey] = gym }
+        guard !context.isEmpty else { return }
+        try? session.updateApplicationContext(context)
     }
 
     /// The saved Today when the app was woken only for the watch.
@@ -162,7 +170,19 @@ extension WatchBridge: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
         let gymDate = message[WatchGym.requestKey] as? String
         let done = (message[WatchGym.doneKey] as? Data).flatMap(WatchGym.Done.decode)
+        let change = (message[WatchGym.changeKey] as? Data).flatMap(WatchGym.Change.decode)
+        let options = (message[WatchGym.optionsKey] as? Data).flatMap(WatchGym.OptionsRequest.decode)
         Task { @MainActor in
+            if let change {
+                let gym = await applyGym(change)
+                replyHandler(gym?.encoded().map { [WatchGym.replyKey: $0] } ?? [:])
+                return
+            }
+            if let options {
+                let list = await gymOptions(options)
+                replyHandler((try? JSONEncoder().encode(list)).map { [WatchGym.optionsKey: $0] } ?? [:])
+                return
+            }
             if let gymDate {
                 let gym = await loadGym(date: gymDate)
                 replyHandler(gym?.encoded().map { [WatchGym.replyKey: $0] } ?? [:])
