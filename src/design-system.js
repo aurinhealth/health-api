@@ -18,7 +18,8 @@ export const themeTokens = `
   --glow-today:#DCEBE2;--glow-health:#E3E6F3;--glow-training:#F3E3C6;--glow-food:#F2E4D0;
   /* The welcome before the sign-in (WelcomePages.swift): its sunrise and coach tints, the logo's sun, the plate loader. */
   --glow-sunrise:#F7DFC2;--glow-coach:#E6E1F3;--sun:#E09A55;--metal:#BDB7AC;
-  --plate-25:#C98A7C;--plate-25-line:#A86A5C;--plate-5:#AEB2B9;--plate-5-line:#8E939B;
+  --plate-25:#C98A7C;--plate-25-line:#A86A5C;--plate-20:#7E8DB5;--plate-20-line:#5F6F98;--plate-15:#B39A5E;--plate-15-line:#937A40;
+  --plate-10:#8AA58C;--plate-10-line:#6A866D;--plate-5:#AEB2B9;--plate-5-line:#8E939B;--plate-2-5:#85817B;--plate-2-5-line:#66625C;--plate-1-25:#A8A39B;--plate-1-25-line:#88837B;
   /* Type scale: caption for short uppercase labels, meta for chips, small for secondary text. */
   --fs-caption:12px;--fs-meta:13px;--fs-small:14px;--fs-body:15px;
 }
