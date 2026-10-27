@@ -122,6 +122,7 @@ enum WeekPlanDraftMemory {
 
 struct WeekPlanView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     @State private var weekStart = WeekPlanView.monday()
     @AppStorage("weekPlan.mode") private var mode = "manual"
     @State private var plan: WeekPlanResponse?
@@ -760,6 +761,12 @@ struct WeekPlanView: View {
         }
         await model.refreshTraining()
         await model.loadCalendar(from: weekStart, to: ISODay.shift(weekStart, 6), force: true)
+        // All in the calendar: back to where the week was planned from (Trénink),
+        // after a moment with "Hotovo, je v kalendáři" (Petr 2026-10-27).
+        if sessions.allSatisfy({ $0.status == .saved }) {
+            try? await Task.sleep(for: .milliseconds(700))
+            dismiss()
+        }
     }
 
     private func load() async {
