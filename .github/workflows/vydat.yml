@@ -1,7 +1,6 @@
 name: Vydat
 
-# Releases one tested build to the external testers, with the server it was
-# tested against:
+# Releases one tested build, with the server it was tested against:
 # 1. picks the build (the newest one uploaded from main, or the number typed in)
 #    and checks that the smoke test of its app passed (ios-native.yml on main),
 # 2. deploys the newest main to the live server (deploy-worker.yml, production);
@@ -10,9 +9,11 @@ name: Vydat
 #    pull requests merged after the build go out too. A typed server commit
 #    (a main commit that holds the build's) leaves out what was merged after it,
 # 3. sets "What to Test" to a summary of every pull request since the last
-#    release, adds the build to the external TestFlight group and sends it to
-#    Apple's beta review,
-# The previous release is the newest build the external group already has.
+#    release; only when "external" is ticked, adds the build to the external
+#    TestFlight group and sends it to Apple's beta review. Otherwise the owner
+#    adds builds to the external groups by hand in App Store Connect.
+# The previous release is the main commit of the newest Vydat run whose
+# production deploy went through.
 #
 # Every merge before that only reaches the test server and the internal
 # testers, who switch the app to the test server (Nastavení → Testování → Server).
@@ -38,6 +39,11 @@ on:
         description: "What to Test for the testers (empty: summary of the pull requests since the last release)"
         required: false
         default: ""
+      external:
+        description: "Also send the build to the external testers (EXTERNAL_GROUP) and to Apple's beta review"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -71,18 +77,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BUILD: ${{ inputs.build }}
           SERVER: ${{ inputs.server }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
-          ASC_KEY_PATH: ${{ runner.temp }}/AuthKey.p8
-          BUNDLE_ID: health.aurin.app
-          EXTERNAL_GROUP: ${{ vars.EXTERNAL_GROUP }}
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
-          chmod 600 "$ASC_KEY_PATH"
-          trap 'rm -f "$ASC_KEY_PATH"' EXIT
           # Builds come from ios-testflight.yml runs on main; the build number is the run number.
           runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ios-testflight.yml --branch main \
             --status success --limit 100 --json number,headSha,databaseId)"
@@ -123,14 +120,18 @@ jobs:
           [ -n "$check" ] || { echo "::error::Pro build $build chybí kontrola aplikace (iOS native app na main). Spusť ji na main a pak Vydat znovu."; exit 1; }
           check_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$(jq -r .databaseId <<< "$check")"
           [ "$(jq -r .conclusion <<< "$check")" = "success" ] || { echo "::error::Kontrola aplikace pro build $build neprošla: $check_url"; exit 1; }
-          last="$(python3 .github/scripts/testflight_notes.py released)"
+          # The previous release: the main commit of the newest Vydat run whose
+          # production deploy went through (a server commit typed in then is not kept).
           base=""
-          if [ -n "$last" ]; then
-            [ "$last" -lt "$build" ] || { echo "::error::Testeři už mají build $last, novější nebo stejný jako $build."; exit 1; }
-            base="$(jq -r --argjson n "$last" 'map(select(.number == $n))[0].headSha // ""' <<< "$runs")"
-            # Older than the last 100 runs: the summary takes the latest pull requests instead.
-            if [ -n "$base" ] && ! git merge-base --is-ancestor "$base" "$sha"; then base=""; fi
-          fi
+          while read -r rid rsha; do
+            deployed="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$rid/jobs?per_page=50" \
+              --jq '.jobs[] | select(.name == "deploy / deploy") | .conclusion')"
+            if [ "$deployed" = "success" ]; then base="$rsha"; break; fi
+          done < <(gh run list --repo "$GITHUB_REPOSITORY" --workflow vydat.yml --branch main \
+            --status completed --limit 30 --json databaseId,headSha --jq '.[] | "\(.databaseId) \(.headSha)"')
+          # Not behind this release (or unknown): the summary takes the latest pull requests instead.
+          if [ -n "$base" ] && ! { git cat-file -e "$base^{commit}" 2>/dev/null && git merge-base --is-ancestor "$base" "$server"; }; then base=""; fi
+          last="${base:0:7}"
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "server=$server" >> "$GITHUB_OUTPUT"
@@ -183,7 +184,8 @@ jobs:
           fi
           { echo "### What to Test"; echo; cat build/WhatToTest.txt; } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Send the build to the external testers
+      # The internal group gets every build anyway; the external ones only when ticked.
+      - name: Set What to Test, and send the build to the external testers when ticked
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
@@ -192,6 +194,7 @@ jobs:
           BUNDLE_ID: health.aurin.app
           BUILD_NUMBER: ${{ needs.pick.outputs.build }}
           EXTERNAL_GROUP: ${{ vars.EXTERNAL_GROUP }}
+          EXTERNAL: ${{ inputs.external }}
         run: |
           printf '%s\n' "$ASC_KEY_P8" > "$ASC_KEY_PATH"
           chmod 600 "$ASC_KEY_PATH"
