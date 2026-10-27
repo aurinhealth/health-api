@@ -277,8 +277,9 @@ struct WeatherDetails: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     if let place = weather.place {
+                        // A pin, so the only arrow on the screen is the wind's (Petr, 2026-10-27).
                         HStack(spacing: 5) {
-                            Image(systemName: "location.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.blue)
+                            Image(systemName: "mappin").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.blue)
                             Text(verbatim: place).font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                         }
                     }
@@ -302,7 +303,7 @@ struct WeatherDetails: View {
             HStack(alignment: .top, spacing: 0) {
                 stat("Max / min", WeatherText.degrees(weather.max), weather.min.map { " / " + WeatherText.degrees($0) })
                 Divider().overlay(Palette.hairline).padding(.horizontal, 12)
-                stat("Vítr", WeatherText.windNumber(wind), " " + WeatherText.windUnit, windCorner)
+                stat("Vítr", WeatherText.windNumber(wind), " " + WeatherText.windUnit, windBeside)
                 Divider().overlay(Palette.hairline).padding(.horizontal, 12)
                 stat("Déšť", weather.rainProb.map { Fmt.int($0) } ?? "–", weather.rainProb == nil ? nil : " %")
             }
@@ -322,25 +323,24 @@ struct WeatherDetails: View {
     /// The wind now, else the day's strongest.
     private var wind: Double? { weather.now?.wind ?? weather.wind }
 
-    /// "↗ SZ" in the wind's top right corner (Petr, 2026-10-27: no extra line): the
+    /// "↘ SZ" beside the label Vítr (Petr, 2026-10-27: no extra line, not at the edge): the
     /// arrow points where the wind blows, the letters say where it comes from.
-    private var windCorner: AnyView? {
+    private var windBeside: AnyView? {
         guard let direction = weather.now?.windDirection, let from = WeatherText.compass(direction), (wind ?? 0) >= 5 else { return nil }
         return AnyView(HStack(spacing: 3) {
-            Image(systemName: "location.north.fill").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.blue)
+            Image(systemName: "arrow.up").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.blue)
                 .rotationEffect(.degrees(direction + 180))
-            Text(verbatim: from).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+            Text(verbatim: from).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: [WeatherText.windWord(wind), from].compactMap { $0 }.joined(separator: ", "))))
     }
 
-    private func stat(_ title: String, _ value: String, _ unit: String?, _ corner: AnyView? = nil) -> some View {
+    private func stat(_ title: String, _ value: String, _ unit: String?, _ beside: AnyView? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 4) {
+            HStack(spacing: 8) {
                 Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                Spacer(minLength: 0)
-                if let corner { corner }
+                if let beside { beside }
             }
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(verbatim: value).font(Typo.number(28)).foregroundStyle(Palette.ink)
