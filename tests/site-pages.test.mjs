@@ -35,6 +35,8 @@ test('the overview follows the app section by section and every file it loads ex
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
   for(const name of ['today','sleep','readiness-parts','training','builder','training-mode','food-day'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
   assert.ok(files.includes('fonts/instrument-serif.woff2'),'the app’s number font');
+  // Every screenshot of the app says what it shows.
+  for(const [img] of html.matchAll(/<img src="\/site\/app\/[^>]*>/g))assert.doesNotMatch(img,/alt=""/,img);
   // Strain, the finished workout and the coach are screens built in site-demos.js, so they can move.
   for(const text of ['5.1</b> workout <b>3.3</b> movement','Saved to Apple Health','Proposal confirmed.'])assert.ok(html.includes(text),text);
   // The 3D figure's frames, its map of muscles and a close-up of every muscle the bubble can open.

@@ -15,41 +15,41 @@ import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 const siteCss = `
 @font-face{font-family:Newsreader;src:url(/site/fonts/newsreader.woff2) format("woff2");font-display:swap}
 *{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;overflow-x:clip}
-body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 -apple-system,BlinkMacSystemFont,Inter,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:clip}
+body{margin:0;background:var(--bg);color:var(--text);font:var(--fs-17)/1.5 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:clip}
 a{color:var(--primary-text)}
 img{max-width:100%}
 .icon{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .wrap{max-width:1160px;margin:0 auto;padding:0 24px}
 h1,h2,h3{margin:0;font-weight:400}
-h1,h2{font-family:Newsreader,"New York",Georgia,serif;letter-spacing:-.02em;line-height:1.02}
+h1,h2{font-family:var(--serif);letter-spacing:-.02em;line-height:1.02}
 p{margin:0}
 .muted{color:var(--muted)}
 :focus-visible{outline:2px solid var(--primary);outline-offset:3px}
 
 /* Floating pill navigation. */
 .site-head{position:sticky;top:12px;z-index:20;display:flex;justify-content:center;padding:0 16px;margin-top:12px;pointer-events:none}
-.pill-nav{pointer-events:auto;display:flex;align-items:center;gap:6px;padding:6px 6px 6px 14px;border:1px solid var(--line);border-radius:999px;background:color-mix(in srgb,var(--panel) 80%,transparent);backdrop-filter:saturate(1.4) blur(18px);-webkit-backdrop-filter:saturate(1.4) blur(18px);box-shadow:0 8px 30px rgba(60,45,20,.08)}
+.pill-nav{pointer-events:auto;display:flex;align-items:center;gap:6px;padding:6px 6px 6px 14px;border:1px solid var(--line);border-radius:var(--r-pill);background:color-mix(in srgb,var(--panel) 80%,transparent);backdrop-filter:saturate(1.4) blur(18px);-webkit-backdrop-filter:saturate(1.4) blur(18px);box-shadow:var(--shadow-float)}
 .logo{display:flex;align-items:center;gap:9px;color:var(--text);text-decoration:none;margin-right:10px}
-.logo span{font:400 25px/1 Newsreader,"New York",Georgia,serif;letter-spacing:-.01em}
+.logo span{font:400 var(--fs-28)/1 var(--serif);letter-spacing:-.01em}
 .pill-nav .links{display:flex;gap:2px;margin-right:6px}
-.pill-nav .links a{padding:7px 12px;border-radius:999px;color:var(--muted);text-decoration:none;font-size:14px;font-weight:500}
+.pill-nav .links a{padding:7px 12px;border-radius:var(--r-pill);color:var(--muted);text-decoration:none;font-size:var(--fs-14);font-weight:500}
 .pill-nav .links a:hover{color:var(--text);background:var(--track)}
 
 /* The waitlist: the app is not in the App Store yet; an e-mail field with its button (store()). */
 .wl{display:inline-flex;flex-direction:column;align-items:center;max-width:100%}
 .wl .done{display:none}
-.wl .field{display:flex;align-items:center;gap:6px;height:56px;width:340px;max-width:100%;padding:0 6px 0 22px;border-radius:999px;background:var(--panel);box-shadow:0 0 0 1px var(--line),0 14px 30px -12px rgba(21,20,15,.35)}
-.wl input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:17px;color:var(--text)}
+.wl .field{display:flex;align-items:center;gap:6px;height:56px;width:340px;max-width:100%;padding:0 6px 0 22px;border-radius:var(--r-pill);background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float)}
+.wl input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:var(--fs-17);color:var(--text)}
 .wl .field:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:3px}
 .wl .go{flex:none;width:44px;height:44px;border:0;border-radius:50%;background:var(--button);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .wl .go svg,.wl .done svg{width:20px;height:20px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 .wl .go svg{stroke:var(--on-button)}
-.wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:999px;background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:17px;font-weight:600}
+.wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:var(--fs-17);font-weight:600}
 .wl .done svg{stroke:currentColor}
-.wl .err{margin-top:10px;font-size:15px;color:var(--rust-ink)}.wl .err:empty{display:none}
+.wl .err{margin-top:10px;font-size:var(--fs-14);color:var(--rust-ink)}.wl .err:empty{display:none}
 .wl.sent .field{display:none}.wl.sent .done{display:inline-flex}
 /* After joining: pass Aurin on (the phone's own sharing, or the link copied). Nothing about it is stored. */
-.wl .share{display:none;align-items:center;gap:8px;margin-top:12px;padding:8px 14px;border:0;border-radius:999px;background:transparent;font:inherit;font-size:15px;font-weight:600;color:var(--sec);cursor:pointer}
+.wl .share{display:none;align-items:center;gap:8px;margin-top:12px;padding:8px 14px;border:0;border-radius:var(--r-pill);background:transparent;font:inherit;font-size:var(--fs-14);font-weight:600;color:var(--sec);cursor:pointer}
 .wl .share:hover{background:var(--panel)}.wl .share svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .wl.sent .share{display:inline-flex}
 /* Cloudflare's "Verify you are human", only when Cloudflare asks for it. */
@@ -59,15 +59,15 @@ p{margin:0}
 .site body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.05;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
 /* Shared pieces of the overview. */
-.eyebrow{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--tone,var(--green));margin-bottom:16px}
+.eyebrow{font-size:var(--fs-12);font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--green);margin-bottom:16px}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.sub{font-size:20px;line-height:1.5;color:var(--sec);max-width:520px;margin-top:20px}
+.sub{font-size:var(--fs-20);line-height:1.5;color:var(--sec);max-width:520px;margin-top:20px}
 .sub.free{margin-top:8px;color:var(--green);font-weight:600}
-h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
+h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spacing:-.025em}
 .up{color:var(--green)}.sleep{color:var(--indigo)}.warm{color:var(--amber)}
-.nav-cta{display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
+.nav-cta{display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:var(--r-pill);background:var(--button);color:var(--on-button);font-size:var(--fs-14);font-weight:600;text-decoration:none;white-space:nowrap}
 .nav-cta:hover{opacity:.9}
-/* One waitlist button at a time: the nav's pill appears once the hero's button has scrolled away (always there without JS). */
+/* One waitlist button at a time: the nav's pill shows while no other way to join is on screen (always there without JS). */
 .js .site-head:not(.away) .nav-cta{display:none}
 
 /* The sun: the logo rising behind soft rings that keep spreading, over the sunrise tint (the welcome's first page). */
@@ -82,22 +82,27 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 /* Hero: the line on the left, the app's Today on the right with three numbers floating beside it. */
 .hero{position:relative;margin-top:-76px;padding:112px 0 72px;overflow:clip}
 .hero .grid{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);align-items:center;gap:32px}
-.kicker{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:color-mix(in srgb,var(--panel) 60%,transparent);border:1px solid var(--line);font-size:14px;font-weight:600;color:var(--sec)}
+.kicker{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--panel) 60%,transparent);border:1px solid var(--line);font-size:var(--fs-14);font-weight:600;color:var(--sec)}
 .kicker i{width:8px;height:8px;border-radius:50%;background:var(--green)}
-.hero h1{font-size:clamp(52px,6.6vw,100px);line-height:.98;letter-spacing:-.03em;margin-top:22px}
-.hero h1 .w{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em}
+.hero h1{font-size:clamp(var(--fs-44),6.4vw,var(--fs-88));line-height:.98;letter-spacing:-.03em;margin-top:22px}
+/* Each word rises inside its own clipped box; the box reaches past the letters so the italic's overhang isn't cut. */
+.hero h1 .w{display:inline-block;overflow:hidden;vertical-align:top;padding:0 .14em .1em;margin:0 -.14em -.1em}
 .hero h1 .w>span{display:inline-block}
 .hero h1 .it{font-style:italic;color:var(--green)}
-.lede{max-width:500px;margin-top:26px;font-size:20px;color:var(--sec)}
+.lede{max-width:500px;margin-top:26px;font-size:var(--fs-20);color:var(--sec)}
 .hero .cta{margin-top:36px}
 .hero .wl{align-items:flex-start}
-.hero .note{margin-top:16px;font-size:14px;color:var(--muted)}
-.stage{position:relative;height:720px;display:flex;align-items:center;justify-content:center}
-.glass{position:absolute;z-index:2;text-align:left;padding:16px 18px;border-radius:22px;background:color-mix(in srgb,var(--panel) 74%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);border:1px solid color-mix(in srgb,var(--panel) 85%,transparent);box-shadow:0 24px 60px -18px rgba(80,60,30,.28)}
-.glass .k{font-size:13px;color:var(--muted)}.glass .v{font-size:30px;font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.glass .d{font-size:13px;font-weight:600}
-.glass.g1{left:calc(50% - 300px);top:150px}
-.glass.g2{right:calc(50% - 280px);top:300px}
-.glass.g3{left:calc(50% - 300px);bottom:84px;width:240px;font-size:15px}
+.hero .note{margin-top:16px;font-size:var(--fs-14);color:var(--muted)}
+/* The phone and its three numbers are drawn at one size (the rig) and scaled down where the column is narrower,
+   so the numbers never leave the column and the coach sits under the phone, not over its tab bar. */
+.stage{position:relative;display:flex;justify-content:center}
+.rig{position:relative;flex:none;width:500px;height:760px;zoom:var(--hz,1)}
+.rig .device{position:absolute;left:89px;top:0}
+.glass{position:absolute;z-index:2;text-align:left;padding:16px 18px;border-radius:var(--r-22);background:color-mix(in srgb,var(--panel) 74%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);border:1px solid color-mix(in srgb,var(--panel) 85%,transparent);box-shadow:var(--shadow-float)}
+.glass .k{font-size:var(--fs-14);color:var(--muted)}.glass .v{font-size:var(--fs-28);font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.glass .d{font-size:var(--fs-14);font-weight:600}
+.glass.g1{left:0;top:56px}
+.glass.g2{right:0;top:290px}
+.glass.g3{left:0;bottom:0;font-size:var(--fs-17);white-space:nowrap}
 
 /* A real-looking iPhone: titanium edge, black bezel, glass glare and a deep shadow. Its screens are
    the app's own, taken in CI from the sample data (ios-native.yml, screens/site/). */
@@ -115,8 +120,8 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 
 /* One morning: the sample day said as a sentence, with the numbers the hero phone shows. */
 .morning{padding:56px 0 24px}
-.morning .say{max-width:1000px;font:400 clamp(30px,3.8vw,52px)/1.18 Newsreader,"New York",Georgia,serif;letter-spacing:-.015em;color:var(--text)}
-.morning .say b{font:600 .78em/1 -apple-system,BlinkMacSystemFont,Inter,"Segoe UI",system-ui,sans-serif;letter-spacing:-.02em;font-variant-numeric:tabular-nums;padding:.08em .32em;border-radius:.4em;white-space:nowrap;background:color-mix(in srgb,currentColor 11%,transparent)}
+.morning .say{max-width:1000px;font:400 clamp(var(--fs-28),3.6vw,var(--fs-44))/1.18 var(--serif);letter-spacing:-.015em;color:var(--text)}
+.morning .say b{font:600 .78em/1 var(--sans);letter-spacing:-.02em;font-variant-numeric:tabular-nums;padding:.08em .32em;border-radius:.4em;white-space:nowrap;background:color-mix(in srgb,currentColor 11%,transparent)}
 .morning .say em{font-style:italic}
 
 /* Chapters: one per area of the app, in the order of its tabs. The words on one side, the phone on
@@ -132,7 +137,7 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .vis .glow{position:absolute;left:50%;top:50%;width:880px;height:880px;margin:-440px 0 0 -440px;border-radius:50%;background:radial-gradient(circle,var(--glow) 0,transparent 62%);pointer-events:none}
 .vis .device{position:absolute;left:318px;top:18px}
 .flip .vis .device{left:0}
-.part{position:absolute;left:0;width:380px;border-radius:22px;overflow:hidden;background:var(--panel);box-shadow:0 40px 80px -30px rgba(60,40,10,.5),0 2px 8px rgba(0,0,0,.06),0 0 0 1px rgba(27,26,23,.05);opacity:0;z-index:3}
+.part{position:absolute;left:0;width:380px;border-radius:var(--r-22);overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float);opacity:0;z-index:3}
 .flip .part{left:260px}
 .part img{display:block;width:100%;height:auto}
 .part.on{opacity:1}
@@ -141,9 +146,9 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .step:last-child{border-bottom:1px solid var(--line)}
 .step>button,.step>div{display:grid;grid-template-columns:40px 1fr;column-gap:8px;width:100%;padding:20px 0;border:0;background:none;font:inherit;color:inherit;text-align:left}
 .step>button{cursor:pointer}
-.step .n{grid-row:1/3;font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--tone);padding-top:6px;font-variant-numeric:tabular-nums}
-.step .tt{font:400 28px/1.1 Newsreader,"New York",Georgia,serif;letter-spacing:-.015em}
-.step .tx{margin-top:8px;color:var(--sec);font-size:17px}
+.step .n{grid-row:1/3;font-size:var(--fs-12);font-weight:700;letter-spacing:.06em;color:var(--green);padding-top:6px;font-variant-numeric:tabular-nums}
+.step .tt{font:400 var(--fs-28)/1.1 var(--serif);letter-spacing:-.015em}
+.step .tx{margin-top:8px;color:var(--sec);font-size:var(--fs-17)}
 .step .bar{grid-column:2;display:none;height:2px;margin-top:16px;border-radius:2px;background:var(--track);overflow:hidden}
 .step .bar i{display:block;height:100%;width:0;background:var(--tone)}
 .part{pointer-events:none}.part:has(.dial){pointer-events:auto}
@@ -156,14 +161,14 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .opener{position:relative;isolation:isolate;padding:150px 0 10px}
 .opener::before{content:"";position:absolute;left:0;right:0;top:40px;height:760px;z-index:-1;pointer-events:none;background:radial-gradient(60% 50% at 30% 30%,var(--glow) 0,transparent 100%)}
 .ac{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:56px;align-items:center}
-.opener h2.big{font-size:clamp(56px,7vw,104px)}
-.opener .sub{font-family:Newsreader,"New York",Georgia,serif;font-size:24px;line-height:1.35}
+.opener h2.big{font-size:clamp(var(--fs-64),7vw,var(--fs-88))}
+.opener .sub{font-family:var(--serif);font-size:var(--fs-28);line-height:1.3}
 .opener .cards{width:420px}
 .chapter.opens{padding-top:90px}
 /* Where the reader is: the welcome's line with a dot per part, the current one glowing. */
-.acts-nav{position:fixed;left:50%;bottom:18px;z-index:19;display:flex;align-items:center;gap:14px;padding:10px 18px 10px 16px;border-radius:999px;background:color-mix(in srgb,var(--panel) 86%,transparent);-webkit-backdrop-filter:saturate(1.4) blur(18px);backdrop-filter:saturate(1.4) blur(18px);box-shadow:0 0 0 1px var(--line),0 14px 34px -14px rgba(60,45,20,.4);transform:translate(-50%,24px);opacity:0;pointer-events:none;transition:opacity .4s,transform .5s cubic-bezier(.16,1,.3,1)}
+.acts-nav{position:fixed;left:50%;bottom:18px;z-index:19;display:flex;align-items:center;gap:14px;padding:10px 18px 10px 16px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--panel) 86%,transparent);-webkit-backdrop-filter:saturate(1.4) blur(18px);backdrop-filter:saturate(1.4) blur(18px);box-shadow:0 0 0 1px var(--line),var(--shadow-float);transform:translate(-50%,24px);opacity:0;pointer-events:none;transition:opacity .4s,transform .5s cubic-bezier(.16,1,.3,1)}
 .acts-nav.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
-.an-t{min-width:76px;font-size:14px;font-weight:600}
+.an-t{min-width:76px;font-size:var(--fs-14);font-weight:600}
 .an-l{position:relative;width:136px;height:12px}
 .an-l::before,.an-fill{content:"";position:absolute;left:0;right:0;top:5px;height:2px;border-radius:2px;background:var(--track)}
 .an-fill{right:auto;width:calc(var(--i,0) * 25%);background:linear-gradient(90deg,color-mix(in srgb,var(--sun) 40%,transparent),var(--sun));transition:width .45s cubic-bezier(.16,1,.3,1)}
@@ -177,25 +182,25 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
    muscle each pixel is, so dragging turns it and a tap names the muscle as the app's bubble does. */
 .muscles{padding:150px 0 0;--tone:var(--rust-ink)}
 .mu{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:center}
-.muscles .key{display:flex;flex-wrap:wrap;gap:18px;margin-top:28px;font-size:14px;color:var(--muted)}
+.muscles .key{display:flex;flex-wrap:wrap;gap:18px;margin-top:28px;font-size:var(--fs-14);color:var(--muted)}
 .muscles .key span{display:inline-flex;align-items:center;gap:7px}
 .muscles .key i{width:9px;height:9px;border-radius:50%;background:var(--c)}
-.muscles .hint{font-size:14px;color:var(--muted);margin-top:14px;transition:opacity .4s}
+.muscles .hint{font-size:var(--fs-14);color:var(--muted);margin-top:14px;transition:opacity .4s}
 .fig{position:relative;margin:0 auto;width:min(480px,100%,calc((100svh - 120px) * .64));aspect-ratio:640/1000;touch-action:pan-y;cursor:grab;-webkit-user-select:none;user-select:none}
 .fig::before{content:"";position:absolute;inset:10% -20%;z-index:-1;background:radial-gradient(circle,color-mix(in srgb,var(--rust) 15%,transparent) 0,transparent 60%)}
 .fig canvas{display:block;width:100%;height:100%}
-.fig .bubble{position:absolute;z-index:2;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border:1px solid var(--line);border-radius:16px;background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 6px 24px rgba(0,0,0,.25);font:inherit;text-align:left;white-space:nowrap;cursor:pointer;transform:translate(-50%,-100%) scale(.85);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.16,1,.3,1)}
+.fig .bubble{position:absolute;z-index:2;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border:1px solid var(--line);border-radius:var(--r-16);background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow-float);font:inherit;text-align:left;white-space:nowrap;cursor:pointer;transform:translate(-50%,-100%) scale(.85);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.16,1,.3,1)}
 .fig .bubble.on{opacity:1;transform:translate(-50%,-100%);pointer-events:auto}
-.fig .bubble b{display:block;font-size:16px;font-weight:600;color:var(--text)}
-.fig .bubble span{font-size:13px}
+.fig .bubble b{display:block;font-size:var(--fs-17);font-weight:600;color:var(--text)}
+.fig .bubble span{font-size:var(--fs-14)}
 .fig .bubble .icon{color:var(--muted);width:14px;height:14px}
 .muscle-card{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .35s,visibility .35s}
 .muscle-card.on{opacity:1;visibility:visible;pointer-events:auto}
-.muscle-card .card{width:min(400px,calc(100% - 32px));padding:20px;border-radius:28px;background:var(--bg);text-align:left;box-shadow:0 40px 80px -30px rgba(60,40,10,.5);transform:scale(.94);transition:transform .45s cubic-bezier(.16,1,.3,1)}
+.muscle-card .card{width:min(400px,calc(100% - 32px));padding:20px;border-radius:var(--r-22);background:var(--bg);text-align:left;box-shadow:var(--shadow-float);transform:scale(.94);transition:transform .45s cubic-bezier(.16,1,.3,1)}
 .muscle-card.on .card{transform:none}
-.muscle-card .zoom{height:220px;border-radius:22px;background:var(--panel) center/cover no-repeat}
-.muscle-card h3{font:400 28px/1.1 Newsreader,"New York",Georgia,serif;margin:16px 0 4px}
-.muscle-card .close{float:right;width:34px;height:34px;margin:-6px -6px 10px 10px;border:0;border-radius:50%;background:var(--track);color:var(--text);font-size:18px;cursor:pointer}
+.muscle-card .zoom{height:220px;border-radius:var(--r-16);background:var(--panel) center/cover no-repeat}
+.muscle-card h3{font:400 var(--fs-28)/1.1 var(--serif);margin:16px 0 4px}
+.muscle-card .close{float:right;width:34px;height:34px;margin:-6px -6px 10px 10px;border:0;border-radius:50%;background:var(--track);color:var(--text);font-size:var(--fs-20);cursor:pointer}
 
 /* Connections: a row of the services the app connects; picking one says what Aurin reads from it and
    what it sends back. They take turns until one is picked. */
@@ -204,43 +209,43 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .connect .intro .sub{margin:0}
 
 /* A real day: one of the owner's own screens (dark mode, his data) beside the sample day, as a small card. */
-.rd{display:flex;gap:18px;align-items:center;max-width:480px;margin:28px 0 0;padding:14px;border-radius:22px;background:var(--panel);box-shadow:0 0 0 1px var(--line),0 18px 40px -26px rgba(60,40,10,.4)}
-.rd a{flex:none;display:block;width:112px;border-radius:14px;overflow:hidden;background:var(--track);box-shadow:0 0 0 1px var(--line)}
+.rd{display:flex;gap:18px;align-items:center;max-width:480px;margin:28px 0 0;padding:14px;border-radius:var(--r-22);background:var(--panel);box-shadow:var(--shadow-card)}
+.rd a{flex:none;display:block;width:112px;border-radius:var(--r-12);overflow:hidden;background:var(--track);box-shadow:0 0 0 1px var(--line)}
 .rd img{display:block;width:100%;height:auto}
-.rd figcaption{font-size:15px;line-height:1.45;color:var(--sec)}
-.rd b{display:block;margin-bottom:4px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--tone,var(--green))}
+.rd figcaption{font-size:var(--fs-17);line-height:1.45;color:var(--sec)}
+.rd b{display:block;margin-bottom:4px;font-size:var(--fs-12);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--green)}
 .ch .rd{grid-area:real}
 .connect .rd{margin:28px auto 0}
 .connect .box{margin-top:48px}
-.flow{position:relative;aspect-ratio:1000/440;border-radius:24px;background:var(--panel2);overflow:hidden}
+.flow{position:relative;aspect-ratio:1000/440;border-radius:var(--r-22);background:var(--panel2);overflow:hidden}
 .fc{position:absolute;left:0;top:0;width:1000px;height:440px;zoom:var(--fz,1)}
 .lines{position:absolute;inset:0;width:100%;height:100%}.lines.tall,.pks.tall{display:none}
 .lines path{fill:none;stroke-width:2.5;stroke-linecap:round;transition:opacity .5s,stroke .5s}
 .lines .in{stroke:color-mix(in srgb,var(--green) 30%,transparent)}.lines .out{stroke:color-mix(in srgb,var(--amber-bar) 34%,transparent)}
 .lines path.on{stroke-width:3}.lines .in.on{stroke:var(--green)}.lines .out.on{stroke:var(--amber-bar)}
-.pk{position:absolute;left:0;top:0;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px 0 8px;border-radius:99px;background:var(--panel);box-shadow:0 4px 14px -4px rgba(60,45,20,.3);font-size:12.5px;font-weight:600;white-space:nowrap;offset-rotate:0deg;offset-anchor:50% 50%;opacity:0;animation:travel 4.4s linear infinite;transition:filter .4s}
+.pk{position:absolute;left:0;top:0;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px 0 8px;border-radius:var(--r-pill);background:var(--panel);box-shadow:var(--shadow-card);font-size:var(--fs-12);font-weight:600;white-space:nowrap;offset-rotate:0deg;offset-anchor:50% 50%;opacity:0;animation:travel 4.4s linear infinite;transition:filter .4s}
 .pk .icon{width:14px;height:14px}.pk.in{color:var(--green)}.pk.out{color:var(--amber)}
 .pk:not(.on){visibility:hidden}
 @keyframes travel{0%{offset-distance:0%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
-.col-l,.col-r{position:absolute;top:18px;font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase}
-.col-l{left:40px;color:var(--green)}.col-r{right:40px;color:var(--amber)}
-.flow .core{position:absolute;left:50%;top:50%;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:0 14px 34px rgba(60,45,20,.16)}
-.node,.dst{position:absolute;left:var(--x);top:var(--y);display:flex;align-items:center;gap:10px;transform:translate(-50%,-50%);border:0;background:none;padding:6px 10px 6px 6px;border-radius:16px;font:inherit;color:var(--muted);transition:background .3s,box-shadow .3s,color .3s}
+.col-l,.col-r{position:absolute;top:18px;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.col-l{left:40px}.col-r{right:40px}
+.flow .core{position:absolute;left:50%;top:50%;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:var(--shadow-float)}
+.node,.dst{position:absolute;left:var(--x);top:var(--y);display:flex;align-items:center;gap:10px;transform:translate(-50%,-50%);border:0;background:none;padding:6px 10px 6px 6px;border-radius:var(--r-16);font:inherit;color:var(--muted);transition:background .3s,box-shadow .3s,color .3s}
 .node{cursor:pointer;flex-direction:row-reverse;transform:translate(calc(-100% + 34px),-50%)}
 .dst{transform:translate(-34px,-50%)}
 .node:hover,.node[aria-selected=true],.dst.on{color:var(--text)}
-.node[aria-selected=true],.dst.on{background:var(--panel);box-shadow:0 10px 30px -12px rgba(60,45,20,.3)}
+.node[aria-selected=true],.dst.on{background:var(--panel);box-shadow:var(--shadow-card)}
 .node .logo-tile,.dst .logo-tile{flex:none;width:52px;height:52px;display:grid;place-items:center}
 .node img,.dst img{display:block;width:100%;height:100%}.node img.pad,.dst img.pad{padding:4%}
-.node .nm,.dst .nm{font-size:14px;font-weight:600;white-space:nowrap}
-.legend{display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:center;margin-top:14px;font-size:14px;color:var(--muted)}
+.node .nm,.dst .nm{font-size:var(--fs-14);font-weight:600;white-space:nowrap}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;justify-content:center;margin-top:14px;font-size:var(--fs-14);color:var(--muted)}
 .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}.legend .in{background:var(--green)}.legend .out{background:var(--amber-bar)}
 @media (prefers-reduced-motion:reduce){.pk{display:none}}
 @media (max-width:640px){
   .flow{aspect-ratio:340/660}.fc{width:340px;height:660px}
   .lines.wide,.pks.wide{display:none}.lines.tall,.pks.tall{display:block}
   .node,.dst{left:var(--mx);top:var(--my);flex-direction:column;gap:4px;padding:6px;transform:translate(-50%,-50%)}
-  .node .logo-tile,.dst .logo-tile{width:46px;height:46px}.node .nm,.dst .nm{font-size:11px;font-weight:600;max-width:84px;text-align:center;white-space:normal;line-height:1.15}
+  .node .logo-tile,.dst .logo-tile{width:46px;height:46px}.node .nm,.dst .nm{font-size:var(--fs-12);font-weight:600;max-width:84px;text-align:center;white-space:normal;line-height:1.15}
   .col-l{left:16px}.col-r{right:auto;left:16px;top:auto;bottom:118px}
   .flow .core{width:92px;height:92px;margin:-46px 0 0 -46px}.flow .core svg{width:46px;height:auto}
   .legend .tip{display:none}
@@ -248,17 +253,17 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .uh-tile{position:relative;display:grid;place-items:center;width:100%;height:100%;border-radius:26%;background:#000}
 .uh-tile img{width:56%!important;height:auto!important}
 .uh-tile.word img{width:78%!important}
-.panels{margin-top:14px;padding:26px 28px;border-radius:24px;background:var(--panel);box-shadow:0 1px 2px rgba(60,45,20,.05)}
-.svc h3{font-size:21px;font-weight:600}
+.panels{margin-top:14px;padding:26px 28px;border-radius:var(--r-22);background:var(--panel);box-shadow:var(--shadow-card)}
+.svc h3{font-size:var(--fs-20);font-weight:600}
 .svc .io{display:grid;grid-template-columns:140px 1fr;gap:12px;margin-top:16px;align-items:start}
-.svc .lbl{display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600;padding-top:7px}
+.svc .lbl{display:flex;align-items:center;gap:6px;font-size:var(--fs-14);font-weight:600;padding-top:7px}
 .svc .lbl .icon{width:15px;height:15px;stroke-width:2.4}
-.svc .lbl.in{color:var(--green)}.svc .lbl.out{color:var(--amber)}
+.svc .lbl.in .icon{color:var(--green)}.svc .lbl.out .icon{color:var(--amber)}
 .svc .items{display:flex;flex-wrap:wrap;gap:8px}
-.svc .items span{display:inline-flex;align-items:center;gap:7px;padding:7px 12px 7px 10px;border-radius:999px;font-size:15px;font-weight:500;background:var(--bg)}
+.svc .items span{display:inline-flex;align-items:center;gap:7px;padding:7px 12px 7px 10px;border-radius:var(--r-pill);font-size:var(--fs-14);font-weight:500;background:var(--bg)}
 .svc .items .icon{width:16px;height:16px}
 .svc .in+.items .icon{color:var(--green)}.svc .out+.items .icon{color:var(--amber)}
-.svc .none{font-size:15px;color:var(--muted);padding-top:6px}
+.svc .none{font-size:var(--fs-14);color:var(--muted);padding-top:6px}
 .svc+.svc{margin-top:24px;padding-top:22px;border-top:1px solid var(--line)}
 .tabs .svc+.svc{margin:0;padding:0;border:0}
 .tabs .svc:not(.on){display:none}
@@ -269,16 +274,16 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .lock{position:relative;width:220px;height:200px}
 .lock .halo{position:absolute;inset:-10px 0;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--sun) 25%,transparent) 0,transparent 62%)}
 .lock .shackle{position:absolute;left:79px;top:28px;width:62px;height:58px;overflow:visible}
-.lock .body{position:absolute;left:58px;top:82px;width:104px;height:84px;display:grid;place-items:center;border-radius:26px;background:linear-gradient(var(--panel),color-mix(in srgb,var(--panel) 92%,var(--bg)));box-shadow:inset 0 0 0 1px var(--line),0 12px 36px -8px rgba(60,45,20,.22)}
+.lock .body{position:absolute;left:58px;top:82px;width:104px;height:84px;display:grid;place-items:center;border-radius:var(--r-22);background:linear-gradient(var(--panel),color-mix(in srgb,var(--panel) 92%,var(--bg)));box-shadow:inset 0 0 0 1px var(--line),var(--shadow-float)}
 .promise h2{margin-top:18px;max-width:720px}
 .promise .sub{margin:18px auto 0;max-width:600px}
 .privacy .more{display:inline-flex;align-items:center;gap:8px;margin-top:24px;color:var(--primary-text);font-weight:600;text-decoration:none}
 .privacy .more:hover{text-decoration:underline}
 .privacy .more .icon{width:16px;height:16px}
-.card{background:var(--panel);border-radius:28px;padding:24px;box-shadow:0 1px 2px rgba(60,45,20,.05)}
+.card{background:var(--panel);border-radius:var(--r-22);padding:24px;box-shadow:var(--shadow-card)}
 .disclosure{max-width:680px;margin:40px auto 0;padding:24px 26px;text-align:left}
-.disclosure h3{font-size:16px;font-weight:600;margin-bottom:10px}
-.disclosure p{font-size:14px;line-height:1.55;color:var(--muted);margin-bottom:12px}
+.disclosure h3{font-size:var(--fs-17);font-weight:600;margin-bottom:10px}
+.disclosure p{font-size:var(--fs-14);line-height:1.55;color:var(--muted);margin-bottom:12px}
 
 /* Questions: the heading stays on the left, plain details/summary on the right (they open without JS). */
 #faq{padding:150px 0 0}
@@ -287,33 +292,40 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .faq .side p{margin-top:18px;color:var(--sec)}
 .faq details{border-top:1px solid var(--line)}
 .faq details:last-child{border-bottom:1px solid var(--line)}
-.faq summary{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:22px 2px;font-size:19px;font-weight:600;cursor:pointer;list-style:none}
+.faq summary{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:22px 2px;font-size:var(--fs-20);font-weight:600;cursor:pointer;list-style:none}
 .faq summary::-webkit-details-marker{display:none}
 .faq summary::after{content:"";flex:none;width:10px;height:10px;margin-top:-5px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .3s}
 .faq details[open] summary::after{transform:translateY(5px) rotate(-135deg)}
 .faq details p{padding:0 2px 22px;color:var(--sec);max-width:640px}
 
+/* A light call between the parts and the rest: one line and a secondary button down to the waitlist. */
+.mid{padding:120px 0 0;text-align:center}
+.mid p{font:400 var(--fs-28)/1.2 var(--serif);letter-spacing:-.01em}
+.ghost{display:inline-flex;align-items:center;gap:8px;height:48px;margin-top:20px;padding:0 22px;border:1px solid var(--line);border-radius:var(--r-pill);color:var(--text);font-size:var(--fs-17);font-weight:600;text-decoration:none}
+.ghost:hover{background:var(--track)}
+.ghost svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
 /* The end: the mark, the name and the waitlist once more. */
 .final{position:relative;padding:180px 0 170px;text-align:center;overflow:clip}
 .final .wrap{position:relative;z-index:1}
 .final .sun{margin:0 auto 10px}
-.final h2{font-size:clamp(44px,6vw,80px);max-width:760px;margin:0 auto}
+.final h2{font-size:clamp(var(--fs-44),6vw,var(--fs-64));max-width:760px;margin:0 auto}
 .final .sub{margin:18px auto 0;text-align:center}
 .final .wl{margin-top:32px}
 
 /* Footer: the mark and the line from the hero, then three short groups, then who runs Aurin. */
-.site-foot{border-top:1px solid var(--line);padding:56px 0 36px;color:var(--muted);font-size:14px}
+.site-foot{border-top:1px solid var(--line);padding:56px 0 36px;color:var(--muted);font-size:var(--fs-14)}
 .site-foot .top{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:32px}
 .site-foot .brand{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
-.site-foot .brand p{font:400 22px/1.2 Newsreader,"New York",Georgia,serif;color:var(--text);letter-spacing:-.01em;max-width:320px}
-.site-foot h3{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.site-foot .brand p{font:400 var(--fs-20)/1.2 var(--serif);color:var(--text);letter-spacing:-.01em;max-width:320px}
+.site-foot h3{font-size:var(--fs-12);font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
 .site-foot ul{list-style:none;margin:0;padding:0;display:grid;gap:9px}
 .site-foot a{color:var(--sec);text-decoration:none}.site-foot a:hover{color:var(--text)}
-.site-foot .base{display:flex;flex-wrap:wrap;gap:6px 24px;justify-content:space-between;margin-top:44px;padding-top:20px;border-top:1px solid var(--line);font-size:13px}
+.site-foot .base{display:flex;flex-wrap:wrap;gap:6px 24px;justify-content:space-between;margin-top:44px;padding-top:20px;border-top:1px solid var(--line);font-size:var(--fs-12)}
 
 .doc{max-width:760px;padding:72px 24px 96px}
-.doc h1{font-size:52px;margin:0 0 24px}
-.doc h2{font-family:inherit;font-size:22px;font-weight:600;line-height:1.25;letter-spacing:-.01em;margin:40px 0 10px}
+.doc h1{font-size:var(--fs-44);margin:0 0 24px}
+.doc h2{font-family:inherit;font-size:var(--fs-20);font-weight:600;line-height:1.25;letter-spacing:-.01em;margin:40px 0 10px}
 .doc p{color:var(--sec);margin-bottom:12px}
 .doc ul,.doc ol{color:var(--sec);margin:0 0 12px;padding-left:22px}.doc li{margin-bottom:6px}
 
@@ -368,7 +380,9 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 @media (max-width:1180px){
   .ch{grid-template-columns:minmax(0,1fr) 560px}.chapter.flip .ch{grid-template-columns:560px minmax(0,1fr)}
   .vis{--z:.875}
+  .rig{--hz:.9}
 }
+@media (max-width:1060px) and (min-width:961px){.rig{--hz:.8}}
 @media (max-width:960px){
   .pill-nav .links{display:none}
   /* Hero: the words first, the phone under them. */
@@ -376,9 +390,9 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
   .hero .grid{grid-template-columns:1fr;text-align:center}
   .lede{margin-left:auto;margin-right:auto}
   .hero .wl{align-items:center}
-  .stage{height:700px;margin-top:24px}
-  .glass.g3{display:none}
-  .glass.g1{left:max(4px,calc(50% - 300px))}.glass.g2{right:max(4px,calc(50% - 300px))}
+  .stage{margin-top:48px}
+  /* The mark is already in the nav: the hero starts with the words and the phone. */
+  .hero .sun{display:none}
   .morning{padding-top:32px}
   /* Chapters: the words, then the phone with its piece over the lower part, then the steps. */
   .chapter{padding-top:110px}
@@ -394,24 +408,27 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
   .opener{padding-top:110px}.chapter.opens{padding-top:64px}
   .sun{margin:-16px auto -8px}
-  .muscles,.connect,.privacy,#faq{padding-top:110px}
+  .muscles,.connect,.privacy,#faq,.mid{padding-top:110px}
   .rd{max-width:none}
   .faq .side{position:static}
 }
 @media (max-width:560px){
   .wrap{padding:0 16px}
-  .nav-cta{height:32px;padding:0 12px;font-size:13px}
+  .nav-cta{height:36px;padding:0 14px}
   .hero{padding-top:110px}
-  .lede,.sub{font-size:18px}
-  .stage{height:640px}
-  .opener .cards{width:100%;max-width:420px}.opener .sub{font-size:20px}
+  .lede,.sub{font-size:var(--fs-17)}
+  /* On a phone the app comes right under the line, before the waitlist (the nav's Join is always there). */
+  .hero .grid{gap:0}.hero .copy{display:contents}.hero .kicker{justify-self:center}
+  .hero .stage{order:1;margin-top:32px}.hero .cta{order:2;margin-top:32px}
+  .rig{width:322px;height:672px;--hz:.8}
+  .rig .device{left:0}
+  .opener .cards{width:100%;max-width:420px}.opener .sub{font-size:var(--fs-20)}
   .acts-nav{bottom:12px;padding:9px 14px 9px 14px;gap:12px}
   /* On a phone the floating cards would cover the real screen's numbers. */
   .glass{display:none}
-  .step .tt{font-size:24px}
   .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
   .panels{padding:20px}
-  .rd a{width:96px}.rd figcaption{font-size:14px}
+  .rd a{width:96px}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 `;
@@ -456,7 +473,7 @@ const store = id => `<form class="wl" action="/waitlist" method="post" novalidat
 // on its own and the steps still switch screens when picked.
 const siteScript = `<script>(function(){var r=document.documentElement;r.classList.add('js');
 var still=matchMedia('(prefers-reduced-motion: reduce)').matches,IO='IntersectionObserver' in window;
-if(IO){var hb=document.querySelector('.hero .wl'),sh=document.querySelector('.site-head');if(hb&&sh)new IntersectionObserver(function(es){sh.classList.toggle('away',!es[0].isIntersecting);}).observe(hb);}
+if(IO){var sh=document.querySelector('.site-head'),cta=[].slice.call(document.querySelectorAll('.wl,.mid .ghost')),seen=new Set();if(sh&&cta.length){var co=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)seen.add(e.target);else seen.delete(e.target);});sh.classList.toggle('away',!seen.size);});cta.forEach(function(el){co.observe(el);});}}
 if(IO){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
 document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});}else document.querySelectorAll('.reveal').forEach(function(el){el.classList.add('in');});
 // Each chapter's stage is drawn at one size and scaled to the window.
@@ -665,8 +682,8 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // The overview follows the app: Today in the hero, one morning said as a sentence, then a chapter per area
 // of the app (its words on one side, a phone with its screens on the other), the muscles, the connections,
 // privacy and questions. The numbers are one believable morning, the same everywhere.
-// Google's app verification reads this disclosure on the homepage. Aurin is not going through Google's
-// verification (2026-10-24), so it stays off the overview; before asking Google to verify the app, set this to true.
+// Google's app verification reads this disclosure on the homepage, so it stays on the overview while Google
+// verifies the app (submitted 2026-10-25); after that this can go back to false.
 // The text stays word for word (tests/site-pages.test.mjs).
 // Real days: the owner's own screens (light mode, October 2026), one beside the sample day in the part
 // of the overview it belongs to: [image, width, height, alt, caption].
@@ -694,7 +711,23 @@ export const googleDisclosure = () => `<div class="card disclosure reveal" lang=
 export function overviewPage(request) {
   const {lang, origin} = pageLang(request);
   // A screen of the app: a screenshot taken in CI from the sample data (public/site/app/).
-  const shot = (name, lazy = true) => `<img src="/site/app/${name}.webp" alt="" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
+  const SHOT_ALT = {
+    today: 'Aurin’s Today screen: readiness 78, sleep 7:12, strain 8.4 and HRV 64 ms',
+    'readiness-parts': 'Aurin’s readiness: what sleep, resting heart rate and HRV each add to or take from the score',
+    'journal-impact': 'Aurin’s journal: what a sauna, a late meal or alcohol does to your mornings',
+    training: 'Aurin’s training week: an activity planned for every day',
+    builder: 'Aurin’s workout builder: the day, the length and the focus of a gym workout',
+    'gym-day': 'A gym workout in Aurin: warm-up, exercises, cardio and stretching in order',
+    'training-mode': 'Aurin’s training mode: every set filled in with its weight, reps and plates',
+    'training-set': 'Aurin’s training mode: sets ticked off one by one',
+    'training-rest': 'Aurin’s rest timer counting down between sets, with the next exercise',
+    'food-day': 'Aurin’s food day: a calorie target that moves with training, and the meals logged',
+    'food-add': 'Adding food in Aurin: a photo of the plate, a barcode or a search',
+    sleep: 'A night in Aurin: deep, REM and light sleep, when you fell asleep and woke up',
+    'sleep-need': 'Aurin’s sleep need for tonight and what made it grow',
+    bedtime: 'Aurin’s bedtime dial: the moon for bedtime, the sun for the alarm',
+    'bedtime-goal': 'Picking tonight’s sleep in Aurin: catch up, as usual or at least seven hours'};
+  const shot = (name, lazy = true) => `<img src="/site/app/${name}.webp" alt="${SHOT_ALT[name] || ''}" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
   // The chapters, one per area of the app: [section id, eyebrow, headline, line, tone, glow, steps]. Each step is
   // [the phone's screen, the live demo beside it (site-demos.js), how far down the stage, title, text, ms it
   // shows]. A screen is the app's screenshot (public/site/app/), or "html:" and a screen built in site-demos.js
@@ -737,7 +770,7 @@ export function overviewPage(request) {
     return `<section id="${id}" class="chapter${n % 2 ? ' flip' : ''}${multi ? ' multi' : ''}${eyebrow ? '' : ' opens'}" style="--tone:var(--${tone});--glow:var(--${glow})"><div class="wrap ch">
 <div class="head reveal">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h2 class="big">${h}</h2>${subs}</div>
 <div class="vis-wrap"><div class="vis"><div class="glow"></div>
-<div class="device" aria-hidden="true"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}">${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>
+<div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}"${screen.startsWith('html:') ? ' aria-hidden="true"' : ''}>${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>
 ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
 </div></div>
 <ol class="steps">${steps}</ol>
@@ -868,12 +901,12 @@ ${sun(104)}
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
 <div class="cta">${store('top')}<p class="note">We invite people to the test version in TestFlight. Testing costs nothing.</p></div>
 </div>
-<div class="stage">
+<div class="stage"><div class="rig">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
 <div class="glass g2" aria-hidden="true"><div class="k">Sleep</div><div class="v">${day.sleep}</div><div class="d sleep">score ${day.sleepScore}</div></div>
 <div class="glass g3" aria-hidden="true"><div class="k">Coach</div><div style="margin-top:4px">Go all in on strength today.</div></div>
 <div class="device" role="img" aria-label="Aurin on a phone: the Today screen with readiness ${day.readiness}, how you feel, the weather, sleep, strain and HRV"><div class="bezel"><div class="screen" aria-hidden="true"><div class="scr on">${shot('today', false)}</div></div></div></div>
-</div>
+</div></div>
 </div>
 </div>
 
@@ -882,6 +915,8 @@ ${sun(104)}
 </div></section>
 
 ${ACT_LIST.map(a => act(a) + '\n' + a[4].map(id => id === 'svaly' ? muscles : chapter(scenes.find(x => x[0] === id), scenes.findIndex(x => x[0] === id))).join('\n')).join('\n')}
+
+<section class="mid"><div class="wrap reveal"><p>Try it on your own mornings.</p><a class="ghost" href="#join">Join the waitlist ${ARROW}</a></div></section>
 ${actNav}
 
 <section id="propojeni" class="connect"><div class="wrap">
