@@ -8,7 +8,112 @@ struct BarStyle {
     var dashed = false
 }
 
+/// A value on a detail chart's scale: a hairline across (unless `line` is
+/// false) and its text in a column on the right.
+struct ScaleTick: Hashable {
+    let value: Double
+    let text: String
+    var color: Color = Palette.faint
+    var line = true
+}
+
+/// The column on the right that holds a detail chart's scale.
+let scaleWidth: CGFloat = 40
+
+/// Hairlines and their values for a chart `width` wide (the column comes on
+/// top of it), `y` turning a value into its height from the chart's top.
+struct ChartScale: View {
+    let ticks: [ScaleTick]
+    let width: CGFloat
+    let y: (Double) -> CGFloat
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ForEach(ticks, id: \.self) { t in
+                if t.line {
+                    Rectangle().fill(Palette.hairline).frame(width: width, height: 1).offset(y: y(t.value))
+                }
+                Text(verbatim: t.text)
+                    .font(.system(size: 9, weight: t.line ? .regular : .semibold))
+                    .foregroundStyle(t.color)
+                    .lineLimit(1).fixedSize()
+                    .frame(height: 12)
+                    .offset(x: width + 6, y: y(t.value) - 6)
+            }
+        }
+    }
+}
+
+/// Labels under a chart at fractions of its width ("Aug 1" under its day).
+struct ChartDates: View {
+    let marks: [(at: Double, text: String)]
+    var trailing: CGFloat = 0
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width - trailing
+            ForEach(marks.indices, id: \.self) { i in
+                Text(verbatim: marks[i].text)
+                    .font(.system(size: 9))
+                    .foregroundStyle(Palette.faint)
+                    .lineLimit(1).fixedSize()
+                    .position(x: min(max(w * marks[i].at, 14), w - 14), y: 6)
+            }
+        }
+        .frame(height: 12)
+    }
+}
+
+/// A row of short coloured lines with their names ("— Fitness — Fatigue"),
+/// then an optional note on the right ("6 wk") when the row has room for it.
+struct ChartLegend: View {
+    let items: [(color: Color, text: String)]
+    var note: String? = nil
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            row(note: note)
+            row(note: nil)
+        }
+        .font(.system(size: 9))
+        .foregroundStyle(Palette.faint)
+    }
+
+    private func row(note: String?) -> some View {
+        HStack(spacing: 8) {
+            ForEach(items.indices, id: \.self) { i in
+                HStack(spacing: 4) {
+                    Capsule().fill(items[i].color).frame(width: 10, height: 2.5)
+                    Text(verbatim: items[i].text).fixedSize()
+                }
+            }
+            Spacer(minLength: note == nil ? 0 : 6)
+            if let note { Text(verbatim: note).fixedSize() }
+        }
+    }
+}
+
+/// The two ends of a small chart's time ("6 months ago" … "today").
+struct ChartSpan: View {
+    let start: String
+    var end: String = L10n.tr("dnes")
+
+    var body: some View {
+        HStack {
+            Text(verbatim: start)
+            Spacer(minLength: 4)
+            Text(verbatim: end)
+        }
+        .font(.system(size: 9))
+        .foregroundStyle(Palette.faint)
+        .lineLimit(1)
+    }
+}
+
 /// Vertical bars with an optional dashed target line and labels underneath.
+/// The dashed line says what it is (`targetLabel`, "goal 10,000"); a caption
+/// above the bars says what they count ("TSS per week"); a detail screen adds
+/// its scale on the right (`scale`).
 struct BarChart: View {
     let values: [Double]
     let styles: [BarStyle]
@@ -20,13 +125,25 @@ struct BarChart: View {
     var highlighted: Int? = nil
     var spacing: CGFloat = 4
     var height: CGFloat = 64
+    var targetLabel: String? = nil
+    /// Where the label sits over the line: on the left when the newest bar
+    /// (on the right) would hide it.
+    var targetLabelAlignment: Alignment = .trailing
+    var caption: String? = nil
+    var scale: [ScaleTick] = []
 
     var body: some View {
         let top = hi ?? (values.max() ?? 1)
+        let trailing = scale.isEmpty ? 0 : scaleWidth
         VStack(spacing: 4) {
             GeometryReader { geo in
                 let h = geo.size.height
+                let w = geo.size.width - trailing
                 ZStack(alignment: .bottomLeading) {
+                    if !scale.isEmpty {
+                        ChartScale(ticks: scale, width: w) { h * (1 - scaled($0, lo, top)) }
+                            .frame(width: geo.size.width, height: h, alignment: .topLeading)
+                    }
                     HStack(alignment: .bottom, spacing: spacing) {
                         ForEach(values.indices, id: \.self) { i in
                             let style = styles[min(i, styles.count - 1)]
@@ -40,15 +157,35 @@ struct BarChart: View {
                             }
                         }
                     }
+                    .frame(width: w)
                     if let target {
                         DashedLine()
                             .stroke(targetColor, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                            .frame(height: 1)
+                            .frame(width: w, height: 1)
                             .offset(y: -h * scaled(target, lo, top))
+                        if let targetLabel {
+                            Text(verbatim: targetLabel)
+                                .font(.system(size: 9))
+                                .foregroundStyle(targetColor)
+                                .lineLimit(1).fixedSize()
+                                .padding(.horizontal, 2)
+                                .background(Palette.card.opacity(0.85), in: Capsule())
+                                .frame(width: w, alignment: targetLabelAlignment)
+                                .offset(y: -h * scaled(target, lo, top) - 3)
+                        }
                     }
                 }
             }
             .frame(height: height)
+            .overlay(alignment: .topLeading) {
+                if let caption {
+                    Text(verbatim: caption)
+                        .font(.system(size: 9))
+                        .foregroundStyle(Palette.faint)
+                        .lineLimit(1).fixedSize()
+                        .offset(y: -14)
+                }
+            }
             if let labels {
                 HStack(spacing: spacing) {
                     ForEach(labels.indices, id: \.self) { i in
@@ -62,6 +199,7 @@ struct BarChart: View {
                             .frame(maxWidth: .infinity)
                     }
                 }
+                .padding(.trailing, trailing)
             }
         }
         .accessibilityHidden(true)
@@ -121,6 +259,8 @@ struct LineChart: View {
 }
 
 /// Weighings as faint dots, the smoothed trend as a line, the goal dashed.
+/// With `scale` (the detail) the scale stands on the right and the goal is
+/// one of its values instead of a label over the line.
 struct TrendDotsChart: View {
     let raw: [Double]
     let trend: [Double]
@@ -128,13 +268,18 @@ struct TrendDotsChart: View {
     var lo: Double
     var hi: Double
     var height: CGFloat = 64
+    var scale: [ScaleTick] = []
 
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
-            let x = { (i: Int, n: Int) in 3 + (size.width - 6) * CGFloat(i) / CGFloat(max(n - 1, 1)) }
+            let width = size.width - (scale.isEmpty ? 0 : scaleWidth)
+            let x = { (i: Int, n: Int) in 3 + (width - 6) * CGFloat(i) / CGFloat(max(n - 1, 1)) }
             let y = { (v: Double) in 3 + (size.height - 6) * (1 - scaled(v, lo, hi)) }
             ZStack(alignment: .topLeading) {
+                if !scale.isEmpty {
+                    ChartScale(ticks: scale, width: width, y: y)
+                }
                 ForEach(raw.indices, id: \.self) { i in
                     Circle().fill(Palette.amberBar.opacity(0.4)).frame(width: 4, height: 4)
                         .position(x: x(i, raw.count), y: y(raw[i]))
@@ -144,13 +289,15 @@ struct TrendDotsChart: View {
                 if let goal {
                     DashedLine()
                         .stroke(Palette.green, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        .frame(height: 1)
+                        .frame(width: width, height: 1)
                         .offset(y: y(goal))
-                    Text(L10n.f("cíl %@", goal.formatted(.number.precision(.fractionLength(0)).locale(Fmt.locale))))
-                        .font(.system(size: 9))
-                        .foregroundStyle(Palette.green)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .offset(y: y(goal) - 13)
+                    if scale.isEmpty {
+                        Text(L10n.f("cíl %@", goal.formatted(.number.precision(.fractionLength(0)).locale(Fmt.locale))))
+                            .font(.system(size: 9))
+                            .foregroundStyle(Palette.green)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .offset(y: y(goal) - 13)
+                    }
                 }
             }
         }
@@ -166,6 +313,54 @@ struct DashedLine: Shape {
             p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
         }
     }
+}
+
+/// Round values inside lo...hi for a detail's scale, about `count` of them,
+/// 1, 2, 2.5 or 5 × 10ⁿ apart.
+func scaleValues(_ lo: Double, _ hi: Double, count: Int = 4) -> [Double] {
+    guard hi > lo, count > 0 else { return [] }
+    let raw = (hi - lo) / Double(count)
+    let magnitude = pow(10, floor(log10(raw)))
+    let step = [1, 2, 2.5, 5, 10].map { $0 * magnitude }.first { $0 >= raw * 0.75 } ?? 10 * magnitude
+    var value = (lo / step).rounded(.up) * step
+    var out: [Double] = []
+    while value <= hi + step * 1e-6 {
+        out.append(value)
+        value += step
+    }
+    return out
+}
+
+/// A detail scale's ticks: the round values with their text, `extra` (a goal,
+/// an average) in place of any round value too close to it.
+func scaleTicks(_ lo: Double, _ hi: Double, count: Int = 4, extra: [ScaleTick] = []) -> [ScaleTick] {
+    let values = scaleValues(lo, hi, count: count)
+    let step = values.count > 1 ? values[1] - values[0] : hi - lo
+    let digits = step < 1 ? 1 : 0
+    let near = (hi - lo) / 12
+    let round = values.filter { v in !extra.contains { abs($0.value - v) < near } }
+        .map { ScaleTick(value: $0, text: Fmt.decimal($0, digits: digits)) }
+    return round + extra
+}
+
+/// The first point of each month along a chart drawn one point per step:
+/// "Aug" at its place. The first point names its month only when the month
+/// starts there; a month too close to the one before takes its place.
+func monthMarks(_ dates: [String]) -> [(at: Double, text: String)] {
+    guard dates.count > 1 else { return [] }
+    var out: [(at: Double, text: String)] = []
+    var month = ""
+    for (i, iso) in dates.enumerated() {
+        let m = String(iso.prefix(7))
+        guard m != month, let date = ISODay.date(iso) else { continue }
+        month = m
+        if i == 0, Int(iso.suffix(2)) ?? 1 > 3 { continue }
+        let at = Double(i) / Double(dates.count - 1)
+        let text = DateFormatters.make("LLL", locale: Fmt.locale, timeZone: TimeZone(identifier: "UTC")!).string(from: date)
+        if let last = out.last, at - last.at < 0.12 { out.removeLast() }
+        out.append((at, text))
+    }
+    return out
 }
 
 func scaled(_ v: Double, _ lo: Double, _ hi: Double) -> CGFloat {

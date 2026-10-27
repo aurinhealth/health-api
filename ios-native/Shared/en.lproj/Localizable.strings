@@ -3083,3 +3083,14 @@
 "Nedorazilo" = "Didn’t arrive";
 "Je v kalendáři Intervals.icu" = "In your Intervals.icu calendar";
 "Neodesláno" = "Not sent";
+
+/* Charts: what a line or a scale stands for */
+"potřeba %@" = "need %@";
+"obvykle %@" = "usually %@";
+"6 týdnů" = "6 weeks";
+"před půl rokem" = "6 months ago";
+"%@+ vysoká" = "%@+ high";
+"%@ střední" = "%@ moderate";
+"pod %@ nízká" = "below %@ low";
+"prům. %@" = "avg %@";
+"%@ cíl" = "%@ goal";
