@@ -72,3 +72,18 @@ test("without context the advice is the score's alone", () => {
   assert.equal(isHardSession({ title: "Upper body", sport: "strength" }), false);
   assert.equal(isHardSession({ title: "Threshold 4×8 min", sport: "ride" }), true);
 });
+
+test("Today's coach card says what the morning push says", async () => {
+  const { readinessSummary } = await import("../src/app-today.js");
+  const changed = en({ score: 68, zone: "green", ...night, date, context: { activities: threeGymDays } }).changed;
+  assert.deepEqual(changed, { headline: "Give your legs a break", recommendation: "3 gym days in a row and a short night. Upper body or an easy Z2 ride, no legs today." });
+  const coach = { headline: "How to start today", text: "Sleep 5 h 54 min.", recommendation: "Nothing is planned today: room to recover." };
+  assert.deepEqual(readinessSummary(coach, { zone: "green" }, null, false, false, changed), { ...coach, ...changed });
+  // Nothing changed by the days before: the coach's own card.
+  assert.equal(en({ score: 86, zone: "green", ...night, sleep: { minutes: 480 }, date, context: { activities: [] } }).changed, undefined);
+  assert.equal(readinessSummary(coach, { zone: "green" }, null, false, false, null), coach);
+  // Once today's training is done, the coach's recovery card stays.
+  assert.equal(readinessSummary(coach, { zone: "green" }, null, true, true, changed), coach);
+  // Red and illness keep their own lines.
+  assert.equal(withLang("en", () => readinessSummary(coach, { zone: "red" }, null, false, false, changed)).headline, "A day to recover");
+});
