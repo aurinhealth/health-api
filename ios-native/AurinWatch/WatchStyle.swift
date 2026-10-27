@@ -27,9 +27,9 @@ enum W {
         static let strain = Color(hex: 0x3A2A17)
     }
 
-    static func glow(_ color: Color) -> some View {
+    /// A shape style, for containerBackground: the colour fades into black.
+    static func glow(_ color: Color) -> RadialGradient {
         RadialGradient(colors: [color, .black], center: UnitPoint(x: 0.5, y: -0.05), startRadius: 0, endRadius: 150)
-            .background(Color.black)
     }
 
     static func zoneColor(_ zone: String?) -> Color {
