@@ -14,7 +14,7 @@ import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
 const siteCss = `
 @font-face{font-family:Newsreader;src:url(/site/fonts/newsreader.woff2) format("woff2");font-display:swap}
-*{box-sizing:border-box}html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;overflow-x:clip}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;overflow-x:clip}
 body{margin:0;background:var(--bg);color:var(--text);font:var(--fs-17)/1.5 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:clip}
 a{color:var(--primary-text)}
 img{max-width:100%}
@@ -339,6 +339,7 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 /* Motion, only with JS and without reduced motion: the headline rises word by word, the sun's rings spread,
    content fades up as it scrolls in, a step's bar fills while it is shown and its piece floats. */
 @media (prefers-reduced-motion:no-preference){
+  html{scroll-behavior:smooth}
   .js .hero h1 .w>span{transform:translateY(105%);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(var(--i) * 40ms)}
   @keyframes rise{to{transform:none}}
   .js .hero .lede,.js .hero .cta,.js .hero .kicker{opacity:0;animation:fade .5s .15s forwards}
@@ -471,8 +472,10 @@ const store = id => `<form class="wl" action="/waitlist" method="post" novalidat
 // The page's motion: content fades up as it scrolls in, each chapter's steps take turns on its phone,
 // the connections take turns. Without JS everything is simply shown; with reduced motion nothing moves
 // on its own and the steps still switch screens when picked.
-const siteScript = `<script>(function(){var r=document.documentElement;r.classList.add('js');
-var still=matchMedia('(prefers-reduced-motion: reduce)').matches,IO='IntersectionObserver' in window;
+// Set before the first paint, so content that rises in is hidden from the start instead of shown, hidden and shown again.
+const headScript = `<script>document.documentElement.classList.add('js')</script>`;
+const siteScript = `<script>(function(){var r=document.documentElement;
+var rm=matchMedia('(prefers-reduced-motion: reduce)'),still=rm.matches,IO='IntersectionObserver' in window;if(rm.addEventListener)rm.addEventListener('change',function(e){still=e.matches;});
 if(IO){var sh=document.querySelector('.site-head'),cta=[].slice.call(document.querySelectorAll('.wl,.mid .ghost')),seen=new Set();if(sh&&cta.length){var co=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)seen.add(e.target);else seen.delete(e.target);});sh.classList.toggle('away',!seen.size);});cta.forEach(function(el){co.observe(el);});}}
 if(IO){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
 document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});}else document.querySelectorAll('.reveal').forEach(function(el){el.classList.add('in');});
@@ -546,7 +549,7 @@ r.classList.add('tabs');pick(0);if(!still)timer=setInterval(function(){pick((cur
 // Muscles: frame k of 72 is the figure turned k·5°; ids.png holds, per frame, which muscle each pixel is
 // (a quarter of the size, the index in NAMES). The frames load when the figure comes near.
 var fig=document.querySelector('.fig');if(!fig)return;
-var N=72,IW=160,IH=250,base=fig.dataset.base,still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+var N=72,IW=160,IH=250,base=fig.dataset.base,rm=matchMedia('(prefers-reduced-motion: reduce)'),still=rm.matches;if(rm.addEventListener)rm.addEventListener('change',function(e){still=e.matches;});
 var NAMES=['quads','hamstrings','glutes','calves','adductors','abductors','chest','back','lower_back','traps','shoulders','side_delts','rear_delts','biceps','triceps','forearms','core','other','bone'];
 var LABEL={quads:'Quads',hamstrings:'Hamstrings',glutes:'Glutes',calves:'Calves',adductors:'Adductors',abductors:'Abductors',chest:'Chest',back:'Back',lower_back:'Lower back',traps:'Traps',shoulders:'Shoulders',side_delts:'Side delts',rear_delts:'Rear delts',biceps:'Biceps',triceps:'Triceps',forearms:'Forearms',core:'Core'};
 var TIRED='var(--rust)',RECOVERING='var(--amber)',RESTED=['rested','var(--green)'];
@@ -633,6 +636,7 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preload" href="/site/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/site/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin>
+${headScript}
 <style>${themeTokens}${siteCss}${demoCss}</style>
 </head>
 <body>
@@ -655,7 +659,7 @@ ${demoScript}
 ${siteScript}
 ${turnstileScript}
 </body></html>`;
-  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(demoScript + siteScript, [TURNSTILE])}});
+  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(headScript + demoScript + siteScript, [TURNSTILE])}});
 }
 
 // Pages take the request (to pick the host, and ?lang=cs on the pages that have Czech) or nothing
@@ -804,20 +808,20 @@ ${REAL_DAYS[id] ? realDay(id) : ''}
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
   // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
   const services = [
-    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="" width="40" height="40">',
+    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="" width="40" height="40" loading="lazy">',
       reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['scale', 'weight']],
       sends: [['bike', 'workouts'], ['scale', 'weight'], ['meal', 'food'], ['drop', 'water']]},
-    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" width="40" height="40" class="pad">',
+    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" width="40" height="40" loading="lazy" class="pad">',
       reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['meal', 'food']],
       sends: [['meal', 'food'], ['drop', 'drinks'], ['bike', 'workouts, if you allow'], ['scale', 'weight, if you allow']]},
-    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="" width="40" height="40">',
+    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="" width="40" height="40" loading="lazy">',
       reads: [['bolt', 'workouts with power'], ['calendar', 'plan'], ['zones', 'zones'], ['scale', 'weight']],
       sends: [['calendar', 'planned workouts'], ['flame', 'calorie target'], ['scale', 'weight'], ['training', 'sleep, HRV and daily values']]},
-    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="40" height="40"></span>',
+    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="40" height="40" loading="lazy"></span>',
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'VO₂max'], ['thermo', 'temperature']], sends: [], none: 'nothing, Aurin only reads the ring'},
-    {id: 'whoop', name: 'WHOOP', logo: '<img src="/site/logos/whoop.svg" alt="" width="40" height="40">',
+    {id: 'whoop', name: 'WHOOP', logo: '<img src="/site/logos/whoop.svg" alt="" width="40" height="40" loading="lazy">',
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'breathing rate'], ['drop', 'blood oxygen']], sends: [], none: 'nothing, Aurin only reads WHOOP'},
-    {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="40" height="40"></span>',
+    {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="40" height="40" loading="lazy"></span>',
       reads: [['bike', 'finished rides and runs'], ['bolt', 'power and TSS'], ['heart', 'heart rate']],
       sends: [['calendar', 'planned workouts, to ELEMNT and KICKR']]}];
   // The flow: each service on the left sends what Aurin reads along a curve into the mark, and what Aurin sends
@@ -910,7 +914,7 @@ ${sun(104)}
 </div>
 </div>
 
-<section class="morning"><div class="wrap reveal"><div class="eyebrow">One morning with Aurin</div>
+<section class="morning"><div class="wrap"><div class="eyebrow">One morning with Aurin</div>
 <p class="say">You slept <b class="sleep">${day.sleep}</b>, your HRV is <b class="up">${day.hrv - day.hrvBaseline} ms above normal</b> and your readiness is <b class="up">${day.readiness}</b>. So the coach says: <em>go all in on strength today.</em></p>
 </div></section>
 

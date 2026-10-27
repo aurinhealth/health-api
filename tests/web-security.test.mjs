@@ -104,7 +104,8 @@ test("the website runs its own scripts and only them", async () => {
     // Every inline script of the page, nothing more, and Cloudflare Turnstile's own script.
     assert.equal(policy, scriptPolicy(html, ["https://challenges.cloudflare.com"]));
     assert.match(html, /<script src="https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js\?render=explicit&onload=aurinTurnstile" async defer><\/script>/);
-    assert.equal(policy.match(/'sha256-/g).length, 3);
+    // The js class set in the head, the demos, the page's motion and the muscle figure.
+    assert.equal(policy.match(/'sha256-/g).length, 4);
     assert.doesNotMatch(policy, /unsafe-inline|unsafe-eval/);
     // Each inline script is valid JavaScript (a quote escaped once too few in a template breaks the whole page).
     for (const [, code] of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) assert.doesNotThrow(() => new Function(code));
