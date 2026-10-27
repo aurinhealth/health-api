@@ -47,13 +47,15 @@ final class WatchStore: NSObject, ObservableObject {
         if let snapshot, snapshot.date == value.date, snapshot.updated > value.updated { return }
         snapshot = value
         UserDefaults.standard.set(data, forKey: Self.savedKey)
+        WatchAlarm.shared.schedule()
     }
 
     /// A drink of water from the Food page: shown at once, sent to the iPhone
     /// now when it is in reach, else as soon as it is.
     func addWater(ml: Int) {
-        if var value = snapshot, value.food != nil {
-            value.food?.water = (value.food?.water ?? 0) + Double(ml)
+        if var value = snapshot, var food = value.food {
+            food.water = (food.water ?? 0) + Double(ml)
+            value.food = food
             value.updated = Date()
             snapshot = value
             if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
@@ -69,6 +71,30 @@ final class WatchStore: NSObject, ObservableObject {
         } else {
             session.transferUserInfo(message)
         }
+    }
+
+    /// The wake time the iPhone just saved, until its new Today comes.
+    func moveAlarm(wake: String, scope: String) {
+        guard var value = snapshot, var alarm = value.alarm else { return }
+        switch scope {
+        case "once":
+            alarm.wake = wake
+            alarm.wakeOnce = true
+        case "weekend":
+            alarm.weekend = wake
+        default:
+            alarm.work = wake
+        }
+        if scope != "once", let evening = alarm.evening, let day = W.day(evening),
+           let morning = Calendar.current.date(byAdding: .day, value: 1, to: day),
+           WatchAlarm.weekend(WatchStore.localDate(morning)) == (scope == "weekend") {
+            alarm.wake = wake
+            alarm.wakeOnce = false
+        }
+        value.alarm = alarm
+        value.updated = Date()
+        snapshot = value
+        if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
     }
 
     nonisolated static func localDate(_ date: Date) -> String {

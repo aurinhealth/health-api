@@ -232,9 +232,11 @@ targets:
         CFBundleDisplayName: Aurin
         NSHealthShareUsageDescription: Aurin na hodinkách čte tep a spálené kalorie během tréninku v posilovně.
         NSHealthUpdateUsageDescription: Aurin uloží trénink z posilovny na hodinkách do Apple Health, s tepem a kaloriemi.
-        # The workout keeps the gym on the screen between sets.
+        # The workout keeps the gym on the screen between sets; the smart
+        # alarm session wakes the user on the watch (WatchAlarm.swift).
         WKBackgroundModes:
           - workout-processing
+          - alarm
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         WKApplication: true

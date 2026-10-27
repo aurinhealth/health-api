@@ -13,7 +13,10 @@ struct AurinWatchApp: App {
                 .environmentObject(store)
                 .task { store.start() }
                 .onChange(of: phase) { _, now in
-                    if now == .active { store.ask() }
+                    if now == .active {
+                        store.ask()
+                        WatchAlarm.shared.schedule()
+                    }
                 }
         }
     }
@@ -21,6 +24,7 @@ struct AurinWatchApp: App {
 
 struct WatchRoot: View {
     @EnvironmentObject private var store: WatchStore
+    @ObservedObject private var alarm = WatchAlarm.shared
 
     var body: some View {
         // By the crown: readiness, the day's training (TrainingPage), food and drink (FoodPage).
@@ -45,9 +49,13 @@ struct WatchRoot: View {
                     case .restingHR: MetricDetail(s: s, metric: .restingHR)
                     case .hrv: MetricDetail(s: s, metric: .hrv)
                     case .strain: StrainDetail(s: s)
+                    case .alarm: AlarmView()
                     }
                 }
             }
+        }
+        .fullScreenCover(isPresented: Binding(get: { alarm.ringing }, set: { if !$0 { alarm.stop() } })) {
+            AlarmRinging()
         }
     }
 }

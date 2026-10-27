@@ -13,6 +13,8 @@ final class WatchBridge: NSObject {
     private var today: TodaySnapshot?
     private var health: HealthSnapshot?
     private var training: TrainingSnapshot?
+    /// The profile's wake times for the watch's alarm (Settings → Sleep).
+    private var profile: JSONObject?
     private var healthLoaded: Date?
     private var loadingHealth = false
     /// The gym days the watch works on (WatchGymBridge.swift).
@@ -47,7 +49,14 @@ final class WatchBridge: NSObject {
         send()
     }
 
+    /// The profile after Settings saved it: new wake times for the watch.
+    func update(profile: JSONObject) {
+        self.profile = profile
+        send()
+    }
+
     func clear() {
+        profile = nil
         today = nil
         health = nil
         training = nil
@@ -74,6 +83,7 @@ final class WatchBridge: NSObject {
             guard api.hasSession else { return }
             // The week for the Training page, when the app has not loaded it yet.
             if training == nil, let week = try? await api.training() { training = week }
+            if let loaded = try? await api.profile() { profile = loaded }
             guard let loaded = try? await api.health() else { send(); return }
             update(loaded)
         }
@@ -95,7 +105,7 @@ final class WatchBridge: NSObject {
     func sendContext() {
         guard watchReady, let session else { return }
         var context: [String: Any] = [:]
-        if let today, let data = Self.snapshot(today, health: health, training: training).encoded() { context[WatchSnapshot.contextKey] = data }
+        if let today, let data = Self.snapshot(today, health: health, training: training, profile: profile).encoded() { context[WatchSnapshot.contextKey] = data }
         if let gym = gymContext { context[WatchGym.replyKey] = gym }
         guard !context.isEmpty else { return }
         try? session.updateApplicationContext(context)
@@ -114,7 +124,7 @@ final class WatchBridge: NSObject {
         }
     }
 
-    static func snapshot(_ today: TodaySnapshot, health: HealthSnapshot?, training: TrainingSnapshot? = nil) -> WatchSnapshot {
+    static func snapshot(_ today: TodaySnapshot, health: HealthSnapshot?, training: TrainingSnapshot? = nil, profile: JSONObject? = nil) -> WatchSnapshot {
         let day = { (points: [Point]) in points.map { WatchSnapshot.Day(date: $0.date, value: $0.value) } }
         let night = health?.sleep.night.flatMap { $0.date == today.date ? $0 : nil }
         let sleep = today.sleep.map { s in
@@ -145,11 +155,17 @@ final class WatchBridge: NSObject {
         let macro = { (m: TodaySnapshot.Macro) in WatchSnapshot.Macro(eaten: m.eaten, target: m.target) }
         let food = WatchSnapshot.Food(kcal: n.kcal, target: n.target, carbs: macro(n.carbs), protein: macro(n.protein), fat: macro(n.fat),
                                       water: n.water.ml, waterTarget: n.water.target)
+        let tonight = health?.sleep.tonight
+        let wakeText = { (key: String) in profile?[key]?.string.flatMap { $0.isEmpty ? nil : $0 } }
+        let alarm = (profile != nil || tonight != nil) ? WatchSnapshot.Alarm(
+            work: wakeText("wakeTime"), weekend: wakeText("wakeTimeWeekend"),
+            evening: tonight?.date, wake: tonight?.wake.map(clock), wakeOnce: tonight?.wakeOnce,
+            bedtime: tonight?.bedtime.map(clock), inBed: tonight?.inBed, sleep: tonight?.sleep ?? tonight?.need) : nil
         return WatchSnapshot(date: today.date, updated: Date(), language: L10n.language,
                              readiness: today.readiness.score, zone: today.readiness.zone,
                              headline: today.summary?.headline, summary: today.summary?.text,
                              sleep: sleep, restingHR: restingHR, hrv: hrv, strain: strain, steps: today.steps.today,
-                             week: week, food: food)
+                             week: week, food: food, alarm: alarm)
     }
 
     /// "23:05" from an ISO time or a clock time.
@@ -203,7 +219,19 @@ extension WatchBridge: WCSessionDelegate {
         let change = (message[WatchGym.changeKey] as? Data).flatMap(WatchGym.Change.decode)
         let options = (message[WatchGym.optionsKey] as? Data).flatMap(WatchGym.OptionsRequest.decode)
         let water = message[WatchSnapshot.waterKey] as? Int
+        let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
+        let onWatch = message[WatchSnapshot.alarmOnWatchKey] as? Bool
         Task { @MainActor in
+            if let alarmChange {
+                let ok = await applyAlarm(alarmChange)
+                replyHandler(["ok": ok])
+                return
+            }
+            if let onWatch {
+                await alarmOnWatch(onWatch)
+                replyHandler(["ok": true])
+                return
+            }
             if let water {
                 await addWater(ml: water)
                 replyHandler(["ok": true])
@@ -230,7 +258,7 @@ extension WatchBridge: WCSessionDelegate {
                 return
             }
             restore()
-            if let today, let data = Self.snapshot(today, health: health, training: training).encoded() {
+            if let today, let data = Self.snapshot(today, health: health, training: training, profile: profile).encoded() {
                 replyHandler([WatchSnapshot.contextKey: data])
             } else {
                 replyHandler([:])
@@ -238,13 +266,15 @@ extension WatchBridge: WCSessionDelegate {
         }
     }
 
-    /// A set or a drink sent while the iPhone was out of reach.
+    /// A set, a drink or the alarm's place sent while the iPhone was out of reach.
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
         let done = (userInfo[WatchGym.doneKey] as? Data).flatMap(WatchGym.Done.decode)
         let water = userInfo[WatchSnapshot.waterKey] as? Int
+        let onWatch = userInfo[WatchSnapshot.alarmOnWatchKey] as? Bool
         Task { @MainActor in
             if let done { await applyGym(done) }
             if let water { await addWater(ml: water) }
+            if let onWatch { await alarmOnWatch(onWatch) }
         }
     }
 }

@@ -44,6 +44,39 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         var target: Double?
     }
 
+    /// The alarm from Settings → Sleep on the iPhone, for the watch's alarm.
+    var alarm: Alarm? = nil
+
+    struct Alarm: Codable, Equatable, Sendable {
+        /// "07:00" on work days and at the weekend; nil without an alarm.
+        var work: String?
+        var weekend: String?
+        /// Tonight: its evening, the wake time for the next morning (maybe
+        /// set for that morning only), the bedtime and the minutes in bed.
+        var evening: String?
+        var wake: String?
+        var wakeOnce: Bool?
+        var bedtime: String?
+        var inBed: Int?
+        /// The sleep tonight plans, minutes.
+        var sleep: Int?
+    }
+
+    /// The watch moves a wake time: for the next morning only ("once"), or
+    /// every work day ("work") or weekend day ("weekend").
+    struct AlarmChange: Codable, Equatable, Sendable {
+        static let key = "alarmChange"
+        var wake: String
+        var scope: String
+        var evening: String?
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> AlarmChange? { try? JSONDecoder().decode(AlarmChange.self, from: data) }
+    }
+
+    /// The watch rings instead of the iPhone (true) or not.
+    static let alarmOnWatchKey = "alarmOnWatch"
+
     /// The watch asks the iPhone to add a drink of water: its ml.
     static let waterKey = "addWater"
 
