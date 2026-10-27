@@ -1468,12 +1468,12 @@ struct TrainingModeView: View {
         } else if !set.warmup, let turn = Self.supersetTurn(next.exercises, from: index) {
             // A superset: A1, B1, A2, B2…, the rest only after each round.
             index = turn.index
-            rest = turn.rest == .none ? 0 : turn.rest == .round ? GymRestSettingsView.between(set, setting: restSets) : restExercises
+            rest = turn.rest == .none ? 0 : turn.rest == .round ? GymRestSettingsView.between(set, setting: restSets) : GymRestSettingsView.before(next.exercises[safe: turn.index], setting: restExercises)
         } else if let exercise = next.exercises[safe: index], exercise.sets.allSatisfy(\.done) {
             // On to the next exercise with sets left, after the longer rest.
             if let after = next.exercises.indices.first(where: { $0 > index && next.exercises[$0].sets.contains { !$0.done } }) {
                 index = after
-                rest = restExercises
+                rest = GymRestSettingsView.before(next.exercises[safe: after], setting: restExercises)
             } else {
                 // The last exercise is done: no rest, the workout is over.
                 rest = 0

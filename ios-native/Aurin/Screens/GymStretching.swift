@@ -544,6 +544,7 @@ struct GymPreferencesGroup: View {
     @State private var goal = "auto"
     @State private var cardio = "start"
     @State private var cardioType = "exercise_bike"
+    @State private var choosingGoal = false
     @State private var error: String?
 
     static let goals = [("strength", "Síla"), ("strength_muscle", "Síla a svaly"), ("muscle", "Svaly"), ("muscle_fitness", "Svaly a kondice"), ("fitness", "Kondice")]
@@ -562,7 +563,9 @@ struct GymPreferencesGroup: View {
 
     private var group: some View {
         SettingsGroup(title: "Trénink na míru") {
-            SettingsPicker(title: "Cíl", selection: $goal, options: goalOptions)
+            Button { choosingGoal = true } label: { goalRow }
+                .buttonStyle(.plain)
+                .sheet(isPresented: $choosingGoal) { GymGoalSheet(goal: $goal, recommended: prefs?.recommendedGoal) }
             SettingsDivider()
             NavigationLink { ExperienceSettingsView() } label: { SettingsRow(title: "Zkušenost", value: experienceValue) }
                 .buttonStyle(.plain)
@@ -621,11 +624,25 @@ struct GymPreferencesGroup: View {
         save(["cardioType": .string(value)], unchanged: saved == value)
     }
 
-    /// "podle sportu · síla a svaly": what the main sport recommends.
-    private var goalOptions: [(String, String)] {
+    /// "Cíl  Auto · Síla a svaly ⌃⌄": opens the sheet with the goals.
+    private var goalRow: some View {
+        HStack(spacing: 12) {
+            Text(L10n.tr("Cíl")).font(.body).foregroundStyle(Palette.ink).layoutPriority(1)
+            Spacer(minLength: 8)
+            Text(goalValue).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.tail)
+            Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+        }
+        .padding(.leading, 16)
+        .padding(.trailing, 14)
+        .frame(minHeight: 50)
+        .contentShape(Rectangle())
+    }
+
+    /// "Auto · Síla a svaly" (what the main sport recommends) or the chosen goal.
+    private var goalValue: String {
+        guard goal == "auto" else { return Self.goals.first { $0.0 == goal }.map { L10n.tr($0.1) } ?? L10n.tr("automaticky") }
         let guess = prefs?.recommendedGoal.flatMap { id in Self.goals.first { $0.0 == id }?.1 }
-        let auto = guess.map { L10n.tr("podle sportu") + " · " + L10n.tr($0).lowercased() } ?? L10n.tr("automaticky")
-        return [("auto", auto)] + Self.goals
+        return guess.map { L10n.f("Auto · %@", L10n.tr($0)) } ?? L10n.tr("Automaticky")
     }
 
     /// "Auto · Mírně pokročilý" or the chosen level: the gym's experience (set in Profil).
@@ -652,6 +669,92 @@ struct GymPreferencesGroup: View {
         Task {
             do { apply(try await model.api.saveGymPreferences(change)); error = nil } catch { self.error = error.localizedDescription }
         }
+    }
+}
+
+/// Cíl: Auto (what the main sport recommends) on top, then each goal with the
+/// reps and rest of its main lifts (src/strength-generator.js goalReps for a
+/// regular lifter, src/strength-timing.js GOAL_RESTS for the heavy sets).
+struct GymGoalSheet: View {
+    @Binding var goal: String
+    let recommended: String?
+    @Environment(\.dismiss) private var dismiss
+
+    static let numbers: [String: (reps: String, rest: String)] = [
+        "strength": ("3–6", "3 min"), "strength_muscle": ("5–8", "2½ min"), "muscle": ("6–10", "2 min"),
+        "muscle_fitness": ("8–12", "1½ min"), "fitness": ("12–15", "1¼ min")
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(L10n.tr("Cíl")).font(Typo.sentence(26, relativeTo: .title2)).foregroundStyle(Palette.ink)
+                    Spacer()
+                    ChromeButton(systemImage: "xmark", label: "Zavřít") { dismiss() }
+                }
+                .padding(.bottom, 6)
+                Button { pick("auto") } label: {
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(verbatim: "Auto").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            Text(autoHint).font(Typo.caption).foregroundStyle(Palette.muted)
+                        }
+                        Spacer(minLength: 8)
+                        check("auto")
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 13)
+                    .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(goal == "auto" ? Palette.ink.opacity(0.7) : .clear, lineWidth: 1.5))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(goal == "auto" ? .isSelected : [])
+                Text(L10n.tr("Nebo vyber")).font(.caption.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
+                    .padding(.horizontal, 4).padding(.top, 8)
+                VStack(spacing: 0) {
+                    ForEach(Array(GymPreferencesGroup.goals.enumerated()), id: \.element.0) { index, item in
+                        if index > 0 { SettingsDivider() }
+                        Button { pick(item.0) } label: {
+                            HStack(spacing: 12) {
+                                Text(L10n.tr(item.1)).font(.body).foregroundStyle(Palette.ink)
+                                Spacer(minLength: 8)
+                                if let numbers = Self.numbers[item.0] {
+                                    Text(L10n.f("%@ opakování · %@", numbers.reps, numbers.rest)).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1)
+                                }
+                                check(item.0)
+                            }
+                            .padding(.horizontal, 16).frame(minHeight: 50)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(goal == item.0 ? .isSelected : [])
+                    }
+                }
+                .cardSurface(cornerRadius: 22)
+            }
+            .padding(20)
+        }
+        .background(Palette.background)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// "Podle tvého sportu: síla a svaly".
+    private var autoHint: String {
+        guard let name = recommended.flatMap({ id in GymPreferencesGroup.goals.first { $0.0 == id }?.1 }) else { return L10n.tr("Podle tvého sportu") }
+        return L10n.f("Podle tvého sportu: %@", L10n.tr(name).lowercased())
+    }
+
+    private func check(_ id: String) -> some View {
+        Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+            .frame(width: 18).opacity(goal == id ? 1 : 0)
+    }
+
+    private func pick(_ id: String) {
+        goal = id
+        dismiss()
     }
 }
 

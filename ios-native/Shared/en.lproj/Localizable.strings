@@ -11,6 +11,7 @@
 "%@ let" = "%@ years";
 "%@ na ruku" = "%@ per dumbbell";
 "%@ od normy" = "%@ from usual";
+"%@ opakování · %@" = "%@ reps · %@";
 "%@ po %@" = "%1$@ by %2$@";
 "%@ týdně" = "%@ a week";
 "%@ z %@ %@ · %@ %@" = "%1$@ of %2$@ %3$@ · %4$@ %5$@";
@@ -134,6 +135,10 @@
 "Do postele" = "Bedtime";
 "Do postele %@" = "Bed by %@";
 "Do postele v %@" = "Bed at %@";
+"Mezi cviky" = "Between exercises";
+"Nebo vyber" = "Or pick one";
+"Podle tvého sportu" = "From your sport";
+"Podle tvého sportu: %@" = "From your sport: %@";
 "V tomto jídle zatím nic není. Přidej první potravinu." = "This meal is empty. Add a food.";
 "Doba do usnutí" = "Time to fall asleep";
 "Dohledat AI" = "AI lookup";
@@ -440,6 +445,7 @@
 "Prahy a zóny se po uložení pošlou do Intervals.icu" = "Thresholds and zones are sent to Intervals.icu after saving";
 "Pravidelnost · %@ nocí" = "Consistency · %@ nights";
 "Pražský půlmaraton" = "Chicago Marathon";
+"Výživa" = "Nutrition";
 "Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit." = "Everything Aurin keeps for you goes and can't be restored.";
 "Smazat účet Aurin" = "Delete your Aurin account";
 "Probrat" = "Discuss";
@@ -459,7 +465,6 @@
 "Průměr 7 dní" = "7-day average";
 "Pás" = "Treadmill";
 "PŘ" = "RDY";
-"Před dalším cvikem" = "Before the next exercise";
 "Předchozí" = "Previous";
 "Předchozí den" = "Previous day";
 "Předchozí konverzace" = "Previous conversations";

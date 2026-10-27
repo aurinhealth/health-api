@@ -243,6 +243,12 @@ final class SnapshotTests: XCTestCase {
         try render("settings-goals", height: 1300) { NavigationStack { GoalsSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-zones", height: 700) { NavigationStack { ZonesSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-gym", height: 700) { NavigationStack { GymSettingsView() }.environment(AppModel(demo: true)) }
+        try render("settings-gym-goal", height: 760) { GymGoalSheet(goal: .constant("auto"), recommended: "strength_muscle") }
+        try render("settings-rest-lengths", height: 180) { RestLengthGrid(value: .constant(GymRestSettingsView.byExercise)) {}.padding(20) }
+        XCTAssertEqual(GymRestSettingsView.short(90), "1:30")
+        XCTAssertEqual(GymRestSettingsView.short(120), "2 min")
+        XCTAssertEqual(GymRestSettingsView.before(nil, setting: 45), 45)
+        XCTAssertEqual(GymRestSettingsView.before(nil, setting: GymRestSettingsView.byExercise), 120)
         try render("gym-stretching", height: 520) {
             StretchingCard(stretching: GymStretching(minutes: 5, items: [
                 .init(id: "hip_flexor", name: "Kyčelní flexory v kleku", seconds: 30, sides: true, rounds: 2, steps: ["Klekni si na jedno koleno."]),
