@@ -49,6 +49,28 @@ final class WatchStore: NSObject, ObservableObject {
         UserDefaults.standard.set(data, forKey: Self.savedKey)
     }
 
+    /// A drink of water from the Food page: shown at once, sent to the iPhone
+    /// now when it is in reach, else as soon as it is.
+    func addWater(ml: Int) {
+        if var value = snapshot, value.food != nil {
+            value.food?.water = (value.food?.water ?? 0) + Double(ml)
+            value.updated = Date()
+            snapshot = value
+            if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
+        }
+        guard WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated else { return }
+        let message: [String: Any] = [WatchSnapshot.waterKey: ml]
+        if session.isReachable {
+            session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in
+                WCSession.default.transferUserInfo(message)
+            })
+        } else {
+            session.transferUserInfo(message)
+        }
+    }
+
     nonisolated static func localDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)

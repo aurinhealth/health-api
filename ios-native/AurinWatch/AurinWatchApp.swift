@@ -23,7 +23,7 @@ struct WatchRoot: View {
     @EnvironmentObject private var store: WatchStore
 
     var body: some View {
-        // By the crown: readiness, then the day's training (TrainingPage).
+        // By the crown: readiness, the day's training (TrainingPage), food and drink (FoodPage).
         NavigationStack {
             TabView {
                 if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(Date()) {
@@ -32,6 +32,7 @@ struct WatchRoot: View {
                     WaitingView(stale: store.snapshot != nil)
                 }
                 TrainingPage()
+                FoodPage()
             }
             .tabViewStyle(.verticalPage)
             // Here, not inside a page: the vertical pages are lazy, and a

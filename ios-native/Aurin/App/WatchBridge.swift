@@ -81,6 +81,16 @@ final class WatchBridge: NSObject {
 
     private func send() { sendContext() }
 
+    /// A glass of water from the watch's Food page: through the app's outbox
+    /// when it runs (Today reloads and comes back to the watch), else straight to the server.
+    func addWater(ml: Int) async {
+        if let model = AppModel.live {
+            model.addDrinkToday(ml: ml, kind: "water")
+            return
+        }
+        _ = try? await APIClient().sendQueued(AppModel.drinkItem(ml: ml, kind: "water", date: AppModel.localDate(Date())))
+    }
+
     /// Today and today's gym (WatchGymBridge.swift) as the application context.
     func sendContext() {
         guard watchReady, let session else { return }
@@ -131,11 +141,15 @@ final class WatchBridge: NSObject {
         let week = training?.sessions?.filter { $0.status != "missed" }.map {
             WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport, minutes: $0.minutes, done: $0.status == "done")
         }
+        let n = today.nutrition
+        let macro = { (m: TodaySnapshot.Macro) in WatchSnapshot.Macro(eaten: m.eaten, target: m.target) }
+        let food = WatchSnapshot.Food(kcal: n.kcal, target: n.target, carbs: macro(n.carbs), protein: macro(n.protein), fat: macro(n.fat),
+                                      water: n.water.ml, waterTarget: n.water.target)
         return WatchSnapshot(date: today.date, updated: Date(), language: L10n.language,
                              readiness: today.readiness.score, zone: today.readiness.zone,
                              headline: today.summary?.headline, summary: today.summary?.text,
                              sleep: sleep, restingHR: restingHR, hrv: hrv, strain: strain, steps: today.steps.today,
-                             week: week)
+                             week: week, food: food)
     }
 
     /// "23:05" from an ISO time or a clock time.
@@ -188,7 +202,13 @@ extension WatchBridge: WCSessionDelegate {
         let done = (message[WatchGym.doneKey] as? Data).flatMap(WatchGym.Done.decode)
         let change = (message[WatchGym.changeKey] as? Data).flatMap(WatchGym.Change.decode)
         let options = (message[WatchGym.optionsKey] as? Data).flatMap(WatchGym.OptionsRequest.decode)
+        let water = message[WatchSnapshot.waterKey] as? Int
         Task { @MainActor in
+            if let water {
+                await addWater(ml: water)
+                replyHandler(["ok": true])
+                return
+            }
             if let change {
                 let gym = await applyGym(change)
                 replyHandler(gym?.encoded().map { [WatchGym.replyKey: $0] } ?? [:])
@@ -218,9 +238,13 @@ extension WatchBridge: WCSessionDelegate {
         }
     }
 
-    /// A set sent while the iPhone was out of reach.
+    /// A set or a drink sent while the iPhone was out of reach.
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
-        guard let done = (userInfo[WatchGym.doneKey] as? Data).flatMap(WatchGym.Done.decode) else { return }
-        Task { @MainActor in await applyGym(done) }
+        let done = (userInfo[WatchGym.doneKey] as? Data).flatMap(WatchGym.Done.decode)
+        let water = userInfo[WatchSnapshot.waterKey] as? Int
+        Task { @MainActor in
+            if let done { await applyGym(done) }
+            if let water { await addWater(ml: water) }
+        }
     }
 }

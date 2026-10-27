@@ -24,6 +24,28 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     /// This week's sessions, done and planned (Training on the iPhone), for the
     /// watch's Training page and its row of days.
     var week: [Session]? = nil
+    /// Today's food and drink (Food on the iPhone), for the watch's Food page.
+    var food: Food? = nil
+
+    struct Food: Codable, Equatable, Sendable {
+        var kcal: Double?
+        /// The day's energy goal, training included.
+        var target: Double?
+        var carbs: Macro
+        var protein: Macro
+        var fat: Macro
+        /// Drunk today and the day's goal, ml.
+        var water: Double?
+        var waterTarget: Double?
+    }
+
+    struct Macro: Codable, Equatable, Sendable {
+        var eaten: Double?
+        var target: Double?
+    }
+
+    /// The watch asks the iPhone to add a drink of water: its ml.
+    static let waterKey = "addWater"
 
     struct Session: Codable, Equatable, Sendable {
         var date: String

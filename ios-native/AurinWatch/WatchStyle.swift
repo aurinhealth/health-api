@@ -18,6 +18,11 @@ enum W {
     static let indigo = Color(hex: 0xA5A1FF)
     static let pink = Color(hex: 0xF59BB0)
     static let red = Color(hex: 0xFF6B5B)
+    /// The iPhone's dark macro and water colours (Shared/Palette.swift).
+    static let carbs = Color(hex: 0xFFC274)
+    static let protein = Color(hex: 0x83C7FF)
+    static let fat = Color(hex: 0xB3A1FF)
+    static let blue = Color(hex: 0x7CC3F0)
 
     /// The glow at the top of a page, one per part of the day.
     enum Glow {
@@ -25,6 +30,7 @@ enum W {
         static let sleep = Color(hex: 0x262556)
         static let restingHR = Color(hex: 0x3D1D2A)
         static let strain = Color(hex: 0x3A2A17)
+        static let food = Color(hex: 0x163047)
     }
 
     /// A shape style, for containerBackground: the colour fades into black.
