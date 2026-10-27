@@ -250,3 +250,18 @@ test('the Consumer Health Data Privacy Policy is its own page, linked from the h
   assert.match(await overviewPage().text(),/<a href="\/health-data">/);
 });
 
+
+test('the overview opens each part with the welcome’s page, in the app’s order and words',async()=>{
+  const read=path=>readFileSync(new URL('../ios-native/'+path,import.meta.url),'utf8');
+  const welcome=read('Aurin/Screens/WelcomePages.swift'),strings=read('Shared/en.lproj/Localizable.strings');
+  const en=label=>strings.match(new RegExp('^"'+label+'" = "([^"]+)";','m'))?.[1];
+  const said=prop=>[...welcome.match(new RegExp('var '+prop+': String \\{[\\s\\S]*?\\n    \\}'))[0].matchAll(/case \.(\w+): return "([^"]*)"/g)].filter(m=>m[1]!=='opening').map(m=>en(m[2]));
+  const html=await overviewPage().text();
+  const parts=[...html.matchAll(/<section id="a-\w+" class="opener"[^>]*><div class="wrap ac">\n<div class="head reveal"><h2 class="big">([^<]+)<\/h2><p class="sub">([^<]+)<\/p>/g)];
+  assert.deepEqual(parts.map(m=>m[1]),said('title'));
+  assert.deepEqual(parts.map(m=>m[2]),said('text'));
+  assert.equal((en('Kouč, který zná ')+en('tvůj spánek.')).trim(),'A coach that knows how you slept.');
+  assert.match(html,/<h1 aria-label="A coach that knows how you slept\.">/);
+  for(const text of ['Good night, third day in a row. ','Go all in on strength today.','Keep legs, go lighter:','Bad night. Legs today?','Legs, lighter'])assert.ok(html.includes(text),text);
+  assert.match(html,/<nav class="acts-nav" aria-label="Parts of Aurin">/);
+});
