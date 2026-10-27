@@ -21,8 +21,10 @@ palette changes, change `design-system.js` and this file together.
    only where that part of the app appears: readiness, strain/food, sleep, tired muscles.
 4. **Warm, not clinical.** Paper instead of white, serif headlines, soft tinted glows. Never cold grey, never
    neon on black.
-5. **Light only.** The site has one look and no theme switch. It follows the app's light screenshots. The one
-   exception is the privacy promise: an ink panel (`--button` with `--on-button` text), so it stands apart.
+5. **Light only.** The site has one look and no theme switch. It follows the app's light screenshots.
+6. **The welcome sets the tone.** The hero, the openings of the parts, the privacy lock and the end take the look
+   and motion of the app's welcome before the sign-in (`WelcomePages.swift`): the logo rising behind spreading
+   rings, a sunrise tint, the app's own cards rising into place one after another.
 
 ## Colour
 
@@ -47,11 +49,14 @@ palette changes, change `design-system.js` and this file together.
 | `--rust-ink` | #A3482A | The muscles eyebrow and other small rust text (5.2:1 on paper) |
 | `--red` (add) | #C2362B | Form errors only (from `Palette.red`) |
 | `--protein` `--carbs` `--fat` | #2F7FD8 · #D98A06 · #7C5CE0 | Macros, only next to food data |
-| `--logo-load` `--logo-recovery` | #F2B46B · #3FA383 | The Aurin mark and the hero aurora, nothing else |
+| `--logo-load` `--logo-recovery` | #F2B46B · #3FA383 | The Aurin mark, nothing else |
+| `--sun` | #E09A55 | The rings and glow around the mark, the scanning beam, the progress pill's dot (`AurinMark.amber`) |
+| `--glow-sunrise` `--glow-coach` | #F7DFC2 · #E6E1F3 | The hero and final tint; the coach's part (`WelcomeGlow`) |
+| `--metal` `--plate-25` `--plate-5` | #BDB7AC · #C98A7C · #AEB2B9 | The plate loader's bar and plates, with their `-line` outlines |
 | `--glow-today` `-health` `-training` `-food` | #DCEBE2 · #E3E6F3 · #F3E3C6 · #F2E4D0 | The soft glow behind each section's phone |
 
 Each section sets two variables, `--tone` (its eyebrow and accent) and `--glow` (the tint behind the phone):
-readiness, training and the coach are green on `glow-today`; sleep is indigo on `glow-health`; strain and the
+readiness, training and the coach are green on `glow-today`; each part's opening is tinted with its welcome page's glow (readiness `glow-today`, training `glow-training`, nutrition `glow-food`, sleep `glow-health`, coach `glow-coach`); sleep is indigo on `glow-health`; strain and the
 gym are amber on `glow-training`; food is amber on `glow-food`; muscles are rust (`--rust-ink` for the eyebrow).
 
 Contrast: body text is `--text`; small text is never lighter than `--muted`. `--amber-bar`, `--carbs`, the logo
@@ -89,15 +94,22 @@ stop: "Know when to push." not "Smart Strain Tracking".
 - Scale (4-based): 4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 160.
 - Content width 1160px (`.wrap`), side gutter 24px, 16px under 480px.
 - Section padding 128-160px on computers, 80px on phones.
-- The hero is split: the words on the left, the app's Today on the right with up to three glass numbers.
+- The hero is split: the sun (the mark in its rings), the kicker and the welcome's line "A coach that knows *how
+  you slept.*" (the last words in green italic) on the left, the app's Today on the right with up to three glass
+  numbers, all over the sunrise tint.
 - Under the hero, **one morning** says the sample day as a sentence, its numbers set as tinted chips.
+- The page goes through the app in the welcome's order: **Readiness, Training, Nutrition, Sleep, Coach**. Each
+  part opens with the welcome's page: the title alone as the headline, the welcome's line in Newsreader, and
+  the welcome's cards (`ACTS` in `site-demos.js`) on the tinted glow. Its chapters follow; the first has no
+  eyebrow, since the part's title says it. While the reader is inside the parts, a pill at the bottom of the
+  window shows the part's name and the welcome's line of dots, the current one glowing.
 - A part of the app is a **chapter**: the words and the steps on one side, the phone with its glow on the
   other, sides alternating. Each step shows its own screen and lifts a piece of it beside the phone; steps
   take turns while the chapter is in view (a thin bar fills under the active step) until one is picked. On
   phones it stacks: headline, phone, steps.
 - Vary the rhythm: chapters, the muscle figure (split, figure on the right), the connections (a recessed box
-  with a row of logos), the privacy promise (the ink panel), questions (heading left, answers right). Only the
-  final call to action is centred.
+  with a row of logos), the privacy promise (the welcome's lock, centred), questions (heading left, answers right). The privacy
+  promise and the final call to action are centred.
 - Never a row of three identical feature cards.
 
 ## Shape and depth
@@ -112,8 +124,8 @@ stop: "Know when to push." not "Smart Strain Tracking".
   - flat cards have no shadow, only `--line`.
 - Blur (glass) only on things that sit over moving content: the nav pill, the three hero cards, the muscle
   bubble. Nowhere else.
-- Gradients only in three places: the hero and final aurora (from the logo colours), the section glows, and the
-  phone's titanium edge. No gradient text, no purple-to-blue.
+- Gradients only in these places: the sunrise behind the hero and the end, the parts' and sections' glows, the
+  rings around the mark, and the phone's titanium edge. No gradient text, no purple-to-blue.
 
 ## Components
 
@@ -130,6 +142,16 @@ stop: "Know when to push." not "Smart Strain Tracking".
   and a smaller pill stay, so the page's one action is always a tap away.
 - **Kicker:** a small glassy pill above the hero headline with a green dot ("For iPhone · now in TestFlight"). The
   site never sells the app as free: it is in testing, and the price after the release is not set.
+- **Sun:** the mark with a soft `--sun` glow and three rings that keep spreading and fading (4 s), the mark
+  bobbing 6px; still rings with reduced motion.
+- **Welcome cards:** the app's paper cards (radius 22, `0 16px 36px -12px` warm shadow) stacked 12px apart. They
+  rise 26px into place one after another and then move as in the app: readiness counts to 78, the rest ring
+  counts down, plates slide onto the bar, sets tick off, the barcode is scanned, the drink fills, the night is
+  drawn, the coach types its answer and offers the workout.
+- **Progress pill:** fixed 18px above the bottom, `--panel` glass, the part's name in 14px 600 and a 136px line
+  with a dot per part; the dots link to the parts.
+- **Privacy lock:** a paper lock with the mark whose shackle clicks shut when the promise scrolls in, the
+  promise as a Newsreader headline, the line under it and the link to the policy.
 - **Phone:** the CSS iPhone (titanium edge, black bezel, glare) around a real screenshot. Never a flat rectangle.
 - **Live demo:** a card 380px wide, 22px radius, `--panel`, floating shadow, overlapping the phone's edge. It
   plays its step's timeline while the chapter is in view and shows its last frame with reduced motion. Numbers

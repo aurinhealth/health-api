@@ -16,6 +16,9 @@ export const themeTokens = `
   --aurora-lilac:#B9B4EE;--device-hi:#F4F1EC;--device-mid:#C9C2B8;--device-lo:#A2998E;
   /* Soft glow behind each section's card, in the tint of the app tab it shows. */
   --glow-today:#DCEBE2;--glow-health:#E3E6F3;--glow-training:#F3E3C6;--glow-food:#F2E4D0;
+  /* The welcome before the sign-in (WelcomePages.swift): its sunrise and coach tints, the logo's sun, the plate loader. */
+  --glow-sunrise:#F7DFC2;--glow-coach:#E6E1F3;--sun:#E09A55;--metal:#BDB7AC;
+  --plate-25:#C98A7C;--plate-25-line:#A86A5C;--plate-5:#AEB2B9;--plate-5-line:#8E939B;
   /* Type scale: caption for short uppercase labels, meta for chips, small for secondary text. */
   --fs-caption:12px;--fs-meta:13px;--fs-small:14px;--fs-body:15px;
 }

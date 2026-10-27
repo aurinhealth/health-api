@@ -341,6 +341,55 @@ const coachWeek = `<div class="dm pad wk"${at('10900')}>
 </div></div>`;
 
 const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, merge(v)]));
+// The welcome's pages (WelcomePages.swift), one before each part of the overview: a few of the app's own cards with
+// the sample day that rise into place and move once the part is on screen, as they do before the sign-in.
+const rise = ms => at(String(ms));
+const actReadiness = `<div class="dm wc">
+<div class="wcard"${rise(0)}><div class="row sp"><span class="mut">Readiness</span><span class="pill grn pop"${at('1200')}>high</span></div>
+<div class="row w-wr"><span class="num"${n(0, 78, 200, 1300, 'i')}>78</span><p class="sent"${at('1400')}>Good night, third day in a row. <em class="grn">Go all in on strength today.</em></p></div></div>
+<div class="w-two"><div class="wcard w-sm"${rise(250)}><span class="mut w-s2">Sleep</span><span class="num w-v">7:12</span>${range(16, 'amber-bar', 700)}<span class="w-nt2 amb2">89% of need</span></div>
+<div class="wcard w-sm"${rise(400)}><span class="mut w-s2">HRV</span><span class="num w-v">64<small>ms</small></span>${range(83, 'green', 700)}<span class="w-nt2 grn">above normal</span></div></div>
+</div>`;
+// Training: the rest ring counting down, the plate loader's bar (80 kg: 25 + 5 a side), the sets ticked off, the muscles.
+const W_SETS = [['W', 40, true], ['1', 80, true], ['2', 80, true], ['3', 80, false]];
+const actTraining = `<div class="dm wc">
+<div class="wcard row w-rest"${rise(0)}><svg class="w-ring" viewBox="0 0 132 132" aria-hidden="true"><circle cx="66" cy="66" r="57" class="w-trk"/><circle cx="66" cy="66" r="57" class="w-arc" stroke-dasharray="358.1" data-ring="83,0,0,83000,90" transform="rotate(-90 66 66)"/></svg>
+<span class="w-rt"><span class="mut s">Rest</span><span class="num"${n(83, 0, 0, 83000, 'ms')}>1:23</span><span class="mut s">of 1:30</span></span>
+<div><span class="mut w-s2">Now</span><b class="w-ex">Squat · set 3</b><span class="num w-kg">80 kg × 8</span><span class="row w-gap6"><span class="w-chip">−15 s</span><span class="w-chip">+15 s</span></span></div></div>
+<div class="wcard"${rise(150)}><div class="row sp base"><span class="num w-kg2">80 kg</span><span class="mut s">25 + 5 per side + bar 20 kg</span></div>
+<div class="w-barbell" aria-hidden="true"><i class="w-rod"></i><i class="w-sleeve"></i><i class="w-collar"></i><span class="w-plate w-p25"${at('600')}>25</span><span class="w-plate w-p5"${at('850')}>5</span></div></div>
+<div class="w-two sets"><div class="wcard"${rise(300)}>${W_SETS.map(([l, kg, done], i) => `<div class="w-set${done ? '' : ' w-now'}"><span class="${l === 'W' ? 'amb' : 'mut'}">${l}</span><span>${kg} kg × 8</span><span class="w-tk${done ? ' w-done' : ''}"${done ? at(String(500 + i * 220)) : ''}>${done ? ic('check') : ''}</span></div>`).join('')}</div>
+<div class="wcard w-fig2"${rise(450)}><img src="/site/muscles/f00.webp" alt="" width="640" height="1000" loading="lazy"${at('1000')}><span class="mut s">Quads · Chest</span></div></div>
+</div>`;
+// Nutrition: Výživa's lunch row with the photo's food in it, the barcode being scanned and the drinks filling up.
+const actFood = `<div class="dm wc">
+<div class="wcard w-meal"${rise(0)}><span class="pill amb pop w-badge"${at('800')}>${ic('spark')}From a photo</span>
+<div class="row sp base"><b>Lunch <span class="mut s">12:30 PM</span></b><span><span class="num md">845</span> <span class="mut s">/ 800 kcal</span></span></div>
+${[['Carbs', 88, 100, 'carbs'], ['Protein', 61, 45, 'protein'], ['Fat', 26, 24, 'fat']].map(([k, v, t, c], i) => `<div class="w-mac"><span class="mut s"><i style="background:var(--${c})"></i>${k}</span><i class="bar"><b style="--w:${Math.min(100, v / t * 100).toFixed(0)}%;background:var(--${c})"${at(String(500 + i * 150))}></b></i><span class="s mono">${v} / ${t} g</span></div>`).join('')}
+<span class="mut s">Chicken with rice, Plain Greek yogurt</span></div>
+<div class="w-two"><div class="wcard w-scan"${rise(200)}><span class="mut w-s2">Barcode</span><span class="w-code" aria-hidden="true">${[2, 1, 3, 1, 2, 1, 1, 3, 2, 1, 2, 3, 1].map(w => `<i style="width:${w}px"></i>`).join('')}<u class="w-corners"${at('600')}></u><b class="w-beam"></b></span></div>
+<div class="wcard w-drink"${rise(350)}><span class="row w-s2"><i class="w-dot"></i>Drinks</span><svg class="w-whale" viewBox="0 0 84 56" aria-hidden="true"><defs><clipPath id="wh"><path d="M6 30C10 14 30 8 46 12c8 2 14 6 18 12l12-10c2-2 5 0 4 3l-5 13 5 13c1 3-2 5-4 3L64 36c-6 10-20 16-34 14C16 48 4 42 6 30z"/></clipPath></defs><g clip-path="url(#wh)"><rect width="84" height="56" fill="var(--track)"/><rect class="w-water" y="0" width="84" height="56"${at('600')}/></g><circle cx="22" cy="27" r="2.4" fill="var(--text)"/></svg>
+<span class="row base"><span class="num md">1,500 ml</span><span class="mut s">1,100 ml to go</span></span></div></div>
+</div>`;
+// Sleep: the bedtime from the alarm, tonight's choice and last night drawn stage by stage.
+const actSleep = `<div class="dm wc">
+<div class="w-two"><div class="wcard w-sm"${rise(0)}><span class="th ind">${ic('moon')}Bedtime</span><span class="num w-v">10:10<small>PM</small></span></div>
+<div class="wcard w-sm"${rise(120)}><span class="th amb">${ic('sun')}Wake up</span><span class="num w-v">7:15<small>AM</small></span></div></div>
+<div class="chips3"${rise(240)}>${[['Catch up', '8 h 30'], ['As usual', '8 h 00'], ['At least', '7 h 00']].map(([k, v], i) => `<span class="ch3 wcard"${i === 0 ? at('900:on') : ''}><b>${k}</b><span>${v}</span></span>`).join('')}</div>
+<div class="wcard"${rise(360)}><div class="row sp base"><span class="mut">Last night</span><span class="num md">7:12</span></div>
+<div class="hg" aria-hidden="true"><div class="hgl"><span>Awake</span><span>REM</span><span>Light</span><span>Deep</span></div><div class="hgt w-draw"${at('600')}>${NIGHT.map(([t, s, e]) => `<i class="${t}" style="left:${(s / 449 * 100).toFixed(2)}%;width:${Math.max(0.5, (e - s) / 449 * 100).toFixed(2)}%"></i>`).join('')}</div></div></div>
+</div>`;
+// Coach: the question, dots for a moment, the answer typed out, then its workout.
+const COACH_SAYS = ['Readiness is 61 after 5 h 40 of sleep. ', 'Keep legs, go lighter:', ' squat 3 × 8 at 70 kg.'];
+const typed = (() => { let t = 1600; return COACH_SAYS.map(x => { const at0 = t; t += x.length * 26; return [x, at0, x.length * 26]; }); })();
+const actCoach = `<div class="dm wc coach2">
+<div class="w-q"${rise(100)}>Bad night. Legs today?</div>
+<div class="dots"${at('700 1600-in')}><i></i><i></i><i></i></div>
+<div class="wcard w-a"${at('1600')}><p class="sent">${typed.map(([x, start, len], i) => `<span${i === 1 ? ' class="grn w-it"' : ''} data-type="${start},${len}">${x}</span>`).join('')}</p></div>
+<div class="wcard row w-wo"${at(String(typed[2][1] + typed[2][2] + 200))}><span class="ib amb">${ic('gym')}</span><div><b>Legs, lighter</b><span class="mut s">40 min · 4 exercises</span></div><span class="w-add">Add</span></div>
+</div>`;
+export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach});
+
 export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, coachWeek});
 export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen});
 
@@ -642,6 +691,59 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .inp .cam{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--panel)}
 .snd{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--button);color:var(--on-button)}
 @media (prefers-reduced-motion:reduce){.cam .scan,.dots i,.btn .sp1{animation:none}}
+/* The welcome's cards (ACTS): the app's paper cards with their soft shadow, rising into place. */
+.dm.wc{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;width:100%}
+.wcard{padding:14px 16px;border-radius:22px;background:var(--panel);box-shadow:0 1px 1px rgba(60,45,20,.05),0 16px 36px -12px rgba(60,45,20,.22)}
+.wc .wait{transition:opacity .5s ease,transform .7s cubic-bezier(.34,1.3,.5,1)}.js .wc .wait:not(.in){transform:translateY(26px)}
+.wc .w-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.wc .w-wr{align-items:flex-end;gap:14px;margin-top:2px}.wc .w-wr .num{font-size:96px;line-height:.92;min-width:108px}.wc .w-wr .sent{font-size:17px;line-height:1.3;padding-bottom:10px}
+.wc em{font-style:italic}.wc .w-it{font-style:italic}
+.wc .w-sm{display:flex;flex-direction:column;gap:2px}.wc .num.w-v{font-size:36px;line-height:1.1}.wc .num.w-v small{font-size:13px}
+.w-s2{font-size:14px}.w-nt2{font-size:12.5px;font-weight:500}.amb2{color:var(--amber-bar)}
+.js .wc .pop.wait:not(.in){transform:scale(.6)}
+.wc .w-rest{gap:16px;padding:12px 16px}.wc .w-ring{flex:none;width:106px;height:106px}.wc .w-ring circle{fill:none;stroke-width:8}.wc .w-ring .w-trk{stroke:var(--track)}.wc .w-ring .w-arc{stroke:var(--green);stroke-linecap:round}
+.wc .w-rest{position:relative}.wc .w-rt{position:absolute;left:16px;width:106px;display:flex;flex-direction:column;align-items:center;line-height:1.1}.wc .w-rt .num{font-size:34px;line-height:1}.wc .w-rt .s{font-size:11px}
+.wc .w-rest>div{display:flex;flex-direction:column}.wc .w-ex{font-size:15px}.wc .num.w-kg{font-size:30px;line-height:1.2}.wc .num.w-kg2{font-size:24px}
+.w-gap6{gap:6px;margin-top:6px}.w-chip{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:99px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 14%,transparent);font-size:12.5px;font-weight:500}
+.w-barbell{position:relative;height:78px;margin-top:8px;overflow:hidden}
+.w-barbell i{position:absolute;top:50%;background:var(--metal);border-radius:3px}.w-barbell .w-rod{left:0;right:0;height:10px;margin-top:-5px}.w-barbell .w-sleeve{left:0;width:64px;height:6px;margin-top:-3px}.w-barbell .w-collar{left:66px;width:7px;height:22px;margin-top:-11px;border-radius:2px}
+.w-plate{position:absolute;top:50%;display:grid;place-items:center;border-radius:5px;color:#fff;font-size:10px;font-weight:600;transform:translateY(-50%);transition:transform .6s cubic-bezier(.34,1.4,.5,1),opacity .4s!important}
+.w-plate.w-p25{left:75px;width:25px;height:77px;background:var(--plate-25);box-shadow:inset 0 0 0 1.2px var(--plate-25-line)}.w-plate.w-p5{left:102px;width:22px;height:52px;background:var(--plate-5);box-shadow:inset 0 0 0 1.2px var(--plate-5-line)}
+.js .w-plate.wait:not(.in){opacity:0;transform:translate(180px,-50%)}
+.wc .sets{grid-template-columns:minmax(0,1fr) 124px}.wc .sets>.wcard:first-child{display:grid;gap:5px;padding:12px}
+.w-set{display:grid;grid-template-columns:16px 1fr 20px;align-items:center;gap:8px;height:28px;padding:0 8px;border-radius:10px;font-size:14px;font-weight:500;font-variant-numeric:tabular-nums}
+.w-set>span:first-child{font-size:12px;font-weight:600}.w-set.w-now{background:color-mix(in srgb,var(--amber-soft) 60%,transparent);box-shadow:inset 0 0 0 1.2px var(--amber-bar)}
+.w-set .w-tk{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--text) 20%,transparent);color:var(--on-button);font-size:11px}
+.w-set .w-tk.w-done{background:var(--green);box-shadow:none;transition:transform .45s cubic-bezier(.34,1.6,.5,1),opacity .3s}.js .w-set .w-tk.w-done.wait:not(.in){transform:scale(.3)}
+.wc .w-fig2{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;padding:10px}.wc .w-fig2 img{width:auto;height:112px}
+.js .wc .w-fig2 img.wait:not(.in){transform:none;filter:grayscale(1);opacity:.5}.wc .w-fig2 img{transition:filter .8s,opacity .8s}
+.wc .w-meal{position:relative;padding-top:20px}.wc .w-badge{position:absolute;left:12px;top:-12px;gap:5px;transform-origin:left}
+.w-mac{display:grid;grid-template-columns:76px 1fr 74px;align-items:center;gap:10px;margin:6px 0}.w-mac .s{text-align:right}.w-mac>.s:first-child{text-align:left;display:flex;align-items:center;gap:6px}.w-mac i:not(.bar){width:6px;height:6px;border-radius:50%}
+.w-mac .bar{height:5px}.wc .w-meal>.mut:last-child{display:block;margin-top:4px}
+.wc .w-scan,.wc .w-drink{display:flex;flex-direction:column;gap:8px;min-height:164px}
+.w-code{position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:2px;border-radius:14px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.w-code>i{height:44px;background:var(--text)}
+.w-code .w-corners{position:absolute;inset:8px;transition:transform .5s cubic-bezier(.34,1.4,.5,1),opacity .3s!important;background:
+ linear-gradient(var(--amber-bar),var(--amber-bar)) 0 0/18px 3px,linear-gradient(var(--amber-bar),var(--amber-bar)) 0 0/3px 18px,
+ linear-gradient(var(--amber-bar),var(--amber-bar)) 100% 0/18px 3px,linear-gradient(var(--amber-bar),var(--amber-bar)) 100% 0/3px 18px,
+ linear-gradient(var(--amber-bar),var(--amber-bar)) 0 100%/18px 3px,linear-gradient(var(--amber-bar),var(--amber-bar)) 0 100%/3px 18px,
+ linear-gradient(var(--amber-bar),var(--amber-bar)) 100% 100%/18px 3px,linear-gradient(var(--amber-bar),var(--amber-bar)) 100% 100%/3px 18px;background-repeat:no-repeat;border-radius:8px}
+.js .w-code .w-corners.wait:not(.in){transform:scale(1.25)}
+.w-code .w-beam{position:absolute;left:16px;right:16px;top:50%;height:2px;border-radius:2px;background:var(--sun);box-shadow:0 0 10px var(--sun)}
+.opener.on .w-code .w-beam{animation:scanbeam 2.85s ease-in-out infinite}
+@keyframes scanbeam{0%,100%{transform:translateY(-26px)}50%{transform:translateY(26px)}}
+.w-drink .w-dot{width:8px;height:8px;border-radius:50%;background:var(--blue)}.w-drink .w-s2{gap:6px;font-weight:500}
+.w-whale{display:block;width:96px;height:64px;margin:0 auto}.w-whale .w-water{fill:color-mix(in srgb,var(--blue) 70%,#7FC4EA);transform:translateY(100%);transition:transform 1.6s ease-in-out!important}
+.w-whale .w-water.in,html:not(.js) .w-whale .w-water{transform:translateY(42%)}.js .w-whale .w-water.wait:not(.in){opacity:1}
+.w-drink .row.base{flex-wrap:wrap;column-gap:6px}.w-drink .row.base .mut{white-space:nowrap}
+.wc .th .di{font-size:12px}.wc .chips3 .ch3{border-radius:16px;transition:background .35s,border-color .35s}.wc .ch3 b{font-weight:600;font-size:15px}
+.wc .hg{margin-bottom:0}.hgt.w-draw{transition:clip-path 1.6s ease-in-out!important;clip-path:inset(0 0 0 0)}.js .hgt.w-draw.wait:not(.in){opacity:1;transform:none;clip-path:inset(0 100% 0 0)}
+.coach2{gap:12px}.coach2 .w-q{justify-self:end;padding:10px 14px;border-radius:18px;background:var(--button);color:var(--on-button);font-size:16px}
+.coach2 .dots{box-shadow:0 16px 36px -12px rgba(60,45,20,.22)}.coach2 .dots:not(.in){display:none}html:not(.js) .coach2 .dots{display:none}
+.coach2 .w-a{margin-right:30px}.coach2 .w-a .sent{font-size:18px;line-height:1.35}
+.coach2 .w-wo{gap:12px;padding:12px}.coach2 .w-wo .ib{width:40px;height:40px;border-radius:12px}.coach2 .w-wo>div{flex:1;display:flex;flex-direction:column}
+.coach2 .w-add{display:inline-flex;align-items:center;height:34px;padding:0 16px;border-radius:99px;background:var(--button);color:var(--on-button);font-size:13px;font-weight:600}
+@media (prefers-reduced-motion:reduce){.opener.on .w-code .w-beam{animation:none}}
 `;
 
 // The player: AurinDemo.play(el) runs the timeline of every demo inside el from the start, stop(el) clears it,

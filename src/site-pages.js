@@ -7,7 +7,7 @@
 // have a Czech version at ?lang=cs, linked from the page and the footer.
 import {themeTokens} from './design-system.js';
 import {icon, ICON_PATHS} from './icons.js';
-import {DEMOS, SCREENS, demoCss, demoScript} from './site-demos.js';
+import {ACTS, DEMOS, SCREENS, demoCss, demoScript} from './site-demos.js';
 import {scriptPolicy} from './web-security.js';
 import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
@@ -70,22 +70,24 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 /* One waitlist button at a time: the nav's pill appears once the hero's button has scrolled away (always there without JS). */
 .js .site-head:not(.away) .nav-cta{display:none}
 
-/* Aurora: the two halves of the mark (and a little lilac), soft behind the hero phone and the end. */
-.aurora{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
-.aurora i{position:absolute;border-radius:50%;filter:blur(80px);opacity:.42}
-.aurora .a{width:40vmax;height:34vmax;right:2vmax;top:-4vmax;background:var(--logo-load)}
-.aurora .b{width:38vmax;height:36vmax;right:-14vmax;top:16vmax;background:var(--logo-recovery)}
-.aurora .c{width:26vmax;height:24vmax;right:22vmax;top:26vmax;background:var(--aurora-lilac);opacity:.3}
-.aurora::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,transparent 60%,var(--bg))}
+/* The sun: the logo rising behind soft rings that keep spreading, over the sunrise tint (the welcome's first page). */
+.sun{position:relative;width:calc(var(--s) * 2.3);height:calc(var(--s) * 2.3);display:grid;place-items:center;margin:-24px 0 -12px calc(var(--s) * -.55)}
+.sun .halo{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--sun) 28%,transparent) 0,transparent 65%)}
+.sun .rg{position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--sun) 35%,transparent);transform:scale(var(--r,.6));opacity:var(--o,.6)}
+.sun .rg:nth-child(2){--r:.5;--o:.75}.sun .rg:nth-child(3){--r:.72;--o:.5}.sun .rg:nth-child(4){--r:.94;--o:.25}
+.sun .mark{position:relative;filter:drop-shadow(0 14px 22px color-mix(in srgb,var(--sun) 45%,transparent))}
+.hero::before,.final::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(70% 55% at 22% 18%,var(--glow-sunrise) 0,transparent 100%)}
+.final::before{background:radial-gradient(60% 60% at 50% 40%,var(--glow-sunrise) 0,transparent 100%)}
 
 /* Hero: the line on the left, the app's Today on the right with three numbers floating beside it. */
-.hero{position:relative;margin-top:-76px;padding:136px 0 72px;overflow:clip}
+.hero{position:relative;margin-top:-76px;padding:112px 0 72px;overflow:clip}
 .hero .grid{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);align-items:center;gap:32px}
 .kicker{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;background:color-mix(in srgb,var(--panel) 60%,transparent);border:1px solid var(--line);font-size:14px;font-weight:600;color:var(--sec)}
 .kicker i{width:8px;height:8px;border-radius:50%;background:var(--green)}
-.hero h1{font-size:clamp(56px,7.2vw,112px);line-height:.96;letter-spacing:-.03em;margin-top:26px}
+.hero h1{font-size:clamp(52px,6.6vw,100px);line-height:.98;letter-spacing:-.03em;margin-top:22px}
 .hero h1 .w{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em}
 .hero h1 .w>span{display:inline-block}
+.hero h1 .it{font-style:italic;color:var(--green)}
 .lede{max-width:500px;margin-top:26px;font-size:20px;color:var(--sec)}
 .hero .cta{margin-top:36px}
 .hero .wl{align-items:flex-start}
@@ -148,6 +150,27 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .js .multi .step:not(.on) .tx{display:none}
 .js .multi .step:not(.on) .tt{color:var(--muted)}
 .js .multi .step>button:hover .tt{color:var(--text)}
+
+/* Parts: the welcome's pages, each before the chapters of its part. The title and line on one side, the
+   app's cards on the other over the part's tint; the cards rise and move once the part is in view. */
+.opener{position:relative;isolation:isolate;padding:150px 0 10px}
+.opener::before{content:"";position:absolute;left:0;right:0;top:40px;height:760px;z-index:-1;pointer-events:none;background:radial-gradient(60% 50% at 30% 30%,var(--glow) 0,transparent 100%)}
+.ac{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:56px;align-items:center}
+.opener h2.big{font-size:clamp(56px,7vw,104px)}
+.opener .sub{font-family:Newsreader,"New York",Georgia,serif;font-size:24px;line-height:1.35}
+.opener .cards{width:420px}
+.chapter.opens{padding-top:90px}
+/* Where the reader is: the welcome's line with a dot per part, the current one glowing. */
+.acts-nav{position:fixed;left:50%;bottom:18px;z-index:19;display:flex;align-items:center;gap:14px;padding:10px 18px 10px 16px;border-radius:999px;background:color-mix(in srgb,var(--panel) 86%,transparent);-webkit-backdrop-filter:saturate(1.4) blur(18px);backdrop-filter:saturate(1.4) blur(18px);box-shadow:0 0 0 1px var(--line),0 14px 34px -14px rgba(60,45,20,.4);transform:translate(-50%,24px);opacity:0;pointer-events:none;transition:opacity .4s,transform .5s cubic-bezier(.16,1,.3,1)}
+.acts-nav.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.an-t{min-width:76px;font-size:14px;font-weight:600}
+.an-l{position:relative;width:136px;height:12px}
+.an-l::before,.an-fill{content:"";position:absolute;left:0;right:0;top:5px;height:2px;border-radius:2px;background:var(--track)}
+.an-fill{right:auto;width:calc(var(--i,0) * 25%);background:linear-gradient(90deg,color-mix(in srgb,var(--sun) 40%,transparent),var(--sun));transition:width .45s cubic-bezier(.16,1,.3,1)}
+.an-l a{position:absolute;left:calc(var(--k) * 25%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%}
+.an-l a::after{content:"";position:absolute;left:3px;top:3px;width:6px;height:6px;border-radius:50%;background:color-mix(in srgb,var(--text) 18%,transparent);transition:background .3s}
+.an-l a.done::after{background:var(--sun)}
+.an-dot{position:absolute;left:calc(var(--i,0) * 25%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--sun);box-shadow:0 0 0 2px var(--panel),0 0 10px var(--sun);pointer-events:none;transition:left .45s cubic-bezier(.16,1,.3,1)}
 
 /* Muscles: the app's 3D figure (Muscle3D.swift). The model is licensed and stays out of the page: the
    figure is drawn ahead from 72 sides (scripts/render-muscles-site.html), and a map per side says which
@@ -240,14 +263,17 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .tabs .svc+.svc{margin:0;padding:0;border:0}
 .tabs .svc:not(.on){display:none}
 
-/* Privacy: the one ink panel on the page, so the promise stands apart. */
-.privacy{padding:150px 0 0}
-.privacy .ink{position:relative;padding:72px 64px;border-radius:32px;background:var(--button);color:var(--on-button);overflow:hidden}
-.privacy .ink::before{content:"";position:absolute;right:-120px;top:-160px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--logo-recovery) 34%,transparent) 0,transparent 65%)}
-.privacy .lock{position:relative;width:40px;height:40px;color:var(--logo-recovery);margin-bottom:28px;stroke-width:1.8}
-.privacy .big{position:relative;max-width:920px;font:400 clamp(30px,4.2vw,56px)/1.12 Newsreader,"New York",Georgia,serif;letter-spacing:-.02em}
-.privacy .more{position:relative;display:inline-flex;align-items:center;gap:8px;margin-top:32px;color:var(--on-button);font-weight:600;text-decoration:none;opacity:.86}
-.privacy .more:hover{opacity:1;text-decoration:underline}
+/* Privacy: the welcome's sign-in promise, the lock clicking shut over a warm glow. */
+.privacy{padding:150px 0 0;text-align:center}
+.promise{display:flex;flex-direction:column;align-items:center}
+.lock{position:relative;width:220px;height:200px}
+.lock .halo{position:absolute;inset:-10px 0;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--sun) 25%,transparent) 0,transparent 62%)}
+.lock .shackle{position:absolute;left:79px;top:28px;width:62px;height:58px;overflow:visible}
+.lock .body{position:absolute;left:58px;top:82px;width:104px;height:84px;display:grid;place-items:center;border-radius:26px;background:linear-gradient(var(--panel),color-mix(in srgb,var(--panel) 92%,var(--bg)));box-shadow:inset 0 0 0 1px var(--line),0 12px 36px -8px rgba(60,45,20,.22)}
+.promise h2{margin-top:18px;max-width:720px}
+.promise .sub{margin:18px auto 0;max-width:600px}
+.privacy .more{display:inline-flex;align-items:center;gap:8px;margin-top:24px;color:var(--primary-text);font-weight:600;text-decoration:none}
+.privacy .more:hover{text-decoration:underline}
 .privacy .more .icon{width:16px;height:16px}
 .card{background:var(--panel);border-radius:28px;padding:24px;box-shadow:0 1px 2px rgba(60,45,20,.05)}
 .disclosure{max-width:680px;margin:40px auto 0;padding:24px 26px;text-align:left}
@@ -269,12 +295,9 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 
 /* The end: the mark, the name and the waitlist once more. */
 .final{position:relative;padding:180px 0 170px;text-align:center;overflow:clip}
-.final .aurora i{opacity:.36}
-.final .aurora .a{right:auto;left:8vmax;top:6vmax}.final .aurora .b{right:4vmax;top:4vmax}.final .aurora .c{right:auto;left:38%;top:12vmax}
-.final .aurora::after{background:linear-gradient(var(--bg),transparent 35%,transparent 70%,var(--bg))}
 .final .wrap{position:relative;z-index:1}
-.final .mark{display:block;margin:0 auto 26px;filter:drop-shadow(0 20px 30px rgba(60,45,20,.18))}
-.final h2{font-size:clamp(58px,8vw,104px)}
+.final .sun{margin:0 auto 10px}
+.final h2{font-size:clamp(44px,6vw,80px);max-width:760px;margin:0 auto}
 .final .sub{margin:18px auto 0;text-align:center}
 .final .wl{margin-top:32px}
 
@@ -295,30 +318,31 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
 .doc ul,.doc ol{color:var(--sec);margin:0 0 12px;padding-left:22px}.doc li{margin-bottom:6px}
 
 /* Phones and tablets: blurred, blended and glass layers are redrawn on every scrolled frame there, which makes the
-   scroll stutter. The same colours are drawn flat instead: soft gradients for the aurora, no grain, solid glass. */
+   scroll stutter. The same colours are drawn flat instead: no grain, solid glass. */
 @media (hover:none),(max-width:960px){
   .site body::after{display:none}
-  .aurora i{filter:none;opacity:.55;background:radial-gradient(closest-side,var(--k) 35%,transparent)!important}
-  .aurora .a{--k:var(--logo-load)}.aurora .b{--k:var(--logo-recovery)}.aurora .c{--k:var(--aurora-lilac)}
   .site *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 }
 
-/* Motion, only with JS and without reduced motion: the headline rises word by word, the aurora drifts,
+/* Motion, only with JS and without reduced motion: the headline rises word by word, the sun's rings spread,
    content fades up as it scrolls in, a step's bar fills while it is shown and its piece floats. */
 @media (prefers-reduced-motion:no-preference){
   .js .hero h1 .w>span{transform:translateY(105%);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(var(--i) * 40ms)}
   @keyframes rise{to{transform:none}}
   .js .hero .lede,.js .hero .cta,.js .hero .kicker{opacity:0;animation:fade .5s .15s forwards}
-  .js .hero .kicker{animation-delay:0s}.js .hero .cta{animation-delay:.25s}
+  .js .hero .kicker{animation-delay:.1s}.js .hero .cta{animation-delay:.25s}
   .js .stage{opacity:0;transform:translateY(40px);animation:lift 1s cubic-bezier(.16,1,.3,1) .2s forwards}
   .js .glass{opacity:0;animation:pop .9s cubic-bezier(.16,1,.3,1) forwards}
   .js .glass.g1{animation-delay:.6s}.js .glass.g2{animation-delay:.75s}.js .glass.g3{animation-delay:.9s}
   @keyframes fade{to{opacity:1}}
   @keyframes lift{to{opacity:1;transform:none}}
   @keyframes pop{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
-  .aurora i{animation:drift 22s ease-in-out infinite alternate}
-  .aurora .b{animation-duration:26s;animation-delay:-8s}.aurora .c{animation-duration:30s;animation-delay:-14s}
-  @keyframes drift{33%{transform:translate(4vmax,3vmax) scale(1.06)}66%{transform:translate(-3vmax,5vmax) scale(.95)}100%{transform:translate(2vmax,-2vmax) scale(1.03)}}
+  .js .sun{opacity:0;transform:translateY(40px);animation:lift 1.1s cubic-bezier(.16,1,.3,1) forwards}
+  .sun .rg{animation:spread 4s linear infinite}.sun .rg:nth-child(3){animation-delay:-1.33s}.sun .rg:nth-child(4){animation-delay:-2.67s}
+  @keyframes spread{from{transform:scale(.47);opacity:.9}to{transform:scale(1);opacity:0}}
+  .sun .mark{animation:bob 4.8s ease-in-out infinite}
+  @keyframes bob{50%{transform:translateY(-6px)}}
+  .js .lock .shackle{transform:translateY(-14px);transition:transform .5s cubic-bezier(.34,1.8,.5,1) .5s}.js .promise.in .lock .shackle{transform:none}
   .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s ease,transform .8s cubic-bezier(.16,1,.3,1)}
   .js .reveal.in{opacity:1;transform:none}
   .js .part{transform:translate(-24px,24px) scale(.94);clip-path:inset(0 100% 0 0 round 22px);transition:opacity .5s,transform .9s cubic-bezier(.2,.8,.2,1),clip-path 1s cubic-bezier(.2,.8,.2,1) .1s}
@@ -330,7 +354,7 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
   .js .auto.paused .step.on .bar i{animation-play-state:paused}
   @keyframes fill{to{width:100%}}
   .js .multi .step.on .tx{animation:fade .5s both}
-  @media (hover:none),(max-width:960px){.aurora i,.js .part.on{animation:none}}
+  @media (hover:none),(max-width:960px){.js .part.on{animation:none}}
   .tabs .svc.on h3{animation:fade .5s both}
   .tabs .svc.on .items span{opacity:0;animation:chip .5s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(.08s + var(--i,0) * 60ms)}
   @keyframes chip{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
@@ -367,10 +391,12 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
   .part,.flip .part{left:30px;width:380px;top:auto!important;bottom:-24px}
   .ch .steps{max-width:none;margin-top:44px}
   .mu,.connect .intro,.faq{grid-template-columns:1fr;gap:32px}
+  .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
+  .opener{padding-top:110px}.chapter.opens{padding-top:64px}
+  .sun{margin:-16px auto -8px}
   .muscles,.connect,.privacy,#faq{padding-top:110px}
   .rd{max-width:none}
   .faq .side{position:static}
-  .privacy .ink{padding:48px 32px}
 }
 @media (max-width:560px){
   .wrap{padding:0 16px}
@@ -378,12 +404,13 @@ h2.big{font-size:clamp(44px,5.6vw,80px);line-height:.98;letter-spacing:-.025em}
   .hero{padding-top:110px}
   .lede,.sub{font-size:18px}
   .stage{height:640px}
+  .opener .cards{width:100%;max-width:420px}.opener .sub{font-size:20px}
+  .acts-nav{bottom:12px;padding:9px 14px 9px 14px;gap:12px}
   /* On a phone the floating cards would cover the real screen's numbers. */
   .glass{display:none}
   .step .tt{font-size:24px}
   .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
   .panels{padding:20px}
-  .privacy .ink{padding:40px 24px;border-radius:24px}
   .rd a{width:96px}.rd figcaption{font-size:14px}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
@@ -405,7 +432,8 @@ function deviceLang(request) {
 
 // The Aurin mark (Rovnováha): the load half over the recovery half, offset as in the app icon.
 const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" height="${Math.round(width * 80 / 88)}" aria-hidden="true"><path d="M6 46A36 36 0 0 1 78 46Z" fill="var(--logo-load)"/><path d="M22 54A36 36 0 0 0 94 54Z" fill="var(--logo-recovery)"/></svg>`;
-const LOCK = '<svg class="icon lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>';
+// The welcome's lock (WelcomeLock in WelcomePages.swift): a soft paper lock with the logo whose shackle clicks shut.
+const LOCK = `<div class="lock" aria-hidden="true"><i class="halo"></i><svg class="shackle" viewBox="0 0 62 58"><defs><linearGradient id="lk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--panel2)"/><stop offset="1" stop-color="var(--device-lo)"/></linearGradient></defs><path d="M5.5 58V31a25.5 25.5 0 0 1 51 0v27" fill="none" stroke="url(#lk)" stroke-width="11" stroke-linecap="round"/></svg><span class="body">${mark(46)}</span></div>`;
 // "Join the waitlist": the button opens an e-mail field; the address waits for the owner, who
 // invites people into TestFlight from the app (src/testflight-waitlist.js).
 const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
@@ -456,6 +484,15 @@ document.querySelectorAll('.chapter').forEach(function(ch){
  if(multi)ch.classList.add('auto','paused');
  new IntersectionObserver(function(es){var on=es[0].isIntersecting;ch.classList.toggle('paused',!on);
   if(on&&!seen){seen=true;run(cur);}else if(!on&&seen){seen=false;clearTimeout(loop);units(cur).forEach(function(u){D.last(u);});}},{threshold:.35}).observe(ch.querySelector('.vis-wrap'));});
+// Parts: the welcome's cards rise and move the first time a part comes into view (their last frame with reduced motion).
+document.querySelectorAll('.opener').forEach(function(a){var c=a.querySelector('.cards');if(still||!IO){D.last(c);a.classList.add('on');return;}D.first(c);
+ new IntersectionObserver(function(es){var on=es[0].isIntersecting;a.classList.toggle('on',on);if(on&&!a._played){a._played=true;D.play(c);}},{threshold:.3}).observe(c);});
+// The pill at the bottom: shown from the first part to the end of the last one, its dot on the part in view.
+var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('kouc'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false;
+ function where(){ticking=false;var mid=innerHeight*.5,i=-1;acts.forEach(function(a,k){if(a.getBoundingClientRect().top<mid)i=k;});
+  var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid;an.classList.toggle('on',shown);if(i<0)i=0;
+  an.style.setProperty('--i',i);title.textContent=dots[i].getAttribute('aria-label');dots.forEach(function(d,k){d.classList.toggle('done',k<=i);});}
+ addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(where);}},{passive:true});where();}
 window.aurinTurnstile=function(){dispatchEvent(new Event('aurin:turnstile'));};
 // Cloudflare Turnstile checks that a person sends the form (src/testflight-waitlist.js): unseen for most,
 // a "Verify you are human" box under the field when Cloudflare isn't sure. It starts on the first touch
@@ -540,8 +577,8 @@ addEventListener('keydown',function(e){if(e.key==='Escape'&&card.classList.conta
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
 // for days by its URL, so ?v= goes up whenever og-en.png is rendered again.
-const SHARE_IMAGE = '/site/og-en.png?v=7';
-const SHARE_IMAGE_ALT = 'Aurin: Train for how you feel today. The Today screen with readiness 78.';
+const SHARE_IMAGE = '/site/og-en.png?v=8';
+const SHARE_IMAGE_ALT = 'Aurin: A coach that knows how you slept. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null}) {
   const self = `${origin}${path}${lang === 'cs' ? '?lang=cs' : ''}`;
@@ -663,30 +700,30 @@ export function overviewPage(request) {
   // shows]. A screen is the app's screenshot (public/site/app/), or "html:" and a screen built in site-demos.js
   // where the screenshot cannot show the step (a moving screen, or one the sample day draws wrong).
   const scenes = [
-    ['spanek', 'Sleep', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
-      ['sleep', 'sleepNight', 300, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
-      ['sleep-need', 'sleepNeed', 150, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
-      ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
-      ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
-    ['pripravenost', 'Readiness', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
+    ['pripravenost', '', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
       ['readiness-parts', 'readyParts', 70, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal. The morning notification brings the same numbers and what to do today, weighing the days before and tomorrow’s workout.', 7000],
       ['journal-impact', 'journal', 110, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000]]],
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
-    ['trenink', 'Training', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
+    ['trenink', '', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
       ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon or a gran fondo, a strength plan, or let the AI plan the week. A busy day in your calendar gets a shorter workout, and when the load adds up, the coach proposes moving or easing a session. Send a planned ride or run to Wahoo, Intervals.icu, your Apple Watch or Zwift, and again if it didn’t arrive. A finished workout shows how much of the plan you did.', 9500]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
       ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Then start.', 7000]]],
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
-      ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight and reps. Change them, add or remove a set, swap an exercise for a similar one or any other when its machine is taken, keep your own note on how to set it up, and start.', 6000],
+      ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight and reps, and the plates to load on each side of the bar. Change them, add or remove a set, swap an exercise for a similar one or any other when its machine is taken, keep your own note on how to set it up, and start.', 6000],
       ['training-set', 'tmTick', 380, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets. Miss your reps or hit failure and the next set comes lighter; breeze through and it comes heavier.', 6000],
-      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, as long as the exercise needs, longer after squats than after curls. It stays on your lock screen and shows what comes next. The last seconds count down with a vibration you feel even with the phone on the bench, or a tone if you like.', 13500],
+      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, as long as the exercise needs, longer after squats than after curls. It stays on your lock screen and shows what comes next. The last seconds count down with a vibration you feel even with the phone on the bench, or a tone if you like. Ask the coach about the set or the next exercise while you rest.', 13500],
       ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired when you finish, saved to Apple Health. Then say how it went.', 6000]]],
-    ['vyziva', 'Nutrition', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
+    ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
       ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
       ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000]]],
-    ['kouc', 'AI coach', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
+    ['spanek', '', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
+      ['sleep', 'sleepNight', 300, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
+      ['sleep-need', 'sleepNeed', 150, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
+      ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
+      ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
+    ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
       ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout, or send a photo of a plan from your trainer. Tap Coach on a workout or your HRV to ask about just that, or during a gym session about the set, the rest or the next exercise. You can also reply straight from its notification. When it proposes a workout or a whole plan for your race, confirm it and it lands in your plan.', 15000]]]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
@@ -697,8 +734,8 @@ export function overviewPage(request) {
     const steps = list.map((x, i) => `<li class="step${i === 0 ? ' on' : ''}" style="--dur:${x[5] || 6500}ms" data-dur="${x[5] || 6500}">${multi
       ? `<button type="button" aria-pressed="${i === 0}">${body(x, i)}<span class="bar" aria-hidden="true"><i></i></span></button>`
       : `<div>${body(x, i)}</div>`}</li>`).join('');
-    return `<section id="${id}" class="chapter${n % 2 ? ' flip' : ''}${multi ? ' multi' : ''}" style="--tone:var(--${tone});--glow:var(--${glow})"><div class="wrap ch">
-<div class="head reveal"><div class="eyebrow">${eyebrow}</div><h2 class="big">${h}</h2>${subs}</div>
+    return `<section id="${id}" class="chapter${n % 2 ? ' flip' : ''}${multi ? ' multi' : ''}${eyebrow ? '' : ' opens'}" style="--tone:var(--${tone});--glow:var(--${glow})"><div class="wrap ch">
+<div class="head reveal">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h2 class="big">${h}</h2>${subs}</div>
 <div class="vis-wrap"><div class="vis"><div class="glow"></div>
 <div class="device" aria-hidden="true"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}">${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>
 ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
@@ -707,6 +744,20 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
 ${REAL_DAYS[id] ? realDay(id) : ''}
 </div></section>`;
   };
+  // The parts of the overview, as the welcome before the sign-in shows them (WelcomePages.swift): each opens with
+  // the welcome's page (its title, its line and its cards that move) and then the chapters of that part, the first
+  // without an eyebrow, since the part's title says it. A pill at the bottom of the window shows where the reader is.
+  const ACT_LIST = [
+    ['readiness', 'Readiness', 'Know every morning how much your body can take today.', 'glow-today', ['pripravenost', 'zatez']],
+    ['training', 'Training', 'Workouts built around your fatigue, muscles and equipment.', 'glow-training', ['trenink', 'posilovna', 'rezim', 'svaly']],
+    ['food', 'Nutrition', 'Snap your plate or scan a barcode. AI fills in the values.', 'glow-food', ['vyziva']],
+    ['sleep', 'Sleep', 'A bedtime from your alarm and the sleep you need tonight.', 'glow-health', ['spanek']],
+    ['coach', 'Coach', 'Ask anything. It knows your sleep, training and food.', 'glow-coach', ['kouc']]];
+  const act = ([id, title, line, glow]) => `<section id="a-${id}" class="opener" style="--glow:var(--${glow})"><div class="wrap ac">
+<div class="head reveal"><h2 class="big">${title}</h2><p class="sub">${line}</p></div>
+<div class="cards" aria-hidden="true">${ACTS[id]}</div>
+</div></section>`;
+  const actNav = `<nav class="acts-nav" aria-label="Parts of Aurin"><span class="an-t" aria-hidden="true">${ACT_LIST[0][1]}</span><span class="an-l"><i class="an-fill"></i>${ACT_LIST.map(([id, title], i) => `<a href="#a-${id}" style="--k:${i}" aria-label="${title}"></a>`).join('')}<i class="an-dot"></i></span></nav>`;
   // Muscles sit between training mode and food, as Svaly sits under Trénink in the app. The bubble's
   // words are the sample day's (DemoData.muscles), in English.
   const muscles = `<section id="svaly" class="muscles"><div class="wrap mu">
@@ -785,8 +836,11 @@ ${layer('wide')}${layer('tall')}
     ['Something doesn’t work. What now?', `In the app, open Settings → Help → Report a problem and send it with diagnostics attached, or write to <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.`],
     ['I’m missing something in Aurin. Can I suggest it?', 'Yes. In the app, open Settings → Help → Suggest a feature, write what would help you and send it.']]
     .map(([q, a]) => `<details><summary>${q}</summary><p>${a}</p></details>`).join('\n');
-  const headline = 'Train for how you feel today.';
-  const aurora = '<div class="aurora" aria-hidden="true"><i class="a"></i><i class="b"></i><i class="c"></i></div>';
+  // The hero says what the welcome's first page says, its last words in the coach's green italic.
+  const headline = 'A coach that knows how you slept.';
+  const SLANT = 4;
+  // The logo rising like the sun behind soft rings that keep spreading (the welcome's first page).
+  const sun = size => `<div class="sun" aria-hidden="true" style="--s:${size}px"><i class="halo"></i><i class="rg"></i><i class="rg"></i><i class="rg"></i>${mark(size)}</div>`;
   // The sample morning (DemoData.swift) the hero phone shows; the sentence under the hero says the same.
   const day = {readiness: 78, hrv: 64, hrvBaseline: 58, sleep: '7:12', sleepScore: 82};
 
@@ -805,12 +859,13 @@ ${layer('wide')}${layer('tall')}
     title: 'Aurin · train for how you feel today',
     description,
     body: `<main>
-<div class="hero">${aurora}
+<div class="hero">
 <div class="wrap grid">
 <div class="copy">
+${sun(104)}
 <span class="kicker"><i></i>For iPhone · now in TestFlight</span>
-<h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
-<p class="lede">Aurin reads your sleep, HRV and workouts and turns them into one number, one plan and one coach every morning.</p>
+<h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
+<p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
 <div class="cta">${store('top')}<p class="note">We invite people to the test version in TestFlight. Testing costs nothing.</p></div>
 </div>
 <div class="stage">
@@ -826,9 +881,8 @@ ${layer('wide')}${layer('tall')}
 <p class="say">You slept <b class="sleep">${day.sleep}</b>, your HRV is <b class="up">${day.hrv - day.hrvBaseline} ms above normal</b> and your readiness is <b class="up">${day.readiness}</b>. So the coach says: <em>go all in on strength today.</em></p>
 </div></section>
 
-${scenes.slice(0, 6).map(chapter).join('\n')}
-${muscles}
-${scenes.slice(6).map((s, i) => chapter(s, i + 6)).join('\n')}
+${ACT_LIST.map(a => act(a) + '\n' + a[4].map(id => id === 'svaly' ? muscles : chapter(scenes.find(x => x[0] === id), scenes.findIndex(x => x[0] === id))).join('\n')).join('\n')}
+${actNav}
 
 <section id="propojeni" class="connect"><div class="wrap">
 <div class="intro reveal"><div><div class="eyebrow">Connections</div><h2 class="big">Works with what you wear.</h2></div><p class="sub">Any watch or ring that saves to Apple Health or Google Health, plus power and plans from Intervals.icu. Wear more than one? Aurin takes each night and day from the one you wear most, or you pick.</p></div>
@@ -841,7 +895,7 @@ ${realDay('propojeni')}
 </div></section>
 
 <section id="soukromi" class="privacy"><div class="wrap">
-<div class="ink reveal">${LOCK}<p class="big">Your data works only for you. Aurin reads only what you allow, never sells it or uses it for ads, and you can delete all of it in Settings at any time.</p>
+<div class="promise reveal">${LOCK}<h2 class="big">Your data works only for you.</h2><p class="sub">We never sell it or use it for ads. Aurin reads only what you allow, and you can delete all of it in Settings at any time.</p>
 <a class="more" href="/privacy">Read the privacy policy <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></div>
 ${GOOGLE_DISCLOSURE_ON_HOME ? googleDisclosure() : ''}
 </div></section>
@@ -853,9 +907,9 @@ ${faq}
 </div>
 </div></section>
 
-<section class="final">${aurora}<div class="wrap reveal" id="join">
-${mark(120)}
-<h2>Aurin</h2>
+<section class="final"><div class="wrap reveal" id="join">
+${sun(104)}
+<h2>Train for how you feel today.</h2>
 <p class="sub">Leave your email and we’ll invite you to try Aurin on your iPhone.</p>
 ${store('end')}
 </div></section>
