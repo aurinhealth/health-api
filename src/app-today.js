@@ -107,7 +107,10 @@ export function todayWeather(location, forecast, date) {
     source: w?.source === "apple" ? "apple" : null,
     // The detail (weatherkit.js detailFromWeatherKit): the temperature now, the
     // hours from now, and seven days with their hours and where to train.
-    now: Number.isFinite(Number(w?.now?.temp)) ? { temp: round(num(w.now.temp)), code: round(num(w.now.code)) } : null,
+    now: Number.isFinite(Number(w?.now?.temp)) ? {
+      temp: round(num(w.now.temp)), code: round(num(w.now.code)), wind: round(num(w.now.wind)),
+      windDirection: round(num(w.now.windDirection)), daylight: typeof w.now.daylight === "boolean" ? w.now.daylight : null
+    } : null,
     next: Array.isArray(w?.next) && w.next.length ? w.next : null,
     week: Array.isArray(w?.week) && w.week.length ? w.week.map(d => ({
       date: d.date, code: round(num(d.code)), max: round(num(d.max)), min: round(num(d.min)), rainProb: round(num(d.rainProb)),

@@ -270,6 +270,11 @@ struct TodaySnapshot: Decodable, Equatable {
         struct Now: Decodable, Equatable {
             let temp: Double
             let code: Double?
+            /// Wind now, km/h, and the compass degrees it blows from.
+            var wind: Double? = nil
+            var windDirection: Double? = nil
+            /// False at night (the detail's sky turns to night).
+            var daylight: Bool? = nil
         }
 
         /// One day of the week: its range, its hours (6–22 h) and where a ride and a run belong.

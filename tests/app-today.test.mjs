@@ -234,9 +234,9 @@ test("Today's weather at the week plan's place with the indoor/outdoor advice", 
   const hourly = buildToday({ ...input, location, forecast: { code: 1, max: 18, min: 7, hours: [{ hour: 8, temp: 9, code: 3 }] } });
   assert.deepEqual(hourly.weather.hours, [{ hour: 8, temp: 9, code: 3 }]);
   // Apple Weather's detail: the temperature now, the hours from now and the week with where to train.
-  const detail = buildToday({ ...input, location, forecast: { code: 1, max: 18, min: 7, source: "apple", now: { temp: 15.4, code: 2 }, next: [{ hour: 15, temp: 15, code: 2, rainProb: 10 }],
+  const detail = buildToday({ ...input, location, forecast: { code: 1, max: 18, min: 7, source: "apple", now: { temp: 15.4, code: 2, wind: 21.2, windDirection: 300, daylight: false }, next: [{ hour: 15, temp: 15, code: 2, rainProb: 10 }],
     week: [{ date: "2026-10-28", code: 3, max: 6, min: 1, wind: 10, rain: 0, rainProb: 10, hours: [{ hour: 6, temp: 1, code: 3, rainProb: 0 }] }] } }).weather;
-  assert.deepEqual(detail.now, { temp: 15, code: 2 });
+  assert.deepEqual(detail.now, { temp: 15, code: 2, wind: 21, windDirection: 300, daylight: false });
   assert.equal(detail.next.length, 1);
   assert.equal(detail.week[0].ride.environment, "indoor");
   assert.match(detail.week[0].ride.reason, /Nejvýš 6°/);
