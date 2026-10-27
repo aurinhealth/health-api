@@ -20,6 +20,7 @@ struct GymSessionView: View {
     @State private var now = Date()
     @State private var list = false
     @State private var summary = false
+    @State private var coachOpen = false
     @FocusState private var focus: Field?
 
     private enum Field { case kg, reps }
@@ -39,6 +40,13 @@ struct GymSessionView: View {
                 }
             }
             .toolbar {
+                if !summary, restEnd.map({ $0 > now }) == true {
+                    // The coach during the rest: it knows the workout is on.
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { coachOpen = true } label: { Image(systemName: "bubble.left.and.text.bubble.right") }
+                            .accessibilityLabel(W.tr("Kouč", "Coach"))
+                    }
+                }
                 if !summary, store.gym?.allDone != true {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { list = true } label: { Image(systemName: "line.3.horizontal") }
@@ -56,6 +64,9 @@ struct GymSessionView: View {
                         summary = true
                     }
                 }
+            }
+            .sheet(isPresented: $coachOpen) {
+                NavigationStack { CoachView(view: "gym") }
             }
             .alert(W.tr("iPhone je mimo dosah", "iPhone out of reach"), isPresented: $store.failedChange) {
                 Button("OK", role: .cancel) {}

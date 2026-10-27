@@ -129,10 +129,25 @@ extension WatchStore: WCSessionDelegate {
         }
     }
 
-    /// The iPhone saved today's gym (Training mode, or a change from here).
+    /// The iPhone saved today's gym (Training mode, or a change from here), or the coach answers.
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
-        guard let gym = message[WatchGym.replyKey] as? Data else { return }
-        Task { @MainActor in GymStore.shared.received(gym) }
+        received(message)
+    }
+
+    /// The coach's answer, queued while the watch was out of reach.
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
+        received(userInfo)
+    }
+
+    private nonisolated func received(_ message: [String: Any]) {
+        let gym = message[WatchGym.replyKey] as? Data
+        let progress = message[WatchCoach.progressKey] as? String
+        let answer = message[WatchCoach.answerKey] as? Data
+        Task { @MainActor in
+            if let gym { GymStore.shared.received(gym) }
+            if let progress { CoachStore.shared.received(progress: progress) }
+            if let answer { CoachStore.shared.received(answer: answer) }
+        }
     }
 
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {

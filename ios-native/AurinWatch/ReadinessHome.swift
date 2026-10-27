@@ -4,12 +4,12 @@ import SwiftUI
 /// word, and sleep, strain and HRV in one card with their range bars, all on
 /// one screen. The number opens why readiness is what it is, each column its
 /// detail (the pages are in WatchRoot's navigationDestination); the alarm
-/// sits at the top left.
+/// sits at the top left, the coach at the top right.
 struct ReadinessHome: View {
     let s: WatchSnapshot
 
     enum Page: Hashable {
-        case why, sleep, restingHR, hrv, strain, alarm
+        case why, sleep, restingHR, hrv, strain, alarm, coach
     }
 
     var body: some View {
@@ -26,6 +26,12 @@ struct ReadinessHome: View {
                     Image(systemName: "alarm.fill").foregroundStyle(W.indigo)
                 }
                 .accessibilityLabel(W.tr("Budík", "Alarm"))
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink(value: Page.coach) {
+                    Image(systemName: "bubble.left.and.text.bubble.right").foregroundStyle(W.amber)
+                }
+                .accessibilityLabel(W.tr("Kouč", "Coach"))
             }
         }
         .containerBackground(W.glow(W.Glow.readiness), for: .navigation)

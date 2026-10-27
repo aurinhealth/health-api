@@ -221,7 +221,14 @@ extension WatchBridge: WCSessionDelegate {
         let water = message[WatchSnapshot.waterKey] as? Int
         let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
         let onWatch = message[WatchSnapshot.alarmOnWatchKey] as? Bool
+        let coach = (message[WatchCoach.askKey] as? Data).flatMap(WatchCoach.Ask.decode)
         Task { @MainActor in
+            if let coach {
+                // The answer takes longer than a reply waits: it comes as its own message.
+                replyHandler(["ok": true])
+                await askCoach(coach)
+                return
+            }
             if let alarmChange {
                 let ok = await applyAlarm(alarmChange)
                 replyHandler(["ok": ok])

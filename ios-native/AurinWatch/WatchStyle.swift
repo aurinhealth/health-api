@@ -31,6 +31,7 @@ enum W {
         static let restingHR = Color(hex: 0x3D1D2A)
         static let strain = Color(hex: 0x3A2A17)
         static let food = Color(hex: 0x163047)
+        static let coach = Color(hex: 0x3D2614)
     }
 
     /// A shape style, for containerBackground: the colour fades into black.

@@ -50,6 +50,7 @@ struct WatchRoot: View {
                     case .hrv: MetricDetail(s: s, metric: .hrv)
                     case .strain: StrainDetail(s: s)
                     case .alarm: AlarmView()
+                    case .coach: CoachView()
                     }
                 }
             }
