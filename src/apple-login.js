@@ -18,11 +18,7 @@ let forcedJwksAt = 0;
 // traded for a refresh token, which deleting the account revokes (App Store rule 5.1.1(v)).
 // The body must be JSON, so another site cannot post a form here to sign someone in.
 const APP_BUNDLE_ID = "health.aurin.app";
-// The app before it became its own Aurin app (Loadwise's ID): still signs in
-// until the testers have moved (navody/nove-id-aplikace-aurin.md, step 9).
-export const LEGACY_APP_BUNDLE_ID = "eu.petrfitnessdata.loadwise.native";
 export const appBundleId = env => String(env?.APPLE_APP_BUNDLE_ID || APP_BUNDLE_ID).trim();
-const appBundleIds = env => [appBundleId(env), LEGACY_APP_BUNDLE_ID];
 const canRevoke = env => Boolean(env?.APPLE_TEAM_ID && env.APPLE_KEY_ID && env.APPLE_PRIVATE_KEY);
 const appJson = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -36,7 +32,7 @@ export async function handleNativeAppleLogin(request, env, pathname, { fetchImpl
   const token = String(body?.identityToken || ""), nonce = String(body?.nonce || "");
   if (!token || token.length > 8000 || nonce.length < 16 || nonce.length > 200) return appJson({ message: L("Neplatný požadavek.", "Invalid request.") }, 400);
   let claims;
-  try { claims = await verifyAppleIdToken(token, appBundleIds(env), await sha256Hex(nonce), fetchImpl); }
+  try { claims = await verifyAppleIdToken(token, appBundleId(env), await sha256Hex(nonce), fetchImpl); }
   catch (error) { console.error("Apple app ID token rejected", error.message); return appJson({ error: "failed", message: L("Účet Apple se nepodařilo ověřit.", "Couldn't verify your Apple account.") }, 401); }
   const verified = claims.email_verified === true || claims.email_verified === "true";
   await ensureTenancy(env.DB, env, { request });
