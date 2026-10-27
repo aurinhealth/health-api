@@ -16,16 +16,31 @@ final class SmokeTests: XCTestCase {
         app = XCUIApplication()
     }
 
-    /// A new phone: the welcome pages, the sign-in and the e-mail code sheet.
-    /// The sign-in offers no sample data. Runs first (tests go by name).
+    /// A new phone: the welcome pages one by one, back, Přeskočit, the sign-in
+    /// and the e-mail code sheet. The sign-in offers no sample data. Runs first
+    /// (tests go by name).
     func test1FirstLaunch() {
         launch()
         let skip = app.buttons["Přeskočit"]
         XCTAssertTrue(skip.waitForExistence(timeout: 20), "the welcome pages did not appear")
+        pause(2)
         shot("uvod")
-        skip.tap()
+        app.buttons["Pojďme na to"].tap()
+        for name in ["pripravenost", "trenink", "jidlo", "spanek", "kouc"] {
+            let next = app.buttons["Pokračovat"]
+            XCTAssertTrue(next.waitForExistence(timeout: 5), "the welcome page \(name) did not appear")
+            pause(4)
+            shot("uvod-" + name)
+            next.tap()
+        }
         let email = app.buttons["Pokračovat e-mailem"]
+        XCTAssertTrue(email.waitForExistence(timeout: 5), "the sign-in did not appear after the pages")
+        // Back to the pages, and Přeskočit goes straight to the sign-in again.
+        app.buttons["Zpět"].tap()
+        XCTAssertTrue(skip.waitForExistence(timeout: 5), "back did not return to the pages")
+        skip.tap()
         XCTAssertTrue(email.waitForExistence(timeout: 5), "the sign-in did not appear")
+        pause(1)
         // Its label also holds the "G" drawn as text.
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Pokračovat přes Google")).firstMatch.exists)
         shot("prihlaseni")
