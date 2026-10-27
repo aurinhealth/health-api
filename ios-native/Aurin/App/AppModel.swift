@@ -37,7 +37,10 @@ final class AppModel {
     /// "Synchronizuji…", "Synchronizováno" for a moment, or a failure to retry.
     private(set) var syncStatus: SyncStatus?
     enum SyncStatus: Equatable { case syncing, done, failed }
-    private(set) var signingIn = false
+    /// The sign-in under way, so only its own button turns into a spinner.
+    private(set) var signingInWith: SignInMethod?
+    enum SignInMethod: Equatable { case apple, google, passkey }
+    var signingIn: Bool { signingInWith != nil }
     var errorMessage: String?
     /// Sample data instead of the server ("-demo": screenshots and UI tests).
     private(set) var demo: Bool
@@ -321,14 +324,16 @@ final class AppModel {
         if let first = shown?.trimmingCharacters(in: .whitespaces).first {
             defaults.set(String(first).uppercased(), forKey: Self.accountInitialKey)
         }
+        // The photo the account keeps on the server, or this phone's going up.
+        await AvatarStore.sync(api: api)
     }
 
     /// The name the user typed in Profil (kept in the profile on the server too).
     nonisolated static let displayNameKey = "displayName"
 
     func signIn() async {
-        signingIn = true
-        defer { signingIn = false }
+        signingInWith = .google
+        defer { signingInWith = nil }
         do {
             try await auth.signIn()
             await signedIn()
@@ -347,8 +352,8 @@ final class AppModel {
             errorMessage = L10n.tr("Apple nevrátil identitu účtu. Zkus to znovu.")
             return
         }
-        signingIn = true
-        defer { signingIn = false }
+        signingInWith = .apple
+        defer { signingInWith = nil }
         let code = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
         let name = credential.fullName.map { PersonNameComponentsFormatter().string(from: $0) }
         do {
@@ -373,8 +378,8 @@ final class AppModel {
     /// CancellationError when the sheet was closed; any other error means the
     /// e-mail code is the way in.
     func signInWithPasskey() async throws {
-        signingIn = true
-        defer { signingIn = false }
+        signingInWith = .passkey
+        defer { signingInWith = nil }
         try await passkeys.signIn(api: api)
         await signedIn()
         await refresh()
@@ -419,6 +424,8 @@ final class AppModel {
     private func checkAccount(_ account: (name: String?, email: String?, id: Int?)) {
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: Self.accountUncheckedKey)
+        // The photo outlasts a sign-out, so it is checked against its own account.
+        AvatarStore.keep(forId: account.id, email: account.email)
         guard Self.anotherAccount(id: account.id, email: account.email, defaults: defaults) else { return }
         outbox = []
         OutboxStore.save([])
@@ -1590,7 +1597,7 @@ final class AppModel {
             // The next account looks for its own kept settings.
             SettingsBackup.forget()
             for key in [AvatarStore.nameKey, AvatarStore.emailKey, AvatarStore.idKey, Self.displayNameKey, Self.accountUncheckedKey] { UserDefaults.standard.removeObject(forKey: key) }
-            AvatarStore.remove()
+            // The photo stays for this account's next sign-in (AvatarStore.keep).
         }
         outboxNote = nil
         notice = nil

@@ -37,9 +37,12 @@ server. `vydat.yml`, run by hand:
    ever takes commits on main (deploy-worker.yml refuses others), so a release never puts back an
    older server than a hand-started deploy left there. Without a typed build number it stops when
    main has app changes the newest build lacks;
-3. writes "What to Test" from the TestFlight sections of every pull request since the build the
-   external group already has, adds the build to the external group (`EXTERNAL_GROUP` repository
-   variable when there is more than one) and submits it to Apple's beta review.
+3. writes "What to Test" from the TestFlight sections of every pull request since the previous
+   release (the main commit of the newest Vydat run whose production deploy went through). Only
+   when "external" is ticked at dispatch it also adds the build to the external group
+   (`EXTERNAL_GROUP` repository variable when there is more than one) and submits it to Apple's
+   beta review; otherwise the owner adds builds to the external groups by hand in App Store
+   Connect (TestFlight → the group → Builds → +).
 
 A server-only fix goes live with `deploy-worker.yml`, target production, without a release.
 

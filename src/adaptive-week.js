@@ -2,6 +2,7 @@ import { L } from './lang.js';
 import { availabilityOn, parseTimeWindow } from './training-availability.js';
 import { planWeekRoles, weekTargets, weekLoadsBefore, weeklyRunCap, capRunVolume, committedRunMinutes, isRunActivity, hrvWeekTrendDown, hrvSourceRows } from './week-planner.js';
 import { timeZone } from "./user-time.js";
+import { weatherKitConfigured, weatherKitWeek, weatherKitHours } from "./weatherkit.js";
 
 const shift = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 export const sportOf = a => /ride|bike|cycl/i.test(a.type || '') ? 'ride' : /run/i.test(a.type || '') ? 'run' : /weight|strength|gym/i.test(a.type || '') ? 'gym' : null;
@@ -25,12 +26,31 @@ export function environmentFor(date, sport, weather = null) {
   const indoor = poor || (sport === 'ride' && winter);
   return { environment: indoor ? 'indoor' : 'outdoor', reason: poor ? L('Předpověď nepřeje venkovnímu tréninku.', 'The forecast isn\'t good for training outdoors.') : indoor ? L('V zimním období preferuji indoor kolo.', 'In winter I prefer indoor riding.') : weather ? L('Podle dostupné předpovědi.', 'Based on the available forecast.') : L('Předpověď není dostupná; volba vychází z ročního období.', 'No forecast is available; the choice is based on the season.') };
 }
+// The reason for one day's place in the weather's detail: what decided it,
+// with its number ("High of 6°, too cold outside.", "Dry, high of 14°.").
+export function weatherReason(date, sport, weather) {
+  const e = environmentFor(date, sport, weather);
+  if (!weather) return e.reason;
+  const n = v => Number.isFinite(Number(v)) && v !== null ? Math.round(Number(v)) : null;
+  const max = n(weather.max), wind = n(weather.wind), chance = n(weather.rainProb), rain = Number(weather.rain);
+  const mm = Number.isFinite(rain) ? String(Math.round(rain * 10) / 10) : null;
+  if (Number(weather.code) >= 95) return L('Hlásí bouřky.', 'Storms are forecast.');
+  if (max != null && max < (sport === 'ride' ? 8 : 0)) return L('Nejvýš ' + max + '°, venku je zima.', 'High of ' + max + '°, too cold outside.');
+  if (wind != null && wind >= (sport === 'ride' ? 35 : 50)) return L('Vítr až ' + wind + ' km/h.', 'Wind up to ' + wind + ' km/h.');
+  if (mm != null && rain >= 3) return L('Naprší ' + mm.replace('.', ',') + ' mm.', mm + ' mm of rain.');
+  if (chance != null && chance >= 70) return L('Déšť na ' + chance + ' %.', chance + ' % chance of rain.');
+  if (e.environment === 'indoor') return e.reason;
+  if (max == null) return e.reason;
+  return chance != null && chance >= 30 ? L('Nejvýš ' + max + '°, déšť na ' + chance + ' %.', 'High of ' + max + '°, ' + chance + ' % chance of rain.') : L('Sucho, nejvýš ' + max + '°.', 'Dry, high of ' + max + '°.');
+}
 // Weather is fetched on the server as well as in the calendar. Client data is
-// never the authority for training or health constraints.
-export async function weekWeather(location, start) {
+// never the authority for training or health constraints. With the WeatherKit
+// key (env) it comes from Apple Weather (weatherkit.js), else from Open-Meteo.
+export async function weekWeather(location, start, env = null) {
   if (!location) return {};
   const end = shift(start, 6);
   try {
+    if (weatherKitConfigured(env)) return await weatherKitWeek(env, location, start);
     const query = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max', timezone: timeZone(), start_date: start, end_date: end });
     const r = await fetch('https://api.open-meteo.com/v1/forecast?' + query, { signal: AbortSignal.timeout(6000) });
     if (!r.ok) return {};
@@ -49,8 +69,9 @@ export function pickHours(hourly, date) {
   }
   return out;
 }
-export async function dayHours(location, date) {
+export async function dayHours(location, date, env = null) {
   if (!location) return [];
+  if (weatherKitConfigured(env)) return pickHours(await weatherKitHours(env, location, date), date);
   const query = new URLSearchParams({ latitude: location.latitude, longitude: location.longitude, hourly: 'temperature_2m,weather_code', timezone: timeZone(), start_date: date, end_date: date });
   const r = await fetch('https://api.open-meteo.com/v1/forecast?' + query, { signal: AbortSignal.timeout(6000) });
   if (!r.ok) throw new Error('no forecast');

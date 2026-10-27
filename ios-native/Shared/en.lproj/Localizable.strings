@@ -440,7 +440,8 @@
 "Prahy a zóny se po uložení pošlou do Intervals.icu" = "Thresholds and zones are sent to Intervals.icu after saving";
 "Pravidelnost · %@ nocí" = "Consistency · %@ nights";
 "Pražský půlmaraton" = "Chicago Marathon";
-"Pro potvrzení napiš SMAZAT." = "Type DELETE to confirm.";
+"Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit." = "Everything Aurin keeps for you goes and can't be restored.";
+"Smazat účet Aurin" = "Delete your Aurin account";
 "Probrat" = "Discuss";
 "Probuzení" = "Woke up";
 "Procvičí hlavně: %@" = "Mainly works: %@";
@@ -557,6 +558,10 @@
 "Pravděpodobnost srážek" = "Chance of rain";
 "Kde dnes trénovat" = "Where to train today";
 "Poloha pro počasí" = "Location for weather";
+"Další zdroje dat" = "Other data sources";
+"Dnes po hodinách" = "Today, hour by hour";
+"Déšť" = "Rain";
+"Ukáže hodiny dne" = "Shows the day's hours";
 "Město nebo obec" = "City or town";
 "Výsledky" = "Results";
 "Nic jsme nenašli. Zkus jiný název." = "Nothing found. Try another name.";
@@ -599,7 +604,6 @@
 "Režim tréninku" = "Workout mode";
 "Rozcvičovací série" = "Warm-up set";
 "Ručně" = "Manual";
-"SMAZAT" = "DELETE";
 "Sacharidy" = "Carbs";
 "Sdílet soubor s daty" = "Share data file";
 "Sedavá práce" = "Desk job";
@@ -1087,7 +1091,6 @@
 "± %lld min" = "± %lld min";
 "Únava" = "Fatigue";
 "Úseky" = "Laps";
-"Účet zůstal: pro smazání je potřeba napsat SMAZAT." = "Your account stays: type DELETE to delete it.";
 "Čaj" = "Tea";
 "Čas" = "Time";
 "Čas do postele" = "Bedtime";
@@ -1598,6 +1601,7 @@
 "Zapnout" = "Turn on";
 "Přístupový klíč se nepodařilo ověřit. Zkus to znovu." = "The passkey couldn't be verified. Try again.";
 "Přístupový klíč se nepodařilo vytvořit." = "The passkey couldn't be created.";
+"Tenhle přístupový klíč patří k účtu, který už neexistuje. Přihlas se jinak, iPhone ho přestane nabízet." = "This passkey belongs to an account that no longer exists. Sign in another way; your iPhone will stop offering it.";
 "Odkud brát data" = "Where to take data from";
 "Tréninkové aplikace" = "Training apps";
 "Souhlasím se zpracováním zdravotních dat" = "I agree to the processing of my health data";
@@ -1605,6 +1609,7 @@
 "Z Apple Health jsme vzali:" = "Taken from Apple Health:";
 "Z Google Health jsme vzali:" = "Taken from Google Health:";
 "Narození" = "Born";
+"Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení." = "Aurin needs your age, height and weight to work out calories, strain and recovery.";
 "Rok" = "Year";
 
 /* Training: the focus card and sheet (FocusSheet) */

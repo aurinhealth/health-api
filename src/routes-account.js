@@ -18,6 +18,7 @@ import { L } from "./lang.js";
 import { localToday } from "./user-time.js";
 import { internalTester } from "./staging.js";
 import { appSettings, saveAppSettings } from "./app-settings.js";
+import { profilePhoto, saveProfilePhoto, removeProfilePhoto } from "./profile-photo.js";
 
 export async function handleAccountApi(request,env,ctx,url,session,internalAuth){
   if (url.pathname === "/app/api/me" && request.method === "GET") {
@@ -33,6 +34,16 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     if(request.method!=='PUT')return Response.json({message:'Method not allowed'},{status:405});
     let body;try{body=await request.json();}catch{return Response.json({message:L('Neplatný požadavek.','Invalid request.')},{status:400});}
     try{return Response.json(await saveAppSettings(env.DB,body),{headers:{'Cache-Control':'no-store'}});}
+    catch(error){return Response.json({message:error.message},{status:400});}
+  }
+  // The profile photo, kept with the account (profile-photo.js).
+  if(url.pathname==='/app/api/profile/photo'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.method==='GET')return Response.json({status:'ok',...await profilePhoto(env.DB)},{headers:{'Cache-Control':'no-store'}});
+    if(request.method==='DELETE')return Response.json(await removeProfilePhoto(env.DB),{headers:{'Cache-Control':'no-store'}});
+    if(request.method!=='PUT')return Response.json({message:'Method not allowed'},{status:405});
+    let body;try{body=await request.json();}catch{return Response.json({message:L('Neplatný požadavek.','Invalid request.')},{status:400});}
+    try{return Response.json(await saveProfilePhoto(env.DB,body),{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:error.message},{status:400});}
   }
   // Consent to health data (required) and to AI with OpenAI (optional); consent.js.

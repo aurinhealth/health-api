@@ -22,6 +22,13 @@ extension DemoData {
 
     static let english: [String: String] = [
         // Today
+        "Déšť na 80 %.": "80 % chance of rain.",
+        "Nejvýš 14°, déšť na 30 %.": "High of 14°, 30 % chance of rain.",
+        "Nejvýš 8°, déšť na 60 %.": "High of 8°, 60 % chance of rain.",
+        "Sucho, nejvýš 11°.": "Dry, high of 11°.",
+        "Sucho, nejvýš 12°.": "Dry, high of 12°.",
+        "Sucho, nejvýš 13°.": "Dry, high of 13°.",
+        "Sucho, nejvýš 9°.": "Dry, high of 9°.",
         "Jak dnes začít": "How to start today",
         "Spánek 7 h 12 min (40 min více než obvykle). HRV je třetí den nad normou.":
             "Sleep 7 h 12 min (40 min more than usual). HRV is above normal for the third day.",

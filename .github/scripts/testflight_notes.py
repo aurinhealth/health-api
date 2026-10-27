@@ -38,14 +38,11 @@ in by hand) goes to every language as it is.
 
   testflight_notes.py release NOTES_FILE
       "Vydat": sets the notes on build BUILD_NUMBER (already in TestFlight),
-      adds it to the external testers' group (EXTERNAL_GROUP, or the only
-      external group) and sends it to Apple's beta review. Same environment
+      and, only with EXTERNAL=true (Vydat's "external" ticked), adds it to the
+      external testers' group (EXTERNAL_GROUP, or the only external group) and
+      sends it to Apple's beta review. Same environment
       as upload, without MARKETING_VERSION. With RELEASE_ALL=1, write takes
       every pull request since BASE_SHA, not only the ones touching ios-native/.
-
-  testflight_notes.py released
-      Prints the number of the newest build the external testers already
-      have (empty when none): where the next release's summary starts.
 
 Standard library only (the JWT is signed with the openssl command).
 """
@@ -276,13 +273,6 @@ def external_group(groups, name=""):
     return external[0]
 
 
-def released():
-    app = app_id()
-    group = external_group(call("GET", f"/apps/{app}/betaGroups?limit=200")["data"], os.environ.get("EXTERNAL_GROUP", ""))
-    numbers = [int(b["attributes"]["version"]) for b in call("GET", f"/betaGroups/{group['id']}/builds?limit=200")["data"]
-               if str(b["attributes"].get("version", "")).isdigit()]
-    print(max(numbers) if numbers else "")
-
 
 def release(notes_file):
     notes = open(notes_file, encoding="utf-8").read()
@@ -298,6 +288,9 @@ def release(notes_file):
     if build["attributes"].get("expired"):
         sys.exit(f"::error::Build {env['BUILD_NUMBER']} v TestFlightu vypršel.")
     set_notes(app, build["id"], notes)
+    if env.get("EXTERNAL") != "true":
+        print("External testers: not sent (Vydat's \"external\" not ticked; add the build by hand in App Store Connect)")
+        return
     group = external_group(call("GET", f"/apps/{app}/betaGroups?limit=200")["data"], env.get("EXTERNAL_GROUP", ""))
     call("POST", f"/betaGroups/{group['id']}/relationships/builds", {"data": [{"type": "builds", "id": build["id"]}]})
     print(f"Build {env['BUILD_NUMBER']} added to {group['attributes'].get('name')}")
@@ -340,7 +333,5 @@ if __name__ == "__main__":
         upload(sys.argv[2])
     elif sys.argv[1] == "release":
         release(sys.argv[2])
-    elif sys.argv[1] == "released":
-        released()
     else:
         sys.exit(__doc__)

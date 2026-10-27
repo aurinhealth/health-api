@@ -1,12 +1,38 @@
 import SwiftUI
 import CoreLocation
+import MapKit
 
 // Weather on Today: the forecast for the place of the week plan
-// (GET /app/api/today → weather, src/app-today.js todayWeather) with the
-// coach's advice where to train, and "Poloha pro počasí" to choose the place
-// (Open-Meteo geocoding, saved as prefs.location of the usual week plan).
+// (GET /app/api/today → weather, src/app-today.js todayWeather; Apple Weather
+// through src/weatherkit.js) with the coach's advice where to train, and
+// "Poloha pro počasí" to choose the place (Apple Maps search, saved as
+// prefs.location of the usual week plan).
 
-/// Texts and symbols for Open-Meteo's forecast (WMO weather codes).
+/// Apple Weather's credit: the " Weather" mark and the link to its other
+/// data sources, in the weather's detail one tap from Today's card (Petr,
+/// 2026-10-26: no mark on Today).
+enum AppleWeather {
+    static let legalPage = URL(string: "https://weatherkit.apple.com/legal-attribution.html")!
+
+    static func credited(_ weather: TodaySnapshot.Weather?) -> Bool { weather?.source == "apple" }
+}
+
+/// " Weather", the mark beside Apple Weather's forecast.
+struct AppleWeatherMark: View {
+    var size: CGFloat = 11
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Image(systemName: "apple.logo").font(.system(size: size, weight: .medium))
+            Text(verbatim: "Weather").font(.system(size: size, weight: .medium))
+        }
+        .foregroundStyle(Palette.faint)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: "Apple Weather"))
+    }
+}
+
+/// Texts and symbols for the forecast (WMO weather codes; the server turns Apple's conditions into them).
 enum WeatherText {
     static func symbol(_ code: Double?) -> String {
         guard let code else { return "cloud.sun.fill" }
@@ -74,6 +100,16 @@ enum WeatherText {
     }
 
     static func indoor(_ advice: TodaySnapshot.Advice?) -> Bool { advice?.environment == "indoor" }
+
+    /// "Tue" or "Út" for "2026-10-27".
+    static func weekday(_ isoDate: String) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
+        let parts = isoDate.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3, let date = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])) else { return isoDate }
+        let names = L10n.isEnglish ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"]
+        return names[calendar.component(.weekday, from: date) - 1]
+    }
 }
 
 /// Today's card above the key numbers: the athlete's status as its first
@@ -151,45 +187,39 @@ struct WeatherSheet: View {
     }
 }
 
-/// Today's forecast: the temperatures, wind and rain, and whether a ride and
-/// a run belong outdoors (the coach's rule, src/adaptive-week.js environmentFor).
+/// The weather's detail (Petr, 2026-10-26, mockup G): the temperature now, the
+/// hours from now, and the week with where a ride and a run belong each day
+/// (the coach's rule, src/adaptive-week.js environmentFor); a day opens with
+/// its hours and the reason. Without Apple Weather's week only today's advice shows.
 struct WeatherDetails: View {
     let weather: TodaySnapshot.Weather
     var close: () -> Void = {}
+    @State private var open: String?
 
     var body: some View {
         SettingsPage(title: "Počasí dnes") {
-            HStack(spacing: 16) {
-                Image(systemName: WeatherText.symbol(weather.code))
-                    .symbolRenderingMode(.multicolor)
-                    .font(.system(size: 44))
-                    .frame(width: 56)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(verbatim: WeatherText.range(weather)).font(Typo.number(40)).foregroundStyle(Palette.ink)
-                    Text(verbatim: [WeatherText.description(weather.code), weather.place].compactMap { $0 }.joined(separator: " · "))
-                        .font(Typo.caption).foregroundStyle(Palette.muted)
-                }
-            }
-            .accessibilityElement(children: .combine)
+            hero
 
             if weather.max == nil {
                 Text("Předpověď teď není k dispozici. Doporučení vychází jen z ročního období.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-            } else {
-                SettingsGroup(title: "Předpověď na dnes") {
-                    SettingsRow(icon: SettingsIcon(systemImage: "wind", color: Palette.blue), title: "Vítr", value: WeatherText.wind(weather.wind), chevron: false)
-                    SettingsDivider()
-                    SettingsRow(icon: SettingsIcon(systemImage: "drop.fill", color: Palette.blue), title: "Srážky", value: WeatherText.rain(weather.rain), chevron: false)
-                    SettingsDivider()
-                    SettingsRow(icon: SettingsIcon(systemImage: "umbrella.fill", color: Palette.indigo), title: "Pravděpodobnost srážek", value: WeatherText.percent(weather.rainProb), chevron: false)
+            }
+
+            if !hours.isEmpty {
+                Card(padding: 14) {
+                    Text("Dnes po hodinách").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
+                    WeatherHourStrip(hours: hours, nowFirst: weather.next != nil)
                 }
             }
 
-            SettingsGroup(title: "Kde dnes trénovat") {
-                advice("bicycle", "Kolo", weather.outdoor)
-                SettingsDivider()
-                advice("figure.run", "Běh", weather.outdoorRun)
+            if let week = weather.week, !week.isEmpty {
+                weekCard(week)
+            } else {
+                SettingsGroup(title: "Kde dnes trénovat") {
+                    advice("bicycle", "Kolo", weather.outdoor)
+                    SettingsDivider()
+                    advice("figure.run", "Běh", weather.outdoorRun)
+                }
             }
 
             SettingsGroup {
@@ -198,6 +228,71 @@ struct WeatherDetails: View {
                 }
             }
             .buttonStyle(.plain)
+
+            if AppleWeather.credited(weather) {
+                HStack {
+                    AppleWeatherMark(size: 13)
+                    Spacer()
+                    Link("Další zdroje dat", destination: AppleWeather.legalPage)
+                        .font(Typo.caption).foregroundStyle(Palette.blue)
+                }
+                .padding(.horizontal, 4)
+            }
+        }
+    }
+
+    /// Today's hours from the one running now (the server's); without the detail, the card's few hours.
+    private var hours: [TodaySnapshot.Weather.Hour] { weather.next ?? weather.hours ?? [] }
+
+    private var hero: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                if let place = weather.place {
+                    HStack(spacing: 5) {
+                        Image(systemName: "location.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.blue)
+                        Text(verbatim: place).font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                    }
+                }
+                Text(verbatim: WeatherText.degrees(weather.now?.temp ?? weather.max)).font(Typo.number(72)).foregroundStyle(Palette.ink)
+                if let text = WeatherText.description(weather.now?.code ?? weather.code) {
+                    Text(verbatim: Fmt.capitalized(text)).font(.headline).foregroundStyle(Palette.ink)
+                }
+                Text(verbatim: [L10n.tr("Vítr") + " " + WeatherText.wind(weather.wind), L10n.tr("Déšť") + " " + WeatherText.percent(weather.rainProb)].joined(separator: " · "))
+                    .font(Typo.small).foregroundStyle(Palette.muted)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: WeatherText.symbol(weather.now?.code ?? weather.code))
+                .symbolRenderingMode(.multicolor)
+                .font(.system(size: 54))
+                .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func weekCard(_ week: [TodaySnapshot.Weather.Day]) -> some View {
+        let low = week.compactMap(\.min).min() ?? 0, high = week.compactMap(\.max).max() ?? 1
+        return Card(padding: 14) {
+            Text("Tento týden").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.muted)
+            VStack(spacing: 0) {
+                ForEach(Array(week.enumerated()), id: \.element.date) { index, day in
+                    if index > 0 { Divider().overlay(Palette.hairline) }
+                    WeatherDayRow(day: day, title: index == 0 ? L10n.tr("Dnes") : WeatherText.weekday(day.date),
+                                  low: low, high: high, open: open == day.date) {
+                        withAnimation(.snappy) { open = open == day.date ? nil : day.date }
+                    }
+                }
+            }
+            HStack(spacing: 14) {
+                legend(Palette.green, "venku")
+                legend(Palette.amber, "uvnitř")
+            }
+        }
+    }
+
+    private func legend(_ color: Color, _ text: String) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text(verbatim: L10n.tr(text)).font(Typo.caption).foregroundStyle(Palette.muted)
         }
     }
 
@@ -208,8 +303,104 @@ struct WeatherDetails: View {
     }
 }
 
-/// A place from Open-Meteo's geocoding search.
-struct GeoPlace: Decodable, Identifiable, Hashable {
+/// A row of hours to swipe: the hour, its symbol, temperature and chance of rain.
+struct WeatherHourStrip: View {
+    let hours: [TodaySnapshot.Weather.Hour]
+    /// The first hour is the one running now ("Teď").
+    var nowFirst = false
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 2) {
+                ForEach(Array(hours.enumerated()), id: \.element.hour) { index, h in
+                    let now = nowFirst && index == 0
+                    VStack(spacing: 4) {
+                        Text(verbatim: now ? L10n.tr("Teď") : String(h.hour)).font(Typo.tiny).foregroundStyle(now ? Palette.blue : Palette.faint)
+                        Image(systemName: WeatherText.symbol(h.code)).font(.system(size: 15))
+                            .symbolRenderingMode(.multicolor).frame(height: 18)
+                        Text(verbatim: WeatherText.degrees(h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                        Text(verbatim: (h.rainProb ?? 0) >= 10 ? WeatherText.percent(h.rainProb) : " ")
+                            .font(Typo.tiny.weight(.medium)).foregroundStyle(Palette.blue)
+                    }
+                    .frame(width: 46).padding(.vertical, 7)
+                    .background(now ? Palette.blue.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+    }
+}
+
+/// One day of the week: the day, its symbol, the range on the week's scale and
+/// a ride's and a run's place; tapped, it shows its hours and the reasons.
+struct WeatherDayRow: View {
+    let day: TodaySnapshot.Weather.Day
+    let title: String
+    let low: Double
+    let high: Double
+    let open: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button(action: toggle) {
+                HStack(spacing: 8) {
+                    Text(verbatim: title).font(open ? Typo.bodyStrong : Typo.body).foregroundStyle(Palette.ink).frame(width: 48, alignment: .leading)
+                    Image(systemName: WeatherText.symbol(day.code)).symbolRenderingMode(.multicolor).font(.system(size: 15)).frame(width: 24)
+                    Text(verbatim: WeatherText.degrees(day.min)).font(Typo.body).foregroundStyle(Palette.muted).frame(width: 30, alignment: .trailing)
+                    range.frame(height: 5)
+                    Text(verbatim: WeatherText.degrees(day.max)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(width: 32, alignment: .leading)
+                    place("bicycle", day.ride)
+                    place("figure.run", day.run)
+                }
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(Text("Ukáže hodiny dne"))
+
+            if open {
+                if let hours = day.hours, !hours.isEmpty { WeatherHourStrip(hours: hours) }
+                Text(verbatim: [reason("Kolo", day.ride), reason("Běh", day.run)].compactMap { $0 }.joined(separator: " "))
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 8)
+            }
+        }
+    }
+
+    private var range: some View {
+        GeometryReader { geo in
+            let span = max(high - low, 1)
+            let from = ((day.min ?? low) - low) / span, to = ((day.max ?? high) - low) / span
+            ZStack(alignment: .leading) {
+                Capsule().fill(Palette.track)
+                Capsule().fill(Palette.amberBar)
+                    .frame(width: max(geo.size.width * (to - from), 5))
+                    .offset(x: geo.size.width * from)
+            }
+        }
+    }
+
+    private func place(_ symbol: String, _ advice: TodaySnapshot.Advice?) -> some View {
+        let indoor = WeatherText.indoor(advice)
+        return Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(indoor ? Palette.amber : Palette.green)
+            .frame(width: 28, height: 24)
+            .background(indoor ? Palette.amberSoft : Palette.greenSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .accessibilityLabel(Text(verbatim: L10n.tr(symbol == "bicycle" ? "Kolo" : "Běh") + " " + L10n.tr(indoor ? "uvnitř" : "venku")))
+    }
+
+    /// "Kolo uvnitř: Nejvýš 6°, venku je zima."
+    private func reason(_ sport: String, _ advice: TodaySnapshot.Advice?) -> String? {
+        guard let advice else { return nil }
+        let head = L10n.tr(sport) + " " + L10n.tr(WeatherText.indoor(advice) ? "uvnitř" : "venku")
+        guard let why = advice.reason, !why.isEmpty else { return head + "." }
+        return head + ": " + why
+    }
+}
+
+/// A place from the search (Apple Maps) or the iPhone's location.
+struct GeoPlace: Identifiable, Hashable {
     let name: String
     let latitude: Double
     let longitude: Double
@@ -223,23 +414,27 @@ struct GeoPlace: Decodable, Identifiable, Hashable {
         return parts.isEmpty ? nil : parts.joined(separator: ", ")
     }
 
-    private struct Response: Decodable {
-        let results: [GeoPlace]?
-    }
-
-    /// Up to 8 places for the name, straight from Open-Meteo (no key needed).
+    /// Up to 8 towns and cities for the name, from Apple Maps. Nothing found is
+    /// an empty list, not a failure.
     static func search(_ name: String) async throws -> [GeoPlace] {
-        guard var components = URLComponents(string: "https://geocoding-api.open-meteo.com/v1/search") else { return [] }
-        components.queryItems = [
-            URLQueryItem(name: "name", value: name),
-            URLQueryItem(name: "count", value: "8"),
-            URLQueryItem(name: "language", value: L10n.isEnglish ? "en" : "cs"),
-            URLQueryItem(name: "format", value: "json")
-        ]
-        guard let url = components.url else { return [] }
-        let (data, response) = try await URLSession.shared.data(from: url)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { throw URLError(.badServerResponse) }
-        return try JSONDecoder().decode(Response.self, from: data).results ?? []
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = name
+        request.resultTypes = .address
+        let items: [MKMapItem]
+        do {
+            items = try await MKLocalSearch(request: request).start().mapItems
+        } catch let error as MKError where error.code == .placemarkNotFound {
+            return []
+        }
+        var places: [GeoPlace] = []
+        for item in items {
+            let mark = item.placemark
+            guard let title = mark.locality ?? item.name, !title.isEmpty else { continue }
+            let place = GeoPlace(name: title, latitude: mark.coordinate.latitude, longitude: mark.coordinate.longitude,
+                                 admin1: mark.administrativeArea, country: mark.country)
+            if !places.contains(where: { $0.name == place.name && $0.detail == place.detail }) { places.append(place) }
+        }
+        return Array(places.prefix(8))
     }
 }
 

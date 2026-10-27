@@ -55,9 +55,11 @@ extension APIClient {
         let _: JSONValue = try await send("/app/api/passkeys", method: "POST", body: ["credential": JSONValue.object(credential)])
     }
 
-    /// The account's passkeys (Profil → Face ID).
+    /// The account's passkeys (Profil → Face ID). The phone's Passwords app
+    /// forgets the ones the server no longer has (PasskeyService.prune).
     func passkeys() async throws -> [PasskeyInfo] {
         let list: PasskeyList = try await get("/app/api/passkeys")
+        PasskeyService.prune(list)
         return list.passkeys
     }
 
@@ -65,7 +67,15 @@ extension APIClient {
     func removePasskey(id: String) async throws -> [PasskeyInfo] {
         let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&+=")))
         let list: PasskeyList = try await send("/app/api/passkeys?id=" + (encoded ?? id), method: "DELETE", body: JSONObject())
+        PasskeyService.prune(list)
         return list.passkeys
+    }
+
+    /// Before the account is deleted: its passkey handle, so the phone can
+    /// drop its passkeys afterwards (PasskeyService.forgetAccount).
+    func passkeyHandle() async -> (rpId: String, userHandle: String)? {
+        guard let list: PasskeyList = try? await get("/app/api/passkeys"), let rpId = list.rpId, let handle = list.userHandle else { return nil }
+        return (rpId, handle)
     }
 
     /// Signs out every other device; this one gets a fresh cookie and stays.
@@ -82,8 +92,10 @@ struct PasskeyInfo: Decodable, Identifiable, Equatable {
     let lastUsedAt: String?
 }
 
-private struct PasskeyList: Decodable {
+struct PasskeyList: Decodable {
     let passkeys: [PasskeyInfo]
+    var rpId: String?
+    var userHandle: String?
 }
 
 /// Runs the system passkey sheet for a sign-in or a registration.
@@ -124,8 +136,17 @@ final class PasskeyService: NSObject, ASAuthorizationControllerDelegate, ASAutho
                 "userHandle": userHandle
             ])
         ]
-        _ = try await api.verifyPasskeyLogin(credential: credential)
+        do {
+            _ = try await api.verifyPasskeyLogin(credential: credential)
+        } catch APIError.unknownPasskey(let message) {
+            // A passkey of a deleted account (or one removed in Settings on
+            // another device): the Passwords app drops it, so it is not offered again.
+            Self.reportUnknown(rpId: options.rpId, credentialID: assertion.credentialID)
+            throw APIError.unknownPasskey(message)
+        }
         Self.remember(true)
+        // The other passkeys of this account the server no longer knows go too.
+        _ = try? await api.passkeys()
     }
 
     /// Adds a passkey for the signed-in account ("Příště přes Face ID").
@@ -155,6 +176,31 @@ final class PasskeyService: NSObject, ASAuthorizationControllerDelegate, ASAutho
         ]
         try await api.registerPasskey(credential: credential)
         Self.remember(true)
+    }
+
+    // MARK: - Keeping the Passwords app in step with the server (iOS 26)
+
+    /// One passkey the server does not know.
+    nonisolated static func reportUnknown(rpId: String, credentialID: Data) {
+        guard #available(iOS 26.0, *) else { return }
+        Task { try? await ASCredentialUpdater().reportUnknownPublicKeyCredential(relyingPartyIdentifier: rpId, credentialID: credentialID) }
+    }
+
+    /// Only the account's passkeys the server lists stay in the Passwords app.
+    nonisolated static func prune(_ list: PasskeyList) {
+        guard let rpId = list.rpId, let handle = list.userHandle.flatMap(decode) else { return }
+        report(rpId: rpId, userHandle: handle, accepted: list.passkeys.compactMap { decode($0.id) })
+    }
+
+    /// After the account was deleted: none of its passkeys is any use.
+    nonisolated static func forgetAccount(rpId: String, userHandle: String) {
+        guard let handle = decode(userHandle) else { return }
+        report(rpId: rpId, userHandle: handle, accepted: [])
+    }
+
+    nonisolated private static func report(rpId: String, userHandle: Data, accepted: [Data]) {
+        guard #available(iOS 26.0, *) else { return }
+        Task { try? await ASCredentialUpdater().reportAllAcceptedPublicKeyCredentials(relyingPartyIdentifier: rpId, userHandle: userHandle, acceptedCredentialIDs: accepted) }
     }
 
     // MARK: - The system sheet
@@ -208,7 +254,7 @@ final class PasskeyService: NSObject, ASAuthorizationControllerDelegate, ASAutho
         AuthService.base64url(data)
     }
 
-    static func decode(_ text: String) -> Data? {
+    nonisolated static func decode(_ text: String) -> Data? {
         var s = text.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
         while s.count % 4 != 0 { s += "=" }
         return Data(base64Encoded: s)
