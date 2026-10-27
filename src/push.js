@@ -11,6 +11,7 @@
 // service. Without the secrets every call here quietly does nothing.
 import { L, storedLanguage, withLang } from "./lang.js";
 import { localDate, localHour, localToday, storedTimeZone, withTimeZone } from "./user-time.js";
+import { adviceSignals, injuryNote, isHardSession, reasonsSentence } from "./morning-advice.js";
 
 const shiftDay = (date, days) => new Date(Date.parse(date + "T12:00:00Z") + days * 86400000).toISOString().slice(0, 10);
 
@@ -154,30 +155,51 @@ export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Da
 // body. Signs of illness (breathing or temperature up), a sick check-in or a
 // paused athlete never get "go hard". `zone` is the colour of the ring the
 // app's notification extension draws (ios-native ReadinessNotification).
-export function readinessMessage({ score, zone, flags = [], missing = [], checkin = null, athleteState = null, sleep = null, hrv = null, restingHR = null, planned = [] }) {
+// With `date` and `context` (morning-advice.js) the advice also weighs the
+// short night, the days before, the journal, an injury and tomorrow: two
+// reasons to hold back turn green into yellow, three turn yellow into red,
+// and the body starts with them ("3 gym days in a row and a short night.").
+export function readinessMessage({ score, zone, flags = [], missing = [], checkin = null, athleteState = null, sleep = null, hrv = null, restingHR = null, planned = [], tomorrow = [], context = null, date = null }) {
   const sick = checkin === "sick" || (flags || []).includes("checkin_sick"), signs = (flags || []).some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f));
   const rest = sick || (athleteState && athleteState !== "active");
-  const shown = rest ? "red" : signs && zone === "green" ? "yellow" : zone;
-  const advice = rest ? L("Dnes odpočinek", "Rest today") : signs ? L("Dnes bez intenzity", "No intensity today") : {
-    green: L("Dnes klidně naplno", "Go hard today"),
-    yellow: L("Dnes spíš lehčeji", "Go easier today"),
-    red: L("Dnes odpočinek", "Rest today")
-  }[zone];
-  const title = L("Připravenost", "Readiness") + " " + Math.round(Number(score)) + (advice ? " · " + advice : "");
-  const subtitle = nightNumbers({ sleep, hrv, restingHR, noSleep: (missing || []).includes("sleep") }) || undefined;
+  const noSleep = (missing || []).includes("sleep");
   const sessions = (planned || []).filter(s => s && s.title).slice(0, 2);
   const names = sessions.map(s => s.title).join(", ");
   const sport = sessions.length === 1 ? sessions[0].sport : null;
+  const weighed = !rest && !signs && !noSleep && date && context;
+  const signals = weighed ? adviceSignals({ date, sleepMinutes: sleep?.minutes, context }) : [];
+  const injury = weighed ? injuryNote(context.memories) : null;
+  const level = zone === "green" && signals.length >= 2 ? "yellow" : zone === "yellow" && signals.length >= 3 ? "red" : zone;
+  const legs = level === "yellow" && signals.some(s => s.legs);
+  const saveFor = weighed && level === "green" && !signals.length && !sessions.some(isHardSession) ? (tomorrow || []).filter(s => s && s.title).find(isHardSession) : null;
+  const shown = rest ? "red" : signs && level === "green" ? "yellow" : level;
+  const advice = rest ? L("Dnes odpočinek", "Rest today") : signs ? L("Dnes bez intenzity", "No intensity today")
+    : legs ? L("Dej nohám pauzu", "Give your legs a break")
+    : saveFor ? L("Dnes v klidu", "Keep today easy")
+    : level === "green" && signals.length === 1 ? L("Můžeš trénovat", "Good to train")
+    : level === "green" && injury ? L("Trénuj opatrně", "Train with care")
+    : {
+      green: L("Dnes klidně naplno", "Go hard today"),
+      yellow: L("Dnes spíš lehčeji", "Go easier today"),
+      red: L("Dnes odpočinek", "Rest today")
+    }[level];
+  const title = L("Připravenost", "Readiness") + " " + Math.round(Number(score)) + (advice ? " · " + advice : "");
+  const subtitle = nightNumbers({ sleep, hrv, restingHR, noSleep }) || undefined;
   let body;
-  if ((missing || []).includes("sleep")) body = L("Otevři Aurin, ať se noc nahraje; skóre se může změnit.", "Open Aurin to sync last night; the score may change.");
+  if (noSleep) body = L("Otevři Aurin, ať se noc nahraje; skóre se může změnit.", "Open Aurin to sync last night; the score may change.");
   else if (rest) body = names ? L(`${names} dnes vynech a dej tělu klid.`, `Skip today's ${names} and let your body recover.`) : L("Dej tělu klid.", "Let your body recover today.");
   else if (signs) body = L("Může to být začátek nemoci. Dnes odpočívej a napiš kouči, jak se cítíš.", "Could be the start of an illness. Rest today and tell the coach how you feel.");
-  else if (zone === "green") body = names ? L(`Dnešní plán: ${names}. Tělo je připravené, do toho.`, `Today's plan: ${names}. Your body is ready, go for it.`) : L("Nic naplánováno. Dobrý den na těžší trénink.", "Nothing planned. A good day for a harder session.");
-  else if (zone === "yellow") body = !names ? L("Nic naplánováno. Když budeš trénovat, tak lehce: Z2 nebo lehká posilovna.", "Nothing planned. If you train, keep it easy: Z2 or a light gym session.")
+  else if (saveFor) body = L(`Zítra: ${saveFor.title}. Dnes lehce v Z2, ať na něj máš síly.`, `Tomorrow: ${saveFor.title}. Easy Z2 today so you're fresh for it.`);
+  else if (level === "green" && signals.length === 1) body = names ? L(`Dnešní plán: ${names}. Odtrénuj ho podle plánu, nic navíc.`, `Today's plan: ${names}. Train as planned, nothing extra.`) : L("Nic naplánováno. Klidně trénuj, jen bez maxim.", "Nothing planned. Train if you like, just no all-out efforts.");
+  else if (level === "green") body = names ? L(`Dnešní plán: ${names}. Tělo je připravené, do toho.`, `Today's plan: ${names}. Your body is ready, go for it.`) : L("Nic naplánováno. Dobrý den na těžší trénink.", "Nothing planned. A good day for a harder session.");
+  else if (level === "yellow") body = legs && !names ? L("Horní polovina těla nebo lehká jízda v Z2, nohy dnes ne.", "Upper body or an easy Z2 ride, no legs today.")
+    : !names ? L("Nic naplánováno. Když budeš trénovat, tak lehce: Z2 nebo lehká posilovna.", "Nothing planned. If you train, keep it easy: Z2 or a light gym session.")
     : sport === "strength" ? L(`Dnešní plán: ${names}. Lehčí váhy, skonči 2–3 opakování před selháním.`, `Today's plan: ${names}. Lighter weights, stop 2–3 reps before failure.`)
     : sport === "ride" || sport === "run" ? L(`Dnešní plán: ${names}. Raději lehce v Z2, intervaly jindy.`, `Today's plan: ${names}. Keep it easy in Z2 instead, intervals another day.`)
     : L(`Dnešní plán: ${names}. Dnes v klidnějším tempu.`, `Today's plan: ${names}. Take it easier than usual.`);
-  else if (zone === "red") body = names ? L(`${names} dnes vynech. Nanejvýš procházka nebo lehké protažení.`, `Skip today's ${names}. A walk or easy mobility at most.`) : L("Nanejvýš procházka nebo lehké protažení.", "A walk or easy mobility at most.");
+  else if (level === "red") body = names ? L(`${names} dnes vynech. Nanejvýš procházka nebo lehké protažení.`, `Skip today's ${names}. A walk or easy mobility at most.`) : L("Nanejvýš procházka nebo lehké protažení.", "A walk or easy mobility at most.");
+  if (body && !saveFor && signals.length) body = reasonsSentence(signals) + " " + body;
+  if (body && injury) body += " " + L(`Pamatuj: ${injury}.`, `Keep in mind: ${injury}.`).replace(/\.\.$/, ".");
   return { alert: { title, ...(subtitle ? { subtitle } : {}), ...(body ? { body } : {}) }, zone: shown || null };
 }
 
@@ -236,9 +258,10 @@ export async function sendMorningReadiness(env, { readiness, details = null, now
     if (!Number(claim?.meta?.changes)) return { sent: 0, reason: "already-sent" };
     // A scored morning carries its score and ring colour for the app's
     // notification extension (mutable-content lets it add the ring).
-    // details(date) adds the night, the baselines and today's plan (entrypoint.js todayReadiness).
+    // details(date) adds the night, the baselines, today's and tomorrow's plan and what else the
+    // advice weighs (entrypoint.js todayReadiness, morning-advice.js).
     const more = text || typeof details !== "function" ? null : await Promise.resolve().then(() => details(date)).catch(() => null);
-    const full = more ? { ...value, sleep: more.sleep ?? null, hrv: more.hrv ?? null, restingHR: more.restingHR ?? null, planned: more.planned || [] } : value;
+    const full = more ? { ...value, sleep: more.sleep ?? null, hrv: more.hrv ?? null, restingHR: more.restingHR ?? null, planned: more.planned || [], tomorrow: more.tomorrow || [], context: more.context || null, date } : value;
     const message = text ? null : readinessMessage(full);
     const alert = text || message.alert;
     const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true } : {};

@@ -84,7 +84,7 @@ import { illnessWarning, illnessSigns } from './illness-check.js';
 import { readinessFor } from './readiness.js';
 import { lockReadiness } from "./readiness-lock.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
-import { loadMuscleFatigue, loadTrainingDoses } from "./muscle-fatigue.js";
+import { loadMuscleFatigue, loadTrainingDoses, muscleFatigue } from "./muscle-fatigue.js";
 import { loadMuscleDetail } from "./muscle-detail.js";
 import { recoveryTime } from "./recovery-time.js";
 import { readGymPlan, ensureGymPlans } from "./gym-plan-store.js";
@@ -649,7 +649,31 @@ async function todayReadiness(env, ctx, date, { fresh = false, plan = false } = 
   const today = buildToday({ date, hour: localHour(), daily: daily || {}, health, fitness, sleep, profile: profile || {}, checkin, gym: gym?.[date] || null });
   if (!plan) return today.readiness;
   const planned = (today.plan || []).filter(i => i.kind === 'workout' && i.status === 'planned').map(i => ({ title: i.title, sport: i.sport }));
-  return { ...today.readiness, sleep: today.sleep, hrv: today.hrv, restingHR: today.restingHR, planned };
+  const morning = await morningContext(env, { date, health, fitness, sleep, profile, read }).catch(error => { console.error('Morning advice context failed', error.message); return { tomorrow: [], context: null }; });
+  return { ...today.readiness, sleep: today.sleep, hrv: today.hrv, restingHR: today.restingHR, planned, ...morning };
+}
+
+// What the morning push's advice weighs beside the score (morning-advice.js):
+// the last week's activities of any sport, tired legs (Trénink → Svaly), the
+// days before with a yellow or red readiness, the form, alcohol in yesterday's
+// journal, and tomorrow's planned sessions from Intervals.icu.
+async function morningContext(env, { date, health, fitness, sleep, profile, read }) {
+  const tomorrowDate = shiftDate(date, 1);
+  const [doses, journal, tomorrowDaily] = await Promise.all([
+    loadTrainingDoses(env.DB).catch(() => null),
+    journalForCoach(env.DB, date).catch(() => null),
+    read('/analysis/daily?date=' + tomorrowDate)
+  ]);
+  const activities = (doses?.activities || []).filter(a => a.date).map(a => ({ date: a.date, kind: a.kind, minutes: a.minutes }));
+  const legs = doses ? muscleFatigue({ ...doses, now: Date.now() }).groups.find(g => g.id === 'legs')?.state || null : null;
+  const zoneOf = d => readinessFor({ date: d, google: health?.wellness || [], intervals: fitness?.wellness || [], sessions: sleep?.sessions || [], profile: profile || {} })?.zone;
+  let lowDays = 0;
+  while (lowDays < 3 && ['yellow', 'red'].includes(zoneOf(shiftDate(date, -(lowDays + 1))))) lowDays++;
+  const row = (fitness?.wellness || []).find(w => w?.id === date);
+  const tsb = row ? Number(row.tsb ?? (Number(row.ctl) - Number(row.atl))) : null;
+  const alcohol = (journal?.yesterday?.answers || []).some(a => /alkohol|alcohol/i.test(a.item) && a.answer !== 'no');
+  const tomorrow = (tomorrowDaily?.training?.planned || []).filter(a => a?.name).map(a => ({ title: a.name, sport: activityKindOf(a.type) }));
+  return { tomorrow, context: { activities, legs, lowDays, tsb: Number.isFinite(tsb) ? tsb : null, alcohol } };
 }
 
 // Deník's "Co na tebe působí": the morning metrics (readiness, HRV, resting
@@ -676,7 +700,7 @@ async function morningPush(env, ctx, options = {}) {
   // Settings → Oznámení → Ranní připravenost off; the phone keeps its token for the coach.
   const state = await getAthleteState(env.DB).catch(() => null);
   if (state?.notify?.morning === false) { await morningPushNote(env, { reason: 'off' }); return { sent: 0, reason: 'off' }; }
-  const withState = r => r ? { ...r, athleteState: state?.status || null } : r;
+  const withState = r => r ? { ...r, athleteState: state?.status || null, ...(r.context ? { context: { ...r.context, memories: state?.memories || [] } } : {}) } : r;
   // The night, the baselines and today's plan only once the push goes out.
   // Each check in the window leaves why no push went out (sync_status
   // morning_push): "started" left alone means the run was cut off.
