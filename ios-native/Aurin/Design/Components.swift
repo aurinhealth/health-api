@@ -110,15 +110,34 @@ struct ProgressLine: View {
 
 /// A slim track with the athlete's usual range (or today's goal) as a lighter
 /// band and a dot at the value: Dnes, the Zdraví tiles and the details. The
-/// band takes the middle third, so values well outside it still fit.
+/// band takes the middle third, so values well outside it still fit. With
+/// `edges` the band's two values stand under its ends ("55" and "61").
 struct RangeBar: View {
     let value: Double
     let low: Double
     let high: Double
     var color: Color = Palette.green
     var height: CGFloat = 6
+    var edges: (low: String, high: String)? = nil
 
     var body: some View {
+        VStack(spacing: 2) {
+            track
+            if let edges {
+                GeometryReader { geo in
+                    Text(verbatim: edges.low).position(x: geo.size.width / 3, y: 6)
+                    Text(verbatim: edges.high).position(x: geo.size.width * 2 / 3, y: 6)
+                }
+                .font(.system(size: 9))
+                .foregroundStyle(Palette.faint)
+                .lineLimit(1)
+                .frame(height: 12)
+                .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private var track: some View {
         GeometryReader { geo in
             let w = geo.size.width
             ZStack(alignment: .leading) {
@@ -171,11 +190,18 @@ struct TileRange: View {
     var worseAbove = false
     /// Replaces "v normálu" (Váha: "cíl 76 kg").
     var text: String? = nil
+    /// The band's values under its ends.
+    var edges: (low: String, high: String)? = nil
+
+    /// Half a degree either side of the usual night, in the phone's unit.
+    static var temperatureEdges: (low: String, high: String) {
+        (Fmt.signed(Units.temperatureChange(-0.5), digits: 1), Fmt.signed(Units.temperatureChange(0.5), digits: 1))
+    }
 
     var body: some View {
         let color = text == nil ? RangeBar.color(value, low, high, worseAbove: worseAbove) : Palette.blue
         VStack(alignment: .leading, spacing: 8) {
-            RangeBar(value: value, low: low, high: high, color: color)
+            RangeBar(value: value, low: low, high: high, color: color, edges: edges)
             Text(verbatim: text ?? RangeBar.word(value, low, high))
                 .font(Typo.caption.weight(.medium)).foregroundStyle(color)
                 .lineLimit(1).minimumScaleFactor(0.8)

@@ -43,15 +43,16 @@ enum ClockText {
     /// every clock as they draw, the day's timeline each minute).
     private static func formatter(timeZone: TimeZone) -> DateFormatter {
         _ = watching
-        let key = timeZone.identifier
+        let key = timeZone.identifier + L10n.language
         lock.lock()
         defer { lock.unlock() }
         if let formatter = made[key] { return formatter }
         let f = DateFormatter()
-        f.locale = .autoupdatingCurrent
+        // The app's language with the phone's 12/24-hour setting: an English
+        // app on a Czech phone reads "7:30 PM", not "7:30 odp.".
+        f.locale = L10n.locale
         f.timeZone = timeZone
-        f.dateStyle = .none
-        f.timeStyle = .short
+        f.dateFormat = isTwelveHour ? "h:mm a" : "H:mm"
         made[key] = f
         return f
     }

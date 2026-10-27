@@ -683,9 +683,10 @@ struct KeyNumbers: View {
     /// The server could not read the nights this time (not: no night yet).
     private var sleepFailed: Bool { today.unavailable?.contains("sleep") == true && today.sleep?.minutes == nil }
 
-    /// A cell's bar (when it has a range) and the line under it.
+    /// A cell's bar (when it has a range), its band's values and the line under it.
     struct Gauge {
         var bar: (value: Double, low: Double, high: Double)?
+        var edges: (low: String, high: String)? = nil
         var note: String?
         var color: Color
     }
@@ -697,7 +698,7 @@ struct KeyNumbers: View {
             return Gauge(note: today.sleep?.index.map { L10n.f("index %@", "\($0)") }, color: Palette.indigo)
         }
         let low = Double(need) - 30, high = Double(need) + 30
-        return Gauge(bar: (minutes, low, high),
+        return Gauge(bar: (minutes, low, high), edges: (Fmt.hoursMinutes(low), Fmt.hoursMinutes(high)),
                      note: L10n.f("%@ %% potřeby", Fmt.int(minutes / Double(need) * 100)),
                      color: minutes >= low ? Palette.green : Palette.amber)
     }
@@ -707,7 +708,7 @@ struct KeyNumbers: View {
             // Whole numbers: "cíl 10,8–13,8" does not fit a third of the phone's width.
             let note = L10n.f("cíl %@–%@", Fmt.int(t.low), Fmt.int(t.high))
             guard let score = today.strain.score else { return Gauge(note: note, color: Palette.green) }
-            return Gauge(bar: (score, t.low, t.high), note: note,
+            return Gauge(bar: (score, t.low, t.high), edges: (Fmt.int(t.low), Fmt.int(t.high)), note: note,
                          color: RangeBar.side(score, t.low, t.high) == 0 ? Palette.green : Palette.amber)
         }
         return Gauge(note: today.strain.planned.map { L10n.f("plán ~%@", Fmt.decimal($0)) }, color: Palette.amber)
@@ -716,7 +717,7 @@ struct KeyNumbers: View {
     private var hrv: Gauge {
         guard let value = today.hrv?.value else { return Gauge(note: nil, color: Palette.green) }
         if let low = today.hrv?.low, let high = today.hrv?.high, high > low {
-            return Gauge(bar: (value, low, high), note: RangeBar.word(value, low, high),
+            return Gauge(bar: (value, low, high), edges: (Fmt.int(low), Fmt.int(high)), note: RangeBar.word(value, low, high),
                          color: RangeBar.color(value, low, high, worseAbove: false))
         }
         guard let base = today.hrv?.baseline else { return Gauge(note: nil, color: Palette.green) }
@@ -733,7 +734,7 @@ struct KeyNumbers: View {
             }
             .lineLimit(1).minimumScaleFactor(0.7)
             if let bar = gauge.bar {
-                RangeBar(value: bar.value, low: bar.low, high: bar.high, color: gauge.color).padding(.vertical, 4)
+                RangeBar(value: bar.value, low: bar.low, high: bar.high, color: gauge.color, edges: gauge.edges).padding(.vertical, 4)
             }
             Text(gauge.note ?? " ").font(Typo.caption.weight(.medium)).foregroundStyle(gauge.color).lineLimit(1).minimumScaleFactor(0.75)
         }
