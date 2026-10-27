@@ -94,6 +94,30 @@ enum WeatherText {
         return Units.imperial ? Fmt.decimal(Units.length(mm / 10), digits: 2) + " in" : Fmt.decimal(mm, digits: 1) + " mm"
     }
 
+    /// "18" and "km/h" (or mph) apart, for the detail's numbers.
+    static func windNumber(_ kmh: Double?) -> String {
+        guard let kmh else { return "–" }
+        return Fmt.int(Units.imperial ? Units.distance(kmh) : kmh)
+    }
+
+    static var windUnit: String { Units.imperial ? "mph" : "km/h" }
+
+    /// How it blows: calm under 5 km/h, light to 19, breezy to 29, windy to 49, strong above.
+    static func windWord(_ kmh: Double?) -> String? {
+        guard let kmh else { return nil }
+        let level = kmh < 5 ? 0 : kmh < 20 ? 1 : kmh < 30 ? 2 : kmh < 50 ? 3 : 4
+        let words = L10n.isEnglish ? ["Calm", "Light", "Breezy", "Windy", "Strong"] : ["Bezvětří", "Slabý", "Mírný", "Větrno", "Silný"]
+        return words[level]
+    }
+
+    /// "NW" (or "SZ"): where the wind blows from.
+    static func compass(_ degrees: Double?) -> String? {
+        guard let degrees, degrees.isFinite else { return nil }
+        let names = L10n.isEnglish ? ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] : ["S", "SV", "V", "JV", "J", "JZ", "Z", "SZ"]
+        let index = Int(((degrees.truncatingRemainder(dividingBy: 360) + 360 + 22.5) / 45).rounded(.down)) % 8
+        return names[index]
+    }
+
     static func percent(_ value: Double?) -> String {
         guard let value else { return "–" }
         return Fmt.int(value) + " %"
@@ -244,28 +268,87 @@ struct WeatherDetails: View {
     /// Today's hours from the one running now (the server's); without the detail, the card's few hours.
     private var hours: [TodaySnapshot.Weather.Hour] { weather.next ?? weather.hours ?? [] }
 
+    private var look: SkyLook { SkyLook(code: weather.now?.code ?? weather.code, daylight: weather.now?.daylight) }
+
+    /// The place, the temperature now with the sun, moon or symbol, and three
+    /// numbers like Today's (Petr, 2026-10-27, B): high / low, wind and rain.
     private var hero: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                if let place = weather.place {
-                    HStack(spacing: 5) {
-                        Image(systemName: "location.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.blue)
-                        Text(verbatim: place).font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let place = weather.place {
+                        HStack(spacing: 5) {
+                            Image(systemName: "location.fill").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.blue)
+                            Text(verbatim: place).font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                        }
+                    }
+                    Text(verbatim: WeatherText.degrees(weather.now?.temp ?? weather.max)).font(Typo.number(72)).foregroundStyle(Palette.ink)
+                    if let text = WeatherText.description(weather.now?.code ?? weather.code) {
+                        Text(verbatim: Fmt.capitalized(text)).font(.headline).foregroundStyle(Palette.ink)
                     }
                 }
-                Text(verbatim: WeatherText.degrees(weather.now?.temp ?? weather.max)).font(Typo.number(72)).foregroundStyle(Palette.ink)
-                if let text = WeatherText.description(weather.now?.code ?? weather.code) {
-                    Text(verbatim: Fmt.capitalized(text)).font(.headline).foregroundStyle(Palette.ink)
+                Spacer(minLength: 0)
+                if look.showsBody {
+                    WeatherSkyBody(night: look.night)
+                } else {
+                    Image(systemName: WeatherText.symbol(weather.now?.code ?? weather.code))
+                        .symbolRenderingMode(.multicolor)
+                        .font(.system(size: 54))
+                        .accessibilityHidden(true)
                 }
-                Text(verbatim: [L10n.tr("Vítr") + " " + WeatherText.wind(weather.wind), L10n.tr("Déšť") + " " + WeatherText.percent(weather.rainProb)].joined(separator: " · "))
-                    .font(Typo.small).foregroundStyle(Palette.muted)
             }
-            Spacer(minLength: 0)
-            Image(systemName: WeatherText.symbol(weather.now?.code ?? weather.code))
-                .symbolRenderingMode(.multicolor)
-                .font(.system(size: 54))
-                .accessibilityHidden(true)
+            .accessibilityElement(children: .combine)
+
+            HStack(alignment: .top, spacing: 0) {
+                stat("Max / min", WeatherText.degrees(weather.max), weather.min.map { " / " + WeatherText.degrees($0) })
+                Divider().overlay(Palette.hairline).padding(.horizontal, 12)
+                stat("Vítr", WeatherText.windNumber(wind), " " + WeatherText.windUnit, windCorner)
+                Divider().overlay(Palette.hairline).padding(.horizontal, 12)
+                stat("Déšť", weather.rainProb.map { Fmt.int($0) } ?? "–", weather.rainProb == nil ? nil : " %")
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 12)
+            .overlay(alignment: .top) { Divider().overlay(Palette.hairline) }
         }
+        .background(alignment: .top) {
+            // The sky reaches under the bar above and fades into the page.
+            WeatherSky(look: look)
+                .frame(height: 460)
+                .padding(.horizontal, -20)
+                .offset(y: -170)
+        }
+    }
+
+    /// The wind now, else the day's strongest.
+    private var wind: Double? { weather.now?.wind ?? weather.wind }
+
+    /// "↗ SZ" in the wind's top right corner (Petr, 2026-10-27: no extra line): the
+    /// arrow points where the wind blows, the letters say where it comes from.
+    private var windCorner: AnyView? {
+        guard let direction = weather.now?.windDirection, let from = WeatherText.compass(direction), (wind ?? 0) >= 5 else { return nil }
+        return AnyView(HStack(spacing: 3) {
+            Image(systemName: "location.north.fill").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.blue)
+                .rotationEffect(.degrees(direction + 180))
+            Text(verbatim: from).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.muted)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: [WeatherText.windWord(wind), from].compactMap { $0 }.joined(separator: ", "))))
+    }
+
+    private func stat(_ title: String, _ value: String, _ unit: String?, _ corner: AnyView? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Text(L10n.tr(title)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
+                Spacer(minLength: 0)
+                if let corner { corner }
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(verbatim: value).font(Typo.number(28)).foregroundStyle(Palette.ink)
+                if let unit, value != "–" { Text(verbatim: unit).font(Typo.caption).foregroundStyle(Palette.muted) }
+            }
+            .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
 
@@ -361,9 +444,12 @@ struct WeatherDayRow: View {
 
             if open {
                 if let hours = day.hours, !hours.isEmpty { WeatherHourStrip(hours: hours) }
-                Text(verbatim: [reason("Kolo", day.ride), reason("Běh", day.run)].compactMap { $0 }.joined(separator: " "))
-                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 8)
+                // Each on its own line, the verdict in its colour (Petr, 2026-10-27).
+                VStack(alignment: .leading, spacing: 4) {
+                    reason("Kolo", day.ride)
+                    reason("Běh", day.run)
+                }
+                .padding(.bottom, 8)
             }
         }
     }
@@ -390,12 +476,16 @@ struct WeatherDayRow: View {
             .accessibilityLabel(Text(verbatim: L10n.tr(symbol == "bicycle" ? "Kolo" : "Běh") + " " + L10n.tr(indoor ? "uvnitř" : "venku")))
     }
 
-    /// "Kolo uvnitř: Nejvýš 6°, venku je zima."
-    private func reason(_ sport: String, _ advice: TodaySnapshot.Advice?) -> String? {
-        guard let advice else { return nil }
-        let head = L10n.tr(sport) + " " + L10n.tr(WeatherText.indoor(advice) ? "uvnitř" : "venku")
-        guard let why = advice.reason, !why.isEmpty else { return head + "." }
-        return head + ": " + why
+    /// "Kolo uvnitř: Nejvýš 6°, venku je zima." with "Kolo uvnitř" in amber (or green outdoors).
+    @ViewBuilder private func reason(_ sport: String, _ advice: TodaySnapshot.Advice?) -> some View {
+        if let advice {
+            let indoor = WeatherText.indoor(advice)
+            let head = L10n.tr(sport) + " " + L10n.tr(indoor ? "uvnitř" : "venku")
+            let why = advice.reason.flatMap { $0.isEmpty ? nil : $0 }
+            (Text(verbatim: head + (why == nil ? "." : ": ")).fontWeight(.semibold).foregroundColor(indoor ? Palette.amber : Palette.green)
+             + Text(verbatim: why ?? "").foregroundColor(Palette.muted))
+                .font(Typo.caption).fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

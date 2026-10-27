@@ -82,8 +82,8 @@ test('the detail: now, the hours from now and seven days with their hours', () =
   }
   const days = Array.from({ length: 9 }, (_, d) => ({ forecastStart: new Date(Date.UTC(2026, 9, 25 + d, 23)).toISOString().replace('.000', ''), conditionCode: 'Clear', temperatureMax: 12, temperatureMin: 3, precipitationChance: 0.1 }));
   const now = Date.UTC(2026, 9, 26, 13, 20); // 14:20 in Prague
-  const detail = dailyDetail({ currentWeather: { temperature: 12.6, conditionCode: 'PartlyCloudy' }, forecastDaily: { days }, forecastHourly: { hours } }, '2026-10-26', now);
-  assert.deepEqual(detail.now, { temp: 13, code: 2 });
+  const detail = dailyDetail({ currentWeather: { temperature: 12.6, conditionCode: 'PartlyCloudy', windSpeed: 17.6, windDirection: 315.4, daylight: true }, forecastDaily: { days }, forecastHourly: { hours } }, '2026-10-26', now);
+  assert.deepEqual(detail.now, { temp: 13, code: 2, wind: 18, windDirection: 315, daylight: true });
   assert.equal(detail.next[0].hour, 14);
   assert.equal(detail.next.at(-1).hour, 23);
   assert.deepEqual(detail.next[0], { hour: 14, temp: 11, code: 3, rainProb: 25 });
