@@ -279,7 +279,7 @@ struct WeatherDetails: View {
                     if let place = weather.place {
                         // A pin, so the only arrow on the screen is the wind's (Petr, 2026-10-27).
                         HStack(spacing: 5) {
-                            Image(systemName: "mappin").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.blue)
+                            PlacePin().fill(Palette.blue, style: FillStyle(eoFill: true)).frame(width: 11, height: 14)
                             Text(verbatim: place).font(Typo.bodyStrong).foregroundStyle(Palette.muted)
                         }
                     }
@@ -383,6 +383,22 @@ struct WeatherDetails: View {
         let indoor = WeatherText.indoor(advice)
         return SettingsRow(icon: SettingsIcon(systemImage: symbol, color: indoor ? Palette.amberBar : Palette.green),
                            title: sport, subtitle: advice?.reason, value: L10n.tr(indoor ? "uvnitř" : "venku"), chevron: false)
+    }
+}
+
+/// A map pin: a drop with a hole, as on Petr's chosen mockup (not the thin SF "mappin").
+struct PlacePin: Shape {
+    func path(in rect: CGRect) -> Path {
+        let w = rect.width, r = w / 2, cx = rect.midX, cy = rect.minY + r
+        var path = Path()
+        path.move(to: CGPoint(x: cx, y: rect.maxY))
+        path.addCurve(to: CGPoint(x: rect.minX, y: cy), control1: CGPoint(x: cx - r * 0.35, y: rect.maxY - r * 0.55), control2: CGPoint(x: rect.minX, y: cy + r * 0.75))
+        path.addRelativeArc(center: CGPoint(x: cx, y: cy), radius: r, startAngle: .degrees(180), delta: .degrees(180))
+        path.addCurve(to: CGPoint(x: cx, y: rect.maxY), control1: CGPoint(x: rect.maxX, y: cy + r * 0.75), control2: CGPoint(x: cx + r * 0.35, y: rect.maxY - r * 0.55))
+        path.closeSubpath()
+        let hole = r * 0.4
+        path.addEllipse(in: CGRect(x: cx - hole, y: cy - hole, width: 2 * hole, height: 2 * hole))
+        return path
     }
 }
 
