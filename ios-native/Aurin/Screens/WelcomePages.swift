@@ -95,7 +95,7 @@ struct WelcomePageView: View {
                 .padding(.top, 12)
             }
         }
-        .dynamicTypeSize(...Typo.denseCap)
+        .dynamicTypeSize(...DynamicTypeSize.denseCap)
         .onChange(of: active, initial: true) { _, now in
             // On screen it plays (with Reduce Motion it just stands there); off screen
             // it goes back to the start without animating, so it plays again.
