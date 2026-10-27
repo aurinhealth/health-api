@@ -45,6 +45,9 @@ struct WeekSessionDraft: Identifiable, Equatable {
     /// `previous` is what it was before, when the day had one of this sport.
     var recalculated = false
     var previous: String?
+    /// The athlete changed it with "Upravit s AI": the asked kind passes the
+    /// coach's load rules (48 h, two quality days…); red and illness still hold.
+    var insisted = false
     var workout: LibraryWorkout?
     var gym: GymProposal?
     var status: Status = .waiting
@@ -78,9 +81,17 @@ struct WeekSessionDraft: Identifiable, Equatable {
                                                     weekSessions: gymDays.compactMap { s in s.gym.map { (date: s.date, rows: $0.rows) } })
             } else {
                 let r = try await api.generateWeekSession(date: date, sport: sport, minutes: minutes, environment: environment, focus: focus,
-                                                          resize: resize ? workout?.id : nil)
+                                                          insisted: insisted, resize: resize ? workout?.id : nil)
                 guard let w = r.workout else { throw APIError.message(r.message ?? L10n.tr("Bez návrhu.")) }
                 next.workout = w
+                // The coach still eased the kind (red, illness…): the pill and the
+                // note say what the steps are, not what was asked.
+                if let eased = r.eased {
+                    next.kind = eased.kind
+                    next.focus = eased.focus
+                    next.label = kindLabel(eased.kind)
+                    next.note = L10n.tr("Kouč nechal trénink lehčí") + (eased.why.map { ": " + $0 } ?? "") + "."
+                }
             }
             next.status = .ready
         } catch {
@@ -111,6 +122,7 @@ enum WeekPlanDraftMemory {
 
 struct WeekPlanView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     @State private var weekStart = WeekPlanView.monday()
     @AppStorage("weekPlan.mode") private var mode = "manual"
     @State private var plan: WeekPlanResponse?
@@ -749,6 +761,12 @@ struct WeekPlanView: View {
         }
         await model.refreshTraining()
         await model.loadCalendar(from: weekStart, to: ISODay.shift(weekStart, 6), force: true)
+        // All in the calendar: back to where the week was planned from (Trénink),
+        // after a moment with "Hotovo, je v kalendáři" (Petr 2026-10-27).
+        if sessions.allSatisfy({ $0.status == .saved }) {
+            try? await Task.sleep(for: .milliseconds(700))
+            dismiss()
+        }
     }
 
     private func load() async {
@@ -930,6 +948,7 @@ struct WeekSessionDetailView: View {
             session.focus = changed.focus
             session.label = kindLabel(kind)
         }
+        session.insisted = true
         session.note = changed.note
         Task { await rebuild(resize: false) }
     }

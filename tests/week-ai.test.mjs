@@ -180,3 +180,13 @@ test("the athlete's remembered wishes reach the week plan and the change of a se
   assert.match(calls[0].instructions, /preferenceMemory/);
   assert.match(readFileSync(new URL("../src/entrypoint.js", import.meta.url), "utf8"), /preferenceMemory:state\.memories\?\.length/);
 });
+
+test("a TSS asked for reaches the AI with the current TSS and each kind's TSS an hour", async () => {
+  const calls = [];
+  const ask = async (env, p) => { calls.push(p); return { text: JSON.stringify({ date: "2026-10-17", sport: "ride", minutes: 90, environment: "outdoor", kind: "threshold", note: "Přidal jsem práh, asi 105 TSS." }) }; };
+  const r = await adjustByText({}, { session: { date: "2026-10-17", sport: "ride", minutes: 90, environment: "outdoor", kind: "endurance", tss: 63 }, request: "chci 110 TSS", weekDays: ["2026-10-17"], prefs, today }, { ask });
+  const facts = JSON.parse(calls[0].input.slice(calls[0].input.indexOf("{")));
+  assert.equal(facts.session.tss, 63);
+  assert.equal(facts.tssPerHour.threshold, 69);
+  assert.equal(r.kind, "threshold");
+});

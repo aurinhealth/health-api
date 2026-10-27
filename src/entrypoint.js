@@ -1293,7 +1293,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const body=await request.json().catch(()=>({})),today=localToday();
       const sport=WEEK_SPORTS.includes(body.sport)?body.sport:null,date=validTrainingDay(body.date)?body.date:null;
       if(!sport||!date)throw new Error(L('Neplatný trénink.', 'Invalid workout.'));
-      const current={date,sport,minutes:Number(body.minutes)||60,environment:body.environment==='indoor'?'indoor':'outdoor',kind:sport==='gym'?'gym':KINDS.includes(body.kind)?body.kind:kindOfSystem(body.system)};
+      const current={date,sport,minutes:Number(body.minutes)||60,environment:body.environment==='indoor'?'indoor':'outdoor',kind:sport==='gym'?'gym':KINDS.includes(body.kind)?body.kind:kindOfSystem(body.system),...(Number(body.tss)>0?{tss:Math.round(Math.min(1000,Number(body.tss)))}:{})};
       let changed;
       if(['shorter','easier','harder','indoor','outdoor'].includes(body.chip))changed={...adjustByChip(current,body.chip),note:null};
       else{
@@ -2919,7 +2919,10 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(!userInitiated&&environment==='indoor'&&weekTarget?.environment!=='indoor')availabilityMinutes=availabilityMinutes!=null?indoorMinutes(genSport,availabilityMinutes):genSport==='ride'?90:60;
       const planFocus=planned?({quality:systemOf(genSport,planned.family),test:'threshold',long:'long_endurance',easy:'endurance',recovery:'recovery'})[planned.kind]||null:null;
       const roleFocus=askedFocus||planFocus||weekRole?.focus;
-      const goalOf=focus=>body.phase||focus?{...(body.phase?{phase:String(body.phase)}:{}),...(focus?{focus}:{}),...(focus&&focus===askedFocus?{asked:true,...(body.fromCoach===true?{chat:true,...(body.insisted===true?{insisted:true}:{})}:{})}:{})}:null;
+      // "Upravit s AI" in the week plan sends insisted: the athlete's own change
+      // passes the load rules like a chat card asked for again; red and illness
+      // still hold (Petr 2026-10-27: "chci intervaly" gave the same ride).
+      const goalOf=focus=>body.phase||focus?{...(body.phase?{phase:String(body.phase)}:{}),...(focus?{focus}:{}),...(focus&&focus===askedFocus?{asked:true,...(body.fromCoach===true||body.insisted===true?{chat:true,...(body.insisted===true?{insisted:true}:{})}:{})}:{})}:null;
       const coachInputs={...await loadCoachInputs(env,ctx,internalAuth,date),athleteState:await getAthleteState(env.DB).catch(()=>null),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),sport:genSport};
       let coach=buildCyclingCoachV2({...coachInputs,goal:goalOf(roleFocus)});
       // A hard kind asked for on a red morning gives way to the coach's own choice.
@@ -2966,7 +2969,12 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(replaced&&generated.explanation?.why)generated.explanation.why=[L('„'+askedWorkout.name+'“ dnes nahrazuje lehčí trénink: ','Today “'+askedWorkout.name+'” gives way to an easier session: ')+(replaced.why.join(', ')||L('podle připravenosti a zátěže','from your readiness and load'))+'.',...generated.explanation.why];
       // Step rows with watts or paces, so the week plan's detail draws the workout's graph.
       for(const w of [generated.workout,...(generated.alternatives||[])]){if(!w||w.steps)continue;let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=genSport==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones,hrZones:thresholds.runHrZones?.length?thresholds.runHrZones:thresholds.hrZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones,hrZones:thresholds.hrZones});}
-      return Response.json({...generated,weekRole,weekTarget,plan:planInfo,environmentReason:suggestedEnvironment.reason,...(replaced?{replaced}:{})},{headers:{'Cache-Control':'no-store'}});
+      // The kind asked for that the coach still eased (red, illness, a test
+      // tomorrow…): what the session became and why, so the detail doesn't
+      // promise intervals the steps don't have.
+      const askedKind=askedFocus?Object.keys(FOCUS_OF).find(k=>FOCUS_OF[k]===askedFocus):null,givenKind=generated.status==='ok'&&generated.system?kindOfSystem(generated.system):null;
+      const eased=askedKind&&givenKind&&givenKind!==askedKind&&!(askedKind==='long'&&givenKind==='endurance')&&!(genSport==='run'&&askedKind==='sweet_spot')?{kind:givenKind,focus:FOCUS_OF[givenKind]||null,why:(generated.adaptations||[]).join(', ')||null}:null;
+      return Response.json({...generated,weekRole,weekTarget,plan:planInfo,...(eased?{eased}:{}),environmentReason:suggestedEnvironment.reason,...(replaced?{replaced}:{})},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/feedback'&&request.method==='POST'){
       // Completion comes from the activity paired in Intervals.icu; the athlete adds RPE (and a note).

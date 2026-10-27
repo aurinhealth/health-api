@@ -584,14 +584,15 @@ struct ActivePlanSummary: View {
 struct TrainingPlansSheet: View {
     @Environment(\.dismiss) private var dismiss
     let plans: TrainingPlans
-    @State private var sport = "run"
+    @State private var sport = "ride"
 
     var body: some View {
         NavigationStack {
             SettingsPage(title: "Tréninkové plány") {
                 Picker("Sport", selection: $sport) {
-                    Text("Běh").tag("run")
+                    // The library's order (Kolo, Běh, Posilovna).
                     Text("Kolo").tag("ride")
+                    Text("Běh").tag("run")
                     Text("Posilovna").tag("gym")
                 }
                 .pickerStyle(.segmented)
@@ -609,7 +610,7 @@ struct TrainingPlansSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Zavřít") { dismiss() } }
             }
         }
-        .onAppear { sport = plans.active?.template.sport ?? "run" }
+        .onAppear { sport = plans.active?.template.sport ?? "ride" }
     }
 
     @ViewBuilder private func rows(_ list: [TrainingPlans.Template]) -> some View {
