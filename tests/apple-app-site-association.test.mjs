@@ -8,12 +8,12 @@ const env = { APPLE_TEAM_ID: "ABCDE12345" };
 const get = (path, method = "GET") => new Request("https://aurin.health" + path, { method });
 
 test("the file names the app for passkeys (webcredentials) with the team id", async () => {
-  assert.deepEqual(appleAppSiteAssociationBody(env).webcredentials, { apps: ["ABCDE12345.health.aurin.app", "ABCDE12345.eu.petrfitnessdata.loadwise.native"] });
-  assert.deepEqual(appleAppSiteAssociationBody(env).applinks.details[0], { appIDs: ["ABCDE12345.health.aurin.app", "ABCDE12345.eu.petrfitnessdata.loadwise.native"], components: [{ "/": "/t/*", comment: "Shared workouts" }] });
+  assert.deepEqual(appleAppSiteAssociationBody(env).webcredentials, { apps: ["ABCDE12345.health.aurin.app"] });
+  assert.deepEqual(appleAppSiteAssociationBody(env).applinks.details[0], { appIDs: ["ABCDE12345.health.aurin.app"], components: [{ "/": "/t/*", comment: "Shared workouts" }] });
   const response = appleAppSiteAssociation(get("/.well-known/apple-app-site-association"), env);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "application/json");
-  assert.deepEqual((await response.json()).webcredentials, { apps: ["ABCDE12345." + APP_BUNDLE_ID, "ABCDE12345.eu.petrfitnessdata.loadwise.native"] });
+  assert.deepEqual((await response.json()).webcredentials, { apps: ["ABCDE12345." + APP_BUNDLE_ID] });
   assert.equal(appleAppSiteAssociation(get("/.well-known/apple-app-site-association.json"), env).status, 200);
 });
 

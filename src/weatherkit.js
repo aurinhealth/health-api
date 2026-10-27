@@ -107,7 +107,8 @@ export async function weatherKitHours(env, location, date, fetchImpl = fetch) {
 
 // The weather's detail in the app (WeatherDetails): the temperature now, the
 // hours from now to the end of today, and the next seven days, each with its
-// hours from 6 to 22 h. Hours: {hour, temp, code, rainProb}.
+// hours from 6 to 22 h. Hours: {hour, temp, code, rainProb}. Now: {temp, code,
+// wind (km/h), windDirection (° it blows from), daylight} for the detail's sky.
 const DAY_FROM = 6, DAY_TO = 22;
 export function detailFromWeatherKit(data, start, now = Date.now()) {
   const end = shift(start, 6), days = dailyFromWeatherKit(data, start, end);
@@ -118,7 +119,12 @@ export function detailFromWeatherKit(data, start, now = Date.now()) {
   const out = h => ({ hour: h.hour, temp: Math.round(h.temp), code: h.code, rainProb: h.rainProb });
   const current = data?.currentWeather, temp = num(current?.temperature);
   return {
-    now: temp == null ? null : { temp: Math.round(temp), code: wmoCode(current.conditionCode) },
+    now: temp == null ? null : {
+      temp: Math.round(temp), code: wmoCode(current.conditionCode),
+      wind: num(current.windSpeed) == null ? null : Math.round(num(current.windSpeed)),
+      windDirection: num(current.windDirection) == null ? null : Math.round(num(current.windDirection)) % 360,
+      daylight: typeof current.daylight === "boolean" ? current.daylight : null
+    },
     // From the hour that is running now.
     next: hours.filter(h => h.date === start && h.at > now - 3600000).map(out),
     week: Object.keys(days).sort().map(date => ({ date, ...days[date], hours: hours.filter(h => h.date === date && h.hour >= DAY_FROM && h.hour <= DAY_TO).map(out) }))

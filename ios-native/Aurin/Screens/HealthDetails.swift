@@ -324,7 +324,13 @@ struct WeightDetailContent: View {
                     let raw = w.series.map { Units.weight($0.value) }
                     let goal = w.goal.map { Units.weight($0) }
                     let all = raw + [goal].compactMap { $0 }
-                    TrendDotsChart(raw: raw, trend: smoothed(raw), goal: goal, lo: (all.min() ?? 70) - 0.5, hi: (all.max() ?? 90) + 0.5, height: 160)
+                    let lo = (all.min() ?? 70) - 0.5, hi = (all.max() ?? 90) + 0.5
+                    let goalTick = goal.map { [ScaleTick(value: $0, text: L10n.f("%@ cíl", Fmt.int($0)), color: Palette.green, line: false)] } ?? []
+                    VStack(spacing: 6) {
+                        TrendDotsChart(raw: raw, trend: smoothed(raw), goal: goal, lo: lo, hi: hi, height: 160,
+                                       scale: scaleTicks(lo, hi, extra: goalTick))
+                        ChartDates(marks: monthMarks(w.series.map(\.date)), trailing: scaleWidth)
+                    }
                 }
                 .padding(.top, 20)
                 ThreeCells(cells: [("Průměr 7 dní", Fmt.decimal(w.average.map { Units.weight($0) })), ("Za 30 dní", w.change.map { Fmt.signed(Units.weight($0), digits: 1) } ?? "–"),

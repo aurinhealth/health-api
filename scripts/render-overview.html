@@ -17,7 +17,7 @@
   --line:rgba(27,26,23,.09);--track:rgba(27,26,23,.08);
   --green:#1F6B52;--green-soft:#D3EADF;--amber:#A35A12;--amber-bar:#C4782A;--indigo:#4F46C8;--rust:#B4532F;
   --button:#15140F;--on-button:#F3EFE8;
-  --logo-load:#F2B46B;--logo-recovery:#3FA383;--aurora-lilac:#B9B4EE;
+  --logo-load:#F2B46B;--logo-recovery:#3FA383;--aurora-lilac:#B9B4EE;--glow-sunrise:#F7DFC2;
   --device-hi:#F4F1EC;--device-mid:#C9C2B8;--device-lo:#A2998E;
   --glow-today:#DCEBE2;--glow-health:#E3E6F3;--glow-training:#F3E3C6;--glow-food:#F2E4D0}
 *{box-sizing:border-box}
@@ -32,6 +32,9 @@ h1,h2,.serif{font-family:Newsreader,"New York",Georgia,serif;font-weight:400;let
 .pill{display:inline-flex;align-items:center;gap:16px;height:96px;padding:0 44px;border-radius:999px;background:var(--button);color:var(--on-button);font-size:32px;font-weight:600;box-shadow:0 14px 30px -12px rgba(21,20,15,.6)}
 .kicker{display:inline-flex;align-items:center;gap:14px;padding:12px 26px;border-radius:999px;background:color-mix(in srgb,var(--panel) 60%,transparent);border:1px solid var(--line);font-size:26px;font-weight:600;color:var(--sec)}
 .kicker i{width:14px;height:14px;border-radius:50%;background:var(--green)}
+/* The sunrise behind the hero, as on the website and the app's welcome. */
+.sunrise{position:absolute;inset:0;pointer-events:none;background:radial-gradient(70% 70% at 22% 25%,var(--glow-sunrise) 0,transparent 100%)}
+h1 em{font-style:italic;color:var(--green)}
 .aurora{position:absolute;inset:0;overflow:hidden;pointer-events:none}
 .aurora i{position:absolute;border-radius:50%;filter:blur(120px);opacity:.42}
 .aurora .a{width:900px;height:760px;right:40px;top:-120px;background:var(--logo-load)}
@@ -69,7 +72,7 @@ h1,h2,.serif{font-family:Newsreader,"New York",Georgia,serif;font-weight:400;let
 #og .aurora{transform:scale(.6);transform-origin:top right}
 #og .words{position:absolute;left:80px;top:0;bottom:0;width:640px;display:flex;flex-direction:column;justify-content:center;z-index:2}
 #og .brand{font-size:40px;gap:14px}
-#og h1{font-size:96px;margin:30px 0 34px}
+#og h1{font-size:88px;margin:30px 0 34px}
 #og .meta{display:flex;align-items:center;gap:22px}
 #og .kicker{font-size:20px;padding:10px 20px;gap:10px}
 #og .kicker i{width:11px;height:11px}
@@ -141,21 +144,21 @@ h1,h2,.serif{font-family:Newsreader,"New York",Georgia,serif;font-weight:400;let
 <body>
 
 <section class="shot" id="og" data-shot="og-en">
-  <div class="aurora"><i class="a"></i><i class="b"></i><i class="c"></i></div>
+  <div class="sunrise"></div>
   <div class="words">
     <div class="brand"><span class="mark" data-mark="52"></span>Aurin</div>
-    <h1>Train for how you feel today.</h1>
+    <h1>A coach that knows <em>how you slept.</em></h1>
     <div class="meta"><span class="kicker"><i></i>For iPhone · now in TestFlight</span><span class="site">aurin.health</span></div>
   </div>
   <div class="phone" data-phone="today"></div>
 </section>
 
 <section class="shot" id="hero" data-shot="01-hero">
-  <div class="aurora"><i class="a"></i><i class="b"></i><i class="c"></i></div>
+  <div class="sunrise"></div>
   <div class="words">
     <div class="brand"><span class="mark" data-mark="72"></span>Aurin</div>
     <div class="kicker" style="margin-top:56px"><i></i>For iPhone · now in TestFlight</div>
-    <h1>Train for how you feel today.</h1>
+    <h1>A coach that knows <em>how you slept.</em></h1>
     <p class="lede">Readiness, sleep, strain and a plan that adapts, from the watch or ring you already wear.</p>
     <span class="pill">Join the waitlist</span><span class="site">aurin.health</span>
   </div>

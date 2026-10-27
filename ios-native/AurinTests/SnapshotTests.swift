@@ -243,6 +243,12 @@ final class SnapshotTests: XCTestCase {
         try render("settings-goals", height: 1300) { NavigationStack { GoalsSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-zones", height: 700) { NavigationStack { ZonesSettingsView(store: store) }.environment(AppModel(demo: true)) }
         try render("settings-gym", height: 700) { NavigationStack { GymSettingsView() }.environment(AppModel(demo: true)) }
+        try render("settings-gym-goal", height: 760) { GymGoalSheet(goal: .constant("auto"), recommended: "strength_muscle") }
+        try render("settings-rest-lengths", height: 180) { RestLengthGrid(value: .constant(GymRestSettingsView.byExercise)) {}.padding(20) }
+        XCTAssertEqual(GymRestSettingsView.short(90), "1:30")
+        XCTAssertEqual(GymRestSettingsView.short(120), "2 min")
+        XCTAssertEqual(GymRestSettingsView.before(nil, setting: 45), 45)
+        XCTAssertEqual(GymRestSettingsView.before(nil, setting: GymRestSettingsView.byExercise), 120)
         try render("gym-stretching", height: 520) {
             StretchingCard(stretching: GymStretching(minutes: 5, items: [
                 .init(id: "hip_flexor", name: "Kyčelní flexory v kleku", seconds: 30, sides: true, rounds: 2, steps: ["Klekni si na jedno koleno."]),
@@ -286,6 +292,17 @@ final class SnapshotTests: XCTestCase {
 
     func testSignInScreen() throws {
         try render("login", height: 844) { LoginView().environment(AppModel()) }
+        // The welcome's pages as they end, in Czech and in English.
+        for language in ["cs", "en"] {
+            L10n.setLanguage(language)
+            for page in WelcomePage.allCases {
+                try render("welcome-\(page.rawValue)-\(language)", glow: page.glow, height: 700) {
+                    WelcomePageView(page: page, active: false, still: true).padding(24).environment(\.locale, L10n.locale)
+                }
+            }
+        }
+        L10n.setLanguage("cs")
+        UserDefaults.standard.removeObject(forKey: "AppleLanguages")
     }
 
     func testDemoDataDecodes() {
@@ -681,6 +698,14 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(WeatherText.symbol(weather.code), "cloud.sun.fill")
         XCTAssertEqual(WeatherText.symbol(95), "cloud.bolt.rain.fill")
         XCTAssertEqual(WeatherText.description(63), "déšť")
+        XCTAssertEqual(SkyLook(code: 61, daylight: false), SkyLook(code: 63, daylight: false))
+        XCTAssertTrue(SkyLook(code: 61, daylight: false).rains)
+        XCTAssertEqual(SkyLook(code: 61, daylight: false).stars, 0, "a rainy night has no stars")
+        XCTAssertTrue(SkyLook(code: 2, daylight: false).showsBody, "a partly cloudy night shows the moon")
+        XCTAssertGreaterThan(SkyLook(code: 0, daylight: false).stars, 0)
+        XCTAssertEqual(SkyLook(code: 2, daylight: nil).night, false)
+        XCTAssertEqual(WeatherText.windWord(18) != nil, true)
+        XCTAssertNil(WeatherText.compass(nil))
 
         let model = AppModel(demo: true)
         let active = try XCTUnwrap(DemoData.training.activeCalories)

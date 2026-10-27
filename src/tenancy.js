@@ -1,6 +1,7 @@
 import { L } from './lang.js';
 import { routedUserDb } from './user-data-routing.js';
 import { inheritAiLimits } from './ai-limit-memory.js';
+import { readOnlySql, withD1Retry } from './d1-retry.js';
 // Multi-user support: every personal row carries user_id, requests run with a
 // user-scoped env, and the schema upgrade that adds user_id to existing tables.
 
@@ -151,6 +152,31 @@ function schemaStatement(statement, sql, schemaDone) {
   };
 }
 
+// A database blip (d1-retry.js) is tried again: a read after any of them, a
+// write only when it never ran.
+function retriedStatement(statement, sql) {
+  const read = readOnlySql(sql);
+  return {
+    [REAL]: statement?.[REAL] || statement,
+    bind: (...values) => retriedStatement(statement.bind(...values), sql),
+    run: (...args) => withD1Retry(() => statement.run(...args), { read }),
+    first: (...args) => withD1Retry(() => statement.first(...args), { read }),
+    all: (...args) => withD1Retry(() => statement.all(...args), { read }),
+    raw: (...args) => withD1Retry(() => statement.raw(...args), { read })
+  };
+}
+
+// The central database as handlers see it (RAW_DB): the same blips tried again.
+export function retryingDb(db) {
+  if (!db?.prepare) return db;
+  return {
+    prepare: query => retriedStatement(db.prepare(query), query),
+    batch: statements => withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }),
+    exec: query => db.exec(query),
+    dump: () => db.dump()
+  };
+}
+
 // A D1 facade that refuses statements touching personal tables unless they
 // mention user_id, so a missed WHERE clause fails instead of leaking data.
 export function scopedDb(db, userId) {
@@ -168,8 +194,8 @@ export function scopedDb(db, userId) {
   };
   return {
     userId: id,
-    prepare(query) { check(query); const statement = db.prepare(query); return IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement; },
-    batch(statements) { return db.batch(statements.map(s => s?.[REAL] || s)); },
+    prepare(query) { check(query); const statement = db.prepare(query); return retriedStatement(IDEMPOTENT_SCHEMA.test(query) ? schemaStatement(statement, String(query), schemaDone) : statement, query); },
+    batch(statements) { return withD1Retry(() => db.batch(statements.map(s => s?.[REAL] || s)), { read: false }); },
     exec(query) { check(query); return db.exec(query); },
     dump() { throw new Error("dump is not available on a user-scoped database"); }
   };
@@ -180,7 +206,7 @@ export function scopedDb(db, userId) {
 export function userEnv(env, user) {
   // CONSENT_REQUIRED: AI for this user runs only with their consent (consent.js).
   const data = env.USER_DATA_DB || env.FOOD_CATALOG_DB ? routedUserDb(env.DB, env.USER_DATA_DB || env.DB, PERSONAL_TABLES, env.FOOD_CATALOG_DB || env.DB) : env.DB;
-  const scoped = { ...env, DB: scopedDb(data, user.id), RAW_DB: env.DB, USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true, CONSENT_REQUIRED: true };
+  const scoped = { ...env, DB: scopedDb(data, user.id), RAW_DB: retryingDb(env.DB), USER_ID: user.id, USER_EMAIL: user.email, USER_ROLE: user.role, USER_IS_OWNER: user.isOwner === true, CONSENT_REQUIRED: true };
   if (!scoped.USER_IS_OWNER) {
     delete scoped.GOOGLE_REFRESH_TOKEN;
     delete scoped.INTERVALS_API_KEY;

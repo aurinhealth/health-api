@@ -35,6 +35,8 @@ test('the overview follows the app section by section and every file it loads ex
   for(const file of files)assert.ok(existsSync(new URL(`../public/site/${file}`,import.meta.url)),file);
   for(const name of ['today','sleep','readiness-parts','training','builder','training-mode','food-day'])assert.ok(files.includes('app/'+name+'.webp'),'the app’s screen '+name);
   assert.ok(files.includes('fonts/instrument-serif.woff2'),'the app’s number font');
+  // Every screenshot of the app says what it shows.
+  for(const [img] of html.matchAll(/<img src="\/site\/app\/[^>]*>/g))assert.doesNotMatch(img,/alt=""/,img);
   // Strain, the finished workout and the coach are screens built in site-demos.js, so they can move.
   for(const text of ['5.1</b> workout <b>3.3</b> movement','Saved to Apple Health','Proposal confirmed.'])assert.ok(html.includes(text),text);
   // The 3D figure's frames, its map of muscles and a close-up of every muscle the bubble can open.
@@ -250,3 +252,18 @@ test('the Consumer Health Data Privacy Policy is its own page, linked from the h
   assert.match(await overviewPage().text(),/<a href="\/health-data">/);
 });
 
+
+test('the overview opens each part with the welcome’s page, in the app’s order and words',async()=>{
+  const read=path=>readFileSync(new URL('../ios-native/'+path,import.meta.url),'utf8');
+  const welcome=read('Aurin/Screens/WelcomePages.swift'),strings=read('Shared/en.lproj/Localizable.strings');
+  const en=label=>strings.match(new RegExp('^"'+label+'" = "([^"]+)";','m'))?.[1];
+  const said=prop=>[...welcome.match(new RegExp('var '+prop+': String \\{[\\s\\S]*?\\n    \\}'))[0].matchAll(/case \.(\w+): return "([^"]*)"/g)].filter(m=>m[1]!=='opening').map(m=>en(m[2]));
+  const html=await overviewPage().text();
+  const parts=[...html.matchAll(/<section id="a-\w+" class="opener"[^>]*><div class="wrap ac">\n<div class="head reveal"><h2 class="big">([^<]+)<\/h2><p class="sub">([^<]+)<\/p>/g)];
+  assert.deepEqual(parts.map(m=>m[1]),said('title'));
+  assert.deepEqual(parts.map(m=>m[2]),said('text'));
+  assert.equal((en('Kouč, který zná ')+en('tvůj spánek.')).trim(),'A coach that knows how you slept.');
+  assert.match(html,/<h1 aria-label="A coach that knows how you slept\.">/);
+  for(const text of ['Good night, third day in a row. ','Go all in on strength today.','Keep legs, go lighter:','Bad night. Legs today?','Legs, lighter'])assert.ok(html.includes(text),text);
+  assert.match(html,/<nav class="acts-nav" aria-label="Parts of Aurin">/);
+});

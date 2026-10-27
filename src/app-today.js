@@ -9,6 +9,8 @@ import { readinessFor, primaryNights, sleepIndexFor } from "./readiness.js";
 import { localDate, localDateTime } from "./user-time.js";
 import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { L } from "./lang.js";
+import { readinessMessage } from "./push.js";
+import { activityKindOf } from "./activity-match.js";
 import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-training.js";
 export { withHeartRateLoad };
 import { recoveryToday } from "./recovery-today.js";
@@ -107,7 +109,10 @@ export function todayWeather(location, forecast, date) {
     source: w?.source === "apple" ? "apple" : null,
     // The detail (weatherkit.js detailFromWeatherKit): the temperature now, the
     // hours from now, and seven days with their hours and where to train.
-    now: Number.isFinite(Number(w?.now?.temp)) ? { temp: round(num(w.now.temp)), code: round(num(w.now.code)) } : null,
+    now: Number.isFinite(Number(w?.now?.temp)) ? {
+      temp: round(num(w.now.temp)), code: round(num(w.now.code)), wind: round(num(w.now.wind)),
+      windDirection: round(num(w.now.windDirection)), daylight: typeof w.now.daylight === "boolean" ? w.now.daylight : null
+    } : null,
     next: Array.isArray(w?.next) && w.next.length ? w.next : null,
     week: Array.isArray(w?.week) && w.week.length ? w.week.map(d => ({
       date: d.date, code: round(num(d.code)), max: round(num(d.max)), min: round(num(d.min)), rainProb: round(num(d.rainProb)),
@@ -124,11 +129,14 @@ export function todayWeather(location, forecast, date) {
 // check-in or signs of illness (breathing or temperature up) it never says to
 // keep the plan; the advice is rest or an easy session. Its facts stay.
 // trained: today's workouts are done and nothing is left: the advice is rest for the rest of the day.
-export function readinessSummary(summary, readiness = {}, checkin = null, hasPlan = false, trained = false) {
+// morning: the morning push's advice when the days before, the journal, an
+// injury or tomorrow changed it (push.js readinessMessage `changed`), so the
+// card and the notification say the same; not once today's training is done.
+export function readinessSummary(summary, readiness = {}, checkin = null, hasPlan = false, trained = false, morning = null) {
   const flags = readiness?.flags || [];
   const sick = checkin === "sick" || flags.includes("checkin_sick");
   const signs = flags.some(f => /^(respiration|skin_temp|wrist_temp)_elevated$/.test(f));
-  if (!(readiness?.zone === "red" || sick || signs)) return summary;
+  if (!(readiness?.zone === "red" || sick || signs)) return morning && !trained ? { ...(summary || { text: null }), ...morning } : summary;
   const recommendation = sick ? L("Když je ti špatně, trénink dnes vynech a odpočívej. Vrať se, až budeš zase fit.", "If you feel unwell, skip training today and rest. Come back when you're well again.")
     : signs ? L("Dech nebo teplota ve spánku jsou nad tvým normálem. Dnes bez intenzity, a když se necítíš dobře, odpočívej.", "Your breathing or temperature in sleep is above your normal. No intensity today, and rest if you don't feel well.")
     : trained ? L("Připravenost je dnes nízká a trénink máš za sebou: zbytek dne odpočívej, najez se a jdi dřív spát.", "Readiness is low today and your training is done: rest for the rest of the day, eat well and get to bed earlier.")
@@ -153,7 +161,7 @@ export function todayUnavailable(failed) {
   return [...new Set([...failed].map(path => TODAY_PARTS[path]).filter(Boolean))];
 }
 
-export function buildToday({ date, hour = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
+export function buildToday({ date, hour = null, morning = null, daily = {}, health = {}, fitness = {}, sleep = {}, fluids = {}, weight = {}, coaches = {}, profile = {}, connectionProblems = [], location = null, forecast = null, gym = null, recovery = null, checkin = null, trainingPlan = null, unavailable = [] }) {
   const google = Array.isArray(health.wellness) ? health.wellness : [];
   const sessions = Array.isArray(sleep.sessions) ? sleep.sessions : [];
   const nights = primaryNights(sessions);
@@ -216,7 +224,10 @@ export function buildToday({ date, hour = null, daily = {}, health = {}, fitness
   const cumulative = hours => hours.reduce((out, v) => [...out, (out.at(-1) || 0) + (num(v) || 0)], []);
   const earlier = Object.keys(byHour).filter(d => d < date && byHour[d].some(v => v > 0)).sort().slice(-14).map(d => cumulative(byHour[d]));
   const usual = earlier.length ? Array.from({ length: 24 }, (_, h) => Math.round(earlier.reduce((s, c) => s + c[h], 0) / earlier.length)) : null;
-  const summary = readinessSummary(coaches.morningSummary || null, readiness, checkin, planned.length > 0, done.length > 0 && !open.length);
+  // The same advice as the morning push (push.js), from the same signals (entrypoint.js morningContext).
+  const morningAdvice = morning && readiness.score != null ? readinessMessage({ score: readiness.score, zone: readiness.zone, flags: readiness.flags || [], missing: readiness.missing || [], checkin, athleteState: morning.athleteState || null,
+    sleep: night ? { minutes: num(night.durationMin) } : null, planned: planned.filter(w => w?.name).map(w => ({ title: w.name, sport: activityKindOf(w.type) })), tomorrow: morning.tomorrow || [], context: morning.context, date }).changed || null : null;
+  const summary = readinessSummary(coaches.morningSummary || null, readiness, checkin, planned.length > 0, done.length > 0 && !open.length, morningAdvice);
 
   // The day's plan: what was done at its time, then what is still planned in
   // the order of the plan (no clock: it comes after the last record, whenever

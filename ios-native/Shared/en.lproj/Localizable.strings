@@ -11,6 +11,7 @@
 "%@ let" = "%@ years";
 "%@ na ruku" = "%@ per dumbbell";
 "%@ od normy" = "%@ from usual";
+"%@ opakování · %@" = "%@ reps · %@";
 "%@ po %@" = "%1$@ by %2$@";
 "%@ týdně" = "%@ a week";
 "%@ z %@ %@ · %@ %@" = "%1$@ of %2$@ %3$@ · %4$@ %5$@";
@@ -134,6 +135,10 @@
 "Do postele" = "Bedtime";
 "Do postele %@" = "Bed by %@";
 "Do postele v %@" = "Bed at %@";
+"Mezi cviky" = "Between exercises";
+"Nebo vyber" = "Or pick one";
+"Podle tvého sportu" = "From your sport";
+"Podle tvého sportu: %@" = "From your sport: %@";
 "V tomto jídle zatím nic není. Přidej první potravinu." = "This meal is empty. Add a food.";
 "Doba do usnutí" = "Time to fall asleep";
 "Dohledat AI" = "AI lookup";
@@ -251,6 +256,7 @@
 "Kopírovat na jiný den" = "Copy to another day";
 "Kouč" = "Coach";
 "Kouč den nezhodnotil." = "The coach couldn't review the day.";
+"Kouč nechal trénink lehčí" = "The coach kept it easier";
 "Kouč používá AI" = "The coach uses AI";
 "Kouč přemýšlí…" = "Coach is thinking…";
 "Kouč teď neodpověděl." = "The coach didn't answer.";
@@ -440,6 +446,7 @@
 "Prahy a zóny se po uložení pošlou do Intervals.icu" = "Thresholds and zones are sent to Intervals.icu after saving";
 "Pravidelnost · %@ nocí" = "Consistency · %@ nights";
 "Pražský půlmaraton" = "Chicago Marathon";
+"Výživa" = "Nutrition";
 "Všechno, co pro tebe Aurin uchovává, zmizí a nejde to obnovit." = "Everything Aurin keeps for you goes and can't be restored.";
 "Smazat účet Aurin" = "Delete your Aurin account";
 "Probrat" = "Discuss";
@@ -459,7 +466,6 @@
 "Průměr 7 dní" = "7-day average";
 "Pás" = "Treadmill";
 "PŘ" = "RDY";
-"Před dalším cvikem" = "Before the next exercise";
 "Předchozí" = "Previous";
 "Předchozí den" = "Previous day";
 "Předchozí konverzace" = "Previous conversations";
@@ -561,6 +567,7 @@
 "Další zdroje dat" = "Other data sources";
 "Dnes po hodinách" = "Today, hour by hour";
 "Déšť" = "Rain";
+"Max / min" = "High / Low";
 "Ukáže hodiny dne" = "Shows the day's hours";
 "Město nebo obec" = "City or town";
 "Výsledky" = "Results";
@@ -3093,3 +3100,39 @@
 "Hodinky nejsou spárované s tímto iPhonem." = "No Apple Watch is paired with this iPhone.";
 "Aurin na hodinkách ještě není. Nainstaluj ho v aplikaci Watch v iPhonu." = "Aurin isn't on your watch yet. Install it in the Watch app on your iPhone.";
 "Připojeno · data poslaná %@" = "Connected · synced %@";
+
+/* Charts: what a line or a scale stands for */
+"potřeba %@" = "need %@";
+"obvykle %@" = "usually %@";
+"6 týdnů" = "6 weeks";
+"před půl rokem" = "6 months ago";
+"%@+ vysoká" = "%@+ high";
+"%@ střední" = "%@ moderate";
+"pod %@ nízká" = "below %@ low";
+"prům. %@" = "avg %@";
+"%@ cíl" = "%@ goal";
+
+/* The welcome before the sign-in (WelcomePages.swift, LoginView.swift) */
+"Pojďme na to" = "Get started";
+"Strana %@ z %@" = "Page %1$@ of %2$@";
+"Kouč, který zná " = "A coach that knows ";
+"tvůj spánek." = "how you slept.";
+"Každé ráno víš, kolik tělo dnes zvládne." = "Know every morning how much your body can take today.";
+"Tréninky podle únavy, svalů a vybavení, které máš." = "Workouts built around your fatigue, muscles and equipment.";
+"Vyfoť talíř nebo naskenuj kód. Hodnoty doplní AI." = "Snap your plate or scan a barcode. AI fills in the values.";
+"Večerka podle budíku a spánku, který dnes potřebuješ." = "A bedtime from your alarm and the sleep you need tonight.";
+"Zeptej se na cokoli. Zná tvůj spánek, trénink i jídlo." = "Ask anything. It knows your sleep, training and food.";
+"Dobrá noc, třetí den. " = "Good night, third day in a row. ";
+"Dnes klidně naplno do síly." = "Go all in on strength today.";
+"Dřep" = "Squat";
+"Minulá noc" = "Last night";
+"Špatná noc. Dneska nohy?" = "Bad night. Legs today?";
+"Připravenost je 61 po 5 h 40 spánku. " = "Readiness is 61 after 5 h 40 of sleep. ";
+"Nohy nech, jen lehčeji:" = "Keep legs, go lighter:";
+" dřep 3 × 8 se 70 kg." = " squat 3 × 8 at 70 kg.";
+"Nohy, lehčeji" = "Legs, lighter";
+"Tvoje data pracují jen pro tebe." = "Your data works only for you.";
+"Nikdy je neprodáváme ani nepoužíváme k reklamě." = "We never sell it or use it for ads.";
+"Pokračováním souhlasíš s [podmínkami](https://aurin.health/terms?lang=cs) a [zásadami ochrany soukromí](https://aurin.health/privacy?lang=cs)." = "By continuing you agree to the [Terms](https://aurin.health/terms) and [Privacy Policy](https://aurin.health/privacy).";
+"Výživa" = "Nutrition";
+"Z fotky" = "From a photo";

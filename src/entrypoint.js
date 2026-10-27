@@ -84,7 +84,7 @@ import { illnessWarning, illnessSigns } from './illness-check.js';
 import { readinessFor } from './readiness.js';
 import { lockReadiness } from "./readiness-lock.js";
 import { loadFitnessInsights, exerciseMuscles } from "./fitness-insights.js";
-import { loadMuscleFatigue, loadTrainingDoses } from "./muscle-fatigue.js";
+import { loadMuscleFatigue, loadTrainingDoses, muscleFatigue } from "./muscle-fatigue.js";
 import { loadMuscleDetail } from "./muscle-detail.js";
 import { recoveryTime } from "./recovery-time.js";
 import { readGymPlan, ensureGymPlans } from "./gym-plan-store.js";
@@ -592,13 +592,22 @@ export default {
     // Server errors are counted for the owner's morning e-mail (ops-report.js); 503 is a planned "try again".
     const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", `${request.method} ${routeName(new URL(request.url).pathname)}`, message));
     try {
+      const answered = await worker.fetch(request, env, ctx);
+      // The owner's report names why (the route's own error text), before it is made plain.
+      if (answered.status >= 500 && answered.status !== 503) count(await serverErrorReason(answered));
       // A database or code error never reaches the app word for word (error-text.js).
-      const response = await withPlainErrors(request, await worker.fetch(request, env, ctx));
-      if (response.status >= 500 && response.status !== 503) count(`HTTP ${response.status}`);
+      const response = await withPlainErrors(request, answered);
       return isStaging(env) ? markStaging(response) : response;
     } catch (error) { count(error); throw error; }
   }
 };
+
+// "HTTP 500: D1_ERROR: …" from a JSON error answer's message, else the status alone.
+async function serverErrorReason(response) {
+  const body = /^application\/json/i.test(response.headers.get("Content-Type") || "") ? await response.clone().json().catch(() => null) : null;
+  const why = [body?.message, body?.error, body?.detail].find(v => typeof v === "string" && v.trim());
+  return `HTTP ${response.status}` + (why ? ": " + why : "");
+}
 
 async function staticRoute(url, request, env) {
   if (url.pathname === "/") return overviewPage(request);
@@ -649,7 +658,32 @@ async function todayReadiness(env, ctx, date, { fresh = false, plan = false } = 
   const today = buildToday({ date, hour: localHour(), daily: daily || {}, health, fitness, sleep, profile: profile || {}, checkin, gym: gym?.[date] || null });
   if (!plan) return today.readiness;
   const planned = (today.plan || []).filter(i => i.kind === 'workout' && i.status === 'planned').map(i => ({ title: i.title, sport: i.sport }));
-  return { ...today.readiness, sleep: today.sleep, hrv: today.hrv, restingHR: today.restingHR, planned };
+  const morning = await morningContext(env, { date, health, fitness, sleep, profile, read }).catch(error => { console.error('Morning advice context failed', error.message); return { tomorrow: [], context: null }; });
+  return { ...today.readiness, sleep: today.sleep, hrv: today.hrv, restingHR: today.restingHR, planned, ...morning };
+}
+
+// What the morning push's advice weighs beside the score (morning-advice.js):
+// the last week's activities of any sport, tired legs (Trénink → Svaly), the
+// days before with a yellow or red readiness, the form, alcohol in yesterday's
+// journal, and tomorrow's planned sessions from Intervals.icu.
+// Today (/app/api/today) passes the training doses and tomorrow's day it already read.
+async function morningContext(env, { date, health, fitness, sleep, profile, read, doses: loaded, tomorrowDaily: next }) {
+  const tomorrowDate = shiftDate(date, 1);
+  const [doses, journal, tomorrowDaily] = await Promise.all([
+    loaded !== undefined ? loaded : loadTrainingDoses(env.DB).catch(() => null),
+    journalForCoach(env.DB, date).catch(() => null),
+    next !== undefined ? next : read('/analysis/daily?date=' + tomorrowDate)
+  ]);
+  const activities = (doses?.activities || []).filter(a => a.date).map(a => ({ date: a.date, kind: a.kind, minutes: a.minutes }));
+  const legs = doses ? muscleFatigue({ ...doses, now: Date.now() }).groups.find(g => g.id === 'legs')?.state || null : null;
+  const zoneOf = d => readinessFor({ date: d, google: health?.wellness || [], intervals: fitness?.wellness || [], sessions: sleep?.sessions || [], profile: profile || {} })?.zone;
+  let lowDays = 0;
+  while (lowDays < 3 && ['yellow', 'red'].includes(zoneOf(shiftDate(date, -(lowDays + 1))))) lowDays++;
+  const row = (fitness?.wellness || []).find(w => w?.id === date);
+  const tsb = row ? Number(row.tsb ?? (Number(row.ctl) - Number(row.atl))) : null;
+  const alcohol = (journal?.yesterday?.answers || []).some(a => /alkohol|alcohol/i.test(a.item) && a.answer !== 'no');
+  const tomorrow = (tomorrowDaily?.training?.planned || []).filter(a => a?.name).map(a => ({ title: a.name, sport: activityKindOf(a.type) }));
+  return { tomorrow, context: { activities, legs, lowDays, tsb: Number.isFinite(tsb) ? tsb : null, alcohol } };
 }
 
 // Deník's "Co na tebe působí": the morning metrics (readiness, HRV, resting
@@ -676,7 +710,7 @@ async function morningPush(env, ctx, options = {}) {
   // Settings → Oznámení → Ranní připravenost off; the phone keeps its token for the coach.
   const state = await getAthleteState(env.DB).catch(() => null);
   if (state?.notify?.morning === false) { await morningPushNote(env, { reason: 'off' }); return { sent: 0, reason: 'off' }; }
-  const withState = r => r ? { ...r, athleteState: state?.status || null } : r;
+  const withState = r => r ? { ...r, athleteState: state?.status || null, ...(r.context ? { context: { ...r.context, memories: state?.memories || [] } } : {}) } : r;
   // The night, the baselines and today's plan only once the push goes out.
   // Each check in the window leaves why no push went out (sync_status
   // morning_push): "started" left alone means the run was cut off.
@@ -1259,7 +1293,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const body=await request.json().catch(()=>({})),today=localToday();
       const sport=WEEK_SPORTS.includes(body.sport)?body.sport:null,date=validTrainingDay(body.date)?body.date:null;
       if(!sport||!date)throw new Error(L('Neplatný trénink.', 'Invalid workout.'));
-      const current={date,sport,minutes:Number(body.minutes)||60,environment:body.environment==='indoor'?'indoor':'outdoor',kind:sport==='gym'?'gym':KINDS.includes(body.kind)?body.kind:kindOfSystem(body.system)};
+      const current={date,sport,minutes:Number(body.minutes)||60,environment:body.environment==='indoor'?'indoor':'outdoor',kind:sport==='gym'?'gym':KINDS.includes(body.kind)?body.kind:kindOfSystem(body.system),...(Number(body.tss)>0?{tss:Math.round(Math.min(1000,Number(body.tss)))}:{})};
       let changed;
       if(['shorter','easier','harder','indoor','outdoor'].includes(body.chip))changed={...adjustByChip(current,body.chip),note:null};
       else{
@@ -2203,9 +2237,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // Connected services that need the user (access refused, Google permissions missing), shown at the top of Today.
       const problems=connectionProblems(status);
       if(date===localToday()&&profile)ctx.waitUntil(lockReadiness(env.DB,{date,health,fitness,sleep,profile}).catch(()=>false));
+      // The morning push's advice (push.js), so Today's coach card says the same.
+      const morning=isToday?await Promise.all([getAthleteState(env.DB).catch(()=>null),morningContext(env,{date,health,fitness,sleep,profile,doses:training,tomorrowDaily:tomorrow})])
+        .then(([state,m])=>({...m,athleteState:state?.status||null,context:m.context?{...m.context,memories:state?.memories||[]}:null})).catch(()=>null):null;
       applyEnergyBudget(daily,profile,health);
       return Response.json(withRecoveryTime(buildToday({date,hour:date===localToday()?localHour():null,daily,health,fitness,sleep,fluids,weight,coaches,profile:profile||{},connectionProblems:problems,location:place.location,forecast:place.forecast,gym:gym[date]||null,checkin,trainingPlan,
-        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess},unavailable:todayUnavailable(failed)}),training),{headers:{'Cache-Control':'no-store'}});
+        recovery:{yesterday:yesterday?.training||{},tomorrow:tomorrow?tomorrow.training||{}:null,gym,saved:savedRecovery,less:recoveryLess},unavailable:todayUnavailable(failed),morning}),training),{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:500})}
   }
 
@@ -2882,7 +2919,10 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(!userInitiated&&environment==='indoor'&&weekTarget?.environment!=='indoor')availabilityMinutes=availabilityMinutes!=null?indoorMinutes(genSport,availabilityMinutes):genSport==='ride'?90:60;
       const planFocus=planned?({quality:systemOf(genSport,planned.family),test:'threshold',long:'long_endurance',easy:'endurance',recovery:'recovery'})[planned.kind]||null:null;
       const roleFocus=askedFocus||planFocus||weekRole?.focus;
-      const goalOf=focus=>body.phase||focus?{...(body.phase?{phase:String(body.phase)}:{}),...(focus?{focus}:{}),...(focus&&focus===askedFocus?{asked:true,...(body.fromCoach===true?{chat:true,...(body.insisted===true?{insisted:true}:{})}:{})}:{})}:null;
+      // "Upravit s AI" in the week plan sends insisted: the athlete's own change
+      // passes the load rules like a chat card asked for again; red and illness
+      // still hold (Petr 2026-10-27: "chci intervaly" gave the same ride).
+      const goalOf=focus=>body.phase||focus?{...(body.phase?{phase:String(body.phase)}:{}),...(focus?{focus}:{}),...(focus&&focus===askedFocus?{asked:true,...(body.fromCoach===true||body.insisted===true?{chat:true,...(body.insisted===true?{insisted:true}:{})}:{})}:{})}:null;
       const coachInputs={...await loadCoachInputs(env,ctx,internalAuth,date),athleteState:await getAthleteState(env.DB).catch(()=>null),availabilityMinutes,capabilities:await getCapabilities(env.DB,genSport),sport:genSport};
       let coach=buildCyclingCoachV2({...coachInputs,goal:goalOf(roleFocus)});
       // A hard kind asked for on a red morning gives way to the coach's own choice.
@@ -2929,7 +2969,12 @@ async function handleWorkoutsApi(request,env,ctx,url,session,internalAuth){
       if(replaced&&generated.explanation?.why)generated.explanation.why=[L('„'+askedWorkout.name+'“ dnes nahrazuje lehčí trénink: ','Today “'+askedWorkout.name+'” gives way to an easier session: ')+(replaced.why.join(', ')||L('podle připravenosti a zátěže','from your readiness and load'))+'.',...generated.explanation.why];
       // Step rows with watts or paces, so the week plan's detail draws the workout's graph.
       for(const w of [generated.workout,...(generated.alternatives||[])]){if(!w||w.steps)continue;let structure=[];try{structure=JSON.parse(w.structure_json||'[]')}catch{}w.steps=genSport==='run'?stepRows(structure,{environment:w.environment,sport:'run',thresholdPace:thresholds.runThresholdPace,zones:thresholds.paceZones,hrZones:thresholds.runHrZones?.length?thresholds.runHrZones:thresholds.hrZones}):stepRows(structure,{environment:w.environment,ftp:rideFtpFor(thresholds,w.environment).ftp,zones:thresholds.powerZones,hrZones:thresholds.hrZones});}
-      return Response.json({...generated,weekRole,weekTarget,plan:planInfo,environmentReason:suggestedEnvironment.reason,...(replaced?{replaced}:{})},{headers:{'Cache-Control':'no-store'}});
+      // The kind asked for that the coach still eased (red, illness, a test
+      // tomorrow…): what the session became and why, so the detail doesn't
+      // promise intervals the steps don't have.
+      const askedKind=askedFocus?Object.keys(FOCUS_OF).find(k=>FOCUS_OF[k]===askedFocus):null,givenKind=generated.status==='ok'&&generated.system?kindOfSystem(generated.system):null;
+      const eased=askedKind&&givenKind&&givenKind!==askedKind&&!(askedKind==='long'&&givenKind==='endurance')&&!(genSport==='run'&&askedKind==='sweet_spot')?{kind:givenKind,focus:FOCUS_OF[givenKind]||null,why:(generated.adaptations||[]).join(', ')||null}:null;
+      return Response.json({...generated,weekRole,weekTarget,plan:planInfo,...(eased?{eased}:{}),environmentReason:suggestedEnvironment.reason,...(replaced?{replaced}:{})},{headers:{'Cache-Control':'no-store'}});
     }
     if(url.pathname==='/app/api/workouts/feedback'&&request.method==='POST'){
       // Completion comes from the activity paired in Intervals.icu; the athlete adds RPE (and a note).

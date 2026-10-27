@@ -228,9 +228,9 @@ struct PlateLoaderSheet: View {
 
     // MARK: Colours and sizes
 
-    private static let metal = Color(light: 0xBDB7AC, dark: 0x5E615F)
+    static let metal = Color(light: 0xBDB7AC, dark: 0x5E615F)
 
-    private static func fill(_ plate: Double) -> Color {
+    static func fill(_ plate: Double) -> Color {
         switch plate {
         case 25: Color(light: 0xC98A7C, dark: 0xC98A7C)
         case 20: Color(light: 0x7E8DB5, dark: 0x7E8DB5)
@@ -243,7 +243,7 @@ struct PlateLoaderSheet: View {
     }
 
     /// The outline: darker than the plate in light mode, lit in dark mode.
-    private static func line(_ plate: Double) -> Color {
+    static func line(_ plate: Double) -> Color {
         switch plate {
         case 25: Color(light: 0xA86A5C, dark: 0xE2AFA3)
         case 20: Color(light: 0x5F6F98, dark: 0xAAB7DA)
@@ -255,12 +255,12 @@ struct PlateLoaderSheet: View {
         }
     }
 
-    private static func height(_ plate: Double) -> CGFloat {
+    static func height(_ plate: Double) -> CGFloat {
         let heights: [Double: CGFloat] = [25: 184, 20: 172, 15: 156, 10: 140, 5: 124, 2.5: 106]
         return heights[plate] ?? 92
     }
 
-    private static func width(_ plate: Double) -> CGFloat {
+    static func width(_ plate: Double) -> CGFloat {
         let widths: [Double: CGFloat] = [25: 36, 20: 36, 15: 34, 10: 34, 5: 32, 2.5: 30]
         return widths[plate] ?? 28
     }

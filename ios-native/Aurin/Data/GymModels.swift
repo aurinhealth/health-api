@@ -331,6 +331,14 @@ struct GeneratedWorkout: Decodable {
     let message: String?
     let workout: LibraryWorkout?
     let variantCount: Int?
+    /// The asked kind the coach still eased, and why (POST /app/api/workouts/generate).
+    var eased: Eased? = nil
+
+    struct Eased: Decodable {
+        let kind: String
+        let focus: String?
+        let why: String?
+    }
 }
 
 struct WorkoutSearchResponse: Decodable {

@@ -23,6 +23,7 @@ const P = {
   sun: '<circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>',
   run: '<circle cx="14.5" cy="4.5" r="1.8" fill="currentColor" stroke="none"/><path d="M7 21l3.5-6 3 2.5V22M9.5 11l2.5-3.5 4 1.5 2 3.5M12 7.5l-1 5.5 2.5 2"/>',
   bike: '<circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 9h6l3.5 7.5M9 9 12 16.5h-1M14 5.5h2.5"/>',
+  lift: '<circle cx="12" cy="4.2" r="1.9" fill="currentColor" stroke="none"/><path d="M3 9h18M4.5 7v4M19.5 7v4M8 9l1.5 3.5H12h2.5L16 9M12 12.5v3.5l-3.5 5M12 16l3.5 5"/>',
   gym: '<path d="M3 9.5v5M6 7v10M18 7v10M21 9.5v5M6 12h12"/>',
   flex: '<circle cx="12" cy="4.5" r="1.8" fill="currentColor" stroke="none"/><path d="M5 11h14M12 7.5v6.5l-4 6M12 14l4 6"/>',
   spark: '<path d="M12 3.5l1.8 5.2 5.2 1.8-5.2 1.8-1.8 5.2-1.8-5.2L5 10.5l5.2-1.8Z" fill="currentColor" stroke="none"/><path d="M19 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7Z" fill="currentColor" stroke="none"/>',
@@ -56,12 +57,12 @@ const merge = html => html.replace(/ data-n="([^"]*)" data-n="/g, ' data-n="$1;'
 
 // The service logos (the app's own files in public/site/logos/), as the app's IntegrationIcon draws them.
 const LOGO = {
-  apple: '<img src="/site/logos/apple-health.png" alt="" width="15" height="15">',
-  google: '<img src="/site/logos/google-health.png" alt="" width="15" height="15" class="pad">',
-  intervals: '<img src="/site/logos/intervals.svg" alt="" width="15" height="15">',
-  ultrahuman: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="15" height="15"></span>',
-  whoop: '<img src="/site/logos/whoop.svg" alt="" width="15" height="15">',
-  wahoo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="15" height="15"></span>',
+  apple: '<img src="/site/logos/apple-health.png" alt="" width="15" height="15" loading="lazy">',
+  google: '<img src="/site/logos/google-health.png" alt="" width="15" height="15" loading="lazy" class="pad">',
+  intervals: '<img src="/site/logos/intervals.svg" alt="" width="15" height="15" loading="lazy">',
+  ultrahuman: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="15" height="15" loading="lazy"></span>',
+  whoop: '<img src="/site/logos/whoop.svg" alt="" width="15" height="15" loading="lazy">',
+  wahoo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="15" height="15" loading="lazy"></span>',
 };
 const logo = id => `<span class="lg">${LOGO[id]}</span>`;
 // The Aurin mark, as the app's own source tile for what it recorded.
@@ -103,11 +104,11 @@ const dial = `<div class="dm pad dialbox">
 <svg viewBox="0 0 300 300" aria-hidden="true"><circle class="trk" cx="150" cy="150" r="126"/><path class="arc" d=""/>
 ${[0, 3, 6, 9, 12, 15, 18, 21].map(h => { const a = h / 24 * 2 * Math.PI; return `<text x="${(150 + 98 * Math.sin(a)).toFixed(1)}" y="${(150 - 98 * Math.cos(a) + 4).toFixed(1)}">${h}</text>`; }).join('')}
 <circle class="usual" cx="${(150 + 143 * Math.sin(1428 / 1440 * 2 * Math.PI)).toFixed(1)}" cy="${(150 - 143 * Math.cos(1428 / 1440 * 2 * Math.PI)).toFixed(1)}" r="3"/></svg>
-<div class="ctr"><span class="num len">8 h 30</span><span class="mut s">sleep</span></div>
-<button type="button" class="hd moon" aria-label="Bedtime">${ic('moon')}</button><button type="button" class="hd sun" aria-label="Wake up">${ic('sun')}</button>
+<div class="ctr" aria-hidden="true"><span class="num len">8 h 30</span><span class="mut s">sleep</span></div>
+<button type="button" class="hd moon" role="slider" aria-label="Bedtime" aria-valuemin="0" aria-valuemax="1435">${ic('moon')}</button><button type="button" class="hd sun" role="slider" aria-label="Wake up" aria-valuemin="0" aria-valuemax="1435">${ic('sun')}</button>
 </div>
-<div class="tiles"><div class="tile"><div class="th ind">${ic('moon')}Bedtime</div><span class="num bed">10:10 PM</span></div><div class="tile"><div class="th amb">${ic('sun')}Wake up</div><span class="num wake">7:15 AM</span></div></div>
-<p class="hint">Drag the moon or the sun</p>
+<div class="tiles" aria-hidden="true"><div class="tile"><div class="th ind">${ic('moon')}Bedtime</div><span class="num bed">10:10 PM</span></div><div class="tile"><div class="th amb">${ic('sun')}Wake up</div><span class="num wake">7:15 AM</span></div></div>
+<p class="hint" aria-hidden="true">Drag the moon or the sun</p>
 </div>`;
 
 // "Tonight I want": the pick moves, and the bedtime follows it.
@@ -264,7 +265,7 @@ const doneScreen = `<div class="app glow-training">${STATUS}
     .map(([k, v, f, t, u, d], i) => `<div><span class="mut s">${k}</span><span class="num tv"><span${n(f, t, 300 + i * 120, 1100, u === 't' ? '1' : 'i')}>${String(t)}</span>${u ? ' ' + u : ''}</span>${d ? `<span class="grn s"${at('1600')}>${d}</span>` : ''}</div>`).join('')}</div>
 <div class="card rec"${at('1900')}><span class="sc amb">${ic('spark')}</span><div><b>New record</b><span class="mut s">Squat 82.5 × 6</span></div></div>
 <div class="card chg"${at('2500')}>${[['Squat', '3 × 80 kg', '+2.5 kg', 'grn'], ['Bench press', '2 × 62.5 kg', '+1 reps', 'grn'], ['Bent-over rows', '2 × 50 kg', '=', 'mut']].map(([a, b, c, k]) => `<div class="li"><div><b>${a}</b><span class="mut s">${b}</span></div><span class="${k} s b">${c}</span></div>`).join('')}</div>
-<div class="card mf"${at('2800')}><img src="/site/muscles/f00.webp" alt="" width="34" height="53"><div><b>Muscle fatigue</b><span class="mut s">Quads and glutes rested in 2 days</span></div><span class="mut">${ic('chev')}</span></div>
+<div class="card mf"${at('2800')}><img src="/site/muscles/f00.webp" alt="" width="34" height="53" loading="lazy"><div><b>Muscle fatigue</b><span class="mut s">Quads and glutes rested in 2 days</span></div><span class="mut">${ic('chev')}</span></div>
 <div class="card hk"${at('3400')}><span class="rust">${ic('heart')}</span><b>Saved to Apple Health</b><span class="grn">${ic('check')}</span></div>
 <div class="btn dark big2">${ic('thumb')}Rate</div>
 </div>`;
@@ -341,6 +342,68 @@ const coachWeek = `<div class="dm pad wk"${at('10900')}>
 </div></div>`;
 
 const each = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, merge(v)]));
+// The welcome's pages (WelcomePages.swift), one before each part of the overview: a few of the app's own cards with
+// the sample day that rise into place and move once the part is on screen, as they do before the sign-in.
+const rise = ms => at(String(ms));
+const actReadiness = `<div class="dm wc">
+<div class="wcard"${rise(0)}><div class="row sp"><span class="mut">Readiness</span><span class="pill grn pop"${at('1200')}>high</span></div>
+<div class="row w-wr"><span class="num"${n(0, 78, 200, 1300, 'i')}>78</span><p class="sent"${at('1400')}>Good night, third day in a row. <em class="grn">Go all in on strength today.</em></p></div></div>
+<div class="w-two"><div class="wcard w-sm"${rise(250)}><span class="mut w-s2">Sleep</span><span class="num w-v">7:12</span>${range(16, 'amber-bar', 700)}<span class="w-nt2 amb2">89% of need</span></div>
+<div class="wcard w-sm"${rise(400)}><span class="mut w-s2">HRV</span><span class="num w-v">64<small>ms</small></span>${range(83, 'green', 700)}<span class="w-nt2 grn">above normal</span></div></div>
+</div>`;
+// Training: Training mode's table of sets (TrainingModeView.swift, GymSetRow in TrainingModeParts.swift). Set 2
+// is ticked off with Set done and set 3 comes up; a tap on its weight slides up the plate loader (PlateLoader.swift)
+// with the bar loaded for 80 kg (25 + 5 a side), a tap on the 2.5 disc puts a pair on, Done, and set 3 says 85.
+const tap = (on, off) => `<i class="w-tap"${at(`${on} ${off}-in`)}></i>`;
+const DISCS = [25, 20, 15, 10, 5, 2.5, 1.25];
+const plateCls = p => String(p).replace('.', '-');
+const plate = (p, when) => `<span class="w-plate w-p${plateCls(p)}"${when ? at(String(when)) : ''}>${p}</span>`;
+// Label, kg, reps, the row's timeline: W and 1 done already, 2 the set at hand until Set done, 3 after it.
+const G_ROWS = [['W', 40, 300, ' w-did'], ['1', 80, 450, ' w-did'], ['2', 80, 1500, ' w-now', '1500-w-now 1500:w-did'], ['3', 80, 0, '', '1500:w-now']];
+const gymRow = ([l, kg, done, cls, when]) => `<div class="w-row${cls}"${when ? at(when) : ''}><span class="w-l">${l}</span><span class="w-lt">—</span>
+<span class="w-f num">${l === '3' ? `<b data-tx="0|80;5200|85">80</b>${tap(2300, 2600)}` : kg}</span><span class="w-f num">8</span><i class="w-rate${l === '1' ? ' w-m">M' : '">'}</i>
+<span class="w-sq">${done ? `<i class="w-ok"${at(String(done))}>${ic('check')}</i>` : ''}</span></div>`;
+const actTraining = `<div class="dm wc w-train">
+<div class="wcard w-gym"${rise(0)}><div class="row sp w-gh"><b>Squat</b><span class="mut s">Exercise 1 of 3</span></div>
+<div class="w-row w-th"><span>Sets</span><span>Last time</span><span>kg</span><span>Reps</span><i></i><i></i></div>
+${G_ROWS.map(gymRow).join('\n')}
+<div class="w-go">${ic('check')}Set done${tap(1200, 1500)}</div></div>
+<div class="w-loader"${at('2700 5000-in')}><div class="row sp w-sh"><span class="mut">Keypad</span><span class="mut">Squat</span><b class="grn">Done${tap(4650, 4950)}</b></div>
+<div class="w-big"><span class="num"${n(80, 85, 3850, 450, 'i')}>80</span><span class="mut">kg</span></div>
+<div class="mut s w-sum" data-tx="0|25 + 5 per side + 20 kg bar;3850|25 + 5 + 2.5 per side + 20 kg bar">25 + 5 per side + 20 kg bar</div>
+<div class="w-barbell" aria-hidden="true"><i class="w-rod"></i><span class="w-end">20</span><i class="w-collar"></i>${plate(25)}${plate(5)}${plate(2.5, 3850)}</div>
+<div class="mut s w-addl">Add plates</div>
+<div class="w-discs">${DISCS.map(p => `<span class="w-disc w-p${plateCls(p)}">${p}${p === 25 || p === 5 ? '<b>×1</b>' : p === 2.5 ? `<b${at('3850')}>×1</b>${tap(3600, 3900)}` : ''}</span>`).join('')}</div></div>
+</div>`;
+// Nutrition: Výživa's lunch row with the photo's food in it, the barcode being scanned and the drinks filling up.
+const actFood = `<div class="dm wc">
+<div class="wcard w-meal"${rise(0)}><span class="pill amb pop w-badge"${at('800')}>${ic('spark')}From a photo</span>
+<div class="w-mr"><div><div class="row base w-mh"><b>Lunch</b><span class="w-ft s">12:30 PM</span><span class="num md">845</span><span class="num w-ft">/ 800 kcal</span></div>
+${[['Carbs', 88, 100, 'carbs'], ['Protein', 61, 45, 'protein'], ['Fat', 26, 24, 'fat']].map(([k, v, t, c], i) => `<div class="w-mac"><span class="mut s"><i style="background:var(--${c})"></i>${k}</span><i class="bar"><b style="--w:${Math.min(100, v / t * 100).toFixed(0)}%;background:var(--${c})"${at(String(500 + i * 150))}></b></i><span class="s mono">${v} / ${t} g</span></div>`).join('')}
+<span class="mut s">Chicken with rice, Plain Greek yogurt</span></div><span class="w-plus">${ic('plus')}</span></div></div>
+<div class="w-two"><div class="wcard w-scan"${rise(200)}><span class="mut w-s2">Barcode</span><span class="w-code" aria-hidden="true">${[2, 1, 3, 1, 2, 1, 1, 3, 2, 1, 2, 3, 1].map(w => `<i style="width:${w}px"></i>`).join('')}<u class="w-corners"${at('600')}></u><b class="w-beam"></b></span></div>
+<div class="wcard w-drink"${rise(350)}><span class="row w-s2"><i class="w-dot"></i>Drinks</span><svg class="w-whale" viewBox="0 0 110 110" aria-hidden="true"><defs><clipPath id="wh"><ellipse cx="50" cy="62" rx="38" ry="28"/><path d="M80 58C92 52 96 40 104 30C106 40 104 48 100 52C106 54 108 62 106 70C98 64 92 64 84 70Z"/></clipPath></defs><g clip-path="url(#wh)"><rect width="110" height="110" fill="#EAF3F9"/><g class="w-water"${at('600')}><path class="w-wv" d="M0 0 q13.75 -3.25 27.5 0 t27.5 0 q13.75 -3.25 27.5 0 t27.5 0 q13.75 -3.25 27.5 0 t27.5 0 q13.75 -3.25 27.5 0 t27.5 0 V60 H0Z" fill="#4FA3D9"/><path class="w-wv w-wv2" d="M0 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 V60 H0Z" transform="translate(0 6)" fill="#2E86C1" fill-opacity=".35"/></g></g><g fill="none" stroke="#1B4F72" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="50" cy="62" rx="38" ry="28"/><path d="M80 58C92 52 96 40 104 30C106 40 104 48 100 52C106 54 108 62 106 70C98 64 92 64 84 70"/><path d="M22 70Q32 76 42 70" stroke-width="2"/></g><circle cx="30" cy="56" r="3.6" fill="#1B1A17"/><circle cx="31.2" cy="54.8" r="1.1" fill="#fff"/></svg>
+<span class="row base"><span class="num md">1,500 ml</span><span class="mut s">1,100 ml to go</span></span></div></div>
+</div>`;
+// Sleep: the bedtime from the alarm, tonight's choice and last night drawn stage by stage.
+const actSleep = `<div class="dm wc">
+<div class="w-two"><div class="wcard w-sm"${rise(0)}><span class="th ind">${ic('moon')}Bedtime</span><span class="num w-v">10:10<small>PM</small></span></div>
+<div class="wcard w-sm"${rise(120)}><span class="th amb">${ic('sun')}Wake up</span><span class="num w-v">7:15<small>AM</small></span></div></div>
+<div class="chips3"${rise(240)}>${[['Catch up', '8 h 30'], ['As usual', '8 h 00'], ['At least', '7 h 00']].map(([k, v], i) => `<span class="ch3 wcard"${i === 0 ? at('900:on') : ''}><b>${k}</b><span>${v}</span></span>`).join('')}</div>
+<div class="wcard"${rise(360)}><div class="row sp base"><span class="mut">Last night</span><span class="num md">7:12</span></div>
+<div class="hg" aria-hidden="true"><div class="hgl"><span>Awake</span><span>REM</span><span>Light</span><span>Deep</span></div><div class="hgt w-draw"${at('600')}>${NIGHT.map(([t, s, e]) => `<i class="${t}" style="left:${(s / 449 * 100).toFixed(2)}%;width:${Math.max(0.5, (e - s) / 449 * 100).toFixed(2)}%"></i>`).join('')}</div></div></div>
+</div>`;
+// Coach: the question, dots for a moment, the answer typed out, then its workout.
+const COACH_SAYS = ['Readiness is 61 after 5 h 40 of sleep. ', 'Keep legs, go lighter:', ' squat 3 × 8 at 70 kg.'];
+const typed = (() => { let t = 1600; return COACH_SAYS.map(x => { const at0 = t; t += x.length * 26; return [x, at0, x.length * 26]; }); })();
+const actCoach = `<div class="dm wc coach2">
+<div class="w-q"${rise(100)}>Bad night. Legs today?</div>
+<div class="dots"${at('700 1600-in')}><i></i><i></i><i></i></div>
+<div class="wcard w-a"${at('1600')}><p class="sent">${typed.map(([x, start, len], i) => `<span${i === 1 ? ' class="grn w-it"' : ''} data-type="${start},${len}">${x}</span>`).join('')}</p></div>
+<div class="wcard row w-wo"${at(String(typed[2][1] + typed[2][2] + 200))}><span class="ib amb">${ic('lift')}</span><div><b>Legs, lighter</b><span class="mut s">40 min · 4 exercises</span></div><span class="w-add">Add</span></div>
+</div>`;
+export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach});
+
 export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, coachWeek});
 export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen});
 
@@ -642,6 +705,85 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .inp .cam{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--panel)}
 .snd{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--button);color:var(--on-button)}
 @media (prefers-reduced-motion:reduce){.cam .scan,.dots i,.btn .sp1{animation:none}}
+/* The welcome's cards (ACTS): the app's paper cards with their soft shadow, rising into place. */
+.dm.wc{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;width:100%}
+.wcard{padding:14px 16px;border-radius:22px;background:var(--panel);box-shadow:0 1px 1px rgba(60,45,20,.05),0 16px 36px -12px rgba(60,45,20,.22)}
+.wc .wait{transition:opacity .5s ease,transform .7s cubic-bezier(.34,1.3,.5,1)}.js .wc .wait:not(.in){transform:translateY(26px)}
+.wc .w-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.wc .w-wr{align-items:flex-end;gap:14px;margin-top:2px}.wc .w-wr .num{font-size:96px;line-height:.92;min-width:108px}.wc .w-wr .sent{font-size:17px;line-height:1.3;padding-bottom:10px}
+.wc em{font-style:italic}.wc .w-it{font-style:italic}
+.wc .w-sm{display:flex;flex-direction:column;gap:2px}.wc .num.w-v{font-size:36px;line-height:1.1}.wc .num.w-v small{font-size:13px}
+.w-s2{font-size:14px}.w-nt2{font-size:12.5px;font-weight:500}.amb2{color:var(--amber-bar)}
+.js .wc .pop.wait:not(.in){transform:scale(.6)}
+/* Training mode's sets: SETS · LAST TIME · KG · REPS, the rating oval and the tick square; the set at hand outlined. */
+.wc .w-gym{padding:14px 10px 12px}.w-gh{padding:0 8px 8px;align-items:baseline}.w-gh b{font-family:Newsreader,"New York",Georgia,serif;font-size:24px;font-weight:400}
+.w-row{position:relative;display:grid;grid-template-columns:34px minmax(0,1fr) 56px 44px 34px 28px;align-items:center;gap:6px;height:44px;padding:0 8px;border-radius:12px;box-shadow:inset 0 0 0 1.5px transparent;transition:background .35s,box-shadow .35s}
+.w-row.w-th{height:20px;font-size:10px;font-weight:500;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);opacity:.8}.w-th span:nth-child(3),.w-th span:nth-child(4){text-align:center}
+.w-l{font-size:14px;font-weight:600;color:var(--sec)}.w-lt{font-size:13px;color:var(--muted);opacity:.7}
+.w-f b{font-weight:400}.w-f{position:relative;display:grid;place-items:center;height:34px;border-radius:8px;font-size:22px;transition:background .35s}
+.w-rate.w-m{display:grid;place-items:center;border:1.5px solid var(--indigo);font-size:11px;font-weight:700;font-style:normal;color:var(--text)}.w-rate{width:34px;height:22px;border-radius:99px;border:1.5px dashed color-mix(in srgb,var(--muted) 70%,transparent)}
+.w-sq{position:relative;width:26px;height:26px;border-radius:8px;box-shadow:inset 0 0 0 1.5px var(--line);transition:box-shadow .35s}
+.w-row:not(.w-now):not(.w-did) .w-l,.w-row:not(.w-now):not(.w-did) .w-f{color:var(--muted);opacity:.55}
+.w-row.w-now{background:var(--track);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--amber) 55%,transparent)}
+.w-now .w-l{color:var(--amber)}.w-now .w-f{background:var(--panel)}.w-now .w-sq{box-shadow:inset 0 0 0 1.5px var(--amber)}
+.w-ok{position:absolute;inset:0;display:grid;place-items:center;border-radius:8px;background:var(--green);color:var(--on-button);font-size:14px;transition:transform .45s cubic-bezier(.34,1.6,.5,1),opacity .3s!important}.w-ok .di{stroke-width:2.6}.js .w-ok.wait:not(.in){transform:scale(.3)}
+.w-go{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;height:46px;margin:12px 0 0;border-radius:99px;background:var(--button);color:var(--on-button);font-size:15px;font-weight:600}
+/* The plate loader, slid up over the lower cards as in the app. */
+.dm.wc.w-train{position:relative;overflow:hidden;width:calc(100% + 60px);margin:-30px -30px -64px;padding:30px 30px 64px}
+.w-loader{position:absolute;left:30px;right:30px;top:30px;bottom:64px;z-index:3;display:flex;flex-direction:column;justify-content:center;padding:14px 18px 18px;border-radius:22px;background:var(--bg);box-shadow:0 -14px 40px -14px rgba(60,45,20,.35);transform:translateY(calc(100% + 64px));transition:transform .6s cubic-bezier(.2,.9,.25,1)!important}
+.js .w-loader.wait:not(.in){opacity:1;transform:translateY(calc(100% + 64px))}.w-loader.in{transform:none}
+.w-sh{font-size:14px}.w-sh b{position:relative;font-weight:600}
+.w-big{display:flex;align-items:baseline;justify-content:center;gap:6px;margin-top:6px}.w-big .num{font-size:54px;line-height:1}.w-big .mut{font-size:18px;font-weight:500}
+.w-sum{text-align:center;margin-top:2px}
+/* The bar from the side, as PlateLoader.swift lays it out: the bar's end, the collar, then the plates two points apart. */
+.w-barbell{position:relative;display:flex;align-items:center;gap:2px;height:100px;margin:10px -18px 0;overflow:hidden}
+.w-barbell .w-rod{position:absolute;left:56px;right:12px;top:50%;height:12px;margin-top:-6px;border-radius:4px;background:var(--metal)}
+.w-barbell .w-end{position:relative;flex:none;width:52px;height:13px;border-radius:0 4px 4px 0;display:grid;place-items:center;font-size:9.5px;font-weight:600;color:#fff;background:var(--plate-1-25);box-shadow:inset 0 0 0 1.2px var(--plate-1-25-line)}
+.w-barbell .w-collar{position:relative;flex:none;width:8px;height:24px;border-radius:2px;background:var(--metal)}
+.w-plate{position:relative;flex:none;display:grid;place-items:center;border-radius:5px;color:#fff;font-size:10px;font-weight:600;background:var(--c);box-shadow:inset 0 0 0 1.2px var(--l);transition:transform .55s cubic-bezier(.34,1.4,.5,1),opacity .35s!important}
+.w-plate.w-p25{width:21px;height:92px;--c:var(--plate-25);--l:var(--plate-25-line)}
+.w-plate.w-p5{width:19px;height:62px;--c:var(--plate-5);--l:var(--plate-5-line)}
+.w-plate.w-p2-5{width:18px;height:53px;font-size:8.5px;--c:var(--plate-2-5);--l:var(--plate-2-5-line)}
+.js .w-plate.wait:not(.in){opacity:0;transform:translateX(160px)}
+.w-addl{margin-top:6px;font-weight:600}
+.w-discs{display:flex;justify-content:space-between;margin-top:8px}
+.w-disc{position:relative;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;color:#fff;font-size:11px;font-weight:600;background:var(--c);box-shadow:inset 0 0 0 1.2px var(--l)}
+.w-disc.w-p25{--c:var(--plate-25);--l:var(--plate-25-line)}.w-disc.w-p20{--c:var(--plate-20);--l:var(--plate-20-line)}.w-disc.w-p15{--c:var(--plate-15);--l:var(--plate-15-line)}
+.w-disc.w-p10{--c:var(--plate-10);--l:var(--plate-10-line)}.w-disc.w-p5{--c:var(--plate-5);--l:var(--plate-5-line)}.w-disc.w-p2-5{--c:var(--plate-2-5);--l:var(--plate-2-5-line)}.w-disc.w-p1-25{--c:var(--plate-1-25);--l:var(--plate-1-25-line);font-size:9.5px}
+.w-disc b{position:absolute;right:-6px;top:-6px;min-width:19px;height:19px;padding:0 4px;border-radius:99px;display:grid;place-items:center;font-size:10px;font-weight:600;color:var(--on-button);background:var(--button);transition:transform .35s cubic-bezier(.34,1.6,.5,1),opacity .2s!important}
+.js .w-disc b.wait:not(.in){opacity:0;transform:scale(.4)}
+/* Where a finger taps: a soft ring that comes and goes. */
+.w-tap{position:absolute;left:50%;top:50%;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;pointer-events:none;background:color-mix(in srgb,var(--text) 14%,transparent);box-shadow:0 0 0 2px color-mix(in srgb,var(--text) 22%,transparent);transition:opacity .2s,transform .3s cubic-bezier(.34,1.6,.5,1)!important}
+.js .wc .w-tap.wait:not(.in),.w-tap:not(.in){opacity:0;transform:scale(.5)}
+.wc .w-meal{position:relative;padding-top:20px}.w-mr{display:grid;grid-template-columns:minmax(0,1fr) 32px;gap:12px;align-items:start}.w-mh{gap:6px}.w-mh b{font-size:16px;font-weight:600}.w-mh .md{margin-left:auto}.w-ft{color:var(--muted);opacity:.85}.num.w-ft{font-size:14px}.w-plus{display:grid;place-items:center;width:32px;height:32px;margin-top:2px;border-radius:50%;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--text) 20%,transparent);font-size:14px}.w-plus .di{stroke-width:2.6}.wc .w-badge{position:absolute;left:12px;top:-12px;gap:5px;transform-origin:left}
+.w-mac{display:grid;grid-template-columns:76px 1fr 74px;align-items:center;gap:10px;margin:6px 0}.w-mac .s{text-align:right}.w-mac>.s:first-child{text-align:left;display:flex;align-items:center;gap:6px}.w-mac i:not(.bar){width:6px;height:6px;border-radius:50%}
+.w-mac .bar{height:5px}.wc .w-mr>div>.mut:last-child{display:block;margin-top:4px}
+.wc .w-scan,.wc .w-drink{display:flex;flex-direction:column;gap:8px;min-height:164px}
+.w-code{position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:2px;border-radius:14px;background:var(--bg);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.w-code>i{height:44px;background:var(--text)}
+.w-code .w-corners{position:absolute;inset:8px;transition:transform .5s cubic-bezier(.34,1.4,.5,1),opacity .3s!important;background:
+ linear-gradient(var(--amber-bar),var(--amber-bar)) 0 0/18px 3px,linear-gradient(var(--amber-bar),var(--amber-bar)) 0 0/3px 18px,
+ linear-gradient(var(--amber-bar),var(--amber-bar)) 100% 0/18px 3px,linear-gradient(var(--amber-bar),var(--amber-bar)) 100% 0/3px 18px,
+ linear-gradient(var(--amber-bar),var(--amber-bar)) 0 100%/18px 3px,linear-gradient(var(--amber-bar),var(--amber-bar)) 0 100%/3px 18px,
+ linear-gradient(var(--amber-bar),var(--amber-bar)) 100% 100%/18px 3px,linear-gradient(var(--amber-bar),var(--amber-bar)) 100% 100%/3px 18px;background-repeat:no-repeat;border-radius:8px}
+.js .w-code .w-corners.wait:not(.in){transform:scale(1.25)}
+.w-code .w-beam{position:absolute;left:16px;right:16px;top:50%;height:2px;border-radius:2px;background:var(--sun);box-shadow:0 0 10px var(--sun)}
+.opener.on .w-code .w-beam{animation:scanbeam 2.85s ease-in-out infinite}
+@keyframes scanbeam{0%,100%{transform:translateY(-26px)}50%{transform:translateY(26px)}}
+.w-drink .w-dot{width:8px;height:8px;border-radius:50%;background:var(--blue)}.w-drink .w-s2{gap:6px;font-weight:500}
+.w-whale{display:block;width:84px;height:84px;margin:0 auto}.w-whale .w-water{transform:translateY(92px);transition:transform 1.6s ease-in-out!important}
+.w-whale .w-water.in,html:not(.js) .w-whale .w-water{transform:translateY(56px)}.js .w-whale .w-water.wait:not(.in){opacity:1}
+.w-wv{animation:w-wave 3s linear infinite}.w-wv2{animation-duration:4.4s}@keyframes w-wave{to{transform:translateX(-55px)}}.w-wv2{animation-name:w-wave2}@keyframes w-wave2{from{transform:translate(0,6px)}to{transform:translate(-36.67px,6px)}}
+@media (prefers-reduced-motion:reduce){.w-wv{animation:none}}
+.w-drink .row.base{flex-wrap:wrap;column-gap:6px}.w-drink .row.base .mut{white-space:nowrap}
+.wc .th .di{font-size:12px}.wc .chips3 .ch3{border-radius:16px;transition:background .35s,border-color .35s}.wc .ch3 b{font-weight:600;font-size:15px}
+.wc .hg{margin-bottom:0}.hgt.w-draw{transition:clip-path 1.6s ease-in-out!important;clip-path:inset(0 0 0 0)}.js .hgt.w-draw.wait:not(.in){opacity:1;transform:none;clip-path:inset(0 100% 0 0)}
+.coach2{gap:12px}.coach2 .w-q{justify-self:end;padding:10px 14px;border-radius:18px;background:var(--button);color:var(--on-button);font-size:16px}
+.coach2 .dots{box-shadow:0 16px 36px -12px rgba(60,45,20,.22)}.coach2 .dots:not(.in){display:none}html:not(.js) .coach2 .dots{display:none}
+.coach2 .w-a{margin-right:30px}.coach2 .w-a .sent{font-size:18px;line-height:1.35}
+.coach2 .w-wo{gap:12px;padding:12px}.coach2 .w-wo .ib{width:40px;height:40px;border-radius:12px;font-size:21px}.coach2 .w-wo>div{flex:1;display:flex;flex-direction:column}
+.coach2 .w-add{display:inline-flex;align-items:center;height:34px;padding:0 16px;border-radius:99px;background:var(--button);color:var(--on-button);font-size:13px;font-weight:600}
+@media (prefers-reduced-motion:reduce){.opener.on .w-code .w-beam{animation:none}}
 `;
 
 // The player: AurinDemo.play(el) runs the timeline of every demo inside el from the start, stop(el) clears it,
@@ -695,7 +837,10 @@ function dial(d,wake,sleep){wake=((wake%1440)+1440)%1440;d.dataset.wake=Math.rou
  var bed=wake-r5(sleep/.936),a=pt(bed,126),b=pt(wake,126),span=((wake-bed)%1440+1440)%1440,box=d.closest('.dm');
  d.querySelector('.arc').setAttribute('d','M'+a[0].toFixed(1)+' '+a[1].toFixed(1)+'A126 126 0 '+(span>720?1:0)+' 1 '+b[0].toFixed(1)+' '+b[1].toFixed(1));
  var w=250/300;[['.moon',a],['.sun',b]].forEach(function(h){var el=d.querySelector(h[0]);el.style.transform='translate('+(h[1][0]*w).toFixed(1)+'px,'+(h[1][1]*w).toFixed(1)+'px)';});
- var s=r5(sleep);d.querySelector('.len').textContent=fmt(s,'hm');box.querySelector('.bed').textContent=clock(bed);box.querySelector('.wake').textContent=clock(wake);}
+ var s=r5(sleep);d.querySelector('.len').textContent=fmt(s,'hm');box.querySelector('.bed').textContent=clock(bed);box.querySelector('.wake').textContent=clock(wake);
+ var mo=d.querySelector('.moon'),su=d.querySelector('.sun'),tl=fmt(s,'hm');
+ mo.setAttribute('aria-valuenow',((Math.round(bed)%1440)+1440)%1440);mo.setAttribute('aria-valuetext','Bedtime '+clock(bed)+', '+tl+' of sleep');
+ su.setAttribute('aria-valuenow',Math.round(wake));su.setAttribute('aria-valuetext','Wake up '+clock(wake)+', '+tl+' of sleep');}
 function minutesAt(d,e){var r=d.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,a=Math.atan2(x,-y);return r5(((a/(2*Math.PI))*1440+1440)%1440);}
 function setFrom(d,h,m){var wake=+d.dataset.wake,sleep=+d.dataset.sleep;
  if(h.classList.contains('sun'))dial(d,m,sleep);else{var inBed=((wake-m)%1440+1440)%1440;dial(d,wake,Math.min(720,Math.max(300,r5(inBed*.936))));}}

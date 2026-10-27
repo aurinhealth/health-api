@@ -204,3 +204,24 @@ test('the library asks for the AI\'s own workout only when few of the chosen typ
   assert.equal(rare.data.compose, rare.data.workouts.filter(w => w.primary_system === 'vo2max').length < 3);
   assert.equal(rare.data.compose, true, rare.data.workouts.map(w => w.name).join(', '));
 });
+
+test('a harder kind asked in "Upravit s AI" is ridden; one the coach eases says what it became', async () => {
+  const app = await api(120);
+  // VO₂max intervals yesterday: the 48 h rule keeps today easy, unless the athlete insists.
+  const yesterday = new Date(Date.parse(today + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10);
+  app.context.loadCoachInputs = async (_env, _ctx, _auth, date) => ({
+    date, week: { days: [{ date: yesterday, daily: { training: { completed: [{ date: yesterday, name: 'VO2max intervals', type: 'Ride', tss: 90, durationHours: 1.25 }], planned: [] } } }] },
+    fitness: { wellness: [{ id: date, ctl: 60, atl: 55 }] },
+    health: { sleep: [{ type: 'sleep', durationMin: 480, endTime: date + 'T06:00:00' }] }
+  });
+  const body = { date: today, sport: 'ride', environment: 'outdoor', availabilityMinutes: 90, focus: 'vo2max', userInitiated: true };
+  const plain = await app.post('/app/api/workouts/generate', body);
+  assert.equal(plain.status, 200, plain.data.message);
+  assert.notEqual(plain.data.system, 'vo2max');
+  assert.equal(plain.data.eased.kind, kindOfSystem(plain.data.system));
+  assert.ok(plain.data.eased.why);
+  const insisted = await app.post('/app/api/workouts/generate', { ...body, insisted: true });
+  assert.equal(insisted.status, 200, insisted.data.message);
+  assert.equal(insisted.data.system, 'vo2max');
+  assert.equal(insisted.data.eased, undefined);
+});

@@ -505,7 +505,11 @@ struct FormWidget: View {
                 }
                 Text(form.label).font(Typo.caption).foregroundStyle(zoneColor(form.zone)).lineLimit(1)
             } chart: { height in
-                FormLines(series: Array(form.series.suffix(size == .large ? 90 : 42)), height: height)
+                VStack(spacing: 6) {
+                    FormLines(series: Array(form.series.suffix(size == .large ? 90 : 42)), height: height)
+                    ChartLegend(items: [(Palette.green, L10n.tr("Kondice")), (Palette.amberBar, L10n.tr("Únava"))],
+                                note: L10n.tr(size == .large ? "3 měsíce" : "6 týdnů"))
+                }
             }
             if let loadNote {
                 Text(verbatim: loadNote).font(Typo.caption).foregroundStyle(Palette.amber)
@@ -541,19 +545,36 @@ func zoneColor(_ zone: String) -> Color {
     }
 }
 
-/// Fitness (green) and fatigue (amber) over time.
+/// Fitness (green) and fatigue (amber) over time. The detail (`scale`) has
+/// its scale on the right and the months underneath.
 struct FormLines: View {
     let series: [TrainingSnapshot.FormPoint]
     var height: CGFloat = 40
+    var scale = false
 
     var body: some View {
         let values = series.flatMap { [$0.fitness, $0.fatigue] }
         let lo = (values.min() ?? 0) - 2, hi = (values.max() ?? 1) + 2
-        ZStack {
-            LineChart(values: series.map(\.fatigue), color: Palette.amberBar, lo: lo, hi: hi, lineWidth: 1.6, height: height)
-            LineChart(values: series.map(\.fitness), color: Palette.green, lo: lo, hi: hi, height: height)
+        VStack(spacing: 6) {
+            ZStack(alignment: .topLeading) {
+                if scale {
+                    GeometryReader { geo in
+                        ChartScale(ticks: scaleTicks(lo, hi, count: 3), width: geo.size.width - scaleWidth) {
+                            3 + (height - 6) * (1 - scaled($0, lo, hi))
+                        }
+                    }
+                }
+                ZStack {
+                    LineChart(values: series.map(\.fatigue), color: Palette.amberBar, lo: lo, hi: hi, lineWidth: 1.6, height: height)
+                    LineChart(values: series.map(\.fitness), color: Palette.green, lo: lo, hi: hi, height: height)
+                }
+                .padding(.trailing, scale ? scaleWidth : 0)
+            }
+            .frame(height: height)
+            if scale {
+                ChartDates(marks: monthMarks(series.map(\.date)), trailing: scaleWidth)
+            }
         }
-        .frame(height: height)
     }
 }
 
@@ -573,7 +594,10 @@ struct VO2maxWidget: View {
                     Text("půl roku").font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             } chart: { height in
-                LineChart(values: values, color: Palette.green, lo: (values.min() ?? 40) - 1, hi: (values.max() ?? 50) + 1, fill: true, height: height)
+                VStack(spacing: 6) {
+                    LineChart(values: values, color: Palette.green, lo: (values.min() ?? 40) - 1, hi: (values.max() ?? 50) + 1, fill: true, height: height)
+                    ChartSpan(start: L10n.tr("před půl rokem"))
+                }
             }
         }
     }
@@ -605,7 +629,8 @@ struct ThisWeekWidget: View {
                              hi: max(values.max() ?? 1, 1),
                              labels: loads.map { String($0.week) },
                              highlighted: loads.count - 1,
-                             height: height)
+                             height: height,
+                             caption: L10n.tr("TSS za týden"))
                 }
             }
         }
@@ -637,7 +662,9 @@ struct ActiveCaloriesWidget: View {
                          labels: active.week.map { Fmt.weekdayInitial($0.date) },
                          highlighted: active.week.count - 1,
                          spacing: size == .small ? 3 : 4,
-                         height: height)
+                         height: height,
+                         targetLabel: active.usual.map { L10n.f("obvykle %@", Fmt.int($0)) },
+                         targetLabelAlignment: .leading)
             }
         }
     }
@@ -730,6 +757,12 @@ struct ZoneWeekBars: View {
                         .stroke(Palette.green, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         .frame(height: 1)
                         .offset(y: -h * scaled(target, 0, top))
+                    Text(verbatim: L10n.f("cíl %@", Fmt.int(target)))
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(Palette.green)
+                        .lineLimit(1).fixedSize()
+                        .frame(width: geo.size.width, alignment: .trailing)
+                        .offset(y: -h * scaled(target, 0, top) - 3)
                 }
                 .frame(width: geo.size.width, height: h, alignment: .bottomLeading)
             }

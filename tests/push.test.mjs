@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
-import { apnsJwt, pkcs8FromP8, sendPush, sendMorningReadiness, handlePushToken, savePushToken, listPushTokens, readinessMessage, hasLastNight, sendFoodApproved, foodApprovedMessage, inMorningWindow, pushConfigured, APNS_TOPIC, LEGACY_APNS_TOPIC, _resetPushForTest } from "../src/push.js";
+import { apnsJwt, pkcs8FromP8, sendPush, sendMorningReadiness, handlePushToken, savePushToken, listPushTokens, readinessMessage, hasLastNight, sendFoodApproved, foodApprovedMessage, inMorningWindow, pushConfigured, APNS_TOPIC, _resetPushForTest } from "../src/push.js";
 import { withLang } from "../src/lang.js";
 import { withTimeZone } from "../src/user-time.js";
 
@@ -60,18 +60,12 @@ test("the provider token is an ES256 JWT signed with the .p8 key and kept for 50
   assert.notEqual(await apnsJwt(env, now + 51 * 60000), jwt);
 });
 
-test("a token of the Loadwise app gets its push under Loadwise's topic", async () => {
+test("a token of another app (the old Loadwise one) is dead after one try", async () => {
   _resetPushForTest();
   const { env } = setup();
-  const { calls, fetchImpl } = fakeApns((url, init) => init.headers["apns-topic"] === APNS_TOPIC
-    ? Response.json({ reason: "DeviceTokenNotForTopic" }, { status: 400 })
-    : new Response(null, { status: 200 }));
-  assert.deepEqual(await sendPush(env, { token: TOKEN_A, environment: "production" }, "Ahoj", { fetchImpl }), { ok: true });
-  assert.deepEqual(calls.map(c => c.init.headers["apns-topic"]), [APNS_TOPIC, LEGACY_APNS_TOPIC]);
-  // A token neither app knows stays dead.
   const gone = fakeApns(() => Response.json({ reason: "DeviceTokenNotForTopic" }, { status: 400 }));
   assert.equal((await sendPush(env, { token: TOKEN_A, environment: "production" }, "Ahoj", { fetchImpl: gone.fetchImpl })).gone, true);
-  assert.equal(gone.calls.length, 2);
+  assert.deepEqual(gone.calls.map(c => c.init.headers["apns-topic"]), [APNS_TOPIC]);
 });
 
 test("the .p8 secret is read with or without its line breaks", () => {

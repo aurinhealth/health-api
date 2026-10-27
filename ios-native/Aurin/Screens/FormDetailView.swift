@@ -43,12 +43,7 @@ struct FormDetailContent: View {
                         legend("Kondice", form.fitness, Palette.green)
                         legend("Únava", form.fatigue, Palette.amberBar)
                     }
-                    FormLines(series: form.series, height: 170)
-                    HStack {
-                        Text(Fmt.dayMonth(form.series.first?.date ?? training.date)).font(Typo.tiny).foregroundStyle(Palette.faint)
-                        Spacer()
-                        Text("dnes").font(Typo.tiny.weight(.semibold)).foregroundStyle(Palette.ink)
-                    }
+                    FormLines(series: form.series, height: 170, scale: true)
                 }
                 .padding(.top, 24)
             }

@@ -104,7 +104,8 @@ struct StepsWidget: View {
                         labels: hours.map { [6, 10, 14, 18, 22].contains($0) ? String($0) : "" },
                         highlighted: hours.firstIndex(of: now),
                         spacing: size == .small ? 1.5 : 2.5,
-                        height: height)
+                        height: height,
+                        targetLabel: goalLabel)
     }
 
     private func weekChart(height: CGFloat) -> some View {
@@ -117,8 +118,12 @@ struct StepsWidget: View {
                  target: steps.goal,
                  labels: steps.week.map { Fmt.weekdayInitial($0.date) },
                  highlighted: steps.week.count - 1,
-                 height: height)
+                 height: height,
+                 targetLabel: goalLabel)
     }
+
+    /// "cíl 10 000" over the dashed line.
+    private var goalLabel: String { L10n.f("cíl %@", Fmt.int(steps.goal)) }
 
     private var percent: String {
         guard let today = steps.today, steps.goal > 0 else { return "" }
@@ -136,7 +141,7 @@ struct RestingHRWidget: View {
             SizedWidgetBody(size: size, smallShowsChart: range == nil) {
                 NumberText(value: Fmt.int(restingHR.value), unit: "bpm")
                 if let range, let value = restingHR.value {
-                    TileRange(value: value, low: range.lowerBound, high: range.upperBound, worseAbove: true)
+                    TileRange(value: value, low: range.lowerBound, high: range.upperBound, worseAbove: true, edges: (Fmt.int(range.lowerBound), Fmt.int(range.upperBound)))
                 }
             } chart: { height in
                 LineChart(values: values, color: Palette.rust,
@@ -163,7 +168,7 @@ struct HRVWidget: View {
             SizedWidgetBody(size: size, smallShowsChart: band == nil || hrv.value == nil) {
                 NumberText(value: Fmt.int(hrv.value ?? hrv.series.last?.value), unit: "ms")
                 if let band, let value = hrv.value {
-                    TileRange(value: value, low: band.lowerBound, high: band.upperBound)
+                    TileRange(value: value, low: band.lowerBound, high: band.upperBound, edges: (Fmt.int(band.lowerBound), Fmt.int(band.upperBound)))
                 } else {
                     Text(note).font(Typo.caption).foregroundStyle(Palette.green).lineLimit(1)
                 }

@@ -56,14 +56,16 @@ struct ActiveEnergyContent: View {
 
             Card {
                 WidgetHeader(title: "Posledních 28 dní", color: Palette.rust, trailing: L10n.f("celkem %@ kcal", Fmt.int(series.reduce(0, +))))
+                let top = Swift.max(series.max() ?? 0, mean ?? 0, 1)
                 BarChart(values: series,
                          styles: all.map { BarStyle(fill: $0 == today ? Palette.rust : Palette.rust.opacity(0.35)) },
-                         hi: Swift.max(series.max() ?? 0, mean ?? 0, 1),
+                         hi: top,
                          target: mean,
                          labels: all.map { ISODay.weekdayIndex($0) == 0 ? Self.dayNumber($0) : "" },
                          highlighted: all.count - 1,
                          spacing: 2,
-                         height: 140)
+                         height: 140,
+                         scale: scaleTicks(0, top, count: 3, extra: mean.map { [ScaleTick(value: $0, text: L10n.f("prům. %@", Fmt.int($0)), color: Palette.muted, line: false)] } ?? []))
             }
             .padding(.top, 20)
 

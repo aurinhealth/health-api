@@ -1,17 +1,25 @@
 import SwiftUI
 
 /// Nastavení → Pauzy v posilovně: how long the rest is between the sets of an
-/// exercise and before the next exercise (Režim tréninku counts it down).
-/// Between sets it follows the exercise unless a length is chosen.
+/// exercise and between exercises (Režim tréninku counts it down). Each
+/// follows the exercise unless a length is chosen.
 struct GymRestSettingsView: View {
     static let options: [Int] = [0, 30, 45, 60, 75, 90, 120, 150, 180, 240, 300]
-    /// "Podle cviku": the plan's rest for each exercise. The default, so a
-    /// length chosen here before stays.
+    /// "Podle cviku": the plan's rest for each exercise. The default between
+    /// sets, so a length chosen here before stays.
     static let byExercise = -1
 
     /// The rest after a work set: the length chosen, else the plan's for the exercise.
     static func between(_ set: GymSet, setting: Int) -> Int {
         setting >= 0 ? setting : set.plannedRest ?? 90
+    }
+
+    /// The rest before the next exercise: the length chosen, else the rest the
+    /// plan gives that exercise's sets (a heavy lift longer than a curl).
+    static func before(_ exercise: GymExercise?, setting: Int) -> Int {
+        if setting >= 0 { return setting }
+        let set = exercise?.sets.first { !$0.done && $0.work } ?? exercise?.sets.first { !$0.done }
+        return set?.plannedRest ?? 120
     }
 
     var body: some View {
@@ -24,33 +32,88 @@ struct GymRestSettingsView: View {
         if seconds < 60 { return "\(seconds) s" }
         return seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds / 60) min \(seconds % 60) s"
     }
+
+    /// The button's label in the grid: "1:30" where "1 min 30 s" won't fit.
+    static func short(_ seconds: Int) -> String {
+        seconds >= 60 && seconds % 60 != 0 ? String(format: "%d:%02d", seconds / 60, seconds % 60) : label(seconds)
+    }
 }
 
-/// The two rests as menus: between the sets and before the next exercise.
+/// The two rests: a tap on a row opens all the lengths as buttons under it.
 struct GymRestGroup: View {
     @AppStorage("restSets") private var restSets = GymRestSettingsView.byExercise
     @AppStorage("restExercises") private var restExercises = 120
+    @State private var open: String?
 
     var body: some View {
         SettingsGroup(title: "Délka pauzy") {
-            row("Mezi sériemi", $restSets, options: [GymRestSettingsView.byExercise] + GymRestSettingsView.options)
+            row("Mezi sériemi", $restSets)
             SettingsDivider()
-            row("Před dalším cvikem", $restExercises)
+            row("Mezi cviky", $restExercises)
         }
     }
 
-    private func row(_ title: String, _ value: Binding<Int>, options: [Int] = GymRestSettingsView.options) -> some View {
-        HStack {
-            Text(title).font(.body).foregroundStyle(Palette.ink)
-            Spacer(minLength: 8)
-            Picker(L10n.tr(title), selection: value) {
-                ForEach(options, id: \.self) { Text(GymRestSettingsView.label($0)).tag($0) }
+    private func row(_ title: String, _ value: Binding<Int>) -> some View {
+        let shown = open == title
+        return VStack(spacing: 0) {
+            Button {
+                withAnimation(.snappy(duration: 0.25)) { open = shown ? nil : title }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(title).font(.body).foregroundStyle(Palette.ink)
+                    Spacer(minLength: 8)
+                    Text(GymRestSettingsView.label(value.wrappedValue)).font(.subheadline)
+                        .foregroundStyle(shown ? Palette.ink : Palette.muted)
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                        .opacity(shown ? 0 : 1)
+                }
+                .padding(.leading, 16).padding(.trailing, 14).frame(minHeight: 50)
+                .contentShape(Rectangle())
             }
-            .pickerStyle(.menu)
-            .tint(Palette.muted)
-            .labelsHidden()
+            .buttonStyle(.plain)
+            if shown {
+                RestLengthGrid(value: value) { withAnimation(.snappy(duration: 0.25)) { open = nil } }
+                    .padding(.horizontal, 16).padding(.bottom, 14)
+                    .transition(.opacity)
+            }
         }
-        .padding(.leading, 16).padding(.trailing, 8).frame(minHeight: 50)
+    }
+}
+
+/// "Podle cviku" and "bez pauzy" wide on top, the lengths four in a row below.
+struct RestLengthGrid: View {
+    @Binding var value: Int
+    let done: () -> Void
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                chip(GymRestSettingsView.byExercise)
+                chip(0)
+            }
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(GymRestSettingsView.options.filter { $0 > 0 }, id: \.self) { chip($0) }
+            }
+        }
+    }
+
+    private func chip(_ seconds: Int) -> some View {
+        let on = value == seconds
+        return Button {
+            value = seconds
+            done()
+        } label: {
+            Text(GymRestSettingsView.short(seconds)).font(.subheadline.weight(.medium))
+                .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity).frame(height: 36)
+                .background(on ? Palette.ink : Palette.ink.opacity(0.08), in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(GymRestSettingsView.label(seconds))
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 

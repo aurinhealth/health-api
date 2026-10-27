@@ -307,8 +307,17 @@ struct ReadinessDetailContent: View {
                          hi: 100,
                          labels: r.history.map { Fmt.weekdayInitial($0.date) },
                          highlighted: r.history.count - 1,
-                         height: 110)
+                         height: 110,
+                         scale: [0, 34, 67].map { ScaleTick(value: $0, text: Fmt.int($0)) })
                     .padding(.top, 14)
+                HStack(spacing: 14) {
+                    zone(Palette.green.opacity(0.7), L10n.f("%@+ vysoká", "67"))
+                    zone(Palette.amberBar.opacity(0.8), L10n.f("%@ střední", "34–66"))
+                    zone(Palette.rust.opacity(0.8), L10n.f("pod %@ nízká", "34"))
+                    Spacer(minLength: 0)
+                }
+                .font(Typo.tiny).foregroundStyle(Palette.faint).lineLimit(1)
+                .padding(.top, 10)
             }
         }
     }
@@ -322,6 +331,14 @@ struct ReadinessDetailContent: View {
         case "respiration": return .metric(.respiration)
         case "skinTemp", "wristTemp": return .metric(.temperature)
         default: return nil
+        }
+    }
+
+    /// A readiness zone's colour and its range under the last 14 days.
+    private func zone(_ color: Color, _ text: String) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text(verbatim: text)
         }
     }
 
@@ -395,7 +412,8 @@ struct SleepWidget: View {
                              labels: sleep.week.map { Fmt.weekdayInitial($0.date) },
                              highlighted: sleep.week.count - 1,
                              spacing: size == .small ? 3 : 4,
-                             height: height)
+                             height: height,
+                             targetLabel: L10n.f("potřeba %@", Fmt.hoursMinutes(Double(sleep.need))))
                 }
             }
         }
@@ -438,7 +456,7 @@ struct OxygenWidget: View {
             SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44, smallShowsChart: oxygen.high <= oxygen.low) {
                 NumberText(value: Fmt.decimal(oxygen.value, digits: oxygen.value.rounded() == oxygen.value ? 0 : 1), unit: "%")
                 if oxygen.high > oxygen.low {
-                    TileRange(value: oxygen.value, low: oxygen.low, high: oxygen.high)
+                    TileRange(value: oxygen.value, low: oxygen.low, high: oxygen.high, edges: (Fmt.int(oxygen.low), Fmt.int(oxygen.high)))
                 } else {
                     Text(L10n.f("14 dní %@–%@ %%", Fmt.int(oxygen.low), Fmt.int(oxygen.high))).font(Typo.caption).foregroundStyle(Palette.faint)
                 }
@@ -461,7 +479,7 @@ struct RespirationWidget: View {
             SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44, smallShowsChart: respiration.baseline == nil) {
                 NumberText(value: Fmt.decimal(respiration.value), unit: "/min")
                 if let base = respiration.baseline {
-                    TileRange(value: respiration.value, low: base - 0.5, high: base + 0.5, worseAbove: true)
+                    TileRange(value: respiration.value, low: base - 0.5, high: base + 0.5, worseAbove: true, edges: (Fmt.decimal(base - 0.5), Fmt.decimal(base + 0.5)))
                 } else {
                     Text(respiration.elevated ? "zrychlený" : "stabilní").font(Typo.caption).foregroundStyle(respiration.elevated ? Palette.rust : Palette.green)
                 }
@@ -485,7 +503,7 @@ struct SkinTempWidget: View {
             SizedWidgetBody(size: size, smallChart: 30, mediumChart: 44, smallShowsChart: false) {
                 NumberText(value: Fmt.signed(Units.temperatureChange(skin.deviation), digits: 1), unit: Units.temperatureUnit)
                 // The usual night is within half a degree of the athlete's own average.
-                TileRange(value: skin.deviation, low: -0.5, high: 0.5, worseAbove: true)
+                TileRange(value: skin.deviation, low: -0.5, high: 0.5, worseAbove: true, edges: TileRange.temperatureEdges)
             } chart: { height in
                 BarChart(values: skin.series.map { $0.value + 1 }, styles: skin.series.map { BarStyle(fill: $0.value > 0 ? Palette.rust.opacity(0.6) : Palette.blue.opacity(0.5)) },
                          lo: 0, hi: 2, target: 1, height: height)
@@ -511,7 +529,7 @@ struct WristTempWidget: View {
                         NumberText(value: Fmt.signed(Units.temperatureChange(deviation), digits: 1),
                                    unit: size == .small ? Units.temperatureUnit : L10n.f("%@ proti normálu", Units.temperatureUnit))
                         // The usual night is within half a degree of the athlete's own average.
-                        TileRange(value: deviation, low: -0.5, high: 0.5, worseAbove: true)
+                        TileRange(value: deviation, low: -0.5, high: 0.5, worseAbove: true, edges: TileRange.temperatureEdges)
                     }
                 } else {
                     NumberText(value: Fmt.decimal(Units.temperature(wrist.value), digits: 1), unit: Units.temperatureUnit)
