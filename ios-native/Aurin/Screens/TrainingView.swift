@@ -663,7 +663,8 @@ struct ActiveCaloriesWidget: View {
                          highlighted: active.week.count - 1,
                          spacing: size == .small ? 3 : 4,
                          height: height,
-                         targetLabel: active.usual.map { L10n.f("obvykle %@", Fmt.int($0)) })
+                         targetLabel: active.usual.map { L10n.f("obvykle %@", Fmt.int($0)) },
+                         targetLabelAlignment: .leading)
             }
         }
     }

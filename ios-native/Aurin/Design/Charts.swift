@@ -65,25 +65,31 @@ struct ChartDates: View {
 }
 
 /// A row of short coloured lines with their names ("— Fitness — Fatigue"),
-/// then an optional note on the right ("6 wk").
+/// then an optional note on the right ("6 wk") when the row has room for it.
 struct ChartLegend: View {
     let items: [(color: Color, text: String)]
     var note: String? = nil
 
     var body: some View {
-        HStack(spacing: 10) {
-            ForEach(items.indices, id: \.self) { i in
-                HStack(spacing: 4) {
-                    Capsule().fill(items[i].color).frame(width: 10, height: 2.5)
-                    Text(verbatim: items[i].text)
-                }
-            }
-            Spacer(minLength: 0)
-            if let note { Text(verbatim: note) }
+        ViewThatFits(in: .horizontal) {
+            row(note: note)
+            row(note: nil)
         }
         .font(.system(size: 9))
         .foregroundStyle(Palette.faint)
-        .lineLimit(1)
+    }
+
+    private func row(note: String?) -> some View {
+        HStack(spacing: 8) {
+            ForEach(items.indices, id: \.self) { i in
+                HStack(spacing: 4) {
+                    Capsule().fill(items[i].color).frame(width: 10, height: 2.5)
+                    Text(verbatim: items[i].text).fixedSize()
+                }
+            }
+            Spacer(minLength: note == nil ? 0 : 6)
+            if let note { Text(verbatim: note).fixedSize() }
+        }
     }
 }
 
@@ -120,6 +126,9 @@ struct BarChart: View {
     var spacing: CGFloat = 4
     var height: CGFloat = 64
     var targetLabel: String? = nil
+    /// Where the label sits over the line: on the left when the newest bar
+    /// (on the right) would hide it.
+    var targetLabelAlignment: Alignment = .trailing
     var caption: String? = nil
     var scale: [ScaleTick] = []
 
@@ -159,7 +168,9 @@ struct BarChart: View {
                                 .font(.system(size: 9))
                                 .foregroundStyle(targetColor)
                                 .lineLimit(1).fixedSize()
-                                .frame(width: w, alignment: .trailing)
+                                .padding(.horizontal, 2)
+                                .background(Palette.card.opacity(0.85), in: Capsule())
+                                .frame(width: w, alignment: targetLabelAlignment)
                                 .offset(y: -h * scaled(target, lo, top) - 3)
                         }
                     }
@@ -333,7 +344,8 @@ func scaleTicks(_ lo: Double, _ hi: Double, count: Int = 4, extra: [ScaleTick] =
 }
 
 /// The first point of each month along a chart drawn one point per step:
-/// "Aug" at its place, a month too close to the one before taking its place.
+/// "Aug" at its place. The first point names its month only when the month
+/// starts there; a month too close to the one before takes its place.
 func monthMarks(_ dates: [String]) -> [(at: Double, text: String)] {
     guard dates.count > 1 else { return [] }
     var out: [(at: Double, text: String)] = []
@@ -342,6 +354,7 @@ func monthMarks(_ dates: [String]) -> [(at: Double, text: String)] {
         let m = String(iso.prefix(7))
         guard m != month, let date = ISODay.date(iso) else { continue }
         month = m
+        if i == 0, Int(iso.suffix(2)) ?? 1 > 3 { continue }
         let at = Double(i) / Double(dates.count - 1)
         let text = DateFormatters.make("LLL", locale: Fmt.locale, timeZone: TimeZone(identifier: "UTC")!).string(from: date)
         if let last = out.last, at - last.at < 0.12 { out.removeLast() }
