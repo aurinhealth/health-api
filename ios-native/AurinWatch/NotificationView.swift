@@ -17,7 +17,6 @@ final class CoachNotificationController: WKUserNotificationHostingController<Coa
     override func didReceive(_ notification: UNNotification) {
         titleText = notification.request.content.title
         bodyText = notification.request.content.body
-        setNeedsBodyUpdate()
     }
 }
 
