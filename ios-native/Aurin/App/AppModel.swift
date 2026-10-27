@@ -735,7 +735,9 @@ final class AppModel {
     func refreshTraining() async {
         guard !demo, phase == .signedIn else { return }
         do {
-            training = try await api.training()
+            let fresh = try await api.training()
+            training = fresh
+            WatchBridge.shared.update(fresh)
             fetched[.training] = (Date(), Self.localDate(Date()))
             dataRevision += 1
             trainingError = nil

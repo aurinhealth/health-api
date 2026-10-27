@@ -1,9 +1,9 @@
 import SwiftUI
 
 /// The first page, as Today on the iPhone: readiness as a big number with its
-/// word, sleep, strain and HRV in one card with their range bars, and the
-/// coach's line for the day. The number opens why readiness is what it is,
-/// each column its detail.
+/// word, and sleep, strain and HRV in one card with their range bars, all on
+/// one screen. The number opens why readiness is what it is, each column its
+/// detail (the pages are in WatchRoot's navigationDestination).
 struct ReadinessHome: View {
     let s: WatchSnapshot
 
@@ -12,26 +12,13 @@ struct ReadinessHome: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                NavigationLink(value: Page.why) { hero }
-                    .buttonStyle(.plain)
-                gauges.padding(.top, 6)
-                if let line = s.headline ?? s.summary {
-                    coach(line).padding(.top, 8)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 0) {
+            NavigationLink(value: Page.why) { hero }
+                .buttonStyle(.plain)
+            gauges.padding(.top, 6)
+            Spacer(minLength: 0)
         }
-        .navigationDestination(for: Page.self) { page in
-            switch page {
-            case .why: WhyDetail(s: s)
-            case .sleep: SleepDetail(s: s)
-            case .restingHR: MetricDetail(s: s, metric: .restingHR)
-            case .hrv: MetricDetail(s: s, metric: .hrv)
-            case .strain: StrainDetail(s: s)
-            }
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .containerBackground(W.glow(W.Glow.readiness), for: .navigation)
         .containerBackground(W.glow(W.Glow.readiness), for: .tabView)
     }
@@ -157,20 +144,6 @@ struct ReadinessHome: View {
         default: g.note = W.tr("v normálu", "normal")
         }
         return g
-    }
-
-    // MARK: Coach
-
-    private func coach(_ line: String) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Label(W.tr("Kouč", "Coach"), systemImage: "sparkles")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(W.indigo)
-            Text(line)
-                .font(W.news(15))
-                .foregroundStyle(W.ink)
-                .fixedSize(horizontal: false, vertical: true)
-        }
     }
 }
 

@@ -109,6 +109,50 @@ enum W {
         formatter.dateFormat = "EEE"
         return formatter.string(from: date)
     }
+
+    /// "2026-10-31" as a date at noon (no day shifts across time zones).
+    static func day(_ text: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd HH"
+        return formatter.date(from: text + " 12")
+    }
+
+    /// "sobota", "Saturday".
+    static func dayName(_ text: String) -> String {
+        guard let date = day(text) else { return text }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateFormat = "EEEE"
+        return formatter.string(from: date)
+    }
+
+    /// The day's letter under its dot: "P Ú S Č P S N", "M T W T F S S".
+    static func dayLetter(_ text: String) -> String {
+        guard let date = day(text) else { return "" }
+        let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
+        let letters = english ? ["S", "M", "T", "W", "T", "F", "S"] : ["N", "P", "Ú", "S", "Č", "P", "S"]
+        return letters[(weekday - 1) % 7]
+    }
+
+    /// "07:30" as "7:30".
+    static func clockText(_ time: String) -> String {
+        let t = time.count > 5 ? String(time.prefix(5)) : time
+        return t.hasPrefix("0") && t.count == 5 ? String(t.dropFirst()) : t
+    }
+
+    /// The sport's SF Symbol, as on the iPhone (SportIcon).
+    static func sportSymbol(_ sport: String) -> String {
+        switch sport {
+        case "ride": "bicycle"
+        case "run": "figure.run"
+        case "strength", "gym": "dumbbell.fill"
+        case "swim": "figure.pool.swim"
+        case "walk": "figure.walk"
+        default: "figure.mixed.cardio"
+        }
+    }
 }
 
 extension Color {

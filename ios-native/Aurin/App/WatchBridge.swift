@@ -12,6 +12,7 @@ final class WatchBridge: NSObject {
 
     private var today: TodaySnapshot?
     private var health: HealthSnapshot?
+    private var training: TrainingSnapshot?
     private var healthLoaded: Date?
     private var loadingHealth = false
     /// The gym days the watch works on (WatchGymBridge.swift).
@@ -40,9 +41,16 @@ final class WatchBridge: NSObject {
         send()
     }
 
+    /// This week's sessions for the watch's Training page.
+    func update(_ training: TrainingSnapshot) {
+        self.training = training
+        send()
+    }
+
     func clear() {
         today = nil
         health = nil
+        training = nil
         healthLoaded = nil
         gymDays = [:]
         guard let session, session.activationState == .activated else { return }
@@ -63,7 +71,10 @@ final class WatchBridge: NSObject {
         Task { @MainActor in
             defer { loadingHealth = false }
             let api = AppModel.live?.api ?? APIClient()
-            guard api.hasSession, let loaded = try? await api.health() else { return }
+            guard api.hasSession else { return }
+            // The week for the Training page, when the app has not loaded it yet.
+            if training == nil, let week = try? await api.training() { training = week }
+            guard let loaded = try? await api.health() else { send(); return }
             update(loaded)
         }
     }
@@ -74,7 +85,7 @@ final class WatchBridge: NSObject {
     func sendContext() {
         guard watchReady, let session else { return }
         var context: [String: Any] = [:]
-        if let today, let data = Self.snapshot(today, health: health).encoded() { context[WatchSnapshot.contextKey] = data }
+        if let today, let data = Self.snapshot(today, health: health, training: training).encoded() { context[WatchSnapshot.contextKey] = data }
         if let gym = gymContext { context[WatchGym.replyKey] = gym }
         guard !context.isEmpty else { return }
         try? session.updateApplicationContext(context)
@@ -86,13 +97,14 @@ final class WatchBridge: NSObject {
            saved.date == AppModel.localDate(Date()) {
             today = saved
         }
+        if training == nil { training = SnapshotCache.load(TrainingSnapshot.self, key: "training")?.value }
         if health == nil, let saved = SnapshotCache.load(HealthSnapshot.self, key: "health")?.value,
            saved.date == today?.date {
             health = saved
         }
     }
 
-    static func snapshot(_ today: TodaySnapshot, health: HealthSnapshot?) -> WatchSnapshot {
+    static func snapshot(_ today: TodaySnapshot, health: HealthSnapshot?, training: TrainingSnapshot? = nil) -> WatchSnapshot {
         let day = { (points: [Point]) in points.map { WatchSnapshot.Day(date: $0.date, value: $0.value) } }
         let night = health?.sleep.night.flatMap { $0.date == today.date ? $0 : nil }
         let sleep = today.sleep.map { s in
@@ -116,10 +128,14 @@ final class WatchBridge: NSObject {
         let strain = WatchSnapshot.Strain(score: today.strain.score, low: today.strain.target?.low, high: today.strain.target?.high,
                                           training: today.strain.training, movement: today.strain.movement,
                                           planned: today.strain.planned, nextTitle: next?.title, nextTime: next?.time)
+        let week = training?.sessions?.filter { $0.status != "missed" }.map {
+            WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport, minutes: $0.minutes, done: $0.status == "done")
+        }
         return WatchSnapshot(date: today.date, updated: Date(), language: L10n.language,
                              readiness: today.readiness.score, zone: today.readiness.zone,
                              headline: today.summary?.headline, summary: today.summary?.text,
-                             sleep: sleep, restingHR: restingHR, hrv: hrv, strain: strain, steps: today.steps.today)
+                             sleep: sleep, restingHR: restingHR, hrv: hrv, strain: strain, steps: today.steps.today,
+                             week: week)
     }
 
     /// "23:05" from an ISO time or a clock time.
@@ -194,7 +210,7 @@ extension WatchBridge: WCSessionDelegate {
                 return
             }
             restore()
-            if let today, let data = Self.snapshot(today, health: health).encoded() {
+            if let today, let data = Self.snapshot(today, health: health, training: training).encoded() {
                 replyHandler([WatchSnapshot.contextKey: data])
             } else {
                 replyHandler([:])

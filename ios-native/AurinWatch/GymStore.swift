@@ -39,6 +39,21 @@ final class GymStore: ObservableObject {
         })
     }
 
+    /// Another day's plan (the Training page shows tomorrow or a day tapped
+    /// in its row), not kept: only today's is worked on.
+    func preview(date: String) async -> WatchGym? {
+        if let gym, gym.date == date { return gym }
+        let session = WCSession.default
+        guard WCSession.isSupported(), session.activationState == .activated, session.isReachable else { return nil }
+        return await withCheckedContinuation { continuation in
+            session.sendMessage([WatchGym.requestKey: date], replyHandler: { reply in
+                continuation.resume(returning: (reply[WatchGym.replyKey] as? Data).flatMap(WatchGym.decode))
+            }, errorHandler: { _ in
+                continuation.resume(returning: nil)
+            })
+        }
+    }
+
     /// A plan from the iPhone: the answer to load or to a change, or sent on
     /// its own when the iPhone saved the day (WatchStore forwards it).
     func received(_ data: Data?) {

@@ -21,6 +21,19 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     var hrv: Metric?
     var strain: Strain
     var steps: Double?
+    /// This week's sessions, done and planned (Training on the iPhone), for the
+    /// watch's Training page and its row of days.
+    var week: [Session]? = nil
+
+    struct Session: Codable, Equatable, Sendable {
+        var date: String
+        var time: String?
+        var title: String
+        /// ride, run, strength, swim, walk or other.
+        var sport: String
+        var minutes: Int?
+        var done: Bool
+    }
 
     struct Day: Codable, Equatable, Sendable {
         /// yyyy-MM-dd.

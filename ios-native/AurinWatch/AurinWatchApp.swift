@@ -34,6 +34,19 @@ struct WatchRoot: View {
                 TrainingPage()
             }
             .tabViewStyle(.verticalPage)
+            // Here, not inside a page: the vertical pages are lazy, and a
+            // destination declared in one was never found by the stack.
+            .navigationDestination(for: ReadinessHome.Page.self) { page in
+                if let s = store.snapshot {
+                    switch page {
+                    case .why: WhyDetail(s: s)
+                    case .sleep: SleepDetail(s: s)
+                    case .restingHR: MetricDetail(s: s, metric: .restingHR)
+                    case .hrv: MetricDetail(s: s, metric: .hrv)
+                    case .strain: StrainDetail(s: s)
+                    }
+                }
+            }
         }
     }
 }
