@@ -1,5 +1,6 @@
 import Charts
 import SwiftUI
+import WatchKit
 
 /// The page under a detail: 7, 30 or 90 days on a chart with the athlete's
 /// normal as a band, the values on the right and the dates below.
@@ -46,7 +47,7 @@ struct HistoryPage: View {
             }
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(days.average.map(format) ?? "–")
-                    .font(W.serif(28))
+                    .font(W.serif(24))
                     .foregroundStyle(W.ink)
                 Text(metric.unit + " " + W.tr("průměr", "avg"))
                     .font(.system(size: 11))
@@ -64,8 +65,7 @@ struct HistoryPage: View {
             if spans.count > 1 { picker.padding(.top, 2) }
             chart
                 .padding(.top, 6)
-                .frame(minHeight: 34, maxHeight: 64)
-                .layoutPriority(-1)
+                .frame(height: Self.chartHeight)
             if shown == 90 {
                 Text(trend)
                     .font(.system(size: 11))
@@ -82,9 +82,12 @@ struct HistoryPage: View {
         // Clear of the back button above and the page dots on the right;
         // the chart gives way on a small watch.
         .padding(.top, 8)
-        .padding(.trailing, 8)
+        .padding(.trailing, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
+
+    /// As tall as the watch allows next to the header, the picker and the tiles.
+    private static let chartHeight: CGFloat = Swift.max(48, WKInterfaceDevice.current().screenBounds.height - 172)
 
     private var header: String {
         let unit = sleep ? W.tr("nocí", "nights") : W.tr("dní", "days")
@@ -242,8 +245,8 @@ struct HistoryPage: View {
                 }
             }
             .chartYScale(domain: domain)
-            // Bars of a night below the range end at its edge.
-            .clipped()
+            // Bars of a night below the range end at its edge; the labels stay whole.
+            .chartPlotStyle { $0.clipped() }
             .chartYAxis {
                 AxisMarks(position: .trailing, values: ticks) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [2, 3]))
