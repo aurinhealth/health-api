@@ -731,6 +731,7 @@ struct JournalValueSheet: View {
     @State private var level: Int?
     @State private var busy = false
     @State private var error: String?
+    @State private var detent: PresentationDetent
 
     init(item: JournalItem, date: String, save: @escaping (JSONObject) async -> String?) {
         self.item = item
@@ -741,6 +742,8 @@ struct JournalValueSheet: View {
         _amount = State(initialValue: start)
         _time = State(initialValue: JournalStyle.date(from: item.time) ?? JournalStyle.date(from: item.late) ?? Date())
         _hasTime = State(initialValue: item.time != nil)
+        let wheel = item.type == "time" || (item.withTime == true && item.time != nil)
+        _detent = State(initialValue: wheel ? .large : .medium)
         _level = State(initialValue: item.type == "scale" ? item.amount.map { Int($0) } : nil)
     }
 
@@ -759,6 +762,12 @@ struct JournalValueSheet: View {
                 }
                 editor
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
+            }
+            .padding(24)
+        }
+        // Save stays at the bottom, so the time wheel never pushes it off the sheet.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 10) {
                 PrimaryButton(title: L10n.tr("Uložit"), busy: busy) { submit(1) }
                     .disabled(busy || (item.type == "scale" && level == nil))
                 HStack(spacing: 10) {
@@ -769,10 +778,16 @@ struct JournalValueSheet: View {
                 }
                 .disabled(busy)
             }
-            .padding(24)
+            .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 8)
+            .background(Palette.background)
+            .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $detent)
         .presentationBackground(Palette.background)
+        // Turning on the time shows the wheel: the sheet grows to show it whole.
+        .onChange(of: hasTime) { _, on in
+            if on { withAnimation(.snappy) { detent = .large } }
+        }
     }
 
     @ViewBuilder private var editor: some View {
