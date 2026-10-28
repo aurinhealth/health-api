@@ -183,10 +183,50 @@ struct MealSlotsSettingsView: View {
 }
 
 /// Nastavení → Snímač tepu: a chest strap or a band broadcasting its heart
-/// rate, for Režim tréninku without an Apple Watch.
+/// rate. An Apple Watch never shows up there (it broadcasts nothing), so its
+/// own group says it measures through Aurin on the watch, with the same
+/// "Otevřít na hodinkách" as Nastavení → Apple Watch.
 struct HeartRateSensorView: View {
     private var sensor: HeartRateSensor { HeartRateSensor.shared }
     private var live: LiveWorkout { LiveWorkout.shared }
+    @State private var watchSettings = WatchBridge.settings
+    @Environment(\.openURL) private var openURL
+
+    /// Only with a paired watch: Aurin on it measures in Režim tréninku, or
+    /// Nainstalovat opens the Watch app where it is added.
+    @ViewBuilder private var watchGroup: some View {
+        let state = WatchBridge.shared.watchState
+        if state.paired {
+            if state.installed {
+                SettingsGroup(title: "Apple Watch", footer: L10n.tr("Režim tréninku otevře posilovnu na hodinkách. Hodinky posílají tep každých 5 sekund a do Zdraví uloží jeden trénink.")) {
+                    SettingsRow(icon: SettingsIcon(systemImage: "applewatch", color: Palette.ink), title: "Apple Watch",
+                                subtitle: L10n.tr("Aurin na hodinkách měří v Režimu tréninku"), chevron: false)
+                    SettingsDivider()
+                    SettingsToggle(title: L10n.tr("Otevřít na hodinkách"), isOn: $watchSettings.openOnWatch)
+                }
+            } else {
+                SettingsGroup(title: "Apple Watch") {
+                    Button {
+                        if let url = URL(string: "itms-watchs://") { openURL(url) }
+                    } label: {
+                        HStack(spacing: 14) {
+                            SettingsIcon(systemImage: "applewatch", color: Palette.ink)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Apple Watch").font(.body).foregroundStyle(Palette.ink)
+                                Text("Nainstaluj Aurin na hodinky, ať měří tep").font(Typo.caption).foregroundStyle(Palette.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 8)
+                            Text("Nainstalovat").font(.subheadline.weight(.medium)).foregroundStyle(Palette.rust)
+                        }
+                        .padding(.horizontal, 18).padding(.vertical, 12).frame(minHeight: 52)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
 
     static func icon(for source: String, sensor: Bool) -> String {
         if sensor { return "heart.fill" }
@@ -201,13 +241,14 @@ struct HeartRateSensorView: View {
             // During a workout: what the heart rate on top of it comes from.
             if live.running, let bpm = live.heartRate {
                 let fromSensor = sensor.liveBpm != nil
+                let fromWatch = !fromSensor && live.onWatch
                 let source = (fromSensor ? sensor.savedName : live.heartSource) ?? L10n.tr("Apple Health")
                 SettingsGroup(title: "Teď měří") {
                     HStack(spacing: 12) {
                         SettingsIcon(systemImage: Self.icon(for: source, sensor: fromSensor), color: fromSensor ? Palette.rust : Palette.ink)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(source).font(.body).foregroundStyle(Palette.ink).lineLimit(1)
-                            Text(fromSensor ? "snímač tepu" : "přes Apple Health")
+                            Text(fromSensor ? "snímač tepu" : fromWatch ? "Aurin na hodinkách" : "přes Apple Health")
                                 .font(Typo.caption).foregroundStyle(Palette.muted)
                         }
                         Spacer(minLength: 8)
@@ -241,6 +282,7 @@ struct HeartRateSensorView: View {
                     .buttonStyle(.plain)
                 }
             }
+            watchGroup
             SettingsGroup(title: "V okolí", footer: L10n.tr("Hrudní pás nebo náramek, který vysílá tep, například Whoop, Polar nebo Garmin.")) {
                 if sensor.unavailable {
                     SettingsRow(title: "Bluetooth je vypnutý nebo nepovolený", chevron: false, titleColor: Palette.muted)
@@ -262,6 +304,7 @@ struct HeartRateSensorView: View {
             }
         }
         .onAppear { sensor.startScan(); sensor.connectSaved() }
+        .onChange(of: watchSettings) { _, value in WatchBridge.settings = value }
         .onDisappear {
             sensor.stopScan()
             // Outside a workout the sensor needn't stay connected.
