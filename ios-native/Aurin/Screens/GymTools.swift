@@ -277,8 +277,8 @@ struct GymBuilderView: View {
             }
         }
         .task {
-            if model.demo { day = earliest }
-            if let d = Self.isoFormatter.date(from: date), d >= earliest { day = d }
+            // The demo builds on the sample day, whichever date opened it.
+            if model.demo { day = earliest } else if let d = Self.isoFormatter.date(from: date), d >= earliest { day = d }
             if let minutes = template?.template.minutes { self.minutes = minutes }
             // Read again on every return, so a list changed in Vybavení shows here (after its save).
             if !model.demo {
