@@ -1,7 +1,7 @@
 import AuthenticationServices
 import SwiftUI
 
-/// The first screen: an opening and five pages of what Aurin does
+/// The first screen: an opening and three pages of what Aurin does
 /// (WelcomePages.swift), then the sign-in.
 struct LoginView: View {
     @Environment(AppModel.self) private var model
@@ -12,6 +12,8 @@ struct LoginView: View {
 
     /// The sign-in comes after the welcome's pages.
     private static let signIn = WelcomePage.allCases.count
+    /// The website's waitlist (src/site-pages.js, #join).
+    private static let waitlistURL = URL(string: "https://aurin.health/#join")!
 
     var body: some View {
         ZStack {
@@ -92,18 +94,31 @@ struct LoginView: View {
             Spacer(minLength: 16)
 
             if let message = model.errorMessage {
-                // A failed sign-in (not invited, cancelled, expired, an unknown passkey) says why here.
-                Label(message, systemImage: "exclamationmark.circle.fill")
-                    .font(Typo.small).foregroundStyle(Palette.rust)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-                    .background(Palette.rust.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .padding(.bottom, 12)
+                // A failed sign-in (not invited, cancelled, expired, an unknown passkey) says why here;
+                // without an invite the way on is the waitlist on aurin.health.
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(message, systemImage: "exclamationmark.circle.fill")
+                        .font(Typo.small).foregroundStyle(Palette.rust)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if model.notInvited {
+                        Link(destination: Self.waitlistURL) {
+                            Text("Přidat se na čekací listinu")
+                                .font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                                .padding(.horizontal, 14).frame(height: 34)
+                                .background(Palette.button, in: Capsule())
+                        }
+                        .padding(.leading, 26)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Palette.rust.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.bottom, 12)
             }
             // Three ways in, the same size: Apple (App Store rule 4.8), Google, the e-mail code.
             SignInWithAppleButton(.continue) { request in
                 model.errorMessage = nil
+                model.notInvited = false
                 appleNonce = AuthService.randomVerifier()
                 request.requestedScopes = [.fullName, .email]
                 request.nonce = AuthService.appleNonceHash(appleNonce)
@@ -130,6 +145,7 @@ struct LoginView: View {
             .accessibilityLabel(L10n.tr("Pokračovat přes Apple"))
             Button {
                 model.errorMessage = nil
+                model.notInvited = false
                 Task { await model.signIn() }
             } label: {
                 HStack(spacing: 10) {
@@ -197,8 +213,9 @@ private struct SignInButtonLook: ViewModifier {
     }
 }
 
-/// After the first e-mail sign-in: a passkey, so next time Face ID is enough.
-/// "Teď ne" and any failure just close it; Settings → Účet can add one later.
+/// After the first e-mail sign-in, the next time the app opens: a passkey, so
+/// from then on Face ID is enough. "Teď ne" and any failure just close it;
+/// Settings → Účet can add one later.
 struct PasskeyOfferSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -231,6 +248,17 @@ struct PasskeyOfferSheet: View {
         try? await model.passkeys.register(api: model.api)
         dismiss()
     }
+}
+
+/// The passkey offer waits for the next start of the app after the first
+/// e-mail sign-in, so nothing stands between the sign-in and the setup.
+/// `due` is read once when the app starts (AurinApp), before any sign-in.
+enum PasskeyOfferLater {
+    private static let key = "passkeyOfferLater"
+    static let due = UserDefaults.standard.bool(forKey: key)
+
+    static func note() { UserDefaults.standard.set(true, forKey: key) }
+    static func forget() { UserDefaults.standard.removeObject(forKey: key) }
 }
 
 /// Sign-in with a six-digit code sent to the e-mail (src/email-login.js).

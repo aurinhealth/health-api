@@ -26,7 +26,7 @@ final class SmokeTests: XCTestCase {
         pause(2)
         shot("uvod")
         app.buttons["Pojďme na to"].tap()
-        for name in ["pripravenost", "trenink", "jidlo", "spanek", "kouc"] {
+        for name in ["pripravenost", "trenink", "kouc"] {
             let next = app.buttons["Pokračovat"]
             XCTAssertTrue(next.waitForExistence(timeout: 5), "the welcome page \(name) did not appear")
             pause(4)
