@@ -135,6 +135,15 @@ enum W {
         return formatter.string(from: date)
     }
 
+    /// "pá", "Fri".
+    static func dayShort(_ text: String) -> String {
+        guard let date = day(text) else { return text }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.dateFormat = "EEE"
+        return formatter.string(from: date)
+    }
+
     /// The day's letter under its dot: "P Ú S Č P S N", "M T W T F S S".
     static func dayLetter(_ text: String) -> String {
         guard let date = day(text) else { return "" }

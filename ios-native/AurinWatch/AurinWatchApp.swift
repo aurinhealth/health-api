@@ -65,6 +65,9 @@ struct WatchRoot: View {
             .fullScreenCover(isPresented: $gym.openedFromPhone) { GymSessionView() }
             // Here, not inside a page: the vertical pages are lazy, and a
             // destination declared in one was never found by the stack.
+            .navigationDestination(for: WatchSnapshot.Session.self) { session in
+                RideDetail(session: session)
+            }
             .navigationDestination(for: ReadinessHome.Page.self) { page in
                 if let s = store.snapshot {
                     switch page {

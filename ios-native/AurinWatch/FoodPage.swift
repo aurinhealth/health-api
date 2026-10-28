@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The third page by the crown, as Food on the iPhone: the day's energy
-/// against its goal, carbs, protein and fat with their bars, and water with
-/// +250 ml that goes to the iPhone's day.
+/// The third page by the crown (mockup 44): the day's energy in a ring with
+/// what is left, carbs, protein and fat in the iPhone's colours, and water
+/// with its bar and +250 ml that goes to the iPhone's day.
 struct FoodPage: View {
     @EnvironmentObject private var store: WatchStore
     @State private var added = 0
@@ -29,49 +29,60 @@ struct FoodPage: View {
 
     private func content(_ food: WatchSnapshot.Food) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(W.tr("Jídlo", "Food"))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(W.secondary)
-            HStack(alignment: .lastTextBaseline, spacing: 5) {
-                Text(food.kcal.map { W.number($0) } ?? "0")
-                    .font(W.serif(40))
-                    .foregroundStyle(W.ink)
-                    .lineLimit(1)
-                if let target = food.target, target > 0 {
-                    Text(W.tr("z ", "of ") + W.number(target) + " kcal")
-                        .font(.system(size: 11))
-                        .foregroundStyle(W.muted)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                } else {
-                    Text("kcal").font(.system(size: 11)).foregroundStyle(W.muted)
+            // Below the time, which hangs over the page.
+            HStack(spacing: 10) {
+                Ring(fraction: fraction(food.kcal, food.target), color: W.amber, size: 74) {
+                    RingValue(value: W.number(food.kcal ?? 0), label: food.target.map { W.tr("z ", "of ") + W.number($0) } ?? "kcal",
+                              color: W.muted, size: 20)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(W.tr("Jídlo", "Food")).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber)
+                    Text(left(food))
+                        .font(W.news(16))
+                        .foregroundStyle(W.ink)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if (food.kcal ?? 0) <= 0 {
+                        Text(W.tr("zapiš ho v iPhonu", "log it on your iPhone")).font(.system(size: 10)).foregroundStyle(W.muted)
+                    }
                 }
             }
-            Bar(fraction: fraction(food.kcal, food.target), color: W.green)
-                .padding(.bottom, 8)
-            VStack(spacing: 5) {
+            .padding(.top, 18)
+            HStack(alignment: .top, spacing: 7) {
                 macro(W.tr("Sacharidy", "Carbs"), food.carbs, W.carbs)
                 macro(W.tr("Bílkoviny", "Protein"), food.protein, W.protein)
                 macro(W.tr("Tuky", "Fat"), food.fat, W.fat)
             }
+            .padding(.top, 10)
             Spacer(minLength: 6)
             water(food)
         }
     }
 
+    /// "977 kcal left", "120 kcal over", "Nothing yet".
+    private func left(_ food: WatchSnapshot.Food) -> String {
+        let kcal = food.kcal ?? 0
+        guard kcal > 0 else { return W.tr("Zatím nic", "Nothing yet") }
+        guard let target = food.target, target > 0 else { return W.number(kcal) + " kcal" }
+        let rest = target - kcal
+        return rest >= 0 ? W.tr("zbývá \(W.number(rest)) kcal", "\(W.number(rest)) kcal left")
+            : W.tr("o \(W.number(-rest)) kcal víc", "\(W.number(-rest)) kcal over")
+    }
+
     private func macro(_ title: String, _ m: WatchSnapshot.Macro, _ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Text(title).font(.system(size: 11)).foregroundStyle(W.secondary)
-                Spacer(minLength: 2)
-                Text(W.number(m.eaten ?? 0) + (m.target.map { " / " + W.number($0) } ?? "") + " g")
-                    .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(W.muted)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+            Text(title).font(.system(size: 9, weight: .semibold)).foregroundStyle(color).lineLimit(1)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(W.number(m.eaten ?? 0)).foregroundStyle(W.ink)
+                Text((m.target.map { "/" + W.number($0) } ?? "") + " g").foregroundStyle(W.muted)
             }
-            Bar(fraction: fraction(m.eaten, m.target), color: color)
+            .font(.system(size: 11, weight: .medium).monospacedDigit())
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            Bar(fraction: fraction(m.eaten, m.target), color: color).padding(.top, 1)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func water(_ food: WatchSnapshot.Food) -> some View {
@@ -85,7 +96,7 @@ struct FoodPage: View {
                     .foregroundStyle(W.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Text(W.tr("Voda", "Water")).font(.system(size: 10)).foregroundStyle(W.muted)
+                Bar(fraction: fraction(food.water, food.waterTarget), color: W.blue).padding(.top, 3)
             }
             Spacer(minLength: 2)
             Button {

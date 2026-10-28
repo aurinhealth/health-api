@@ -38,9 +38,9 @@ struct HistoryPage: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
                 Spacer(minLength: 2)
-                if band != nil {
+                if band != nil, !sleep {
                     RoundedRectangle(cornerRadius: 2).fill(metric.color.opacity(0.35)).frame(width: 9, height: 5)
-                    Text(sleep ? W.tr("potřeba", "need") : W.tr("normál", "normal"))
+                    Text(W.tr("normál", "normal"))
                         .font(W.label(8))
                         .foregroundStyle(metric.color)
                 }
@@ -53,6 +53,9 @@ struct HistoryPage: View {
                     .font(.system(size: 11))
                     .foregroundStyle(W.secondary)
                 if let need {
+                    Spacer(minLength: 2)
+                    // The dashed line in the chart.
+                    Rectangle().fill(W.amber).frame(width: 8, height: 1.5)
                     Text(W.tr("potřeba", "need") + " " + W.clock(minutes: need))
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(W.amber)
@@ -186,10 +189,12 @@ struct HistoryPage: View {
 
     /// The chart's range: the points and the normal with a little room.
     private var domain: ClosedRange<Double> {
-        let values = plots.map(\.value) + (band.map { [$0.lowerBound, $0.upperBound] } ?? [])
+        let values = plots.map(\.value) + (sleep ? (need.map { [$0 / 60] } ?? []) : (band.map { [$0.lowerBound, $0.upperBound] } ?? []))
         guard var lo = values.min(), var hi = values.max() else { return 0...1 }
         if hi - lo < (sleep ? 1 : 4) { let mid = (lo + hi) / 2; lo = mid - (sleep ? 0.5 : 2); hi = mid + (sleep ? 0.5 : 2) }
         let pad = (hi - lo) * 0.12
+        // Bars stand on zero, so a short night looks short.
+        if sleep { return 0...(hi + Swift.max(pad, 0.4)) }
         return Swift.max(0, lo - pad)...(hi + pad)
     }
 
@@ -222,7 +227,12 @@ struct HistoryPage: View {
         let middle = first.addingTimeInterval(last.timeIntervalSince(first) / 2)
         return VStack(spacing: 2) {
             Chart {
-                if let band {
+                if sleep, let need {
+                    // The night's need as one dashed line over the bars.
+                    RuleMark(y: .value("Potřeba", need / 60))
+                        .foregroundStyle(W.amber)
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                } else if let band {
                     RectangleMark(xStart: .value("Od", first), xEnd: .value("Do", last),
                                   yStart: .value("Nízko", band.lowerBound), yEnd: .value("Vysoko", band.upperBound))
                         .foregroundStyle(metric.color.opacity(0.16))

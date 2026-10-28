@@ -125,7 +125,7 @@ enum Small {
         switch m {
         case .readiness:
             guard let r = today?.readiness else { return empty }
-            return SmallValue(fraction: Double(r) / 100, color: C.zone(today?.zone), symbol: "bolt.heart.fill", text: "\(r)",
+            return SmallValue(fraction: Double(r) / 100, color: C.zone(today?.zone), symbol: "sun.max.fill", text: "\(r)",
                               line: name(m) + " \(r)")
         case .sleep:
             guard let minutes = today?.sleep?.minutes, minutes > 0 else { return empty }
@@ -165,7 +165,7 @@ enum Small {
 
     private static func symbol(_ m: SmallMetric) -> String {
         switch m {
-        case .readiness: "bolt.heart.fill"
+        case .readiness: "sun.max.fill"
         case .sleep: "moon.fill"
         case .strain: "flame.fill"
         case .calories: "fork.knife"
@@ -278,11 +278,11 @@ struct SmallView: View {
                 SegmentedArc(fraction: value.fraction, color: value.color)
                 VStack(spacing: 0) {
                     Image(systemName: value.symbol)
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.system(size: 9, weight: .bold))
                         .foregroundStyle(value.color)
                         .widgetAccentable()
                     Text(value.text)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
@@ -294,19 +294,20 @@ struct SmallView: View {
     }
 }
 
-/// The arc of 12 segments around a small complication, filled from the top (mockup 24, M2d).
+/// The arc of 10 thick segments around a small complication, filled from the
+/// top, the rest in a dim shade of the same colour (mockup 45, A).
 struct SegmentedArc: View {
     let fraction: Double
     let color: Color
-    private let count = 12
+    private let count = 10
 
     var body: some View {
         let filled = Int((min(1, max(0, fraction)) * Double(count)).rounded())
         ZStack {
             ForEach(0..<count, id: \.self) { i in
                 Circle()
-                    .trim(from: Double(i) / Double(count) + 0.012, to: Double(i + 1) / Double(count) - 0.012)
-                    .stroke(i < filled ? color : Color.white.opacity(0.18), style: StrokeStyle(lineWidth: 4, lineCap: .butt))
+                    .trim(from: Double(i) / Double(count) + 0.014, to: Double(i + 1) / Double(count) - 0.014)
+                    .stroke(i < filled ? color : color.opacity(0.28), style: StrokeStyle(lineWidth: 5.5, lineCap: .butt))
                     .rotationEffect(.degrees(-90))
                     .widgetAccentable(i < filled)
             }
@@ -575,10 +576,10 @@ enum Days {
         return f.string(from: NSNumber(value: v)) ?? String(format: "%.1f", v)
     }
 
-    /// "7h38", as on the small ones.
+    /// "7:38", as on the small ones.
     static func hm(_ minutes: Double) -> String {
         let m = Int(minutes.rounded())
-        return "\(m / 60)h\(String(format: "%02d", m % 60))"
+        return "\(m / 60):\(String(format: "%02d", m % 60))"
     }
 
     /// "7 h 38 min".

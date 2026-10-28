@@ -80,7 +80,7 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     /// The watch asks the iPhone to add a drink of water: its ml.
     static let waterKey = "addWater"
 
-    struct Session: Codable, Equatable, Sendable {
+    struct Session: Codable, Hashable, Sendable {
         var date: String
         var time: String?
         var title: String
@@ -88,6 +88,8 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
         var sport: String
         var minutes: Int?
         var done: Bool
+        /// The calendar event, for the steps of a ride or run (WatchPlan).
+        var eventId: String? = nil
     }
 
     struct Day: Codable, Equatable, Sendable {

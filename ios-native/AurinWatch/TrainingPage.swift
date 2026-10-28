@@ -10,6 +10,7 @@ struct TrainingPage: View {
     @State private var running = false
     @State private var picked: String?
     @State private var preview: WatchGym?
+    @ObservedObject private var plans = PlanStore.shared
 
     private var today: String { WatchStore.localDate(Date()) }
     private var sessions: [WatchSnapshot.Session] {
@@ -34,9 +35,9 @@ struct TrainingPage: View {
                             .background(W.amber, in: Capsule())
                     }
                 }
-                content(day)
                 WeekRow(days: weekDays, today: today, shown: day, sessions: sessions) { picked = $0 }
-                    .padding(.top, 10)
+                    .padding(.top, 6)
+                content(day)
                 later(after: day)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -79,7 +80,15 @@ struct TrainingPage: View {
         let done = sessions.filter { $0.date == day && $0.done }
         let gym = day == today ? store.gym : preview
         let gymPlanned = gym.map { !$0.exercises.isEmpty } ?? false
-        if let main = planned.first ?? (gymPlanned && done.isEmpty ? WatchSnapshot.Session(date: day, title: W.tr("Posilovna", "Gym"), sport: "strength", minutes: gym?.minutes, done: false) : nil) {
+        if let main = planned.first, main.sport != "strength", main.eventId != nil {
+            NavigationLink(value: main) { planCard(main) }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+            ForEach(Array(planned.dropFirst().enumerated()), id: \.offset) { _, other in
+                Text("+ " + Self.name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
+                    .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 4)
+            }
+        } else if let main = planned.first ?? (gymPlanned && done.isEmpty ? WatchSnapshot.Session(date: day, title: W.tr("Posilovna", "Gym"), sport: "strength", minutes: gym?.minutes, done: false) : nil) {
             header(main)
             Text(subtitle(main, day: day)).font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 1)
             if main.sport == "strength", let gym, !gym.exercises.isEmpty {
@@ -107,7 +116,7 @@ struct TrainingPage: View {
                     .font(.system(size: 12)).foregroundStyle(W.muted).padding(.top, 6)
             }
             ForEach(Array(planned.dropFirst().enumerated()), id: \.offset) { _, other in
-                Text("+ " + name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
+                Text("+ " + Self.name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
                     .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 4)
             }
         } else if let first = done.first {
@@ -117,7 +126,7 @@ struct TrainingPage: View {
                 Image(systemName: "checkmark").foregroundStyle(W.green)
             }
             ForEach(Array(done.dropFirst().enumerated()), id: \.offset) { _, other in
-                Text(name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
+                Text(Self.name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
                     .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 2)
             }
         } else {
@@ -133,11 +142,36 @@ struct TrainingPage: View {
     private func header(_ s: WatchSnapshot.Session) -> some View {
         HStack(spacing: 5) {
             Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber)
-            Text(name(s))
+            Text(Self.name(s))
                 .font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
                 .lineLimit(2).minimumScaleFactor(0.7)
         }
         .padding(.top, 2)
+    }
+
+    /// A ride or run: its name, when and how long, and its steps as bars.
+    private func planCard(_ s: WatchSnapshot.Session) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber)
+                Text(Self.name(s)).font(.system(size: 14, weight: .semibold)).foregroundStyle(W.ink)
+                    .lineLimit(2).minimumScaleFactor(0.8)
+            }
+            Text(subtitle(s, day: s.date)).font(.system(size: 11)).foregroundStyle(W.muted).padding(.top, 2)
+            Group {
+                if let plan = s.eventId.flatMap({ plans.plans[$0] }) {
+                    PlanBars(plan: plan)
+                } else {
+                    RoundedRectangle(cornerRadius: 3).fill(W.track)
+                }
+            }
+            .frame(height: 24)
+            .padding(.top, 7)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
+        .onAppear { plans.load(s) }
     }
 
     /// "dnes · 17:30", "sobota · 9:00".
@@ -148,7 +182,7 @@ struct TrainingPage: View {
 
     /// The title without the length the server's plan already ends it with
     /// ("Endurance with cadence drills · 60 min"), which the subtitle shows.
-    private func name(_ s: WatchSnapshot.Session) -> String {
+    static func name(_ s: WatchSnapshot.Session) -> String {
         guard let minutes = s.minutes else { return s.title }
         for suffix in [" · \(minutes) min", " – \(minutes) min", " (\(minutes) min)"] where s.title.hasSuffix(suffix) {
             return String(s.title.dropLast(suffix.count))
@@ -176,25 +210,22 @@ struct TrainingPage: View {
     @ViewBuilder private func later(after day: String) -> some View {
         let next = sessions.filter { $0.date > day && !$0.done }
         if !next.isEmpty {
-            Text(W.tr("Dál tento týden", "Later this week"))
-                .font(.system(size: 11, weight: .semibold)).foregroundStyle(W.muted)
-                .padding(.top, 12)
+            Text(W.tr("DÁL TENTO TÝDEN", "LATER THIS WEEK"))
+                .font(.system(size: 9, weight: .semibold)).tracking(0.6).foregroundStyle(W.muted)
+                .padding(.top, 12).padding(.bottom, 2)
             ForEach(Array(next.enumerated()), id: \.offset) { _, s in
                 Button { picked = s.date } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber).frame(width: 18)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(name(s))
-                                .font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
-                            Text(subtitle(s, day: s.date)).font(.system(size: 11)).foregroundStyle(W.secondary)
-                        }
-                        Spacer(minLength: 0)
+                    HStack(spacing: 7) {
+                        Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 12)).foregroundStyle(W.amber).frame(width: 16)
+                        Text(Self.name(s)).font(.system(size: 12.5, weight: .medium)).foregroundStyle(W.ink).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(W.dayShort(s.date)).font(.system(size: 11)).foregroundStyle(W.muted)
                     }
-                    .padding(.horizontal, 8).padding(.vertical, 6)
-                    .background(W.tile, in: RoundedRectangle(cornerRadius: 12))
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 4)
+                .overlay(alignment: .top) { Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1) }
             }
         }
     }
@@ -216,10 +247,10 @@ struct WeekRow: View {
                 Button { pick(day) } label: {
                     VStack(spacing: 3) {
                         dot(day)
-                            .frame(width: 18, height: 18)
+                            .frame(width: 14, height: 14)
                             .padding(2)
                             .overlay(Circle().stroke(day == shown ? W.ink : .clear, lineWidth: 1.5))
-                        Text(W.dayLetter(day)).font(.system(size: 9, weight: .semibold))
+                        Text(W.dayLetter(day)).font(.system(size: 8, weight: .semibold))
                             .foregroundStyle(day == today ? W.ink : W.muted)
                     }
                     .frame(maxWidth: .infinity)

@@ -192,7 +192,8 @@ final class WatchBridge: NSObject {
                                           training: today.strain.training, movement: today.strain.movement,
                                           planned: today.strain.planned, nextTitle: next?.title, nextTime: next?.time)
         let week = training?.sessions?.filter { $0.status != "missed" }.map {
-            WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport, minutes: $0.minutes, done: $0.status == "done")
+            WatchSnapshot.Session(date: $0.date, time: $0.time, title: $0.title, sport: $0.sport, minutes: $0.minutes, done: $0.status == "done",
+                                  eventId: $0.eventId)
         }
         let n = today.nutrition
         let macro = { (m: TodaySnapshot.Macro) in WatchSnapshot.Macro(eaten: m.eaten, target: m.target) }
@@ -266,7 +267,13 @@ extension WatchBridge: WCSessionDelegate {
         let onWatch = message[WatchSnapshot.alarmOnWatchKey] as? Bool
         let coach = (message[WatchCoach.askKey] as? Data).flatMap(WatchCoach.Ask.decode)
         let live = (message[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
+        let plan = (message[WatchPlan.requestKey] as? Data).flatMap { try? JSONDecoder().decode(WatchPlan.Request.self, from: $0) }
         Task { @MainActor in
+            if let plan {
+                let steps = await planSteps(plan)
+                replyHandler(steps?.encoded().map { [WatchPlan.replyKey: $0] } ?? [:])
+                return
+            }
             if let live {
                 LiveWorkout.shared.watch(live)
                 replyHandler(["ok": true])
@@ -320,6 +327,26 @@ extension WatchBridge: WCSessionDelegate {
                 replyHandler([:])
             }
         }
+    }
+
+    /// A ride's or run's steps for its detail on the watch.
+    private func planSteps(_ request: WatchPlan.Request) async -> WatchPlan? {
+        let api = AppModel.live?.api ?? APIClient()
+        // As Training's session detail asks (PlannedWorkoutView): the day only for today's.
+        let today = request.date == AppModel.localDate(Date())
+        guard let planned = try? await api.plannedWorkout(eventId: request.eventId, date: today ? request.date : nil) else { return nil }
+        let workout = planned.workout
+        var steps: [WatchPlan.Step] = []
+        for block in workout.steps ?? [] {
+            for (i, s) in (block.steps ?? []).enumerated() {
+                let mid = s.percentLow.flatMap { low in s.percentHigh.map { (low + $0) / 2 } } ?? s.percentHigh ?? s.percentLow
+                steps.append(WatchPlan.Step(seconds: s.durationSeconds ?? 60, zone: WatchPlan.zone(percent: mid),
+                                            label: WatchPlan.label(note: s.note, intensity: s.intensity, english: L10n.isEnglish),
+                                            repeats: max(1, block.repeats ?? 1), first: i == 0))
+            }
+        }
+        guard !steps.isEmpty else { return nil }
+        return WatchPlan(name: workout.name, minutes: workout.duration_minutes.map { Int($0.rounded()) }, steps: steps)
     }
 
     /// A set, a drink or the alarm's place sent while the iPhone was out of reach.

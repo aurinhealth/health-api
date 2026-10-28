@@ -115,6 +115,18 @@ enum WatchAPI {
                            proposal: !actions.isEmpty || object["kind"] as? String == "food_draft")
     }
 
+    /// A ride's or run's steps as Training's session detail on the iPhone asks for them.
+    static func plan(_ plan: WatchPlan.Request) async -> WatchPlan? {
+        var query = URLComponents()
+        query.queryItems = [URLQueryItem(name: "id", value: plan.eventId)]
+        if plan.date == WatchStore.localDate(Date()) { query.queryItems?.append(URLQueryItem(name: "date", value: plan.date)) }
+        guard let session, let q = query.percentEncodedQuery,
+              let request = request("/app/api/workouts/planned?" + q, session: session),
+              let (data, response) = try? await urlSession.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        return WatchPlan.parse(data, english: session.language == "en")
+    }
+
     /// The answer without Markdown, as Siri reads it (SiriAnswer.coach on the iPhone).
     static func plain(_ answer: String) -> String {
         var text = answer
