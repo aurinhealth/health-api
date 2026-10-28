@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Nastavení → Apple Watch: whether the watch is connected and when it last
 /// got Today, its pages by the crown (on or off, drag to reorder; Readiness
-/// stays first), what the end of a rest does in the gym, and whether the
+/// stays first), whether Training mode opens the gym on the watch, what the
+/// end of a rest does there, and whether the
 /// alarm rings on the iPhone or the watch. Sent to the watch with Today
 /// (WatchShared/WatchSettings.swift).
 struct WatchSettingsView: View {
@@ -32,6 +33,7 @@ struct WatchSettingsView: View {
                 Text("Mezi stránkami se na hodinkách přechází korunkou. Pořadí změníš přetažením.")
             }
             Section {
+                Toggle(L10n.tr("Otevřít na hodinkách"), isOn: $settings.openOnWatch)
                 Picker(L10n.tr("Když skončí pauza"), selection: $settings.restEnd) {
                     Text("Ťuknutí a zvuk").tag("tapBeep")
                     Text("Jen ťuknutí").tag("tap")
@@ -39,6 +41,8 @@ struct WatchSettingsView: View {
                 }
             } header: {
                 Text("Posilovna")
+            } footer: {
+                Text("Režim tréninku v iPhonu spustí posilovnu i na hodinkách. Hodinky měří tep a kalorie a trénink uloží do Zdraví jednou.")
             }
             Section {
                 Picker(L10n.tr("Budík zvoní na"), selection: $settings.alarmOnWatch) {

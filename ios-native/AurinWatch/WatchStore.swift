@@ -160,7 +160,9 @@ extension WatchStore: WCSessionDelegate {
         let gym = message[WatchGym.replyKey] as? Data
         let progress = message[WatchCoach.progressKey] as? String
         let answer = message[WatchCoach.answerKey] as? Data
+        let ended = message[WatchGym.endKey] as? Bool == true
         Task { @MainActor in
+            if ended, GymWorkout.shared.running { GymStore.shared.endedOnPhone = true }
             if let gym { GymStore.shared.received(gym) }
             if let progress { CoachStore.shared.received(progress: progress) }
             if let answer { CoachStore.shared.received(answer: answer) }

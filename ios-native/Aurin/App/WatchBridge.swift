@@ -116,6 +116,17 @@ final class WatchBridge: NSObject {
         lastSent = Date()
     }
 
+    /// Training mode finished on the iPhone: the watch ends its workout and saves it.
+    func endWatchGym() {
+        guard let session, session.activationState == .activated, session.isWatchAppInstalled else { return }
+        let message: [String: Any] = [WatchGym.endKey: true]
+        if session.isReachable {
+            session.sendMessage(message, replyHandler: nil) { _ in WCSession.default.transferUserInfo(message) }
+        } else {
+            session.transferUserInfo(message)
+        }
+    }
+
     /// The session cookie for the watch's own requests (WatchShared/WatchSession.swift).
     static func signIn() -> WatchSession? {
         let api = AppModel.live?.api ?? APIClient()
@@ -254,7 +265,13 @@ extension WatchBridge: WCSessionDelegate {
         let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
         let onWatch = message[WatchSnapshot.alarmOnWatchKey] as? Bool
         let coach = (message[WatchCoach.askKey] as? Data).flatMap(WatchCoach.Ask.decode)
+        let live = (message[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
         Task { @MainActor in
+            if let live {
+                LiveWorkout.shared.watch(live)
+                replyHandler(["ok": true])
+                return
+            }
             if let coach {
                 // The answer takes longer than a reply waits: it comes as its own message.
                 replyHandler(["ok": true])

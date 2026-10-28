@@ -3100,6 +3100,8 @@
 "Hodinky nejsou spárované s tímto iPhonem." = "No Apple Watch is paired with this iPhone.";
 "Aurin na hodinkách ještě není. Nainstaluj ho v aplikaci Watch v iPhonu." = "Aurin isn't on your watch yet. Install it in the Watch app on your iPhone.";
 "Připojeno · data poslaná %@" = "Connected · synced %@";
+"Otevřít na hodinkách" = "Open on the watch";
+"Režim tréninku v iPhonu spustí posilovnu i na hodinkách. Hodinky měří tep a kalorie a trénink uloží do Zdraví jednou." = "Training mode on your iPhone starts the gym on your watch too. The watch measures heart rate and calories and saves the workout to Health once.";
 
 /* Charts: what a line or a scale stands for */
 "potřeba %@" = "need %@";

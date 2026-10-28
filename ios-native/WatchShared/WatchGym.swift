@@ -82,6 +82,20 @@ struct WatchGym: Codable, Equatable, Sendable {
     static let replyKey = "gym"
     static let doneKey = "gymDone"
     static let changeKey = "gymChange"
+    /// Watch → iPhone every few seconds of the gym: the heart rate and calories
+    /// (Live) for Training mode, which then leaves Apple Health to the watch.
+    static let liveKey = "gymLive"
+    /// iPhone → watch: Training mode finished, the watch ends and saves the workout.
+    static let endKey = "gymEnd"
+
+    struct Live: Codable, Equatable, Sendable {
+        var start: Date
+        var heartRate: Double?
+        var calories: Double
+
+        func encoded() -> Data? { try? JSONEncoder().encode(self) }
+        static func decode(_ data: Data) -> Live? { try? JSONDecoder().decode(Live.self, from: data) }
+    }
     static let optionsKey = "gymOptions"
 
     func encoded() -> Data? { try? JSONEncoder().encode(self) }

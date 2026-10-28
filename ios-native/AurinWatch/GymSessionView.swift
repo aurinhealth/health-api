@@ -80,6 +80,12 @@ struct GymSessionView: View {
             if let current = store.gym?.current { exercise = current.exercise }
             await workout.begin()
         }
+        .onChange(of: store.endedOnPhone) { _, ended in
+            // Finished in Training mode on the iPhone: saved here, as one workout.
+            guard ended else { return }
+            store.endedOnPhone = false
+            finish()
+        }
         .onReceive(tick) { date in
             now = date
             if let end = restEnd, end <= date {
@@ -271,6 +277,7 @@ struct GymSessionView: View {
         let save = (store.gym?.setsDone ?? 0) > 0
         Task {
             await workout.finish(save: save)
+            store.openedFromPhone = false
             dismiss()
         }
     }

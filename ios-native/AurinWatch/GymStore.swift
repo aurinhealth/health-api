@@ -127,6 +127,17 @@ final class GymStore: ObservableObject {
         })
     }
 
+    /// Training mode on the iPhone opened the gym here (WatchAppDelegate).
+    @Published var openedFromPhone = false
+    /// Training mode on the iPhone finished: the session here ends and saves.
+    @Published var endedOnPhone = false
+
+    func openFromPhone() {
+        guard !GymWorkout.shared.running else { return }
+        load()
+        openedFromPhone = true
+    }
+
     @Published private(set) var changing = false
     /// A change the iPhone did not take (out of reach): the screen says so once.
     @Published var failedChange = false

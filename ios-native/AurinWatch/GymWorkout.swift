@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import WatchConnectivity
 
 /// The gym as a HealthKit strength workout on the watch: it keeps the app on
 /// the screen between sets, measures the heart rate and the calories, and
@@ -19,6 +20,7 @@ final class GymWorkout: NSObject, ObservableObject {
     private var builder: HKLiveWorkoutBuilder?
 
     var running: Bool { session != nil }
+    private var lastLive = Date.distantPast
 
     func begin() async {
         guard session == nil, HKHealthStore.isHealthDataAvailable() else {
@@ -86,6 +88,18 @@ final class GymWorkout: NSObject, ObservableObject {
         if let value = r.average { averageHeartRate = value }
         if let value = r.max { maxHeartRate = value }
         if let value = r.calories { calories = value }
+        sendLive()
+    }
+
+    /// Every few seconds to Training mode on the iPhone, which then shows these
+    /// and leaves Apple Health to this workout (WatchGym.Live).
+    private func sendLive() {
+        guard let start, Date().timeIntervalSince(lastLive) >= 5, WCSession.isSupported() else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isReachable,
+              let data = WatchGym.Live(start: start, heartRate: heartRate, calories: calories).encoded() else { return }
+        lastLive = Date()
+        session.sendMessage([WatchGym.liveKey: data], replyHandler: { _ in }, errorHandler: { _ in })
     }
 }
 

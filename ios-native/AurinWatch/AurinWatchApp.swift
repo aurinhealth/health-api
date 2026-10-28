@@ -1,4 +1,6 @@
+import HealthKit
 import SwiftUI
+import WatchKit
 
 /// The Apple Watch app: Today from the iPhone (WatchStore), drawn in the
 /// watch's own black with a coloured glow per page.
@@ -6,6 +8,7 @@ import SwiftUI
 struct AurinWatchApp: App {
     @StateObject private var store = WatchStore.shared
     @Environment(\.scenePhase) private var phase
+    @WKApplicationDelegateAdaptor(WatchAppDelegate.self) private var delegate
 
     var body: some Scene {
         WindowGroup {
@@ -26,9 +29,19 @@ struct AurinWatchApp: App {
     }
 }
 
+/// Training mode on the iPhone starts the gym here (HKHealthStore.startWatchApp
+/// in App/LiveWorkout.swift): the watch opens it and runs the workout.
+@MainActor
+final class WatchAppDelegate: NSObject, WKApplicationDelegate {
+    func handle(_ workoutConfiguration: HKWorkoutConfiguration) {
+        GymStore.shared.openFromPhone()
+    }
+}
+
 struct WatchRoot: View {
     @EnvironmentObject private var store: WatchStore
     @ObservedObject private var alarm = WatchAlarm.shared
+    @ObservedObject private var gym = GymStore.shared
 
     var body: some View {
         // By the crown: readiness, then the day's training (TrainingPage) and food and drink (FoodPage).
@@ -49,6 +62,7 @@ struct WatchRoot: View {
                 }
             }
             .tabViewStyle(.verticalPage)
+            .fullScreenCover(isPresented: $gym.openedFromPhone) { GymSessionView() }
             // Here, not inside a page: the vertical pages are lazy, and a
             // destination declared in one was never found by the stack.
             .navigationDestination(for: ReadinessHome.Page.self) { page in
