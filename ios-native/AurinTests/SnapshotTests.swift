@@ -740,9 +740,12 @@ final class SnapshotTests: XCTestCase {
     /// the list with the plans.
     func testPaywallTour() throws {
         for time in [0.6, 2.9, 5.0, 7.6, 10.2, 12.0, 14.6] {
-            try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time) }
+            try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time, store: ProStore()) }
         }
-        try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1) }
+        try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }
+        // A new Apple ID: the free-week switch under the plans, then the week as a timeline.
+        try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore(trialEligible: true)) }
+        try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
     }
 
     /// Training plans: before the start, the running plan, a week and the result.
