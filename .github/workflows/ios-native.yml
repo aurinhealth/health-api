@@ -86,6 +86,15 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO test 2>&1 | tee "$RUNNER_TEMP/build.log"
 
+      # When the app would not open on the simulator, the installer's own reason.
+      - name: Why the app does not install
+        if: failure()
+        run: |
+          app=build/Build/Products/Debug-iphonesimulator/Aurin.app
+          find "$app/Watch" -maxdepth 4 -name Info.plist -exec sh -c 'echo "== $1"; plutil -p "$1"' _ {} \; || true
+          xcrun simctl boot "${{ steps.sim.outputs.udid }}" || true
+          xcrun simctl install "${{ steps.sim.outputs.udid }}" "$app" || true
+
       # The Swift concurrency warnings the compiler found (SWIFT_STRICT_CONCURRENCY
       # in project.yml), counted per file, so each round of fixes shows what is left.
       - name: Count concurrency warnings
