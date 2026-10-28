@@ -3,7 +3,11 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// App state: signed in or not, and the Today data.
+/// App state: signed in or not, the screens' data and the navigation. The
+/// work is in its extensions: AppModel+Session (signing in and out),
+/// AppModel+Loading (the screens from the server), AppModel+Writes (through
+/// WriteQueue) and AppModel+Cycle. Each sign-in is an AccountScope; each tab's
+/// data has its own store (ScreenStore.swift).
 @MainActor
 @Observable
 final class AppModel {
@@ -12,50 +16,81 @@ final class AppModel {
         case signedIn
     }
 
-    private(set) var phase: Phase
-    private(set) var today: TodaySnapshot?
-    private(set) var training: TrainingSnapshot?
-    var trainingError: String?
+    var phase: Phase
+
+    // MARK: - The screens' data
+
+    /// Each tab's data in its own store, so a view follows only the screen it
+    /// shows; the properties below read and write them.
+    @ObservationIgnored let todayScreen = PatchedScreen<TodaySnapshot>(patch: OutboxPatch.today)
+    @ObservationIgnored let foodScreen = PatchedScreen<FoodSnapshot>(patch: OutboxPatch.food)
+    @ObservationIgnored let healthScreen = ScreenStore<HealthSnapshot>()
+    @ObservationIgnored let trainingScreen = ScreenStore<TrainingSnapshot>()
+
+    var today: TodaySnapshot? {
+        get { todayScreen.value }
+        set { todayScreen.value = newValue }
+    }
+    var training: TrainingSnapshot? {
+        get { trainingScreen.value }
+        set { trainingScreen.value = newValue }
+    }
+    var trainingError: String? {
+        get { trainingScreen.error }
+        set { trainingScreen.error = newValue }
+    }
     /// The training calendar's days by date (Training → the strip and month).
-    private(set) var calendar: [String: CalendarDay] = [:]
+    var calendar: [String: CalendarDay] = [:]
     /// The strain of past days before this week, by date, as Today shows it for
     /// that day (Training → the day chosen in the calendar).
-    private(set) var pastStrain: [String: Double] = [:]
-    private(set) var health: HealthSnapshot?
-    var healthError: String?
-    private(set) var food: FoodSnapshot?
-    var foodError: String?
+    var pastStrain: [String: Double] = [:]
+    var health: HealthSnapshot? {
+        get { healthScreen.value }
+        set { healthScreen.value = newValue }
+    }
+    var healthError: String? {
+        get { healthScreen.error }
+        set { healthScreen.error = newValue }
+    }
+    var food: FoodSnapshot? {
+        get { foodScreen.value }
+        set { foodScreen.value = newValue }
+    }
+    var foodError: String? {
+        get { foodScreen.error }
+        set { foodScreen.error = newValue }
+    }
     /// A write or a refresh that failed while data is on screen: shown on top
     /// of every tab for 6 s or until tapped away (the screens' own errors show
     /// only without data).
     var notice: String?
-    private(set) var loading = false
+    var loading = false
     /// Loading with no day on screen yet: the day arrows and swipes wait. With
     /// one (saved or loaded) they work while the refresh goes on behind.
     var dayLocked: Bool { loading && today == nil }
     /// The pill on top while the app syncs after opening (RootView SyncPill):
     /// "Synchronizuji…", "Synchronizováno" for a moment, or a failure to retry.
-    private(set) var syncStatus: SyncStatus?
+    var syncStatus: SyncStatus?
     enum SyncStatus: Equatable { case syncing, done, failed }
     /// The sign-in under way, so only its own button turns into a spinner.
-    private(set) var signingInWith: SignInMethod?
+    var signingInWith: SignInMethod?
     enum SignInMethod: Equatable { case apple, google, passkey }
     var signingIn: Bool { signingInWith != nil }
     var errorMessage: String?
     /// Sample data instead of the server ("-demo": screenshots and UI tests).
-    private(set) var demo: Bool
+    var demo: Bool
     /// The last refresh failed for lack of a connection: the screens show the
     /// data saved on the phone (SnapshotCache) with a note.
-    private(set) var offline = false
+    var offline = false
     /// The day on the Today, Food and Health screens, nil for today. Only Food
     /// goes ahead (meals planned or copied into the coming days).
-    private(set) var selectedDate: String?
+    var selectedDate: String?
     /// Food reaches this many days past today.
     static let foodDaysAhead = 14
     /// The chosen day lies after today (Food only).
     var showsFutureDay: Bool { selectedDate.map { $0 > Self.localDate(Date()) } ?? false }
     /// Stav sportovce on Today (active, sick, injured, on a break).
-    private(set) var athleteStatus: AthleteStatus?
+    var athleteStatus: AthleteStatus?
     /// Cycle tracking (AppModel+Cycle.swift): nil until loaded, `available`
     /// false unless the profile's sex is female.
     var cycle: CycleResponse?
@@ -67,34 +102,31 @@ final class AppModel {
     /// Apple Health's cycle data went to the server in this run of the app.
     @ObservationIgnored var cycleHealthSynced = false
 
-    /// Bumped by every sign-out: an answer asked for before it is dropped
-    /// (stillSignedIn), so the last account's data does not come back.
-    @ObservationIgnored private(set) var signInRound = 0
+    /// This sign-in (AccountScope): ended by every sign-out, so an answer
+    /// asked for before it is dropped (stillSignedIn) and its loads stop.
+    @ObservationIgnored var scope = AccountScope()
     /// Still the sign-in that asked: checked after every await that brings data.
-    func stillSignedIn(_ round: Int) -> Bool { round == signInRound && phase == .signedIn }
+    func stillSignedIn(_ asked: AccountScope) -> Bool { asked === scope && !asked.ended && phase == .signedIn }
 
     /// The server answered 426: this build is too old (src/app-version.js).
-    private(set) var updateRequired = false
+    var updateRequired = false
     /// When each tab's data last came from the server, and for which day. The
     /// screens open with the copy saved on the phone; refreshIfStale loads it again.
-    @ObservationIgnored private var fetched: [AppTab: (at: Date, day: String)] = [:]
+    @ObservationIgnored var fetched: [AppTab: (at: Date, day: String)] = [:]
     /// Counts every load of a tab's data: the coach's text asks again after
     /// any change (CoachTextCard), and the server writes it anew when it differs.
-    private(set) var dataRevision = 0
+    var dataRevision = 0
     /// Bumped only when Today comes from the server (not by a waiting write over it),
     /// so Today's cards ask their own endpoints once per load.
-    private(set) var todayRevision = 0
-    /// Whether food/today currently carry waiting writes over the server's answer.
-    private var foodPatched = false
-    private var todayPatched = false
+    var todayRevision = 0
     /// The day the screens show: the chosen one, else today (so a load from
     /// 23:58 counts as stale after midnight).
-    private var shownDay: String { selectedDate ?? Self.localDate(Date()) }
+    var shownDay: String { selectedDate ?? Self.localDate(Date()) }
     /// The "+" sheet is open: what it adds goes to today, whatever day the
     /// screens show (weight always did).
     var writesToday = false
     /// The day food and drinks are written to.
-    private var writeDay: String { writesToday ? Self.localDate(Date()) : shownDay }
+    var writeDay: String { writesToday ? Self.localDate(Date()) : shownDay }
     /// The open tab and each tab's navigation stack, so cards, widgets and
     /// links (loadwise://open/sleep) can open any detail.
     var tab: AppTab = .today
@@ -109,11 +141,14 @@ final class AppModel {
     /// Režim tréninku hidden with its arrow: the workout goes on and a bar
     /// over the tab bar leads back (MinimizedGymBar).
     var minimizedGym: MinimizedGym?
-    /// Writes made without signal, oldest first (Outbox.swift); the screens
-    /// show them meanwhile.
-    private(set) var outbox: [OutboxItem] = []
+    /// The writes waiting to go out (WriteQueue.swift); the screens show them meanwhile.
+    @ObservationIgnored let writes: WriteQueue
+    var outbox: [OutboxItem] { writes.items }
     /// A waiting write the server turned down, shown until tapped away.
-    var outboxNote: String?
+    var outboxNote: String? {
+        get { writes.note }
+        set { writes.note = newValue }
+    }
     /// A done activity just sent to the apps chosen in Zdroje dat (Aurin posílá): the
     /// toast "Odesláno do 2 aplikací" and its sheet (SyncViews.swift).
     var syncReport: SyncReport?
@@ -152,25 +187,18 @@ final class AppModel {
         }
         undoToast = PlanToast(title: title, note: note, cancelled: true, undo: undo, commit: commit)
     }
-    /// The Today and Food answers as they came, under the waiting writes.
-    @ObservationIgnored private var todayBase: Data?
-    @ObservationIgnored private var foodBase: Data?
-    @ObservationIgnored private var sendingOutbox = false
-    /// Writes that just went out, still drawn over Food and Today until each
-    /// screen's next answer from the server has them, so nothing blinks away.
-    @ObservationIgnored private var settlingFood: [(id: UUID, overlay: OutboxOverlay)] = []
-    @ObservationIgnored private var settlingToday: [(id: UUID, overlay: OutboxOverlay)] = []
-    /// The server's id of a meal or drink logged on the phone (by its local
-    /// id), so "Vrátit" or a delete right after the save finds it.
-    @ObservationIgnored private var sentIds: [Int: Int] = [:]
-    /// The write on its way now; a write made meanwhile asks for one more round.
-    @ObservationIgnored private var sendingItem: UUID?
-    @ObservationIgnored private var sendAgain = false
-    @ObservationIgnored private var reloadTodayAfterSend = false
     @ObservationIgnored private var network: NetworkWatch?
 
+    // Today's refresh (AppModel+Loading.swift).
+    @ObservationIgnored var announcedRefresh: Task<Void, Never>?
+    @ObservationIgnored var announcedSince = Date.distantPast
+    /// Bumped by each refresh: a stopped one leaves the pill to the one after it.
+    @ObservationIgnored var refreshRound = 0
+    @ObservationIgnored var leftAt: Date?
+    @ObservationIgnored var refreshing: Set<AppTab> = []
+
     let api: APIClient
-    private let auth: AuthService
+    let auth: AuthService
     /// Passkeys (Data/Passkeys.swift): the sign-in and "Příště přes Face ID".
     @ObservationIgnored let passkeys: PasskeyService
 
@@ -179,6 +207,7 @@ final class AppModel {
         self.auth = AuthService(api: api)
         self.passkeys = PasskeyService()
         self.demo = demo
+        self.writes = WriteQueue(api: api, load: !demo)
         if demo {
             phase = .signedIn
             today = DemoData.today
@@ -188,7 +217,6 @@ final class AppModel {
             calendar = DemoData.calendarByDate
         } else {
             phase = api.hasSession ? .signedIn : .signedOut
-            outbox = OutboxStore.load()
             if phase == .signedIn { loadSaved() }
         }
         // "-tab training" (simulator screenshots) opens another tab first.
@@ -214,10 +242,11 @@ final class AppModel {
             Task { @MainActor in if let self { Paywall.present(self) } }
         }
         if !demo {
+            connectWrites()
             Self.live = self
             // Water from Siri or Shortcuts (AddWaterIntent) goes out now, not on the next refresh.
             drinkObserver = NotificationCenter.default.addObserver(forName: PendingDrinks.added, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in _ = await self?.sendOutbox(reloadToday: true) }
+                Task { @MainActor in _ = await self?.writes.send(reloadToday: true) }
             }
         }
     }
@@ -227,27 +256,6 @@ final class AppModel {
     static weak var live: AppModel?
     @ObservationIgnored private var drinkObserver: NSObjectProtocol?
 
-    /// The screens as they were last time, until the server answers.
-    private func loadSaved() {
-        today = SnapshotCache.load(TodaySnapshot.self, key: "today")?.value
-        food = SnapshotCache.load(FoodSnapshot.self, key: "food")?.value
-        todayBase = OutboxStore.savedSnapshot("today")
-        foodBase = OutboxStore.savedSnapshot("food")
-        applyOutbox()
-        // Training and Health are not on the first screen: read off the main
-        // thread, and only where the server has not answered meanwhile.
-        let round = signInRound
-        Task {
-            let saved = await Task.detached(priority: .userInitiated) {
-                SavedScreens(training: SnapshotCache.load(TrainingSnapshot.self, key: "training")?.value,
-                             health: SnapshotCache.load(HealthSnapshot.self, key: "health")?.value)
-            }.value
-            guard stillSignedIn(round) else { return }
-            if training == nil { training = saved.training }
-            if health == nil { health = saved.health }
-        }
-        Task.detached(priority: .utility) { SnapshotCache.prune(today: AppModel.localDate(Date())) }
-    }
 
     /// Notes whether a refresh reached the server; true when the error was a
     /// missing connection and saved data is on screen instead.
@@ -257,7 +265,7 @@ final class AppModel {
         return (error as NSError).domain == NSURLErrorDomain && (error as NSError).code == NSURLErrorCancelled
     }
 
-    private func noteConnection(_ error: Error?) -> Bool {
+    func noteConnection(_ error: Error?) -> Bool {
         let lost = error.map(Outbox.isNoConnection) ?? false
         offline = lost
         return lost
@@ -287,185 +295,6 @@ final class AppModel {
         }
     }
 
-    /// Whether the profile setup (GET /app/api/onboarding) still waits; asked
-    /// once per sign-in, remembered after it is done.
-    func checkSetup() async {
-        guard !demo, phase == .signedIn else { return }
-        // An account set up before the health-data consent still has to give it.
-        let consent = (try? await api.healthConsentNeeded()) ?? false
-        if UserDefaults.standard.bool(forKey: Self.setupDoneKey) {
-            if consent { needsSetup = true }
-            return
-        }
-        if let done = try? await api.onboardingCompleted() {
-            needsSetup = !done || consent
-            if done { UserDefaults.standard.set(true, forKey: Self.setupDoneKey) }
-        }
-    }
-
-    func finishSetup() async {
-        UserDefaults.standard.set(true, forKey: Self.setupDoneKey)
-        needsSetup = false
-        await refresh()
-        await refreshFood()
-        await refreshHealth()
-    }
-
-    nonisolated static let setupDoneKey = "setupDone"
-    nonisolated static let accountInitialKey = "accountInitial"
-
-    /// The account's name and e-mail for Profil, and the first letter of the
-    /// name for the settings button while there is no photo.
-    /// account: already fetched (signing in), so it is not asked for twice.
-    func loadAccountInitial(_ known: (name: String?, email: String?, id: Int?)? = nil) async {
-        guard !demo, phase == .signedIn else { return }
-        var account = known
-        if account == nil { account = try? await api.account() }
-        guard let account else { return }
-        if Self.accountUnconfirmed { checkAccount(account) }
-        let defaults = UserDefaults.standard
-        defaults.set(account.name, forKey: AvatarStore.nameKey)
-        defaults.set(account.email, forKey: AvatarStore.emailKey)
-        if let id = account.id { defaults.set(id, forKey: AvatarStore.idKey) }
-        let shown = defaults.string(forKey: Self.displayNameKey)?.nilIfBlank ?? account.name ?? account.email
-        if let first = shown?.trimmingCharacters(in: .whitespaces).first {
-            defaults.set(String(first).uppercased(), forKey: Self.accountInitialKey)
-        }
-        // The photo the account keeps on the server, or this phone's going up.
-        await AvatarStore.sync(api: api)
-    }
-
-    /// The name the user typed in Profil (kept in the profile on the server too).
-    nonisolated static let displayNameKey = "displayName"
-
-    func signIn() async {
-        signingInWith = .google
-        defer { signingInWith = nil }
-        do {
-            try await auth.signIn()
-            await signedIn()
-            await refresh()
-        } catch is CancellationError {
-            // The user closed the sign-in sheet.
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    /// Signs in with what Sign in with Apple returned; nonce is the raw value
-    /// whose hash went into the request.
-    func signIn(apple credential: ASAuthorizationAppleIDCredential, nonce: String) async {
-        guard let tokenData = credential.identityToken, let token = String(data: tokenData, encoding: .utf8) else {
-            errorMessage = L10n.tr("Apple nevrátil identitu účtu. Zkus to znovu.")
-            return
-        }
-        signingInWith = .apple
-        defer { signingInWith = nil }
-        let code = credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
-        let name = credential.fullName.map { PersonNameComponentsFormatter().string(from: $0) }
-        do {
-            try await api.appleLogin(identityToken: token, authorizationCode: code, nonce: nonce, name: name)
-            await signedIn()
-            await refresh()
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
-    /// Signs in with the code from the e-mail. The first time on this phone
-    /// the app then offers a passkey ("Příště přes Face ID", RootView).
-    func signIn(email: String, code: String) async throws {
-        try await api.verifyEmailLogin(email: email, code: code)
-        if ServerChoice.current.passkeys && !PasskeyService.mayHaveOne { passkeyOffer = true }
-        await signedIn()
-        await refresh()
-    }
-
-    /// Signs in with a passkey of this phone (Data/Passkeys.swift). Throws
-    /// CancellationError when the sheet was closed; any other error means the
-    /// e-mail code is the way in.
-    func signInWithPasskey() async throws {
-        signingInWith = .passkey
-        defer { signingInWith = nil }
-        try await passkeys.signIn(api: api)
-        await signedIn()
-        await refresh()
-    }
-
-    /// After either sign-in: no sample data left on screen, and what an expired
-    /// session left behind (writes waiting for signal, the photo, Apple Health)
-    /// is kept only for the same account. That is settled before the screens
-    /// load; when the account cannot be asked, nothing of it goes out until it can.
-    private func signedIn() async {
-        if demo {
-            today = nil; training = nil; health = nil; food = nil
-            calendar = [:]
-            demo = false
-        }
-        errorMessage = nil
-        let defaults = UserDefaults.standard
-        if defaults.string(forKey: AvatarStore.emailKey) != nil { defaults.set(true, forKey: Self.accountUncheckedKey) }
-        let account = try? await api.account()
-        if let account { checkAccount(account) }
-        phase = .signedIn
-        await loadAccountInitial(account)
-        // The settings this account kept (a new install, another account before).
-        await SettingsBackup.restore(api: api)
-        // Back in the account that read Apple Health before signing out.
-        if !Self.accountUnconfirmed {
-            await AppleHealth.shared.resume(account: defaults.string(forKey: AvatarStore.emailKey), api: api)
-        }
-        await checkSetup()
-        // The morning readiness push for this account (PushRegistration.swift).
-        await PushRegistration.refresh(api: api)
-    }
-
-    /// Signed in, but not yet known whether to the account this phone kept things
-    /// for (GET /app/api/me failed): its waiting writes and Apple Health wait.
-    nonisolated static let accountUncheckedKey = "accountUnchecked"
-    nonisolated static var accountUnconfirmed: Bool { UserDefaults.standard.bool(forKey: accountUncheckedKey) }
-
-    /// The one place that decides about what the last account left on this
-    /// phone: another account's writes, photo, saved screens, cycle, pill and
-    /// Apple Health go (it turns Apple Health on itself); the same keeps them.
-    private func checkAccount(_ account: (name: String?, email: String?, id: Int?)) {
-        let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: Self.accountUncheckedKey)
-        // The photo outlasts a sign-out, so it is checked against its own account.
-        AvatarStore.keep(forId: account.id, email: account.email)
-        guard Self.anotherAccount(id: account.id, email: account.email, defaults: defaults) else { return }
-        outbox = []
-        OutboxStore.clear()
-        AvatarStore.remove()
-        defaults.removeObject(forKey: Self.displayNameKey)
-        SnapshotCache.clear()
-        CoachPick.forget()
-        today = nil; training = nil; health = nil; food = nil
-        calendar = [:]
-        todayBase = nil
-        foodBase = nil
-        fetched = [:]
-        AppleHealth.shared.pause(account: defaults.string(forKey: AvatarStore.emailKey))
-        forgetAccountData()
-    }
-
-    /// What follows the account and has no sense for the next one.
-    private func forgetAccountData() {
-        cycle = nil
-        cycleHealthSynced = false
-        Reminders.forgetPill()
-        AppleHealthExport.shared.reset()
-    }
-
-    /// Someone else than the account this phone kept things for: neither the
-    /// same e-mail nor the same account id. The id stays when the e-mail is
-    /// changed in Settings → Účet, so the other devices, signed out by the
-    /// change, keep their waiting writes and the photo when they sign in again.
-    nonisolated static func anotherAccount(id: Int?, email: String?, defaults: UserDefaults) -> Bool {
-        guard let previous = defaults.string(forKey: AvatarStore.emailKey), email != previous else { return false }
-        if let id, defaults.object(forKey: AvatarStore.idKey) != nil, defaults.integer(forKey: AvatarStore.idKey) == id { return false }
-        return true
-    }
 
     /// Connects a data source; the event says how it went ("intervals",
     /// "google-cancelled", "intervals-failed"…), nil when the sheet was closed.
@@ -483,772 +312,6 @@ final class AppModel {
         phase = .signedIn
     }
 
-    /// announce: the app was opened or pulled down, so the pill says it syncs.
-    func refresh(announce: Bool = false) async {
-        guard !demo, phase == .signedIn else { return }
-        // The app opened or pulled down while a refresh runs (the app came
-        // back as Today first loaded): that one brings the same data. A write
-        // (refresh() without announce) still loads again after it.
-        guard announce else { return await performRefresh(announce: false) }
-        if let running = announcedRefresh { return await running.value }
-        let task = Task { await performRefresh(announce: true) }
-        announcedRefresh = task
-        announcedSince = Date()
-        // Leaving the app mid-sync: it goes on for the time iOS gives, then stops.
-        let background = FinishInBackground("Today") { [weak self] in self?.dropRefresh() }
-        defer { background.end() }
-        await task.value
-        if announcedRefresh == task { announcedRefresh = nil }
-    }
-    @ObservationIgnored private var announcedRefresh: Task<Void, Never>?
-    @ObservationIgnored private var announcedSince = Date.distantPast
-    /// Bumped by each refresh: a stopped one leaves the pill to the one after it.
-    @ObservationIgnored private var refreshRound = 0
-    @ObservationIgnored private var leftAt: Date?
-
-    /// The app went to the background (RootView).
-    func left() { leftAt = Date() }
-
-    /// Back in the app (RootView). After more than the half minute iOS lets
-    /// work go on, what was on its way then stayed frozen mid-request: the
-    /// open does not wait for it but syncs anew.
-    func cameBack() {
-        guard let leftAt else { return }
-        self.leftAt = nil
-        guard Date().timeIntervalSince(leftAt) > 25 else { return }
-        if announcedRefresh != nil, announcedSince < leftAt { dropRefresh() }
-        AppleHealth.shared.dropFrozen(left: leftAt)
-    }
-
-    private func dropRefresh() {
-        announcedRefresh?.cancel()
-        announcedRefresh = nil
-    }
-
-    private func performRefresh(announce: Bool) async {
-        refreshRound += 1
-        let round = refreshRound
-        let account = signInRound
-        loading = true
-        defer { if round == refreshRound { loading = false } }
-        if announce { syncStatus = .syncing }
-        if Self.accountUnconfirmed { await loadAccountInitial() }
-        await sendOutbox()
-        // The free time from the iPhone calendar, before Aktivita dne is made.
-        await CalendarTime.shared.send(api: api)
-        // The planned workouts into the iPhone calendar, alongside Today.
-        let mirror = api
-        Task { await CalendarTime.shared.mirror(api: mirror) }
-        let health = AppleHealth.shared
-        // Until a late-morning sync, last night and the morning's HRV from the
-        // watch go out before Today is computed, waiting at most 8 s. Later in
-        // the day (or after those 8 s) Today loads alongside the sync and again
-        // only when it brought something new.
-        let client = api
-        var sync: Task<AppleHealth.SyncOutcome, Never>? = Task { await health.run(api: client) }
-        var changed = false
-        if !health.hasMorningData, let task = sync, let outcome = await Self.outcome(of: task, within: 8) {
-            changed = outcome.changed
-            sync = nil
-        }
-        do {
-            try await loadToday()
-            // The day is on screen: the arrows and swipes work again.
-            loading = false
-            if let sync, await sync.value.changed { changed = true; try? await loadToday() }
-            // New nights or workouts reach the Health snapshot too: the sleep
-            // detail opened from Today shows it.
-            if changed {
-                fetched[.health] = nil
-                if self.health != nil { Task { await self.refreshHealth() } }
-            }
-            async let status = try? api.athleteStatus()
-            if selectedDate == nil, let today {
-                // Muscles and older days' strain follow new workouts too.
-                if !pastStrain.isEmpty { let days = Array(pastStrain.keys); Task { for day in days { await self.loadPastStrain(day, again: true) } } }
-                if muscleFatigue != nil, musclesStale { Task { await self.loadMuscles() } }
-                async let cycle: Void = loadCycle()
-                await Reminders.reschedule(from: today)
-                WidgetBridge.update(today)
-                prefetchAround(Self.localDate(Date()))
-                await cycle
-            }
-            if let status = await status, stillSignedIn(account) { athleteStatus = status }
-            if syncStatus == .syncing { finishSync(.done) }
-        } catch APIError.unauthorized {
-            syncStatus = nil
-            signOut(expired: true)
-        } catch {
-            // Without signal the saved screen stays; an error only without one.
-            // A request cut short (a newer load of the same data, a closed screen) is no error.
-            if Self.isCancellation(error) { if round == refreshRound, syncStatus == .syncing { syncStatus = nil }; return }
-            let lost = noteConnection(error)
-            if !(lost && today != nil) { errorMessage = error.localizedDescription }
-            // Offline has its own note; the pill takes a failed sync.
-            if syncStatus == .syncing {
-                finishSync(lost ? nil : .failed)
-            } else if !lost && today != nil {
-                notice = error.localizedDescription
-            }
-            // "Bez připojení" alone hides that a Wi-Fi wants a sign-in: say so.
-            if lost, (error as? URLError)?.code == .secureConnectionFailed { notice = error.localizedDescription }
-        }
-    }
-
-    /// What the sync did if it ends within `seconds`; nil when it takes longer
-    /// (it goes on, only this wait ends).
-    private static func outcome(of task: Task<AppleHealth.SyncOutcome, Never>, within seconds: Double) async -> AppleHealth.SyncOutcome? {
-        let once = FirstAnswer()
-        return await withCheckedContinuation { continuation in
-            Task { @MainActor in
-                let value = await task.value
-                if once.take() { continuation.resume(returning: value) }
-            }
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(seconds))
-                if once.take() { continuation.resume(returning: nil) }
-            }
-        }
-    }
-
-    /// Today of the shown day from the server, with the waiting writes over it.
-    private func loadToday() async throws {
-        let settled = Set(settlingToday.map { $0.id })
-        let day = selectedDate
-        let account = signInRound
-        let (snapshot, data) = try await api.todayData(date: day)
-        // Signed out meanwhile: the answer belongs to no one on screen.
-        guard stillSignedIn(account) else { throw CancellationError() }
-        // Another day was chosen meanwhile: its own load shows it.
-        guard selectedDate == day else { return }
-        // The same answer again (back in the app, pulled down): Today is not drawn anew.
-        if today != snapshot { today = snapshot }
-        todayBase = data
-        todayPatched = false
-        settlingToday.removeAll { settled.contains($0.id) }
-        fetched[.today] = (Date(), shownDay)
-        dataRevision += 1
-        todayRevision += 1
-        applyOutbox()
-        errorMessage = nil
-        _ = noteConnection(nil)
-    }
-
-    /// Today again after a meal or drink went out: without the Apple Health
-    /// sync, the cycle and the athlete status, which a meal does not change.
-    private func reloadToday() async {
-        guard !demo, phase == .signedIn else { return }
-        do {
-            try await loadToday()
-            if selectedDate == nil, let today {
-                await Reminders.reschedule(from: today)
-                WidgetBridge.update(today)
-            }
-        } catch APIError.unauthorized {
-            signOut(expired: true)
-        } catch {
-            // The write stays drawn over the screen; the next load brings it.
-        }
-    }
-
-    /// "Synchronizováno" goes away after 3 seconds; a failure stays until tapped.
-    private func finishSync(_ status: SyncStatus?) {
-        syncStatus = status
-        guard status == .done else { return }
-        Task { @MainActor in
-            try? await Task.sleep(for: .seconds(3))
-            if syncStatus == .done { syncStatus = nil }
-        }
-    }
-
-    /// A tap on the failed pill: try again, or put it away.
-    func dismissSyncFailure() { if syncStatus == .failed { syncStatus = nil } }
-
-    /// A tab's data again unless it came from the server in the last 5 minutes
-    /// for the same day. Without this a tab kept the copy saved on the phone
-    /// (yesterday's night on Health while Today already had last night).
-    func refreshIfStale(_ tab: AppTab) async {
-        guard !demo, phase == .signedIn, !refreshing.contains(tab) else { return }
-        // Today is already loading (the app came back): no second request.
-        if tab == .today && loading { return }
-        // A coming day is Food's only: Today and Health go back to today.
-        if tab != .food && tab != .training && showsFutureDay { selectedDate = nil }
-        let day = tab == .training ? Self.localDate(Date()) : shownDay
-        if fresh(tab, day: day) { return }
-        refreshing.insert(tab)
-        let background = FinishInBackground("Refresh")
-        defer { refreshing.remove(tab); background.end() }
-        switch tab {
-        case .today: await refresh(announce: true)
-        case .training: await refreshTraining()
-        case .health: await refreshHealth()
-        case .food: await refreshFood()
-        }
-    }
-    @ObservationIgnored private var refreshing: Set<AppTab> = []
-
-    /// The tab's data came from the server in the last 5 minutes, for this day.
-    private func fresh(_ tab: AppTab, day: String) -> Bool {
-        guard let last = fetched[tab] else { return false }
-        return last.day == day && Date().timeIntervalSince(last.at) < 300
-    }
-
-    /// Back in the app (RootView): Today again by the rule of refreshIfStale,
-    /// and after a time without signal. What waited for signal (and water added
-    /// from the widget) goes out either way.
-    func refreshOnReturn() async {
-        guard !demo, phase == .signedIn else { return }
-        // Google Health may have been disconnected meanwhile: then Apple Health gets the food, weight and workouts again.
-        Task { await loadGoogleSync() }
-        if !offline && fresh(.today, day: shownDay) {
-            await sendOutbox(reloadToday: true)
-        } else {
-            await refresh(announce: true)
-        }
-    }
-
-    /// The morning check-in on Today. It lowers the readiness, so Today loads
-    /// again; without signal the answer waits in the outbox (a newer one
-    /// replaces it) and Today follows once it went out.
-    func setMorningCheckin(_ feeling: String?) async throws {
-        guard !demo, let today else { return }
-        guard try await deliver(APIClient.morningCheckinItem(feeling, date: today.date)) else { return }
-        await refresh()
-        if health != nil { await refreshHealth() }
-    }
-
-    /// A new Stav sportovce. The coach and the plans follow it, so Today and
-    /// Training load again.
-    func setAthleteStatus(_ status: String, until: String?, note: String?, cancel: [String] = []) async throws {
-        guard !demo else { athleteStatus = AthleteStatus(status: status, note: note, statusUntil: until); return }
-        athleteStatus = try await api.setAthleteStatus(status, until: until, note: note, cancel: cancel)
-        await refresh()
-        if training != nil { await refreshTraining() }
-    }
-
-    /// What the server writes to Google Health, so Apple Health does not
-    /// carry the same food, weight or workout there a second time.
-    func loadGoogleSync() async {
-        guard !demo, phase == .signedIn else { return }
-        guard let google = try? await api.syncOverview().destinations.first(where: { $0.id == "google" }) else { return }
-        AppleHealthExport.shared.setGoogle(google)
-    }
-
-    /// Every tab again, e.g. after a change of language (the server's texts).
-    func refreshAll() async {
-        fetched = [:]
-        await refresh()
-        if training != nil { await refreshTraining() }
-        if health != nil { await refreshHealth() }
-        if food != nil { await refreshFood() }
-    }
-
-    func refreshTraining() async {
-        guard !demo, phase == .signedIn else { return }
-        let account = signInRound
-        do {
-            let value = try await api.training()
-            guard stillSignedIn(account) else { return }
-            training = value
-            fetched[.training] = (Date(), Self.localDate(Date()))
-            dataRevision += 1
-            trainingError = nil
-            _ = noteConnection(nil)
-            // The calendar too: loadCalendar alone fetches only missing days, so a
-            // moved or deleted session, or a new activity, stayed as it was.
-            let today = Self.localDate(Date())
-            await loadCalendar(from: ISODay.shift(today, -14), to: ISODay.shift(today, 28), force: true)
-            // A workout planned or moved anywhere reaches the iPhone calendar at once.
-            let client = api
-            Task { await CalendarTime.shared.mirror(api: client, force: true) }
-        } catch APIError.unauthorized {
-            signOut(expired: true)
-        } catch {
-            // A request cut short (a newer load of the same data, a closed screen) is no error.
-            if Self.isCancellation(error) { return }
-            let lost = noteConnection(error)
-            if !(lost && training != nil) { trainingError = error.localizedDescription }
-            if !lost && training != nil { notice = error.localizedDescription }
-        }
-    }
-
-    func refreshHealth() async {
-        guard !demo, phase == .signedIn else { return }
-        await AppleHealth.shared.sync(api: api)
-        do {
-            let day = selectedDate, account = signInRound
-            let value = try await api.health(date: day)
-            guard stillSignedIn(account), selectedDate == day else { return }
-            health = value
-            fetched[.health] = (Date(), shownDay)
-            dataRevision += 1
-            healthError = nil
-            _ = noteConnection(nil)
-        } catch APIError.unauthorized {
-            signOut(expired: true)
-        } catch {
-            // A request cut short (a newer load of the same data, a closed screen) is no error.
-            if Self.isCancellation(error) { return }
-            let lost = noteConnection(error)
-            if !(lost && health != nil) { healthError = error.localizedDescription }
-            if !lost && health != nil { notice = error.localizedDescription }
-        }
-    }
-
-    func refreshFood() async {
-        guard !demo, phase == .signedIn else { return }
-        let settled = Set(settlingFood.map { $0.id })
-        do {
-            let day = selectedDate, account = signInRound
-            let (snapshot, data) = try await api.foodData(date: day)
-            guard stillSignedIn(account), selectedDate == day else { return }
-            food = snapshot
-            foodBase = data
-            settlingFood.removeAll { settled.contains($0.id) }
-            // The day's food and water to Apple Health when switched on in Zdroje dat (Aurin posílá).
-            Task { await AppleHealthExport.shared.saveFoodDay(snapshot) }
-            fetched[.food] = (Date(), shownDay)
-            dataRevision += 1
-            applyOutbox()
-            foodError = nil
-            _ = noteConnection(nil)
-        } catch APIError.unauthorized {
-            signOut(expired: true)
-        } catch {
-            // A request cut short (a newer load of the same data, a closed screen) is no error.
-            if Self.isCancellation(error) { return }
-            let lost = noteConnection(error)
-            if !(lost && food != nil) { foodError = error.localizedDescription }
-            if !lost && food != nil { notice = error.localizedDescription }
-        }
-    }
-
-    /// A drink of any kind; true when it was saved (or waits for signal).
-    @discardableResult
-    func addDrink(ml: Int, kind: String) async -> Bool {
-        guard !demo else { return true }
-        write(Self.drinkItem(ml: ml, kind: kind, date: writeDay))
-        return true
-    }
-
-    /// A drink from Siri or Shortcuts: always today, whatever day the app shows.
-    func addDrinkToday(ml: Int, kind: String) {
-        guard !demo else { return }
-        write(Self.drinkItem(ml: ml, kind: kind, date: Self.localDate(Date())))
-    }
-
-    /// POST /app/api/fluids with the time it was drunk, so a later send keeps it.
-    static func drinkItem(ml: Int, kind: String, date: String, at: Date = Date()) -> OutboxItem {
-        let localId = Outbox.localId()
-        var body: JSONObject = ["ml": .number(Double(ml)), "kind": .string(kind), "date": .string(date),
-                                "requestId": .string(UUID().uuidString)]
-        if date == Self.localDate(at) { body["at"] = .string(Outbox.clock(at, withDay: true)) }
-        return OutboxItem(path: "/app/api/fluids", method: "POST", body: OutboxItem.json(body), label: L10n.tr("Pití"),
-                          overlay: OutboxOverlay(kind: .drink, date: date, id: localId, ml: Double(ml), drink: kind,
-                                                 time: date == Self.localDate(at) ? Outbox.clock(at) : nil))
-    }
-
-    // MARK: - Writes without signal
-
-    /// A meal or drink shows at once and goes out in the background, so the
-    /// sheet closes without waiting for the server. Without signal it waits in
-    /// the outbox; one the server refuses comes back as the outbox note.
-    /// send: false when several are written at once and sent after the last.
-    private func write(_ item: OutboxItem, send: Bool = true) {
-        // The saved copy of another day no longer holds; its next load saves it anew.
-        if let date = item.overlay?.date, date != Self.localDate(Date()) {
-            for screen in ["today", "food", "health"] { SnapshotCache.remove(key: SnapshotCache.dayKey(screen, date)) }
-        }
-        enqueue(item)
-        if send { Task { await sendOutbox(reloadToday: true) } }
-    }
-
-    /// Sends a write now; without signal or on a server error it waits in the
-    /// outbox and shows on the screens meanwhile. True when it went out now.
-    /// Throws when the server refused it (4xx).
-    private func deliver(_ item: OutboxItem) async throws -> Bool {
-        // The same gym day already waits: this one goes after it (the newer wins).
-        if let key = item.key, outbox.contains(where: { $0.key == key }) {
-            enqueue(item)
-            await sendOutbox()
-            return false
-        }
-        do {
-            try await api.sendQueued(item)
-            return true
-        } catch where Outbox.isNoConnection(error) {
-            enqueue(item)
-            offline = true
-            return false
-        } catch OutboxRefusal.retry, OutboxRefusal.outdated {
-            // A server error (5xx) or too old an app: it waits with the outbox's
-            // retries instead of being lost (a gym sheet mid-workout).
-            enqueue(item)
-            return false
-        }
-    }
-
-    private func enqueue(_ item: OutboxItem) {
-        if let key = item.key, let i = outbox.firstIndex(where: { $0.key == key }) {
-            outbox[i] = item
-        } else {
-            outbox.append(item)
-        }
-        saveOutbox()
-    }
-
-    private func saveOutbox() {
-        OutboxStore.save(outbox)
-        applyOutbox()
-    }
-
-    /// The Today and Food screens: the server's answer with the waiting writes.
-    private func applyOutbox() {
-        let overlays = outbox.compactMap(\.overlay)
-        // Nothing waiting and nothing shown over the server's answer: no second decode.
-        let foodLayers = settlingFood.map({ $0.overlay }) + overlays, todayLayers = settlingToday.map({ $0.overlay }) + overlays
-        if let foodBase, !foodLayers.isEmpty || foodPatched,
-           let value = try? JSONDecoder().decode(FoodSnapshot.self, from: OutboxPatch.food(foodBase, foodLayers)) {
-            if food != value { food = value }
-            foodPatched = !foodLayers.isEmpty
-        }
-        if let todayBase, !todayLayers.isEmpty || todayPatched,
-           let value = try? JSONDecoder().decode(TodaySnapshot.self, from: OutboxPatch.today(todayBase, todayLayers)) {
-            if today != value { today = value }
-            todayPatched = !todayLayers.isEmpty
-        }
-    }
-
-    /// Water added from the widget while the app was closed joins the outbox.
-    private func takeWidgetDrinks() {
-        let drinks = PendingDrinks.take()
-        guard !drinks.isEmpty else { return }
-        outbox += drinks.map { Self.drinkItem(ml: $0.ml, kind: "water", date: $0.date) }
-        saveOutbox()
-    }
-
-    /// Sends the waiting writes in order and loads Food (and Health) again.
-    /// reloadToday: Today too, without the Apple Health sync (after a meal or
-    /// drink; refresh() loads Today itself). True when something went out.
-    @discardableResult
-    func sendOutbox(reloadToday reload: Bool = false) async -> Bool {
-        guard !demo, phase == .signedIn, !Self.accountUnconfirmed else { return false }
-        if reload { reloadTodayAfterSend = true }
-        // Already sending: the running loop takes the new write in one more round.
-        guard !sendingOutbox else { sendAgain = true; return false }
-        sendingOutbox = true
-        // A meal saved just before leaving the app still goes out.
-        let background = FinishInBackground("Outbox")
-        defer { sendingOutbox = false; background.end() }
-        var sentAny = false
-        repeat {
-            sendAgain = false
-            takeWidgetDrinks()
-            guard !outbox.isEmpty else { break }
-            let sent = await sendWaiting()
-            saveOutbox()
-            if sent {
-                sentAny = true
-                offline = false
-                let today = reloadTodayAfterSend
-                reloadTodayAfterSend = false
-                await reloadAfterWrites(today: today)
-            }
-        } while sendAgain
-        return sentAny
-    }
-
-    /// The waiting writes out in order. Stops at the first that still finds no
-    /// connection; one the server refuses (4xx) is dropped with a note.
-    private func sendWaiting() async -> Bool {
-        var sent = false
-        while let item = outbox.first {
-            if Outbox.isOthers(item, account: Outbox.account) {
-                outbox.removeAll { $0.id == item.id }
-                OutboxStore.save(outbox)
-                continue
-            }
-            sendingItem = item.id
-            defer { sendingItem = nil }
-            do {
-                let answer = try await api.sendQueued(item)
-                settle(item, answer: answer)
-                outbox.removeAll { $0.id == item.id }
-                sent = true
-            } catch OutboxRefusal.rejected(let message) {
-                outbox.removeAll { $0.id == item.id }
-                outboxNote = L10n.f("Neuloženo – %@: %@", item.label, message)
-            } catch OutboxRefusal.retry(let message) {
-                // A server error: later, but not forever.
-                guard let i = outbox.firstIndex(where: { $0.id == item.id }) else { continue }
-                outbox[i].failures += 1
-                if outbox[i].failures >= 5 {
-                    outbox.remove(at: i)
-                    outboxNote = L10n.f("Neuloženo – %@: %@", item.label, message)
-                    continue
-                }
-                break
-            } catch OutboxRefusal.outdated {
-                // Waits for the new version of the app, however long that takes.
-                break
-            } catch {
-                // Still no signal (or the session ended): the rest waits.
-                if Outbox.isNoConnection(error) { offline = true }
-                break
-            }
-            OutboxStore.save(outbox)
-        }
-        return sent
-    }
-
-    /// A write that just went out stays drawn until Food and Today load it from
-    /// the server; a new meal or drink takes its server id.
-    private func settle(_ item: OutboxItem, answer: Data) {
-        guard var overlay = item.overlay else { return }
-        if let local = overlay.id, local < 0, let id = Outbox.entryId(answer) {
-            sentIds[local] = id
-            overlay.id = id
-        }
-        settlingFood.append((item.id, overlay))
-        settlingToday.append((item.id, overlay))
-    }
-
-    /// Food, Health and Today load at once after writes went out.
-    private func reloadAfterWrites(today: Bool) async {
-        await withTaskGroup(of: Void.self) { group in
-            if food != nil { group.addTask { await self.refreshFood() } }
-            if health != nil { group.addTask { await self.refreshHealth() } }
-            if today { group.addTask { await self.reloadToday() } }
-        }
-    }
-
-    /// A meal or drink logged on the phone (negative local id) as the server
-    /// knows it: nil while it still waits to be sent, its server id once sent.
-    /// A food logged on this phone (a negative id): its id on the server once it
-    /// went out, nil while it still waits for signal.
-    func sentFoodId(_ localId: Int) async -> Int? {
-        localId > 0 ? localId : await serverId(of: localId)
-    }
-
-    private func serverId(of localId: Int) async -> Int? {
-        // On its way right now: its answer brings the id.
-        while let sending = sendingItem, outbox.first(where: { $0.id == sending })?.overlay?.id == localId {
-            try? await Task.sleep(for: .milliseconds(100))
-        }
-        return sentIds[localId]
-    }
-
-    /// The network came back: send what waited and load the screens again.
-    private func networkBack() async {
-        guard !demo, phase == .signedIn, offline || !outbox.isEmpty else { return }
-        await refresh()
-        if food != nil { await refreshFood() }
-    }
-
-    /// A weigh-in (kg); waits for signal when there is none. Throws the server's
-    /// refusal. True when it went out now. reload: false for Siri, which waits
-    /// for the answer and needs no screens loaded.
-    @discardableResult
-    func addWeight(kg: Double, reload: Bool = true) async throws -> Bool {
-        guard !demo else { return true }
-        let date = Self.localDate(Date())
-        let item = Self.weightItem(kg: kg, date: date)
-        // Apple Health gets it too when weight is switched on in Zdroje dat (Aurin posílá).
-        Task { await AppleHealthExport.shared.saveWeight(kg: kg, date: date) }
-        let sent = try await deliver(item)
-        if sent && reload {
-            await refreshHealth()
-            await refresh()
-        }
-        return sent
-    }
-
-    /// POST /app/api/weight; the requestId keeps one weigh-in when it goes out twice.
-    nonisolated static func weightItem(kg: Double, date: String) -> OutboxItem {
-        let body: JSONObject = ["kg": .number(kg), "date": .string(date), "requestId": .string(UUID().uuidString)]
-        return OutboxItem(path: "/app/api/weight", method: "POST", body: OutboxItem.json(body), label: L10n.tr("Váha"),
-                          overlay: OutboxOverlay(kind: .weight, date: date, kg: kg))
-    }
-
-    // MARK: - Synchronizace
-
-    /// The server destinations a done activity goes to (Google Health,
-    /// Intervals.icu), as last seen in Zdroje dat (Aurin posílá): the toast lists
-    /// them as "odešle se" while there is no signal.
-    static let activityDestinationsKey = "sync.activityDestinations"
-
-    /// A finished gym session (Posilovna or Režim tréninku) to those apps, under
-    /// the day's key, so finishing it again updates the same activity.
-    /// `appleSaved`: the live workout is in Apple Health already.
-    func shareGym(_ day: GymDay, date: String, start: Date? = nil, minutes: Int? = nil, appleSaved: Bool = false) async {
-        let done = day.exercises.filter { $0.doneCount > 0 }
-        guard !done.isEmpty, let start = day.startedAt ?? start else { return }
-        let length = max(1, minutes ?? day.loggedMinutes ?? Int((Date().timeIntervalSince(start) / 60).rounded()))
-        let sets = done.map { $0.name + ": " + GymCoach.setsLine($0.sets) }.joined(separator: "\n")
-        await shareActivity(ActivityToSync(key: "gym:" + date, sport: "gym", name: day.planName ?? L10n.tr("Silový trénink"), date: date,
-                                           start: start, minutes: length, notes: sets), apple: !appleSaved)
-    }
-
-    /// A done activity (a gym session, a workout typed in) to the apps chosen
-    /// in Zdroje dat (Aurin posílá); `sends` when the server already sent it (a manual
-    /// workout). Shows the toast when it went anywhere.
-    /// `toApple` false when the workout is in Apple Health already.
-    func shareActivity(_ activity: ActivityToSync, sends: [SyncSend]? = nil, apple toApple: Bool = true) async {
-        guard !demo else { return }
-        var rows: [SyncReport.Row] = []
-        if let sends {
-            rows = sends.map { SyncReport.Row(destination: $0.destination, status: SyncReport.status($0.status), message: $0.message, needsScope: $0.needsScope) }
-        } else {
-            do {
-                let result = try await api.sendActivity(activity)
-                rows = (result.sends ?? []).map { SyncReport.Row(destination: $0.destination, status: SyncReport.status($0.status), message: $0.message, needsScope: $0.needsScope) }
-            } catch where Outbox.isNoConnection(error) {
-                // Without signal it waits in the outbox, after the activity itself.
-                enqueue(OutboxItem(path: "/app/api/sync/activity", method: "POST", body: OutboxItem.json(activity.body),
-                                   label: activity.name, key: "sync:" + activity.key))
-                offline = true
-                let waiting = UserDefaults.standard.stringArray(forKey: Self.activityDestinationsKey) ?? []
-                rows = waiting.map { SyncReport.Row(destination: $0, status: .pending) }
-            } catch {
-                rows = []
-            }
-        }
-        let apple = AppleHealthExport.shared
-        if toApple && apple.writesWorkouts {
-            let failed = await apple.saveWorkout(activity)
-            rows.insert(SyncReport.Row(destination: "apple", status: failed == nil ? .sent : .error, message: failed), at: 0)
-        }
-        rows.sort { (SyncApp.order.firstIndex(of: $0.destination) ?? 9) < (SyncApp.order.firstIndex(of: $1.destination) ?? 9) }
-        syncReport = rows.isEmpty ? nil : SyncReport(activity: activity, rows: rows)
-    }
-
-    /// "Zkusit znovu" in the toast's sheet.
-    func retrySync(_ destination: String) async {
-        guard var report = syncReport, let i = report.rows.firstIndex(where: { $0.destination == destination }) else { return }
-        report.rows[i].working = true
-        syncReport = report
-        var row = report.rows[i]
-        if destination == "apple" {
-            let failed = await AppleHealthExport.shared.saveWorkout(report.activity)
-            row.status = failed == nil ? .sent : .error
-            row.message = failed
-        } else {
-            do {
-                // Google first needs the permission to write workouts.
-                if row.needsScope != nil {
-                    guard let event = try await connect(provider: "google-extra"), event == "google" else {
-                        row.working = false
-                        update(row)
-                        return
-                    }
-                }
-                let send = try await api.retrySend(key: report.activity.key, destination: destination)
-                row.status = SyncReport.status(send.status)
-                row.message = send.message
-                row.needsScope = send.needsScope
-            } catch {
-                // Never reached the server (it waited without signal): send it whole.
-                if let result = try? await api.sendActivity(report.activity), let send = result.sends?.first(where: { $0.destination == destination }) {
-                    row.status = SyncReport.status(send.status)
-                    row.message = send.message
-                    row.needsScope = send.needsScope
-                } else {
-                    row.status = .error
-                    row.message = error.localizedDescription
-                }
-            }
-        }
-        row.working = false
-        update(row)
-    }
-
-    private func update(_ row: SyncReport.Row) {
-        guard var report = syncReport, let i = report.rows.firstIndex(where: { $0.destination == row.destination }) else { return }
-        report.rows[i] = row
-        syncReport = report
-    }
-
-    /// Saves a day's gym sheet; without signal the newest sheet of the day
-    /// waits. Throws the server's refusal.
-    func saveGym(_ day: GymDay, date: String) async throws {
-        guard !demo else { return }
-        GymDayCache.save(day, date: date)
-        // One save of a day at a time. Sets ticked meanwhile go out after it,
-        // only the newest sheet, so an older sheet can never land last.
-        if gymSaving.contains(date) { gymPending[date] = day; return }
-        gymSaving.insert(date)
-        defer { gymSaving.remove(date) }
-        var next: GymDay? = day
-        func item(_ day: GymDay) -> OutboxItem {
-            OutboxItem(path: "/app/api/gym", method: "POST", body: OutboxItem.json(APIClient.gymBody(day, date: date)),
-                       label: L10n.tr("Posilovna"), key: "gym:" + date)
-        }
-        while let current = next {
-            gymPending[date] = nil
-            do {
-                _ = try await deliver(item(current))
-            } catch {
-                // Sets ticked while this save failed still go out, with the outbox's retries.
-                if let newer = gymPending.removeValue(forKey: date) {
-                    enqueue(item(newer))
-                    Task { await sendOutbox() }
-                }
-                throw error
-            }
-            // The muscles count this workout at their next load.
-            musclesAt = nil
-            next = gymPending[date]
-        }
-    }
-    @ObservationIgnored private var gymSaving: Set<String> = []
-    @ObservationIgnored private var gymPending: [String: GymDay] = [:]
-
-    /// Zahodit trénink: the day's sets still waiting (the next sheet, the
-    /// outbox, the copy kept without signal) leave with it, and a save already
-    /// on its way lands first, so nothing sent later brings the workout back.
-    /// When the server refuses, what waited goes back to the outbox.
-    func discardGym(date: String) async throws {
-        guard !demo else { return }
-        let key = "gym:" + date
-        gymPending[date] = nil
-        var waiting = outbox.filter { $0.key == key }
-        outbox.removeAll { $0.key == key }
-        saveOutbox()
-        let cached = GymDayCache.load(date: date)
-        let ids = Set(waiting.map(\.id))
-        for _ in 0..<150 {
-            guard gymSaving.contains(date) || sendingItem.map(ids.contains) == true else { break }
-            try? await Task.sleep(for: .milliseconds(100))
-        }
-        // A save that found no signal meanwhile waits in the outbox again: it goes too.
-        waiting += outbox.filter { $0.key == key }
-        outbox.removeAll { $0.key == key }
-        saveOutbox()
-        GymDayCache.remove(date: date)
-        do {
-            try await api.discardGym(date: date)
-        } catch {
-            if let newest = waiting.last, !outbox.contains(where: { $0.key == key }) { enqueue(newest) }
-            if let cached { GymDayCache.save(cached, date: date) }
-            throw error
-        }
-    }
-
-    /// A day's gym sheet: the one waiting to be sent, the server's, or the
-    /// last one seen on the phone when there is no signal.
-    func gymDay(date: String) async throws -> GymDay {
-        if let waiting = outbox.last(where: { $0.key == "gym:" + date }), let day = Outbox.gymDay(waiting, date: date) { return day }
-        do {
-            let day = try await api.gym(date: date)
-            // The server couldn't read the day: an error, never an empty sheet to save over it.
-            if day.status == "partial" { throw APIError.message(L10n.tr("Plán se nepodařilo načíst.")) }
-            GymDayCache.save(day, date: date)
-            return day
-        } catch where Outbox.isNoConnection(error) {
-            if let saved = GymDayCache.load(date: date) { return saved }
-            throw error
-        }
-    }
 
     /// Loads the calendar days that are not here yet (all of them with force).
     func loadCalendar(from start: String, to end: String, force: Bool = false) async {
@@ -1256,7 +319,7 @@ final class AppModel {
         guard force || days.contains(where: { calendar[$0] == nil }) else { return }
         if demo { return }
         guard phase == .signedIn else { return }
-        let account = signInRound
+        let account = scope
         do {
             let result = try await api.trainingCalendar(start: start, end: end)
             guard stillSignedIn(account) else { return }
@@ -1274,279 +337,9 @@ final class AppModel {
     /// again: once more with Today's load, so a workout that came later counts.
     func loadPastStrain(_ date: String, again: Bool = false) async {
         guard !demo, phase == .signedIn, again || pastStrain[date] == nil else { return }
-        let account = signInRound
+        let account = scope
         guard let snapshot = try? await api.today(date: date), snapshot.date == date, stillSignedIn(account) else { return }
         pastStrain[date] = snapshot.strain.score ?? 0
-    }
-
-    func updateDrink(id: Int, ml: Int, kind: String) async -> Bool {
-        guard !demo else { return true }
-        var id = id
-        if id < 0 {
-            if let sent = await serverId(of: id) {
-                id = sent
-            } else {
-                // A drink not sent yet changes while it waits.
-                guard let i = outbox.firstIndex(where: { $0.overlay?.id == id }) else { return true }
-                var fields = outbox[i].fields
-                fields["ml"] = .number(Double(ml))
-                fields["kind"] = .string(kind)
-                outbox[i].body = OutboxItem.json(fields)
-                outbox[i].overlay?.ml = Double(ml)
-                outbox[i].overlay?.drink = kind
-                saveOutbox()
-                return true
-            }
-        }
-        let old = food?.water.drinks?.first { $0.id == id }
-        let item = OutboxItem(path: "/app/api/fluids", method: "PATCH",
-                              body: OutboxItem.json(["id": JSONValue.number(Double(id)), "ml": .number(Double(ml)), "kind": .string(kind)]),
-                              label: L10n.tr("Pití"),
-                              overlay: OutboxOverlay(kind: .editDrink, date: food?.date ?? Self.localDate(Date()), id: id, ml: Double(ml), drink: kind,
-                                                     previousMl: old?.ml, previousDrink: old?.kind))
-        write(item)
-        return true
-    }
-
-    @discardableResult
-    func deleteDrink(id: Int) async -> Bool {
-        guard !demo else { return true }
-        var id = id
-        if id < 0 {
-            guard let sent = await serverId(of: id) else { dropWaiting(localId: id); return true }
-            id = sent
-        }
-        let old = food?.water.drinks?.first { $0.id == id }
-        let item = OutboxItem(path: "/app/api/fluids?id=\(id)", method: "DELETE", body: OutboxItem.json(JSONObject()), label: L10n.tr("Pití"),
-                              overlay: OutboxOverlay(kind: .removeDrink, date: food?.date ?? Self.localDate(Date()), id: id, ml: old?.ml, drink: old?.kind))
-        write(item)
-        return true
-    }
-
-    /// A meal or drink taken back before it was sent.
-    private func dropWaiting(localId: Int) {
-        outbox.removeAll { $0.overlay?.id == localId && ($0.overlay?.kind == .food || $0.overlay?.kind == .drink) }
-        saveOutbox()
-    }
-
-    /// Logs a food: it shows at once and goes out in the background (nil; a
-    /// refusal comes later as the outbox note).
-    /// `day`: another day than the one shown (a food the coach drafted from a sentence);
-    /// `refreshAfter: false` when several are logged at once and sent after the last.
-    func logFood(product: FoodProduct, amount: Double, meal: String, day: String? = nil, refreshAfter: Bool = true) async -> String? {
-        guard !demo else { return nil }
-        let date = day ?? writeDay
-        let request = FoodLogRequest(date: date, product: product.forLogging, quantity: amount, unit: product.unit, mealType: meal)
-        let overlay = OutboxOverlay(kind: .food, date: date, id: Outbox.localId(), name: product.name, meal: meal,
-                                    kcal: product.kcal(for: amount), protein: product.grams(product.protein_100g, for: amount),
-                                    carbs: product.grams(product.carbs_100g, for: amount), fat: product.grams(product.fat_100g, for: amount),
-                                    time: date == Self.localDate(Date()) ? Outbox.clock() : nil)
-        // Today's meal keeps the time it was logged, also when it waits for signal.
-        var extra: JSONObject = ["requestId": .string(UUID().uuidString)]
-        if date == Self.localDate(Date()) { extra["time"] = .string(Outbox.clock()) }
-        let item = OutboxItem(path: "/app/api/food/log", method: "POST", body: OutboxItem.json(request, adding: extra),
-                              label: product.name, overlay: overlay)
-        write(item, send: refreshAfter)
-        return nil
-    }
-
-    /// true when it was deleted (or waits for signal).
-    @discardableResult
-    func deleteFood(id: Int) async -> Bool {
-        guard !demo else { return true }
-        var id = id
-        if id < 0 {
-            guard let sent = await serverId(of: id) else { dropWaiting(localId: id); return true }
-            id = sent
-        }
-        let entry = food?.meals.flatMap(\.entries).first { $0.id == id }
-        let item = OutboxItem(path: "/app/api/food/entry", method: "DELETE", body: OutboxItem.json(["id": JSONValue.number(Double(id))]),
-                              label: entry?.name ?? L10n.tr("Jídlo"),
-                              overlay: OutboxOverlay(kind: .removeFood, date: food?.date ?? Self.localDate(Date()), id: id,
-                                                     kcal: entry?.kcal, protein: entry?.protein, carbs: entry?.carbs, fat: entry?.fat))
-        write(item)
-        return true
-    }
-
-    @discardableResult
-    func addWater(ml: Int) async -> Bool {
-        await addDrink(ml: ml, kind: "water")
-    }
-
-    /// One day back or forward from the day on screen; forward stops at today,
-    /// on Food (ahead) two weeks later. saved: the day as a swipe drew it beside.
-    func showDay(offset: Int, ahead: Bool = false, saved page: DayPage? = nil) async {
-        let todayDate = Self.localDate(Date())
-        guard !demo, let date = Self.shift(selectedDate ?? todayDate, by: offset) else { return }
-        if date > todayDate {
-            guard ahead, let last = Self.shift(todayDate, by: Self.foodDaysAhead), date <= last else { return }
-            selectedDate = date
-            // The day as last seen (or loaded ahead) at once, as on the days before.
-            showSaved(date, page: page?.date == date ? page : nil)
-            await refreshFood()
-            if selectedDate == date, foodError == nil { prefetchFoodAhead(date) }
-            return
-        }
-        selectedDate = date == todayDate ? nil : date
-        showSaved(selectedDate, page: page?.date == date ? page : nil)
-        await refreshDay()
-    }
-
-    /// A day picked in Today's week strip; today or earlier.
-    func showDate(_ date: String) async {
-        let todayDate = Self.localDate(Date())
-        guard !demo, date <= todayDate, date != (selectedDate ?? todayDate) else { return }
-        selectedDate = date == todayDate ? nil : date
-        showSaved(selectedDate)
-        await refreshDay()
-    }
-
-    func showToday() async {
-        guard selectedDate != nil else { return }
-        selectedDate = nil
-        showSaved(nil)
-        await refreshDay()
-    }
-
-    /// The day changed: Today, and Food and Health when they were opened.
-    func refreshDay() async {
-        if let date = selectedDate {
-            await loadOtherDay(date)
-            return
-        }
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { await self.refresh() }
-            if food != nil { group.addTask { await self.refreshFood() } }
-            if health != nil { group.addTask { await self.refreshHealth() } }
-        }
-    }
-
-    /// The saved copy of a day (SnapshotCache), on screen at once while the
-    /// day loads; without one the screens keep the day before until it comes.
-    /// page: the same copy, read already for the swipe (DayPage.saved).
-    private func showSaved(_ date: String?, page: DayPage? = nil) {
-        if let page {
-            if let value = page.today, let data = page.todayData {
-                today = value
-                todayBase = data
-            }
-            if food != nil, let value = page.food, let data = page.foodData {
-                food = value
-                foodBase = data
-            }
-            if health != nil, let value = page.health { health = value }
-            applyOutbox()
-            return
-        }
-        let decoder = JSONDecoder()
-        if let saved = SnapshotCache.data(key: SnapshotCache.dayKey("today", date)),
-           let value = try? decoder.decode(TodaySnapshot.self, from: saved.data) {
-            today = value
-            todayBase = saved.data
-        }
-        if food != nil, let saved = SnapshotCache.data(key: SnapshotCache.dayKey("food", date)),
-           let value = try? decoder.decode(FoodSnapshot.self, from: saved.data) {
-            food = value
-            foodBase = saved.data
-        }
-        if health != nil, let saved = SnapshotCache.data(key: SnapshotCache.dayKey("health", date)),
-           let value = try? decoder.decode(HealthSnapshot.self, from: saved.data) {
-            health = value
-        }
-        applyOutbox()
-    }
-
-    /// Another day than today: its Today, Food and Health from the server at
-    /// once, without the Apple Health sync, the waiting writes and the
-    /// athlete status, which belong to today. The arrows stay free: a newer
-    /// day chosen meanwhile wins and this answer is dropped.
-    private func loadOtherDay(_ date: String) async {
-        guard !demo, phase == .signedIn else { return }
-        let wantFood = food != nil, wantHealth = health != nil
-        let settledToday = Set(settlingToday.map { $0.id }), settledFood = Set(settlingFood.map { $0.id })
-        let api = api
-        async let todayAnswer: Result<(TodaySnapshot, Data), Error> = Self.attempt { try await api.todayData(date: date) }
-        async let foodAnswer: Result<(FoodSnapshot, Data), Error>? = wantFood ? Self.attempt { try await api.foodData(date: date) } : nil
-        async let healthAnswer: Result<HealthSnapshot, Error>? = wantHealth ? Self.attempt { try await api.health(date: date) } : nil
-        let account = signInRound
-        let (t, f, h) = await (todayAnswer, foodAnswer, healthAnswer)
-        guard stillSignedIn(account), selectedDate == date else { return }
-        var failure: Error?
-        switch t {
-        case .success(let (snapshot, data)):
-            today = snapshot
-            todayBase = data
-            settlingToday.removeAll { settledToday.contains($0.id) }
-            fetched[.today] = (Date(), date)
-        case .failure(let error): failure = error
-        }
-        if case .success(let (snapshot, data))? = f {
-            food = snapshot
-            foodBase = data
-            settlingFood.removeAll { settledFood.contains($0.id) }
-            fetched[.food] = (Date(), date)
-            Task { await AppleHealthExport.shared.saveFoodDay(snapshot) }
-        }
-        if case .success(let value)? = h {
-            health = value
-            fetched[.health] = (Date(), date)
-        }
-        dataRevision += 1
-        applyOutbox()
-        guard let failure else {
-            errorMessage = nil
-            _ = noteConnection(nil)
-            prefetchAround(date)
-            return
-        }
-        if (failure as? APIError) == .unauthorized { signOut(expired: true); return }
-        if Self.isCancellation(failure) { return }
-        // Without signal the saved day stays on screen; an error only without one.
-        let lost = noteConnection(failure)
-        if !lost { notice = failure.localizedDescription }
-    }
-
-    nonisolated private static func attempt<T>(_ body: () async throws -> T) async -> Result<T, Error> {
-        do { return .success(try await body()) } catch { return .failure(error) }
-    }
-
-    /// The days before and after the one on screen kept on the phone in
-    /// advance (each at most once an hour), with Food and Health when they
-    /// were opened, so the next swipe or arrow opens at once.
-    private func prefetchAround(_ date: String) {
-        let todayDate = Self.localDate(Date())
-        let wantFood = food != nil, wantHealth = health != nil
-        let api = api
-        if wantFood { prefetchFoodAhead(date) }
-        for offset in [-1, 1] {
-            // Today itself is always loaded; later days have no Today or Health.
-            guard let day = Self.shift(date, by: offset), day < todayDate else { continue }
-            func stale(_ screen: String) -> Bool {
-                guard let saved = SnapshotCache.savedAt(key: SnapshotCache.dayKey(screen, day)) else { return true }
-                return Date().timeIntervalSince(saved) >= 3600
-            }
-            let today = stale("today"), food = wantFood && stale("food"), health = wantHealth && stale("health")
-            guard today || food || health else { continue }
-            Task(priority: .utility) {
-                if today { _ = try? await api.todayData(date: day) }
-                if food { _ = try? await api.foodData(date: day) }
-                if health { _ = try? await api.health(date: day) }
-            }
-        }
-    }
-
-    /// Food's days ahead beside the one on screen (each at most once an hour),
-    /// so the next arrow or swipe forward opens at once too.
-    private func prefetchFoodAhead(_ date: String) {
-        let todayDate = Self.localDate(Date())
-        guard let last = Self.shift(todayDate, by: Self.foodDaysAhead) else { return }
-        let api = api
-        for offset in [-1, 1] {
-            guard let day = Self.shift(date, by: offset), day > todayDate, day <= last else { continue }
-            if let saved = SnapshotCache.savedAt(key: SnapshotCache.dayKey("food", day)),
-               Date().timeIntervalSince(saved) < 3600 { continue }
-            Task(priority: .utility) { _ = try? await api.foodData(date: day) }
-        }
     }
 
     nonisolated static func localDate(_ date: Date) -> String {
@@ -1560,130 +353,5 @@ final class AppModel {
         calendar.timeZone = utc
         guard let d = f.date(from: isoDate), let moved = calendar.date(byAdding: .day, value: days, to: d) else { return nil }
         return f.string(from: moved)
-    }
-
-    /// Settings → "Odhlásit se": ends the session on the server as well.
-    func logout() async {
-        if !demo {
-            // While the session still works: no more pushes to this phone.
-            if !(await PushRegistration.unregister(api: api)) { PushRegistration.leavePushService() }
-            await api.logout()
-        }
-        signOut()
-    }
-
-    /// expired: the session ran out (401), not "Odhlásit se". Writes waiting
-    /// for signal, the photo and the account's name stay until the next
-    /// sign-in shows whether it is the same account (signedIn()).
-    func signOut(expired: Bool = false) {
-        api.signOut()
-        // The session ran out, so the server cannot be asked to drop this phone's
-        // token: the phone leaves Apple's push service and the morning pushes stop
-        // reaching the lock screen. The next sign-in registers again.
-        if expired { PushRegistration.leavePushService() }
-        clearLocal(expired: expired)
-    }
-
-    /// Nastavení → Testování → Server: the other server, with its own account
-    /// data and sign-in. What the screens and the outbox hold belongs to the
-    /// old server; both sessions stay, so switching back needs no sign-in.
-    /// Apple Health stays as it is on this iPhone and reads into the chosen
-    /// server, each with its own last sync (AppleHealth.serverChanged). It
-    /// used to pause like a sign-out, and the way back switched it off for good.
-    func switchServer(to choice: ServerChoice) async {
-        guard !demo, choice != ServerChoice.current else { return }
-        if phase == .signedIn { await PushRegistration.unregister(api: api) }
-        ServerChoice.current = choice
-        AppleHealth.shared.serverChanged()
-        clearLocal(expired: true)
-        outbox = []
-        OutboxStore.clear()
-        if api.hasSession {
-            await signedIn()
-            await refresh()
-        }
-    }
-
-    private func clearLocal(expired: Bool) {
-        // What is still loading belongs to this sign-in: it stops, and what
-        // comes back anyway is dropped (stillSignedIn, SnapshotCache.generation).
-        signInRound += 1
-        dropRefresh()
-        // The next account's purchases carry its own appAccountToken.
-        ProStore.shared.forgetAccount()
-        SnapshotCache.clear()
-        CoachPick.forget()
-        GymDayCache.clear()
-        CoachTextMemory.values = [:]
-        WeekPlanDraftMemory.drafts = [:]
-        ThresholdCheckMemory.kept = nil
-        GymHistoryCache.clear()
-        ActivityDetailMemory.values = [:]
-        if !expired {
-            // Waiting writes belong to this account; the next one must not send them.
-            outbox = []
-            OutboxStore.clear()
-            // Apple Health was allowed for this account, not the next one.
-            AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
-            forgetAccountData()
-            ErrorLog.clear()
-            // The next account looks for its own kept settings.
-            SettingsBackup.forget()
-            for key in [AvatarStore.nameKey, AvatarStore.emailKey, AvatarStore.idKey, Self.displayNameKey, Self.accountUncheckedKey] { UserDefaults.standard.removeObject(forKey: key) }
-            // The photo stays for this account's next sign-in (AvatarStore.keep).
-        }
-        outboxNote = nil
-        notice = nil
-        todayBase = nil
-        foodBase = nil
-        settlingFood = []
-        settlingToday = []
-        sentIds = [:]
-        Reminders.cancelAll()
-        // The next sign-in sends the push token again for its own account.
-        PushRegistration.forget()
-        WidgetBridge.clear()
-        UserDefaults.standard.removeObject(forKey: Self.setupDoneKey)
-        UserDefaults.standard.removeObject(forKey: Self.accountInitialKey)
-        needsSetup = false
-        passkeyOffer = false
-        paths = [:]
-        tab = .today
-        offline = false
-        demo = false
-        today = nil
-        training = nil
-        health = nil
-        food = nil
-        calendar = [:]
-        selectedDate = nil
-        fetched = [:]
-        athleteStatus = nil
-        muscleFatigue = nil
-        musclesAt = nil
-        pastStrain = [:]
-        phase = .signedOut
-    }
-}
-
-/// The first of two racing waits answers; the other one finds it taken.
-@MainActor
-private final class FirstAnswer {
-    private var taken = false
-    func take() -> Bool {
-        guard !taken else { return false }
-        taken = true
-        return true
-    }
-}
-
-/// Training and Health read from disk off the main thread (AppModel.loadSaved);
-/// read once, then handed over.
-private final class SavedScreens: @unchecked Sendable {
-    let training: TrainingSnapshot?
-    let health: HealthSnapshot?
-    init(training: TrainingSnapshot?, health: HealthSnapshot?) {
-        self.training = training
-        self.health = health
     }
 }
