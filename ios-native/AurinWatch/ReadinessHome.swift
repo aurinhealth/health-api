@@ -42,9 +42,11 @@ struct ReadinessHome: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Below the alarm and coach buttons, which hang over the page.
             Text(W.tr("Připravenost", "Readiness"))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(W.secondary)
+                .padding(.top, 14)
             HStack(alignment: .lastTextBaseline, spacing: 7) {
                 Text(s.readiness.map { String($0) } ?? "–")
                     .font(W.serif(64))

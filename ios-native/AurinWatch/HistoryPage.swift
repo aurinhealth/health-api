@@ -40,7 +40,7 @@ struct HistoryPage: View {
                 Spacer(minLength: 2)
                 if band != nil {
                     RoundedRectangle(cornerRadius: 2).fill(metric.color.opacity(0.35)).frame(width: 9, height: 5)
-                    Text(W.tr("normál", "normal"))
+                    Text(sleep ? W.tr("potřeba", "need") : W.tr("normál", "normal"))
                         .font(W.label(8))
                         .foregroundStyle(metric.color)
                 }
@@ -65,7 +65,7 @@ struct HistoryPage: View {
             if spans.count > 1 { picker.padding(.top, 2) }
             chart
                 .padding(.top, 6)
-                .frame(height: Self.chartHeight)
+                .frame(height: Self.chartHeight - (spans.count > 1 ? 26 : 0))
             if shown == 90 {
                 Text(trend)
                     .font(.system(size: 11))
@@ -80,7 +80,7 @@ struct HistoryPage: View {
             }
         }
         // Clear of the back button above and the page dots on the right;
-        // the chart gives way on a small watch.
+        // the chart gives way to the 7D/30D/90D picker and on a small watch.
         .padding(.top, 8)
         .padding(.trailing, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)

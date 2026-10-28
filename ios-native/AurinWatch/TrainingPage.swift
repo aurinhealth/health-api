@@ -107,7 +107,7 @@ struct TrainingPage: View {
                     .font(.system(size: 12)).foregroundStyle(W.muted).padding(.top, 6)
             }
             ForEach(Array(planned.dropFirst().enumerated()), id: \.offset) { _, other in
-                Text("+ " + other.title + (other.minutes.map { " · \($0) min" } ?? ""))
+                Text("+ " + name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
                     .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 4)
             }
         } else if let first = done.first {
@@ -117,7 +117,7 @@ struct TrainingPage: View {
                 Image(systemName: "checkmark").foregroundStyle(W.green)
             }
             ForEach(Array(done.dropFirst().enumerated()), id: \.offset) { _, other in
-                Text(other.title + (other.minutes.map { " · \($0) min" } ?? ""))
+                Text(name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
                     .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 2)
             }
         } else {
@@ -133,7 +133,7 @@ struct TrainingPage: View {
     private func header(_ s: WatchSnapshot.Session) -> some View {
         HStack(spacing: 5) {
             Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber)
-            Text(s.title + (s.minutes.map { " · \($0) min" } ?? ""))
+            Text(name(s))
                 .font(.system(size: 16, weight: .semibold)).foregroundStyle(W.ink)
                 .lineLimit(2).minimumScaleFactor(0.7)
         }
@@ -143,7 +143,17 @@ struct TrainingPage: View {
     /// "dnes · 17:30", "sobota · 9:00".
     private func subtitle(_ s: WatchSnapshot.Session, day: String) -> String {
         let name = day == today ? W.tr("dnes", "today") : day == tomorrow ? W.tr("zítra", "tomorrow") : W.dayName(day)
-        return name + (s.time.map { " · " + W.clockText($0) } ?? "")
+        return name + (s.time.map { " · " + W.clockText($0) } ?? "") + (s.minutes.map { " · \($0) min" } ?? "")
+    }
+
+    /// The title without the length the server's plan already ends it with
+    /// ("Endurance with cadence drills · 60 min"), which the subtitle shows.
+    private func name(_ s: WatchSnapshot.Session) -> String {
+        guard let minutes = s.minutes else { return s.title }
+        for suffix in [" · \(minutes) min", " – \(minutes) min", " (\(minutes) min)"] where s.title.hasSuffix(suffix) {
+            return String(s.title.dropLast(suffix.count))
+        }
+        return s.title
     }
 
     private func exercises(_ gym: WatchGym) -> some View {
@@ -174,7 +184,7 @@ struct TrainingPage: View {
                     HStack(spacing: 8) {
                         Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber).frame(width: 18)
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(s.title + (s.minutes.map { " · \($0) min" } ?? ""))
+                            Text(name(s))
                                 .font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.7)
                             Text(subtitle(s, day: s.date)).font(.system(size: 11)).foregroundStyle(W.secondary)
                         }
