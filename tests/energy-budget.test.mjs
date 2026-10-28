@@ -32,7 +32,7 @@ test("day view, week view and coaches all apply the same energy budget", () => {
   assert.match(source, /applyEnergyBudget\(daily,profile,health\);\n\s*return Response\.json\((withRecoveryTime\()?buildToday/);
   assert.match(source, /applyEnergyBudget\(daily,profile,health\);\n\s*const built=buildFood/);
   assert.match(source, /daily: applyEnergyBudget\(daily, profile,/);
-  assert.match(source, /applyEnergyBudget\(daily,profile,date===today\?healthToday:.*\n\s*const \{kcal,target,trainingBonus\}=buildFood/);
+  assert.match(source, /applyEnergyBudget\(daily,profile,date===today\?healthToday:.*\n\s*const \{kcal,target,trainingBonus,everyday\}=buildFood/);
 });
 
 test("early in the day the expected day from the profile is the floor of the target", () => {
