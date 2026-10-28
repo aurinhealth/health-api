@@ -16,8 +16,14 @@ enum WidgetBridge {
                                       fat: today.nutrition.fat.eaten, fatTarget: today.nutrition.fat.target,
                                       steps: today.steps.today, stepsGoal: today.steps.goal,
                                       bedtime: today.tonight?.bedtime, nextTitle: next?.title, nextTime: next?.time)
-        snapshot.save()
-        WidgetCenter.shared.reloadAllTimelines()
+        // The same day again (a refresh with nothing new) leaves the widgets
+        // alone: reloads are budgeted, and the time saved is never shown.
+        var saved = WidgetSnapshot.load()
+        saved?.updated = snapshot.updated
+        if saved != snapshot {
+            snapshot.save()
+            WidgetCenter.shared.reloadAllTimelines()
+        }
         Task { @MainActor in
             QuickActions.update(today)
             WatchBridge.shared.update(today)
