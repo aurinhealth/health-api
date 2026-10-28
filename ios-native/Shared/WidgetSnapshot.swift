@@ -45,6 +45,7 @@ struct WidgetSnapshot: Codable, Equatable {
         encoder.dateEncodingStrategy = .secondsSince1970
         guard let data = try? encoder.encode(self) else { return }
         UserDefaults(suiteName: Self.group)?.set(data, forKey: Self.key)
+        AurinControls.reload(AurinControls.water)
     }
 
     /// The snapshot as it stands on `today`: from an earlier day the day's
