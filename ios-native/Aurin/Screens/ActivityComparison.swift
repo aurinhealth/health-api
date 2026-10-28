@@ -39,10 +39,17 @@ struct ActivityComparisonSection: View {
     @Environment(AppModel.self) private var model
     let activityId: String
     @State private var comparison: ActivityComparison?
+    @State private var failed = false
 
     var body: some View {
         Group {
-            if let c = comparison {
+            if failed && comparison == nil {
+                VStack(alignment: .leading, spacing: 10) {
+                    SectionLabel(text: "Minule vs dnes")
+                    RetryRow(message: "Porovnání s minulým tréninkem se nepodařilo načíst.") { await load() }
+                }
+                .padding(.top, 26)
+            } else if let c = comparison {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .firstTextBaseline) {
                         SectionLabel(text: "Minule vs dnes")
@@ -76,8 +83,13 @@ struct ActivityComparisonSection: View {
         }
         .task(id: activityId) {
             guard !model.demo, comparison == nil else { return }
-            comparison = try? await model.api.activityComparison(id: activityId)
+            await load()
         }
+    }
+
+    /// No earlier workout is no comparison and no error; only a failed load says so.
+    private func load() async {
+        do { comparison = try await model.api.activityComparison(id: activityId); failed = false } catch { failed = true }
     }
 
     private func big(_ title: String, before: String, after: String, unit: String, delta: (text: String, better: Bool)?) -> some View {
@@ -105,7 +117,7 @@ struct ActivityComparisonSection: View {
                 Text("Minule").frame(width: 100, alignment: .trailing)
                 Text("Dnes").frame(width: 100, alignment: .trailing)
             }
-            .font(.system(size: 12, weight: .medium)).tracking(1.1).textCase(.uppercase).foregroundStyle(Palette.muted)
+            .font(.caption.weight(.medium)).tracking(1.1).textCase(.uppercase).foregroundStyle(Palette.muted)
             .padding(.bottom, 6)
             ForEach(Array(c.rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 0) {

@@ -284,9 +284,11 @@ final class LiveWorkout: NSObject {
     /// updated from TestFlight) has nobody to end it: it would record for
     /// hours and land in Apple Health as one long strength workout. At launch
     /// it is ended without saving; Režim tréninku starts a new one with the
-    /// next ticked set.
+    /// next ticked set. A workout kept in the last 4 hours (Checkpoint) is no
+    /// orphan: Režim tréninku picks the session up (continueWorkout).
     func endOrphanedSession() {
         guard #available(iOS 26.0, *), HKHealthStore.isHealthDataAvailable(), start == nil else { return }
+        if let saved = Checkpoint.load(), Date().timeIntervalSince(saved.start) < 4 * 3600 { return }
         store.recoverActiveWorkoutSession { session, _ in
             guard let session else { return }
             session.associatedWorkoutBuilder().discardWorkout()

@@ -17,19 +17,25 @@ struct PlanPreviewView: View {
     var done: () -> Void = {}
     @State var preview: PlanPreview? = nil
     @State private var starting = false
+    @State private var failed = false
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: template.name) {
-            PlanPreviewContent(template: template, preview: preview, replacing: replacing) { starting = true }
+            PlanPreviewContent(template: template, preview: preview, replacing: replacing,
+                               failed: failed, canStart: preview != nil, retry: { await load() }) { starting = true }
                 .disabled(model.demo && preview == nil)
         }
         .task {
             guard preview == nil, !model.demo else { return }
-            preview = try? await model.api.trainingPlanPreview(templateId: template.id)
+            await load()
         }
         .sheet(isPresented: $starting) {
             StartPlanSheet(template: template, initial: preview) { done() }
         }
+    }
+
+    private func load() async {
+        do { preview = try await model.api.trainingPlanPreview(templateId: template.id); failed = false } catch { failed = true }
     }
 }
 
@@ -38,6 +44,11 @@ struct PlanPreviewContent: View {
     let template: TrainingPlans.Template
     let preview: PlanPreview?
     var replacing: TrainingPlans.Active? = nil
+    /// The plan's workouts didn't load: "Zkusit znovu" under the numbers.
+    var failed = false
+    /// "Začít plán" waits for the plan's workouts.
+    var canStart = true
+    var retry: () async -> Void = {}
     let start: () -> Void
     @State private var allWeeks = false
 
@@ -62,6 +73,10 @@ struct PlanPreviewContent: View {
                     }
                 }
                 .padding(.top, 20).padding(.horizontal, 4)
+                if failed && preview == nil {
+                    RetryRow(message: "Tréninky plánu se nepodařilo načíst.", retry: retry)
+                        .padding(.top, 12).padding(.horizontal, 4)
+                }
                 Card {
                     let weeks = allWeeks ? template.weeks : Array(template.weeks.prefix(4))
                     VStack(spacing: 0) {
@@ -83,6 +98,7 @@ struct PlanPreviewContent: View {
                 }
                 .padding(.top, 16)
                 PrimaryButton(title: L10n.tr(replacing == nil ? "Začít plán" : "Začít tento plán"), systemImage: "flag", action: start)
+                    .disabled(!canStart).opacity(canStart ? 1 : 0.4)
                     .padding(.top, 18)
             }
     }
@@ -265,7 +281,7 @@ struct StartPlanSheet: View {
         }
     }
 
-    private var weekdays: [String] { L10n.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"] }
+    private var weekdays: [String] { Fmt.weekdaysFromMonday }
 
     /// Under the race: a running race's estimate and goal pace, a cycling race's power and time.
     private var raceNote: String? {
@@ -1145,7 +1161,7 @@ struct PlanResultContent: View {
                                     Text(Fmt.int(end) + " W").font(Typo.number(52)).foregroundStyle(Palette.ink)
                                 }
                                 let gain = end - start
-                                Text((gain >= 0 ? "+" : "−") + Fmt.int(abs(gain)) + " W · " + (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(start, 1) * 100) + " %")
+                                Text((gain >= 0 ? "+" : "−") + Fmt.int(abs(gain)) + " W · " + (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(start, 1) * 100) + Fmt.percentSign)
                                     .font(Typo.bodyStrong).foregroundStyle(gain >= 0 ? Palette.green : Palette.rust)
                             }
                             .frame(maxWidth: .infinity)
@@ -1161,7 +1177,7 @@ struct PlanResultContent: View {
                                     let gain = lift.after - lift.before
                                     compare(Fmt.capitalized(lift.exercise), Units.weightText(lift.before, digits: lift.before.rounded() == lift.before ? 0 : 1),
                                             Units.weightText(lift.after, digits: lift.after.rounded() == lift.after ? 0 : 1),
-                                            (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(lift.before, 1) * 100) + " %", gain >= 0 ? Palette.green : Palette.rust)
+                                            (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(lift.before, 1) * 100) + Fmt.percentSign, gain >= 0 ? Palette.green : Palette.rust)
                                 }
                                 Text("Odhad maxima z nejlepší série do 12 opakování.").font(Typo.caption).foregroundStyle(Palette.muted)
                                     .frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 4)
@@ -1177,7 +1193,7 @@ struct PlanResultContent: View {
                             }
                             let planned = result.sessionsPlanned ?? 0
                             let pct = planned > 0 ? min(100, result.sessionsDone * 100 / planned) : nil
-                            compare("Tréninky", nil, planned > 0 ? L10n.f("%@ z %@", String(result.sessionsDone), String(planned)) : String(result.sessionsDone), pct.map { "\($0) %" }, pct.map(PlanColors.done) ?? Palette.muted)
+                            compare("Tréninky", nil, planned > 0 ? L10n.f("%@ z %@", String(result.sessionsDone), String(planned)) : String(result.sessionsDone), pct.map { "\($0)" + Fmt.percentSign }, pct.map(PlanColors.done) ?? Palette.muted)
                             if result.sport != "gym" {
                                 Rectangle().fill(Palette.hairline).frame(height: 1)
                                 compare("Čas", nil, planDuration(result.minutesDone), result.minutesPlanned.map { L10n.f("z %@", planDuration($0)) }, Palette.muted)

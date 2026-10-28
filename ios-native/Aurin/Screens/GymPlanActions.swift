@@ -101,11 +101,7 @@ struct GymPlanActionsSheet: View {
     }
 
     private static func noon(_ isoDate: String) -> Date? {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = .current
-        f.dateFormat = "yyyy-MM-dd"
-        return f.date(from: isoDate).map { $0.addingTimeInterval(12 * 3600) }
+        DateFormatters.make("yyyy-MM-dd").date(from: isoDate).map { $0.addingTimeInterval(12 * 3600) }
     }
 
     private func move() async {

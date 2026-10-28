@@ -93,8 +93,11 @@ enum Reminders {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
-        let pending = await center.pendingNotificationRequests().map(\.identifier).filter { $0.hasPrefix(prefix) }
+        let all = await center.pendingNotificationRequests().map(\.identifier)
+        let pending = all.filter { $0.hasPrefix(prefix) }
         center.removePendingNotificationRequests(withIdentifiers: pending)
+        var planned: [UNNotificationRequest] = []
+        defer { addSoonest(planned, room: limit - (all.count - pending.count), to: center) }
 
         let weekday = Calendar.current.component(.weekday, from: Date())
         // Bedtime: a fixed time on the chosen days, or the chosen time before
@@ -102,13 +105,13 @@ enum Reminders {
         if isOn(bedtimeKey) {
             let bedDays = days(bedtimeKey)
             if UserDefaults.standard.string(forKey: bedtimeModeKey) == "custom" {
-                addRepeating(center, "bedtime", at: minute(bedtimeTimeKey, 22 * 60), days: bedDays,
+                addRepeating(&planned, "bedtime", at: minute(bedtimeTimeKey, 22 * 60), days: bedDays,
                              title: L10n.tr("Čas do postele"), body: L10n.tr("Dobrý spánek je základ regenerace."))
             } else if has(bedDays, weekday), let bed = today.tonight?.bedtime, let need = today.tonight?.need, let at = minutes(bed) {
                 let offset = minute(bedtimeOffsetKey, 30)
                 let remind = (at - offset + 1440) % 1440
                 // A bedtime after midnight (00:40) reminds at 00:10 tonight, which is "earlier" than now.
-                add(center, "bedtime", at: remind, title: offset >= 60 ? L10n.tr("Za hodinu do postele") : L10n.f("Za %@ min do postele", String(offset)),
+                add(&planned, "bedtime", at: remind, title: offset >= 60 ? L10n.tr("Za hodinu do postele") : L10n.f("Za %@ min do postele", String(offset)),
                     body: L10n.f("Na dnešní noc potřebuješ %@. Jdi spát do %@.", Fmt.duration(need), ClockText.format(bed)), afterMidnight: remind < 6 * 60)
             }
         }
@@ -120,12 +123,12 @@ enum Reminders {
             let timeOf = { (item: TodaySnapshot.PlanItem) in item.time ?? item.session?.time }
             for item in open {
                 guard let time = timeOf(item), let at = minutes(time), at >= 60 else { continue }
-                add(center, "workout." + time, at: at - 60, title: L10n.f("Za hodinu: %@", item.title),
+                add(&planned, "workout." + time, at: at - 60, title: L10n.f("Za hodinu: %@", item.title),
                     body: item.detail.map { L10n.f("%@. Dej si něco malého a připrav se.", $0) } ?? L10n.tr("Dej si něco malého a připrav se."))
             }
             let untimed = open.filter { timeOf($0) == nil }
             if !untimed.isEmpty {
-                add(center, "workout.day", at: minute(workoutTimeKey, 16 * 60), title: L10n.f("Dnes v plánu: %@", untimed.map(\.title).joined(separator: ", ")),
+                add(&planned, "workout.day", at: minute(workoutTimeKey, 16 * 60), title: L10n.f("Dnes v plánu: %@", untimed.map(\.title).joined(separator: ", ")),
                     body: untimed.first?.detail.map { L10n.f("%@. Dej si něco malého a připrav se.", $0) } ?? L10n.tr("Dej si něco malého a připrav se."))
             }
         }
@@ -136,13 +139,13 @@ enum Reminders {
                                    mode: UserDefaults.standard.string(forKey: waterModeKey) ?? "every",
                                    every: minute(waterEveryKey, 3 * 60), count: minute(waterCountKey, 4))
             for at in times {
-                add(center, "water.\(at)", at: at, title: L10n.tr("Napij se"), body: L10n.f("Dnešní cíl je %@ vody.", amount))
+                add(&planned, "water.\(at)", at: at, title: L10n.tr("Napij se"), body: L10n.f("Dnešní cíl je %@ vody.", amount))
             }
         }
         // Each chosen meal at its time, on the chosen days.
         if isOn(mealsKey) {
             for meal in meals where isOn(mealKey(meal.id)) {
-                addRepeating(center, "meal." + meal.id, at: minute(mealTimeKey(meal.id), meal.time), days: days(mealsKey),
+                addRepeating(&planned, "meal." + meal.id, at: minute(mealTimeKey(meal.id), meal.time), days: days(mealsKey),
                              title: L10n.tr(meal.title), body: L10n.tr("Zapiš, co jíš, ať sedí dnešní příjem."))
             }
         }
@@ -158,13 +161,13 @@ enum Reminders {
                 if offset == 0 && logged { continue }
                 guard let day = calendar.date(byAdding: .day, value: offset, to: start),
                       has(foodDays, calendar.component(.weekday, from: day)) else { continue }
-                addOnce(center, "food.\(offset)", day: day, at: at, title: L10n.tr("Zapiš jídlo"),
+                addOnce(&planned, "food.\(offset)", day: day, at: at, title: L10n.tr("Zapiš jídlo"),
                         body: L10n.tr("Ať sedí dnešní příjem a zítřejší doporučení."))
             }
         }
         // Weighing in the morning, before breakfast.
         if isOn(weightKey) {
-            addRepeating(center, "weight", at: minute(weightTimeKey, 7 * 60), days: days(weightKey),
+            addRepeating(&planned, "weight", at: minute(weightTimeKey, 7 * 60), days: days(weightKey),
                          title: L10n.tr("Zvaž se"), body: L10n.tr("Ráno nalačno, ať je trend váhy přesný."))
         }
         // The pill (Settings → Oznámení → Antikoncepce): the coming 8 days of
@@ -180,14 +183,14 @@ enum Reminders {
                 let date = AppModel.localDate(day)
                 guard let number = pillNumber(on: date, packStart: pill.packStart, active: pill.active) else { continue }
                 if number == 0 && !pill.inPause { continue }
-                addOnce(center, "pill.\(offset)", day: day, at: pill.minute, title: L10n.tr("Čas na prášek"),
+                addOnce(&planned, "pill.\(offset)", day: day, at: pill.minute, title: L10n.tr("Čas na prášek"),
                         body: number == 0 ? L10n.tr("Pauza mezi baleními") : L10n.f("%@. prášek z %@", String(number), String(pill.active)),
                         category: pillCategory, info: ["date": date])
             }
         }
         // Sunday evening (or the chosen days): a look at the coming week's plan.
         if isOn(weekKey) {
-            addRepeating(center, "week", at: minute(weekTimeKey, 19 * 60), days: days(weekKey),
+            addRepeating(&planned, "week", at: minute(weekTimeKey, 19 * 60), days: days(weekKey),
                          title: L10n.tr("Plán na příští týden"), body: L10n.tr("Zkontroluj tréninky a volný čas na další týden."))
         }
     }
@@ -226,9 +229,25 @@ enum Reminders {
         }
     }
 
+    /// iOS keeps 64 pending notifications per app and silently drops the rest.
+    static let limit = 64
+
+    /// The soonest that fit: the room is what the other notifications (the
+    /// rest timer, the pill's snooze) leave of the 64.
+    private static func addSoonest(_ planned: [UNNotificationRequest], room: Int, to center: UNUserNotificationCenter) {
+        for request in soonest(planned, room: room) { center.add(request) }
+    }
+
+    static func soonest(_ planned: [UNNotificationRequest], room: Int) -> [UNNotificationRequest] {
+        func next(_ request: UNNotificationRequest) -> Date {
+            (request.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate() ?? .distantFuture
+        }
+        return Array(planned.sorted { next($0) < next($1) }.prefix(max(0, room)))
+    }
+
     /// Only times still ahead today are planned, unless the reminder repeats
     /// daily or belongs to the coming night (afterMidnight: the next 00:10).
-    private static func add(_ center: UNUserNotificationCenter, _ id: String, at minute: Int, title: String, body: String,
+    private static func add(_ planned: inout [UNNotificationRequest], _ id: String, at minute: Int, title: String, body: String,
                             repeats: Bool = false, afterMidnight: Bool = false, weekday: Int? = nil) {
         let now = Calendar.current.dateComponents([.hour, .minute], from: Date())
         let nowMinute = (now.hour ?? 0) * 60 + (now.minute ?? 0)
@@ -244,22 +263,22 @@ enum Reminders {
         when.weekday = weekday
         // The next matching time: later today, or after midnight for the coming night.
         let trigger = UNCalendarNotificationTrigger(dateMatching: when, repeats: repeats)
-        center.add(UNNotificationRequest(identifier: prefix + id, content: content, trigger: trigger))
+        planned.append(UNNotificationRequest(identifier: prefix + id, content: content, trigger: trigger))
     }
 
     /// Every day as one daily reminder, else one weekly reminder per chosen day.
-    private static func addRepeating(_ center: UNUserNotificationCenter, _ id: String, at minute: Int, days: Int, title: String, body: String) {
+    private static func addRepeating(_ planned: inout [UNNotificationRequest], _ id: String, at minute: Int, days: Int, title: String, body: String) {
         if days & everyDay == everyDay {
-            add(center, id, at: minute, title: title, body: body, repeats: true)
+            add(&planned, id, at: minute, title: title, body: body, repeats: true)
             return
         }
         for weekday in 1...7 where has(days, weekday) {
-            add(center, id + ".\(weekday)", at: minute, title: title, body: body, repeats: true, weekday: weekday)
+            add(&planned, id + ".\(weekday)", at: minute, title: title, body: body, repeats: true, weekday: weekday)
         }
     }
 
     /// One reminder on the given day, skipped when its time has passed.
-    private static func addOnce(_ center: UNUserNotificationCenter, _ id: String, day: Date, at minute: Int, title: String, body: String,
+    private static func addOnce(_ planned: inout [UNNotificationRequest], _ id: String, day: Date, at minute: Int, title: String, body: String,
                                 category: String? = nil, info: [String: String] = [:]) {
         let calendar = Calendar.current
         guard let fire = calendar.date(bySettingHour: minute / 60, minute: minute % 60, second: 0, of: day), fire > Date() else { return }
@@ -271,7 +290,7 @@ enum Reminders {
         if !info.isEmpty { content.userInfo = info }
         let when = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
         let trigger = UNCalendarNotificationTrigger(dateMatching: when, repeats: false)
-        center.add(UNNotificationRequest(identifier: prefix + id, content: content, trigger: trigger))
+        planned.append(UNNotificationRequest(identifier: prefix + id, content: content, trigger: trigger))
     }
 
     // MARK: - The pill

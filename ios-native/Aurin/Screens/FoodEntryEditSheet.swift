@@ -173,18 +173,12 @@ struct FoodEntryEditSheet: View {
 
     /// "150", "12,5": what the amount field starts with.
     static func text(_ value: Double) -> String {
-        let r = rounded(value)
-        if r == r.rounded() { return String(Int(r)) }
-        let s = String(format: "%.1f", r)
-        return L10n.isEnglish ? s : s.replacingOccurrences(of: ".", with: ",")
+        rounded(value).formatted(.number.precision(.fractionLength(0...1)).grouping(.never).locale(Fmt.locale))
     }
 
     static func rounded(_ value: Double) -> Double { (value * 10).rounded() / 10 }
 
     static func date(_ iso: String) -> Date? {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        return f.date(from: iso).flatMap { Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: $0) }
+        DateFormatters.make("yyyy-MM-dd").date(from: iso).flatMap { Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: $0) }
     }
 }

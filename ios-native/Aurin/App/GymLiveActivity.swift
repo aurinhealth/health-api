@@ -11,6 +11,8 @@ enum GymLiveActivity {
     private static var activity: Activity<GymActivityAttributes>?
     private static var last: GymActivityAttributes.ContentState?
     private static var lastUpdate = Date.distantPast
+    /// The user swiped the activity away: no new one until the workout ends.
+    private static var dismissed = false
 
     /// The day as it is now. `focus` is the exercise on screen (Režim
     /// tréninku), else the first one with a set left. `quiet` (a new heart
@@ -18,9 +20,13 @@ enum GymLiveActivity {
     static func sync(day: GymDay?, focus: Int? = nil, restStart: Date?, restEnd: Date?, quiet: Bool = false) {
         guard let day, let state = state(day, focus: focus, restStart: restStart, restEnd: restEnd) else { end(); return }
         guard state != last else { return }
+        // Swiped away on the lock screen: it stays away for this workout.
+        if activity?.activityState == .dismissed { dismissed = true; activity = nil }
+        guard !dismissed else { return }
         if quiet && Date().timeIntervalSince(lastUpdate) < 15 { return }
         last = state
         lastUpdate = Date()
+        GymRestShared.set(state.restEnd)
         let content = ActivityContent(state: state, staleDate: state.restEnd)
         // Stale (the rest ran out on the lock screen) is still the same
         // activity: updated, never a second one under it.
@@ -37,7 +43,9 @@ enum GymLiveActivity {
     }
 
     static func end() {
+        GymRestShared.set(nil)
         last = nil
+        dismissed = false
         guard let current = activity else { return }
         activity = nil
         Task { await current.end(nil, dismissalPolicy: .immediate) }

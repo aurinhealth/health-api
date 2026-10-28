@@ -82,6 +82,17 @@ final class SettingsStore {
     /// Saves the profile with these keys changed. Returns false on an error.
     func saveProfile(_ changes: JSONObject) async -> Bool {
         guard !demo else { profile.merge(changes) { $1 }; return true }
+        // One save at a time, each on top of the one before: the server
+        // replaces the whole profile, so two quick changes sent side by side
+        // ended with only the later one.
+        let earlier = profileQueue
+        let mine = Task { await earlier?.value; return await saveProfileNow(changes) }
+        profileQueue = Task { _ = await mine.value }
+        return await mine.value
+    }
+    @ObservationIgnored private var profileQueue: Task<Void, Never>?
+
+    private func saveProfileNow(_ changes: JSONObject) async -> Bool {
         if !profileLoaded { await load() }
         guard profileLoaded else {
             errorMessage = L10n.tr("Profil se nepodařilo načíst, takže ho teď nejde uložit. Zkus to znovu za chvíli.")

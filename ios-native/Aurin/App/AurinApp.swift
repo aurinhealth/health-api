@@ -11,6 +11,11 @@ struct AurinApp: App {
     /// Settings → Jazyk: "cs" or "en"; the phone's language until it is chosen.
     @AppStorage(L10n.key) private var language = L10n.defaultLanguage
 
+    init() {
+        // Začít posilovnu in Control Center or on the Lock Screen (Shared/AurinControls.swift).
+        ControlInbox.startGym = { QuickActions.shared.pick = QuickActions.Pick(id: "liveGym") }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -19,6 +24,8 @@ struct AurinApp: App {
                 .onOpenURL { model.handle($0) }
                 // A gym Live Activity left from before the app closed has no screen behind it.
                 .task { GymLiveActivity.endOrphans() }
+                // Aurin Pro: renewals and codes redeemed in the App Store reach the server (ProStore.swift).
+                .task { ProStore.shared.start(api: model.demo ? nil : model.api) }
                 .tint(Palette.ink)
                 .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
                 .environment(\.locale, L10n.locale)

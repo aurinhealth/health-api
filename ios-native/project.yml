@@ -287,6 +287,9 @@ targets:
     platform: iOS
     sources:
       - path: AurinTests
+      # Aurin Pro's plans for SKTestSession (ProStoreTests); never in the app itself.
+      - path: StoreKit/Aurin.storekit
+        buildPhase: resources
     dependencies:
       - target: Aurin
     settings:
@@ -312,6 +315,10 @@ schemes:
       targets:
         Aurin: all
         AurinTests: [test]
+    # Run from Xcode in the simulator, Aurin Pro is bought from this file
+    # (prices, the free week, an offer code) instead of App Store Connect.
+    run:
+      storeKitConfiguration: StoreKit/Aurin.storekit
     test:
       targets:
         - AurinTests
@@ -323,6 +330,8 @@ schemes:
       targets:
         Aurin: all
         AurinUITests: [test]
+    run:
+      storeKitConfiguration: StoreKit/Aurin.storekit
     test:
       targets:
         - AurinUITests

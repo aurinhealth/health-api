@@ -84,6 +84,8 @@ final class SnapshotTests: XCTestCase {
         try render("health", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: health) }.padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
         try render("health-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30) }
         try render("health-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: DemoData.night).padding(24).padding(.top, 30) }
+        // The night's timeline didn't load: "Zkusit znovu" in the stages card.
+        try render("health-sleep-failed", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: nil, failed: true).padding(24).padding(.top, 30) }
         for metric in HealthMetric.allCases {
             try render("health-" + metric.rawValue, glow: Palette.Glow.health) { MetricDetailContent(metric: metric, health: health).padding(24).padding(.top, 30) }
         }
@@ -738,9 +740,12 @@ final class SnapshotTests: XCTestCase {
     /// the list with the plans.
     func testPaywallTour() throws {
         for time in [0.6, 2.9, 5.0, 7.6, 10.2, 12.0, 14.6] {
-            try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time) }
+            try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time, store: ProStore()) }
         }
-        try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1) }
+        try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }
+        // A new Apple ID: the free-week switch under the plans, then the week as a timeline.
+        try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore(trialEligible: true)) }
+        try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
     }
 
     /// Training plans: before the start, the running plan, a week and the result.
@@ -812,6 +817,9 @@ final class SnapshotTests: XCTestCase {
         try render("plan-card", glow: Palette.Glow.training, height: 260) { ActivePlanSummary(active: active).padding(24) }
         try render("plan-preview", glow: Palette.Glow.training, height: 1150) {
             PlanPreviewContent(template: active.template, preview: preview) {}.padding(.horizontal, 24).environment(model)
+        }
+        try render("plan-preview-failed", glow: Palette.Glow.training, height: 1150) {
+            PlanPreviewContent(template: active.template, preview: nil, failed: true, canStart: false) {}.padding(.horizontal, 24).environment(model)
         }
         try render("plan-active", glow: Palette.Glow.training, height: 1500) {
             NavigationStack { ActivePlanContent(active: active, preview: preview, week: week).padding(.horizontal, 24) }.environment(model)

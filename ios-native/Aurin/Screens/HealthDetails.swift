@@ -6,23 +6,31 @@ struct SleepDetailView: View {
     @Environment(AppModel.self) private var model
     let health: HealthSnapshot
     @State private var detail: NightDetail?
+    @State private var failed = false
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.health, title: "Spánek",
                      coach: .sleep(line: health.sleep.night?.minutes.map { L10n.tr("Dnes") + " " + Fmt.duration(Int($0)) }, date: health.date)) {
-            SleepDetailContent(health: health, detail: detail)
+            SleepDetailContent(health: health, detail: detail, failed: failed) { await load() }
         }
         .task {
             guard detail == nil, health.sleep.night != nil else { return }
             if model.demo { detail = DemoData.night; return }
-            detail = try? await model.api.night(date: health.date)
+            await load()
         }
+    }
+
+    private func load() async {
+        do { detail = try await model.api.night(date: health.date); failed = false } catch { failed = true }
     }
 }
 
 struct SleepDetailContent: View {
     let health: HealthSnapshot
     let detail: NightDetail?
+    /// The night's timeline didn't load: "Zkusit znovu" where the chart goes.
+    var failed = false
+    var retry: () async -> Void = {}
 
     var body: some View {
         let sleep = health.sleep
@@ -44,7 +52,9 @@ struct SleepDetailContent: View {
                 if let stages = night.stages {
                     SectionLabel(text: "Fáze spánku").padding(.top, 30)
                     Card {
-                        if let segments = detail?.night?.segments, !segments.isEmpty {
+                        if failed && detail == nil {
+                            RetryRow(message: "Průběh noci se nepodařilo načíst.", retry: retry)
+                        } else if let segments = detail?.night?.segments, !segments.isEmpty {
                             Hypnogram(segments: segments)
                             HStack {
                                 Text(ClockText.format(optional: night.start) ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
@@ -56,6 +66,8 @@ struct SleepDetailContent: View {
                         StageTotals(stages: stages, wakeups: detail?.night?.stats?.wakeups)
                     }
                     .padding(.top, 14)
+                } else if failed && detail == nil {
+                    RetryRow(message: "Průběh noci se nepodařilo načíst.", retry: retry).padding(.top, 26)
                 }
             }
 
@@ -142,8 +154,11 @@ struct SleepDetailContent: View {
 
     private func weekday(_ iso: String) -> String {
         if L10n.isEnglish {
+            // "Noc na čtvrtek" (ending Thursday morning) is Wednesday night in English.
+            let formatter = DateFormatters.iso()
+            let before = formatter.date(from: iso).flatMap { Calendar.current.date(byAdding: .day, value: -1, to: $0) }.map { formatter.string(from: $0) } ?? iso
             let english = ["Su": "Sunday", "Mo": "Monday", "Tu": "Tuesday", "We": "Wednesday", "Th": "Thursday", "Fr": "Friday", "Sa": "Saturday"]
-            return english[Fmt.weekdayShort(iso)] ?? iso
+            return english[Fmt.weekdayShort(before)] ?? iso
         }
         let names = ["Ne": "neděli", "Po": "pondělí", "Út": "úterý", "St": "středu", "Čt": "čtvrtek", "Pá": "pátek", "So": "sobotu"]
         return names[Fmt.weekdayShort(iso)] ?? iso
@@ -199,7 +214,7 @@ struct NeedRow: View {
         HStack {
             Text(title)
             Spacer()
-            Text((signed ? (minutes < 0 ? "− " : "+ ") : "") + Fmt.hoursMinutes(Double(abs(minutes))))
+            Text((signed ? (minutes < 0 ? "−" : "+") : "") + Fmt.hoursMinutes(Double(abs(minutes))))
         }
         .font(Typo.small).foregroundStyle(Palette.muted)
     }
@@ -287,7 +302,7 @@ struct StageTotals: View {
 
     /// "19 %", or the awakenings for the awake row ("3×").
     static func note(share: Double?, wakeups: Int?) -> String {
-        if let share { return Fmt.int(share * 100) + " %" }
+        if let share { return Fmt.int(share * 100) + Fmt.percentSign }
         return wakeups.map { "\($0)×" } ?? ""
     }
 }
@@ -400,8 +415,7 @@ struct WeightEntrySheet: View {
     }
 
     private var placeholder: String {
-        let sample = Units.imperial ? "181.7" : "82.4"
-        return L10n.isEnglish ? sample : sample.replacingOccurrences(of: ".", with: ",")
+        Fmt.decimal(Units.imperial ? 181.7 : 82.4)
     }
 
     /// The typed weight in kg (typed in lb with imperial units).

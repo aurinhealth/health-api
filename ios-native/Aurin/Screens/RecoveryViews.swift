@@ -211,6 +211,9 @@ struct RecoveryRoutineView: View {
     @State private var current = 0
     @State private var remaining = 0
     @State private var paused = false
+    /// When the move ends: the countdown is worked out from it, so it keeps
+    /// time while the app is in the background too (nil while paused).
+    @State private var endsAt: Date?
 
     private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
@@ -323,7 +326,7 @@ struct RecoveryRoutineView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
             ProgressLine(fraction: 1 - Double(remaining) / Double(total), color: Palette.green, height: 6)
             HStack(spacing: 10) {
-                SecondaryButton(title: paused ? "Pokračovat" : "Pozastavit", systemImage: paused ? "play.fill" : "pause.fill") { paused.toggle() }
+                SecondaryButton(title: paused ? "Pokračovat" : "Pozastavit", systemImage: paused ? "play.fill" : "pause.fill") { togglePause() }
                 SecondaryButton(title: "Další cvik", systemImage: "forward.fill") { finishCurrent() }
             }
             Button("Ukončit časovač") { timerOn = false }
@@ -352,13 +355,23 @@ struct RecoveryRoutineView: View {
         guard let first = exercises.firstIndex(where: { !ticked.contains($0.key) }) else { return }
         current = first
         remaining = exercises[first].seconds ?? 30
+        endsAt = Date().addingTimeInterval(Double(remaining))
         paused = false
         timerOn = true
     }
 
+    private func togglePause() {
+        paused.toggle()
+        endsAt = paused ? nil : Date().addingTimeInterval(Double(remaining))
+    }
+
+    /// Back from the background, the moves that ended meanwhile are ticked off.
     private func tick() {
-        guard timerOn, !paused, current < exercises.count else { return }
-        if remaining > 1 { remaining -= 1 } else { finishCurrent() }
+        while timerOn, !paused, current < exercises.count, let endsAt {
+            let left = Int(endsAt.timeIntervalSinceNow.rounded(.up))
+            if left > 0 { remaining = left; return }
+            finishCurrent()
+        }
     }
 
     private func finishCurrent() {
@@ -367,6 +380,9 @@ struct RecoveryRoutineView: View {
         if let next = exercises.indices.first(where: { $0 > current && !ticked.contains(exercises[$0].key) }) {
             current = next
             remaining = exercises[next].seconds ?? 30
+            // The next move starts when the last one ended (in the background,
+            // not at this tick), or now after Další cvik.
+            endsAt = min(endsAt ?? Date(), Date()).addingTimeInterval(Double(remaining))
             paused = false
         } else {
             timerOn = false

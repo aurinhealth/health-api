@@ -393,7 +393,7 @@ struct InsightsView: View {
     private func legend(_ title: String, _ value: Double?, _ color: Color) -> some View {
         HStack(spacing: 5) {
             Circle().fill(color).frame(width: 7, height: 7)
-            Text(verbatim: L10n.tr(title) + " " + Fmt.int(value) + " %").font(Typo.caption).foregroundStyle(Palette.secondary)
+            Text(verbatim: L10n.tr(title) + " " + Fmt.int(value) + Fmt.percentSign).font(Typo.caption).foregroundStyle(Palette.secondary)
         }
     }
 

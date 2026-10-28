@@ -309,8 +309,10 @@ struct CoachView: View {
                 Button { photo = nil } label: {
                     Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
                         .frame(width: 20, height: 20).background(Color.black.opacity(0.65), in: Circle())
+                        // The small × in a 44 pt target, centred where it was.
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
                 }
-                .padding(4)
+                .offset(x: 8, y: -8)
                 .accessibilityLabel(L10n.tr("Odebrat fotku"))
             }
     }
@@ -769,7 +771,7 @@ struct PlanProposalBlock: View {
     let action: CoachAction
     var decided = false
 
-    private var dayNames: [String] { L10n.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["po", "út", "st", "čt", "pá", "so", "ne"] }
+    private var dayNames: [String] { Fmt.weekdaysFromMonday.map { L10n.isEnglish ? $0 : $0.lowercased(with: Fmt.locale) } }
 
     var body: some View {
         let card = action.trainingPlan

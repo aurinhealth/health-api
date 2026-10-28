@@ -14,6 +14,11 @@ struct AurinWidgetBundle: WidgetBundle {
         DayWidget()
         FoodWaterWidget()
         GymActivityWidget()
+        if #available(iOS 18.0, *) {
+            WaterControl()
+            StartGymControl()
+            SkipRestControl()
+        }
     }
 }
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
 import { withLang } from "../src/lang.js";
-import { CATALOG, DEFAULT_PINNED, CATEGORIES, normalizeCustomItem, itemView, catalogItem, usualPart } from "../src/journal-catalog.js";
+import { CATALOG, DEFAULT_PINNED, CATEGORIES, normalizeCustomItem, itemView, catalogItem, usualPart, moodText } from "../src/journal-catalog.js";
 import { percentEffect, impactOf, thresholdOf, rankImpacts, newDiscovery, dayState, itemDetail, morningMetrics, timeLevel, levelTime, shiftDay } from "../src/journal-impact.js";
 import { saveJournalEntry, listJournalEntries, getJournalSettings, saveCustomItem, autoDays, sickDays, caffeineMg, alcoholDrinks, setJournalOptions, setFixed } from "../src/journal-store.js";
 import { journalDay, journalCard, journalCatalog, thresholdText, waitingText, valueText, handleJournalApi, journalForCoach } from "../src/routes-journal.js";
@@ -26,7 +26,7 @@ test("the catalogue has over 100 items in both languages, unique keys and six ca
     assert.ok(["yesno", "amount", "time", "scale"].includes(i.type), i.key);
   }
   assert.deepEqual(CATEGORIES.filter(c => !CATALOG.some(i => i.cat === c)), []);
-  assert.equal(DEFAULT_PINNED.length, 9);
+  assert.equal(DEFAULT_PINNED.length, 10);
   assert.ok(DEFAULT_PINNED.every(k => catalogItem(k)));
   assert.equal(withLang("en", () => itemView(catalogItem("phone_in_bed")).name), "Phone in bed");
   assert.equal(withLang("cs", () => itemView(catalogItem("phone_in_bed")).name), "Mobil v posteli");
@@ -164,6 +164,11 @@ test("answers are stored per day and item; null clears back to unanswered", asyn
   let rows = await listJournalEntries(db, "2026-10-01", "2026-10-31");
   assert.deepEqual(rows.map(r => [r.key, r.answer, r.amount]).sort(), [["alcohol", 0, 0], ["mood", 1, 4], ["phone_in_bed", 0, null], ["sauna", 1, null]]);
   assert.deepEqual(rows.find(r => r.key === "sauna").extra, { minutes: 15, temp: 90 });
+  // The mood's words go as bits of extra.labels; anything else is dropped.
+  await saveJournalEntry(db, settings, { date: "2026-10-13", key: "mood", amount: 4, extra: { labels: 5 } });
+  await saveJournalEntry(db, settings, { date: "2026-10-12", key: "mood", amount: 2, extra: { labels: 99999 } });
+  const moods = await listJournalEntries(db, "2026-10-12", "2026-10-13");
+  assert.deepEqual(moods.map(r => r.extra), [null, { labels: 5 }]);
   await saveJournalEntry(db, settings, { date: "2026-10-14", key: "sauna", answer: null });
   rows = await listJournalEntries(db, "2026-10-01", "2026-10-31");
   assert.equal(rows.some(r => r.key === "sauna"), false);
@@ -222,15 +227,15 @@ test("the day's data fills in alcohol, caffeine, the last meal and an evening wo
   const items = day.sections.flatMap(s => s.items);
   assert.deepEqual(items.filter(i => i.fromData).map(i => [i.key, i.value]), [["caffeine", "145 mg · do 15:10"], ["outdoors", null], ["evening_training", "19:00"], ["late_meal", "21:15"], ["alcohol", "2 · do 21:40"]]);
   // By part of the day and time; the row's value without the time.
-  assert.deepEqual(day.sections.map(s => [s.title, s.items.map(i => i.key)]), [["Přes den", ["caffeine", "outdoors"]], ["Večer", ["evening_training", "late_meal", "alcohol", "sauna"]], ["Noc", ["phone_in_bed", "late_bed"]], ["Dnešní noc", ["sleep_away"]]]);
+  assert.deepEqual(day.sections.map(s => [s.title, s.items.map(i => i.key)]), [["Přes den", ["caffeine", "outdoors"]], ["Večer", ["evening_training", "late_meal", "alcohol", "sauna", "mood"]], ["Noc", ["phone_in_bed", "late_bed"]], ["Dnešní noc", ["sleep_away"]]]);
   assert.deepEqual(items.filter(i => i.key === "alcohol" || i.key === "late_meal").map(i => i.short), [null, "2 nápoje"]);
-  assert.deepEqual([day.answered, day.total], [5, 9]);
+  assert.deepEqual([day.answered, day.total], [5, 10]);
   assert.deepEqual(day.week.map(w => w.state), ["empty", "empty", "partial", "empty", "future", "future", "future"]);
   // More from the same day: coffee, too little water, no energy drink, no big dinner, a training day.
   assert.deepEqual(auto[d].coffee_cups, { amount: 2, time: "15:10" });
   assert.deepEqual([auto[d].little_water, auto[d].energy_drink, auto[d].heavy_dinner, auto[d].rest_day], [{ yes: true }, { yes: false }, { yes: false }, { yes: false }]);
   const card = await withLang("cs", () => journalCard(db, today, 7));
-  assert.deepEqual([card.date, card.open, card.answered, card.total], [d, 4, 5, 9]);
+  assert.deepEqual([card.date, card.open, card.answered, card.total], [d, 5, 5, 10]);
   assert.equal(await journalCard(db, today, 3), null);
 });
 
@@ -279,7 +284,7 @@ test("the morning sheet goes once yesterday is answered, put away, or Deník is 
   const settings = await getJournalSettings(db);
   const d = shiftDay(today, -1);
   assert.deepEqual([settings.enabled, settings.askMorning], [true, true]);
-  assert.equal((await journalCard(db, today, 8)).open, 9);
+  assert.equal((await journalCard(db, today, 8)).open, 10);
   await setJournalOptions(db, { askMorning: false });
   assert.equal((await journalCard(db, today, 8)).ask, false);
   await setJournalOptions(db, { enabled: false });
@@ -432,4 +437,13 @@ test("journal: Apple Health fills in mindfulness, daylight, noise in sleep, symp
   assert.equal(appleRow({ type: "daily-night-noise", id: "x", date: d, value: 200 }, now), null);
   assert.equal(appleRow({ type: "daily-time-zone-change", id: "y", date: d, value: -6 }, now).value_numeric, -6);
   assert.ok(CATALOG.filter(i => ["meditation", "night_noise", "sex", "time_zone", "stomach"].includes(i.key)).every(i => itemView(i).auto));
+});
+
+test("the mood is pinned, belongs to the evening and reads as a word with its labels", () => {
+  assert.ok(DEFAULT_PINNED.includes("mood"));
+  assert.equal(catalogItem("mood").type, "scale");
+  assert.equal(usualPart(catalogItem("mood")), "evening");
+  assert.equal(withLang("cs", () => moodText(4, 5)), "Příjemná · Klid, Radost");
+  assert.equal(withLang("en", () => moodText(1, 0)), "Very unpleasant");
+  assert.equal(moodText(null, 0), null);
 });

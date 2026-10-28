@@ -120,7 +120,7 @@ enum WeatherText {
 
     static func percent(_ value: Double?) -> String {
         guard let value else { return "–" }
-        return Fmt.int(value) + " %"
+        return Fmt.int(value) + Fmt.percentSign
     }
 
     static func indoor(_ advice: TodaySnapshot.Advice?) -> Bool { advice?.environment == "indoor" }
@@ -131,8 +131,12 @@ enum WeatherText {
         calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
         let parts = isoDate.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3, let date = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])) else { return isoDate }
-        let names = L10n.isEnglish ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"]
-        return names[calendar.component(.weekday, from: date) - 1]
+        let i = calendar.component(.weekday, from: date) - 1
+        // "Mon" in English as weather apps write it, "Po" in Czech.
+        guard L10n.isEnglish else { return Fmt.weekdays.indices.contains(i) ? Fmt.weekdays[i] : isoDate }
+        calendar.locale = Fmt.locale
+        let names = calendar.shortStandaloneWeekdaySymbols
+        return names.indices.contains(i) ? names[i] : isoDate
     }
 }
 
@@ -305,7 +309,7 @@ struct WeatherDetails: View {
                 Divider().overlay(Palette.hairline).padding(.horizontal, 12)
                 stat("Vítr", WeatherText.windNumber(wind), " " + WeatherText.windUnit, windBeside)
                 Divider().overlay(Palette.hairline).padding(.horizontal, 12)
-                stat("Déšť", weather.rainProb.map { Fmt.int($0) } ?? "–", weather.rainProb == nil ? nil : " %")
+                stat("Déšť", weather.rainProb.map { Fmt.int($0) } ?? "–", weather.rainProb == nil ? nil : Fmt.percentSign)
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 12)

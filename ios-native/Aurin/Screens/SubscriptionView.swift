@@ -1,14 +1,18 @@
+import StoreKit
 import SwiftUI
 import UIKit
 
 // Aurin Pro, laid out like Bevel Pro: a row at the top of Settings, the
 // subscription page (what Free has ✓ and lacks ✗, "Přejít na Aurin Pro"),
 // and the offer over the whole screen: the app in a phone, then what Pro
-// brings and the plans. During the invitation-only pilot everything is free
-// and nothing can be bought; the purchase (App Store) comes with the Apple
-// Developer Program. The server decides who has AI (src/subscription.js).
+// brings and the plans, then how the free week goes. It is bought from the
+// App Store (ProStore.swift); during the invitation-only pilot everything is
+// free anyway and TestFlight buys with Apple's test purchases. The server
+// decides who has AI (src/subscription.js, src/app-store.js).
 
-/// The plans of the offer, prices with VAT in Czech crowns (App Store).
+/// The plans of the offer. The prices come from the App Store (ProStore), in
+/// the currency of the buyer's country; until it answers, the Czech ones with
+/// VAT that App Store Connect starts from.
 enum ProPlans {
     struct Plan: Identifiable, Equatable {
         let id: String
@@ -16,6 +20,8 @@ enum ProPlans {
         let price: String?
         let note: String?
         var best = false
+        /// The App Store product.
+        var product: String { id == "annual" ? ProStore.yearlyID : ProStore.monthlyID }
     }
 
     static let main: [Plan] = [
@@ -23,6 +29,26 @@ enum ProPlans {
         Plan(id: "monthly", title: "Měsíčně", price: "199 Kč / měsíc", note: "placeno měsíčně")
     ]
     static let all: [Plan] = main
+
+    /// The plans with the App Store's prices where it has them.
+    @MainActor
+    static func priced(_ store: ProStore) -> [Plan] {
+        main.map { plan in
+            guard let price = store.price(plan.product) else { return plan }
+            if plan.id == "annual" {
+                return Plan(id: plan.id, title: plan.title, price: L10n.f("%@ / rok", price),
+                            note: store.perMonth(plan.product).map { L10n.f("%@ měsíčně", $0) } ?? plan.note, best: plan.best)
+            }
+            return Plan(id: plan.id, title: plan.title, price: L10n.f("%@ / měsíc", price), note: plan.note, best: plan.best)
+        }
+    }
+
+    /// "1 490 Kč" for the renewal line under the button.
+    @MainActor
+    static func price(_ plan: String, _ store: ProStore) -> String {
+        let product = plan == "annual" ? ProStore.yearlyID : ProStore.monthlyID
+        return store.price(product) ?? L10n.tr(plan == "annual" ? "1 490 Kč" : "199 Kč")
+    }
 }
 
 /// One thing Pro adds, with its icon.
@@ -50,7 +76,7 @@ struct ProFeature: Identifiable {
 }
 
 /// Settings → the first row: the logo and "Aurin Pro", a gold "Aktivní"
-/// with the plan.
+/// once it is bought.
 struct ProSettingsRow: View {
     @Environment(AppModel.self) private var model
     @State private var hasPro = false
@@ -77,19 +103,24 @@ struct ProSettingsRow: View {
         .buttonStyle(.plain)
         .task {
             guard !model.demo else { return }
-            hasPro = (try? await model.api.subscription())?.hasAI == true
+            hasPro = (try? await model.api.subscription())?.purchased == true || ProStore.shared.entitled
         }
     }
 }
 
 /// Aurin Pro: the logo, the plan, a tile for each thing Pro brings (locked
-/// without it) and, without Pro, the plans and the way to the offer.
+/// without it) and, without Pro, the plans and the way to the offer; with it,
+/// when it renews and Apple's sheet to change or cancel it.
 struct SubscriptionView: View {
     @Environment(AppModel.self) private var model
     @State private var status: SubscriptionStatus?
     @State private var error: String?
+    @State private var manage = false
+    @State private var restoring = false
+    @State private var notice: String?
+    private let store = ProStore.shared
 
-    private var hasPro: Bool { status?.hasAI == true }
+    private var hasPro: Bool { status?.purchased == true || store.entitled }
     private var unlocked: Bool { hasPro || status?.aiAccess == true }
 
     var body: some View {
@@ -102,6 +133,9 @@ struct SubscriptionView: View {
                         .foregroundStyle(hasPro ? AurinMark.goldTop : Palette.secondary)
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background((hasPro ? AurinMark.goldTop : Palette.ink).opacity(0.12), in: Capsule())
+                }
+                if hasPro, let line = renewal {
+                    Text(line).font(Typo.small).foregroundStyle(Palette.muted)
                 }
                 // The week's coach messages: nothing under 75 %, then one line.
                 if let line = status?.coachAllowance?.settingsLine {
@@ -137,10 +171,17 @@ struct SubscriptionView: View {
                 }
             }
 
-            if status != nil && !hasPro {
+            if hasPro {
+                Button { manage = true } label: {
+                    Text("Spravovat předplatné").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity, minHeight: 52)
+                        .background(Palette.card, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            } else if status != nil {
                 VStack(spacing: 14) {
                     HStack(spacing: 10) {
-                        ForEach(ProPlans.main) { plan in
+                        ForEach(ProPlans.priced(store)) { plan in
                             Button { Paywall.present(model) } label: {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(plan.title).textCase(.uppercase).font(.caption.weight(.semibold))
@@ -163,34 +204,57 @@ struct SubscriptionView: View {
                     }
                     .buttonStyle(.plain)
                 }
-            } else if status == nil && error == nil {
+            } else if error == nil {
                 ProgressView().frame(maxWidth: .infinity)
             }
 
-            Link(destination: URL(string: "https://aurin.health/terms")!) {
-                Text("Podmínky a ceny").font(Typo.caption).foregroundStyle(Palette.muted).underline()
+            HStack(spacing: 14) {
+                Link(destination: URL(string: "https://aurin.health/terms")!) {
+                    Text("Podmínky a ceny").font(Typo.caption).foregroundStyle(Palette.muted).underline()
+                }
+                Button {
+                    restoring = true
+                    Task { notice = await store.restore(); restoring = false; await load() }
+                } label: {
+                    Text("Obnovit nákup").font(Typo.caption).foregroundStyle(Palette.muted).underline()
+                }
+                .buttonStyle(.plain)
+                .disabled(restoring)
             }
             .frame(maxWidth: .infinity)
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
         }
         .task { await load() }
+        .manageSubscriptionsSheet(isPresented: $manage)
+        .onChange(of: manage) { _, open in if !open { Task { await store.refresh(); await load() } } }
+        .alert(L10n.tr("Aurin Pro"), isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(notice ?? "") }
     }
 
     private var badge: String? {
         guard let status else { return nil }
-        if status.hasAI { return L10n.tr("Aktivní") }
+        if hasPro { return L10n.tr("Aktivní") }
         if status.pilot { return L10n.tr("Pilot · vše zdarma") }
         return nil
     }
 
+    /// "Obnoví se 1. prosince" or "Platí do 1. prosince".
+    private var renewal: String? {
+        guard let purchase = status?.purchase, purchase.active, let end = purchase.expiresAt, end.count >= 10 else { return nil }
+        let day = Fmt.dayMonth(String(end.prefix(10)))
+        return purchase.autoRenew == false ? L10n.f("Platí do %@", day) : L10n.f("Obnoví se %@", day)
+    }
+
     private func load() async {
-        if model.demo { status = .demo; return }
+        if model.demo { status = .demo; await store.load(); return }
         do {
             status = try await model.api.subscription()
             error = nil
         } catch {
             self.error = error.localizedDescription
         }
+        await store.load()
     }
 }
 
@@ -218,20 +282,32 @@ struct PaywallView: View {
     let close: () -> Void
     /// A fixed moment of the tour instead of the clock (the snapshot tests).
     var frozenTime: Double? = nil
+    let store: ProStore
     @State private var demo = AppModel(demo: true)
-    /// 0 the app playing in the phone, 1 what Pro brings and the plans.
+    /// 0 the app playing in the phone, 1 what Pro brings and the plans, 2 how
+    /// the free week goes (yearly with the free week only).
     @State private var step = 0
     @State private var plan = "annual"
+    /// The free week, on the yearly plan for whoever can still have it.
+    @State private var trial = true
     @State private var allPlans = false
-    @State private var notYet: String?
+    @State private var redeemCode = false
+    @State private var notice: String?
+    /// Bought: says so, then the offer closes.
+    @State private var thanks: String?
     @State private var started = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0) {
+    init(close: @escaping () -> Void, frozenTime: Double? = nil, step: Int = 0, store: ProStore = .shared) {
         self.close = close
         self.frozenTime = frozenTime
+        self.store = store
         _step = State(initialValue: step)
     }
+
+    /// The switch shows only when the yearly plan would start with the free week.
+    private var offersTrial: Bool { plan == "annual" && store.trialEligible }
+    private var withTrial: Bool { offersTrial && trial }
 
     var body: some View {
         ZStack {
@@ -240,16 +316,24 @@ struct PaywallView: View {
             clock { time in Sparkles(time: time) }.ignoresSafeArea().allowsHitTesting(false)
             VStack(spacing: 0) {
                 HStack {
-                    Button(action: close) {
-                        Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
-                            .frame(width: 40, height: 40).background(Palette.card, in: Circle())
+                    if step == 2 {
+                        Button { go(1) } label: {
+                            Image(systemName: "chevron.left").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                                .frame(width: 40, height: 40).background(Palette.card, in: Circle())
+                        }
+                        .accessibilityLabel("Zpět")
+                    } else {
+                        Button(action: close) {
+                            Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                                .frame(width: 40, height: 40).background(Palette.card, in: Circle())
+                        }
+                        .accessibilityLabel("Zavřít")
                     }
-                    .accessibilityLabel("Zavřít")
                     Spacer()
                     Menu {
                         Button("Všechny tarify") { allPlans = true }
-                        Button("Uplatnit promo kód") { notYet = L10n.tr("Promo kódy půjdou uplatnit, až spustíme předplatné.") }
-                        Button("Obnovit nákup") { notYet = L10n.tr("Zatím není co obnovit: předplatné ještě nejde koupit.") }
+                        Button("Uplatnit promo kód") { redeemCode = true }
+                        Button("Obnovit nákup") { restore() }
                     } label: {
                         Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
                             .frame(width: 40, height: 40).background(Palette.card, in: Circle())
@@ -258,7 +342,7 @@ struct PaywallView: View {
                 }
                 .padding(.horizontal, 20).padding(.top, 8)
 
-                Text("Začni naplno s Aurin Pro")
+                Text(verbatim: L10n.tr(step == 2 ? "Jak funguje týden zdarma" : "Začni naplno s Aurin Pro"))
                     .font(.system(size: 28, weight: .bold)).multilineTextAlignment(.center).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 24).padding(.top, 12)
 
@@ -272,38 +356,130 @@ struct PaywallView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                         .transition(.opacity.combined(with: .scale(scale: 0.94)))
-                    } else {
+                    } else if step == 1 {
                         features.transition(.opacity)
+                    } else {
+                        freeWeek.transition(.opacity)
                     }
                 }
                 .frame(maxHeight: .infinity)
 
                 VStack(spacing: 10) {
-                    if step > 0 {
+                    if step == 1 {
                         HStack(spacing: 10) {
-                            ForEach(ProPlans.main) { p in PlanCard(plan: p, selected: plan == p.id) { plan = p.id } }
+                            ForEach(ProPlans.priced(store)) { p in PlanCard(plan: p, selected: plan == p.id) { plan = p.id } }
                         }
                         .transition(.move(edge: .bottom).combined(with: .opacity))
+                        if offersTrial {
+                            Toggle(isOn: $trial) {
+                                Text("Týden zdarma").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
+                            }
+                            .toggleStyle(AurinToggleStyle())
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .transition(.opacity)
+                        }
                     }
-                    Button {
-                        if step == 0 { withAnimation(.easeInOut(duration: 0.4)) { step = 1 }; started = Date() }
-                        else { notYet = L10n.tr("Během pilotu je všechno zdarma, i AI. Předplatné spustíme později a cenu oznámíme předem.") }
-                    } label: {
-                        Text("Pokračovat").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
-                            .frame(maxWidth: .infinity).frame(height: 54).background(Palette.button, in: Capsule())
+                    Button(action: next) {
+                        ZStack {
+                            Text(verbatim: cta).font(Typo.bodyStrong).foregroundStyle(Palette.onButton).opacity(store.purchasing ? 0 : 1)
+                            if store.purchasing { ProgressView().tint(Palette.onButton) }
+                        }
+                        .frame(maxWidth: .infinity).frame(height: 54).background(Palette.button, in: Capsule())
                     }
                     .buttonStyle(.plain)
+                    .disabled(store.purchasing)
+                    if step > 0 { renewalTerms }
                 }
                 .padding(.horizontal, 20).padding(.bottom, 12)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: offersTrial)
             }
         }
-        .sheet(isPresented: $allPlans) { AllPlansSheet(selected: $plan) }
-        .alert(L10n.tr("Aurin Pro"), isPresented: Binding(get: { notYet != nil }, set: { if !$0 { notYet = nil } })) {
+        .sheet(isPresented: $allPlans) { AllPlansSheet(selected: $plan, store: store) }
+        // Apple's own sheet for an offer code; what it redeems comes through Transaction.updates (ProStore).
+        .offerCodeRedemption(isPresented: $redeemCode) { result in
+            if case .failure(let error) = result { notice = error.localizedDescription }
+            Task { await store.refresh() }
+        }
+        .alert(L10n.tr("Aurin Pro"), isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
             Button("OK", role: .cancel) {}
-        } message: { Text(notYet ?? "") }
+        } message: { Text(notice ?? "") }
+        .alert(L10n.tr("Aurin Pro"), isPresented: Binding(get: { thanks != nil }, set: { if !$0 { thanks = nil } })) {
+            Button("OK", role: .cancel) { close() }
+        } message: { Text(thanks ?? "") }
+        .task { await store.load() }
     }
 
-    /// Seconds since the page (or its second step) opened, frame by frame;
+    private var cta: String {
+        switch step {
+        case 0: return L10n.tr("Pokračovat")
+        case 1: return L10n.tr(withTrial ? "Vyzkoušet týden zdarma" : "Předplatit")
+        default: return L10n.tr("Začít týden zdarma")
+        }
+    }
+
+    private func next() {
+        switch step {
+        case 0: go(1)
+        case 1: if withTrial { go(2) } else { buy() }
+        default: buy()
+        }
+    }
+
+    private func go(_ next: Int) {
+        if reduceMotion { step = next } else { withAnimation(.easeInOut(duration: 0.4)) { step = next } }
+        started = Date()
+    }
+
+    private func buy() {
+        let id = plan == "annual" ? ProStore.yearlyID : ProStore.monthlyID
+        Task {
+            do {
+                switch try await store.purchase(id) {
+                case .purchased(let trial):
+                    thanks = L10n.tr(trial ? "Týden zdarma začal. Kouč, jídlo z fotky a hodnocení jsou odemčené." : "Aurin Pro je aktivní. Díky!")
+                case .pending:
+                    notice = L10n.tr("Nákup čeká na schválení. Až ho App Store potvrdí, Aurin Pro se odemkne sám.")
+                case .cancelled:
+                    break
+                }
+            } catch {
+                notice = error.localizedDescription
+            }
+        }
+    }
+
+    private func restore() {
+        Task { notice = await store.restore() }
+    }
+
+    /// What Apple asks for by the button (guideline 3.1.2): the price, the
+    /// period, that it renews by itself and can be cancelled, the terms, the
+    /// privacy policy and restoring a purchase. The yearly plan starts with
+    /// the free week whenever the App Store offers it, switch or not.
+    private var renewalTerms: some View {
+        let line = renewalLine
+        return VStack(spacing: 3) {
+            Text(verbatim: line).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 6) {
+                Link(destination: URL(string: "https://aurin.health/terms")!) { Text("Podmínky").underline() }
+                Text(verbatim: "·")
+                Link(destination: URL(string: "https://aurin.health/privacy")!) { Text("Soukromí").underline() }
+                Text(verbatim: "·")
+                Button(action: restore) { Text("Obnovit").underline() }.buttonStyle(.plain)
+            }
+        }
+        .font(.caption2).foregroundStyle(Palette.faint)
+    }
+
+    private var renewalLine: String {
+        if plan != "annual" { return L10n.f("%@ měsíčně. Obnovuje se automaticky, zrušíš kdykoli.", ProPlans.price("monthly", store)) }
+        let yearly = ProPlans.price("annual", store)
+        if store.trialEligible { return L10n.f("7 dní zdarma, poté %@ ročně. Obnovuje se automaticky, zrušíš kdykoli.", yearly) }
+        return L10n.f("%@ ročně. Obnovuje se automaticky, zrušíš kdykoli.", yearly)
+    }
+
+    /// Seconds since the page (or its step) opened, frame by frame;
     /// still with Reduce Motion.
     @ViewBuilder
     private func clock<V: View>(@ViewBuilder _ content: @escaping (Double) -> V) -> some View {
@@ -322,6 +498,64 @@ struct PaywallView: View {
             FeatureMarquee(offset: reduceMotion ? 0 : CGFloat(max(0, time - 0.8)) * 22)
         }
         .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.08), .init(color: .black, location: 0.88), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
+    }
+
+    /// The free week as a timeline: today, the reminder on day 5, the first
+    /// payment on day 7. The rows rise in one after another.
+    private var freeWeek: some View {
+        let rows: [(Color, String, String, String)] = [
+            (Palette.green, "checkmark", L10n.tr("Dnes"), L10n.tr("Odemkne se kouč, jídlo z fotky a hodnocení tréninků.")),
+            (Palette.amberBar, "bell.fill", L10n.tr("Den 5"), L10n.tr("Připomeneme ti, že týden zdarma končí.")),
+            (Palette.indigo, "sparkles", L10n.tr("Den 7"), L10n.f("Začne roční předplatné za %@. Do té doby ho zrušíš jedním klepnutím.", ProPlans.price("annual", store)))
+        ]
+        return clock { time in
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(rows.indices, id: \.self) { i in
+                    let shown: Double = reduceMotion ? 1 : Self.risen(time, row: i)
+                    FreeWeekRow(color: rows[i].0, symbol: rows[i].1, title: rows[i].2, text: rows[i].3, next: i + 1 < rows.count ? rows[i + 1].0 : nil)
+                        .opacity(shown).offset(y: CGFloat(10 * (1 - shown)))
+                }
+            }
+            .padding(.horizontal, 30).padding(.top, 30)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+    }
+
+    /// How far a row of the free week has risen in, 0 to 1, each 0.15 s after the one above.
+    static func risen(_ time: Double, row: Int) -> Double {
+        let start = Double(row) * 0.15
+        let progress = (time - start) / 0.5
+        return min(1.0, max(0.0, progress))
+    }
+}
+
+/// A day of the free week: its coloured icon, a line down to the next day.
+struct FreeWeekRow: View {
+    let color: Color
+    let symbol: String
+    let title: String
+    let text: String
+    let next: Color?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 16) {
+            Image(systemName: symbol).font(.system(size: 17, weight: .bold)).foregroundStyle(Palette.onAccent)
+                .frame(width: 44, height: 44).background(color, in: Circle())
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.ink)
+                Text(text).font(.subheadline).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.top, 2)
+        }
+        .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+        .background(alignment: .topLeading) {
+            if let next {
+                LinearGradient(colors: [color, next], startPoint: .top, endPoint: .bottom)
+                    .frame(width: 3).frame(maxHeight: .infinity)
+                    .padding(.top, 44).padding(.leading, 20.5)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -614,6 +848,7 @@ struct PlanCard: View {
 struct AllPlansSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var selected: String
+    var store: ProStore = .shared
 
     var body: some View {
         VStack(spacing: 10) {
@@ -625,7 +860,7 @@ struct AllPlansSheet: View {
                 .accessibilityLabel("Zavřít")
                 Spacer()
             }
-            ForEach(ProPlans.all) { p in PlanCard(plan: p, selected: selected == p.id) { selected = p.id } }
+            ForEach(ProPlans.priced(store)) { p in PlanCard(plan: p, selected: selected == p.id) { selected = p.id } }
             Button { dismiss() } label: {
                 Text("Pokračovat").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                     .frame(maxWidth: .infinity).frame(height: 52).background(Palette.button, in: Capsule())

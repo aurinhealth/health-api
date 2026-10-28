@@ -245,9 +245,21 @@ struct CircleButton: View {
                 .font(.system(size: 15, weight: .medium))
                 .frame(width: 36, height: 36)
                 .overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                .tapTarget(width: 36, height: 36)
         }
         .foregroundStyle(Palette.ink)
         .accessibilityLabel(L10n.tr(label))
+    }
+}
+
+extension View {
+    /// At least 44 × 44 pt to tap (Apple's minimum) around a smaller control,
+    /// which looks and lays out as before.
+    func tapTarget(width: CGFloat, height: CGFloat) -> some View {
+        let dx = max(0, (44 - width) / 2), dy = max(0, (44 - height) / 2)
+        return padding(.horizontal, dx).padding(.vertical, dy)
+            .contentShape(Rectangle())
+            .padding(.horizontal, -dx).padding(.vertical, -dy)
     }
 }
 

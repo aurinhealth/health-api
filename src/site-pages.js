@@ -100,7 +100,7 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .rig .device{position:absolute;left:89px;top:0}
 .glass{position:absolute;z-index:2;text-align:left;padding:16px 18px;border-radius:var(--r-22);background:color-mix(in srgb,var(--panel) 74%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);border:1px solid color-mix(in srgb,var(--panel) 85%,transparent);box-shadow:var(--shadow-float)}
 .glass .k{font-size:var(--fs-14);color:var(--muted)}.glass .v{font-size:var(--fs-28);font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.glass .d{font-size:var(--fs-14);font-weight:600}
-.glass.g1{left:0;top:56px}
+.glass.g1{left:-76px;top:196px}
 .glass.g2{right:0;top:290px}
 .glass.g3{left:0;bottom:0;font-size:var(--fs-17);white-space:nowrap}
 
@@ -137,8 +137,8 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .vis .glow{position:absolute;left:50%;top:50%;width:880px;height:880px;margin:-440px 0 0 -440px;border-radius:50%;background:radial-gradient(circle,var(--glow) 0,transparent 62%);pointer-events:none}
 .vis .device{position:absolute;left:318px;top:18px}
 .flip .vis .device{left:0}
-.part{position:absolute;left:0;width:380px;border-radius:var(--r-22);overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float);opacity:0;z-index:3}
-.flip .part{left:260px}
+.part{position:absolute;left:-44px;width:380px;border-radius:var(--r-22);overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float);opacity:0;z-index:3}
+.flip .part{left:304px}
 .part img{display:block;width:100%;height:auto}
 .part.on{opacity:1}
 .part:has(>.dm.wait:not(.in)){opacity:0!important}
@@ -148,7 +148,7 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .step>button{cursor:pointer}
 .step .n{grid-row:1/3;font-size:var(--fs-12);font-weight:700;letter-spacing:.06em;color:var(--green);padding-top:6px;font-variant-numeric:tabular-nums}
 .step .tt{font:400 var(--fs-28)/1.1 var(--serif);letter-spacing:-.015em}
-.step .tx{margin-top:8px;color:var(--sec);font-size:var(--fs-17)}
+.step .tx{max-width:60ch;margin-top:8px;color:var(--sec);font-size:var(--fs-17)}
 .step .bar{grid-column:2;display:none;height:2px;margin-top:16px;border-radius:2px;background:var(--track);overflow:hidden}
 .step .bar i{display:block;height:100%;width:0;background:var(--tone)}
 .part{pointer-events:none}.part:has(.dial){pointer-events:auto}
@@ -166,6 +166,9 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .opener .cards{width:420px}
 .chapter.opens{padding-top:90px}
 /* Where the reader is: the welcome's line with a dot per part, the current one glowing. */
+/* For the keyboard: the first Tab shows a link past the nav to the page itself. */
+.skip{position:fixed;left:16px;top:12px;z-index:60;padding:10px 16px;border-radius:var(--r-pill);background:var(--button);color:var(--on-button);font-weight:600;text-decoration:none;transform:translateY(-200%)}.skip:focus{transform:none}
+main:focus{outline:none}
 .acts-nav{position:fixed;left:50%;bottom:18px;z-index:19;display:flex;align-items:center;gap:14px;padding:10px 18px 10px 16px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--panel) 86%,transparent);-webkit-backdrop-filter:saturate(1.4) blur(18px);backdrop-filter:saturate(1.4) blur(18px);box-shadow:0 0 0 1px var(--line),var(--shadow-float);transform:translate(-50%,24px);opacity:0;pointer-events:none;transition:opacity .4s,transform .5s cubic-bezier(.16,1,.3,1)}
 .acts-nav.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .an-t{min-width:76px;font-size:var(--fs-14);font-weight:600}
@@ -185,10 +188,11 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .muscles .key{display:flex;flex-wrap:wrap;gap:18px;margin-top:28px;font-size:var(--fs-14);color:var(--muted)}
 .muscles .key span{display:inline-flex;align-items:center;gap:7px}
 .muscles .key i{width:9px;height:9px;border-radius:50%;background:var(--c)}
-.muscles .hint{font-size:var(--fs-14);color:var(--muted);margin-top:14px;transition:opacity .4s}
+.muscles .hint{position:absolute;left:0;right:0;bottom:-30px;margin:0;text-align:center;font-size:var(--fs-14);color:var(--muted);pointer-events:none;transition:opacity .4s}
 .fig{position:relative;margin:0 auto;width:min(480px,100%,calc((100svh - 120px) * .64));aspect-ratio:640/1000;touch-action:pan-y;cursor:grab;-webkit-user-select:none;user-select:none}
 .fig::before{content:"";position:absolute;inset:10% -20%;z-index:-1;background:radial-gradient(circle,color-mix(in srgb,var(--rust) 15%,transparent) 0,transparent 60%)}
 .fig canvas{display:block;width:100%;height:100%}
+.mu .fig{margin-bottom:36px}
 .fig .bubble{position:absolute;z-index:2;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border:1px solid var(--line);border-radius:var(--r-16);background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow-float);font:inherit;text-align:left;white-space:nowrap;cursor:pointer;transform:translate(-50%,-100%) scale(.85);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.16,1,.3,1)}
 .fig .bubble.on{opacity:1;transform:translate(-50%,-100%);pointer-events:auto}
 .fig .bubble b{display:block;font-size:var(--fs-17);font-weight:600;color:var(--text)}
@@ -403,7 +407,10 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
   .vis{width:440px;height:700px}
   .vis .glow{width:640px;height:640px;margin:-320px 0 0 -320px}
   .vis .device,.flip .vis .device{left:59px;top:0}
-  .part,.flip .part{left:30px;width:380px;top:auto!important;bottom:-24px}
+  /* The phone, then its piece under it, over the phone's lowest quarter only: the pieces share one grid cell. */
+  .vis{display:grid;justify-items:center;height:auto}
+  .vis .device,.flip .vis .device{position:relative;left:auto;top:auto;grid-area:1/1}
+  .part,.flip .part{position:relative;grid-area:2/1;align-self:start;left:auto;top:auto!important;width:380px;max-width:100%;margin-top:-170px}
   .ch .steps{max-width:none;margin-top:44px}
   .mu,.connect .intro,.faq{grid-template-columns:1fr;gap:32px}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
@@ -419,11 +426,13 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
   .hero{padding-top:110px}
   .lede,.sub{font-size:var(--fs-17)}
   /* On a phone the app comes right under the line, before the waitlist (the nav's Join is always there). */
-  .hero .grid{gap:0}.hero .copy{display:contents}.hero .kicker{justify-self:center}
+  /* Left-aligned on a phone: four centred lines read badly. */
+  .hero .grid{gap:0;text-align:left}.hero .copy{display:contents}.hero .kicker{justify-self:start}.hero .lede{margin-left:0}
   .hero .stage{order:1;margin-top:32px}.hero .cta{order:2;margin-top:32px}
   .rig{width:322px;height:672px;--hz:.8}
   .rig .device{left:0}
-  .opener .cards{width:100%;max-width:420px}.opener .sub{font-size:var(--fs-20)}
+  /* On a phone a part opens with its title and line only: its chapters right under show the same day. */
+  .opener .cards{display:none}.opener .sub{font-size:var(--fs-20)}
   .acts-nav{bottom:12px;padding:9px 14px 9px 14px;gap:12px}
   /* On a phone the floating cards would cover the real screen's numbers. */
   .glass{display:none}
@@ -508,9 +517,10 @@ document.querySelectorAll('.chapter').forEach(function(ch){
 document.querySelectorAll('.opener').forEach(function(a){var c=a.querySelector('.cards');if(still||!IO){D.last(c);a.classList.add('on');return;}D.first(c);
  new IntersectionObserver(function(es){var on=es[0].isIntersecting;a.classList.toggle('on',on);if(on&&!a._played){a._played=true;D.play(c);}},{threshold:.3}).observe(c);});
 // The pill at the bottom: shown from the first part to the end of the last one, its dot on the part in view.
-var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('kouc'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false;
- function where(){ticking=false;var mid=innerHeight*.5,i=-1;acts.forEach(function(a,k){if(a.getBoundingClientRect().top<mid)i=k;});
-  var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid;an.classList.toggle('on',shown);if(i<0)i=0;
+// On a phone the pill steps aside while reading downwards and comes back on the way up.
+var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('kouc'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false,lastY=scrollY,down=false,narrow=matchMedia('(max-width:560px)');
+ function where(){ticking=false;var mid=innerHeight*.5,i=-1,y=scrollY;if(Math.abs(y-lastY)>8){down=y>lastY;lastY=y;}acts.forEach(function(a,k){if(a.getBoundingClientRect().top<mid)i=k;});
+  var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid&&!(narrow.matches&&down);an.classList.toggle('on',shown);if(i<0)i=0;
   an.style.setProperty('--i',i);title.textContent=dots[i].getAttribute('aria-label');dots.forEach(function(d,k){d.classList.toggle('done',k<=i);});}
  addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(where);}},{passive:true});where();}
 window.aurinTurnstile=function(){dispatchEvent(new Event('aurin:turnstile'));};
@@ -640,6 +650,7 @@ ${headScript}
 <style>${themeTokens}${siteCss}${demoCss}</style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
 <a class="logo" href="/">${mark(30)}<span>Aurin</span></a>
 <div class="links"><a href="/#pripravenost">Features</a><a href="/#kouc">AI coach</a><a href="/#propojeni">Connections</a><a href="/#soukromi">Privacy</a></div>
@@ -676,7 +687,7 @@ function pageLang(request, czech = false) {
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '27. října 2026', en: '27 October 2026'};
+const UPDATED = {cs: '28. října 2026', en: '28 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -761,7 +772,7 @@ export function overviewPage(request) {
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
     ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout, or send a photo of a plan from your trainer. Tap Coach on a workout or your HRV to ask about just that, or during a gym session about the set, the rest or the next exercise. You can also reply straight from its notification. When it proposes a workout or a whole plan for your race, confirm it and it lands in your plan.', 15000]]]];
+      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout, or send a photo of a plan from your trainer. Tap Coach on a workout or your HRV to ask about just that, or during a gym session about the set, the rest or the next exercise. You can also reply straight from its notification. When it proposes a workout or a whole plan for your race, confirm it and it lands in your plan.', 11500]]]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {
@@ -800,8 +811,8 @@ ${REAL_DAYS[id] ? realDay(id) : ''}
   const muscles = `<section id="svaly" class="muscles"><div class="wrap mu">
 <div class="copy reveal"><div class="eyebrow">Muscles</div><h2 class="big">Know what’s recovered.</h2><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
 <div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
-<p class="hint">Drag to turn · tap a muscle</p>${realDay('svaly')}</div>
-<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+${realDay('svaly')}</div>
+<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn · tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
 </div></section>
 <div class="muscle-card" role="dialog" aria-modal="true" aria-label="Muscle"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3></h3><p class="state"></p></div></div>`;
 
@@ -865,7 +876,7 @@ ${layer('wide')}${layer('tall')}
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
-    ['What does it cost?', 'Nothing during testing. The price after the release is not set yet; you will see it in the App Store before you buy, and Apple handles the purchase.'],
+    ['What does it cost?', 'Nothing during testing. After the release, the coach, food from a photo and reviews come with Aurin Pro: CZK 199 a month or CZK 1,490 a year with the first week free, in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
     ['Can I delete my data?', 'Yes. In Settings → Privacy &amp; data you can download all your data or delete your account with everything in it.'],
@@ -895,7 +906,7 @@ ${layer('wide')}${layer('tall')}
   return sitePage({lang, origin, path: '/', jsonLd,
     title: 'Aurin · train for how you feel today',
     description,
-    body: `<main>
+    body: `<main id="main" tabindex="-1">
 <div class="hero">
 <div class="wrap grid">
 <div class="copy">
@@ -962,7 +973,7 @@ function doc(request, path, title, html) {
     ? `<p class="muted"><a href="${path}" lang="en" hreflang="en">English version</a></p>`
     : `<p class="muted"><a href="${path}?lang=cs" lang="cs" hreflang="cs">Česká verze</a></p>`;
   return sitePage({lang, origin, path, czech, title: `${pick(title)} · Aurin`, description: lang === 'cs' ? `${title.cs} pro Aurin (aurin.health).` : `${title.en} for Aurin (aurin.health).`,
-    body: `<main class="wrap doc"><h1>${pick(title)}</h1>${other}${pick(html)}</main>`});
+    body: `<main id="main" tabindex="-1" class="wrap doc"><h1>${pick(title)}</h1>${other}${pick(html)}</main>`});
 }
 
 // Sign in with Apple and e-mail codes are described only once they are set up (signIn from the
@@ -997,6 +1008,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <p><strong>The calendar on your iPhone</strong>, only if you turn on Read calendar: the app reads your events on the phone and sends us only the number of minutes free for training on each day of the next two weeks, never the events, their names or times. We keep these numbers for up to a week after the day and delete them when you turn reading off. If you turn on Add workouts, the app writes your planned workouts into the calendar on your phone.</p>
 <p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training) and the profile photo if you add one, food and drinks, workouts and how they went, notes, your journal answers (such as alcohol, caffeine, sauna or how you felt), and your conversations with the assistant. A photo you send the coach goes to OpenAI with that one message (see below) and is not stored; the conversation keeps only a note that a photo was there. We count the messages you send the coach each week, to keep the service fair for everyone.</p>
 <p><strong>What you send us from Settings → Help:</strong> a problem report with what you write, a screenshot if you add one and, if you leave it on, the app’s diagnostics (app and iOS version, your connections and their last errors, failed requests and crashes, never your health data), or a feature idea with the app version. We keep them to answer you and fix the problem, and they are deleted with your account.</p>
+<p><strong>Aurin Pro bought in the app:</strong> Apple handles the payment and we never see your payment details. With each purchase, renewal, refund or cancellation the App Store sends us a signed record of it: its identifiers, the plan, when it started and when it renews or ends, whether it renews and whether it was refunded, and the random identifier of your Aurin account that the app gives the purchase. We use it only to unlock Aurin Pro for your account, and it is deleted with your account.</p>
 <p><strong>The waitlist on our website:</strong> when you join it, we keep the email address you enter and when you joined. We use it only to let you test Aurin through Apple’s TestFlight; we send no newsletters to it.</p>
 <p><strong>On your device:</strong> a sign-in cookie valid for up to 30 days, a short-lived cookie that protects signing in, a cookie kept for up to a year after you sign in with an email code, which holds no personal data and only lets this device keep signing in when someone else enters wrong codes for your email, cookies with your theme and language and, in the browser’s storage, a copy of the last loaded day and a few display settings so the app opens instantly, and, once you add or use a passkey, your email with the passkey’s identifier, so this device signs you in with it instead of sending a code. We use no advertising or tracking cookies.</p>
 <p><strong>Technical logs:</strong> our hosting provider records technical details of requests (such as time, IP address, page and errors) to keep the service running and secure. These logs are kept for a few days.</p>
@@ -1040,6 +1052,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data, including data from a connected Ultrahuman Ring or WHOOP. OpenAI processes it on our behalf under its API data processing terms: it does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse, unless the law requires it to keep it longer.</li>
 <li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''} On the website, Cloudflare Turnstile checks that the waitlist form is sent by a person. For that it reads technical details of your browser and sets no tracking cookies.</li>
 <li><strong>Apple</strong>, if you allow notifications (Settings → Notifications): your iPhone’s notification token and the text of each notification, such as the morning readiness or a note from the coach, which Apple’s push service delivers to your iPhone. Turning notifications off or signing out removes the token.</li>
+<li><strong>Apple</strong>, when you buy Aurin Pro: the random identifier of your Aurin account that the app adds to the purchase, so the App Store’s records of it reach the right account. Apple handles the purchase under its own privacy policy.</li>
 <li><strong>Apple</strong>, when we add you to the testers from the waitlist: your email address, so that TestFlight emails you how to install Aurin. Apple handles it under its own privacy policy.</li>
 <li><strong>Apple Weather</strong> (WeatherKit) gets only the place you choose for the weather in your training plan: a place you search for (the search uses Apple Maps), or your location rounded to about 1 km if you allow it. Without that the app shows no weather.</li>
 <li><strong>Authorities</strong>, only when the law requires it.</li>
@@ -1104,6 +1117,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <p><strong>Kalendář v iPhonu</strong>, jen když zapneš Číst kalendář: aplikace přečte události v telefonu a pošle nám jen počet volných minut na trénink v každém dni příštích dvou týdnů, nikdy události, jejich názvy ani časy. Tato čísla uchováváme nejvýš týden po daném dni a smažeme je, když čtení vypneš. Když zapneš Zapisovat tréninky, aplikace zapíše naplánované tréninky do kalendáře v telefonu.</p>
 <p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink) a profilovou fotku, pokud ji přidáš, jídlo a pití, tréninky a jejich hodnocení, poznámky, odpovědi v deníku (třeba alkohol, kofein, sauna nebo jak ti bylo) a konverzace s asistentem. Fotka, kterou pošleš kouči, jde do OpenAI jen s tou jednou zprávou (viz níže) a neukládáme ji; v konverzaci zůstane jen poznámka, že tam fotka byla. Počítáme, kolik zpráv koučovi za týden pošleš, aby služba zůstala férová pro všechny.</p>
 <p><strong>Co nám pošleš z Nastavení → Pomoc:</strong> hlášení problému s tím, co napíšeš, snímkem obrazovky, když ho přidáš, a pokud ji necháš zapnutou, diagnostikou aplikace (verze aplikace a iOS, propojení a jejich poslední chyby, nepovedené požadavky a pády, nikdy tvoje zdravotní data), nebo návrh funkce s verzí aplikace. Uchováváme je, abychom ti odpověděli a problém opravili, a smažou se s tvým účtem.</p>
+<p><strong>Aurin Pro koupené v aplikaci:</strong> platbu řeší Apple a tvoje platební údaje nikdy nevidíme. S každým nákupem, obnovením, vrácením peněz nebo zrušením nám App Store pošle podepsaný záznam o něm: jeho identifikátory, tarif, kdy začal a kdy se obnoví nebo skončí, jestli se obnovuje a jestli byly peníze vráceny, a náhodný identifikátor tvého účtu Aurin, který aplikace k nákupu přidá. Používáme ho jen k odemčení Aurin Pro pro tvůj účet a smaže se s tvým účtem.</p>
 <p><strong>Waitlist na našem webu:</strong> když se do něj zapíšeš, uložíme e-mail, který zadáš, a datum zápisu. Použijeme ho jen k testování Aurinu přes TestFlight od Applu; žádné newslettery na něj neposíláme.</p>
 <p><strong>Ve tvém zařízení:</strong> cookie přihlášení s platností nejvýš 30 dní, krátkodobá cookie, která chrání přihlašování, cookie na nejvýš rok po přihlášení kódem z e-mailu, která neobsahuje žádné osobní údaje a jen dovolí tomuto zařízení přihlásit se, i když na tvůj e-mail někdo jiný zadává špatné kódy, cookies s vybraným vzhledem a jazykem a v úložišti prohlížeče kopie naposledy načteného dne a několik nastavení zobrazení, aby se aplikace otevřela hned, a když si přidáš nebo použiješ přístupový klíč, tvůj e-mail s označením klíče, aby tě zařízení přihlásilo jím a nemuselo posílat kód. Reklamní ani sledovací cookies nepoužíváme.</p>
 <p><strong>Technické záznamy:</strong> náš poskytovatel hostingu zaznamenává technické údaje o požadavcích (třeba čas, IP adresu, stránku a chyby), aby služba fungovala a byla bezpečná. Tyto záznamy se uchovávají několik dní.</p>
@@ -1147,6 +1161,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě, včetně dat z připojeného prstenu Ultrahuman nebo WHOOPu. OpenAI je zpracovává naším jménem podle svých podmínek zpracování dat přes API: data poslaná přes API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití, pokud mu zákon neukládá uchovat je déle.</li>
 <li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''} Na webu Cloudflare Turnstile ověřuje, že formulář čekací listiny posílá člověk. Čte k tomu technické údaje o prohlížeči a nenastavuje sledovací cookies.</li>
 <li><strong>Apple</strong>, když povolíš oznámení (Nastavení → Oznámení): token tvého iPhonu pro oznámení a text každého oznámení, třeba ranní připravenosti nebo zprávy od kouče, které Applova služba pro oznámení doručí do tvého iPhonu. Vypnutím oznámení nebo odhlášením se token smaže.</li>
+<li><strong>Apple</strong>, když koupíš Aurin Pro: náhodný identifikátor tvého účtu Aurin, který aplikace k nákupu přidá, aby záznamy App Storu o něm došly ke správnému účtu. Apple s nákupem nakládá podle svých zásad ochrany soukromí.</li>
 <li><strong>Apple</strong>, když tě z waitlistu přidáme k testerům: tvůj e-mail, aby ti TestFlight poslal, jak Aurin nainstalovat. Apple s ním nakládá podle svých zásad ochrany soukromí.</li>
 <li><strong>Apple Weather</strong> (WeatherKit) dostane jen místo, které vybereš pro počasí v plánu tréninků: vyhledané místo (hledání používá Apple Mapy), nebo tvou polohu zaokrouhlenou zhruba na 1 km, pokud ji povolíš. Bez toho aplikace počasí neukazuje.</li>
 <li><strong>Úřady</strong>, jen když to vyžaduje zákon.</li>
@@ -1189,7 +1204,7 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
 }
 
 // Terms of Use. The English text is the reference version; the Czech one says the same.
-const TERMS_UPDATED = {cs: '22. října 2026', en: '22 October 2026'};
+const TERMS_UPDATED = {cs: '28. října 2026', en: '28 October 2026'};
 const APPLE_EULA = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 export function termsPage(request) {
@@ -1231,7 +1246,7 @@ export function termsPage(request) {
 <li>AI answers are generated automatically and can be incomplete or wrong, including nutrition values and ingredients. Check them before you rely on them, especially if you have an allergy or follow a medical diet.</li>
 </ul>
 <h2>Price</h2>
-<p>Aurin is currently free. If we introduce paid features, we will tell you in advance, show the price and conditions before you buy, and sell them only through the App Store, where Apple handles payment, cancellation and refunds. We never charge you without your purchase.</p>
+<p>Aurin is currently free, AI features included. Aurin Pro, the coach, food from a photo and the AI reviews, is an auto-renewing subscription sold only through the App Store, where Apple handles payment, cancellation and refunds. The app shows its price, period and conditions before you buy; the yearly plan can start with a free week, once per Apple ID. A subscription renews until you cancel it in your Apple account’s subscriptions (in the app, Settings → Aurin Pro → Manage subscription) at least 24 hours before the period ends. While Aurin is in testing, purchases in TestFlight are Apple’s test purchases and cost nothing. Before Aurin Pro is needed for the AI features, we will tell you in advance. We never charge you without your purchase.</p>
 <h2>Fair use</h2>
 <p>Do not try to get around Aurin’s security, access someone else’s account or data, overload the service, download it automatically, copy or resell it, or use it for anything unlawful. Reverse engineering is allowed only where the law permits it.</p>
 <h2>Availability and changes</h2>
@@ -1248,6 +1263,7 @@ export function termsPage(request) {
 <h2>Ending your use</h2>
 <ul>
 <li>You can stop at any time by deleting your account in <strong>Settings → Privacy &amp; data → Delete account</strong>.</li>
+<li>Deleting your account does not cancel an Aurin Pro subscription: Apple keeps charging it until you cancel it in your Apple account’s subscriptions.</li>
 <li>We may suspend or close an account that seriously or repeatedly breaks these terms. Unless the law prevents it, we tell you by e-mail why.</li>
 <li>An account nobody has signed in to for two years is deleted, as the Privacy Policy describes.</li>
 </ul>
@@ -1298,7 +1314,7 @@ export function termsPage(request) {
 <li>Odpovědi AI vznikají automaticky a můžou být neúplné nebo chybné, včetně nutričních hodnot a složení. Než se na ně spolehneš, zkontroluj je, hlavně když máš alergii nebo držíš léčebnou dietu.</li>
 </ul>
 <h2>Cena</h2>
-<p>Aurin je zatím zdarma. Pokud zavedeme placené funkce, dáme ti vědět předem, cenu a podmínky uvidíš před nákupem a prodávat je budeme jen přes App Store, kde platbu, zrušení i vrácení peněz řeší Apple. Bez tvého nákupu ti nikdy nic neúčtujeme.</p>
+<p>Aurin je zatím zdarma, včetně AI funkcí. Aurin Pro, tedy kouč, jídlo z fotky a hodnocení od AI, je automaticky obnovované předplatné, které prodáváme jen přes App Store, kde platbu, zrušení i vrácení peněz řeší Apple. Cenu, období a podmínky ti aplikace ukáže před nákupem; roční tarif může začít týdnem zdarma, jednou na Apple ID. Předplatné se obnovuje, dokud ho nezrušíš v předplatných svého účtu Apple (v aplikaci Nastavení → Aurin Pro → Spravovat předplatné) aspoň 24 hodin před koncem období. Dokud je Aurin v testování, nákupy v TestFlightu jsou testovací nákupy Applu a nic nestojí. Než bude Aurin Pro pro AI funkce potřeba, dáme ti vědět předem. Bez tvého nákupu ti nikdy nic neúčtujeme.</p>
 <h2>Férové používání</h2>
 <p>Nesnaž se obejít zabezpečení Aurinu, dostat se k cizímu účtu nebo datům, přetěžovat službu, automaticky ji stahovat, kopírovat ji nebo přeprodávat, ani ji používat k ničemu protiprávnímu. Zpětná analýza je dovolená jen tam, kde to povoluje zákon.</p>
 <h2>Dostupnost a změny</h2>
@@ -1315,6 +1331,7 @@ export function termsPage(request) {
 <h2>Konec používání</h2>
 <ul>
 <li>Přestat můžeš kdykoli smazáním účtu v <strong>Nastavení → Soukromí a data → Smazat účet</strong>.</li>
+<li>Smazání účtu nezruší předplatné Aurin Pro: Apple ho účtuje dál, dokud ho nezrušíš v předplatných svého účtu Apple.</li>
 <li>Účet, který vážně nebo opakovaně porušuje tyto podmínky, můžeme pozastavit nebo zrušit. Pokud to zákon nezakazuje, napíšeme ti e-mailem proč.</li>
 <li>Účet, do kterého se dva roky nikdo nepřihlásil, smažeme, jak popisují Zásady ochrany soukromí.</li>
 </ul>

@@ -25,7 +25,7 @@ enum EnduranceZones {
 
     /// "88–93 % · 229–242 W" or "78–88 % · 5:40–6:10 /km".
     static func target(_ sport: String, _ step: EnduranceStep, _ athlete: AthleteThresholds) -> String {
-        let percent = step.low == step.high ? "\(step.low) %" : "\(step.low)–\(step.high) %"
+        let percent = step.low == step.high ? "\(step.low)" + Fmt.percentSign : "\(step.low)–\(step.high)" + Fmt.percentSign
         if sport == "run", let pace = athlete.runThresholdPace {
             return percent + " · " + ZonesSettingsView.pace(Units.pace(pace * 100 / Double(step.high))) + "–" + ZonesSettingsView.pace(Units.pace(pace * 100 / Double(step.low))) + " " + Units.paceUnit
         }
@@ -353,7 +353,7 @@ struct StepEditorSheet: View {
     private func value(_ percent: Int) -> String {
         if sport == "run", let pace = athlete.runThresholdPace { return "\(percent) % · " + Units.paceText(pace * 100 / Double(percent)) }
         if sport != "run", let ftp = athlete.ftp { return "\(percent) % · \(Int((ftp * Double(percent) / 100).rounded())) W" }
-        return "\(percent) %"
+        return "\(percent)" + Fmt.percentSign
     }
 }
 
