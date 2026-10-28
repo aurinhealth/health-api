@@ -34,7 +34,10 @@ struct CoachView: View {
     @State private var galleryOpen = false
     @State private var galleryItem: PhotosPickerItem?
     @State private var home: CoachesSnapshot?
+    /// The side panel with the conversations, from ☰.
     @State private var showChats = false
+    /// False once another conversation is opened from the panel: it is not about `subject`.
+    @State private var aboutSubject = true
     @State private var showMemory = false
     /// This week's messages to the coach (src/coach-allowance.js); nil for the owner.
     @State private var allowance: CoachAllowance?
@@ -75,7 +78,7 @@ struct CoachView: View {
                         // Lazy: a long chat lays out only the bubbles on screen.
                         LazyVStack(alignment: .leading, spacing: 14) {
                             if messages.isEmpty { welcome }
-                            else if let subject { CoachSubjectCard(subject: subject) }
+                            else if let subject = current { CoachSubjectCard(subject: subject) }
                             ForEach(messages) { bubble in
                                 BubbleView(bubble: bubble, writing: sending && bubble.id == messages.last?.id && !bubble.mine,
                                            decide: { action, confirm in Task { await decide(action, confirm: confirm, in: bubble.id) } },
@@ -109,21 +112,18 @@ struct CoachView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
-                        .accessibilityLabel("Zavřít")
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button { newChat() } label: { Label("Nová konverzace", systemImage: "square.and.pencil") }
-                        Button { showChats = true } label: { Label("Předchozí konverzace", systemImage: "clock.arrow.circlepath") }
-                        Button { showMemory = true } label: { Label("Co si kouč pamatuje", systemImage: "sparkles") }
-                    } label: { Image(systemName: "ellipsis.circle") }
+                    Button { withAnimation(.easeOut(duration: 0.25)) { showChats = true } } label: {
+                        Image(systemName: "line.3.horizontal").font(.system(size: 16, weight: .semibold))
+                    }
                     // Not while an answer streams in: it writes into the current conversation.
                     .disabled(sending)
                     .accessibilityLabel("Konverzace")
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
+                        .accessibilityLabel("Zavřít")
+                }
             }
-            .sheet(isPresented: $showChats) { ChatsSheet { id in Task { await open(id) } } }
             .fullScreenCover(isPresented: $cameraOpen) {
                 CameraPicker { image in
                     cameraOpen = false
@@ -141,6 +141,16 @@ struct CoachView: View {
             }
             .navigationDestination(isPresented: $showMemory) { CoachMemoryView() }
         }
+        .overlay {
+            if showChats {
+                ChatsPanel(current: chatId, close: { withAnimation(.easeOut(duration: 0.25)) { showChats = false } },
+                           newChat: { newChat() }, open: { id in
+                               aboutSubject = id == chatId && aboutSubject
+                               Task { await open(id) }
+                           }, memory: { showMemory = true })
+                .transition(.move(edge: .leading))
+            }
+        }
         .tint(Palette.ink)
         .task {
             guard !model.demo, home == nil else { return }
@@ -154,7 +164,7 @@ struct CoachView: View {
     // MARK: Parts
 
     @ViewBuilder private var welcome: some View {
-        if let subject {
+        if let subject = current {
             VStack(alignment: .leading, spacing: 14) {
                 CoachSubjectCard(subject: subject)
                 SectionLabel(text: "Zkus třeba").padding(.top, 10)
@@ -355,7 +365,7 @@ struct CoachView: View {
         var unshown: String?
         var shownAt = Date.distantPast
         do {
-            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image, appContext: subject?.appContext) {
+            for try await event in model.api.askCoach(text, chatId: chatId, view: view, date: date, image: image, appContext: current?.appContext) {
                 switch event {
                 case .progress(let p): progress = p
                 case .answer(let a):
@@ -382,7 +392,7 @@ struct CoachView: View {
                     }
                     if let chat = result.chatId {
                         chatId = chat
-                        keepChat(chat)
+                        if aboutSubject { keepChat(chat) }
                     }
                     if let a = result.coachAllowance {
                         allowance = a
@@ -515,10 +525,14 @@ struct CoachView: View {
         return protein > 0 ? L10n.f("Zbývá ti %d kcal a %d g bílkovin.", kcal, protein) : L10n.f("Zbývá ti %d kcal.", kcal)
     }
 
+    /// What the open conversation is about: nil for one opened from the panel.
+    private var current: CoachSubject? { aboutSubject ? subject : nil }
+
     private func newChat() {
         messages = []
         chatId = nil
         error = nil
+        aboutSubject = true
         // A new conversation gets no extra messages.
         usedUp = allowance?.usedUp == true
     }
@@ -539,7 +553,7 @@ struct CoachView: View {
         do {
             let chat = try await model.api.chat(id: id)
             chatId = chat.id
-            keepChat(chat.id)
+            if aboutSubject { keepChat(chat.id) }
             usedUp = allowance?.usedUp == true
             // The proposals stay under the answer they came with, decided or still open.
             let actions = chat.actions ?? []
@@ -909,46 +923,127 @@ struct WorkoutPreviewBlock: View {
     }
 }
 
-struct ChatsSheet: View {
+/// ☰ in the coach: every conversation by the day it was last written in,
+/// a new one on top and what the coach remembers at the bottom.
+struct ChatsPanel: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
+    /// The conversation on screen, marked in the list.
+    var current: Int?
+    var close: () -> Void
+    var newChat: () -> Void
     var open: (Int) -> Void
+    var memory: () -> Void
     @State private var chats: [ChatSummary] = []
     @State private var loading = true
 
     var body: some View {
-        NavigationStack {
-            List {
-                ForEach(chats) { chat in
-                    Button {
-                        open(chat.id)
-                        dismiss()
-                    } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(chat.title ?? "Konverzace").font(.body).foregroundStyle(Palette.ink).lineLimit(2)
-                            if let n = chat.messages { Text("\(n) " + Fmt.plural(n, "zpráva", "zprávy", "zpráv")).font(Typo.caption).foregroundStyle(Palette.muted) }
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Color.black.opacity(0.35).ignoresSafeArea()
+                    .onTapGesture(perform: close)
+                    .accessibilityLabel(L10n.tr("Zavřít"))
+                    .accessibilityAddTraits(.isButton)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Konverzace").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                        .padding(.horizontal, 18).padding(.top, 18)
+                    Button { newChat(); close() } label: {
+                        Label("Nová konverzace", systemImage: "square.and.pencil")
+                            .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 14).frame(height: 46)
+                            .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 12).padding(.top, 14)
+                    List {
+                        ForEach(Self.days(chats)) { group in
+                            Section {
+                                ForEach(group.chats) { chat in row(chat) }
+                                    .onDelete { offsets in
+                                        let ids = offsets.map { group.chats[$0].id }
+                                        chats.removeAll { ids.contains($0.id) }
+                                        Task { for id in ids { try? await model.api.deleteChat(id: id) } }
+                                    }
+                            } header: {
+                                SectionLabel(text: Self.title(group.day))
+                            }
+                        }
+                        if !loading && chats.isEmpty {
+                            Text("Zatím žádné konverzace.").font(Typo.small).foregroundStyle(Palette.muted)
+                                .listRowBackground(Color.clear)
                         }
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    Divider().overlay(Palette.ink.opacity(0.08))
+                    Button { close(); memory() } label: {
+                        Label("Co si kouč pamatuje", systemImage: "sparkles")
+                            .font(Typo.body).foregroundStyle(Palette.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 18).frame(height: 52)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .onDelete { offsets in
-                    let ids = offsets.map { chats[$0].id }
-                    chats.remove(atOffsets: offsets)
-                    Task { for id in ids { try? await model.api.deleteChat(id: id) } }
-                }
-                if !loading && chats.isEmpty {
-                    Text("Zatím žádné konverzace.").foregroundStyle(Palette.muted)
-                }
-            }
-            .navigationTitle("Konverzace")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Zavřít") { dismiss() } } }
-            .task {
-                defer { loading = false }
-                guard !model.demo else { return }
-                chats = (try? await model.api.chats()) ?? []
+                .frame(width: min(320, geo.size.width * 0.82))
+                .frame(maxHeight: .infinity)
+                .background(Palette.background.ignoresSafeArea())
+                .shadow(color: .black.opacity(0.25), radius: 20, x: 6)
             }
         }
-        .presentationDetents([.medium, .large])
+        .task {
+            defer { loading = false }
+            guard !model.demo else { return }
+            chats = (try? await model.api.chats()) ?? []
+        }
+    }
+
+    private func row(_ chat: ChatSummary) -> some View {
+        Button { open(chat.id); close() } label: {
+            HStack(spacing: 10) {
+                Text(chat.title ?? L10n.tr("Konverzace")).font(Typo.body).foregroundStyle(Palette.ink).lineLimit(1)
+                Spacer(minLength: 0)
+                if let date = Self.date(chat.updatedAt) {
+                    Text(ClockText.format(date)).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(chat.id == current ? Palette.card : Color.clear)
+    }
+
+    /// The server's "2026-10-28 18:32:10" is UTC.
+    static func date(_ text: String?) -> Date? {
+        guard let text else { return nil }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return f.date(from: text)
+    }
+
+    /// The chats by the phone's day they were last written in, newest first (the server's order).
+    struct Day: Identifiable {
+        let day: String
+        var chats: [ChatSummary]
+        var id: String { day }
+    }
+
+    static func days(_ chats: [ChatSummary]) -> [Day] {
+        var out: [Day] = []
+        for chat in chats {
+            let day = date(chat.updatedAt).map { AppModel.localDate($0) } ?? ""
+            if let i = out.firstIndex(where: { $0.day == day }) { out[i].chats.append(chat) } else { out.append(Day(day: day, chats: [chat])) }
+        }
+        return out
+    }
+
+    /// "Dnes", "Včera" or "Po 26. října".
+    static func title(_ day: String) -> String {
+        let today = AppModel.localDate(Date())
+        if day == today { return "Dnes" }
+        if day == AppModel.shift(today, by: -1) { return "Včera" }
+        guard !day.isEmpty else { return "Konverzace" }
+        return Fmt.capitalized(Fmt.weekdayShort(day)) + " " + Fmt.dayMonth(day)
     }
 }
 
