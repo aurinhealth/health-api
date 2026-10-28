@@ -171,7 +171,7 @@ struct StepsDetailContent: View {
 
     /// The average steps of each weekday, Monday first.
     private func weekdays(_ list: [TodaySnapshot.Point]) -> [Bar] {
-        let names = L10n.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
+        let names = Fmt.weekdaysFromMonday
         return names.indices.map { i in
             let values = list.filter { $0.value > 0 && ISODay.weekdayIndex($0.date) == i }.map(\.value)
             let mean = values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count)

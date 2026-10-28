@@ -174,6 +174,28 @@ struct AdjustmentNote: View {
     }
 }
 
+/// Over the GymSetRow rows, in Režim tréninku and on the gym day.
+struct GymSetTableHeader: View {
+    // The same columns as GymSetRow, growing with the text size.
+    @ScaledMetric(relativeTo: .subheadline) private var labelWidth: CGFloat = 26
+    @ScaledMetric(relativeTo: .largeTitle) private var kgWidth: CGFloat = 64
+    @ScaledMetric(relativeTo: .largeTitle) private var repsWidth: CGFloat = 52
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // One line: "SETS" and "SÉRIE" are a little wider than the set numbers below.
+            Text("Série").lineLimit(1).fixedSize().frame(width: labelWidth, alignment: .leading)
+            Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
+            Text(Units.weightUnit).frame(width: kgWidth)
+            Text("Opak.").lineLimit(1).fixedSize().frame(width: repsWidth)
+            Color.clear.frame(width: 40, height: 1)
+            Color.clear.frame(width: 34, height: 1)
+        }
+        .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
+        .padding(.horizontal, 10).padding(.bottom, 4)
+    }
+}
+
 struct GymSetRow: View {
     enum Phase { case done, current, next }
 
@@ -203,6 +225,11 @@ struct GymSetRow: View {
 
     private enum Field { case kg, reps }
     @FocusState private var focus: Field?
+    // The columns grow with the text size, as the numbers in them do (Typo.number).
+    @ScaledMetric(relativeTo: .subheadline) private var labelWidth: CGFloat = 26
+    @ScaledMetric(relativeTo: .largeTitle) private var kgWidth: CGFloat = 64
+    @ScaledMetric(relativeTo: .largeTitle) private var repsWidth: CGFloat = 52
+    @ScaledMetric(relativeTo: .largeTitle) private var fieldHeight: CGFloat = 34
     @State private var editKg = ""
     @State private var editReps = ""
 
@@ -211,7 +238,7 @@ struct GymSetRow: View {
             HStack(spacing: 6) {
                 Text(label).font(.subheadline.weight(.semibold))
                     .foregroundStyle(drop ? GymIntensity.color("D") : state == .current ? Palette.amber : state == .next ? Palette.faint : Palette.secondary)
-                    .frame(width: side == nil ? 26 : 16, alignment: .leading)
+                    .frame(width: side == nil ? labelWidth : labelWidth - 10, alignment: .leading)
                 if let side {
                     Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side)).frame(width: 12)
                 }
@@ -219,13 +246,13 @@ struct GymSetRow: View {
             Text(lastTime ?? "—").font(.footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
             field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg)
-            field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps, hint: repsHint).frame(width: 52)
+            field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps, hint: repsHint).frame(width: repsWidth)
             if let onIntensity {
                 Button(action: onIntensity) {
                     IntensityPill(letter: intensity, planned: planned)
                         .opacity(state == .next ? 0.6 : 1)
                         .frame(width: 40, height: 40)
-                        .contentShape(Rectangle())
+                        .tapTarget(width: 40, height: 40)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(intensity.map { GymIntensity.name($0) } ?? L10n.tr("Bez hodnocení"))
@@ -243,7 +270,7 @@ struct GymSetRow: View {
                     }
                 }
                 .frame(width: 34, height: 40)
-                .contentShape(Rectangle())
+                .tapTarget(width: 34, height: 40)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.tr(state == .done ? "Vrátit sérii" : "Série hotová"))
@@ -272,14 +299,14 @@ struct GymSetRow: View {
                 .font(Typo.number(22))
                 .foregroundStyle(Palette.ink)
                 .focused($focus, equals: field)
-                .frame(width: 64, height: 34)
+                .frame(width: kgWidth, height: fieldHeight)
                 .background(focus == field ? Palette.card : .clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else if field == .kg, state == .current, let onKgTap {
             Button(action: onKgTap) {
                 Text(binding?.wrappedValue.nilIfBlank ?? (value.isEmpty ? "–" : value))
                     .font(Typo.number(22))
                     .foregroundStyle(Palette.ink)
-                    .frame(width: 64, height: 34)
+                    .frame(width: kgWidth, height: fieldHeight)
                     .background(Palette.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .buttonStyle(.plain)
@@ -290,12 +317,12 @@ struct GymSetRow: View {
                 .multilineTextAlignment(.center)
                 .font(Typo.number(22))
                 .foregroundStyle(Palette.ink)
-                .frame(width: 64, height: 34)
+                .frame(width: kgWidth, height: fieldHeight)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else {
             Text(value.isEmpty ? "–" : value).font(Typo.number(22))
                 .foregroundStyle(state == .next ? Palette.faint : Palette.ink)
-                .frame(width: 64)
+                .frame(width: kgWidth)
         }
     }
 }
@@ -328,6 +355,32 @@ struct RestRing: View {
             .frame(width: 220, height: 220)
             .frame(maxWidth: .infinity)
         }
+    }
+}
+
+/// The heart rate since the rest began (and 5 s before it), read here so a
+/// beat redraws only this card.
+struct LiveHeartRecovery: View {
+    let live: LiveWorkout
+    let since: Date
+
+    var body: some View {
+        let from = since.addingTimeInterval(-5)
+        let points = live.trail.filter { $0.date >= from }.map(\.bpm)
+        if points.count >= 2 { HeartRecoveryCard(points: points) }
+    }
+}
+
+/// Nothing to see: calls `onChange` on each new heart rate, so the screen
+/// around it doesn't read (and redraw with) every beat.
+struct HeartRateWatch: View {
+    let live: LiveWorkout
+    let onChange: () -> Void
+
+    var body: some View {
+        Color.clear.frame(width: 0, height: 0)
+            .accessibilityHidden(true)
+            .onChange(of: live.heartRate) { _, _ in onChange() }
     }
 }
 
@@ -481,6 +534,9 @@ struct HeartSourceButton: View {
                     .foregroundStyle(on ? Palette.rust : Palette.faint)
                 if let bpm {
                     Text(verbatim: "\(Int(bpm.rounded()))").font(Typo.number(18)).monospacedDigit().foregroundStyle(Palette.ink)
+                } else if !on {
+                    // The crossed heart alone didn't say what it was.
+                    Text("Bez tepu").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
                 }
             }
             .padding(.horizontal, 12)

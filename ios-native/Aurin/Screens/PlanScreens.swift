@@ -281,7 +281,7 @@ struct StartPlanSheet: View {
         }
     }
 
-    private var weekdays: [String] { L10n.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"] }
+    private var weekdays: [String] { Fmt.weekdaysFromMonday }
 
     /// Under the race: a running race's estimate and goal pace, a cycling race's power and time.
     private var raceNote: String? {
@@ -1161,7 +1161,7 @@ struct PlanResultContent: View {
                                     Text(Fmt.int(end) + " W").font(Typo.number(52)).foregroundStyle(Palette.ink)
                                 }
                                 let gain = end - start
-                                Text((gain >= 0 ? "+" : "−") + Fmt.int(abs(gain)) + " W · " + (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(start, 1) * 100) + " %")
+                                Text((gain >= 0 ? "+" : "−") + Fmt.int(abs(gain)) + " W · " + (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(start, 1) * 100) + Fmt.percentSign)
                                     .font(Typo.bodyStrong).foregroundStyle(gain >= 0 ? Palette.green : Palette.rust)
                             }
                             .frame(maxWidth: .infinity)
@@ -1177,7 +1177,7 @@ struct PlanResultContent: View {
                                     let gain = lift.after - lift.before
                                     compare(Fmt.capitalized(lift.exercise), Units.weightText(lift.before, digits: lift.before.rounded() == lift.before ? 0 : 1),
                                             Units.weightText(lift.after, digits: lift.after.rounded() == lift.after ? 0 : 1),
-                                            (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(lift.before, 1) * 100) + " %", gain >= 0 ? Palette.green : Palette.rust)
+                                            (gain >= 0 ? "+" : "−") + Fmt.int(abs(gain) / max(lift.before, 1) * 100) + Fmt.percentSign, gain >= 0 ? Palette.green : Palette.rust)
                                 }
                                 Text("Odhad maxima z nejlepší série do 12 opakování.").font(Typo.caption).foregroundStyle(Palette.muted)
                                     .frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 4)
@@ -1193,7 +1193,7 @@ struct PlanResultContent: View {
                             }
                             let planned = result.sessionsPlanned ?? 0
                             let pct = planned > 0 ? min(100, result.sessionsDone * 100 / planned) : nil
-                            compare("Tréninky", nil, planned > 0 ? L10n.f("%@ z %@", String(result.sessionsDone), String(planned)) : String(result.sessionsDone), pct.map { "\($0) %" }, pct.map(PlanColors.done) ?? Palette.muted)
+                            compare("Tréninky", nil, planned > 0 ? L10n.f("%@ z %@", String(result.sessionsDone), String(planned)) : String(result.sessionsDone), pct.map { "\($0)" + Fmt.percentSign }, pct.map(PlanColors.done) ?? Palette.muted)
                             if result.sport != "gym" {
                                 Rectangle().fill(Palette.hairline).frame(height: 1)
                                 compare("Čas", nil, planDuration(result.minutesDone), result.minutesPlanned.map { L10n.f("z %@", planDuration($0)) }, Palette.muted)

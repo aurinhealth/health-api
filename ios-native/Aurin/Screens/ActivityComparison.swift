@@ -117,7 +117,7 @@ struct ActivityComparisonSection: View {
                 Text("Minule").frame(width: 100, alignment: .trailing)
                 Text("Dnes").frame(width: 100, alignment: .trailing)
             }
-            .font(.system(size: 12, weight: .medium)).tracking(1.1).textCase(.uppercase).foregroundStyle(Palette.muted)
+            .font(.caption.weight(.medium)).tracking(1.1).textCase(.uppercase).foregroundStyle(Palette.muted)
             .padding(.bottom, 6)
             ForEach(Array(c.rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 0) {

@@ -39,8 +39,9 @@ struct SectionLabel: View {
     let text: String
 
     var body: some View {
+        // Caption: 12 pt at the default size, growing with the text size.
         Text(verbatim: L10n.tr(text).uppercased(with: Fmt.locale))
-            .font(.system(size: 12, weight: .medium))
+            .font(.caption.weight(.medium))
             .tracking(1.9)
             .foregroundStyle(Palette.muted)
             .accessibilityAddTraits(.isHeader)

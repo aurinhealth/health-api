@@ -11,6 +11,11 @@ struct AurinApp: App {
     /// Settings → Jazyk: "cs" or "en"; the phone's language until it is chosen.
     @AppStorage(L10n.key) private var language = L10n.defaultLanguage
 
+    init() {
+        // Začít posilovnu in Control Center or on the Lock Screen (Shared/AurinControls.swift).
+        ControlInbox.startGym = { QuickActions.shared.pick = QuickActions.Pick(id: "liveGym") }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()

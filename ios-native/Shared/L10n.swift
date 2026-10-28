@@ -45,8 +45,12 @@ enum L10n {
     static var isEnglish: Bool { language == "en" }
 
     static var locale: Locale { isEnglish ? englishLocale : czechLocale }
-    private static let englishLocale = Locale(identifier: "en_US")
-    private static let czechLocale = Locale(identifier: "cs_CZ")
+    // The language's texts with the phone region's formats (dates, decimal mark):
+    // English in the UK writes "8 October" and in Germany "62,5". No region: the US.
+    // Czech shows only on Czech and Slovak phones; elsewhere it keeps Czech formats.
+    private static let region = Locale.current.region?.identifier
+    private static let englishLocale = Locale(identifier: "en_" + (region ?? "US"))
+    private static let czechLocale = Locale(identifier: "cs_" + (region == "SK" ? "SK" : "CZ"))
 
     static func setLanguage(_ value: String) {
         UserDefaults.standard.set(value, forKey: key)

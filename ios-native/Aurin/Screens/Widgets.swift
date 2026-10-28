@@ -116,7 +116,7 @@ struct StepsWidget: View {
                  },
                  hi: max(steps.goal * 1.15, steps.week.map(\.value).max() ?? 0),
                  target: steps.goal,
-                 labels: steps.week.map { Fmt.weekdayInitial($0.date) },
+                 labels: steps.week.map { Fmt.weekdayShort($0.date) },
                  highlighted: steps.week.count - 1,
                  height: height,
                  targetLabel: goalLabel)
@@ -127,7 +127,7 @@ struct StepsWidget: View {
 
     private var percent: String {
         guard let today = steps.today, steps.goal > 0 else { return "" }
-        return " · " + Fmt.int(today / steps.goal * 100) + " %"
+        return " · " + Fmt.int(today / steps.goal * 100) + Fmt.percentSign
     }
 }
 

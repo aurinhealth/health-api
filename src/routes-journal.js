@@ -12,7 +12,7 @@
 // GET  /app/api/journal/impact?metric= Co na tebe působí: readiness, hrv, sleep or rhr
 // GET  /app/api/journal/item?key=&metric=  one item in detail
 // `mornings(from, to)` loads the morning metrics (entrypoint.js journalMornings).
-import { CATEGORIES, categoryTitle, itemView, unitText, NOT_RANKED, PARTS, partTitle, usualPart, partOfTime } from "./journal-catalog.js";
+import { CATEGORIES, categoryTitle, itemView, unitText, NOT_RANKED, PARTS, partTitle, usualPart, partOfTime, moodText } from "./journal-catalog.js";
 import { getJournalSettings, saveJournalSettings, getJournalFindings, saveJournalFindings, journalItems, findItem, pinnedItems, setPinned, saveCustomItem, listJournalEntries, saveJournalEntry, autoDays, sickDays, setJournalOptions, setFixed, withFixed, MOOD } from "./journal-store.js";
 import { dayState, rankImpacts, newDiscovery, itemDetail, thresholdOf, levelTime, METRICS, WINDOW_DAYS, DISCOVERY_PERCENT, MIN_DAYS, shiftDay } from "./journal-impact.js";
 import { getAthleteState } from "./athlete-state.js";
@@ -48,9 +48,10 @@ function journalItemOnDay(item, entry, auto) {
   const time = entry ? entry.time : auto?.time || null;
   const answer = entry ? entry.answer : fromData ? (item.type === "yesno" ? (state.yes ? 1 : 0) : (amount ?? 1) > 0 || time || fixed === 1 ? 1 : 0) : null;
   const shown = { yes: state.yes, amount, time };
-  const value = fixed != null ? (fixed ? L("vždy ano", "always yes") : L("vždy ne", "always no")) : valueText(item, shown);
+  const mood = item.key === MOOD && fixed == null ? moodText(amount, entry?.extra?.labels) : null;
+  const value = mood || (fixed != null ? (fixed ? L("vždy ano", "always yes") : L("vždy ne", "always no")) : valueText(item, shown));
   // The row: the time on the left, the value without it on the right.
-  const short = fixed != null ? value
+  const short = mood || fixed != null ? value
     : item.type === "time" ? (time ? null : value)
       : item.type === "amount" && state.yes != null ? num(amount ?? 0, 1) + (unitText(item.unit, amount ?? 0) ? " " + unitText(item.unit, amount ?? 0) : "")
         : valueText(item, { ...shown, time: null });

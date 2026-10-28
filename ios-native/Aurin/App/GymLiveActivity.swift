@@ -21,6 +21,7 @@ enum GymLiveActivity {
         if quiet && Date().timeIntervalSince(lastUpdate) < 15 { return }
         last = state
         lastUpdate = Date()
+        GymRestShared.set(state.restEnd)
         let content = ActivityContent(state: state, staleDate: state.restEnd)
         // Stale (the rest ran out on the lock screen) is still the same
         // activity: updated, never a second one under it.
@@ -37,6 +38,7 @@ enum GymLiveActivity {
     }
 
     static func end() {
+        GymRestShared.set(nil)
         last = nil
         guard let current = activity else { return }
         activity = nil
