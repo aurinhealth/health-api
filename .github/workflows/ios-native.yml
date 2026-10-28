@@ -11,7 +11,8 @@ name: iOS native app
 # - Aurin-screens: whole-screen snapshots in light and dark mode
 #   from the sample data, plus simulator screenshots of the running app
 #   (site/: the English, light-mode shots the website uses; smoke/: each step
-#   of the smoke test Vydat relies on).
+#   of the smoke test Vydat relies on), and preview/: the App Store preview
+#   videos in English and Czech (app-preview-en.mp4, app-preview-cs.mp4).
 
 on:
   workflow_dispatch:
@@ -152,7 +153,42 @@ jobs:
           xcrun simctl uninstall "${{ steps.sim.outputs.udid }}" health.aurin.app || true
           xcodebuild -project Aurin.xcodeproj -scheme AurinSmoke -configuration Debug \
             -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
+            -skip-testing:AurinUITests/AppPreviewTests \
             CODE_SIGNING_ALLOWED=NO test
+
+      # The App Store preview videos: the simulator's screen recorded while
+      # AppPreviewTests walks the sample day in English and Czech, then the clips
+      # it marks cut into one 15–30 s video per language (scripts/app-preview.mjs).
+      # Never fails the run: the videos are for the store page, not the release.
+      - name: Record the App Store preview
+        continue-on-error: true
+        env:
+          TEST_RUNNER_PREVIEW_DIR: ${{ github.workspace }}/screens/preview
+        run: |
+          udid=${{ steps.sim.outputs.udid }}
+          dir="$GITHUB_WORKSPACE/screens/preview"
+          mkdir -p "$dir"
+          xcrun simctl ui "$udid" appearance light
+          xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
+          xcrun simctl io "$udid" recordVideo --codec=h264 --force "$dir/recording.mp4" 2> "$RUNNER_TEMP/record.log" &
+          recorder=$!
+          for _ in $(seq 1 50); do grep -q "Recording started" "$RUNNER_TEMP/record.log" && break; sleep 0.2; done
+          python3 -c 'import time; print(f"{time.time():.3f}")' > "$dir/started.txt"
+          set +e
+          xcodebuild -project Aurin.xcodeproj -scheme AurinSmoke -configuration Debug \
+            -destination "id=$udid" -derivedDataPath build \
+            -only-testing:AurinUITests/AppPreviewTests \
+            CODE_SIGNING_ALLOWED=NO test-without-building
+          status=$?
+          set -e
+          kill -INT "$recorder"
+          wait "$recorder" || true
+          cat "$RUNNER_TEMP/record.log"
+          cat "$dir/marks.txt" || true
+          command -v ffmpeg >/dev/null || brew install --quiet ffmpeg
+          node "$GITHUB_WORKSPACE/scripts/app-preview.mjs" "$dir"
+          rm -f "$dir/recording.mp4"
+          exit $status
 
       # Unsigned: Sideloadly signs it with the user's Apple ID.
       - name: Build for iPhone
