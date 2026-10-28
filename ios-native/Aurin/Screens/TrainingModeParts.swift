@@ -174,6 +174,23 @@ struct AdjustmentNote: View {
     }
 }
 
+/// Over the GymSetRow rows, in Režim tréninku and on the gym day.
+struct GymSetTableHeader: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            // One line: "SETS" and "SÉRIE" are a little wider than the set numbers below.
+            Text("Série").lineLimit(1).fixedSize().frame(width: 26, alignment: .leading)
+            Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
+            Text(Units.weightUnit).frame(width: 64)
+            Text("Opak.").frame(width: 52)
+            Color.clear.frame(width: 40, height: 1)
+            Color.clear.frame(width: 34, height: 1)
+        }
+        .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
+        .padding(.horizontal, 10).padding(.bottom, 4)
+    }
+}
+
 struct GymSetRow: View {
     enum Phase { case done, current, next }
 
@@ -481,6 +498,9 @@ struct HeartSourceButton: View {
                     .foregroundStyle(on ? Palette.rust : Palette.faint)
                 if let bpm {
                     Text(verbatim: "\(Int(bpm.rounded()))").font(Typo.number(18)).monospacedDigit().foregroundStyle(Palette.ink)
+                } else if !on {
+                    // The crossed heart alone didn't say what it was.
+                    Text("Bez tepu").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
                 }
             }
             .padding(.horizontal, 12)

@@ -307,23 +307,28 @@ struct TrainingModeView: View {
         let set = nextSet(exercise)
         let last = history.last(exercise.name, before: date)
         return VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 8) {
-                Text(exercise.name).font(Typo.sentence(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 4)
+            Text(exercise.name).font(Typo.sentence(30, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 18)
+            // Named, not bare icons: what each one does shows at first use.
+            HStack(spacing: 8) {
                 if set != nil {
-                    CircleButton(systemImage: "arrow.triangle.swap", label: L10n.tr("Nahradit cvik")) { swapping = exercise.name }
+                    Button { swapping = exercise.name } label: { ToolChip(systemImage: "arrow.triangle.swap", title: L10n.tr("Vyměnit")) }
+                        .buttonStyle(.plain).accessibilityLabel(L10n.tr("Nahradit cvik"))
                 }
-                CircleButton(systemImage: "chart.bar", label: L10n.tr("Historie cviku")) { historyFor = exercise.name }
-                CircleButton(systemImage: "info", label: L10n.tr("Technika")) { technique = exercise.name }
+                Button { historyFor = exercise.name } label: { ToolChip(systemImage: "chart.bar", title: L10n.tr("Historie")) }
+                    .buttonStyle(.plain).accessibilityLabel(L10n.tr("Historie cviku"))
+                Button { technique = exercise.name } label: { ToolChip(systemImage: "info.circle", title: L10n.tr("Technika")) }
+                    .buttonStyle(.plain)
             }
-            .padding(.top, 18)
+            .padding(.top, 10)
 
             ExerciseNoteLine(note: notes.note(exercise.name)) { noteFor = exercise.name }.padding(.top, 8)
 
             chips(day, exercise, set)
 
-            sidesPicker(exercise)
+            // Only where sides make sense: one-legged or one-armed, or already done by sides.
+            if exercise.bySides || GymSides.oneSided(exercise.name) || sideChoices[exercise.name] == "sides" { sidesPicker(exercise) }
 
             setTable(exercise, set, last)
 
@@ -410,19 +415,7 @@ struct TrainingModeView: View {
         .padding(.top, 14)
     }
 
-    private var tableHeader: some View {
-        HStack(spacing: 8) {
-            // One line: "SETS" and "SÉRIE" are a little wider than the set numbers below.
-            Text("Série").lineLimit(1).fixedSize().frame(width: 26, alignment: .leading)
-            Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
-            Text(Units.weightUnit).frame(width: 64)
-            Text("Opak.").frame(width: 52)
-            Color.clear.frame(width: 40, height: 1)
-            Color.clear.frame(width: 34, height: 1)
-        }
-        .font(.caption2.weight(.medium)).textCase(.uppercase).foregroundStyle(Palette.faint)
-        .padding(.horizontal, 10).padding(.bottom, 4)
-    }
+    private var tableHeader: some View { GymSetTableHeader() }
 
     private func setRow(_ s: GymSet, _ exercise: GymExercise, current: GymSet?, last: GymHistory.Session?) -> GymSetRow {
         let phase: GymSetRow.Phase = s.done ? .done : (s.row == current?.row ? .current : .next)
