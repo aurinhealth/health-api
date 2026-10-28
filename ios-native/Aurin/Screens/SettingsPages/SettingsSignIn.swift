@@ -89,15 +89,10 @@ struct PasskeysSettingsView: View {
 
     private static func day(_ text: String?) -> String? {
         guard let text, text.count >= 19 else { return nil }
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.timeZone = TimeZone(identifier: "UTC")
-        parser.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        let parser = DateFormatters.make("yyyy-MM-dd HH:mm:ss", timeZone: TimeZone(identifier: "UTC") ?? .gmt)
         guard let date = parser.date(from: String(text.prefix(19))) else { return nil }
         if Calendar.current.isDateInToday(date) { return L10n.tr("dnes") }
-        let out = DateFormatter()
-        out.locale = L10n.locale
-        out.setLocalizedDateFormatFromTemplate("dMMM")
-        return out.string(from: date)
+        let pattern = DateFormatter.dateFormat(fromTemplate: "dMMM", options: 0, locale: L10n.locale) ?? "d MMM"
+        return DateFormatters.make(pattern, locale: L10n.locale).string(from: date)
     }
 }

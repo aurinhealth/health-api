@@ -9,7 +9,18 @@ enum SnapshotCache {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appending(path: "snapshots", directoryHint: .isDirectory)
     }
 
-    static func save(_ data: Data, key: String) {
+    /// Bumped by clear(): an answer asked for before a sign-out is not saved
+    /// after it (APIClient.getWithData), so the next start does not show it.
+    private static let lock = NSLock()
+    // Guarded by lock.
+    nonisolated(unsafe) private static var round = 0
+    static var generation: Int { lock.withLock { round } }
+
+    /// generation: the one read before the request; a sign-out since then drops the save.
+    static func save(_ data: Data, key: String, generation: Int? = nil) {
+        lock.lock()
+        defer { lock.unlock() }
+        if let generation, generation != round { return }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try? data.write(to: directory.appending(path: key + ".json"), options: .atomic)
     }
@@ -64,6 +75,9 @@ enum SnapshotCache {
     }
 
     static func clear() {
+        lock.lock()
+        defer { lock.unlock() }
+        round += 1
         try? FileManager.default.removeItem(at: directory)
     }
 }

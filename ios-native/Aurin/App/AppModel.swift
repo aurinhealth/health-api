@@ -67,6 +67,12 @@ final class AppModel {
     /// Apple Health's cycle data went to the server in this run of the app.
     @ObservationIgnored var cycleHealthSynced = false
 
+    /// Bumped by every sign-out: an answer asked for before it is dropped
+    /// (stillSignedIn), so the last account's data does not come back.
+    @ObservationIgnored private(set) var signInRound = 0
+    /// Still the sign-in that asked: checked after every await that brings data.
+    func stillSignedIn(_ round: Int) -> Bool { round == signInRound && phase == .signedIn }
+
     /// The server answered 426: this build is too old (src/app-version.js).
     private(set) var updateRequired = false
     /// When each tab's data last came from the server, and for which day. The
@@ -232,12 +238,13 @@ final class AppModel {
         applyOutbox()
         // Training and Health are not on the first screen: read off the main
         // thread, and only where the server has not answered meanwhile.
+        let round = signInRound
         Task {
             let saved = await Task.detached(priority: .userInitiated) {
                 SavedScreens(training: SnapshotCache.load(TrainingSnapshot.self, key: "training")?.value,
                              health: SnapshotCache.load(HealthSnapshot.self, key: "health")?.value)
             }.value
-            guard phase == .signedIn else { return }
+            guard stillSignedIn(round) else { return }
             if training == nil { training = saved.training }
             if health == nil { health = saved.health }
         }
@@ -434,7 +441,7 @@ final class AppModel {
         AvatarStore.keep(forId: account.id, email: account.email)
         guard Self.anotherAccount(id: account.id, email: account.email, defaults: defaults) else { return }
         outbox = []
-        OutboxStore.save([])
+        OutboxStore.clear()
         AvatarStore.remove()
         defaults.removeObject(forKey: Self.displayNameKey)
         SnapshotCache.clear()
@@ -527,6 +534,7 @@ final class AppModel {
     private func performRefresh(announce: Bool) async {
         refreshRound += 1
         let round = refreshRound
+        let account = signInRound
         loading = true
         defer { if round == refreshRound { loading = false } }
         if announce { syncStatus = .syncing }
@@ -571,7 +579,7 @@ final class AppModel {
                 prefetchAround(Self.localDate(Date()))
                 await cycle
             }
-            if let status = await status { athleteStatus = status }
+            if let status = await status, stillSignedIn(account) { athleteStatus = status }
             if syncStatus == .syncing { finishSync(.done) }
         } catch APIError.unauthorized {
             syncStatus = nil
@@ -613,7 +621,10 @@ final class AppModel {
     private func loadToday() async throws {
         let settled = Set(settlingToday.map { $0.id })
         let day = selectedDate
+        let account = signInRound
         let (snapshot, data) = try await api.todayData(date: day)
+        // Signed out meanwhile: the answer belongs to no one on screen.
+        guard stillSignedIn(account) else { throw CancellationError() }
         // Another day was chosen meanwhile: its own load shows it.
         guard selectedDate == day else { return }
         // The same answer again (back in the app, pulled down): Today is not drawn anew.
@@ -740,8 +751,11 @@ final class AppModel {
 
     func refreshTraining() async {
         guard !demo, phase == .signedIn else { return }
+        let account = signInRound
         do {
-            training = try await api.training()
+            let value = try await api.training()
+            guard stillSignedIn(account) else { return }
+            training = value
             fetched[.training] = (Date(), Self.localDate(Date()))
             dataRevision += 1
             trainingError = nil
@@ -768,9 +782,9 @@ final class AppModel {
         guard !demo, phase == .signedIn else { return }
         await AppleHealth.shared.sync(api: api)
         do {
-            let day = selectedDate
+            let day = selectedDate, account = signInRound
             let value = try await api.health(date: day)
-            guard selectedDate == day else { return }
+            guard stillSignedIn(account), selectedDate == day else { return }
             health = value
             fetched[.health] = (Date(), shownDay)
             dataRevision += 1
@@ -791,9 +805,9 @@ final class AppModel {
         guard !demo, phase == .signedIn else { return }
         let settled = Set(settlingFood.map { $0.id })
         do {
-            let day = selectedDate
+            let day = selectedDate, account = signInRound
             let (snapshot, data) = try await api.foodData(date: day)
-            guard selectedDate == day else { return }
+            guard stillSignedIn(account), selectedDate == day else { return }
             food = snapshot
             foodBase = data
             settlingFood.removeAll { settled.contains($0.id) }
@@ -855,9 +869,9 @@ final class AppModel {
         if send { Task { await sendOutbox(reloadToday: true) } }
     }
 
-    /// Sends a write now; without signal it waits in the outbox and shows on
-    /// the screens meanwhile. True when it went out now. Throws when the
-    /// server refused it.
+    /// Sends a write now; without signal or on a server error it waits in the
+    /// outbox and shows on the screens meanwhile. True when it went out now.
+    /// Throws when the server refused it (4xx).
     private func deliver(_ item: OutboxItem) async throws -> Bool {
         // The same gym day already waits: this one goes after it (the newer wins).
         if let key = item.key, outbox.contains(where: { $0.key == key }) {
@@ -871,6 +885,11 @@ final class AppModel {
         } catch where Outbox.isNoConnection(error) {
             enqueue(item)
             offline = true
+            return false
+        } catch OutboxRefusal.retry, OutboxRefusal.outdated {
+            // A server error (5xx) or too old an app: it waits with the outbox's
+            // retries instead of being lost (a gym sheet mid-workout).
+            enqueue(item)
             return false
         }
     }
@@ -1243,8 +1262,10 @@ final class AppModel {
         guard force || days.contains(where: { calendar[$0] == nil }) else { return }
         if demo { return }
         guard phase == .signedIn else { return }
+        let account = signInRound
         do {
             let result = try await api.trainingCalendar(start: start, end: end)
+            guard stillSignedIn(account) else { return }
             for day in result.days { calendar[day.date] = day }
         } catch {
             // Without signal the days already here stay; anything else is said,
@@ -1259,7 +1280,8 @@ final class AppModel {
     /// again: once more with Today's load, so a workout that came later counts.
     func loadPastStrain(_ date: String, again: Bool = false) async {
         guard !demo, phase == .signedIn, again || pastStrain[date] == nil else { return }
-        guard let snapshot = try? await api.today(date: date), snapshot.date == date else { return }
+        let account = signInRound
+        guard let snapshot = try? await api.today(date: date), snapshot.date == date, stillSignedIn(account) else { return }
         pastStrain[date] = snapshot.strain.score ?? 0
     }
 
@@ -1452,8 +1474,9 @@ final class AppModel {
         async let todayAnswer: Result<(TodaySnapshot, Data), Error> = Self.attempt { try await api.todayData(date: date) }
         async let foodAnswer: Result<(FoodSnapshot, Data), Error>? = wantFood ? Self.attempt { try await api.foodData(date: date) } : nil
         async let healthAnswer: Result<HealthSnapshot, Error>? = wantHealth ? Self.attempt { try await api.health(date: date) } : nil
+        let account = signInRound
         let (t, f, h) = await (todayAnswer, foodAnswer, healthAnswer)
-        guard selectedDate == date else { return }
+        guard stillSignedIn(account), selectedDate == date else { return }
         var failure: Error?
         switch t {
         case .success(let (snapshot, data)):
@@ -1560,6 +1583,10 @@ final class AppModel {
     /// sign-in shows whether it is the same account (signedIn()).
     func signOut(expired: Bool = false) {
         api.signOut()
+        // The session ran out, so the server cannot be asked to drop this phone's
+        // token: the phone leaves Apple's push service and the morning pushes stop
+        // reaching the lock screen. The next sign-in registers again.
+        if expired { PushRegistration.leavePushService() }
         clearLocal(expired: expired)
     }
 
@@ -1576,7 +1603,7 @@ final class AppModel {
         AppleHealth.shared.serverChanged()
         clearLocal(expired: true)
         outbox = []
-        OutboxStore.save([])
+        OutboxStore.clear()
         if api.hasSession {
             await signedIn()
             await refresh()
@@ -1584,6 +1611,10 @@ final class AppModel {
     }
 
     private func clearLocal(expired: Bool) {
+        // What is still loading belongs to this sign-in: it stops, and what
+        // comes back anyway is dropped (stillSignedIn, SnapshotCache.generation).
+        signInRound += 1
+        dropRefresh()
         // The next account's purchases carry its own appAccountToken.
         ProStore.shared.forgetAccount()
         SnapshotCache.clear()
@@ -1597,7 +1628,7 @@ final class AppModel {
         if !expired {
             // Waiting writes belong to this account; the next one must not send them.
             outbox = []
-            OutboxStore.save([])
+            OutboxStore.clear()
             // Apple Health was allowed for this account, not the next one.
             AppleHealth.shared.pause(account: UserDefaults.standard.string(forKey: AvatarStore.emailKey))
             forgetAccountData()

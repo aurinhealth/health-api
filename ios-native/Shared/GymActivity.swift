@@ -59,9 +59,22 @@ enum GymActivityAction: Equatable {
 
 /// The open workout screen handles the buttons; the intents run in the app's
 /// process (LiveActivityIntent), where the screen set this handler.
+/// A button tapped while no screen listens (the app started cold from the
+/// Live Activity) waits a minute for the screen instead of doing nothing.
 @MainActor
 enum GymActivityInbox {
-    static var handler: ((GymActivityAction) -> Void)?
+    static var handler: ((GymActivityAction) -> Void)? {
+        didSet {
+            guard let handler, let waiting else { return }
+            self.waiting = nil
+            if Date().timeIntervalSince(waiting.at) < 60 { handler(waiting.action) }
+        }
+    }
+    private static var waiting: (action: GymActivityAction, at: Date)?
+
+    static func send(_ action: GymActivityAction) {
+        if let handler { handler(action) } else { waiting = (action, Date()) }
+    }
 }
 
 struct GymRestExtendIntent: LiveActivityIntent {
@@ -69,7 +82,7 @@ struct GymRestExtendIntent: LiveActivityIntent {
     static let isDiscoverable = false
 
     func perform() async throws -> some IntentResult {
-        await MainActor.run { GymActivityInbox.handler?(.extend) }
+        await MainActor.run { GymActivityInbox.send(.extend) }
         return .result()
     }
 }
@@ -79,7 +92,7 @@ struct GymRestSkipIntent: LiveActivityIntent {
     static let isDiscoverable = false
 
     func perform() async throws -> some IntentResult {
-        await MainActor.run { GymActivityInbox.handler?(.skip) }
+        await MainActor.run { GymActivityInbox.send(.skip) }
         return .result()
     }
 }
@@ -96,7 +109,7 @@ struct GymSetDoneIntent: LiveActivityIntent {
 
     func perform() async throws -> some IntentResult {
         let row = row
-        await MainActor.run { GymActivityInbox.handler?(.complete(row: row)) }
+        await MainActor.run { GymActivityInbox.send(.complete(row: row)) }
         return .result()
     }
 }

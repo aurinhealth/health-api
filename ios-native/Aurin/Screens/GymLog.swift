@@ -756,10 +756,6 @@ struct ExerciseHistorySheet: View {
     /// "červenec": the month of the first session in the chart.
     static func month(_ iso: String) -> String {
         guard let date = ISODay.date(iso) else { return "" }
-        let f = DateFormatter()
-        f.locale = Fmt.locale
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "LLLL"
-        return f.string(from: date)
+        return DateFormatters.make("LLLL", locale: Fmt.locale, timeZone: TimeZone(identifier: "UTC") ?? .gmt).string(from: date)
     }
 }

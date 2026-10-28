@@ -179,9 +179,6 @@ struct FoodEntryEditSheet: View {
     static func rounded(_ value: Double) -> Double { (value * 10).rounded() / 10 }
 
     static func date(_ iso: String) -> Date? {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyy-MM-dd"
-        return f.date(from: iso).flatMap { Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: $0) }
+        DateFormatters.make("yyyy-MM-dd").date(from: iso).flatMap { Calendar.current.date(bySettingHour: 12, minute: 0, second: 0, of: $0) }
     }
 }

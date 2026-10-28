@@ -131,15 +131,64 @@ enum OutboxStore {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "outbox.json")
     }
 
+    /// Waiting writes this version cannot read (a newer build wrote them, or
+    /// one got damaged). They wait here instead of being overwritten, so the
+    /// build that can read them still sends them.
+    private static var asideURL: URL {
+        url.deletingLastPathComponent().appending(path: "outbox-unread.json")
+    }
+
     static func load() -> [OutboxItem] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? JSONDecoder().decode([OutboxItem].self, from: data)) ?? []
+        read().items
     }
 
     static func save(_ items: [OutboxItem]) {
-        if items.isEmpty { try? FileManager.default.removeItem(at: url); return }
+        let unread = read().unread
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? JSONEncoder().encode(items).write(to: url, options: .atomic)
+        if items.isEmpty {
+            try? FileManager.default.removeItem(at: url)
+        } else {
+            try? JSONEncoder().encode(items).write(to: url, options: .atomic)
+        }
+        if unread.isEmpty {
+            try? FileManager.default.removeItem(at: asideURL)
+        } else {
+            var list = Data("[".utf8)
+            list.append(Data(unread.joined(separator: Data(",".utf8))))
+            list.append(Data("]".utf8))
+            try? list.write(to: asideURL, options: .atomic)
+        }
+    }
+
+    /// Signing out: this account's waiting writes go, the unread ones too.
+    static func clear() {
+        try? FileManager.default.removeItem(at: url)
+        try? FileManager.default.removeItem(at: asideURL)
+    }
+
+    /// Each waiting write on its own: one this version cannot read does not
+    /// take the others with it. A file that is not a list at all is moved
+    /// aside under another name, never overwritten.
+    private static func read() -> (items: [OutboxItem], unread: [Data]) {
+        var items: [OutboxItem] = []
+        var unread: [Data] = []
+        for file in [url, asideURL] {
+            guard let data = try? Data(contentsOf: file) else { continue }
+            guard let list = (try? JSONSerialization.jsonObject(with: data)) as? [Any] else {
+                let name = file.deletingPathExtension().lastPathComponent + "-damaged-\(Int(Date().timeIntervalSince1970)).json"
+                try? FileManager.default.moveItem(at: file, to: file.deletingLastPathComponent().appending(path: name))
+                continue
+            }
+            for element in list {
+                guard JSONSerialization.isValidJSONObject(element), let one = try? JSONSerialization.data(withJSONObject: element) else { continue }
+                if let item = try? JSONDecoder().decode(OutboxItem.self, from: one) {
+                    items.append(item)
+                } else {
+                    unread.append(one)
+                }
+            }
+        }
+        return (items, unread)
     }
 
     /// The saved screen as it came from the server (SnapshotCache's file).
