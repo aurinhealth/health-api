@@ -100,7 +100,7 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .rig .device{position:absolute;left:89px;top:0}
 .glass{position:absolute;z-index:2;text-align:left;padding:16px 18px;border-radius:var(--r-22);background:color-mix(in srgb,var(--panel) 74%,transparent);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);border:1px solid color-mix(in srgb,var(--panel) 85%,transparent);box-shadow:var(--shadow-float)}
 .glass .k{font-size:var(--fs-14);color:var(--muted)}.glass .v{font-size:var(--fs-28);font-weight:600;letter-spacing:-.03em;font-variant-numeric:tabular-nums}.glass .d{font-size:var(--fs-14);font-weight:600}
-.glass.g1{left:0;top:56px}
+.glass.g1{left:-76px;top:196px}
 .glass.g2{right:0;top:290px}
 .glass.g3{left:0;bottom:0;font-size:var(--fs-17);white-space:nowrap}
 
@@ -137,8 +137,8 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .vis .glow{position:absolute;left:50%;top:50%;width:880px;height:880px;margin:-440px 0 0 -440px;border-radius:50%;background:radial-gradient(circle,var(--glow) 0,transparent 62%);pointer-events:none}
 .vis .device{position:absolute;left:318px;top:18px}
 .flip .vis .device{left:0}
-.part{position:absolute;left:0;width:380px;border-radius:var(--r-22);overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float);opacity:0;z-index:3}
-.flip .part{left:260px}
+.part{position:absolute;left:-44px;width:380px;border-radius:var(--r-22);overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float);opacity:0;z-index:3}
+.flip .part{left:304px}
 .part img{display:block;width:100%;height:auto}
 .part.on{opacity:1}
 .part:has(>.dm.wait:not(.in)){opacity:0!important}
@@ -148,7 +148,7 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .step>button{cursor:pointer}
 .step .n{grid-row:1/3;font-size:var(--fs-12);font-weight:700;letter-spacing:.06em;color:var(--green);padding-top:6px;font-variant-numeric:tabular-nums}
 .step .tt{font:400 var(--fs-28)/1.1 var(--serif);letter-spacing:-.015em}
-.step .tx{margin-top:8px;color:var(--sec);font-size:var(--fs-17)}
+.step .tx{max-width:60ch;margin-top:8px;color:var(--sec);font-size:var(--fs-17)}
 .step .bar{grid-column:2;display:none;height:2px;margin-top:16px;border-radius:2px;background:var(--track);overflow:hidden}
 .step .bar i{display:block;height:100%;width:0;background:var(--tone)}
 .part{pointer-events:none}.part:has(.dial){pointer-events:auto}
@@ -166,6 +166,9 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .opener .cards{width:420px}
 .chapter.opens{padding-top:90px}
 /* Where the reader is: the welcome's line with a dot per part, the current one glowing. */
+/* For the keyboard: the first Tab shows a link past the nav to the page itself. */
+.skip{position:fixed;left:16px;top:12px;z-index:60;padding:10px 16px;border-radius:var(--r-pill);background:var(--button);color:var(--on-button);font-weight:600;text-decoration:none;transform:translateY(-200%)}.skip:focus{transform:none}
+main:focus{outline:none}
 .acts-nav{position:fixed;left:50%;bottom:18px;z-index:19;display:flex;align-items:center;gap:14px;padding:10px 18px 10px 16px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--panel) 86%,transparent);-webkit-backdrop-filter:saturate(1.4) blur(18px);backdrop-filter:saturate(1.4) blur(18px);box-shadow:0 0 0 1px var(--line),var(--shadow-float);transform:translate(-50%,24px);opacity:0;pointer-events:none;transition:opacity .4s,transform .5s cubic-bezier(.16,1,.3,1)}
 .acts-nav.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .an-t{min-width:76px;font-size:var(--fs-14);font-weight:600}
@@ -185,10 +188,11 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .muscles .key{display:flex;flex-wrap:wrap;gap:18px;margin-top:28px;font-size:var(--fs-14);color:var(--muted)}
 .muscles .key span{display:inline-flex;align-items:center;gap:7px}
 .muscles .key i{width:9px;height:9px;border-radius:50%;background:var(--c)}
-.muscles .hint{font-size:var(--fs-14);color:var(--muted);margin-top:14px;transition:opacity .4s}
+.muscles .hint{position:absolute;left:0;right:0;bottom:-30px;margin:0;text-align:center;font-size:var(--fs-14);color:var(--muted);pointer-events:none;transition:opacity .4s}
 .fig{position:relative;margin:0 auto;width:min(480px,100%,calc((100svh - 120px) * .64));aspect-ratio:640/1000;touch-action:pan-y;cursor:grab;-webkit-user-select:none;user-select:none}
 .fig::before{content:"";position:absolute;inset:10% -20%;z-index:-1;background:radial-gradient(circle,color-mix(in srgb,var(--rust) 15%,transparent) 0,transparent 60%)}
 .fig canvas{display:block;width:100%;height:100%}
+.mu .fig{margin-bottom:36px}
 .fig .bubble{position:absolute;z-index:2;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border:1px solid var(--line);border-radius:var(--r-16);background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow-float);font:inherit;text-align:left;white-space:nowrap;cursor:pointer;transform:translate(-50%,-100%) scale(.85);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.16,1,.3,1)}
 .fig .bubble.on{opacity:1;transform:translate(-50%,-100%);pointer-events:auto}
 .fig .bubble b{display:block;font-size:var(--fs-17);font-weight:600;color:var(--text)}
@@ -403,7 +407,10 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
   .vis{width:440px;height:700px}
   .vis .glow{width:640px;height:640px;margin:-320px 0 0 -320px}
   .vis .device,.flip .vis .device{left:59px;top:0}
-  .part,.flip .part{left:30px;width:380px;top:auto!important;bottom:-24px}
+  /* The phone, then its piece under it, over the phone's lowest quarter only: the pieces share one grid cell. */
+  .vis{display:grid;justify-items:center;height:auto}
+  .vis .device,.flip .vis .device{position:relative;left:auto;top:auto;grid-area:1/1}
+  .part,.flip .part{position:relative;grid-area:2/1;align-self:start;left:auto;top:auto!important;width:380px;max-width:100%;margin-top:-170px}
   .ch .steps{max-width:none;margin-top:44px}
   .mu,.connect .intro,.faq{grid-template-columns:1fr;gap:32px}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
@@ -419,11 +426,13 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
   .hero{padding-top:110px}
   .lede,.sub{font-size:var(--fs-17)}
   /* On a phone the app comes right under the line, before the waitlist (the nav's Join is always there). */
-  .hero .grid{gap:0}.hero .copy{display:contents}.hero .kicker{justify-self:center}
+  /* Left-aligned on a phone: four centred lines read badly. */
+  .hero .grid{gap:0;text-align:left}.hero .copy{display:contents}.hero .kicker{justify-self:start}.hero .lede{margin-left:0}
   .hero .stage{order:1;margin-top:32px}.hero .cta{order:2;margin-top:32px}
   .rig{width:322px;height:672px;--hz:.8}
   .rig .device{left:0}
-  .opener .cards{width:100%;max-width:420px}.opener .sub{font-size:var(--fs-20)}
+  /* On a phone a part opens with its title and line only: its chapters right under show the same day. */
+  .opener .cards{display:none}.opener .sub{font-size:var(--fs-20)}
   .acts-nav{bottom:12px;padding:9px 14px 9px 14px;gap:12px}
   /* On a phone the floating cards would cover the real screen's numbers. */
   .glass{display:none}
@@ -508,9 +517,10 @@ document.querySelectorAll('.chapter').forEach(function(ch){
 document.querySelectorAll('.opener').forEach(function(a){var c=a.querySelector('.cards');if(still||!IO){D.last(c);a.classList.add('on');return;}D.first(c);
  new IntersectionObserver(function(es){var on=es[0].isIntersecting;a.classList.toggle('on',on);if(on&&!a._played){a._played=true;D.play(c);}},{threshold:.3}).observe(c);});
 // The pill at the bottom: shown from the first part to the end of the last one, its dot on the part in view.
-var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('kouc'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false;
- function where(){ticking=false;var mid=innerHeight*.5,i=-1;acts.forEach(function(a,k){if(a.getBoundingClientRect().top<mid)i=k;});
-  var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid;an.classList.toggle('on',shown);if(i<0)i=0;
+// On a phone the pill steps aside while reading downwards and comes back on the way up.
+var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('kouc'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false,lastY=scrollY,down=false,narrow=matchMedia('(max-width:560px)');
+ function where(){ticking=false;var mid=innerHeight*.5,i=-1,y=scrollY;if(Math.abs(y-lastY)>8){down=y>lastY;lastY=y;}acts.forEach(function(a,k){if(a.getBoundingClientRect().top<mid)i=k;});
+  var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid&&!(narrow.matches&&down);an.classList.toggle('on',shown);if(i<0)i=0;
   an.style.setProperty('--i',i);title.textContent=dots[i].getAttribute('aria-label');dots.forEach(function(d,k){d.classList.toggle('done',k<=i);});}
  addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(where);}},{passive:true});where();}
 window.aurinTurnstile=function(){dispatchEvent(new Event('aurin:turnstile'));};
@@ -640,6 +650,7 @@ ${headScript}
 <style>${themeTokens}${siteCss}${demoCss}</style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
 <a class="logo" href="/">${mark(30)}<span>Aurin</span></a>
 <div class="links"><a href="/#pripravenost">Features</a><a href="/#kouc">AI coach</a><a href="/#propojeni">Connections</a><a href="/#soukromi">Privacy</a></div>
@@ -761,7 +772,7 @@ export function overviewPage(request) {
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
     ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout, or send a photo of a plan from your trainer. Tap Coach on a workout or your HRV to ask about just that, or during a gym session about the set, the rest or the next exercise. You can also reply straight from its notification. When it proposes a workout or a whole plan for your race, confirm it and it lands in your plan.', 15000]]]];
+      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout, or send a photo of a plan from your trainer. Tap Coach on a workout or your HRV to ask about just that, or during a gym session about the set, the rest or the next exercise. You can also reply straight from its notification. When it proposes a workout or a whole plan for your race, confirm it and it lands in your plan.', 11500]]]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {
@@ -800,8 +811,8 @@ ${REAL_DAYS[id] ? realDay(id) : ''}
   const muscles = `<section id="svaly" class="muscles"><div class="wrap mu">
 <div class="copy reveal"><div class="eyebrow">Muscles</div><h2 class="big">Know what’s recovered.</h2><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
 <div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
-<p class="hint">Drag to turn · tap a muscle</p>${realDay('svaly')}</div>
-<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+${realDay('svaly')}</div>
+<div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn · tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
 </div></section>
 <div class="muscle-card" role="dialog" aria-modal="true" aria-label="Muscle"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3></h3><p class="state"></p></div></div>`;
 
@@ -895,7 +906,7 @@ ${layer('wide')}${layer('tall')}
   return sitePage({lang, origin, path: '/', jsonLd,
     title: 'Aurin · train for how you feel today',
     description,
-    body: `<main>
+    body: `<main id="main" tabindex="-1">
 <div class="hero">
 <div class="wrap grid">
 <div class="copy">
@@ -962,7 +973,7 @@ function doc(request, path, title, html) {
     ? `<p class="muted"><a href="${path}" lang="en" hreflang="en">English version</a></p>`
     : `<p class="muted"><a href="${path}?lang=cs" lang="cs" hreflang="cs">Česká verze</a></p>`;
   return sitePage({lang, origin, path, czech, title: `${pick(title)} · Aurin`, description: lang === 'cs' ? `${title.cs} pro Aurin (aurin.health).` : `${title.en} for Aurin (aurin.health).`,
-    body: `<main class="wrap doc"><h1>${pick(title)}</h1>${other}${pick(html)}</main>`});
+    body: `<main id="main" tabindex="-1" class="wrap doc"><h1>${pick(title)}</h1>${other}${pick(html)}</main>`});
 }
 
 // Sign in with Apple and e-mail codes are described only once they are set up (signIn from the
