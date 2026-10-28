@@ -9,22 +9,38 @@ import WidgetKit
 @main
 struct AurinWatchWidgets: WidgetBundle {
     var body: some Widget {
-        SmallComplication(metric: .readiness)
-        SmallComplication(metric: .sleep)
-        SmallComplication(metric: .strain)
-        SmallComplication(metric: .calories)
-        SmallComplication(metric: .drinks)
-        SmallComplication(metric: .hrv)
-        SmallComplication(metric: .restingHR)
-        SmallComplication(metric: .workout)
-        SmallComplication(metric: .alarm)
-        WideComplication(kind: .day)
-        WideComplication(kind: .workout)
-        WideComplication(kind: .food)
-        WideComplication(kind: .drinks)
-        WideComplication(kind: .night)
+        SmallReadiness()
+        SmallSleep()
+        SmallStrain()
+        SmallCalories()
+        SmallDrinks()
+        SmallHrv()
+        SmallRestingHR()
+        SmallWorkout()
+        SmallAlarm()
+        WideDay()
+        WideWorkout()
+        WideFood()
+        WideDrinks()
+        WideNight()
     }
 }
+
+// A widget is made with init(), so each complication is its own type.
+struct SmallReadiness: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.readiness) } }
+struct SmallSleep: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.sleep) } }
+struct SmallStrain: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.strain) } }
+struct SmallCalories: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.calories) } }
+struct SmallDrinks: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.drinks) } }
+struct SmallHrv: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.hrv) } }
+struct SmallRestingHR: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.restingHR) } }
+struct SmallWorkout: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.workout) } }
+struct SmallAlarm: Widget { var body: some WidgetConfiguration { SmallComplication.configuration(.alarm) } }
+struct WideDay: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.day) } }
+struct WideWorkout: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.workout) } }
+struct WideFood: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.food) } }
+struct WideDrinks: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.drinks) } }
+struct WideNight: Widget { var body: some WidgetConfiguration { WideComplication.configuration(.night) } }
 
 // MARK: - Timeline
 
@@ -57,10 +73,9 @@ enum SmallMetric: String, CaseIterable {
     case readiness, sleep, strain, calories, drinks, hrv, restingHR, workout, alarm
 }
 
-struct SmallComplication: Widget {
-    let metric: SmallMetric
-
-    var body: some WidgetConfiguration {
+@MainActor
+enum SmallComplication {
+    static func configuration(_ metric: SmallMetric) -> some WidgetConfiguration {
         StaticConfiguration(kind: "aurin.small." + metric.rawValue, provider: DayProvider()) { entry in
             SmallView(metric: metric, value: Small.value(metric, entry.snapshot, at: entry.date), entry: entry)
                 .containerBackground(.black, for: .widget)
@@ -306,20 +321,19 @@ enum WideKind: String {
     case day, workout, food, drinks, night
 }
 
-struct WideComplication: Widget {
-    let kind: WideKind
-
-    var body: some WidgetConfiguration {
+@MainActor
+enum WideComplication {
+    static func configuration(_ kind: WideKind) -> some WidgetConfiguration {
         StaticConfiguration(kind: "aurin.wide." + kind.rawValue, provider: DayProvider()) { entry in
             WideView(kind: kind, entry: entry)
                 .containerBackground(.black, for: .widget)
         }
-        .configurationDisplayName(name)
+        .configurationDisplayName(name(kind))
         .description(tr("Z dneška v aplikaci Aurin.", "From today in Aurin."))
         .supportedFamilies([.accessoryRectangular])
     }
 
-    private var name: String {
+    private static func name(_ kind: WideKind) -> String {
         switch kind {
         case .day: tr("Den", "Day")
         case .workout: tr("Trénink", "Workout")

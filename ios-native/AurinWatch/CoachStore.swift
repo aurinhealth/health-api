@@ -62,7 +62,8 @@ final class CoachStore: ObservableObject {
         progress = W.tr("Ptám se kouče přes internet hodinek…", "Asking the coach over the watch's internet…")
         Task {
             do {
-                let chat = chatId ?? (await WatchAPI.recentChat())
+                var chat = chatId
+                if chat == nil { chat = await WatchAPI.recentChat() }
                 let result = try await WatchAPI.askCoach(question, chatId: chat, view: view)
                 guard let data = WatchCoach.Answer(id: id, text: result.text, chatId: result.chatId ?? chat,
                                                    failed: false, proposal: result.proposal).encoded() else { return }
