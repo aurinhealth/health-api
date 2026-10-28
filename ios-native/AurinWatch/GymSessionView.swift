@@ -127,10 +127,12 @@ struct GymSessionView: View {
                 }
                 .disabled(store.changing)
                 HStack(spacing: 6) {
+                    // Detents: the value moves only by whole steps (0.5 kg, one rep),
+                    // never through the in-between values the plain rotation shows.
                     tile(GymText.kg(kg), unit: "kg", field: .kg)
-                        .digitalCrownRotation($kg, from: 0, through: 500, by: 2.5, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
+                        .digitalCrownRotation(detent: $kg, from: 0, through: 500, by: 0.5, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     tile("\(Int(reps))", unit: W.tr("opak.", "reps"), field: .reps)
-                        .digitalCrownRotation($reps, from: 0, through: 100, by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
+                        .digitalCrownRotation(detent: $reps, from: 0, through: 100, by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 Button {
                     done(lift, in: gym)
