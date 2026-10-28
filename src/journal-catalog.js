@@ -136,6 +136,8 @@ export const CATALOG = [
   y("sore_muscles", "Bolest svalů", "Sore muscles", "health", "figure.strengthtraining.traditional", { auto: "sore_muscles" }),
   y("injury", "Zranění", "Injury", "health", "bandage.fill"),
   { key: "stress", cs: "Stres", en: "Stress", cat: "health", type: "scale", icon: "brain.head.profile" },
+  // 1 very unpleasant … 5 very pleasant; the app also writes it to Apple Health as State of Mind.
+  { key: "mood", cs: "Nálada", en: "Mood", cat: "health", type: "scale", icon: "face.smiling", when: "evening" },
   y("air_travel", "Cestování letadlem", "Air travel", "health", "paperplane"),
   y("time_zone", "Změna časového pásma", "Time-zone change", "health", "globe", { auto: "time_zone" }),
   y("long_drive", "Dlouhá cesta autem", "Long drive", "health", "clock"),
@@ -192,7 +194,23 @@ export const catalogItem = key => BY_KEY.get(key) || null;
 
 // What a new journal starts with: the four filled in from the data and five
 // common questions (the "Dnes" card's "4 z 9").
-export const DEFAULT_PINNED = ["alcohol", "caffeine", "late_meal", "evening_training", "phone_in_bed", "late_bed", "sleep_away", "sauna", "outdoors"];
+export const DEFAULT_PINNED = ["alcohol", "caffeine", "late_meal", "evening_training", "phone_in_bed", "late_bed", "sleep_away", "sauna", "outdoors", "mood"];
+
+// The mood's words (1–5) and the words that describe it, in the order of the
+// bits of its extra.labels (Apple Health's State of Mind labels of the same name).
+const MOOD_WORDS = [["Velmi nepříjemná", "Very unpleasant"], ["Nepříjemná", "Unpleasant"], ["Neutrální", "Neutral"], ["Příjemná", "Pleasant"], ["Velmi příjemná", "Very pleasant"]];
+export const MOOD_LABELS = [["calm", "Klid", "Calm"], ["content", "Spokojenost", "Content"], ["happy", "Radost", "Happy"], ["grateful", "Vděčnost", "Grateful"],
+  ["confident", "Sebejistota", "Confident"], ["excited", "Nadšení", "Excited"], ["drained", "Vyčerpání", "Drained"], ["stressed", "Stres", "Stressed"],
+  ["anxious", "Úzkost", "Anxious"], ["irritated", "Podráždění", "Irritated"], ["sad", "Smutek", "Sad"], ["overwhelmed", "Zahlcení", "Overwhelmed"]];
+export const MOOD_LABEL_MASK = (1 << MOOD_LABELS.length) - 1;
+
+// "Příjemná · Klid, Radost": the mood's word and its labels.
+export function moodText(amount, labels) {
+  const n = Math.round(Number(amount));
+  if (!(n >= 1 && n <= 5)) return null;
+  const words = MOOD_LABELS.filter((_, i) => (Number(labels) || 0) & (1 << i)).map(l => L(l[1], l[2]));
+  return L(MOOD_WORDS[n - 1][0], MOOD_WORDS[n - 1][1]) + (words.length ? " · " + words.join(", ") : "");
+}
 
 // Items the impact screen never ranks: illness takes days out of every other
 // item's comparison instead (journal-impact.js).
@@ -208,7 +226,7 @@ export const PARTS = ["morning", "day", "evening", "night", "last_night"];
 const PART_TEXT = { morning: ["Ráno", "Morning"], day: ["Přes den", "Daytime"], evening: ["Večer", "Evening"], night: ["Noc", "Night"], last_night: ["Dnešní noc", "Last night"] };
 export const partTitle = part => L(...(PART_TEXT[part] || PART_TEXT.day));
 const MORNING = new Set(["morning_light", "caffeine", "coffee_cups"]);
-const EVENING = new Set(["alcohol", "late_meal", "evening_training", "heavy_dinner", "sweets_evening", "carbs_dinner", "herbal_tea", "drink_before_bed",
+const EVENING = new Set(["alcohol", "mood", "late_meal", "evening_training", "heavy_dinner", "sweets_evening", "carbs_dinner", "herbal_tea", "drink_before_bed",
   "sauna", "hot_bath", "screen_late", "series_before_bed", "work_late", "wind_down", "reading_bed", "gratitude", "calm_music", "sex",
   "melatonin", "glycine", "theanine", "magnesium", "tart_cherry", "sleeping_pill"]);
 const EVENING_SLEEP = new Set(["nap"]);

@@ -362,7 +362,11 @@ struct JournalDayEditor: View {
         }
         .task(id: date + "|" + String(reload)) { await load() }
         .sheet(item: $valueItem) { item in
-            JournalValueSheet(item: item, date: date) { body in await save(body) }
+            if item.key == "mood" {
+                JournalMoodSheet(item: item, date: date) { body in await save(body) }
+            } else {
+                JournalValueSheet(item: item, date: date) { body in await save(body) }
+            }
         }
     }
 
@@ -494,10 +498,20 @@ struct JournalDayEditor: View {
             guard asked == date else { return }
             day = loaded
             error = nil
+            await moodFromHealth(loaded)
         } catch {
             guard asked == date else { return }
             self.error = error.localizedDescription
         }
+    }
+
+    /// A mood logged in Apple Health (Apple Watch, Mindfulness) fills in a day without one.
+    private func moodFromHealth(_ loaded: JournalDay) async {
+        guard let mood = loaded.sections.flatMap(\.items).first(where: { $0.key == "mood" }), !mood.isAnswered,
+              let logged = await MoodHealth.logged(on: loaded.date), loaded.date == date else { return }
+        let body: JSONObject = ["date": .string(loaded.date), "key": .string("mood"), "answer": .number(1),
+                                "amount": .number(Double(logged.level)), "extra": .object(["labels": .number(Double(logged.labels))])]
+        _ = await save(body)
     }
 
     private func update(_ key: String, _ change: (inout JournalItem) -> Void) {
