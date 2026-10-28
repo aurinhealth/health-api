@@ -13,6 +13,8 @@ struct CoachView: View {
     var subject: CoachSubject? = nil
     /// Opened from the coach's push: the chat it answered in.
     var openChat: Int? = nil
+    /// Told the conversation's id once the server has one, so the caller can open it again.
+    var keepChat: (Int) -> Void = { _ in }
     @State private var messages: [Bubble] = []
     @State private var chatId: Int?
     @State private var input = ""
@@ -378,7 +380,10 @@ struct CoachView: View {
                             $0.text = ""
                         }
                     }
-                    if let chat = result.chatId { chatId = chat }
+                    if let chat = result.chatId {
+                        chatId = chat
+                        keepChat(chat)
+                    }
                     if let a = result.coachAllowance {
                         allowance = a
                         if a.notice == true { messages.append(Bubble(mine: false, text: a.chatNotice, note: true)) }
@@ -534,6 +539,7 @@ struct CoachView: View {
         do {
             let chat = try await model.api.chat(id: id)
             chatId = chat.id
+            keepChat(chat.id)
             usedUp = allowance?.usedUp == true
             // The proposals stay under the answer they came with, decided or still open.
             let actions = chat.actions ?? []
