@@ -5,7 +5,9 @@ import Observation
 /// Writing to Apple Health (Zdroje dat → Apple Health → Aurin posílá): done
 /// workouts logged in Aurin as HKWorkout, and the chosen health data the
 /// app itself has: the weight typed in, the day's food (energy and macros)
-/// and water. iOS asks for write permission only for the types switched on.
+/// and water. The "Jak to šlo?" rating of a done workout goes on its workout
+/// there as its effort (iOS 18). iOS asks for write permission only for the
+/// types switched on.
 ///
 /// Each sample carries a sync identifier (loadwise:…) and a version, so a
 /// newer value of the same day or workout replaces the older one in Apple
@@ -79,7 +81,10 @@ final class AppleHealthExport {
     /// The types iOS is asked to let Aurin write, for these preferences.
     static func shareTypes(_ prefs: SyncPrefs) -> Set<HKSampleType> {
         var types = Set<HKSampleType>()
-        if prefs.pushActivities { types.insert(HKObjectType.workoutType()) }
+        if prefs.pushActivities {
+            types.insert(HKObjectType.workoutType())
+            if #available(iOS 18.0, *) { types.insert(HKQuantityType(.workoutEffortScore)) }
+        }
         if prefs.health.allows("weight") { types.insert(HKQuantityType(.bodyMass)) }
         if prefs.health.allows("nutrition") {
             types.formUnion([HKQuantityType(.dietaryEnergyConsumed), HKQuantityType(.dietaryProtein),
@@ -173,6 +178,54 @@ final class AppleHealthExport {
         } catch {
             // The old copy stays; the type is right in the app.
         }
+    }
+
+    // MARK: Effort
+
+    /// "Jak to šlo?" (1–10) of a done workout, on that workout in Apple Health as
+    /// its effort: Fitness and the watch show it instead of Apple's estimate.
+    /// Rating it again replaces it (the same sync identifier, a newer version).
+    func saveEffort(_ rpe: Int, session: WeekSession) async {
+        guard #available(iOS 18.0, *), isAvailable, prefs.pushActivities, session.status == "done" else { return }
+        let type = HKQuantityType(.workoutEffortScore)
+        // Apple Health switched on before this version: iOS asks once, for the effort alone.
+        if store.authorizationStatus(for: type) == .notDetermined {
+            _ = try? await store.requestAuthorization(toShare: [type], read: [])
+        }
+        guard allowed(type), let workout = await workout(of: session) else { return }
+        let score = HKQuantity(unit: .appleEffortScore(), doubleValue: Double(min(10, max(1, rpe))))
+        let sample = HKQuantitySample(type: type, quantity: score, start: workout.startDate, end: workout.endDate,
+                                      metadata: metadata("effort:" + session.id))
+        guard await save([sample]) else { return }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            store.relateWorkoutEffortSample(sample, with: workout, activity: nil) { _, error in
+                if let error { print("Apple Health effort failed", error.localizedDescription) }
+                continuation.resume()
+            }
+        }
+    }
+
+    /// The session's workout in Apple Health: on its day, the one starting
+    /// nearest its time (within half an hour); without a time (a gym day), the
+    /// day's only workout of its type.
+    private func workout(of session: WeekSession) async -> HKWorkout? {
+        let day = Self.dayStart(session.date)
+        let predicate = HKQuery.predicateForSamples(withStart: day, end: day.addingTimeInterval(86400), options: .strictStartDate)
+        let list: [HKWorkout] = await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: .workoutType(), predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+                continuation.resume(returning: (samples ?? []).compactMap { $0 as? HKWorkout })
+            }
+            store.execute(query)
+        }
+        let parts = (session.time ?? "").split(separator: ":").compactMap { Int($0) }
+        if parts.count == 2 {
+            let start = day.addingTimeInterval(TimeInterval(parts[0] * 3600 + parts[1] * 60))
+            return list.filter { abs($0.startDate.timeIntervalSince(start)) <= 30 * 60 }
+                .min { abs($0.startDate.timeIntervalSince(start)) < abs($1.startDate.timeIntervalSince(start)) }
+        }
+        let activity = session.type.map(Self.workoutType) ?? Self.activityType(session.sport)
+        let same = list.filter { $0.workoutActivityType == activity }
+        return same.count == 1 ? same[0] : nil
     }
 
     /// An Intervals.icu activity type (src/activity-type.js) as Apple's.
