@@ -403,8 +403,7 @@ struct WeightEntrySheet: View {
     }
 
     private var placeholder: String {
-        let sample = Units.imperial ? "181.7" : "82.4"
-        return L10n.isEnglish ? sample : sample.replacingOccurrences(of: ".", with: ",")
+        Fmt.decimal(Units.imperial ? 181.7 : 82.4)
     }
 
     /// The typed weight in kg (typed in lb with imperial units).

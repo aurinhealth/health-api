@@ -1125,8 +1125,8 @@ enum LiftWeight {
         Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
     }
 
+    /// In the phone region's decimal mark, never grouped ("1250", typed back in a field).
     private static func text(_ value: Double) -> String {
-        let s = value.rounded() == value ? String(Int(value)) : String(value)
-        return L10n.isEnglish ? s : s.replacingOccurrences(of: ".", with: ",")
+        value.formatted(.number.precision(.fractionLength(0...2)).grouping(.never).locale(Fmt.locale))
     }
 }

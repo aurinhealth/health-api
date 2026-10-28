@@ -255,7 +255,7 @@ struct MonthGrid: View {
     let move: (Int) -> Void
 
     private var names: [String] {
-        L10n.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"]
+        Fmt.weekdaysFromMonday
     }
 
     var body: some View {

@@ -550,7 +550,7 @@ struct ActivityDetailContent: View {
                     if showPace { Text(L10n.isEnglish ? "Pace" : "Tempo").frame(width: 70, alignment: .trailing) }
                     if hasHr { Text("Tep").frame(width: 48, alignment: .trailing) }
                 }
-                .font(.system(size: 12, weight: .medium)).tracking(1.2).textCase(.uppercase).foregroundStyle(Palette.muted)
+                .font(.caption.weight(.medium)).tracking(1.2).textCase(.uppercase).foregroundStyle(Palette.muted)
                 .padding(.top, 28).padding(.bottom, 8)
                 VStack(spacing: 0) {
                     ForEach(Array(laps.prefix(30).enumerated()), id: \.offset) { i, lap in

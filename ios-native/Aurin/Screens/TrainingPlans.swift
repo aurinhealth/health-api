@@ -660,7 +660,7 @@ struct PlanDetailView: View {
     /// The most sessions a week ("3× týdně" leads each week's keys).
     private var perWeek: Int { template.weeks.compactMap { w in w.keys.lazy.compactMap { k in k.contains("×") ? Int(k.prefix { $0.isNumber }) : nil }.first }.max() ?? 0 }
     private var tests: Int { template.weeks.filter { $0.phase == "test" }.count }
-    private var weekdays: [String] { L10n.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"] }
+    private var weekdays: [String] { Fmt.weekdaysFromMonday }
 
     var body: some View {
         SettingsPage(title: template.name) {

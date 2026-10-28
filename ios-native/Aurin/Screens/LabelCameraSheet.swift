@@ -27,7 +27,7 @@ struct LabelCameraSheet: View {
             HStack {
                 circle("xmark", label: "Zavřít") { dismiss() }
                 Spacer()
-                Text(L10n.tr(title)).font(.system(size: 12, weight: .medium)).tracking(1.9).foregroundStyle(Palette.muted)
+                Text(L10n.tr(title)).font(.caption.weight(.medium)).tracking(1.9).foregroundStyle(Palette.muted)
                 Spacer()
                 if cameraReady && BarcodeScanSheet.hasTorch {
                     circle(torch ? "flashlight.on.fill" : "flashlight.off.fill", label: torch ? "Zhasnout světlo" : "Rozsvítit světlo", on: torch) {

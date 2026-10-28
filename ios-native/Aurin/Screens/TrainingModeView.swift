@@ -89,6 +89,9 @@ struct TrainingModeView: View {
             // A tap beside the fields puts the keyboard away.
             ScreenBackground(glow: Palette.Glow.training)
                 .onTapGesture { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+            // The Live Activity follows the heart rate from here: read in this
+            // screen's body, every beat redrew the whole workout.
+            HeartRateWatch(live: live) { syncActivity(quiet: true) }
             VStack(alignment: .leading, spacing: 0) {
                 header
                 if let day, !finishedSession, let exercise = current(day) { tools(day, exercise) }
@@ -171,7 +174,6 @@ struct TrainingModeView: View {
         .onChange(of: day) { _, _ in syncActivity() }
         .onChange(of: index) { _, _ in syncActivity() }
         .onChange(of: finishedSession) { _, _ in syncActivity() }
-        .onChange(of: live.heartRate) { _, _ in syncActivity(quiet: true) }
         // Back from the lock screen after the rest ran out: straight to the set.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, let end = restEnd, end <= Date() { restEnd = nil }
@@ -604,7 +606,6 @@ struct TrainingModeView: View {
     private func rest(_ day: GymDay, _ exercise: GymExercise, until end: Date) -> some View {
         let set = nextSet(exercise)
         let last = history.last(exercise.name, before: date)
-        let points: [Double] = recoveryPoints()
         return VStack(alignment: .leading, spacing: 14) {
             RestRing(end: end, total: restTotal).padding(.top, 24)
             HStack(spacing: 10) {
@@ -613,7 +614,8 @@ struct TrainingModeView: View {
                 SecondaryButton(title: "Přeskočit") { restEnd = nil }
             }
             .padding(.top, 6)
-            if points.count >= 2 { HeartRecoveryCard(points: points) }
+            // Its own view: each heartbeat redraws the card, not the whole screen.
+            if let restStart { LiveHeartRecovery(live: live, since: restStart) }
             if let set {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Teď").font(Typo.caption).foregroundStyle(Palette.muted)
@@ -669,12 +671,6 @@ struct TrainingModeView: View {
     private func routineDone(_ routine: GymStretching, kind: GymRoutineKind) -> Bool {
         let done = StretchingCard.done(stretchesDone, date: date)
         return !routine.items.isEmpty && routine.items.allSatisfy { done.contains(kind.key + $0.id) }
-    }
-
-    private func recoveryPoints() -> [Double] {
-        guard let start = restStart else { return [] }
-        let from = start.addingTimeInterval(-5)
-        return live.trail.filter { $0.date >= from }.map { $0.bpm }
     }
 
     private func nowLine(_ exercise: GymExercise, _ set: GymSet) -> String {

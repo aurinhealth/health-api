@@ -265,7 +265,7 @@ struct StartPlanSheet: View {
         }
     }
 
-    private var weekdays: [String] { L10n.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["Po", "Út", "St", "Čt", "Pá", "So", "Ne"] }
+    private var weekdays: [String] { Fmt.weekdaysFromMonday }
 
     /// Under the race: a running race's estimate and goal pace, a cycling race's power and time.
     private var raceNote: String? {

@@ -379,7 +379,7 @@ struct MovePlannedSheet: View {
             .padding(.top, 18)
             if timed {
                 Text("ČAS")
-                    .font(.system(size: 12, weight: .medium)).tracking(1.2)
+                    .font(.caption.weight(.medium)).tracking(1.2)
                     .foregroundStyle(Palette.muted)
                     .padding(.top, 20)
                 Picker("Čas", selection: $slot) {

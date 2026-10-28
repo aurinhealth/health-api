@@ -47,7 +47,7 @@ struct PlanComplianceCard: View {
                 HStack(spacing: 16) {
                     ComplianceRing(percent: compliance.percent)
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("Splnění plánu").font(.system(size: 11, weight: .medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
+                        Text("Splnění plánu").font(.caption2.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
                         Text(verbatim: compliance.word ?? ComplianceScale.word(compliance.percent))
                             .font(.system(size: 17, weight: .semibold)).foregroundStyle(ComplianceScale.color(compliance.percent))
                     }
@@ -315,7 +315,7 @@ struct GymComplianceSection: View {
                         HStack(spacing: 16) {
                             ComplianceRing(percent: compliance.percent)
                             VStack(alignment: .leading, spacing: 5) {
-                                Text("Splnění plánu").font(.system(size: 11, weight: .medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
+                                Text("Splnění plánu").font(.caption2.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
                                 Text(verbatim: compliance.word ?? ComplianceScale.word(compliance.percent))
                                     .font(.system(size: 17, weight: .semibold)).foregroundStyle(ComplianceScale.color(compliance.percent))
                             }

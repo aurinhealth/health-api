@@ -384,7 +384,7 @@ struct NextSession: View {
             HStack(alignment: .firstTextBaseline) {
                 Label {
                     Text(verbatim: when.uppercased(with: Fmt.locale))
-                        .font(.system(size: 12, weight: .medium)).tracking(1.9)
+                        .font(.caption.weight(.medium)).tracking(1.9)
                 } icon: {
                     Image(systemName: "calendar").font(.system(size: 12, weight: .medium))
                 }
