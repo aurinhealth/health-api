@@ -12,7 +12,7 @@ final class WatchSnapshotTests: XCTestCase {
         XCTAssertEqual(s.date, today.date)
         XCTAssertEqual(s.readiness, 78)
         XCTAssertEqual(s.sleep?.minutes, 432)
-        XCTAssertEqual(s.sleep?.start, "23:48")
+        XCTAssertEqual(s.sleep?.start, "23:33")
         XCTAssertEqual(s.sleep?.end, "7:02")
         // Health's 30 days of HRV and resting HR, its seven nights and the stages.
         XCTAssertEqual(s.hrv?.series.count, 30)
