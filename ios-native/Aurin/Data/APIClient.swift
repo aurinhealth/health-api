@@ -53,9 +53,11 @@ final class APIClient: @unchecked Sendable {
     /// The server's address (ServerChoice.swift).
     static var server: URL { ServerChoice.current.url }
 
-    init(baseURL: URL? = nil) {
+    /// protocols: a stand-in server for the tests (URLProtocol), asked first.
+    init(baseURL: URL? = nil, protocols: [AnyClass] = []) {
         self.fixedBaseURL = baseURL
         let config = URLSessionConfiguration.default
+        if !protocols.isEmpty { config.protocolClasses = protocols + (config.protocolClasses ?? []) }
         config.httpCookieStorage = .shared
         config.httpCookieAcceptPolicy = .always
         config.httpShouldSetCookies = true

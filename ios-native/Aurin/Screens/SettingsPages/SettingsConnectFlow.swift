@@ -32,9 +32,7 @@ final class SourceActions {
         // The time of day in the phone's 12/24-hour format.
         let time = ClockText.format(date)
         if Calendar.current.isDateInToday(date) { return L10n.tr("dnes") + " " + time }
-        let out = DateFormatter()
-        out.locale = Fmt.locale
-        out.dateFormat = L10n.isEnglish ? "MMM d," : "d. M."
+        let out = DateFormatters.make(L10n.isEnglish ? "MMM d," : "d. M.", locale: Fmt.locale)
         return out.string(from: date) + " " + time
     }
 

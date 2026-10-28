@@ -178,10 +178,7 @@ struct SleepSettingsForm: View {
 
     /// The morning after the evening `date` ("2026-10-15") is a Saturday or Sunday.
     static func weekendMorning(after date: String?) -> Bool {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "yyyy-MM-dd"
+        let f = DateFormatters.make("yyyy-MM-dd", timeZone: TimeZone(identifier: "UTC") ?? .gmt)
         guard let date, let day = f.date(from: date) else { return false }
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!

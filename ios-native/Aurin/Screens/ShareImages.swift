@@ -442,36 +442,19 @@ struct ShareFood: Equatable {
 enum ShareText {
     /// "středa 15. 10." / "Wed, Oct 15".
     static func date(_ iso: String) -> String {
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.timeZone = TimeZone(identifier: "UTC")
-        parser.dateFormat = "yyyy-MM-dd"
-        guard let day = parser.date(from: iso) else { return iso }
-        let out = DateFormatter()
-        out.locale = L10n.locale
-        out.timeZone = TimeZone(identifier: "UTC")
-        out.dateFormat = L10n.isEnglish ? "EEE, MMM d" : "EEEE d. M."
-        return out.string(from: day)
+        format(iso, L10n.isEnglish ? "EEE, MMM d" : "EEEE d. M.")
     }
 
     /// A clock in the phone's format, "18:42" or "6:42 PM".
     static func clock(_ text: String?) -> String { text.map { ClockText.format($0) } ?? "" }
 
     private static func day(_ iso: String) -> Date? {
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.timeZone = TimeZone(identifier: "UTC")
-        parser.dateFormat = "yyyy-MM-dd"
-        return parser.date(from: iso)
+        DateFormatters.make("yyyy-MM-dd", timeZone: TimeZone(identifier: "UTC") ?? .gmt).date(from: iso)
     }
 
     private static func format(_ iso: String, _ pattern: String) -> String {
         guard let date = day(iso) else { return iso }
-        let out = DateFormatter()
-        out.locale = L10n.locale
-        out.timeZone = TimeZone(identifier: "UTC")
-        out.dateFormat = pattern
-        return out.string(from: date)
+        return DateFormatters.make(pattern, locale: L10n.locale, timeZone: TimeZone(identifier: "UTC") ?? .gmt).string(from: date)
     }
 
     /// "15. 10." / "Oct 15".
