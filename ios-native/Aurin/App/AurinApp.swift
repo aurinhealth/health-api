@@ -18,7 +18,11 @@ struct AurinApp: App {
                 // loadwise://open/sleep from the home-screen widgets.
                 .onOpenURL { model.handle($0) }
                 // A gym Live Activity left from before the app closed has no screen behind it.
-                .task { GymLiveActivity.endOrphans() }
+                .task {
+                    GymLiveActivity.endOrphans()
+                    // Read before any sign-in, so the offer waits for the next start.
+                    _ = PasskeyOfferLater.due
+                }
                 .tint(Palette.ink)
                 .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
                 .environment(\.locale, L10n.locale)

@@ -100,6 +100,11 @@ struct TodayContent: View {
         }
         .padding(.top, 40)
 
+        // The first two weeks after the setup: what fills Today (FirstDaysCard).
+        if selectedDate == nil && !model.demo {
+            FirstDaysCard(today: today, openCoach: openCoach).padding(.top, 20)
+        }
+
         // Today's weather at the week plan's place (or the offer to set
         // it) with the athlete's status, above the key numbers.
         if selectedDate == nil {
