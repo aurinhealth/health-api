@@ -308,7 +308,7 @@ struct WorkoutLibrarySection: View {
             HStack(spacing: 7) {
                 AIMark()
                 Text(verbatim: L10n.tr("Na míru od AI").uppercased(with: Fmt.locale))
-                    .font(.system(size: 12, weight: .medium)).tracking(1.9).foregroundStyle(Palette.amber)
+                    .font(.caption.weight(.medium)).tracking(1.9).foregroundStyle(Palette.amber)
                     .accessibilityAddTraits(.isHeader)
             }
             if let composed, !composing {

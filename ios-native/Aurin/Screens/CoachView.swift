@@ -769,7 +769,7 @@ struct PlanProposalBlock: View {
     let action: CoachAction
     var decided = false
 
-    private var dayNames: [String] { L10n.isEnglish ? ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] : ["po", "út", "st", "čt", "pá", "so", "ne"] }
+    private var dayNames: [String] { Fmt.weekdaysFromMonday.map { L10n.isEnglish ? $0 : $0.lowercased(with: Fmt.locale) } }
 
     var body: some View {
         let card = action.trainingPlan

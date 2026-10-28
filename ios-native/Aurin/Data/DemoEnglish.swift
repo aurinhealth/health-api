@@ -22,16 +22,16 @@ extension DemoData {
 
     static let english: [String: String] = [
         // Today
-        "Déšť na 80 %.": "80 % chance of rain.",
-        "Nejvýš 14°, déšť na 30 %.": "High of 14°, 30 % chance of rain.",
-        "Nejvýš 8°, déšť na 60 %.": "High of 8°, 60 % chance of rain.",
+        "Déšť na 80 %.": "80% chance of rain.",
+        "Nejvýš 14°, déšť na 30 %.": "High of 14°, 30% chance of rain.",
+        "Nejvýš 8°, déšť na 60 %.": "High of 8°, 60% chance of rain.",
         "Sucho, nejvýš 11°.": "Dry, high of 11°.",
         "Sucho, nejvýš 12°.": "Dry, high of 12°.",
         "Sucho, nejvýš 13°.": "Dry, high of 13°.",
         "Sucho, nejvýš 9°.": "Dry, high of 9°.",
         "Jak dnes začít": "How to start today",
-        "Spánek 7 h 12 min (40 min více než obvykle). HRV je třetí den nad normou.":
-            "Sleep 7 h 12 min (40 min more than usual). HRV is above normal for the third day.",
+        "Spánek 7 h 12 min, kousek pod potřebou. HRV je třetí den nad normou.":
+            "Sleep 7 h 12 min, a little under your need. HRV is above normal for the third day.",
         "Silový trénink dej naplno, hodinu a půl před ním si dej svačinu se sacharidy.":
             "Go all in on strength today, with a carb snack an hour and a half before.",
         "Silový trénink": "Strength training",
@@ -39,13 +39,13 @@ extension DemoData {
         "Do postele": "Bedtime",
         "Ranní běh": "Morning run",
         "Kolo · tempo": "Ride · tempo",
-        "potřeba spánku 8 h 05 min": "sleep need 8 h 05 min",
+        "potřeba spánku 8 h 30 min": "sleep need 8 h 30 min",
         "Praha": "Prague",
         "Podle dostupné předpovědi.": "Based on the available forecast.",
         // Training
         "Silový trénink, celé tělo": "Strength, full body",
-        "Proč dnes: vysoká připravenost, nohy od pondělí v klidu, v sobotu delší běh.":
-            "Why today: high readiness, legs rested since Monday, a longer run on Saturday.",
+        "Proč dnes: vysoká připravenost a odpočatá horní polovina těla. Nohy jen středně, ráno byl běh.":
+            "Why today: high readiness and a rested upper body. Legs only moderate after this morning's run.",
         "Dřep": "Squat",
         "Tlak na lavici": "Bench press",
         "Přítahy": "Rows",
@@ -74,8 +74,8 @@ extension DemoData {
         // Gym
         "Celé tělo": "Full body",
         "Celé tělo  •  08. 10. 2026": "Full body  •  Oct 8, 2026",
-        "Nohy od pondělí v klidu, v sobotu delší běh: dřep ve střední zátěži.":
-            "Legs rested since Monday, a longer run on Saturday: squats at a moderate load.",
+        "Ráno běh, v sobotu delší běh: dřep jen ve střední zátěži.":
+            "A run this morning and a long run on Saturday: squats at a moderate load only.",
         // Food
         "Tréninkový den: o 350 kcal víc. Zbývá 1270 kcal, odpolední svačina kolem 360 kcal.":
             "Training day: 350 kcal more. 1,270 kcal left, an afternoon snack of about 360 kcal.",

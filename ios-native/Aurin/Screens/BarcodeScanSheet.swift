@@ -51,7 +51,7 @@ struct BarcodeScanSheet: View {
             HStack {
                 circle("xmark", label: "Zavřít") { dismiss() }
                 Spacer()
-                Text("ČÁROVÝ KÓD").font(.system(size: 12, weight: .medium)).tracking(1.9).foregroundStyle(Palette.muted)
+                Text("ČÁROVÝ KÓD").font(.caption.weight(.medium)).tracking(1.9).foregroundStyle(Palette.muted)
                 Spacer()
                 if scannerReady && Self.hasTorch && (state == .scanning || state == .searching) {
                     circle(torch ? "flashlight.on.fill" : "flashlight.off.fill", label: torch ? "Zhasnout světlo" : "Rozsvítit světlo", on: torch) {

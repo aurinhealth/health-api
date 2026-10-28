@@ -196,7 +196,7 @@ struct SessionRow: View {
             }
             Spacer(minLength: 8)
             if let percent = session.compliance, session.status == "done" {
-                Text(verbatim: "\(percent) %").font(Typo.bodyStrong).foregroundStyle(ComplianceScale.color(percent))
+                Text(verbatim: "\(percent)" + Fmt.percentSign).font(Typo.bodyStrong).foregroundStyle(ComplianceScale.color(percent))
                     .accessibilityLabel(L10n.f("%@ %% plánu", String(percent)))
             } else if let tss = session.tss, tss > 0 {
                 Text(Fmt.int(tss)).font(Typo.number(18)).foregroundStyle(Palette.ink)
@@ -550,7 +550,7 @@ struct ActivityDetailContent: View {
                     if showPace { Text(L10n.isEnglish ? "Pace" : "Tempo").frame(width: 70, alignment: .trailing) }
                     if hasHr { Text("Tep").frame(width: 48, alignment: .trailing) }
                 }
-                .font(.system(size: 12, weight: .medium)).tracking(1.2).textCase(.uppercase).foregroundStyle(Palette.muted)
+                .font(.caption.weight(.medium)).tracking(1.2).textCase(.uppercase).foregroundStyle(Palette.muted)
                 .padding(.top, 28).padding(.bottom, 8)
                 VStack(spacing: 0) {
                     ForEach(Array(laps.prefix(30).enumerated()), id: \.offset) { i, lap in
@@ -753,7 +753,7 @@ struct ZoneList: View {
                         Spacer()
                         VStack(alignment: .trailing, spacing: 1) {
                             Text(verbatim: Fmt.duration(Int((r.seconds / 60).rounded()))).font(Typo.number(20)).foregroundStyle(Palette.ink)
-                            if bars { Text(verbatim: Fmt.int(r.percent) + " %").font(Typo.caption).foregroundStyle(Palette.muted) }
+                            if bars { Text(verbatim: Fmt.int(r.percent) + Fmt.percentSign).font(Typo.caption).foregroundStyle(Palette.muted) }
                         }
                     }
                     if bars {
@@ -1057,7 +1057,7 @@ struct StepBlockRow: View {
         var parts: [String] = []
         if let d = s.durationSeconds { parts.append(d >= 60 ? Fmt.duration(Int(d / 60)) : Fmt.int(d) + " s") }
         if let lo = s.wattsLow, let hi = s.wattsHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + " W") }
-        else if let lo = s.percentLow, let hi = s.percentHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + " %") }
+        else if let lo = s.percentLow, let hi = s.percentHigh { parts.append(Fmt.int(lo) + "–" + Fmt.int(hi) + Fmt.percentSign) }
         if let slow = s.paceSlow, let fast = s.paceFast { parts.append(ZonesSettingsView.pace(Units.pace(fast)) + "–" + ZonesSettingsView.pace(Units.pace(slow)) + " " + Units.paceUnit) }
         if let note = s.note { parts.append(note) }
         return parts.joined(separator: " · ")
