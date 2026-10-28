@@ -17,19 +17,25 @@ struct PlanPreviewView: View {
     var done: () -> Void = {}
     @State var preview: PlanPreview? = nil
     @State private var starting = false
+    @State private var failed = false
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: template.name) {
-            PlanPreviewContent(template: template, preview: preview, replacing: replacing) { starting = true }
+            PlanPreviewContent(template: template, preview: preview, replacing: replacing,
+                               failed: failed, canStart: preview != nil, retry: { await load() }) { starting = true }
                 .disabled(model.demo && preview == nil)
         }
         .task {
             guard preview == nil, !model.demo else { return }
-            preview = try? await model.api.trainingPlanPreview(templateId: template.id)
+            await load()
         }
         .sheet(isPresented: $starting) {
             StartPlanSheet(template: template, initial: preview) { done() }
         }
+    }
+
+    private func load() async {
+        do { preview = try await model.api.trainingPlanPreview(templateId: template.id); failed = false } catch { failed = true }
     }
 }
 
@@ -38,6 +44,11 @@ struct PlanPreviewContent: View {
     let template: TrainingPlans.Template
     let preview: PlanPreview?
     var replacing: TrainingPlans.Active? = nil
+    /// The plan's workouts didn't load: "Zkusit znovu" under the numbers.
+    var failed = false
+    /// "Začít plán" waits for the plan's workouts.
+    var canStart = true
+    var retry: () async -> Void = {}
     let start: () -> Void
     @State private var allWeeks = false
 
@@ -62,6 +73,10 @@ struct PlanPreviewContent: View {
                     }
                 }
                 .padding(.top, 20).padding(.horizontal, 4)
+                if failed && preview == nil {
+                    RetryRow(message: "Tréninky plánu se nepodařilo načíst.", retry: retry)
+                        .padding(.top, 12).padding(.horizontal, 4)
+                }
                 Card {
                     let weeks = allWeeks ? template.weeks : Array(template.weeks.prefix(4))
                     VStack(spacing: 0) {
@@ -83,6 +98,7 @@ struct PlanPreviewContent: View {
                 }
                 .padding(.top, 16)
                 PrimaryButton(title: L10n.tr(replacing == nil ? "Začít plán" : "Začít tento plán"), systemImage: "flag", action: start)
+                    .disabled(!canStart).opacity(canStart ? 1 : 0.3)
                     .padding(.top, 18)
             }
     }

@@ -281,20 +281,28 @@ struct ActivityComplianceSection: View {
     let session: WeekSession
     @State private var compliance: PlanCompliance?
     @State private var open = false
+    @State private var failed = false
 
     private var run: Bool { session.sport == "run" }
 
     var body: some View {
         Group {
-            if let compliance {
+            if failed && compliance == nil {
+                RetryRow(message: "Splnění plánu se nepodařilo načíst.") { await load() }
+            } else if let compliance {
                 PlanComplianceCard(compliance: compliance, run: run) { open = true }
                     .sheet(isPresented: $open) { PlanComplianceSheet(compliance: compliance, title: session.title, run: run) }
             }
         }
         .task(id: session.id) {
-            guard !model.demo, compliance == nil, let activity = session.activityId, let planned = session.plannedId else { return }
-            compliance = try? await model.api.planCompliance(activityId: activity, plannedId: planned)
+            guard !model.demo, compliance == nil else { return }
+            await load()
         }
+    }
+
+    private func load() async {
+        guard let activity = session.activityId, let planned = session.plannedId else { return }
+        do { compliance = try await model.api.planCompliance(activityId: activity, plannedId: planned); failed = false } catch { failed = true }
     }
 }
 

@@ -858,6 +858,10 @@
 "Zkus ho dohledat pomocí AI, nebo naskenuj jiný." = "Try looking it up with AI, or scan another one.";
 "Zkus třeba" = "Try asking";
 "Zkusit znovu" = "Try again";
+"Průběh noci se nepodařilo načíst." = "Couldn't load the night's timeline.";
+"Tréninky plánu se nepodařilo načíst." = "Couldn't load the plan's workouts.";
+"Porovnání s minulým tréninkem se nepodařilo načíst." = "Couldn't load the comparison with last time.";
+"Splnění plánu se nepodařilo načíst." = "Couldn't load how the plan went.";
 "Zmizí i z kalendáře v Intervals.icu." = "It will also disappear from your Intervals.icu calendar.";
 "Změna" = "Change";
 "Změna se neuložila: %@" = "The change wasn't saved: %@";
