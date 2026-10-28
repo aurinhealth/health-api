@@ -153,7 +153,10 @@ enum OutboxStore {
         if unread.isEmpty {
             try? FileManager.default.removeItem(at: asideURL)
         } else {
-            try? Data("[".utf8 + unread.joined(separator: Data(",".utf8)) + "]".utf8).write(to: asideURL, options: .atomic)
+            var list = Data("[".utf8)
+            list.append(Data(unread.joined(separator: Data(",".utf8))))
+            list.append(Data("]".utf8))
+            try? list.write(to: asideURL, options: .atomic)
         }
     }
 
