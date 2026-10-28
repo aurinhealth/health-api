@@ -542,3 +542,16 @@ test('a swap\'s warm-ups follow the equipment step and the focus understands "le
   assert.equal(generateStrengthPlan(context,{focus:'legs',durationMinutes:60}).planName,'Lower Body');
   assert.throws(()=>generateStrengthPlan(context,{focus:'brain',durationMinutes:60}),/zaměření|focus/);
 });
+
+test('the classic hyperextension is called so, trains the lower back and keeps the old Roman chair history', () => {
+  assert.equal(normalizeExerciseName('Roman chair'), 'Hyperextension');
+  assert.equal(EXERCISES['Roman chair'], undefined);
+  assert.equal(EXERCISES.Hyperextension.muscle, 'lower_back');
+  assert.ok(FOCUS_GROUPS.lower_back.exercises.includes('Hyperextension'));
+  // A core slot after a week of crunches: the hyperextension of the gym, not supermans on the floor.
+  const crunches = ['2026-10-21', '2026-10-24'].flatMap(workout_date => ['Abs bench crunch', 'Cable crunch', 'Pallof press'].map(exercise => ({ exercise, workout_date, type: 'WORK', reps: 12, kg: 20 })));
+  const plan = generateStrengthPlan({ date: '2026-10-28', trainingSetup: { equipment: 'gym' }, strength: { recentCompletedSets: crunches, plannedSessions: [] }, profile: {} }, { durationMinutes: 90, focus: 'lower' });
+  const names = plan.rows.map(r => r[1]);
+  assert.ok(names.includes('Hyperextension') || names.includes('Dumbbell Back Extension'));
+  assert.ok(!names.includes('Supermans') && !names.includes('Dumbbell Superman'));
+});

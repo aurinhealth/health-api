@@ -149,7 +149,7 @@ export const EXERCISE_STATIONS = {
   "Cable crunch": ["cables"],
   "Pallof press": ["cables"],
   "Cable woodchop": ["cables"],
-  "Roman chair": ["roman_chair"],
+  "Hyperextension": ["roman_chair"],
   "Cable glute kickback": ["cables"],
   "Cable pull-through": ["cables"],
   "Cable hip abduction": ["cables"],

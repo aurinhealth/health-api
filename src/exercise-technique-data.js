@@ -699,7 +699,7 @@ export const TECHNIQUE = {
   },
   "query": "cable woodchop proper form"
  },
- "Roman chair": {
+ "Hyperextension": {
   "setup": [
    "Polštář nastav pod záhyb kyčlí, aby se mohly volně ohýbat.",
    "Paty zaklesni pod válce, tělo v rovné linii.",

@@ -591,7 +591,7 @@ export const TECHNIQUE_EN = {
   ],
   breathing: "Exhale as you rotate, inhale on the way back."
  },
- "Roman chair": {
+ "Hyperextension": {
   setup: [
    "Set the pad below the crease of your hips so you can hinge freely.",
    "Hook your heels under the rollers, body in a straight line.",

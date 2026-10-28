@@ -35,7 +35,7 @@ export const FEEL = {
   "Cable rear delt fly": ["Zadní ramena; konec pohybu cítíš mezi lopatkami.", "Ramena dolů od uší, bez švihu trupem."],
   "Pallof press": ["Šikmé břišní svaly a hluboký střed těla – odporuješ rotaci.", "Trup ani pánev se nestáčí ke kladce; dýchej klidně."],
   "Cable woodchop": ["Šikmé břišní svaly při rotaci trupu, ruce jen drží lano.", "Rotace jde z hrudníku a boků, ne ze spodních zad."],
-  "Roman chair": ["Spodní záda a hýždě, při propnutí i zadní stehna.", "Nahoře nepřeprohýbej – zastav v rovině s nohama."],
+  "Hyperextension": ["Spodní záda a hýždě, při propnutí i zadní stehna.", "Nahoře nepřeprohýbej – zastav v rovině s nohama."],
   "Standing calf raise": ["Lýtka, nejvíc nahoře na špičkách a v protažení dole.", "Kolena klidná a téměř propnutá; bez pérování."],
   "Cable crunch": ["Přímý sval břišní – zakulacuješ trup, žebra k pánvi.", "Pohyb nejde ze sklopení boků ani z rukou."],
   "Barbell bench press": ["Prsní svaly, přední ramena a triceps.", "Lopatky stažené a ramena dole; bolest v rameni = lokty moc do stran nebo osa vysoko na hrudníku."],

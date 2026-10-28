@@ -38,7 +38,7 @@ const searchTerms={
   'Cable rear delt fly':'zadní ramena kladka',
   'Pallof press':'antirotace břicho střed těla',
   'Cable woodchop':'rotace břicho kladka',
-  'Roman chair':'hyperextenze záda',
+  'Hyperextension':'hyperextenze záklony spodní záda roman chair římská lavice back extension',
   'Standing calf raise':'výpony lýtka',
   'Cable crunch':'břicho zkracovačky kladka',
   'Barbell bench press':'benchpress osa tlaky prsa',

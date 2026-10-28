@@ -34,7 +34,7 @@ export const FEEL_EN = {
   "Cable rear delt fly": ["Rear delts; you feel the end of the movement between your shoulder blades.", "Shoulders down away from your ears, no swinging your torso."],
   "Pallof press": ["Obliques and deep core – you're resisting rotation.", "Torso and hips don't turn toward the pulley; breathe calmly."],
   "Cable woodchop": ["Obliques as your torso rotates; your hands just hold the handle.", "Rotation comes from your chest and hips, not your lower back."],
-  "Roman chair": ["Lower back and glutes, plus hamstrings as you extend.", "Don't overarch at the top – stop in line with your legs."],
+  "Hyperextension": ["Lower back and glutes, plus hamstrings as you extend.", "Don't overarch at the top – stop in line with your legs."],
   "Standing calf raise": ["Calves, most at the top on your toes and in the stretch at the bottom.", "Knees still and nearly straight; no bouncing."],
   "Cable crunch": ["Rectus abdominis – you're curling your torso, ribs toward your pelvis.", "The movement doesn't come from bending at the hips or from your arms."],
   "Barbell bench press": ["Chest, front delts and triceps.", "Shoulder blades squeezed and shoulders down; shoulder pain = elbows flared too wide or the bar too high on your chest."],

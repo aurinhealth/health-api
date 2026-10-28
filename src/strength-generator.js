@@ -55,7 +55,7 @@ const EXERCISES = {
   "Cable rear delt fly": { pattern: "rear_delt", muscle: "rear_delts", unilateral: true, sets: 2, reps: "10–15", baseKg: 15, warmup: false, note: "Zadní delty; jednostranně na kladce", fatigue: 0.35 },
   "Pallof press": { pattern: "anti_rotation", muscle: "core", unilateral: true, sets: 3, reps: "10–15", baseKg: 30, warmup: false, note: "Anti-rotace; jednostranně", fatigue: 0.3 },
   "Cable woodchop": { pattern: "rotation", muscle: "core", unilateral: true, sets: 2, reps: "8–12", baseKg: 25, warmup: false, note: "Rotace; jednostranně", fatigue: 0.3 },
-  "Roman chair": { pattern: "trunk_extension", muscle: "core", unilateral: false, sets: 3, reps: "10–15", baseKg: 20, warmup: false, note: "Core/hyperextenze; stroj", fatigue: 0.4 },
+  "Hyperextension": { pattern: "trunk_extension", muscle: "lower_back", unilateral: false, sets: 3, reps: "10–15", baseKg: 0, warmup: false, note: "Spodní záda a hýždě; záklon na římské lavici s rovnými zády, kg = přidaná zátěž", fatigue: 0.4 },
   "Standing calf raise": { pattern: "plantar_flexion", muscle: "calves", unilateral: false, sets: 3, reps: "10–20", baseKg: 50, warmup: false, note: "Lýtka; stroj", fatigue: 0.45 },
   "Cable crunch": { pattern: "trunk_flexion", muscle: "core", unilateral: false, sets: 3, reps: "10–20", baseKg: 30, warmup: false, note: "Core; kladka", fatigue: 0.35 },
   "Barbell bench press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "5–8", baseKg: 50, warmup: true, note: "Hlavní tlak; benchpress s osou, kg = celá osa", fatigue: 1.05 },
@@ -208,7 +208,7 @@ const EXERCISES = {
   "Neutral-Grip Dumbbell Bench Press": { pattern: "push", muscle: "chest", unilateral: false, sets: 3, reps: "8–12", baseKg: 16, warmup: true, note: "Hrudník a tricepsy; rovná lavice, dlaně proti sobě, šetrné k ramenům, kg = 1 jednoručka", fatigue: 1, variantOf: "DB bench press" },
   "One Arm Dumbbell Bench Press": { pattern: "push", muscle: "chest", unilateral: true, sets: 3, reps: "8–12", baseKg: 16, warmup: false, note: "Hrudník a střed těla; tlak jednou rukou vleže, druhá strana drží trup, kg = jednoručka", fatigue: 0.85, variantOf: "DB bench press" },
   "Chest-Supported Dumbbell Row": { pattern: "pull", muscle: "back", unilateral: false, sets: 3, reps: "8–12", baseKg: 14, warmup: false, note: "Střed zad; přítahy jednoruček vleže na břiše na šikmé lavici, kg = 1 jednoručka", fatigue: 0.75, variantOf: "Chest-supported row" },
-  "Dumbbell Back Extension": { pattern: "trunk_extension", muscle: "core", unilateral: false, sets: 3, reps: "10–15", baseKg: 5, warmup: false, note: "Spodní záda a hýždě; záklony na římské lavici s jednoručkou u hrudníku, kg = jednoručka", fatigue: 0.45, variantOf: "Roman chair" },
+  "Dumbbell Back Extension": { pattern: "trunk_extension", muscle: "lower_back", unilateral: false, sets: 3, reps: "10–15", baseKg: 5, warmup: false, note: "Spodní záda a hýždě; záklony na římské lavici s jednoručkou u hrudníku, kg = jednoručka", fatigue: 0.45, variantOf: "Hyperextension" },
   "Dumbbell Pullover": { pattern: "pull_vertical", muscle: "back", unilateral: false, sets: 3, reps: "10–12", baseKg: 12, warmup: false, note: "Široký sval zádový a hrudník; jednoručka obloukem za hlavu vleže na lavici, kg = jednoručka", fatigue: 0.55 },
   "Cuban Press": { pattern: "rear_delt", muscle: "rear_delts", unilateral: false, sets: 2, reps: "10–12", baseKg: 4, warmup: false, note: "Rotátorová manžeta a ramena; přítah, vytočení předloktí nahoru a tlak nad hlavu, lehké jednoručky", fatigue: 0.35 },
   "Dumbbell Front Raise": { pattern: "lateral_raise", muscle: "shoulders", unilateral: false, sets: 3, reps: "10–15", baseKg: 6, warmup: false, note: "Přední ramena; předpažování s jednoručkami do výšky ramen, kg = 1 jednoručka", fatigue: 0.35 },
@@ -372,7 +372,7 @@ export const FOCUS_GROUPS = {
   calves: {label:'Lýtka', exercises:['Standing calf raise','Single-leg calf raise','Seated calf raise','Calf Press','Dumbbell Tibialis Raise','Bent-Knee Soleus Raise','Tibialis Raise']},
   forearms: {label:'Předloktí', exercises:['DB wrist curl','DB reverse wrist curl','Cable reverse curl','Reverse Grip Barbell Curl','Wrist Roller','EZ Bar Reverse Preacher Curl']},
   traps: {label:'Trapézy', exercises:['DB shrug','Barbell shrug','Smith machine shrug','Cable upright row','Dumbbell Upright Row','Barbell Upright Row']},
-  lower_back: {label:'Spodní záda', exercises:['Roman chair','Barbell good morning','Machine Back Extension','Supermans']}
+  lower_back: {label:'Spodní záda', exercises:['Hyperextension','Barbell good morning','Machine Back Extension','Supermans']}
 };// English exercise notes and muscle group labels: `note` and `label` follow the
 // app language (lang.js).
 const NOTE_EN = {
@@ -410,7 +410,7 @@ const NOTE_EN = {
  "Cable woodchop": "Rotation; one side at a time",
  "Cable pullover": "Lats; cable",
  "Standing calf raise": "Calves; machine",
- "Roman chair": "Core/back extension; machine",
+ "Hyperextension": "Lower back and glutes; back extension on the Roman chair with a straight back, kg = added weight",
  "Barbell bench press": "Main press; barbell bench press, kg = whole bar",
  "DB incline press": "Upper chest; adjustable bench at 30°, kg = one dumbbell",
  "One-arm DB row": "Back; supported on a bench, kg = one dumbbell",
@@ -1025,7 +1025,7 @@ function choosePlan(context, options = {}) {
     biceps: ["DB curl", "Hammer curl", "Cable curl", "DB incline curl", "Cable rope hammer curl", "EZ bar curl", "Preacher curl", "Machine Preacher Curl", "Bayesian Curl", "Dumbbell Concentration Curl", "Zottman Curl", "Barbell Curl", "Spider Curl", "Band Curl"],
     triceps: ["Cable triceps extension", "Cable overhead triceps extension", "Cable triceps kickback", "DB overhead triceps extension", "EZ bar skull crusher", "Dips", "Assisted dip", "Smith Machine Close Grip Bench Press", "Cable Bar Pushdown", "Cable Overhead Straight Bar Extensions", "Cross-Body Cable Tricep Extension", "Reverse-Grip Tricep Pushdown", "Single-Arm Overhead Cable Extension", "Machine Tricep Extension", "Close-Grip Push-Up off a Dumbbell", "Bench Dips", "Diamond Push Ups", "Barbell Close Grip Bench Press"],
     rearDelts: ["Rear delt pec deck", "Cable rear delt fly", "Face pull", "DB rear delt fly", "Band pull-apart", "Cable External Rotation", "Cable Single Arm Rear Delt Row", "Cuban Press", "Barbell Rear Delt Row", "Prone Y-T Raises"],
-    core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Roman chair", "Hanging leg raise", "Medicine ball slam", "Cable Side Bend", "Machine Back Extension", "Machine Crunch", "Captain's Chair Knee Raise", "Selectorized Torso Rotation Machine", "Dumbbell Russian Twist", "Bicycle Crunches", "Bird Dog", "Crunches", "Reverse Crunch", "Supermans", "V-Up"],
+    core: ["Abs bench crunch", "Cable crunch", "Pallof press", "Cable woodchop", "Hyperextension", "Hanging leg raise", "Medicine ball slam", "Cable Side Bend", "Machine Back Extension", "Machine Crunch", "Captain's Chair Knee Raise", "Selectorized Torso Rotation Machine", "Dumbbell Russian Twist", "Bicycle Crunches", "Bird Dog", "Crunches", "Reverse Crunch", "Supermans", "V-Up"],
     quad: ["Pivot leg press", "Pendulum squat", "Leg extension Prime", "Goblet squat", "DB sumo squat", "Barbell back squat", "Smith machine squat", "Barbell front squat", "Hack squat", "Smith Machine Front Squat", "Belt Squat", "Dumbbell Front Squat", "Dumbbell Squat", "Dumbbell Thruster", "Band Squat"],
     hinge: ["DB Romanian deadlift", "Barbell Romanian deadlift", "Hip thrust", "Barbell hip thrust", "Cable pull-through", "DB single-leg Romanian deadlift", "Trap bar deadlift", "Kettlebell swing", "Glute kickback machine", "Smith Machine Sumo Romanian Deadlift", "Reverse Hack Squat", "Reverse Hyperextension", "Dumbbell Deadlift", "Barbell Deadlift", "Sumo Deadlift"],
     unilateral: ["DB Bulgarian split squat", "DB reverse lunge", "DB step-up", "Smith machine split squat", "Box step-up", "Dumbbell Cossack Squat", "Dumbbell Goblet Alternating Curtsy Lunge", "Dumbbell Goblet Split Squat", "Dumbbell Lateral Lunge", "Dumbbell Walking Lunges", "Barbell Split Squat", "Forward Lunge"],
