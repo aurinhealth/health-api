@@ -295,6 +295,7 @@ struct PlanRowMenu: ViewModifier {
     @Environment(AppModel.self) private var model
     let item: TodaySnapshot.PlanItem
     @State private var deleting = false
+    @State private var unpairing = false
     @State private var editingKcal = false
 
     func body(content: Content) -> some View {
@@ -303,10 +304,14 @@ struct PlanRowMenu: ViewModifier {
         } else if item.kind == "workout", item.done, let session = item.session, session.kind == "activity" {
             content
                 .contextMenu {
+                    if session.unpairTarget != nil {
+                        Button { unpairing = true } label: { Label("Odpárovat od plánu", systemImage: "minus.circle") }
+                    }
                     Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
                 }
                 .activityEditing(id: session.id, title: session.title, kcal: session.kcal,
                                  edited: session.kcalEdited == true, deleting: $deleting, editingKcal: $editingKcal)
+                .activityUnpairing(session: session, asking: $unpairing)
         } else if item.kind == "recovery", let id = item.recoveryId {
             content.contextMenu {
                 Button(role: .destructive) {

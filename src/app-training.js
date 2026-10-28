@@ -146,7 +146,10 @@ export function daySessions(d, date, training = {}, gymDay = null) {
   // A gym plan saved in the app is its own session unless the day already
   // has a strength session, planned in Intervals.icu or done; other sports
   // that day do not hide it. Sets logged in the app mean it was done.
-  const strengthDay = [...planned, ...matchedPlans.map(m => m.planned), ...(training.completed || [])].some(w => w && sportOf(w) === "strength");
+  // Unpaired by the user (manual-pairs.js): the day's lifting session neither
+  // hides nor fulfils the plan, the two show apart.
+  const gymUnpaired = gymDay?.unpaired === true;
+  const strengthDay = [...planned, ...matchedPlans.map(m => m.planned), ...(gymUnpaired ? [] : training.completed || [])].some(w => w && sportOf(w) === "strength");
   const gymPlan = !strengthDay && gymDay?.exercises?.length ? gymDay : null;
   const gymLogged = gymPlan?.logged > 0 ? 1 : 0;
   const matchedIds = new Set(matchedPlans.map(m => m.planned.id).filter(Boolean));
@@ -157,9 +160,12 @@ export function daySessions(d, date, training = {}, gymDay = null) {
     const plan = planOf.get(String(a.id ?? ""));
     const session = sessionOf(plan && sportOf(a) === "other" ? { ...a, name: plan.name || a.name, type: plan.type || a.type } : a, d, "done");
     // A strength session done on a day with a gym plan saved in the app fulfils it.
-    const gymSets = session.sport === "strength" && gymDay?.exercises?.length ? gymDay : null;
+    const gymSets = session.sport === "strength" && gymDay?.exercises?.length && !gymUnpaired ? gymDay : null;
     const fit = plan ? adherenceOf(a, plan, gymSets) : gymSets ? adherenceOf(a, {}, gymSets) : { adherence: "offplan" };
-    sessions.push({ ...(plan?.id ? { ...session, plannedId: String(plan.id) } : session), ...fit });
+    // pairedGym: it fulfils the gym plan saved in the app, which the app can
+    // unpair (gym:<date>); unpaired: it was, and opens as an activity of its own.
+    const gymMark = gymSets && !plan ? { pairedGym: true } : gymUnpaired && session.sport === "strength" ? { unpaired: true } : {};
+    sessions.push({ ...(plan?.id ? { ...session, plannedId: String(plan.id) } : session), ...fit, ...gymMark });
   }
   // On a past day a plan counts as done by an activity of its sport that no other
   // plan took (pairing can miss one), or by a stub without a sport; a walk does
@@ -266,7 +272,7 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   const sessionsOf = d => {
     const planned = (d === date ? remaining : byDate.get(d)?.training?.planned || []).filter(Boolean);
     // Today's gym plan is done once a strength session was recorded.
-    const plan = d === date && (todayTraining.completed || []).some(a => /weight|strength|gym/i.test(String(a?.type || ""))) ? null : gym[d];
+    const plan = d === date && !gym[d]?.unpaired && (todayTraining.completed || []).some(a => /weight|strength|gym/i.test(String(a?.type || ""))) ? null : gym[d];
     const gymAt = plan?.exercises?.length ? planned.findIndex(isStrength) : -1;
     const list = planned.map((w, i) => sessionOf(d, w, i === gymAt ? plan : null));
     if (plan?.exercises?.length && gymAt < 0) list.unshift(sessionOf(d, null, plan));
