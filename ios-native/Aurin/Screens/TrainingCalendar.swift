@@ -343,7 +343,7 @@ struct MonthGrid: View {
         let minutes = list.reduce(0.0) { $0 + $1.minutes }
         let kcal = list.reduce(0.0) { $0 + $1.kcal }
         guard count > 0 else { return L10n.tr("zatím bez aktivit") }
-        let head = L10n.f("%@ %@", String(count), Fmt.plural(count, "aktivita", "aktivity", "aktivit"))
+        let head = L10n.plural("%lld aktivit", count)
         // Splnění: the month's sessions done to a plan, their mean percent.
         if mode == .compliance {
             let values = list.flatMap(\.activities).filter { $0.status == "done" }.compactMap(\.compliance)

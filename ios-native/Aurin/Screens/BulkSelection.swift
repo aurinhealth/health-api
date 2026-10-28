@@ -163,7 +163,6 @@ struct BulkMoveSheet: View {
 
     /// "2 položky", "5 položek".
     static func items(_ n: Int) -> String {
-        if L10n.isEnglish { return n == 1 ? "1 item" : "\(n) items" }
-        return n == 1 ? "1 položku" : (2...4).contains(n) ? "\(n) položky" : "\(n) položek"
+        L10n.plural("%lld položek", n)
     }
 }

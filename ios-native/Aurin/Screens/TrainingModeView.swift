@@ -300,7 +300,7 @@ struct TrainingModeView: View {
         let done: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
         let total: Int = day.exercises.reduce(0) { $0 + $1.workCount }
         let position = L10n.f("Cvik %@ z %@", String(min(index, day.exercises.count - 1) + 1), String(day.exercises.count))
-        return position + " · \(done)/\(total) " + Fmt.plural(total, "série", "série", "sérií")
+        return position + " · " + L10n.plural("%lld/%lld sérií", done, total)
     }
 
     // MARK: The exercise
@@ -569,7 +569,7 @@ struct TrainingModeView: View {
     /// "15 kg × 5–8 · 3 série": the first set still to do and the sets left.
     private func nextLoad(_ next: GymExercise) -> String {
         let left: Int = next.workCount - next.doneCount
-        let count: String = L10n.f("%@ %@", String(left), Fmt.plural(left, "série", "série", "sérií"))
+        let count: String = L10n.plural("%lld sérií", left)
         guard let set = next.sets.first(where: { !$0.done && $0.work }) else { return count }
         return GymLiveActivity.load(set, in: next) + " · " + count
     }
@@ -890,7 +890,7 @@ struct TrainingModeView: View {
                 NavigationLink(value: AppRoute.liveGym(date, true)) {
                     VStack(spacing: 2) {
                         Label("Zopakovat minulou", systemImage: "arrow.counterclockwise").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(verbatim: Fmt.capitalized(Fmt.relativeDay(last, today: date)) + " · " + String(count) + " " + Fmt.plural(count, "cvik", "cviky", "cviků"))
+                        Text(verbatim: Fmt.capitalized(Fmt.relativeDay(last, today: date)) + " · " + L10n.plural("%lld cviků", count))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     .frame(maxWidth: .infinity).frame(height: 60).background(Palette.card, in: Capsule())
@@ -1105,7 +1105,7 @@ struct TrainingModeView: View {
     /// Under the name in "Nahradit cvik": its muscle and the sets still to do.
     private func swapSubtitle(_ name: String) -> String? {
         let left = day?.exercises.filter { $0.name == name }.flatMap(\.sets).filter { !$0.done && !$0.warmup }.count ?? 0
-        let sets = left > 0 ? L10n.f(Fmt.plural(left, "Zbývá %@ série", "Zbývají %@ série", "Zbývá %@ sérií"), String(left)) : nil
+        let sets = left > 0 ? L10n.plural("Zbývá %lld sérií", left) : nil
         let muscle = catalog.first { $0.name == name }?.muscle?.nilIfBlank
         let line = [muscle, sets].compactMap { $0 }.joined(separator: " · ")
         return line.isEmpty ? nil : line

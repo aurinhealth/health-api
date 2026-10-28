@@ -179,9 +179,9 @@ struct TrendChart: View {
         let values = points.map(\.value)
         guard let last = values.last, let lo = values.min(), let hi = values.max() else { return L10n.tr("Bez dat") }
         let shownUnit = L10n.tr(unit)
-        let span = L10n.f("od %@ do %@", Fmt.decimal(lo, digits: digits), Fmt.decimal(hi, digits: digits)) + " " + shownUnit
-        let latest = L10n.f("naposledy %@", Fmt.decimal(last, digits: digits)) + " " + shownUnit
-        let days = String(values.count) + " " + Fmt.plural(values.count, "den", "dny", "dní")
+        let span = L10n.f("od %@ do %@ %@", Fmt.decimal(lo, digits: digits), Fmt.decimal(hi, digits: digits), shownUnit)
+        let latest = L10n.f("naposledy %@ %@", Fmt.decimal(last, digits: digits), shownUnit)
+        let days = L10n.plural("%lld dní", values.count)
         return [days, span, latest].joined(separator: ", ")
     }
 }

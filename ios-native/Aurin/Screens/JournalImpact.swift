@@ -92,7 +92,7 @@ struct JournalImpactView: View {
     }
 
     private func fewDays(_ list: [JournalImpact.Waiting]) -> some View {
-        Text(verbatim: L10n.tr("Málo dní:") + " " + list.map(\.name).joined(separator: ", "))
+        Text(verbatim: L10n.f("Málo dní: %@", list.map(\.name).joined(separator: ", ")))
             .font(.footnote).foregroundStyle(Palette.faint)
             .fixedSize(horizontal: false, vertical: true)
     }

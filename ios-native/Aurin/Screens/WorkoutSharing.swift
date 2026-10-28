@@ -122,7 +122,7 @@ struct SharePreviewCard: View {
         }
         var parts = [L10n.tr("Posilovna")]
         if let minutes = template.minutes { parts.append(Fmt.duration(minutes)) }
-        parts.append(L10n.f("%@ %@", String(template.exercises.count), Fmt.plural(template.exercises.count, "cvik", "cviky", "cviků")))
+        parts.append(L10n.plural("%lld cviků", template.exercises.count))
         return parts.joined(separator: " · ")
     }
 

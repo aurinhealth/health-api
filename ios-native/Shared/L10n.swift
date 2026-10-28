@@ -62,8 +62,12 @@ enum L10n {
         UserDefaults.standard.set([value], forKey: "AppleLanguages")
     }
 
-    private static let english: Bundle? = Bundle.main.path(forResource: "en", ofType: "lproj").flatMap(Bundle.init(path:))
-        ?? Bundle(for: Marker.self).path(forResource: "en", ofType: "lproj").flatMap(Bundle.init(path:))
+    private static let english: Bundle? = bundle("en")
+    private static let czech: Bundle? = bundle("cs")
+    private static func bundle(_ language: String) -> Bundle? {
+        Bundle.main.path(forResource: language, ofType: "lproj").flatMap(Bundle.init(path:))
+            ?? Bundle(for: Marker.self).path(forResource: language, ofType: "lproj").flatMap(Bundle.init(path:))
+    }
     private final class Marker {}
 
     /// The text in the app's language; a text without a translation stays as it is.
@@ -84,6 +88,15 @@ enum L10n {
     /// A translated format with arguments: L10n.f("%@ z %@", a, b).
     static func f(_ format: String, _ args: CVarArg...) -> String {
         String(format: tr(format), locale: locale, arguments: args)
+    }
+
+    /// A text with a count, in the form the count asks for: L10n.plural("%lld dní", 5)
+    /// is "5 dní" (1 den, 2 dny) and in English "5 days". Each language's forms live
+    /// in its Plurals.stringsdict (Czech one, few and other; English one and other),
+    /// keyed by the Czech text for five. The arguments go in the key's order.
+    static func plural(_ key: String, _ args: CVarArg...) -> String {
+        let format = (isEnglish ? english : czech)?.localizedString(forKey: key, value: key, table: "Plurals") ?? key
+        return String(format: format, locale: locale, arguments: args)
     }
 }
 

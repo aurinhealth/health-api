@@ -424,9 +424,7 @@ struct OfflineBanner: View {
     }
 
     static func waitingText(_ n: Int) -> String {
-        if n == 1 { return L10n.f("%@ zápis čeká na signál", String(n)) }
-        if (2...4).contains(n) { return L10n.f("%@ zápisy čekají na signál", String(n)) }
-        return L10n.f("%@ zápisů čeká na signál", String(n))
+        L10n.plural("%lld zápisů čeká na signál", n)
     }
 
     var body: some View {

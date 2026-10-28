@@ -253,7 +253,7 @@ struct WorkoutEditorSheet: View {
                             Text(e.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
                             HStack(spacing: 10) {
                                 Stepper(value: $e.sets, in: 1...10) {
-                                    Text(L10n.f("%@ %@", String(e.sets), Fmt.plural(e.sets, "série", "série", "sérií"))).font(Typo.small)
+                                    Text(L10n.plural("%lld sérií", e.sets)).font(Typo.small)
                                 }
                                 TextField("8–12", text: $e.reps)
                                     .keyboardType(.numbersAndPunctuation)

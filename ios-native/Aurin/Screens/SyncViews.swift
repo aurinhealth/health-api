@@ -396,7 +396,7 @@ struct SyncToastView: View {
                             .overlay(RoundedRectangle(cornerRadius: 24 * 0.27, style: .continuous).stroke(Palette.card, lineWidth: 2))
                     }
                 }
-                Text(verbatim: L10n.f("Odesláno do %@ %@", String(report.rows.count), Fmt.plural(report.rows.count, "aplikace", "aplikací", "aplikací")))
+                Text(verbatim: L10n.plural("Odesláno do %lld aplikací", report.rows.count))
                     .font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
                 Spacer(minLength: 8)
                 if report.rows.contains(where: { $0.status == .error }) {

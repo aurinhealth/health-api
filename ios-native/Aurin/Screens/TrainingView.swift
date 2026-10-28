@@ -446,7 +446,7 @@ struct NextSession: View {
         if !session.exercises.isEmpty {
             let shown = session.exercises.prefix(3).joined(separator: " · ")
             let rest = session.exercises.count - 3
-            return rest > 0 ? shown + " · " + L10n.f("a %@ %@", String(rest), Fmt.plural(rest, "další", "další", "dalších")) : shown
+            return rest > 0 ? shown + " · " + L10n.plural("a %lld dalších", rest) : shown
         }
         return session.description
     }
@@ -472,7 +472,7 @@ struct EventCard: View {
                 if let left = event.daysLeft {
                     HStack(alignment: .lastTextBaseline, spacing: 4) {
                         Text(String(left)).font(Typo.number(44)).foregroundStyle(Palette.ink)
-                        Text(Fmt.plural(left, "den", "dny", "dní")).font(Typo.small).foregroundStyle(Palette.faint)
+                        Text(L10n.plural("dní", left)).font(Typo.small).foregroundStyle(Palette.faint)
                     }
                     .fixedSize()
                 }
@@ -637,7 +637,7 @@ struct ThisWeekWidget: View {
                     Text("\(week.done)").font(Typo.number(34)).foregroundStyle(Palette.ink)
                     Text(L10n.f("z %@", String(week.planned))).font(Typo.number(17)).foregroundStyle(Palette.faint)
                 }
-                Text(L10n.f("%@ hotovo", Fmt.plural(week.planned, "tréninku", "tréninků", "tréninků")))
+                Text(L10n.plural("tréninků hotovo", week.planned))
                     .font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(1)
             } chart: { height in
                 if loads.count > 1 {

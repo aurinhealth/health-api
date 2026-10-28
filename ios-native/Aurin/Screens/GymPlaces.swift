@@ -188,7 +188,7 @@ struct GymPlaceView: View {
             return needs.contains(station.id) && needs.isSubset(of: after) && !needs.isSubset(of: before)
         }.count
         let text = opened > 0
-            ? L10n.f("%@ · %@ %@", station.label, String(opened), Fmt.plural(opened, "nový cvik", "nové cviky", "nových cviků"))
+            ? L10n.plural("%@ · %lld nových cviků", station.label, opened)
             : L10n.f("Přidáno: %@", station.label)
         toast = Toast(station: station, text: text)
     }
@@ -346,7 +346,7 @@ struct DumbbellWeightsEditor: View {
             HStack(alignment: .firstTextBaseline) {
                 SectionLabel(text: "Jednoručky")
                 Spacer()
-                Text(weights.isEmpty ? L10n.tr("plán navrhne jakoukoli váhu") : L10n.f("%@ %@", String(weights.count), Fmt.plural(weights.count, "váha", "váhy", "vah")))
+                Text(weights.isEmpty ? L10n.tr("plán navrhne jakoukoli váhu") : L10n.plural("%lld vah", weights.count))
                     .font(Typo.caption).foregroundStyle(Palette.muted)
             }
             HStack(spacing: 8) {
@@ -449,7 +449,7 @@ struct AddGymSheet: View {
         let count = Set(stations).subtracting(["floor_mats"]).count
         return VStack(alignment: .leading, spacing: 12) {
             Label(r.gymName?.nilIfBlank ?? L10n.tr("Poznáno"), systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-            Text(L10n.f("%@ %@", String(count), Fmt.plural(count, "věc", "věci", "věcí"))).font(Typo.caption).foregroundStyle(Palette.muted)
+            Text(L10n.plural("%lld věcí", count)).font(Typo.caption).foregroundStyle(Palette.muted)
             if current != nil {
                 if change.added.isEmpty && change.removed.isEmpty {
                     Text("Beze změny").font(Typo.small).foregroundStyle(Palette.muted)

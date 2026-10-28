@@ -165,10 +165,10 @@ struct PortionWheel: View {
             if product.serving_name == nil || f.value == 1 { return f.label + " " + name }
             return f.label + " × " + name
         }
-        if product.perPortion { return Fmt.decimal(amount, digits: 2) + " " + L10n.tr("porce") }
+        if product.perPortion { return L10n.f("%@ porce", Fmt.decimal(amount, digits: 2)) }
         if let q = FoodProduct.size(product.quantity, unit: product.unit),
            let f = fractions.first(where: { abs($0.value * q - amount) < 0.01 }) {
-            return f.label + " " + L10n.tr("balení")
+            return L10n.f("%@ balení", f.label)
         }
         return String(Int(amount.rounded())) + " " + product.unit
     }

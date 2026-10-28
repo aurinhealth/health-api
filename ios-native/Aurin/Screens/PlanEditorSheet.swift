@@ -195,14 +195,14 @@ struct PlanEditorSheet: View {
         var line = Text(Self.summary(sets: work, reps: reps, done: exercise.doneCount)).foregroundStyle(Palette.muted)
         if warmups > 0 {
             line = line + Text(verbatim: " · ").foregroundStyle(Palette.muted)
-                + Text(L10n.f("%@ %@", String(warmups), Fmt.plural(warmups, "rozcvičovací série", "rozcvičovací série", "rozcvičovacích sérií"))).foregroundStyle(Palette.amber)
+                + Text(L10n.plural("%lld rozcvičovacích sérií", warmups)).foregroundStyle(Palette.amber)
         }
         return line.font(Typo.caption)
     }
 
     /// "3 série × 8-12 · hotovo 1".
     static func summary(sets: Int, reps: String?, done: Int) -> String {
-        var text = L10n.f("%@ %@", String(sets), Fmt.plural(sets, "série", "série", "sérií"))
+        var text = L10n.plural("%lld sérií", sets)
         if let reps { text += " × " + reps }
         if done > 0 { text += " · " + L10n.f("hotovo %@", String(done)) }
         return text

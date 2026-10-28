@@ -62,14 +62,14 @@ struct PlanPreviewContent: View {
                 }
                 .padding(.top, 18)
                 HStack(alignment: .top) {
-                    stat(String(template.weeksCount), Fmt.plural(template.weeksCount, "týden", "týdny", "týdnů"))
+                    stat(String(template.weeksCount), L10n.plural("týdnů", template.weeksCount))
                     Spacer()
                     stat(preview.map { String($0.totals.sessions) } ?? "–", L10n.tr("tréninků"))
                     Spacer()
                     stat(preview.map { "~" + planDuration($0.totals.minutes / max(1, template.weeksCount)) } ?? "–", L10n.tr("týdně"))
                     if tests > 0 {
                         Spacer()
-                        stat(String(tests), template.sport == "ride" ? Fmt.plural(tests, "test FTP", "testy FTP", "testů FTP") : Fmt.plural(tests, "test", "testy", "testů"))
+                        stat(String(tests), L10n.plural(template.sport == "ride" ? "testů FTP" : "testů", tests))
                     }
                 }
                 .padding(.top, 20).padding(.horizontal, 4)
@@ -88,7 +88,7 @@ struct PlanPreviewContent: View {
                         if !allWeeks && template.weeks.count > 4 {
                             Rectangle().fill(Palette.hairline).frame(height: 1)
                             Button { withAnimation(.snappy) { allWeeks = true } } label: {
-                                Text(L10n.f("+ další %@", "\(template.weeks.count - 4) " + Fmt.plural(template.weeks.count - 4, "týden", "týdny", "týdnů")))
+                                Text(L10n.plural("+ další %lld týdnů", template.weeks.count - 4))
                                     .font(Typo.caption).foregroundStyle(Palette.muted)
                                     .frame(maxWidth: .infinity).padding(.vertical, 12)
                             }
@@ -300,7 +300,7 @@ struct StartPlanSheet: View {
 
     private var buttonTitle: String {
         if template.race != nil { return L10n.tr("Začít plán") }
-        return start == today ? L10n.tr("Začít dnes") : L10n.f("Začít %@", Fmt.onWeekday(start) + " " + Fmt.dayMonth(start))
+        return start == today ? L10n.tr("Začít dnes") : L10n.f("Začít %@ %@", Fmt.onWeekday(start), Fmt.dayMonth(start))
     }
 
     private func dayChip(_ d: String) -> some View {
@@ -414,7 +414,7 @@ struct GoalTimeSheet: View {
     static func verdict(goal: Int, estimate: Int?, weeks: Int) -> (String, Color)? {
         guard let estimate, estimate > 0, goal >= 600 else { return nil }
         let faster = Double(estimate - goal) / Double(estimate), months = max(1, Double(weeks) / 4.3)
-        let span = "\(weeks) " + Fmt.plural(weeks, "týden", "týdny", "týdnů"), gap = raceTime(abs(estimate - goal))
+        let span = L10n.plural("%lld týdnů", weeks), gap = raceTime(abs(estimate - goal))
         if faster <= 0 { return (L10n.tr("Pomalejší než tvůj odhad: zvládneš ho s rezervou."), Palette.green) }
         if faster <= 0.01 * months { return (L10n.f("O %@ rychleji než teď: reálný cíl na %@.", gap, span), Palette.green) }
         if faster <= 0.02 * months { return (L10n.f("O %@ rychleji než teď: odvážný, ale reálný cíl na %@.", gap, span), Palette.amber) }
@@ -574,14 +574,14 @@ struct ActivePlanContent: View {
         }
 
         if active.started, active.paused != true, let week {
-            SectionLabel(text: L10n.tr("Tento týden") + " · " + Fmt.dayMonth(week.monday) + "–" + Fmt.dayMonth(ISODay.shift(week.monday, 6))).padding(.top, 26)
+            SectionLabel(text: L10n.f("Tento týden · %@–%@", Fmt.dayMonth(week.monday), Fmt.dayMonth(ISODay.shift(week.monday, 6)))).padding(.top, 26)
             Button(action: editDays) {
                 HStack(spacing: 12) {
                     Image(systemName: "clock").font(.system(size: 15, weight: .medium)).foregroundStyle(Palette.amber)
                         .frame(width: 30, height: 30).background(Palette.amberSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     Text("Čas tento týden").font(.body).foregroundStyle(Palette.ink)
                     Spacer()
-                    Text("\(week.weekDays ?? week.sessions.count) " + Fmt.plural(week.weekDays ?? week.sessions.count, "den", "dny", "dní")).font(.body).foregroundStyle(Palette.muted)
+                    Text(L10n.plural("%lld dní", week.weekDays ?? week.sessions.count)).font(.body).foregroundStyle(Palette.muted)
                     Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
                 }
                 .padding(.horizontal, 16).frame(minHeight: 52)
@@ -610,7 +610,7 @@ struct ActivePlanContent: View {
                     Rectangle().fill(Palette.hairline).frame(height: 1)
                     let rest = active.template.weeks.count - weeks.count
                     Button { withAnimation(.snappy) { allWeeks = true } } label: {
-                        Text(L10n.f("+ další %@", "\(rest) " + Fmt.plural(rest, "týden", "týdny", "týdnů")))
+                        Text(L10n.plural("+ další %lld týdnů", rest))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                             .frame(maxWidth: .infinity).padding(.vertical, 12)
                     }
@@ -655,7 +655,7 @@ struct ActivePlanContent: View {
                 HStack {
                     Text("start").font(Typo.caption).foregroundStyle(Palette.faint)
                     Spacer()
-                    Text(verbatim: L10n.tr("cíl") + (active.raceDate.map { " " + Fmt.dayMonth($0) } ?? "")).font(Typo.caption).foregroundStyle(Palette.faint)
+                    Text(verbatim: active.raceDate.map { L10n.f("cíl %@", Fmt.dayMonth($0)) } ?? L10n.tr("cíl")).font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             }
             if let editGoal {
@@ -796,7 +796,7 @@ struct PlanWeekContent: View {
                 Text(week.phaseLabel).font(Typo.sentence(32, relativeTo: .title)).foregroundStyle(Palette.ink).padding(.top, 10)
                 if let detail {
                     HStack(spacing: 26) {
-                        stat(String(detail.sessions.count), Fmt.plural(detail.sessions.count, "trénink", "tréninky", "tréninků"))
+                        stat(String(detail.sessions.count), L10n.plural("tréninků", detail.sessions.count))
                         stat(planDuration(detail.sessions.reduce(0) { $0 + $1.length }), L10n.tr("čas"))
                         let tss = detail.sessions.compactMap { $0.workout?.target_load }.reduce(0, +)
                         if tss > 0 { stat(Fmt.int(tss), "TSS") }
@@ -1055,7 +1055,7 @@ struct WeekDaysSheet: View {
             SettingsPage(title: "Čas tento týden") {
                 Picker("Dny", selection: $days) {
                     ForEach(max(1, keyCount)...max(usual, week.sessions.count, keyCount, 1), id: \.self) { n in
-                        Text("\(n) " + Fmt.plural(n, "den", "dny", "dní")).tag(n)
+                        Text(L10n.plural("%lld dní", n)).tag(n)
                     }
                 }
                 .pickerStyle(.segmented)
