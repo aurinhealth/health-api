@@ -13,12 +13,7 @@ struct AurinWidgetBundle: WidgetBundle {
         SleepWidget()
         DayWidget()
         FoodWaterWidget()
-        // From iOS 18 the same activity also shows in the watch's Smart Stack.
-        if #available(iOS 18.0, *) {
-            GymActivityWatchWidget()
-        } else {
-            GymActivityWidget()
-        }
+        GymActivityWidget()
     }
 }
 

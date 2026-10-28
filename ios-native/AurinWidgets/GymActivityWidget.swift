@@ -10,7 +10,14 @@ import WidgetKit
 /// "2/4"). The buttons run in the app (GymActivityInbox). Once the rest's end
 /// passes, the activity is stale and shows the set.
 struct GymActivityWidget: Widget {
-    var body: some WidgetConfiguration { Self.activity() }
+    var body: some WidgetConfiguration {
+        // From iOS 18 the same activity also shows in the watch's Smart Stack.
+        if #available(iOS 18.0, *) {
+            return Self.activity().supplementalActivityFamilies([.small])
+        } else {
+            return Self.activity()
+        }
+    }
 
     static func activity() -> some WidgetConfiguration {
         ActivityConfiguration(for: GymActivityAttributes.self) { context in
@@ -74,15 +81,6 @@ struct GymActivityWidget: Widget {
             }
             .keylineTint(Palette.amberBar)
         }
-    }
-}
-
-/// The same activity in the Apple Watch's Smart Stack (iOS 18): the small
-/// family, where the lock screen's card does not fit.
-@available(iOS 18.0, *)
-struct GymActivityWatchWidget: Widget {
-    var body: some WidgetConfiguration {
-        GymActivityWidget.activity().supplementalActivityFamilies([.small])
     }
 }
 
