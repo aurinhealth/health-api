@@ -8,7 +8,7 @@ struct RetryRow: View {
     @State private var busy = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(L10n.tr(message)).font(Typo.body).foregroundStyle(Palette.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Button {

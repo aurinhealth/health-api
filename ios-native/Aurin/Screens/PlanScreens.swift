@@ -98,7 +98,7 @@ struct PlanPreviewContent: View {
                 }
                 .padding(.top, 16)
                 PrimaryButton(title: L10n.tr(replacing == nil ? "Začít plán" : "Začít tento plán"), systemImage: "flag", action: start)
-                    .disabled(!canStart).opacity(canStart ? 1 : 0.3)
+                    .disabled(!canStart).opacity(canStart ? 1 : 0.4)
                     .padding(.top, 18)
             }
     }

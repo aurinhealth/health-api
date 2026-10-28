@@ -85,7 +85,7 @@ final class SnapshotTests: XCTestCase {
         try render("health-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30) }
         try render("health-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: DemoData.night).padding(24).padding(.top, 30) }
         // The night's timeline didn't load: "Zkusit znovu" in the stages card.
-        try render("health-sleep-failed", glow: Palette.Glow.health, height: 900) { SleepDetailContent(health: health, detail: nil, failed: true).padding(24).padding(.top, 30) }
+        try render("health-sleep-failed", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: nil, failed: true).padding(24).padding(.top, 30) }
         for metric in HealthMetric.allCases {
             try render("health-" + metric.rawValue, glow: Palette.Glow.health) { MetricDetailContent(metric: metric, health: health).padding(24).padding(.top, 30) }
         }
