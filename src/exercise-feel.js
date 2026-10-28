@@ -323,5 +323,8 @@ export const FEEL = {
   "Band Assisted Pull-Up": ["Široký sval zádový a biceps.","Ramena nebolí; dole se jen nepovolíš úplně."],
   "Neutral-Grip Pull-Up": ["Široký sval zádový a biceps.","Ramena nebolí."],
   "Weighted Pull Ups": ["Široký sval zádový a biceps.","Lokty ani ramena nebolí; zátěž se nehoupe."],
-  "Wide-Grip Pull-Up": ["Široký sval zádový, horní část.","Ramena nebolí; úchop ne příliš široký."]
+  "Wide-Grip Pull-Up": ["Široký sval zádový, horní část.","Ramena nebolí; úchop ne příliš široký."],
+  "Box Jump": ["Přední stehna a hýždě při odrazu.","Kolena ani kotníky nebolí; dopad je tichý."],
+  "Squat Jump": ["Přední stehna, hýždě a lýtka při odrazu.","Kolena nebolí a nepadají dovnitř; dopad je měkký."],
+  "Pogo Hops": ["Lýtka a Achillovy šlachy, pružně.","Achillovka ani holeně nebolí; poskoky jsou nízké."]
 };

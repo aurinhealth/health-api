@@ -77,6 +77,7 @@ export const SECONDARY = {
   hip_extension: { hamstrings: .4 },
   glute_kickback: { hamstrings: .2 },
   hamstring: { calves: .2 },
+  jump: { glutes: .5, calves: .4 },
   trunk_extension: { lower_back: .6, glutes: .3 },
   rear_delt: { traps: .3 },
   lateral_raise: { traps: .2 },

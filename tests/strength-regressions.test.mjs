@@ -5,7 +5,7 @@ import { isIntensity } from "../src/strength-context.js";
 import { normalizeExerciseName } from "../src/strength-normalization.js";
 import { parseStrengthPlan } from "../src/strength-history.js";
 import { estimateStartingLoad } from "../src/strength-intelligence.js";
-import { EXERCISES, FOCUS_GROUPS, generateStrengthPlan, validateFocusMuscles, painfulExercises, normalizeGymFocus } from "../src/strength-generator.js";
+import { EXERCISES, FOCUS_GROUPS, generateStrengthPlan, validateFocusMuscles, painfulExercises, normalizeGymFocus, isStandIn as standIn } from "../src/strength-generator.js";
 
 test('focused gym validates the selected groups', () => {
   assert.deepEqual(validateFocusMuscles(['chest', 'upper_back']), ['chest', 'upper_back']);
@@ -573,4 +573,25 @@ test('bands, the floor and Cossack squats stand in only when the place has nothi
   // At home with dumbbells and bands, the band exercises still come.
   const home = generateStrengthPlan({ date: '2026-10-28', trainingSetup: { equipment: 'home', stations: ['dumbbells', 'adjustable_bench', 'resistance_bands', 'floor_mats'] }, strength: { recentCompletedSets: [], plannedSessions: [] }, profile: {} }, { durationMinutes: 75, focus: 'lower' });
   assert.ok(home.rows.some(r => r[1] === 'Band Leg Curl'));
+});
+
+test('the main sport decides: a cyclist gets heavy legs and back first, a runner single-leg work and one short jump session a week', () => {
+  const plan = (sport, date, history = [], extra = {}) => generateStrengthPlan({ date, trainingSetup: { equipment: 'gym' }, strength: { recentCompletedSets: history, plannedSessions: [] }, profile: { mainSport: sport }, ...extra }, { durationMinutes: 60 });
+  const names = p => [...new Set(p.rows.filter(r => r[0] === 'WORK').map(r => r[1]))];
+  const run = names(plan('running', '2026-10-28'));
+  assert.ok(['Squat Jump', 'Pogo Hops'].includes(run[0]), run.join());
+  assert.match(plan('running', '2026-10-28').rationale, /výskoky|jumps/);
+  // Not again within six days, never for a cyclist or without a main sport.
+  const jumped = [{ exercise: 'Squat Jump', workout_date: '2026-10-25', type: 'WORK', reps: 5 }];
+  assert.ok(!names(plan('running', '2026-10-28', jumped)).some(ex => ['Box Jump', 'Squat Jump', 'Pogo Hops'].includes(ex)));
+  for (const sport of ['cycling', '']) assert.ok(!names(plan(sport, '2026-10-28')).some(ex => ['Box Jump', 'Squat Jump', 'Pogo Hops'].includes(ex)), sport);
+  // Not on a day the legs are spared for a key run.
+  const keyRun = { running: { nextRun: { date: '2026-10-29', name: 'Intervaly', type: 'Run', intensity: true, durationMinutes: 60 } } };
+  const spared = plan('running', '2026-10-28', [], keyRun);
+  if (spared.protectedLegs) assert.ok(!names(spared).some(ex => ['Box Jump', 'Squat Jump', 'Pogo Hops'].includes(ex)));
+  // A cyclist's leg slot prefers the heavy lifts.
+  const ride = names(plan('cycling', '2026-10-28'));
+  assert.ok(ride.some(ex => ['DB Romanian deadlift', 'Barbell Romanian deadlift', 'Pivot leg press', 'Pendulum squat', 'Barbell back squat', 'Hip thrust'].includes(ex)), ride.join());
+  // The Nordic curl is strength work, not a floor stand-in.
+  assert.equal(EXERCISES['Nordic Hamstring Curl'] && !standIn('Nordic Hamstring Curl'), true);
 });

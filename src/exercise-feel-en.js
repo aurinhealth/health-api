@@ -322,5 +322,8 @@ export const FEEL_EN = {
   "Band Assisted Pull-Up": ["Lats and biceps.","No shoulder pain; don't hang completely loose at the bottom."],
   "Neutral-Grip Pull-Up": ["Lats and biceps.","No shoulder pain."],
   "Weighted Pull Ups": ["Lats and biceps.","No elbow or shoulder pain; the weight doesn't swing."],
-  "Wide-Grip Pull-Up": ["Lats, the upper part.","No shoulder pain; a grip not too wide."]
+  "Wide-Grip Pull-Up": ["Lats, the upper part.","No shoulder pain; a grip not too wide."],
+  "Box Jump": ["Quads and glutes as you take off.","No knee or ankle pain; the landing is quiet."],
+  "Squat Jump": ["Quads, glutes and calves as you take off.","No knee pain and the knees don't cave in; the landing is soft."],
+  "Pogo Hops": ["Calves and Achilles tendons, springy.","No Achilles or shin pain; the hops stay low."]
 };

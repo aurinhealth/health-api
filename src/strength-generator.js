@@ -339,6 +339,9 @@ const EXERCISES = {
   "Crunches": { pattern: "trunk_flexion", muscle: "core", unilateral: false, sets: 3, reps: "12–20", baseKg: 0, warmup: false, note: "Přímý sval břišní; zkracovačky vleže, kg = přidaná zátěž", fatigue: 0.25 },
   "Decline Sit-Up": { pattern: "core", muscle: "core", unilateral: false, sets: 3, reps: "10–15", baseKg: 0, warmup: false, note: "Břišní svaly a flexory kyčle; sed-lehy na šikmé lavici hlavou dolů, kg = přidaná zátěž", fatigue: 0.4, variantOf: "Abs bench crunch" },
   "Reverse Crunch": { pattern: "trunk_flexion", muscle: "core", unilateral: false, sets: 3, reps: "10–15", baseKg: 0, warmup: false, note: "Spodní část břicha; vleže přitahuješ kolena a podsazuješ pánev, kg = přidaná zátěž", fatigue: 0.3 },
+  "Box Jump": { pattern: "jump", muscle: "quads", unilateral: false, sets: 3, reps: "4–6", baseKg: null, warmup: false, note: "Výbušnost nohou; výskok snožmo na bednu, měkký dopad, dolů sestup, kg = bez zátěže", fatigue: 0.35 },
+  "Squat Jump": { pattern: "jump", muscle: "quads", unilateral: false, sets: 3, reps: "5–6", baseKg: null, warmup: false, note: "Výbušnost nohou; z podřepu výskok co nejvýš, měkký dopad a krátká pauza, kg = bez zátěže", fatigue: 0.35 },
+  "Pogo Hops": { pattern: "jump", muscle: "calves", unilateral: false, sets: 3, reps: "15–20", baseKg: null, warmup: false, note: "Pružnost kotníků a lýtek; rychlé nízké poskoky po špičkách s téměř propnutými koleny, kg = bez zátěže", fatigue: 0.25 },
   "Supermans": { pattern: "trunk_extension", muscle: "lower_back", unilateral: false, sets: 2, reps: "10–15", baseKg: 0, warmup: false, note: "Spodní záda a hýždě; vleže na břiše zvedáš paže a nohy, kg = přidaná zátěž", fatigue: 0.25 },
   "V-Up": { pattern: "trunk_flexion", muscle: "core", unilateral: false, sets: 2, reps: "8–12", baseKg: 0, warmup: false, note: "Břišní svaly; z lehu současně zvedáš natažené nohy a trup do V, kg = přidaná zátěž", fatigue: 0.4 },
   "Stability Ball Leg Curl": { pattern: "hamstring", muscle: "hamstrings", unilateral: false, sets: 3, reps: "8–12", baseKg: 0, warmup: false, note: "Zadní stehna a hýždě; vleže s patami na gymballu přitahuješ míč k hýždím, kg = přidaná zátěž", fatigue: 0.4 },
@@ -366,10 +369,10 @@ export const FOCUS_GROUPS = {
   triceps: {label:'Triceps', exercises:['Cable triceps extension','Cable overhead triceps extension','Cable triceps kickback','DB overhead triceps extension','EZ bar skull crusher','Dips','Assisted dip','Smith Machine Close Grip Bench Press','Cable Bar Pushdown','Cable Overhead Straight Bar Extensions','Cross-Body Cable Tricep Extension','Reverse-Grip Tricep Pushdown','Single-Arm Overhead Cable Extension','Machine Tricep Extension','Close-Grip Push-Up off a Dumbbell','Bench Dips','Diamond Push Ups','Barbell Close Grip Bench Press']},
   abs: {label:'Břišní svaly', exercises:['Abs bench crunch','Cable crunch','Hanging leg raise','Medicine ball slam','Machine Crunch',"Captain's Chair Knee Raise",'Turkish Get-Up','Bird Dog','Crunches','Reverse Crunch','V-Up']},
   obliques: {label:'Šikmé břišní svaly', exercises:['Pallof press','Cable woodchop','Cable Side Bend','Selectorized Torso Rotation Machine','Dumbbell Russian Twist','Dumbbell Windmill','Bicycle Crunches']},
-  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat','DB sumo squat','Barbell back squat','Barbell front squat','Smith machine squat','Hack squat','Smith Machine Front Squat','Belt Squat','Dumbbell Front Squat','Dumbbell Goblet Split Squat','Dumbbell Overhead Squat','Dumbbell Squat','Dumbbell Thruster','Barbell Split Squat','Barbell Thruster','Band Squat','TRX Squat','Single-Leg Step-Down']},
+  quads: {label:'Přední stehna', exercises:['Pivot leg press','Pendulum squat','Leg extension Prime','DB Bulgarian split squat','Goblet squat','DB sumo squat','Barbell back squat','Barbell front squat','Smith machine squat','Hack squat','Smith Machine Front Squat','Belt Squat','Dumbbell Front Squat','Dumbbell Goblet Split Squat','Dumbbell Overhead Squat','Dumbbell Squat','Dumbbell Thruster','Barbell Split Squat','Barbell Thruster','Band Squat','TRX Squat','Single-Leg Step-Down','Box Jump','Squat Jump']},
   hamstrings: {label:'Zadní stehna', exercises:['Prone leg curl Prime','DB Romanian deadlift','Barbell Romanian deadlift','DB single-leg Romanian deadlift','Seated leg curl','Trap bar deadlift','Smith Machine Sumo Romanian Deadlift','Band Leg Curl','Nordic Hamstring Curl','Stability Ball Leg Curl']},
   hips: {label:'Hýždě a kyčle', exercises:['Hip thrust','Abduction machine','Adduction machine','Barbell hip thrust','Leg press high feet','Cable glute kickback','Glute hyperextension','Cable pull-through','Abduction machine forward lean','Cable hip abduction','DB reverse lunge','DB step-up','DB sumo squat','Smith machine hip thrust','Smith machine split squat','Glute kickback machine','Trap bar deadlift','Kettlebell swing','Box step-up','Reverse Hack Squat','Reverse Hyperextension','Dumbbell Cossack Squat','Dumbbell Deadlift','Dumbbell Goblet Alternating Curtsy Lunge','Dumbbell Lateral Lunge','Dumbbell Walking Lunges','Barbell Deadlift','Sumo Deadlift','Band Glute Bridge','Band Hip Abduction','Bodyweight Hip Abduction','Fire Hydrants','Forward Lunge']},
-  calves: {label:'Lýtka', exercises:['Standing calf raise','Single-leg calf raise','Seated calf raise','Calf Press','Dumbbell Tibialis Raise','Bent-Knee Soleus Raise','Tibialis Raise']},
+  calves: {label:'Lýtka', exercises:['Standing calf raise','Single-leg calf raise','Seated calf raise','Calf Press','Dumbbell Tibialis Raise','Bent-Knee Soleus Raise','Tibialis Raise','Pogo Hops']},
   forearms: {label:'Předloktí', exercises:['DB wrist curl','DB reverse wrist curl','Cable reverse curl','Reverse Grip Barbell Curl','Wrist Roller','EZ Bar Reverse Preacher Curl']},
   traps: {label:'Trapézy', exercises:['DB shrug','Barbell shrug','Smith machine shrug','Cable upright row','Dumbbell Upright Row','Barbell Upright Row']},
   lower_back: {label:'Spodní záda', exercises:['Hyperextension','Barbell good morning','Machine Back Extension','Supermans']}
@@ -685,6 +688,9 @@ const NOTE_EN = {
 "Decline Sit-Up": "Abs and hip flexors; sit-ups on a decline bench, kg = added weight",
 "Reverse Crunch": "Lower abs; lying down, pull your knees in and curl your pelvis up, kg = added weight",
 "Supermans": "Lower back and glutes; lying face down, lift your arms and legs, kg = added weight",
+"Box Jump": "Leg power; jump with both feet onto a box, land softly, step down, kg = no load",
+"Squat Jump": "Leg power; from a half squat jump as high as you can, land softly and pause briefly, kg = no load",
+"Pogo Hops": "Ankle and calf stiffness; quick low hops on the balls of your feet with nearly straight knees, kg = no load",
 "V-Up": "Abs; from lying, lift straight legs and torso together into a V, kg = added weight",
 "Stability Ball Leg Curl": "Hamstrings and glutes; lying with your heels on a gym ball, roll the ball to your glutes, kg = added weight",
 "Slider Leg Curl": "Hamstrings and glutes; in a bridge, slide your heels on sliders to your glutes and back, kg = added weight",
@@ -971,8 +977,31 @@ const LIKED_BONUS = 0.4;
 // one of them (home, body weight) the order stays as before.
 const STAND_IN_STATIONS = new Set(["resistance_bands", "mini_band", "floor_mats", "gym_ball"]);
 const STAND_IN_EXERCISES = new Set(["Dumbbell Cossack Squat", "Cossack Squat"]);
+// Floor exercises that are real strength or power work, not a stand-in.
+const FLOOR_STRENGTH = new Set(["Nordic Hamstring Curl", "Squat Jump", "Pogo Hops"]);
 const STAND_IN_PENALTY = 3;
-export const isStandIn = name => STAND_IN_EXERCISES.has(name) || (EXERCISE_STATIONS[name]?.length > 0 && EXERCISE_STATIONS[name].every(id => STAND_IN_STATIONS.has(id)));
+export const isStandIn = name => STAND_IN_EXERCISES.has(name) || (!FLOOR_STRENGTH.has(name) && EXERCISE_STATIONS[name]?.length > 0 && EXERCISE_STATIONS[name].every(id => STAND_IN_STATIONS.has(id)));
+
+// The main sport (profile, else the training history) decides which exercises
+// of a pattern come first. A cyclist needs strong legs for the pedal stroke
+// (heavy squats, presses and hinges) and a back and trunk that hold the position;
+// a runner single-leg strength, calves and soleus, and hamstrings that take the
+// stride (Nordic curls). A near tie still goes to recency and muscle load.
+const SPORT_FAVOURITES = {
+  cycling: ["Barbell back squat", "Pivot leg press", "Hack squat", "Pendulum squat", "Belt Squat", "Barbell Romanian deadlift", "DB Romanian deadlift", "Trap bar deadlift", "Hip thrust", "Barbell hip thrust", "DB Bulgarian split squat", "Hyperextension", "Kettlebell swing", "Low row", "Chest-supported row", "One-arm DB row", "Pallof press"],
+  running: ["DB Bulgarian split squat", "DB step-up", "Box step-up", "DB reverse lunge", "Barbell Split Squat", "DB single-leg Romanian deadlift", "DB Romanian deadlift", "Hip thrust", "Nordic Hamstring Curl", "Prone leg curl Prime", "Single-leg calf raise", "Seated calf raise", "Standing calf raise", "Pallof press", "Hyperextension"]
+};
+SPORT_FAVOURITES.triathlon = [...new Set([...SPORT_FAVOURITES.running, ...SPORT_FAVOURITES.cycling.slice(0, 6)])];
+const SPORT_BONUS = 1.5;
+export const mainSportOf = context => context?.profile?.mainSport || context?.trainingSetup?.history?.mainSport || "";
+const sportFavours = (sport, name) => (SPORT_FAVOURITES[sport] || []).includes(name);
+
+// A runner jumps once a week: a few low-volume sets at the start, while fresh
+// (stiffer tendons and a better running economy). Not on a day the legs are
+// spared for a key session, a lighter day, poor recovery or without leg work.
+export const PLYOMETRICS = ["Box Jump", "Squat Jump", "Pogo Hops"];
+const PLYO_SPORTS = new Set(["running", "triathlon"]);
+const PLYO_EVERY_DAYS = 6;
 function taste(options) {
   return { liked: new Set((options.likedExercises || []).map(normalizeExerciseName)), disliked: new Set((options.dislikedExercises || []).map(normalizeExerciseName)) };
 }
@@ -1012,7 +1041,7 @@ function choosePlan(context, options = {}) {
   const score = (ex, rank = 0, withStall = true) => {
     const def = EXERCISES[ex], last = lastExerciseDate.get(ex);
     const recent = last && daysBetween(last, context.date) <= 4 ? 3 : 0;
-    return recent + groupRecency(ex) + (adjacentGroups.has(groupOf[ex]) ? 6 : 0) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) + (isStandIn(ex) ? STAND_IN_PENALTY : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
+    return recent + groupRecency(ex) + (adjacentGroups.has(groupOf[ex]) ? 6 : 0) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) + (isStandIn(ex) ? STAND_IN_PENALTY : 0) - (sportFavours(sport, ex) ? SPORT_BONUS : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
   };
 
   // Only a close call between variants: recency and muscle load still decide.
@@ -1022,7 +1051,7 @@ function choosePlan(context, options = {}) {
 
   const forceUpper = options.forceProtectLegs === true || options.focus === "upper"&&options.focusSource!=='week';
   const forceLower = options.focus === "lower";
-  const { liked, disliked } = taste(options);
+  const { liked, disliked } = taste(options), sport = mainSportOf(context);
   const recovery=recoverySignals(context),acuteRecovery=(context?.adaptive?.recovery?.score??100)<55||recovery.sleepMin!=null&&recovery.sleepMin<330;
 
   const candidatesByPattern = {
@@ -1422,7 +1451,7 @@ export function generateStrengthPlan(context, options = {}) {
   const planPhase = !focusMuscles && options.planPhase?.exercises?.length ? options.planPhase : null;
   if (options.focusMuscles != null && !focusMuscles) throw new Error(L('Vyber 1 až 5 známých partií.', 'Choose 1 to 5 known muscle groups.'));
   const excluded = new Set((options.excludeExercises || []).map(normalizeExerciseName));
-  const { liked, disliked } = taste(options);
+  const { liked, disliked } = taste(options), mainSport = mainSportOf(context);
   const selection = selectionHistory(context);
   const weeklyExposure = recentMuscleExposure(selection, context.date);
   const weeklyLoad = recentMuscleLoad(selection, context.date);
@@ -1434,7 +1463,8 @@ export function generateStrengthPlan(context, options = {}) {
   const stalled = stalledExercises(history, context.date), stallSwaps = { ...(chosen.stallSwaps || {}) };
   // The group's exercises, best first (the first one may carry a stall swap).
   const rankedExercises = group => {
-    const candidates = withoutDisliked(FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && availableAt(name) && fitsEquipment(name,context.trainingSetup) && !excluded.has(name)), disliked);
+    // Jumps come only as a runner's weekly jumps, never as a group's strength work.
+    const candidates = withoutDisliked(FOCUS_GROUPS[group].exercises.filter(name => EXERCISES[name] && !PLYOMETRICS.includes(name) && availableAt(name) && fitsEquipment(name,context.trainingSetup) && !excluded.has(name)), disliked);
     if (!candidates.length) throw new Error(L('Pro partii ' + FOCUS_GROUPS[group].label + ' není dostupný cvik.', 'No exercise is available for ' + FOCUS_GROUPS[group].label + '.'));
     const score = (name, withStall = true) => {
       const def = EXERCISES[name], last = lastExerciseDate.get(name);
@@ -1443,7 +1473,7 @@ export function generateStrengthPlan(context, options = {}) {
       // The group's list is curated main movement first (hip thrust before
       // abduction), so its order breaks near ties.
       const order = FOCUS_GROUPS[group].exercises.indexOf(name) * .05;
-      return recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1 + order + (withStall && stalled.has(name) ? 3 : 0) + (isStandIn(name) ? STAND_IN_PENALTY : 0) - (liked.has(name) ? LIKED_BONUS : 0);
+      return recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1 + order + (withStall && stalled.has(name) ? 3 : 0) + (isStandIn(name) ? STAND_IN_PENALTY : 0) - (sportFavours(mainSport, name) ? SPORT_BONUS : 0) - (liked.has(name) ? LIKED_BONUS : 0);
     };
     const ranked = candidates.slice().sort((a, b) => score(a) - score(b)), best = ranked[0], plain = candidates.slice().sort((a, b) => score(a, false) - score(b, false))[0];
     if (plain !== best && stalled.has(plain)) stallSwaps[best] = plain;
@@ -1472,7 +1502,7 @@ export function generateStrengthPlan(context, options = {}) {
     // fits, an exercise for the same muscle that does, so the movement stays
     // in the session instead of dropping out.
     const usable = name => EXERCISES[name] && availableAt(name) && fitsEquipment(name, context.trainingSetup) && !excluded.has(name) && !disliked.has(name);
-    const sameMuscle = slot => { const muscle = EXERCISES[[].concat(slot).find(name => EXERCISES[name])]?.muscle; return muscle ? Object.keys(EXERCISES).filter(name => EXERCISES[name].muscle === muscle && usable(name)).sort((a, b) => EXERCISES[a].fatigue - EXERCISES[b].fatigue)[0] : null; };
+    const sameMuscle = slot => { const muscle = EXERCISES[[].concat(slot).find(name => EXERCISES[name])]?.muscle; return muscle ? Object.keys(EXERCISES).filter(name => EXERCISES[name].muscle === muscle && usable(name) && !PLYOMETRICS.includes(name)).sort((a, b) => EXERCISES[a].fatigue - EXERCISES[b].fatigue)[0] : null; };
     exercises = [...new Set(planPhase.exercises.map(slot => [].concat(slot).find(usable) || sameMuscle(slot)).filter(Boolean))].slice(0, maxExercises);
   } else {
     exercises = chosen.exercises.filter(ex => !excluded.has(ex)&&fitsEquipment(ex,context.trainingSetup)).slice(0, maxExercises);
@@ -1488,6 +1518,14 @@ export function generateStrengthPlan(context, options = {}) {
   // relative order otherwise, so each exercise's warm-up sets stay immediately
   // before its work sets and no warm-up exercise is introduced later in the plan.
   exercises = exercises.sort((a, b) => Number(EXERCISES[b]?.warmup === true) - Number(EXERCISES[a]?.warmup === true));
+
+  // A runner's jumps go first, before the heavy sets (see PLYOMETRICS).
+  const since = ex => lastExerciseDate.has(ex) ? daysBetween(lastExerciseDate.get(ex), context.date) : 99, lastJump = Math.min(...PLYOMETRICS.map(since));
+  const recoveryScore = context?.adaptive?.recovery?.score;
+  const jumpDay = PLYO_SPORTS.has(mainSport) && !focusMuscles && !planPhase && !deload && !chosen.protectedLegs && !chosen.lighterDay && !(recoveryScore < 55)
+    && lastJump >= PLYO_EVERY_DAYS && exercises.some(ex => LEG_MUSCLES.has(EXERCISES[ex]?.muscle));
+  const jump = jumpDay ? PLYOMETRICS.filter(fits).sort((a, b) => since(b) - since(a))[0] : null;
+  if (jump) { if (exercises.length >= maxExercises) exercises.pop(); exercises.unshift(jump); }
 
   const rows = [], loadEstimates = [];
   const muscleLoad = acuteMuscleLoad(history, context.date),sportLoad=sportMuscleLoad(context);
@@ -1591,7 +1629,7 @@ export function generateStrengthPlan(context, options = {}) {
     fitness: L('kondice: hodně opakování a krátké pauzy', 'fitness: many reps and short rests')
   }[goal];
   const goalText = goalLine ? (chosenGoal === 'auto' ? L('Cíl podle tvého sportu – ', 'Goal from your sport – ') : L('Cíl ', 'Goal ')) + goalLine + '. ' : '';
-  const rationale = goalText + (firstSession ? L('První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ', 'Your first workout in the app: weights are a careful estimate and no set goes to failure; once you log your actual weights, the next workout follows your performance. ') : '') + baseRationale + (pain.parts.length ? L(' Podle toho, co si trenér pamatuje o bolesti (' + pain.parts.join(', ') + '), vynechávám cviky, které ji zatěžují.', ' From what the coach remembers about pain (' + pain.parts.join(', ') + '), I leave out exercises that load it.') : '') + (sportLoad.size?L(' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.', ' Load from other sports adjusts the dose for the muscles involved; it doesn\'t replace their strength training.'):'') + (nearby.length ? L(' Cviky se liší od plánu na ' + nearby.join(' a ') + '.', ' The exercises differ from the plan for ' + nearby.join(' and ') + '.') : '') + (swapped.length ? L(' Po třech trénincích bez posunu nová varianta: ', ' A new variant after three sessions without progress: ') + swapped.join(', ') + '.' : '');
+  const rationale = goalText + (firstSession ? L('První trénink v aplikaci: váhy jsou opatrný odhad a žádná série nejde do selhání; po zapsání skutečných vah se další trénink řídí tvými výkony. ', 'Your first workout in the app: weights are a careful estimate and no set goes to failure; once you log your actual weights, the next workout follows your performance. ') : '') + baseRationale + (pain.parts.length ? L(' Podle toho, co si trenér pamatuje o bolesti (' + pain.parts.join(', ') + '), vynechávám cviky, které ji zatěžují.', ' From what the coach remembers about pain (' + pain.parts.join(', ') + '), I leave out exercises that load it.') : '') + (sportLoad.size?L(' Zátěž z ostatních sportů upravuje dávku zapojených svalů; nenahrazuje jejich silový trénink.', ' Load from other sports adjusts the dose for the muscles involved; it doesn\'t replace their strength training.'):'') + (nearby.length ? L(' Cviky se liší od plánu na ' + nearby.join(' a ') + '.', ' The exercises differ from the plan for ' + nearby.join(' and ') + '.') : '') + (swapped.length ? L(' Po třech trénincích bez posunu nová varianta: ', ' A new variant after three sessions without progress: ') + swapped.join(', ') + '.' : '') + (jump ? L(' Jednou týdně na začátku krátké výskoky (' + jump + '): pružnější šlachy a úspornější běh.', ' Once a week short jumps at the start (' + jump + '): springier tendons and a more economical stride.') : '');
   snapDumbbells(rows, context?.trainingSetup?.dumbbellWeights);
   assignIntensities(rows, { phaseRpe: planPhase?.rpe });
   if(!rows.some(r=>r[0]==='WORK'))throw new Error(L('Pro toto vybavení nebyl nalezen vhodný cvik. Uprav vybavení v průvodci.', 'No suitable exercise was found for this equipment. Adjust your equipment in the setup guide.'));

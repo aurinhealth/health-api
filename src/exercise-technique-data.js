@@ -6882,5 +6882,62 @@ export const TECHNIQUE = {
    "title": "How to Do Wide Grip Pullups"
   },
   "query": "wide grip pull up"
+ },
+ "Box Jump": {
+  "setup": [
+   "Stabilní bedna, která se nepohne, zprvu nízká (30–50 cm).",
+   "Stoupni si na šířku ramen asi 30 cm před bednu.",
+   "Paže volně podél těla."
+  ],
+  "steps": [
+   "Švihni pažemi dozadu a pokrč kolena do čtvrtdřepu.",
+   "Výbušně se odraz a švihem paží vyskoč na bednu.",
+   "Dopadni měkce na celá chodidla v podřepu, narovnej se a ze bedny sestup, neskákej dolů."
+  ],
+  "mistakes": [
+   "Moc vysoká bedna a dopad do hlubokého dřepu.",
+   "Seskakování z bedny místo sestupu.",
+   "Kolena padají dovnitř při odrazu nebo dopadu."
+  ],
+  "breathing": "Nádech před odrazem, výdech při dopadu.",
+  "query": "box jump proper form"
+ },
+ "Squat Jump": {
+  "setup": [
+   "Stoj na šířku ramen, špičky mírně ven.",
+   "Ruce před tělem nebo za hlavou.",
+   "Měkká podložka nebo pevná podlaha, ne kluzká."
+  ],
+  "steps": [
+   "Sjeď do podřepu, stehna nad vodorovnou.",
+   "Výbušně se odraz a vyskoč co nejvýš.",
+   "Dopadni měkce přes špičky do podřepu, na chvíli zastav a opakuj."
+  ],
+  "mistakes": [
+   "Kolena padají dovnitř.",
+   "Tvrdý dopad na paty.",
+   "Opakování bez pauzy, takže výskoky slábnou."
+  ],
+  "breathing": "Nádech v podřepu, výdech při výskoku.",
+  "query": "squat jump proper form"
+ },
+ "Pogo Hops": {
+  "setup": [
+   "Stoj na šířku boků, váha na přední části chodidel.",
+   "Kolena jen lehce pokrčená.",
+   "Paže volně, pomáhají rytmu."
+  ],
+  "steps": [
+   "Odrážej se jen z kotníků v rychlém rytmu.",
+   "Poskoky jsou nízké, jen pár centimetrů.",
+   "Na zemi zůstaň co nejkratší dobu, paty se nedotýkají."
+  ],
+  "mistakes": [
+   "Poskoky z kolen místo z kotníků.",
+   "Moc vysoké a pomalé poskoky.",
+   "Dopad na paty."
+  ],
+  "breathing": "Dýchej volně v rytmu poskoků.",
+  "query": "pogo hops running drill"
  }
 };
