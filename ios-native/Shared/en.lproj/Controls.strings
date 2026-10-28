@@ -1,4 +1,4 @@
-/* Control Center and Lock Screen controls (AurinWidgets/AurinControls.swift): names and descriptions iOS shows in its gallery. */
+/* Control Center and Lock Screen controls (AurinWidgets/ControlWidgets.swift): names and descriptions iOS shows in its gallery. */
 "Voda" = "Water";
 "Přidá sklenici vody do dnešního pití." = "Adds a glass of water to today's drinks.";
 "Začít posilovnu" = "Start gym";

@@ -3,7 +3,7 @@ import Foundation
 import WidgetKit
 
 /// Aurin's controls in Control Center and on the Lock Screen (AurinWidgets/
-/// AurinControls.swift): Voda, Začít posilovnu and Přeskočit pauzu. Their
+/// ControlWidgets.swift): Voda, Začít posilovnu and Přeskočit pauzu. Their
 /// values come from the App Group, so they are asked again whenever those change.
 enum AurinControls {
     static let water = "health.aurin.control.water"
