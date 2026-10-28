@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 import UIKit
 
@@ -457,11 +458,7 @@ struct PaywallView: View {
     /// privacy policy and restoring a purchase. The yearly plan starts with
     /// the free week whenever the App Store offers it, switch or not.
     private var renewalTerms: some View {
-        let yearly = ProPlans.price("annual", store)
-        let line = plan == "annual"
-            ? (store.trialEligible ? L10n.f("7 dní zdarma, poté %@ ročně. Obnovuje se automaticky, zrušíš kdykoli.", yearly)
-                                   : L10n.f("%@ ročně. Obnovuje se automaticky, zrušíš kdykoli.", yearly))
-            : L10n.f("%@ měsíčně. Obnovuje se automaticky, zrušíš kdykoli.", ProPlans.price("monthly", store))
+        let line = renewalLine
         return VStack(spacing: 3) {
             Text(verbatim: line).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 6) {
@@ -473,6 +470,13 @@ struct PaywallView: View {
             }
         }
         .font(.caption2).foregroundStyle(Palette.faint)
+    }
+
+    private var renewalLine: String {
+        if plan != "annual" { return L10n.f("%@ měsíčně. Obnovuje se automaticky, zrušíš kdykoli.", ProPlans.price("monthly", store)) }
+        let yearly = ProPlans.price("annual", store)
+        if store.trialEligible { return L10n.f("7 dní zdarma, poté %@ ročně. Obnovuje se automaticky, zrušíš kdykoli.", yearly) }
+        return L10n.f("%@ ročně. Obnovuje se automaticky, zrušíš kdykoli.", yearly)
     }
 
     /// Seconds since the page (or its step) opened, frame by frame;
@@ -507,14 +511,21 @@ struct PaywallView: View {
         return clock { time in
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(rows.indices, id: \.self) { i in
-                    let shown = reduceMotion ? 1 : min(1, max(0, (time - Double(i) * 0.15) / 0.5))
+                    let shown: Double = reduceMotion ? 1 : Self.risen(time, row: i)
                     FreeWeekRow(color: rows[i].0, symbol: rows[i].1, title: rows[i].2, text: rows[i].3, next: i + 1 < rows.count ? rows[i + 1].0 : nil)
-                        .opacity(shown).offset(y: 10 * (1 - shown))
+                        .opacity(shown).offset(y: CGFloat(10 * (1 - shown)))
                 }
             }
             .padding(.horizontal, 30).padding(.top, 30)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
+    }
+
+    /// How far a row of the free week has risen in, 0 to 1, each 0.15 s after the one above.
+    static func risen(_ time: Double, row: Int) -> Double {
+        let start = Double(row) * 0.15
+        let progress = (time - start) / 0.5
+        return min(1.0, max(0.0, progress))
     }
 }
 
