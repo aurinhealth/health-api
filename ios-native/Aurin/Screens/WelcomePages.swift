@@ -334,7 +334,7 @@ private struct WelcomeTraining: View {
 
     /// The plate loader's bar with 80 kg: the plates slide on one after another.
     private var loadedBar: some View {
-        let plates: [Double] = PlateLoad.plates(for: 80, bar: 20)
+        let plates: [Double] = PlateLoad.plates(for: 80, bar: 20, sizes: PlateLoad.kgSizes)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(verbatim: "80 kg").font(Typo.number(24)).foregroundStyle(Palette.ink)

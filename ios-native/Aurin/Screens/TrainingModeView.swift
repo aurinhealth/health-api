@@ -236,7 +236,7 @@ struct TrainingModeView: View {
             ExerciseNoteSheet(exercise: item.name)
         }
         .sheet(item: $loadingBar) { target in
-            PlateLoaderSheet(title: target.title, startKg: target.kg) { total in loaded(total, on: target) }
+            PlateLoaderSheet(title: target.title, exercise: target.exercise, startKg: target.kg, usual: target.usual) { total in loaded(total, on: target) }
         }
         .sheet(isPresented: $editing) {
             if let day {
@@ -428,9 +428,9 @@ struct TrainingModeView: View {
         // By sides the number shows on the L row only.
         let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) : carriedLetter(s, in: exercise) ?? s.intensity
         var plateTap: (() -> Void)? = nil
-        if loadsPlates(exercise) {
+        if let usual = usualBar(exercise) {
             let target = PlateTarget(id: s.row, exercise: exercise.name, title: s.warmup ? exercise.name : L10n.f("%@ · série %@", exercise.name, s.number),
-                                     kg: LiftWeight.number(LiftWeight.kgText(kg.isEmpty ? shownKg : kg)))
+                                     kg: LiftWeight.number(LiftWeight.kgText(kg.isEmpty ? shownKg : kg)), usual: usual)
             plateTap = { loadingBar = target }
         }
         return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
@@ -461,9 +461,10 @@ struct TrainingModeView: View {
         .padding(.horizontal, 10).padding(.top, 8)
     }
 
-    /// A barbell in kilograms: its weight is loaded as plates.
-    private func loadsPlates(_ exercise: GymExercise) -> Bool {
-        !Units.imperial && uses(exercise, "barbells")
+    /// The bar (or plate-loaded machine) an exercise is done with: its weight is
+    /// loaded as plates. Nil for dumbbells, cables and stack machines.
+    private func usualBar(_ exercise: GymExercise) -> PlateBar? {
+        PlateBar.usual(catalog.first { $0.name == exercise.name }?.stations ?? [])
     }
 
     /// The bar loaded: the set at hand takes the weight, and so do the work
@@ -476,9 +477,11 @@ struct TrainingModeView: View {
         Task { await setWeight(text, of: exercise) }
     }
 
-    /// "Kotouče: 20 + 10 na stranu" for a barbell lift.
+    /// "Kotouče: 20 + 10 na stranu" for a lift done with plates.
     private func platesText(_ exercise: GymExercise) -> String? {
-        guard uses(exercise, "barbells"), let value = LiftWeight.number(LiftWeight.kgText(kg)), let plates = GymSessionMath.plates(value) else { return nil }
+        guard let usual = usualBar(exercise), let shown = LiftWeight.number(kg) else { return nil }
+        let bar = PlateBar.saved(exercise.name) ?? usual
+        guard shown > bar.weight, let plates = PlateLoad.perSide(shown, bar: bar.weight, sizes: PlateLoad.sizes) else { return nil }
         return L10n.f("Kotouče: %@ na stranu", plates)
     }
 
@@ -911,10 +914,6 @@ struct TrainingModeView: View {
     }
 
     // MARK: Parts
-
-    private func uses(_ exercise: GymExercise, _ station: String) -> Bool {
-        catalog.first { $0.name == exercise.name }?.stations?.contains(station) == true
-    }
 
     private func current(_ day: GymDay) -> GymExercise? {
         let list = day.exercises
