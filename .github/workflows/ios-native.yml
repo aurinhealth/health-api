@@ -67,8 +67,15 @@ jobs:
           udid=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           devices = json.load(sys.stdin)["devices"]
-          phones = [d for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith("iPhone")]
-          pick = next((d for d in phones if d["name"] in ("iPhone 16", "iPhone 16 Pro", "iPhone 17", "iPhone 17 Pro")), phones[0])
+          version = lambda runtime: [int(n) for n in runtime.split("iOS-")[-1].split("-")]
+          # The newest iOS first (the one the SDK was made for), then the usual phone.
+          runtimes = sorted((r for r in devices if "iOS" in r), key=version, reverse=True)
+          print("runtimes:", ", ".join(runtimes), file=sys.stderr)
+          phones = [d for r in runtimes for d in devices[r] if d["name"].startswith("iPhone")]
+          names = ("iPhone 17", "iPhone 16", "iPhone 17 Pro", "iPhone 16 Pro")
+          newest = [d for d in devices[runtimes[0]] if d["name"].startswith("iPhone")] if runtimes else []
+          pick = next((d for n in names for d in newest if d["name"] == n), newest[0] if newest else phones[0])
+          print(pick["name"], file=sys.stderr)
           print(pick["udid"])')
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
