@@ -6,23 +6,31 @@ struct SleepDetailView: View {
     @Environment(AppModel.self) private var model
     let health: HealthSnapshot
     @State private var detail: NightDetail?
+    @State private var failed = false
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.health, title: "Spánek",
                      coach: .sleep(line: health.sleep.night?.minutes.map { L10n.tr("Dnes") + " " + Fmt.duration(Int($0)) }, date: health.date)) {
-            SleepDetailContent(health: health, detail: detail)
+            SleepDetailContent(health: health, detail: detail, failed: failed) { await load() }
         }
         .task {
             guard detail == nil, health.sleep.night != nil else { return }
             if model.demo { detail = DemoData.night; return }
-            detail = try? await model.api.night(date: health.date)
+            await load()
         }
+    }
+
+    private func load() async {
+        do { detail = try await model.api.night(date: health.date); failed = false } catch { failed = true }
     }
 }
 
 struct SleepDetailContent: View {
     let health: HealthSnapshot
     let detail: NightDetail?
+    /// The night's timeline didn't load: "Zkusit znovu" where the chart goes.
+    var failed = false
+    var retry: () async -> Void = {}
 
     var body: some View {
         let sleep = health.sleep
@@ -44,7 +52,9 @@ struct SleepDetailContent: View {
                 if let stages = night.stages {
                     SectionLabel(text: "Fáze spánku").padding(.top, 30)
                     Card {
-                        if let segments = detail?.night?.segments, !segments.isEmpty {
+                        if failed && detail == nil {
+                            RetryRow(message: "Průběh noci se nepodařilo načíst.", retry: retry)
+                        } else if let segments = detail?.night?.segments, !segments.isEmpty {
                             Hypnogram(segments: segments)
                             HStack {
                                 Text(ClockText.format(optional: night.start) ?? "").font(Typo.tiny).foregroundStyle(Palette.faint)
@@ -56,6 +66,8 @@ struct SleepDetailContent: View {
                         StageTotals(stages: stages, wakeups: detail?.night?.stats?.wakeups)
                     }
                     .padding(.top, 14)
+                } else if failed && detail == nil {
+                    RetryRow(message: "Průběh noci se nepodařilo načíst.", retry: retry).padding(.top, 26)
                 }
             }
 
