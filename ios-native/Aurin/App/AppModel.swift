@@ -1609,6 +1609,8 @@ final class AppModel {
         // comes back anyway is dropped (stillSignedIn, SnapshotCache.generation).
         signInRound += 1
         dropRefresh()
+        // The next account's purchases carry its own appAccountToken.
+        ProStore.shared.forgetAccount()
         SnapshotCache.clear()
         CoachPick.forget()
         GymDayCache.clear()

@@ -155,18 +155,18 @@ struct PlanEditorSheet: View {
                     Button { day.toggleSuperset(at: offset) } label: { Label("Supersérie s dalším cvikem", systemImage: "link") }
                 }
             } label: {
-                Image(systemName: "ellipsis").frame(width: 32, height: 32).background(Palette.track, in: Circle())
+                Image(systemName: "ellipsis").frame(width: 32, height: 32).background(Palette.track, in: Circle()).tapTarget(width: 44, height: 32)
             }
             .buttonStyle(.borderless)
             .accessibilityLabel("Další volby")
             Button { day.removeSet(at: offset) } label: {
-                Image(systemName: "minus").frame(width: 32, height: 32).background(Palette.track, in: Circle())
+                Image(systemName: "minus").frame(width: 32, height: 32).background(Palette.track, in: Circle()).tapTarget(width: 44, height: 32)
             }
             .buttonStyle(.borderless)
             .disabled(!left)
             .accessibilityLabel("O sérii méně")
             Button { day.addSet(at: offset) } label: {
-                Image(systemName: "plus").frame(width: 32, height: 32).background(Palette.track, in: Circle())
+                Image(systemName: "plus").frame(width: 32, height: 32).background(Palette.track, in: Circle()).tapTarget(width: 44, height: 32)
             }
             .buttonStyle(.borderless)
             .accessibilityLabel("O sérii víc")

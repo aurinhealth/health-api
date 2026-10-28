@@ -9,7 +9,7 @@
 // Alcohol, caffeine, the last meal and an evening workout come from the
 // drinks (Pití), the food diary and the activities; the athlete's own answer
 // wins over them.
-import { CATALOG, DEFAULT_PINNED, catalogItem, normalizeCustomItem } from "./journal-catalog.js";
+import { CATALOG, DEFAULT_PINNED, MOOD_LABEL_MASK, catalogItem, normalizeCustomItem } from "./journal-catalog.js";
 import { drinkFromFoodEntry, hydrationMl, hydrationTarget } from "./fluids.js";
 import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
@@ -183,6 +183,9 @@ export async function saveJournalEntry(db, settings, body) {
   const extra = answer && body.extra && typeof body.extra === "object"
     ? Object.fromEntries(follow.map(f => [f.key, finite(body.extra[f.key])]).filter(([, v]) => v != null && v >= 0 && v <= 1000))
     : {};
+  // The mood's words (Klid, Stres…) as bits of one number (journal-catalog.js MOOD_LABELS).
+  const labels = key === MOOD && answer ? finite(body.extra?.labels) : null;
+  if (labels != null && labels > 0 && labels <= MOOD_LABEL_MASK && Number.isInteger(labels)) extra.labels = labels;
   await db.prepare("INSERT INTO journal_entries(user_id,date,item_key,answer,amount,time,extra_json) VALUES(?,?,?,?,?,?,?) ON CONFLICT(user_id,date,item_key) DO UPDATE SET answer=excluded.answer,amount=excluded.amount,time=excluded.time,extra_json=excluded.extra_json,updated_at=CURRENT_TIMESTAMP")
     .bind(db.userId, date, key, answer, amount, answer ? time : null, Object.keys(extra).length ? JSON.stringify(extra) : null).run();
   return { date, key, answer, amount, time: answer ? time : null, extra: Object.keys(extra).length ? extra : null };

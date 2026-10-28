@@ -142,8 +142,11 @@ struct SleepDetailContent: View {
 
     private func weekday(_ iso: String) -> String {
         if L10n.isEnglish {
+            // "Noc na čtvrtek" (ending Thursday morning) is Wednesday night in English.
+            let formatter = DateFormatters.iso()
+            let before = formatter.date(from: iso).flatMap { Calendar.current.date(byAdding: .day, value: -1, to: $0) }.map { formatter.string(from: $0) } ?? iso
             let english = ["Su": "Sunday", "Mo": "Monday", "Tu": "Tuesday", "We": "Wednesday", "Th": "Thursday", "Fr": "Friday", "Sa": "Saturday"]
-            return english[Fmt.weekdayShort(iso)] ?? iso
+            return english[Fmt.weekdayShort(before)] ?? iso
         }
         let names = ["Ne": "neděli", "Po": "pondělí", "Út": "úterý", "St": "středu", "Čt": "čtvrtek", "Pá": "pátek", "So": "sobotu"]
         return names[Fmt.weekdayShort(iso)] ?? iso
@@ -199,7 +202,7 @@ struct NeedRow: View {
         HStack {
             Text(title)
             Spacer()
-            Text((signed ? (minutes < 0 ? "− " : "+ ") : "") + Fmt.hoursMinutes(Double(abs(minutes))))
+            Text((signed ? (minutes < 0 ? "−" : "+") : "") + Fmt.hoursMinutes(Double(abs(minutes))))
         }
         .font(Typo.small).foregroundStyle(Palette.muted)
     }
@@ -287,7 +290,7 @@ struct StageTotals: View {
 
     /// "19 %", or the awakenings for the awake row ("3×").
     static func note(share: Double?, wakeups: Int?) -> String {
-        if let share { return Fmt.int(share * 100) + " %" }
+        if let share { return Fmt.int(share * 100) + Fmt.percentSign }
         return wakeups.map { "\($0)×" } ?? ""
     }
 }
@@ -400,8 +403,7 @@ struct WeightEntrySheet: View {
     }
 
     private var placeholder: String {
-        let sample = Units.imperial ? "181.7" : "82.4"
-        return L10n.isEnglish ? sample : sample.replacingOccurrences(of: ".", with: ",")
+        Fmt.decimal(Units.imperial ? 181.7 : 82.4)
     }
 
     /// The typed weight in kg (typed in lb with imperial units).

@@ -15,6 +15,14 @@ enum Fmt {
         return value.formatted(.number.precision(.fractionLength(digits)).locale(locale))
     }
 
+    /// After a percentage: "19 %" in Czech, "19%" in English.
+    static var percentSign: String { L10n.isEnglish ? "%" : " %" }
+
+    /// A range as typed ("8-10") with an en dash: "8–10".
+    static func range(_ text: String) -> String {
+        text.replacingOccurrences(of: #"(\d)\s*-\s*(\d)"#, with: "$1–$2", options: .regularExpression)
+    }
+
     /// 432 → "7:12".
     static func hoursMinutes(_ minutes: Double?) -> String {
         guard let minutes else { return "–" }
@@ -31,7 +39,7 @@ enum Fmt {
     /// "ČTVRTEK 8. ŘÍJNA" for 2026-10-08.
     static func dayHeading(_ isoDate: String) -> String {
         guard let date = DateFormatters.iso().date(from: isoDate) else { return isoDate }
-        return DateFormatters.make(L10n.isEnglish ? "EEEE, MMMM d" : "EEEE d. MMMM", locale: locale).string(from: date).uppercased(with: locale)
+        return DateFormatters.make(L10n.isEnglish ? "EEEE, MMMM d" : "EEEE d. MMMM", locale: locale, template: L10n.isEnglish).string(from: date).uppercased(with: locale)
     }
 
     /// The day's title on Dnes, Zdraví and Jídlo: "Dnes", "Včera", "Zítra" or
@@ -72,24 +80,17 @@ enum Fmt {
         DateFormatters.iso().date(from: isoDate)
     }
 
+    /// English formats are templates: the region orders them ("October 8", "8 October").
     private static func formatted(_ date: Date, _ format: String) -> String {
-        DateFormatters.make(format, locale: locale).string(from: date)
-    }
-
-    /// One-letter Czech weekday for a chart label: "P", "Ú", "S", "Č", "P", "S", "N".
-    static func weekdayInitial(_ isoDate: String) -> String {
-        guard let date = DateFormatters.iso().date(from: isoDate) else { return "" }
-        let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
-        return (L10n.isEnglish ? ["S", "M", "T", "W", "T", "F", "S"] : ["N", "P", "Ú", "S", "Č", "P", "S"])[weekday - 1]
+        DateFormatters.make(format, locale: locale, template: L10n.isEnglish).string(from: date)
     }
 
     /// "1. listopadu" for 2026-11-01.
     static func dayMonth(_ isoDate: String) -> String {
         guard let date = parse(isoDate) else { return isoDate }
-        return DateFormatters.make(L10n.isEnglish ? "MMMM d" : "d. MMMM", locale: locale, timeZone: utc).string(from: date)
+        return DateFormatters.make(L10n.isEnglish ? "MMMM d" : "d. MMMM", locale: locale, timeZone: utc, template: L10n.isEnglish).string(from: date)
     }
 
-    /// Two-letter Czech weekday: "Po", "Út", "St", "Čt", "Pá", "So", "Ne".
     /// "Říjen", "October": the month of Today's week strip.
     static func monthTitle(_ isoDate: String) -> String {
         guard let date = parse(isoDate) else { return "" }
@@ -105,9 +106,24 @@ enum Fmt {
 
     static func weekdayShort(_ isoDate: String) -> String {
         guard let date = parse(isoDate) else { return "" }
-        let names = L10n.isEnglish ? ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] : ["Ne", "Po", "Út", "St", "Čt", "Pá", "So"]
-        return names[utcCalendar.component(.weekday, from: date) - 1]
+        let names = weekdays
+        let i = utcCalendar.component(.weekday, from: date) - 1
+        return names.indices.contains(i) ? names[i] : ""
     }
+
+    /// The two-letter weekdays of the app's language from the locale, Sunday
+    /// first as Calendar counts them: "Su", "Mo" … or "Ne", "Po", "Út" ….
+    static var weekdays: [String] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = locale
+        return calendar.shortStandaloneWeekdaySymbols.map { name in
+            let two = String(name.prefix(2))
+            return two.prefix(1).uppercased(with: locale) + two.dropFirst()
+        }
+    }
+
+    /// The same, Monday first: the app's week rows.
+    static var weekdaysFromMonday: [String] { Array(weekdays.dropFirst()) + weekdays.prefix(1) }
 
     /// "dnes", "zítra", "v sobotu", "včera" or "6. 10." relative to today's date.
     static func relativeDay(_ isoDate: String, today: String) -> String {
@@ -184,15 +200,17 @@ enum DateFormatters {
     // Guarded by lock.
     nonisolated(unsafe) private static var made: [String: DateFormatter] = [:]
 
-    static func make(_ format: String, locale: Locale = Locale(identifier: "en_US_POSIX"), timeZone: TimeZone = .current) -> DateFormatter {
-        let key = format + "|" + locale.identifier + "|" + timeZone.identifier
+    /// `template`: the format is a template the locale orders and punctuates
+    /// (setLocalizedDateFormatFromTemplate), not a fixed pattern.
+    static func make(_ format: String, locale: Locale = Locale(identifier: "en_US_POSIX"), timeZone: TimeZone = .current, template: Bool = false) -> DateFormatter {
+        let key = format + "|" + locale.identifier + "|" + timeZone.identifier + (template ? "|t" : "")
         lock.lock()
         defer { lock.unlock() }
         if let formatter = made[key] { return formatter }
         let formatter = DateFormatter()
         formatter.locale = locale
         formatter.timeZone = timeZone
-        formatter.dateFormat = format
+        if template { formatter.setLocalizedDateFormatFromTemplate(format) } else { formatter.dateFormat = format }
         made[key] = formatter
         return formatter
     }

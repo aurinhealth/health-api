@@ -202,7 +202,7 @@ struct DataAgePill: View {
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(last, inSameDayAs: yesterday) {
             return L10n.f("data ze včera %@", time)
         }
-        let day = DateFormatters.make(L10n.isEnglish ? "MMM d" : "d. M.", locale: Fmt.locale, timeZone: calendar.timeZone)
+        let day = DateFormatters.make(L10n.isEnglish ? "MMM d" : "d. M.", locale: Fmt.locale, timeZone: calendar.timeZone, template: L10n.isEnglish)
         return L10n.f("data z %@", day.string(from: last) + " " + time)
     }
 }

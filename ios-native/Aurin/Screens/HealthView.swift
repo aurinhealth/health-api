@@ -201,7 +201,7 @@ enum ReadinessText {
     static func unit(_ key: String) -> String {
         switch key {
         case "hrv": return "ms"
-        case "restingHR": return "/min"
+        case "restingHR": return "bpm"
         case "sleep": return "h"
         default: return ""
         }
@@ -214,7 +214,8 @@ enum ReadinessText {
     /// "58–70 ms", "7:10–8:00 h".
     static func range(_ part: HealthSnapshot.Part) -> String {
         let show = { (x: Double?) in part.key == "sleep" ? Fmt.hoursMinutes(x) : Fmt.int(x) }
-        return show(part.low) + "–" + show(part.high) + " " + unit(part.key)
+        // "7:20–8:10" needs no "h"; heart rate in bpm as everywhere else.
+        return show(part.low) + "–" + show(part.high) + (part.key == "sleep" ? "" : " " + unit(part.key))
     }
 
     /// -1 under the usual range, 1 above it, 0 within.
@@ -305,7 +306,7 @@ struct ReadinessDetailContent: View {
                 BarChart(values: r.history.map(\.value),
                          styles: r.history.map { BarStyle(fill: $0.value >= 67 ? Palette.green.opacity(0.7) : $0.value >= 34 ? Palette.amberBar.opacity(0.8) : Palette.rust.opacity(0.8)) },
                          hi: 100,
-                         labels: r.history.map { Fmt.weekdayInitial($0.date) },
+                         labels: r.history.map { Fmt.weekdayShort($0.date) },
                          highlighted: r.history.count - 1,
                          height: 110,
                          scale: [0, 34, 67].map { ScaleTick(value: $0, text: Fmt.int($0)) })
@@ -409,7 +410,7 @@ struct SleepWidget: View {
                              styles: sleep.week.indices.map { i in BarStyle(fill: i == sleep.week.count - 1 ? Palette.indigo : Palette.lilac) },
                              hi: max(Double(sleep.need) * 1.15, sleep.week.map(\.value).max() ?? 0),
                              target: Double(sleep.need),
-                             labels: sleep.week.map { Fmt.weekdayInitial($0.date) },
+                             labels: sleep.week.map { Fmt.weekdayShort($0.date) },
                              highlighted: sleep.week.count - 1,
                              spacing: size == .small ? 3 : 4,
                              height: height,

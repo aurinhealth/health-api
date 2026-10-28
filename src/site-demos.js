@@ -78,11 +78,11 @@ const NIGHT = [['l', 0, 12], ['d', 12, 40], ['l', 40, 62], ['r', 62, 74], ['a', 
   ['l', 130, 158], ['r', 158, 178], ['l', 178, 210], ['d', 210, 228], ['l', 228, 262], ['r', 262, 284], ['a', 284, 290],
   ['l', 290, 330], ['d', 330, 337], ['l', 337, 370], ['r', 370, 400], ['a', 400, 405], ['l', 405, 436], ['r', 436, 446], ['a', 446, 449]];
 const sleepNight = `<div class="dm pad">
-<div class="sl">Sleep · Thursday night</div>
-<div class="row base"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="pill ind"${at('1300')}>score 82</span></div>
+<div class="sl">Sleep · Wednesday night</div>
+<div class="row base"><span class="num big"${n(400, 432, 150, 1300, 'hmc')}>7:12</span><span class="pill ind"${at('1300')}>Score 82</span></div>
 <div class="hg" aria-hidden="true"><div class="hgl"><span>Awake</span><span>REM</span><span>Light</span><span>Deep</span></div><div class="hgt">${NIGHT.map(([t, s, e], i) => `<i class="${t}" style="left:${(s / 449 * 100).toFixed(2)}%;width:${Math.max(0.5, (e - s) / 449 * 100).toFixed(2)}%"${at(String(300 + i * 60))}></i>`).join('')}</div></div>
-<div class="hgx" aria-hidden="true"><span>11:48 PM</span><span>7:02 AM</span></div>
-<div class="stg">${[['Deep', '1:23', 83, '19 %', 'd'], ['REM', '1:34', 94, '22 %', 'r'], ['Light', '4:15', 255, '59 %', 'l'], ['Awake', '0:17', 17, '3×', 'a']].map(([k, v, m, p, c], i) => `<div class="sr"><span>${k}</span><i class="bar"><b class="${c}" style="--w:${(m / 255 * 100).toFixed(1)}%"${at(String(900 + i * 220))}></b></i><span class="num">${v}</span><span class="mut">${p}</span></div>`).join('')}</div>
+<div class="hgx" aria-hidden="true"><span>11:33 PM</span><span>7:02 AM</span></div>
+<div class="stg">${[['Deep', '1:23', 83, '19%', 'd'], ['REM', '1:34', 94, '22%', 'r'], ['Light', '4:15', 255, '59%', 'l'], ['Awake', '0:17', 17, '3×', 'a']].map(([k, v, m, p, c], i) => `<div class="sr"><span>${k}</span><i class="bar"><b class="${c}" style="--w:${(m / 255 * 100).toFixed(1)}%"${at(String(900 + i * 220))}></b></i><span class="num">${v}</span><span class="mut">${p}</span></div>`).join('')}</div>
 </div>`;
 
 // "Why 8 h 30": the need for tonight built up row by row.
@@ -129,7 +129,7 @@ const readyParts = `<div class="dm pad">
 <div class="sl">Readiness</div>
 <div class="row base"><span class="num big"${n(0, 78, 200, 1300, 'i')}>78</span><span class="pill grn"${at('1300')}>high</span></div>
 <div class="sl">What makes up today’s score</div>
-${[['Sleep', '7:12', 'your normal 7:53–9:11 h', '↓ below normal', 'rust', 12, '−4 readiness points'], ['Resting heart rate', '48 bpm', 'your normal 50–54 /min', '↓ below normal', 'green', 20, '+3 readiness points'], ['HRV', '64 ms', 'your normal 55–61 ms', '↑ above normal', 'green', 83, '+9 readiness points']]
+${[['Sleep', '7:12', 'your normal 7:20–8:10', '↓ below normal', 'rust', 12, '−4 readiness points'], ['Resting heart rate', '48 bpm', 'your normal 50–54 bpm', '↓ below normal', 'green', 20, '+3 readiness points'], ['HRV', '64 ms', 'your normal 55–61 ms', '↑ above normal', 'green', 83, '+9 readiness points']]
     .map(([k, v, nm, dir, c, x, pt], i) => `<div class="pr3"><div class="row sp base"><b>${k}</b><span class="num md">${v}</span></div><div class="row sp"><span class="mut s">${nm}</span><span class="s" style="color:var(--${c})">${dir}</span></div>${range(x, c, 500 + i * 250)}<span class="pts" style="color:var(--${c})">${pt}</span></div>`).join('')}
 </div>`;
 
@@ -185,7 +185,7 @@ const monthState = d => d === '' ? '' : d > 8 ? (d % 7 === 2 ? '' : 'up') : d ==
 const monthSport = d => ['gym', 'bike', 'run', 'gym', 'bike', 'bike', 'run'][d % 7];
 const week = `<div class="dm pad wk">
 <div class="sl">Training · Week 41</div>
-<div class="strip">${dayC('M', 5, 'run', 'ok')}${dayC('T', 6, 'bike', 'ok')}${dayC('W', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">T</span><span class="ci up"${at('1400:done')}>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
+<div class="strip">${dayC('Mo', 5, 'run', 'ok')}${dayC('Tu', 6, 'bike', 'ok')}${dayC('We', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">Th</span><span class="ci up"${at('1400:done')}>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('Fr', 9, 'bike', 'up')}${dayC('Sa', 10, 'run', 'up')}</div>
 <div class="handle"${at('4300:pull 5200-pull')}><i></i><span data-tx="0|Full month;4800|Less">Full month</span></div>
 <div class="month"${at('4800:open')}><div class="mh"><b>October</b><span class="mut s">12 activities · 14 h 20 min</span></div><div class="mg">${['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map(d => `<span class="mw">${d}</span>`).join('')}${MONTH.flat().map((d, i) => `<span class="md${d === 8 ? ' sel' : ''}" style="--i:${i}"><span>${d}</span>${monthState(d) ? `<span class="ci ${monthState(d)}">${ic(monthSport(d))}</span>` : ''}</span>`).join('')}</div></div>
 <div class="day"><div class="row sp"><b>Today</b><span class="mut s">1 h 27 min · 840 kcal</span></div>
@@ -195,7 +195,7 @@ const week = `<div class="dm pad wk">
 
 // ---- Gym (GymTools.swift GymBuilderView, GymDayParts.swift GymPartsCard) ----
 const seg = (opts, from, to, t) => `<div class="seg">${opts.map((o, i) => `<span${i === from ? ' class="on"' : ''}${i === from && to !== from ? at(`${t}-on`) : ''}${i === to && to !== from ? at(`${t}:on`) : ''}>${o}</span>`).join('')}</div>`;
-const EX = [['Bench press', 'Chest · Triceps', '3 × 8-10 · 62.5 kg', 'A'], ['Bent-over rows', 'Back · Biceps', '3 × 10 · 50 kg', 'A'], ['Overhead press', 'Shoulders · Triceps', '3 × 8 · 37.5 kg'], ['Lat pulldown', 'Back · Biceps', '3 × 10-12 · 55 kg'], ['Biceps curls', 'Biceps', '2 × 12 · 12 kg']];
+const EX = [['Bench press', 'Chest · Triceps', '3 × 8–10 · 62.5 kg', 'A'], ['Bent-over rows', 'Back · Biceps', '3 × 10 · 50 kg', 'A'], ['Overhead press', 'Shoulders · Triceps', '3 × 8 · 37.5 kg'], ['Lat pulldown', 'Back · Biceps', '3 × 10–12 · 55 kg'], ['Biceps curls', 'Biceps', '2 × 12 · 12 kg']];
 const builder = `<div class="dm pad bld">
 <div class="stage1"${at('3900:gone')}>
 <div class="sl">When and how long</div>${seg(['30', '45', '60', '75', '90', '120'], 2, 2, 0)}
@@ -233,8 +233,8 @@ const tmTable = `<div class="dm pad tm">
 ${setRow('W', '40 × 8', '40', '8', '<i class="ip w">W</i>', 'done')}
 ${setRow('1', '77.5 × 8', '80', '8', '<i class="ip m">M</i>', 'done')}
 <div class="st cur"><span class="sl2">2</span><span class="mut s">77.5 × 8</span><span class="v num ed"><span data-tx="0|80;1100|82.5">80</span></span><span class="v num ed"><span data-tx="0|8;1900|6">8</span></span><span class="lt"><i class="ip dash" data-tx="0|H;2700|F">H</i></span><span class="tk"></span></div>
-${setRow('3', '77.5 × 8', '80', '6-8', '<i class="ip dash">H</i>', 'next')}
-<div class="st next add"${at('3500')}><span class="sl2">4</span><span class="mut s">—</span><span class="v num">80</span><span class="v num">6-8</span><span class="lt"><i class="ip none"></i></span><span class="tk"></span></div>
+${setRow('3', '77.5 × 8', '80', '6–8', '<i class="ip dash">H</i>', 'next')}
+<div class="st next add"${at('3500')}><span class="sl2">4</span><span class="mut s">—</span><span class="v num">80</span><span class="v num">6–8</span><span class="lt"><i class="ip none"></i></span><span class="tk"></span></div>
 <div class="row gap"><span class="pb"${at('3300:press 3600-press')}>${ic('plus')}Sets</span><span class="pb">${ic('minus')}Sets</span><span class="pb">Plates: 20 + 10 per side</span></div>
 </div>`;
 
@@ -243,7 +243,7 @@ const tmTick = `<div class="dm pad tm">
 <div class="row sp"><div class="sent h">Squat</div><span class="tag rust">${ic('flame')}To failure</span></div>
 ${setRow('1', '77.5 × 8', '80', '8', '<i class="ip m">M</i>', 'done')}
 <div class="st cur"${at('3600-cur 3600:done')}><span class="sl2">2</span><span class="mut s">77.5 × 8</span><span class="v num">82.5</span><span class="v num">6</span><span class="lt"><i class="ip dash"${at('2300:f')} data-tx="0|H;2300|F">H</i></span><span class="tk"></span></div>
-<div class="st next"${at('3800-next 3800:cur')}><span class="sl2">3</span><span class="mut s">77.5 × 8</span><span class="v num">80</span><span class="v num">6-8</span><span class="lt"><i class="ip dash">H</i></span><span class="tk"></span></div>
+<div class="st next"${at('3800-next 3800:cur')}><span class="sl2">3</span><span class="mut s">77.5 × 8</span><span class="v num">80</span><span class="v num">6–8</span><span class="lt"><i class="ip dash">H</i></span><span class="tk"></span></div>
 <div class="lpick"${at('700:in 2600-in')}>${LETTERS.map(([l, name, c]) => `<span class="lr"${l === 'F' ? at('1700:on') : ''}><i class="ip" style="--c:var(--${c})">${l}</i>${name}</span>`).join('')}</div>
 <div class="btn dark"${at('3300:press 3600-press')}>${ic('check')}Set done</div>
 </div>`;
@@ -315,7 +315,7 @@ const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
 <div class="msgs">
 <div class="u">How should I train today?</div>
-<div class="c1"><span>Readiness is 78 and HRV is above normal for the third day. Your legs are rested since Monday, so today is a good day for strength.</span></div>
+<div class="c1"><span>Readiness is 78 and HRV is above normal for the third day. Your upper body is rested, so today is a good day for strength. Keep squats moderate after this morning’s run.</span></div>
 <div class="u"${at('1300')}>I’d like a gym workout this evening, about an hour.</div>
 <div class="dots"${at('2100 3200-in')}><i></i><i></i><i></i><span>Coach is thinking…</span></div>
 <div class="c1"${at('3200')}><span data-type="3200,900">Here’s a full-body session for 5:30 PM:</span></div>
@@ -334,7 +334,7 @@ ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Bent-over r
 // Beside the phone: the confirmed workout lands in the week.
 const coachWeek = `<div class="dm pad wk"${at('6900')}>
 <div class="sl">Training · Week 41</div>
-<div class="strip">${dayC('M', 5, 'run', 'ok')}${dayC('T', 6, 'bike', 'ok')}${dayC('W', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">T</span><span class="ci empty"${at('7600:up')}><span class="rest">–</span>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('F', 9, 'bike', 'up')}${dayC('S', 10, 'run', 'up')}</div>
+<div class="strip">${dayC('Mo', 5, 'run', 'ok')}${dayC('Tu', 6, 'bike', 'ok')}${dayC('We', 7, 'bike', 'off')}<div class="dc sel"><span class="wd today">Th</span><span class="ci empty"${at('7600:up')}><span class="rest">–</span>${ic('gym')}</span><span class="num dn">8</span></div>${dayC('Fr', 9, 'bike', 'up')}${dayC('Sa', 10, 'run', 'up')}</div>
 <div class="day"><div class="row sp"><b>Today</b><span class="mut s" data-tx="0|42 min · 520 kcal;8000|1 h 42 min · 520 kcal">42 min · 520 kcal</span></div>
 <div class="ar"><span class="ci ok">${ic('run')}</span><div><b>Morning run</b><span class="mut s">Run · 7:30 AM · 42 min · 8.2 km</span>${pct(98)}</div><span class="num">520<small>kcal</small></span></div>
 <div class="ar new"${at('8000')}><span class="ci up">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">Planned · 5:30 PM · 60 min</span></div>${ic('chev')}</div>

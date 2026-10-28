@@ -75,7 +75,7 @@ struct ZonesSettingsView: View {
             OptionListRow(title: "Předvolba", selection: $paceModel, options: t.paceZoneModels.map { ($0.id, $0.label) })
             ForEach(t.paceZones) { z in
                 SettingsDivider()
-                ZoneRow(name: z.name, percent: z.percentHigh.map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) + " %" },
+                ZoneRow(name: z.name, percent: z.percentHigh.map { Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) + Fmt.percentSign },
                         range: paceRange(z))
             }
         }
@@ -105,7 +105,7 @@ struct ZonesSettingsView: View {
             OptionListRow(title: "Předvolba", selection: $powerModel, options: t.powerZoneModels.map { ($0.id, $0.label) })
             ForEach(t.powerZones) { z in
                 SettingsDivider()
-                ZoneRow(name: z.name, percent: z.percentHigh.map { Fmt.int($0) + " %" }, range: wattRange(z))
+                ZoneRow(name: z.name, percent: z.percentHigh.map { Fmt.int($0) + Fmt.percentSign }, range: wattRange(z))
             }
         }
         SettingsGroup(title: "Tepové zóny pro kolo") {
