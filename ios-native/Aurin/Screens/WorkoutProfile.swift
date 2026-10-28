@@ -99,7 +99,7 @@ struct WorkoutProfile: View {
     }
 
     private func value(_ s: Segment) -> String {
-        let pct = Fmt.int(s.percent) + " %"
+        let pct = Fmt.int(s.percent) + Fmt.percentSign
         if sport == "run", let slow = s.step.paceSlow, let fast = s.step.paceFast {
             return ZonesSettingsView.pace(Units.pace((slow + fast) / 2)) + " " + Units.paceUnit + " (" + pct + ")"
         }

@@ -409,7 +409,7 @@ struct MusclesView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(muscle.label).font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1)
                 Spacer(minLength: 8)
-                Text(verbatim: "\(percent) %").font(Typo.bodyStrong).foregroundStyle(muscle.textColor).monospacedDigit()
+                Text(verbatim: "\(percent)" + Fmt.percentSign).font(Typo.bodyStrong).foregroundStyle(muscle.textColor).monospacedDigit()
             }
             ProgressLine(fraction: Double(percent) / 100, color: muscle.color, height: 6)
             HStack {

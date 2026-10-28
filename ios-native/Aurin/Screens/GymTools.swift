@@ -248,6 +248,12 @@ struct GymBuilderView: View {
 
     private var isoDay: String { AppModel.localDate(day) }
 
+    /// The first day that can be picked: today, the sample day in the demo.
+    private var earliest: Date {
+        let sample = model.demo ? model.today.flatMap { Self.isoFormatter.date(from: $0.date) } : nil
+        return Calendar.current.startOfDay(for: sample ?? Date())
+    }
+
     /// No place saved yet: the plan would be body weight only without asking.
     private var needsPlace: Bool {
         !model.demo && template == nil && equipment != nil && (equipment?.places ?? []).isEmpty
@@ -271,7 +277,8 @@ struct GymBuilderView: View {
             }
         }
         .task {
-            if let d = Self.isoFormatter.date(from: date), d >= Calendar.current.startOfDay(for: Date()) { day = d }
+            if model.demo { day = earliest }
+            if let d = Self.isoFormatter.date(from: date), d >= earliest { day = d }
             if let minutes = template?.template.minutes { self.minutes = minutes }
             // Read again on every return, so a list changed in Vybavení shows here (after its save).
             if !model.demo {
@@ -319,7 +326,8 @@ struct GymBuilderView: View {
                     Text(verbatim: L10n.tr(data.readyTitle == nil ? "Dnes" : "Dnes připravené")).font(Typo.caption).foregroundStyle(Palette.muted)
                     Text(verbatim: data.headline).font(Typo.sentence(21)).foregroundStyle(Palette.ink).lineLimit(2).minimumScaleFactor(0.8)
                     if let most = data.tired.first {
-                        Text(verbatim: L10n.f("%@: odpočaté %@", L10n.tr(most.label), most.readyText(today: data.date)))
+                        // Under "ready", the tired muscle reads as tired: "Ještě unavené: hýždě, odpočaté za 2 dny".
+                        Text(verbatim: L10n.f("Ještě unavené: %@, odpočaté %@", L10n.tr(most.label).lowercased(with: Fmt.locale), most.readyText(today: data.date)))
                             .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -336,7 +344,7 @@ struct GymBuilderView: View {
             if let data = model.muscles { musclesCard(data).padding(.top, 20) }
             SectionLabel(text: "Kdy a jak dlouho").padding(.top, 26)
             Card {
-                DatePicker("Den", selection: $day, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
+                DatePicker("Den", selection: $day, in: earliest..., displayedComponents: .date)
                     .environment(\.locale, Fmt.locale)
                 Picker("Délka", selection: $minutes) {
                     ForEach([30, 45, 60, 75, 90, 120], id: \.self) { Text("\($0)").tag($0) }
@@ -387,7 +395,7 @@ struct GymBuilderView: View {
                     Image(systemName: "dumbbell").foregroundStyle(Palette.indigo)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Vybavení").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(needsPlace ? L10n.tr("vyber, kde cvičíš") : EquipmentView.summary(equipment)).font(Typo.caption).foregroundStyle(Palette.muted)
+                        Text(needsPlace ? L10n.tr("vyber, kde cvičíš") : Fmt.capitalized(EquipmentView.summary(equipment))).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     Spacer()
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
@@ -416,7 +424,7 @@ struct GymBuilderView: View {
             }
             SectionLabel(text: "Kdy").padding(.top, 26)
             Card {
-                DatePicker("Den", selection: $day, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
+                DatePicker("Den", selection: $day, in: earliest..., displayedComponents: .date)
                     .environment(\.locale, Fmt.locale)
             }
             .padding(.top, 10)
@@ -426,7 +434,7 @@ struct GymBuilderView: View {
                     HStack {
                         Text(e.name).font(.body).foregroundStyle(Palette.ink)
                         Spacer()
-                        Text("\(e.sets) × \(e.reps)").font(Typo.small).foregroundStyle(Palette.secondary)
+                        Text("\(e.sets) × " + Fmt.range(e.reps)).font(Typo.small).foregroundStyle(Palette.secondary)
                     }
                     .padding(.vertical, 12)
                     Rectangle().fill(Palette.hairline).frame(height: 1)
@@ -565,7 +573,7 @@ struct GymBuilderView: View {
                     if p.failing.contains(ex.name) { GymTag.failure.padding(.top, 4) }
                 }
                 Spacer(minLength: 8)
-                Text("\(ex.sets) × " + ex.reps + (ex.kg.isEmpty ? "" : " · " + (LiftWeight.shown(ex.kg) ?? ex.kg) + " " + Units.weightUnit))
+                Text("\(ex.sets) × " + Fmt.range(ex.reps) + (ex.kg.isEmpty ? "" : " · " + (LiftWeight.shown(ex.kg) ?? ex.kg) + " " + Units.weightUnit))
                     .font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
                 ExerciseInfoButton(name: ex.name) { technique = ex.name }
                 if !saved {
@@ -1087,10 +1095,11 @@ struct StepsProfile: View {
 /// Lifted weight between the gym sheet (kg as text, "62,5" or "62.5") and
 /// what is shown and typed in (kg, or lb with imperial units).
 enum LiftWeight {
-    /// The sheet's kg text in the chosen unit: unchanged in kg, "137.8" in lb.
+    /// The sheet's kg text in the chosen unit: "62.5" kg (62,5 in Czech), "137.8" in lb.
     static func shown(_ kgText: String?) -> String? {
         guard let kgText else { return nil }
-        guard Units.imperial, let kg = number(kgText) else { return kgText }
+        // The sheet keeps "62,5" or "62.5": shown with the app language's decimal mark.
+        guard let kg = number(kgText) else { return kgText }
         return text(shownValue(kg))
     }
 
@@ -1116,8 +1125,8 @@ enum LiftWeight {
         Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
     }
 
+    /// In the phone region's decimal mark, never grouped ("1250", typed back in a field).
     private static func text(_ value: Double) -> String {
-        let s = value.rounded() == value ? String(Int(value)) : String(value)
-        return L10n.isEnglish ? s : s.replacingOccurrences(of: ".", with: ",")
+        value.formatted(.number.precision(.fractionLength(0...2)).grouping(.never).locale(Fmt.locale))
     }
 }

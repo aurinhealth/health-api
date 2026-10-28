@@ -308,7 +308,7 @@ struct DrinksCard: View {
 
     /// "1,3 l", or "44 fl oz" in imperial units.
     static func litres(_ ml: Double) -> String {
-        Units.imperial ? Fmt.int(Units.volume(ml)) + " " + Units.volumeUnit : Fmt.decimal(ml / 1000) + " l"
+        Units.imperial ? Fmt.int(Units.volume(ml)) + " " + Units.volumeUnit : Fmt.decimal(ml / 1000) + (L10n.isEnglish ? " L" : " l")
     }
 
     /// The big number: litres, or fluid ounces in imperial units.
@@ -339,7 +339,7 @@ struct DrinksCard: View {
             WidgetHeader(title: "Pití", color: Palette.blue)
             VStack(alignment: .leading, spacing: 4) {
                 amount(30)
-                Text(Fmt.int(fraction * 100) + " %").font(.footnote.weight(.semibold)).foregroundStyle(Palette.blue)
+                Text(Fmt.int(fraction * 100) + Fmt.percentSign).font(.footnote.weight(.semibold)).foregroundStyle(Palette.blue)
             }
             ProgressLine(fraction: fraction, color: Palette.blue, height: 5)
         }
@@ -385,7 +385,7 @@ struct DrinksCard: View {
                     NavigationLink { DrinkHistoryView() } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             amount(40)
-                            Text(Fmt.int(fraction * 100) + " %").font(.footnote.weight(.semibold)).foregroundStyle(Palette.blue)
+                            Text(Fmt.int(fraction * 100) + Fmt.percentSign).font(.footnote.weight(.semibold)).foregroundStyle(Palette.blue)
                             Text(Self.remaining(ml: water.ml ?? 0, target: target)).font(Typo.caption).foregroundStyle(Palette.muted)
                             drunkNote
                         }

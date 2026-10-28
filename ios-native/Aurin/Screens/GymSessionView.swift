@@ -33,6 +33,9 @@ struct GymSessionView: View {
     @State private var extra: [String: GymPreferences.Extra]?
     @State private var deleting = false
     @State private var editingKcal = false
+    /// The set whose letter is being chosen (IntensitySheet), as in Režim tréninku.
+    @State private var intensityFor: SetRef?
+    @State private var history: GymHistory = .empty
 
     /// The lifting session from the watch or Intervals.icu that day.
     private var doneSession: WeekSession? { session.map(model.liveSession) ?? model.doneStrengthSession(on: date) }
@@ -85,6 +88,13 @@ struct GymSessionView: View {
             content
         }
         .task { await load() }
+        .sheet(item: $intensityFor) { ref in
+            let set: GymSet? = day?.exercises.flatMap(\.sets).first(where: { $0.row == ref.id })
+            IntensitySheet(title: set.map { $0.drop ? L10n.tr("Dropset") : $0.warmup ? L10n.tr("Rozcvička") : L10n.f("Série %@", $0.number) } ?? "",
+                           selected: set?.intensity) { letter in
+                Task { await pickIntensity(ref.id, letter) }
+            }
+        }
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
             TechniqueSheet(exercise: item.name)
         }
@@ -287,8 +297,10 @@ struct GymSessionView: View {
         let remove: ((GymSet) -> Void)? = offset.map { (_: Int) -> (GymSet) -> Void in { set in Task { await deleteSet(set) } } }
         return ExerciseCard(exercise: exercise,
                             failure: Set(exercise.sets.map { $0.row }.filter { day.isToFailure(row: $0) }),
+                            last: history.last(exercise.name, before: date),
                             onSet: { set, kg, reps, rpe in Task { await record(set, kg: kg, reps: reps, rpe: rpe) } },
                             onUndo: { set in Task { await undo(set) } },
+                            onIntensity: { set in intensityFor = SetRef(id: set.row) },
                             onTechnique: { technique = exercise.name },
                             onAlternatives: { alternativesFor = exercise.name },
                             onAddSet: add,
@@ -299,7 +311,7 @@ struct GymSessionView: View {
     private func progress(_ day: GymDay) -> some View {
         let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
         return VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.f("%@ z %@ %@ · %@ %@", String(done), String(total), Fmt.plural(total, "série", "sérií", "sérií"),
+            Text(L10n.f("%@/%@ %@ · %@ %@", String(done), String(total), Fmt.plural(total, "série", "sérií", "sérií"),
                         String(day.exercises.count), Fmt.plural(day.exercises.count, "cvik", "cviky", "cviků")))
                 .font(Typo.small).foregroundStyle(Palette.muted)
             ProgressLine(fraction: total > 0 ? Double(done) / Double(total) : 0, color: Palette.amberBar, height: 4)
@@ -308,7 +320,7 @@ struct GymSessionView: View {
     }
 
     private func load() async {
-        if model.demo { day = DemoData.gym; loading = false; return }
+        if model.demo { day = DemoData.gym; history = DemoGymHistory.history; loading = false; return }
         loading = true
         defer { loading = false }
         do {
@@ -317,6 +329,7 @@ struct GymSessionView: View {
             if let names = day?.exercises.map(\.name), !names.isEmpty {
                 muscles = (try? await model.api.gymMuscles(names: names)) ?? [:]
             }
+            history = await model.gymHistory()
         } catch {
             self.error = error.localizedDescription
         }
@@ -336,6 +349,15 @@ struct GymSessionView: View {
 
     private func record(_ set: GymSet, kg: String, reps: String, rpe: String) async {
         day?.complete(row: set.row, kg: kg, reps: reps, rpe: rpe)
+        await save()
+    }
+
+    private func pickIntensity(_ row: Int, _ letter: String) async {
+        if letter == "D" {
+            day?.addDrop(after: row)
+        } else if day?.exercises.flatMap(\.sets).first(where: { $0.row == row })?.drop != true {
+            day?.setIntensity(row: row, letter)
+        }
         await save()
     }
 
@@ -401,13 +423,19 @@ struct ExerciseCard: View {
     let exercise: GymExercise
     /// The rows of the sets that go to failure.
     var failure: Set<Int> = []
+    /// The exercise last time (GymHistory), for Minule.
+    var last: GymHistory.Session? = nil
     var onSet: (GymSet, String, String, String) -> Void
     var onUndo: (GymSet) -> Void
+    /// The letter tapped: how hard the set was (IntensitySheet).
+    var onIntensity: ((GymSet) -> Void)? = nil
     var onTechnique: () -> Void
     var onAlternatives: () -> Void
     var onAddSet: (() -> Void)? = nil
     var onRemoveSet: ((GymSet) -> Void)? = nil
     var onRemoveExercise: (() -> Void)? = nil
+    @State private var kg = ""
+    @State private var reps = ""
 
     /// The note the server gives the first set of an exercise it has no weight for
     /// (strength-generator.js TEST_SET_NOTE).
@@ -441,89 +469,48 @@ struct ExerciseCard: View {
                 .foregroundStyle(Palette.ink)
                 .accessibilityLabel("Možnosti cviku")
             }
-            VStack(spacing: 6) {
+            // The same rows as Režim tréninku (GymSetRow): one way to log a set.
+            VStack(spacing: 2) {
+                GymSetTableHeader()
                 // By place in the exercise: rows renumbered elsewhere keep what is typed.
                 ForEach(Array(exercise.sets.enumerated()), id: \.offset) { _, set in
                     // Swiped left: just this set goes away.
-                    SetRow(set: set, failure: failure.contains(set.row), onDone: { kg, reps, rpe in onSet(set, kg, reps, rpe) }, onUndo: { onUndo(set) })
+                    row(set, current: exercise.sets.first { !$0.done })
                         .modifier(SwipeToDelete(enabled: onRemoveSet != nil) { onRemoveSet?(set) })
                 }
             }
+            .padding(.horizontal, -10)
             if let onAddSet {
-                HStack(spacing: 16) {
-                    Button(action: onAddSet) { Label("Přidat sérii", systemImage: "plus") }
-                    Spacer()
+                Button(action: onAddSet) {
+                    Label("Přidat sérii", systemImage: "plus").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
+                        .padding(.horizontal, 12).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                        .tapTarget(width: 44, height: 30)
                 }
-                .font(Typo.caption.weight(.semibold))
-                .foregroundStyle(Palette.muted)
-                .buttonStyle(.borderless)
-                .padding(.top, 2)
+                .buttonStyle(.plain)
+                .padding(.top, 4)
             }
         }
     }
-}
 
-/// One set: planned "8–10 × 60 kg", fields for what was done, and the tick.
-struct SetRow: View {
-    let set: GymSet
-    /// To failure: a flame by the number.
-    var failure = false
-    var onDone: (String, String, String) -> Void
-    var onUndo: () -> Void
-    @State private var kg = ""
-    @State private var reps = ""
-    @State private var rpe = ""
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(set.warmup ? "R" : set.drop ? "↳" : set.number).font(Typo.number(17)).foregroundStyle(set.warmup ? Palette.faint : failure ? Palette.rust : Palette.muted)
-                .frame(width: 22, alignment: .leading)
-                .overlay(alignment: .topTrailing) {
-                    if failure { Image(systemName: "flame.fill").font(.system(size: 9)).foregroundStyle(Palette.rust).offset(x: -2, y: -1) }
-                }
-                .accessibilityLabel((set.warmup ? L10n.tr("Rozcvičovací série") : L10n.f("Série %@", set.number)) + (failure ? ", " + L10n.tr("do selhání") : ""))
-            field($kg, placeholder: LiftWeight.shown(set.plannedKg) ?? Units.weightUnit, unit: Units.weightUnit, width: 64)
-            Text("×").foregroundStyle(Palette.faint)
-            field($reps, placeholder: set.plannedReps ?? L10n.tr("op."), unit: nil, width: 54)
-            field($rpe, placeholder: "RPE", unit: nil, width: 46)
-            Spacer(minLength: 4)
-            Button {
-                if set.done { onUndo() } else { onDone(kgValue(kg, set.plannedKg), value(reps, firstNumber(set.plannedReps)), rpe) }
-            } label: {
-                Image(systemName: set.done ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 26))
-                    .foregroundStyle(set.done ? Palette.green : Palette.faint)
+    private func row(_ s: GymSet, current: GymSet?) -> GymSetRow {
+        let phase: GymSetRow.Phase = s.done ? .done : (s.row == current?.row ? .current : .next)
+        let pick = onIntensity
+        return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
+                         lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
+                         kg: LiftWeight.shown(s.done ? s.kg : s.plannedKg) ?? "",
+                         reps: Fmt.range((s.done ? s.reps : s.plannedReps) ?? ""),
+                         state: phase, kgText: $kg, repsText: $reps, repsHint: s.plannedReps.map(Fmt.range),
+                         drop: s.drop, intensity: s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) : s.intensity, planned: !s.done,
+                         onIntensity: pick == nil ? nil : { pick?(s) }) {
+            switch phase {
+            case .done: onUndo(s)
+            case .current:
+                onSet(s, kgValue(kg, s.plannedKg), value(reps, firstNumber(s.plannedReps)), "")
+                kg = ""
+                reps = ""
+            case .next: break
             }
-            .sensoryFeedback(.impact(weight: .light), trigger: set.done) { was, now in !was && now }
-            .accessibilityLabel(L10n.tr(set.done ? "Hotovo, klepnutím vrátit" : "Označit sérii jako hotovou"))
         }
-        .opacity(set.done ? 0.75 : 1)
-        .onAppear { fill(set) }
-        // The plan reloads after a swap or a save: show what is stored now. Only
-        // the row number changed (a set added or removed in another exercise):
-        // what is typed and not ticked yet stays.
-        .onChange(of: set) { old, next in if Self.stored(old) != Self.stored(next) { fill(next) } }
-    }
-
-    /// What a set holds apart from its row.
-    private static func stored(_ s: GymSet) -> [String?] {
-        [s.kg, s.reps, s.rpe, s.done ? "done" : nil, s.number, s.plannedKg, s.plannedReps, s.note, s.side, s.drop ? "drop" : nil, s.warmup ? "warmup" : nil, s.intensity]
-    }
-
-    private func fill(_ set: GymSet) {
-        kg = LiftWeight.shown(set.kg) ?? ""
-        reps = set.reps ?? ""
-        rpe = set.rpe ?? ""
-    }
-
-    private func field(_ text: Binding<String>, placeholder: String, unit: String?, width: CGFloat) -> some View {
-        TextField(placeholder, text: text)
-            .keyboardType(.decimalPad)
-            .multilineTextAlignment(.center)
-            .font(Typo.number(18))
-            .frame(width: width, height: 34)
-            .background(Palette.track, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .disabled(set.done)
     }
 
     /// Typed in the chosen unit (kg or lb), recorded in kg.

@@ -437,7 +437,7 @@ struct LiveGymView: View {
     /// "další 82,5 × 6".
     static func describe(_ set: GymSet) -> String {
         let kg = LiftWeight.shown(set.plannedKg).map { $0 + " × " } ?? ""
-        return L10n.f("další %@", kg + (set.plannedReps ?? ""))
+        return L10n.f("další %@", kg + Fmt.range(set.plannedReps ?? ""))
     }
 
     private func edit(_ set: GymSet, kg: String, reps: String) {
