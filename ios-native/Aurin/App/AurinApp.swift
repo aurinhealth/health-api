@@ -23,6 +23,8 @@ struct AurinApp: App {
                     // Read before any sign-in, so the offer waits for the next start.
                     _ = PasskeyOfferLater.due
                 }
+                // Aurin Pro: renewals and codes redeemed in the App Store reach the server (ProStore.swift).
+                .task { ProStore.shared.start(api: model.demo ? nil : model.api) }
                 .tint(Palette.ink)
                 .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
                 .environment(\.locale, L10n.locale)
