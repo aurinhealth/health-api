@@ -384,7 +384,7 @@ struct SharedWorkoutView: View {
                         HStack {
                             Text(e.name).font(.body).foregroundStyle(Palette.ink)
                             Spacer()
-                            Text("\(e.sets) × \(e.reps)").font(Typo.small).foregroundStyle(Palette.secondary)
+                            Text("\(e.sets) × " + Fmt.range(e.reps)).font(Typo.small).foregroundStyle(Palette.secondary)
                         }
                         .padding(.vertical, 12)
                         if i < share.exercises.count - 1 { Rectangle().fill(Palette.hairline).frame(height: 1) }

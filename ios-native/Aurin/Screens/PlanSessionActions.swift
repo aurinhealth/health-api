@@ -99,7 +99,7 @@ enum ComplianceScale {
     static func rangeText(_ range: ClosedRange<Int>) -> String {
         if range.lowerBound == 0 { return L10n.f("pod %@ %%", String(range.upperBound + 1)) }
         if range.upperBound == Int.max { return L10n.f("nad %@ %%", String(range.lowerBound - 1)) }
-        return "\(range.lowerBound)–\(range.upperBound) %"
+        return "\(range.lowerBound)–\(range.upperBound)" + Fmt.percentSign
     }
 }
 

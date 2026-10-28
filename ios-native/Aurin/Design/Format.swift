@@ -15,6 +15,14 @@ enum Fmt {
         return value.formatted(.number.precision(.fractionLength(digits)).locale(locale))
     }
 
+    /// After a percentage: "19 %" in Czech, "19%" in English.
+    static var percentSign: String { L10n.isEnglish ? "%" : " %" }
+
+    /// A range as typed ("8-10") with an en dash: "8–10".
+    static func range(_ text: String) -> String {
+        text.replacingOccurrences(of: #"(\d)\s*-\s*(\d)"#, with: "$1–$2", options: .regularExpression)
+    }
+
     /// 432 → "7:12".
     static func hoursMinutes(_ minutes: Double?) -> String {
         guard let minutes else { return "–" }
@@ -74,13 +82,6 @@ enum Fmt {
 
     private static func formatted(_ date: Date, _ format: String) -> String {
         DateFormatters.make(format, locale: locale).string(from: date)
-    }
-
-    /// One-letter Czech weekday for a chart label: "P", "Ú", "S", "Č", "P", "S", "N".
-    static func weekdayInitial(_ isoDate: String) -> String {
-        guard let date = DateFormatters.iso().date(from: isoDate) else { return "" }
-        let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
-        return (L10n.isEnglish ? ["S", "M", "T", "W", "T", "F", "S"] : ["N", "P", "Ú", "S", "Č", "P", "S"])[weekday - 1]
     }
 
     /// "1. listopadu" for 2026-11-01.

@@ -234,7 +234,7 @@ enum JournalText {
 
     /// "+11 %", "−17 %".
     static func percent(_ effect: Int) -> String {
-        (effect < 0 ? "−" : "+") + String(abs(effect)) + " %"
+        (effect < 0 ? "−" : "+") + String(abs(effect)) + Fmt.percentSign
     }
 
     /// A metric's value: "61", "49 ms", "58", "6 h 41", "52 min".

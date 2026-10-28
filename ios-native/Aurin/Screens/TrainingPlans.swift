@@ -260,7 +260,7 @@ struct PlanWeeksChart: View {
                 VStack(spacing: 6) {
                     VStack(spacing: 4) {
                         Spacer(minLength: 0)
-                        if !compact, let label = bar.done.map({ "\($0) %" }) ?? bar.minutes.map(hoursLabel) {
+                        if !compact, let label = bar.done.map({ "\($0)" + Fmt.percentSign }) ?? bar.minutes.map(hoursLabel) {
                             Text(label)
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(bar.done != nil ? color : Palette.secondary)
@@ -343,7 +343,7 @@ struct PlanWeekRow: View {
                         .foregroundStyle(phase == "recovery" || phase == "taper" ? Palette.muted : Palette.ink)
                     Spacer(minLength: 8)
                     if let done {
-                        Text("\(done) %").font(.footnote.weight(.semibold)).foregroundStyle(PlanColors.done(done))
+                        Text("\(done)" + Fmt.percentSign).font(.footnote.weight(.semibold)).foregroundStyle(PlanColors.done(done))
                     } else if let sessions, let minutes {
                         Text("\(sessions)× · " + planDuration(minutes)).font(Typo.caption).foregroundStyle(Palette.muted)
                     }

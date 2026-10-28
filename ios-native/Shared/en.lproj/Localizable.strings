@@ -15,23 +15,25 @@
 "%@ po %@" = "%1$@ by %2$@";
 "%@ týdně" = "%@ a week";
 "%@ z %@ %@ · %@ %@" = "%1$@ of %2$@ %3$@ · %4$@ %5$@";
+"%@/%@ %@ · %@ %@" = "%1$@/%2$@ %3$@ · %4$@ %5$@";
 "%@ z %@ TSS" = "%1$@ of %2$@ TSS";
 "%@ za 4 týdny" = "%@ in 4 weeks";
 "%@ zápis čeká na signál" = "%@ entry waiting for a connection";
 "%@ zápisy čekají na signál" = "%@ entries waiting for a connection";
 "%@ zápisů čeká na signál" = "%@ entries waiting for a connection";
-"%@, %@ %% cíle" = "%@, %@ %% of goal";
+"%@, %@ %% cíle" = "%@, %@%% of goal";
 "%@, průměr %@, %@" = "%@, average %@, %@";
 "%@. Dej si něco malého a připrav se." = "%@. Have a small snack and get ready.";
 "%@: množství" = "%@: amounts";
 "%lld min" = "%lld min";
 "+%@ trénink" = "+%@ training";
 "+%@ námahy" = "+%@ strain";
+"námaha dnes ~%@" = "~%@ strain today";
 "+%@ další" = "+%@ more";
 ", pomocně: %@" = ", also: %@";
 "1 porce" = "1 serving";
-"14 dní %@–%@ %%" = "14 days %@–%@ %%";
-"%@ %% potřeby" = "%@ %% of need";
+"14 dní %@–%@ %%" = "14 days %@–%@%%";
+"%@ %% potřeby" = "%@%% of need";
 "1–3 h" = "1–3 h";
 "2,5–25 po 2,5" = "2.5–25 by 2.5";
 "2–40 po 2" = "2–40 by 2";
@@ -935,7 +937,7 @@
 "hubnout %@ týdně" = "lose %@ per week";
 "nabrat %@ týdně" = "gain %@ per week";
 "imperiální" = "imperial";
-"index %@" = "score %@";
+"index %@" = "Score %@";
 "jen tento týden" = "this week only";
 "jen vlastní váha" = "bodyweight only";
 "jen čára jako dřív" = "just a line, as before";
@@ -1837,8 +1839,8 @@
 "Pravá strana dala o %@ opakování míň. Levou dělej jen tolik co pravou, ať se rozdíl nezvětšuje." = "Your right side did %@ fewer reps. Do only as many with the left, so the gap doesn't grow.";
 "%@: pravou stranu dorovnáváme, dokud zaostává, dostane jednu sérii navíc." = "%@: we're evening out your right side; while it lags it gets one extra set.";
 "%@: levou stranu dorovnáváme, dokud zaostává, dostane jednu sérii navíc." = "%@: we're evening out your left side; while it lags it gets one extra set.";
-"L o %@ %% slabší" = "L %@ %% weaker";
-"P o %@ %% slabší" = "R %@ %% weaker";
+"L o %@ %% slabší" = "L %@%% weaker";
+"P o %@ %% slabší" = "R %@%% weaker";
 "vyrovnané" = "balanced";
 "Posilovna · historie" = "Gym · history";
 "Levá a pravá strana" = "Left and right side";
@@ -1963,8 +1965,8 @@
 "+%@ min navíc" = "+%@ min extra";
 "Celkem %@ min" = "%@ min in total";
 "%@ + %@ navíc" = "%@ + %@ extra";
-"+ %@ min rozcvička" = "+ %@ min warm-up";
-"+ %@ min protažení" = "+ %@ min stretching";
+"+ %@ min rozcvička" = "+%@ min warm-up";
+"+ %@ min protažení" = "+%@ min stretching";
 "Posilování" = "Lifting";
 
 "Ultrahuman je připojený, noci z prstenu se začínají stahovat." = "Ultrahuman is connected; the ring's nights are starting to download.";
@@ -2376,7 +2378,7 @@
 "připravená" = "ready";
 "Únava svalů · odpočaté na %" = "Muscle fatigue · % rested";
 "Trénink: %@" = "Workout: %@";
-"odpočaté na %@ %%" = "%@ %% rested";
+"odpočaté na %@ %%" = "%@%% rested";
 "Postava se svaly" = "Muscle figure";
 "Pohled" = "View";
 "odpočatých" = "rested";
@@ -2393,7 +2395,7 @@
 "naposledy včera" = "trained yesterday";
 "naposledy před %@ dny" = "trained %@ days ago";
 "Cviky: %@" = "Exercises: %@";
-"%@ %% za %@" = "%1$@ %% in %2$@";
+"%@ %% za %@" = "%1$@%% in %2$@";
 "Odhad maxima: %@, z tvých sérií." = "Estimated max: %@, from your sets.";
 "Odhad maxima: %@. Trend uvidíš po dalším týdnu." = "Estimated max: %@. The trend shows after another week.";
 "Zatím bez vah" = "No weights yet";
@@ -2408,6 +2410,7 @@
 "Poslední trénink: %@, %@" = "Last workout: %1$@, %2$@";
 "ještě unavené" = "still tired";
 "%@: odpočaté %@" = "%1$@: rested %2$@";
+"Ještě unavené: %@, odpočaté %@" = "Still tired: %1$@, rested %2$@";
 "Odpočaté" = "Rested";
 "%@ unavené, odpočaté %@" = "%1$@ tired, rested %2$@";
 "Dnes chci" = "Tonight I want";
@@ -2445,7 +2448,7 @@
 "Vyzkoušet Pro" = "Try Pro";
 "max" = "max";
 "z" = "of";
-"Průměr za 7 dní: %@ %%" = "7-day average: %@ %%";
+"Průměr za 7 dní: %@ %%" = "7-day average: %@%%";
 "Dnes z" = "Today from";
 "Na obrazovce Jídlo" = "On the Food screen";
 "Oblíbené · %@ ze 3" = "Favourites · %@ of 3";
@@ -2675,7 +2678,7 @@
 "%@ cvik" = "%@ exercise";
 "%@ cviky" = "%@ exercises";
 "%@ cviků" = "%@ exercises";
-"+ %@ min kardio" = "+ %@ min cardio";
+"+ %@ min kardio" = "+%@ min cardio";
 
 /* Weekly allowance of coach messages (CoachAllowance) */
 "zbývá %@ zpráva" = "%@ message left";

@@ -252,7 +252,8 @@ struct TrainingModeView: View {
             } else {
                 CircleButton(systemImage: "xmark", label: L10n.tr("Ukončit režim tréninku")) { close() }
             }
-            if let day, !day.exercises.isEmpty {
+            // The summary has its own title: no exercise and sets line above it.
+            if let day, !day.exercises.isEmpty, !finishedSession {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title(day)).font(.body.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
                     Text(progressLine(day)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
@@ -411,7 +412,8 @@ struct TrainingModeView: View {
 
     private var tableHeader: some View {
         HStack(spacing: 8) {
-            Text("Série").frame(width: 26, alignment: .leading)
+            // One line: "SETS" and "SÉRIE" are a little wider than the set numbers below.
+            Text("Série").lineLimit(1).fixedSize().frame(width: 26, alignment: .leading)
             Text("Minule").frame(maxWidth: .infinity, alignment: .leading)
             Text(Units.weightUnit).frame(width: 64)
             Text("Opak.").frame(width: 52)
@@ -427,7 +429,7 @@ struct TrainingModeView: View {
         // The sets to come show what the set before was done with.
         let carry = s.done ? nil : GymSessionMath.carried(s, in: exercise, keep: kept)
         let shownKg: String = LiftWeight.shown(s.done ? s.kg : carry?.kg ?? s.plannedKg) ?? ""
-        let shownReps: String = (s.done ? s.reps : carry?.reps ?? s.plannedReps) ?? ""
+        let shownReps: String = Fmt.range((s.done ? s.reps : carry?.reps ?? s.plannedReps) ?? "")
         // By sides the number shows on the L row only.
         let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) : carriedLetter(s, in: exercise) ?? s.intensity
         var plateTap: (() -> Void)? = nil
@@ -439,7 +441,7 @@ struct TrainingModeView: View {
         return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
-                         kgText: $kg, repsText: $reps, repsHint: s.plannedReps,
+                         kgText: $kg, repsText: $reps, repsHint: s.plannedReps.map(Fmt.range),
                          drop: s.drop, intensity: letter, planned: !s.done && !picked.contains(s.row),
                          onIntensity: { intensityFor = SetRef(id: s.row) },
                          onEdit: s.done ? { k, r in Task { await editDone(s, kg: k, reps: r) } } : nil,
@@ -583,7 +585,7 @@ struct TrainingModeView: View {
             withAnimation(.snappy) { if unfolded.contains(key) { unfolded.remove(key) } else { unfolded.insert(key) } }
         } label: {
             Image(systemName: unfolded.contains(key) ? "chevron.up" : "chevron.down").font(.footnote.weight(.semibold)).foregroundStyle(Palette.faint)
-                .frame(width: 28, height: 34).contentShape(Rectangle())
+                .frame(width: 28, height: 34).tapTarget(width: 28, height: 34)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(unfolded.contains(key) ? "Skrýt série" : "Ukázat série"))
@@ -691,7 +693,7 @@ struct TrainingModeView: View {
     private func plannedLine(_ set: GymSet, in exercise: GymExercise) -> String {
         let carry = GymSessionMath.carried(set, in: exercise, keep: kept)
         let weight: String = LiftWeight.shown(carry?.kg ?? set.plannedKg).map { $0 + " " + Units.weightUnit + " × " } ?? ""
-        return weight + (carry?.reps ?? set.plannedReps ?? "")
+        return weight + Fmt.range(carry?.reps ?? set.plannedReps ?? "")
     }
 
     // MARK: The end
@@ -744,6 +746,9 @@ struct TrainingModeView: View {
 
     private func summaryGrid(_ day: GymDay) -> some View {
         let sets: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
+        let planned: Int = day.exercises.reduce(0) { $0 + $1.workCount }
+        // Finished early: "5 z 7", so the sets left out show.
+        let setsText: String = sets < planned ? L10n.f("%@ z %@", String(sets), String(planned)) : String(sets)
         let volume: Double = GymSessionMath.volume(day.exercises)
         let shown = GymSessionMath.volumeText(volume)
         let columns = [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)]
@@ -753,7 +758,7 @@ struct TrainingModeView: View {
                 if let kcal = totals.kcal { total(L10n.tr("Kalorie"), Fmt.int(kcal) + " kcal") }
                 if let hr = totals.avgHr { total(L10n.tr("Prům. tep"), Fmt.int(hr) + " bpm") }
             }
-            total(L10n.tr("Série"), String(sets))
+            total(L10n.tr("Série"), setsText)
             total(L10n.tr("Objem"), shown.value + " " + shown.unit, change: volumeChange(day, volume), better: volume >= lastVolume(day))
             if let hr = totals?.maxHr { total(L10n.tr("Max. tep"), Fmt.int(hr) + " bpm") }
         }
@@ -1014,7 +1019,12 @@ struct TrainingModeView: View {
     // MARK: Server
 
     private func load() async {
-        if model.demo { day = DemoData.gym; history = DemoGymHistory.history; loading = false; startAtFirstOpen(); restoreMinimized(); return }
+        if model.demo {
+            day = DemoData.gym; history = DemoGymHistory.history; loading = false; startAtFirstOpen(); restoreMinimized()
+            // The sample day has sets done: under way, as a real one opened again (below), without a recording.
+            if let day, day.exercises.contains(where: { $0.sets.contains(where: \.done) }) { startTapped = true }
+            return
+        }
         loading = true
         defer { loading = false }
         Task { [api = model.api] in await ExerciseNotes.shared.load(api: api, demo: false) }

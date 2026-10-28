@@ -120,7 +120,7 @@ enum WeatherText {
 
     static func percent(_ value: Double?) -> String {
         guard let value else { return "–" }
-        return Fmt.int(value) + " %"
+        return Fmt.int(value) + Fmt.percentSign
     }
 
     static func indoor(_ advice: TodaySnapshot.Advice?) -> Bool { advice?.environment == "indoor" }
@@ -305,7 +305,7 @@ struct WeatherDetails: View {
                 Divider().overlay(Palette.hairline).padding(.horizontal, 12)
                 stat("Vítr", WeatherText.windNumber(wind), " " + WeatherText.windUnit, windBeside)
                 Divider().overlay(Palette.hairline).padding(.horizontal, 12)
-                stat("Déšť", weather.rainProb.map { Fmt.int($0) } ?? "–", weather.rainProb == nil ? nil : " %")
+                stat("Déšť", weather.rainProb.map { Fmt.int($0) } ?? "–", weather.rainProb == nil ? nil : Fmt.percentSign)
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(.top, 12)

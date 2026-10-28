@@ -21,7 +21,7 @@ struct ComplianceRing: View {
                     .rotationEffect(.degrees(-90))
                     .padding(9)
             }
-            Text(verbatim: "\(percent) %")
+            Text(verbatim: "\(percent)" + Fmt.percentSign)
                 .font(Typo.number(size * (percent < 100 ? 0.3 : 0.25)))
                 .foregroundStyle(Palette.ink)
                 .lineLimit(1).minimumScaleFactor(0.6)
@@ -96,7 +96,7 @@ struct PlanComplianceRows: View {
             Spacer(minLength: 6)
             (Text(verbatim: done).foregroundStyle(Palette.ink) + Text(verbatim: plan.map { " / " + $0 } ?? "").foregroundStyle(Palette.faint))
                 .font(Typo.body).lineLimit(1).minimumScaleFactor(0.8)
-            Text(verbatim: percent.map { "\($0) %" } ?? "")
+            Text(verbatim: percent.map { "\($0)" + Fmt.percentSign } ?? "")
                 .font(.system(size: 13, weight: .medium)).foregroundStyle(percent.map(ComplianceScale.color) ?? .clear)
                 .frame(width: 46, alignment: .trailing)
         }
@@ -355,7 +355,7 @@ struct GymComplianceSection: View {
                 Text(verbatim: Self.detail(e)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
             Spacer(minLength: 6)
-            Text(verbatim: "\(e.percent) %").font(Typo.bodyStrong).foregroundStyle(ComplianceScale.color(e.percent))
+            Text(verbatim: "\(e.percent)" + Fmt.percentSign).font(Typo.bodyStrong).foregroundStyle(ComplianceScale.color(e.percent))
         }
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)

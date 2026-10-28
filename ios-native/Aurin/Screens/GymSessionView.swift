@@ -299,7 +299,7 @@ struct GymSessionView: View {
     private func progress(_ day: GymDay) -> some View {
         let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
         return VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.f("%@ z %@ %@ · %@ %@", String(done), String(total), Fmt.plural(total, "série", "sérií", "sérií"),
+            Text(L10n.f("%@/%@ %@ · %@ %@", String(done), String(total), Fmt.plural(total, "série", "sérií", "sérií"),
                         String(day.exercises.count), Fmt.plural(day.exercises.count, "cvik", "cviky", "cviků")))
                 .font(Typo.small).foregroundStyle(Palette.muted)
             ProgressLine(fraction: total > 0 ? Double(done) / Double(total) : 0, color: Palette.amberBar, height: 4)
@@ -484,7 +484,7 @@ struct SetRow: View {
                 .accessibilityLabel((set.warmup ? L10n.tr("Rozcvičovací série") : L10n.f("Série %@", set.number)) + (failure ? ", " + L10n.tr("do selhání") : ""))
             field($kg, placeholder: LiftWeight.shown(set.plannedKg) ?? Units.weightUnit, unit: Units.weightUnit, width: 64)
             Text("×").foregroundStyle(Palette.faint)
-            field($reps, placeholder: set.plannedReps ?? L10n.tr("op."), unit: nil, width: 54)
+            field($reps, placeholder: set.plannedReps.map(Fmt.range) ?? L10n.tr("op."), unit: nil, width: 54)
             field($rpe, placeholder: "RPE", unit: nil, width: 46)
             Spacer(minLength: 4)
             Button {

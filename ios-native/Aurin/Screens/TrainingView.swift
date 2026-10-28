@@ -108,7 +108,7 @@ struct TrainingContent: View {
                 // else the next planned day's, with Začít trénink. It belongs to
                 // today, not to a day looked back at.
                 if shownDay == training.date, !upcoming.isEmpty {
-                    TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [])
+                    TodaySessions(sessions: upcoming, today: training.date, week: training.sessions ?? [], strainNow: training.strain.score)
                         .padding(.top, 14)
                 }
 
@@ -298,17 +298,19 @@ struct TodaySessions: View {
     let today: String
     /// The week's sessions: a card opens the same detail as Tréninky týdne.
     let week: [WeekSession]
+    /// Today's strain so far: a workout today shows where it takes the day.
+    var strainNow: Double? = nil
     @State private var current: Int?
 
     var body: some View {
         if sessions.count == 1, let session = sessions.first {
-            NextSession(session: session, today: today, route: route(session))
+            NextSession(session: session, today: today, route: route(session), strainNow: strainNow)
         } else {
             VStack(spacing: 12) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 24) {
                         ForEach(Array(sessions.enumerated()), id: \.offset) { index, session in
-                            NextSession(session: session, today: today, route: route(session), fill: true)
+                            NextSession(session: session, today: today, route: route(session), strainNow: strainNow, fill: true)
                                 .frame(maxHeight: .infinity)
                                 .containerRelativeFrame(.horizontal)
                                 .id(index)
@@ -351,6 +353,8 @@ struct NextSession: View {
     let today: String
     /// Where a tap on the card opens (Start workout keeps its own tap).
     var route: AppRoute? = nil
+    /// Today's strain so far (TodaySessions).
+    var strainNow: Double? = nil
     /// In the swiping card: as tall as the tallest of today's.
     var fill = false
 
@@ -419,8 +423,23 @@ struct NextSession: View {
     }
 
     private var meta: String {
-        [session.minutes.map { Fmt.duration($0) }, session.strain.map { L10n.f("+%@ námahy", Fmt.decimal($0)) }]
-            .compactMap { $0 }.joined(separator: " · ")
+        [session.minutes.map { Fmt.duration($0) }, strainText].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// Today: where the workout takes the day's strain ("námaha dnes ~13,4"), as
+    /// the target band counts it; strain doesn't add up (8,4 + 8,3 is not 16,7).
+    /// Another day: the workout's own strain.
+    private var strainText: String? {
+        guard let strain = session.strain else { return nil }
+        guard session.date == today, let now = strainNow else { return L10n.f("+%@ námahy", Fmt.decimal(strain)) }
+        return L10n.f("námaha dnes ~%@", Fmt.decimal(Self.dayStrain(now, adding: strain)))
+    }
+
+    /// Two strains on one day: the loads add up on the saturating 0–21 curve
+    /// (strainScore in src/recovery-model.js), 21 · (1 − e^(−load / 225)).
+    static func dayStrain(_ a: Double, adding b: Double) -> Double {
+        let left = (1 - min(a, 20.9) / 21) * (1 - min(b, 20.9) / 21)
+        return ((21 * (1 - left)) * 10).rounded() / 10
     }
 
     private var detail: String? {
@@ -659,7 +678,7 @@ struct ActiveCaloriesWidget: View {
                          styles: active.week.indices.map { i in BarStyle(fill: i == active.week.count - 1 ? Palette.rust : Palette.rust.opacity(0.3)) },
                          hi: max(active.week.map(\.value).max() ?? 1, active.usual ?? 0),
                          target: active.usual,
-                         labels: active.week.map { Fmt.weekdayInitial($0.date) },
+                         labels: active.week.map { Fmt.weekdayShort($0.date) },
                          highlighted: active.week.count - 1,
                          spacing: size == .small ? 3 : 4,
                          height: height,
@@ -847,13 +866,13 @@ struct ZoneBar: View {
                 ForEach(parts.indices, id: \.self) { i in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(parts[i].0).font(Typo.tiny).foregroundStyle(Palette.faint).lineLimit(1)
-                        Text(Fmt.int(parts[i].1 / total * 100) + " %").font(Typo.number(17)).foregroundStyle(Palette.ink)
+                        Text(Fmt.int(parts[i].1 / total * 100) + Fmt.percentSign).font(Typo.number(17)).foregroundStyle(Palette.ink)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(parts.map { L10n.tr($0.0) + " " + Fmt.int($0.1 / total * 100) + " %" }.joined(separator: ", "))
+        .accessibilityLabel(parts.map { L10n.tr($0.0) + " " + Fmt.int($0.1 / total * 100) + Fmt.percentSign }.joined(separator: ", "))
     }
 }

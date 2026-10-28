@@ -258,6 +258,8 @@ struct GymPartsCard: View {
                     }
                     Spacer(minLength: 6)
                 }
+                // Off stays readable: only the name and icon fade, the switch keeps its colours.
+                .opacity(on || reordering ? 1 : 0.7)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -278,7 +280,6 @@ struct GymPartsCard: View {
         }
         .padding(.horizontal, 8)
         .frame(minHeight: 56)
-        .opacity(on || reordering ? 1 : 0.45)
         .accessibilityElement(children: .contain)
     }
 

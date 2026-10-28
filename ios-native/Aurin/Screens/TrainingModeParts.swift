@@ -225,7 +225,7 @@ struct GymSetRow: View {
                     IntensityPill(letter: intensity, planned: planned)
                         .opacity(state == .next ? 0.6 : 1)
                         .frame(width: 40, height: 40)
-                        .contentShape(Rectangle())
+                        .tapTarget(width: 40, height: 40)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(intensity.map { GymIntensity.name($0) } ?? L10n.tr("Bez hodnocení"))
@@ -243,7 +243,7 @@ struct GymSetRow: View {
                     }
                 }
                 .frame(width: 34, height: 40)
-                .contentShape(Rectangle())
+                .tapTarget(width: 34, height: 40)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.tr(state == .done ? "Vrátit sérii" : "Série hotová"))

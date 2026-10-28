@@ -1089,7 +1089,7 @@ struct ShareFoodCard: View {
                     ForEach(Array(arcs.enumerated()), id: \.element.id) { i, arc in
                         if i > 0 { Spacer(minLength: u * 2) }
                         VStack(spacing: u * 0.6) {
-                            Text(verbatim: Fmt.int((arc.to - arc.from) * 100) + " %").font(s.serif(9)).foregroundStyle(arc.part.color)
+                            Text(verbatim: Fmt.int((arc.to - arc.from) * 100) + Fmt.percentSign).font(s.serif(9)).foregroundStyle(arc.part.color)
                             Text(L10n.tr(arc.part.key)).font(s.sans(3.4)).foregroundStyle(s.t.muted)
                         }
                         .sharePiece(arc.id, s)

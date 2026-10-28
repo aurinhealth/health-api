@@ -165,7 +165,7 @@ struct DayCircle: View {
     var body: some View {
         let style = SportStyle(day: day, date: date, today: today)
         VStack(spacing: 6) {
-            Text(Fmt.weekdayInitial(date))
+            Text(Fmt.weekdayShort(date))
                 .font(.system(size: 12, weight: date == today ? .bold : .medium))
                 .foregroundStyle(date == today ? Palette.amber : Palette.faint)
             ZStack {
@@ -329,7 +329,7 @@ struct MonthGrid: View {
         switch mode {
         case .compliance:
             guard PlanState(day: day) == .good || PlanState(day: day) == .off, let percent = day.compliance else { return " " }
-            return "\(percent) %"
+            return "\(percent)" + Fmt.percentSign
         case .count: return String(day.count)
         case .time: return Fmt.hoursMinutes(day.minutes)
         case .kcal: return Fmt.int(day.kcal)
@@ -468,7 +468,7 @@ struct CalendarActivityRow: View {
                 Text(Self.detail(activity)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                 // A session done to a plan: only its percent, the why is in its detail.
                 if activity.status == "done", let percent = activity.compliance {
-                    Text(verbatim: "\(percent) %").font(Typo.caption.weight(.semibold)).foregroundStyle(ComplianceScale.color(percent))
+                    Text(verbatim: "\(percent)" + Fmt.percentSign).font(Typo.caption.weight(.semibold)).foregroundStyle(ComplianceScale.color(percent))
                         .accessibilityLabel(L10n.f("%@ %% plánu", String(percent)))
                 } else if state == .off, let reason = activity.adherenceReason, !reason.isEmpty {
                     Text(reason).font(Typo.caption).foregroundStyle(Palette.amber).lineLimit(1)
