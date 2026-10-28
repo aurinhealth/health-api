@@ -191,7 +191,8 @@ final class AppleHealth {
         // A new category needs its history, not just the last days.
         lastSync = nil
         UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
-        start(api: api)
+        // A category added to the ones watched already gets its observer too.
+        await restartObservers(api: api)
         return await sync(api: api, force: true)
     }
 
@@ -248,8 +249,7 @@ final class AppleHealth {
         guard !chosen.isEmpty else { message = L10n.tr("Vyber aspoň jeden typ dat."); return }
         if chosen.isSubset(of: categories) {
             setCategories(chosen)
-            stopObservers()
-            start(api: api)
+            await restartObservers(api: api)
         } else {
             _ = await connect(chosen, api: api)
         }
@@ -275,9 +275,10 @@ final class AppleHealth {
                 nonisolated(unsafe) let completion = completion
                 Task { @MainActor in
                     if let api = AppleHealth.shared.api {
-                        // Woken in the background: the widgets follow the new data.
+                        // Woken in the background: the widgets follow the new data,
+                        // after HealthKit heard back (BackgroundRefresh.healthWake).
                         if UIApplication.shared.applicationState == .active { _ = await AppleHealth.shared.sync(api: api) }
-                        else { await BackgroundRefresh.refresh(api: api, widgets: false) }
+                        else { await BackgroundRefresh.healthWake(api: api) }
                     }
                     completion()
                 }
@@ -296,6 +297,16 @@ final class AppleHealth {
         for query in observers { reader.store.stop(query) }
         observers = []
         reader.store.disableAllBackgroundDelivery { _, _ in }
+    }
+
+    /// The observers anew for the chosen categories. Background delivery goes
+    /// off before it goes on again: switched off without waiting, the "off"
+    /// could land after the "on" and nothing would wake the app any more.
+    private func restartObservers(api: APIClient) async {
+        for query in observers { reader.store.stop(query) }
+        observers = []
+        try? await reader.store.disableAllBackgroundDelivery()
+        start(api: api)
     }
 
     /// Sends what is new. Without force at most every 10 minutes (each screen
@@ -491,13 +502,6 @@ final class HealthReader: @unchecked Sendable {
         f.formatOptions = [.withInternetDateTime]
         return f
     }()
-    private let dayFormat: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.calendar = Calendar(identifier: .gregorian)
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
     private var calendar: Calendar { Calendar.current }
 
     /// Reading the categories; `share` are the types Synchronizace writes
@@ -527,8 +531,7 @@ final class HealthReader: @unchecked Sendable {
 
     private func stamp(_ date: Date) -> String { iso.string(from: date) }
     private func day(_ date: Date) -> String {
-        dayFormat.timeZone = calendar.timeZone
-        return dayFormat.string(from: date)
+        DateFormatters.make("yyyy-MM-dd", timeZone: calendar.timeZone).string(from: date)
     }
 
     /// Everything to send, split so one request stays well under the server's
@@ -702,16 +705,10 @@ final class HealthReader: @unchecked Sendable {
         id == .dietaryEnergyConsumed ? .kilocalorie() : .gram()
     }
 
-    private let clockFormat: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "HH:mm"
-        return f
-    }()
-
+    /// The reads run side by side (async let): each time zone has its own
+    /// formatter, never one shared and changed while another thread uses it.
     private func clock(_ date: Date) -> String {
-        clockFormat.timeZone = calendar.timeZone
-        return clockFormat.string(from: date)
+        DateFormatters.make("HH:mm", timeZone: calendar.timeZone).string(from: date)
     }
 
     /// Every food and water other apps (Yazio, MyFitnessPal…) logged from the

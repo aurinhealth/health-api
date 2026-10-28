@@ -53,13 +53,46 @@ enum BackgroundRefresh {
         await CalendarTime.shared.send(api: api)
         await CalendarTime.shared.mirror(api: api)
         guard always || outcome.changed else { return synced }
-        guard !Task.isCancelled, let today = try? await api.today() else { return false }
-        WidgetBridge.update(today)
-        // Aktivita dne for the new data, kept for Today's card (CoachPick.stored),
-        // so it opens ready without loading.
-        if !Task.isCancelled { _ = try? await api.coachPick() }
+        guard !Task.isCancelled, await followToday(api: api) else { return false }
         return synced || !AppleHealth.shared.enabled
     }
+
+    /// The server's Today for the widgets and the reminders (water after the
+    /// day's target, a workout the watch already brought), then Aktivita dne
+    /// for the new data, kept for Today's card (CoachPick.stored), so it opens
+    /// ready without loading.
+    private static func followToday(api: APIClient) async -> Bool {
+        guard let today = try? await api.today() else { return false }
+        WidgetBridge.update(today)
+        await Reminders.reschedule(from: today)
+        if !Task.isCancelled { _ = try? await api.coachPick() }
+        return true
+    }
+
+    /// A HealthKit wake in the background. HealthKit is told it was handled
+    /// as soon as the data went out: it slows the wakes of an app that takes
+    /// long. The mornings bring several types at once (sleep, HRV, heart
+    /// rate…), each its own wake; Today and Aktivita dne follow once for all
+    /// of them, a moment after the last.
+    static func healthWake(api: APIClient) async {
+        let outcome = await AppleHealth.shared.run(api: api)
+        wakeChanged = wakeChanged || outcome.changed
+        follow?.cancel()
+        let background = FinishInBackground("Health wake")
+        follow = Task { @MainActor in
+            defer { background.end() }
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled, api.hasSession else { return }
+            follow = nil
+            let changed = wakeChanged
+            wakeChanged = false
+            await CalendarTime.shared.send(api: api)
+            await CalendarTime.shared.mirror(api: api)
+            if changed { _ = await followToday(api: api) }
+        }
+    }
+    private static var follow: Task<Void, Never>?
+    private static var wakeChanged = false
 }
 
 /// Leaving the app mid-sync: iOS froze the app within seconds, the requests on

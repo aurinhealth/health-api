@@ -13,7 +13,8 @@ extension AppModel {
 
     func loadMuscles() async {
         guard !demo else { return }
-        if let fresh = try? await api.muscles() {
+        let account = signInRound
+        if let fresh = try? await api.muscles(), stillSignedIn(account) {
             muscleFatigue = fresh
             musclesAt = Date()
         }

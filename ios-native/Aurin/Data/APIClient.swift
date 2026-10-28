@@ -645,6 +645,7 @@ final class APIClient: @unchecked Sendable {
 
     /// The decoded answer and its JSON as it came.
     func getWithData<T: Decodable>(_ path: String, cacheKey: String? = nil) async throws -> (T, Data) {
+        let generation = SnapshotCache.generation
         let (data, response) = try await load(makeRequest(path))
         try check(response, data)
         let value: T
@@ -654,7 +655,7 @@ final class APIClient: @unchecked Sendable {
             ErrorLog.add(path: "GET \(path)", status: nil, message: ErrorLog.describe(error))
             throw APIError.message(L10n.tr("Odpověď serveru se nepodařilo přečíst."))
         }
-        if let cacheKey { SnapshotCache.save(data, key: cacheKey) }
+        if let cacheKey { SnapshotCache.save(data, key: cacheKey, generation: generation) }
         return (value, data)
     }
 

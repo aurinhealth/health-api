@@ -230,7 +230,8 @@ final class AppleHealthExport {
     /// A weigh-in typed in Aurin (one per day, the newest wins).
     func saveWeight(kg: Double, date: String) async {
         guard prefs.health.allows("weight"), !viaGoogle.contains("weight"), isAvailable, allowed(HKQuantityType(.bodyMass)) else { return }
-        let now = Date()
+        // On its own day: now for today, noon for a weigh-in added to another day.
+        let now = date == AppModel.localDate(Date()) ? Date() : Self.dayStart(date).addingTimeInterval(12 * 3600)
         let sample = HKQuantitySample(type: HKQuantityType(.bodyMass), quantity: HKQuantity(unit: .gramUnit(with: .kilo), doubleValue: kg),
                                       start: now, end: now, metadata: metadata("weight:" + date))
         _ = await save([sample])

@@ -93,4 +93,48 @@ final class OutboxTests: XCTestCase {
         XCTAssertFalse(AppModel.anotherAccount(id: 1, email: "new@example.com", defaults: defaults))
         XCTAssertTrue(AppModel.anotherAccount(id: 2, email: "b@example.com", defaults: defaults))
     }
+
+    /// One write this build cannot read (a newer build wrote it) neither takes
+    /// the others with it nor is overwritten: it waits aside for that build.
+    @MainActor func testUnreadableWriteWaitsAside() throws {
+        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let main = folder.appending(path: "outbox.json"), aside = folder.appending(path: "outbox-unread.json")
+        let kept = (try? Data(contentsOf: main), try? Data(contentsOf: aside))
+        defer {
+            OutboxStore.clear()
+            if let data = kept.0 { try? data.write(to: main) }
+            if let data = kept.1 { try? data.write(to: aside) }
+        }
+        OutboxStore.clear()
+        let drink = AppModel.drinkItem(ml: 250, kind: "water", date: "2026-10-28")
+        var list = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode([drink])) as? [Any])
+        var newer = try XCTUnwrap(list[0] as? [String: Any])
+        newer["id"] = UUID().uuidString
+        newer["overlay"] = ["kind": "somethingNew", "date": "2026-10-28"]
+        list.append(newer)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: list).write(to: main)
+
+        XCTAssertEqual(OutboxStore.load().map(\.id), [drink.id])
+        OutboxStore.save([])
+        XCTAssertTrue(OutboxStore.load().isEmpty)
+        let waiting = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: aside)) as? [[String: Any]])
+        XCTAssertEqual(waiting.count, 1)
+        XCTAssertEqual((waiting[0]["overlay"] as? [String: Any])?["kind"] as? String, "somethingNew")
+        // Signing out takes it too.
+        OutboxStore.clear()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: aside.path))
+    }
+
+    /// An answer asked for before a sign-out is not saved after it.
+    func testSnapshotFromBeforeSignOutIsNotSaved() {
+        let key = "test-generation"
+        let before = SnapshotCache.generation
+        SnapshotCache.clear()
+        SnapshotCache.save(Data("{}".utf8), key: key, generation: before)
+        XCTAssertNil(SnapshotCache.savedAt(key: key))
+        SnapshotCache.save(Data("{}".utf8), key: key, generation: SnapshotCache.generation)
+        XCTAssertNotNil(SnapshotCache.savedAt(key: key))
+        SnapshotCache.remove(key: key)
+    }
 }

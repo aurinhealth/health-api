@@ -303,6 +303,7 @@ struct ServiceConnectSheet: View {
 
 /// A bar that runs while the first import starts (no progress to show yet).
 private struct DownloadBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var moving = false
 
     var body: some View {
@@ -315,7 +316,8 @@ private struct DownloadBar: View {
                 .clipShape(Capsule())
         }
         .frame(height: 6)
-        .onAppear { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { moving = true } }
+        // Reduce Motion: the bar stands still.
+        .onAppear { if !reduceMotion { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { moving = true } } }
         .accessibilityHidden(true)
     }
 }
