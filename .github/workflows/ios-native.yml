@@ -68,13 +68,14 @@ jobs:
           import json, sys
           devices = json.load(sys.stdin)["devices"]
           version = lambda runtime: [int(n) for n in runtime.split("iOS-")[-1].split("-")]
-          # The newest iOS first (the one the SDK was made for), then the usual phone.
-          runtimes = sorted((r for r in devices if "iOS" in r), key=version, reverse=True)
+          # The oldest iOS on the image first: StoreKit testing (ProStoreTests) loads
+          # no products from xcodebuild on the iOS 26.4/26.5 simulators.
+          runtimes = sorted((r for r in devices if "iOS" in r), key=version)
           print("runtimes:", ", ".join(runtimes), file=sys.stderr)
           phones = [d for r in runtimes for d in devices[r] if d["name"].startswith("iPhone")]
           names = ("iPhone 17", "iPhone 16", "iPhone 17 Pro", "iPhone 16 Pro")
-          newest = [d for d in devices[runtimes[0]] if d["name"].startswith("iPhone")] if runtimes else []
-          pick = next((d for n in names for d in newest if d["name"] == n), newest[0] if newest else phones[0])
+          first = [d for d in devices[runtimes[0]] if d["name"].startswith("iPhone")] if runtimes else []
+          pick = next((d for n in names for d in first if d["name"] == n), first[0] if first else phones[0])
           print(pick["name"], file=sys.stderr)
           print(pick["udid"])')
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
