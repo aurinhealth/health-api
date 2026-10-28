@@ -135,8 +135,11 @@ extension WatchStore: WCSessionDelegate {
         let data = applicationContext[WatchSnapshot.contextKey] as? Data
         let gym = applicationContext[WatchGym.replyKey] as? Data
         let settings = applicationContext[WatchSettings.contextKey] as? Data
+        let signIn = applicationContext[WatchSession.contextKey] as? Data
         let empty = applicationContext.isEmpty
         Task { @MainActor in
+            // No sign-in with Today: the iPhone signed out.
+            WatchAPI.store(signIn)
             if let settings { WatchStore.shared.receive(settings: settings) }
             if let gym { GymStore.shared.received(gym) }
             if data != nil || empty { WatchStore.shared.receive(data) }

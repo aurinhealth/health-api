@@ -1,8 +1,9 @@
 import Foundation
 
-/// The coach on the watch (AurinWatch/CoachView.swift): the watch has no
-/// session of its own, so the iPhone asks the server (App/WatchCoachBridge.swift)
-/// in the same chat as the coach in the app and sends the answer back.
+/// The coach on the watch (AurinWatch/CoachView.swift): with the iPhone in
+/// reach, the iPhone asks the server (App/WatchCoachBridge.swift) in the same
+/// chat as the coach in the app and sends the answer back; without it, the
+/// watch asks the server itself with the iPhone's sign-in (WatchSession).
 enum WatchCoach {
     /// Watch → iPhone: a question (Ask, with the chat it continues).
     static let askKey = "coachAsk"

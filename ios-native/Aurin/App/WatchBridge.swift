@@ -111,8 +111,21 @@ final class WatchBridge: NSObject {
         if let gym = gymContext { context[WatchGym.replyKey] = gym }
         guard !context.isEmpty else { return }
         context[WatchSettings.contextKey] = Self.settings.encoded()
+        if let signIn = Self.signIn()?.encoded() { context[WatchSession.contextKey] = signIn }
         try? session.updateApplicationContext(context)
         lastSent = Date()
+    }
+
+    /// The session cookie for the watch's own requests (WatchShared/WatchSession.swift).
+    static func signIn() -> WatchSession? {
+        let api = AppModel.live?.api ?? APIClient()
+        guard api.hasSession,
+              let cookie = HTTPCookieStorage.shared.cookies(for: api.baseURL)?.first(where: { $0.name == APIClient.sessionCookie })
+        else { return nil }
+        let server = api.baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        return WatchSession(server: server, name: cookie.name, value: cookie.value,
+                            expires: api.baseURL.host().flatMap(SessionKeychain.expires) ?? cookie.expiresDate,
+                            apiLevel: APIClient.apiLevel, language: L10n.language, imperial: Units.imperial)
     }
 
     /// Settings → Apple Watch, kept on the iPhone and sent with every Today.

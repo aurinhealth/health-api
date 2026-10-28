@@ -3,7 +3,8 @@ import WatchConnectivity
 
 /// The coach on the watch: the question goes to the iPhone, which asks the
 /// server in the app's chat (WatchShared/WatchCoach.swift); what it is doing
-/// and the answer come back as messages.
+/// and the answer come back as messages. Without the iPhone in reach, the
+/// watch asks the server on its own internet (WatchAPI).
 @MainActor
 final class CoachStore: ObservableObject {
     static let shared = CoachStore()
@@ -40,18 +41,38 @@ final class CoachStore: ObservableObject {
         guard !question.isEmpty, !waiting else { return }
         let id = UUID().uuidString
         turns.append(Turn(id: id, question: question))
-        guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isReachable,
-              let data = WatchCoach.Ask(id: id, text: question, chatId: chatId, view: view).encoded() else {
-            fail(id, W.tr("iPhone není poblíž. Kouč odpovídá přes iPhone.", "Your iPhone isn't nearby. The coach answers through it."))
-            return
-        }
         waiting = true
         progress = nil
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated, WCSession.default.isReachable,
+              let data = WatchCoach.Ask(id: id, text: question, chatId: chatId, view: view).encoded() else {
+            askServer(id, question, view: view)
+            return
+        }
         WCSession.default.sendMessage([WatchCoach.askKey: data], replyHandler: { _ in }, errorHandler: { _ in
-            Task { @MainActor in
-                CoachStore.shared.fail(id, W.tr("Otázka se do iPhonu nedostala. Zkus to znovu.", "The question didn't reach your iPhone. Try again."))
-            }
+            Task { @MainActor in CoachStore.shared.askServer(id, question, view: view) }
         })
+    }
+
+    /// Without the iPhone: the watch asks the server itself (WatchAPI).
+    private func askServer(_ id: String, _ question: String, view: String) {
+        guard WatchAPI.signedIn else {
+            fail(id, W.tr("Hodinky nejsou přihlášené. Otevři jednou Aurin v iPhonu.", "The watch isn't signed in. Open Aurin on your iPhone once."))
+            return
+        }
+        progress = W.tr("Ptám se kouče přes internet hodinek…", "Asking the coach over the watch's internet…")
+        Task {
+            do {
+                let chat = chatId ?? (await WatchAPI.recentChat())
+                let result = try await WatchAPI.askCoach(question, chatId: chat, view: view)
+                guard let data = WatchCoach.Answer(id: id, text: result.text, chatId: result.chatId ?? chat,
+                                                   failed: false, proposal: result.proposal).encoded() else { return }
+                received(answer: data)
+            } catch let failure as WatchAPI.Failure {
+                fail(id, failure.text)
+            } catch {
+                fail(id, W.tr("Kouč teď neodpověděl.", "The coach didn't answer just now."))
+            }
+        }
     }
 
     func received(progress text: String) {
