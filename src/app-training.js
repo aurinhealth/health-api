@@ -270,9 +270,13 @@ export function buildTraining({ date, days = [], health = {}, fitness = {}, insi
   };
   // The day's workouts in the calendar's order: those without an hour (midnight) first.
   const sessionsOf = d => {
-    const planned = (d === date ? remaining : byDate.get(d)?.training?.planned || []).filter(Boolean);
-    // Today's gym plan is done once a strength session was recorded.
-    const plan = d === date && !gym[d]?.unpaired && (todayTraining.completed || []).some(a => /weight|strength|gym/i.test(String(a?.type || ""))) ? null : gym[d];
+    // Today's gym plan is done once a strength session was recorded, or its
+    // sets were logged in the app; then the app's own copy of it (a
+    // planned:local-… strength event, as daySessions) is done with it.
+    const gymDone = d === date && (gym[d]?.logged > 0 || (!gym[d]?.unpaired && (todayTraining.completed || []).some(a => /weight|strength|gym/i.test(String(a?.type || "")))));
+    const appCopy = w => isStrength(w) && /^(planned:)?local-/.test(String(w?.id ?? ""));
+    const planned = (d === date ? remaining : byDate.get(d)?.training?.planned || []).filter(w => w && !(d === date && gym[d]?.logged > 0 && appCopy(w)));
+    const plan = gymDone ? null : gym[d];
     const gymAt = plan?.exercises?.length ? planned.findIndex(isStrength) : -1;
     const list = planned.map((w, i) => sessionOf(d, w, i === gymAt ? plan : null));
     if (plan?.exercises?.length && gymAt < 0) list.unshift(sessionOf(d, null, plan));

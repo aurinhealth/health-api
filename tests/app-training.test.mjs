@@ -268,3 +268,13 @@ test("A missed ride stays on a past day where only a walk was done; a ride done 
   assert.deepEqual(on([walk]), [["activity", "done"], ["planned", "missed"]]);
   assert.deepEqual(on([walk, rideDone]), [["activity", "done"], ["activity", "done"]]);
 });
+
+test("A gym plan done in the app leaves today's sessions, with the app's own copy of it", () => {
+  const copy = { id: "planned:local-7", name: "Strength — Lower Body", type: "WeightTraining", start: DATE + "T00:00:00", durationHours: 1.25 };
+  const today = days.map(d => d.date === DATE ? { ...d, daily: { training: { planned: [copy], completed: [], matched: [] } } } : d);
+  const gym = { [DATE]: { name: "Lower Body", exercises: ["Pendulum squat"], sets: 12, logged: 0 } };
+  assert.equal(buildTraining({ ...input, days: today, gym }).todaySessions[0].title, "Strength — Lower Body", "ahead while nothing is logged");
+  const done = buildTraining({ ...input, days: today, gym: { [DATE]: { ...gym[DATE], logged: 13 } } });
+  assert.deepEqual(done.todaySessions, []);
+  assert.notEqual(done.next?.date, DATE);
+});
