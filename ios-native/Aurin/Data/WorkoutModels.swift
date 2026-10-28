@@ -469,6 +469,17 @@ struct GymDay: Decodable, Equatable {
         write(list, rest)
     }
 
+    /// Joins the exercise with another one into a superset: the other moves
+    /// right after it (out of a superset it was in).
+    mutating func superset(_ offset: Int, with other: Int) {
+        let count = blocks.exercises.count
+        guard offset != other, (0..<count).contains(offset), (0..<count).contains(other) else { return }
+        if ExerciseOrder.letter(exercises[other].superset) != nil { toggleSuperset(at: other) }
+        if ExerciseOrder.letter(exercises[offset].superset) != nil { toggleSuperset(at: offset) }
+        moveExercise(from: other, to: offset + 1)
+        toggleSuperset(at: other < offset ? offset - 1 : offset)
+    }
+
     /// Adds an exercise at the end: its work sets with the planned reps.
     /// sides: by sides (L and P rows), as last time or by its name.
     mutating func addExercise(_ name: String, sets: Int, reps: String, kg: String = "", sides: Bool = false) {

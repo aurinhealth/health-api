@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Režim tréninku → Upravit plán: the exercises in their order with how far
 /// each is, to drag into another order, swipe away, give a set more or fewer,
-/// swap for another, join into a superset, or add one from the catalog.
+/// swap for another, join into a superset with any other (a swipe to the
+/// right), see how one is done ("i"), or add one from the catalog.
 /// "Uložit" hands the changed day back. Po cvicích turns the stretching and the
 /// cardio at the end on or off for the day (and changes them) right away.
 struct PlanEditorSheet: View {
@@ -20,6 +21,9 @@ struct PlanEditorSheet: View {
     @AppStorage(GymDayParts.storageKey) private var dayParts = ""
     @State private var cardioEditing: GymDayPart?
     @State private var choosing: GymDayPart?
+    @State private var technique: String?
+    /// The exercise (by its id) to join into a superset with one picked next.
+    @State private var pairing: String?
 
     init(day: GymDay, catalog: [GymCatalogExercise], date: String? = nil, current: Int? = nil,
          go: ((GymDay, String) -> Void)? = nil, save: @escaping (GymDay) -> Void) {
@@ -61,7 +65,8 @@ struct PlanEditorSheet: View {
                     }
                 }
             }
-            .environment(\.editMode, .constant(.active))
+            // No edit mode: a row swipes (Superset to the right, delete to the
+            // left) and a long press drags it into another place.
             .navigationTitle(day.planName?.nilIfBlank ?? L10n.tr("Plán tréninku"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -88,6 +93,14 @@ struct PlanEditorSheet: View {
             }
             .sheet(item: $choosing) { part in
                 if let date { GymRoutineSheet(part: part, day: day, date: date) }
+            }
+            .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
+                TechniqueSheet(exercise: item.name)
+            }
+            .sheet(item: Binding(get: { pairing.map { Named(name: $0) } }, set: { pairing = $0?.name })) { item in
+                if let offset = day.exercises.firstIndex(where: { $0.id == item.name }) {
+                    SupersetPicker(day: day, offset: offset) { other in day.superset(offset, with: other) }
+                }
             }
             .sheet(isPresented: $adding) {
                 ExercisePicker(catalog: catalog, used: Set(day.exercises.map(\.name))) { ex in
@@ -138,8 +151,13 @@ struct PlanEditorSheet: View {
         return HStack(spacing: 10) {
             status(offset, exercise)
             VStack(alignment: .leading, spacing: 2) {
-                Text(exercise.name).font(.body.weight(.medium)).foregroundStyle(left ? Palette.ink : Palette.muted)
+                HStack(spacing: 0) {
+                    Text(exercise.name).font(.body.weight(.medium)).foregroundStyle(left ? Palette.ink : Palette.muted)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    ExerciseInfoButton(name: exercise.name) { technique = exercise.name }
+                }
                 summaryLine(exercise, work: work.count, reps: reps)
+                if let letter = ExerciseOrder.letter(exercise.superset) { GymTag.superset(letter).padding(.top, 2) }
             }
             Spacer(minLength: 6)
             Menu {
@@ -151,8 +169,8 @@ struct PlanEditorSheet: View {
                 }
                 if ExerciseOrder.letter(exercise.superset) != nil {
                     Button { day.toggleSuperset(at: offset) } label: { Label("Zrušit supersérii", systemImage: "link") }
-                } else if offset + 1 < day.exercises.count {
-                    Button { day.toggleSuperset(at: offset) } label: { Label("Supersérie s dalším cvikem", systemImage: "link") }
+                } else if left, SupersetPicker.offers(day, offset) {
+                    Button { pairing = exercise.id } label: { Label("Supersérie s…", systemImage: "link") }
                 }
             } label: {
                 Image(systemName: "ellipsis").frame(width: 32, height: 32).background(Palette.track, in: Circle()).tapTarget(width: 44, height: 32)
@@ -172,6 +190,12 @@ struct PlanEditorSheet: View {
             .accessibilityLabel("O sérii víc")
         }
         .foregroundStyle(Palette.ink)
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            if left, ExerciseOrder.letter(exercise.superset) == nil, SupersetPicker.offers(day, offset) {
+                Button { pairing = exercise.id } label: { Label("Supersérie", systemImage: "link") }
+                    .tint(Palette.indigo)
+            }
+        }
     }
 
     /// Done (a tick), in progress ("2/4") or not started (an empty circle).
@@ -212,6 +236,59 @@ struct PlanEditorSheet: View {
     static func count(_ value: JSONValue?) -> Int? {
         guard let text = value?.string else { return nil }
         return Int(String(text.prefix { $0.isNumber }))
+    }
+}
+
+/// Supersérie s…: the other exercises of the day not finished yet, to do in
+/// turns with the one swiped; the picked one moves right after it.
+struct SupersetPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    let day: GymDay
+    let offset: Int
+    let pick: (Int) -> Void
+    @State private var technique: String?
+
+    static func candidates(_ day: GymDay, _ offset: Int) -> [Int] {
+        day.exercises.indices.filter { $0 != offset && day.exercises[$0].sets.contains { !$0.done } }
+    }
+
+    static func offers(_ day: GymDay, _ offset: Int) -> Bool { !candidates(day, offset).isEmpty }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(Self.candidates(day, offset), id: \.self) { i in
+                        let exercise = day.exercises[i]
+                        HStack(spacing: 8) {
+                            Button { pick(i); dismiss() } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(exercise.name).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
+                                    Text(PlanEditorSheet.summary(sets: exercise.workCount, reps: exercise.sets.first(where: \.work)?.plannedReps?.nilIfBlank, done: exercise.doneCount))
+                                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.borderless)
+                            ExerciseInfoButton(name: exercise.name) { technique = exercise.name }
+                        }
+                    }
+                } header: {
+                    Text(L10n.f("%@, pak cvik, který vybereš, a teprve potom pauza.", day.exercises[offset].name))
+                        .textCase(nil)
+                } footer: {
+                    Text("Hotové cviky tu nejsou.")
+                }
+            }
+            .navigationTitle("Supersérie s…")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } } }
+            .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
+                TechniqueSheet(exercise: item.name)
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 

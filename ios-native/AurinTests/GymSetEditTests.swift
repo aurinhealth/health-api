@@ -107,6 +107,24 @@ final class GymSetEditTests: XCTestCase {
         XCTAssertEqual(d.exercises[0].sets.filter(\.warmup).count, 3)
     }
 
+    func testASupersetWithAnyExerciseMovesItUnder() {
+        var d = day([row("WORK", "Bench", "1", "60"), row("WORK", "Squat", "1", "80"), row("WORK", "Row", "1", "50"), row("WORK", "Curl", "1", "12")])
+        d.superset(0, with: 2)
+        XCTAssertEqual(d.exercises.map(\.name), ["Bench", "Row", "Squat", "Curl"])
+        XCTAssertEqual(d.exercises.map { ExerciseOrder.letter($0.superset) }, ["A", "A", nil, nil])
+        // One above: it comes down under the one swiped.
+        d.superset(3, with: 2)
+        XCTAssertEqual(d.exercises.map(\.name), ["Bench", "Row", "Curl", "Squat"])
+        XCTAssertEqual(d.exercises.map { ExerciseOrder.letter($0.superset) }, ["A", "A", "B", "B"])
+        // Out of the superset it was in: Bench is left alone.
+        d.superset(3, with: 1)
+        XCTAssertEqual(d.exercises.map(\.name), ["Bench", "Curl", "Squat", "Row"])
+        XCTAssertNil(ExerciseOrder.letter(d.exercises[0].superset))
+        XCTAssertNil(ExerciseOrder.letter(d.exercises[1].superset))
+        XCTAssertEqual(ExerciseOrder.letter(d.exercises[2].superset), ExerciseOrder.letter(d.exercises[3].superset))
+        XCTAssertNotNil(ExerciseOrder.letter(d.exercises[3].superset))
+    }
+
     func testReadyMadePlacesComeOnceToAnAccountWithPlaces() {
         let mine = GymPlace(id: "place-1", kind: "gym", name: "METAGYM", stations: ["dumbbells"], url: "", dumbbellWeights: [])
         let body = GymPlace(id: "place-2", kind: "home", name: L10n.tr("Vlastní váha"), stations: ["floor_mats"], url: "", dumbbellWeights: [])
