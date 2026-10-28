@@ -120,7 +120,7 @@ enum Small {
     }
 
     static func value(_ m: SmallMetric, _ s: WatchSnapshot?, at now: Date) -> SmallValue {
-        let today = s.flatMap { $0.date == Day.key(now) ? $0 : nil }
+        let today = s.flatMap { $0.date == Days.key(now) ? $0 : nil }
         let empty = SmallValue(fraction: 0, color: C.muted, symbol: symbol(m), text: "–", line: name(m) + " –")
         switch m {
         case .readiness:
@@ -130,18 +130,18 @@ enum Small {
         case .sleep:
             guard let minutes = today?.sleep?.minutes, minutes > 0 else { return empty }
             let need = today?.sleep?.need ?? 480
-            return SmallValue(fraction: minutes / max(need, 1), color: C.indigo, symbol: "moon.fill", text: Day.hm(minutes),
-                              line: name(m) + " " + Day.duration(minutes))
+            return SmallValue(fraction: minutes / max(need, 1), color: C.indigo, symbol: "moon.fill", text: Days.hm(minutes),
+                              line: name(m) + " " + Days.duration(minutes))
         case .strain:
             guard let score = today?.strain.score else { return empty }
             let top = max(today?.strain.high ?? 14, score, 1)
-            return SmallValue(fraction: score / top, color: C.amber, symbol: "flame.fill", text: Day.one(score),
-                              line: name(m) + " " + Day.one(score))
+            return SmallValue(fraction: score / top, color: C.amber, symbol: "flame.fill", text: Days.one(score),
+                              line: name(m) + " " + Days.one(score))
         case .calories:
             guard let food = today?.food, let kcal = food.kcal else { return empty }
             let target = food.target ?? 0
             return SmallValue(fraction: target > 0 ? kcal / target : 0, color: C.carbs, symbol: "fork.knife",
-                              text: Day.int(kcal), line: Day.int(kcal) + (target > 0 ? " / " + Day.int(target) : "") + " kcal")
+                              text: Days.int(kcal), line: Days.int(kcal) + (target > 0 ? " / " + Days.int(target) : "") + " kcal")
         case .drinks:
             guard let food = today?.food, let target = food.waterTarget, target > 0 else { return empty }
             let share = (food.water ?? 0) / target
@@ -150,12 +150,12 @@ enum Small {
                               line: name(m) + " \(percent) %")
         case .hrv:
             guard let metric = today?.hrv, let v = metric.value else { return empty }
-            return SmallValue(fraction: band(v, metric), color: C.green, symbol: "waveform.path.ecg", text: Day.int(v),
-                              line: "HRV " + Day.int(v) + " ms")
+            return SmallValue(fraction: band(v, metric), color: C.green, symbol: "waveform.path.ecg", text: Days.int(v),
+                              line: "HRV " + Days.int(v) + " ms")
         case .restingHR:
             guard let metric = today?.restingHR, let v = metric.value else { return empty }
-            return SmallValue(fraction: band(v, metric), color: C.pink, symbol: "heart.fill", text: Day.int(v),
-                              line: name(m) + " " + Day.int(v))
+            return SmallValue(fraction: band(v, metric), color: C.pink, symbol: "heart.fill", text: Days.int(v),
+                              line: name(m) + " " + Days.int(v))
         case .workout:
             return workout(s, at: now) ?? empty
         case .alarm:
@@ -188,13 +188,13 @@ enum Small {
     /// in the evening or once done: tomorrow's.
     static func workout(_ s: WatchSnapshot?, at now: Date) -> SmallValue? {
         guard let s else { return nil }
-        let key = Day.key(now)
+        let key = Days.key(now)
         let week = s.week ?? []
         let todays = week.filter { $0.date == key }
         let evening = Calendar.current.component(.hour, from: now) >= 18
-        if let next = todays.first(where: { !$0.done }), !evening || Day.at(next.time, on: key).map({ $0 > now }) == true {
-            let symbol = Day.sport(next.sport)
-            if let start = Day.at(next.time, on: key) {
+        if let next = todays.first(where: { !$0.done }), !evening || Days.at(next.time, on: key).map({ $0 > now }) == true {
+            let symbol = Days.sport(next.sport)
+            if let start = Days.at(next.time, on: key) {
                 let left = start.timeIntervalSince(now)
                 if left > 3 * 3600 {
                     return SmallValue(fraction: 0, color: C.amber, symbol: symbol, text: next.time ?? "", line: next.title + " " + (next.time ?? ""))
@@ -203,21 +203,21 @@ enum Small {
                     let minutes = Int(left / 60)
                     return SmallValue(fraction: 1 - left / (3 * 3600), color: C.amber, symbol: symbol,
                                       text: String(format: "%d:%02d", minutes / 60, minutes % 60),
-                                      line: next.title + " " + tr("za ", "in ") + Day.duration(Double(minutes)))
+                                      line: next.title + " " + tr("za ", "in ") + Days.duration(Double(minutes)))
                 }
             }
             let length = next.minutes.map { "\($0)′" } ?? ""
             return SmallValue(fraction: 0, color: C.amber, symbol: symbol, text: length, line: next.title + " " + length)
         }
         if !todays.isEmpty, todays.allSatisfy(\.done), !evening {
-            let strain = s.date == key ? s.strain.score.map(Day.one) ?? "" : ""
+            let strain = s.date == key ? s.strain.score.map(Days.one) ?? "" : ""
             return SmallValue(fraction: 1, color: C.green, symbol: "checkmark", text: strain, line: tr("Trénink hotový", "Workout done"))
         }
         // Tomorrow's, in the evening or after today's.
-        guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now).map(Day.key),
+        guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now).map(Days.key),
               let next = week.first(where: { $0.date == tomorrow }) else { return nil }
-        let day = Day.weekday(tomorrow)
-        return SmallValue(fraction: 0, color: C.muted, symbol: Day.sport(next.sport), text: day,
+        let day = Days.weekday(tomorrow)
+        return SmallValue(fraction: 0, color: C.muted, symbol: Days.sport(next.sport), text: day,
                           line: day + " " + next.title + (next.time.map { " " + $0 } ?? ""))
     }
 
@@ -225,20 +225,20 @@ enum Small {
     /// the alarm with the night filling to it; in the morning the sleep.
     static func alarm(_ s: WatchSnapshot?, at now: Date) -> SmallValue? {
         guard let alarm = s?.alarm else { return nil }
-        let key = Day.key(now)
+        let key = Days.key(now)
         let hour = Calendar.current.component(.hour, from: now)
         if hour < 12, let slept = s?.sleep?.minutes, slept > 0, s?.date == key,
-           let end = Day.at(s?.sleep?.end, on: key), now > end {
+           let end = Days.at(s?.sleep?.end, on: key), now > end {
             return SmallValue(fraction: slept / max(s?.sleep?.need ?? 480, 1), color: C.amber, symbol: "sun.max.fill",
-                              text: Day.hm(slept), line: tr("Spánek ", "Slept ") + Day.duration(slept))
+                              text: Days.hm(slept), line: tr("Spánek ", "Slept ") + Days.duration(slept))
         }
         let evening = alarm.evening ?? key
-        guard let bed = Day.at(alarm.bedtime, on: evening) else {
+        guard let bed = Days.at(alarm.bedtime, on: evening) else {
             guard let wake = alarm.wake else { return nil }
             return SmallValue(fraction: 0, color: C.amber, symbol: "alarm.fill", text: wake, line: name(.alarm) + " " + wake)
         }
-        let wakeDay = Calendar.current.date(byAdding: .day, value: 1, to: Day.date(evening) ?? now).map(Day.key) ?? key
-        let wake = Day.at(alarm.wake, on: wakeDay)
+        let wakeDay = Calendar.current.date(byAdding: .day, value: 1, to: Days.date(evening) ?? now).map(Days.key) ?? key
+        let wake = Days.at(alarm.wake, on: wakeDay)
         if now < bed {
             // The day from 7 in the morning to the bedtime.
             let morning = Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: bed) ?? bed.addingTimeInterval(-15 * 3600)
@@ -349,7 +349,7 @@ struct WideView: View {
     let entry: DayEntry
 
     private var today: WatchSnapshot? {
-        entry.snapshot.flatMap { $0.date == Day.key(entry.date) ? $0 : nil }
+        entry.snapshot.flatMap { $0.date == Days.key(entry.date) ? $0 : nil }
     }
 
     var body: some View {
@@ -382,14 +382,14 @@ struct WideView: View {
 
     /// The next workout: its sport, title, start and length, and how long until it starts (T1).
     private var workout: some View {
-        let key = Day.key(entry.date)
+        let key = Days.key(entry.date)
         let week = entry.snapshot?.week ?? []
         let next = week.first { $0.date == key && !$0.done } ?? week.first { $0.date > key }
         return VStack(alignment: .leading, spacing: 2) {
             if let next {
                 HStack(spacing: 4) {
-                    Image(systemName: Day.sport(next.sport)).foregroundStyle(C.amber)
-                    Text(next.date == key ? tr("Dnes", "Today") : Day.weekday(next.date))
+                    Image(systemName: Days.sport(next.sport)).foregroundStyle(C.amber)
+                    Text(next.date == key ? tr("Dnes", "Today") : Days.weekday(next.date))
                         .foregroundStyle(C.amber)
                     if let time = next.time { Text(time).foregroundStyle(.white) }
                 }
@@ -425,8 +425,8 @@ struct WideView: View {
             }
             .font(.system(size: 12, weight: .semibold))
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(food?.kcal == nil ? "–" : Day.int(kcal)).font(.system(size: 18, weight: .semibold, design: .rounded))
-                if let target = food?.target { Text(tr("z ", "of ") + Day.int(target) + " kcal").font(.system(size: 11)).foregroundStyle(C.muted) }
+                Text(food?.kcal == nil ? "–" : Days.int(kcal)).font(.system(size: 18, weight: .semibold, design: .rounded))
+                if let target = food?.target { Text(tr("z ", "of ") + Days.int(target) + " kcal").font(.system(size: 11)).foregroundStyle(C.muted) }
             }
             GeometryReader { g in
                 HStack(spacing: 2) {
@@ -453,7 +453,7 @@ struct WideView: View {
             }
             .font(.system(size: 13, weight: .semibold))
             if let food = today?.food, let target = food.waterTarget {
-                Text(Day.liters(food.water ?? 0) + " / " + Day.liters(target)).font(.system(size: 15, weight: .semibold, design: .rounded))
+                Text(Days.liters(food.water ?? 0) + " / " + Days.liters(target)).font(.system(size: 15, weight: .semibold, design: .rounded))
             }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
@@ -473,7 +473,7 @@ struct WideView: View {
                 Image(systemName: "moon.fill").foregroundStyle(C.indigo)
                 Text(tr("Noc", "Night")).foregroundStyle(C.indigo)
                 Spacer()
-                if let sleep = alarm?.sleep { Text(Day.duration(Double(sleep))).foregroundStyle(.white) }
+                if let sleep = alarm?.sleep { Text(Days.duration(Double(sleep))).foregroundStyle(.white) }
             }
             .font(.system(size: 12, weight: .semibold))
             HStack(spacing: 4) {
@@ -526,7 +526,7 @@ var english: Bool {
 
 func tr(_ czech: String, _ englishText: String) -> String { english ? englishText : czech }
 
-enum Day {
+enum Days {
     static func key(_ date: Date) -> String {
         let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
@@ -593,7 +593,7 @@ enum Day {
 extension WatchSnapshot {
     /// The watch face's gallery before the first Today.
     static var sample: WatchSnapshot {
-        let key = Day.key(Date())
+        let key = Days.key(Date())
         return WatchSnapshot(
             date: key, updated: Date(), language: english ? "en" : "cs", readiness: 78, zone: "green",
             headline: nil, summary: nil,
