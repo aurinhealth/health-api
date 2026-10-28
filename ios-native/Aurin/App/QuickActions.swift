@@ -24,8 +24,9 @@ struct QuickAction: Identifiable, Equatable {
     /// iOS shows at most four of an app's own items.
     static let limit = 4
     static let storageKey = "quickActions.items"
-    /// A glass of water, as in the home-screen widget (AddWaterIntent).
-    static let glassMl = 250
+    /// The user's glass of water, as Siri and Shortcuts add it (AddWaterIntent):
+    /// their smallest water amount, else 250 ml or 8 fl oz.
+    static var glassMl: Int { PendingDrinks.glassMl }
 
     static func list(_ stored: String) -> [QuickAction] {
         Array(stored.split(separator: ",").compactMap { id in all.first { $0.id == id } }.prefix(limit))

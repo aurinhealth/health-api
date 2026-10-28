@@ -32,9 +32,7 @@ final class SourceActions {
         // The time of day in the phone's 12/24-hour format.
         let time = ClockText.format(date)
         if Calendar.current.isDateInToday(date) { return L10n.tr("dnes") + " " + time }
-        let out = DateFormatter()
-        out.locale = Fmt.locale
-        out.dateFormat = L10n.isEnglish ? "MMM d," : "d. M."
+        let out = DateFormatters.make(L10n.isEnglish ? "MMM d," : "d. M.", locale: Fmt.locale)
         return out.string(from: date) + " " + time
     }
 
@@ -303,6 +301,7 @@ struct ServiceConnectSheet: View {
 
 /// A bar that runs while the first import starts (no progress to show yet).
 private struct DownloadBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var moving = false
 
     var body: some View {
@@ -315,7 +314,8 @@ private struct DownloadBar: View {
                 .clipShape(Capsule())
         }
         .frame(height: 6)
-        .onAppear { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { moving = true } }
+        // Reduce Motion: the bar stands still.
+        .onAppear { if !reduceMotion { withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) { moving = true } } }
         .accessibilityHidden(true)
     }
 }

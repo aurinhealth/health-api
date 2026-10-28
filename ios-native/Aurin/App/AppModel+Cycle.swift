@@ -6,7 +6,8 @@ import Foundation
 extension AppModel {
     func loadCycle(month: String? = nil) async {
         guard !demo, phase == .signedIn else { return }
-        guard let response = try? await api.cycle(month: month) else { return }
+        let account = signInRound
+        guard let response = try? await api.cycle(month: month), stillSignedIn(account) else { return }
         cycle = response
         Reminders.storePill(response.enabled ? response.settings : nil)
         if response.enabled && !cycleHealthSynced {

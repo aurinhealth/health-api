@@ -145,11 +145,22 @@ final class HeartRateSensor: NSObject {
         peripheral.discoverServices([Self.service])
     }
 
-    fileprivate func didDisconnect(_ peripheral: CBPeripheral) {
+    /// failed: the connection did not even start (a strap that turns it down
+    /// at once); the next try waits a few seconds instead of looping.
+    fileprivate func didDisconnect(_ peripheral: CBPeripheral, failed: Bool = false) {
         guard peripheral.identifier == active?.identifier else { return }
         connected = false
         // Out of range for a moment: keep trying while the workout runs.
-        if wantsConnect, let central { central.connect(peripheral, options: nil) }
+        guard failed else {
+            if wantsConnect, let central { central.connect(peripheral, options: nil) }
+            return
+        }
+        let id = peripheral.identifier
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard let self, self.wantsConnect, !self.connected, let active = self.active, active.identifier == id, let central = self.central else { return }
+            central.connect(active, options: nil)
+        }
     }
 
     fileprivate func beat(_ value: Double) {
@@ -193,7 +204,7 @@ extension HeartRateSensor: CBCentralManagerDelegate, CBPeripheralDelegate {
 
     nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         nonisolated(unsafe) let peripheral = peripheral
-        MainActor.assumeIsolated { didDisconnect(peripheral) }
+        MainActor.assumeIsolated { didDisconnect(peripheral, failed: true) }
     }
 
     nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {

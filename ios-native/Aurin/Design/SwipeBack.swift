@@ -10,7 +10,10 @@ extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
     }
 
     public func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        gestureRecognizer == interactivePopGestureRecognizer ? viewControllers.count > 1 : true
+        guard gestureRecognizer == interactivePopGestureRecognizer else { return true }
+        // Not while a push or pop still animates: a swipe then left the stack
+        // half popped and the screen frozen.
+        return viewControllers.count > 1 && transitionCoordinator == nil
     }
 
 }
