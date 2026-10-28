@@ -555,3 +555,22 @@ test('the classic hyperextension is called so, trains the lower back and keeps t
   assert.ok(names.includes('Hyperextension') || names.includes('Dumbbell Back Extension'));
   assert.ok(!names.includes('Supermans') && !names.includes('Dumbbell Superman'));
 });
+
+test('bands, the floor and Cossack squats stand in only when the place has nothing better', async () => {
+  const { isStandIn } = await import('../src/strength-generator.js');
+  const { METAGYM_KUTNA_HORA, OTHER_STATIONS } = await import('../src/gym-equipment.js');
+  assert.ok(isStandIn('Band Leg Curl') && isStandIn('Supermans') && isStandIn('Dumbbell Cossack Squat'));
+  assert.ok(!isStandIn('Prone leg curl Prime') && !isStandIn('Hyperextension') && !isStandIn('DB Bulgarian split squat'));
+  const everything = { equipment: 'custom', stations: [...Object.keys(METAGYM_KUTNA_HORA.stations), ...Object.keys(OTHER_STATIONS)] };
+  // Eight weeks of three sessions in a fully equipped gym, each one done as planned.
+  const history = [], seen = new Set();
+  for (let i = 0, day = Date.parse('2026-09-01T12:00:00Z'); i < 24; i++, day += 86400000 * (i % 3 ? 2 : 3)) {
+    const date = new Date(day).toISOString().slice(0, 10);
+    const plan = generateStrengthPlan({ date, trainingSetup: everything, strength: { recentCompletedSets: history.slice(), plannedSessions: [] }, profile: {} }, { durationMinutes: 75 });
+    for (const ex of new Set(plan.rows.filter(r => r[0] === 'WORK').map(r => r[1]))) { seen.add(ex); history.push({ exercise: ex, workout_date: date, type: 'WORK', reps: 10, kg: 20 }); }
+  }
+  assert.deepEqual([...seen].filter(isStandIn), []);
+  // At home with dumbbells and bands, the band exercises still come.
+  const home = generateStrengthPlan({ date: '2026-10-28', trainingSetup: { equipment: 'home', stations: ['dumbbells', 'adjustable_bench', 'resistance_bands', 'floor_mats'] }, strength: { recentCompletedSets: [], plannedSessions: [] }, profile: {} }, { durationMinutes: 75, focus: 'lower' });
+  assert.ok(home.rows.some(r => r[1] === 'Band Leg Curl'));
+});

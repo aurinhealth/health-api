@@ -964,6 +964,15 @@ export function stalledExercises(rows, date) {
 // The athlete's thumbs (exercise-feedback.js): disliked exercises are left
 // out while the pattern or group has another one; a liked one wins a close call.
 const LIKED_BONUS = 0.4;
+// Bands, a ball or the floor stand in when the place has nothing better, and
+// so do the Cossack squats (tagged as inner thighs, a muscle the main leg
+// exercises never count, so they always looked the freshest). Elsewhere they
+// wait behind the loaded exercises of their pattern; where every candidate is
+// one of them (home, body weight) the order stays as before.
+const STAND_IN_STATIONS = new Set(["resistance_bands", "mini_band", "floor_mats", "gym_ball"]);
+const STAND_IN_EXERCISES = new Set(["Dumbbell Cossack Squat", "Cossack Squat"]);
+const STAND_IN_PENALTY = 3;
+export const isStandIn = name => STAND_IN_EXERCISES.has(name) || (EXERCISE_STATIONS[name]?.length > 0 && EXERCISE_STATIONS[name].every(id => STAND_IN_STATIONS.has(id)));
 function taste(options) {
   return { liked: new Set((options.likedExercises || []).map(normalizeExerciseName)), disliked: new Set((options.dislikedExercises || []).map(normalizeExerciseName)) };
 }
@@ -1003,7 +1012,7 @@ function choosePlan(context, options = {}) {
   const score = (ex, rank = 0, withStall = true) => {
     const def = EXERCISES[ex], last = lastExerciseDate.get(ex);
     const recent = last && daysBetween(last, context.date) <= 4 ? 3 : 0;
-    return recent + groupRecency(ex) + (adjacentGroups.has(groupOf[ex]) ? 6 : 0) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
+    return recent + groupRecency(ex) + (adjacentGroups.has(groupOf[ex]) ? 6 : 0) + (muscleExposure.get(def?.muscle) || 0) * 0.3 + (muscleLoad.get(def?.muscle) || 0) * 0.2 + rank * 0.05 + (emphasis[def?.muscle] || 0) + (usedPatterns.has(def?.pattern) ? 1 : 0) + (withStall && stalled.has(ex) ? 3 : 0) + (isStandIn(ex) ? STAND_IN_PENALTY : 0) - (liked.has(ex) ? LIKED_BONUS : 0);
   };
 
   // Only a close call between variants: recency and muscle load still decide.
@@ -1434,7 +1443,7 @@ export function generateStrengthPlan(context, options = {}) {
       // The group's list is curated main movement first (hip thrust before
       // abduction), so its order breaks near ties.
       const order = FOCUS_GROUPS[group].exercises.indexOf(name) * .05;
-      return recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1 + order + (withStall && stalled.has(name) ? 3 : 0) - (liked.has(name) ? LIKED_BONUS : 0);
+      return recent + (weeklyExposure.get(def.muscle) || 0) * .3 + (weeklyLoad.get(def.muscle) || 0) * .2 + legPenalty + def.fatigue * .1 + order + (withStall && stalled.has(name) ? 3 : 0) + (isStandIn(name) ? STAND_IN_PENALTY : 0) - (liked.has(name) ? LIKED_BONUS : 0);
     };
     const ranked = candidates.slice().sort((a, b) => score(a) - score(b)), best = ranked[0], plain = candidates.slice().sort((a, b) => score(a, false) - score(b, false))[0];
     if (plain !== best && stalled.has(plain)) stallSwaps[best] = plain;
@@ -1470,9 +1479,10 @@ export function generateStrengthPlan(context, options = {}) {
   }
 
   // A main exercise with variants (variantOf): the same one for five weeks,
-  // then the next one the athlete's equipment allows.
+  // then the next one the athlete's equipment allows. A band or floor variant
+  // takes a turn only for an exercise that is a stand-in itself.
   const fits = name => availableAt(name) && fitsEquipment(name, context.trainingSetup) && !excluded.has(name) && !disliked.has(name);
-  exercises = [...new Set(exercises.map(ex => variantFor(ex, context.date, fits)))];
+  exercises = [...new Set(exercises.map(ex => variantFor(ex, context.date, name => fits(name) && (!isStandIn(name) || isStandIn(ex)))))];
 
   // Warm-up exercises must be the first exercises of the session. Keep the
   // relative order otherwise, so each exercise's warm-up sets stay immediately
