@@ -38,7 +38,9 @@ enum GymSessionMath {
     /// Short of the plan's reps, or to failure on a lighter plan (F on M):
     /// the weight the estimated max allows for the plan's reps and letter, to
     /// the nearest 2.5 kg. Well over the reps, or far easier than planned (E on
-    /// H): one 2.5 kg step up. Otherwise nil: the next set copies this one.
+    /// H): one 2.5 kg step up, but never when the athlete rated the set harder
+    /// than the next one is planned (15 reps at M before an E set): the letter
+    /// says more than the reps. Otherwise nil: the next set copies this one.
     static func adjustment(_ set: GymSet, after before: GymSet) -> Adjustment? {
         guard set.work, before.work, before.done,
               let kg = before.kg.flatMap(LiftWeight.number), kg > 0,
@@ -54,7 +56,7 @@ enum GymSessionMath {
             guard fits < kg, fits > 0 else { return nil }
             return Adjustment(kg: GymCoach.kgText(fits), lighter: true)
         }
-        if done >= Double(range.hi + 2) || (done >= Double(range.hi) && reserve >= planned + 2) {
+        if reserve >= planned, done >= Double(range.hi + 2) || (done >= Double(range.hi) && reserve >= planned + 2) {
             return Adjustment(kg: GymCoach.kgText(GymCoach.roundLoad(kg + GymCoach.step)), lighter: false)
         }
         return nil
@@ -208,7 +210,9 @@ struct GymSetRow: View {
     let state: Phase
     var kgText: Binding<String>? = nil
     var repsText: Binding<String>? = nil
-    /// The planned reps ("5–8") shown in the empty field of the set at hand.
+    /// The weight it would take ("17,5") and the planned reps ("5–8"), shown
+    /// in the empty fields of the set at hand.
+    var kgHint: String? = nil
     var repsHint: String? = nil
     /// A drop set: "↳" under the set it follows.
     var drop = false
@@ -245,7 +249,7 @@ struct GymSetRow: View {
             }
             Text(lastTime ?? "—").font(.footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg)
+            field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg, hint: kgHint)
             field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps, hint: repsHint).frame(width: repsWidth)
             if let onIntensity {
                 Button(action: onIntensity) {
