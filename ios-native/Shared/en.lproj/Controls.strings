@@ -1,0 +1,7 @@
+/* Control Center and Lock Screen controls (AurinWidgets/ControlWidgets.swift): names and descriptions iOS shows in its gallery. */
+"Voda" = "Water";
+"Přidá sklenici vody do dnešního pití." = "Adds a glass of water to today's drinks.";
+"Začít posilovnu" = "Start gym";
+"Otevře dnešní trénink v posilovně." = "Opens today's gym workout.";
+"Přeskočit pauzu" = "Skip rest";
+"Ukončí pauzu v posilovně, která právě běží." = "Ends the rest of the gym workout running now.";
