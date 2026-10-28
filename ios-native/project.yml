@@ -212,6 +212,10 @@ targets:
         buildPhase: resources
       - path: Aurin/Resources/Fonts/Newsreader-Regular.ttf
         buildPhase: resources
+      - path: AurinWatchWidgets/ComplicationShelf.swift
+    # The complications on the watch face, in the watch app's PlugIns.
+    dependencies:
+      - target: AurinWatchWidgets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.watchkitapp
@@ -226,6 +230,12 @@ targets:
       properties:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
+        # Today for the complications (ComplicationShelf) and the sign-in
+        # (WatchAPI) in one Keychain group with AurinWatchWidgets: no App
+        # Group to register. The team comes in from the environment at
+        # xcodegen (APPLE_TEAM_ID), as the archive is signed ad hoc first.
+        keychain-access-groups:
+          - ${APPLE_TEAM_ID}.health.aurin.watch
     info:
       path: AurinWatch/Info.plist
       properties:
@@ -244,6 +254,34 @@ targets:
         UIAppFonts:
           - InstrumentSerif-Regular.ttf
           - Newsreader-Regular.ttf
+  # The watch face's complications (AurinWatchWidgets/): the last Today the
+  # watch app got, read from the Keychain group they share.
+  AurinWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: AurinWatchWidgets
+      - path: WatchShared/WatchSnapshot.swift
+    entitlements:
+      path: AurinWatchWidgets/AurinWatchWidgets.entitlements
+      properties:
+        keychain-access-groups:
+          - ${APPLE_TEAM_ID}.health.aurin.watch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.watchkitapp.widgets
+        PRODUCT_NAME: AurinWatchWidgets
+        TARGETED_DEVICE_FAMILY: "4"
+        SKIP_INSTALL: YES
+    info:
+      path: AurinWatchWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Aurin
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
   AurinTests:
     type: bundle.unit-test
     platform: iOS

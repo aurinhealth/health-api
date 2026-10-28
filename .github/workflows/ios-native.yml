@@ -54,7 +54,11 @@ jobs:
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
           xcodebuild -version
 
+      # The team goes into the watch's Keychain group (project.yml); a
+      # placeholder is enough for the simulator and the unsigned build.
       - name: Generate the Xcode project
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || 'SIMULATOR' }}
         run: |
           brew install xcodegen
           xcodegen generate
@@ -168,6 +172,7 @@ jobs:
           app=ipa/Payload/Aurin.app
           codesign --force --sign - --entitlements AurinWidgets/AurinWidgets.entitlements "$app/PlugIns/AurinWidgets.appex"
           codesign --force --sign - "$app/PlugIns/AurinNotifications.appex"
+          codesign --force --sign - --entitlements AurinWatchWidgets/AurinWatchWidgets.entitlements "$app/Watch/AurinWatch.app/PlugIns/AurinWatchWidgets.appex"
           codesign --force --sign - --entitlements AurinWatch/AurinWatch.entitlements "$app/Watch/AurinWatch.app"
           codesign --force --sign - --entitlements Aurin/Aurin.entitlements "$app"
           (cd ipa && zip -qry "$GITHUB_WORKSPACE/Aurin-unsigned.ipa" Payload)

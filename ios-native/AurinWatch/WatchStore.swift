@@ -1,5 +1,6 @@
 import Foundation
 import WatchConnectivity
+import WidgetKit
 
 /// Today from the iPhone (App/WatchBridge.swift): the application context it
 /// sends after every refresh, kept on the watch so the app opens with the last one.
@@ -44,6 +45,8 @@ final class WatchStore: NSObject, ObservableObject {
             // The iPhone signed out.
             snapshot = nil
             UserDefaults.standard.removeObject(forKey: Self.savedKey)
+            ComplicationShelf.clear()
+            WidgetCenter.shared.reloadAllTimelines()
             return
         }
         guard let value = WatchSnapshot.decode(data) else { return }
@@ -51,6 +54,9 @@ final class WatchStore: NSObject, ObservableObject {
         snapshot = value
         UserDefaults.standard.set(data, forKey: Self.savedKey)
         WatchAlarm.shared.schedule()
+        // The watch face draws the same day (AurinWatchWidgets).
+        ComplicationShelf.save(value)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     func receive(settings data: Data) {
@@ -69,6 +75,9 @@ final class WatchStore: NSObject, ObservableObject {
             value.updated = Date()
             snapshot = value
             if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
+            ComplicationShelf.save(value)
+            WidgetCenter.shared.reloadTimelines(ofKind: "aurin.small.drinks")
+            WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.drinks")
         }
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
