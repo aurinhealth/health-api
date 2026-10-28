@@ -37,7 +37,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     defaults:
       run:
@@ -46,11 +46,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      # The newest Xcode on the runner: with Xcode 26 the iOS 26 SDK brings
-      # AlarmKit (the alarm in Nastavení → Spánek); older Xcode builds without it.
+      # Xcode 26.5 on the macOS 26 runner (macos-15 stops at Xcode 26.3); if the
+      # image ever drops it, the newest stable Xcode 26. Xcode 26 brings the iOS 26
+      # SDK with AlarmKit (the alarm in Nastavení → Spánek).
       - name: Pick Xcode
         run: |
-          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi -e beta -e release_candidate | sort -V | tail -1)
+          xcode=/Applications/Xcode_26.5.app
+          [ -d "$xcode" ] || xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi -e beta -e release_candidate | sort -V | tail -1)
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
           xcodebuild -version
 
@@ -67,7 +69,7 @@ jobs:
           import json, sys
           devices = json.load(sys.stdin)["devices"]
           phones = [d for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith("iPhone")]
-          pick = next((d for d in phones if d["name"] in ("iPhone 16", "iPhone 16 Pro", "iPhone 15")), phones[0])
+          pick = next((d for d in phones if d["name"] in ("iPhone 16", "iPhone 16 Pro", "iPhone 17", "iPhone 17 Pro")), phones[0])
           print(pick["udid"])')
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
