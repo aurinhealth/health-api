@@ -200,7 +200,7 @@ final class SnapshotTests: XCTestCase {
         }
         XCTAssertEqual(L10n.tr("Spánek"), "Sleep")
         XCTAssertEqual(L10n.tr("text bez překladu"), "text bez překladu")
-        XCTAssertEqual(Fmt.plural(5, "den", "dny", "dní"), "days")
+        XCTAssertEqual(L10n.plural("dní", 5), "days")
         XCTAssertEqual(Units.weightText(100, digits: 0), "220 lb")
         XCTAssertEqual(Units.distanceText(10), "6.2 mi")
         // Every translation keeps the placeholders of its Czech key.
@@ -289,7 +289,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(Fmt.dayMonth("2026-11-01"), "1. listopadu")
         XCTAssertEqual(Fmt.relativeDay("2026-10-10", today: "2026-10-08"), "v sobotu")
         XCTAssertEqual(Fmt.duration(75), "1 h 15 min")
-        XCTAssertEqual(Fmt.plural(24, "den", "dny", "dní"), "dní")
+        XCTAssertEqual(L10n.plural("dní", 24), "dní")
     }
 
     func testSignInScreen() throws {

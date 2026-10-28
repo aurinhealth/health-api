@@ -45,7 +45,8 @@ struct GymStretching: Codable, Equatable {
         /// "2 × 30 s na stranu", "45 s", "3 min".
         var duration: String {
             let time = seconds >= 120 && seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds) s"
-            return (rounds > 1 ? "\(rounds) × " : "") + time + (sides ? " " + L10n.tr("na stranu") : "")
+            let each = sides ? L10n.f("%@ na stranu", time) : time
+            return (rounds > 1 ? "\(rounds) × " : "") + each
         }
 
         var photoURLs: [URL] { photos.compactMap(URL.init(string:)) }
@@ -459,7 +460,7 @@ struct GymPreferences: Decodable, Equatable {
         /// "30 s", "20 s na stranu", "5 min".
         var duration: String {
             let time = seconds >= 120 && seconds % 60 == 0 ? "\(seconds / 60) min" : "\(seconds) s"
-            return time + (sides == true ? " " + L10n.tr("na stranu") : "")
+            return sides == true ? L10n.f("%@ na stranu", time) : time
         }
     }
 

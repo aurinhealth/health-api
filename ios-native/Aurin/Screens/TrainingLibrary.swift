@@ -258,8 +258,7 @@ struct WorkoutLibrarySection: View {
                 Text(composeShown ? "V knihovně tomuto výběru nic neodpovídá." : "Těmto filtrům nic neodpovídá. Zkus delší toleranci délky nebo jinou obtížnost.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 20)
             } else {
-                Text(composeShown ? L10n.f("Z knihovny · %@ %@", String(workouts.count), Fmt.plural(workouts.count, "trénink", "tréninky", "tréninků"))
-                                  : L10n.f("%@ %@", String(workouts.count), Fmt.plural(workouts.count, "trénink", "tréninky", "tréninků")))
+                Text(L10n.plural(composeShown ? "Z knihovny · %lld tréninků" : "%lld tréninků", workouts.count))
                     .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 20)
                 VStack(spacing: 10) {
                     ForEach(workouts) { w in
@@ -716,7 +715,7 @@ struct ExerciseCatalog: View {
             } else if let error {
                 Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 16)
             } else {
-                Text(L10n.f("%@ %@", String(filtered.count), Fmt.plural(filtered.count, "cvik", "cviky", "cviků")))
+                Text(L10n.plural("%lld cviků", filtered.count))
                     .font(Typo.caption).foregroundStyle(Palette.faint).padding(.top, 16)
                 LazyVStack(spacing: 0) {
                     ForEach(filtered) { ex in

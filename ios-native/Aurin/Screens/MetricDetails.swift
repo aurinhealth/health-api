@@ -27,13 +27,13 @@ struct MetricDetailView: View {
         switch metric {
         case .hrv:
             let h = health.hrv
-            var line: String? = h?.value.map { L10n.tr("Dnes") + " " + Fmt.int($0) + " ms" }
+            var line: String? = h?.value.map { L10n.f("Dnes %@ ms", Fmt.int($0)) }
             if let line0 = line, let low = h?.low, let high = h?.high { line = line0 + " · " + L10n.f("normál %@–%@ ms", Fmt.int(low), Fmt.int(high)) }
             let isLow = h?.value != nil && h?.low != nil && h!.value! < h!.low!
             return .metric(metric, line: line, low: isLow, date: health.date)
         case .restingHR:
             let r = health.restingHR
-            var line: String? = r?.value.map { L10n.tr("Dnes") + " " + Fmt.int($0) + " bpm" }
+            var line: String? = r?.value.map { L10n.f("Dnes %@ bpm", Fmt.int($0)) }
             if let line0 = line, let base = r?.baseline { line = line0 + " · " + L10n.f("normál %@ bpm", Fmt.int(base)) }
             let high = r?.value != nil && r?.baseline != nil && r!.value! > r!.baseline! + 3
             return .metric(metric, line: line, low: high, date: health.date)
@@ -77,7 +77,7 @@ struct MetricDetailContent: View {
             MetricHeadline(caption: "Variabilita srdečního tepu v noci", value: Fmt.int(hrv.value ?? hrv.series.last?.value), unit: "ms",
                            status: hrv.value.flatMap { v in hrv.low.flatMap { low in hrv.high.map { MetricStatus.compare(v, low: low, high: $0, worseAbove: false) } } })
             if let value = hrv.value, let low = hrv.low, let high = hrv.high, high > low {
-                DetailRange(value: value, low: low, high: high, label: L10n.f("tvůj normál %@", Fmt.int(low) + "–" + Fmt.int(high) + " ms"))
+                DetailRange(value: value, low: low, high: high, label: L10n.f("tvůj normál %@–%@ ms", Fmt.int(low), Fmt.int(high)))
                     .padding(.top, 14)
             }
             MetricChart(title: "HRV po nocích", color: Palette.green) {
@@ -99,7 +99,7 @@ struct MetricDetailContent: View {
                            status: rhr.value.flatMap { v in rhr.baseline.map { MetricStatus.compare(v, low: $0 - 2, high: $0 + 2, worseAbove: true) } })
             if let value = rhr.value, let base = rhr.baseline {
                 DetailRange(value: value, low: base - 2, high: base + 2,
-                            label: L10n.f("tvůj normál %@", Fmt.int(base - 2) + "–" + Fmt.int(base + 2) + " bpm"), worseAbove: true)
+                            label: L10n.f("tvůj normál %@–%@ bpm", Fmt.int(base - 2), Fmt.int(base + 2)), worseAbove: true)
                     .padding(.top, 14)
             }
             MetricChart(title: "Klidový tep po dnech", color: Palette.rust) {
@@ -130,7 +130,7 @@ struct MetricDetailContent: View {
                                ?? MetricStatus(text: L10n.tr(r.elevated ? "zrychlený" : "v normě"), color: r.elevated ? Palette.rust : Palette.green))
             if let base = r.baseline {
                 DetailRange(value: r.value, low: base - 0.5, high: base + 0.5,
-                            label: L10n.f("tvůj normál %@", Fmt.decimal(base - 0.5) + "–" + Fmt.decimal(base + 0.5) + " /min"), worseAbove: true)
+                            label: L10n.f("tvůj normál %@–%@ /min", Fmt.decimal(base - 0.5), Fmt.decimal(base + 0.5)), worseAbove: true)
                     .padding(.top, 14)
             }
             MetricChart(title: "Dech po nocích", color: Palette.green) {

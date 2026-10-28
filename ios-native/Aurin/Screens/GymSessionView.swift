@@ -311,8 +311,7 @@ struct GymSessionView: View {
     private func progress(_ day: GymDay) -> some View {
         let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
         return VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.f("%@/%@ %@ · %@ %@", String(done), String(total), Fmt.plural(total, "série", "sérií", "sérií"),
-                        String(day.exercises.count), Fmt.plural(day.exercises.count, "cvik", "cviky", "cviků")))
+            Text(L10n.plural("%lld/%lld sérií · %lld cviků", done, total, day.exercises.count))
                 .font(Typo.small).foregroundStyle(Palette.muted)
             ProgressLine(fraction: total > 0 ? Double(done) / Double(total) : 0, color: Palette.amberBar, height: 4)
         }
@@ -446,7 +445,7 @@ struct ExerciseCard: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(exercise.name).font(.headline).foregroundStyle(Palette.ink)
-                    Text("\(exercise.doneCount)/\(exercise.workCount) " + Fmt.plural(exercise.workCount, "série", "série", "sérií"))
+                    Text(L10n.plural("%lld/%lld sérií", exercise.doneCount, exercise.workCount))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     if !failure.isEmpty { GymTag.failure.padding(.top, 4) }
                     // No weight to start from (an exercise the app doesn't know): the test set's advice.

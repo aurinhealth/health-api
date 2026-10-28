@@ -270,7 +270,7 @@ struct RecoveryRoutineView: View {
     private var subtitle: String {
         let minutes = item.routine?.minutes.map { "\($0) min" }
         let count = exercises.count
-        let moves = "\(count) " + Fmt.plural(count, "cvik", "cviky", "cviků")
+        let moves = L10n.plural("%lld cviků", count)
         return [minutes, moves].compactMap { $0 }.joined(separator: " · ")
     }
 

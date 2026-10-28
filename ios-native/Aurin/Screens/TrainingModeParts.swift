@@ -145,7 +145,7 @@ enum GymSessionMath {
         let repsNow = now.filter { $0.kg == top }.compactMap(\.reps).max() ?? 0
         let repsBefore = last.sets.filter { $0.kg == before }.compactMap(\.reps).max() ?? 0
         if repsNow != repsBefore {
-            return (Fmt.signed(repsNow - repsBefore) + " " + L10n.tr("op."), repsNow > repsBefore)
+            return (L10n.f("%@ op.", Fmt.signed(repsNow - repsBefore)), repsNow > repsBefore)
         }
         return ("=", nil)
     }
@@ -435,7 +435,7 @@ struct MuscleProgressCard: View {
             HStack {
                 Text("Celkem dnes").font(Typo.small).foregroundStyle(Palette.muted)
                 Spacer()
-                Text(verbatim: L10n.f("%@ z %@", String(total.done), String(total.planned)) + " " + Fmt.plural(total.planned, "série", "série", "sérií"))
+                Text(verbatim: L10n.plural("%lld z %lld sérií", total.done, total.planned))
                     .font(Typo.small).foregroundStyle(Palette.muted).monospacedDigit()
             }
             HStack(spacing: 10) {
@@ -633,7 +633,7 @@ struct MinimizedGymBar: View {
     private func line(at now: Date) -> String? {
         if let end = gym.restEnd, end > now {
             let s = Int(end.timeIntervalSince(now).rounded(.up))
-            let rest = L10n.tr("Pauza") + " " + String(format: "%d:%02d", s / 60, s % 60)
+            let rest = L10n.f("Pauza %@", String(format: "%d:%02d", s / 60, s % 60))
             return gym.next.map { rest + " · " + L10n.f("další %@", $0) } ?? rest
         }
         return gym.next

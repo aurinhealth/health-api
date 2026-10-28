@@ -146,8 +146,8 @@ struct AppIconUnlock {
     static func lockNote(_ icon: AppIconChoice) -> String {
         switch icon.rule {
         case .runKm(let km), .rideKm(let km): return distance(km)
-        case .gym(let n): return "\(Fmt.int(Double(n))) " + L10n.tr(Fmt.plural(n, "trénink", "tréninky", "tréninků"))
-        case .streak(let n): return "\(n) " + L10n.tr(Fmt.plural(n, "den", "dny", "dní"))
+        case .gym(let n): return L10n.plural("%lld tréninků", n)
+        case .streak(let n): return L10n.plural("%lld dní", n)
         case .season(let s): return L10n.tr(["jen na jaře", "jen v létě", "jen na podzim", "jen v zimě"][s])
         default: return ""
         }

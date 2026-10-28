@@ -90,7 +90,7 @@ struct WeekSessionDraft: Identifiable, Equatable {
                     next.kind = eased.kind
                     next.focus = eased.focus
                     next.label = kindLabel(eased.kind)
-                    next.note = L10n.tr("Kouč nechal trénink lehčí") + (eased.why.map { ": " + $0 } ?? "") + "."
+                    next.note = eased.why.map { L10n.f("Kouč nechal trénink lehčí: %@.", $0) } ?? L10n.tr("Kouč nechal trénink lehčí.")
                 }
             }
             next.status = .ready
