@@ -3,6 +3,7 @@
 import { initialImport } from "./account-sync.js";
 import { onboardingStatus, completeOnboarding } from "./onboarding.js";
 import { subscriptionStatus } from "./subscription.js";
+import { appAccountToken, saveAppTransaction, storePurchase } from "./app-store.js";
 import { coachAllowance } from "./coach-allowance.js";
 import { consentStatus, saveConsent } from "./consent.js";
 import { missingProviders, connectionEnvironment, deleteConnectionSecret } from "./connection-secrets.js";
@@ -92,7 +93,18 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     }catch(error){return Response.json({message:error.message},{status:400});}
   }
   // With the week's coach messages, which Settings → Aurin Pro shows from 75 % on (coach-allowance.js).
-  if(url.pathname==='/app/api/subscription'&&request.method==='GET')return Response.json({...await subscriptionStatus(env),coachAllowance:await coachAllowance(env).catch(()=>null)},{headers:{'Cache-Control':'no-store'}});
+  // The purchase as the App Store last told it, and the account's appAccountToken for the next one (app-store.js).
+  if(url.pathname==='/app/api/subscription'&&request.method==='GET'){
+    const store=session.signedIn?await Promise.all([appAccountToken(env),storePurchase(env)]).catch(error=>{console.error('App Store row failed',error.message);return [null,null];}):[null,null];
+    return Response.json({...await subscriptionStatus(env),coachAllowance:await coachAllowance(env).catch(()=>null),appAccountToken:store[0],purchase:store[1]},{headers:{'Cache-Control':'no-store'}});
+  }
+  // A signed transaction the app saw: a purchase, a renewal, a restore or a redeemed code.
+  if(url.pathname==='/app/api/subscription/transaction'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{return Response.json(await saveAppTransaction(env,await request.json().catch(()=>({}))),{headers:{'Cache-Control':'no-store'}});}
+    catch(error){if(error.status)return Response.json({status:'error',message:error.message},{status:error.status});throw error;}
+  }
   if(url.pathname==='/app/api/onboarding'){
     if(request.method==='GET')return Response.json(await onboardingStatus(env),{headers:{'Cache-Control':'no-store'}});
     if(request.method==='POST'){

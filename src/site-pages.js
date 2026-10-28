@@ -687,7 +687,7 @@ function pageLang(request, czech = false) {
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '27. října 2026', en: '27 October 2026'};
+const UPDATED = {cs: '28. října 2026', en: '28 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -876,7 +876,7 @@ ${layer('wide')}${layer('tall')}
   const faq = [
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
-    ['What does it cost?', 'Nothing during testing. The price after the release is not set yet; you will see it in the App Store before you buy, and Apple handles the purchase.'],
+    ['What does it cost?', 'Nothing during testing. After the release, the coach, food from a photo and reviews come with Aurin Pro: CZK 199 a month or CZK 1,490 a year with the first week free, in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
     ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
     ['Can I delete my data?', 'Yes. In Settings → Privacy &amp; data you can download all your data or delete your account with everything in it.'],
@@ -1008,6 +1008,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <p><strong>The calendar on your iPhone</strong>, only if you turn on Read calendar: the app reads your events on the phone and sends us only the number of minutes free for training on each day of the next two weeks, never the events, their names or times. We keep these numbers for up to a week after the day and delete them when you turn reading off. If you turn on Add workouts, the app writes your planned workouts into the calendar on your phone.</p>
 <p><strong>What you enter in Aurin:</strong> your profile (such as age, height, weight, sports, goals and the time you have for training) and the profile photo if you add one, food and drinks, workouts and how they went, notes, your journal answers (such as alcohol, caffeine, sauna or how you felt), and your conversations with the assistant. A photo you send the coach goes to OpenAI with that one message (see below) and is not stored; the conversation keeps only a note that a photo was there. We count the messages you send the coach each week, to keep the service fair for everyone.</p>
 <p><strong>What you send us from Settings → Help:</strong> a problem report with what you write, a screenshot if you add one and, if you leave it on, the app’s diagnostics (app and iOS version, your connections and their last errors, failed requests and crashes, never your health data), or a feature idea with the app version. We keep them to answer you and fix the problem, and they are deleted with your account.</p>
+<p><strong>Aurin Pro bought in the app:</strong> Apple handles the payment and we never see your payment details. With each purchase, renewal, refund or cancellation the App Store sends us a signed record of it: its identifiers, the plan, when it started and when it renews or ends, whether it renews and whether it was refunded, and the random identifier of your Aurin account that the app gives the purchase. We use it only to unlock Aurin Pro for your account, and it is deleted with your account.</p>
 <p><strong>The waitlist on our website:</strong> when you join it, we keep the email address you enter and when you joined. We use it only to let you test Aurin through Apple’s TestFlight; we send no newsletters to it.</p>
 <p><strong>On your device:</strong> a sign-in cookie valid for up to 30 days, a short-lived cookie that protects signing in, a cookie kept for up to a year after you sign in with an email code, which holds no personal data and only lets this device keep signing in when someone else enters wrong codes for your email, cookies with your theme and language and, in the browser’s storage, a copy of the last loaded day and a few display settings so the app opens instantly, and, once you add or use a passkey, your email with the passkey’s identifier, so this device signs you in with it instead of sending a code. We use no advertising or tracking cookies.</p>
 <p><strong>Technical logs:</strong> our hosting provider records technical details of requests (such as time, IP address, page and errors) to keep the service running and secure. These logs are kept for a few days.</p>
@@ -1051,6 +1052,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data, including data from a connected Ultrahuman Ring or WHOOP. OpenAI processes it on our behalf under its API data processing terms: it does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse, unless the law requires it to keep it longer.</li>
 <li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''} On the website, Cloudflare Turnstile checks that the waitlist form is sent by a person. For that it reads technical details of your browser and sets no tracking cookies.</li>
 <li><strong>Apple</strong>, if you allow notifications (Settings → Notifications): your iPhone’s notification token and the text of each notification, such as the morning readiness or a note from the coach, which Apple’s push service delivers to your iPhone. Turning notifications off or signing out removes the token.</li>
+<li><strong>Apple</strong>, when you buy Aurin Pro: the random identifier of your Aurin account that the app adds to the purchase, so the App Store’s records of it reach the right account. Apple handles the purchase under its own privacy policy.</li>
 <li><strong>Apple</strong>, when we add you to the testers from the waitlist: your email address, so that TestFlight emails you how to install Aurin. Apple handles it under its own privacy policy.</li>
 <li><strong>Apple Weather</strong> (WeatherKit) gets only the place you choose for the weather in your training plan: a place you search for (the search uses Apple Maps), or your location rounded to about 1 km if you allow it. Without that the app shows no weather.</li>
 <li><strong>Authorities</strong>, only when the law requires it.</li>
@@ -1115,6 +1117,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <p><strong>Kalendář v iPhonu</strong>, jen když zapneš Číst kalendář: aplikace přečte události v telefonu a pošle nám jen počet volných minut na trénink v každém dni příštích dvou týdnů, nikdy události, jejich názvy ani časy. Tato čísla uchováváme nejvýš týden po daném dni a smažeme je, když čtení vypneš. Když zapneš Zapisovat tréninky, aplikace zapíše naplánované tréninky do kalendáře v telefonu.</p>
 <p><strong>Co zadáš v Aurinu:</strong> profil (třeba věk, výška, váha, sporty, cíle a čas na trénink) a profilovou fotku, pokud ji přidáš, jídlo a pití, tréninky a jejich hodnocení, poznámky, odpovědi v deníku (třeba alkohol, kofein, sauna nebo jak ti bylo) a konverzace s asistentem. Fotka, kterou pošleš kouči, jde do OpenAI jen s tou jednou zprávou (viz níže) a neukládáme ji; v konverzaci zůstane jen poznámka, že tam fotka byla. Počítáme, kolik zpráv koučovi za týden pošleš, aby služba zůstala férová pro všechny.</p>
 <p><strong>Co nám pošleš z Nastavení → Pomoc:</strong> hlášení problému s tím, co napíšeš, snímkem obrazovky, když ho přidáš, a pokud ji necháš zapnutou, diagnostikou aplikace (verze aplikace a iOS, propojení a jejich poslední chyby, nepovedené požadavky a pády, nikdy tvoje zdravotní data), nebo návrh funkce s verzí aplikace. Uchováváme je, abychom ti odpověděli a problém opravili, a smažou se s tvým účtem.</p>
+<p><strong>Aurin Pro koupené v aplikaci:</strong> platbu řeší Apple a tvoje platební údaje nikdy nevidíme. S každým nákupem, obnovením, vrácením peněz nebo zrušením nám App Store pošle podepsaný záznam o něm: jeho identifikátory, tarif, kdy začal a kdy se obnoví nebo skončí, jestli se obnovuje a jestli byly peníze vráceny, a náhodný identifikátor tvého účtu Aurin, který aplikace k nákupu přidá. Používáme ho jen k odemčení Aurin Pro pro tvůj účet a smaže se s tvým účtem.</p>
 <p><strong>Waitlist na našem webu:</strong> když se do něj zapíšeš, uložíme e-mail, který zadáš, a datum zápisu. Použijeme ho jen k testování Aurinu přes TestFlight od Applu; žádné newslettery na něj neposíláme.</p>
 <p><strong>Ve tvém zařízení:</strong> cookie přihlášení s platností nejvýš 30 dní, krátkodobá cookie, která chrání přihlašování, cookie na nejvýš rok po přihlášení kódem z e-mailu, která neobsahuje žádné osobní údaje a jen dovolí tomuto zařízení přihlásit se, i když na tvůj e-mail někdo jiný zadává špatné kódy, cookies s vybraným vzhledem a jazykem a v úložišti prohlížeče kopie naposledy načteného dne a několik nastavení zobrazení, aby se aplikace otevřela hned, a když si přidáš nebo použiješ přístupový klíč, tvůj e-mail s označením klíče, aby tě zařízení přihlásilo jím a nemuselo posílat kód. Reklamní ani sledovací cookies nepoužíváme.</p>
 <p><strong>Technické záznamy:</strong> náš poskytovatel hostingu zaznamenává technické údaje o požadavcích (třeba čas, IP adresu, stránku a chyby), aby služba fungovala a byla bezpečná. Tyto záznamy se uchovávají několik dní.</p>
@@ -1158,6 +1161,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě, včetně dat z připojeného prstenu Ultrahuman nebo WHOOPu. OpenAI je zpracovává naším jménem podle svých podmínek zpracování dat přes API: data poslaná přes API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití, pokud mu zákon neukládá uchovat je déle.</li>
 <li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''} Na webu Cloudflare Turnstile ověřuje, že formulář čekací listiny posílá člověk. Čte k tomu technické údaje o prohlížeči a nenastavuje sledovací cookies.</li>
 <li><strong>Apple</strong>, když povolíš oznámení (Nastavení → Oznámení): token tvého iPhonu pro oznámení a text každého oznámení, třeba ranní připravenosti nebo zprávy od kouče, které Applova služba pro oznámení doručí do tvého iPhonu. Vypnutím oznámení nebo odhlášením se token smaže.</li>
+<li><strong>Apple</strong>, když koupíš Aurin Pro: náhodný identifikátor tvého účtu Aurin, který aplikace k nákupu přidá, aby záznamy App Storu o něm došly ke správnému účtu. Apple s nákupem nakládá podle svých zásad ochrany soukromí.</li>
 <li><strong>Apple</strong>, když tě z waitlistu přidáme k testerům: tvůj e-mail, aby ti TestFlight poslal, jak Aurin nainstalovat. Apple s ním nakládá podle svých zásad ochrany soukromí.</li>
 <li><strong>Apple Weather</strong> (WeatherKit) dostane jen místo, které vybereš pro počasí v plánu tréninků: vyhledané místo (hledání používá Apple Mapy), nebo tvou polohu zaokrouhlenou zhruba na 1 km, pokud ji povolíš. Bez toho aplikace počasí neukazuje.</li>
 <li><strong>Úřady</strong>, jen když to vyžaduje zákon.</li>
@@ -1200,7 +1204,7 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
 }
 
 // Terms of Use. The English text is the reference version; the Czech one says the same.
-const TERMS_UPDATED = {cs: '22. října 2026', en: '22 October 2026'};
+const TERMS_UPDATED = {cs: '28. října 2026', en: '28 October 2026'};
 const APPLE_EULA = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 export function termsPage(request) {
@@ -1242,7 +1246,7 @@ export function termsPage(request) {
 <li>AI answers are generated automatically and can be incomplete or wrong, including nutrition values and ingredients. Check them before you rely on them, especially if you have an allergy or follow a medical diet.</li>
 </ul>
 <h2>Price</h2>
-<p>Aurin is currently free. If we introduce paid features, we will tell you in advance, show the price and conditions before you buy, and sell them only through the App Store, where Apple handles payment, cancellation and refunds. We never charge you without your purchase.</p>
+<p>Aurin is currently free, AI features included. Aurin Pro, the coach, food from a photo and the AI reviews, is an auto-renewing subscription sold only through the App Store, where Apple handles payment, cancellation and refunds. The app shows its price, period and conditions before you buy; the yearly plan can start with a free week, once per Apple ID. A subscription renews until you cancel it in your Apple account’s subscriptions (in the app, Settings → Aurin Pro → Manage subscription) at least 24 hours before the period ends. While Aurin is in testing, purchases in TestFlight are Apple’s test purchases and cost nothing. Before Aurin Pro is needed for the AI features, we will tell you in advance. We never charge you without your purchase.</p>
 <h2>Fair use</h2>
 <p>Do not try to get around Aurin’s security, access someone else’s account or data, overload the service, download it automatically, copy or resell it, or use it for anything unlawful. Reverse engineering is allowed only where the law permits it.</p>
 <h2>Availability and changes</h2>
@@ -1259,6 +1263,7 @@ export function termsPage(request) {
 <h2>Ending your use</h2>
 <ul>
 <li>You can stop at any time by deleting your account in <strong>Settings → Privacy &amp; data → Delete account</strong>.</li>
+<li>Deleting your account does not cancel an Aurin Pro subscription: Apple keeps charging it until you cancel it in your Apple account’s subscriptions.</li>
 <li>We may suspend or close an account that seriously or repeatedly breaks these terms. Unless the law prevents it, we tell you by e-mail why.</li>
 <li>An account nobody has signed in to for two years is deleted, as the Privacy Policy describes.</li>
 </ul>
@@ -1309,7 +1314,7 @@ export function termsPage(request) {
 <li>Odpovědi AI vznikají automaticky a můžou být neúplné nebo chybné, včetně nutričních hodnot a složení. Než se na ně spolehneš, zkontroluj je, hlavně když máš alergii nebo držíš léčebnou dietu.</li>
 </ul>
 <h2>Cena</h2>
-<p>Aurin je zatím zdarma. Pokud zavedeme placené funkce, dáme ti vědět předem, cenu a podmínky uvidíš před nákupem a prodávat je budeme jen přes App Store, kde platbu, zrušení i vrácení peněz řeší Apple. Bez tvého nákupu ti nikdy nic neúčtujeme.</p>
+<p>Aurin je zatím zdarma, včetně AI funkcí. Aurin Pro, tedy kouč, jídlo z fotky a hodnocení od AI, je automaticky obnovované předplatné, které prodáváme jen přes App Store, kde platbu, zrušení i vrácení peněz řeší Apple. Cenu, období a podmínky ti aplikace ukáže před nákupem; roční tarif může začít týdnem zdarma, jednou na Apple ID. Předplatné se obnovuje, dokud ho nezrušíš v předplatných svého účtu Apple (v aplikaci Nastavení → Aurin Pro → Spravovat předplatné) aspoň 24 hodin před koncem období. Dokud je Aurin v testování, nákupy v TestFlightu jsou testovací nákupy Applu a nic nestojí. Než bude Aurin Pro pro AI funkce potřeba, dáme ti vědět předem. Bez tvého nákupu ti nikdy nic neúčtujeme.</p>
 <h2>Férové používání</h2>
 <p>Nesnaž se obejít zabezpečení Aurinu, dostat se k cizímu účtu nebo datům, přetěžovat službu, automaticky ji stahovat, kopírovat ji nebo přeprodávat, ani ji používat k ničemu protiprávnímu. Zpětná analýza je dovolená jen tam, kde to povoluje zákon.</p>
 <h2>Dostupnost a změny</h2>
@@ -1326,6 +1331,7 @@ export function termsPage(request) {
 <h2>Konec používání</h2>
 <ul>
 <li>Přestat můžeš kdykoli smazáním účtu v <strong>Nastavení → Soukromí a data → Smazat účet</strong>.</li>
+<li>Smazání účtu nezruší předplatné Aurin Pro: Apple ho účtuje dál, dokud ho nezrušíš v předplatných svého účtu Apple.</li>
 <li>Účet, který vážně nebo opakovaně porušuje tyto podmínky, můžeme pozastavit nebo zrušit. Pokud to zákon nezakazuje, napíšeme ti e-mailem proč.</li>
 <li>Účet, do kterého se dva roky nikdo nepřihlásil, smažeme, jak popisují Zásady ochrany soukromí.</li>
 </ul>
