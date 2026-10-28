@@ -107,6 +107,9 @@ extension WatchBridge {
         case .addExercise:
             guard let option = change.option else { break }
             day.addExercise(option.name, sets: option.sets ?? 3, reps: option.reps ?? "10", kg: option.kg.map(GymCoach.kgText) ?? "")
+        case .move:
+            guard let to = change.to else { break }
+            day.moveExercise(from: change.exercise, to: to)
         }
         await save(day, date: change.date)
         return watchGym(day, date: change.date)

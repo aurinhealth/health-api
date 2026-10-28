@@ -105,8 +105,8 @@ final class GymStore: ObservableObject {
 
     /// A change from the menu (a set or an exercise added, removed or
     /// swapped); the iPhone writes it into the sheet and answers with the new plan.
-    func change(_ kind: WatchGym.Change.Kind, exercise: Int, option: WatchGym.Option? = nil) {
-        guard let gym, let data = WatchGym.Change(date: gym.date, kind: kind, exercise: exercise, option: option).encoded() else { return }
+    func change(_ kind: WatchGym.Change.Kind, exercise: Int, option: WatchGym.Option? = nil, to: Int? = nil) {
+        guard let gym, let data = WatchGym.Change(date: gym.date, kind: kind, exercise: exercise, option: option, to: to).encoded() else { return }
         let session = WCSession.default
         guard WCSession.isSupported(), session.activationState == .activated, session.isReachable else {
             failedChange = true

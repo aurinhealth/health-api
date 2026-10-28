@@ -50,13 +50,15 @@ struct WatchGym: Codable, Equatable, Sendable {
     /// A change of the plan from the watch (the menu under ≡); the iPhone
     /// writes it into the sheet and answers with the new plan.
     struct Change: Codable, Equatable, Sendable {
-        enum Kind: String, Codable, Sendable { case addSet, removeSet, removeExercise, swap, addExercise }
+        enum Kind: String, Codable, Sendable { case addSet, removeSet, removeExercise, swap, addExercise, move }
         var date: String
         var kind: Kind
         /// The exercise's place in `exercises`.
         var exercise: Int
         /// The new exercise of swap and addExercise.
         var option: Option?
+        /// move: the place it goes to, as List.onMove reports it.
+        var to: Int?
     }
 
     /// An exercise offered for a swap or to add, with what it would start from.

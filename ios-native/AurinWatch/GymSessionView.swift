@@ -59,6 +59,8 @@ struct GymSessionView: View {
                         exercise = picked
                         restEnd = nil
                         list = false
+                    } moved: { current in
+                        exercise = current
                     } end: {
                         list = false
                         summary = true
@@ -280,6 +282,8 @@ struct GymExerciseList: View {
     @ObservedObject private var store = GymStore.shared
     let current: Int
     let pick: (Int) -> Void
+    /// The exercise on the screen after a move, at its new place.
+    let moved: (Int) -> Void
     let end: () -> Void
     @State private var swap: Int?
 
@@ -311,6 +315,13 @@ struct GymExerciseList: View {
                             .tint(W.indigo)
                         }
                     }
+                    .onMove { from, to in
+                        guard let source = from.first, store.gym != nil else { return }
+                        var order = Array(gym.exercises.indices)
+                        order.move(fromOffsets: from, toOffset: to)
+                        if let place = order.firstIndex(of: current) { moved(place) }
+                        store.change(.move, exercise: source, to: to)
+                    }
                     NavigationLink {
                         GymOptionsView(title: W.tr("Přidat cvik", "Add exercise"), exercise: nil) { option in
                             store.change(.addExercise, exercise: max(0, gym.exercises.count - 1), option: option)
@@ -321,7 +332,7 @@ struct GymExerciseList: View {
                 } header: {
                     Text(W.tr("Cviky", "Exercises"))
                 } footer: {
-                    Text(W.tr("Potáhni cvik doleva: vyměnit nebo odebrat.", "Swipe an exercise left to swap or remove it."))
+                    Text(W.tr("Potáhni cvik doleva: vyměnit nebo odebrat. Podrž a přetáhni: jiné pořadí.", "Swipe an exercise left to swap or remove it. Touch and hold to drag it to another place."))
                 }
             }
             Button(role: .destructive) { end() } label: {
