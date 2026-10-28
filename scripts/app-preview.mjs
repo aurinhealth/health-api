@@ -40,15 +40,12 @@ for (const line of readFileSync(join(dir, 'marks.txt'), 'utf8').split('\n')) {
 
 let failed = 0;
 for (const [language, list] of Object.entries(clips)) {
-  // Longer than App Store Connect takes: the last clips are cut short.
-  let left = MAX - 0.1;
-  const kept = [];
-  for (const [from, to] of list) {
-    if (left <= 0.5) break;
-    const end = Math.min(to, from + left);
-    kept.push([from, end]);
-    left -= end - from;
-  }
+  // Longer than App Store Connect takes: every clip gives up the same share of its end,
+  // so each scene still shows.
+  const total = list.reduce((sum, [from, to]) => sum + to - from, 0);
+  const share = Math.min(1, (MAX - 0.1) / total);
+  const kept = list.map(([from, to]) => [from, from + (to - from) * share]);
+  if (share < 1) console.log(`${language}: ${total.toFixed(1)} s of clips, each kept to ${Math.round(share * 100)} %`);
   const length = kept.reduce((sum, [from, to]) => sum + to - from, 0);
   const target = join(dir, `app-preview-${language}.mp4`);
   // Each clip is its own input, seeked to: ffmpeg decodes only the clips, not the whole recording.

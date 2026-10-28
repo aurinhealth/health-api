@@ -1,7 +1,7 @@
 import XCTest
 
 /// The App Store preview video (app preview): the sample day walked through at a
-/// viewer's pace (Today, Training, readiness, food, then a gym set and its rest), in English and in Czech. ios-native.yml records the simulator's
+/// viewer's pace (Today, Training, food, then a gym set and its rest), in English and in Czech. ios-native.yml records the simulator's
 /// screen while this runs; the test writes when each clip starts and ends to
 /// PREVIEW_DIR/marks.txt, and scripts/app-preview.mjs cuts the clips out of the
 /// recording (no launches, no test runner) into one 15–30 s video per language.
@@ -11,13 +11,13 @@ final class AppPreviewTests: XCTestCase {
     private var language = "en"
 
     private struct Labels {
-        let today, training, health, food, start, setDone, skip: String
+        let today, training, food, start, setDone, skip: String
     }
 
     private let labels = [
-        "en": Labels(today: "Today", training: "Training", health: "Health", food: "Food",
+        "en": Labels(today: "Today", training: "Training", food: "Food",
                      start: "Start workout", setDone: "Set done", skip: "Skip"),
-        "cs": Labels(today: "Dnes", training: "Trénink", health: "Zdraví", food: "Jídlo",
+        "cs": Labels(today: "Dnes", training: "Trénink", food: "Jídlo",
                      start: "Začít trénink", setDone: "Série hotová", skip: "Přeskočit")]
 
     override func setUp() {
@@ -31,19 +31,16 @@ final class AppPreviewTests: XCTestCase {
             self.language = language
             let l = labels[language]!
 
-            // Today as it opens (the dial turns), its cards, Training, Health and readiness.
+            // Every tap waits for the app to settle (about 3 s with the dial and the
+            // charts moving), so the taps themselves give each screen its time.
+            // Today as it opens (the dial turns), then Training. No scrolling first:
+            // on iOS 26 the tab bar hides while Today scrolls.
             launch("-tab", "today")
             guard tab(l.today).waitForExistence(timeout: 20) else { continue }
             mark("in")
-            pause(3.5)
-            app.swipeUp()
-            pause(1.5)
+            pause(3)
             tapIfThere(tab(l.training))
-            pause(2.5)
-            tapIfThere(tab(l.health))
             pause(1)
-            tapIfThere(app.descendants(matching: .any).matching(identifier: "open.readiness").firstMatch)
-            pause(2.5)
             mark("out")
 
             // Food: eaten against the target and the day's meals.
@@ -58,15 +55,12 @@ final class AppPreviewTests: XCTestCase {
             let start = button(containing: l.start)
             guard start.waitForExistence(timeout: 20) else { continue }
             mark("in")
-            pause(1)
             tapIfThere(start)
-            pause(1.5)
             tapIfThere(button(containing: l.start))
-            pause(1)
             tapIfThere(button(containing: l.setDone))
-            pause(3.5)
+            pause(2)
             tapIfThere(app.buttons[l.skip])
-            pause(1.5)
+            pause(0.5)
             mark("out")
         }
     }
