@@ -79,7 +79,11 @@ change in `ios-native/`. It:
 1. generates the Xcode project from `project.yml` with XcodeGen;
 2. runs the tests, which render the screens to PNG in light and dark mode;
 3. takes simulator screenshots of the running app;
-4. builds `Aurin-native-unsigned.ipa`.
+4. records the App Store preview videos (`AurinUITests/AppPreviewTests.swift`
+   walks the sample day, `scripts/app-preview.mjs` cuts the recording into
+   `preview/app-preview-en.mp4` and `-cs.mp4`, 886×1920, 15–30 s): upload them
+   in App Store Connect → the version → App Previews;
+5. builds `Aurin-native-unsigned.ipa`.
 
 Download the artifacts under Actions → the run → Artifacts.
 
