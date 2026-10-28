@@ -1212,6 +1212,7 @@ struct FeedbackSheet: View {
                     let result = try await model.api.workoutFeedback(workoutId: target.id, scheduledDate: target.date, rpe: Int(rpe), notes: text, minutes: minutes)
                     saved = true
                     status = Self.intervalsText(result.intervals)
+                    await AppleHealthExport.shared.saveEffort(Int(rpe), session: session)
                     await model.refreshTraining()
                     if result.reflection == "pending" { await awaitReflection(date: target.date) }
                     return
@@ -1221,6 +1222,7 @@ struct FeedbackSheet: View {
             }
             if let note = try await model.api.coachReflection(date: session.date, rpe: Int(rpe), notes: text) { reflection = note }
             saved = true
+            await AppleHealthExport.shared.saveEffort(Int(rpe), session: session)
             await model.refreshTraining()
         } catch {
             self.error = error.localizedDescription

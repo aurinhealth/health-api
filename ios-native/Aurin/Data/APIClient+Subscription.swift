@@ -3,6 +3,8 @@ import Foundation
 // The AI subscription (src/subscription.js). During the invitation-only pilot
 // everything is free (mode "pilot"); once AI_PAYWALL_ENABLED is on, AI features
 // answer 402 without the "ai" plan and the app offers the subscription.
+// Aurin Pro is bought in the app (ProStore.swift); the server keeps what the
+// App Store says about it (purchase, src/app-store.js).
 
 struct SubscriptionStatus: Decodable, Equatable {
     /// "pilot" (all free) or "paid" (AI needs the plan).
@@ -12,12 +14,26 @@ struct SubscriptionStatus: Decodable, Equatable {
     let aiAccess: Bool?
     let aiConsent: Bool?
     let billingActive: Bool?
-    /// Buying is possible in the app (false until payments are connected).
+    /// The App Store is set up on the server (src/app-store.js).
     let checkoutAvailable: Bool?
     let features: [Feature]?
     let terms: String?
     /// This week's messages to the coach; nil for the owner.
     var coachAllowance: CoachAllowance? = nil
+    /// The account's UUID that every purchase carries, so the server knows whose it is.
+    var appAccountToken: String? = nil
+    /// Aurin Pro as the App Store last told the server; nil when never bought.
+    var purchase: Purchase? = nil
+
+    struct Purchase: Decodable, Equatable {
+        let active: Bool
+        let productId: String?
+        /// ISO 8601: the end of the paid period (or of the free week).
+        let expiresAt: String?
+        /// "Production" or "Sandbox" (TestFlight).
+        let environment: String?
+        let autoRenew: Bool?
+    }
 
     struct Feature: Decodable, Equatable, Hashable {
         let name: String
@@ -27,6 +43,8 @@ struct SubscriptionStatus: Decodable, Equatable {
 
     var pilot: Bool { mode != "paid" }
     var hasAI: Bool { plan == "ai" }
+    /// Aurin Pro bought (or its free week); in the pilot everyone has AI without it.
+    var purchased: Bool { purchase?.active == true || (!pilot && hasAI) }
 
     static let demo = SubscriptionStatus(mode: "pilot", plan: "free", aiAccess: true, aiConsent: true, billingActive: false, checkoutAvailable: false,
         features: [Feature(name: "Profil, kalorické cíle a přehledy", ai: false), Feature(name: "Ruční zápis jídla, váhy a tréninků", ai: false),

@@ -1578,6 +1578,8 @@ final class AppModel {
     }
 
     private func clearLocal(expired: Bool) {
+        // The next account's purchases carry its own appAccountToken.
+        ProStore.shared.forgetAccount()
         SnapshotCache.clear()
         CoachPick.forget()
         GymDayCache.clear()

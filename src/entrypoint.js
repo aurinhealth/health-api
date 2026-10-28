@@ -115,6 +115,7 @@ import { forgetExpiredAiLimits } from "./ai-limit-memory.js";
 import { withPlainErrors } from "./error-text.js";
 import { handleIntervalsOAuth, disconnectIntervalsApp } from "./intervals-oauth.js";
 import { handleIntervalsWebhook } from "./intervals-webhook.js";
+import { handleAppStoreNotification } from "./app-store.js";
 import { intervalsChanged, intervalsReads } from "./intervals-reads.js";
 import { handleUltrahumanOAuth, disconnectUltrahuman, syncUltrahuman, FIRST_IMPORT_DAYS } from "./ultrahuman.js";
 import { handleWhoopOAuth, disconnectWhoop, syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
@@ -191,7 +192,7 @@ function forgetScreens(userId) {
   for (const key of recentScreens.keys()) if (key.startsWith(userId + "|")) recentScreens.delete(key);
 }
 // Unlinking Apple (/app/api/me/apple), adding or removing passkeys and signing out everywhere change no training data.
-const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|health\/apple$|account\/(email\/(start|verify)|sign-out-everywhere)$|support\/report$|push\/token$|passkeys$|passkeys\/options$)/;
+const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|health\/apple$|account\/(email\/(start|verify)|sign-out-everywhere)$|support\/report$|push\/token$|subscription\/transaction$|passkeys$|passkeys\/options$)/;
 const STATIC_PATHS = new Set(['/logo.svg','/','/privacy','/terms','/support','/health-data','/robots.txt','/sitemap.xml']);
 
 // An OAuth connection to Intervals.icu skips a scheduled job except at minute
@@ -521,6 +522,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (url.pathname === "/webhooks/wahoo" && request.method === "POST") return handleWahooWebhook(request, rawEnv, (wahooUser, fn) => forWahooUser(rawEnv, wahooUser, fn));
     // Intervals.icu's webhooks: what changed for an athlete connected with OAuth.
     if (url.pathname === "/webhooks/intervals" && request.method === "POST") return handleIntervalsWebhook(request, rawEnv, ctx, (athlete, parts, kinds, deleted) => intervalsWebhookFor(rawEnv, ctx, { athlete, parts, kinds, deleted }));
+    // App Store Server Notifications V2: renewals, expiry, refunds and revocation of Aurin Pro (app-store.js).
+    if (url.pathname === "/webhooks/app-store" && request.method === "POST") return handleAppStoreNotification(request, rawEnv);
     // Passkeys in the iPhone app: the app's associated domain (apple-app-site-association.js).
     const siteAssociation = appleAppSiteAssociation(request, rawEnv, url.pathname);
     if (siteAssociation) return siteAssociation;
