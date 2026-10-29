@@ -4,7 +4,8 @@ name: App videos
 # the iPhone simulator with the sample data, in English, each clip one short walk
 # through the app (ios-native/AurinUITests/ClipTests.swift), cut from the test's
 # start to its end mark. Artifact Aurin-videos: clips/<appearance>/<clip>.mp4,
-# and in raw/ the whole recording of a clip that could not be cut.
+# and in raw/ the whole recording of a clip that could not be cut. The clips also
+# go to the app-videos branch, for links Metricool can take.
 # Runs after each app change on main, on pull requests that change the clips,
 # and by hand (Actions → App videos → Run).
 
@@ -38,6 +39,9 @@ concurrency:
 jobs:
   record:
     runs-on: macos-latest
+    # Writes the clips to the app-videos branch (the last step).
+    permissions:
+      contents: write
     timeout-minutes: 60
     defaults:
       run:
@@ -136,3 +140,18 @@ jobs:
           path: videos
           if-no-files-found: ignore
           retention-days: 30
+
+      # The clips also go to the app-videos branch, one commit replaced by each run, so
+      # they have public links (raw.githubusercontent.com): Metricool takes the media of
+      # a post by URL, and the social videos are cut from them.
+      - name: Publish the clips
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        working-directory: ${{ github.workspace }}/videos/clips
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          git init -q -b app-videos
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "App videos from ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:$TOKEN@github.com/$GITHUB_REPOSITORY" app-videos
