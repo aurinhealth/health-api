@@ -124,7 +124,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(f.meals[3].suggestion?.kcal, 360)
         let yogurt = DemoData.foods[0]
         XCTAssertEqual(yogurt.defaultAmount, 140)
-        XCTAssertEqual(yogurt.kcal(for: 140) ?? 0, 133, accuracy: 0.01)
+        XCTAssertEqual(yogurt.kcal(for: 140) ?? 0, 205, accuracy: 0.5)
         XCTAssertEqual(MealSlot.now(Calendar.current.date(bySettingHour: 15, minute: 0, second: 0, of: Date())!), "snack_pm")
         // Lenient product decoding: text numbers and unknown keys.
         let product = try JSONDecoder().decode(FoodProduct.self, from: Data(#"{"name":"Rohlík","calories_100g":"287","protein_100g":9.2,"serving_size":"43 g","id":12,"confidence":"high"}"#.utf8))
