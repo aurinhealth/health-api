@@ -143,7 +143,9 @@ export async function verifyAppStoreJws(jws, { roots = [APPLE_ROOT_CA_G3] } = {}
 }
 
 // ---- The subscriptions row ----
-const COLUMNS = ['app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT'];
+// free_trial: the transaction is Apple's introductory offer (the free week),
+// which gets the reduced AI limits (ai-limit-share.js).
+const COLUMNS = ['app_account_token TEXT', 'original_transaction_id TEXT', 'product_id TEXT', 'store_environment TEXT', 'store_signed_at INTEGER', 'auto_renew INTEGER', 'updated_at TEXT', 'free_trial INTEGER'];
 // The columns are added the first time a statement misses them, so a request
 // costs no schema statements once they are there.
 export async function ensureStoreColumns(db) {
@@ -207,8 +209,8 @@ async function write(db, userId, tx, renewal, type) {
   const { plan, validUntil } = planOf(tx, renewal, type);
   const signedAt = Number(tx.signedDate) || Date.now();
   const autoRenew = renewal && renewal.autoRenewStatus != null ? (Number(renewal.autoRenewStatus) === 1 ? 1 : 0) : null;
-  await db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at WHERE subscriptions.store_signed_at IS NULL OR subscriptions.store_signed_at<=excluded.store_signed_at OR subscriptions.original_transaction_id IS NOT excluded.original_transaction_id")
-    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, new Date().toISOString()).run();
+  await db.prepare("INSERT INTO subscriptions(user_id,plan,valid_until,original_transaction_id,product_id,store_environment,store_signed_at,auto_renew,updated_at,free_trial) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET plan=excluded.plan,valid_until=excluded.valid_until,original_transaction_id=excluded.original_transaction_id,product_id=excluded.product_id,store_environment=excluded.store_environment,store_signed_at=excluded.store_signed_at,auto_renew=COALESCE(excluded.auto_renew,subscriptions.auto_renew),updated_at=excluded.updated_at,free_trial=excluded.free_trial WHERE subscriptions.store_signed_at IS NULL OR subscriptions.store_signed_at<=excluded.store_signed_at OR subscriptions.original_transaction_id IS NOT excluded.original_transaction_id")
+    .bind(userId, plan, validUntil, String(tx.originalTransactionId), tx.productId, tx.environment, signedAt, autoRenew, new Date().toISOString(), Number(tx.offerType) === 1 ? 1 : 0).run();
   return { plan, validUntil };
 }
 

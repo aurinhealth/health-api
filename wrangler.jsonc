@@ -89,7 +89,10 @@
     "OPEN_SIGNUP": "true",
     // Emergency brake on an account's AI spending per month (src/ai-usage.js);
     // audit/aurin-pro-ai-limity-plan-2026-10-18.md.
-    "AI_MONTHLY_LIMIT_USD": "10",
+    "AI_MONTHLY_LIMIT_USD": "6",
+    // Half of every AI limit (the brake, the daily guard, the coach's week) until
+    // the account pays for Pro: the pilot, TestFlight and the free week (src/ai-limit-share.js).
+    "AI_UNPAID_LIMIT_SHARE": "0.5",
     // A daily guard against abuse on the AI around the coach (food, plans, reviews); the coach chat is not in it.
     "AI_DAILY_LIMIT_USD": "1",
     // All users together in a UTC day (src/ai-total.js): an e-mail to the owner past
@@ -98,7 +101,7 @@
     "AI_TOTAL_DAILY_LIMIT_USD": "200",
     // The weekly allowance of messages to the coach (src/coach-allowance.js): per week,
     // extra ones to finish a conversation, and how many messages of a conversation
-    // after a workout count as one. The trial will use 15 a week.
+    // after a workout count as one. Unpaid accounts get half (AI_UNPAID_LIMIT_SHARE).
     "COACH_WEEKLY_MESSAGES": "30",
     "COACH_EXTRA_MESSAGES": "2",
     "COACH_WORKOUT_CHAT_MESSAGES": "5",
@@ -160,7 +163,8 @@
         "USER_DATA_SHARD_COUNT": "2",
         "CONTACT_EMAIL": "support@aurin.health",
         "OPEN_SIGNUP": "true",
-        "AI_MONTHLY_LIMIT_USD": "10",
+        "AI_MONTHLY_LIMIT_USD": "6",
+        "AI_UNPAID_LIMIT_SHARE": "0.5",
         "AI_DAILY_LIMIT_USD": "1",
         // Testing costs at most 1 USD of AI a day, the owner included (src/ai-total.js).
         "AI_TOTAL_DAILY_ALERT_USD": "1",

@@ -12,11 +12,14 @@
 // The owner has no allowance. The numbers are Worker settings (wrangler.jsonc).
 import { L } from './lang.js';
 import { localToday } from './user-time.js';
+import { aiLimitShare } from './ai-limit-share.js';
 import { mondayOfDate, shiftDate } from './dashboard-shared.js';
 import { sessionOf } from './activity-match.js';
 
 const n = (value, fallback) => { const v = Number(value); return value !== undefined && value !== null && value !== '' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : fallback; };
 export const coachWeeklyMessages = env => n(env.COACH_WEEKLY_MESSAGES, 30);
+// The week's messages of this account: half until it pays for Pro (ai-limit-share.js).
+const weeklyLimit = async env => Math.floor(coachWeeklyMessages(env) * await aiLimitShare(env));
 export const coachExtraMessages = env => n(env.COACH_EXTRA_MESSAGES, 2);
 export const coachWorkoutChatMessages = env => n(env.COACH_WORKOUT_CHAT_MESSAGES, 5);
 const WORKOUT_CHAT_HOURS = 3;
@@ -51,7 +54,7 @@ async function carriedOver(env, week) {
 export async function coachAllowance(env, today = localToday()) {
   if (!tracked(env)) return null;
   await ensure(env.DB);
-  const week = mondayOfDate(today), limit = coachWeeklyMessages(env);
+  const week = mondayOfDate(today), limit = await weeklyLimit(env);
   const row = await env.DB.prepare('SELECT COUNT(*) AS used FROM coach_messages WHERE user_id = ? AND week = ? AND counted = 1').bind(env.USER_ID, week).first();
   const used = (Number(row?.used) || 0) + await carriedOver(env, week), left = Math.max(0, limit - used);
   return { limit, used, left, resetsOn: shiftDate(week, 7), near: left <= nearAt(limit) };
@@ -116,7 +119,7 @@ export async function claimCoachMessage(env, chatId, { today = localToday(), now
     if (!claim) return null;
     const kind = storedKind(claim.kind), counted = countedKind(claim.kind);
     const [condition, ...values] = counted
-      ? ['SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND counted = 1', env.USER_ID, week, coachWeeklyMessages(env) - await carriedOver(env, week)]
+      ? ['SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND counted = 1', env.USER_ID, week, await weeklyLimit(env) - await carriedOver(env, week)]
       : claim.kind === 'extra'
         ? ["SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND chat_id = ? AND kind = 'extra'", env.USER_ID, week, chat, coachExtraMessages(env)]
         : ['SELECT COUNT(*) FROM coach_messages WHERE user_id = ? AND week = ? AND chat_id = ?', env.USER_ID, week, chat, coachWorkoutChatMessages(env)];
