@@ -34,6 +34,9 @@ final class LiveWorkout: NSObject {
     private(set) var trail: [(date: Date, bpm: Double)] = []
     /// The session saved its own workout to Apple Health.
     private(set) var savedToHealth = false
+    /// The Apple Watch records this gym (AurinWatch's GymWorkout): its heart
+    /// rate and calories show here, and the watch saves the one workout.
+    private(set) var onWatch = false
     var running: Bool { start != nil }
     /// Seconds the workout stood between Dokončit and Pokračovat v tréninku:
     /// not counted on the clock nor in Apple Health (a pause in the workout).
@@ -193,6 +196,29 @@ final class LiveWorkout: NSObject {
         try? await store.requestAuthorization(toShare: share, read: read)
         if #available(iOS 26.0, *) { await startSession(at: begun) }
         tick()
+        openOnWatch()
+    }
+
+    /// Settings → Apple Watch → Open on the watch: the watch app starts the gym
+    /// as its own workout (WKApplicationDelegate.handle there).
+    private func openOnWatch() {
+        guard WatchBridge.settings.openOnWatch, WatchBridge.shared.watchState.installed else { return }
+        let configuration = HKWorkoutConfiguration()
+        configuration.activityType = .traditionalStrengthTraining
+        configuration.locationType = .indoor
+        store.startWatchApp(with: configuration) { _, _ in }
+    }
+
+    /// A reading from the watch's workout (WatchBridge): the watch measures,
+    /// and Apple Health gets the watch's workout instead of this one.
+    func watch(_ live: WatchGym.Live) {
+        guard start != nil else { return }
+        onWatch = true
+        if sensor.liveBpm == nil, let bpm = live.heartRate, bpm > 0 {
+            note(bpm)
+            heartSource = "Apple Watch"
+        }
+        if live.calories > 0 { kcal = live.calories; liveKcal = true }
     }
 
     /// Ends the clock. On iOS 26 the workout goes to Apple Health; returns
@@ -202,6 +228,17 @@ final class LiveWorkout: NSObject {
         guard let begun = start else { return false }
         poll?.cancel(); poll = nil
         stopSensor()
+        if onWatch {
+            // The watch saves the workout; this one goes, and the watch ends too.
+            if #available(iOS 26.0, *), let session = session as? HKWorkoutSession {
+                (builder as? HKLiveWorkoutBuilder)?.discardWorkout()
+                session.end()
+            }
+            session = nil; builder = nil
+            WatchBridge.shared.endWatchGym()
+            savedToHealth = true
+            return true
+        }
         var saved = false
         if #available(iOS 26.0, *) { saved = await endSession(from: begun) }
         if !saved { saved = await saveWorkout(from: begun, to: Date()) }
@@ -270,6 +307,7 @@ final class LiveWorkout: NSObject {
             session.end()
         }
         session = nil; builder = nil; liveKcal = false
+        onWatch = false
         start = nil
         paused = 0
         carried = nil

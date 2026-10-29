@@ -287,6 +287,7 @@ extension AppModel {
             let value = try await api.training()
             guard stillSignedIn(account) else { return }
             training = value
+            WatchBridge.shared.update(value)
             fetched[.training] = (Date(), Self.localDate(Date()))
             dataRevision += 1
             trainingError = nil
@@ -318,6 +319,8 @@ extension AppModel {
             guard stillSignedIn(account), selectedDate == day else { return }
             health = value
             fetched[.health] = (Date(), shownDay)
+            // The 90 days of resting HR and HRV for the Apple Watch app.
+            if day == nil { WatchBridge.shared.update(value) }
             dataRevision += 1
             healthError = nil
             _ = noteConnection(nil)

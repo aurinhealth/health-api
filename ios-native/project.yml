@@ -27,6 +27,8 @@ targets:
     sources:
       - path: Aurin
       - path: Shared
+      # What the iPhone sends the Apple Watch app (App/WatchBridge.swift).
+      - path: WatchShared
       # The privacy manifest App Store Connect checks (UserDefaults, file dates, the data sent to the server).
       - path: Privacy/App/PrivacyInfo.xcprivacy
         buildPhase: resources
@@ -39,6 +41,12 @@ targets:
     dependencies:
       - target: AurinWidgets
       - target: AurinNotifications
+      # The Apple Watch app, in the app's Watch folder ("Embed Watch Content").
+      - target: AurinWatch
+        embed: true
+        copy:
+          destination: productsDirectory
+          subpath: $(CONTENTS_FOLDER_PATH)/Watch
     # The App Group the home-screen widgets read Today from (WidgetBridge).
     # HealthKit: Apple Health is read on the phone (App/AppleHealth.swift),
     # with background delivery so new nights and workouts sync on their own.
@@ -190,6 +198,90 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+  # The Apple Watch app (AurinWatch/): Today from the iPhone over
+  # WatchConnectivity (WatchStore), embedded in the app and installed with it.
+  AurinWatch:
+    type: application
+    platform: watchOS
+    # 10: the vertical pages of a detail and their coloured backgrounds.
+    deploymentTarget: "10.0"
+    sources:
+      - path: AurinWatch
+      - path: WatchShared
+      - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
+        buildPhase: resources
+      - path: Aurin/Resources/Fonts/Newsreader-Regular.ttf
+        buildPhase: resources
+      - path: AurinWatchWidgets/ComplicationShelf.swift
+    # The complications on the watch face, in the watch app's PlugIns.
+    dependencies:
+      - target: AurinWatchWidgets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.watchkitapp
+        PRODUCT_NAME: AurinWatch
+        TARGETED_DEVICE_FAMILY: "4"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SKIP_INSTALL: YES
+    # HealthKit: the gym runs as a strength workout on the watch (GymWorkout.swift),
+    # with the heart rate and calories, saved to Apple Health at the end.
+    entitlements:
+      path: AurinWatch/AurinWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+        # Today for the complications (ComplicationShelf) and the sign-in
+        # (WatchAPI) in one Keychain group with AurinWatchWidgets: no App
+        # Group to register. The team comes in from the environment at
+        # xcodegen (APPLE_TEAM_ID), as the archive is signed ad hoc first.
+        keychain-access-groups:
+          - ${APPLE_TEAM_ID}.health.aurin.watch
+    info:
+      path: AurinWatch/Info.plist
+      properties:
+        CFBundleDisplayName: Aurin
+        NSHealthShareUsageDescription: Aurin na hodinkách čte tep a spálené kalorie během tréninku v posilovně.
+        NSHealthUpdateUsageDescription: Aurin uloží trénink z posilovny na hodinkách do Apple Health, s tepem a kaloriemi.
+        # The workout keeps the gym on the screen between sets; the smart
+        # alarm session wakes the user on the watch (WatchAlarm.swift).
+        WKBackgroundModes:
+          - workout-processing
+          - alarm
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: health.aurin.app
+        UIAppFonts:
+          - InstrumentSerif-Regular.ttf
+          - Newsreader-Regular.ttf
+  # The watch face's complications (AurinWatchWidgets/): the last Today the
+  # watch app got, read from the Keychain group they share.
+  AurinWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: AurinWatchWidgets
+      - path: WatchShared/WatchSnapshot.swift
+    entitlements:
+      path: AurinWatchWidgets/AurinWatchWidgets.entitlements
+      properties:
+        keychain-access-groups:
+          - ${APPLE_TEAM_ID}.health.aurin.watch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.watchkitapp.widgets
+        PRODUCT_NAME: AurinWatchWidgets
+        TARGETED_DEVICE_FAMILY: "4"
+        SKIP_INSTALL: YES
+    info:
+      path: AurinWatchWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Aurin
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
   AurinTests:
     type: bundle.unit-test
     platform: iOS

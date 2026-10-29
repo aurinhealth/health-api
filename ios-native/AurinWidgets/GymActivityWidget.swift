@@ -11,11 +11,18 @@ import WidgetKit
 /// passes, the activity is stale and shows the set.
 struct GymActivityWidget: Widget {
     var body: some WidgetConfiguration {
+        // From iOS 18 the same activity also shows in the watch's Smart Stack.
+        if #available(iOS 18.0, *) {
+            return Self.activity().supplementalActivityFamilies([.small])
+        } else {
+            return Self.activity()
+        }
+    }
+
+    static func activity() -> some WidgetConfiguration {
         ActivityConfiguration(for: GymActivityAttributes.self) { context in
             // The lock screen gives the card about 160 pt: anything taller is cut.
-            GymActivityCard(context: context)
-                .padding(.horizontal, 16).padding(.vertical, 12)
-                .activityBackgroundTint(Palette.card.opacity(0.9))
+            GymActivityPresentation(context: context)
                 .activitySystemActionForegroundColor(Palette.ink)
         } dynamicIsland: { context in
             let resting = GymActivityCard.resting(context)
@@ -74,6 +81,75 @@ struct GymActivityWidget: Widget {
             }
             .keylineTint(Palette.amberBar)
         }
+    }
+}
+
+/// The lock screen's card, or on the watch the rest or the set in a few lines.
+struct GymActivityPresentation: View {
+    let context: ActivityViewContext<GymActivityAttributes>
+
+    var body: some View {
+        if #available(iOS 18.0, *) {
+            GymActivityFamily(context: context)
+        } else {
+            card
+        }
+    }
+
+    var card: some View {
+        GymActivityCard(context: context)
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .activityBackgroundTint(Palette.card.opacity(0.9))
+    }
+}
+
+@available(iOS 18.0, *)
+private struct GymActivityFamily: View {
+    let context: ActivityViewContext<GymActivityAttributes>
+    @Environment(\.activityFamily) private var family
+
+    var body: some View {
+        if family == .small {
+            GymActivitySmall(context: context)
+                .activityBackgroundTint(.black)
+        } else {
+            GymActivityPresentation(context: context).card
+        }
+    }
+}
+
+/// On the watch: the rest counting down with the next set, or the set with its load.
+struct GymActivitySmall: View {
+    let context: ActivityViewContext<GymActivityAttributes>
+
+    var body: some View {
+        let s = context.state
+        let labels = context.attributes.labels
+        let resting = GymActivityCard.resting(context)
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 4) {
+                Image(systemName: "dumbbell.fill").font(.system(size: 11)).foregroundStyle(Palette.amberBar)
+                Text(resting ? labels.rest.uppercased() : s.setLabel.uppercased())
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(resting ? Palette.amberBar : .gray)
+                Spacer(minLength: 2)
+                if let bpm = s.heartRate {
+                    Image(systemName: "heart.fill").font(.system(size: 9)).foregroundStyle(Palette.rust)
+                    Text("\(bpm)").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white).monospacedDigit()
+                }
+            }
+            if resting, let start = s.restStart, let end = s.restEnd {
+                GymRestTimer(start: start, end: end, size: 26)
+                Text(labels.next + ": " + s.exercise + " · " + s.load)
+                    .font(.system(size: 12, weight: .medium)).foregroundStyle(.white)
+            } else {
+                Text(s.exercise).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                Text(s.load).font(.system(size: 18, weight: .semibold)).foregroundStyle(.white).monospacedDigit()
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .padding(10)
+        .environment(\.colorScheme, .dark)
     }
 }
 

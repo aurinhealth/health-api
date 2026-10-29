@@ -105,6 +105,8 @@ final class SettingsStore {
         do {
             try await api.saveProfile(next)
             profile = try await api.profile()
+            // New wake times for the watch's alarm.
+            WatchBridge.shared.update(profile: profile)
             errorMessage = nil
             return true
         } catch {

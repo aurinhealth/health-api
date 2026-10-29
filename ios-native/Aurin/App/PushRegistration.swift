@@ -27,6 +27,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 BackgroundRefresh.register(api: client)
                 BackgroundRefresh.schedule()
                 LiveWorkout.shared.endOrphanedSession()
+                // Today for the Apple Watch app (WatchBridge.swift).
+                WatchBridge.shared.start()
             }
         }
         // A tap outside a text field hides the keyboard (KeyboardDismiss.swift).

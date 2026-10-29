@@ -230,6 +230,7 @@ extension AppModel {
     /// server error the newest sheet of the day waits. Throws the server's refusal.
     func saveGym(_ day: GymDay, date: String) async throws {
         guard !demo else { return }
+        WatchBridge.shared.gymSaved(day, date: date)
         try await writes.saveGym(day, date: date)
         // The muscles count this workout at their next load.
         musclesAt = nil
