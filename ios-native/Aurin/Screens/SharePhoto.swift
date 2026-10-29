@@ -154,7 +154,7 @@ struct ShareCameraView: View {
                         ForEach(layouts, id: \.index) { layout in
                             let i = layout.index, name = layout.name
                             Button { options.variant = i } label: {
-                                Text(L10n.tr(name).uppercased()).font(.system(size: 13, weight: .semibold)).tracking(0.6)
+                                Text(L10n.tr(name).uppercased()).scaledFont(13, weight: .semibold).tracking(0.6)
                                     .foregroundStyle(options.variant == i ? Palette.amber : Color.white.opacity(0.6))
                                     .lineLimit(1).fixedSize()
                                     .padding(.vertical, 6).contentShape(Rectangle())
@@ -168,7 +168,7 @@ struct ShareCameraView: View {
 
                 HStack {
                     Button { picking = true } label: {
-                        Image(systemName: "photo.on.rectangle").font(.system(size: 20, weight: .medium)).foregroundStyle(.white)
+                        Image(systemName: "photo.on.rectangle").scaledFont(20, weight: .medium, cap: .denseCap).foregroundStyle(.white)
                             .frame(width: 52, height: 52).background(Color.white.opacity(0.12), in: Circle())
                     }
                     .buttonStyle(.plain)
@@ -184,7 +184,7 @@ struct ShareCameraView: View {
                     .accessibilityLabel(L10n.tr("Vyfotit"))
                     Spacer()
                     Button { camera.flip() } label: {
-                        Image(systemName: "arrow.triangle.2.circlepath.camera").font(.system(size: 20, weight: .medium)).foregroundStyle(.white)
+                        Image(systemName: "arrow.triangle.2.circlepath.camera").scaledFont(20, weight: .medium, cap: .denseCap).foregroundStyle(.white)
                             .frame(width: 52, height: 52).background(Color.white.opacity(0.12), in: Circle())
                     }
                     .buttonStyle(.plain)
@@ -388,7 +388,7 @@ struct ShareRoundButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemImage).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+            Image(systemName: systemImage).scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(.white)
                 .frame(width: 40, height: 40).background(Color.white.opacity(0.12), in: Circle())
         }
         .buttonStyle(.plain)

@@ -113,7 +113,7 @@ struct AddSheet: View {
         let on = item.drink != nil && pouring == item.drink
         return Button { run(item) } label: {
             VStack(spacing: 6) {
-                Image(systemName: item.symbol).font(.system(size: 20))
+                Image(systemName: item.symbol).scaledFont(20, cap: .denseCap)
                     .foregroundStyle(on ? Palette.onButton : item.section == .drink ? Palette.ink : item.section.color)
                     .frame(maxWidth: .infinity).frame(height: 52)
                     .background(on ? Palette.blue : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -423,7 +423,7 @@ struct DrinkSheet: View {
                     ForEach(DrinkKind.all) { d in
                         Button { kind = d.id } label: {
                             VStack(spacing: 5) {
-                                Image(systemName: d.symbol).font(.system(size: 18))
+                                Image(systemName: d.symbol).scaledFont(18)
                                 Text(d.label).font(.caption2.weight(.medium)).lineLimit(1).minimumScaleFactor(0.7)
                             }
                             .foregroundStyle(kind == d.id ? Palette.onButton : Palette.ink)
@@ -436,13 +436,13 @@ struct DrinkSheet: View {
                 }
 
                 HStack(alignment: .lastTextBaseline) {
-                    Button { step(-1) } label: { Image(systemName: "minus.circle").font(.system(size: 28)) }
+                    Button { step(-1) } label: { Image(systemName: "minus.circle").scaledFont(28) }
                         .accessibilityLabel("Méně")
                     Spacer()
                     Text(Units.imperial ? Fmt.int(Units.volume(Double(ml))) : String(ml)).font(Typo.number(64)).foregroundStyle(Palette.ink)
                     Text(verbatim: Units.volumeUnit).font(Typo.small).foregroundStyle(Palette.muted)
                     Spacer()
-                    Button { step(1) } label: { Image(systemName: "plus.circle").font(.system(size: 28)) }
+                    Button { step(1) } label: { Image(systemName: "plus.circle").scaledFont(28) }
                         .accessibilityLabel("Více")
                 }
                 .foregroundStyle(Palette.ink)

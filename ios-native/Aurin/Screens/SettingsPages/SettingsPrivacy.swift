@@ -34,7 +34,7 @@ struct PrivacySettingsView: View {
                 Link(destination: Self.policyURL) {
                     SettingsRow(title: "Zásady ochrany soukromí", chevron: false)
                         .overlay(alignment: .trailing) {
-                            Image(systemName: "arrow.up.right.square").font(.system(size: 14)).foregroundStyle(Palette.faint)
+                            Image(systemName: "arrow.up.right.square").scaledFont(14).foregroundStyle(Palette.faint)
                                 .padding(.trailing, 18).accessibilityHidden(true)
                         }
                 }

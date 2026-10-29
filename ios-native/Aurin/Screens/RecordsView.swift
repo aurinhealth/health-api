@@ -190,7 +190,7 @@ struct InsightsView: View {
             .buttonStyle(.plain)
             Button { togglePin(lift.exercise) } label: {
                 Image(systemName: isPinned ? "star.fill" : "star")
-                    .font(.system(size: 17)).foregroundStyle(isPinned ? Palette.amber : Palette.faint)
+                    .scaledFont(17, cap: .denseCap).foregroundStyle(isPinned ? Palette.amber : Palette.faint)
                     .frame(width: 32, height: 32).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -227,7 +227,7 @@ struct InsightsView: View {
     private var sidesLink: some View {
         NavigationLink { GymSidesView(items: sides) } label: {
             HStack(spacing: 12) {
-                Image(systemName: "figure.strengthtraining.functional").font(.system(size: 16, weight: .semibold))
+                Image(systemName: "figure.strengthtraining.functional").scaledFont(16, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(Palette.onAccent).frame(width: 34, height: 34)
                     .background(Palette.blue, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 Text("Levá a pravá strana").font(Typo.bodyStrong).foregroundStyle(Palette.ink)

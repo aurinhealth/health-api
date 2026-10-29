@@ -294,7 +294,7 @@ struct GoogleWriteSheet: View {
         VStack(spacing: 16) {
             HStack(spacing: 12) {
                 IntegrationIcon(id: "aurin", size: 52)
-                Image(systemName: "arrow.right").font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "arrow.right").scaledFont(17, weight: .semibold).foregroundStyle(Palette.faint)
                 IntegrationIcon(id: "google", size: 52)
             }
             .padding(.top, 8)
@@ -403,7 +403,7 @@ struct SyncToastView: View {
                     Image(systemName: "exclamationmark.circle.fill").foregroundStyle(Palette.rust)
                         .accessibilityLabel("Něco se nepodařilo odeslat")
                 }
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)

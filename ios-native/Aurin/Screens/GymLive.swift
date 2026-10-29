@@ -222,14 +222,14 @@ struct LiveGymView: View {
                 ForEach(suggestion.picks) { (pick: GymNextPick) in
                     Button { add(pick.name, suggestion: pick.suggestion) } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: "dumbbell.fill").font(.system(size: 13)).foregroundStyle(Palette.muted)
+                            Image(systemName: "dumbbell.fill").scaledFont(13, cap: .denseCap).foregroundStyle(Palette.muted)
                                 .frame(width: 34, height: 34).background(Palette.track, in: Circle())
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(pick.name).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                                 Text(GymCoach.proposal(pick.suggestion)).font(Typo.caption).foregroundStyle(Palette.muted)
                             }
                             Spacer(minLength: 8)
-                            Image(systemName: "plus").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.amberBar)
+                            Image(systemName: "plus").scaledFont(15, weight: .semibold).foregroundStyle(Palette.amberBar)
                         }
                         .padding(.vertical, 11)
                         .contentShape(Rectangle())

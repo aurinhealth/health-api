@@ -393,7 +393,7 @@ struct GymExerciseTable: View {
                 Text("OPAK.").frame(width: 70, alignment: .leading)
                 Spacer()
             }
-            .font(.system(size: 11, weight: .medium))
+            .scaledFont(11, weight: .medium)
             .tracking(1.2)
             .foregroundStyle(Palette.muted)
             VStack(alignment: .leading, spacing: 8) {
@@ -458,7 +458,7 @@ struct GymSetTableRow: View {
             Spacer(minLength: 4)
             Button { onToggle(kg, reps) } label: {
                 Image(systemName: set.done ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 28))
+                    .scaledFont(28)
                     .foregroundStyle(set.done ? Palette.green : highlighted ? Palette.amberBar : Palette.faint)
             }
             .buttonStyle(.borderless)
@@ -498,7 +498,7 @@ struct GymCoachLine: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "sparkles").font(.system(size: 13)).foregroundStyle(Palette.amber)
+            Image(systemName: "sparkles").scaledFont(13).foregroundStyle(Palette.amber)
             Text(text).font(Typo.sentence(16)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
@@ -650,7 +650,7 @@ struct GymExerciseSearch: View {
                 dismiss()
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "dumbbell.fill").font(.system(size: 15)).foregroundStyle(Palette.amber)
+                    Image(systemName: "dumbbell.fill").scaledFont(15, cap: .denseCap).foregroundStyle(Palette.amber)
                         .frame(width: 40, height: 40).background(Palette.amberSoft, in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
                         Text(verbatim: ExerciseCatalog.shownName(item.name))
@@ -695,7 +695,7 @@ struct ExerciseHistorySheet: View {
                     if let pinned {
                         Button { pinned.wrappedValue.toggle() } label: {
                             Image(systemName: pinned.wrappedValue ? "star.fill" : "star")
-                                .font(.system(size: 17)).foregroundStyle(pinned.wrappedValue ? Palette.amber : Palette.faint)
+                                .scaledFont(17, cap: .denseCap).foregroundStyle(pinned.wrappedValue ? Palette.amber : Palette.faint)
                                 .frame(width: 32, height: 32).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)

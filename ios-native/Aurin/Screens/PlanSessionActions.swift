@@ -133,7 +133,7 @@ struct WeekSessionsHeader: View {
             WidgetHeader(title: L10n.tr("Tréninky týdne"), color: Palette.amberBar)
             Button { legend = true } label: {
                 Image(systemName: "info.circle")
-                    .font(.system(size: 17, weight: .regular))
+                    .scaledFont(17, weight: .regular, cap: .denseCap)
                     .foregroundStyle(Palette.muted)
                     .frame(width: 32, height: 32)
                     .contentShape(Rectangle())
@@ -261,7 +261,7 @@ struct PlanToastView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Image(systemName: toast.cancelled ? "xmark" : "arrow.right")
-                    .font(.system(size: 13, weight: .bold))
+                    .scaledFont(13, weight: .bold, cap: .denseCap)
                     .foregroundStyle(Palette.onAccent)
                     .frame(width: 30, height: 30)
                     .background(toast.cancelled ? Palette.rust : Palette.green, in: Circle())

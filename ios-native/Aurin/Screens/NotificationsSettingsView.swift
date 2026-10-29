@@ -370,7 +370,7 @@ private struct ReminderDayOverview: View {
 
     private func dot(_ mark: ReminderMark) -> some View {
         Image(systemName: mark.kind.symbol)
-            .font(.system(size: 12, weight: .semibold))
+            .scaledFont(12, weight: .semibold, cap: .denseCap)
             .foregroundStyle(mark.on ? Palette.onAccent : Palette.faint)
             .frame(width: size, height: size)
             .background(Circle().fill(mark.on ? mark.kind.color : Palette.track))
@@ -463,7 +463,7 @@ private struct ReminderEditSheet: View {
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: kind.symbol)
-                .font(.system(size: 17, weight: .semibold))
+                .scaledFont(17, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(kind.color)
                 .frame(width: 40, height: 40)
                 .background(kind.color.opacity(0.18), in: RoundedRectangle(cornerRadius: 11, style: .continuous))

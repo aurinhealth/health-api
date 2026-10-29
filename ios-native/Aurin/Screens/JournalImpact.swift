@@ -125,7 +125,7 @@ struct ImpactBarRow: View {
                     value.fixedSize().offset(x: half + length + 8, y: 8)
                 }
                 HStack(spacing: 6) {
-                    Image(systemName: item.icon).font(.system(size: 13)).foregroundStyle(Palette.muted)
+                    Image(systemName: item.icon).scaledFont(13, cap: .denseCap).foregroundStyle(Palette.muted)
                     Text(verbatim: item.name).font(.footnote.weight(.medium)).foregroundStyle(Palette.secondary).lineLimit(1)
                 }
                 .frame(width: half - 10, alignment: hurts ? .leading : .trailing)

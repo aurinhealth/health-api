@@ -166,7 +166,7 @@ struct StretchingCard: View {
     var body: some View {
         Card {
             HStack(spacing: 10) {
-                Image(systemName: kind.symbol).font(.system(size: 17, weight: .medium)).foregroundStyle(kind.color)
+                Image(systemName: kind.symbol).scaledFont(17, weight: .medium, cap: .denseCap).foregroundStyle(kind.color)
                     .frame(width: 36, height: 36)
                     .background(kind.color.opacity(0.14), in: Circle())
                     .accessibilityHidden(true)
@@ -191,7 +191,7 @@ struct StretchingCard: View {
                         Button { stored = Self.toggled(stored, date: date, id: kind.key + item.id) } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: isDone(item) ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 21)).foregroundStyle(isDone(item) ? Palette.green : Palette.faint)
+                                    .scaledFont(21).foregroundStyle(isDone(item) ? Palette.green : Palette.faint)
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(verbatim: item.name).font(.body).foregroundStyle(Palette.ink)
                                         .strikethrough(isDone(item), color: Palette.muted)
@@ -310,14 +310,14 @@ struct StretchTimerView: View {
                 Spacer()
                 if !finished { GymSignalsMenu() }
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).frame(width: 36, height: 36)
+                    Image(systemName: "xmark").scaledFont(16, weight: .semibold, cap: .denseCap).frame(width: 36, height: 36)
                 }
                 .foregroundStyle(Palette.ink)
                 .accessibilityLabel(L10n.tr("Zavřít"))
             }
             if finished {
                 Spacer()
-                Image(systemName: "checkmark.circle.fill").font(.system(size: 64)).foregroundStyle(Palette.green)
+                Image(systemName: "checkmark.circle.fill").scaledFont(64).foregroundStyle(Palette.green)
                 Text(kind.doneTitle).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Spacer()
                 PrimaryButton(title: L10n.tr("Hotovo")) { dismiss() }
@@ -631,7 +631,7 @@ struct GymPreferencesGroup: View {
             Text(L10n.tr("Cíl")).font(.body).foregroundStyle(Palette.ink).layoutPriority(1)
             Spacer(minLength: 8)
             Text(goalValue).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.tail)
-            Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+            Image(systemName: "chevron.up.chevron.down").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
         }
         .padding(.leading, 16)
         .padding(.trailing, 14)
@@ -749,7 +749,7 @@ struct GymGoalSheet: View {
     }
 
     private func check(_ id: String) -> some View {
-        Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+        Image(systemName: "checkmark").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
             .frame(width: 18).opacity(goal == id ? 1 : 0)
     }
 

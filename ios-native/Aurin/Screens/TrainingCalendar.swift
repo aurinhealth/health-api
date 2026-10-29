@@ -15,6 +15,8 @@ struct TrainingCalendarCard: View {
     @State private var centered: String?
     @State private var expanded = false
     @State private var month: String?
+    /// The strip grows with the letter and the date (the circle stays 44 pt).
+    @ScaledMetric(relativeTo: .caption) private var stripHeight: CGFloat = 108
     @AppStorage("calendarMode") private var mode = CalendarMode.count.rawValue
 
     enum CalendarMode: String, CaseIterable, Identifiable {
@@ -107,7 +109,7 @@ struct TrainingCalendarCard: View {
             .scrollPosition(id: $centered, anchor: .center)
             // Room for the letter, the selected ring and the date; the percent
             // of the plan shows in the ring's colour and in the day's list.
-            .frame(height: 108)
+            .frame(height: stripHeight)
             .onAppear { proxy.scrollTo(day, anchor: .center) }
             .onChange(of: centered) { _, date in
                 // The day in the middle is the chosen one, as in a picker.
@@ -166,14 +168,14 @@ struct DayCircle: View {
         let style = SportStyle(day: day, date: date, today: today)
         VStack(spacing: 6) {
             Text(Fmt.weekdayShort(date))
-                .font(.system(size: 12, weight: date == today ? .bold : .medium))
+                .scaledFont(12, weight: date == today ? .bold : .medium, cap: .denseCap)
                 .foregroundStyle(date == today ? Palette.amber : Palette.faint)
             ZStack {
                 if let state = style.state {
                     PlanStateIcon(symbol: style.symbol, state: state, size: 44, percent: style.percent)
                 } else {
                     Circle().fill(style.fill)
-                    Image(systemName: style.symbol).font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: style.symbol).scaledFont(17, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
                 }
             }
             .frame(width: 44, height: 44)
@@ -300,18 +302,18 @@ struct MonthGrid: View {
         let isSelected = date == selected
         return VStack(spacing: 3) {
             Text(ISODay.day(date))
-                .font(.system(size: 12, weight: date == today ? .bold : .regular))
+                .scaledFont(12, weight: date == today ? .bold : .regular, cap: .denseCap)
                 .foregroundStyle(date == today ? Palette.amber : Palette.muted)
             ZStack {
                 if let state = style.state {
                     PlanStateIcon(symbol: style.symbol, state: state, size: 26, percent: style.percent)
                 } else {
                     Circle().fill(style.fill)
-                    Image(systemName: style.symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: style.symbol).scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
                 }
             }
             .frame(width: 26, height: 26)
-            Text(Self.value(day, mode)).font(.system(size: 10, weight: .semibold).monospacedDigit())
+            Text(Self.value(day, mode)).scaledFont(10, weight: .semibold, cap: .denseCap).monospacedDigit()
                 .foregroundStyle(mode == .compliance ? style.percent.map(ComplianceScale.color) ?? Palette.faint : (day?.count ?? 0) > 0 ? Palette.ink : Palette.faint)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
@@ -480,16 +482,16 @@ struct CalendarActivityRow: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     HStack(spacing: 4) {
                         if check {
-                            Image(systemName: "exclamationmark.triangle").font(.system(size: 11, weight: .semibold))
+                            Image(systemName: "exclamationmark.triangle").scaledFont(11, weight: .semibold, cap: .denseCap)
                         }
                         Text(Fmt.int(kcal)).font(Typo.number(17))
                     }
                     .foregroundStyle(check ? Palette.amber : Palette.ink)
-                    Text("kcal").font(.system(size: 10)).foregroundStyle(Palette.faint)
+                    Text("kcal").scaledFont(10, cap: .denseCap).foregroundStyle(Palette.faint)
                 }
                 .accessibilityLabel(check ? L10n.f("%@ kcal, k ověření", Fmt.int(kcal)) : Fmt.int(kcal) + " kcal")
             }
-            if chevron { Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint) }
+            if chevron { Image(systemName: "chevron.right").scaledFont(11, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint) }
         }
         .padding(.vertical, 9)
         .contentShape(Rectangle())
@@ -529,7 +531,7 @@ struct WatchActivityDetail: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 14) {
                         Image(systemName: SportIcon.symbol(activity.sport, type: activity.type))
-                            .font(.system(size: 20, weight: .semibold))
+                            .scaledFont(20, weight: .semibold, cap: .denseCap)
                             .foregroundStyle(Palette.onAccent)
                             .frame(width: 48, height: 48)
                             .background(SportStyle.color(activity.sport), in: Circle())
@@ -549,7 +551,7 @@ struct WatchActivityDetail: View {
             .background(Palette.background.ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
+                    Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold, cap: .denseCap) }
                         .accessibilityLabel("Zavřít")
                 }
                 if !model.demo, ["intervals", "google-wearables", "apple-health", "local", "gym"].contains(activity.source ?? "") {
@@ -566,7 +568,7 @@ struct WatchActivityDetail: View {
                                 Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
                             }
                         } label: {
-                            Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold))
+                            Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap)
                         }
                         .accessibilityLabel("Další volby")
                     }

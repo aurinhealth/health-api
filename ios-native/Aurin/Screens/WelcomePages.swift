@@ -343,7 +343,7 @@ private struct WelcomeTraining: View {
                     ForEach(Array(plates.enumerated()), id: \.offset) { i, plate in
                         let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
                         Text(verbatim: GymCoach.shown(plate))
-                            .font(.system(size: 10, weight: .semibold)).foregroundStyle(.white)
+                            .scaledFont(10, weight: .semibold, cap: .denseCap).foregroundStyle(.white)
                             .lineLimit(1).minimumScaleFactor(0.6)
                             .frame(width: PlateLoaderSheet.width(plate) * 0.7, height: PlateLoaderSheet.height(plate) * 0.42)
                             .background(shape.fill(PlateLoaderSheet.fill(plate)))
@@ -375,7 +375,7 @@ private struct WelcomeTraining: View {
             ZStack {
                 if set.done {
                     Circle().fill(Palette.green)
-                    Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.onAccent)
+                    Image(systemName: "checkmark").scaledFont(10, weight: .bold).foregroundStyle(Palette.onAccent)
                 } else {
                     Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1.5)
                 }
@@ -451,7 +451,7 @@ private struct WelcomeCoach: View {
     private var workout: some View {
         HStack(spacing: 12) {
             Image(systemName: "figure.strengthtraining.traditional")
-                .font(.system(size: 18, weight: .semibold)).foregroundStyle(Palette.amber)
+                .scaledFont(18, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.amber)
                 .frame(width: 40, height: 40).background(Palette.amberSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text("Nohy, lehčeji").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)

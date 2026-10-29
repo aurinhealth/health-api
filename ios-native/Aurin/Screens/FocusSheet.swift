@@ -9,13 +9,13 @@ struct FocusPromptCard: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: "scope")
-                    .font(.system(size: 16, weight: .semibold))
+                    .scaledFont(16, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(Palette.amber)
                     .frame(width: 34, height: 34)
                     .background(Palette.amberSoft, in: Circle())
                 Text("Nastav si zaměření a cíle").font(.body.weight(.medium)).foregroundStyle(Palette.ink)
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
             .padding(14)
             .cardSurface(cornerRadius: 18)

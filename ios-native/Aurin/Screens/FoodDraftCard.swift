@@ -129,7 +129,7 @@ struct FoodDraftCard: View {
 
     private func stepButton(_ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.ink)
+            Image(systemName: symbol).scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 26, height: 26).background(Palette.track, in: Circle())
         }
         .buttonStyle(.plain)

@@ -90,7 +90,7 @@ struct ProSettingsRow: View {
                 if hasPro {
                     Text("Aktivní").font(.subheadline).foregroundStyle(AurinMark.goldTop)
                 }
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
             .padding(.horizontal, 18).frame(minHeight: 52)
             .background(
@@ -151,12 +151,12 @@ struct SubscriptionView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         HStack(alignment: .top) {
                             Image(systemName: feature.symbol)
-                                .font(.system(size: 16, weight: .medium)).foregroundStyle(feature.color)
+                                .scaledFont(16, weight: .medium, cap: .denseCap).foregroundStyle(feature.color)
                                 .frame(width: 36, height: 36)
                                 .background(feature.color.opacity(0.14), in: Circle())
                             Spacer()
                             if !unlocked {
-                                Image(systemName: "lock").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                                Image(systemName: "lock").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                             }
                         }
                         Spacer(minLength: 14)
@@ -318,13 +318,13 @@ struct PaywallView: View {
                 HStack {
                     if step == 2 {
                         Button { go(1) } label: {
-                            Image(systemName: "chevron.left").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                            Image(systemName: "chevron.left").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                                 .frame(width: 40, height: 40).background(Palette.card, in: Circle())
                         }
                         .accessibilityLabel("Zpět")
                     } else {
                         Button(action: close) {
-                            Image(systemName: "xmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                            Image(systemName: "xmark").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                                 .frame(width: 40, height: 40).background(Palette.card, in: Circle())
                         }
                         .accessibilityLabel("Zavřít")
@@ -335,7 +335,7 @@ struct PaywallView: View {
                         Button("Uplatnit promo kód") { redeemCode = true }
                         Button("Obnovit nákup") { restore() }
                     } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                        Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                             .frame(width: 40, height: 40).background(Palette.card, in: Circle())
                     }
                     .accessibilityLabel("Další možnosti")
@@ -343,7 +343,7 @@ struct PaywallView: View {
                 .padding(.horizontal, 20).padding(.top, 8)
 
                 Text(verbatim: L10n.tr(step == 2 ? "Jak funguje týden zdarma" : "Začni naplno s Aurin Pro"))
-                    .font(.system(size: 28, weight: .bold)).multilineTextAlignment(.center).foregroundStyle(Palette.ink)
+                    .scaledFont(28, weight: .bold).multilineTextAlignment(.center).foregroundStyle(Palette.ink)
                     .padding(.horizontal, 24).padding(.top, 12)
 
                 ZStack {
@@ -539,10 +539,10 @@ struct FreeWeekRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            Image(systemName: symbol).font(.system(size: 17, weight: .bold)).foregroundStyle(Palette.onAccent)
+            Image(systemName: symbol).scaledFont(17, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                 .frame(width: 44, height: 44).background(color, in: Circle())
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.ink)
+                Text(title).scaledFont(17, weight: .semibold).foregroundStyle(Palette.ink)
                 Text(text).font(.subheadline).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
             }
             .padding(.top, 2)
@@ -697,14 +697,14 @@ struct AppTour: View {
 
     private var statusBar: some View {
         HStack {
-            Text(verbatim: "9:41").font(.system(size: 16, weight: .semibold))
+            Text(verbatim: "9:41").scaledFont(16, weight: .semibold)
             Spacer()
             HStack(spacing: 5) {
                 Image(systemName: "cellularbars")
                 Image(systemName: "wifi")
                 Image(systemName: "battery.100")
             }
-            .font(.system(size: 14, weight: .semibold))
+            .scaledFont(14, weight: .semibold)
         }
         .foregroundStyle(Palette.ink)
         .padding(.horizontal, 34).padding(.top, 18)
@@ -797,7 +797,7 @@ struct FeatureLine: View {
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: feature.symbol)
-                .font(.system(size: 17, weight: .semibold))
+                .scaledFont(17, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(Palette.onAccent)
                 .frame(width: 42, height: 42)
                 .background(feature.color, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -854,7 +854,7 @@ struct AllPlansSheet: View {
         VStack(spacing: 10) {
             HStack {
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.ink)
+                    Image(systemName: "xmark").scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                         .frame(width: 36, height: 36).background(Palette.card, in: Circle())
                 }
                 .accessibilityLabel("Zavřít")

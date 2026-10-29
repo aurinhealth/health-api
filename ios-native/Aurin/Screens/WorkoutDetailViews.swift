@@ -64,7 +64,7 @@ struct WeekSessionsList: View {
                             }
                         } label: {
                             Image(systemName: "ellipsis")
-                                .font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                                .scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
                                 .frame(width: 36, height: 44)
                                 .contentShape(Rectangle())
                         }
@@ -203,7 +203,7 @@ struct SessionRow: View {
             } else if let tss = session.tss, tss > 0 {
                 Text(Fmt.int(tss)).font(Typo.number(18)).foregroundStyle(Palette.ink)
             }
-            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
         }
         .padding(.vertical, 11)
         .contentShape(Rectangle())
@@ -295,7 +295,7 @@ struct ActivityDetailView: View {
                     }
                     if session.status == "done", detail != nil {
                         Button { sharing = true } label: {
-                            Image(systemName: "square.and.arrow.up").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                            Image(systemName: "square.and.arrow.up").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
                                 .frame(width: 36, height: 32).contentShape(Rectangle())
                         }
                         .accessibilityLabel("Sdílet")
@@ -311,7 +311,7 @@ struct ActivityDetailView: View {
                             }
                             Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
                         } label: {
-                            Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                            Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
                                 .frame(width: 36, height: 32).contentShape(Rectangle())
                         }
                         .accessibilityLabel("Další volby")
@@ -749,7 +749,7 @@ struct ZoneList: View {
             ForEach(rows) { r in
                 VStack(spacing: 10) {
                     HStack(spacing: 12) {
-                        Text(verbatim: "Z\(r.id + 1)").font(.system(size: 13, weight: .semibold))
+                        Text(verbatim: "Z\(r.id + 1)").scaledFont(13, weight: .semibold, cap: .denseCap)
                             .foregroundStyle(r.id >= 3 ? Palette.onAccent : Palette.ink)
                             .frame(width: 30, height: 30)
                             .background(Self.color(r.id), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -1345,7 +1345,7 @@ struct ManualWorkoutSheet: View {
             minutes = Self.defaults[id] ?? 60
         } label: {
             VStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 17, weight: .semibold))
+                Image(systemName: symbol).scaledFont(17, weight: .semibold)
                 Text(title).font(Typo.small).lineLimit(1).minimumScaleFactor(0.8)
             }
             .foregroundStyle(on ? Palette.onButton : Palette.ink)

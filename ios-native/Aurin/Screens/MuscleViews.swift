@@ -113,7 +113,7 @@ struct WorkoutFatigueCard: View {
                 HStack {
                     Text(verbatim: MuscleFatigue.title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                 }
                 Group {
                     if let figure = MuscleModelStore.shared.figure {
@@ -339,7 +339,7 @@ struct MusclesView: View {
         if let title = data.readyTitle {
             Card {
                 HStack(spacing: 12) {
-                    Image(systemName: "sparkles").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.onButton)
+                    Image(systemName: "sparkles").scaledFont(16, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.onButton)
                         .frame(width: 38, height: 38).background(Palette.green, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
                         Text(verbatim: L10n.f("Dnes se hodí: %@", title.lowercased())).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
@@ -449,7 +449,7 @@ struct MusclesView: View {
         if !missing.isEmpty {
             Card {
                 HStack(spacing: 12) {
-                    Image(systemName: "exclamationmark").font(.system(size: 15, weight: .bold)).foregroundStyle(Palette.onButton)
+                    Image(systemName: "exclamationmark").scaledFont(15, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onButton)
                         .frame(width: 38, height: 38).background(Palette.amberBar, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     Text(verbatim: L10n.f("Do konce týdne ještě: %@.", missing.map { L10n.tr($0.label).lowercased() }.joined(separator: ", ")))
                         .font(Typo.small).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
@@ -529,7 +529,7 @@ struct MuscleFigureSpinner: View {
                     Text(verbatim: L10n.tr(muscle.label)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     Text(verbatim: muscle.stateText(today: data.date)).font(Typo.caption).foregroundStyle(muscle.textColor)
                 }
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.muted)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.muted)
             }
             .padding(.vertical, 10).padding(.leading, 14).padding(.trailing, 12)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))

@@ -129,7 +129,7 @@ struct DrinkHistoryView: View {
                     if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
                     let kind = DrinkKind.find(g.kind)
                     HStack(spacing: 12) {
-                        Image(systemName: kind?.symbol ?? "drop.fill").font(.system(size: 15))
+                        Image(systemName: kind?.symbol ?? "drop.fill").scaledFont(15, cap: .denseCap)
                             .foregroundStyle(DrinkHistory.color(g.kind))
                             .frame(width: 34, height: 34)
                             .background(DrinkHistory.color(g.kind).opacity(0.14), in: Circle())
@@ -140,7 +140,7 @@ struct DrinkHistoryView: View {
                         }
                         Spacer(minLength: 8)
                         Text(Units.volumeText(g.hydrationMl)).font(Typo.number(20)).foregroundStyle(Palette.ink)
-                        Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                        Image(systemName: "chevron.down").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                             .rotationEffect(.degrees(open.contains(g.kind) ? 180 : 0))
                     }
                     .padding(.vertical, 10)

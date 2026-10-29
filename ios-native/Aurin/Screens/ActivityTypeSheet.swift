@@ -97,7 +97,7 @@ struct ActivityTypeSheet: View {
         return HStack(spacing: 12) {
             Button { chosen = option.type } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: SportIcon.symbol(option.group, type: option.type)).font(.system(size: 16)).frame(width: 24)
+                    Image(systemName: SportIcon.symbol(option.group, type: option.type)).scaledFont(16, cap: .denseCap).frame(width: 24)
                     Text(verbatim: option.name).font(.body).foregroundStyle(Palette.ink)
                     Spacer(minLength: 6)
                     if chosen == option.type {
@@ -110,7 +110,7 @@ struct ActivityTypeSheet: View {
             .accessibilityAddTraits(chosen == option.type ? .isSelected : [])
             Button { toggleFavorite(option.type) } label: {
                 Image(systemName: favorite ? "star.fill" : "star")
-                    .font(.system(size: 17)).foregroundStyle(favorite ? Palette.amber : Palette.faint)
+                    .scaledFont(17, cap: .denseCap).foregroundStyle(favorite ? Palette.amber : Palette.faint)
                     .frame(width: 32, height: 32).contentShape(Rectangle())
             }
             .buttonStyle(.plain)

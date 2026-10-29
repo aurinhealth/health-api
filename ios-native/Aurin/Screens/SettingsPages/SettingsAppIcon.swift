@@ -220,21 +220,21 @@ struct AppIconSettingsView: View {
                     }
                     .overlay(alignment: .topTrailing) {
                         if icon.rule == .pro {
-                            Text(verbatim: "PRO").font(.system(size: 9.5, weight: .bold)).foregroundStyle(Color(red: 0.1, green: 0.07, blue: 0.03))
+                            Text(verbatim: "PRO").scaledFont(9.5, weight: .bold).foregroundStyle(Color(red: 0.1, green: 0.07, blue: 0.03))
                                 .padding(.horizontal, 6).padding(.vertical, 2)
                                 .background(AurinMark.amber, in: Capsule())
                                 .offset(x: 6, y: -7)
                         }
                     }
                 // Long Pro names ("Rýsovací deska bílá") wrap; the row stays aligned at the top.
-                Text(icon.name).font(.system(size: 11, weight: .medium)).foregroundStyle(Palette.ink)
+                Text(icon.name).scaledFont(11, weight: .medium).foregroundStyle(Palette.ink)
                     .lineLimit(2).multilineTextAlignment(.center).minimumScaleFactor(0.8)
                 if !open && icon.rule != .pro {
                     HStack(spacing: 2) {
-                        Image(systemName: "lock.fill").font(.system(size: 8))
+                        Image(systemName: "lock.fill").scaledFont(8)
                         Text(verbatim: AppIconUnlock.lockNote(icon)).lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    .font(.system(size: 10)).foregroundStyle(Palette.muted)
+                    .scaledFont(10).foregroundStyle(Palette.muted)
                 }
             }
             .frame(maxWidth: .infinity)

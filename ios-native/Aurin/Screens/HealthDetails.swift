@@ -81,7 +81,7 @@ struct SleepDetailContent: View {
                             Spacer()
                             Text(verbatim: Fmt.int(night.stats?.avgHr)).font(Typo.number(22)).foregroundStyle(Palette.ink)
                             Text("bpm").font(Typo.small).foregroundStyle(Palette.faint)
-                            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                         }
                         .padding(.vertical, 13)
                         let end = SleepHeartRate.end(night)

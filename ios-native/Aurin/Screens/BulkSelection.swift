@@ -11,7 +11,7 @@ struct SelectCircle: View {
         ZStack {
             if on {
                 Circle().fill(Palette.button)
-                Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.onButton)
+                Image(systemName: "checkmark").scaledFont(12, weight: .bold).foregroundStyle(Palette.onButton)
             } else {
                 Circle().stroke(Palette.ink.opacity(0.3), lineWidth: 1.5)
             }
@@ -62,7 +62,7 @@ struct BulkActionBar: View {
     private func item(_ symbol: String, _ title: String, _ color: Color, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 5) {
-                Image(systemName: symbol).font(.system(size: 18, weight: .medium))
+                Image(systemName: symbol).scaledFont(18, weight: .medium)
                 Text(L10n.tr(title)).font(.caption.weight(.medium))
             }
             .foregroundStyle(color)
@@ -117,7 +117,7 @@ struct BulkMoveSheet: View {
                                     Text(L10n.tr(slot.label)).font(.body).foregroundStyle(Palette.ink)
                                     Spacer()
                                     if chosenMeal == slot.id {
-                                        Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                                        Image(systemName: "checkmark").scaledFont(15, weight: .semibold).foregroundStyle(Palette.ink)
                                     }
                                 }
                                 .padding(.horizontal, 16).frame(minHeight: 48)

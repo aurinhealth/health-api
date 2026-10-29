@@ -79,7 +79,7 @@ struct GymPlaceView: View {
             Button { detecting = true } label: { Label("Poznat automaticky", systemImage: "sparkles") }
             Button(role: .destructive) { confirmDelete = true } label: { Label("Smazat", systemImage: "trash") }
         } label: {
-            Image(systemName: "ellipsis.circle").font(.system(size: 20)).foregroundStyle(Palette.ink)
+            Image(systemName: "ellipsis.circle").scaledFont(20, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 40, height: 32).contentShape(Rectangle())
         }
         .accessibilityLabel(L10n.tr("Upravit"))
@@ -155,14 +155,14 @@ struct GymPlaceView: View {
             }
             .buttonStyle(.plain)
             Button { info = station } label: {
-                Image(systemName: "info.circle").font(.system(size: 19)).foregroundStyle(Palette.muted)
+                Image(systemName: "info.circle").scaledFont(19, cap: .denseCap).foregroundStyle(Palette.muted)
                     .frame(width: 34, height: 40).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.f("O stroji %@", station.label))
             Button { toggle(station) } label: {
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 22)).foregroundStyle(on ? Palette.green : Palette.faint)
+                    .scaledFont(22, cap: .denseCap).foregroundStyle(on ? Palette.green : Palette.faint)
                     .frame(width: 34, height: 40).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -243,7 +243,7 @@ struct StationSheet: View {
                         if on { place.stations.removeAll { $0 == station.id } } else { place.stations.append(station.id) }
                     } label: {
                         Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 28)).foregroundStyle(on ? Palette.green : Palette.faint)
+                            .scaledFont(28, cap: .denseCap).foregroundStyle(on ? Palette.green : Palette.faint)
                             .frame(width: 44, height: 44).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -289,7 +289,7 @@ struct StationSheet: View {
             }
             Spacer(minLength: 8)
             Button { technique = ex.name } label: {
-                Image(systemName: "info.circle").font(.system(size: 19)).foregroundStyle(Palette.muted)
+                Image(systemName: "info.circle").scaledFont(19, cap: .denseCap).foregroundStyle(Palette.muted)
                     .frame(width: 34, height: 40).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -304,7 +304,7 @@ struct StationSheet: View {
         let on = ex.liked == up
         return Button { rate(ex, on ? nil : up) } label: {
             Image(systemName: up ? (on ? "hand.thumbsup.fill" : "hand.thumbsup") : (on ? "hand.thumbsdown.fill" : "hand.thumbsdown"))
-                .font(.system(size: 16))
+                .scaledFont(16, cap: .denseCap)
                 .foregroundStyle(on ? (up ? Palette.green : Palette.rust) : Palette.muted)
                 .frame(width: 38, height: 38)
                 .background(on ? (up ? Palette.greenSoft : Palette.pinkSoft) : Palette.track, in: Circle())

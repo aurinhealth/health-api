@@ -67,7 +67,7 @@ struct SwipeRow<Content: View>: View {
 
     private func action(_ symbol: String, _ label: String, _ color: Color, run: @escaping () -> Void) -> some View {
         Button(action: run) {
-            Image(systemName: symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.onAccent)
+            Image(systemName: symbol).scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                 .frame(width: 56, height: 36)
                 .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }

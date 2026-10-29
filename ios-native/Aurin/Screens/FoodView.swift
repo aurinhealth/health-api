@@ -351,7 +351,7 @@ struct DrinksCard: View {
                 WidgetHeader(title: "Pití a hydratace", color: Palette.blue)
                 Button { other = true } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 15, weight: .bold))
+                        .scaledFont(15, weight: .bold, cap: .denseCap)
                         .foregroundStyle(Palette.onAccent)
                         .frame(width: 34, height: 34)
                         .background(Palette.blue, in: Circle())
@@ -398,7 +398,7 @@ struct DrinksCard: View {
             }
             if let added {
                 HStack(spacing: 10) {
-                    Image(systemName: "checkmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.blue)
+                    Image(systemName: "checkmark").scaledFont(14, weight: .bold).foregroundStyle(Palette.blue)
                     Text(added.text).font(Typo.small).foregroundStyle(Palette.ink)
                     Spacer(minLength: 6)
                     if let id = added.id {
@@ -465,7 +465,7 @@ struct DrinkLine: View {
     var body: some View {
         let kind = DrinkKind.find(drink.kind)
         HStack(spacing: 10) {
-            Image(systemName: kind?.symbol ?? "drop.fill").font(.system(size: 13)).foregroundStyle(Palette.blue).frame(width: 20)
+            Image(systemName: kind?.symbol ?? "drop.fill").scaledFont(13, cap: .denseCap).foregroundStyle(Palette.blue).frame(width: 20)
             Text(kind?.label ?? drink.kind).font(Typo.small).foregroundStyle(Palette.secondary)
             if let t = drink.time { Text(ClockText.format(t)).font(Typo.tiny).foregroundStyle(Palette.faint) }
             if let app = drink.app { AppTag(name: app) }
@@ -526,7 +526,7 @@ struct MealRow: View {
         let tint: Color = empty ? Palette.onButton : Palette.ink
         let ring: Double = empty ? 0 : 0.2
         return Button(action: add) {
-            Image(systemName: "plus").font(.system(size: 13, weight: .bold))
+            Image(systemName: "plus").scaledFont(13, weight: .bold, cap: .denseCap)
                 .frame(width: 32, height: 32)
                 .foregroundStyle(tint)
                 .background(fill, in: Circle())
@@ -568,7 +568,7 @@ struct MacroBar: View {
             .frame(width: 84, alignment: .leading)
             ProgressLine(fraction: eaten / max(target ?? 1, 1), color: color, height: 4)
             Text(FiberRow.text(eaten: eaten, target: target, limit: false))
-                .font(.system(size: 12, weight: .medium).monospacedDigit()).foregroundStyle(Palette.secondary)
+                .scaledFont(12, weight: .medium, cap: .denseCap).monospacedDigit().foregroundStyle(Palette.secondary)
                 .frame(width: 72, alignment: .trailing)
         }
         .accessibilityElement(children: .ignore)

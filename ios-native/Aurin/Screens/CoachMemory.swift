@@ -27,7 +27,7 @@ struct CoachMemoryView: View {
                             Text(memory.text).font(.body).foregroundStyle(Palette.ink)
                                 .fixedSize(horizontal: false, vertical: true)
                             Spacer(minLength: 8)
-                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                            Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                         }
                         .padding(.vertical, 4)
                     }
@@ -145,7 +145,7 @@ struct MemoryChipView: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: chip.undone ? "arrow.uturn.backward" : symbol)
-                .font(.system(size: 12, weight: .bold))
+                .scaledFont(12, weight: .bold)
             Text(label).font(.footnote.weight(.medium)).lineLimit(2)
             if !chip.undone {
                 Button(action: undo) {

@@ -64,7 +64,7 @@ struct WidgetHeader: View {
 struct HealthKitTag: View {
     var body: some View {
         Text("HK")
-            .font(.system(size: 9, weight: .bold))
+            .scaledFont(9, weight: .bold)
             .tracking(0.7)
             .foregroundStyle(Color(light: 0xC2410C, dark: 0xF6A06B))
             .padding(.horizontal, 5)
@@ -128,7 +128,7 @@ struct RangeBar: View {
                     Text(verbatim: edges.low).position(x: geo.size.width / 3, y: 6)
                     Text(verbatim: edges.high).position(x: geo.size.width * 2 / 3, y: 6)
                 }
-                .font(.system(size: 9))
+                .scaledFont(9, cap: .denseCap)
                 .foregroundStyle(Palette.faint)
                 .lineLimit(1)
                 .frame(height: 12)
@@ -242,7 +242,7 @@ struct CircleButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 15, weight: .medium))
+                .scaledFont(15, weight: .medium, cap: .denseCap)
                 .frame(width: 36, height: 36)
                 .overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
                 .tapTarget(width: 36, height: 36)
@@ -320,7 +320,7 @@ struct ChromeButton: View {
         } else {
             Button(action: action) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 15, weight: .semibold))
+                    .scaledFont(15, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(tint ?? Palette.ink)
                     .frame(width: 40, height: 40)
                     .contentShape(Circle())

@@ -32,7 +32,7 @@ struct SourcesSettingsView: View {
                 Text("Propojení").font(.title3.weight(.semibold)).foregroundStyle(Palette.ink)
                 Spacer()
                 Button { adding = true } label: {
-                    Image(systemName: "plus").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                    Image(systemName: "plus").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                         .frame(width: 36, height: 36).background(Palette.card, in: Circle())
                 }
                 .buttonStyle(.plain)
@@ -228,7 +228,7 @@ struct SourcePrioritySheet: View {
                     } label: {
                         HStack(spacing: 14) {
                             if id == "auto" {
-                                Image(systemName: "sparkle").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink)
+                                Image(systemName: "sparkle").scaledFont(16, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                                     .frame(width: 34, height: 34)
                                     .background(Palette.track, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                             } else {

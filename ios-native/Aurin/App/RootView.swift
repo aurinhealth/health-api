@@ -398,7 +398,7 @@ struct UpdateRequiredView: View {
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "arrow.down.app")
-                .font(.system(size: 44, weight: .light))
+                .scaledFont(44, weight: .light)
                 .foregroundStyle(Palette.ink)
             Text(L10n.tr("Je potřeba nová verze")).font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
             Text(L10n.tr("Server se změnil a tahle verze aplikace už jeho data nepřečte správně. Nainstaluj novou verzi přes Sideloadly. Data zůstávají uložená na serveru."))
@@ -481,7 +481,7 @@ struct ThanksToast: View {
     var body: some View {
         Button(action: dismiss) {
             HStack(spacing: 10) {
-                Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.green)
+                Image(systemName: "checkmark").scaledFont(15, weight: .semibold).foregroundStyle(Palette.green)
                 Text(verbatim: text).font(Typo.bodyStrong).foregroundStyle(Palette.ink).multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
             }
@@ -525,7 +525,7 @@ struct TabBar: View {
             HStack {
                 Button(action: onExpand) {
                     Image(systemName: Self.symbol(tab))
-                        .font(.system(size: 20, weight: .regular))
+                        .scaledFont(20, weight: .regular, cap: .denseCap)
                         .foregroundStyle(Palette.ink)
                         .frame(width: 52, height: 52)
                         .contentShape(Circle())
@@ -566,7 +566,7 @@ struct TabBar: View {
     private func plus(size: CGFloat) -> some View {
         Button(action: onAdd) {
             Image(systemName: "plus")
-                .font(.system(size: 19, weight: .semibold))
+                .scaledFont(19, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(Palette.onButton)
                 .frame(width: size, height: size)
                 .background(Palette.button, in: Circle())
@@ -581,10 +581,10 @@ struct TabBar: View {
         return Button { tab = value } label: {
             VStack(spacing: 3) {
                 Image(systemName: Self.symbol(value))
-                    .font(.system(size: 19, weight: open ? .semibold : .regular))
+                    .scaledFont(19, weight: open ? .semibold : .regular, cap: .denseCap)
                     .frame(height: 22)
                 Text(L10n.tr(label))
-                    .font(.system(size: 10, weight: open ? .semibold : .medium))
+                    .scaledFont(10, weight: open ? .semibold : .medium)
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
             .foregroundStyle(open ? Palette.ink : Palette.faint)

@@ -78,7 +78,7 @@ struct AthleteStatusPill: View {
         Button { editing = true } label: {
             HStack(spacing: 10) {
                 Image(systemName: kind.symbol)
-                    .font(.system(size: 13, weight: .semibold))
+                    .scaledFont(13, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(Palette.onAccent)
                     .frame(width: 30, height: 30)
                     .background(kind.color, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -86,7 +86,7 @@ struct AthleteStatusPill: View {
                     Text(kind.title).font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                     Text(AthleteStatusSheet.untilText(status.statusUntil)).font(.caption2).foregroundStyle(Palette.muted)
                 }
-                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.down").scaledFont(10, weight: .semibold).foregroundStyle(Palette.faint)
                     .padding(.leading, 4)
             }
             .padding(.leading, 6).padding(.trailing, 14).padding(.vertical, 6)
@@ -112,7 +112,7 @@ struct AthleteStatusRow: View {
         Button { editing = true } label: {
             HStack(spacing: 8) {
                 // The state's icon, not a dot: a coloured dot read as "live".
-                Image(systemName: kind.symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(kind.color)
+                Image(systemName: kind.symbol).scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(kind.color)
                     .frame(width: 18)
                 Text(kind.title).font(.subheadline.weight(.semibold)).foregroundStyle(kind.color)
                 if let detail = Self.detail(status, kind) {
@@ -120,7 +120,7 @@ struct AthleteStatusRow: View {
                 }
                 Spacer(minLength: 8)
                 // It opens a choice below, not a page: a quiet downward chevron.
-                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.faint.opacity(0.7))
+                Image(systemName: "chevron.down").scaledFont(10, weight: .semibold).foregroundStyle(Palette.faint.opacity(0.7))
             }
             .contentShape(Rectangle())
         }
@@ -161,7 +161,7 @@ struct AthleteStatusSheet: View {
                         Button { kind = option } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: option.symbol)
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .scaledFont(16, weight: .semibold, cap: .denseCap)
                                     .foregroundStyle(Palette.onAccent)
                                     .frame(width: 40, height: 40)
                                     .background(option.color, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
@@ -171,7 +171,7 @@ struct AthleteStatusSheet: View {
                                 }
                                 Spacer()
                                 Image(systemName: kind == option ? "largecircle.fill.circle" : "circle")
-                                    .font(.system(size: 20)).foregroundStyle(kind == option ? Palette.ink : Palette.faint)
+                                    .scaledFont(20).foregroundStyle(kind == option ? Palette.ink : Palette.faint)
                             }
                             .padding(12)
                             .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -190,7 +190,7 @@ struct AthleteStatusSheet: View {
                             } label: {
                                 HStack(spacing: 4) {
                                     Text(durationLabel).font(.subheadline).foregroundStyle(Palette.muted)
-                                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 10)).foregroundStyle(Palette.faint)
+                                    Image(systemName: "chevron.up.chevron.down").scaledFont(10).foregroundStyle(Palette.faint)
                                 }
                             }
                         }
@@ -219,7 +219,7 @@ struct AthleteStatusSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
+                    Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
                         .accessibilityLabel("Zavřít")
                 }
             }

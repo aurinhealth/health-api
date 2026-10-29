@@ -93,7 +93,7 @@ struct GymRoutineSettingsView: View {
                 Spacer(minLength: 8)
                 if let value { Text(verbatim: value).font(.subheadline).foregroundStyle(Palette.muted) }
                 if selected {
-                    Image(systemName: "checkmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.amber)
+                    Image(systemName: "checkmark").scaledFont(14, weight: .semibold).foregroundStyle(Palette.amber)
                 }
             }
             .padding(.horizontal, 18).frame(minHeight: 50)

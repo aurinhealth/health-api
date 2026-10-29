@@ -127,10 +127,10 @@ struct CoachTextCard: View {
                     withAnimation(.easeInOut(duration: 0.2)) { showWhy.toggle() }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass").font(.system(size: 13, weight: .semibold))
+                        Image(systemName: "magnifyingglass").scaledFont(13, weight: .semibold)
                         Text("Proč?").font(Typo.body)
                         Spacer()
-                        Image(systemName: showWhy ? "chevron.up" : "chevron.down").font(.system(size: 12, weight: .semibold))
+                        Image(systemName: showWhy ? "chevron.up" : "chevron.down").scaledFont(12, weight: .semibold)
                     }
                     .foregroundStyle(Palette.muted)
                     .contentShape(Rectangle())
@@ -171,7 +171,7 @@ struct CoachTextCard: View {
     /// "Kouč", the time the AI wrote it and the chevron that folds the text.
     private func header(chevron: Bool) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: "sparkles").font(.system(size: 13, weight: .semibold))
+            Image(systemName: "sparkles").scaledFont(13, weight: .semibold)
             Text("Kouč").font(Typo.bodyStrong)
             Spacer(minLength: 8)
             if let time = ai?.time {

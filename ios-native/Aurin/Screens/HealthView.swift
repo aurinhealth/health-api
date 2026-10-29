@@ -115,7 +115,7 @@ struct ReadinessCard: View {
         Card {
             HStack {
                 Text("Připravenost").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
-                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
                 Spacer()
             }
             if let score = readiness.score {
@@ -397,7 +397,7 @@ struct SleepWidget: View {
             SizedWidgetBody(size: size) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     NumberText(value: Fmt.hoursMinutes(sleep.night?.minutes), unit: "h")
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
                 }
                 if let index = sleep.night?.index {
                     Text(L10n.f("index %@", String(index))).font(Typo.caption).foregroundStyle(Palette.indigo)

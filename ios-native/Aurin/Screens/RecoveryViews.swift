@@ -113,7 +113,7 @@ struct RecoveryTipRows: View {
     }
 
     private var chevron: some View {
-        Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+        Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             .accessibilityHidden(true)
     }
 
@@ -133,7 +133,7 @@ struct RecoveryTipRows: View {
                 ProgressView()
             } else if done {
                 Circle().fill(Palette.green)
-                Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.onAccent)
+                Image(systemName: "checkmark").scaledFont(12, weight: .bold).foregroundStyle(Palette.onAccent)
             } else {
                 Circle().stroke(Palette.faint, lineWidth: 1.5)
             }
@@ -167,7 +167,7 @@ struct RecoveryIcon: View {
 
     var body: some View {
         Image(systemName: symbol)
-            .font(.system(size: 15, weight: .semibold))
+            .scaledFont(15, weight: .semibold, cap: .denseCap)
             .foregroundStyle(color)
             .frame(width: 38, height: 38)
             .background(color.opacity(0.16), in: Circle())
@@ -290,7 +290,7 @@ struct RecoveryRoutineView: View {
                 ZStack {
                     if on {
                         Circle().fill(Palette.green)
-                        Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.onAccent)
+                        Image(systemName: "checkmark").scaledFont(13, weight: .bold).foregroundStyle(Palette.onAccent)
                     } else {
                         Circle().stroke(active ? Palette.green : Palette.faint, lineWidth: 1.5)
                     }
@@ -430,7 +430,7 @@ struct RecoveryTimeRow: View {
                 }
             }
             Spacer(minLength: 8)
-            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+            Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                 .accessibilityHidden(true)
         }
         .padding(.vertical, 11)
@@ -558,7 +558,7 @@ struct RecoveryTimeContent: View {
 
     private func row(icon: String, color: Color, title: String, detail: String, trailing: String, ready: Bool = false) -> some View {
         HStack(spacing: 14) {
-            Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(color)
+            Image(systemName: icon).scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(color)
                 .frame(width: 38, height: 38).background(color.opacity(0.16), in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {

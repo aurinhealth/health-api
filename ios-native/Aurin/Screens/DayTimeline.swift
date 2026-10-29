@@ -248,7 +248,7 @@ struct DayTimeline: View {
             if item.kind == "pill" {
                 PillButton(taken: item.done ? (item.time ?? "taken") : nil, saving: busy) { act { try await model.takePill(on: day) } }
             } else if item.kind == "bedtime" {
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                     .accessibilityHidden(true)
             } else if item.done {
                 Image(systemName: "checkmark").font(.footnote.weight(.bold)).foregroundStyle(Palette.green)

@@ -284,7 +284,7 @@ struct FoodEntryCard: View {
 
     private func value(_ letter: String, _ grams: Double?, _ color: Color) -> some View {
         HStack(spacing: 4) {
-            Text(verbatim: letter).font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+            Text(verbatim: letter).scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(.white)
                 .frame(width: 18, height: 18).background(color, in: Circle())
             Text(Fmt.decimal(grams ?? 0, digits: (grams ?? 0) < 10 ? 1 : 0) + " g").font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(Palette.ink)
         }

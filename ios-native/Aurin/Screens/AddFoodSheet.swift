@@ -52,7 +52,7 @@ struct AddFoodSheet: View {
                     HStack(spacing: 10) {
                         Image(systemName: "magnifyingglass").foregroundStyle(Palette.muted)
                         TextField("Hledat potravinu", text: $query)
-                            .font(.system(size: 19))
+                            .scaledFont(19)
                             .submitLabel(.search)
                             .autocorrectionDisabled()
                         if searching { ProgressView() }
@@ -178,7 +178,7 @@ struct AddFoodSheet: View {
     private func tile(_ title: String, _ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 8) {
-                Image(systemName: symbol).font(.system(size: 21))
+                Image(systemName: symbol).scaledFont(21)
                 Text(title).font(.footnote.weight(.medium))
             }
             .foregroundStyle(Palette.ink)
@@ -483,7 +483,7 @@ struct FoodAmountView: View {
                     HStack {
                         Label("Upravit hodnoty a značku", systemImage: "slider.horizontal.3").font(Typo.bodyStrong)
                         Spacer()
-                        Image(systemName: edit ? "chevron.up" : "chevron.down").font(.system(size: 12, weight: .semibold))
+                        Image(systemName: edit ? "chevron.up" : "chevron.down").scaledFont(12, weight: .semibold)
                     }
                     .foregroundStyle(Palette.ink)
                 }
@@ -809,7 +809,7 @@ struct FoodReportSheet: View {
                     Button { reason = item.code } label: {
                         HStack(spacing: 12) {
                             Image(systemName: reason == item.code ? "largecircle.fill.circle" : "circle")
-                                .font(.system(size: 20)).foregroundStyle(reason == item.code ? Palette.ink : Palette.faint)
+                                .scaledFont(20).foregroundStyle(reason == item.code ? Palette.ink : Palette.faint)
                             Text(LocalizedStringKey(item.title)).font(.body).foregroundStyle(Palette.ink)
                             Spacer()
                         }

@@ -167,7 +167,7 @@ struct ThresholdCheckCard: View {
                             VStack(spacing: 2) {
                                 Text(Fmt.weekdayShort(option.date)).font(.footnote.weight(.semibold))
                                 Text(Fmt.dayMonth(option.date)).font(.caption)
-                                Image(systemName: "star.fill").font(.system(size: 8))
+                                Image(systemName: "star.fill").scaledFont(8)
                                     .opacity(option.date == o.recommended ? 1 : 0)
                             }
                             .foregroundStyle(on ? Palette.onButton : Palette.ink)

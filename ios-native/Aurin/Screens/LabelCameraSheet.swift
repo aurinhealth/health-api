@@ -67,7 +67,7 @@ struct LabelCameraSheet: View {
 
             HStack {
                 PhotosPicker(selection: $photo, matching: .images) {
-                    Image(systemName: "photo").font(.system(size: 20, weight: .medium)).foregroundStyle(Palette.ink)
+                    Image(systemName: "photo").scaledFont(20, weight: .medium, cap: .denseCap).foregroundStyle(Palette.ink)
                         .frame(width: 52, height: 52).background(Palette.ink.opacity(0.08), in: Circle())
                 }
                 .buttonStyle(.plain)
@@ -102,7 +102,7 @@ struct LabelCameraSheet: View {
 
     private func circle(_ systemImage: String, label: String, on: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: systemImage).font(.system(size: 15, weight: .semibold))
+            Image(systemName: systemImage).scaledFont(15, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .frame(width: 40, height: 40)
                 .background(on ? Palette.amber : Palette.ink.opacity(0.08), in: Circle())

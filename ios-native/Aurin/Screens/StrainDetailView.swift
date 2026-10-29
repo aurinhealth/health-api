@@ -289,7 +289,7 @@ struct StrainRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
-                .font(.system(size: 15, weight: .semibold))
+                .scaledFont(15, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(planned ? color : Palette.onAccent)
                 .frame(width: 38, height: 38)
                 .background {

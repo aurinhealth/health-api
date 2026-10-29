@@ -154,7 +154,7 @@ struct TodayWeatherCard: View {
             Divider().overlay(Palette.hairline)
             Button { open = true } label: {
                 HStack(spacing: 5) {
-                    Image(systemName: "location.fill").font(.system(size: 10, weight: .semibold)).foregroundStyle(Palette.blue)
+                    Image(systemName: "location.fill").scaledFont(10, weight: .semibold).foregroundStyle(Palette.blue)
                     if let weather {
                         Text(verbatim: (weather.place ?? L10n.tr("Počasí")) + " · " + WeatherText.range(weather))
                             .font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
@@ -172,7 +172,7 @@ struct TodayWeatherCard: View {
                         ForEach(hours, id: \.hour) { h in
                             VStack(spacing: 5) {
                                 Text(verbatim: String(h.hour)).font(Typo.tiny).foregroundStyle(Palette.faint)
-                                Image(systemName: WeatherText.symbol(h.code)).font(.system(size: 15)).foregroundStyle(Palette.blue)
+                                Image(systemName: WeatherText.symbol(h.code)).scaledFont(15, cap: .denseCap).foregroundStyle(Palette.blue)
                                     .symbolRenderingMode(.hierarchical).frame(height: 18)
                                 Text(verbatim: WeatherText.degrees(h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                             }
@@ -206,7 +206,7 @@ struct WeatherSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
+                    Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
                         .accessibilityLabel("Zavřít")
                 }
             }
@@ -298,7 +298,7 @@ struct WeatherDetails: View {
                 } else {
                     Image(systemName: WeatherText.symbol(weather.now?.code ?? weather.code))
                         .symbolRenderingMode(.multicolor)
-                        .font(.system(size: 54))
+                        .scaledFont(54)
                         .accessibilityHidden(true)
                 }
             }
@@ -332,7 +332,7 @@ struct WeatherDetails: View {
     private var windBeside: AnyView? {
         guard let direction = weather.now?.windDirection, let from = WeatherText.compass(direction), (wind ?? 0) >= 5 else { return nil }
         return AnyView(HStack(spacing: 3) {
-            Image(systemName: "arrow.up").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.blue)
+            Image(systemName: "arrow.up").scaledFont(10, weight: .bold).foregroundStyle(Palette.blue)
                 .rotationEffect(.degrees(direction + 180))
             Text(verbatim: from).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
         }
@@ -419,7 +419,7 @@ struct WeatherHourStrip: View {
                     let now = nowFirst && index == 0
                     VStack(spacing: 4) {
                         Text(verbatim: now ? L10n.tr("Teď") : String(h.hour)).font(Typo.tiny).foregroundStyle(now ? Palette.blue : Palette.faint)
-                        Image(systemName: WeatherText.symbol(h.code)).font(.system(size: 15))
+                        Image(systemName: WeatherText.symbol(h.code)).scaledFont(15, cap: .denseCap)
                             .symbolRenderingMode(.multicolor).frame(height: 18)
                         Text(verbatim: WeatherText.degrees(h.temp)).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                         Text(verbatim: (h.rainProb ?? 0) >= 10 ? WeatherText.percent(h.rainProb) : " ")
@@ -449,7 +449,7 @@ struct WeatherDayRow: View {
             Button(action: toggle) {
                 HStack(spacing: 8) {
                     Text(verbatim: title).font(open ? Typo.bodyStrong : Typo.body).foregroundStyle(Palette.ink).frame(width: 48, alignment: .leading)
-                    Image(systemName: WeatherText.symbol(day.code)).symbolRenderingMode(.multicolor).font(.system(size: 15)).frame(width: 24)
+                    Image(systemName: WeatherText.symbol(day.code)).symbolRenderingMode(.multicolor).scaledFont(15, cap: .denseCap).frame(width: 24)
                     Text(verbatim: WeatherText.degrees(day.min)).font(Typo.body).foregroundStyle(Palette.muted).frame(width: 30, alignment: .trailing)
                     range.frame(height: 5)
                     Text(verbatim: WeatherText.degrees(day.max)).font(Typo.bodyStrong).foregroundStyle(Palette.ink).frame(width: 32, alignment: .leading)
@@ -489,7 +489,7 @@ struct WeatherDayRow: View {
 
     private func place(_ symbol: String, _ advice: TodaySnapshot.Advice?) -> some View {
         let indoor = WeatherText.indoor(advice)
-        return Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+        return Image(systemName: symbol).scaledFont(12, weight: .semibold, cap: .denseCap)
             .foregroundStyle(indoor ? Palette.amber : Palette.green)
             .frame(width: 28, height: 24)
             .background(indoor ? Palette.amberSoft : Palette.greenSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -677,7 +677,7 @@ struct WeatherPlaceView: View {
                 Button { Task { await useDevice() } } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "location.fill")
-                            .font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.onAccent)
+                            .scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                             .frame(width: 32, height: 32).background(Palette.blue, in: Circle())
                         VStack(alignment: .leading, spacing: 1) {
                             Text("Aktuální poloha").font(.body.weight(.semibold)).foregroundStyle(Palette.blue)
