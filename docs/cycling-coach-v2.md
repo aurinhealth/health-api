@@ -137,6 +137,11 @@ Without CTL the estimate starts at 75 min (bike) or 45 min (run). The reasons ap
 **Změnit délku** keeps the proposal and changes only its length (`resizeWorkout`):
 
 1. If the library has the same family and main set at that length, that workout is used.
+   A longer tempo, sweet spot, threshold or VO₂max session on a green day first takes the same family's level
+   with the most work whose difficulty stays within the day's target difficulty (or the athlete's level), up to
+   a cap of work (ride: tempo 90, sweet spot 60, threshold 45, VO₂max 25 min; run: tempo 50, threshold 40,
+   VO₂max 20 min). On a yellow or red day the extra time is easy riding only, with a note saying so.
+   Anaerobic and sprint sessions never gain work.
 2. Otherwise the structure is resized:
    - the aerobic part grows or shrinks
    - in long sessions, an aerobic block is added before the main set and a cool-down ride after it
