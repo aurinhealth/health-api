@@ -201,7 +201,7 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
   ships to the site.
 - **Logos of other services:** their official marks at their own colours, on a panel tile; never recoloured.
 - **Icons:** one set (`src/icons.js`), 24px grid, 2px stroke, round caps, `currentColor`. No emoji.
-- **Share image:** `public/site/og-en.png`, 1200×630, re-rendered whenever the hero changes.
+- **Share image:** `public/site/og-en.jpg`, 1200×630, re-rendered whenever the hero changes.
 - **Motion:** slow and soft (`cubic-bezier(.16,1,.3,1)`, 400-600ms); the phone stands up as you scroll, words of
   the headline rise one by one. Everything respects `prefers-reduced-motion` with a still version.
 

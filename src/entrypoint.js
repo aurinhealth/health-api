@@ -109,7 +109,7 @@ import { coachEvalPrincipal, handleCoachEval } from "./coach-eval.js";
 import { isPublicPath, resolvePrincipal, unauthorizedResponse, handleDashboardLogout, sessionSecret, foreignOriginChange, sessionMatchesUser, slidingSession } from "./dashboard-auth.js";
 import { appleAppSiteAssociation } from "./apple-app-site-association.js";
 import { handleWorkoutTemplatesApi, publicSharePage } from "./workout-templates.js";
-import { wwwRedirect } from "./app-origin.js";
+import { wwwRedirect, languageRedirect } from "./app-origin.js";
 import { internalHeaders } from "./internal-auth.js";
 import { deleteAccount, finishAccountDeletions, revokeGoogle, inactiveAccounts } from "./account-data.js";
 import { forgetExpiredAiLimits } from "./ai-limit-memory.js";
@@ -136,7 +136,7 @@ import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
 import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS } from "./push.js";
 import { coachNudge, swapOffer, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
-import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, robotsTxt, sitemapXml } from './site-pages.js';
+import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
 import { compactHeartRate } from "./heart-rate-compaction.js";
@@ -194,7 +194,7 @@ function forgetScreens(userId) {
 }
 // Unlinking Apple (/app/api/me/apple), adding or removing passkeys and signing out everywhere change no training data.
 const CACHE_NEUTRAL = /^\/app\/api\/(sync\/(prefs|activity|retry)|food\/(label|photo|search|ai-lookup)|workouts\/generate|gym\/generate|gym\/equipment\/detect|gym\/technique|training-profile\/estimate|assistant$|assistant\/stream|assistant\/chats|me\/apple$|health\/apple$|account\/(email\/(start|verify)|sign-out-everywhere)$|support\/report$|push\/token$|subscription\/transaction$|passkeys$|passkeys\/options$)/;
-const STATIC_PATHS = new Set(['/logo.svg','/','/privacy','/terms','/support','/health-data','/robots.txt','/sitemap.xml']);
+const STATIC_PATHS = new Set(['/logo.svg','/','/privacy','/terms','/cs/privacy','/cs/terms','/support','/health-data','/robots.txt','/sitemap.xml']);
 
 // An OAuth connection to Intervals.icu skips a scheduled job except at minute
 // 40 (or the job's own minute) of every sixth hour (UTC).
@@ -441,6 +441,8 @@ const worker = {
     const url = new URL(request.url);
     const www = wwwRedirect(url, request.method);
     if (www) return www;
+    const moved = languageRedirect(url, request.method);
+    if (moved) return moved;
     // Static pages stay independent of storage availability.
     // Crawlers and link checkers ask with HEAD too; a 401 there keeps the site out of search.
     if (STATIC_PATHS.has(url.pathname) && (request.method === 'GET' || request.method === 'HEAD')) {
@@ -460,6 +462,11 @@ const worker = {
     if (!principal && url.pathname === "/automation/coach-eval") principal = await coachEvalPrincipal(request, env);
     const isPublic = isPublicPath(url.pathname);
     if (!isPublic && !principal) {
+      // A browser opening an address that isn't a page (a mistyped or old link) gets the site's 404 page.
+      if ((request.method === 'GET' || request.method === 'HEAD') && /text\/html/.test(request.headers.get('Accept') || '')) {
+        const page = notFoundPage(request);
+        return request.method === 'HEAD' ? new Response(null, page) : page;
+      }
       return unauthorizedResponse();
     }
     let user = null, prefetched = null;
@@ -635,8 +642,8 @@ async function serverErrorReason(response) {
 
 async function staticRoute(url, request, env) {
   if (url.pathname === "/") return overviewPage(request);
-  if (url.pathname === "/privacy") return privacyPage(request, { apple: true, email: emailConfigured(env), open: openSignup(env) });
-  if (url.pathname === "/terms") return termsPage(request);
+  if (url.pathname === "/privacy" || url.pathname === "/cs/privacy") return privacyPage(request, { apple: true, email: emailConfigured(env), open: openSignup(env) });
+  if (url.pathname === "/terms" || url.pathname === "/cs/terms") return termsPage(request);
   if (url.pathname === "/health-data") return healthDataPage(request);
   if (url.pathname === "/support") return supportPage(request, { apple: true, email: emailConfigured(env), open: openSignup(env) });
   if (url.pathname === "/robots.txt") return robotsTxt(request);

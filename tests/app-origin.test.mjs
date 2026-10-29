@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { appOrigin, wwwRedirect } from "../src/app-origin.js";
+import { appOrigin, wwwRedirect, languageRedirect } from "../src/app-origin.js";
 import { handleGoogleLogin } from "../src/google-login.js";
 import { handleGoogleOAuth } from "../src/google-oauth.js";
 import { handleIntervalsOAuth } from "../src/intervals-oauth.js";
@@ -49,18 +49,30 @@ test("www.aurin.health and the old petrfitnessdata.eu lead to aurin.health, othe
 test("the public pages link to the host they are served on, aurin.health by default", async () => {
   for (const origin of hosts) {
     const html = await (await overviewPage(new Request(origin + "/"))).text();
-    assert.match(html, new RegExp(`<meta property="og:image" content="${origin}/site/og-en\\.png\\?v=\\d+">`));
+    assert.match(html, new RegExp(`<meta property="og:image" content="${origin}/site/og-en\\.jpg\\?v=\\d+">`));
     assert.match(html, new RegExp(`<meta property="og:url" content="${origin}/">`));
-    assert.match(html, new RegExp(`<meta name="twitter:image" content="${origin}/site/og-en\\.png\\?v=\\d+">`));
+    assert.match(html, new RegExp(`<meta name="twitter:image" content="${origin}/site/og-en\\.jpg\\?v=\\d+">`));
     assert.match(html, /<meta name="twitter:card" content="summary_large_image">/);
     const ld = JSON.parse(html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1]);
     assert.equal(ld['@graph'][0]['@type'], 'SoftwareApplication');
     assert.equal(ld['@graph'][0].url, origin);
     assert.match(html, new RegExp(`<link rel="canonical" href="${origin}/">`));
     const privacy = await (await privacyPage(new Request(origin + "/privacy"))).text();
-    assert.match(privacy, new RegExp(`hreflang="cs" href="${origin}/privacy\\?lang=cs"`));
+    assert.match(privacy, new RegExp(`hreflang="cs" href="${origin}/cs/privacy"`));
   }
-  assert.match(await overviewPage().text(), /content="https:\/\/aurin\.health\/site\/og-en\.png\?v=\d+"/);
+  assert.match(await overviewPage().text(), /content="https:\/\/aurin\.health\/site\/og-en\.jpg\?v=\d+"/);
   const unknown = await (await privacyPage(new Request("https://evil.example/privacy"))).text();
   assert.match(unknown, /<link rel="canonical" href="https:\/\/aurin\.health\/privacy">/);
+});
+
+test("?lang= leads to the address of that language; /cs to the English home page", () => {
+  const to = path => languageRedirect(new URL("https://aurin.health" + path))?.headers.get("Location") ?? null;
+  assert.equal(to("/privacy?lang=cs"), "https://aurin.health/cs/privacy");
+  assert.equal(to("/terms?lang=cs"), "https://aurin.health/cs/terms");
+  assert.equal(to("/privacy?lang=en"), "https://aurin.health/privacy");
+  assert.equal(to("/cs"), "https://aurin.health/");
+  assert.equal(to("/?lang=cs"), "https://aurin.health/");
+  assert.equal(languageRedirect(new URL("https://aurin.health/privacy?lang=cs")).status, 301);
+  for (const path of ["/", "/privacy", "/cs/privacy", "/t/abc?lang=cs", "/auth/email/verify?lang=cs"]) assert.equal(to(path), null, path);
+  assert.equal(languageRedirect(new URL("https://aurin.health/privacy?lang=cs"), "POST"), null);
 });

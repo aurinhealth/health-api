@@ -15,3 +15,13 @@ export function wwwRedirect(url, method = "GET") {
   if (!ALIASES.has(url.hostname)) return null;
   return Response.redirect(SITE_ORIGIN + url.pathname + url.search, method === "GET" || method === "HEAD" ? 301 : 308);
 }
+
+// The Czech privacy policy and terms live at /cs/privacy and /cs/terms. ?lang= (older links and the
+// app's) leads to the address of that language, and /cs to the home page, which is in English only.
+export function languageRedirect(url, method = "GET") {
+  if (method !== "GET" && method !== "HEAD") return null;
+  const lang = url.searchParams.get("lang");
+  if ((url.pathname === "/privacy" || url.pathname === "/terms") && lang) return Response.redirect(`${url.origin}${lang === "cs" ? "/cs" : ""}${url.pathname}`, 301);
+  if (url.pathname === "/cs" || url.pathname === "/cs/" || (url.pathname === "/" && lang)) return Response.redirect(`${url.origin}/`, 301);
+  return null;
+}

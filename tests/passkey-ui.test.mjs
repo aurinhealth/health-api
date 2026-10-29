@@ -26,7 +26,7 @@ test("the privacy policy and support page describe only the sign-in methods that
   assert.match(all, /<strong>Codes sent by email\.<\/strong>/);
   assert.match(all, /Its Email Service sends the sign-in codes/);
   assert.match(all, /You sign in with Apple, Google, a passkey or a one-time code sent to your email,/);
-  const cs = await privacyPage(new Request("https://aurin.health/privacy?lang=cs"), { email: true }).text();
+  const cs = await privacyPage(new Request("https://aurin.health/cs/privacy"), { email: true }).text();
   assert.match(cs, /<strong>Přístupové klíče \(passkeys\)\.<\/strong>/);
   assert.match(cs, /<strong>Kódy e-mailem\.<\/strong>/);
   assert.doesNotMatch(cs, /Apple ID/);

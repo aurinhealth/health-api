@@ -23,6 +23,8 @@ const PUBLIC_PATHS = new Set([
   "/",
   "/privacy",
   "/terms",
+  "/cs/privacy",
+  "/cs/terms",
   "/support",
   "/logo.svg",
   "/robots.txt",
