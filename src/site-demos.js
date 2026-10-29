@@ -573,9 +573,9 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .gar{display:flex;gap:6px;opacity:0;transition:opacity .3s}.gar i{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:color-mix(in srgb,var(--text) 8%,transparent)}.gar svg{width:14px;height:14px}
 .gparts.reo .gar{opacity:1}.gparts.reo .pt .tg{opacity:0!important}.gparts.reo .pt{opacity:1}
 .p1 .gar i:first-child,.p4 .gar i:last-child{opacity:.3}
-.tg{position:relative;width:44px;height:26px;border-radius:99px;background:color-mix(in srgb,var(--text) 16%,transparent);transition:background .3s}
-.tg i{position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.18);transition:transform .35s cubic-bezier(.3,1.5,.5,1),background .3s}
-.tg.on{background:var(--button)}.tg.on i{transform:translateX(18px);background:var(--on-button);box-shadow:none}
+.tg{position:relative;width:54px;height:24px;border-radius:99px;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--text) 28%,transparent);background:transparent;transition:background .3s,box-shadow .3s}
+.tg i{position:absolute;left:6px;top:6px;width:12px;height:12px;border-radius:99px;background:color-mix(in srgb,var(--text) 45%,transparent);transition:transform .35s cubic-bezier(.3,1.5,.5,1),width .35s,height .35s,left .35s,top .35s,background .3s}
+.tg.on{background:var(--green);box-shadow:none}.tg.on i{left:2px;top:2px;width:32px;height:20px;transform:translateX(18px);background:#fff;box-shadow:0 1.5px 3px rgba(0,0,0,.14)}
 .js .tg[data-at]{opacity:1!important;transform:none!important}
 .p2:has(.tg:not(.on)){opacity:.45}
 .gparts.swap .p2{transform:translateY(54px)}.gparts.swap .p3{transform:translateY(-54px)}

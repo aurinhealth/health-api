@@ -31,6 +31,8 @@ struct AurinApp: App {
                 // Aurin Pro: renewals and codes redeemed in the App Store reach the server (ProStore.swift).
                 .task { ProStore.shared.start(api: model.demo ? nil : model.api) }
                 .tint(Palette.ink)
+                // Every switch in the app, also the ones without their own style.
+                .toggleStyle(AurinToggleStyle())
                 .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
                 .environment(\.locale, L10n.locale)
                 // Texts from variables are translated when drawn, so a new language redraws everything.
