@@ -1,5 +1,6 @@
 import Foundation
 import WatchConnectivity
+import WatchKit
 import WidgetKit
 
 /// Today from the iPhone (App/WatchBridge.swift): the application context it
@@ -29,16 +30,51 @@ final class WatchStore: NSObject, ObservableObject {
         session.activate()
     }
 
-    /// The newest Today from the iPhone, when it is in reach.
+    /// The newest Today from the iPhone, when it is in reach; else, or when
+    /// it has nothing for today, from the server with the watch's sign-in.
     func ask() {
-        guard WCSession.isSupported() else { return }
+        guard WCSession.isSupported() else { Task { await fromServer() }; return }
         let session = WCSession.default
-        guard session.activationState == .activated, session.isReachable else { return }
+        guard session.activationState == .activated, session.isReachable else {
+            Task { await fromServer() }
+            return
+        }
         session.sendMessage(["today": true], replyHandler: { reply in
-            guard let data = reply[WatchSnapshot.contextKey] as? Data else { return }
-            Task { @MainActor in WatchStore.shared.receive(data) }
-        }, errorHandler: nil)
+            let data = reply[WatchSnapshot.contextKey] as? Data
+            Task { @MainActor in
+                if let data { WatchStore.shared.receive(data) }
+                await WatchStore.shared.fromServer()
+            }
+        }, errorHandler: { _ in
+            Task { @MainActor in await WatchStore.shared.fromServer() }
+        })
     }
+
+    private var loading = false
+
+    /// Today from the server when the watch has none for today (WatchToday).
+    func fromServer() async {
+        let today = Self.localDate(Date())
+        guard snapshot?.date != today, !loading, WatchAPI.signedIn else { return }
+        loading = true
+        defer { loading = false }
+        guard let value = await WatchToday.load(over: snapshot), value.date == today, let data = value.encoded() else { return }
+        receive(data)
+    }
+
+    /// Wakes the app shortly after the usual wake time (or 6:30) to fetch
+    /// today before the first look at the watch (AurinWatchApp backgroundTask).
+    func scheduleMorning() {
+        let calendar = Calendar.current
+        let now = Date()
+        let wake = snapshot?.alarm?.nextWake(after: now)
+            ?? calendar.nextDate(after: now, matching: DateComponents(hour: 6, minute: 30), matchingPolicy: .nextTime)
+        guard let wake else { return }
+        WKApplication.shared().scheduleBackgroundRefresh(withPreferredDate: wake.addingTimeInterval(10 * 60),
+                                                         userInfo: Self.morningTask as NSString) { _ in }
+    }
+
+    static let morningTask = "today"
 
     func receive(_ data: Data?) {
         guard let data else {

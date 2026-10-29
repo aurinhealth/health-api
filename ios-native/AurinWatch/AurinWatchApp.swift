@@ -20,7 +20,13 @@ struct AurinWatchApp: App {
                         store.ask()
                         WatchAlarm.shared.schedule()
                     }
+                    if now == .background { store.scheduleMorning() }
                 }
+        }
+        // In the morning: today from the server before the first look at the watch.
+        .backgroundTask(.appRefresh(WatchStore.morningTask)) {
+            await WatchStore.shared.fromServer()
+            await WatchStore.shared.scheduleMorning()
         }
         // The coach's pushes from the iPhone, in the watch's own look.
         WKNotificationScene(controller: CoachNotificationController.self, category: "COACH_SWAP")
