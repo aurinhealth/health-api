@@ -1,5 +1,6 @@
 import {initialImport,recentDashboardImport} from './account-sync.js';
 import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
+import { elapsed, serverTiming, slowness, timed } from "./request-timing.js";
 import { trainingSetup } from './onboarding.js';
 import { subscriptionStatus, assertAIAccess } from './subscription.js';
 import { claimCoachMessage, recordCoachMessage, releaseCoachMessage } from './coach-allowance.js';
@@ -593,17 +594,32 @@ export default {
     const outdated = appUpdateRequired(request);
     if (outdated) return isStaging(env) ? markStaging(outdated) : outdated;
     // Server errors are counted for the owner's morning e-mail (ops-report.js); 503 is a planned "try again".
-    const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", `${request.method} ${routeName(new URL(request.url).pathname)}`, message));
-    try {
-      const answered = await worker.fetch(request, env, ctx);
-      // The owner's report names why (the route's own error text), before it is made plain.
-      if (answered.status >= 500 && answered.status !== 503) count(await serverErrorReason(answered));
-      // A database or code error never reaches the app word for word (error-text.js).
-      const response = await withPlainErrors(request, answered);
-      return isStaging(env) ? markStaging(response) : response;
-    } catch (error) { count(error); throw error; }
+    const route = `${request.method} ${routeName(new URL(request.url).pathname)}`;
+    const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", route, message));
+    return timed(async work => {
+      try {
+        const answered = await worker.fetch(request, env, ctx);
+        // The owner's report names why (the route's own error text), before it is made plain.
+        if (answered.status >= 500 && answered.status !== 503) count(await serverErrorReason(answered));
+        // A database or code error never reaches the app word for word (error-text.js).
+        const response = withTiming(await withPlainErrors(request, answered), work, route, env, ctx);
+        return isStaging(env) ? markStaging(response) : response;
+      } catch (error) { count(error); throw error; }
+    });
   }
 };
+
+// Server-Timing on every answer; the app's API requests also go to the logs,
+// and a slow one into the owner's morning report (request-timing.js).
+function withTiming(response, work, route, env, ctx) {
+  if (route.includes(" /app/api/")) {
+    console.log(JSON.stringify({ timing: route, status: response.status, ms: elapsed(work), queries: work.queries, rows_read: work.rowsRead, db_ms: work.dbMs }));
+    const slow = slowness(work);
+    if (slow) ctx?.waitUntil?.(recordOpsEvent(env.DB, "slow", route, slow));
+  }
+  try { response.headers.set("Server-Timing", serverTiming(work)); return response; }
+  catch { const copy = new Response(response.body, response); copy.headers.set("Server-Timing", serverTiming(work)); return copy; }
+}
 
 // "HTTP 500: D1_ERROR: …" from a JSON error answer's message, else the status alone.
 async function serverErrorReason(response) {
