@@ -88,6 +88,8 @@ struct GymSessionView: View {
             finish()
         }
         .onReceive(tick) { date in
+            // Only the rest counts down; the set screen stays still between taps.
+            guard restEnd != nil else { return }
             now = date
             if let end = restEnd, end <= date {
                 restEnd = nil
@@ -130,10 +132,11 @@ struct GymSessionView: View {
                 }
                 .disabled(store.changing)
                 HStack(spacing: 6) {
-                    // Detents: the value moves only by whole steps (0.5 kg, one rep),
+                    // Detents: the value moves only by whole steps (0.5 kg or 1 lb, one rep),
                     // never through the in-between values the plain rotation shows.
-                    tile(GymText.kg(kg), unit: "kg", field: .kg, value: $kg, step: 0.5, top: 500)
-                        .digitalCrownRotation(detent: $kg, from: 0, through: 500, by: 0.5, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
+                    // `kg` holds the weight as shown, in pounds with imperial units.
+                    tile(GymText.kg(kg), unit: W.weightUnit, field: .kg, value: $kg, step: W.weightStep, top: W.imperial ? 1100 : 500)
+                        .digitalCrownRotation(detent: $kg, from: 0, through: W.imperial ? 1100 : 500, by: W.weightStep, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
                     tile("\(Int(reps))", unit: W.tr("opak.", "reps"), field: .reps, value: $reps, step: 1, top: 100)
                         .digitalCrownRotation(detent: $reps, from: 0, through: 100, by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
@@ -148,7 +151,8 @@ struct GymSessionView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(W.ink)
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 5), GridItem(.flexible(), spacing: 5)], spacing: 5) {
-                    cell(W.tr("Čas", "Time"), workout.start.map { GymText.elapsed(now.timeIntervalSince($0)) } ?? "0:00", nil, W.ink)
+                    // The time runs on its own, without drawing the whole set again each second.
+                    timeCell
                     cell(W.tr("Tep", "Heart"), workout.heartRate.map { W.number($0) } ?? "–", "bpm", W.pink)
                     cell(W.tr("Objem", "Volume"), GymText.volume(gym.volume), nil, W.indigo)
                     cell(W.tr("Kalorie", "Calories"), W.number(workout.calories), "kcal", W.amber)
@@ -210,6 +214,25 @@ struct GymSessionView: View {
         }
     }
 
+    private var timeCell: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(W.tr("Čas", "Time")).font(.system(size: 10)).foregroundStyle(W.secondary)
+            Group {
+                if let start = workout.start {
+                    Text(timerInterval: start...Date.distantFuture, countsDown: false)
+                } else {
+                    Text("0:00")
+                }
+            }
+            .font(.system(size: 17, weight: .semibold).monospacedDigit()).foregroundStyle(W.ink)
+            .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(W.tile, in: RoundedRectangle(cornerRadius: 10))
+    }
+
     private func cell(_ title: String, _ value: String, _ unit: String?, _ color: Color) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title).font(.system(size: 10)).foregroundStyle(W.secondary)
@@ -228,14 +251,14 @@ struct GymSessionView: View {
     private func load(_ lift: WatchGym.Lift) {
         guard row != lift.row else { return }
         row = lift.row
-        kg = lift.kg ?? 0
+        kg = W.weight(lift.kg ?? 0)
         reps = Double(lift.reps ?? 8)
         if focus == nil { focus = .kg }
     }
 
     private func done(_ lift: WatchGym.Lift, in gym: WatchGym) {
         let next = gym.next(after: lift.row)
-        store.complete(row: lift.row, kg: kg, reps: Int(reps))
+        store.complete(row: lift.row, kg: W.kg(kg), reps: Int(reps))
         WKInterfaceDevice.current().play(.success)
         guard let next else {
             summary = true
@@ -267,7 +290,7 @@ struct GymSessionView: View {
             }
             .frame(width: 92, height: 92)
             if let gym = store.gym, let lift = currentLift(in: gym), let e = gym.exercises.first(where: { $0.lifts.contains { $0.row == lift.row } }) {
-                Text(W.tr("Další: ", "Next: ") + e.title + " · " + GymText.kg(lift.kg ?? 0) + " kg × \(lift.reps ?? 0)")
+                Text(W.tr("Další: ", "Next: ") + e.title + " · " + GymText.weight(lift.kg ?? 0) + " × \(lift.reps ?? 0)")
                     .font(.system(size: 11)).foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
             }
             HStack(spacing: 4) {
@@ -423,7 +446,7 @@ struct GymOptionsView: View {
     private func line(_ o: WatchGym.Option) -> String? {
         var parts: [String] = []
         if let sets = o.sets { parts.append("\(sets) × " + (o.reps ?? "–")) }
-        if let kg = o.kg, kg > 0 { parts.append(GymText.kg(kg) + " kg") }
+        if let kg = o.kg, kg > 0 { parts.append(GymText.weight(kg)) }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
@@ -463,7 +486,7 @@ struct GymSummary: View {
                         HStack {
                             Text(e.title).lineLimit(1)
                             Spacer(minLength: 4)
-                            Text("\(done.count) × \(done.last?.reps ?? 0) · " + GymText.kg(done.map { $0.kg ?? 0 }.max() ?? 0) + " kg")
+                            Text("\(done.count) × \(done.last?.reps ?? 0) · " + GymText.weight(done.map { $0.kg ?? 0 }.max() ?? 0))
                                 .foregroundStyle(W.secondary).lineLimit(1).minimumScaleFactor(0.7)
                         }
                         .font(.system(size: 12))

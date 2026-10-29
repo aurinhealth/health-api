@@ -1,5 +1,6 @@
 import SwiftUI
 import WatchConnectivity
+import WidgetKit
 
 /// A planned ride's or run's steps (mockup 44): asked from the iPhone when it
 /// is in reach, else from the server with the watch's own sign-in, and kept
@@ -39,7 +40,14 @@ final class PlanStore: ObservableObject {
 
     private func finish(_ plan: WatchPlan?, id: String) {
         asking.remove(id)
-        if let plan { plans[id] = plan } else { failed.insert(id) }
+        if let plan {
+            plans[id] = plan
+            ComplicationShelf.save(plan: plan, id: id)
+            WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.workout")
+            WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.aurin")
+        } else {
+            failed.insert(id)
+        }
     }
 
     static func color(_ zone: Int) -> Color {

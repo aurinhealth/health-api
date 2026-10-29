@@ -40,6 +40,7 @@ final class GymWorkout: NSObject, ObservableObject {
         let builder = session.associatedWorkoutBuilder()
         builder.dataSource = HKLiveWorkoutDataSource(healthStore: store, workoutConfiguration: configuration)
         builder.delegate = self
+        session.delegate = self
         self.session = session
         self.builder = builder
         let now = Date()
@@ -59,6 +60,7 @@ final class GymWorkout: NSObject, ObservableObject {
         guard let recovered, recovered.state == .running || recovered.state == .paused else { return false }
         let builder = recovered.associatedWorkoutBuilder()
         builder.delegate = self
+        recovered.delegate = self
         session = recovered
         self.builder = builder
         start = recovered.startDate ?? builder.startDate ?? Date()
@@ -72,6 +74,8 @@ final class GymWorkout: NSObject, ObservableObject {
             return
         }
         session.end()
+        // Let go now, so the session's own "ended" isn't taken for a loss.
+        self.session = nil
         let now = Date()
         try? await builder.endCollection(at: now)
         if save {
@@ -117,6 +121,34 @@ final class GymWorkout: NSObject, ObservableObject {
               let data = WatchGym.Live(start: start, heartRate: heartRate, calories: calories).encoded() else { return }
         lastLive = Date()
         session.sendMessage([WatchGym.liveKey: data], replyHandler: { _ in }, errorHandler: { _ in })
+    }
+
+    /// The system ended the session (another workout started, an error): the
+    /// gym goes on with its clock, the next workout starts from here.
+    fileprivate func lost(_ ended: ObjectIdentifier) {
+        guard let session, ObjectIdentifier(session) == ended else { return }
+        let builder = self.builder
+        session = nil
+        self.builder = nil
+        Task {
+            try? await builder?.endCollection(at: Date())
+            _ = try? await builder?.finishWorkout()
+        }
+    }
+}
+
+extension GymWorkout: HKWorkoutSessionDelegate {
+    nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState,
+                                    from fromState: HKWorkoutSessionState, date: Date) {
+        // Ended by Aurin itself (finish), it has already let go of the session.
+        guard toState == .ended else { return }
+        let id = ObjectIdentifier(workoutSession)
+        Task { @MainActor in GymWorkout.shared.lost(id) }
+    }
+
+    nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
+        let id = ObjectIdentifier(workoutSession)
+        Task { @MainActor in GymWorkout.shared.lost(id) }
     }
 }
 

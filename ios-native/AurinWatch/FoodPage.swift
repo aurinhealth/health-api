@@ -2,12 +2,10 @@ import SwiftUI
 
 /// The third page by the crown (mockup 44): the day's energy in a ring with
 /// what is left, carbs, protein and fat in the iPhone's colours, and water
-/// with its bar and +250 ml that goes to the iPhone's day.
+/// with its bar and +250 ml (8 fl oz in imperial) that goes to the iPhone's day.
 struct FoodPage: View {
     @EnvironmentObject private var store: WatchStore
     @State private var added = 0
-
-    private static let glass = 250
 
     var body: some View {
         Group {
@@ -91,7 +89,7 @@ struct FoodPage: View {
                 .font(.system(size: 15))
                 .foregroundStyle(W.blue)
             VStack(alignment: .leading, spacing: 0) {
-                Text(liters(food.water ?? 0) + (food.waterTarget.map { " / " + liters($0) } ?? "") + " l")
+                Text(waterLine(food))
                     .font(.system(size: 12, weight: .medium).monospacedDigit())
                     .foregroundStyle(W.ink)
                     .lineLimit(1)
@@ -100,10 +98,10 @@ struct FoodPage: View {
             }
             Spacer(minLength: 2)
             Button {
-                store.addWater(ml: Self.glass)
+                store.addWater(ml: W.glassMl)
                 added += 1
             } label: {
-                Text("+\(Self.glass)")
+                Text(W.imperial ? "+8 oz" : "+250")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.black)
                     .padding(.horizontal, 10)
@@ -112,7 +110,7 @@ struct FoodPage: View {
             }
             .buttonStyle(.plain)
             .sensoryFeedback(.success, trigger: added)
-            .accessibilityLabel(W.tr("Přidat 250 ml vody", "Add 250 ml of water"))
+            .accessibilityLabel(W.imperial ? W.tr("Přidat 8 fl oz vody", "Add 8 fl oz of water") : W.tr("Přidat 250 ml vody", "Add 250 ml of water"))
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -124,7 +122,12 @@ struct FoodPage: View {
         return min(max(value / target, 0), 1)
     }
 
-    private func liters(_ ml: Double) -> String { W.number(ml / 1000, digits: 1) }
+    /// "1,2 / 2,5 l" or "41 / 85 fl oz".
+    private func waterLine(_ food: WatchSnapshot.Food) -> String {
+        guard let target = food.waterTarget else { return W.water(food.water ?? 0) }
+        let unit = W.imperial ? " fl oz" : " l"
+        return W.water(food.water ?? 0).replacingOccurrences(of: unit, with: "") + " / " + W.water(target)
+    }
 
     private struct Bar: View {
         let fraction: Double

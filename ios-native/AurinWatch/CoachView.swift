@@ -9,7 +9,6 @@ import AVFoundation
 struct CoachView: View {
     var view = "today"
     @ObservedObject private var coach = CoachStore.shared
-    @State private var draft = ""
     @State private var speaker = CoachSpeaker()
 
     private var ideas: [String] {
@@ -68,7 +67,7 @@ struct CoachView: View {
     /// The microphone: a tap opens the watch's input (dictation first, then
     /// scribble or the keyboard), and the question goes when it closes.
     private var input: some View {
-        ZStack {
+        TextFieldLink(prompt: Text(W.tr("Zeptej se kouče", "Ask the coach"))) {
             VStack(spacing: 4) {
                 Image(systemName: "mic.fill")
                     .font(.system(size: 24, weight: .semibold))
@@ -80,16 +79,13 @@ struct CoachView: View {
                     .foregroundStyle(W.muted)
             }
             .frame(maxWidth: .infinity)
-            TextField(W.tr("Zeptej se kouče", "Ask the coach"), text: $draft)
-                .textFieldStyle(.plain)
-                .opacity(0.02)
-                .frame(height: 80)
-                .onSubmit {
-                    coach.ask(draft, view: view)
-                    draft = ""
-                }
+        } onSubmit: { text in
+            let question = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !question.isEmpty else { return }
+            coach.ask(question, view: view)
         }
-        .accessibilityElement(children: .contain)
+        .buttonStyle(.plain)
+        .accessibilityLabel(W.tr("Zeptej se kouče", "Ask the coach"))
     }
 }
 

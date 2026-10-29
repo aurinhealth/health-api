@@ -50,26 +50,32 @@ struct WatchRoot: View {
     @EnvironmentObject private var store: WatchStore
     @ObservedObject private var alarm = WatchAlarm.shared
     @ObservedObject private var gym = GymStore.shared
+    @State private var page = "readiness"
+    @State private var path = NavigationPath()
 
     var body: some View {
         // By the crown: readiness, then the day's training (TrainingPage) and food and drink (FoodPage).
-        NavigationStack {
-            TabView {
-                if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(Date()) {
-                    ReadinessHome(s: snapshot)
-                } else {
-                    WaitingView(stale: store.snapshot != nil)
+        NavigationStack(path: $path) {
+            TabView(selection: $page) {
+                Group {
+                    if let snapshot = store.snapshot, snapshot.date == WatchStore.localDate(Date()) {
+                        ReadinessHome(s: snapshot)
+                    } else {
+                        WaitingView(stale: store.snapshot != nil)
+                    }
                 }
+                .tag("readiness")
                 // The rest in the order Settings → Apple Watch on the iPhone gives.
                 ForEach(store.settings.pages.filter { $0 != "readiness" }, id: \.self) { page in
                     switch page {
-                    case "training": TrainingPage()
-                    case "food": FoodPage()
+                    case "training": TrainingPage().tag("training")
+                    case "food": FoodPage().tag("food")
                     default: EmptyView()
                     }
                 }
             }
             .tabViewStyle(.verticalPage)
+            .onOpenURL(perform: open)
             .fullScreenCover(isPresented: $gym.openedFromPhone) { GymSessionView() }
             // Here, not inside a page: the vertical pages are lazy, and a
             // destination declared in one was never found by the stack.
@@ -93,6 +99,23 @@ struct WatchRoot: View {
         .fullScreenCover(isPresented: Binding(get: { alarm.ringing }, set: { if !$0 { alarm.stop() } })) {
             AlarmRinging()
         }
+    }
+
+    /// A tap on a complication (aurinwatch://open/<page>, AurinWatchWidgets Link):
+    /// its page, and the detail for a number.
+    private func open(_ url: URL) {
+        guard url.scheme == "aurinwatch", !gym.openedFromPhone else { return }
+        path = NavigationPath()
+        let target = url.lastPathComponent
+        let details: [String: ReadinessHome.Page] = ["sleep": .sleep, "restingHR": .restingHR, "hrv": .hrv, "strain": .strain, "alarm": .alarm]
+        let detail = details[target]
+        let pages = store.settings.pages
+        if target == "training" || target == "food", pages.contains(target) {
+            page = target
+        } else {
+            page = "readiness"
+        }
+        if let detail, store.snapshot != nil { path.append(detail) }
     }
 }
 

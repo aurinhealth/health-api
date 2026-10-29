@@ -238,10 +238,7 @@ private struct AlarmSettings: View {
         guard let next = alarm.next else {
             return W.tr("iPhone nezvoní. Bez času budíku hodinky nebudí.", "Your iPhone stays quiet. The watch needs a wake time.")
         }
-        let f = DateFormatter()
-        f.locale = W.locale
-        f.dateFormat = "EEEE H:mm"
-        return W.tr("iPhone nezvoní. Další buzení: ", "Your iPhone stays quiet. Next: ") + f.string(from: next)
+        return W.tr("iPhone nezvoní. Další buzení: ", "Your iPhone stays quiet. Next: ") + W.dateFormatter("EEEE H:mm").string(from: next)
     }
 }
 

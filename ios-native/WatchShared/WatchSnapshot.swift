@@ -46,6 +46,8 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
 
     /// The alarm from Settings → Sleep on the iPhone, for the watch's alarm.
     var alarm: Alarm? = nil
+    /// Settings → Units on the iPhone: pounds and fluid ounces on the watch too.
+    var imperial: Bool? = nil
 
     struct Alarm: Codable, Equatable, Sendable {
         /// "07:00" on work days and at the weekend; nil without an alarm.
@@ -76,6 +78,10 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
 
     /// The watch rings instead of the iPhone (true) or not.
     static let alarmOnWatchKey = "alarmOnWatch"
+    /// The watch's alarm was stopped (true) or snoozed until a time (Date):
+    /// the iPhone moves its backup alarm (WatchAlarmBridge).
+    static let alarmStoppedKey = "alarmStopped"
+    static let alarmSnoozedKey = "alarmSnoozed"
 
     /// The watch asks the iPhone to add a drink of water: its ml.
     static let waterKey = "addWater"

@@ -52,12 +52,25 @@ final class WatchStore: NSObject, ObservableObject {
         }
         guard let value = WatchSnapshot.decode(data) else { return }
         if let snapshot, snapshot.date == value.date, snapshot.updated > value.updated { return }
+        // The iPhone sends the same Today by context, reply and message: draw it once.
+        if let snapshot, Self.same(snapshot, value) { return }
         snapshot = value
         UserDefaults.standard.set(data, forKey: Self.savedKey)
         WatchAlarm.shared.schedule()
         // The watch face draws the same day (AurinWatchWidgets).
         ComplicationShelf.save(value)
         WidgetCenter.shared.reloadAllTimelines()
+        // The next ride's or run's steps for the Workout complication.
+        if let next = (value.week ?? []).first(where: { $0.date == value.date && !$0.done && $0.eventId != nil }) {
+            PlanStore.shared.load(next)
+        }
+    }
+
+    /// The same day apart from when it was sent.
+    private static func same(_ a: WatchSnapshot, _ b: WatchSnapshot) -> Bool {
+        var a = a
+        a.updated = b.updated
+        return a == b
     }
 
     func receive(settings data: Data) {

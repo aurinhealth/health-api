@@ -34,26 +34,9 @@ final class WatchAlarm: NSObject, ObservableObject {
 
     private var session: WKExtendedRuntimeSession?
 
-    /// The next wake time from the iPhone's alarm, within the next day and a half.
-    static func nextWake(_ alarm: WatchSnapshot.Alarm?, after now: Date = Date()) -> Date? {
-        guard let alarm else { return nil }
-        let calendar = Calendar.current
-        for offset in 0...2 {
-            guard let morning = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: now)) else { continue }
-            guard let text = wake(on: WatchStore.localDate(morning), alarm), let date = at(text, on: morning), date > now else { continue }
-            return date
-        }
-        return nil
-    }
-
-    /// The wake time of a morning ("2026-10-28"): tonight's own for the
-    /// morning after tonight, else the work day or weekend one.
+    /// The wake time of a morning ("2026-10-28").
     static func wake(on morning: String, _ alarm: WatchSnapshot.Alarm) -> String? {
-        if let evening = alarm.evening, let wake = alarm.wake, let day = W.day(evening),
-           let after = Calendar.current.date(byAdding: .day, value: 1, to: day), WatchStore.localDate(after) == morning {
-            return wake
-        }
-        return weekend(morning) ? alarm.weekend : alarm.work
+        W.day(morning).flatMap { alarm.wake(on: $0) }
     }
 
     static func weekend(_ morning: String) -> Bool {
@@ -62,17 +45,10 @@ final class WatchAlarm: NSObject, ObservableObject {
         return weekday == 1 || weekday == 7
     }
 
-    /// "6:45" on that day.
-    static func at(_ text: String, on day: Date) -> Date? {
-        let parts = text.prefix(5).split(separator: ":").compactMap { Int($0) }
-        guard parts.count == 2 else { return nil }
-        return Calendar.current.date(bySettingHour: parts[0], minute: parts[1], second: 0, of: day)
-    }
-
     /// Sets the session for the next wake time, or takes it away.
     func schedule(at date: Date? = nil) {
         guard !ringing else { return }
-        let when = date ?? Self.nextWake(WatchStore.shared.snapshot?.alarm)
+        let when = date ?? WatchStore.shared.snapshot?.alarm?.nextWake()
         guard onWatch, let when else {
             session?.invalidate()
             session = nil
@@ -89,18 +65,22 @@ final class WatchAlarm: NSObject, ObservableObject {
     }
 
     func stop() {
+        let wasRinging = ringing
         session?.invalidate()
         session = nil
         ringing = false
         next = nil
         schedule()
+        if wasRinging { tellPhone([WatchSnapshot.alarmStoppedKey: true]) }
     }
 
     func snoozeNow() {
         session?.invalidate()
         session = nil
         ringing = false
-        schedule(at: Date().addingTimeInterval(Self.snooze))
+        let until = Date().addingTimeInterval(Self.snooze)
+        schedule(at: until)
+        tellPhone([WatchSnapshot.alarmSnoozedKey: until])
     }
 
     /// Settings → Apple Watch → Rings on, changed on the iPhone.
@@ -137,11 +117,13 @@ final class WatchAlarm: NSObject, ObservableObject {
         }
     }
 
-    private func tellPhone() {
+    /// Rings on the watch or not, stopped or snoozed: the iPhone keeps its
+    /// backup alarm five minutes after the watch's (WatchAlarmBridge).
+    private func tellPhone(_ about: [String: Any]? = nil) {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         guard session.activationState == .activated else { return }
-        let message: [String: Any] = [WatchSnapshot.alarmOnWatchKey: onWatch]
+        let message: [String: Any] = about ?? [WatchSnapshot.alarmOnWatchKey: onWatch]
         if session.isReachable {
             session.sendMessage(message, replyHandler: { _ in }, errorHandler: nil)
         } else {

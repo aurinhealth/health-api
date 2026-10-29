@@ -66,14 +66,61 @@ enum W {
 
     // MARK: Numbers
 
+    /// Made once per language and format: a formatter costs more than the text.
+    private static var numbers: [String: NumberFormatter] = [:]
+    private static var dates: [String: DateFormatter] = [:]
+
     static func number(_ value: Double, digits: Int = 0) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = locale
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = digits
-        formatter.maximumFractionDigits = digits
+        let id = "\(english)\(digits)"
+        let formatter = numbers[id] ?? {
+            let formatter = NumberFormatter()
+            formatter.locale = locale
+            formatter.numberStyle = .decimal
+            formatter.minimumFractionDigits = digits
+            formatter.maximumFractionDigits = digits
+            numbers[id] = formatter
+            return formatter
+        }()
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
+
+    /// A date formatter in the app's language, or a fixed one with `posix`.
+    static func dateFormatter(_ format: String, posix: Bool = false) -> DateFormatter {
+        let id = (posix ? "posix" : "\(english)") + format
+        if let formatter = dates[id] { return formatter }
+        let formatter = DateFormatter()
+        if posix {
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+        } else {
+            formatter.locale = locale
+        }
+        formatter.dateFormat = format
+        dates[id] = formatter
+        return formatter
+    }
+
+    // MARK: Units
+
+    /// Settings → Units on the iPhone, sent with Today.
+    static var imperial: Bool { WatchStore.shared.snapshot?.imperial ?? false }
+    private static let poundsPerKg = 2.2046226218
+    private static let mlPerFluidOunce = 29.5735295625
+
+    static var weightUnit: String { imperial ? "lb" : "kg" }
+    static func weight(_ kg: Double) -> Double { imperial ? (kg * poundsPerKg).rounded() : kg }
+    static func kg(_ shown: Double) -> Double { imperial ? shown / poundsPerKg : shown }
+    /// The crown's step: 0.5 kg or 1 lb.
+    static var weightStep: Double { imperial ? 1 : 0.5 }
+
+    /// "1,2 l" or "41 fl oz".
+    static func water(_ ml: Double) -> String {
+        imperial ? number(ml / mlPerFluidOunce) + " fl oz" : number(ml / 1000, digits: 1) + " l"
+    }
+
+    /// A glass: 250 ml or 8 fl oz.
+    static var glassMl: Int { imperial ? Int((8 * mlPerFluidOunce).rounded()) : 250 }
+    static var glassText: String { imperial ? "+8 fl oz" : "+250 ml" }
 
     /// A signed change: "+4", "−2", "0".
     static func change(_ value: Double, digits: Int = 0) -> String {
@@ -104,44 +151,28 @@ enum W {
 
     /// An axis date: "28 Sep" / "28. 9.", or the month alone over 90 days.
     static func axisDate(_ date: Date, month: Bool) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.dateFormat = month ? "LLL" : (english ? "d MMM" : "d. M.")
-        return formatter.string(from: date)
+        return dateFormatter(month ? "LLL" : (english ? "d MMM" : "d. M.")).string(from: date)
     }
 
     static func weekday(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.dateFormat = "EEE"
-        return formatter.string(from: date)
+        return dateFormatter("EEE").string(from: date)
     }
 
     /// "2026-10-31" as a date at noon (no day shifts across time zones).
     static func day(_ text: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd HH"
-        return formatter.date(from: text + " 12")
+        dateFormatter("yyyy-MM-dd HH", posix: true).date(from: text + " 12")
     }
 
     /// "sobota", "Saturday".
     static func dayName(_ text: String) -> String {
         guard let date = day(text) else { return text }
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.dateFormat = "EEEE"
-        return formatter.string(from: date)
+        return dateFormatter("EEEE").string(from: date)
     }
 
     /// "pá", "Fri".
     static func dayShort(_ text: String) -> String {
         guard let date = day(text) else { return text }
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.dateFormat = "EEE"
-        return formatter.string(from: date)
+        return dateFormatter("EEE").string(from: date)
     }
 
     /// The day's letter under its dot: "P Ú S Č P S N", "M T W T F S S".

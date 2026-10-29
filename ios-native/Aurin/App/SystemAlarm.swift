@@ -60,6 +60,36 @@ enum SystemAlarm {
         UserDefaults.standard.removeObject(forKey: idsKey)
     }
 
+    private static let backupKey = "systemAlarmBackup"
+
+    /// When the iPhone's backup for the watch's alarm rings, if set.
+    static var backupTime: Date? {
+        UserDefaults.standard.object(forKey: backupKey + "Time") as? Date
+    }
+
+    /// One alarm on the iPhone at `date`, for when the watch's doesn't wake
+    /// (WatchAlarmBridge): replaces the one before; nil takes it away.
+    static func backup(at date: Date?) async {
+        #if canImport(AlarmKit)
+        if #available(iOS 26, *) {
+            let manager = AlarmManager.shared
+            if let text = UserDefaults.standard.string(forKey: backupKey), let id = UUID(uuidString: text) {
+                try? manager.cancel(id: id)
+            }
+            UserDefaults.standard.removeObject(forKey: backupKey)
+            UserDefaults.standard.removeObject(forKey: backupKey + "Time")
+            guard let date, date > Date(), manager.authorizationState == .authorized else { return }
+            let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: L10n.tr("Budík · záloha hodinek")),
+                                                stopButton: AlarmButton(text: LocalizedStringResource(stringLiteral: L10n.tr("Vstávám")), textColor: .white, systemImageName: "sun.max.fill"))
+            let attributes = AlarmAttributes<WakeAlarm>(presentation: AlarmPresentation(alert: alert), tintColor: Palette.indigo)
+            let id = UUID()
+            guard (try? await manager.schedule(id: id, configuration: .alarm(schedule: .fixed(date), attributes: attributes))) != nil else { return }
+            UserDefaults.standard.set(id.uuidString, forKey: backupKey)
+            UserDefaults.standard.set(date, forKey: backupKey + "Time")
+        }
+        #endif
+    }
+
     #if canImport(AlarmKit)
     @available(iOS 26, *)
     private static func cancelSaved(_ manager: AlarmManager) {
