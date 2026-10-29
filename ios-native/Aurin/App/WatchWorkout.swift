@@ -1,5 +1,6 @@
 import HealthKit
 import SwiftUI
+import TipKit
 import WorkoutKit
 
 /// A planned ride or run as a WorkoutKit custom workout for the Apple Watch
@@ -67,7 +68,7 @@ struct WatchWorkoutButton: View {
     @State private var showing = false
 
     var body: some View {
-        Group {
+        VStack(spacing: 12) {
             if let plan {
                 Button { showing = true } label: {
                     Label("Do Apple Watch", systemImage: "applewatch")
@@ -78,6 +79,7 @@ struct WatchWorkoutButton: View {
                 }
                 .buttonStyle(.plain)
                 .workoutPreview(plan, isPresented: $showing)
+                TipView(WatchWorkoutTip()).tipBackground(Palette.card)
             }
         }
         .onAppear { plan = WatchWorkout.plan(workout, title: title) }
