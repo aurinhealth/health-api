@@ -47,3 +47,18 @@ test("Google heart-rate pages skip the Apple replacement when Apple Health never
   assert.equal(await replaceGoogleWithApple(db, 1, ["weight"], "2025-10-01"), 1);
   assert.equal(db.sqlite.prepare("SELECT record_role FROM health_datapoints WHERE external_id = 'gw'").get().record_role, "duplicate");
 });
+
+// Choosing the source and replacing Google with Apple filter by the row's day,
+// COALESCE(sample_time,end_time,start_time): the expression index lets them seek
+// the days instead of reading every row of the type.
+test("the day filters of source choice and Apple replacement seek the day index", () => {
+  const day = "COALESCE(sample_time,end_time,start_time) >= ?";
+  for (const name of ["source-priority.js", "apple-health.js"]) assert.ok(src(name).includes(day), name);
+  const db = new DatabaseSync(":memory:");
+  db.exec(schema);
+  const plan = sql => db.prepare("EXPLAIN QUERY PLAN " + sql).all().map(r => r.detail).join(" | ");
+  const keys = plan(`SELECT substr(start_time,1,13) k, source_family f FROM health_datapoints WHERE user_id = 1 AND data_type IN ('steps','distance') AND source_family IN ('apple-health','google-wearables') AND ${day.replace("?", "'2026-10-01'")} GROUP BY 1, 2`);
+  assert.match(keys, /idx_health_datapoints_user_day \(user_id=\? AND source_family=\? AND data_type=\? AND <expr>>\?\)/, keys);
+  const update = plan(`UPDATE health_datapoints SET record_role = 'duplicate' WHERE user_id = 1 AND source_family IN ('google-wearables') AND data_type = 'heart-rate' AND ${day.replace("?", "'2026-10-01'")}`);
+  assert.match(update, /idx_health_datapoints_user_day .*<expr>>\?/, update);
+});
