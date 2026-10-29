@@ -17,11 +17,13 @@ test('the overview keeps what Google verification reads on the homepage',async()
 });
 
 test('public pages use the app’s light palette',async()=>{
+  const {DARK_SITE}=await import('../src/design-system.js');
   for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
     const html=await page().text();
     assert.match(html,/<html lang="en" class="site"/);
     assert.match(html,/:root\{color-scheme:light;[^}]*--bg:#F3EFE8;/);
-    assert.equal((html.match(/:root\{[^}]*\}/g)||[]).length,1);
+    // A second :root only for the app's dark palette, behind prefers-color-scheme (DARK_SITE).
+    assert.equal((html.match(/:root\{[^}]*\}/g)||[]).length,DARK_SITE?2:1);
     assert.doesNotMatch(html,/data-theme-choice/,'the site has one look; the Vzhled switch stays in the app');
   }
 });

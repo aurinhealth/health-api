@@ -10,7 +10,8 @@ availability) updates the overview in the same pull request. The site is in Engl
 - Each section of the overview matches a part of the app. Its phones show the app's own screens: the
   English, light-mode screenshots of the sample day that CI takes (`ios-native.yml`: `screens/site/` and
   the smoke test's `smoke/4-…` walk through the app, in the Aurin-screens artifact), saved as
-  `public/site/app/*.webp` (`scripts/site-screens.mjs` turns the unzipped artifact into them). The same screens
+  `public/site/app/*.webp` (`scripts/site-screens.mjs` turns the unzipped artifact into them; the same shots in dark
+  mode become `*-dark.webp` for the site's dark look, `DARK_SITE`). The same screens
   make the overview as images for Reddit or the App Store (`scripts/render-overview.mjs`). Beside each phone stands a live demo (`src/site-demos.js`): a piece of the
   app rebuilt in HTML that moves (the dial turns, the rest timer counts down, the coach answers), following
   the app's own view and the sample day. Where a screenshot can't show a step, the phone's screen is built
