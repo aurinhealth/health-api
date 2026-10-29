@@ -11,14 +11,24 @@ export const CACHE_TTL_SECONDS = 600;
 // (some 400 database reads each) before the first one was kept.
 const computing = new Map();
 
-export async function cacheVersion(db) {
-  try { return (await db.prepare("SELECT version FROM api_cache_versions WHERE user_id=?").bind(db.userId).first())?.version || 0; }
-  catch { return 0; }
+// Read once per database object (one request, or one user's cron run) until
+// it bumps the version itself: a coach card asks for several cached entries.
+const versions = new WeakMap();
+export function cacheVersion(db) {
+  if (!versions.has(db)) {
+    let read;
+    try { read = db.prepare("SELECT version FROM api_cache_versions WHERE user_id=?").bind(db.userId).first().then(row => row?.version || 0, () => 0); }
+    catch { read = Promise.resolve(0); }
+    versions.set(db, read);
+  }
+  return versions.get(db);
 }
 
 export async function bumpCacheVersion(db) {
+  versions.delete(db);
   try { await db.prepare("INSERT INTO api_cache_versions(user_id,version) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET version=version+1").bind(db.userId).run(); }
   catch { /* table not migrated yet: entries still expire with the TTL */ }
+  versions.delete(db);
 }
 
 function failedValue(value) {

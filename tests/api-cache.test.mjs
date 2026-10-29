@@ -111,3 +111,19 @@ test("requests asking for the same entry at once compute it once, and each gets 
   await cached(env, null, "week:2026-10-27", async () => { failing++; return { days: [] }; }, { store });
   assert.equal(failing, 2);
 });
+
+// G in audit/zrychleni-aplikace-mereni-2026-10-29.md: Aktivita dne asks for
+// several cached entries, each read the version again (three trips to D1).
+test("the version is read once per request until the request bumps it", async () => {
+  const { cacheVersion, bumpCacheVersion } = await import("../src/api-cache.js");
+  let reads = 0, version = 4;
+  const db = { userId: 7, prepare: sql => ({ bind: () => ({ first: async () => { if (/^SELECT/.test(sql)) reads++; return { version }; }, run: async () => { version++; return {}; } }) }) };
+  assert.deepEqual(await Promise.all([cacheVersion(db), cacheVersion(db), cacheVersion(db)]), [4, 4, 4]);
+  assert.equal(reads, 1);
+  await bumpCacheVersion(db);
+  assert.equal(await cacheVersion(db), 5);
+  assert.equal(reads, 2);
+  // Another request (another database object) reads its own.
+  assert.equal(await cacheVersion({ ...db }), 5);
+  assert.equal(reads, 3);
+});
