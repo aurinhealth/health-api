@@ -83,6 +83,9 @@ final class ClipTests: XCTestCase {
             pause(2)
             if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Start workout")).firstMatch) { pause(2) }
             if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Set done")).firstMatch) {
+                // The first rest asks for notifications; the system's question would cover the timer.
+                let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow"]
+                if allow.waitForExistence(timeout: 3) { allow.tap() }
                 pause(5)
                 if tapIfThere(app.buttons["Skip"]) { pause(2) }
             }
