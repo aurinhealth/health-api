@@ -4,7 +4,7 @@ name: App videos
 # the iPhone simulator with the sample data, in English, each clip one short walk
 # through the app (ios-native/AurinUITests/ClipTests.swift), cut from the test's
 # start to its end mark. Artifact Aurin-videos: clips/<appearance>/<clip>.mp4,
-# the full recordings in raw/.
+# and in raw/ the whole recording of a clip that could not be cut.
 # Runs after each app change on main, on pull requests that change the clips,
 # and by hand (Actions → App videos → Run).
 
@@ -122,7 +122,9 @@ jobs:
               length=$(python3 -c "print(round($to - $from, 2))")
               ffmpeg -loglevel error -y -ss "$from" -i "$raw" -t "$length" -vf fps=30 \
                 -c:v libx264 -crf 18 -pix_fmt yuv420p -movflags +faststart -an "$out/clips/$mode/$name.mp4"
-              echo "$mode/$name.mp4: $from–$to s" | tee -a "$GITHUB_STEP_SUMMARY"
+              # The whole recording stays only when its clip did not come out.
+              rm -f "$raw"
+              echo "$mode/$name.mp4: ${length} s (from ${from} s of the recording)" | tee -a "$GITHUB_STEP_SUMMARY"
             done
           done
 
