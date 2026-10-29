@@ -15,7 +15,7 @@ const PHOTOS = {
   'DB Bulgarian split squat': 'Split_Squat_with_Dumbbells', 'Adduction machine': 'Thigh_Adductor', 'Abduction machine': 'Thigh_Abductor',
   'Pec deck': 'Butterfly', 'Rear delt pec deck': 'Reverse_Machine_Flyes', 'Cable lateral raise': 'Cable_Seated_Lateral_Raise',
   'Cable pullover': 'Straight-Arm_Pulldown', 'Cable rear delt fly': 'Cable_Rear_Delt_Fly', 'Pallof press': 'Pallof_Press',
-  'Roman chair': 'Hyperextensions_Back_Extensions', 'Standing calf raise': 'Standing_Calf_Raises', 'Cable crunch': 'Cable_Crunch',
+  'Hyperextension': 'Hyperextensions_Back_Extensions', 'Standing calf raise': 'Standing_Calf_Raises', 'Cable crunch': 'Cable_Crunch',
   'Barbell bench press': 'Barbell_Bench_Press_-_Medium_Grip', 'DB incline press': 'Incline_Dumbbell_Press', 'One-arm DB row': 'One-Arm_Dumbbell_Row',
   'Face pull': 'Face_Pull', 'Cable overhead triceps extension': 'Cable_Rope_Overhead_Triceps_Extension', 'Goblet squat': 'Goblet_Squat',
   'Cable glute kickback': 'One-Legged_Cable_Kickback', 'Cable pull-through': 'Pull_Through', 'Barbell hip thrust': 'Barbell_Hip_Thrust',

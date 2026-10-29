@@ -34,7 +34,7 @@ export const FEEL_EN = {
   "Cable rear delt fly": ["Rear delts; you feel the end of the movement between your shoulder blades.", "Shoulders down away from your ears, no swinging your torso."],
   "Pallof press": ["Obliques and deep core – you're resisting rotation.", "Torso and hips don't turn toward the pulley; breathe calmly."],
   "Cable woodchop": ["Obliques as your torso rotates; your hands just hold the handle.", "Rotation comes from your chest and hips, not your lower back."],
-  "Roman chair": ["Lower back and glutes, plus hamstrings as you extend.", "Don't overarch at the top – stop in line with your legs."],
+  "Hyperextension": ["Lower back and glutes, plus hamstrings as you extend.", "Don't overarch at the top – stop in line with your legs."],
   "Standing calf raise": ["Calves, most at the top on your toes and in the stretch at the bottom.", "Knees still and nearly straight; no bouncing."],
   "Cable crunch": ["Rectus abdominis – you're curling your torso, ribs toward your pelvis.", "The movement doesn't come from bending at the hips or from your arms."],
   "Barbell bench press": ["Chest, front delts and triceps.", "Shoulder blades squeezed and shoulders down; shoulder pain = elbows flared too wide or the bar too high on your chest."],
@@ -322,5 +322,8 @@ export const FEEL_EN = {
   "Band Assisted Pull-Up": ["Lats and biceps.","No shoulder pain; don't hang completely loose at the bottom."],
   "Neutral-Grip Pull-Up": ["Lats and biceps.","No shoulder pain."],
   "Weighted Pull Ups": ["Lats and biceps.","No elbow or shoulder pain; the weight doesn't swing."],
-  "Wide-Grip Pull-Up": ["Lats, the upper part.","No shoulder pain; a grip not too wide."]
+  "Wide-Grip Pull-Up": ["Lats, the upper part.","No shoulder pain; a grip not too wide."],
+  "Box Jump": ["Quads and glutes as you take off.","No knee or ankle pain; the landing is quiet."],
+  "Squat Jump": ["Quads, glutes and calves as you take off.","No knee pain and the knees don't cave in; the landing is soft."],
+  "Pogo Hops": ["Calves and Achilles tendons, springy.","No Achilles or shin pain; the hops stay low."]
 };
