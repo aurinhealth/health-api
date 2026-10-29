@@ -197,8 +197,29 @@ struct CoachPill: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.tr("Zeptat se kouče"))
-            .sheet(isPresented: $open) { CoachView(view: subject.view, date: subject.date, subject: subject) }
+            .sheet(isPresented: $open) {
+                CoachView(view: subject.view, date: subject.date, subject: subject, openChat: WorkoutCoachChat.id(for: subject),
+                          keepChat: { WorkoutCoachChat.keep($0, for: subject) })
+            }
         }
+    }
+}
+
+/// Režim tréninku: the chat with the coach goes on where it was when the
+/// athlete closes it to log a set and opens it again, for the whole day's
+/// workout (also after the app was closed).
+enum WorkoutCoachChat {
+    private static let key = "workoutCoachChat"
+
+    static func id(for subject: CoachSubject) -> Int? {
+        guard subject.kind == .workout, let date = subject.date,
+              let saved = UserDefaults.standard.dictionary(forKey: key), saved["date"] as? String == date else { return nil }
+        return saved["chatId"] as? Int
+    }
+
+    static func keep(_ chatId: Int, for subject: CoachSubject) {
+        guard subject.kind == .workout, let date = subject.date else { return }
+        UserDefaults.standard.set(["date": date, "chatId": chatId], forKey: key)
     }
 }
 
