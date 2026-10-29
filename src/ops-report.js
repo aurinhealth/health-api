@@ -7,6 +7,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { emailConfigured, sendEmail } from "./email-sender.js";
 import { accountCapacity } from "./tenancy.js";
 import { aiMonthlyLimitUsd, ensureAiUsage } from "./ai-usage.js";
+import { MANY_QUERIES, MANY_ROWS, SLOW_REQUEST_MS, slowness, timed } from "./request-timing.js";
 
 const scope = new AsyncLocalStorage();
 const day = (date = new Date()) => date.toISOString().slice(0, 10);
@@ -37,11 +38,18 @@ if (!console.error.__ops) {
   };
   console.error.__ops = true;
 }
+// A job that read a million rows or more is listed as slow too.
 export async function withOpsScope(db, service, fn) {
   const store = { errors: 0, last: "" };
-  try { return await scope.run(store, fn); }
-  catch (error) { store.errors++; store.last = text(error); throw error; }
-  finally { if (store.errors) await recordOpsEvent(db, "sync", service, store.last, store.errors); }
+  return timed(async work => {
+    try { return await scope.run(store, fn); }
+    catch (error) { store.errors++; store.last = text(error); throw error; }
+    finally {
+      const slow = slowness(work, { cron: true });
+      if (store.errors) await recordOpsEvent(db, "sync", service, store.last, store.errors);
+      if (slow) await recordOpsEvent(db, "slow", "cron " + service, slow);
+    }
+  });
 }
 
 // A path without ids, so one broken route is one row.
@@ -105,6 +113,7 @@ export function opsReport(rows, capacity, date, ai = null, stuckDeletions = []) 
   if (of("sync").length) sections.push(`Selhané synchronizace\n${list(of("sync"))}`);
   if (of("broken").length) sections.push(`Rozbitá propojení (uživatel musí znovu připojit)\n${list(of("broken"))}`);
   if (of("server").length) sections.push(`Chyby serveru\n${list(of("server"))}`);
+  if (of("slow").length) sections.push(`Pomalé požadavky a úlohy (${SLOW_REQUEST_MS / 1000} s a víc, ${MANY_QUERIES} dotazů nebo ${MANY_ROWS / 1e6} M přečtených řádků do D1)\n${list(of("slow"))}`);
   if (capacity?.places && capacity.used / capacity.places >= 0.8) sections.push(`Místo pro účty\n- Obsazeno ${capacity.used} z ${capacity.places} (${Math.round(capacity.used / capacity.places * 100)} %). Nové registrace se po zaplnění řadí do čekací listiny.`);
   if (stuckDeletions?.length) sections.push(`Nedokončená smazání účtů (cron je opakuje, data zatím zůstávají)\n${stuckDeletions.map(row => `- účet #${row.user_id} smazaný ${String(row.requested_at || "").slice(0, 10)}: ${row.attempts}× selhalo${row.last_error ? ` (naposledy: ${row.last_error})` : ""}`).join("\n")}`);
   if (ai) sections.push(ai);
