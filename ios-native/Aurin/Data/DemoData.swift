@@ -92,7 +92,7 @@ enum DemoData {
             "Jak se mi povedl dnešní běh?": "Ranní běh byl klidný, 42 minut za 48 TSS, přesně jak měl být. Nohy moc nezatížil, takže silový trénink v 17:30 platí. K obědu si dej dost sacharidů.",
             "Co mám dát zítra?": "Zítra dej lehčí den, třeba procházku nebo protažení. Po dnešních dřepech budou nohy unavené a v sobotu tě čeká delší běh, ten chci mít na čerstvých nohách.",
             "Co sníst po tréninku?": "Do hodiny po tréninku si dej bílkoviny se sacharidy, třeba řecký jogurt s ovocem a müsli nebo kuře s rýží. Do dnešního cíle ti zbývá 1 270 kcal, tak se klidně pořádně najez.",
-            "Jak mám dnes trénovat?": "Připravenost je 78 a nohy odpočívají od pondělí. Dnes do toho jdi naplno: silový trénink celého těla, dřep s 80 kg, potom tlak na lavici. V sobotu je delší běh, tak nohy nedorážej do selhání."]
+            "Jak mám dnes trénovat?": "Připravenost je 78, takže dnes můžeš jít naplno. Nohy se po pondělí ještě zotavují, tak dřep dej se střední zátěží 80 kg a víc přidej na horní části těla: tlak na lavici a přítahy. V sobotu tě čeká delší běh."]
         let key = answers.keys.first { L10n.tr($0) == question } ?? ""
         return L10n.tr(answers[key] ?? "V ukázce odpovídám podle vzorového dne: připravenost 78, spánek 7:12 a v 17:30 silový trénink celého těla. Po přihlášení ti odpovím podle tvých vlastních dat.")
     }
