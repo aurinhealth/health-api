@@ -5,7 +5,8 @@ name: App videos
 # through the app (ios-native/AurinUITests/ClipTests.swift), cut from the test's
 # start to its end mark. Artifact Aurin-videos: clips/<appearance>/<clip>.mp4,
 # the full recordings in raw/.
-# Runs after each app change on main and by hand (Actions → App videos → Run).
+# Runs after each app change on main, on pull requests that change the clips,
+# and by hand (Actions → App videos → Run).
 
 on:
   workflow_dispatch:
@@ -20,6 +21,11 @@ on:
       - main
     paths:
       - "ios-native/**"
+      - ".github/workflows/app-videos.yml"
+  # A change to the clips themselves shows its videos before the merge.
+  pull_request:
+    paths:
+      - "ios-native/AurinUITests/ClipTests.swift"
       - ".github/workflows/app-videos.yml"
 
 permissions:
