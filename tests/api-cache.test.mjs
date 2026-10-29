@@ -141,3 +141,19 @@ test("a food write keeps entries without food; any other write makes everything 
   for (const path of ["/app/api/fluids", "/app/api/water", "/app/api/food/entry", "/app/api/food/entries", "/app/api/food/log", "/app/api/food/personal", "/app/api/food/recipes/12", "/app/api/food/nutrients/favorites", "/app/api/food/suggestions/decide"]) assert.ok(FOOD_WRITE.test(path), path);
   for (const path of ["/app/api/food-today", "/app/api/food/nutrients", "/app/api/profile", "/app/api/gym", "/app/api/weight", "/app/api/fluidsx"]) assert.ok(!FOOD_WRITE.test(path), path);
 });
+
+// G in audit/zrychleni-aplikace-mereni-2026-10-29.md: Aktivita dne asks for
+// several cached entries, each read the version again (three trips to D1).
+test("the version is read once per request until the request bumps it", async () => {
+  const { cacheVersion, bumpCacheVersion } = await import("../src/api-cache.js");
+  let reads = 0, version = 4;
+  const db = { userId: 7, prepare: sql => ({ bind: () => ({ first: async () => { if (/^SELECT/.test(sql)) reads++; return { version }; }, run: async () => { version++; return {}; } }) }) };
+  assert.deepEqual(await Promise.all([cacheVersion(db), cacheVersion(db), cacheVersion(db)]).then(all => all.map(v => v.version)), [4, 4, 4]);
+  assert.equal(reads, 1);
+  await bumpCacheVersion(db);
+  assert.equal((await cacheVersion(db)).version, 5);
+  assert.equal(reads, 2);
+  // Another request (another database object) reads its own.
+  assert.equal((await cacheVersion({ ...db })).version, 5);
+  assert.equal(reads, 3);
+});

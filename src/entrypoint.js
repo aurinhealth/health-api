@@ -1189,11 +1189,15 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       try{return Response.json(await undoSkip(env.DB,env.USER_ID,date));}catch(error){return Response.json({message:error.message},{status:400})}
     }
     try{
-      const [inputs,prefs,plan]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),getWeekPlan(env.DB,date).catch(()=>null),planForWeek(env,ctx,mondayOfDate(date)).catch(()=>null)]);
-      const week={prefs,plan,targets:prefs?await computeWeekTargets(env,ctx,mondayOfDate(date),prefs).catch(()=>null):null};
-      const athlete=await getAthleteState(env.DB).catch(()=>null);
-      const [ride,run]=await Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]);
-      const [profiles,recent,state,gym]=await Promise.all([loadProfiles(env.DB,env.USER_ID).catch(()=>({})),recentKinds(env.DB,env.USER_ID,date),pickState(env.DB,env.USER_ID,date),readGymPlan(env.DB,date).catch(()=>null)]);
+      // Everything that does not need the coach's inputs starts with them: the
+      // week's targets once its preferences are read, the athlete, the recent
+      // picks, the gym plan and the day's place (one wait instead of five).
+      const weekLoading=Promise.all([getWeekPlan(env.DB,date).catch(()=>null),planForWeek(env,ctx,mondayOfDate(date)).catch(()=>null)])
+        .then(async([prefs,plan])=>({prefs,plan,targets:prefs?await computeWeekTargets(env,ctx,mondayOfDate(date),prefs).catch(()=>null):null}));
+      const around=Promise.all([loadProfiles(env.DB,env.USER_ID).catch(()=>({})),recentKinds(env.DB,env.USER_ID,date),pickState(env.DB,env.USER_ID,date),readGymPlan(env.DB,date).catch(()=>null),lessKinds(env.DB,env.USER_ID).catch(()=>[]),todayPlace(env,ctx,date)]);
+      around.catch(()=>{});
+      const [inputs,week,athlete]=await Promise.all([loadCoachInputs(env,ctx,internalAuth,date),weekLoading,getAthleteState(env.DB).catch(()=>null)]);
+      const [[ride,run],[profiles,recent,state,gym,less,place]]=await Promise.all([Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]),around]);
       const planned=[...(ride.constraints?.plannedToday&&activityKindOf(ride.constraints.plannedToday.type||ride.constraints.plannedToday.name)==='ride'?['ride']:[]),...(run.constraints?.plannedToday&&activityKindOf(run.constraints.plannedToday.type||run.constraints.plannedToday.name)==='run'?['run']:[]),...((gym?.values||[]).length>7?['gym']:[])];
       // Nemoc, Zranění or Pauza leaves only rest; signs of an illness drop the sauna.
       const illness=illnessSigns(readinessFor({date,google:inputs.health?.wellness||[],intervals:inputs.fitness?.wellness||[],sessions:inputs.health?.sleep||[],profile:inputs.profile})).length>0;
@@ -1203,7 +1207,6 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const signature=pickSignature(ranked);
       let details=await storedDetails(env.DB,env.USER_ID,date,signature).catch(()=>null);
       if(!details){details=await pickDetails(env,ctx,ranked,date,gym);await storeDetails(env.DB,env.USER_ID,date,signature,details).catch(()=>{});}
-      const [less,place]=await Promise.all([lessKinds(env.DB,env.USER_ID).catch(()=>[]),todayPlace(env,ctx,date)]);
       // Horko (heat-advice.js) at a ride or run outdoors: the workout's place, else the forecast's advice.
       const heatFor=(kind,workout)=>{
         if(!['ride','run'].includes(kind))return null;

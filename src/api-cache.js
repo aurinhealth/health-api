@@ -13,8 +13,11 @@ const computing = new Map();
 
 // { version, food }: food counts only meals and drinks (bumpCacheVersion with
 // food: true). Before migration 0030 there is no food counter: food writes
-// then bump the version itself.
-export async function cacheVersion(db) {
+// then bump the version itself. Read once per database object (one request,
+// or one user's cron run) until it bumps the version itself: a coach card asks
+// for several cached entries.
+const versions = new WeakMap();
+async function readCacheVersion(db) {
   try { const row = await db.prepare("SELECT version, food FROM api_cache_versions WHERE user_id=?").bind(db.userId).first(); return { version: row?.version || 0, food: row?.food || 0 }; }
   catch {
     try { return { version: (await db.prepare("SELECT version FROM api_cache_versions WHERE user_id=?").bind(db.userId).first())?.version || 0, food: 0 }; }
@@ -22,13 +25,20 @@ export async function cacheVersion(db) {
   }
 }
 
+export function cacheVersion(db) {
+  if (!versions.has(db)) versions.set(db, readCacheVersion(db));
+  return versions.get(db);
+}
+
 export async function bumpCacheVersion(db, { food = false } = {}) {
+  versions.delete(db);
   if (food) {
-    try { await db.prepare("INSERT INTO api_cache_versions(user_id,version,food) VALUES(?,0,1) ON CONFLICT(user_id) DO UPDATE SET food=food+1").bind(db.userId).run(); return; }
+    try { await db.prepare("INSERT INTO api_cache_versions(user_id,version,food) VALUES(?,0,1) ON CONFLICT(user_id) DO UPDATE SET food=food+1").bind(db.userId).run(); versions.delete(db); return; }
     catch { /* no food counter yet: the whole version below */ }
   }
   try { await db.prepare("INSERT INTO api_cache_versions(user_id,version) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET version=version+1").bind(db.userId).run(); }
   catch { /* table not migrated yet: entries still expire with the TTL */ }
+  versions.delete(db);
 }
 
 // Entries that never show food or drinks: a meal logged keeps them.
