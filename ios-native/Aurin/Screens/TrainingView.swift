@@ -174,12 +174,20 @@ struct StrainHero: View {
                     Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                 }
             }
-            HStack(alignment: .lastTextBaseline, spacing: 14) {
-                Text(score.map { Fmt.decimal($0) } ?? "–")
-                    .font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5)
-                    .foregroundStyle(isAhead ? Palette.faint : Palette.ink)
-                if let note {
-                    Pill(text: note, foreground: Palette.amber, background: Palette.amberSoft)
+            if restDay {
+                // A day ahead with nothing planned: said in words, not a faint dash.
+                Text("Volný den")
+                    .font(Typo.number(52)).lineLimit(1).minimumScaleFactor(0.5)
+                    .foregroundStyle(Palette.faint)
+                Text("Nic v plánu").font(Typo.small).foregroundStyle(Palette.faint)
+            } else {
+                HStack(alignment: .lastTextBaseline, spacing: 14) {
+                    Text(score.map { Fmt.decimal($0) } ?? "–")
+                        .font(Typo.number(104)).lineLimit(1).minimumScaleFactor(0.5)
+                        .foregroundStyle(isAhead ? Palette.faint : Palette.ink)
+                    if let note {
+                        Pill(text: note, foreground: Palette.amber, background: Palette.amberSoft)
+                    }
                 }
             }
         }
@@ -196,6 +204,11 @@ struct StrainHero: View {
     private var isToday: Bool { date == training.date }
     private var isAhead: Bool { date > training.date }
     private var weekDay: TrainingSnapshot.Day? { training.days.first { $0.date == date } }
+    /// A day of this week ahead without a planned session: a rest day.
+    private var restDay: Bool {
+        guard isAhead, weekDay != nil, score == nil else { return false }
+        return !(training.sessions ?? []).contains { $0.date == date }
+    }
 
     private var title: String {
         if isToday { return L10n.tr("Námaha dnes") }

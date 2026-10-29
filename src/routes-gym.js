@@ -205,7 +205,10 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
         const to=String(body.to||'');
         if(!/^\d{4}-\d{2}-\d{2}$/.test(to)||to<localToday())return Response.json({message:L('Gym jde přesunout jen na dnešek nebo pozdější den.', 'The gym session can only be moved to today or a later day.')},{status:400});
         const moved=await moveGymPlan(env.DB,date,to);
-        if(!moved.moved)return Response.json({message:L('Gym se nepodařilo přesunout: cílový den už má gym plán, nebo jsou v tréninku zapsané série.', 'The gym session couldn\'t be moved: the target day already has a gym plan, or the workout has logged sets.')},{status:409});
+        if(!moved.moved){
+          const why={target:L('Gym se nepodařilo přesunout: ten den už má vlastní gym plán.', 'The gym session couldn\'t be moved: that day already has its own gym plan.'),logged:L('Gym se nepodařilo přesunout: v tréninku už jsou zapsané série.', 'The gym session couldn\'t be moved: the workout already has logged sets.'),missing:L('Gym se nepodařilo přesunout: plán toho dne už neexistuje.', 'The gym session couldn\'t be moved: that day\'s plan no longer exists.')};
+          return Response.json({message:why[moved.reason]||L('Gym se nepodařilo přesunout.', 'The gym session couldn\'t be moved.')},{status:409});
+        }
         return Response.json({status:'ok',date:to,message:L('Gym je přesunutý.', 'The gym session has been moved.')},{headers:{'Cache-Control':'no-store'}});
       }
       // The day's strength events (Intervals.icu and the app's own copy).

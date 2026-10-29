@@ -55,14 +55,19 @@ export async function restoreGymPlan(db, date) {
 
 // A strength event moved in the calendar takes its plan along, so the
 // exercises are on the day the workout now is. A plan with logged sets, or a
-// target day that already has its own plan, stays where it is.
+// target day that already has its own plan, stays where it is (reason says
+// which). A cancelled plan on the target day without logged sets is only
+// hidden, so the moved one takes its place. Logged as the week list counts it
+// (plan-context.js): ticked off or reps written in, not a weight left behind.
+const loggedRows = values => values.slice(7).filter(r => r?.[1] && (DONE.has(String(r?.[8] ?? "")) || Number(r?.[6]) > 0)).length;
+
 export async function moveGymPlan(db, from, to) {
   const valid = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
-  if (!valid(from) || !valid(to) || from === to) return { moved: false };
+  if (!valid(from) || !valid(to) || from === to) return { moved: false, reason: "invalid" };
   const source = await readGymPlan(db, from), target = await readGymPlan(db, to, { includeCancelled: true });
-  if (!source.stored || target.stored) return { moved: false };
-  const logged = source.values.slice(7).some(r => DONE.has(String(r?.[8] ?? "")) || String(r?.[5] ?? "").trim() || String(r?.[6] ?? "").trim());
-  if (logged) return { moved: false };
+  if (!source.stored) return { moved: false, reason: "missing" };
+  if (target.stored && (!target.cancelled || loggedRows(target.values))) return { moved: false, reason: "target" };
+  if (loggedRows(source.values)) return { moved: false, reason: "logged" };
   const label = d => d.split("-").reverse().join(". ");
   const values = source.values.map(r => Array.isArray(r) ? [...r] : r);
   if (typeof values[1]?.[0] === "string") values[1][0] = values[1][0].replace(label(from), label(to));
