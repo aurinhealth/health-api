@@ -172,6 +172,8 @@ test("the morning push goes out once a local day, between 5:00 and 11:00", async
   // The app's notification extension draws the ring from the score and zone.
   assert.equal(calls[0].body.aps["mutable-content"], 1);
   assert.deepEqual(calls[0].body.readiness, { score: 72, zone: "green" });
+  // And wakes the app, which loads Today for the widgets.
+  assert.equal(calls[0].body.aps["content-available"], 1);
   // The next sync the same morning sends nothing.
   assert.equal((await sendMorningReadiness(env, { readiness, now: new Date("2026-10-12T07:00:00Z"), fetchImpl })).reason, "already-sent");
   assert.equal(calls.length, 1);

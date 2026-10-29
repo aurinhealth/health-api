@@ -41,6 +41,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         return true
     }
 
+    /// The morning readiness push (src/push.js) comes with content-available:
+    /// Today for the widgets in the background (BackgroundRefresh.morningPush).
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        guard userInfo["readiness"] != nil, !ProcessInfo.processInfo.arguments.contains("-demo") else { return .noData }
+        return await BackgroundRefresh.morningPush(api: api) ? .newData : .failed
+    }
+
     /// The icon's menu (QuickActions.swift): a pick that launches the app comes
     /// here, later picks go to the scene delegate.
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,

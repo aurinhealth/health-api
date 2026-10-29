@@ -128,14 +128,15 @@ const DEAD_TOKEN = new Set(["BadDeviceToken", "Unregistered", "DeviceTokenNotFor
 // One alert to one device: {ok}, {ok:false, gone:true} for a dead token.
 // alert: a text, or {title, subtitle, body}; category names the phone's buttons
 // for it (the coach's "Vyměnit" / "Nechat"), data rides along for them;
-// mutable lets the app's notification extension add an image (the ring).
-export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null, mutable = false, topic = APNS_TOPIC } = {}) {
+// mutable lets the app's notification extension add an image (the ring);
+// wake also wakes the app in the background (content-available).
+export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null, mutable = false, wake = false, topic = APNS_TOPIC } = {}) {
   if (!pushConfigured(env)) return { ok: false, skipped: true };
   const jwt = await apnsJwt(env, now);
   const response = await fetchImpl(`https://${apnsHost(env, device.environment)}/3/device/${device.token}`, {
     method: "POST",
     headers: { authorization: "bearer " + jwt, "apns-topic": topic, "apns-push-type": "alert", "apns-priority": "10", "content-type": "application/json" },
-    body: JSON.stringify({ ...(data || {}), aps: { alert, sound: "default", ...(category ? { category } : {}), ...(mutable ? { "mutable-content": 1 } : {}) } })
+    body: JSON.stringify({ ...(data || {}), aps: { alert, sound: "default", ...(category ? { category } : {}), ...(mutable ? { "mutable-content": 1 } : {}), ...(wake ? { "content-available": 1 } : {}) } })
   });
   if (response.status === 200) return { ok: true };
   const reason = await response.json().then(x => x?.reason || null).catch(() => null);
@@ -262,7 +263,9 @@ export async function sendMorningReadiness(env, { readiness, details = null, now
     const full = more ? { ...value, sleep: more.sleep ?? null, hrv: more.hrv ?? null, restingHR: more.restingHR ?? null, planned: more.planned || [], tomorrow: more.tomorrow || [], context: more.context || null, date } : value;
     const message = text ? null : readinessMessage(full);
     const alert = text || message.alert;
-    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true } : {};
+    // It also wakes the app, which loads Today for the widgets, so they show
+    // the morning before the app is opened (ios-native AppDelegate).
+    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true, wake: true } : {};
     let sent = 0, removed = 0;
     for (const device of devices) {
       const result = await sendPush(env, device, alert, { fetchImpl, now: now.getTime(), ...extra }).catch(error => ({ ok: false, error: error.message }));
