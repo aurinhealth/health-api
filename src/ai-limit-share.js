@@ -6,7 +6,8 @@
 import { ensureStoreColumns } from "./app-store.js";
 
 const shares = new WeakMap();
-const configuredShare = env => {
+// The share an unpaid account gets; 1 when unset or not a number below 1.
+export const unpaidLimitShare = env => {
   const share = Number(env?.AI_UNPAID_LIMIT_SHARE);
   return env?.AI_UNPAID_LIMIT_SHARE != null && env.AI_UNPAID_LIMIT_SHARE !== "" && Number.isFinite(share) && share >= 0 && share < 1 ? share : 1;
 };
@@ -25,7 +26,7 @@ export async function paidPro(env, now = Date.now()) {
 
 // The share of the limits this account gets (1 or AI_UNPAID_LIMIT_SHARE), once per request.
 export async function aiLimitShare(env) {
-  const share = configuredShare(env);
+  const share = unpaidLimitShare(env);
   if (share === 1 || env?.USER_IS_OWNER === true || !env?.DB || !(Number(env.USER_ID) > 0)) return 1;
   if (!shares.has(env)) shares.set(env, paidPro(env).then(paid => paid ? 1 : share, error => { console.error("Subscription read failed", error?.message || error); return share; }));
   return shares.get(env);

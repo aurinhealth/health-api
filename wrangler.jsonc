@@ -97,8 +97,8 @@
     "AI_DAILY_LIMIT_USD": "1",
     // All users together in a UTC day (src/ai-total.js): an e-mail to the owner past
     // the alert; past the limit AI waits until the next day for everyone but the owner.
-    "AI_TOTAL_DAILY_ALERT_USD": "30",
-    "AI_TOTAL_DAILY_LIMIT_USD": "200",
+    "AI_TOTAL_DAILY_ALERT_USD": "10",
+    "AI_TOTAL_DAILY_LIMIT_USD": "30",
     // The weekly allowance of messages to the coach (src/coach-allowance.js): per week,
     // extra ones to finish a conversation, and how many messages of a conversation
     // after a workout count as one. Unpaid accounts get half (AI_UNPAID_LIMIT_SHARE).
