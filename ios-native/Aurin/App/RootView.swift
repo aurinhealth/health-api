@@ -583,7 +583,8 @@ struct TabBar: View {
     }
 
     /// The icon with the section's name under it (Petr, 2026-10-24), all in
-    /// ink: grey on glass reads too faintly, so the open one is only bolder.
+    /// ink: grey on glass reads too faintly. The open one is bolder, on a soft
+    /// fill like the system tab bar's (it still shows with Bold Text on).
     private func item(_ value: AppTab, _ label: String) -> some View {
         let open = tab == value
         return Button { tab = value } label: {
@@ -597,6 +598,9 @@ struct TabBar: View {
             }
             .foregroundStyle(Palette.ink)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                if open { Capsule().fill(Palette.track).padding(.vertical, 6).padding(.horizontal, 2) }
+            }
             .contentShape(Rectangle())
         }
         .accessibilityLabel(L10n.tr(label))
