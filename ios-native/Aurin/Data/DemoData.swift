@@ -37,7 +37,7 @@ enum DemoData {
     private static let foodEnglish: FoodSnapshot = decode(inEnglish(foodJSON))
 
     static var foods: [FoodProduct] { [
-        FoodProduct(name: local("Řecký jogurt bílý"), brand: "Hollandia", calories_100g: 95, protein_100g: 9, carbs_100g: 4, fat_100g: 5, serving_size: .string("140 g"), barcode: "8594001234567", source: "personal"),
+        FoodProduct(name: local("Řecký jogurt bílý"), brand: "Hollandia", calories_100g: 146, protein_100g: 9.3, carbs_100g: 4.3, fat_100g: 10, serving_size: .string("140 g"), barcode: "8594001234567", source: "personal"),
         FoodProduct(name: local("Ovesná kaše s jogurtem"), calories_100g: 430, protein_100g: 22, carbs_100g: 62, fat_100g: 10, nutrition_basis: "portion", source: "composed"),
         FoodProduct(name: local("Banán"), calories_100g: 89, protein_100g: 1.1, carbs_100g: 23, fat_100g: 0.3, serving_size: .string("120 g"), source: "personal")
     ] }

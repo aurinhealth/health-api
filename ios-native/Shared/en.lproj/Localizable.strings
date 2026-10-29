@@ -2318,6 +2318,8 @@
 "v normálu" = "normal";
 "nad normálem" = "above normal";
 "pod normálem" = "below normal";
+"lepší než obvykle" = "better than usual";
+"horší než obvykle" = "worse than usual";
 "bod" = "point";
 "bodů" = "points";
 "%@ %@ připravenosti" = "%@ readiness %@";
