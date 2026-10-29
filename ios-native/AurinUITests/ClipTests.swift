@@ -1,23 +1,14 @@
 import XCTest
 
 /// Short screen recordings of the app for Aurin's socials (app-videos.yml): CI
-/// records the simulator while each test runs and cuts the clip from its start
-/// to its end mark, so the launch and the test runner stay out. English, the
-/// sample data. They only move through the app and never fail; the smoke test
-/// (AurinSmoke) skips them.
+/// records the simulator from each test's start() to its end(), so the launch
+/// and the test runner stay out. English, the sample data. They only move
+/// through the app and never fail; the smoke test (AurinSmoke) skips them.
 final class ClipTests: XCTestCase {
     private let app = XCUIApplication()
-    private var marks: [String] = []
 
     override func setUp() {
         continueAfterFailure = true
-    }
-
-    override func tearDown() {
-        guard let dir = ProcessInfo.processInfo.environment["CLIP_DIR"] else { return }
-        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        let clip = name.components(separatedBy: "test").last?.trimmingCharacters(in: CharacterSet(charactersIn: "]")).lowercased() ?? "clip"
-        try? marks.joined(separator: "\n").write(toFile: "\(dir)/\(clip).marks", atomically: true, encoding: .utf8)
     }
 
     /// Today from the top down and back.
@@ -131,11 +122,36 @@ final class ClipTests: XCTestCase {
         app.launch()
     }
 
-    /// The clip's cut points, in the host's clock (the simulator shares it).
-    private func start() { marks.append("start \(Date().timeIntervalSince1970)") }
+    /// The clip's start and end, agreed with app-videos.yml through files in
+    /// CLIP_DIR: the test says "ready" once the screen is up, CI starts the
+    /// recording and answers "go", and "done" stops it. The recording's own clock
+    /// leaves out the seconds the screen stood still, so cut times taken from a
+    /// clock missed by seconds.
+    private func start() {
+        guard let dir = clipDir else { return }
+        FileManager.default.createFile(atPath: "\(dir)/\(clip).ready", contents: nil)
+        let wait = Date().addingTimeInterval(30)
+        while !FileManager.default.fileExists(atPath: "\(dir)/\(clip).go"), Date() < wait {
+            pause(0.25)
+        }
+        pause(0.5)
+    }
+
     private func end() {
         pause(1)
-        marks.append("end \(Date().timeIntervalSince1970)")
+        guard let dir = clipDir else { return }
+        FileManager.default.createFile(atPath: "\(dir)/\(clip).done", contents: nil)
+    }
+
+    private var clipDir: String? {
+        guard let dir = ProcessInfo.processInfo.environment["CLIP_DIR"] else { return nil }
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// "testToday" → "today", the clip's file name.
+    private var clip: String {
+        name.components(separatedBy: "test").last?.trimmingCharacters(in: CharacterSet(charactersIn: "]")).lowercased() ?? "clip"
     }
 
     private func scroll(_ times: Int, up: Bool = false) {

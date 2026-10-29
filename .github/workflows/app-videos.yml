@@ -2,9 +2,9 @@ name: App videos
 
 # Screen recordings of the running app for Aurin's socials (TikTok, Instagram):
 # the iPhone simulator with the sample data, in English, each clip one short walk
-# through the app (ios-native/AurinUITests/ClipTests.swift), cut from the test's
-# start to its end mark. Artifact Aurin-videos: clips/<appearance>/<clip>.mp4,
-# and in raw/ the whole recording of a clip that could not be cut. The clips also
+# through the app (ios-native/AurinUITests/ClipTests.swift), recorded from the
+# test's start() to its end(). Artifact Aurin-videos: clips/<appearance>/<clip>.mp4,
+# and in raw/ the recording of a clip that ffmpeg could not encode. The clips also
 # go to the app-videos branch, for links Metricool can take.
 # Runs after each app change on main, on pull requests that change the clips,
 # and by hand (Actions → App videos → Run).
@@ -88,16 +88,17 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO build-for-testing | tail -20
 
-      # Each clip test runs on its own while the simulator records the screen; the
-      # test writes when its walk starts and ends, and ffmpeg cuts the recording there.
+      # Each clip test runs on its own; the simulator records the screen from the
+      # test's start() to its end().
       - name: Record the clips
         env:
           APPEARANCE: ${{ inputs.appearance || 'both' }}
-          TEST_RUNNER_CLIP_DIR: ${{ runner.temp }}/marks
+          CLIP_DIR: ${{ runner.temp }}/clips
+          TEST_RUNNER_CLIP_DIR: ${{ runner.temp }}/clips
         run: |
           udid=${{ steps.sim.outputs.udid }}
           out="$GITHUB_WORKSPACE/videos"
-          mkdir -p "$out/raw" "$TEST_RUNNER_CLIP_DIR"
+          mkdir -p "$out/raw" "$CLIP_DIR"
           xcrun simctl boot "$udid" || true
           xcrun simctl bootstatus "$udid" -b
           xcrun simctl status_bar "$udid" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularMode active --cellularBars 4 || true
@@ -109,33 +110,30 @@ jobs:
             for clip in Today Sleep Readiness Strain Muscles Workout Food Coach; do
               name=$(echo "$clip" | tr '[:upper:]' '[:lower:]')
               raw="$out/raw/$mode-$name.mp4"
-              rm -f "$TEST_RUNNER_CLIP_DIR/$name.marks"
-              xcrun simctl io "$udid" recordVideo --codec=h264 --force "$raw" 2> "$RUNNER_TEMP/rec.log" &
-              rec=$!
-              for _ in $(seq 50); do grep -q "Recording started" "$RUNNER_TEMP/rec.log" && break; sleep 0.2; done
-              t0=$(python3 -c 'import time; print(time.time())')
+              rm -f "$CLIP_DIR/$name".*
               xcodebuild -project Aurin.xcodeproj -scheme AurinClips -configuration Debug \
                 -destination "id=$udid" -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
-                -only-testing:"AurinUITests/ClipTests/test$clip" test-without-building > "$RUNNER_TEMP/test-$name.log" 2>&1 \
-                || { echo "::warning title=App videos::$clip did not finish"; tail -20 "$RUNNER_TEMP/test-$name.log"; }
-              # The recording's clock: its last frame is when it stopped, so it began
-              # its length before that. Counting from "Recording started" put the cuts
-              # seconds late (the home screen at the end of each clip).
-              t1=$(python3 -c 'import time; print(time.time())')
-              kill -INT "$rec"; wait "$rec" || true
-              if [ -s "$raw" ]; then
-                t0=$(python3 -c "print($t1 - $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$raw"))")
+                -only-testing:"AurinUITests/ClipTests/test$clip" test-without-building > "$RUNNER_TEMP/test-$name.log" 2>&1 &
+              test=$!
+              # The test says when its screen is up; the recording starts then and
+              # stops when the test is done (ClipTests.start() and end()).
+              until [ -e "$CLIP_DIR/$name.ready" ] || ! kill -0 "$test" 2>/dev/null; do sleep 0.2; done
+              rec=
+              if [ -e "$CLIP_DIR/$name.ready" ]; then
+                xcrun simctl io "$udid" recordVideo --codec=h264 --force "$raw" 2> "$RUNNER_TEMP/rec.log" &
+                rec=$!
+                for _ in $(seq 50); do grep -q "Recording started" "$RUNNER_TEMP/rec.log" && break; sleep 0.2; done
+                touch "$CLIP_DIR/$name.go"
+                until [ -e "$CLIP_DIR/$name.done" ] || ! kill -0 "$test" 2>/dev/null; do sleep 0.2; done
+                kill -INT "$rec"; wait "$rec" || true
               fi
-              marks="$TEST_RUNNER_CLIP_DIR/$name.marks"
-              if [ ! -s "$marks" ] || [ ! -s "$raw" ]; then echo "::warning title=App videos::no $mode $name clip"; continue; fi
-              from=$(awk -v t0="$t0" '$1=="start"{printf "%.2f", $2-t0}' "$marks")
-              to=$(awk -v t0="$t0" '$1=="end"{printf "%.2f", $2-t0}' "$marks")
-              length=$(python3 -c "print(round($to - $from, 2))")
-              ffmpeg -loglevel error -y -ss "$from" -i "$raw" -t "$length" -vf fps=30 \
+              wait "$test" || { echo "::warning title=App videos::$clip did not finish"; tail -20 "$RUNNER_TEMP/test-$name.log"; }
+              if [ -z "$rec" ] || [ ! -s "$raw" ]; then echo "::warning title=App videos::no $mode $name clip"; continue; fi
+              ffmpeg -loglevel error -y -i "$raw" -vf fps=30 \
                 -c:v libx264 -crf 18 -pix_fmt yuv420p -movflags +faststart -an "$out/clips/$mode/$name.mp4"
               # The whole recording stays only when its clip did not come out.
               rm -f "$raw"
-              echo "$mode/$name.mp4: ${length} s (from ${from} s of the recording)" | tee -a "$GITHUB_STEP_SUMMARY"
+              echo "$mode/$name.mp4: $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$out/clips/$mode/$name.mp4") s" | tee -a "$GITHUB_STEP_SUMMARY"
             done
           done
 
