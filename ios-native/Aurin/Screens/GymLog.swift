@@ -204,8 +204,9 @@ final class KcalChoiceStore {
         defer { busy.remove(session.id) }
         do {
             try await model.api.setEnergyChoice(activityId: session.id, date: date, choice: choice)
-            await model.refreshTraining()
+            async let training: Void = model.refreshTraining()
             await model.refresh()
+            await training
         } catch {
             chosen[session.id] = nil
             self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)

@@ -1275,8 +1275,9 @@ struct TrainingModeView: View {
         model.deleteLater(L10n.tr("Trénink zahozen")) {
             if !model.demo {
                 do { try await model.discardGym(date: date) } catch { model.notice = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription) }
-                await model.refreshTraining()
+                async let training: Void = model.refreshTraining()
                 await model.refresh()
+                await training
             }
             if let workout { await live.delete(workout) }
         }

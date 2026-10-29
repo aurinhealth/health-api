@@ -108,8 +108,9 @@ struct WeekSessionsList: View {
     }
 
     private func reload() async {
-        await model.refreshTraining()
+        async let training: Void = model.refreshTraining()
         await model.refresh()
+        await training
     }
 
     /// Moved: the toast says where, "Zpět" moves it back.
@@ -128,8 +129,9 @@ struct WeekSessionsList: View {
                 } catch {
                     self.error = error.localizedDescription
                 }
-                await model.refreshTraining()
+                async let training: Void = model.refreshTraining()
                 await model.refresh()
+                await training
             })
     }
 
@@ -154,8 +156,9 @@ struct WeekSessionsList: View {
                     _ = hidden.remove(s.id)
                     self.error = error.localizedDescription
                 }
-                await model.refreshTraining()
+                async let training: Void = model.refreshTraining()
                 await model.refresh()
+                await training
             })
     }
 
@@ -935,8 +938,9 @@ struct PlannedWorkoutView: View {
             let _: PlannedChange = try await model.api.reschedulePlanned(eventId: id, to: session.date, time: value)
             timeSet = .some(value.isEmpty ? nil : value)
             error = nil
-            await model.refreshTraining()
+            async let training: Void = model.refreshTraining()
             await model.refresh()
+            await training
             return true
         } catch {
             self.error = error.localizedDescription
@@ -956,8 +960,9 @@ struct PlannedWorkoutView: View {
         defer { working = false }
         do {
             try await work()
-            await model.refreshTraining()
+            async let training: Void = model.refreshTraining()
             await model.refresh()
+            await training
             dismiss()
         } catch {
             self.error = error.localizedDescription
@@ -975,8 +980,9 @@ struct PlannedWorkoutView: View {
         let model = model
         model.deleteLater(L10n.tr("Trénink smazán"), hide: id) {
             do { try await model.api.deletePlanned(eventId: id) } catch { model.notice = error.localizedDescription }
-            await model.refreshTraining()
+            async let training: Void = model.refreshTraining()
             await model.refresh()
+            await training
         }
         dismiss()
     }

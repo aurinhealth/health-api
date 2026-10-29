@@ -141,8 +141,9 @@ struct MergeWorkoutsSheet: View {
         defer { saving = false }
         do {
             try await model.api.mergeWorkouts(ids: proposal.ids, energy: energy, span: span)
-            await model.refreshTraining()
+            async let training: Void = model.refreshTraining()
             await model.refresh()
+            await training
             dismiss()
         } catch {
             self.error = error.localizedDescription

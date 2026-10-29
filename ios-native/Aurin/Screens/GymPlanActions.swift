@@ -121,8 +121,9 @@ struct GymPlanActionsSheet: View {
         do {
             try await work()
             error = nil
-            await model.refreshTraining()
+            async let training: Void = model.refreshTraining()
             await model.refresh()
+            await training
             onChange()
             dismiss()
         } catch {

@@ -636,8 +636,9 @@ struct LibraryWorkoutSheet: View {
             try await model.api.scheduleWorkout(id: workout.id, date: AppModel.localDate(date), indoor: indoor)
             done = true
             error = nil
-            await model.refreshTraining()
+            async let training: Void = model.refreshTraining()
             await model.refresh()
+            await training
         } catch {
             self.error = error.localizedDescription
         }
