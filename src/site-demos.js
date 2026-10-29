@@ -130,7 +130,7 @@ const readyParts = `<div class="dm pad">
 <div class="row base"><span class="num big"${n(0, 78, 200, 1300, 'i')}>78</span><span class="pill grn"${at('1300')}>high</span></div>
 <div class="sl">What makes up today’s score</div>
 ${[['Sleep', '7:12', 'your normal 7:20–8:10', '↓ below normal', 'rust', 12, '−4 readiness points'], ['Resting heart rate', '48 bpm', 'your normal 50–54 bpm', '↓ below normal', 'green', 20, '+3 readiness points'], ['HRV', '64 ms', 'your normal 55–61 ms', '↑ above normal', 'green', 83, '+9 readiness points']]
-    .map(([k, v, nm, dir, c, x, pt], i) => `<div class="pr3"><div class="row sp base"><b>${k}</b><span class="num md">${v}</span></div><div class="row sp"><span class="mut s">${nm}</span><span class="s" style="color:var(--${c})">${dir}</span></div>${range(x, c, 500 + i * 250)}<span class="pts" style="color:var(--${c})">${pt}</span></div>`).join('')}
+    .map(([k, v, nm, dir, c, x, pt], i) => `<div class="pr3"><div class="row sp base"><b>${k}</b><span class="num md">${v}</span></div><div class="row sp"><span class="mut s">${nm}</span><span class="s" style="color:var(--${c})">${dir}</span></div>${range(x, c, 500 + i * 250)}<span class="pts" style="color:var(--${c === 'rust' ? 'rust-ink' : c})">${pt}</span></div>`).join('')}
 </div>`;
 
 const journal = `<div class="dm pad">
@@ -420,7 +420,7 @@ export const demoCss = `
 .sent.h{font-size:26px;line-height:1.1;margin:2px 0 4px}.sent.h2{font-size:24px;margin-bottom:6px}
 .sl{font-size:11px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:14px 0 8px}
 .dm>.sl:first-child,.dm>.row:first-child .sl{margin-top:0}
-.mut{color:var(--muted)}.faint{color:var(--muted);opacity:.85}.s{font-size:12.5px}.b{font-weight:600}.mono{font-variant-numeric:tabular-nums}
+.mut{color:var(--muted)}.faint{color:var(--muted)}.s{font-size:12.5px}.b{font-weight:600}.mono{font-variant-numeric:tabular-nums}
 .grn{color:var(--green)}.amb{color:var(--amber)}.ind{color:var(--indigo)}.rust{color:var(--rust)}.sec{color:var(--sec)}
 .row{display:flex;align-items:center;gap:10px}.row.sp{justify-content:space-between}.row.base{align-items:baseline}.row.gap{gap:8px;flex-wrap:wrap;margin-top:10px}
 .pill{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:999px;font-size:12.5px;font-weight:600}
