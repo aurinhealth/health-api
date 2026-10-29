@@ -213,8 +213,10 @@ struct StretchingCard: View {
             }
         }
         // Dashed: on top of the chosen time, not part of the lifting.
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .strokeBorder(kind.color.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4])))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(kind.color.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+        }
         .sheet(item: $info) { item in StretchInfoSheet(item: item) }
         .fullScreenCover(isPresented: $timer) {
             StretchTimerView(stretching: stretching, kind: kind) { id in
@@ -345,7 +347,7 @@ struct StretchTimerView: View {
                         Label(paused ? "Pokračovat" : "Pauza", systemImage: paused ? "play.fill" : "pause.fill")
                             .font(Typo.bodyStrong).frame(maxWidth: .infinity).frame(height: 50)
                             .foregroundStyle(Palette.ink)
-                            .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                            .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
                     }
                     Button { next() } label: {
                         Label("Další", systemImage: "forward.fill")
@@ -357,7 +359,7 @@ struct StretchTimerView: View {
             }
         }
         .padding(20)
-        .background(Palette.background.ignoresSafeArea())
+        .background { Palette.background.ignoresSafeArea() }
         .task { await run() }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
@@ -706,8 +708,10 @@ struct GymGoalSheet: View {
                     }
                     .padding(.horizontal, 16).padding(.vertical, 13)
                     .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(goal == "auto" ? Palette.ink.opacity(0.7) : .clear, lineWidth: 1.5))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(goal == "auto" ? Palette.ink.opacity(0.7) : .clear, lineWidth: 1.5)
+                    }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

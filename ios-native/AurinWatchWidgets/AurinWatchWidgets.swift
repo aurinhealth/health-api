@@ -436,7 +436,7 @@ struct WideView: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .background(Capsule().fill(Color.white.opacity(0.18)))
+                .background { Capsule().fill(Color.white.opacity(0.18)) }
             }
             .frame(height: 6)
         }

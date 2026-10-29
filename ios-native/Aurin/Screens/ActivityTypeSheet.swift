@@ -68,7 +68,7 @@ struct ActivityTypeSheet: View {
                 }
                 .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 40)
             }
-            .background(Palette.settingsBackground.ignoresSafeArea())
+            .background { Palette.settingsBackground.ignoresSafeArea() }
             .navigationTitle(L10n.tr("Typ aktivity"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

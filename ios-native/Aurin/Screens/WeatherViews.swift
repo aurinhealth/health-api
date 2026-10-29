@@ -413,7 +413,7 @@ struct WeatherHourStrip: View {
     var nowFirst = false
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 2) {
                 ForEach(Array(hours.enumerated()), id: \.element.hour) { index, h in
                     let now = nowFirst && index == 0
@@ -431,6 +431,7 @@ struct WeatherHourStrip: View {
                 }
             }
         }
+        .scrollIndicators(.hidden)
     }
 }
 

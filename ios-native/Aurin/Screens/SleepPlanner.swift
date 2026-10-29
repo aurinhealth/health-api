@@ -138,7 +138,7 @@ struct SleepPlanner: View {
             }
             .frame(maxWidth: .infinity).padding(.vertical, 10)
             .background(on ? Palette.lilac : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Palette.indigo : .clear, lineWidth: 1.5))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Palette.indigo : .clear, lineWidth: 1.5) }
         }
         .buttonStyle(.plain)
         .disabled(saving)
@@ -193,9 +193,11 @@ struct SleepPlanner: View {
             .accessibilityAddTraits(.isHeader)
     }
 
-    /// 510 → "8 h 30", 480 → "8 h 00".
+    /// 510 → "8 h 30 min", 480 → "8 h": a length in a line of text, as everywhere
+    /// else in the app (Fmt.duration). The dial's big number is "8:30", as the night
+    /// on Spánek is "7:12".
     static func short(_ minutes: Int) -> String {
-        "\(minutes / 60) h " + String(format: "%02d", minutes % 60)
+        Fmt.duration(minutes)
     }
 
     static func wrap(_ minutes: Int) -> Int { ((minutes % 1440) + 1440) % 1440 }
@@ -236,7 +238,7 @@ struct SleepDial: View {
                         .accessibilityHidden(true)
                 }
                 VStack(spacing: 2) {
-                    Text(SleepPlanner.short(sleep)).font(Typo.number(42)).foregroundStyle(Palette.ink)
+                    Text(Fmt.hoursMinutes(Double(sleep))).font(Typo.number(42)).foregroundStyle(Palette.ink)
                         .contentTransition(.numericText())
                     Text("spánek").font(Typo.small).foregroundStyle(Palette.muted)
                 }
@@ -255,7 +257,7 @@ struct SleepDial: View {
             .scaledFont(13, weight: .bold, cap: .denseCap)
             .foregroundStyle(color)
             .frame(width: 32, height: 32)
-            .background(Circle().fill(Palette.card))
+            .background { Circle().fill(Palette.card) }
             .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
             .frame(width: 48, height: 48)
             .contentShape(Circle())
@@ -329,7 +331,7 @@ struct WakeSheet: View {
         }
         .padding(24)
         .presentationDetents([.height(440)])
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .onAppear { time = SleepSettingsForm.clock(SleepSettingsForm.text(minutes: wake)) }
     }
 

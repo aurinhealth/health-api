@@ -309,7 +309,7 @@ struct GoogleWriteSheet: View {
         }
         .padding(24)
         .presentationDetents([.medium])
-        .presentationBackground(Palette.settingsBackground)
+        .glassSheetBackground(Palette.settingsBackground)
     }
 }
 
@@ -393,7 +393,7 @@ struct SyncToastView: View {
                 HStack(spacing: -8) {
                     ForEach(report.rows.prefix(4)) { row in
                         SyncAppIcon(id: row.destination, size: 24)
-                            .overlay(RoundedRectangle(cornerRadius: 24 * 0.27, style: .continuous).stroke(Palette.card, lineWidth: 2))
+                            .overlay { RoundedRectangle(cornerRadius: 24 * 0.27, style: .continuous).stroke(Palette.card, lineWidth: 2) }
                     }
                 }
                 Text(verbatim: L10n.plural("Odesláno do %lld aplikací", report.rows.count))
@@ -439,7 +439,7 @@ struct SyncStatusSheet: View {
         }
         .padding(24)
         .presentationDetents([.medium, .large])
-        .presentationBackground(Palette.settingsBackground)
+        .glassSheetBackground(Palette.settingsBackground)
     }
 
     private func line(_ row: SyncReport.Row) -> some View {

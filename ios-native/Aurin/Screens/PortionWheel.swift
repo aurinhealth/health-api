@@ -82,7 +82,7 @@ struct PortionWheel: View {
             }
             .frame(height: 50)
             .background(Palette.track, in: Capsule())
-            .overlay(Capsule().stroke(Palette.amber, lineWidth: typing ? 1.5 : 0))
+            .overlay { Capsule().stroke(Palette.amber, lineWidth: typing ? 1.5 : 0) }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()

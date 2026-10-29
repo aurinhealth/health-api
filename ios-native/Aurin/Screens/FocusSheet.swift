@@ -19,7 +19,7 @@ struct FocusPromptCard: View {
             }
             .padding(14)
             .cardSurface(cornerRadius: 18)
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.amber.opacity(0.35), lineWidth: 1))
+            .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.amber.opacity(0.35), lineWidth: 1) }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -101,7 +101,7 @@ struct FocusSheet: View {
                 }
                 .padding(24)
             }
-            .background(ScreenBackground(glow: Palette.Glow.training))
+            .background { ScreenBackground(glow: Palette.Glow.training) }
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } } }
         }
         .tint(Palette.ink)

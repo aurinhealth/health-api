@@ -102,7 +102,7 @@ struct CoachTextCard: View {
             }
 
             if !chips.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     HStack(spacing: 8) {
                         ForEach(chips, id: \.self) { chip in
                             Text(verbatim: chip)
@@ -114,6 +114,7 @@ struct CoachTextCard: View {
                         }
                     }
                 }
+                .scrollIndicators(.hidden)
             }
 
             if let tip {

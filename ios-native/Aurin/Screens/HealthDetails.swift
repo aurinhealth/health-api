@@ -410,7 +410,7 @@ struct WeightEntrySheet: View {
         }
         .padding(24)
         .presentationDetents([.medium])
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .onAppear { focused = true }
     }
 

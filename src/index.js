@@ -922,9 +922,12 @@ async function saveGooglePointsBatch(env, family, type, points) {
   });
 
   // D1 batch executes the statements sequentially in one database call.
-  for(let i=0;i<statements.length;i+=50)await env.DB.batch(statements.slice(i,i+50));
+  let changed=0;
+  for(let i=0;i<statements.length;i+=50)for(const result of await env.DB.batch(statements.slice(i,i+50)))changed+=Number(result?.meta?.changes||0);
   // Days Apple Health already covers keep the Apple rows (apple-health.js).
-  await afterGoogleSync(env, type, points);
+  // Only when a row changed: the recent sync reads the same two days every
+  // 5 minutes, and choosing the source again read ~1 B rows a day for nothing.
+  if(changed)await afterGoogleSync(env, type, points);
   return points.length;
 }
 // A workout changed in Google Health a few days later (a run that was a walk)
@@ -1441,7 +1444,7 @@ export async function matchActivities(env, { days = null } = {}) {
     `SELECT source_family, data_type, external_id, start_time, end_time, payload_json, record_role, matched_activity_id
      FROM health_datapoints
      WHERE user_id = ?
-     AND ((source_family IN ('intervals','local','wahoo') AND data_type = 'activity') OR (source_family IN ('google-wearables','apple-health') AND data_type = 'exercise'))
+     AND source_family IN ('intervals','local','wahoo','google-wearables','apple-health') AND data_type IN ('activity','exercise') AND ((source_family IN ('intervals','local','wahoo') AND data_type = 'activity') OR (source_family IN ('google-wearables','apple-health') AND data_type = 'exercise'))
      -- Google copies of Apple Health workouts stay out (apple-health.js).
      AND NOT (source_family = 'google-wearables' AND COALESCE(matched_activity_id,'') = 'apple-health')
      -- Apple Health copies of Google Health workouts too (apple-health.js resolveWorkoutCopies).

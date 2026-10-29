@@ -37,7 +37,7 @@ async function rowOf(env, id) {
   const key = String(id || '').slice(0, 300);
   if (!key || /^gym:/.test(key)) return null;
   return env.DB.prepare(`SELECT id, source_family, data_type, external_id, sample_time, start_time, end_time, payload_json, record_role, matched_activity_id, match_confidence FROM health_datapoints
-    WHERE user_id = ? AND external_id = ? AND ((source_family IN ('intervals', 'local') AND data_type = 'activity')
+    WHERE user_id = ? AND external_id = ? AND source_family IN ('intervals', 'local', 'google-wearables', 'apple-health') AND data_type IN ('activity', 'exercise') AND ((source_family IN ('intervals', 'local') AND data_type = 'activity')
       OR (source_family IN ('google-wearables', 'apple-health') AND data_type = 'exercise'))
       AND COALESCE(matched_activity_id, '') != ? LIMIT 1`).bind(env.USER_ID, key, DELETED).first();
 }

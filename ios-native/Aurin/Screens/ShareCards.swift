@@ -443,7 +443,7 @@ struct ShareDayCard: View {
         .padding(.horizontal, u * 4.4).padding(.vertical, u * 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(s.t.line(s.t.clear ? 0.1 : 0.05), in: RoundedRectangle(cornerRadius: u * 4.5, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: u * 4.5, style: .continuous).stroke(s.t.line(0.07), lineWidth: 1))
+        .overlay { RoundedRectangle(cornerRadius: u * 4.5, style: .continuous).stroke(s.t.line(0.07), lineWidth: 1) }
     }
 }
 
@@ -635,7 +635,7 @@ struct ShareTimeline: View {
         let u = s.u
         return Circle()
             .strokeBorder(color, lineWidth: u * 1.1)
-            .background(Circle().fill(s.t.hole))
+            .background { Circle().fill(s.t.hole) }
             .frame(width: u * 3.6, height: u * 3.6)
             .shadow(color: color.opacity(0.55), radius: u * 1.2)
     }
@@ -891,7 +891,7 @@ struct ShareRoute: View {
     }
 
     private func marker(_ c: Color) -> some View {
-        Circle().strokeBorder(c, lineWidth: u * 1.2).background(Circle().fill(hole)).frame(width: u * 4.4, height: u * 4.4)
+        Circle().strokeBorder(c, lineWidth: u * 1.2).background { Circle().fill(hole) }.frame(width: u * 4.4, height: u * 4.4)
     }
 
     /// Longitude scaled by the latitude, so the shape keeps its proportions.
@@ -1188,7 +1188,7 @@ struct ShareDial<Center: View>: View {
                     .stroke(LinearGradient(colors: [color.opacity(0.35), color], startPoint: .leading, endPoint: .trailing),
                             style: StrokeStyle(lineWidth: line, lineCap: .round))
                     .shadow(color: color.opacity(0.4), radius: u * 2)
-                Circle().strokeBorder(color, lineWidth: u * 1.2).background(Circle().fill(hole))
+                Circle().strokeBorder(color, lineWidth: u * 1.2).background { Circle().fill(hole) }
                     .frame(width: line * 1.7, height: line * 1.7)
                     .position(knob)
                 center()

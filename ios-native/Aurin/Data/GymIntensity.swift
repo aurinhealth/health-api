@@ -121,8 +121,10 @@ struct IntensitySheet: View {
                         }
                         .padding(.horizontal, 16).padding(.vertical, 11)
                         .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(selected == letter ? Palette.amber.opacity(0.7) : .clear, lineWidth: 1.5))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(selected == letter ? Palette.amber.opacity(0.7) : .clear, lineWidth: 1.5)
+                        }
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)

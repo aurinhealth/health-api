@@ -75,7 +75,7 @@ struct BarcodeScanSheet: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollDismissesKeyboard(.immediately)
         }
-        .background(Palette.background.ignoresSafeArea())
+        .background { Palette.background.ignoresSafeArea() }
         .task { await askCamera() }
         .onChange(of: torch) { Self.setTorch(torch) }
         .onChange(of: state) { if state != .scanning && state != .searching { torch = false } }
@@ -152,7 +152,7 @@ struct BarcodeScanSheet: View {
                     PhotosPicker(selection: $photo, matching: .images) {
                         Label("Vybrat fotku", systemImage: "photo").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
                             .padding(.horizontal, 18).frame(height: 44)
-                            .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                            .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
                     }
                     .buttonStyle(.plain)
                     if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).multilineTextAlignment(.center) }
@@ -209,7 +209,7 @@ struct BarcodeScanSheet: View {
                             Button { edit(product) } label: {
                                 Label("Upravit produkt", systemImage: "pencil").font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink)
                                     .padding(.horizontal, 12).frame(height: 30)
-                                    .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                                    .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
                             }
                             .buttonStyle(.plain)
                         }
@@ -240,7 +240,7 @@ struct BarcodeScanSheet: View {
                     Button("Skenovat znovu") { reset() }
                         .font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
                         .padding(.horizontal, 16).frame(height: 46)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
                     Button { Task { await lookUp() } } label: {
                         Label(L10n.tr(guess.trimmingCharacters(in: .whitespaces).count >= 2 ? "Odhadnout AI" : "Dohledat AI"), systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
                             .frame(maxWidth: .infinity).frame(height: 46).background(Palette.button, in: Capsule())
@@ -249,7 +249,7 @@ struct BarcodeScanSheet: View {
                 Button { labelOpen = true } label: {
                     Label("Vyfotit etiketu", systemImage: "camera").font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 46)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
                 }
                 .buttonStyle(.plain)
                 .disabled(model.demo)

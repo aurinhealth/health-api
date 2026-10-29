@@ -16,13 +16,14 @@ function setup() {
   const raw = createD1();
   raw.sqlite.exec(schema);
   const env = { DB: scopedDb(raw, 1), USER_ID: 1 };
-  const context = vm.createContext({ healthPointJson, KEEP_TYPE_SQL, crypto, googleInfo: (_type, p) => p.info, afterGoogleSync: async () => 0 });
+  const afterSync = [];
+  const context = vm.createContext({ healthPointJson, KEEP_TYPE_SQL, crypto, googleInfo: (_type, p) => p.info, afterGoogleSync: async (_env, type) => { afterSync.push(type); return 0; } });
   for (const [start, end] of [
     ['function pointStatement(', '// GOOGLE NUTRITION API'],
     ['async function saveGooglePointsBatch(', 'async function syncGoogleRecent(']
   ]) vm.runInContext(source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))), context);
   const point = (values = {}, user = env) => context.pointStatement(user, 'google-wearables', 'steps', values.payload ?? { steps: { count: 12 } }, values.value ?? 12, values.unit ?? 'steps', values.sample ?? '2026-10-10T12:00:00Z', values.start ?? null, values.end ?? null, 'sample-1');
-  return { raw, env, context, point };
+  return { raw, env, context, point, afterSync };
 }
 
 test('identical samples write zero rows and preserve update time and activity matching', async () => {
@@ -82,6 +83,18 @@ test('125 repeated Google samples stay batched and perform no INSERT or UPDATE',
   batches.length = 0;
   await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points);
   assert.equal(batches.reduce((n, b) => n + b.changes, 0), 1);
+});
+
+test('choosing the source again runs only after a Google page changed a row', async () => {
+  const { env, context, afterSync } = setup();
+  const points = Array.from({ length: 3 }, (_, i) => ({ name: 'sample-' + i, info: { sample: '2026-10-10', start: null, end: null, value: i, unit: 'steps' } }));
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points);
+  assert.deepEqual(afterSync, ['steps']);
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points);
+  assert.deepEqual(afterSync, ['steps']);
+  points[1].info.value = 50;
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'steps', points);
+  assert.deepEqual(afterSync, ['steps', 'steps']);
 });
 
 test('Intervals weight import skips identical weights and retains corrections', async () => {

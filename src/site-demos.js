@@ -85,7 +85,7 @@ const sleepNight = `<div class="dm pad">
 <div class="stg">${[['Deep', '1:23', 83, '19%', 'd'], ['REM', '1:34', 94, '22%', 'r'], ['Light', '4:15', 255, '59%', 'l'], ['Awake', '0:17', 17, '3×', 'a']].map(([k, v, m, p, c], i) => `<div class="sr"><span>${k}</span><i class="bar"><b class="${c}" style="--w:${(m / 255 * 100).toFixed(1)}%"${at(String(900 + i * 220))}></b></i><span class="num">${v}</span><span class="mut">${p}</span></div>`).join('')}</div>
 </div>`;
 
-// "Why 8 h 30": the need for tonight built up row by row.
+// "Why 8 h 30 min": the need for tonight built up row by row.
 const sleepNeed = `<div class="dm pad">
 <div class="sl">Need and debt</div>
 <div class="nd"><div class="row sp base"><b class="nt">Need for tonight</b><span class="num md"${n(480, 510, 600, 2600, 'hmc')}>8:30</span></div>
@@ -104,7 +104,7 @@ const dial = `<div class="dm pad dialbox">
 <svg viewBox="0 0 300 300" aria-hidden="true"><circle class="trk" cx="150" cy="150" r="126"/><path class="arc" d=""/>
 ${[0, 3, 6, 9, 12, 15, 18, 21].map(h => { const a = h / 24 * 2 * Math.PI; return `<text x="${(150 + 98 * Math.sin(a)).toFixed(1)}" y="${(150 - 98 * Math.cos(a) + 4).toFixed(1)}">${h}</text>`; }).join('')}
 <circle class="usual" cx="${(150 + 143 * Math.sin(1428 / 1440 * 2 * Math.PI)).toFixed(1)}" cy="${(150 - 143 * Math.cos(1428 / 1440 * 2 * Math.PI)).toFixed(1)}" r="3"/></svg>
-<div class="ctr" aria-hidden="true"><span class="num len">8 h 30</span><span class="mut s">sleep</span></div>
+<div class="ctr" aria-hidden="true"><span class="num len">8:30</span><span class="mut s">sleep</span></div>
 <button type="button" class="hd moon" role="slider" aria-label="Bedtime" aria-valuemin="0" aria-valuemax="1435">${ic('moon')}</button><button type="button" class="hd sun" role="slider" aria-label="Wake up" aria-valuemin="0" aria-valuemax="1435">${ic('sun')}</button>
 </div>
 <div class="tiles" aria-hidden="true"><div class="tile"><div class="th ind">${ic('moon')}Bedtime</div><span class="num bed">10:10 PM</span></div><div class="tile"><div class="th amb">${ic('sun')}Wake up</div><span class="num wake">7:15 AM</span></div></div>
@@ -115,9 +115,9 @@ ${[0, 3, 6, 9, 12, 15, 18, 21].map(h => { const a = h / 24 * 2 * Math.PI; return
 const tonight = `<div class="dm pad">
 <div class="sl">Tonight I want</div>
 <div class="chips3">
-<div class="ch3 on"${at('2600-on 7400:on')}><b>Catch up</b><span class="mono">8 h 30</span></div>
-<div class="ch3"${at('2600:on 5000-on')}><b>As usual</b><span class="mono">8 h 00</span></div>
-<div class="ch3"${at('5000:on 7400-on')}><b>At least</b><span class="mono">7 h 00</span></div>
+<div class="ch3 on"${at('2600-on 7400:on')}><b>Catch up</b><span class="mono">8 h 30 min</span></div>
+<div class="ch3"${at('2600:on 5000-on')}><b>As usual</b><span class="mono">8 h</span></div>
+<div class="ch3"${at('5000:on 7400-on')}><b>At least</b><span class="mono">7 h</span></div>
 </div>
 <div class="tiles"><div class="tile"><div class="th ind">${ic('moon')}Bedtime</div><span class="num" data-tx="0|10:10 PM;2700|10:40 PM;5100|11:45 PM;7500|10:10 PM">10:10 PM</span></div><div class="tile"><div class="th amb">${ic('sun')}Wake up</div><span class="num">7:15 AM</span></div></div>
 </div>`;
@@ -129,7 +129,7 @@ const readyParts = `<div class="dm pad">
 <div class="sl">Readiness</div>
 <div class="row base"><span class="num big"${n(0, 78, 200, 1300, 'i')}>78</span><span class="pill grn"${at('1300')}>high</span></div>
 <div class="sl">What makes up today’s score</div>
-${[['Sleep', '7:12', 'your normal 7:20–8:10', '↓ below normal', 'rust', 12, '−4 readiness points'], ['Resting heart rate', '48 bpm', 'your normal 50–54 bpm', '↓ below normal', 'green', 20, '+3 readiness points'], ['HRV', '64 ms', 'your normal 55–61 ms', '↑ above normal', 'green', 83, '+9 readiness points']]
+${[['Sleep', '7:12', 'your normal 7:20–8:10', 'worse than usual', 'rust', 12, '−4 readiness points'], ['Resting heart rate', '48 bpm', 'your normal 50–54 bpm', 'better than usual', 'green', 20, '+3 readiness points'], ['HRV', '64 ms', 'your normal 55–61 ms', 'better than usual', 'green', 83, '+9 readiness points']]
     .map(([k, v, nm, dir, c, x, pt], i) => `<div class="pr3"><div class="row sp base"><b>${k}</b><span class="num md">${v}</span></div><div class="row sp"><span class="mut s">${nm}</span><span class="s" style="color:var(--${c})">${dir}</span></div>${range(x, c, 500 + i * 250)}<span class="pts" style="color:var(--${c === 'rust' ? 'rust-ink' : c})">${pt}</span></div>`).join('')}
 </div>`;
 
@@ -156,10 +156,10 @@ const strainScreen = `<div class="app glow-training">${STATUS}
 <div class="sent title">Strain</div>
 <div class="gwrap">${gauge(190, 300)}<div class="gc"><span class="num g"${n(0, 8.4, 300, 1600, '1')}>8.4</span><span class="mut s">target 11–14 · of 21</span></div><div class="gl"><span>0</span><span>21</span></div></div>
 <div class="center"><span class="pill amb"${at('1700')}>moderate</span></div>
-<div class="card split"><i class="sb2"><b class="w" style="--w:${5.1 / 21 * 100}%"${at('500')}></b><b class="m" style="--w:${3.3 / 21 * 100}%"${at('1200')}></b><b class="p" style="--w:${8.3 / 21 * 100}%"${at('2000')}></b></i>
-<div class="leg"><b>5.1</b> workout <b>3.3</b> movement <b>+8.3</b> in plan</div></div>
+<div class="card split"><i class="sb2"><b class="w" style="--w:${5.1 / 21 * 100}%"${at('500')}></b><b class="m" style="--w:${3.3 / 21 * 100}%"${at('1200')}></b><b class="p" style="--w:${5.0 / 21 * 100}%"${at('2000')}></b></i>
+<div class="leg"><b>5.1</b> workout <b>3.3</b> movement <b>+5.0</b> in plan</div></div>
 <div class="sl pad2">Today’s target</div>
-<div class="card rows"><div class="li"><span>Readiness</span><span>78</span></div><div class="li"><span>Sleep debt</span><span>30 min</span></div><div class="li"><span>Plan</span><span>Strength, full body</span></div></div>
+<div class="card rows"><div class="li"><span>Readiness</span><span>78</span></div><div class="li"><span>Sleep debt</span><span>4 h 51 min</span></div><div class="li"><span>Plan</span><span>Strength, full body</span></div></div>
 <div class="sl pad2">What it’s made of</div>
 <div class="card made"><div class="mi"><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM · 42 min · 48 TSS</span></div><span class="num">5.1</span></div><div class="mi"><span class="sq sand">${ic('steps')}</span><div><b>Movement through the day</b><span class="mut s">6,420 steps</span></div><span class="num">3.3</span></div></div>
 </div>`;
@@ -167,10 +167,10 @@ const strainScreen = `<div class="app glow-training">${STATUS}
 // Beside the phone: what adds up to today's strain, and where it should land.
 const strainMade = `<div class="dm pad">
 <div class="row sp"><div class="sl">What it’s made of</div><span class="mut s">target 11–14</span></div>
-<div class="tgt"><i><b class="band"></b><b class="fill"${at('400:a 1700:b 3000:c')}></b></i><span class="num"${n(0, 5.1, 400, 900, '1')}${n(5.1, 8.4, 1700, 900, '1')}${n(8.4, 16.7, 3000, 900, '1')}>16.7</span></div>
+<div class="tgt"><i><b class="band"></b><b class="fill"${at('400:a 1700:b 3000:c')}></b></i><span class="num"${n(0, 5.1, 400, 900, '1')}${n(5.1, 8.4, 1700, 900, '1')}${n(8.4, 13.4, 3000, 900, '1')}>13.4</span></div>
 <div class="mi"${at('400')}><span class="sq amb">${ic('run')}</span><div><b>Morning run</b><span class="mut s">7:30 AM · 42 min · 48 TSS</span></div><span class="num">5.1</span></div>
 <div class="mi"${at('1700')}><span class="sq sand">${ic('steps')}</span><div><b>Movement through the day</b><span class="mut s"><span${n(0, 6420, 1700, 1100, 'i')}>6,420</span> steps</span></div><span class="num">3.3</span></div>
-<div class="mi plan"${at('3000')}><span class="sq dash">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">5:30 PM · in plan</span></div><span class="num faint">+8.3</span></div>
+<div class="mi plan"${at('3000')}><span class="sq dash">${ic('gym')}</span><div><b>Strength, full body</b><span class="mut s">5:30 PM · in plan</span></div><span class="num faint">+5.0</span></div>
 <p class="note"${at('4000')}>Lands inside today’s target.</p>
 </div>`;
 
@@ -214,8 +214,8 @@ const builder = `<div class="dm pad bld">
 const part = (id, icon, color, title, sub, toggle) => `<div class="pt ${id}"><span class="ib ${color}">${ic(icon)}</span><div><b>${title}</b><span class="mut s">${sub}</span></div><span class="gpr">${toggle === null ? '' : `<span class="tg${toggle ? ' on' : ''}"${toggle === 'flip' ? at('1200:on') : ''}><i></i></span>`}<span class="gar"><i>${ic('chup')}</i><i>${ic('chdown')}</i></span></span></div>`;
 const gymParts = `<div class="dm pad">
 <div class="row sp"><b class="sent md2"><span${n(58, 68, 1200, 700, 'i')}>68</span> min in total</b><span class="mut s"><span${n(13, 23, 1200, 700, 'i')}>23</span> min extra</span></div>
-<div class="tbar"><i class="w" style="flex:5"></i><i class="l" style="flex:45"></i><i class="sx" style="flex:8"></i></div>
-<div class="tl s mut"><span>Warm-up +5 min</span><span>Lifting 45 min</span><span>Stretching +8 min</span></div>
+<div class="tbar"><i class="w" style="flex:5"></i><i class="c"${at('1200:on')}></i><i class="l" style="flex:45"></i><i class="sx" style="flex:8"></i></div>
+<div class="tl s mut">Warm-up 5 · <span class="tc"${at('1200:on')}>Cardio 10 · </span>Lifting 45 · Stretching 8 min</div>
 <div class="row sp"><span class="sl">Today’s workout</span><span class="s gro" data-tx="0|Reorder;2600|Done;4600|Reorder">Reorder</span></div>
 <div class="gparts"${at('2600:reo 3500:swap 4600-reo')}>
 ${part('p1', 'run', 'amb', 'Warm-up', 'Automatic · 5 min', true)}
@@ -302,10 +302,10 @@ ${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105]].
 <div class="row sp"><span class="grn s b">✓ Found</span><span class="olp">${ic('pencil')}Edit product</span></div>
 <div class="sent h3">Plain Greek yogurt</div>
 <div class="mut s">Hollandia · EAN 8594001234567</div>
-<div class="nc">${[['kcal', 133, 200], ['protein', 12.6, 18.9], ['carbs', 5.6, 8.4], ['fat', 7, 10.5]].map(([k, a, b]) => `<div><span class="num md"${n(a, b, 4500, 700, 'i')}>${Math.round(b)}</span><span class="mut s">${k === 'kcal' ? 'kcal' : k + ' g'}</span></div>`).join('')}</div>
+<div class="nc">${[['kcal', 205, 307], ['protein', 13, 19.5], ['carbs', 6, 9], ['fat', 14, 21]].map(([k, a, b]) => `<div><span class="num md"${n(a, b, 4500, 700, 'i')}>${Math.round(b)}</span><span class="mut s">${k === 'kcal' ? 'kcal' : k + ' g'}</span></div>`).join('')}</div>
 <div class="wf"><b data-tx="0|1;4500|1½">1½</b><i></i><span>serving (140 g)</span>${ic('chevd')}</div>
 <div class="wheel"><div class="col w"><ul>${['0', '1', '2'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col p"><ul${at('4500:on')}>${['', '–', '¼', '⅓', '½', '⅔'].map(x => `<li>${x}</li>`).join('')}</ul></div><div class="col u"><ul>${['g', 'serving (140 g)', ''].map(x => `<li>${x}</li>`).join('')}</ul></div></div>
-<div class="mut s">1 serving = 140 g · 133 kcal</div>
+<div class="mut s">1 serving = 140 g · 205 kcal</div>
 <span class="meal">Lunch${ic('updown')}</span>
 <div class="btn dark"${at('5800:press 6100-press 6100:ok')}><span data-tx="0|Add to lunch · 1 serving;4500|Add to lunch · 1½ serving;6100|✓ Added to lunch">Add to lunch · 1½ serving</span></div>
 </div></div></div>`;
@@ -320,7 +320,7 @@ const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="dots"${at('2100 3200-in')}><i></i><i></i><i></i><span>Coach is thinking…</span></div>
 <div class="c1"${at('3200')}><span data-type="3200,900">Here’s a full-body session for 5:30 PM:</span></div>
 <div class="act"${at('4400')}>
-<div class="al">${ic('wand')}Schedule · Thu 8/10</div>
+<div class="al">${ic('wand')}Schedule · Thu, Oct 8</div>
 <div class="sent an">Strength, full body</div>
 ${[['Squat', '3×8 · 80 kg'], ['Bench press', '3×8 · 62.5 kg'], ['Bent-over rows', '3×10 · 50 kg'], ['Romanian deadlift', '3×8 · 70 kg']].map(([a, b]) => `<div class="ar2"><span>${a}</span><span>${b}</span></div>`).join('')}
 <span class="mut s">+1 more · 1 h</span>
@@ -388,7 +388,7 @@ ${[['Carbs', 88, 100, 'carbs'], ['Protein', 61, 45, 'protein'], ['Fat', 26, 24, 
 const actSleep = `<div class="dm wc">
 <div class="w-two"><div class="wcard w-sm"${rise(0)}><span class="th ind">${ic('moon')}Bedtime</span><span class="num w-v">10:10<small>PM</small></span></div>
 <div class="wcard w-sm"${rise(120)}><span class="th amb">${ic('sun')}Wake up</span><span class="num w-v">7:15<small>AM</small></span></div></div>
-<div class="chips3"${rise(240)}>${[['Catch up', '8 h 30'], ['As usual', '8 h 00'], ['At least', '7 h 00']].map(([k, v], i) => `<span class="ch3 wcard"${i === 0 ? at('900:on') : ''}><b>${k}</b><span>${v}</span></span>`).join('')}</div>
+<div class="chips3"${rise(240)}>${[['Catch up', '8 h 30 min'], ['As usual', '8 h'], ['At least', '7 h']].map(([k, v], i) => `<span class="ch3 wcard"${i === 0 ? at('900:on') : ''}><b>${k}</b><span>${v}</span></span>`).join('')}</div>
 <div class="wcard"${rise(360)}><div class="row sp base"><span class="mut">Last night</span><span class="num md">7:12</span></div>
 <div class="hg" aria-hidden="true"><div class="hgl"><span>Awake</span><span>REM</span><span>Light</span><span>Deep</span></div><div class="hgt w-draw"${at('600')}>${NIGHT.map(([t, s, e]) => `<i class="${t}" style="left:${(s / 449 * 100).toFixed(2)}%;width:${Math.max(0.5, (e - s) / 449 * 100).toFixed(2)}%"></i>`).join('')}</div></div></div>
 </div>`;
@@ -563,7 +563,8 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .md2{font-size:20px}
 .tbar{display:flex;gap:4px;height:8px;margin:10px 0 6px}.tbar i{border-radius:9px;transition:flex .6s,opacity .4s}
 .tbar .w{background:var(--amber)}.tbar .l{background:color-mix(in srgb,var(--text) 85%,transparent)}.tbar .c{background:var(--rust)}.tbar .sx{background:var(--indigo)}
-.tl{display:flex;justify-content:space-between}
+.tbar .c{flex:0;opacity:0}.tbar .c.on,html:not(.js) .tbar .c{flex:10;opacity:1}
+.js .tl .tc:not(.on){display:none}
 .gparts{position:relative;padding:4px 8px;border-radius:20px;background:var(--bg)}
 .pt{display:grid;grid-template-columns:32px 1fr auto;align-items:center;gap:10px;min-height:54px;border-top:1px solid var(--line);background:var(--bg);transition:transform .6s cubic-bezier(.16,1,.3,1),box-shadow .3s,opacity .3s}
 .pt:first-child{border-top:0}.pt b{display:block;font-size:14px;font-weight:500}
@@ -572,9 +573,9 @@ html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
 .gar{display:flex;gap:6px;opacity:0;transition:opacity .3s}.gar i{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:color-mix(in srgb,var(--text) 8%,transparent)}.gar svg{width:14px;height:14px}
 .gparts.reo .gar{opacity:1}.gparts.reo .pt .tg{opacity:0!important}.gparts.reo .pt{opacity:1}
 .p1 .gar i:first-child,.p4 .gar i:last-child{opacity:.3}
-.tg{position:relative;width:44px;height:26px;border-radius:99px;background:color-mix(in srgb,var(--text) 12%,transparent);transition:background .3s}
-.tg i{position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:var(--muted);transition:transform .35s cubic-bezier(.3,1.5,.5,1),background .3s}
-.tg.on{background:var(--button)}.tg.on i{transform:translateX(18px);background:var(--on-button)}
+.tg{position:relative;width:44px;height:26px;border-radius:99px;background:color-mix(in srgb,var(--text) 16%,transparent);transition:background .3s}
+.tg i{position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.18);transition:transform .35s cubic-bezier(.3,1.5,.5,1),background .3s}
+.tg.on{background:var(--button)}.tg.on i{transform:translateX(18px);background:var(--on-button);box-shadow:none}
 .js .tg[data-at]{opacity:1!important;transform:none!important}
 .p2:has(.tg:not(.on)){opacity:.45}
 .gparts.swap .p2{transform:translateY(54px)}.gparts.swap .p3{transform:translateY(-54px)}
@@ -794,7 +795,7 @@ export const demoScript = `<script>(function(){
 var T=new WeakMap();
 function fmt(v,f){if(f==='i')return Math.round(v).toLocaleString('en-US');if(f==='1')return v.toFixed(1);
  if(f==='ms'){v=Math.max(0,Math.round(v));return Math.floor(v/60)+':'+('0'+v%60).slice(-2);}
- if(f==='hm'){v=Math.round(v);return Math.floor(v/60)+' h '+('0'+v%60).slice(-2);}
+ if(f==='hm'){v=Math.round(v);return Math.floor(v/60)+' h'+(v%60?' '+v%60+' min':'');}
  if(f==='hmc'){v=Math.round(v);return Math.floor(v/60)+':'+('0'+v%60).slice(-2);}return String(v);}
 function clock(m){m=((Math.round(m)%1440)+1440)%1440;var h=Math.floor(m/60),am=h<12;h=h%12||12;return h+':'+('0'+m%60).slice(-2)+(am?' AM':' PM');}
 function specs(s){return (s||'').split(';').filter(Boolean).map(function(x){return x.split(',');});}
@@ -839,7 +840,7 @@ function dial(d,wake,sleep){wake=((wake%1440)+1440)%1440;d.dataset.wake=Math.rou
  var bed=wake-r5(sleep/.936),a=pt(bed,126),b=pt(wake,126),span=((wake-bed)%1440+1440)%1440,box=d.closest('.dm');
  d.querySelector('.arc').setAttribute('d','M'+a[0].toFixed(1)+' '+a[1].toFixed(1)+'A126 126 0 '+(span>720?1:0)+' 1 '+b[0].toFixed(1)+' '+b[1].toFixed(1));
  var w=250/300;[['.moon',a],['.sun',b]].forEach(function(h){var el=d.querySelector(h[0]);el.style.transform='translate('+(h[1][0]*w).toFixed(1)+'px,'+(h[1][1]*w).toFixed(1)+'px)';});
- var s=r5(sleep);d.querySelector('.len').textContent=fmt(s,'hm');box.querySelector('.bed').textContent=clock(bed);box.querySelector('.wake').textContent=clock(wake);
+ var s=r5(sleep);d.querySelector('.len').textContent=fmt(s,'hmc');box.querySelector('.bed').textContent=clock(bed);box.querySelector('.wake').textContent=clock(wake);
  var mo=d.querySelector('.moon'),su=d.querySelector('.sun'),tl=fmt(s,'hm');
  mo.setAttribute('aria-valuenow',((Math.round(bed)%1440)+1440)%1440);mo.setAttribute('aria-valuetext','Bedtime '+clock(bed)+', '+tl+' of sleep');
  su.setAttribute('aria-valuenow',Math.round(wake));su.setAttribute('aria-valuetext','Wake up '+clock(wake)+', '+tl+' of sleep');}

@@ -83,7 +83,7 @@ struct WidgetBoard: View {
                         .foregroundStyle(Palette.ink)
                         .frame(width: 36, height: 36)
                         .background(Palette.card, in: Circle())
-                        .overlay(Circle().stroke(Palette.hairline, lineWidth: 1))
+                        .overlay { Circle().stroke(Palette.hairline, lineWidth: 1) }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Přidat widget")
@@ -220,7 +220,7 @@ struct WidgetEditButton: View {
                 .foregroundStyle(Palette.ink)
                 .padding(.horizontal, 18)
                 .frame(height: 40)
-                .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
         }
         .frame(maxWidth: .infinity)
     }
@@ -359,9 +359,9 @@ struct WidgetGallery: View {
                 .padding(.bottom, 40)
             }
             .scrollDismissesKeyboard(.interactively)
-            .background(Palette.background.ignoresSafeArea())
+            .background { Palette.background.ignoresSafeArea() }
             .navigationTitle("Widgety")
-            .toolbar(.hidden, for: .navigationBar)
+            .navBarVisibility(.hidden)
             .navigationDestination(for: WidgetSection.self) { section in
                 WidgetSectionPage(section: section, kinds: available.filter { $0.section == section }, data: data) { choosing = $0 }
             }
@@ -398,7 +398,7 @@ struct WidgetGallery: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Doporučené").font(.headline).foregroundStyle(Palette.ink)
                 .padding(.top, 26)
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 HStack(alignment: .top, spacing: 12) {
                     ForEach(recommended) { kind in
                         WidgetPreview(item: PlacedWidget(kind: kind, size: kind.defaultSize), data: data)
@@ -410,6 +410,7 @@ struct WidgetGallery: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
             }
+            .scrollIndicators(.hidden)
             .padding(.horizontal, -20)
         }
     }
@@ -516,9 +517,9 @@ struct WidgetSectionPage: View {
             .padding(.top, 8)
             .padding(.bottom, 40)
         }
-        .background(Palette.background.ignoresSafeArea())
+        .background { Palette.background.ignoresSafeArea() }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(.visible, for: .navigationBar)
+        .navBarVisibility(.visible)
     }
 }
 
@@ -553,7 +554,7 @@ struct WidgetAddSheet: View {
                 .foregroundStyle(Palette.muted)
                 .padding(.top, 4)
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 HStack(spacing: 14) {
                     ForEach(kind.sizes) { size in
                         WidgetPreview(item: PlacedWidget(kind: kind, size: size), data: data)
@@ -565,6 +566,7 @@ struct WidgetAddSheet: View {
                 }
                 .scrollTargetLayout()
             }
+            .scrollIndicators(.hidden)
             .contentMargins(.horizontal, 34, for: .scrollContent)
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $current)
@@ -596,7 +598,7 @@ struct WidgetAddSheet: View {
             .padding(.top, 24)
             .padding(.bottom, 16)
         }
-        .background(Palette.background.ignoresSafeArea())
+        .background { Palette.background.ignoresSafeArea() }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
     }

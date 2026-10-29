@@ -73,7 +73,7 @@ struct WatchWorkoutButton: View {
                     Label("Do Apple Watch", systemImage: "applewatch")
                         .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 46)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)

@@ -676,7 +676,7 @@ struct SharePath: View {
                         .offset(x: p.x + u * 1.6, y: p.y + u * 0.8)
                 }
                 if let end = pts.last {
-                    Circle().strokeBorder(color, lineWidth: u * 1.1).background(Circle().fill(hole))
+                    Circle().strokeBorder(color, lineWidth: u * 1.1).background { Circle().fill(hole) }
                         .frame(width: u * 5, height: u * 5)
                         .position(end)
                 }

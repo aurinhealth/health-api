@@ -124,7 +124,7 @@ struct FoodSuggestionDetail: View {
                     Button { Task { await decide("reject") } } label: {
                         Text("Zamítnout").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
                             .frame(maxWidth: .infinity).frame(height: 50)
-                            .overlay(Capsule().stroke(Palette.rust.opacity(0.5), lineWidth: 1))
+                            .overlay { Capsule().stroke(Palette.rust.opacity(0.5), lineWidth: 1) }
                     }
                     Button { Task { await decide("approve") } } label: {
                         Text("Schválit").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
@@ -216,7 +216,7 @@ struct FoodReportDetail: View {
                     Button { Task { await reject() } } label: {
                         Text("Zamítnout").font(Typo.bodyStrong).foregroundStyle(Palette.rust)
                             .frame(maxWidth: .infinity).frame(height: 50)
-                            .overlay(Capsule().stroke(Palette.rust.opacity(0.5), lineWidth: 1))
+                            .overlay { Capsule().stroke(Palette.rust.opacity(0.5), lineWidth: 1) }
                     }
                     Button { fixing = true } label: {
                         Text("Opravit").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)

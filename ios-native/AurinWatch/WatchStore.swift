@@ -44,6 +44,7 @@ final class WatchStore: NSObject, ObservableObject {
         guard let data else {
             // The iPhone signed out.
             snapshot = nil
+            GymStore.shared.clear()
             UserDefaults.standard.removeObject(forKey: Self.savedKey)
             ComplicationShelf.clear()
             WidgetCenter.shared.reloadAllTimelines()

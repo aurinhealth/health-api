@@ -159,7 +159,7 @@ struct ThresholdCheckCard: View {
             Text(headline(o)).font(Typo.sentence(20)).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
             Text(L10n.f("Ověř to testem: %@ (%@).", o.testName, Fmt.duration(o.testMinutes ?? 60)))
                 .font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     ForEach(o.options.filter(\.fits), id: \.date) { (option: ThresholdCheck.Option) in
                         let on = chosen == option.date
@@ -180,6 +180,7 @@ struct ThresholdCheckCard: View {
                     }
                 }
             }
+            .scrollIndicators(.hidden)
             HStack(spacing: 10) {
                 PrimaryButton(title: L10n.tr("Naplánovat test"), systemImage: "calendar.badge.plus", busy: busy) {
                     guard let chosen else { return }

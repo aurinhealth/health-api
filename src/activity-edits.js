@@ -32,7 +32,7 @@ async function activityRow(env, id) {
   const key = String(id || '').slice(0, 300);
   if (!key) return null;
   return env.DB.prepare(`SELECT id, source_family, data_type, external_id, start_time, payload_json FROM health_datapoints
-    WHERE user_id = ? AND external_id = ? AND ((source_family IN ('intervals', 'local', 'wahoo') AND data_type = 'activity')
+    WHERE user_id = ? AND external_id = ? AND source_family IN ('intervals', 'local', 'wahoo', 'google-wearables', 'apple-health') AND data_type IN ('activity', 'exercise') AND ((source_family IN ('intervals', 'local', 'wahoo') AND data_type = 'activity')
       OR (source_family IN ('google-wearables', 'apple-health') AND data_type = 'exercise')) LIMIT 1`).bind(env.USER_ID, key).first();
 }
 

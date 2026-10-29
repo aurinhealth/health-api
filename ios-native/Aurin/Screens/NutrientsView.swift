@@ -32,7 +32,7 @@ struct NutrientsView: View {
         }
         .floatingBack(title: "Živiny",
                       trailing: page?.pro == true ? ChromeAction(systemImage: "slider.horizontal.3", label: "Upravit živiny na Jídle", text: "Upravit") { editing = true } : nil) { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
         .navigationDestination(isPresented: $editing) { NutrientFavoritesView(items: page?.items ?? [], chosen: page?.favorites ?? []) }
         .task(id: week) { await load() }
     }
@@ -131,7 +131,7 @@ struct NutrientsContent: View {
             .foregroundStyle(on ? Palette.onButton : Palette.ink)
             .padding(.horizontal, 14).frame(height: 34)
             .background(on ? Palette.button : .clear, in: Capsule())
-            .overlay(Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.18), lineWidth: 1))
+            .overlay { Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.18), lineWidth: 1) }
             .opacity(enabled ? 1 : 0.5)
         }
         .buttonStyle(.plain)
@@ -197,7 +197,7 @@ struct NutrientDetailView: View {
             }
         }
         .floatingBack(title: detail?.name) { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
         .task {
             do { detail = try await model.api.nutrientDetail(key: key, date: date) }
             catch { self.error = error.localizedDescription }
@@ -296,7 +296,7 @@ struct NutrientFavoritesView: View {
             }
         }
         .floatingBack(title: "Na obrazovce Jídlo") { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
         .onChange(of: chosen) { _, keys in
             Task {
                 try? await model.api.saveNutrientFavorites(keys)
