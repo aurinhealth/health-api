@@ -489,8 +489,9 @@ struct LiveGymView: View {
                 self.error = L10n.f("Nepodařilo se uložit: %@", error.localizedDescription)
                 return
             }
-            await model.refreshTraining()
+            async let training: Void = model.refreshTraining()
             await model.refresh()
+            await training
         }
         dismiss()
     }

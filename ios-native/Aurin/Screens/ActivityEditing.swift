@@ -86,8 +86,9 @@ struct ActivityEditing: ViewModifier {
             } catch {
                 model.notice = error.localizedDescription
             }
-            await model.refreshTraining()
+            async let training: Void = model.refreshTraining()
             await model.refresh()
+            await training
         }
         onDeleted()
     }
@@ -109,8 +110,9 @@ struct ActivityEditing: ViewModifier {
         if let value, !(1...6000).contains(value) { error = L10n.tr("Zadej hodnotu od 1 do 6 000 kcal."); return }
         do {
             try await model.api.setActivityKcal(id: id, kcal: value)
-            await model.refreshTraining()
+            async let training: Void = model.refreshTraining()
             await model.refresh()
+            await training
         } catch {
             self.error = error.localizedDescription
         }
@@ -161,8 +163,9 @@ struct ActivityUnpairing: ViewModifier {
             return
         }
         onUnpaired()
-        await model.refreshTraining()
+        async let training: Void = model.refreshTraining()
         await model.refresh()
+        await training
         model.undoToast = PlanToast(title: L10n.tr("Spárování zrušeno"), note: L10n.tr("Naplánovaný trénink je zpět v plánu."), cancelled: false, undo: {
             // A gym plan goes back to the automatic pairing, a plan to this activity.
             if target.hasPrefix("gym:") {
@@ -170,8 +173,9 @@ struct ActivityUnpairing: ViewModifier {
             } else {
                 try? await model.api.pairActivity(plannedId: target, activityId: session.id, date: session.date)
             }
-            await model.refreshTraining()
+            async let training: Void = model.refreshTraining()
             await model.refresh()
+            await training
         })
     }
 }

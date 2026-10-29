@@ -74,9 +74,12 @@ extension AppModel {
         defer { if round == refreshRound { loading = false } }
         if announce { syncStatus = .syncing }
         if Self.accountUnconfirmed { await loadAccountInitial() }
-        await sendOutbox()
-        // The free time from the iPhone calendar, before Aktivita dne is made.
-        await CalendarTime.shared.send(api: api)
+        // The waiting writes and the free time from the iPhone calendar (before
+        // Aktivita dne is made) go out together, both before Today.
+        let calendarClient = api
+        async let calendarSent: Void = CalendarTime.shared.send(api: calendarClient)
+        let wrote = await sendOutbox()
+        await calendarSent
         // The planned workouts into the iPhone calendar, alongside Today.
         let mirror = api
         Task { await CalendarTime.shared.mirror(api: mirror) }
@@ -105,8 +108,9 @@ extension AppModel {
             }
             async let status = try? api.athleteStatus()
             if selectedDate == nil, let today {
-                // Muscles and older days' strain follow new workouts too.
-                if !pastStrain.isEmpty { let days = Array(pastStrain.keys); scope.task { for day in days { await self.loadPastStrain(day, again: true) } } }
+                // Muscles and older days' strain follow new workouts too; with
+                // nothing new from Health or the outbox they stay as loaded.
+                if (changed || wrote), !pastStrain.isEmpty { let days = Array(pastStrain.keys); scope.task { for day in days { await self.loadPastStrain(day, again: true) } } }
                 if muscleFatigue != nil, musclesStale { scope.task { await self.loadMuscles() } }
                 async let cycle: Void = loadCycle()
                 await Reminders.reschedule(from: today)
@@ -310,9 +314,17 @@ extension AppModel {
         }
     }
 
+    /// The snapshot shows at once; the Apple Health sync runs alongside and
+    /// the snapshot loads again only when the sync brought something new.
     func refreshHealth() async {
         guard !demo, phase == .signedIn else { return }
-        await AppleHealth.shared.sync(api: api)
+        let client = api
+        let sync = Task { await AppleHealth.shared.run(api: client) }
+        await loadHealthSnapshot()
+        if await sync.value.changed { await loadHealthSnapshot() }
+    }
+
+    private func loadHealthSnapshot() async {
         do {
             let day = selectedDate, account = scope
             let value = try await api.health(date: day)
