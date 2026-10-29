@@ -330,7 +330,8 @@ struct TrainingModeView: View {
             chips(day, exercise, set)
 
             // Only where sides make sense: one-legged or one-armed, or already done by sides.
-            if exercise.bySides || GymSides.oneSided(exercise.name) || sideChoices[exercise.name] == "sides" { sidesPicker(exercise) }
+            // Any other exercise switches with Každá strana beside + Série.
+            if showsSides(exercise) { sidesPicker(exercise) }
 
             setTable(exercise, set, last)
 
@@ -377,8 +378,17 @@ struct TrainingModeView: View {
             Text("Každá strana zvlášť").tag(true)
         }
         .pickerStyle(.segmented)
-        .disabled(saving || !exercise.sets.contains { !$0.done && !$0.warmup })
+        .disabled(saving || !sidesOpen(exercise))
         .padding(.top, 12)
+    }
+
+    private func showsSides(_ exercise: GymExercise) -> Bool {
+        exercise.bySides || GymSides.oneSided(exercise.name) || sideChoices[exercise.name] == "sides"
+    }
+
+    /// Sets left to do: the sides can still change.
+    private func sidesOpen(_ exercise: GymExercise) -> Bool {
+        exercise.sets.contains { !$0.done && !$0.warmup }
     }
 
     private func setSides(_ exercise: GymExercise, _ on: Bool) async {
@@ -452,6 +462,17 @@ struct TrainingModeView: View {
     private func tableActions(_ exercise: GymExercise, _ set: GymSet?) -> some View {
         HStack(spacing: 8) {
             pill("plus", L10n.tr("Série")) { Task { await addSet() } }.disabled(saving)
+            // Both sides at once so far: the sets left can go one side at a time
+            // (a band leg curl one leg after the first set), the switch then shows.
+            if !showsSides(exercise), sidesOpen(exercise) {
+                Button { Task { await setSides(exercise, true) } } label: {
+                    Label(L10n.tr("Každá strana"), systemImage: "arrow.left.and.right").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
+                        .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(saving)
+                .accessibilityLabel(L10n.tr("Každá strana zvlášť"))
+            }
             if let plates = platesText(exercise) {
                 Text(plates).font(Typo.caption).foregroundStyle(Palette.secondary)
                     .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
