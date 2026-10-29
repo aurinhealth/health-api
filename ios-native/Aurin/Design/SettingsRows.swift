@@ -164,10 +164,13 @@ struct SettingsPage<Content: View>: View {
     }
 }
 
-/// The switch of the design: a light capsule in the ink colour with a dark
-/// knob when on, a faint one when off (instead of the green system switch).
+/// The switch of the design: an ink capsule with a light knob when on, a faint
+/// capsule with a white knob when off (instead of the green system switch), so
+/// in light mode the darker switch is always the one that is on. In dark mode
+/// the on capsule is the bright one and the off knob a mid grey.
 struct AurinToggleStyle: ToggleStyle {
     @Environment(\.isEnabled) private var isEnabled
+    private static let offKnob = Color(light: 0xFFFFFF, dark: 0x8A918D)
 
     func makeBody(configuration: Configuration) -> some View {
         Button {
@@ -178,11 +181,12 @@ struct AurinToggleStyle: ToggleStyle {
                 Spacer(minLength: 8)
                 ZStack(alignment: configuration.isOn ? .trailing : .leading) {
                     Capsule()
-                        .fill(configuration.isOn ? Palette.button : Palette.ink.opacity(0.12))
+                        .fill(configuration.isOn ? Palette.button : Palette.ink.opacity(0.16))
                         .frame(width: 50, height: 30)
                     Circle()
-                        .fill(configuration.isOn ? Palette.onButton : Palette.muted)
+                        .fill(configuration.isOn ? Palette.onButton : Self.offKnob)
                         .frame(width: 24, height: 24)
+                        .shadow(color: .black.opacity(configuration.isOn ? 0 : 0.18), radius: 1.5, y: 1)
                         .padding(3)
                 }
                 .opacity(isEnabled ? 1 : 0.45)
@@ -191,7 +195,7 @@ struct AurinToggleStyle: ToggleStyle {
         }
         .buttonStyle(.plain)
         .accessibilityValue(L10n.tr(configuration.isOn ? "zapnuto" : "vypnuto"))
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(.isToggle)
     }
 }
 
