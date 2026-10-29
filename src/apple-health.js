@@ -209,6 +209,10 @@ export async function replaceGoogleWithApple(db, userId, types, since) {
   let changed = 0;
   for (const type of types) {
     if (type === "exercise") { changed += await resolveWorkoutCopies(db, userId, since); continue; }
+    // Apple Health never sent this type (heart-rate samples): nothing to replace.
+    // The update below reads every Google row of the type (930,000 heart-rate
+    // rows on a Fitbit account, on each page the nightly sync saves).
+    if (!(await db.prepare(`SELECT 1 AS found FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}' AND data_type = ? LIMIT 1`).bind(userId, type).first())) continue;
     // Weighings and body fat come from Google's other sources (scales, apps).
     const family = SAMPLE[type] ? "'google-sources','all-sources'" : "'google-wearables'";
     const result = await db.prepare(
