@@ -110,8 +110,6 @@ targets:
         # iOS 26 AlarmKit: the alarm from Nastavení → Spánek rings like the Clock's.
         NSAlarmKitUsageDescription: Aurin tě vzbudí v čase budíku, podle kterého počítá večerku.
         NSFaceIDUsageDescription: Aurin se zeptá na Face ID, než smaže tvůj účet.
-        # Built with the iOS 26 SDK for AlarmKit, the app keeps its own design.
-        UIDesignRequiresCompatibility: true
         # loadwise://open/sleep: the widgets open a screen of the app.
         CFBundleURLTypes:
           - CFBundleURLName: health.aurin.app
@@ -240,6 +238,7 @@ targets:
       path: AurinWatch/Info.plist
       properties:
         CFBundleDisplayName: Aurin
+        # Czech and English: AurinWatch/{cs,en}.lproj/InfoPlist.strings, by the watch's language.
         NSHealthShareUsageDescription: Aurin na hodinkách čte tep a spálené kalorie během tréninku v posilovně.
         NSHealthUpdateUsageDescription: Aurin uloží trénink z posilovny na hodinkách do Apple Health, s tepem a kaloriemi.
         # The workout keeps the gym on the screen between sets; the smart

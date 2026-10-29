@@ -29,7 +29,7 @@ struct HealthView: View {
                     ProgressView()
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navBarVisibility(.hidden)
             .appRoutes()
         }
         .task { await model.refreshIfStale(.health) }
@@ -64,7 +64,7 @@ struct DetailScreen<Content: View>: View {
             }
         }
         .floatingBack(title: title) { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
     }
 }
 
@@ -233,13 +233,14 @@ enum ReadinessText {
         }
     }
 
-    /// "↑ nad normálem" in the readiness detail.
+    /// "lepší než obvykle" in the readiness detail: what the value means, in the
+    /// colour of its points, since a lower resting heart rate helps and a shorter
+    /// night costs (the bar above already shows the direction).
     static func longWord(_ part: HealthSnapshot.Part) -> String {
-        switch side(part) {
-        case 1: return "↑ " + L10n.tr("nad normálem")
-        case -1: return "↓ " + L10n.tr("pod normálem")
-        default: return L10n.tr("v normálu")
-        }
+        if side(part) == 0 { return L10n.tr("v normálu") }
+        if part.points > 0 { return L10n.tr("lepší než obvykle") }
+        if part.points < 0 { return L10n.tr("horší než obvykle") }
+        return side(part) == 1 ? "↑ " + L10n.tr("nad normálem") : "↓ " + L10n.tr("pod normálem")
     }
 
     /// Green when the value helps the readiness, rust when it costs points.

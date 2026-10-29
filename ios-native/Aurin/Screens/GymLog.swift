@@ -63,7 +63,7 @@ struct GymDoneDetail: View {
             Button { picking = true } label: {
                 Label("Přidat cvik", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .frame(maxWidth: .infinity).frame(height: 50)
-                    .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                    .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
@@ -308,7 +308,7 @@ struct KcalCheckCard: View {
                 Button { choose("device") } label: {
                     Text(L10n.f("Nechat %@", Fmt.int(device))).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.22), lineWidth: 1))
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.22), lineWidth: 1) }
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -338,10 +338,10 @@ struct KcalRangeBar: View {
                 Capsule().fill(Palette.track).frame(height: 6)
                 Capsule().fill(Palette.green.opacity(0.5)).frame(width: max(x(high) - x(low), 6), height: 6).offset(x: x(low))
                 Circle().fill(Palette.green).frame(width: 12, height: 12)
-                    .overlay(Circle().stroke(Palette.amberSoft, lineWidth: 2))
+                    .overlay { Circle().stroke(Palette.amberSoft, lineWidth: 2) }
                     .offset(x: x(estimate) - 6)
                 Circle().fill(Palette.rust).frame(width: 12, height: 12)
-                    .overlay(Circle().stroke(Palette.amberSoft, lineWidth: 2))
+                    .overlay { Circle().stroke(Palette.amberSoft, lineWidth: 2) }
                     .offset(x: x(device) - 6)
             }
             .frame(height: 12)
@@ -620,7 +620,7 @@ struct GymExerciseSearch: View {
     }
 
     private var chips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 chip(L10n.tr("Vše"), muscle == nil) { muscle = nil }
                 ForEach(BodyFigure.muscles.indices, id: \.self) { i in
@@ -630,6 +630,7 @@ struct GymExerciseSearch: View {
             }
             .padding(.horizontal, 20)
         }
+        .scrollIndicators(.hidden)
         .padding(.horizontal, -20)
     }
 
@@ -713,7 +714,7 @@ struct ExerciseHistorySheet: View {
             .padding(24)
         }
         .presentationDetents([.medium, .large])
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
     }
 
     @ViewBuilder

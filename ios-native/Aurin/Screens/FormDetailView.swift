@@ -14,7 +14,7 @@ struct FormDetailView: View {
             }
         }
         .floatingBack(title: "Forma a kondice") { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
     }
 }
 

@@ -50,6 +50,7 @@ struct GymSessionView: View {
                 if !summary, store.gym?.allDone != true {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button { list = true } label: { Image(systemName: "line.3.horizontal") }
+                            .accessibilityLabel(W.tr("Cviky", "Exercises"))
                     }
                 }
             }
@@ -120,18 +121,20 @@ struct GymSessionView: View {
                 // − set 2/4 +: one set fewer or one more of this exercise (mockup 20).
                 HStack(spacing: 4) {
                     roundButton("minus") { store.change(.removeSet, exercise: e) }
+                        .accessibilityLabel(W.tr("O sérii méně", "One set fewer"))
                     Text(label(lift, in: ex)).font(.system(size: 12, weight: .medium)).foregroundStyle(W.secondary)
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity)
                     roundButton("plus") { store.change(.addSet, exercise: e) }
+                        .accessibilityLabel(W.tr("O sérii víc", "One set more"))
                 }
                 .disabled(store.changing)
                 HStack(spacing: 6) {
                     // Detents: the value moves only by whole steps (0.5 kg, one rep),
                     // never through the in-between values the plain rotation shows.
-                    tile(GymText.kg(kg), unit: "kg", field: .kg)
+                    tile(GymText.kg(kg), unit: "kg", field: .kg, value: $kg, step: 0.5, top: 500)
                         .digitalCrownRotation(detent: $kg, from: 0, through: 500, by: 0.5, sensitivity: .medium, isContinuous: false, isHapticFeedbackEnabled: true)
-                    tile("\(Int(reps))", unit: W.tr("opak.", "reps"), field: .reps)
+                    tile("\(Int(reps))", unit: W.tr("opak.", "reps"), field: .reps, value: $reps, step: 1, top: 100)
                         .digitalCrownRotation(detent: $reps, from: 0, through: 100, by: 1, sensitivity: .low, isContinuous: false, isHapticFeedbackEnabled: true)
                 }
                 Button {
@@ -152,6 +155,8 @@ struct GymSessionView: View {
                 }
             }
         }
+        // The crown starts on the weight, also when the tiles come back after a rest.
+        .defaultFocus($focus, .kg)
         .onAppear { load(lift) }
         .onChange(of: lift.row) { _, _ in load(lift) }
     }
@@ -181,7 +186,7 @@ struct GymSessionView: View {
         .buttonStyle(.plain)
     }
 
-    private func tile(_ value: String, unit: String, field: Field) -> some View {
+    private func tile(_ value: String, unit: String, field: Field, value number: Binding<Double>, step: Double, top: Double) -> some View {
         let on = focus == field
         return VStack(spacing: 0) {
             Text(value).font(W.serif(34)).foregroundStyle(W.ink).lineLimit(1).minimumScaleFactor(0.6)
@@ -190,11 +195,19 @@ struct GymSessionView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
         .background(on ? W.green.opacity(0.18) : W.tile, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(on ? W.green : .clear, lineWidth: 2))
+        .overlay { RoundedRectangle(cornerRadius: 12).stroke(on ? W.green : .clear, lineWidth: 2) }
         .focusable(true)
         .focused($focus, equals: field)
         .focusEffectDisabled()
         .onTapGesture { focus = field }
+        // VoiceOver: one element that a swipe up or down changes, as the crown does.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(field == .kg ? W.tr("Váha", "Weight") : W.tr("Opakování", "Reps"))
+        .accessibilityValue(value + " " + unit)
+        .accessibilityAdjustableAction { direction in
+            let next = number.wrappedValue + (direction == .increment ? step : -step)
+            number.wrappedValue = min(top, max(0, next))
+        }
     }
 
     private func cell(_ title: String, _ value: String, _ unit: String?, _ color: Color) -> some View {
@@ -300,7 +313,8 @@ struct GymExerciseList: View {
         List {
             if let gym = store.gym {
                 Section {
-                    ForEach(Array(gym.exercises.enumerated()), id: \.offset) { index, e in
+                    // By the exercise, not its place: a removed or moved one takes its swipe along.
+                    ForEach(Array(gym.exercises.enumerated()), id: \.element.key) { index, e in
                         Button { pick(index) } label: {
                             HStack {
                                 Text(e.title).foregroundStyle(index == current ? W.amber : W.ink).lineLimit(2)
@@ -360,6 +374,11 @@ struct GymExerciseList: View {
 
 extension Array {
     subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
+}
+
+extension WatchGym.Exercise {
+    /// Who the exercise is in the list: its name and its first row, unique in the sheet.
+    var key: String { name + "#" + String(lifts.first?.row ?? -1) }
 }
 
 /// Exercises from the iPhone to swap in (similar to the one swapped) or to

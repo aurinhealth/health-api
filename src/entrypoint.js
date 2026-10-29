@@ -1,5 +1,6 @@
 import {initialImport,recentDashboardImport} from './account-sync.js';
 import { recordOpsEvent, routeName, sendDailyOpsReport, withOpsScope } from "./ops-report.js";
+import { elapsed, serverTiming, slowness, timed } from "./request-timing.js";
 import { trainingSetup } from './onboarding.js';
 import { subscriptionStatus, assertAIAccess } from './subscription.js';
 import { claimCoachMessage, recordCoachMessage, releaseCoachMessage } from './coach-allowance.js';
@@ -17,7 +18,7 @@ import { connectionStatus } from "./connections.js";
 import { saveSourcePriority } from "./source-priority.js";
 import { connectionEnvironment, saveConnectionSecret, deleteConnectionSecret, missingProviders, backfillConnectionAccounts } from "./connection-secrets.js";
 import { withIntervalsSleep, intervalsWellness } from './intervals-sleep.js';
-import { cached, bumpCacheVersion } from './api-cache.js';
+import { cached, bumpCacheVersion, FOOD_WRITE, UNCHANGED_HEADER } from './api-cache.js';
 import { manualPairs } from './manual-pairs.js';
 import { activityDetail, rideIntervals } from './activity-detail.js';
 import { watchDetail, withWatch } from './watch-detail.js';
@@ -565,13 +566,16 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     if (url.pathname.startsWith("/app/api/")) {
       if (!user) return unauthorizedResponse();
       if (foodCatalogRequestPaused(request, env, url.pathname)) return Response.json({status:'catalog_upgrade',message:new FoodCatalogUnavailable().message},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
-      // Any change by the user lets the coach's texts answer it at once (screen-texts.js).
-      const planChange = request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname);
-      if (request.method !== "GET") forgetScreens(user.id);
       // A write the app replays after a lost signal is stored once (idempotency.js).
       const response = await withIdempotency(request, env, url, r => handleDashboardApi(r, env, ctx, url, { user, signedIn }));
-      // A change by the user makes the cached coach inputs outdated.
-      if (request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname)) await bumpCacheVersion(env.DB);
+      // A write that saved nothing new (the same free time from the calendar) changes nothing below.
+      const unchanged = response.headers.get(UNCHANGED_HEADER) === "1";
+      if (unchanged) response.headers.delete(UNCHANGED_HEADER);
+      // Any change by the user lets the coach's texts answer it at once (screen-texts.js).
+      const planChange = request.method !== "GET" && !CACHE_NEUTRAL.test(url.pathname) && !unchanged;
+      if (request.method !== "GET" && !unchanged) forgetScreens(user.id);
+      // A change by the user makes the cached coach inputs outdated; a meal or a drink only what shows food (api-cache.js).
+      if (planChange) await bumpCacheVersion(env.DB, { food: FOOD_WRITE.test(url.pathname) });
       // A changed plan makes the coach's text of the day outdated (screen-texts.js).
       if (planChange && response.ok) await markScreenTextsStale(env).catch(() => {});
       // Today's screen data, kept a moment for the coach's text that follows it.
@@ -593,17 +597,32 @@ export default {
     const outdated = appUpdateRequired(request);
     if (outdated) return isStaging(env) ? markStaging(outdated) : outdated;
     // Server errors are counted for the owner's morning e-mail (ops-report.js); 503 is a planned "try again".
-    const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", `${request.method} ${routeName(new URL(request.url).pathname)}`, message));
-    try {
-      const answered = await worker.fetch(request, env, ctx);
-      // The owner's report names why (the route's own error text), before it is made plain.
-      if (answered.status >= 500 && answered.status !== 503) count(await serverErrorReason(answered));
-      // A database or code error never reaches the app word for word (error-text.js).
-      const response = await withPlainErrors(request, answered);
-      return isStaging(env) ? markStaging(response) : response;
-    } catch (error) { count(error); throw error; }
+    const route = `${request.method} ${routeName(new URL(request.url).pathname)}`;
+    const count = message => ctx?.waitUntil?.(recordOpsEvent(env.DB, "server", route, message));
+    return timed(async work => {
+      try {
+        const answered = await worker.fetch(request, env, ctx);
+        // The owner's report names why (the route's own error text), before it is made plain.
+        if (answered.status >= 500 && answered.status !== 503) count(await serverErrorReason(answered));
+        // A database or code error never reaches the app word for word (error-text.js).
+        const response = withTiming(await withPlainErrors(request, answered), work, route, env, ctx);
+        return isStaging(env) ? markStaging(response) : response;
+      } catch (error) { count(error); throw error; }
+    });
   }
 };
+
+// Server-Timing on every answer; the app's API requests also go to the logs,
+// and a slow one into the owner's morning report (request-timing.js).
+function withTiming(response, work, route, env, ctx) {
+  if (route.includes(" /app/api/")) {
+    console.log(JSON.stringify({ timing: route, status: response.status, ms: elapsed(work), queries: work.queries, rows_read: work.rowsRead, db_ms: work.dbMs }));
+    const slow = slowness(work);
+    if (slow) ctx?.waitUntil?.(recordOpsEvent(env.DB, "slow", route, slow));
+  }
+  try { response.headers.set("Server-Timing", serverTiming(work)); return response; }
+  catch { const copy = new Response(response.body, response); copy.headers.set("Server-Timing", serverTiming(work)); return copy; }
+}
 
 // "HTTP 500: D1_ERROR: …" from a JSON error answer's message, else the status alone.
 async function serverErrorReason(response) {
@@ -1664,7 +1683,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
     try{
-      if(request.method==='POST'){const body=await request.json().catch(()=>({}));const days=await saveCalendarFree(env.DB,body.days,localToday());return Response.json({status:'ok',days},{headers:{'Cache-Control':'no-store'}});}
+      if(request.method==='POST'){const body=await request.json().catch(()=>({}));const {days,changed}=await saveCalendarFree(env.DB,body.days,localToday());return Response.json({status:'ok',days},{headers:{'Cache-Control':'no-store',...(changed?{}:{[UNCHANGED_HEADER]:'1'})}});}
       if(request.method==='DELETE'){await clearCalendarFree(env.DB);return Response.json({status:'ok'},{headers:{'Cache-Control':'no-store'}});}
       return Response.json({message:'Method not allowed'},{status:405});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}

@@ -20,7 +20,7 @@ struct VO2maxDetailView: View {
             }
         }
         .floatingBack(title: "VO2max") { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
     }
 }
 

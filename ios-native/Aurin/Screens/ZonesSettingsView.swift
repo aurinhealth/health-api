@@ -270,7 +270,7 @@ struct MaxHeartSuggestion: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .background(Palette.amber.opacity(0.10), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.amber.opacity(0.28), lineWidth: 1))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.amber.opacity(0.28), lineWidth: 1) }
     }
 }
 

@@ -42,7 +42,7 @@ struct MealDetailView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
         .sheet(isPresented: $adding) { AddFoodSheet(meal: type) }
         .sheet(item: Binding(get: { moving.map { BulkVerb(verb: $0) } }, set: { moving = $0?.verb })) { v in
             BulkMoveSheet(verb: v.verb, count: selected.count, from: model.food?.date ?? AppModel.localDate(Date()), meal: type) { date, mealType in

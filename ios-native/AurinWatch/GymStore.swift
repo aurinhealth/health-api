@@ -19,9 +19,17 @@ final class GymStore: ObservableObject {
         }
     }
 
+    /// The day worked on: today, or the day a workout still running began
+    /// (a gym past midnight stays on its own day).
+    private var day: String {
+        let today = WatchStore.localDate(Date())
+        guard GymWorkout.shared.running, let gym else { return today }
+        return gym.date
+    }
+
     /// The plan from the iPhone; a session in progress keeps what was done here.
     func load() {
-        let date = WatchStore.localDate(Date())
+        let date = day
         let session = WCSession.default
         guard WCSession.isSupported(), session.activationState == .activated, session.isReachable else {
             failed = gym == nil
@@ -64,7 +72,7 @@ final class GymStore: ObservableObject {
         }
         failed = false
         // Sets done on the watch that the iPhone has not written yet stay done.
-        guard fresh.date == WatchStore.localDate(Date()) else { return }
+        guard fresh.date == day else { return }
         if let gym, gym.date == fresh.date {
             for e in fresh.exercises.indices {
                 for l in fresh.exercises[e].lifts.indices {
@@ -163,6 +171,14 @@ final class GymStore: ObservableObject {
         gym.update(row: row) { $0.kg = kg; $0.reps = reps }
         self.gym = gym
         save()
+    }
+
+    /// The iPhone signed out: the day's gym of that account goes too.
+    func clear() {
+        guard !GymWorkout.shared.running else { return }
+        gym = nil
+        failed = false
+        UserDefaults.standard.removeObject(forKey: Self.savedKey)
     }
 
     private func save() {

@@ -196,7 +196,7 @@ struct IllnessSheet: View {
                 .disabled(saving)
             }
             .padding(20)
-            .background(Palette.background.ignoresSafeArea())
+            .background { Palette.background.ignoresSafeArea() }
             .navigationTitle(L10n.tr("Nemoc"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

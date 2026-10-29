@@ -252,6 +252,6 @@ struct SourcePrioritySheet: View {
         }
         .padding(24)
         .presentationDetents([.medium])
-        .presentationBackground(Palette.settingsBackground)
+        .glassSheetBackground(Palette.settingsBackground)
     }
 }

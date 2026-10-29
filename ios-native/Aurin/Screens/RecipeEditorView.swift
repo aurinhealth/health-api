@@ -73,7 +73,7 @@ struct RecipeEditorView: View {
                 Button { picking = true } label: {
                     Label("Přidat surovinu", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
                 }
                 .buttonStyle(.plain)
 
@@ -91,9 +91,9 @@ struct RecipeEditorView: View {
             }
             .padding(24)
         }
-        .background(Palette.background.ignoresSafeArea())
+        .background { Palette.background.ignoresSafeArea() }
         .floatingBack { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
         .sheet(isPresented: $picking) {
             IngredientPicker { product in
                 items.append(Item(product: product, amount: product.perPortion ? "1" : FoodAmountView.text(product.defaultAmount)))

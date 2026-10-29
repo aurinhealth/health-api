@@ -86,7 +86,7 @@ struct TrainingCalendarCard: View {
 
     private var strip: some View {
         ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {
                     ForEach(stripDays, id: \.self) { date in
                         Button { pick(date, scroll: true, proxy: proxy) } label: {
@@ -105,6 +105,7 @@ struct TrainingCalendarCard: View {
                 }
                 .scrollTargetLayout()
             }
+            .scrollIndicators(.hidden)
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $centered, anchor: .center)
             // Room for the letter, the selected ring and the date; the percent
@@ -179,7 +180,7 @@ struct DayCircle: View {
                 }
             }
             .frame(width: 44, height: 44)
-            .overlay(Circle().stroke(selected ? Palette.ink : .clear, lineWidth: 2).padding(-4))
+            .overlay { Circle().stroke(selected ? Palette.ink : .clear, lineWidth: 2).padding(-4) }
             Text(ISODay.day(date))
                 .font(Typo.number(15))
                 .foregroundStyle(selected ? Palette.ink : Palette.muted)
@@ -548,7 +549,7 @@ struct WatchActivityDetail: View {
                 }
                 .padding(24)
             }
-            .background(Palette.background.ignoresSafeArea())
+            .background { Palette.background.ignoresSafeArea() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold, cap: .denseCap) }

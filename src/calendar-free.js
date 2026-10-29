@@ -35,16 +35,20 @@ export function sanitizeCalendarDays(days, today) {
 }
 
 // Replaces the days the app sent; the days before them stay a week for the
-// plan already built from them, then go.
+// plan already built from them, then go. { days, changed }: the app sends
+// them on most refreshes, and the same minutes again change nothing.
 export async function saveCalendarFree(db, days, today) {
   const clean = sanitizeCalendarDays(days, today);
   await ensureCalendarFree(db);
   const from = clean[0]?.date || today;
+  const stored = (await db.prepare('SELECT date, minutes FROM calendar_free WHERE user_id=? AND date>=? ORDER BY date').bind(db.userId, from).all()).results || [];
+  const same = stored.length === clean.length && stored.every((row, i) => row.date === clean[i].date && Number(row.minutes) === clean[i].minutes);
+  if (same) return { days: clean, changed: false };
   await db.batch([
     db.prepare('DELETE FROM calendar_free WHERE user_id=? AND (date>=? OR date<?)').bind(db.userId, from, shift(today, -KEEP_PAST_DAYS)),
     ...clean.map(d => db.prepare('INSERT INTO calendar_free(user_id,date,minutes) VALUES(?,?,?)').bind(db.userId, d.date, d.minutes))
   ]);
-  return clean;
+  return { days: clean, changed: true };
 }
 
 // "Číst kalendář" turned off: the calendar no longer limits any day.

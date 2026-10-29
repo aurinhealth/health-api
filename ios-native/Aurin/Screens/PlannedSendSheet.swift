@@ -45,7 +45,7 @@ struct SendToButton: View {
             Label("Odeslat do", systemImage: "paperplane")
                 .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 .frame(maxWidth: .infinity).frame(height: 46)
-                .overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                .overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -102,7 +102,7 @@ struct PlannedSendSheet: View {
         .padding(.horizontal, 22).padding(.top, 14)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .task {
             watchPlan = WatchWorkout.plan(workout, title: session.title)
             guard let id = session.eventId else { destinations = []; return }
@@ -127,7 +127,7 @@ struct PlannedSendSheet: View {
                     .font(Typo.small.weight(.semibold)).foregroundStyle(primary ? Palette.onButton : Palette.ink)
                     .padding(.horizontal, 14).frame(height: 34)
                     .background(primary ? Palette.button : .clear, in: Capsule())
-                    .overlay(Capsule().stroke(Palette.ink.opacity(primary ? 0 : 0.2), lineWidth: 1))
+                    .overlay { Capsule().stroke(Palette.ink.opacity(primary ? 0 : 0.2), lineWidth: 1) }
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
