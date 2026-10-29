@@ -37,7 +37,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 60
     defaults:
       run:
@@ -46,11 +46,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      # The newest Xcode on the runner: with Xcode 26 the iOS 26 SDK brings
-      # AlarmKit (the alarm in Nastavení → Spánek); older Xcode builds without it.
+      # The newest stable Xcode on the newest macOS runner (macos-latest moves to
+      # each new image; macos-15 stopped at Xcode 26.3). Xcode 26 and later bring
+      # AlarmKit (the alarm in Nastavení → Spánek).
       - name: Pick Xcode
         run: |
-          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi -e beta -e release_candidate | sort -V | tail -1)
+          xcode=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -vi -e beta -e release_candidate -e _rc | sort -V | tail -1)
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
           xcodebuild -version
 
@@ -66,8 +67,16 @@ jobs:
           udid=$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           devices = json.load(sys.stdin)["devices"]
-          phones = [d for runtime, ds in devices.items() if "iOS" in runtime for d in ds if d["name"].startswith("iPhone")]
-          pick = next((d for d in phones if d["name"] in ("iPhone 16", "iPhone 16 Pro", "iPhone 15")), phones[0])
+          version = lambda runtime: [int(n) for n in runtime.split("iOS-")[-1].split("-")]
+          # The oldest iOS on the image first: StoreKit testing (ProStoreTests) loads
+          # no products from xcodebuild on the iOS 26.4/26.5 simulators.
+          runtimes = sorted((r for r in devices if "iOS" in r), key=version)
+          print("runtimes:", ", ".join(runtimes), file=sys.stderr)
+          phones = [d for r in runtimes for d in devices[r] if d["name"].startswith("iPhone")]
+          names = ("iPhone 17", "iPhone 16", "iPhone 17 Pro", "iPhone 16 Pro")
+          first = [d for d in devices[runtimes[0]] if d["name"].startswith("iPhone")] if runtimes else []
+          pick = next((d for n in names for d in first if d["name"] == n), first[0] if first else phones[0])
+          print(pick["name"], file=sys.stderr)
           print(pick["udid"])')
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
