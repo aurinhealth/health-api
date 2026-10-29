@@ -24,7 +24,8 @@ extension WatchBridge {
                               kg: number(set.kg) ?? number(set.plannedKg),
                               reps: GymCoach.firstNumber(set.reps) ?? GymCoach.firstNumber(set.plannedReps),
                               plannedReps: set.plannedReps, done: set.done,
-                              rest: set.warmup ? 60 : GymRestSettingsView.between(set, setting: restSets))
+                              rest: set.warmup ? 60 : GymRestSettingsView.between(set, setting: restSets),
+                              intensity: GymIntensity.letter(set.intensity))
             }
             let shown = ExerciseCatalog.shownName(exercise.name)
             return WatchGym.Exercise(name: exercise.name, shown: shown == exercise.name ? nil : shown, lifts: lifts)
@@ -90,6 +91,13 @@ extension WatchBridge {
         guard var day = await gymDay(done.date) else { return }
         day.complete(row: done.row, kg: GymCoach.kgText(done.kg), reps: String(done.reps), rpe: "")
         await save(day, date: done.date)
+    }
+
+    /// How a set went, tapped on the watch during the rest.
+    func applyGym(_ rated: WatchGym.Rated) async {
+        guard var day = await gymDay(rated.date) else { return }
+        day.setIntensity(row: rated.row, rated.letter)
+        await save(day, date: rated.date)
     }
 
     /// A change from the watch's menu; the new plan goes back to the watch.

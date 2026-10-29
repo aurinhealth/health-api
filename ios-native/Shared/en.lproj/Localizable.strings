@@ -74,6 +74,7 @@
 "Budík zvoní %@." = "Alarm rings %@.";
 "Budík · pracovní den" = "Alarm · weekday";
 "Budík · víkend" = "Alarm · weekend";
+"Budík · záloha hodinek" = "Alarm · watch backup";
 "Bílkoviny" = "Protein";
 "Běh" = "Run";
 "Běžný den" = "Typical day";
@@ -3256,3 +3257,5 @@
 "%@ aktivních min" = "%@ active min";
 "Forma %@ %@" = "Form %@ %@";
 "Pauza %@" = "Rest %@";
+"Záloha na iPhonu" = "Backup on iPhone";
+"Hodinky zvoní první. Když je nevypneš, za 5 minut zazvoní iPhone. Čas budíku je stejný jako v Nastavení → Spánek." = "The watch rings first. If you don't stop it, your iPhone rings 5 minutes later. The wake time is the one in Settings → Sleep.";

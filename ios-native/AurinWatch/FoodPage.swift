@@ -2,12 +2,13 @@ import SwiftUI
 
 /// The third page by the crown (mockup 44): the day's energy in a ring with
 /// what is left, carbs, protein and fat in the iPhone's colours, and water
-/// with its bar and +250 ml that goes to the iPhone's day.
+/// with its bar and +250 ml (8 fl oz in imperial) that goes to the iPhone's day.
+/// Undo takes a drink back for a few seconds; the drop opens the favourite
+/// drinks from Food → Drinks on the iPhone (mockup 9).
 struct FoodPage: View {
     @EnvironmentObject private var store: WatchStore
     @State private var added = 0
-
-    private static let glass = 250
+    @State private var drinks = false
 
     var body: some View {
         Group {
@@ -86,12 +87,22 @@ struct FoodPage: View {
     }
 
     private func water(_ food: WatchSnapshot.Food) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "waterbottle.fill")
-                .font(.system(size: 15))
-                .foregroundStyle(W.blue)
+        let favorites = store.snapshot?.drinks ?? []
+        return HStack(spacing: 6) {
+            Button {
+                drinks = true
+            } label: {
+                Image(systemName: "waterbottle.fill")
+                    .font(.system(size: 15))
+                    .foregroundStyle(W.blue)
+                    .frame(width: 22, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(favorites.isEmpty)
+            .accessibilityLabel(W.tr("Nápoje", "Drinks"))
             VStack(alignment: .leading, spacing: 0) {
-                Text(liters(food.water ?? 0) + (food.waterTarget.map { " / " + liters($0) } ?? "") + " l")
+                Text(store.drink.flatMap(\.name).map { $0 + " · " + W.water(food.water ?? 0) } ?? waterLine(food))
                     .font(.system(size: 12, weight: .medium).monospacedDigit())
                     .foregroundStyle(W.ink)
                     .lineLimit(1)
@@ -99,24 +110,45 @@ struct FoodPage: View {
                 Bar(fraction: fraction(food.water, food.waterTarget), color: W.blue).padding(.top, 3)
             }
             Spacer(minLength: 2)
-            Button {
-                store.addWater(ml: Self.glass)
-                added += 1
-            } label: {
-                Text("+\(Self.glass)")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(W.blue, in: Capsule())
+            if store.drink != nil {
+                Button {
+                    store.undoDrink()
+                } label: {
+                    Text(W.tr("Zpět", "Undo"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(W.ink)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.14), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    store.addWater(ml: W.glassMl)
+                    added += 1
+                } label: {
+                    Text(W.imperial ? "+8 oz" : "+250")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.black)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(W.blue, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(W.imperial ? W.tr("Přidat 8 fl oz vody", "Add 8 fl oz of water") : W.tr("Přidat 250 ml vody", "Add 250 ml of water"))
             }
-            .buttonStyle(.plain)
-            .sensoryFeedback(.success, trigger: added)
-            .accessibilityLabel(W.tr("Přidat 250 ml vody", "Add 250 ml of water"))
         }
+        .sensoryFeedback(.success, trigger: added)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(W.tile, in: RoundedRectangle(cornerRadius: 12))
+        .sheet(isPresented: $drinks) {
+            DrinksList(drinks: favorites) { drink in
+                store.addWater(ml: drink.ml, kind: drink.kind, name: drink.name, factor: drink.factor)
+                added += 1
+                drinks = false
+            }
+        }
     }
 
     private func fraction(_ value: Double?, _ target: Double?) -> Double {
@@ -124,7 +156,12 @@ struct FoodPage: View {
         return min(max(value / target, 0), 1)
     }
 
-    private func liters(_ ml: Double) -> String { W.number(ml / 1000, digits: 1) }
+    /// "1,2 / 2,5 l" or "41 / 85 fl oz".
+    private func waterLine(_ food: WatchSnapshot.Food) -> String {
+        guard let target = food.waterTarget else { return W.water(food.water ?? 0) }
+        let unit = W.imperial ? " fl oz" : " l"
+        return W.water(food.water ?? 0).replacingOccurrences(of: unit, with: "") + " / " + W.water(target)
+    }
 
     private struct Bar: View {
         let fraction: Double
@@ -140,5 +177,26 @@ struct FoodPage: View {
             .frame(height: 4)
             .accessibilityHidden(true)
         }
+    }
+}
+
+/// Under the drop: the favourite drinks from Food → Drinks on the iPhone in
+/// their usual glasses; one tap adds one.
+struct DrinksList: View {
+    let drinks: [WatchSnapshot.Drink]
+    let add: (WatchSnapshot.Drink) -> Void
+
+    var body: some View {
+        List(drinks) { drink in
+            Button { add(drink) } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: drink.symbol).foregroundStyle(drink.kind == "coffee" ? W.amber : W.blue)
+                    Text(drink.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(W.glass(drink.ml)).font(.system(size: 13)).foregroundStyle(W.muted).lineLimit(1)
+                }
+            }
+        }
+        .navigationTitle(W.tr("Nápoje", "Drinks"))
     }
 }

@@ -70,6 +70,15 @@ enum WatchAPI {
         return URLSession(configuration: config)
     }()
 
+    /// A GET with the watch's sign-in; nil without one, offline or on an error.
+    static func get(_ path: String) async -> Data? {
+        guard let session, let request = request(path, session: session),
+              let (data, response) = try? await urlSession.data(for: request) else { return nil }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 401 { store(nil) }
+        return status == 200 ? data : nil
+    }
+
     /// The chat the app was written in during the last 6 hours, so the watch continues it.
     static func recentChat() async -> Int? {
         guard let session, let request = request("/app/api/assistant/chats", session: session),

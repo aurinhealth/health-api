@@ -1,9 +1,11 @@
+import HealthKit
 import SwiftUI
+import WorkoutKit
 
 /// The second page by the crown (mockups 14 and 16): the day's training from
 /// the iPhone, today, or tomorrow in the evening or once today is done, with
-/// the gym's exercises and Start (Začít, today only), then the week's row of
-/// days (tap one to see it) and the sessions still to come this week.
+/// the gym's exercises and Start (Začít, today only), a ride's or run's steps
+/// with Open in Workout, and the week's row of days (tap one to see it).
 struct TrainingPage: View {
     @EnvironmentObject private var watch: WatchStore
     @ObservedObject private var store = GymStore.shared
@@ -38,7 +40,6 @@ struct TrainingPage: View {
                 WeekRow(days: weekDays, today: today, shown: day, sessions: sessions) { picked = $0 }
                     .padding(.top, 6)
                 content(day)
-                later(after: day)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -129,6 +130,12 @@ struct TrainingPage: View {
                 Text(Self.name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
                     .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 2)
             }
+        } else if day == today, let s = watch.snapshot, s.date != today {
+            // Yesterday's Today: no word on today's plan yet, so not "Rest day".
+            Text(W.tr("Čekám na dnešek", "Waiting for today"))
+                .font(.system(size: 17, weight: .semibold)).foregroundStyle(W.ink).padding(.top, 4)
+            Text(W.tr("Dnešní plán přijde z iPhonu nebo serveru.", "Today's plan comes from your iPhone or the server."))
+                .font(.system(size: 12)).foregroundStyle(W.secondary)
         } else {
             Text(day == today ? W.tr("Dnes volno", "Rest day") : W.tr("Nic naplánováno", "Nothing planned"))
                 .font(.system(size: 17, weight: .semibold)).foregroundStyle(W.ink).padding(.top, 4)
@@ -149,24 +156,43 @@ struct TrainingPage: View {
         .padding(.top, 2)
     }
 
-    /// A ride or run: its name, when and how long, and its steps as bars.
+    /// A ride or run (mockup 4): when and how long, its name, its steps as
+    /// bars, and today Open in Workout with the plan's steps.
     private func planCard(_ s: WatchSnapshot.Session) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
-                Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber)
-                Text(Self.name(s)).font(.system(size: 14, weight: .semibold)).foregroundStyle(W.ink)
-                    .lineLimit(2).minimumScaleFactor(0.8)
+        let plan = s.eventId.flatMap { plans.plans[$0] }
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(subtitle(s, day: s.date, length: false)).font(.system(size: 11, weight: .semibold)).foregroundStyle(W.amber)
+                Spacer(minLength: 4)
+                if let minutes = s.minutes { Text("\(minutes) min").font(.system(size: 11)).foregroundStyle(W.muted) }
             }
-            Text(subtitle(s, day: s.date)).font(.system(size: 11)).foregroundStyle(W.muted).padding(.top, 2)
+            HStack(spacing: 6) {
+                Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 15)).foregroundStyle(W.amber)
+                Text(Self.name(s)).font(.system(size: 17, weight: .semibold)).foregroundStyle(W.ink)
+                    .lineLimit(2).minimumScaleFactor(0.75)
+            }
+            .padding(.top, 3)
             Group {
-                if let plan = s.eventId.flatMap({ plans.plans[$0] }) {
+                if let plan {
                     PlanBars(plan: plan)
                 } else {
                     RoundedRectangle(cornerRadius: 3).fill(W.track)
                 }
             }
-            .frame(height: 24)
+            .frame(height: 26)
             .padding(.top, 7)
+            if s.date == today, let plan, WorkoutOpener.workout(plan, sport: s.sport, name: Self.name(s)) != nil {
+                Button {
+                    Task { await WorkoutOpener.open(plan, sport: s.sport, name: Self.name(s)) }
+                } label: {
+                    Label(W.tr("Otevřít ve Cvičení", "Open in Workout"), systemImage: "play.fill")
+                        .font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(W.green)
+                .padding(.top, 8)
+            }
         }
         .padding(.horizontal, 10).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -174,10 +200,10 @@ struct TrainingPage: View {
         .onAppear { plans.load(s) }
     }
 
-    /// "dnes · 17:30", "sobota · 9:00".
-    private func subtitle(_ s: WatchSnapshot.Session, day: String) -> String {
-        let name = day == today ? W.tr("dnes", "today") : day == tomorrow ? W.tr("zítra", "tomorrow") : W.dayName(day)
-        return name + (s.time.map { " · " + W.clockText($0) } ?? "") + (s.minutes.map { " · \($0) min" } ?? "")
+    /// "dnes · 17:30", "sobota · 9:00"; the length too unless the card shows it apart.
+    private func subtitle(_ s: WatchSnapshot.Session, day: String, length: Bool = true) -> String {
+        let name = day == today ? W.tr("Dnes", "Today") : day == tomorrow ? W.tr("Zítra", "Tomorrow") : W.dayName(day).capitalized
+        return name + (s.time.map { " · " + W.clockText($0) } ?? "") + (length ? s.minutes.map { " · \($0) min" } ?? "" : "")
     }
 
     /// The title without the length the server's plan already ends it with
@@ -205,30 +231,6 @@ struct TrainingPage: View {
         .foregroundStyle(W.secondary)
         .padding(.top, 4)
     }
-
-    /// The sessions still to come this week after the day shown.
-    @ViewBuilder private func later(after day: String) -> some View {
-        let next = sessions.filter { $0.date > day && !$0.done }
-        if !next.isEmpty {
-            Text(W.tr("DÁL TENTO TÝDEN", "LATER THIS WEEK"))
-                .font(.system(size: 9, weight: .semibold)).tracking(0.6).foregroundStyle(W.muted)
-                .padding(.top, 12).padding(.bottom, 2)
-            ForEach(Array(next.enumerated()), id: \.offset) { _, s in
-                Button { picked = s.date } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 12)).foregroundStyle(W.amber).frame(width: 16)
-                        Text(Self.name(s)).font(.system(size: 12.5, weight: .medium)).foregroundStyle(W.ink).lineLimit(1)
-                        Spacer(minLength: 4)
-                        Text(W.dayShort(s.date)).font(.system(size: 11)).foregroundStyle(W.muted)
-                    }
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .overlay(alignment: .top) { Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1) }
-            }
-        }
-    }
 }
 
 /// Monday to Sunday (mockup 14): green a day with a workout done, an orange
@@ -247,10 +249,10 @@ struct WeekRow: View {
                 Button { pick(day) } label: {
                     VStack(spacing: 3) {
                         dot(day)
-                            .frame(width: 14, height: 14)
+                            .frame(width: 18, height: 18)
                             .padding(2)
                             .overlay { Circle().stroke(day == shown ? W.ink : .clear, lineWidth: 1.5) }
-                        Text(W.dayLetter(day)).font(.system(size: 8, weight: .semibold))
+                        Text(W.dayLetter(day)).font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(day == today ? W.ink : W.muted)
                     }
                     .frame(maxWidth: .infinity)
@@ -275,6 +277,42 @@ struct WeekRow: View {
     }
 }
 
+/// A planned ride or run in Apple's Workout app (WorkoutKit), its steps by
+/// time: zone 3 and up as work, the rest as recovery, repeats as one block.
+@MainActor
+enum WorkoutOpener {
+    static func workout(_ plan: WatchPlan, sport: String, name: String) -> WorkoutPlan? {
+        let activity: HKWorkoutActivityType
+        switch sport {
+        case "ride": activity = .cycling
+        case "run": activity = .running
+        default: return nil
+        }
+        guard CustomWorkout.supportsActivity(activity) else { return nil }
+        var blocks: [IntervalBlock] = []
+        var current: [IntervalStep] = []
+        var repeats = 1
+        func flush() {
+            guard !current.isEmpty else { return }
+            blocks.append(IntervalBlock(steps: current, iterations: max(1, min(repeats, 20))))
+            current = []
+        }
+        for step in plan.steps {
+            if step.first { flush(); repeats = step.repeats }
+            current.append(IntervalStep(step.zone >= 3 ? .work : .recovery, goal: .time(max(step.seconds, 5), .seconds)))
+        }
+        flush()
+        guard !blocks.isEmpty else { return nil }
+        let custom = CustomWorkout(activity: activity, location: .outdoor, displayName: name, blocks: blocks)
+        return WorkoutPlan(.custom(custom))
+    }
+
+    static func open(_ plan: WatchPlan, sport: String, name: String) async {
+        guard let workout = workout(plan, sport: sport, name: name) else { return }
+        try? await workout.openInWorkoutApp()
+    }
+}
+
 /// Texts of the gym screens.
 @MainActor
 enum GymText {
@@ -291,9 +329,15 @@ enum GymText {
         W.number(value, digits: value.rounded() == value ? 0 : 1)
     }
 
-    /// 2140 kg as "2,1 t".
+    /// "77,5 kg" or "171 lb", by Settings → Units on the iPhone.
+    static func weight(_ kg: Double) -> String {
+        Self.kg(W.weight(kg)) + " " + W.weightUnit
+    }
+
+    /// 2140 kg as "2,1 t", or "4,718 lb".
     static func volume(_ kg: Double) -> String {
-        kg >= 1000 ? W.number(kg / 1000, digits: 1) + " t" : W.number(kg) + " kg"
+        if W.imperial { return W.number(W.weight(kg)) + " lb" }
+        return kg >= 1000 ? W.number(kg / 1000, digits: 1) + " t" : W.number(kg) + " kg"
     }
 
     static func elapsed(_ seconds: TimeInterval) -> String {

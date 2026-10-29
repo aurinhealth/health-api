@@ -111,6 +111,30 @@ final class GymStore: ObservableObject {
         }
     }
 
+    /// How a set went (mockup 8B), tapped during the rest: the next set of
+    /// the exercise starts from `next` (in kg) when not done yet, and the
+    /// letter goes to the iPhone's sheet.
+    func rate(row: Int, letter: String, next kg: Double) {
+        guard var gym else { return }
+        if let next = gym.next(after: row), !next.newExercise, next.lift.work, !next.lift.done {
+            gym.update(row: next.lift.row) { $0.kg = kg }
+        }
+        gym.update(row: row) { $0.intensity = letter }
+        self.gym = gym
+        save()
+        guard let data = WatchGym.Rated(date: gym.date, row: row, letter: letter).encoded() else { return }
+        let session = WCSession.default
+        guard WCSession.isSupported(), session.activationState == .activated else { return }
+        let message = [WatchGym.ratedKey: data]
+        if session.isReachable {
+            session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in
+                WCSession.default.transferUserInfo(message)
+            })
+        } else {
+            session.transferUserInfo(message)
+        }
+    }
+
     /// A change from the menu (a set or an exercise added, removed or
     /// swapped); the iPhone writes it into the sheet and answers with the new plan.
     func change(_ kind: WatchGym.Change.Kind, exercise: Int, option: WatchGym.Option? = nil, to: Int? = nil) {

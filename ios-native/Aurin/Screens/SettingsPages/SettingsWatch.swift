@@ -9,6 +9,8 @@ import SwiftUI
 struct WatchSettingsView: View {
     @State private var settings = WatchBridge.settings
     @State private var order: [String] = []
+    /// When the iPhone's backup for the watch's alarm rings (SystemAlarm.backup).
+    @State private var backup = SystemAlarm.backupTime
 
     private static let names = ["readiness": "Připravenost", "training": "Trénink", "food": "Jídlo"]
 
@@ -49,10 +51,20 @@ struct WatchSettingsView: View {
                     Text("iPhonu").tag(false)
                     Text("Apple Watch").tag(true)
                 }
+                if settings.alarmOnWatch {
+                    LabeledContent(L10n.tr("Záloha na iPhonu")) {
+                        Text(backup.map { $0.formatted(date: .omitted, time: .shortened) } ?? "–")
+                            .foregroundStyle(Palette.indigo)
+                    }
+                }
             } header: {
                 Text("Budík")
             } footer: {
-                Text("Zvoní jen jedno zařízení. Čas budíku je stejný jako v Nastavení → Spánek.")
+                if settings.alarmOnWatch {
+                    Text("Hodinky zvoní první. Když je nevypneš, za 5 minut zazvoní iPhone. Čas budíku je stejný jako v Nastavení → Spánek.")
+                } else {
+                    Text("Zvoní jen jedno zařízení. Čas budíku je stejný jako v Nastavení → Spánek.")
+                }
             }
         }
         .environment(\.editMode, .constant(.active))
@@ -61,11 +73,17 @@ struct WatchSettingsView: View {
         .navigationTitle("Apple Watch")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
+            backup = SystemAlarm.backupTime
             order = settings.pages + WatchSettings.allPages.filter { !settings.pages.contains($0) }
         }
         .onChange(of: settings) { old, new in
             WatchBridge.settings = new
-            if old.alarmOnWatch != new.alarmOnWatch { Task { await WatchBridge.shared.alarmOnWatch(new.alarmOnWatch) } }
+            if old.alarmOnWatch != new.alarmOnWatch {
+                Task {
+                    await WatchBridge.shared.alarmOnWatch(new.alarmOnWatch)
+                    backup = SystemAlarm.backupTime
+                }
+            }
         }
     }
 

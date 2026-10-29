@@ -91,23 +91,56 @@ final class WatchBridge: NSObject {
         }
     }
 
-    private func send() { sendContext() }
+    private var pending: Task<Void, Never>?
+
+    /// The wake times as the watch has them.
+    var currentAlarm: WatchSnapshot.Alarm? {
+        today.flatMap { Self.snapshot($0, health: health, training: training, profile: profile).alarm }
+    }
+
+    /// Today, health and the week come one after another on a refresh: sent
+    /// once, half a second after the last of them, not three times.
+    private func send() {
+        pending?.cancel()
+        pending = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            sendContext()
+        }
+    }
 
     /// A glass of water from the watch's Food page: through the app's outbox
     /// when it runs (Today reloads and comes back to the watch), else straight to the server.
-    func addWater(ml: Int) async {
+    func addWater(ml: Int, kind: String = "water") async {
+        let kind = DrinkKind.find(kind) == nil ? "water" : kind
         if let model = AppModel.live {
-            model.addDrinkToday(ml: ml, kind: "water")
+            model.addDrinkToday(ml: ml, kind: kind)
             return
         }
-        _ = try? await APIClient().sendQueued(AppModel.drinkItem(ml: ml, kind: "water", date: AppModel.localDate(Date())))
+        _ = try? await APIClient().sendQueued(AppModel.drinkItem(ml: ml, kind: kind, date: AppModel.localDate(Date())))
+    }
+
+    /// Food → Drinks: the favourite drinks in their usual glasses, for the watch.
+    static func watchDrinks() -> [WatchSnapshot.Drink] {
+        let favorites = UserDefaults.standard.string(forKey: DrinkPrefs.favoritesKey) ?? DrinkPrefs.defaultFavorites
+        return DrinkPrefs.presets(favorites: DrinkPrefs.list(favorites)).compactMap { preset in
+            guard let kind = DrinkKind.find(preset.kind) else { return nil }
+            return WatchSnapshot.Drink(kind: preset.kind, ml: preset.ml, name: L10n.tr(kind.label), symbol: kind.symbol, factor: kind.factor)
+        }
     }
 
     /// Today and today's gym (WatchGymBridge.swift) as the application context.
     func sendContext() {
         guard watchReady, let session else { return }
         var context: [String: Any] = [:]
-        if let today, let data = Self.snapshot(today, health: health, training: training, profile: profile).encoded() { context[WatchSnapshot.contextKey] = data }
+        var alarm: WatchSnapshot.Alarm?
+        if let today {
+            let snapshot = Self.snapshot(today, health: health, training: training, profile: profile)
+            alarm = snapshot.alarm
+            if let data = snapshot.encoded() { context[WatchSnapshot.contextKey] = data }
+        }
+        // The iPhone's backup for the watch's alarm follows the wake times.
+        Task { await updateAlarmBackup(alarm) }
         if let gym = gymContext { context[WatchGym.replyKey] = gym }
         guard !context.isEmpty else { return }
         context[WatchSettings.contextKey] = Self.settings.encoded()
@@ -209,7 +242,7 @@ final class WatchBridge: NSObject {
                              readiness: today.readiness.score, zone: today.readiness.zone,
                              headline: today.summary?.headline, summary: today.summary?.text,
                              sleep: sleep, restingHR: restingHR, hrv: hrv, strain: strain, steps: today.steps.today,
-                             week: week, food: food, alarm: alarm)
+                             week: week, food: food, alarm: alarm, imperial: Units.imperial, drinks: watchDrinks())
     }
 
     /// "23:05" from an ISO time or a clock time.
@@ -260,11 +293,15 @@ extension WatchBridge: WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any], replyHandler: @escaping ([String: Any]) -> Void) {
         let gymDate = message[WatchGym.requestKey] as? String
         let done = (message[WatchGym.doneKey] as? Data).flatMap(WatchGym.Done.decode)
+        let rated = (message[WatchGym.ratedKey] as? Data).flatMap(WatchGym.Rated.decode)
         let change = (message[WatchGym.changeKey] as? Data).flatMap(WatchGym.Change.decode)
         let options = (message[WatchGym.optionsKey] as? Data).flatMap(WatchGym.OptionsRequest.decode)
         let water = message[WatchSnapshot.waterKey] as? Int
+        let drinkKind = message[WatchSnapshot.drinkKindKey] as? String ?? "water"
         let alarmChange = (message[WatchSnapshot.AlarmChange.key] as? Data).flatMap(WatchSnapshot.AlarmChange.decode)
         let onWatch = message[WatchSnapshot.alarmOnWatchKey] as? Bool
+        let alarmStopped = message[WatchSnapshot.alarmStoppedKey] as? Bool == true
+        let alarmSnoozed = message[WatchSnapshot.alarmSnoozedKey] as? Date
         let coach = (message[WatchCoach.askKey] as? Data).flatMap(WatchCoach.Ask.decode)
         let live = (message[WatchGym.liveKey] as? Data).flatMap(WatchGym.Live.decode)
         let plan = (message[WatchPlan.requestKey] as? Data).flatMap { try? JSONDecoder().decode(WatchPlan.Request.self, from: $0) }
@@ -295,8 +332,13 @@ extension WatchBridge: WCSessionDelegate {
                 replyHandler(["ok": true])
                 return
             }
+            if alarmStopped || alarmSnoozed != nil {
+                replyHandler(["ok": true])
+                await watchAlarm(stopped: alarmStopped, snoozedUntil: alarmSnoozed)
+                return
+            }
             if let water {
-                await addWater(ml: water)
+                await addWater(ml: water, kind: drinkKind)
                 replyHandler(["ok": true])
                 return
             }
@@ -320,12 +362,32 @@ extension WatchBridge: WCSessionDelegate {
                 replyHandler(["ok": true])
                 return
             }
+            if let rated {
+                await applyGym(rated)
+                replyHandler(["ok": true])
+                return
+            }
             restore()
+            // In the morning the iPhone may not have opened Aurin yet: it
+            // loads today itself, so the watch doesn't wait on yesterday.
+            if today?.date != AppModel.localDate(Date()) { await loadTodayForWatch() }
             if let today, let data = Self.snapshot(today, health: health, training: training, profile: profile).encoded() {
                 replyHandler([WatchSnapshot.contextKey: data])
             } else {
                 replyHandler([:])
             }
+        }
+    }
+
+    /// Today, the week and health from the server, when the app has none for today.
+    private func loadTodayForWatch() async {
+        let api = AppModel.live?.api ?? APIClient()
+        guard api.hasSession, let loaded = try? await api.today() else { return }
+        today = loaded
+        if let week = try? await api.training() { training = week }
+        if let fresh = try? await api.health(), fresh.date == loaded.date {
+            health = fresh
+            healthLoaded = Date()
         }
     }
 
@@ -352,12 +414,18 @@ extension WatchBridge: WCSessionDelegate {
     /// A set, a drink or the alarm's place sent while the iPhone was out of reach.
     nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any]) {
         let done = (userInfo[WatchGym.doneKey] as? Data).flatMap(WatchGym.Done.decode)
+        let rated = (userInfo[WatchGym.ratedKey] as? Data).flatMap(WatchGym.Rated.decode)
         let water = userInfo[WatchSnapshot.waterKey] as? Int
+        let drinkKind = userInfo[WatchSnapshot.drinkKindKey] as? String ?? "water"
         let onWatch = userInfo[WatchSnapshot.alarmOnWatchKey] as? Bool
+        let alarmStopped = userInfo[WatchSnapshot.alarmStoppedKey] as? Bool == true
+        let alarmSnoozed = userInfo[WatchSnapshot.alarmSnoozedKey] as? Date
         Task { @MainActor in
             if let done { await applyGym(done) }
-            if let water { await addWater(ml: water) }
+            if let rated { await applyGym(rated) }
+            if let water { await addWater(ml: water, kind: drinkKind) }
             if let onWatch { await alarmOnWatch(onWatch) }
+            if alarmStopped || alarmSnoozed != nil { await watchAlarm(stopped: alarmStopped, snoozedUntil: alarmSnoozed) }
         }
     }
 }

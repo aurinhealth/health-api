@@ -17,6 +17,20 @@ struct ReadinessHome: View {
             NavigationLink(value: Page.why) { hero }
                 .buttonStyle(.plain)
             gauges.padding(.top, 6)
+            if let today = todayLine {
+                NavigationLink(value: today.session) {
+                    HStack(spacing: 5) {
+                        Image(systemName: today.symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber)
+                        Text(today.text).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink)
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 7)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(today.session.sport != "ride" && today.session.sport != "run")
+            }
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -49,7 +63,7 @@ struct ReadinessHome: View {
                 .padding(.top, 14)
             HStack(alignment: .lastTextBaseline, spacing: 7) {
                 Text(s.readiness.map { String($0) } ?? "–")
-                    .font(W.serif(64))
+                    .font(W.serif(58))
                     .foregroundStyle(W.ink)
                     .lineLimit(1)
                 if let pill {
@@ -75,6 +89,23 @@ struct ReadinessHome: View {
         case "red": return (W.tr("nízká", "low"), W.red)
         default: return nil
         }
+    }
+
+    // MARK: Today
+
+    /// What is next today, in one line under the numbers ("Sweet spot 75′ at 17:30").
+    private var todayLine: (text: String, symbol: String, session: WatchSnapshot.Session)? {
+        guard let next = (s.week ?? []).first(where: { $0.date == s.date && !$0.done }) else { return nil }
+        var text = next.title
+        if let minutes = next.minutes { text += " \(minutes)′" }
+        if let time = next.time { text += W.tr(" v ", " at ") + time }
+        let symbol = switch next.sport {
+        case "ride": "figure.outdoor.cycle"
+        case "run": "figure.run"
+        case "strength": "dumbbell.fill"
+        default: "figure.mixed.cardio"
+        }
+        return (text, symbol, next)
     }
 
     // MARK: Sleep, strain, HRV
@@ -103,10 +134,10 @@ struct ReadinessHome: View {
 
     private func cell(_ g: Gauge) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(g.title).font(.system(size: 10)).foregroundStyle(W.muted).lineLimit(1)
+            Text(g.title).font(.system(size: 11, weight: .medium)).foregroundStyle(W.muted).lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(g.value).font(W.serif(21)).foregroundStyle(W.ink)
-                if let unit = g.unit, g.value != "–" { Text(unit).font(.system(size: 8)).foregroundStyle(W.muted) }
+                Text(g.value).font(W.serif(19)).foregroundStyle(W.ink)
+                if let unit = g.unit, g.value != "–" { Text(unit).font(.system(size: 10)).foregroundStyle(W.muted) }
             }
             .lineLimit(1)
             .minimumScaleFactor(0.7)
@@ -114,7 +145,7 @@ struct ReadinessHome: View {
                 WatchRangeBar(value: bar.value, low: bar.low, high: bar.high, color: g.color).padding(.vertical, 2)
             }
             Text(g.note ?? " ")
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(g.color)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -131,7 +162,7 @@ struct ReadinessHome: View {
         guard let minutes = s.sleep?.minutes, let need = s.sleep?.need, need > 0 else { return g }
         let low = need - 30, high = need + 30
         g.bar = (minutes, low, high)
-        g.note = W.tr("\(W.number(minutes / need * 100)) % potřeby", "\(W.number(minutes / need * 100))% of need")
+        g.note = W.tr("\(W.number(minutes / need * 100)) %", "\(W.number(minutes / need * 100))%")
         g.color = minutes >= low ? W.green : W.amber
         return g
     }
@@ -142,7 +173,7 @@ struct ReadinessHome: View {
             g.note = s.strain.planned.map { W.tr("plán ~", "plan ~") + W.number($0, digits: 1) }
             return g
         }
-        g.note = W.tr("cíl ", "target ") + W.number(low) + "–" + W.number(high)
+        g.note = W.tr("z ", "of ") + W.number(low) + "–" + W.number(high)
         g.color = W.green
         if let score = s.strain.score {
             g.bar = (score, low, high)
@@ -156,8 +187,8 @@ struct ReadinessHome: View {
         guard let value = s.hrv?.value, let low = s.hrv?.low, let high = s.hrv?.high, high > low else { return g }
         g.bar = (value, low, high)
         switch WatchRangeBar.side(value, low, high) {
-        case 1: g.note = W.tr("nad normálem", "above normal")
-        case -1: g.note = W.tr("pod normálem", "below normal"); g.color = W.amber
+        case 1: g.note = W.tr("nad", "high")
+        case -1: g.note = W.tr("pod", "low"); g.color = W.amber
         default: g.note = W.tr("v normálu", "normal")
         }
         return g

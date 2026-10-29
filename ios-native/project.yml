@@ -250,6 +250,11 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         WKApplication: true
         WKCompanionAppBundleIdentifier: health.aurin.app
+        # A tap on a complication opens its page (widgetURL, WatchRoot.open).
+        CFBundleURLTypes:
+          - CFBundleURLName: health.aurin.watch
+            CFBundleURLSchemes:
+              - aurinwatch
         UIAppFonts:
           - InstrumentSerif-Regular.ttf
           - Newsreader-Regular.ttf
@@ -262,6 +267,7 @@ targets:
     sources:
       - path: AurinWatchWidgets
       - path: WatchShared/WatchSnapshot.swift
+      - path: WatchShared/WatchPlan.swift
     entitlements:
       path: AurinWatchWidgets/AurinWatchWidgets.entitlements
       properties:
