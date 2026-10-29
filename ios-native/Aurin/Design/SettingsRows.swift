@@ -164,13 +164,13 @@ struct SettingsPage<Content: View>: View {
     }
 }
 
-/// The switch of the design: an ink capsule with a light knob when on, a faint
-/// capsule with a white knob when off (instead of the green system switch), so
-/// in light mode the darker switch is always the one that is on. In dark mode
-/// the on capsule is the bright one and the off knob a mid grey.
+/// The switch of the design, in the shape of the iOS 26 switch (64 × 28 with a
+/// long knob): green with a white knob when on, only a thin outline with a small
+/// knob when off, so an off switch is never a grey block on the card.
 struct AurinToggleStyle: ToggleStyle {
     @Environment(\.isEnabled) private var isEnabled
-    private static let offKnob = Color(light: 0xFFFFFF, dark: 0x8A918D)
+    private static let outline = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.28)
+    private static let offKnob = Color(light: 0x1B1A17, dark: 0xECEAE6, alpha: 0.45)
 
     func makeBody(configuration: Configuration) -> some View {
         Button {
@@ -181,13 +181,24 @@ struct AurinToggleStyle: ToggleStyle {
                 Spacer(minLength: 8)
                 ZStack(alignment: configuration.isOn ? .trailing : .leading) {
                     Capsule()
-                        .fill(configuration.isOn ? Palette.button : Palette.ink.opacity(0.16))
-                        .frame(width: 50, height: 30)
-                    Circle()
-                        .fill(configuration.isOn ? Palette.onButton : Self.offKnob)
-                        .frame(width: 24, height: 24)
-                        .shadow(color: .black.opacity(configuration.isOn ? 0 : 0.18), radius: 1.5, y: 1)
-                        .padding(3)
+                        .fill(configuration.isOn ? Palette.green : Color.clear)
+                        .overlay {
+                            Capsule().strokeBorder(Self.outline, lineWidth: 1.5)
+                                .opacity(configuration.isOn ? 0 : 1)
+                        }
+                        .frame(width: 64, height: 28)
+                    if configuration.isOn {
+                        Capsule()
+                            .fill(Color.white)
+                            .frame(width: 38, height: 24)
+                            .shadow(color: .black.opacity(0.14), radius: 2.5, y: 1.5)
+                            .padding(2)
+                    } else {
+                        Circle()
+                            .fill(Self.offKnob)
+                            .frame(width: 14, height: 14)
+                            .padding(7)
+                    }
                 }
                 .opacity(isEnabled ? 1 : 0.45)
             }
