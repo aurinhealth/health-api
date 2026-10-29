@@ -883,6 +883,8 @@
 "Námaha dnes" = "Strain today";
 "Námaha včera" = "Strain yesterday";
 "Námaha zítra" = "Strain tomorrow";
+"Volný den" = "Rest day";
+"Nic v plánu" = "Nothing planned";
 "Námaha · %@" = "Strain · %@";
 "Námaha po dnech tohoto týdne" = "Strain by day this week";
 "Zátěž po týdnech" = "Weekly load";
