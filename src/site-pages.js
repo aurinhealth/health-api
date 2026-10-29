@@ -610,16 +610,20 @@ function load(){if(frames.length)return;
 function at(){return ((Math.round(cur)%N)+N)%N;}
 function idAt(k,x,y){return ids?ids.data[((Math.floor(k/9)*IH+y)*ids.width+(k%9)*IW+x)*4]:255;}
 // The app dims the other muscles to 62 % and lights the one tapped.
-function draw(){var k=at(),im=frames[k];if(!im||!im.complete||!im.naturalWidth)return;shown=k;
- cx.clearRect(0,0,640,1000);cx.drawImage(im,0,0);if(sel===null||!ids)return;
+function ok(im){return im&&im.complete&&im.naturalWidth;}
+// Between two frames the next one fades in by how far the turn is past this one, so the 5° steps don't show.
+function draw(){var k=at(),im=frames[k];if(!ok(im))return;
+ if(sel===null&&!still){var f=Math.floor(cur),k0=((f%N)+N)%N,a=frames[k0],b=frames[(k0+1)%N],t=cur-f;
+  if(ok(a)){shown=cur;cx.clearRect(0,0,640,1000);cx.drawImage(a,0,0);if(t>.02&&ok(b)){cx.globalAlpha=t;cx.drawImage(b,0,0);cx.globalAlpha=1;}return;}}
+ shown=cur;cx.clearRect(0,0,640,1000);cx.drawImage(im,0,0);if(sel===null||!ids)return;
  var d=cx.getImageData(0,0,640,1000),p=d.data;
  for(var y=0;y<1000;y++){var iy=Math.min(IH-1,(y*IH/1000)|0);for(var x=0;x<640;x++){var o=(y*640+x)*4;if(!p[o+3])continue;
   var f=idAt(k,x>>2,iy)===sel?1.25:.62;p[o]*=f;p[o+1]*=f;p[o+2]*=f;}}
  cx.putImageData(d,0,0);}
 function close(){sel=null;bub.classList.remove('on');draw();}
 function tick(){if(!running)return;
- if(!drag){if(spin)cur+=.12;else{cur+=vel;vel*=.92;}}
- if(at()!==shown){if(sel!==null&&Math.abs(vel)>.05)close();else draw();}
+ if(!drag){if(spin)cur+=.12;else{cur+=vel;vel*=.92;if(Math.abs(vel)<.002)vel=0;}}
+ if(sel===null?cur!==shown:at()!==Math.round(shown)){if(sel!==null&&Math.abs(vel)>.05)close();else draw();}
  requestAnimationFrame(tick);}
 if('IntersectionObserver' in window)new IntersectionObserver(function(es){var on=es[0].isIntersecting;if(on)load();if(on&&!running){running=true;requestAnimationFrame(tick);}else if(!on)running=false;},{rootMargin:'50% 0px'}).observe(fig);
 else{load();running=true;requestAnimationFrame(tick);}
