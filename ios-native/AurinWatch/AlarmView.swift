@@ -9,12 +9,15 @@ import WatchKit
 struct AlarmView: View {
     @EnvironmentObject private var store: WatchStore
     @State private var settings = false
+    /// The morning on the screen: only its dial takes the crown.
+    @State private var page = 0
 
     var body: some View {
         let alarm = store.snapshot?.alarm ?? WatchSnapshot.Alarm()
-        TabView {
+        TabView(selection: $page) {
             ForEach(Array(Self.mornings(alarm).enumerated()), id: \.element) { index, morning in
-                AlarmDay(morning: morning, first: index == 0, alarm: alarm)
+                AlarmDay(morning: morning, first: index == 0, alarm: alarm, shown: page == index)
+                    .tag(index)
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
@@ -44,6 +47,8 @@ private struct AlarmDay: View {
     let morning: String
     let first: Bool
     let alarm: WatchSnapshot.Alarm
+    /// The page on the screen: the crown moves this morning's time, never a hidden one.
+    let shown: Bool
 
     @State private var minutes: Double = 420
     @State private var saved: Int?
@@ -73,7 +78,8 @@ private struct AlarmDay: View {
             }
             .focusable()
             .focused($focused)
-            .digitalCrownRotation($minutes, from: 0, through: 1435, by: 5, sensitivity: .low, isContinuous: true, isHapticFeedbackEnabled: true)
+            // Detents: only whole 5-minute steps, never 7:03 while turning.
+            .digitalCrownRotation(detent: $minutes, from: 0, through: 1435, by: 5, sensitivity: .low, isContinuous: true, isHapticFeedbackEnabled: true)
             if edited {
                 HStack(spacing: 4) {
                     if first && alarm.evening != nil {
@@ -90,7 +96,11 @@ private struct AlarmDay: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear(perform: fill)
+        .onAppear {
+            fill()
+            focused = shown
+        }
+        .onChange(of: shown) { _, now in focused = now }
         .onChange(of: alarm) { _, _ in if !edited { fill() } }
     }
 

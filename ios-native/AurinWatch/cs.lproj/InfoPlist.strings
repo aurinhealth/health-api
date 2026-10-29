@@ -1,0 +1,3 @@
+/* Health permission texts of the watch app (project.yml, AurinWatch target), by the watch's language. */
+"NSHealthShareUsageDescription" = "Aurin na hodinkách čte tep a spálené kalorie během tréninku v posilovně.";
+"NSHealthUpdateUsageDescription" = "Aurin uloží trénink z posilovny na hodinkách do Apple Health, s tepem a kaloriemi.";
