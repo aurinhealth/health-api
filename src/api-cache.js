@@ -11,15 +11,32 @@ export const CACHE_TTL_SECONDS = 600;
 // (some 400 database reads each) before the first one was kept.
 const computing = new Map();
 
+// { version, food }: food counts only meals and drinks (bumpCacheVersion with
+// food: true). Before migration 0030 there is no food counter: food writes
+// then bump the version itself.
 export async function cacheVersion(db) {
-  try { return (await db.prepare("SELECT version FROM api_cache_versions WHERE user_id=?").bind(db.userId).first())?.version || 0; }
-  catch { return 0; }
+  try { const row = await db.prepare("SELECT version, food FROM api_cache_versions WHERE user_id=?").bind(db.userId).first(); return { version: row?.version || 0, food: row?.food || 0 }; }
+  catch {
+    try { return { version: (await db.prepare("SELECT version FROM api_cache_versions WHERE user_id=?").bind(db.userId).first())?.version || 0, food: 0 }; }
+    catch { return { version: 0, food: 0 }; }
+  }
 }
 
-export async function bumpCacheVersion(db) {
+export async function bumpCacheVersion(db, { food = false } = {}) {
+  if (food) {
+    try { await db.prepare("INSERT INTO api_cache_versions(user_id,version,food) VALUES(?,0,1) ON CONFLICT(user_id) DO UPDATE SET food=food+1").bind(db.userId).run(); return; }
+    catch { /* no food counter yet: the whole version below */ }
+  }
   try { await db.prepare("INSERT INTO api_cache_versions(user_id,version) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET version=version+1").bind(db.userId).run(); }
   catch { /* table not migrated yet: entries still expire with the TTL */ }
 }
+
+// Entries that never show food or drinks: a meal logged keeps them.
+export const FOOD_FREE = /^(fitness|thresholds|curves|laps|intervals-wellness|activity-detail|training-calendar|milestones|share-milestones):?/;
+// The routes that change only food and drinks (entrypoint.js).
+export const FOOD_WRITE = /^\/app\/api\/(fluids|water|food\/(entry|entries|log|personal|recipes|nutrients\/favorites|suggestions\/decide|report))(\/|$)/;
+// A handler that saved nothing new says so, and nothing is made outdated.
+export const UNCHANGED_HEADER = "X-Aurin-Unchanged";
 
 function failedValue(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -29,7 +46,8 @@ function failedValue(value) {
 export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, store = globalThis.caches?.default } = {}) {
   if (!store || env.DB?.userId == null) return compute();
   const scope = encodeURIComponent((env.ENVIRONMENT || 'production') + ':' + (env.USER_DATA_SHARD || 'legacy'));
-  const url = "https://cache.internal/" + scope + "/" + env.DB.userId + "/" + (await cacheVersion(env.DB)) + "/" + encodeURIComponent(key);
+  const { version, food } = await cacheVersion(env.DB);
+  const url = "https://cache.internal/" + scope + "/" + env.DB.userId + "/" + (FOOD_FREE.test(key) ? version : version + "." + food) + "/" + encodeURIComponent(key);
   const hit = await store.match(url).catch(() => null);
   if (hit) return hit.json();
   // Waiting for the one computing it: a copy, as from the cache, since callers change what they get.
