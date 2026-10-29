@@ -241,9 +241,16 @@ struct DrinkFigureCanvas: View, @preconcurrency Animatable {
         fill(&ctx, clip: clip, top: 30, bottom: 92)
         stroke(&ctx, ellipse(50, 62, 38, 28), ink, 2.5)
         stroke(&ctx, whaleTail(), ink, 2.5)
-        ctx.fill(circle(30, 56, 3.6), with: .color(face))
-        ctx.fill(circle(31.2, 54.8, 1.1), with: .color(.white))
-        stroke(&ctx, curve(pt(22, 70), pt(32, 76), pt(42, 70)), ink, 2)
+        if done {
+            // Goal reached: the eye closes into a happy arc, a blush and a wider smile.
+            stroke(&ctx, curve(pt(26, 57), pt(30, 51.5), pt(34, 57)), face, 2.4)
+            ctx.fill(ellipse(24, 66, 4, 2.4), with: .color(pink.opacity(0.45)))
+            stroke(&ctx, curve(pt(21, 69), pt(32, 79), pt(43, 69)), ink, 2)
+        } else {
+            ctx.fill(circle(30, 56, 3.6), with: .color(face))
+            ctx.fill(circle(31.2, 54.8, 1.1), with: .color(.white))
+            stroke(&ctx, curve(pt(22, 70), pt(32, 76), pt(42, 70)), ink, 2)
+        }
         if done {
             let lift = CGFloat(1.5 * sin(phase * 4))
             var spout = Path()
