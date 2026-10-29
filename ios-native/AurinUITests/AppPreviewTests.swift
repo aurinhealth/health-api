@@ -1,0 +1,168 @@
+import XCTest
+
+/// The App Store preview video (app preview): the sample day walked through at a
+/// viewer's pace (Today, Training, food, then a gym set and its rest), in English and in Czech. ios-native.yml records the simulator's
+/// screen while this runs; the test writes when each clip starts and ends to
+/// PREVIEW_DIR/marks.txt, and scripts/app-preview.mjs cuts the clips out of the
+/// recording (no launches, no test runner) into one 15–30 s video per language.
+/// It never fails the run: a changed label costs a scene, not a release.
+final class AppPreviewTests: XCTestCase {
+    private var app: XCUIApplication!
+    private var language = "en"
+    /// The video a clip goes into: app-preview-<video>.mp4 (scripts/app-preview.mjs).
+    private var video = "en"
+
+    private struct Labels {
+        let today, training, food, start, setDone, skip, coach, question, glutes: String
+    }
+
+    private let labels = [
+        "en": Labels(today: "Today", training: "Training", food: "Food",
+                     start: "Start workout", setDone: "Set done", skip: "Skip",
+                     coach: "Coach", question: "How should I train today?", glutes: "Glutes"),
+        "cs": Labels(today: "Dnes", training: "Trénink", food: "Jídlo",
+                     start: "Začít trénink", setDone: "Série hotová", skip: "Přeskočit",
+                     coach: "Kouč", question: "Jak mám dnes trénovat?", glutes: "Hýždě")]
+
+    override func setUp() {
+        continueAfterFailure = true
+        app = XCUIApplication()
+    }
+
+    func testAppPreview() {
+        warmUp()
+        for language in ["en", "cs"] {
+            self.language = language
+            video = language
+            let l = labels[language]!
+
+            // Every tap waits for the app to settle (about 3 s with the dial and the
+            // charts moving), so the taps themselves give each screen its time.
+            // Today as it opens (the dial turns), then Training. No scrolling first:
+            // on iOS 26 the tab bar hides while Today scrolls.
+            launch("-tab", "today")
+            guard tab(l.today).waitForExistence(timeout: 20) else { continue }
+            mark("in")
+            pause(3)
+            tapIfThere(tab(l.training))
+            pause(1)
+            mark("out")
+
+            // Food: eaten against the target and the day's meals.
+            launch("-tab", "food")
+            guard tab(l.food).waitForExistence(timeout: 20) else { continue }
+            mark("in")
+            pause(3)
+            mark("out")
+
+            // The gym day into training mode: a set done, the rest counting down, the next set.
+            launch("-open", "gym/2026-10-08")
+            let start = button(containing: l.start)
+            guard start.waitForExistence(timeout: 20) else { continue }
+            mark("in")
+            tapIfThere(start)
+            tapIfThere(button(containing: l.start))
+            tapIfThere(button(containing: l.setDone))
+            pause(2)
+            tapIfThere(app.buttons[l.skip])
+            pause(0.5)
+            mark("out")
+        }
+    }
+
+    /// The second video, app-preview-<language>-coach.mp4: the muscles and one of them,
+    /// then the coach answering "How should I train today?" (the demo's ready answer; the
+    /// coach suggests from the real date, so the sample day's own suggestions don't show).
+    func testCoachPreview() {
+        for language in ["en", "cs"] {
+            self.language = language
+            video = language + "-coach"
+            let l = labels[language]!
+
+            // Muscles: the figure in the sample day's colours, then the glutes' detail.
+            launch("-open", "muscles")
+            let glutes = button(containing: l.glutes)
+            guard glutes.waitForExistence(timeout: 20) else { continue }
+            mark("in")
+            pause(2)
+            // The tired muscles sit under the figure: scrolled up to, then the glutes opened.
+            app.swipeUp()
+            pause(1)
+            if glutes.isHittable { glutes.tap() }
+            pause(3)
+            mark("out")
+
+            // The coach: a suggested question, "thinking", then the answer written out.
+            launch("-tab", "today")
+            let coach = tab(l.coach)
+            guard coach.waitForExistence(timeout: 20) else { continue }
+            mark("in")
+            tapIfThere(coach)
+            let question = button(containing: l.question)
+            guard question.waitForExistence(timeout: 8) else { mark("out"); continue }
+            pause(1)
+            question.tap()
+            pause(9)
+            mark("out")
+        }
+    }
+
+    // MARK: - Helpers
+
+    /// The first rest asks to send notifications: answered here, before the
+    /// camera rolls, so the system's question never shows in the video.
+    private func warmUp() {
+        launch("-open", "gym/2026-10-08")
+        let start = button(containing: labels["en"]!.start)
+        guard start.waitForExistence(timeout: 20) else { return }
+        tapIfThere(start)
+        tapIfThere(button(containing: labels["en"]!.start))
+        tapIfThere(button(containing: labels["en"]!.setDone))
+        let allow = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Allow"]
+        if allow.waitForExistence(timeout: 5) { allow.tap() }
+        pause(1)
+    }
+
+    private func launch(_ arguments: String...) {
+        let locale = language == "en" ? "en_US" : "cs_CZ"
+        app.launchArguments = ["-demo"] + arguments + ["-language", language, "-AppleLanguages", "(\(language))", "-AppleLocale", locale]
+        app.launch()
+    }
+
+    private func tab(_ name: String) -> XCUIElement {
+        app.buttons.matching(identifier: name).firstMatch
+    }
+
+    private func button(containing text: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", text)).firstMatch
+    }
+
+    @discardableResult
+    private func tapIfThere(_ element: XCUIElement) -> Bool {
+        guard element.waitForExistence(timeout: 6) else { return false }
+        if !element.isHittable { app.swipeUp() }
+        guard element.isHittable else { return false }
+        element.tap()
+        return true
+    }
+
+    private func pause(_ seconds: TimeInterval) {
+        _ = XCTWaiter.wait(for: [expectation(description: "settle")], timeout: seconds)
+    }
+
+    /// One line per cut, "<video> in|out <seconds since 1970>": the simulator
+    /// runs on the Mac's clock, the same one the recording's start is taken on.
+    private func mark(_ edge: String) {
+        guard let dir = ProcessInfo.processInfo.environment["PREVIEW_DIR"] else { return }
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let line = String(format: "%@ %@ %.3f\n", video, edge, Date().timeIntervalSince1970)
+        let url = URL(fileURLWithPath: dir).appending(path: "marks.txt")
+        if let handle = try? FileHandle(forWritingTo: url) {
+            handle.seekToEndOfFile()
+            handle.write(Data(line.utf8))
+            try? handle.close()
+        } else {
+            try? Data(line.utf8).write(to: url)
+        }
+    }
+}
