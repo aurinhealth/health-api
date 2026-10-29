@@ -469,9 +469,19 @@ private struct PinnedBarBackground: View {
     }
 }
 
+/// On iOS 26 the pinned bar of a drill-down page sits above the page
+/// (safeAreaBar); before, it floats over the page's own title row.
+private var pinnedBarAbovePage: Bool {
+    #if compiler(>=6.2)
+    if #available(iOS 26, *) { return true }
+    #endif
+    return false
+}
+
 /// The pinned bar of a drill-down page: back on the left, the page's action
-/// on the right, both glass. Scrolled down, a light blur goes behind it and
-/// the title shows in the middle.
+/// on the right, both glass. Scrolled down, the title shows in the middle;
+/// on iOS 26 the page fades out under the bar (the system's soft edge),
+/// before it a light blur goes behind it.
 private struct PinnedTopBar: ViewModifier {
     var title: String?
     var trailing: ChromeAction?
@@ -486,43 +496,34 @@ private struct PinnedTopBar: ViewModifier {
     @State private var scrolled = false
 
     func body(content: Content) -> some View {
-        content
+        let page = content
             .environment(\.floatingBack, true)
             .environment(\.scrollReport, { (offset: CGFloat) in
                 parent?(offset)
                 let now = offset > 24
                 if now != scrolled { withAnimation(.easeOut(duration: 0.2)) { scrolled = now } }
             })
-            .overlay(alignment: .top) {
-                ChromeGlassGroup {
-                    HStack(spacing: 12) {
-                        if let leading {
-                            ChromeButton(systemImage: leading.systemImage, label: leading.label, text: leading.text, action: leading.action)
-                        } else {
-                            FloatingBackButton(action: back)
-                        }
-                        Spacer(minLength: 0)
-                        if let title {
-                            Text(L10n.tr(title))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Palette.ink)
-                                .lineLimit(1)
-                                .opacity(pinTitle || (scrolled && model?.syncStatus == nil) ? 1 : 0)
-                        }
-                        Spacer(minLength: 0)
-                        if let extra {
-                            ChromeButton(systemImage: extra.systemImage, label: extra.label, text: extra.text, action: extra.action)
-                        }
-                        if let trailing {
-                            ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled,
-                                         tint: trailing.tint, action: trailing.action)
-                        } else if extra == nil {
-                            // Balances the back button; "Vybrat" alone sits at the edge itself.
-                            Color.clear.frame(width: 40, height: 40)
-                        }
-                    }
+        #if compiler(>=6.2)
+        if #available(iOS 26, *) {
+            // The bar takes its place above the page, and the system's soft
+            // edge fades the page out under it.
+            page
+                .scrollEdgeEffectStyle(.soft, for: .top)
+                .safeAreaBar(edge: .top) {
+                    bar.padding(.top, 6).padding(.bottom, 10)
                 }
-                .padding(.horizontal, 22)
+        } else {
+            pinned(page)
+        }
+        #else
+        pinned(page)
+        #endif
+    }
+
+    /// Before iOS 26 the bar floats over the page, on the line of its title.
+    private func pinned(_ page: some View) -> some View {
+        page.overlay(alignment: .top) {
+            bar
                 // On the line of the page's own title row (24 pt down, 36 pt high).
                 .padding(.top, 22)
                 .padding(.bottom, 10)
@@ -530,7 +531,39 @@ private struct PinnedTopBar: ViewModifier {
                     PinnedBarBackground()
                         .opacity(scrolled ? 1 : 0)
                 }
+        }
+    }
+
+    private var bar: some View {
+        ChromeGlassGroup {
+            HStack(spacing: 12) {
+                if let leading {
+                    ChromeButton(systemImage: leading.systemImage, label: leading.label, text: leading.text, action: leading.action)
+                } else {
+                    FloatingBackButton(action: back)
+                }
+                Spacer(minLength: 0)
+                if let title {
+                    Text(L10n.tr(title))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Palette.ink)
+                        .lineLimit(1)
+                        .opacity(pinTitle || (scrolled && model?.syncStatus == nil) ? 1 : 0)
+                }
+                Spacer(minLength: 0)
+                if let extra {
+                    ChromeButton(systemImage: extra.systemImage, label: extra.label, text: extra.text, action: extra.action)
+                }
+                if let trailing {
+                    ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled,
+                                 tint: trailing.tint, action: trailing.action)
+                } else if extra == nil {
+                    // Balances the back button; "Vybrat" alone sits at the edge itself.
+                    Color.clear.frame(width: 40, height: 40)
+                }
             }
+        }
+        .padding(.horizontal, 22)
     }
 }
 
@@ -589,7 +622,8 @@ struct BackSlot: View {
 
     var body: some View {
         if floating {
-            Color.clear.frame(width: 36, height: 36)
+            // On iOS 26 the bar sits above the page, so the slot keeps only its width.
+            Color.clear.frame(width: 36, height: pinnedBarAbovePage ? 0 : 36)
         } else {
             CircleButton(systemImage: "chevron.left", label: L10n.tr("Zpět"), action: action)
         }
@@ -621,9 +655,10 @@ struct PageScroll<Content: View>: View {
     var body: some View {
         ScrollView(.vertical) {
             content.containerRelativeFrame(.horizontal)
-                .onGeometryChange(for: CGFloat.self) { -$0.frame(in: .named("pageScroll")).minY } action: { report?($0) }
+                .reportingOffset(report)
         }
         .coordinateSpace(.named("pageScroll"))
+        .reportingInsetOffset(report)
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         .scrollDismissesKeyboard(.interactively)
         .reportingDrags(dragReport)
@@ -631,6 +666,25 @@ struct PageScroll<Content: View>: View {
 }
 
 private extension View {
+    /// How far the page has scrolled, 0 at the top. On iOS 26 a pinned bar
+    /// insets the page (safeAreaBar), so the offset is read from the scroll
+    /// view with its insets (reportingInsetOffset); before, from the content.
+    @ViewBuilder func reportingOffset(_ report: ((CGFloat) -> Void)?) -> some View {
+        if #available(iOS 26, *) {
+            self
+        } else {
+            onGeometryChange(for: CGFloat.self) { -$0.frame(in: .named("pageScroll")).minY } action: { report?($0) }
+        }
+    }
+
+    @ViewBuilder func reportingInsetOffset(_ report: ((CGFloat) -> Void)?) -> some View {
+        if #available(iOS 26, *) {
+            onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, offset in report?(offset) }
+        } else {
+            self
+        }
+    }
+
     /// On iOS 17 there is no scroll phase: the tab bar opened with a tap
     /// stays open until the page is back at the top.
     @ViewBuilder func reportingDrags(_ report: (() -> Void)?) -> some View {
