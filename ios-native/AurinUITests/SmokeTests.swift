@@ -26,7 +26,7 @@ final class SmokeTests: XCTestCase {
         pause(2)
         shot("uvod")
         app.buttons["Pojďme na to"].tap()
-        for name in ["pripravenost", "trenink", "jidlo", "spanek", "kouc"] {
+        for name in ["pripravenost", "trenink", "kouc"] {
             let next = app.buttons["Pokračovat"]
             XCTAssertTrue(next.waitForExistence(timeout: 5), "the welcome page \(name) did not appear")
             pause(4)
@@ -273,9 +273,12 @@ final class SmokeTests: XCTestCase {
 
     /// A card that opens a detail (RouteLink, identifier "open.<route>").
     private func open(_ route: String, _ file: String) {
-        let card = app.descendants(matching: .any).matching(identifier: "open.\(route)").firstMatch
-        XCTAssertTrue(card.waitForExistence(timeout: 8), "the \(route) card is missing")
-        if !card.isHittable { app.swipeUp() }
+        // On iOS 26 the other tabs stay in the tree, so the same card on Dnes
+        // also matches behind Zdraví: take the one on screen.
+        let cards = app.descendants(matching: .any).matching(identifier: "open.\(route)")
+        XCTAssertTrue(cards.firstMatch.waitForExistence(timeout: 8), "the \(route) card is missing")
+        var card = hittable(cards)
+        if !card.isHittable { app.swipeUp(); card = hittable(cards) }
         card.tap()
         pause(2)
         XCTAssertTrue(app.wait(for: .runningForeground, timeout: 5), "the app quit on \(route)")

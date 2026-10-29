@@ -343,7 +343,7 @@ struct MonthGrid: View {
         let minutes = list.reduce(0.0) { $0 + $1.minutes }
         let kcal = list.reduce(0.0) { $0 + $1.kcal }
         guard count > 0 else { return L10n.tr("zatím bez aktivit") }
-        let head = L10n.f("%@ %@", String(count), Fmt.plural(count, "aktivita", "aktivity", "aktivit"))
+        let head = L10n.plural("%lld aktivit", count)
         // Splnění: the month's sessions done to a plan, their mean percent.
         if mode == .compliance {
             let values = list.flatMap(\.activities).filter { $0.status == "done" }.compactMap(\.compliance)
@@ -520,6 +520,7 @@ struct WatchActivityDetail: View {
     let activity: CalendarActivity
     @State private var changingType = false
     @State private var deleting = false
+    @State private var unpairing = false
     @State private var editingKcal = false
 
     var body: some View {
@@ -558,6 +559,9 @@ struct WatchActivityDetail: View {
                             if activity.status == "done" && activity.source != "gym" {
                                 Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
                             }
+                            if activity.session.unpairTarget != nil {
+                                Button { unpairing = true } label: { Label("Odpárovat od plánu", systemImage: "minus.circle") }
+                            }
                             if activity.status == "done" {
                                 Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
                             }
@@ -577,6 +581,7 @@ struct WatchActivityDetail: View {
         .activityEditing(id: activity.id, title: activity.title, kcal: model.countedKcal(activity),
                          edited: model.doneSession(for: activity)?.kcalEdited == true,
                          deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
+        .activityUnpairing(session: activity.session, asking: $unpairing) { dismiss() }
     }
 
     /// "Chůze · st 8. 10. · 10:00–11:10".

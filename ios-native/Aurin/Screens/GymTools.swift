@@ -573,7 +573,7 @@ struct GymBuilderView: View {
                     if p.failing.contains(ex.name) { GymTag.failure.padding(.top, 4) }
                 }
                 Spacer(minLength: 8)
-                Text("\(ex.sets) × " + Fmt.range(ex.reps) + (ex.kg.isEmpty ? "" : " · " + (LiftWeight.shown(ex.kg) ?? ex.kg) + " " + Units.weightUnit))
+                Text(setsLine(ex.sets, ex.reps, ex.kg))
                     .font(Typo.small).foregroundStyle(Palette.secondary).lineLimit(1)
                 ExerciseInfoButton(name: ex.name) { technique = ex.name }
                 if !saved {
@@ -595,6 +595,14 @@ struct GymBuilderView: View {
             .padding(.vertical, 12)
             Rectangle().fill(Palette.hairline).frame(height: 1)
         }
+    }
+
+    /// "3 × 8–10 · 60 kg" in steps: Xcode 26.6 times out on it as one expression.
+    private func setsLine(_ sets: Int, _ reps: String, _ kg: String) -> String {
+        let line: String = "\(sets) × " + Fmt.range(reps)
+        if kg.isEmpty { return line }
+        let weight: String = LiftWeight.shown(kg) ?? kg
+        return line + " · " + weight + " " + Units.weightUnit
     }
 
     // MARK: Editing the proposal by hand
@@ -848,7 +856,7 @@ struct EquipmentView: View {
     static func countLine(_ place: GymPlace) -> String {
         if place.bodyweightOnly { return L10n.tr("Bez vybavení") }
         let n = place.stations.count
-        return L10n.f("%@ %@", String(n), Fmt.plural(n, "věc", "věci", "věcí"))
+        return L10n.plural("%lld věcí", n)
     }
 
     private func binding(_ id: String) -> Binding<GymPlace> {
@@ -1011,7 +1019,7 @@ struct EquipmentView: View {
     /// "Posilovna · 14 strojů" for the builder and the library.
     static func summary(_ e: GymEquipment?) -> String {
         guard let e else { return L10n.tr("posilovna") }
-        let count = " · " + L10n.f("%@ %@", String(e.selected.count), Fmt.plural(e.selected.count, "věc", "věci", "věcí"))
+        let count = " · " + L10n.plural("%lld věcí", e.selected.count)
         switch e.equipment {
         case "custom": return (e.gymName.nilIfBlank ?? L10n.tr("Posilovna")) + count
         case "home": return L10n.tr("Domácí posilovna") + count

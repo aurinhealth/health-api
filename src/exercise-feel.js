@@ -35,7 +35,7 @@ export const FEEL = {
   "Cable rear delt fly": ["Zadní ramena; konec pohybu cítíš mezi lopatkami.", "Ramena dolů od uší, bez švihu trupem."],
   "Pallof press": ["Šikmé břišní svaly a hluboký střed těla – odporuješ rotaci.", "Trup ani pánev se nestáčí ke kladce; dýchej klidně."],
   "Cable woodchop": ["Šikmé břišní svaly při rotaci trupu, ruce jen drží lano.", "Rotace jde z hrudníku a boků, ne ze spodních zad."],
-  "Roman chair": ["Spodní záda a hýždě, při propnutí i zadní stehna.", "Nahoře nepřeprohýbej – zastav v rovině s nohama."],
+  "Hyperextension": ["Spodní záda a hýždě, při propnutí i zadní stehna.", "Nahoře nepřeprohýbej – zastav v rovině s nohama."],
   "Standing calf raise": ["Lýtka, nejvíc nahoře na špičkách a v protažení dole.", "Kolena klidná a téměř propnutá; bez pérování."],
   "Cable crunch": ["Přímý sval břišní – zakulacuješ trup, žebra k pánvi.", "Pohyb nejde ze sklopení boků ani z rukou."],
   "Barbell bench press": ["Prsní svaly, přední ramena a triceps.", "Lopatky stažené a ramena dole; bolest v rameni = lokty moc do stran nebo osa vysoko na hrudníku."],
@@ -323,5 +323,8 @@ export const FEEL = {
   "Band Assisted Pull-Up": ["Široký sval zádový a biceps.","Ramena nebolí; dole se jen nepovolíš úplně."],
   "Neutral-Grip Pull-Up": ["Široký sval zádový a biceps.","Ramena nebolí."],
   "Weighted Pull Ups": ["Široký sval zádový a biceps.","Lokty ani ramena nebolí; zátěž se nehoupe."],
-  "Wide-Grip Pull-Up": ["Široký sval zádový, horní část.","Ramena nebolí; úchop ne příliš široký."]
+  "Wide-Grip Pull-Up": ["Široký sval zádový, horní část.","Ramena nebolí; úchop ne příliš široký."],
+  "Box Jump": ["Přední stehna a hýždě při odrazu.","Kolena ani kotníky nebolí; dopad je tichý."],
+  "Squat Jump": ["Přední stehna, hýždě a lýtka při odrazu.","Kolena nebolí a nepadají dovnitř; dopad je měkký."],
+  "Pogo Hops": ["Lýtka a Achillovy šlachy, pružně.","Achillovka ani holeně nebolí; poskoky jsou nízké."]
 };

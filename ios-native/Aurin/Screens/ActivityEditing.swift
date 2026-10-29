@@ -123,3 +123,67 @@ extension View {
         modifier(ActivityEditing(id: id, title: title, kcal: kcal, edited: edited, deleting: deleting, editingKcal: editingKcal, onDeleted: onDeleted))
     }
 }
+
+/// ⋯ Odpárovat od plánu on a done activity the app paired with a plan (an
+/// Intervals.icu plan, or the gym plan saved for that day): the activity stays
+/// and counts, the plan goes back to the day as not done; "Vrátit" pairs them
+/// again (src/manual-pairs.js).
+struct ActivityUnpairing: ViewModifier {
+    @Environment(AppModel.self) private var model
+    let session: WeekSession
+    @Binding var asking: Bool
+    var onUnpaired: () -> Void = {}
+    @State private var error: String?
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(L10n.f("Zrušit spárování „%@“?", session.title), isPresented: $asking, titleVisibility: .visible) {
+                Button("Zrušit spárování") { Task { await unpair() } }
+                Button("Zrušit", role: .cancel) {}
+            } message: {
+                Text("Aktivita zůstane a dál se počítá. Naplánovaný trénink se vrátí do plánu.")
+            }
+            .alert("Nepovedlo se", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(verbatim: error ?? "")
+            }
+    }
+
+    private func unpair() async {
+        guard let target = session.unpairTarget, !model.demo else { return }
+        let model = model
+        let session = session
+        do {
+            try await model.api.pairActivity(plannedId: target, activityId: nil, date: session.date)
+        } catch {
+            self.error = error.localizedDescription
+            return
+        }
+        onUnpaired()
+        await model.refreshTraining()
+        await model.refresh()
+        model.undoToast = PlanToast(title: L10n.tr("Spárování zrušeno"), note: L10n.tr("Naplánovaný trénink je zpět v plánu."), cancelled: false, undo: {
+            // A gym plan goes back to the automatic pairing, a plan to this activity.
+            if target.hasPrefix("gym:") {
+                try? await model.api.resetPair(plannedId: target, date: session.date)
+            } else {
+                try? await model.api.pairActivity(plannedId: target, activityId: session.id, date: session.date)
+            }
+            await model.refreshTraining()
+            await model.refresh()
+        })
+    }
+}
+
+extension View {
+    func activityUnpairing(session: WeekSession?, asking: Binding<Bool>, onUnpaired: @escaping () -> Void = {}) -> some View {
+        Group {
+            if let session, session.unpairTarget != nil {
+                modifier(ActivityUnpairing(session: session, asking: asking, onUnpaired: onUnpaired))
+            } else {
+                self
+            }
+        }
+    }
+}

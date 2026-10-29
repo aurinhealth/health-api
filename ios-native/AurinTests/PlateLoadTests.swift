@@ -35,4 +35,42 @@ final class PlateLoadTests: XCTestCase {
         XCTAssertEqual(PlateLoad.adding(5, to: full), full)
         XCTAssertEqual(PlateLoad.plates(for: 1000, bar: 20).count, PlateLoad.maxPerSide)
     }
+
+    func testPoundPlatesOnAPoundBar() {
+        XCTAssertEqual(PlateLoad.plates(for: 225, bar: 45, sizes: PlateLoad.lbSizes), [45, 45])
+        XCTAssertEqual(PlateLoad.plates(for: 235, bar: 45, sizes: PlateLoad.lbSizes), [45, 45, 5])
+        XCTAssertEqual(PlateLoad.plates(for: 135, bar: 45, sizes: PlateLoad.lbSizes), [45])
+        XCTAssertEqual(PlateLoad.plates(for: 100, bar: 0, sizes: PlateLoad.lbSizes), [45, 5])
+    }
+
+    func testPerSideOnlyWhenThePlatesMakeTheWeight() {
+        XCTAssertEqual(PlateLoad.perSide(80, bar: 20), "25 + 5")
+        XCTAssertEqual(PlateLoad.perSide(25, bar: 10), "5 + 2.5".replacingOccurrences(of: ".", with: Fmt.locale.decimalSeparator ?? "."))
+        XCTAssertNil(PlateLoad.perSide(81, bar: 20))
+        XCTAssertNil(PlateLoad.perSide(20, bar: 20))
+        XCTAssertEqual(PlateLoad.perSide(225, bar: 45, sizes: PlateLoad.lbSizes), "45 + 45")
+    }
+
+    func testTheUsualBarComesFromTheStations() {
+        XCTAssertEqual(PlateBar.usual(["ez_bar"]), .ez)
+        XCTAssertEqual(PlateBar.usual(["preacher_bench", "ez_bar"]), .ez)
+        XCTAssertEqual(PlateBar.usual(["trap_bar"]), .trap)
+        XCTAssertEqual(PlateBar.usual(["smith_machine"]), .smith)
+        XCTAssertEqual(PlateBar.usual(["pivot_leg_press"]), .machine)
+        XCTAssertNil(PlateBar.usual(["dumbbells", "adjustable_bench"]))
+        XCTAssertNil(PlateBar.usual(["cables"]))
+        XCTAssertEqual(PlateBar.machine.weight, 0)
+        XCTAssertEqual(PlateBar.ez.weight, 10)
+    }
+
+    func testAChosenBarIsKeptForItsExercise() {
+        for bar in [PlateBar.barbell, .womens, .ez, .trap, .smith, .none, .machine, .custom(12.5)] {
+            XCTAssertEqual(PlateBar(id: bar.id), bar)
+        }
+        XCTAssertNil(PlateBar(id: "custom:x"))
+        let name = "Test lift \(UUID().uuidString)"
+        XCTAssertNil(PlateBar.saved(name))
+        PlateBar.save(.ez, for: name)
+        XCTAssertEqual(PlateBar.saved(name), .ez)
+    }
 }

@@ -31,7 +31,7 @@ struct WeekSessionsList: View {
                     let upcoming = PlanSessionActions.upcoming(session)
                     let changeable = GymPlanActions.changeable(session) && !upcoming
                     let candidates = pairCandidates(session)
-                    if (upcoming || changeable || !candidates.isEmpty || session.plannedId != nil) && !model.demo {
+                    if (upcoming || changeable || !candidates.isEmpty || session.unpairTarget != nil) && !model.demo {
                         Menu {
                             if upcoming {
                                 Button { moving = session } label: { Label("Přesunout", systemImage: "arrow.right") }
@@ -52,8 +52,9 @@ struct WeekSessionsList: View {
                                     }
                                 } label: { Label("Spárovat s aktivitou", systemImage: "link") }
                             }
-                            if let plannedId = session.plannedId {
-                                Button { Task { await pair(plannedId: plannedId, activityId: nil, date: session.date) } } label: {
+                            // Paired with a plan or the day's gym plan: apart again.
+                            if let target = session.unpairTarget {
+                                Button { Task { await pair(plannedId: target, activityId: nil, date: session.date) } } label: {
                                     Label("Zrušit spárování", systemImage: "link.badge.plus")
                                 }
                             }
@@ -165,8 +166,9 @@ struct WeekSessionsList: View {
         // A gym session typed in by hand (Zapsat trénink) has no sheet yet:
         // its detail is the planned one, where it can move or be deleted.
         if s.kind == "planned", let id = s.eventId, id.hasPrefix("planned:local-"), s.sport == "strength" { return .planned(s) }
-        if s.kind == "activity" && s.sport == "strength" && s.status == "done" { return .gymSession(s) }
-        if s.kind == "gym" || s.sport == "strength" { return .gym(s.date) }
+        // Unpaired from the day's gym plan: an activity of its own, the plan opens apart.
+        if s.kind == "activity" && s.sport == "strength" && s.status == "done" && s.unpaired != true { return .gymSession(s) }
+        if s.kind == "gym" || (s.sport == "strength" && s.unpaired != true) { return .gym(s.date) }
         // An activity from another source (typed in) opens too: its
         // numbers from the list, with the ⋯ to delete it.
         if s.kind == "activity" { return .activity(s) }
@@ -273,6 +275,7 @@ struct ActivityDetailView: View {
     @State private var feedbackClosed = 0
     @State private var changingType = false
     @State private var deleting = false
+    @State private var unpairing = false
     @State private var editingKcal = false
     /// No source detail to load: the numbers Training lists.
     @State private var basicOnly = false
@@ -303,6 +306,9 @@ struct ActivityDetailView: View {
                                 Button { changingType = true } label: { Label("Změnit typ aktivity", systemImage: "arrow.triangle.2.circlepath") }
                             }
                             Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
+                            if model.liveSession(session).unpairTarget != nil {
+                                Button { unpairing = true } label: { Label("Odpárovat od plánu", systemImage: "minus.circle") }
+                            }
                             Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
                         } label: {
                             Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
@@ -337,6 +343,7 @@ struct ActivityDetailView: View {
         }
         .activityEditing(id: session.id, title: detail?.activity.name ?? session.title, kcal: countedKcal ?? detail?.activity.calories,
                          edited: model.liveSession(session).kcalEdited == true, deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
+        .activityUnpairing(session: model.liveSession(session), asking: $unpairing)
         .sheet(isPresented: $feedback, onDismiss: { feedbackClosed += 1 }) { FeedbackSheet(session: session) }
         .sheet(isPresented: $sharing) { ShareSheet(source: .activity(model.liveSession(session), withRoute)) }
         .sheet(isPresented: $changingType) {
@@ -665,7 +672,7 @@ struct StreamChart: View {
                     Text(verbatim: Self.clock(picked.minute) + "   " + Fmt.int(picked.value) + " " + unit)
                         .font(Typo.number(17)).foregroundStyle(Palette.ink)
                 } else {
-                    Text(verbatim: L10n.tr("prům.") + " " + Fmt.int(average) + " " + unit).font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(verbatim: L10n.f("prům. %@ %@", Fmt.int(average), unit)).font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }
             Chart {
@@ -701,7 +708,7 @@ struct StreamChart: View {
             Text("min").font(Typo.tiny).foregroundStyle(Palette.faint).frame(maxWidth: .infinity, alignment: .trailing)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: L10n.tr(title) + ", " + L10n.tr("prům.") + " " + Fmt.int(average) + " " + unit))
+        .accessibilityLabel(Text(verbatim: L10n.tr(title) + ", " + L10n.f("prům. %@ %@", Fmt.int(average), unit)))
     }
 
     /// 31.5 → "31:30".
@@ -1451,7 +1458,7 @@ struct ManualWorkoutSheet: View {
 
     private var windowText: String {
         let style = Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)
-        return L10n.f("Tep z %@", startAt.formatted(style) + "–" + endAt.formatted(style))
+        return L10n.f("Tep z %@–%@", startAt.formatted(style), endAt.formatted(style))
     }
 
     private func loadHeart() async {

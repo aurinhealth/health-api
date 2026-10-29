@@ -241,7 +241,7 @@ struct TrainingModeView: View {
             ExerciseNoteSheet(exercise: item.name)
         }
         .sheet(item: $loadingBar) { target in
-            PlateLoaderSheet(title: target.title, startKg: target.kg) { total in loaded(total, on: target) }
+            PlateLoaderSheet(title: target.title, exercise: target.exercise, startKg: target.kg, usual: target.usual) { total in loaded(total, on: target) }
         }
         .sheet(isPresented: $editing) {
             if let day {
@@ -305,7 +305,7 @@ struct TrainingModeView: View {
         let done: Int = day.exercises.reduce(0) { $0 + $1.doneCount }
         let total: Int = day.exercises.reduce(0) { $0 + $1.workCount }
         let position = L10n.f("Cvik %@ z %@", String(min(index, day.exercises.count - 1) + 1), String(day.exercises.count))
-        return position + " · \(done)/\(total) " + Fmt.plural(total, "série", "série", "sérií")
+        return position + " · " + L10n.plural("%lld/%lld sérií", done, total)
     }
 
     // MARK: The exercise
@@ -335,7 +335,8 @@ struct TrainingModeView: View {
             chips(day, exercise, set)
 
             // Only where sides make sense: one-legged or one-armed, or already done by sides.
-            if exercise.bySides || GymSides.oneSided(exercise.name) || sideChoices[exercise.name] == "sides" { sidesPicker(exercise) }
+            // Any other exercise switches with Každá strana beside + Série.
+            if showsSides(exercise) { sidesPicker(exercise) }
 
             setTable(exercise, set, last)
 
@@ -382,8 +383,17 @@ struct TrainingModeView: View {
             Text("Každá strana zvlášť").tag(true)
         }
         .pickerStyle(.segmented)
-        .disabled(saving || !exercise.sets.contains { !$0.done && !$0.warmup })
+        .disabled(saving || !sidesOpen(exercise))
         .padding(.top, 12)
+    }
+
+    private func showsSides(_ exercise: GymExercise) -> Bool {
+        exercise.bySides || GymSides.oneSided(exercise.name) || sideChoices[exercise.name] == "sides"
+    }
+
+    /// Sets left to do: the sides can still change.
+    private func sidesOpen(_ exercise: GymExercise) -> Bool {
+        exercise.sets.contains { !$0.done && !$0.warmup }
     }
 
     private func setSides(_ exercise: GymExercise, _ on: Bool) async {
@@ -433,15 +443,15 @@ struct TrainingModeView: View {
         // By sides the number shows on the L row only.
         let letter = s.done ? s.intensity ?? GymIntensity.from(rpe: s.rpe) : carriedLetter(s, in: exercise) ?? s.intensity
         var plateTap: (() -> Void)? = nil
-        if loadsPlates(exercise) {
+        if let usual = usualBar(exercise) {
             let target = PlateTarget(id: s.row, exercise: exercise.name, title: s.warmup ? exercise.name : L10n.f("%@ · série %@", exercise.name, s.number),
-                                     kg: LiftWeight.number(LiftWeight.kgText(kg.isEmpty ? shownKg : kg)))
+                                     kg: LiftWeight.number(LiftWeight.kgText(kg.isEmpty ? shownKg : kg)), usual: usual)
             plateTap = { loadingBar = target }
         }
         return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
-                         kgText: $kg, repsText: $reps, repsHint: s.plannedReps.map(Fmt.range),
+                         kgText: $kg, repsText: $reps, kgHint: shownKg, repsHint: s.plannedReps.map(Fmt.range),
                          drop: s.drop, intensity: letter, planned: !s.done && !picked.contains(s.row),
                          onIntensity: { intensityFor = SetRef(id: s.row) },
                          onEdit: s.done ? { k, r in Task { await editDone(s, kg: k, reps: r) } } : nil,
@@ -457,6 +467,17 @@ struct TrainingModeView: View {
     private func tableActions(_ exercise: GymExercise, _ set: GymSet?) -> some View {
         HStack(spacing: 8) {
             pill("plus", L10n.tr("Série")) { Task { await addSet() } }.disabled(saving)
+            // Both sides at once so far: the sets left can go one side at a time
+            // (a band leg curl one leg after the first set), the switch then shows.
+            if !showsSides(exercise), sidesOpen(exercise) {
+                Button { Task { await setSides(exercise, true) } } label: {
+                    Label(L10n.tr("Každá strana"), systemImage: "arrow.left.and.right").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
+                        .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(saving)
+                .accessibilityLabel(L10n.tr("Každá strana zvlášť"))
+            }
             if let plates = platesText(exercise) {
                 Text(plates).font(Typo.caption).foregroundStyle(Palette.secondary)
                     .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
@@ -466,9 +487,10 @@ struct TrainingModeView: View {
         .padding(.horizontal, 10).padding(.top, 8)
     }
 
-    /// A barbell in kilograms: its weight is loaded as plates.
-    private func loadsPlates(_ exercise: GymExercise) -> Bool {
-        !Units.imperial && uses(exercise, "barbells")
+    /// The bar (or plate-loaded machine) an exercise is done with: its weight is
+    /// loaded as plates. Nil for dumbbells, cables and stack machines.
+    private func usualBar(_ exercise: GymExercise) -> PlateBar? {
+        PlateBar.usual(catalog.first { $0.name == exercise.name }?.stations ?? [])
     }
 
     /// The bar loaded: the set at hand takes the weight, and so do the work
@@ -481,9 +503,11 @@ struct TrainingModeView: View {
         Task { await setWeight(text, of: exercise) }
     }
 
-    /// "Kotouče: 20 + 10 na stranu" for a barbell lift.
+    /// "Kotouče: 20 + 10 na stranu" for a lift done with plates.
     private func platesText(_ exercise: GymExercise) -> String? {
-        guard uses(exercise, "barbells"), let value = LiftWeight.number(LiftWeight.kgText(kg)), let plates = GymSessionMath.plates(value) else { return nil }
+        guard let usual = usualBar(exercise), let shown = LiftWeight.number(kg) else { return nil }
+        let bar = PlateBar.saved(exercise.name) ?? usual
+        guard shown > bar.weight, let plates = PlateLoad.perSide(shown, bar: bar.weight, sizes: PlateLoad.sizes) else { return nil }
         return L10n.f("Kotouče: %@ na stranu", plates)
     }
 
@@ -574,7 +598,7 @@ struct TrainingModeView: View {
     /// "15 kg × 5–8 · 3 série": the first set still to do and the sets left.
     private func nextLoad(_ next: GymExercise) -> String {
         let left: Int = next.workCount - next.doneCount
-        let count: String = L10n.f("%@ %@", String(left), Fmt.plural(left, "série", "série", "sérií"))
+        let count: String = L10n.plural("%lld sérií", left)
         guard let set = next.sets.first(where: { !$0.done && $0.work }) else { return count }
         return GymLiveActivity.load(set, in: next) + " · " + count
     }
@@ -895,7 +919,7 @@ struct TrainingModeView: View {
                 NavigationLink(value: AppRoute.liveGym(date, true)) {
                     VStack(spacing: 2) {
                         Label("Zopakovat minulou", systemImage: "arrow.counterclockwise").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(verbatim: Fmt.capitalized(Fmt.relativeDay(last, today: date)) + " · " + String(count) + " " + Fmt.plural(count, "cvik", "cviky", "cviků"))
+                        Text(verbatim: Fmt.capitalized(Fmt.relativeDay(last, today: date)) + " · " + L10n.plural("%lld cviků", count))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     .frame(maxWidth: .infinity).frame(height: 60).background(Palette.card, in: Capsule())
@@ -916,10 +940,6 @@ struct TrainingModeView: View {
     }
 
     // MARK: Parts
-
-    private func uses(_ exercise: GymExercise, _ station: String) -> Bool {
-        catalog.first { $0.name == exercise.name }?.stations?.contains(station) == true
-    }
 
     private func current(_ day: GymDay) -> GymExercise? {
         let list = day.exercises
@@ -967,6 +987,20 @@ struct TrainingModeView: View {
         let carry = GymSessionMath.carried(set, in: exercise, keep: kept)
         kg = LiftWeight.shown(set.kg ?? carry?.kg ?? set.plannedKg) ?? ""
         reps = set.reps ?? carry?.reps ?? ""
+    }
+
+    /// The set before changed after its tick (its weight, reps or letter):
+    /// the set at hand follows it, unless something else was typed there.
+    private func refill(from old: GymDay?) {
+        guard let old, let exercise = day?.exercises[safe: index], let set = nextSet(exercise),
+              let before = old.exercises.first(where: { $0.name == exercise.name && $0.sets.contains { $0.row == set.row } }),
+              let was = before.sets.first(where: { $0.row == set.row }) else { return }
+        let wasCarry = GymSessionMath.carried(was, in: before, keep: kept)
+        let carry = GymSessionMath.carried(set, in: exercise, keep: kept)
+        if kg.isEmpty || kg == LiftWeight.shown(was.kg ?? wasCarry?.kg ?? was.plannedKg) ?? "" {
+            kg = LiftWeight.shown(set.kg ?? carry?.kg ?? set.plannedKg) ?? ""
+        }
+        if reps == was.reps ?? wasCarry?.reps ?? "" { reps = set.reps ?? carry?.reps ?? "" }
     }
 
     private func move(_ by: Int) {
@@ -1110,7 +1144,7 @@ struct TrainingModeView: View {
     /// Under the name in "Nahradit cvik": its muscle and the sets still to do.
     private func swapSubtitle(_ name: String) -> String? {
         let left = day?.exercises.filter { $0.name == name }.flatMap(\.sets).filter { !$0.done && !$0.warmup }.count ?? 0
-        let sets = left > 0 ? L10n.f(Fmt.plural(left, "Zbývá %@ série", "Zbývají %@ série", "Zbývá %@ sérií"), String(left)) : nil
+        let sets = left > 0 ? L10n.plural("Zbývá %lld sérií", left) : nil
         let muscle = catalog.first { $0.name == name }?.muscle?.nilIfBlank
         let line = [muscle, sets].compactMap { $0 }.joined(separator: " · ")
         return line.isEmpty ? nil : line
@@ -1311,7 +1345,9 @@ struct TrainingModeView: View {
         let r = reps.trimmingCharacters(in: .whitespaces)
         guard !k.isEmpty || !r.isEmpty, (set.kg ?? "") != k || (set.reps ?? "") != r else { return }
         next.edit(row: set.row, kg: k.isEmpty ? (set.kg ?? "") : k, reps: r.isEmpty ? (set.reps ?? "") : r)
+        let old = day
         day = next
+        refill(from: old)
         guard !model.demo else { return }
         do {
             try await model.saveGym(next, date: date)
@@ -1375,7 +1411,9 @@ struct TrainingModeView: View {
         // Rows after an added drop set move one down.
         picked = Set(picked.map { $0 > row && letter == "D" ? $0 + 1 : $0 }).union([row])
         if letter == "D" { kept = Set(kept.map { $0 > row ? $0 + 1 : $0 }) }
+        let old = day
         await saveDay(next)
+        if letter != "D" { refill(from: old) }
     }
 
     private func removeDrop(_ row: Int) async {
@@ -1452,7 +1490,9 @@ struct TrainingModeView: View {
         // Nothing typed in reps: the plan's lower number ("5" of "5–8").
         let planned: String = GymCoach.firstNumber(set.plannedReps).map { String($0) } ?? (set.plannedReps ?? "")
         // The letter in the set (the plan's, the one chosen, or the one chosen for the set before) goes with it.
-        next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.drop ? "" : planned) : r, rpe: "", intensity: carried)
+        // Nothing typed in kg: the weight the field showed (carried from the set before, else the plan's).
+        let shown: String? = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { GymSessionMath.carried(set, in: $0, keep: kept)?.kg }
+        next.complete(row: set.row, kg: k.isEmpty ? (shown ?? set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.drop ? "" : planned) : r, rpe: "", intensity: carried)
         // The start in the sheet: after iOS closes the app the clock goes on from it.
         if next.startedAt == nil { next.markStarted(live.start ?? Date()) }
         day = next

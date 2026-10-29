@@ -130,7 +130,7 @@ struct JournalHealthCard: View {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Včerejšek čeká").font(Typo.sentence(20)).foregroundStyle(Palette.secondary)
-                        Text(verbatim: String(card.open) + " " + L10n.tr(Fmt.plural(card.open, "otázka", "otázky", "otázek")))
+                        Text(verbatim: L10n.plural("%lld otázek", card.open))
                             .font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     Spacer(minLength: 8)

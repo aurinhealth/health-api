@@ -607,7 +607,7 @@ addEventListener('keydown',function(e){if(e.key==='Escape'&&card.classList.conta
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
 // for days by its URL, so ?v= goes up whenever og-en.png is rendered again.
-const SHARE_IMAGE = '/site/og-en.png?v=8';
+const SHARE_IMAGE = '/site/og-en.png?v=9';
 const SHARE_IMAGE_ALT = 'Aurin: A coach that knows how you slept. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null}) {
@@ -772,7 +772,7 @@ export function overviewPage(request) {
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
     ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout, or send a photo of a plan from your trainer. Tap Coach on a workout or your HRV to ask about just that, or during a gym session about the set, the rest or the next exercise. You can also reply straight from its notification. When it proposes a workout or a whole plan for your race, confirm it and it lands in your plan.', 11500]]]];
+      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout, or send a photo of a plan from your trainer. Tap Coach on a workout or your HRV to ask about just that, or during a gym session about the set, the rest or the next exercise. Earlier chats wait in the side panel, so the morning talk about sleep is still there after the workout. You can also reply straight from its notification. When it proposes a workout or a whole plan for your race, confirm it and it lands in your plan.', 11500]]]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {

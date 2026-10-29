@@ -1,13 +1,14 @@
 import SwiftUI
 import UserNotifications
 
-/// After the first sign-in, two pages: where the data comes from ("Odkud brát
-/// data": Apple Health, Google Health, the Ultrahuman Ring, WHOOP, Intervals.icu,
-/// Wahoo, the consent to health data and the separate one to the AI features)
-/// and who you are ("O tobě": sex, year of birth, height and weight,
-/// filled in from Apple Health or the server's suggestions). Everything else
-/// (the day, goals, training, sleep) lives in Settings. An account set up
-/// earlier that still owes the consent sees only the consent page.
+/// After the first sign-in: the consent to health data with the separate one
+/// to the AI features ("Tvoje data o zdraví"), where the data comes from
+/// ("Odkud brát data": Apple Health, Google Health, the Ultrahuman Ring, WHOOP,
+/// Intervals.icu, Wahoo), who you are ("O tobě": sex, year of birth, height and
+/// weight, filled in from Apple Health or the server's suggestions) and what
+/// the notifications bring, before iOS asks once. Everything else (the day,
+/// goals, training, sleep) lives in Settings. An account set up earlier that
+/// still owes the consent sees only the consent page.
 struct SetupFlowView: View {
     @Environment(AppModel.self) private var model
     @State private var index = 0
@@ -20,15 +21,18 @@ struct SetupFlowView: View {
     @State private var error: String?
     @State private var loaded = false
     @State private var ready = false
+    /// The year of birth on its wheel, open under "Narození".
+    @State private var yearWheel = false
     // Consent
-    @State private var consentNeeded = false
+    @State private var consentFirst = false
     @State private var consentOnly = false
     @State private var agree = false
     // Sending what an AI feature needs to OpenAI: its own choice, never ticked
     // in advance (GDPR, App Review 5.1.2(i), WHOOP API terms 4.2.1).
     @State private var agreeAI = false
+    /// iOS has not asked about notifications yet: the page about them comes last.
+    @State private var askNotifications = false
     // Data sources
-    @State private var appleOn = true
     @State private var appleWorking = false
     @State private var appleRead = false
     @State private var appleFilled = false
@@ -42,9 +46,12 @@ struct SetupFlowView: View {
     /// The weight as prefilled; unchanged it is not saved again as today's.
     @State private var prefilledWeight: String?
 
-    private enum Page: Equatable { case consent, sources, about }
+    private enum Page: Equatable { case consent, sources, about, notifications }
 
-    private var pages: [Page] { consentOnly ? [.consent] : [.sources, .about] }
+    private var pages: [Page] {
+        if consentOnly { return [.consent] }
+        return (consentFirst ? [.consent] : []) + [.sources, .about] + (askNotifications ? [.notifications] : [])
+    }
     private var page: Page { pages[min(index, pages.count - 1)] }
     private var health: AppleHealth { AppleHealth.shared }
 
@@ -53,7 +60,9 @@ struct SetupFlowView: View {
             ScreenBackground(glow: Palette.Glow.today)
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    if index > 0 {
+                    // No way back to a consent already given, or from the notifications
+                    // to a profile already saved.
+                    if index > 0 && pages[index - 1] != .consent && page != .notifications {
                         CircleButton(systemImage: "chevron.left", label: "Zpět") { withAnimation { index -= 1 } }
                     }
                     Spacer()
@@ -72,17 +81,27 @@ struct SetupFlowView: View {
                 .scrollDismissesKeyboard(.interactively)
 
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.bottom, 8) }
+                if page == .consent && ready && !agree {
+                    // Why "Pokračovat" is grey, right above it.
+                    Label("Zaškrtni první políčko, ať můžeš pokračovat.", systemImage: "info.circle")
+                        .font(Typo.small.weight(.medium)).foregroundStyle(Palette.amber)
+                        .padding(.bottom, 10)
+                }
                 PrimaryButton(title: buttonTitle, busy: saving || appleWorking) { Task { await next() } }
-                    .disabled(saving || appleWorking || !ready || (page == .about && !aboutComplete) || (page != .about && consentNeeded && !agree))
+                    .disabled(saving || appleWorking || !ready || (page == .about && !aboutComplete) || (page == .consent && !agree))
                 if page == .sources {
                     // "Teď ne" skips connecting, not "O tobě": without age, height and
                     // weight nothing (calories, strain, recovery) can be worked out.
-                    Button(L10n.tr(consentNeeded ? "Odhlásit se" : "Teď ne")) {
-                        if consentNeeded { Task { await model.logout() } } else { withAnimation { index += 1 } }
-                    }
-                    .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
-                    .frame(maxWidth: .infinity).frame(height: 44)
-                    .disabled(!ready)
+                    Button("Teď ne") { withAnimation { index += 1 } }
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .disabled(!ready)
+                }
+                if page == .notifications {
+                    Button("Později") { Task { await done(notifications: false) } }
+                        .font(Typo.bodyStrong).foregroundStyle(Palette.muted)
+                        .frame(maxWidth: .infinity).frame(height: 44)
+                        .disabled(saving)
                 }
             }
             .padding(.horizontal, 24)
@@ -91,13 +110,6 @@ struct SetupFlowView: View {
         .task { await load() }
         .task(id: syncRun) { if syncRun > 0 { await followSync() } }
         .task(id: index) { if page == .about { await readAppleProfile() } }
-        .onChange(of: appleOn) { _, on in
-            if on {
-                Task { await connectApple() }
-            } else if health.enabled {
-                health.disconnect()
-            }
-        }
         .sheet(item: $connecting) { target in ServiceConnectSheet(target: target) { await loadProviders(); syncRun += 1 } }
         .interactiveDismissDisabled()
     }
@@ -105,7 +117,11 @@ struct SetupFlowView: View {
     private var buttonTitle: String {
         if saving { return "Ukládám…" }
         if appleWorking { return "Moment…" }
-        return page == .about ? "Hotovo" : "Pokračovat"
+        switch page {
+        case .about: return "Hotovo"
+        case .notifications: return "Zapnout"
+        default: return "Pokračovat"
+        }
     }
 
     @ViewBuilder
@@ -114,6 +130,7 @@ struct SetupFlowView: View {
         case .consent: consentPage
         case .sources: sourcesPage
         case .about: aboutPage
+        case .notifications: notificationsPage
         }
     }
 
@@ -139,10 +156,11 @@ struct SetupFlowView: View {
                 }
             }
         }
-        Toggle("Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše.", isOn: $agree)
-            .font(Typo.small).tint(Palette.green)
-        Toggle("Posílat data do AI funkcí", isOn: $agreeAI)
-            .font(Typo.small).tint(Palette.green)
+        checkbox("Souhlasím, aby Aurin zpracovával moje údaje o zdraví, jak je popsáno výše.", note: nil, isOn: $agree)
+            .padding(.top, 4)
+        checkbox("Posílat data do AI funkcí",
+                 note: "Nepovinné. Potřebuje je kouč a rozpoznání jídla. Jde to vypnout v Nastavení.",
+                 isOn: $agreeAI)
         Link("Zásady ochrany soukromí", destination: Self.privacyURL).font(Typo.small)
     }
 
@@ -180,9 +198,9 @@ struct SetupFlowView: View {
         }
         if let line = syncLine {
             HStack(spacing: 8) {
-                if syncState == "running" { ProgressView() } else {
-                    Image(systemName: syncState == "done" ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                        .foregroundStyle(syncState == "done" ? Palette.green : Palette.amber)
+                if syncShown == "running" { ProgressView() } else {
+                    Image(systemName: syncShown == "done" ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                        .foregroundStyle(syncShown == "done" ? Palette.green : Palette.amber)
                 }
                 Text(line).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -190,23 +208,34 @@ struct SetupFlowView: View {
         if let message = health.message {
             Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
         }
-        if consentNeeded { consentRow.padding(.top, 10) }
     }
 
-    /// Apple Health: a switch, on by default; turning it on asks iOS for the
-    /// permissions (the health categories plus the profile, AppleHealthProfile).
+    /// Apple Health: "Připojit" like the other rows, with a line on what it
+    /// reads; the tap asks iOS for the permissions (the health categories plus
+    /// the profile, AppleHealthProfile).
     private var appleRow: some View {
         HStack(spacing: 12) {
             IntegrationIcon(id: "apple", size: 30)
-            if appleWorking {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Apple Health").font(.body).foregroundStyle(Palette.ink)
-                Spacer()
-                ProgressView().padding(.trailing, 16)
+                if !health.enabled {
+                    Text("Čte spánek, tep, HRV, tréninky, váhu a jídlo. Bez zeptání nic nezapisuje.")
+                        .font(Typo.caption).foregroundStyle(Palette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Spacer(minLength: 8)
+            if appleWorking {
+                ProgressView()
+            } else if health.enabled {
+                Label("připojeno", systemImage: "checkmark").font(Typo.small).foregroundStyle(Palette.green)
             } else {
-                SettingsToggle(title: "Apple Health", isOn: $appleOn).padding(.leading, -16)
+                Button { Task { await connectApple() } } label: { connectLabel }
+                    .buttonStyle(.plain)
             }
         }
-        .padding(.leading, 16)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         .frame(minHeight: 56)
     }
 
@@ -230,22 +259,6 @@ struct SetupFlowView: View {
         Text("Připojit").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
             .padding(.horizontal, 14).frame(height: 34)
             .background(Palette.button, in: Capsule())
-    }
-
-    /// Two checkboxes (the same POST /app/api/consent as the consent page):
-    /// the health-data consent, needed to go on, with the policy next to it,
-    /// and the optional one for the AI features.
-    private var consentRow: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 12) {
-                checkbox("Souhlasím se zpracováním zdravotních dat", note: nil, isOn: $agree)
-                Spacer(minLength: 8)
-                Link("Zásady", destination: Self.privacyURL).font(Typo.bodyStrong).foregroundStyle(Palette.blue)
-            }
-            checkbox("Posílat data do AI funkcí",
-                     note: "Kouč a rozpoznání jídla pošlou potřebné údaje o zdraví a fotky, které jim pošleš, společnosti OpenAI v USA. Jde to vypnout v Nastavení.",
-                     isOn: $agreeAI)
-        }
     }
 
     private func checkbox(_ title: LocalizedStringKey, note: LocalizedStringKey?, isOn: Binding<Bool>) -> some View {
@@ -280,8 +293,11 @@ struct SetupFlowView: View {
         return ConnectionsResponse.Provider(id: id, name: name, connected: false, configured: nil, missingPermissions: nil, metrics: nil, note: nil)
     }
 
+    /// The import of a connected service, or Apple Health's first sync.
+    private var syncShown: String? { syncState ?? (health.syncing ? "running" : nil) }
+
     private var syncLine: String? {
-        switch syncState {
+        switch syncShown {
         case "running": return L10n.tr("Načítám historii. Můžeš pokračovat.")
         case "done": return L10n.tr("Historie je načtená.")
         case "partial", "error": return L10n.tr("Část historie se nepodařilo načíst. Import zopakuješ v Nastavení → Zdroje dat.")
@@ -324,23 +340,83 @@ struct SetupFlowView: View {
             .padding(.horizontal, 16)
             .frame(minHeight: 50)
             SettingsDivider()
-            SettingsField(title: "Narození", text: $birthYear, keyboard: .numberPad, placeholder: "Rok")
+            yearRow
             SettingsDivider()
             SettingsField(title: "Výška", text: $heightText, unit: Units.lengthUnit, keyboard: Units.imperial ? .decimalPad : .numberPad)
+            if let hint = heightHint { fieldHint(hint) }
             SettingsDivider()
             SettingsField(title: "Váha", text: $weightText, unit: Units.weightUnit, keyboard: .decimalPad)
+            if let hint = weightHint { fieldHint(hint) }
         }
-        .onChange(of: birthYear) { _, value in birthYear = String(value.filter(\.isNumber).prefix(4)) }
-        Text("Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení.")
+        Text("Aurin potřebuje věk, výšku a váhu, aby spočítal kalorie, námahu a zotavení. Pohlaví mění výpočet kalorií a tepových zón.")
             .font(Typo.small).foregroundStyle(Palette.muted)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 4)
     }
 
+    /// "Narození": the year on a wheel (no keyboard, so no year that cannot be),
+    /// open under the row after a tap.
+    @ViewBuilder
+    private var yearRow: some View {
+        Button {
+            if birthYear.isEmpty { birthYear = String(Self.currentYear - 30) }
+            withAnimation(.easeInOut(duration: 0.25)) { yearWheel.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Text("Narození").font(.body).foregroundStyle(Palette.ink)
+                Spacer(minLength: 8)
+                Text(birthYear.isEmpty ? L10n.tr("Rok") : birthYear).font(.body)
+                    .foregroundStyle(birthYear.isEmpty ? Palette.faint : Palette.ink)
+                Image(systemName: yearWheel ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.muted)
+            }
+            .padding(.horizontal, 16)
+            .frame(minHeight: 50)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        if yearWheel {
+            Picker("Narození", selection: Binding(get: { Int(birthYear) ?? Self.currentYear - 30 }, set: { birthYear = String($0) })) {
+                ForEach(Array(Self.birthYears.reversed()), id: \.self) { year in
+                    Text(verbatim: String(year)).tag(year)
+                }
+            }
+            .pickerStyle(.wheel)
+            .frame(height: 150)
+            .clipped()
+        }
+    }
+
+    private func fieldHint(_ text: String) -> some View {
+        Label(text, systemImage: "info.circle")
+            .font(Typo.small.weight(.medium)).foregroundStyle(Palette.rust)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16).padding(.bottom, 12)
+    }
+
+    /// The plausible years of birth: from 100 years ago to 10 years ago.
+    private static var birthYears: ClosedRange<Int> { (currentYear - 100)...(currentYear - 10) }
+    /// Plausible heights and weights, in centimetres and kilograms.
+    private static let heights: ClosedRange<Double> = 120...230
+    private static let weights: ClosedRange<Double> = 30...250
+
+    /// Said under the field when what was typed is not a plausible height.
+    private var heightHint: String? {
+        guard !heightText.isEmpty else { return nil }
+        if let shown = Self.number(heightText), Self.heights.contains(Units.cm(shown)) { return nil }
+        return L10n.f("Zadej výšku mezi %@ a %@.", Units.lengthText(Self.heights.lowerBound), Units.lengthText(Self.heights.upperBound))
+    }
+
+    private var weightHint: String? {
+        guard !weightText.isEmpty else { return nil }
+        if let shown = Self.number(weightText), Self.weights.contains(Units.kg(shown)) { return nil }
+        return L10n.f("Zadej váhu mezi %@ a %@.", Units.weightText(Self.weights.lowerBound, digits: 0), Units.weightText(Self.weights.upperBound, digits: 0))
+    }
+
     /// Sex, a plausible year of birth, height and weight: "Hotovo" waits for all four.
     private var aboutComplete: Bool {
-        guard !sex.isEmpty, let year = Int(birthYear), year > 1900, year <= Self.currentYear - 10 else { return false }
-        guard let height = Self.number(heightText), height > 0, let weight = Self.number(weightText), weight > 0 else { return false }
+        guard !sex.isEmpty, let year = Int(birthYear), Self.birthYears.contains(year) else { return false }
+        guard !heightText.isEmpty, heightHint == nil, !weightText.isEmpty, weightHint == nil else { return false }
         return true
     }
 
@@ -354,16 +430,14 @@ struct SetupFlowView: View {
         error = nil
         switch page {
         case .consent:
-            _ = await giveConsent()
+            if await giveConsent(), !consentOnly { withAnimation { index += 1 } }
         case .sources:
-            if consentNeeded {
-                let given = await giveConsent()
-                if !given { return }
-            }
-            if appleOn && !health.enabled { await connectApple() }
             withAnimation { index += 1 }
         case .about:
-            await finish()
+            guard await saveProfile() else { return }
+            if askNotifications { withAnimation { index += 1 } } else { await done(notifications: false) }
+        case .notifications:
+            await done(notifications: true)
         }
     }
 
@@ -379,7 +453,8 @@ struct SetupFlowView: View {
         async let consent = try? api.healthConsentNeeded()
         async let connections = try? api.connections()
         let s = await status
-        consentNeeded = await consent ?? false
+        let consentNeeded = await consent ?? false
+        consentFirst = consentNeeded
         if let s {
             consentOnly = consentNeeded && s.completed == true
             let p = s.savedProfile ?? [:]
@@ -388,7 +463,7 @@ struct SetupFlowView: View {
             if let v = p["height"]?.number { heightText = Self.lengthText(v) }
             apply(s)
         }
-        appleOn = health.isAvailable
+        askNotifications = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .notDetermined
         if let list = await connections { providers = list.providers }
         ready = true
         guard !consentOnly else { return }
@@ -433,7 +508,7 @@ struct SetupFlowView: View {
         }
     }
 
-    /// The "Apple Health" switch: one iOS sheet for the health categories and
+    /// "Připojit" at Apple Health: one iOS sheet for the health categories and
     /// the profile, then the history loads in the background (AppleHealth).
     private func connectApple() async {
         guard health.isAvailable, !health.enabled, !appleWorking else { return }
@@ -443,7 +518,6 @@ struct SetupFlowView: View {
         } catch {
             appleWorking = false
             health.message = error.localizedDescription
-            appleOn = false
             return
         }
         appleWorking = false
@@ -483,11 +557,7 @@ struct SetupFlowView: View {
         defer { saving = false }
         do {
             try await model.api.giveHealthConsent(ai: agreeAI)
-            if consentOnly {
-                await model.finishSetup()
-            } else {
-                consentNeeded = false
-            }
+            if consentOnly { await model.finishSetup() }
             return true
         } catch {
             self.error = error.localizedDescription
@@ -516,7 +586,8 @@ struct SetupFlowView: View {
         }
     }
 
-    private func finish() async {
+    /// "Hotovo" on "O tobě": the profile goes to the server. False when it could not (the error is shown).
+    private func saveProfile() async -> Bool {
         saving = true
         defer { saving = false }
         // A suggestion left alone goes back empty and stays automatic, as on the web.
@@ -525,7 +596,7 @@ struct SetupFlowView: View {
         }
         var profile: JSONObject = ["sex": .string(sex)]
         let year = Int(birthYear.trimmingCharacters(in: .whitespaces)) ?? 0
-        if year > 1900, year <= Self.currentYear - 10 {
+        if Self.birthYears.contains(year) {
             let age = Self.currentYear - year
             profile["age"] = keep("age", birthYear, .number(Double(age)))
         } else {
@@ -543,22 +614,76 @@ struct SetupFlowView: View {
         }
         do {
             try await model.api.completeOnboarding(profile: profile, weightKg: newWeight, training: JSONObject())
-            await askForNotifications()
-            await model.finishSetup()
+            return true
         } catch {
             self.error = error.localizedDescription
+            return false
         }
     }
 
-    /// The morning readiness, the coach's messages and the reminders are on by
-    /// default, but iOS delivers none of them until it is allowed: the system
-    /// asks once here, before Today, unless it was answered already (as in
-    /// Nastavení → Oznámení). The push token follows the answer.
-    private func askForNotifications() async {
-        if await UNUserNotificationCenter.current().notificationSettings().authorizationStatus == .notDetermined {
-            _ = await Reminders.requestPermission()
-        }
+    /// The end of the setup. The morning readiness, the coach's messages and the
+    /// reminders are on by default, but iOS delivers none of them until it is
+    /// allowed, and it asks only once: so only after "Zapnout" on the page that
+    /// shows what they bring ("Později" leaves the question for Nastavení →
+    /// Oznámení). The push token follows the answer. Today then starts with
+    /// the "První dny" card (FirstDaysCard).
+    private func done(notifications: Bool) async {
+        saving = true
+        defer { saving = false }
+        if notifications { _ = await Reminders.requestPermission() }
         await PushRegistration.refresh(api: model.api)
+        FirstDays.start()
+        await model.finishSetup()
+    }
+
+    // MARK: - Oznámení
+
+    @ViewBuilder
+    private var notificationsPage: some View {
+        Text("Ozveme se, když na tom záleží")
+            .font(Typo.sentence(34, relativeTo: .largeTitle)).foregroundStyle(Palette.ink)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 24)
+        Text("Každé ráno tvoje připravenost a kouč, když je potřeba změnit plán.")
+            .font(Typo.sentence(18)).foregroundStyle(Palette.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: 10) {
+            NotificationPreview(title: L10n.tr("Připravenost 78 · vysoká"), text: L10n.tr("Dobrá noc, třetí den v řadě. Dnes naplno do posilovny."), time: "7:02")
+            NotificationPreview(title: L10n.tr("Kouč"), text: L10n.tr("HRV je dva dny dole. Dnešní intervaly jsem posunul na čtvrtek."), time: "12:40")
+            NotificationPreview(title: L10n.tr("Za 30 minut do postele"),
+                                text: L10n.f("Na budík v %@ potřebuješ jít spát do %@.", ClockText.format("7:15"), ClockText.format("22:40")), time: "22:10")
+        }
+        .padding(.top, 14)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// One of the sample notifications on the setup's last page, drawn like the
+/// banner iOS shows: the app's mark, the title, the time and the text.
+private struct NotificationPreview: View {
+    let title: String
+    let text: String
+    /// "7:02", shown in the phone's 12/24-hour format.
+    let time: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 11) {
+            AurinMark(size: 26)
+                .frame(width: 38, height: 38)
+                .background(Palette.cardLift, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
+                    Spacer(minLength: 8)
+                    Text(verbatim: ClockText.format(time)).font(Typo.caption).foregroundStyle(Palette.muted)
+                }
+                Text(verbatim: text).font(Typo.small).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(Palette.card.opacity(0.92), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
     }
 }
 

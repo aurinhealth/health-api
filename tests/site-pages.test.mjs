@@ -253,15 +253,19 @@ test('the Consumer Health Data Privacy Policy is its own page, linked from the h
 });
 
 
-test('the overview opens each part with the welcome’s page, in the app’s order and words',async()=>{
+test('the overview opens the parts the welcome shows with its page, in the app’s order and words',async()=>{
   const read=path=>readFileSync(new URL('../ios-native/'+path,import.meta.url),'utf8');
   const welcome=read('Aurin/Screens/WelcomePages.swift'),strings=read('Shared/en.lproj/Localizable.strings');
   const en=label=>strings.match(new RegExp('^"'+label+'" = "([^"]+)";','m'))?.[1];
   const said=prop=>[...welcome.match(new RegExp('var '+prop+': String \\{[\\s\\S]*?\\n    \\}'))[0].matchAll(/case \.(\w+): return "([^"]*)"/g)].filter(m=>m[1]!=='opening').map(m=>en(m[2]));
   const html=await overviewPage().text();
   const parts=[...html.matchAll(/<section id="a-\w+" class="opener"[^>]*><div class="wrap ac">\n<div class="head reveal"><h2 class="big">([^<]+)<\/h2><p class="sub">([^<]+)<\/p>/g)];
-  assert.deepEqual(parts.map(m=>m[1]),said('title'));
-  assert.deepEqual(parts.map(m=>m[2]),said('text'));
+  // The welcome shows only some parts (Readiness, Training, Coach since the onboarding review);
+  // the overview has a chapter for every area of the app, and those the welcome shows keep its order and words.
+  const titles=said('title'),texts=said('text'),shown=parts.filter(m=>titles.includes(m[1]));
+  assert.ok(titles.length>0&&titles.every(Boolean)&&texts.every(Boolean),'every welcome page has its English words');
+  assert.deepEqual(shown.map(m=>m[1]),titles);
+  assert.deepEqual(shown.map(m=>m[2]),texts);
   assert.equal((en('Kouč, který zná ')+en('tvůj spánek.')).trim(),'A coach that knows how you slept.');
   assert.match(html,/<h1 aria-label="A coach that knows how you slept\.">/);
   for(const text of ['Good night, third day in a row. ','Go all in on strength today.','Keep legs, go lighter:','Bad night. Legs today?','Legs, lighter'])assert.ok(html.includes(text),text);

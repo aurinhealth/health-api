@@ -591,7 +591,7 @@ export const TECHNIQUE_EN = {
   ],
   breathing: "Exhale as you rotate, inhale on the way back."
  },
- "Roman chair": {
+ "Hyperextension": {
   setup: [
    "Set the pad below the crease of your hips so you can hinge freely.",
    "Hook your heels under the rollers, body in a straight line.",
@@ -3900,5 +3900,59 @@ export const TECHNIQUE_EN = {
   steps: ["Pull your chest towards the bar, elbows going down and out.","Chin above the bar.","Lower slowly."],
   mistakes: ["A grip too wide with a small range.","Kicking the legs."],
   breathing: "Exhale up, inhale down."
+ },
+ "Box Jump": {
+  setup: [
+   "A stable box that won't move, low at first (30–50 cm).",
+   "Stand shoulder-width apart about 30 cm in front of the box.",
+   "Arms loose at your sides."
+  ],
+  steps: [
+   "Swing your arms back and bend your knees into a quarter squat.",
+   "Take off explosively and swing your arms to jump onto the box.",
+   "Land softly on whole feet in a half squat, stand up and step down, don't jump down."
+  ],
+  mistakes: [
+   "A box too high, landing in a deep squat.",
+   "Jumping down from the box instead of stepping down.",
+   "Knees caving in on take-off or landing."
+  ],
+  breathing: "Inhale before take-off, exhale on landing."
+ },
+ "Squat Jump": {
+  setup: [
+   "Stand shoulder-width apart, toes slightly out.",
+   "Hands in front of you or behind your head.",
+   "A mat or firm floor, not slippery."
+  ],
+  steps: [
+   "Drop into a half squat, thighs above parallel.",
+   "Take off explosively and jump as high as you can.",
+   "Land softly through the balls of your feet into a half squat, pause briefly and repeat."
+  ],
+  mistakes: [
+   "Knees caving in.",
+   "A hard landing on the heels.",
+   "Reps without a pause, so the jumps get weaker."
+  ],
+  breathing: "Inhale in the squat, exhale as you jump."
+ },
+ "Pogo Hops": {
+  setup: [
+   "Stand hip-width apart, weight on the balls of your feet.",
+   "Knees only slightly bent.",
+   "Arms loose, helping the rhythm."
+  ],
+  steps: [
+   "Bounce only from your ankles in a quick rhythm.",
+   "The hops are low, just a few centimetres.",
+   "Stay on the ground as briefly as you can; heels don't touch down."
+  ],
+  mistakes: [
+   "Hopping from the knees instead of the ankles.",
+   "Hops too high and slow.",
+   "Landing on the heels."
+  ],
+  breathing: "Breathe freely with the rhythm of the hops."
  }
 };

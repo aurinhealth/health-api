@@ -46,7 +46,7 @@ permissions:
 
 jobs:
   testflight:
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 40
     environment: ${{ github.event_name == 'pull_request' && 'testflight-pr' || 'testflight' }}
     # One upload at a time; the notes job below doesn't hold the next one up.
@@ -86,12 +86,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The same Xcode as ios-native.yml: Xcode 26 for the iOS 26 SDK, which
+      # The same Xcode as ios-native.yml (the newest stable one): the newest SDK, which
       # App Store Connect also requires for new uploads.
       - name: Pick Xcode
         if: steps.secrets.outputs.ready == 'true'
         run: |
-          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -vi -e beta -e release_candidate | sort -V | tail -1)
+          xcode=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -vi -e beta -e release_candidate -e _rc | sort -V | tail -1)
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
           xcodebuild -version
 

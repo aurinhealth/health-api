@@ -5,7 +5,7 @@ import { isIntensity } from "../src/strength-context.js";
 import { normalizeExerciseName } from "../src/strength-normalization.js";
 import { parseStrengthPlan } from "../src/strength-history.js";
 import { estimateStartingLoad } from "../src/strength-intelligence.js";
-import { EXERCISES, FOCUS_GROUPS, generateStrengthPlan, validateFocusMuscles, painfulExercises, normalizeGymFocus } from "../src/strength-generator.js";
+import { EXERCISES, FOCUS_GROUPS, generateStrengthPlan, validateFocusMuscles, painfulExercises, normalizeGymFocus, isStandIn as standIn } from "../src/strength-generator.js";
 
 test('focused gym validates the selected groups', () => {
   assert.deepEqual(validateFocusMuscles(['chest', 'upper_back']), ['chest', 'upper_back']);
@@ -541,4 +541,57 @@ test('a swap\'s warm-ups follow the equipment step and the focus understands "le
   const context={date:'2026-09-28',cycling:{recentRideTss:100,recentRideHours:2,recentActivities:[],nextRide:null},recovery:{},strength:{recentCompletedSets:[]}};
   assert.equal(generateStrengthPlan(context,{focus:'legs',durationMinutes:60}).planName,'Lower Body');
   assert.throws(()=>generateStrengthPlan(context,{focus:'brain',durationMinutes:60}),/zaměření|focus/);
+});
+
+test('the classic hyperextension is called so, trains the lower back and keeps the old Roman chair history', () => {
+  assert.equal(normalizeExerciseName('Roman chair'), 'Hyperextension');
+  assert.equal(EXERCISES['Roman chair'], undefined);
+  assert.equal(EXERCISES.Hyperextension.muscle, 'lower_back');
+  assert.ok(FOCUS_GROUPS.lower_back.exercises.includes('Hyperextension'));
+  // A core slot after a week of crunches: the hyperextension of the gym, not supermans on the floor.
+  const crunches = ['2026-10-21', '2026-10-24'].flatMap(workout_date => ['Abs bench crunch', 'Cable crunch', 'Pallof press'].map(exercise => ({ exercise, workout_date, type: 'WORK', reps: 12, kg: 20 })));
+  const plan = generateStrengthPlan({ date: '2026-10-28', trainingSetup: { equipment: 'gym' }, strength: { recentCompletedSets: crunches, plannedSessions: [] }, profile: {} }, { durationMinutes: 90, focus: 'lower' });
+  const names = plan.rows.map(r => r[1]);
+  assert.ok(names.includes('Hyperextension') || names.includes('Dumbbell Back Extension'));
+  assert.ok(!names.includes('Supermans') && !names.includes('Dumbbell Superman'));
+});
+
+test('bands, the floor and Cossack squats stand in only when the place has nothing better', async () => {
+  const { isStandIn } = await import('../src/strength-generator.js');
+  const { METAGYM_KUTNA_HORA, OTHER_STATIONS } = await import('../src/gym-equipment.js');
+  assert.ok(isStandIn('Band Leg Curl') && isStandIn('Supermans') && isStandIn('Dumbbell Cossack Squat'));
+  assert.ok(!isStandIn('Prone leg curl Prime') && !isStandIn('Hyperextension') && !isStandIn('DB Bulgarian split squat'));
+  const everything = { equipment: 'custom', stations: [...Object.keys(METAGYM_KUTNA_HORA.stations), ...Object.keys(OTHER_STATIONS)] };
+  // Eight weeks of three sessions in a fully equipped gym, each one done as planned.
+  const history = [], seen = new Set();
+  for (let i = 0, day = Date.parse('2026-09-01T12:00:00Z'); i < 24; i++, day += 86400000 * (i % 3 ? 2 : 3)) {
+    const date = new Date(day).toISOString().slice(0, 10);
+    const plan = generateStrengthPlan({ date, trainingSetup: everything, strength: { recentCompletedSets: history.slice(), plannedSessions: [] }, profile: {} }, { durationMinutes: 75 });
+    for (const ex of new Set(plan.rows.filter(r => r[0] === 'WORK').map(r => r[1]))) { seen.add(ex); history.push({ exercise: ex, workout_date: date, type: 'WORK', reps: 10, kg: 20 }); }
+  }
+  assert.deepEqual([...seen].filter(isStandIn), []);
+  // At home with dumbbells and bands, the band exercises still come.
+  const home = generateStrengthPlan({ date: '2026-10-28', trainingSetup: { equipment: 'home', stations: ['dumbbells', 'adjustable_bench', 'resistance_bands', 'floor_mats'] }, strength: { recentCompletedSets: [], plannedSessions: [] }, profile: {} }, { durationMinutes: 75, focus: 'lower' });
+  assert.ok(home.rows.some(r => r[1] === 'Band Leg Curl'));
+});
+
+test('the main sport decides: a cyclist gets heavy legs and back first, a runner single-leg work and one short jump session a week', () => {
+  const plan = (sport, date, history = [], extra = {}) => generateStrengthPlan({ date, trainingSetup: { equipment: 'gym' }, strength: { recentCompletedSets: history, plannedSessions: [] }, profile: { mainSport: sport }, ...extra }, { durationMinutes: 60 });
+  const names = p => [...new Set(p.rows.filter(r => r[0] === 'WORK').map(r => r[1]))];
+  const run = names(plan('running', '2026-10-28'));
+  assert.ok(['Squat Jump', 'Pogo Hops'].includes(run[0]), run.join());
+  assert.match(plan('running', '2026-10-28').rationale, /výskoky|jumps/);
+  // Not again within six days, never for a cyclist or without a main sport.
+  const jumped = [{ exercise: 'Squat Jump', workout_date: '2026-10-25', type: 'WORK', reps: 5 }];
+  assert.ok(!names(plan('running', '2026-10-28', jumped)).some(ex => ['Box Jump', 'Squat Jump', 'Pogo Hops'].includes(ex)));
+  for (const sport of ['cycling', '']) assert.ok(!names(plan(sport, '2026-10-28')).some(ex => ['Box Jump', 'Squat Jump', 'Pogo Hops'].includes(ex)), sport);
+  // Not on a day the legs are spared for a key run.
+  const keyRun = { running: { nextRun: { date: '2026-10-29', name: 'Intervaly', type: 'Run', intensity: true, durationMinutes: 60 } } };
+  const spared = plan('running', '2026-10-28', [], keyRun);
+  if (spared.protectedLegs) assert.ok(!names(spared).some(ex => ['Box Jump', 'Squat Jump', 'Pogo Hops'].includes(ex)));
+  // A cyclist's leg slot prefers the heavy lifts.
+  const ride = names(plan('cycling', '2026-10-28'));
+  assert.ok(ride.some(ex => ['DB Romanian deadlift', 'Barbell Romanian deadlift', 'Pivot leg press', 'Pendulum squat', 'Barbell back squat', 'Hip thrust'].includes(ex)), ride.join());
+  // The Nordic curl is strength work, not a floor stand-in.
+  assert.equal(EXERCISES['Nordic Hamstring Curl'] && !standIn('Nordic Hamstring Curl'), true);
 });

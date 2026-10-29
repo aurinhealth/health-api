@@ -169,8 +169,8 @@ struct StrainDetailContent: View {
 
     private var movementMeta: String {
         var parts: [String] = []
-        if let steps = today.steps.today { parts.append(Fmt.int(steps) + " " + L10n.tr("kroků")) }
-        if let active = today.steps.activeMinutes { parts.append(Fmt.int(active.today) + " " + L10n.tr("aktivních min")) }
+        if let steps = today.steps.today { parts.append(L10n.plural("%@ kroků", Fmt.int(steps), Int(steps.rounded()))) }
+        if let active = today.steps.activeMinutes { parts.append(L10n.f("%@ aktivních min", Fmt.int(active.today))) }
         return parts.joined(separator: " · ")
     }
 
@@ -436,7 +436,7 @@ struct FitnessChart: View {
                     Spacer()
                     if let endForm, let end = upcoming.last?.date {
                         VStack(alignment: .trailing, spacing: 2) {
-                            Text(verbatim: L10n.f("Forma %@", Fmt.weekdayShort(end) + " " + Fmt.dayMonth(end))).font(Typo.caption).foregroundStyle(Palette.muted)
+                            Text(verbatim: L10n.f("Forma %@ %@", Fmt.weekdayShort(end), Fmt.dayMonth(end))).font(Typo.caption).foregroundStyle(Palette.muted)
                             Text(verbatim: signed(endForm)).font(Typo.number(30)).foregroundStyle(Palette.ink)
                             Text(verbatim: L10n.tr(Self.formWord(endForm))).font(Typo.caption).foregroundStyle(endForm < -30 ? Palette.rust : Palette.green)
                         }

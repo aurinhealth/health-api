@@ -83,15 +83,16 @@ enum SiriData {
     }
 
     /// A write when the app's process has no model (not seen so far, kept as a
-    /// fallback): sent now, else into the outbox file the app sends from when
-    /// it opens. No model holds that file in memory meanwhile.
+    /// fallback): sent now, else by the queue's rule (WriteVerdict) into the
+    /// outbox file the app sends from when it opens. No model holds that file
+    /// in memory meanwhile.
     static func send(_ item: OutboxItem) async throws -> Bool {
         let api = APIClient()
         guard api.hasSession else { throw APIError.unauthorized }
         do {
             _ = try await api.sendQueued(item)
             return true
-        } catch where Outbox.isNoConnection(error) {
+        } catch where WriteVerdict.of(error).waits {
             OutboxStore.save(OutboxStore.load() + [item])
             return false
         }

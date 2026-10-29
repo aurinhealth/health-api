@@ -53,13 +53,29 @@ function noteOf(entry) {
   try { const n = JSON.parse(entry?.note || "{}"); return n && typeof n === "object" && !Array.isArray(n) ? n : {}; } catch { return {}; }
 }
 
+// The day's calorie target split into the everyday intake (what a day without
+// training gets: the resting intake, or the safe minimum when that is higher)
+// and what training adds. Training counts only for what it really raises the
+// target by: on a day held at the safe minimum, a session that ends below it
+// adds nothing, so the day never shows "+433 trénink" on a target it did not move.
+export function dayCalories(nutrition = {}) {
+  const breakdown = nutrition.calorieBreakdown || {};
+  const target = num(nutrition.calorieTarget);
+  const raw = num(breakdown.activityAdjustment) != null ? Math.round(num(breakdown.activityAdjustment) * (num(breakdown.trainingCoverage) ?? 0.7)) : null;
+  if (target == null) return { target: null, everyday: null, bonus: raw };
+  const rest = num(breakdown.restIntakeTarget);
+  const everyday = Math.min(Math.round(target), rest != null
+    ? Math.max(num(breakdown.minTarget) ?? 0, Math.round(rest + (num(breakdown.sportDailyAverage) ?? 0)))
+    : Math.round(target) - Math.max(0, raw ?? 0));
+  return { target, everyday, bonus: raw != null ? Math.min(raw, Math.max(0, Math.round(target) - everyday)) : null };
+}
+
 export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {}, slots = null }) {
   const chosen = Array.isArray(slots) && slots.length ? MEALS.filter(m => slots.includes(m.type)).map(m => m.type) : USUAL;
   const nutrition = daily.nutrition || {};
   const macros = nutrition.macros || {};
   const breakdown = nutrition.calorieBreakdown || {};
-  const bonus = num(breakdown.activityAdjustment) != null ? Math.round(num(breakdown.activityAdjustment) * (num(breakdown.trainingCoverage) ?? 0.7)) : null;
-  const target = num(nutrition.calorieTarget);
+  const { target, everyday, bonus } = dayCalories(nutrition);
 
   const entries = (Array.isArray(food.entries) ? food.entries : [])
     .filter(e => e && !["planned", "cancelled"].includes(e.status))
@@ -142,6 +158,8 @@ export function buildFood({ date, hour = null, daily = {}, food = {}, fluids = {
     kcal: eaten.kcal,
     target,
     trainingBonus: bonus,
+    // The day's target without what training and movement add (Týdenní kalorie).
+    everyday,
     // For the coach's text (screen-texts.js): the hour, the safe minimum and the weight goal.
     hour,
     minimumKcal: num(breakdown.minTarget),

@@ -68,6 +68,19 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     /// On a done session with a plan: how much of the plan was done, in
     /// percent (src/plan-compliance.js), coloured by ComplianceScale.
     var compliance: Int? = nil
+    /// On a done lifting session: it fulfils the day's gym plan saved in the
+    /// app (pairedGym), or the user unpaired the two (unpaired) and it opens
+    /// as an activity of its own (src/app-training.js daySessions).
+    var pairedGym: Bool? = nil
+    var unpaired: Bool? = nil
+
+    /// What Odpárovat od plánu undoes: the plan it fulfils, or the day's gym
+    /// plan (gym:<date>, src/manual-pairs.js).
+    var unpairTarget: String? {
+        guard kind == "activity", status == "done" else { return nil }
+        if let plannedId { return plannedId }
+        return pairedGym == true ? "gym:" + date : nil
+    }
 }
 
 /// The answer to POST /app/api/planned/move (src/planned-events.js).
@@ -467,6 +480,17 @@ struct GymDay: Decodable, Equatable {
             mark(offset + 1, value)
         }
         write(list, rest)
+    }
+
+    /// Joins the exercise with another one into a superset: the other moves
+    /// right after it (out of a superset it was in).
+    mutating func superset(_ offset: Int, with other: Int) {
+        let count = blocks.exercises.count
+        guard offset != other, (0..<count).contains(offset), (0..<count).contains(other) else { return }
+        if ExerciseOrder.letter(exercises[other].superset) != nil { toggleSuperset(at: other) }
+        if ExerciseOrder.letter(exercises[offset].superset) != nil { toggleSuperset(at: offset) }
+        moveExercise(from: other, to: offset + 1)
+        toggleSuperset(at: other < offset ? offset - 1 : offset)
     }
 
     /// Adds an exercise at the end: its work sets with the planned reps.

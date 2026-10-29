@@ -2288,8 +2288,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const day=async date=>{
         const [daily,food]=await Promise.all([read('/analysis/daily?date='+date),read('/food/log?date='+date)]);
         applyEnergyBudget(daily,profile,date===today?healthToday:{today:health?.wellness?.find(w=>w.id===date)||{}});
-        const {kcal,target,trainingBonus}=buildFood({date,daily,food});
-        return {date,kcal,target,trainingBonus};
+        const {kcal,target,trainingBonus,everyday}=buildFood({date,daily,food});
+        return {date,kcal,target,trainingBonus,everyday};
       };
       // Days gone by are cached until the user changes something (the cache version).
       const days=await mapLimit(dates,3,date=>date<today?cached(env,ctx,'food-week-day:'+date,()=>day(date),{ttl:600}):day(date));

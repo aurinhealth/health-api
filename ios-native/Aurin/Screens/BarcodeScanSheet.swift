@@ -22,6 +22,8 @@ struct BarcodeScanSheet: View {
     @State private var product: FoodProduct?
     /// In the food's unit (grams, ml, or portions for a per-portion food).
     @State private var amount: Double = 100
+    /// The unit the portion wheel shows, for the add button's wording.
+    @State private var portionKind: PortionWheel.Kind?
     @State private var state: ScanState = .scanning
     @State private var saving = false
     @State private var error: String?
@@ -216,12 +218,12 @@ struct BarcodeScanSheet: View {
                     }
                     NutritionCells(product: product, amount: amount)
                     VStack(alignment: .leading, spacing: 4) {
-                        PortionWheel(product: product, amount: $amount).id(product.id + (product.serving_size?.string ?? "") + (product.serving_name ?? ""))
+                        PortionWheel(product: product, amount: $amount, kind: Binding(get: { portionKind ?? .base }, set: { portionKind = $0 })).id(product.id + (product.serving_size?.string ?? "") + (product.serving_name ?? ""))
                         servingLine(product)
                     }
                     MealMenu(selection: Binding(get: { target }, set: { chosenMeal = $0 }))
                     Button { Task { await save(product) } } label: {
-                        Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target) + " · " + PortionWheel.label(product: product, amount: amount))
+                        Text(saving ? L10n.tr("Ukládám…") : MealSlot.addText(target) + " · " + PortionWheel.label(product: product, amount: amount, kind: portionKind))
                             .font(Typo.bodyStrong).foregroundStyle(Palette.onButton).lineLimit(1).minimumScaleFactor(0.8)
                             .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
                     }

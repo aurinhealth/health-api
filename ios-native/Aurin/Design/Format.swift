@@ -174,12 +174,6 @@ enum Fmt {
         text.prefix(1).uppercased() + String(text.dropFirst())
     }
 
-    /// Czech plural: 1 den, 2 dny, 5 dní. In English "many" is the plural.
-    static func plural(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {
-        if L10n.isEnglish { return L10n.tr(n == 1 ? one : many) }
-        return n == 1 ? one : (2...4).contains(n) ? few : many
-    }
-
     private static let utc = TimeZone(identifier: "UTC")!
     private static var utcCalendar: Calendar {
         var c = Calendar(identifier: .gregorian)

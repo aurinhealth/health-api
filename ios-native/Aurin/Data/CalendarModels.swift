@@ -101,6 +101,9 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
     var mergeEnergy: String? = nil
     /// Percent of its plan done (WeekSession.compliance).
     var compliance: Int? = nil
+    /// The day's gym plan: fulfilled by it, or unpaired from it (WeekSession).
+    var pairedGym: Bool? = nil
+    var unpaired: Bool? = nil
 
     struct Summary: Decodable, Equatable {
         let source: String?
@@ -118,7 +121,8 @@ struct CalendarActivity: Decodable, Equatable, Identifiable {
         return WeekSession(id: id, kind: kind, status: status, date: date, time: time, title: title, sport: sport,
                            minutes: rounded, tss: nil, activityId: activityId, eventId: eventId, plannedId: plannedId,
                            watch: watchRef, adherence: adherence, adherenceReason: adherenceReason,
-                           sources: sources, mergeEnergy: mergeEnergy, compliance: compliance)
+                           sources: sources, mergeEnergy: mergeEnergy, compliance: compliance,
+                           pairedGym: pairedGym, unpaired: unpaired)
     }
 
     /// A done session from the watch or Wahoo opens its own detail.

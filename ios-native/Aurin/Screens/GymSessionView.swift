@@ -32,6 +32,7 @@ struct GymSessionView: View {
     /// What the warm-up and stretching add to each length, shown under the length picker.
     @State private var extra: [String: GymPreferences.Extra]?
     @State private var deleting = false
+    @State private var unpairing = false
     @State private var editingKcal = false
     /// The set whose letter is being chosen (IntensitySheet), as in Režim tréninku.
     @State private var intensityFor: SetRef?
@@ -135,6 +136,10 @@ struct GymSessionView: View {
                         if !editTarget.app {
                             Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
                         }
+                        // Paired with the day's gym plan or a plan: apart again, the activity stays.
+                        if doneSession?.unpairTarget != nil {
+                            Button { unpairing = true } label: { Label("Odpárovat od plánu", systemImage: "minus.circle") }
+                        }
                         Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
                     } label: {
                         Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
@@ -147,6 +152,7 @@ struct GymSessionView: View {
                     .activityEditing(id: editTarget.id, title: day?.planName ?? doneSession?.title ?? L10n.tr("Posilovna"),
                                      kcal: doneSession?.kcal, edited: doneSession?.kcalEdited == true,
                                      deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
+                    .activityUnpairing(session: doneSession, asking: $unpairing) { dismiss() }
                 }
             }
             .padding(.top, 24)
@@ -311,8 +317,7 @@ struct GymSessionView: View {
     private func progress(_ day: GymDay) -> some View {
         let done = day.exercises.reduce(0) { $0 + $1.doneCount }, total = day.exercises.reduce(0) { $0 + $1.workCount }
         return VStack(alignment: .leading, spacing: 6) {
-            Text(L10n.f("%@/%@ %@ · %@ %@", String(done), String(total), Fmt.plural(total, "série", "sérií", "sérií"),
-                        String(day.exercises.count), Fmt.plural(day.exercises.count, "cvik", "cviky", "cviků")))
+            Text(L10n.plural("%lld/%lld sérií · %lld cviků", done, total, day.exercises.count))
                 .font(Typo.small).foregroundStyle(Palette.muted)
             ProgressLine(fraction: total > 0 ? Double(done) / Double(total) : 0, color: Palette.amberBar, height: 4)
         }
@@ -446,7 +451,7 @@ struct ExerciseCard: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(exercise.name).font(.headline).foregroundStyle(Palette.ink)
-                    Text("\(exercise.doneCount)/\(exercise.workCount) " + Fmt.plural(exercise.workCount, "série", "série", "sérií"))
+                    Text(L10n.plural("%lld/%lld sérií", exercise.doneCount, exercise.workCount))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                     if !failure.isEmpty { GymTag.failure.padding(.top, 4) }
                     // No weight to start from (an exercise the app doesn't know): the test set's advice.

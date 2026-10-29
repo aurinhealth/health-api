@@ -13,7 +13,7 @@ extension AppModel {
 
     func loadMuscles() async {
         guard !demo else { return }
-        let account = signInRound
+        let account = scope
         if let fresh = try? await api.muscles(), stillSignedIn(account) {
             muscleFatigue = fresh
             musclesAt = Date()
@@ -647,7 +647,7 @@ struct MuscleDetailView: View {
             if let s = d.strength, s.points.count >= 2, let change = s.change {
                 let percent = Int((change * 100).rounded())
                 let weeks = max(1, MuscleFatigue.days(from: s.points[0].week, to: s.points[s.points.count - 1].week) / 7)
-                Text(verbatim: (percent > 0 ? "+" : "") + L10n.f("%@ %% za %@", String(percent), "\(weeks) " + Fmt.plural(weeks, "týden", "týdny", "týdnů")))
+                Text(verbatim: L10n.plural("%@ %% za %lld týdnů", (percent > 0 ? "+" : "") + String(percent), weeks))
                     .font(Typo.sentence(22)).foregroundStyle(percent > 0 ? Palette.green : percent < 0 ? Palette.amber : Palette.ink)
                 Text(verbatim: L10n.f("Odhad maxima: %@, z tvých sérií.", L10n.tr(s.exercise))).font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -759,7 +759,7 @@ struct MuscleDetailView: View {
     }
 
     private func recentLine(_ r: MuscleDetailData.Recent) -> String {
-        var parts = [L10n.tr(r.day), L10n.f(r.sets >= 5 ? "%@ sérií" : r.sets == 1 ? "%@ série" : "%@ série", String(r.sets))]
+        var parts = [L10n.tr(r.day), L10n.plural("%lld sérií", r.sets)]
         if let kg = r.kg, let reps = r.reps { parts.append(Units.weightText(kg, digits: kg.truncatingRemainder(dividingBy: 1) == 0 ? 0 : 1) + " × " + String(Int(reps))) }
         return parts.joined(separator: " · ")
     }

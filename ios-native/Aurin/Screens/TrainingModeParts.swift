@@ -38,7 +38,9 @@ enum GymSessionMath {
     /// Short of the plan's reps, or to failure on a lighter plan (F on M):
     /// the weight the estimated max allows for the plan's reps and letter, to
     /// the nearest 2.5 kg. Well over the reps, or far easier than planned (E on
-    /// H): one 2.5 kg step up. Otherwise nil: the next set copies this one.
+    /// H): one 2.5 kg step up, but never when the athlete rated the set harder
+    /// than the next one is planned (15 reps at M before an E set): the letter
+    /// says more than the reps. Otherwise nil: the next set copies this one.
     static func adjustment(_ set: GymSet, after before: GymSet) -> Adjustment? {
         guard set.work, before.work, before.done,
               let kg = before.kg.flatMap(LiftWeight.number), kg > 0,
@@ -54,7 +56,7 @@ enum GymSessionMath {
             guard fits < kg, fits > 0 else { return nil }
             return Adjustment(kg: GymCoach.kgText(fits), lighter: true)
         }
-        if done >= Double(range.hi + 2) || (done >= Double(range.hi) && reserve >= planned + 2) {
+        if reserve >= planned, done >= Double(range.hi + 2) || (done >= Double(range.hi) && reserve >= planned + 2) {
             return Adjustment(kg: GymCoach.kgText(GymCoach.roundLoad(kg + GymCoach.step)), lighter: false)
         }
         return nil
@@ -105,18 +107,6 @@ enum GymSessionMath {
         }
     }
 
-    /// Plates on each side of a 20 kg bar: "20 + 10".
-    static func plates(_ kg: Double) -> String? {
-        guard !Units.imperial, kg > 20 else { return nil }
-        var side = (kg - 20) / 2
-        var out: [Double] = []
-        for plate in [25, 20, 15, 10, 5, 2.5, 1.25] where side >= plate - 0.001 {
-            while side >= plate - 0.001 { out.append(plate); side -= plate }
-        }
-        guard side < 0.01, !out.isEmpty else { return nil }
-        return out.map { GymCoach.shown($0) }.joined(separator: " + ")
-    }
-
     /// The plan's main muscles and how much of their sets is done (0…1).
     static func muscleProgress(_ exercises: [GymExercise], muscles: [String: [String: Double]]) -> [(id: String, done: Int, planned: Int)] {
         var planned: [String: Double] = [:], done: [String: Double] = [:]
@@ -145,7 +135,7 @@ enum GymSessionMath {
         let repsNow = now.filter { $0.kg == top }.compactMap(\.reps).max() ?? 0
         let repsBefore = last.sets.filter { $0.kg == before }.compactMap(\.reps).max() ?? 0
         if repsNow != repsBefore {
-            return (Fmt.signed(repsNow - repsBefore) + " " + L10n.tr("op."), repsNow > repsBefore)
+            return (L10n.f("%@ op.", Fmt.signed(repsNow - repsBefore)), repsNow > repsBefore)
         }
         return ("=", nil)
     }
@@ -208,7 +198,9 @@ struct GymSetRow: View {
     let state: Phase
     var kgText: Binding<String>? = nil
     var repsText: Binding<String>? = nil
-    /// The planned reps ("5–8") shown in the empty field of the set at hand.
+    /// The weight it would take ("17,5") and the planned reps ("5–8"), shown
+    /// in the empty fields of the set at hand.
+    var kgHint: String? = nil
     var repsHint: String? = nil
     /// A drop set: "↳" under the set it follows.
     var drop = false
@@ -245,7 +237,7 @@ struct GymSetRow: View {
             }
             Text(lastTime ?? "—").font(.footnote).foregroundStyle(Palette.faint).lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg)
+            field(kg, kgText, keyboard: .decimalPad, edit: $editKg, field: .kg, hint: kgHint)
             field(reps, repsText, keyboard: .numberPad, edit: $editReps, field: .reps, hint: repsHint).frame(width: repsWidth)
             if let onIntensity {
                 Button(action: onIntensity) {
@@ -435,7 +427,7 @@ struct MuscleProgressCard: View {
             HStack {
                 Text("Celkem dnes").font(Typo.small).foregroundStyle(Palette.muted)
                 Spacer()
-                Text(verbatim: L10n.f("%@ z %@", String(total.done), String(total.planned)) + " " + Fmt.plural(total.planned, "série", "série", "sérií"))
+                Text(verbatim: L10n.plural("%lld z %lld sérií", total.done, total.planned))
                     .font(Typo.small).foregroundStyle(Palette.muted).monospacedDigit()
             }
             HStack(spacing: 10) {
@@ -633,7 +625,7 @@ struct MinimizedGymBar: View {
     private func line(at now: Date) -> String? {
         if let end = gym.restEnd, end > now {
             let s = Int(end.timeIntervalSince(now).rounded(.up))
-            let rest = L10n.tr("Pauza") + " " + String(format: "%d:%02d", s / 60, s % 60)
+            let rest = L10n.f("Pauza %@", String(format: "%d:%02d", s / 60, s % 60))
             return gym.next.map { rest + " · " + L10n.f("další %@", $0) } ?? rest
         }
         return gym.next
