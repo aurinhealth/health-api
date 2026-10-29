@@ -1,8 +1,11 @@
 // Pairings the user made by hand in the app: a planned session and the
 // activity that fulfilled it, when the automatic pairing (index.js
 // matchPlannedWorkouts) missed it or picked the wrong one. activity_id ''
-// keeps a plan unpaired.
+// keeps a plan unpaired. A gym plan saved in the app (gym:<date>) can only be
+// unpaired: the day's lifting session then no longer fulfils it
+// (trainingGymPlans marks the day, daySessions keeps the two apart).
 const ID = /^[A-Za-z0-9:._-]{1,120}$/;
+const GYM = /^gym:\d{4}-\d{2}-\d{2}$/;
 export const MANUAL_PAIRS_TABLE = "CREATE TABLE IF NOT EXISTS manual_activity_pairs (user_id INTEGER NOT NULL, planned_id TEXT NOT NULL, activity_id TEXT NOT NULL, date TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (user_id, planned_id))";
 
 async function ensureTable(db) {
@@ -26,8 +29,9 @@ export async function manualPairs(db, userId, plannedIds) {
 // reset: true goes back to the automatic pairing.
 export async function setManualPair(db, userId, body = {}) {
   const plannedId = String(body.plannedId || ""), activityId = body.activityId == null ? "" : String(body.activityId), date = String(body.date || "");
-  if (!ID.test(plannedId) || !/^planned:/.test(plannedId)) return { status: "error", code: 400, message: "plannedId" };
-  if (activityId && !ID.test(activityId)) return { status: "error", code: 400, message: "activityId" };
+  const gym = GYM.test(plannedId);
+  if (!ID.test(plannedId) || !(gym || /^planned:/.test(plannedId))) return { status: "error", code: 400, message: "plannedId" };
+  if (activityId && (gym || !ID.test(activityId))) return { status: "error", code: 400, message: "activityId" };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { status: "error", code: 400, message: "date" };
   await ensureTable(db);
   if (body.reset) {
@@ -39,4 +43,16 @@ export async function setManualPair(db, userId, body = {}) {
   await db.prepare("INSERT INTO manual_activity_pairs (user_id, planned_id, activity_id, date, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, planned_id) DO UPDATE SET activity_id = excluded.activity_id, date = excluded.date, updated_at = excluded.updated_at")
     .bind(userId, plannedId, activityId, date, new Date().toISOString()).run();
   return { status: "ok", plannedId, activityId: activityId || null };
+}
+
+// The days in from..to whose gym plan the user unpaired from the day's activity.
+export async function unpairedGymDays(db, userId, from, to) {
+  if (!db) return new Set();
+  try {
+    const rows = (await db.prepare("SELECT planned_id FROM manual_activity_pairs WHERE user_id = ? AND planned_id >= ? AND planned_id <= ? AND activity_id = ''").bind(userId, "gym:" + from, "gym:" + to).all()).results || [];
+    return new Set(rows.map(r => String(r.planned_id).slice(4)));
+  } catch (error) {
+    if (!/no such table/i.test(error.message)) console.error("Unpaired gym days read failed", error.message);
+    return new Set();
+  }
 }

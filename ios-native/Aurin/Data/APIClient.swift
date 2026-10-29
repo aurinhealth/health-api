@@ -528,6 +528,12 @@ final class APIClient: @unchecked Sendable {
         let _: JSONValue = try await send("/app/api/training/pair", method: "POST", body: body)
     }
 
+    /// Back to the automatic pairing of a plan (or gym:<date>).
+    func resetPair(plannedId: String, date: String) async throws {
+        let body: JSONObject = ["plannedId": .string(plannedId), "reset": .bool(true), "date": .string(date)]
+        let _: JSONValue = try await send("/app/api/training/pair", method: "POST", body: body)
+    }
+
     // MARK: - Settings
 
     func profile() async throws -> JSONObject {

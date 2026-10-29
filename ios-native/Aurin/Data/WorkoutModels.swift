@@ -68,6 +68,19 @@ struct WeekSession: Decodable, Hashable, Identifiable {
     /// On a done session with a plan: how much of the plan was done, in
     /// percent (src/plan-compliance.js), coloured by ComplianceScale.
     var compliance: Int? = nil
+    /// On a done lifting session: it fulfils the day's gym plan saved in the
+    /// app (pairedGym), or the user unpaired the two (unpaired) and it opens
+    /// as an activity of its own (src/app-training.js daySessions).
+    var pairedGym: Bool? = nil
+    var unpaired: Bool? = nil
+
+    /// What Odpárovat od plánu undoes: the plan it fulfils, or the day's gym
+    /// plan (gym:<date>, src/manual-pairs.js).
+    var unpairTarget: String? {
+        guard kind == "activity", status == "done" else { return nil }
+        if let plannedId { return plannedId }
+        return pairedGym == true ? "gym:" + date : nil
+    }
 }
 
 /// The answer to POST /app/api/planned/move (src/planned-events.js).

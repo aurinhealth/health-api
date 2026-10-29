@@ -520,6 +520,7 @@ struct WatchActivityDetail: View {
     let activity: CalendarActivity
     @State private var changingType = false
     @State private var deleting = false
+    @State private var unpairing = false
     @State private var editingKcal = false
 
     var body: some View {
@@ -558,6 +559,9 @@ struct WatchActivityDetail: View {
                             if activity.status == "done" && activity.source != "gym" {
                                 Button { editingKcal = true } label: { Label("Upravit kalorie", systemImage: "flame") }
                             }
+                            if activity.session.unpairTarget != nil {
+                                Button { unpairing = true } label: { Label("Odpárovat od plánu", systemImage: "minus.circle") }
+                            }
                             if activity.status == "done" {
                                 Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
                             }
@@ -577,6 +581,7 @@ struct WatchActivityDetail: View {
         .activityEditing(id: activity.id, title: activity.title, kcal: model.countedKcal(activity),
                          edited: model.doneSession(for: activity)?.kcalEdited == true,
                          deleting: $deleting, editingKcal: $editingKcal) { dismiss() }
+        .activityUnpairing(session: activity.session, asking: $unpairing) { dismiss() }
     }
 
     /// "Chůze · st 8. 10. · 10:00–11:10".

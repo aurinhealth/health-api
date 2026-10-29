@@ -186,6 +186,8 @@ export function buildCalendar({ start, end, today, activities = [], google = [],
       rest.adherence = s?.adherence || "offplan";
       if (s?.adherenceReason) rest.adherenceReason = s.adherenceReason;
       if (s?.compliance != null) rest.compliance = s.compliance;
+      if (s?.pairedGym) rest.pairedGym = true;
+      if (s?.unpaired) rest.unpaired = true;
       if (s?.plannedId) {
         rest.plannedId = s.plannedId;
         const plan = dayPlans.find(w => w.id === s.plannedId);

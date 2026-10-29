@@ -142,10 +142,11 @@ extension AppModel {
     }
 
     func doneStrengthSession(on date: String) -> WeekSession? {
-        let pick: (WeekSession) -> Bool = { $0.date == date && $0.sport == "strength" && $0.status == "done" && $0.kind == "activity" }
+        // One unpaired from the day's gym plan is not its session.
+        let pick: (WeekSession) -> Bool = { $0.date == date && $0.sport == "strength" && $0.status == "done" && $0.kind == "activity" && $0.unpaired != true }
         if let found = training?.sessions?.first(where: pick) { return found }
         if let found = today?.plan.compactMap({ $0.session }).first(where: pick) { return found }
-        if let day = calendar[date], let found = day.activities.first(where: { $0.sport == "strength" && $0.status == "done" }) { return found.session }
+        if let day = calendar[date], let found = day.activities.first(where: { $0.sport == "strength" && $0.status == "done" && $0.unpaired != true }) { return found.session }
         return nil
     }
 }

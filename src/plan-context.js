@@ -2,6 +2,7 @@
 // weather place of Today, the planning history and the saved gym plans per day.
 import { cached } from "./api-cache.js";
 import { gymTypes } from "./activity-type.js";
+import { unpairedGymDays } from "./manual-pairs.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { getCapabilities } from "./workout-library.js";
 import { athleteThresholds } from "./intervals-athlete.js";
@@ -103,12 +104,14 @@ export async function planningHistory(env,date,days=84){
   return [...byDate].sort(([a],[b])=>a.localeCompare(b)).map(([date,completed])=>({date,daily:{training:{completed}}}));
 }
 
-// Saved gym plans per day (not cancelled): the name and the exercises in order.
+// Saved gym plans per day (not cancelled): the name and the exercises in order;
+// unpaired: the user unpaired it from that day's lifting session (manual-pairs.js).
 export async function trainingGymPlans(env,from,to){
   await ensureGymPlans(env.DB);
-  const [plans,cancelled]=await Promise.all([
+  const [plans,cancelled,unpaired]=await Promise.all([
     env.DB.prepare('SELECT workout_date,values_json FROM gym_plans WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,from,to).all(),
-    env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,from,to).all()
+    env.DB.prepare('SELECT workout_date FROM gym_plan_cancellations WHERE user_id=? AND workout_date>=? AND workout_date<=?').bind(env.USER_ID,from,to).all(),
+    unpairedGymDays(env.DB,env.USER_ID,from,to)
   ]);
   const skip=new Set((cancelled.results||[]).map(r=>r.workout_date)),out={},types=await gymTypes(env.DB,env.USER_ID,from,to).catch(()=>({}));
   for(const r of plans.results||[]){
@@ -117,7 +120,7 @@ export async function trainingGymPlans(env,from,to){
     const rows=(Array.isArray(v)?v.slice(7):[]).filter(x=>x?.[1]);
     // done: sets per exercise that were ticked off (Hotovo) or have reps written in.
     const isDone=x=>['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))||Number(x?.[6])>0,count=list=>list.reduce((m,x)=>{const n=String(x[1]).slice(0,80);m[n]=(m[n]||0)+1;return m;},{});
-    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],sets:rows.length,logged:rows.filter(isDone).length,compliance:gymCompliance(rows.map(x=>({type:String(x[0]||'WORK'),exercise:String(x[1]).slice(0,80),plannedKg:x[3],plannedReps:x[4],actualKg:x[5],actualReps:x[6],completed:['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))})))?.percent??null,setsBy:count(rows),done:count(rows.filter(isDone)),...(types[r.workout_date]?{type:types[r.workout_date]}:{})};
+    if(rows.length)out[r.workout_date]={name:String(v[2]?.[3]||'').slice(0,120),exercises:[...new Set(rows.map(x=>String(x[1]).slice(0,80)))],sets:rows.length,logged:rows.filter(isDone).length,compliance:gymCompliance(rows.map(x=>({type:String(x[0]||'WORK'),exercise:String(x[1]).slice(0,80),plannedKg:x[3],plannedReps:x[4],actualKg:x[5],actualReps:x[6],completed:['TRUE','true','1','ANO','ano','✓','☑'].includes(String(x?.[8]??''))})))?.percent??null,setsBy:count(rows),done:count(rows.filter(isDone)),...(types[r.workout_date]?{type:types[r.workout_date]}:{}),...(unpaired.has(r.workout_date)?{unpaired:true}:{})};
   }
   return out;
 }

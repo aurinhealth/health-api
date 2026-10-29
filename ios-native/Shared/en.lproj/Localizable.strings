@@ -1319,6 +1319,11 @@
 "Nesplněno" = "Missed";
 "Spárovat s aktivitou" = "Pair with an activity";
 "Zrušit spárování" = "Unpair";
+"Odpárovat od plánu" = "Unpair from plan";
+"Zrušit spárování „%@“?" = "Unpair “%@”?";
+"Aktivita zůstane a dál se počítá. Naplánovaný trénink se vrátí do plánu." = "The activity stays and still counts. The planned workout goes back to your plan.";
+"Spárování zrušeno" = "Unpaired";
+"Naplánovaný trénink je zpět v plánu." = "The planned workout is back in your plan.";
 "Použít polohu iPhonu" = "Use iPhone location";
 "Aurin nemá přístup k poloze. Povol ho v Nastavení iPhonu → Soukromí a zabezpečení → Polohové služby → Aurin." = "Aurin doesn't have access to your location. Allow it in iPhone Settings → Privacy & Security → Location Services → Aurin.";
 "Polohu se nepodařilo zjistit. Zkus to znovu venku nebo vyhledej místo." = "Couldn't get your location. Try again outdoors or search for the place.";
