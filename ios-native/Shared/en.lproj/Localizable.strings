@@ -1847,7 +1847,10 @@
 "Zóna %@" = "Zone %@";
 "Vyměnit cvik" = "Swap exercise";
 "Zrušit supersérii" = "Break up superset";
-"Supersérie s dalším cvikem" = "Superset with the next exercise";
+"Supersérie s…" = "Superset with…";
+"Supersérie" = "Superset";
+"%@, pak cvik, který vybereš, a teprve potom pauza." = "%@, then the exercise you pick, then the rest.";
+"Hotové cviky tu nejsou." = "Finished exercises are not offered.";
 "Ukončit trénink?" = "End the workout?";
 "Pokračovat později" = "Continue later";
 "Zahodit trénink" = "Discard workout";
