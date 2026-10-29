@@ -6,7 +6,9 @@
 // The website shows each screen under its own name (overviewPage in src/site-pages.js and the overview
 // images of scripts/render-overview.mjs); the artifact names them after the step of the walk that took them
 // (site/<tab>.png from the workflow, smoke/4-NN-<step>.png from test4WebsiteScenes in SmokeTests.swift).
-// This is the one place that says which is which. Needs ImageMagick (magick or convert).
+// This is the one place that says which is which. The same walk in dark mode (site-dark/, smoke-dark/) becomes
+// <name>-dark.webp for the site's dark look (DARK_SITE in src/design-system.js); a run without it keeps the
+// dark files as they are. Needs ImageMagick (magick or convert).
 import {execFileSync} from 'node:child_process';
 import {readdirSync, existsSync, statSync} from 'node:fs';
 import {join, dirname} from 'node:path';
@@ -46,18 +48,29 @@ const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'site'
 const magick = (() => { for (const bin of ['magick', 'convert']) { try { execFileSync(bin, ['-version'], {stdio: 'ignore'}); return bin; } catch { /* next */ } } })();
 if (!magick) { console.error('ImageMagick is missing: brew install imagemagick'); process.exit(2); }
 
-const smoke = existsSync(join(from, 'smoke')) ? readdirSync(join(from, 'smoke')) : [];
-const source = step => {
-  if (step.startsWith('site/')) return join(from, `${step}.png`);
-  const file = smoke.find(f => /^4-\d\d-/.test(f) && f.replace(/^4-\d\d-/, '').replace(/\.png$/, '') === step);
-  return file && join(from, 'smoke', file);
+const source = (step, dark) => {
+  const suffix = dark ? '-dark' : '';
+  if (step.startsWith('site/')) return join(from, step.replace('site/', `site${suffix}/`) + '.png');
+  const dir = join(from, `smoke${suffix}`);
+  const file = existsSync(dir) && readdirSync(dir).find(f => /^4-\d\d-/.test(f) && f.replace(/^4-\d\d-/, '').replace(/\.png$/, '') === step);
+  return file && join(dir, file);
 };
-let missing = 0;
-for (const [name, step] of Object.entries(SCREENS)) {
-  const png = source(step);
-  if (!png || !existsSync(png)) { console.error(`${name}: ${step} is not in the artifact`); missing++; continue; }
+const save = (png, name) => {
   const target = join(out, `${name}.webp`);
   execFileSync(magick, [png, '-filter', 'Lanczos', '-resize', `${WIDTH}x${HEIGHT}!`, '-quality', String(QUALITY), '-define', 'webp:method=6', target]);
-  console.log(`${name}.webp  ←  ${step}  (${Math.round(statSync(target).size / 1024)} kB)`);
+  return Math.round(statSync(target).size / 1024);
+};
+let missing = 0, dark = 0;
+const hasDark = existsSync(join(from, 'site-dark')) || existsSync(join(from, 'smoke-dark'));
+for (const [name, step] of Object.entries(SCREENS)) {
+  const png = source(step, false);
+  if (!png || !existsSync(png)) { console.error(`${name}: ${step} is not in the artifact`); missing++; continue; }
+  console.log(`${name}.webp  ←  ${step}  (${save(png, name)} kB)`);
+  if (!hasDark) continue;
+  const darkPng = source(step, true);
+  if (!darkPng || !existsSync(darkPng)) { console.error(`${name}-dark: ${step} is not in the dark shots`); continue; }
+  console.log(`${name}-dark.webp  ←  ${step} (dark)  (${save(darkPng, `${name}-dark`)} kB)`);
+  dark++;
 }
+if (hasDark) console.log(`${dark} of ${Object.keys(SCREENS).length} dark screens; the site's dark look needs all of them (DARK_SITE).`);
 if (missing) process.exit(1);

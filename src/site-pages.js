@@ -5,7 +5,7 @@
 // When the app changes what a section shows, change the section here too.
 // The site is in English only (Aurin is for the whole world); the privacy policy and the terms also
 // have a Czech version at ?lang=cs, linked from the page and the footer.
-import {themeTokens} from './design-system.js';
+import {DARK_SITE, siteTokens} from './design-system.js';
 import {icon, ICON_PATHS} from './icons.js';
 import {ACTS, DEMOS, SCREENS, demoCss, demoScript} from './site-demos.js';
 import {scriptPolicy} from './web-security.js';
@@ -112,6 +112,7 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .bezel{padding:5px;border-radius:49px;background:#000}
 .screen{position:relative;aspect-ratio:1206/2622;border-radius:44px;overflow:hidden;background:var(--bg)}
 .screen img{display:block;width:100%;height:100%}
+.screen picture{display:contents}
 .screen::after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.28),rgba(255,255,255,0) 32%)}
 /* The hero's Today: the coach's sentence scrolled under the tab bar fades into the paper instead of reading as cut off. */
 .hero .screen::before{content:"";position:absolute;left:0;right:0;bottom:0;height:56px;z-index:3;pointer-events:none;background:linear-gradient(to top,var(--bg) 45%,transparent)}
@@ -460,7 +461,7 @@ function deviceLang(request) {
 // The Aurin mark (Rovnováha): the load half over the recovery half, offset as in the app icon.
 const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" height="${Math.round(width * 80 / 88)}" aria-hidden="true"><path d="M6 46A36 36 0 0 1 78 46Z" fill="var(--logo-load)"/><path d="M22 54A36 36 0 0 0 94 54Z" fill="var(--logo-recovery)"/></svg>`;
 // The welcome's lock (WelcomeLock in WelcomePages.swift): a soft paper lock with the logo whose shackle clicks shut.
-const LOCK = `<div class="lock" aria-hidden="true"><i class="halo"></i><svg class="shackle" viewBox="0 0 62 58"><defs><linearGradient id="lk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--panel2)"/><stop offset="1" stop-color="var(--device-lo)"/></linearGradient></defs><path d="M5.5 58V31a25.5 25.5 0 0 1 51 0v27" fill="none" stroke="url(#lk)" stroke-width="11" stroke-linecap="round"/></svg><span class="body">${mark(46)}</span></div>`;
+const LOCK = `<div class="lock" aria-hidden="true"><i class="halo"></i><svg class="shackle" viewBox="0 0 62 58"><defs><linearGradient id="lk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sand)"/><stop offset="1" stop-color="color-mix(in srgb,var(--brown) 60%,transparent)"/></linearGradient></defs><path d="M5.5 58V31a25.5 25.5 0 0 1 51 0v27" fill="none" stroke="url(#lk)" stroke-width="11" stroke-linecap="round"/></svg><span class="body">${mark(46)}</span></div>`;
 // "Join the waitlist": the button opens an e-mail field; the address waits for the owner, who
 // invites people into TestFlight from the app (src/testflight-waitlist.js).
 const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
@@ -520,9 +521,11 @@ document.querySelectorAll('.opener').forEach(function(a){var c=a.querySelector('
 // On a phone the pill steps aside while reading downwards and comes back on the way up.
 var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('kouc'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false,lastY=scrollY,down=false,narrow=matchMedia('(max-width:560px)');
  function where(){ticking=false;var mid=innerHeight*.5,i=-1,y=scrollY;if(Math.abs(y-lastY)>8){down=y>lastY;lastY=y;}acts.forEach(function(a,k){if(a.getBoundingClientRect().top<mid)i=k;});
-  var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid&&!(narrow.matches&&down);an.classList.toggle('on',shown);if(i<0)i=0;
+  var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid&&!(narrow.matches&&down)&&!covers();an.classList.toggle('on',shown);if(i<0)i=0;
   an.style.setProperty('--i',i);title.textContent=dots[i].getAttribute('aria-label');dots.forEach(function(d,k){d.classList.toggle('done',k<=i);});}
- addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(where);}},{passive:true});where();}
+ // The pill steps aside while a live demo card passes under it, so it never hides the demo's last rows.
+ function covers(){var w=an.offsetWidth/2+16,cx=innerWidth/2,top=innerHeight-an.offsetHeight-34;return [].some.call(document.querySelectorAll('.part.on'),function(p){var r=p.getBoundingClientRect();return r.bottom>top&&r.top<innerHeight&&r.left<cx+w&&r.right>cx-w;});}
+ addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(where);}},{passive:true});setInterval(where,700);where();}
 window.aurinTurnstile=function(){dispatchEvent(new Event('aurin:turnstile'));};
 // Cloudflare Turnstile checks that a person sends the form (src/testflight-waitlist.js): unseen for most,
 // a "Verify you are human" box under the field when Cloudflare isn't sure. It starts on the first touch
@@ -617,7 +620,7 @@ function sitePage({title, description, lang, origin, path, body, czech=false, in
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#F3EFE8">
+${DARK_SITE ? '<meta name="theme-color" content="#F3EFE8" media="(prefers-color-scheme:light)">\n<meta name="theme-color" content="#0A0B0C" media="(prefers-color-scheme:dark)">' : '<meta name="theme-color" content="#F3EFE8">'}
 <title>${title}</title>
 <meta name="description" content="${description}">
 <meta property="og:title" content="${title}">
@@ -647,7 +650,7 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(
 <link rel="preload" href="/site/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/site/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin>
 ${headScript}
-<style>${themeTokens}${siteCss}${demoCss}</style>
+<style>${siteTokens}${siteCss}${demoCss}</style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -742,7 +745,11 @@ export function overviewPage(request) {
     'sleep-need': 'Aurin’s sleep need for tonight and what made it grow',
     bedtime: 'Aurin’s bedtime dial: the moon for bedtime, the sun for the alarm',
     'bedtime-goal': 'Picking tonight’s sleep in Aurin: catch up, as usual or at least seven hours'};
-  const shot = (name, lazy = true) => `<img src="/site/app/${name}.webp" alt="${SHOT_ALT[name] || ''}" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
+  // In dark mode (DARK_SITE) each phone shows CI's dark shot of the same screen (scripts/site-screens.mjs).
+  const shot = (name, lazy = true) => {
+    const img = `<img src="/site/app/${name}.webp" alt="${SHOT_ALT[name] || ''}" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
+    return DARK_SITE ? `<picture><source srcset="/site/app/${name}-dark.webp" media="(prefers-color-scheme:dark)">${img}</picture>` : img;
+  };
   // The chapters, one per area of the app: [section id, eyebrow, headline, line, tone, glow, steps]. Each step is
   // [the phone's screen, the live demo beside it (site-demos.js), how far down the stage, title, text, ms it
   // shows]. A screen is the app's screenshot (public/site/app/), or "html:" and a screen built in site-demos.js

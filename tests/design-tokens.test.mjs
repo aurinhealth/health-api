@@ -31,7 +31,8 @@ test('theme layers take surface, line and text colours from tokens',()=>{
 test('the design system defines every token the layers mix from, once',async()=>{
   const html=await overviewPage().text();
   const roots=html.match(/:root\{[^}]*\}/g)||[];
-  assert.equal(roots.length,1,'all colour tokens live in design-system.js');
+  const {DARK_SITE}=await import('../src/design-system.js');
+  assert.equal(roots.length,DARK_SITE?2:1,'all colour tokens live in design-system.js');
   for(const name of new Set([...html.matchAll(/color-mix\(in srgb,var\(--([a-z0-9-]+)\)/g)].map(m=>m[1]))) assert.match(roots[0],new RegExp('--'+name+':'),name);
 });
 
@@ -66,4 +67,21 @@ test('the site keeps to its type scale, corners and two shadows (DESIGN.md)',asy
   // Shadows: the two tokens, the phone's own, rings and glows drawn with box-shadow.
   const shadows=[...css.matchAll(/box-shadow:([^;}]*)/g)].map(m=>m[1]).filter(v=>/rgba\(/.test(v)&&!/inset 0 0 0 1px rgba\(255,255,255,\.7\)/.test(v));
   assert.deepEqual(shadows,[],'use var(--shadow-card) or var(--shadow-float)');
+});
+
+// Dark mode (DESIGN.md): the app's dark palette for every colour token, switched on only once CI's dark
+// screenshots of every screen are in public/site/app/, since light screenshots glare on a dark page.
+test('the dark tokens cover every colour of the light ones, and wait for the dark screenshots',async()=>{
+  const {themeTokens,darkTokens,DARK_SITE}=await import('../src/design-system.js');
+  const names=css=>new Set([...css.matchAll(/(--[a-z0-9-]+):\s*(?:#|rgba|0 )/g)].map(m=>m[1]));
+  const light=names(themeTokens),dark=names(darkTokens);
+  for(const name of dark) assert.ok(light.has(name),`${name} has no light value`);
+  // Colours that stay the same in both palettes: the mark, the plates' fill, other brands, fixed device glare.
+  const same=new Set(['--logo-load','--logo-recovery','--health-red','--google-blue','--plate-25','--plate-20','--plate-15','--plate-10','--plate-5','--plate-2-5','--plate-1-25']);
+  assert.deepEqual([...light].filter(n=>!dark.has(n)&&!same.has(n)),[],'give these a dark value from Palette.swift');
+  const html=await overviewPage().text();
+  if(!DARK_SITE){assert.doesNotMatch(html,/prefers-color-scheme:dark/);return;}
+  const {readdirSync}=await import('node:fs');
+  const files=new Set(readdirSync(new URL('../public/site/app/',import.meta.url)));
+  for(const m of html.matchAll(/\/site\/app\/([a-z-]+)\.webp/g)) if(!m[1].endsWith('-dark')) assert.ok(files.has(`${m[1]}-dark.webp`),`${m[1]}-dark.webp is missing (scripts/site-screens.mjs)`);
 });
