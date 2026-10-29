@@ -288,6 +288,17 @@ final class AppModel {
         paths[route.tab] = [route]
     }
 
+    /// A planned session by its id (Spotlight): its detail, or Training when
+    /// it is no longer in the week.
+    func openPlanned(_ id: String) {
+        if let session = training?.sessions?.first(where: { $0.id == id }) {
+            open(session.sport == "strength" ? .gym(session.date) : .planned(session))
+        } else {
+            tab = .training
+            paths[.training] = []
+        }
+    }
+
     func handle(_ url: URL) {
         if let route = AppRoute(url: url) {
             open(route)
@@ -355,5 +366,16 @@ final class AppModel {
         calendar.timeZone = utc
         guard let d = f.date(from: isoDate), let moved = calendar.date(byAdding: .day, value: days, to: d) else { return nil }
         return f.string(from: moved)
+    }
+
+    /// The Monday of a yyyy-MM-dd day's week.
+    nonisolated static func monday(of isoDate: String) -> String {
+        let utc = TimeZone(identifier: "UTC")!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = utc
+        guard let d = DateFormatters.iso(timeZone: utc).date(from: isoDate) else { return isoDate }
+        // Sunday is 1, Monday 2.
+        let back = (calendar.component(.weekday, from: d) + 5) % 7
+        return shift(isoDate, by: -back) ?? isoDate
     }
 }

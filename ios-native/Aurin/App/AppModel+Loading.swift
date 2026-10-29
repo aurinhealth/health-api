@@ -292,6 +292,7 @@ extension AppModel {
             guard stillSignedIn(account) else { return }
             training = value
             WatchBridge.shared.update(value)
+            WidgetBridge.update(training: value)
             fetched[.training] = (Date(), Self.localDate(Date()))
             dataRevision += 1
             trainingError = nil

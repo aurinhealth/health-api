@@ -5,3 +5,13 @@
 "Otevře dnešní trénink v posilovně." = "Opens today's gym workout.";
 "Přeskočit pauzu" = "Skip rest";
 "Ukončí pauzu v posilovně, která právě běží." = "Ends the rest of the gym workout running now.";
+/* The number widget's choice in Edit Widget (AurinWidgets/MetricWeekWidgets.swift). */
+"Údaj" = "Metric";
+"Vyber, které číslo widget ukáže." = "Pick the number the widget shows.";
+"Připravenost" = "Readiness";
+"Spánek" = "Sleep";
+"HRV" = "HRV";
+"Klidový tep" = "Resting heart rate";
+"Kroky" = "Steps";
+"Zbývá kalorií" = "Calories left";
+"Pití" = "Water";

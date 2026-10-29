@@ -14,6 +14,9 @@ struct AurinWidgetBundle: WidgetBundle {
         DayWidget()
         FoodWaterWidget()
         GymActivityWidget()
+        MetricWidget()
+        WeekWidget()
+        NextWorkoutWidget()
         if #available(iOS 18.0, *) {
             WaterControl()
             StartGymControl()

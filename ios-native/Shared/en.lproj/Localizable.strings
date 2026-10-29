@@ -3265,3 +3265,16 @@
 "Do hodiny po tréninku si dej bílkoviny se sacharidy, třeba řecký jogurt s ovocem a müsli nebo kuře s rýží. Do dnešního cíle ti zbývá 1 270 kcal, tak se klidně pořádně najez." = "Within an hour after training, have protein with carbs, like Greek yogurt with fruit and granola or chicken with rice. You still have 1,270 kcal left today, so go ahead and eat properly.";
 "Připravenost je 78, takže dnes můžeš jít naplno. Nohy se po pondělí ještě zotavují, tak dřep dej se střední zátěží 80 kg a víc přidej na horní části těla: tlak na lavici a přítahy. V sobotu tě čeká delší běh." = "Readiness is 78, so you can go hard today. Your legs are still recovering from Monday, so keep squats at a moderate 80 kg and put more into your upper body: bench press and rows. A longer run waits on Saturday.";
 "V ukázce odpovídám podle vzorového dne: připravenost 78, spánek 7:12 a v 17:30 silový trénink celého těla. Po přihlášení ti odpovím podle tvých vlastních dat." = "In the demo I answer from the sample day: readiness 78, 7:12 of sleep and full-body strength at 5:30 PM. Once you sign in, I answer from your own data.";
+"%@ z %@ splněno" = "%@ of %@ done";
+"Další trénink" = "Next workout";
+"Dnes už nic" = "Nothing left today";
+"Dnešní trénink, jeho čas a délka. Hodí se i do StandBy." = "Today's workout, its time and length. Fits StandBy too.";
+"Jedno číslo" = "One number";
+"Na zbytek týdne nic naplánovaného." = "Nothing planned for the rest of the week.";
+"Trénink po dnech, splněné tréninky a co tě čeká." = "Training by day, workouts done and what's next.";
+"Zbývá kalorií" = "Calories left";
+"dobrá" = "good";
+"nad tvým rozmezím" = "above your range";
+"pod tvým rozmezím" = "below your range";
+"v tvém rozmezí" = "in your range";
+"Číslo, které si vybereš: HRV, klidový tep, kroky a další." = "A number you pick: HRV, resting heart rate, steps and more.";
