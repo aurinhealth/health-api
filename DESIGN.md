@@ -158,8 +158,8 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
   and a secondary button down to the waitlist at the end. Light on purpose: the ink pill stays the hero's and
   the end's.
 - **Link:** `--primary-text`, underline on hover; a trailing chevron icon when it leads to another page.
-- **Nav:** a floating pill 12px from the top, sticky: the mark and the word Aurin in Newsreader, 4 section
-  links in `--muted`, a small ink pill "Join the waitlist" on the right that appears once the hero's own button
+- **Nav:** a floating pill 12px from the top, sticky: the mark and the word Aurin in Newsreader, links to the five
+  parts in `--muted`, a small ink pill "Join the waitlist" on the right that appears once the hero's own button
   has scrolled away (one waitlist button on screen at a time: it hides while the hero's or the end's field or the
   mid-page call is in view). Under 960px the links go; under 560px the logo
   and a smaller pill stay, so the page's one action is always a tap away.

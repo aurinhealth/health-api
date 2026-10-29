@@ -182,7 +182,7 @@ test('the support page follows the app’s Settings and every page has the foote
     assert.doesNotMatch(await page(new Request('https://aurin.health/x?lang='+lang)).text(),/Nastavení → Účet,|Settings → Account(?!;)|Settings → Account you|Nastavení → Propojení|Settings → Connections/);
   for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
     const html=await page().text();
-    for(const href of ['/#pripravenost','/support#problem','mailto:support@aurin.health','/privacy','/terms'])assert.ok(html.includes('href="'+href+'"'),href);
+    for(const href of ['/#a-readiness','/#propojeni','/support#problem','mailto:support@aurin.health','/privacy','/terms'])assert.ok(html.includes('href="'+href+'"'),href);
     assert.match(html,/Aurin is not a medical device\./);
   }
   assert.match(support,/<h2 id="problem">/);
