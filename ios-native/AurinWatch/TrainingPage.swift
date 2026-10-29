@@ -12,6 +12,8 @@ struct TrainingPage: View {
     @State private var running = false
     @State private var picked: String?
     @State private var preview: WatchGym?
+    /// Which of a day's workouts is open, by day (the first until a tap).
+    @State private var chosen: [String: Int] = [:]
     @ObservedObject private var plans = PlanStore.shared
 
     private var today: String { WatchStore.localDate(Date()) }
@@ -81,45 +83,25 @@ struct TrainingPage: View {
         let done = sessions.filter { $0.date == day && $0.done }
         let gym = day == today ? store.gym : preview
         let gymPlanned = gym.map { !$0.exercises.isEmpty } ?? false
-        if let main = planned.first, main.sport != "strength", main.eventId != nil {
+        if planned.count > 1 {
+            // Two or more (mockup 23): each its own card, the picked one open
+            // with its steps or exercises and its button, a tap picks another.
+            let pick = min(chosen[day] ?? 0, planned.count - 1)
+            ForEach(Array(planned.enumerated()), id: \.offset) { index, session in
+                if index == pick {
+                    pickedCard(session, day: day, gym: gym)
+                } else {
+                    Button { chosen[day] = index } label: { foldedCard(session) }
+                        .buttonStyle(.plain)
+                        .padding(.top, 6)
+                }
+            }
+        } else if let main = planned.first, main.sport != "strength", main.eventId != nil {
             NavigationLink(value: main) { planCard(main) }
                 .buttonStyle(.plain)
                 .padding(.top, 8)
-            ForEach(Array(planned.dropFirst().enumerated()), id: \.offset) { _, other in
-                Text("+ " + Self.name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
-                    .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 4)
-            }
         } else if let main = planned.first ?? (gymPlanned && done.isEmpty ? WatchSnapshot.Session(date: day, title: W.tr("Posilovna", "Gym"), sport: "strength", minutes: gym?.minutes, done: false) : nil) {
-            header(main)
-            Text(subtitle(main, day: day)).font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 1)
-            if main.sport == "strength", let gym, !gym.exercises.isEmpty {
-                exercises(gym)
-                if day == today {
-                    if gym.allDone {
-                        Label(W.tr("Hotovo", "Done"), systemImage: "checkmark")
-                            .font(.system(size: 15, weight: .semibold)).foregroundStyle(W.green)
-                            .frame(maxWidth: .infinity).padding(.top, 8)
-                    } else {
-                        Button { running = true } label: {
-                            Text(gym.started ? W.tr("Pokračovat", "Continue") : W.tr("Začít", "Start"))
-                                .font(.system(size: 16, weight: .semibold)).foregroundStyle(.black)
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(W.green)
-                        .padding(.top, 8)
-                    }
-                }
-            } else if main.sport == "strength", day == today, store.loading {
-                ProgressView().frame(maxWidth: .infinity).padding(.top, 8)
-            } else if main.sport != "strength", day == today {
-                Text(W.tr("Spustíš v aplikaci Cvičení.", "Start it in the Workout app."))
-                    .font(.system(size: 12)).foregroundStyle(W.muted).padding(.top, 6)
-            }
-            ForEach(Array(planned.dropFirst().enumerated()), id: \.offset) { _, other in
-                Text("+ " + Self.name(other) + (other.minutes.map { " · \($0) min" } ?? ""))
-                    .font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 4)
-            }
+            single(main, day: day, gym: gym)
         } else if let first = done.first {
             HStack {
                 header(first)
@@ -146,6 +128,67 @@ struct TrainingPage: View {
         }
     }
 
+    /// One workout: its name and when, the gym's exercises with Start today,
+    /// or where a ride or run without steps starts.
+    @ViewBuilder private func single(_ main: WatchSnapshot.Session, day: String, gym: WatchGym?) -> some View {
+        header(main)
+        Text(subtitle(main, day: day)).font(.system(size: 12)).foregroundStyle(W.secondary).padding(.top, 1)
+        if main.sport == "strength", let gym, !gym.exercises.isEmpty {
+            exercises(gym)
+            if day == today {
+                if gym.allDone {
+                    Label(W.tr("Hotovo", "Done"), systemImage: "checkmark")
+                        .font(.system(size: 15, weight: .semibold)).foregroundStyle(W.green)
+                        .frame(maxWidth: .infinity).padding(.top, 8)
+                } else {
+                    Button { running = true } label: {
+                        Text(gym.started ? W.tr("Pokračovat", "Continue") : W.tr("Začít", "Start"))
+                            .font(.system(size: 16, weight: .semibold)).foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(W.green)
+                    .padding(.top, 8)
+                }
+            }
+        } else if main.sport == "strength", day == today, store.loading {
+            ProgressView().frame(maxWidth: .infinity).padding(.top, 8)
+        } else if main.sport != "strength", day == today {
+            Text(W.tr("Spustíš v aplikaci Cvičení.", "Start it in the Workout app."))
+                .font(.system(size: 12)).foregroundStyle(W.muted).padding(.top, 6)
+        }
+    }
+
+    /// The picked one of a day's workouts, open, with an amber edge.
+    @ViewBuilder private func pickedCard(_ s: WatchSnapshot.Session, day: String, gym: WatchGym?) -> some View {
+        if s.sport != "strength", s.eventId != nil {
+            NavigationLink(value: s) { planCard(s, picked: true) }
+                .buttonStyle(.plain)
+                .padding(.top, 6)
+        } else {
+            VStack(alignment: .leading, spacing: 0) { single(s, day: day, gym: gym) }
+                .padding(.horizontal, 10).padding(.vertical, 9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
+                .overlay { RoundedRectangle(cornerRadius: 14).stroke(W.amber, lineWidth: 1.5) }
+                .padding(.top, 6)
+        }
+    }
+
+    /// Another of the day's workouts, folded to one line: tap to pick it.
+    private func foldedCard(_ s: WatchSnapshot.Session) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber)
+            Text(Self.name(s)).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink).lineLimit(1)
+            Spacer(minLength: 4)
+            if let minutes = s.minutes { Text("\(minutes) min").font(.system(size: 11)).foregroundStyle(W.muted) }
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
+        .contentShape(Rectangle())
+    }
+
     private func header(_ s: WatchSnapshot.Session) -> some View {
         HStack(spacing: 5) {
             Image(systemName: W.sportSymbol(s.sport)).font(.system(size: 13)).foregroundStyle(W.amber)
@@ -158,7 +201,7 @@ struct TrainingPage: View {
 
     /// A ride or run (mockup 4): when and how long, its name, its steps as
     /// bars, and today Open in Workout with the plan's steps.
-    private func planCard(_ s: WatchSnapshot.Session) -> some View {
+    private func planCard(_ s: WatchSnapshot.Session, picked: Bool = false) -> some View {
         let plan = s.eventId.flatMap { plans.plans[$0] }
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -197,6 +240,7 @@ struct TrainingPage: View {
         .padding(.horizontal, 10).padding(.vertical, 9)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(W.tile, in: RoundedRectangle(cornerRadius: 14))
+        .overlay { if picked { RoundedRectangle(cornerRadius: 14).stroke(W.amber, lineWidth: 1.5) } }
         .onAppear { plans.load(s) }
     }
 
@@ -206,15 +250,7 @@ struct TrainingPage: View {
         return name + (s.time.map { " · " + W.clockText($0) } ?? "") + (length ? s.minutes.map { " · \($0) min" } ?? "" : "")
     }
 
-    /// The title without the length the server's plan already ends it with
-    /// ("Endurance with cadence drills · 60 min"), which the subtitle shows.
-    static func name(_ s: WatchSnapshot.Session) -> String {
-        guard let minutes = s.minutes else { return s.title }
-        for suffix in [" · \(minutes) min", " – \(minutes) min", " (\(minutes) min)"] where s.title.hasSuffix(suffix) {
-            return String(s.title.dropLast(suffix.count))
-        }
-        return s.title
-    }
+    static func name(_ s: WatchSnapshot.Session) -> String { s.name }
 
     private func exercises(_ gym: WatchGym) -> some View {
         VStack(alignment: .leading, spacing: 1) {

@@ -19,10 +19,11 @@ struct ReadinessHome: View {
             gauges.padding(.top, 6)
             if let today = todayLine {
                 NavigationLink(value: today.session) {
-                    HStack(spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
                         Image(systemName: today.symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(W.amber)
                         Text(today.text).font(.system(size: 13, weight: .semibold)).foregroundStyle(W.ink)
-                            .lineLimit(1).minimumScaleFactor(0.8)
+                            .lineLimit(2).minimumScaleFactor(0.8)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 7)
@@ -55,17 +56,19 @@ struct ReadinessHome: View {
     // MARK: Readiness
 
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Below the alarm and coach buttons, which hang over the page.
-            Text(W.tr("Připravenost", "Readiness"))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(W.secondary)
-                .padding(.top, 14)
-            HStack(alignment: .lastTextBaseline, spacing: 7) {
-                Text(s.readiness.map { String($0) } ?? "–")
-                    .font(W.serif(58))
-                    .foregroundStyle(W.ink)
+        // The name beside the number, above the pill: over the number it
+        // slid under the alarm button, which hangs over the page.
+        HStack(alignment: .lastTextBaseline, spacing: 8) {
+            Text(s.readiness.map { String($0) } ?? "–")
+                .font(W.serif(58))
+                .foregroundStyle(W.ink)
+                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(W.tr("Připravenost", "Readiness"))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(W.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 if let pill {
                     Text(pill.text)
                         .font(.system(size: 11, weight: .semibold))
@@ -76,6 +79,7 @@ struct ReadinessHome: View {
                 }
             }
         }
+        .padding(.top, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
     }
@@ -93,11 +97,12 @@ struct ReadinessHome: View {
 
     // MARK: Today
 
-    /// What is next today, in one line under the numbers ("Sweet spot 75′ at 17:30").
+    /// What is next today, under the numbers ("Sweet spot · 75′ at 17:30"), the
+    /// length once though the plan's title may already end with it.
     private var todayLine: (text: String, symbol: String, session: WatchSnapshot.Session)? {
         guard let next = (s.week ?? []).first(where: { $0.date == s.date && !$0.done }) else { return nil }
-        var text = next.title
-        if let minutes = next.minutes { text += " \(minutes)′" }
+        var text = next.name
+        if let minutes = next.minutes { text += " · \(minutes)′" }
         if let time = next.time { text += W.tr(" v ", " at ") + time }
         let symbol = switch next.sport {
         case "ride": "figure.outdoor.cycle"

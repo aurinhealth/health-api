@@ -441,9 +441,9 @@ const wRing = (size, r, width, frac, c, inner) => `<span class="aw-ring" style="
 const wTop = (left, time, right) => `<div class="aw-top"><span>${left}</span><span class="aw-time">${time}</span><span>${right}</span></div>`;
 const wBtn = (icon, c) => `<span class="aw-ib" style="color:${c}">${ic(icon)}</span>`;
 const watchHome = `<div class="aw-s" style="--gw:#163A2E">${wTop(wBtn('alarm', WA.indigo), '7:12', wBtn('chat', WA.amber))}
-<div class="aw-k">Readiness</div><div class="aw-hero"><span class="aw-n" style="font-size:58px">78</span><span class="aw-pill" style="color:${WA.green}">high</span></div>
+<div class="aw-hero"><span class="aw-n" style="font-size:58px">78</span><span class="aw-side"><span class="aw-k">Readiness</span><span class="aw-pill" style="color:${WA.green}">high</span></span></div>
 <div class="aw-g">${[['Sleep', '7:12', '', 28, WA.amber, '89%'], ['Strain', '8.4', '', 14, WA.amber, 'of 11–14'], ['HRV', '64', 'ms', 76, WA.green, 'high']].map(([k, v, u, pos, c, note]) => `<div><span class="aw-k">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
-<div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength training 45′ at 5:30 PM</div></div>`;
+<div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength training · 45′ at 5:30 PM</div></div>`;
 const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop('', '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
 <div class="aw-ex"><b>Squat</b><span><i class="aw-ib aw-sm">${ic('minus')}</i>set 2/4<i class="aw-ib aw-sm">${ic('plus')}</i></span></div>
 <div class="aw-two"><div class="aw-box on"><span class="aw-n">80</span><span class="aw-k">kg</span></div><div class="aw-box"><span class="aw-n">8</span><span class="aw-k">reps</span></div></div>
@@ -887,7 +887,8 @@ html:not(.js) .stage1{display:none}
 .aw-n{font-family:"Instrument Serif","New York",Georgia,serif;font-weight:400;line-height:1}
 .aw-k{color:#9AA39F;font-size:11px}
 .aw-hero{display:flex;align-items:flex-end;gap:7px;margin-top:-2px}.aw-hero .aw-n{line-height:.95}
-.aw-pill{margin-bottom:7px;padding:2px 8px;border-radius:99px;background:rgba(143,230,196,.16);font-size:11px;font-weight:600}
+.aw-side{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin-bottom:7px}.aw-side .aw-k{color:#D9D6D0;font-size:12px}
+.aw-pill{padding:2px 8px;border-radius:99px;background:rgba(143,230,196,.16);font-size:11px;font-weight:600}
 .aw-g{display:flex;margin-top:6px;border-radius:14px;background:rgba(255,255,255,.08)}.aw-g>div{flex:1;display:flex;flex-direction:column;padding:6px 6px 6px 7px}.aw-g>div+div{border-left:1px solid rgba(255,255,255,.1)}
 .aw-v{font-size:19px;line-height:1.1}.aw-v small{font:10px -apple-system,Inter,sans-serif;color:#9AA39F;margin-left:2px}.aw-g b{font-size:10px}
 .aw-rb{position:relative;display:block;height:4px;margin:4px 0 3px;border-radius:2px;background:#2A2C2E}.aw-rb:before{content:"";position:absolute;left:33%;width:34%;top:0;bottom:0;background:rgba(255,255,255,.18)}
