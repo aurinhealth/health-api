@@ -130,8 +130,8 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
    the other (sides alternate); each step shows its own screen and lifts a piece of it beside the phone.
    Steps take turns on their own while the chapter is in view, until one is picked. */
 .chapter{position:relative;padding:140px 0 0}
-.ch{display:grid;grid-template-columns:minmax(0,1fr) 640px;grid-template-areas:"head vis" "steps vis" "real vis";column-gap:56px;align-items:start}
-.chapter.flip .ch{grid-template-columns:640px minmax(0,1fr);grid-template-areas:"vis head" "vis steps" "vis real"}
+.ch{display:grid;grid-template-columns:minmax(0,1fr) 640px;grid-template-areas:"head vis" "steps vis";grid-template-rows:auto 1fr;column-gap:56px;align-items:start}
+.chapter.flip .ch{grid-template-columns:640px minmax(0,1fr);grid-template-areas:"vis head" "vis steps"}
 .ch .head{grid-area:head;padding-top:56px}
 .ch .vis-wrap{grid-area:vis;position:relative}
 .ch .rail{grid-area:steps;margin-top:40px;max-width:480px}
@@ -225,13 +225,6 @@ main:focus{outline:none}
 .connect .intro .sub{margin:0}
 
 /* A real day: one of the owner's own screens (dark mode, his data) beside the sample day, as a small card. */
-.rd{display:flex;gap:18px;align-items:center;max-width:480px;margin:28px 0 0;padding:14px;border-radius:var(--r-22);background:var(--panel);box-shadow:var(--shadow-card)}
-.rd a{flex:none;display:block;width:112px;border-radius:var(--r-12);overflow:hidden;background:var(--track);box-shadow:0 0 0 1px var(--line)}
-.rd img{display:block;width:100%;height:auto}
-.rd figcaption{font-size:var(--fs-17);line-height:1.45;color:var(--sec)}
-.rd b{display:block;margin-bottom:4px;font-size:var(--fs-12);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--green)}
-.ch .rd{grid-area:real}
-.connect .rd{margin:28px auto 0}
 .connect .box{margin-top:48px}
 .flow{position:relative;aspect-ratio:1000/440;border-radius:var(--r-22);background:var(--panel2);overflow:hidden}
 .fc{position:absolute;left:0;top:0;width:1000px;height:440px;zoom:var(--fz,1)}
@@ -420,7 +413,7 @@ main:focus{outline:none}
   .morning{padding-top:32px}
   /* Chapters: the words, then the phone with its piece over the lower part, then the steps. */
   .chapter{padding-top:110px}
-  .ch,.chapter.flip .ch{grid-template-columns:1fr;grid-template-areas:"head" "vis" "steps" "real"}
+  .ch,.chapter.flip .ch{grid-template-columns:1fr;grid-template-areas:"head" "vis" "steps"}
   .ch .head{padding-top:0}
   .ch .vis-wrap{display:flex;justify-content:center;margin-top:32px}
   .vis{width:440px;height:700px}
@@ -436,7 +429,6 @@ main:focus{outline:none}
   .opener{padding-top:110px}.chapter.opens{padding-top:64px}
   .sun{margin:-16px auto -8px}
   .muscles,.connect,.privacy,#faq,.mid{padding-top:110px}
-  .rd{max-width:none}
   .faq .side{position:static}
 }
 @media (max-width:560px){
@@ -460,7 +452,6 @@ main:focus{outline:none}
   .part,.flip .part{margin-top:-310px}
   .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
   .panels{padding:20px}
-  .rd a{width:96px}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 `;
@@ -736,20 +727,6 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // Google's app verification reads this disclosure on the homepage, so it stays on the overview while Google
 // verifies the app (submitted 2026-10-25); after that this can go back to false.
 // The text stays word for word (tests/site-pages.test.mjs).
-// Real days: the owner's own screens (light mode, October 2026), one beside the sample day in the part
-// of the overview it belongs to: [image, width, height, alt, caption].
-const REAL_DAYS = {
-  spanek: ['sleep-night', 664, 1080, 'A night in Aurin: 5 h 51 min asleep, score 65, from 11:52 PM to 6:02 AM, with deep, REM and light sleep through the night', 'A short night as it was: 5 h 51 min, a quarter of it deep sleep.'],
-  zatez: ['ride-summary', 664, 1149, 'An indoor ride from Wahoo in Aurin: 1 h 30 min, 43.8 km, 74 TSS, NP 183 W, recovery 12 h, with the power graph', 'A ride straight from Wahoo: power, load and 12 hours to recover.'],
-  trenink: ['october', 664, 832, 'October 2026 in Aurin’s training calendar: 47 activities, 40 h 14 min, 20,099 kcal, the time of each day’s ride, gym session or walk', 'October in one screen: 47 activities and 40 hours, rest days included.'],
-  svaly: ['quads-strength', 664, 932, 'Aurin’s quads screen: 43 % rested, strength up 73 % in 6 weeks, estimated leg press max 291 kg', 'Leg press estimated max up 73 % in six weeks, from the sets already logged.'],
-  propojeni: ['ride-day', 664, 716, 'A day in Aurin: an indoor ride from Wahoo and two walks from Google Health, 2 h 17 min and 1,375 kcal', 'One day from two sources: the ride from Wahoo, the walks from the watch, nothing typed twice.'],
-};
-const realDay = id => {
-  const [name, w, h, alt, say] = REAL_DAYS[id];
-  return `<figure class="rd reveal"><a href="/site/real/${name}.webp" target="_blank" rel="noopener"><img src="/site/real/${name}.webp" alt="${alt}" width="${w}" height="${h}" loading="lazy" decoding="async"></a><figcaption><b>From a real day</b>${say}</figcaption></figure>`;
-};
-
 export const GOOGLE_DISCLOSURE_ON_HOME = true;
 export const googleDisclosure = () => `<div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
@@ -829,7 +806,6 @@ export function overviewPage(request) {
 ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
 </div></div>
 <div class="rail"><ol class="steps">${steps}</ol>${multi ? `<button type="button" class="hold"><svg class="icon pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg><svg class="icon play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg><span>Pause</span></button>` : ''}</div>
-${REAL_DAYS[id] ? realDay(id) : ''}
 </div></section>`;
   };
   // The parts of the overview, as the welcome before the sign-in shows them (WelcomePages.swift): each opens with
@@ -852,7 +828,7 @@ ${REAL_DAYS[id] ? realDay(id) : ''}
 <div class="copy reveal"><div class="eyebrow">Muscles</div><h2 class="big">Know what’s recovered.</h2><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
 <div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
 <div class="mpick" role="group" aria-label="Open a muscle"></div>
-${realDay('svaly')}</div>
+</div>
 <div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn · tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
 </div></section>
 <div class="muscle-card" role="dialog" aria-modal="true" aria-labelledby="mc-name"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3 id="mc-name"></h3><p class="state"></p></div></div>`;
@@ -989,7 +965,6 @@ ${flow}
 <div class="legend" aria-hidden="true"><span><i class="in"></i>Into Aurin</span><span><i class="out"></i>Sent back</span><span class="tip">Pick a service to see what it carries</span></div>
 <div class="panels">${panels}</div>
 </div>
-${realDay('propojeni')}
 </div></section>
 
 <section id="soukromi" class="privacy"><div class="wrap">

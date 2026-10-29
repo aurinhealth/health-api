@@ -92,7 +92,7 @@ headlines grow fluidly with the window, but only between two neighbouring steps.
 |---|---|---|
 | `--fs-12` | 12px | Eyebrows (700, 0.18em, uppercase), step numbers, footer headings and base line, flow labels |
 | `--fs-14` | 14px | Nav links, chips, notes under the waitlist, hero card labels, legends, footer links, legal small print |
-| `--fs-17` | 17px | Body (site base), step text, real-day captions, buttons, FAQ answers |
+| `--fs-17` | 17px | Body (site base), step text, buttons, FAQ answers |
 | `--fs-20` | 20px | Ledes and section sub-lines (17 on phones), FAQ questions, service names, legal h2 |
 | `--fs-28` | 28px | Step titles, the opener lines (20 on phones), the mid-page call, hero card numbers, the logo word |
 | `--fs-44` | 44px | h2 on phones, the smallest hero headline, legal h1 |
@@ -132,13 +132,12 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
 
 ## Shape and depth
 
-- **Corners** (`--r-*`): 8 (fields inside cards, small tiles), 12 (thumbnails such as the real-day screen),
+- **Corners** (`--r-*`): 8 (fields inside cards, small tiles), 12 (thumbnails),
   16 (bubbles, the connection nodes, inner panels), 22 (the app's cards, glass cards, lifted app parts, big boxes:
   the connections, the panels, the muscle card), `--r-pill` (buttons, nav, chips, the kicker). The phone keeps its
   real 58px corner, thin bars 2px.
 - **Two shadows**, warm (brown-tinted, never pure black):
-  - `--shadow-card`: a card resting on the paper (a 1px `--line` ring and a hairline shadow). Panels, real-day
-    cards, chips that travel the connections, the picked service.
+  - `--shadow-card`: a card resting on the paper (a 1px `--line` ring and a hairline shadow). Panels, chips that travel the connections, the picked service.
   - `--shadow-float`: anything floating over the page: the nav, the progress pill, the hero's glass numbers, the
     lifted app parts, the muscle bubble and card, the waitlist field (with a `--line` ring), the lock.
   - The phone keeps its own titanium shadow; the ink pill and glows are not shadows.
@@ -223,8 +222,7 @@ To turn it on:
 2. `node scripts/site-screens.mjs screens/` saves them beside the light ones as `public/site/app/*-dark.webp`.
 3. Set `DARK_SITE = true`. `tests/design-tokens.test.mjs` fails while any screen lacks its dark file.
 
-Still light in dark mode: the "From a real day" cards (the owner's own screens, light only, framed like a photo),
-the share image and the overview images for Reddit and the App Store.
+Still light in dark mode: the share image and the overview images for Reddit and the App Store.
 
 ## Voice
 
