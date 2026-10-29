@@ -9,16 +9,20 @@ import XCTest
 final class AppPreviewTests: XCTestCase {
     private var app: XCUIApplication!
     private var language = "en"
+    /// The video a clip goes into: app-preview-<video>.mp4 (scripts/app-preview.mjs).
+    private var video = "en"
 
     private struct Labels {
-        let today, training, food, start, setDone, skip: String
+        let today, training, food, start, setDone, skip, coach, question, glutes: String
     }
 
     private let labels = [
         "en": Labels(today: "Today", training: "Training", food: "Food",
-                     start: "Start workout", setDone: "Set done", skip: "Skip"),
+                     start: "Start workout", setDone: "Set done", skip: "Skip",
+                     coach: "Coach", question: "How did today's run go?", glutes: "Glutes"),
         "cs": Labels(today: "Dnes", training: "Trénink", food: "Jídlo",
-                     start: "Začít trénink", setDone: "Série hotová", skip: "Přeskočit")]
+                     start: "Začít trénink", setDone: "Série hotová", skip: "Přeskočit",
+                     coach: "Kouč", question: "Jak se mi povedl dnešní běh?", glutes: "Hýždě")]
 
     override func setUp() {
         continueAfterFailure = true
@@ -29,6 +33,7 @@ final class AppPreviewTests: XCTestCase {
         warmUp()
         for language in ["en", "cs"] {
             self.language = language
+            video = language
             let l = labels[language]!
 
             // Every tap waits for the app to settle (about 3 s with the dial and the
@@ -61,6 +66,39 @@ final class AppPreviewTests: XCTestCase {
             pause(2)
             tapIfThere(app.buttons[l.skip])
             pause(0.5)
+            mark("out")
+        }
+    }
+
+    /// The second video, app-preview-<language>-coach.mp4: the muscles and one of them,
+    /// then the coach answering a question about the sample day (the demo's ready answer).
+    func testCoachPreview() {
+        for language in ["en", "cs"] {
+            self.language = language
+            video = language + "-coach"
+            let l = labels[language]!
+
+            // Muscles: the figure in the sample day's colours, then the glutes' detail.
+            launch("-open", "muscles")
+            let glutes = button(containing: l.glutes)
+            guard glutes.waitForExistence(timeout: 20) else { continue }
+            mark("in")
+            pause(2.5)
+            tapIfThere(glutes)
+            pause(3)
+            mark("out")
+
+            // The coach: a suggested question, "thinking", then the answer written out.
+            launch("-tab", "today")
+            let coach = tab(l.coach)
+            guard coach.waitForExistence(timeout: 20) else { continue }
+            mark("in")
+            tapIfThere(coach)
+            let question = button(containing: l.question)
+            guard question.waitForExistence(timeout: 8) else { mark("out"); continue }
+            pause(1)
+            question.tap()
+            pause(9)
             mark("out")
         }
     }
@@ -108,12 +146,12 @@ final class AppPreviewTests: XCTestCase {
         _ = XCTWaiter.wait(for: [expectation(description: "settle")], timeout: seconds)
     }
 
-    /// One line per cut, "<language> in|out <seconds since 1970>": the simulator
+    /// One line per cut, "<video> in|out <seconds since 1970>": the simulator
     /// runs on the Mac's clock, the same one the recording's start is taken on.
     private func mark(_ edge: String) {
         guard let dir = ProcessInfo.processInfo.environment["PREVIEW_DIR"] else { return }
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        let line = String(format: "%@ %@ %.3f\n", language, edge, Date().timeIntervalSince1970)
+        let line = String(format: "%@ %@ %.3f\n", video, edge, Date().timeIntervalSince1970)
         let url = URL(fileURLWithPath: dir).appending(path: "marks.txt")
         if let handle = try? FileHandle(forWritingTo: url) {
             handle.seekToEndOfFile()

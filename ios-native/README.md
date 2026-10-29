@@ -81,7 +81,8 @@ change in `ios-native/`. It:
 3. takes simulator screenshots of the running app;
 4. records the App Store preview videos (`AurinUITests/AppPreviewTests.swift`
    walks the sample day, `scripts/app-preview.mjs` cuts the recording into
-   `preview/app-preview-en.mp4` and `-cs.mp4`, 886×1920, 15–30 s): upload them
+   `preview/app-preview-en.mp4` and `-cs.mp4`, 886×1920, 15–30 s, plus a second pair
+   `app-preview-en-coach.mp4` and `-cs-coach.mp4` with the muscles and the coach): upload them
    in App Store Connect → the version → App Previews;
 5. builds `Aurin-native-unsigned.ipa`.
 

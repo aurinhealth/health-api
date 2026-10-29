@@ -289,7 +289,7 @@ struct CoachView: View {
                     Image(systemName: "arrow.up").scaledFont(16, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onButton)
                         .frame(width: 40, height: 40).background(Palette.button, in: Circle())
                 }
-                .disabled(sending || usedUp || (input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil) || model.demo)
+                .disabled(sending || usedUp || (input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil))
                 .accessibilityLabel("Odeslat")
             }
         }
@@ -336,8 +336,13 @@ struct CoachView: View {
     private func send() async {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let picture = photo
-        // The demo has no account to ask with.
-        guard !text.isEmpty || picture != nil, !sending, !usedUp, !model.demo else { return }
+        // The demo has no account to ask with: a ready answer from the sample day.
+        if model.demo {
+            guard !text.isEmpty, !sending else { return }
+            await demoAnswer(text)
+            return
+        }
+        guard !text.isEmpty || picture != nil, !sending, !usedUp else { return }
         input = ""
         photo = nil
         error = nil
@@ -430,6 +435,23 @@ struct CoachView: View {
     private func openPlan() {
         dismiss()
         model.open(.trainingPlan)
+    }
+
+    /// The demo's answer, written out a few words at a time as the server's would be.
+    private func demoAnswer(_ text: String) async {
+        input = ""
+        messages.append(Bubble(mine: true, text: text))
+        let reply = Bubble(mine: false, text: "")
+        messages.append(reply)
+        sending = true
+        progress = L10n.tr("Kouč přemýšlí…")
+        defer { sending = false; progress = nil }
+        try? await Task.sleep(for: .seconds(1.2))
+        let words = DemoData.coachAnswer(text).split(separator: " ")
+        for i in words.indices {
+            try? await Task.sleep(for: .milliseconds(60))
+            edit(reply.id) { $0.text = words[...i].joined(separator: " ") }
+        }
     }
 
     private func edit(_ id: UUID, _ change: (inout Bubble) -> Void) {
