@@ -639,8 +639,8 @@ addEventListener('keydown',function(e){if(!card.classList.contains('on'))return;
 })();</script>`;
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
-// for days by its URL, so ?v= goes up whenever og-en.png is rendered again.
-const SHARE_IMAGE = '/site/og-en.png?v=9';
+// for days by its URL, so ?v= goes up whenever og-en.jpg is rendered again (a JPEG: a tenth of the PNG's size).
+const SHARE_IMAGE = '/site/og-en.jpg?v=10';
 const SHARE_IMAGE_ALT = 'Aurin: A coach that knows how you slept. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null, status=200}) {
@@ -659,7 +659,7 @@ ${DARK_SITE ? '<meta name="theme-color" content="#F3EFE8" media="(prefers-color-
 <meta property="og:url" content="${self}">
 <meta property="og:site_name" content="Aurin">
 <meta property="og:image" content="${origin}${SHARE_IMAGE}">
-<meta property="og:image:type" content="image/png">
+<meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="${SHARE_IMAGE_ALT}">

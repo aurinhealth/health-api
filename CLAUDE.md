@@ -24,7 +24,7 @@ availability) updates the overview in the same pull request. The site is in Engl
 - The site shows only the sample day, never anyone's real data (the "From a real day" cards were dropped on
   2026-10-29).
 - Colours come from the light palette in `ios-native/Shared/Palette.swift`.
-- After changing the hero, render the share image `public/site/og-en.png` (1200×630) again.
+- After changing the hero, render the share image `public/site/og-en.jpg` (1200×630) again.
 - The privacy policy and the terms also have a Czech version (`/cs/privacy`, `/cs/terms`; the old `?lang=cs` redirects there; linked from the page and the
   footer) that says the same as the English one; change both together.
 - The privacy, terms and support pages are legal texts that Google verification reads: change them only

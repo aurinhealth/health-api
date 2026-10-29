@@ -40,8 +40,10 @@ await page.evaluate(async () => {
 });
 for (const shot of await page.locator('[data-shot]').all()) {
   const name = await shot.getAttribute('data-shot');
-  await shot.screenshot({path: join(out, `${name}.png`), animations: 'disabled'});
-  console.log(`${name}.png`);
+  // The share image is a JPEG: link previews load it on every share, and as a PNG it weighed 300 kB.
+  const file = name === 'og-en' ? `${name}.jpg` : `${name}.png`;
+  await shot.screenshot({path: join(out, file), animations: 'disabled', ...(name === 'og-en' ? {type: 'jpeg', quality: 88} : {})});
+  console.log(file);
 }
 await browser.close();
 server.close();
