@@ -279,7 +279,7 @@ struct RootView: View {
                 try? await Task.sleep(for: .seconds(7))
                 if !showSyncStatus && model.syncReport?.id == shown { model.syncReport = nil }
             }
-            // After the first e-mail sign-in: a passkey for next time, then the setup.
+            // The next start after the first e-mail sign-in: a passkey for next time.
             .sheet(isPresented: Binding(get: { model.passkeyOffer }, set: { model.passkeyOffer = $0 })) { PasskeyOfferSheet().dynamicTypeSize(Self.textSizes) }
             .fullScreenCover(isPresented: Binding(get: { model.needsSetup && !model.passkeyOffer }, set: { model.needsSetup = $0 })) { SetupFlowView().dynamicTypeSize(Self.textSizes) }
             .task {
@@ -288,6 +288,10 @@ struct RootView: View {
                 async let account: Void = model.loadAccountInitial()
                 async let google: Void = model.loadGoogleSync()
                 _ = await (setup, account, google)
+                if PasskeyOfferLater.due && !model.needsSetup && !model.demo {
+                    PasskeyOfferLater.forget()
+                    if ServerChoice.current.passkeys && !PasskeyService.mayHaveOne { model.passkeyOffer = true }
+                }
                 // A fresh install takes back the settings the account kept.
                 if !model.demo { await SettingsBackup.restore(api: model.api) }
             }
@@ -420,9 +424,7 @@ struct OfflineBanner: View {
     }
 
     static func waitingText(_ n: Int) -> String {
-        if n == 1 { return L10n.f("%@ zápis čeká na signál", String(n)) }
-        if (2...4).contains(n) { return L10n.f("%@ zápisy čekají na signál", String(n)) }
-        return L10n.f("%@ zápisů čeká na signál", String(n))
+        L10n.plural("%lld zápisů čeká na signál", n)
     }
 
     var body: some View {

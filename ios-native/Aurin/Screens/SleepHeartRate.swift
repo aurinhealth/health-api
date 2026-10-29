@@ -27,7 +27,7 @@ struct SleepHeartRateContent: View {
                            status: stats?.avgHr.flatMap { v in norm.map { MetricStatus.compare(v, low: $0.lowerBound, high: $0.upperBound, worseAbove: true) } })
             if let avg = stats?.avgHr, let norm {
                 DetailRange(value: avg, low: norm.lowerBound, high: norm.upperBound,
-                            label: L10n.f("tvůj normál %@", Fmt.int(norm.lowerBound) + "–" + Fmt.int(norm.upperBound) + " bpm"), worseAbove: true)
+                            label: L10n.f("tvůj normál %@–%@ bpm", Fmt.int(norm.lowerBound), Fmt.int(norm.upperBound)), worseAbove: true)
                     .padding(.top, 14)
             }
 

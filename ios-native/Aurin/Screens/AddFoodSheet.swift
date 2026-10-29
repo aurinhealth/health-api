@@ -297,10 +297,10 @@ struct AddFoodSheet: View {
         var parts = [L10n.tr("1 porce")]
         if let s = r.servings {
             let number = Fmt.decimal(s, digits: s.rounded() == s ? 0 : 1)
-            parts.append(L10n.f("z %@ %@", number, Fmt.plural(Int(s), "porce", "porce", "porcí")))
+            parts.append(L10n.plural("z %@ porcí", number, Int(s)))
         }
         let count = r.ingredients?.count ?? 0
-        if count > 0 { parts.append("\(count) " + Fmt.plural(count, "surovina", "suroviny", "surovin")) }
+        if count > 0 { parts.append(L10n.plural("%lld surovin", count)) }
         return parts.joined(separator: " · ")
     }
 

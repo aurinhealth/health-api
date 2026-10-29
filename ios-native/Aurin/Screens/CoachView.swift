@@ -822,21 +822,20 @@ struct PlanProposalBlock: View {
         var out: [(String, String)] = []
         let day = { (d: String) in Fmt.weekdayShort(d) + " " + Fmt.dayMonth(d) }
         let weeks = action.weeksCount ?? action.trainingPlan?.weeks.count ?? 0
-        let length = String(weeks) + " " + Fmt.plural(weeks, "týden", "týdny", "týdnů")
+        let length = L10n.plural("%lld týdnů", weeks)
         if let race = action.raceDate {
             out.append((L10n.tr("Závod"), day(race) + (action.raceKm.map { " · " + Fmt.decimal($0, digits: $0.rounded() == $0 ? 0 : 1) + " km" } ?? "")))
-            out.append((L10n.tr("Délka"), length + (action.startDate.map { " " + L10n.f("od %@", Fmt.dayMonth(action.firstDay ?? $0)) } ?? "")))
+            out.append((L10n.tr("Délka"), action.startDate.map { L10n.plural("%lld týdnů od %@", weeks, Fmt.dayMonth(action.firstDay ?? $0)) } ?? length))
         } else {
             if let start = action.firstDay ?? action.startDate { out.append((L10n.tr("Začátek"), day(start))) }
             out.append((L10n.tr("Délka"), length))
         }
         if let card = action.trainingPlan, let n = card.sessions, n > 0 {
-            let what: String = switch action.sport {
-            case "run": Fmt.plural(n, "běh", "běhy", "běhů")
-            case "ride": Fmt.plural(n, "jízda", "jízdy", "jízd")
-            default: Fmt.plural(n, "trénink", "tréninky", "tréninků")
+            var text: String = switch action.sport {
+            case "run": L10n.plural("%lld běhů", n)
+            case "ride": L10n.plural("%lld jízd", n)
+            default: L10n.plural("%lld tréninků", n)
             }
-            var text = String(n) + " " + what
             if let m = card.minutes, let lo = m.first, let hi = m.last, hi > 0 {
                 let h = { (x: Int) in String(format: "%.0f", (Double(x) / 60).rounded()) }
                 text += " · " + (h(lo) == h(hi) ? h(hi) : h(lo) + "–" + h(hi)) + " h"
@@ -920,7 +919,7 @@ struct ChatsSheet: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(chat.title ?? "Konverzace").font(.body).foregroundStyle(Palette.ink).lineLimit(2)
-                            if let n = chat.messages { Text("\(n) " + Fmt.plural(n, "zpráva", "zprávy", "zpráv")).font(Typo.caption).foregroundStyle(Palette.muted) }
+                            if let n = chat.messages { Text(L10n.plural("%lld zpráv", n)).font(Typo.caption).foregroundStyle(Palette.muted) }
                         }
                     }
                 }

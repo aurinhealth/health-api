@@ -319,7 +319,7 @@ enum GymCoach {
     /// "návrh 72,5 kg × 8, 3 série".
     static func proposal(_ s: GymSuggestion) -> String {
         guard let first = s.work.first else { return "" }
-        let sets = String(s.work.count) + " " + Fmt.plural(s.work.count, "série", "série", "sérií")
+        let sets = L10n.plural("%lld sérií", s.work.count)
         if let kg = first.kg {
             return L10n.f("návrh %@ %@ × %@, %@", shown(kg), Units.weightUnit, String(first.reps), sets)
         }

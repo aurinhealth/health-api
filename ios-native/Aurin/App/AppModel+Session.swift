@@ -66,6 +66,7 @@ extension AppModel {
             // The user closed the sign-in sheet.
         } catch {
             errorMessage = error.localizedDescription
+            notInvited = error as? APIError == .notInvited(error.localizedDescription)
         }
     }
 
@@ -86,14 +87,16 @@ extension AppModel {
             await refresh()
         } catch {
             errorMessage = error.localizedDescription
+            notInvited = error as? APIError == .notInvited(error.localizedDescription)
         }
     }
 
     /// Signs in with the code from the e-mail. The first time on this phone
-    /// the app then offers a passkey ("Příště přes Face ID", RootView).
+    /// the app offers a passkey ("Příště přes Face ID") the next time it opens
+    /// (PasskeyOfferLater), not between the sign-in and the setup.
     func signIn(email: String, code: String) async throws {
         try await api.verifyEmailLogin(email: email, code: code)
-        if ServerChoice.current.passkeys && !PasskeyService.mayHaveOne { passkeyOffer = true }
+        if ServerChoice.current.passkeys && !PasskeyService.mayHaveOne { PasskeyOfferLater.note() }
         await signedIn()
         await refresh()
     }
@@ -120,6 +123,7 @@ extension AppModel {
             demo = false
         }
         errorMessage = nil
+        notInvited = false
         let defaults = UserDefaults.standard
         if defaults.string(forKey: AvatarStore.emailKey) != nil { defaults.set(true, forKey: Self.accountUncheckedKey) }
         let account = try? await api.account()
@@ -263,6 +267,8 @@ extension AppModel {
         UserDefaults.standard.removeObject(forKey: Self.accountInitialKey)
         needsSetup = false
         passkeyOffer = false
+        PasskeyOfferLater.forget()
+        FirstDays.forget()
         paths = [:]
         tab = .today
         offline = false

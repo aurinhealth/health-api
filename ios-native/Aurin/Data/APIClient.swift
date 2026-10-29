@@ -13,6 +13,8 @@ enum APIError: LocalizedError, Equatable {
     case coachAllowanceUsed(String, CoachAllowance?)
     /// The passkey used to sign in belongs to no account (401 unknownCredential, src/passkeys.js).
     case unknownPasskey(String)
+    /// The account has no invite to Aurin (not_invited, src/apple-login.js, src/google-login.js).
+    case notInvited(String)
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +25,7 @@ enum APIError: LocalizedError, Equatable {
         case .subscriptionRequired(let text): return text
         case .coachAllowanceUsed(let text, _): return text
         case .unknownPasskey(let text): return text
+        case .notInvited(let text): return text
         }
     }
 }
@@ -111,7 +114,8 @@ final class APIClient: @unchecked Sendable {
     /// `appContext` replaces the screen and day when the coach is asked about a
     /// detail (CoachSubject.appContext).
     func askCoach(_ message: String, chatId: Int?, view: String, date: String? = nil, image: String? = nil, appContext: JSONObject? = nil) -> AsyncThrowingStream<AssistantEvent, Error> {
-        AsyncThrowingStream { continuation in
+        FirstDays.mark(FirstDays.coachKey)
+        return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
                     var request = makeRequest("/app/api/assistant", method: "POST")
@@ -503,6 +507,7 @@ final class APIClient: @unchecked Sendable {
 
     func logFood(_ request: FoodLogRequest) async throws {
         let _: JSONValue = try await send("/app/api/food/log", method: "POST", body: request)
+        FirstDays.mark(FirstDays.mealKey)
     }
 
     func deleteFoodEntry(id: Int) async throws {
@@ -785,6 +790,9 @@ final class APIClient: @unchecked Sendable {
         guard (200..<300).contains(http.statusCode) else {
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let message = json?["message"] as? String
+            if json?["error"] as? String == "not_invited" {
+                throw APIError.notInvited(message ?? L10n.tr("Tento účet nemá do Aurinu pozvánku. Aurin je teď jen pro pozvané."))
+            }
             if http.statusCode == 401 {
                 // A refused sign-in (/auth/…) says why; elsewhere 401 is an expired session.
                 if json?["unknownCredential"] as? Bool == true { throw APIError.unknownPasskey(message ?? "") }

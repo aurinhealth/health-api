@@ -133,9 +133,11 @@ final class AppModel {
     var paths: [AppTab: [AppRoute]] = [:]
     /// After the first sign-in: the profile setup has not been done yet.
     var needsSetup = false
-    /// After the first e-mail sign-in on this phone: the "Příště přes Face ID"
-    /// sheet, shown before the setup (RootView).
+    /// The "Příště přes Face ID" sheet, the next time the app opens after the
+    /// first e-mail sign-in on this phone (PasskeyOfferLater, RootView).
     var passkeyOffer = false
+    /// The last sign-in failed for want of an invite: the sign-in offers the waitlist.
+    var notInvited = false
     /// A full-screen flow (Režim tréninku) hides the tab bar.
     var immersive = false
     /// Režim tréninku hidden with its arrow: the workout goes on and a bar

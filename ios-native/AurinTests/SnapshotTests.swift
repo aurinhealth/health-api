@@ -84,6 +84,8 @@ final class SnapshotTests: XCTestCase {
         try render("health", glow: Palette.Glow.health) { NavigationStack { HealthContent(health: health) }.padding(.top, 50).padding(.bottom, 40).environment(AppModel(demo: true)) }
         try render("health-readiness", glow: Palette.Glow.health) { ReadinessDetailContent(health: health).padding(24).padding(.top, 30) }
         try render("health-sleep", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: DemoData.night).padding(24).padding(.top, 30) }
+        // The night's timeline didn't load: "Zkusit znovu" in the stages card.
+        try render("health-sleep-failed", glow: Palette.Glow.health) { SleepDetailContent(health: health, detail: nil, failed: true).padding(24).padding(.top, 30) }
         for metric in HealthMetric.allCases {
             try render("health-" + metric.rawValue, glow: Palette.Glow.health) { MetricDetailContent(metric: metric, health: health).padding(24).padding(.top, 30) }
         }
@@ -198,7 +200,7 @@ final class SnapshotTests: XCTestCase {
         }
         XCTAssertEqual(L10n.tr("Spánek"), "Sleep")
         XCTAssertEqual(L10n.tr("text bez překladu"), "text bez překladu")
-        XCTAssertEqual(Fmt.plural(5, "den", "dny", "dní"), "days")
+        XCTAssertEqual(L10n.plural("dní", 5), "days")
         XCTAssertEqual(Units.weightText(100, digits: 0), "220 lb")
         XCTAssertEqual(Units.distanceText(10), "6.2 mi")
         // Every translation keeps the placeholders of its Czech key.
@@ -287,7 +289,7 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(Fmt.dayMonth("2026-11-01"), "1. listopadu")
         XCTAssertEqual(Fmt.relativeDay("2026-10-10", today: "2026-10-08"), "v sobotu")
         XCTAssertEqual(Fmt.duration(75), "1 h 15 min")
-        XCTAssertEqual(Fmt.plural(24, "den", "dny", "dní"), "dní")
+        XCTAssertEqual(L10n.plural("dní", 24), "dní")
     }
 
     func testSignInScreen() throws {
@@ -815,6 +817,9 @@ final class SnapshotTests: XCTestCase {
         try render("plan-card", glow: Palette.Glow.training, height: 260) { ActivePlanSummary(active: active).padding(24) }
         try render("plan-preview", glow: Palette.Glow.training, height: 1150) {
             PlanPreviewContent(template: active.template, preview: preview) {}.padding(.horizontal, 24).environment(model)
+        }
+        try render("plan-preview-failed", glow: Palette.Glow.training, height: 1150) {
+            PlanPreviewContent(template: active.template, preview: nil, failed: true, canStart: false) {}.padding(.horizontal, 24).environment(model)
         }
         try render("plan-active", glow: Palette.Glow.training, height: 1500) {
             NavigationStack { ActivePlanContent(active: active, preview: preview, week: week).padding(.horizontal, 24) }.environment(model)

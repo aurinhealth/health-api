@@ -111,7 +111,7 @@ struct WeeklyLoadChart: View {
             HStack(spacing: 14) {
                 Text("TSS za týden").font(Typo.caption).foregroundStyle(Palette.muted)
                 if let current = weeks.last {
-                    Text(L10n.f("tento týden %@", Fmt.int(current.load)) + (current.planned.map { $0 > current.load ? " " + L10n.f("z %@", Fmt.int($0)) : "" } ?? ""))
+                    Text(current.planned.flatMap { $0 > current.load ? L10n.f("tento týden %@ z %@", Fmt.int(current.load), Fmt.int($0)) : nil } ?? L10n.f("tento týden %@", Fmt.int(current.load)))
                         .font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             }
