@@ -290,3 +290,26 @@ test("a Fitbit workout counts as Google Health has it; the Apple Watch's as Appl
   await afterGoogleSync({ DB: db, USER_ID: 1 }, "exercise", [{}]);
   assert.deepEqual(role("apple:W1"), ["primary", null]);
 });
+
+// E in audit/zrychleni-aplikace-mereni-2026-10-29.md: the app sends the same
+// hours on most syncs; only rows written or deleted choose sources again.
+test("a sync with nothing new chooses no source again; a changed hour does", async () => {
+  const { raw, db } = setup();
+  google(raw, "steps", "2026-10-10", 500);
+  const records = [{ type: "steps", id: "steps:2026-10-10T08", start: "2026-10-10T08:00:00Z", end: "2026-10-10T09:00:00Z", value: 1200 }, { type: "daily-resting-heart-rate", id: "rhr:2026-10-10", date: "2026-10-10", value: 52 }];
+  const now = Date.parse("2026-10-11T12:00:00Z");
+  const seen = [], prepare = raw.prepare.bind(raw);
+  raw.prepare = sql => { seen.push(sql); return prepare(sql); };
+  const choosing = () => seen.filter(sql => /MAX\(record_role = 'primary'\) kept/.test(sql)).length;
+  await saveAppleHealth(db, 1, { records }, { now });
+  assert.ok(choosing() > 0);
+  assert.equal(rows(raw, "source_family='google-wearables' AND data_type='steps'")[0].record_role, "duplicate");
+  seen.length = 0;
+  const again = await saveAppleHealth(db, 1, { records: records.map(r => ({ ...r })) }, { now });
+  assert.equal(again.changed, 0);
+  assert.equal(choosing(), 0, "nothing new, nothing chosen again");
+  seen.length = 0;
+  await saveAppleHealth(db, 1, { records: [{ ...records[0], value: 1300 }, records[1]] }, { now });
+  assert.ok(choosing() > 0);
+  assert.equal(rows(raw, "source_family='google-wearables' AND data_type='steps'")[0].record_role, "duplicate");
+});
