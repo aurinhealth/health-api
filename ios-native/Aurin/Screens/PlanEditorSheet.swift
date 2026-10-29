@@ -206,7 +206,7 @@ struct PlanEditorSheet: View {
                 .frame(width: 28, height: 28).background(Palette.green, in: Circle())
         } else if offset == current || exercise.doneCount > 0 {
             Text("\(exercise.doneCount)/\(exercise.workCount)").scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(Palette.amber)
-                .frame(width: 28, height: 28).overlay(Circle().stroke(Palette.amber, lineWidth: 2))
+                .frame(width: 28, height: 28).overlay { Circle().stroke(Palette.amber, lineWidth: 2) }
         } else {
             Circle().stroke(Palette.hairline, lineWidth: 1.5).frame(width: 28, height: 28)
         }
@@ -318,7 +318,7 @@ struct ExercisePicker: View {
         NavigationStack {
             List {
                 Section {
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    ScrollView(.horizontal) {
                         HStack(spacing: 8) {
                             chip("Vše", muscle == nil) { muscle = nil }
                             ForEach(BodyFigure.muscles.indices, id: \.self) { i in
@@ -327,6 +327,7 @@ struct ExercisePicker: View {
                             }
                         }
                     }
+                    .scrollIndicators(.hidden)
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
                 ForEach(filtered) { ex in

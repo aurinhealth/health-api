@@ -66,12 +66,13 @@ struct DrinkPresetRow: View {
     @State private var done: String?
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 ForEach(DrinkPrefs.presets(favorites: DrinkPrefs.list(favorites))) { preset($0) }
             }
             .padding(.vertical, 1)
         }
+        .scrollIndicators(.hidden)
     }
 
     private func preset(_ p: DrinkPreset) -> some View {

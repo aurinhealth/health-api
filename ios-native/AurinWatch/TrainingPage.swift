@@ -249,7 +249,7 @@ struct WeekRow: View {
                         dot(day)
                             .frame(width: 14, height: 14)
                             .padding(2)
-                            .overlay(Circle().stroke(day == shown ? W.ink : .clear, lineWidth: 1.5))
+                            .overlay { Circle().stroke(day == shown ? W.ink : .clear, lineWidth: 1.5) }
                         Text(W.dayLetter(day)).font(.system(size: 8, weight: .semibold))
                             .foregroundStyle(day == today ? W.ink : W.muted)
                     }

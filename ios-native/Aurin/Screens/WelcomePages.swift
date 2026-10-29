@@ -362,7 +362,7 @@ private struct WelcomeTraining: View {
     private func chip(_ text: String) -> some View {
         Text(verbatim: text).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.ink)
             .padding(.horizontal, 10).frame(height: 26)
-            .overlay(Capsule().stroke(Palette.ink.opacity(0.14), lineWidth: 1))
+            .overlay { Capsule().stroke(Palette.ink.opacity(0.14), lineWidth: 1) }
     }
 
     private func setRow(_ set: (label: String, kg: Int, done: Bool), index: Int) -> some View {
@@ -387,7 +387,7 @@ private struct WelcomeTraining: View {
         }
         .padding(.horizontal, 8).frame(height: 26)
         .background(set.done ? Color.clear : Palette.amberSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(set.done ? Color.clear : Palette.amberBar, lineWidth: 1.2))
+        .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(set.done ? Color.clear : Palette.amberBar, lineWidth: 1.2) }
     }
 }
 
@@ -482,7 +482,7 @@ struct WelcomeLock: View {
                 .offset(y: shut ? -44 : -58)
             RoundedRectangle(cornerRadius: 26, style: .continuous)
                 .fill(LinearGradient(colors: [Palette.cardLift, Palette.card], startPoint: .top, endPoint: .bottom))
-                .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.cardEdge, lineWidth: 1))
+                .overlay { RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(Palette.cardEdge, lineWidth: 1) }
                 .frame(width: 104, height: 84)
                 .shadow(color: .black.opacity(0.1), radius: 18, y: 12)
                 .offset(y: 10)
@@ -526,7 +526,7 @@ struct WelcomeProgress: View {
                 }
                 Circle().fill(AurinMark.amber)
                     .frame(width: 12, height: 12)
-                    .overlay(Circle().stroke(Palette.card, lineWidth: 2))
+                    .overlay { Circle().stroke(Palette.card, lineWidth: 2) }
                     .shadow(color: AurinMark.amber.opacity(0.8), radius: 6)
                     .offset(x: step * CGFloat(index) - 6)
             }

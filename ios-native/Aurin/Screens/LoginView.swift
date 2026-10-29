@@ -138,7 +138,7 @@ struct LoginView: View {
                 // While the server signs in with what Apple returned.
                 if model.signingInWith == .apple {
                     Capsule().fill(colorScheme == .dark ? Color.white : Color.black)
-                        .overlay(ProgressView().tint(colorScheme == .dark ? Color.black : Color.white))
+                        .overlay { ProgressView().tint(colorScheme == .dark ? Color.black : Color.white) }
                 }
             }
             .disabled(model.signingIn)
@@ -208,7 +208,7 @@ private struct SignInButtonLook: ViewModifier {
             .font(.body.weight(.semibold)).foregroundStyle(Palette.ink)
             .frame(maxWidth: .infinity).frame(height: 52)
             .background(Palette.card.opacity(0.6), in: Capsule())
-            .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+            .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
             .contentShape(Capsule())
     }
 }
@@ -235,7 +235,7 @@ struct PasskeyOfferSheet: View {
                     .disabled(busy)
             }
             .padding(24)
-            .background(ScreenBackground(glow: Palette.Glow.today))
+            .background { ScreenBackground(glow: Palette.Glow.today) }
         }
         .presentationDetents([.medium, .large])
         .interactiveDismissDisabled(busy)
@@ -305,7 +305,7 @@ struct EmailLoginSheet: View {
                 Spacer()
             }
             .padding(24)
-            .background(ScreenBackground(glow: Palette.Glow.today))
+            .background { ScreenBackground(glow: Palette.Glow.today) }
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } } }
             .onAppear { focused = true }
         }

@@ -259,7 +259,7 @@ struct JournalMorningSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.card)
+        .glassSheetBackground(Palette.card)
     }
 }
 

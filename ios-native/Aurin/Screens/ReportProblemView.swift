@@ -233,7 +233,7 @@ struct ReportDiagnosticsView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(20)
         }
-        .background(Palette.settingsBackground.ignoresSafeArea())
+        .background { Palette.settingsBackground.ignoresSafeArea() }
         .navigationTitle(L10n.tr("Diagnostika"))
         .navigationBarTitleDisplayMode(.inline)
     }

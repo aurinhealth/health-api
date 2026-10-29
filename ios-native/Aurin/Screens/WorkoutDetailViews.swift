@@ -948,7 +948,7 @@ struct PlannedWorkoutView: View {
         Text(title).font(Typo.bodyStrong).foregroundStyle(filled ? Palette.onButton : Palette.ink)
             .frame(maxWidth: .infinity).frame(height: 46)
             .background(filled ? Palette.button : .clear, in: Capsule())
-            .overlay(Capsule().stroke(Palette.ink.opacity(filled ? 0 : 0.2), lineWidth: 1))
+            .overlay { Capsule().stroke(Palette.ink.opacity(filled ? 0 : 0.2), lineWidth: 1) }
     }
 
     private func run(_ work: () async throws -> Void) async {
@@ -1031,7 +1031,7 @@ struct PlannedTimeSheet: View {
         .padding(24)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
     }
 
     private func save(_ value: String) {

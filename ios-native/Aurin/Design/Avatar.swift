@@ -152,7 +152,7 @@ struct AvatarView: View {
         .frame(width: size, height: size)
         .background(image == nil ? Palette.sand.opacity(size > 50 ? 0.6 : 0) : .clear)
         .clipShape(Circle())
-        .overlay(Circle().stroke(Palette.ink.opacity(image == nil ? 0.2 : 0.08), lineWidth: 1))
+        .overlay { Circle().stroke(Palette.ink.opacity(image == nil ? 0.2 : 0.08), lineWidth: 1) }
         .task(id: version) { image = AvatarStore.image() }
     }
 }

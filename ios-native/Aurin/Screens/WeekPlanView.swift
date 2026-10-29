@@ -305,7 +305,7 @@ struct WeekPlanView: View {
                             .foregroundStyle(picked == sport ? Palette.onButton : Palette.ink)
                             .padding(.horizontal, 12).frame(height: 36)
                             .background(picked == sport ? Palette.button : Palette.card, in: Capsule())
-                            .overlay(Capsule().stroke(Palette.hairline, lineWidth: picked == sport ? 0 : 1))
+                            .overlay { Capsule().stroke(Palette.hairline, lineWidth: picked == sport ? 0 : 1) }
                     }
                     .buttonStyle(.plain)
                 }
@@ -346,13 +346,14 @@ struct WeekPlanView: View {
                         Text(past ? "" : picked == nil ? L10n.tr("Bez tréninku") : L10n.tr("Přidat sem"))
                             .font(Typo.caption).foregroundStyle(Palette.faint)
                     } else {
-                        ScrollView(.horizontal, showsIndicators: false) {
+                        ScrollView(.horizontal) {
                             HStack(spacing: 6) {
                                 ForEach(Array(days[w].enumerated()), id: \.offset) { k, sport in
                                     chip(sport, removable: !past) { withAnimation(.snappy) { _ = days[w].remove(at: k) } }
                                 }
                             }
                         }
+                        .scrollIndicators(.hidden)
                     }
                     Spacer(minLength: 0)
                 }
@@ -862,7 +863,7 @@ struct WeekSessionDetailView: View {
 
                 if session.status != .saved {
                     SectionLabel(text: "Délka").padding(.top, 6)
-                    ScrollView(.horizontal, showsIndicators: false) {
+                    ScrollView(.horizontal) {
                         HStack(spacing: 8) {
                             ForEach(WeekSessionDraft.lengths(session.sport, including: session.minutes), id: \.self) { m in
                                 Button {
@@ -879,6 +880,7 @@ struct WeekSessionDetailView: View {
                             }
                         }
                     }
+                    .scrollIndicators(.hidden)
                     .disabled(busy)
 
                     if session.sport != "gym" {
@@ -982,7 +984,7 @@ private struct AdjustSessionSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 16) {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     HStack(spacing: 8) {
                         ForEach(chips.indices, id: \.self) { i in
                             let chip = chips[i]
@@ -995,12 +997,13 @@ private struct AdjustSessionSheet: View {
                                 Text(L10n.tr(chip.1)).font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
                                     .padding(.horizontal, 14).frame(height: 36)
                                     .background(Palette.card, in: Capsule())
-                                    .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                                    .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
                             }
                             .buttonStyle(.plain)
                         }
                     }
                 }
+                .scrollIndicators(.hidden)
                 TextField(L10n.tr("Třeba: bude pršet, chci kratší a uvnitř"), text: $text, axis: .vertical)
                     .font(Typo.body).lineLimit(2...5)
                     .padding(12).background(Palette.card, in: RoundedRectangle(cornerRadius: 14))

@@ -74,9 +74,9 @@ struct FoodProductEditor: View {
             }
             .padding(24)
         }
-        .background(Palette.background.ignoresSafeArea())
+        .background { Palette.background.ignoresSafeArea() }
         .floatingBack(title: "Upravit produkt") { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
         .onAppear(perform: fill)
     }
 

@@ -479,7 +479,7 @@ struct ActivePlanView: View {
             .refreshable { await reload() }
         }
         .floatingBack(title: active?.name, trailing: ChromeAction(systemImage: "ellipsis", label: L10n.tr("Plán")) { menu = true }) { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
         .task {
             guard !model.demo else { return }
             await reload()
@@ -1129,7 +1129,7 @@ struct PlanResultView: View {
             }
         }
         .floatingBack(title: result.name) { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
     }
 
     /// The result seen: it leaves Training.

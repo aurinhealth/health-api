@@ -75,7 +75,7 @@ struct LabelCameraSheet: View {
                 Spacer()
                 Button { Task { await shoot() } } label: {
                     Circle().fill(Palette.ink).frame(width: 58, height: 58)
-                        .padding(5).overlay(Circle().stroke(Palette.ink, lineWidth: 4))
+                        .padding(5).overlay { Circle().stroke(Palette.ink, lineWidth: 4) }
                         .opacity(cameraReady && !taking ? 1 : 0.35)
                 }
                 .buttonStyle(.plain)
@@ -89,7 +89,7 @@ struct LabelCameraSheet: View {
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 14) }
             Spacer(minLength: 0)
         }
-        .background(Palette.background.ignoresSafeArea())
+        .background { Palette.background.ignoresSafeArea() }
         .task { await askCamera() }
         .onChange(of: torch) { BarcodeScanSheet.setTorch(torch) }
         .onDisappear { if torch { BarcodeScanSheet.setTorch(false) } }

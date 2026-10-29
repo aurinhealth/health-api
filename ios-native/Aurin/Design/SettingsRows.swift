@@ -158,7 +158,7 @@ struct SettingsPage<Content: View>: View {
                 .padding(.top, 12)
                 .padding(.bottom, 48)
         }
-        .background(Palette.settingsBackground.ignoresSafeArea())
+        .background { Palette.settingsBackground.ignoresSafeArea() }
         .navigationTitle(L10n.tr(title))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -226,7 +226,7 @@ struct PillToggle: View {
         .disabled(disabled)
         .padding(.horizontal, 14).padding(.vertical, 12)
         .cardSurface(cornerRadius: 18)
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(isOn ? Palette.green.opacity(0.5) : Palette.hairline, lineWidth: 1))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(isOn ? Palette.green.opacity(0.5) : Palette.hairline, lineWidth: 1) }
     }
 }
 

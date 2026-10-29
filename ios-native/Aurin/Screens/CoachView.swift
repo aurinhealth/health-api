@@ -107,7 +107,7 @@ struct CoachView: View {
                 }
                 inputBar
             }
-            .background(ScreenBackground(glow: Palette.Glow.today))
+            .background { ScreenBackground(glow: Palette.Glow.today) }
             .navigationTitle("Kouč")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -266,30 +266,32 @@ struct CoachView: View {
     }
 
     private var inputBar: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            photoMenu
-            HStack(alignment: .bottom, spacing: 8) {
-                VStack(alignment: .leading, spacing: 8) {
-                    if let photo { photoThumb(photo) }
-                    TextField(usedUp ? CoachAllowance.placeholder : L10n.tr("Napiš kouči…"), text: $input, axis: .vertical)
-                        .lineLimit(1...5)
-                        .focused($focused)
+        ChromeGlassGroup {
+            HStack(alignment: .bottom, spacing: 10) {
+                photoMenu
+                HStack(alignment: .bottom, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let photo { photoThumb(photo) }
+                        TextField(usedUp ? CoachAllowance.placeholder : L10n.tr("Napiš kouči…"), text: $input, axis: .vertical)
+                            .lineLimit(1...5)
+                            .focused($focused)
+                    }
+                    // From 75 % on: how many are left, until the new week.
+                    if let allowance, allowance.near, !allowance.usedUp, !usedUp {
+                        Text(allowance.counter).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).fixedSize()
+                            .padding(.bottom, 2)
+                    }
                 }
-                // From 75 % on: how many are left, until the new week.
-                if let allowance, allowance.near, !allowance.usedUp, !usedUp {
-                    Text(allowance.counter).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).fixedSize()
-                        .padding(.bottom, 2)
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .chromeGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .chromeShadow(0.08, radius: 6, y: 2)
+                Button { Task { await send() } } label: {
+                    Image(systemName: "arrow.up").scaledFont(16, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onButton)
+                        .frame(width: 40, height: 40).background(Palette.button, in: Circle())
                 }
+                .disabled(sending || usedUp || (input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil) || model.demo)
+                .accessibilityLabel("Odeslat")
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .chromeGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-            Button { Task { await send() } } label: {
-                Image(systemName: "arrow.up").scaledFont(16, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onButton)
-                    .frame(width: 40, height: 40).background(Palette.button, in: Circle())
-            }
-            .disabled(sending || usedUp || (input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil) || model.demo)
-            .accessibilityLabel("Odeslat")
         }
         .disabled(usedUp)
         .opacity(usedUp ? 0.55 : 1)
@@ -306,7 +308,7 @@ struct CoachView: View {
                 .frame(width: 40, height: 40).contentShape(Circle())
         }
         .chromeGlass(in: Circle())
-        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+        .chromeShadow(0.08, radius: 6, y: 2)
         .disabled(photo != nil || sending || model.demo)
         .opacity(photo != nil ? 0.35 : 1)
         .accessibilityLabel(L10n.tr("Přidat fotku"))
@@ -716,7 +718,7 @@ struct ActionCard: View {
                     }
                     Button { decide(false) } label: {
                         Text("Ne").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                            .padding(.horizontal, 16).frame(height: 34).overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                            .padding(.horizontal, 16).frame(height: 34).overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
                     }
                 }
                 .buttonStyle(.plain)
@@ -744,7 +746,7 @@ struct ActionCard: View {
         }
         chip("day", "Jiný den", quick.day, on: pickingDay) { pickingDay.toggle() }
         if pickingDay {
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 HStack(spacing: 5) {
                     ForEach(quick.days, id: \.self) { day in
                         Button {
@@ -758,13 +760,14 @@ struct ActionCard: View {
                             .foregroundStyle(day.fits ? Palette.ink : Palette.ink.opacity(0.3))
                             .frame(width: 52, height: 44)
                             .background(day.fits ? Palette.card : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Palette.ink.opacity(0.1), lineWidth: 1))
+                            .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Palette.ink.opacity(0.1), lineWidth: 1) }
                         }
                         .buttonStyle(.plain)
                         .disabled(!day.fits || adjusting != nil)
                     }
                 }
             }
+            .scrollIndicators(.hidden)
         }
     }
 
@@ -777,7 +780,7 @@ struct ActionCard: View {
             .foregroundStyle(on ? Palette.onButton : enabled ? Palette.ink : Palette.ink.opacity(0.3))
             .padding(.horizontal, 12).frame(height: 30)
             .background(on ? Palette.button : enabled ? Palette.card : Color.clear, in: Capsule())
-            .overlay(Capsule().stroke(on ? Color.clear : Palette.ink.opacity(0.1), lineWidth: 1))
+            .overlay { Capsule().stroke(on ? Color.clear : Palette.ink.opacity(0.1), lineWidth: 1) }
         }
         .buttonStyle(.plain)
         .disabled(!enabled || adjusting != nil)
@@ -985,7 +988,7 @@ struct ChatsPanel: View {
                 }
                 .frame(width: min(320, geo.size.width * 0.82))
                 .frame(maxHeight: .infinity)
-                .background(Palette.background.ignoresSafeArea())
+                .background { Palette.background.ignoresSafeArea() }
                 .shadow(color: .black.opacity(0.25), radius: 20, x: 6)
             }
         }

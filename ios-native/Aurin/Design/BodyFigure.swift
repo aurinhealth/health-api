@@ -181,7 +181,7 @@ struct BodyMap: View {
                     let region = regions[i]
                     FigureShape(d: region.path)
                         .fill(fill(region.id))
-                        .overlay(FigureShape(d: region.path).stroke(Palette.background.opacity(0.75), lineWidth: compact ? 0.4 : 0.8))
+                        .overlay { FigureShape(d: region.path).stroke(Palette.background.opacity(0.75), lineWidth: compact ? 0.4 : 0.8) }
                         .shadow(color: glow(region.id), radius: compact ? 0 : 4)
                         .onTapGesture { onTap?(region.id) }
                         .allowsHitTesting(onTap != nil)

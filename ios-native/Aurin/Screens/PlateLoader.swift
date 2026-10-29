@@ -235,7 +235,7 @@ struct PlateLoaderSheet: View {
         .padding(.horizontal, 24)
         .presentationDetents([.height(600)])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .onAppear {
             plates = PlateLoad.plates(for: startKg.map(LiftWeight.shownValue) ?? bar.weight, bar: bar.weight, sizes: sizes)
         }
@@ -294,14 +294,14 @@ struct PlateLoaderSheet: View {
                     Text("Stroj")
                         .font(.footnote.weight(.semibold)).foregroundStyle(.white)
                         .frame(width: 96, height: 120)
-                        .background(UnevenRoundedRectangle(cornerRadii: .init(bottomTrailing: 10, topTrailing: 10), style: .continuous).fill(Self.fill(1.25)))
-                        .overlay(UnevenRoundedRectangle(cornerRadii: .init(bottomTrailing: 10, topTrailing: 10), style: .continuous).stroke(Self.line(1.25), lineWidth: 1.5))
+                        .background { UnevenRoundedRectangle(cornerRadii: .init(bottomTrailing: 10, topTrailing: 10), style: .continuous).fill(Self.fill(1.25)) }
+                        .overlay { UnevenRoundedRectangle(cornerRadii: .init(bottomTrailing: 10, topTrailing: 10), style: .continuous).stroke(Self.line(1.25), lineWidth: 1.5) }
                 } else if bar.weight > 0 {
                     Text(verbatim: barMark)
                         .font(.footnote.weight(.semibold)).foregroundStyle(.white)
                         .frame(width: 96, height: 24)
-                        .background(UnevenRoundedRectangle(cornerRadii: .init(bottomTrailing: 6, topTrailing: 6), style: .continuous).fill(Self.fill(1.25)))
-                        .overlay(UnevenRoundedRectangle(cornerRadii: .init(bottomTrailing: 6, topTrailing: 6), style: .continuous).stroke(Self.line(1.25), lineWidth: 1.5))
+                        .background { UnevenRoundedRectangle(cornerRadii: .init(bottomTrailing: 6, topTrailing: 6), style: .continuous).fill(Self.fill(1.25)) }
+                        .overlay { UnevenRoundedRectangle(cornerRadii: .init(bottomTrailing: 6, topTrailing: 6), style: .continuous).stroke(Self.line(1.25), lineWidth: 1.5) }
                 } else {
                     Rectangle().fill(Self.metal).frame(width: 96, height: 14)
                 }
@@ -357,14 +357,14 @@ struct PlateLoaderSheet: View {
                 .scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(.white)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(width: 42, height: 42)
-                .background(Circle().fill(Self.fill(look)))
-                .overlay(Circle().inset(by: 2).stroke(Color.white.opacity(0.22), lineWidth: 1.5))
-                .overlay(Circle().stroke(Self.line(look), lineWidth: 1.5))
+                .background { Circle().fill(Self.fill(look)) }
+                .overlay { Circle().inset(by: 2).stroke(Color.white.opacity(0.22), lineWidth: 1.5) }
+                .overlay { Circle().stroke(Self.line(look), lineWidth: 1.5) }
                 .overlay(alignment: .topTrailing) {
                     if count > 0 {
                         Text(verbatim: "×\(count)").scaledFont(10.5, weight: .semibold).foregroundStyle(Palette.onButton)
                             .padding(.horizontal, 4).frame(minWidth: 19, minHeight: 19)
-                            .background(Capsule().fill(Palette.button))
+                            .background { Capsule().fill(Palette.button) }
                             .offset(x: 6, y: -6)
                     }
                 }
@@ -404,7 +404,7 @@ struct PlateLoaderSheet: View {
             }
             .font(Typo.small.weight(.medium)).foregroundStyle(Palette.secondary)
             .padding(.horizontal, 12).frame(height: 32)
-            .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+            .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
         }
     }
 

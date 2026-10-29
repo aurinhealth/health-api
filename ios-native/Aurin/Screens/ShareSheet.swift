@@ -105,8 +105,8 @@ struct ShareSheet: View {
                 .padding(.horizontal, 24)
                 .padding(.bottom, 28)
             }
-            .background(Palette.background.ignoresSafeArea())
-            .toolbar(.hidden, for: .navigationBar)
+            .background { Palette.background.ignoresSafeArea() }
+            .navBarVisibility(.hidden)
             .navigationDestination(isPresented: $editing) {
                 ShareEditView(kind: kind, options: current, workout: workout, milestones: milestones?.items ?? [], hasPhoto: photo != nil) { self.card($0, width: $1) }
             }
@@ -166,7 +166,7 @@ struct ShareSheet: View {
             }
             .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
             .frame(maxWidth: .infinity).frame(height: 46)
-            .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+            .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -182,9 +182,10 @@ struct ShareSheet: View {
                     kindTab(k)
                 }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 HStack(spacing: 22) { ForEach(kinds) { kindTab($0) } }
             }
+            .scrollIndicators(.hidden)
         }
         .overlay(alignment: .bottom) { Rectangle().fill(Palette.ink.opacity(0.1)).frame(height: 1) }
     }
@@ -216,8 +217,10 @@ struct ShareSheet: View {
                     VStack(spacing: 6) {
                         card(shown, width: 64)
                             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .stroke(selected ? Palette.ink : Palette.ink.opacity(0.1), lineWidth: selected ? 2 : 1))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .stroke(selected ? Palette.ink : Palette.ink.opacity(0.1), lineWidth: selected ? 2 : 1)
+                            }
                             .opacity(selected ? 1 : 0.6)
                         Text(L10n.tr(name)).font(.caption.weight(.medium)).foregroundStyle(selected ? Palette.ink : Palette.muted)
                     }
@@ -407,8 +410,8 @@ struct ShareEditView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 30)
         }
-        .background(Palette.background.ignoresSafeArea())
-        .toolbar(.hidden, for: .navigationBar)
+        .background { Palette.background.ignoresSafeArea() }
+        .navBarVisibility(.hidden)
     }
 
     private var header: some View {
@@ -444,7 +447,7 @@ struct ShareEditView: View {
             .padding(10)
             .frame(maxWidth: .infinity)
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(on ? Palette.ink : Palette.ink.opacity(0.08), lineWidth: on ? 2 : 1))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(on ? Palette.ink : Palette.ink.opacity(0.08), lineWidth: on ? 2 : 1) }
             .overlay(alignment: .topTrailing) {
                 if on {
                     Image(systemName: "checkmark").scaledFont(10, weight: .heavy, cap: .denseCap).foregroundStyle(Palette.onButton)

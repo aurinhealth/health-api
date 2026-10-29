@@ -532,9 +532,7 @@ struct MuscleFigureSpinner: View {
                 Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.muted)
             }
             .padding(.vertical, 10).padding(.leading, 14).padding(.trailing, 12)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
-            .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
+            .bubbleSurface(RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -727,7 +725,7 @@ struct MuscleDetailView: View {
     private func cell(_ date: String, trained: Set<String>) -> some View {
         RoundedRectangle(cornerRadius: 7, style: .continuous)
             .fill(trained.contains(date) ? Palette.green : date > today ? Color.clear : Palette.ink.opacity(0.07))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(date == today ? Palette.ink : .clear, lineWidth: 1.5))
+            .overlay { RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(date == today ? Palette.ink : .clear, lineWidth: 1.5) }
             .aspectRatio(1, contentMode: .fit)
             .frame(maxWidth: .infinity)
     }
@@ -809,5 +807,27 @@ struct MuscleFatigueInfoSheet: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+private extension View {
+    /// The bubble floats over the figure and takes a tap, so it is glass like
+    /// the bars' buttons on iOS 26; before it a frosted card with a shadow.
+    @ViewBuilder func bubbleSurface(_ shape: RoundedRectangle) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26, *) {
+            chromeGlass(in: shape)
+        } else {
+            frostedBubble(shape)
+        }
+        #else
+        frostedBubble(shape)
+        #endif
+    }
+
+    func frostedBubble(_ shape: RoundedRectangle) -> some View {
+        background(.regularMaterial, in: shape)
+            .overlay { shape.stroke(Palette.hairline, lineWidth: 1) }
+            .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
     }
 }

@@ -257,7 +257,7 @@ struct GymSessionView: View {
                 NavigationLink(value: AppRoute.gymBuilder) {
                     Label("Vybrat partie a sestavit trénink", systemImage: "sparkles").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 46)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 10)
@@ -488,7 +488,7 @@ struct ExerciseCard: View {
             if let onAddSet {
                 Button(action: onAddSet) {
                     Label("Přidat sérii", systemImage: "plus").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
-                        .padding(.horizontal, 12).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                        .padding(.horizontal, 12).frame(height: 30).overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
                         .tapTarget(width: 44, height: 30)
                 }
                 .buttonStyle(.plain)
@@ -743,7 +743,7 @@ struct AlternativesSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .sheet(item: Binding(get: { technique.map { Named(name: $0) } }, set: { technique = $0?.name })) { item in
             TechniqueSheet(exercise: item.name)
         }

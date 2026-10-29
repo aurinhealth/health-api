@@ -110,8 +110,6 @@ targets:
         # iOS 26 AlarmKit: the alarm from Nastavení → Spánek rings like the Clock's.
         NSAlarmKitUsageDescription: Aurin tě vzbudí v čase budíku, podle kterého počítá večerku.
         NSFaceIDUsageDescription: Aurin se zeptá na Face ID, než smaže tvůj účet.
-        # Built with the iOS 26 SDK for AlarmKit, the app keeps its own design.
-        UIDesignRequiresCompatibility: true
         # loadwise://open/sleep: the widgets open a screen of the app.
         CFBundleURLTypes:
           - CFBundleURLName: health.aurin.app

@@ -58,7 +58,7 @@ struct ActivityRouteMap: View {
                         MapPolyline(coordinates: segment.coordinates).stroke(segment.color, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
                     }
                     Annotation("", coordinate: route[0].coordinate) {
-                        Circle().fill(Palette.background).frame(width: 12, height: 12).overlay(Circle().stroke(Palette.ink, lineWidth: 3))
+                        Circle().fill(Palette.background).frame(width: 12, height: 12).overlay { Circle().stroke(Palette.ink, lineWidth: 3) }
                     }
                     Annotation("", coordinate: route[route.count - 1].coordinate) {
                         Circle().fill(Palette.ink).frame(width: 12, height: 12)

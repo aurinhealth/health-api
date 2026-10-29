@@ -29,7 +29,7 @@ struct HealthView: View {
                     ProgressView()
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navBarVisibility(.hidden)
             .appRoutes()
         }
         .task { await model.refreshIfStale(.health) }
@@ -64,7 +64,7 @@ struct DetailScreen<Content: View>: View {
             }
         }
         .floatingBack(title: title) { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
     }
 }
 
