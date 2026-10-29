@@ -159,7 +159,7 @@ final class GymWorkout: NSObject, ObservableObject {
     fileprivate func lost(_ ended: ObjectIdentifier) {
         guard let session, ObjectIdentifier(session) == ended else { return }
         let builder = self.builder
-        session = nil
+        self.session = nil
         self.builder = nil
         Task {
             try? await builder?.endCollection(at: Date())
