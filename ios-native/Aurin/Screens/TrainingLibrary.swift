@@ -859,7 +859,7 @@ struct ExerciseSheet: View {
             .padding(24)
         }
         .presentationDetents([.medium, .large])
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .sheet(isPresented: $technique) { TechniqueSheet(exercise: exercise.name) }
     }
 

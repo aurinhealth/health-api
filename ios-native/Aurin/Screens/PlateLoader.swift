@@ -235,7 +235,7 @@ struct PlateLoaderSheet: View {
         .padding(.horizontal, 24)
         .presentationDetents([.height(600)])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .onAppear {
             plates = PlateLoad.plates(for: startKg.map(LiftWeight.shownValue) ?? bar.weight, bar: bar.weight, sizes: sizes)
         }

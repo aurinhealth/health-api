@@ -102,7 +102,7 @@ struct PlannedSendSheet: View {
         .padding(.horizontal, 22).padding(.top, 14)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .task {
             watchPlan = WatchWorkout.plan(workout, title: session.title)
             guard let id = session.eventId else { destinations = []; return }

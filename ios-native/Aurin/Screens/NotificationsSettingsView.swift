@@ -452,7 +452,7 @@ private struct ReminderEditSheet: View {
         .scrollBounceBehavior(.basedOnSize)
         .presentationDetents(detents)
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.card)
+        .glassSheetBackground(Palette.card)
         .tint(Palette.ink)
     }
 

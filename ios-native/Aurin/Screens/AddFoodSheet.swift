@@ -541,7 +541,7 @@ struct FoodAmountView: View {
         .sheet(isPresented: $reporting) {
             FoodReportSheet(product: product) { withAnimation { reportedNow = true } }
                 .presentationDetents([.medium, .large])
-                .presentationBackground(Palette.background)
+                .glassSheetBackground()
         }
     }
 

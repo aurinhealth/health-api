@@ -314,28 +314,31 @@ struct TabHeader<Extra: View>: View {
     @ScaledMetric(relativeTo: .title) private var capHeight: CGFloat = 20.4
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(verbatim: Fmt.monthTitle(date))
-                .font(Typo.sentence(30, relativeTo: .title))
-                .foregroundStyle(Palette.ink)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 4)
-            if let back = backToToday {
-                Button(action: back) {
-                    Label("Dnes", systemImage: "arrow.uturn.backward")
-                        .font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                        .lineLimit(1).fixedSize()
-                        .padding(.horizontal, 12).frame(height: 36)
-                        .contentShape(Capsule())
+        // "Dnes" and the capsule are 8 pt apart: they never melt into one.
+        ChromeGlassGroup(spacing: 4) {
+            HStack(spacing: 8) {
+                Text(verbatim: Fmt.monthTitle(date))
+                    .font(Typo.sentence(30, relativeTo: .title))
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .alignmentGuide(VerticalAlignment.center) { $0[.firstTextBaseline] - capHeight / 2 }
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 4)
+                if let back = backToToday {
+                    Button(action: back) {
+                        Label("Dnes", systemImage: "arrow.uturn.backward")
+                            .font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                            .lineLimit(1).fixedSize()
+                            .padding(.horizontal, 12).frame(height: 36)
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .chromeGlass(in: Capsule())
+                    .chromeShadow(0.08, radius: 6, y: 2)
+                    .disabled(model.demo || (followsDay && model.dayLocked))
                 }
-                .buttonStyle(.plain)
-                .chromeGlass(in: Capsule())
-                .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-                .disabled(model.demo || (followsDay && model.dayLocked))
+                HeaderCapsule(share: share, coach: coach, settings: settings) { extra }
             }
-            HeaderCapsule(share: share, coach: coach, settings: settings) { extra }
         }
     }
 
@@ -380,7 +383,7 @@ struct HeaderCapsule<Extra: View>: View {
         .padding(.trailing, (TabChrome.height - 37) / 2)
         .frame(height: TabChrome.height)
         .chromeGlass(in: Capsule())
-        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+        .chromeShadow(0.08, radius: 6, y: 2)
     }
 }
 
@@ -479,32 +482,34 @@ struct DayCapsule: View {
     let showToday: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 0) {
-                Button { move(-1) } label: {
-                    Image(systemName: "chevron.left").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
+        ChromeGlassGroup(spacing: 4) {
+            HStack(spacing: 8) {
+                HStack(spacing: 0) {
+                    Button { move(-1) } label: {
+                        Image(systemName: "chevron.left").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Předchozí den")
+                    Text(verbatim: Fmt.dayShort(date, today: today))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Palette.ink)
+                        .lineLimit(1)
+                    Button { move(1) } label: {
+                        Image(systemName: "chevron.right").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
+                    }
+                    .opacity(canGoForward ? 1 : 0.25)
+                    .disabled(!canGoForward)
+                    .accessibilityLabel("Další den")
                 }
-                .accessibilityLabel("Předchozí den")
-                Text(verbatim: Fmt.dayShort(date, today: today))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Palette.ink)
-                    .lineLimit(1)
-                Button { move(1) } label: {
-                    Image(systemName: "chevron.right").frame(width: 30, height: TabChrome.height).contentShape(Rectangle())
+                .scaledFont(13, weight: .semibold)
+                .foregroundStyle(Palette.muted)
+                .buttonStyle(.plain)
+                .padding(.horizontal, 2)
+                .background(date == today ? Color.clear : Palette.amberSoft.opacity(0.85), in: Capsule())
+                .chromeGlass(in: Capsule())
+                .chromeShadow(0.08, radius: 6, y: 2)
+                if date != today {
+                    ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes", height: TabChrome.height, action: showToday)
                 }
-                .opacity(canGoForward ? 1 : 0.25)
-                .disabled(!canGoForward)
-                .accessibilityLabel("Další den")
-            }
-            .scaledFont(13, weight: .semibold)
-            .foregroundStyle(Palette.muted)
-            .buttonStyle(.plain)
-            .padding(.horizontal, 2)
-            .background(date == today ? Color.clear : Palette.amberSoft.opacity(0.85), in: Capsule())
-            .chromeGlass(in: Capsule())
-            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-            if date != today {
-                ChromeButton(systemImage: "calendar", label: "Dnes", text: "Dnes", height: TabChrome.height, action: showToday)
             }
         }
         // While the sync pill shows (RootView), it takes the day's place.

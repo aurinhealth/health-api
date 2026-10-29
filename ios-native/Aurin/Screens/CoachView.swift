@@ -266,30 +266,32 @@ struct CoachView: View {
     }
 
     private var inputBar: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            photoMenu
-            HStack(alignment: .bottom, spacing: 8) {
-                VStack(alignment: .leading, spacing: 8) {
-                    if let photo { photoThumb(photo) }
-                    TextField(usedUp ? CoachAllowance.placeholder : L10n.tr("Napiš kouči…"), text: $input, axis: .vertical)
-                        .lineLimit(1...5)
-                        .focused($focused)
+        ChromeGlassGroup {
+            HStack(alignment: .bottom, spacing: 10) {
+                photoMenu
+                HStack(alignment: .bottom, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let photo { photoThumb(photo) }
+                        TextField(usedUp ? CoachAllowance.placeholder : L10n.tr("Napiš kouči…"), text: $input, axis: .vertical)
+                            .lineLimit(1...5)
+                            .focused($focused)
+                    }
+                    // From 75 % on: how many are left, until the new week.
+                    if let allowance, allowance.near, !allowance.usedUp, !usedUp {
+                        Text(allowance.counter).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).fixedSize()
+                            .padding(.bottom, 2)
+                    }
                 }
-                // From 75 % on: how many are left, until the new week.
-                if let allowance, allowance.near, !allowance.usedUp, !usedUp {
-                    Text(allowance.counter).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1).fixedSize()
-                        .padding(.bottom, 2)
+                .padding(.horizontal, 14).padding(.vertical, 10)
+                .chromeGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .chromeShadow(0.08, radius: 6, y: 2)
+                Button { Task { await send() } } label: {
+                    Image(systemName: "arrow.up").scaledFont(16, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onButton)
+                        .frame(width: 40, height: 40).background(Palette.button, in: Circle())
                 }
+                .disabled(sending || usedUp || (input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil) || model.demo)
+                .accessibilityLabel("Odeslat")
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .chromeGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
-            Button { Task { await send() } } label: {
-                Image(systemName: "arrow.up").scaledFont(16, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onButton)
-                    .frame(width: 40, height: 40).background(Palette.button, in: Circle())
-            }
-            .disabled(sending || usedUp || (input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil) || model.demo)
-            .accessibilityLabel("Odeslat")
         }
         .disabled(usedUp)
         .opacity(usedUp ? 0.55 : 1)
@@ -306,7 +308,7 @@ struct CoachView: View {
                 .frame(width: 40, height: 40).contentShape(Circle())
         }
         .chromeGlass(in: Circle())
-        .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+        .chromeShadow(0.08, radius: 6, y: 2)
         .disabled(photo != nil || sending || model.demo)
         .opacity(photo != nil ? 0.35 : 1)
         .accessibilityLabel(L10n.tr("Přidat fotku"))

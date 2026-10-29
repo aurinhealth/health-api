@@ -54,7 +54,7 @@ struct BulkActionBar: View {
         }
         .padding(.vertical, 10)
         .chromeGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
+        .chromeShadow(0.12, radius: 10, y: 3)
         .disabled(count == 0)
         .opacity(count == 0 ? 0.45 : 1)
     }

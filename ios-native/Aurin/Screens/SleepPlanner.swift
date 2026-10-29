@@ -329,7 +329,7 @@ struct WakeSheet: View {
         }
         .padding(24)
         .presentationDetents([.height(440)])
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .onAppear { time = SleepSettingsForm.clock(SleepSettingsForm.text(minutes: wake)) }
     }
 

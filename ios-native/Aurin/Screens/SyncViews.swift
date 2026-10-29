@@ -309,7 +309,7 @@ struct GoogleWriteSheet: View {
         }
         .padding(24)
         .presentationDetents([.medium])
-        .presentationBackground(Palette.settingsBackground)
+        .glassSheetBackground(Palette.settingsBackground)
     }
 }
 
@@ -439,7 +439,7 @@ struct SyncStatusSheet: View {
         }
         .padding(24)
         .presentationDetents([.medium, .large])
-        .presentationBackground(Palette.settingsBackground)
+        .glassSheetBackground(Palette.settingsBackground)
     }
 
     private func line(_ row: SyncReport.Row) -> some View {

@@ -713,7 +713,7 @@ struct ExerciseHistorySheet: View {
             .padding(24)
         }
         .presentationDetents([.medium, .large])
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
     }
 
     @ViewBuilder

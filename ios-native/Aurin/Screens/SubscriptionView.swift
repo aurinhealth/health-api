@@ -870,7 +870,7 @@ struct AllPlansSheet: View {
         }
         .padding(20)
         .presentationDetents([.medium])
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
     }
 }
 

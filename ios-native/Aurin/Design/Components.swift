@@ -27,16 +27,17 @@ extension View {
             )
     }
 
-    /// A sheet over the app: the system's glass on iOS 26, the paper colour before it.
-    @ViewBuilder func glassSheetBackground() -> some View {
+    /// A sheet over the app: the system's glass on iOS 26, the paper colour
+    /// (or the sheet's own colour) before it.
+    @ViewBuilder func glassSheetBackground(_ fallback: Color = Palette.background) -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26, *) {
             self
         } else {
-            presentationBackground(Palette.background)
+            presentationBackground(fallback)
         }
         #else
-        presentationBackground(Palette.background)
+        presentationBackground(fallback)
         #endif
     }
 }
@@ -267,10 +268,12 @@ extension View {
 /// (it follows Nastavení → Displej a jas → Liquid Glass and Omezit
 /// průhlednost), a blurred light material before it.
 extension View {
-    @ViewBuilder func chromeGlass<S: Shape>(in shape: S) -> some View {
+    /// `interactive` is off for glass a finger cannot use (a note, the sync
+    /// pill while it syncs): it does not light up under the finger then.
+    @ViewBuilder func chromeGlass<S: Shape>(in shape: S, interactive: Bool = true) -> some View {
         #if compiler(>=6.2)
         if #available(iOS 26, *) {
-            glassEffect(.regular.interactive(), in: shape)
+            glassEffect(interactive ? Glass.regular.interactive() : Glass.regular, in: shape)
         } else {
             materialChrome(in: shape)
         }
@@ -279,10 +282,59 @@ extension View {
         #endif
     }
 
+    /// The shadow under a bar's glass before iOS 26. Liquid Glass casts its
+    /// own, lighter over the paper and stronger over text, so it gets none.
+    @ViewBuilder func chromeShadow(_ opacity: Double, radius: CGFloat, y: CGFloat) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26, *) {
+            self
+        } else {
+            shadow(color: .black.opacity(opacity), radius: radius, y: y)
+        }
+        #else
+        shadow(color: .black.opacity(opacity), radius: radius, y: y)
+        #endif
+    }
+
+    /// The same glass shape across two layouts (the tab bar's capsule and its
+    /// one icon), so on iOS 26 one morphs into the other inside a ChromeGlassGroup.
+    @ViewBuilder func chromeGlassID(_ id: String, in namespace: Namespace.ID) -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26, *) {
+            glassEffectID(id, in: namespace)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+
     private func materialChrome<S: Shape>(in shape: S) -> some View {
         background(.ultraThinMaterial, in: shape)
             .background(Palette.card.opacity(0.6), in: shape)
             .overlay(shape.stroke(Palette.hairline, lineWidth: 1))
+    }
+}
+
+/// Glass shapes side by side (the buttons of a bar, the camera and the coach's
+/// field): on iOS 26 they render together, since glass cannot show other glass
+/// through it. `spacing` stays below the gap between them, so they never melt
+/// into one.
+struct ChromeGlassGroup<Content: View>: View {
+    var spacing: CGFloat = 8
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: spacing) { content }
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
     }
 }
 
@@ -316,7 +368,7 @@ struct ChromeButton: View {
             }
             .buttonStyle(.plain)
             .chromeGlass(in: Capsule())
-            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            .chromeShadow(0.08, radius: 6, y: 2)
         } else {
             Button(action: action) {
                 Image(systemName: systemImage)
@@ -327,7 +379,7 @@ struct ChromeButton: View {
             }
             .buttonStyle(.plain)
             .chromeGlass(in: Circle())
-            .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
+            .chromeShadow(0.08, radius: 6, y: 2)
             .accessibilityLabel(L10n.tr(label))
         }
     }
@@ -430,30 +482,32 @@ private struct PinnedTopBar: ViewModifier {
                 if now != scrolled { withAnimation(.easeOut(duration: 0.2)) { scrolled = now } }
             })
             .overlay(alignment: .top) {
-                HStack(spacing: 12) {
-                    if let leading {
-                        ChromeButton(systemImage: leading.systemImage, label: leading.label, text: leading.text, action: leading.action)
-                    } else {
-                        FloatingBackButton(action: back)
-                    }
-                    Spacer(minLength: 0)
-                    if let title {
-                        Text(L10n.tr(title))
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Palette.ink)
-                            .lineLimit(1)
-                            .opacity(pinTitle || (scrolled && model?.syncStatus == nil) ? 1 : 0)
-                    }
-                    Spacer(minLength: 0)
-                    if let extra {
-                        ChromeButton(systemImage: extra.systemImage, label: extra.label, text: extra.text, action: extra.action)
-                    }
-                    if let trailing {
-                        ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled,
-                                     tint: trailing.tint, action: trailing.action)
-                    } else if extra == nil {
-                        // Balances the back button; "Vybrat" alone sits at the edge itself.
-                        Color.clear.frame(width: 40, height: 40)
+                ChromeGlassGroup {
+                    HStack(spacing: 12) {
+                        if let leading {
+                            ChromeButton(systemImage: leading.systemImage, label: leading.label, text: leading.text, action: leading.action)
+                        } else {
+                            FloatingBackButton(action: back)
+                        }
+                        Spacer(minLength: 0)
+                        if let title {
+                            Text(L10n.tr(title))
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Palette.ink)
+                                .lineLimit(1)
+                                .opacity(pinTitle || (scrolled && model?.syncStatus == nil) ? 1 : 0)
+                        }
+                        Spacer(minLength: 0)
+                        if let extra {
+                            ChromeButton(systemImage: extra.systemImage, label: extra.label, text: extra.text, action: extra.action)
+                        }
+                        if let trailing {
+                            ChromeButton(systemImage: trailing.systemImage, label: trailing.label, text: trailing.text, enabled: trailing.enabled,
+                                         tint: trailing.tint, action: trailing.action)
+                        } else if extra == nil {
+                            // Balances the back button; "Vybrat" alone sits at the edge itself.
+                            Color.clear.frame(width: 40, height: 40)
+                        }
                     }
                 }
                 .padding(.horizontal, 22)

@@ -186,7 +186,7 @@ struct PlanColorsLegend: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
     }
 }
 
@@ -418,7 +418,7 @@ struct MovePlannedSheet: View {
         .padding(24)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .onAppear {
             if day.isEmpty { day = days.first ?? today }
             exact = Calendar.current.date(bySettingHour: 18, minute: 0, second: 0, of: Date()) ?? Date()

@@ -904,7 +904,7 @@ struct LengthChoiceSheet: View {
         }
         .padding(24)
         .presentationDetents([.medium])
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .onAppear { length = min(40, max(21, initial)) }
     }
 }

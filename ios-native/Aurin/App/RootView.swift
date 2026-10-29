@@ -432,7 +432,7 @@ struct OfflineBanner: View {
             .font(.footnote.weight(.medium))
             .foregroundStyle(Palette.ink)
             .padding(.horizontal, 14).frame(height: 32)
-            .chromeGlass(in: Capsule())
+            .chromeGlass(in: Capsule(), interactive: false)
             .allowsHitTesting(false)
     }
 }
@@ -466,8 +466,8 @@ struct SyncPill: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .chromeGlass(in: Capsule())
-        .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
+        .chromeGlass(in: Capsule(), interactive: status == .failed)
+        .chromeShadow(0.08, radius: 8, y: 3)
         .allowsHitTesting(status == .failed)
     }
 }
@@ -487,7 +487,7 @@ struct ThanksToast: View {
             }
             .padding(.horizontal, 16).frame(minHeight: 48)
             .chromeGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: .black.opacity(0.14), radius: 16, y: 8)
+            .chromeShadow(0.14, radius: 16, y: 8)
         }
         .buttonStyle(.plain)
     }
@@ -519,8 +519,14 @@ struct TabBar: View {
     var compact: Bool = false
     var onExpand: () -> Void = {}
     var onAdd: () -> Void
+    @Namespace private var glass
 
     var body: some View {
+        // On iOS 26 the capsule morphs into the one icon and back.
+        ChromeGlassGroup { bar }
+    }
+
+    @ViewBuilder private var bar: some View {
         if compact {
             HStack {
                 Button(action: onExpand) {
@@ -532,7 +538,8 @@ struct TabBar: View {
                 }
                 .buttonStyle(.plain)
                 .chromeGlass(in: Circle())
-                .shadow(color: .black.opacity(0.1), radius: 12, y: 6)
+                .chromeGlassID("bar", in: glass)
+                .chromeShadow(0.1, radius: 12, y: 6)
                 .accessibilityLabel(L10n.tr("Rozbalit menu"))
                 Spacer()
                 plus(size: 52)
@@ -549,7 +556,8 @@ struct TabBar: View {
             }
             .frame(height: 60)
             .chromeGlass(in: Capsule())
-            .shadow(color: .black.opacity(0.1), radius: 15, y: 10)
+            .chromeGlassID("bar", in: glass)
+            .chromeShadow(0.1, radius: 15, y: 10)
             .transition(.opacity)
         }
     }
@@ -574,8 +582,8 @@ struct TabBar: View {
         .accessibilityLabel("Přidat záznam")
     }
 
-    /// The icon with the section's name under it (Petr, 2026-10-24); the open
-    /// one in ink and a touch bolder.
+    /// The icon with the section's name under it (Petr, 2026-10-24), all in
+    /// ink: grey on glass reads too faintly, so the open one is only bolder.
     private func item(_ value: AppTab, _ label: String) -> some View {
         let open = tab == value
         return Button { tab = value } label: {
@@ -584,10 +592,10 @@ struct TabBar: View {
                     .scaledFont(19, weight: open ? .semibold : .regular, cap: .denseCap)
                     .frame(height: 22)
                 Text(L10n.tr(label))
-                    .scaledFont(10, weight: open ? .semibold : .medium)
+                    .scaledFont(10, weight: open ? .semibold : .regular)
                     .lineLimit(1).minimumScaleFactor(0.8)
             }
-            .foregroundStyle(open ? Palette.ink : Palette.faint)
+            .foregroundStyle(Palette.ink)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
         }

@@ -1031,7 +1031,7 @@ struct PlannedTimeSheet: View {
         .padding(24)
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
     }
 
     private func save(_ value: String) {
