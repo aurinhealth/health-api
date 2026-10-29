@@ -7,7 +7,7 @@ import { TECHNIQUE } from "../src/exercise-technique-data.js";
 import { TECHNIQUE_EN } from "../src/exercise-technique-data-en.js";
 import { FEEL } from "../src/exercise-feel.js";
 import { FEEL_EN } from "../src/exercise-feel-en.js";
-import { PHOTO_IDS } from "../src/exercise-photos.js";
+import { PHOTO_IDS, REPDB_IDS } from "../src/exercise-photos.js";
 import { techniqueFor } from "../src/exercise-technique.js";
 import { exerciseMuscles } from "../src/fitness-insights.js";
 
@@ -109,16 +109,16 @@ test("a sore shoulder leaves out the new overhead and bench presses", () => {
   for (const name of ["Dumbbell Push Press", "Standing Dumbbell Press", "Seated Barbell Military Press", "Two-Arm Kettlebell Military Press", "Kettlebell Clean & Press (Double)", "Barbell Floor Press", "Decline Barbell Bench Press", "Dumbbell Thruster", "Bench Dips", "Cuban Press"]) assert.ok(avoid.has(name), name);
 });
 
-test("every new exercise has a video; photos only from the Free Exercise DB", () => {
+test("every new exercise has a video; photos only from the Free Exercise DB or RepDB", () => {
   let photos = 0;
   for (const name of ADDED) {
     assert.match(TECHNIQUE[name]?.video?.id || "", /^[A-Za-z0-9_-]{11}$/, name + " video");
     assert.ok(TECHNIQUE[name].video.title, name + " video title");
     const t = techniqueFor(name);
     assert.equal(t.video.id, TECHNIQUE[name].video.id, name);
-    assert.equal(t.photos.length, PHOTO_IDS[name] ? 2 : 0, name + " photos");
+    assert.equal(t.photos.length, PHOTO_IDS[name] || REPDB_IDS[name] ? 2 : 0, name + " photos");
     if (PHOTO_IDS[name]) photos++;
-    for (const url of t.photos) { assert.match(url, /^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\//, name); assert.doesNotMatch(url, /ytimg/, name); }
+    for (const url of t.photos) { assert.match(url, /^https:\/\/raw\.githubusercontent\.com\/(yuhonas\/free-exercise-db|RepDB\/exercise-dataset)\//, name); assert.doesNotMatch(url, /ytimg/, name); }
   }
   assert.ok(photos >= 90, String(photos));
 });

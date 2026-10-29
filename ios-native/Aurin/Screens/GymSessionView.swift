@@ -630,7 +630,7 @@ struct TechniqueSheet: View {
     /// quarters of it), not the author's thumbnail with its text on top.
     @ViewBuilder private var photo: some View {
         if let photos = technique?.photos, photos.count >= 2 {
-            ExercisePhotos(urls: photos.compactMap { URL(string: $0) })
+            ExercisePhotos(urls: photos.compactMap { URL(string: $0) }, aspect: CGFloat(technique?.photoAspect ?? 1.5))
         } else if let id = videoId {
             ExercisePhotos(urls: ["hq1", "hq3"].compactMap { URL(string: "https://i.ytimg.com/vi/" + id + "/" + $0 + ".jpg") },
                            labeled: false, aspect: 16 / 9)
