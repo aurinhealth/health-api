@@ -16,7 +16,7 @@ availability) updates the overview in the same pull request. The site is in Engl
   app rebuilt in HTML that moves (the dial turns, the rest timer counts down, the coach answers), following
   the app's own view and the sample day. Where a screenshot can't show a step, the phone's screen is built
   there too (strain, the finished workout, the coach). When a view a demo copies changes in the app, change
-  the demo in the same pull request. The hero shows Today; below it one chapter per app area, whose steps
+  the demo in the same pull request. The Apple Watch section (`WATCH` in `src/site-demos.js`) rebuilds the watch app's screens in HTML, since CI takes no watch screenshots; change it with the watch views. The hero shows Today; below it one chapter per app area, whose steps
   take turns on the phone. The muscles show the app's 3D figure, rendered ahead by
   `scripts/render-muscles-site.mjs` (the licensed model never goes on the website). When a screen
   they show changes, take them again; the numbers around the hero phone follow the sample day

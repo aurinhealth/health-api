@@ -48,6 +48,11 @@ const P = {
   updown: '<path d="m8 9.5 4-4 4 4M8 14.5l4 4 4-4"/>',
   chevd: '<path d="m6 9 6 6 6-6"/>',
   torch: '<path d="M9 3h6v4l-1.5 2v12h-3V9L9 7ZM12 12v3"/>',
+  drop: '<path d="M12 3.5c3 4 6 7.3 6 10.7a6 6 0 0 1-12 0c0-3.4 3-6.7 6-10.7Z" fill="currentColor" stroke="none"/>',
+  cup: '<path d="M5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5ZM16 11h1.5a2.5 2.5 0 0 1 0 5H16"/>',
+  alarm: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 2M4 5l3-2M20 5l-3-2"/>',
+  chat: '<path d="M4 5h11v8H8l-4 3ZM15 9h5v8l-3-2h-6v-2"/>',
+  menu: '<path d="M6 8h12M6 12h12M6 16h12"/>',
 };
 const ic = (name, cls = '') => `<svg class="di${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" aria-hidden="true">${P[name]}</svg>`;
 const at = spec => ` data-at="${spec}"`;
@@ -310,6 +315,32 @@ ${[['Plain Greek yogurt', 'Hollandia · 140 g', 205], ['Banana', '120 g', 105]].
 <div class="btn dark"${at('5800:press 6100-press 6100:ok')}><span data-tx="0|Add to lunch · 1 serving;4500|Add to lunch · 1½ serving;6100|✓ Added to lunch">Add to lunch · 1½ serving</span></div>
 </div></div></div>`;
 
+// FoodView.swift's drinks card (DrinkFigure.swift's whale, DrinkPresetRow in DrinkFavorites.swift) on the sample
+// day's 1.5 of 2.6 L: Water 500 ml twice (the chip ticks), then a tap on the whale adds the first favourite, the
+// toast says so, and at the goal the whale jumps, closes its eye happily and blows its spout.
+const WHALE_TAIL = 'M80 58C92 52 96 40 104 30C106 40 104 48 100 52C106 54 108 62 106 70C98 64 92 64 84 70';
+const DROP = 'M0-5C2.5-1.5 3.5.5 3.5 2A3.5 3.5 0 0 1-3.5 2C-3.5.5-2.5-1.5 0-5Z';
+const whaleFig = `<svg class="dw" viewBox="0 0 110 110" aria-hidden="true"${at('4300:press 4450-press 5500:goal')}><defs><clipPath id="dwc"><ellipse cx="50" cy="62" rx="38" ry="28"/><path d="${WHALE_TAIL}Z"/></clipPath></defs>
+<g clip-path="url(#dwc)"><rect x="-10" y="-10" width="130" height="130" class="dw-empty"/><g class="dw-w"${at('900:a 2700:b 4800:c')}><path class="w-wv dw-f1" d="M0 0 q13.75 -3.25 27.5 0 t27.5 0 q13.75 -3.25 27.5 0 t27.5 0 q13.75 -3.25 27.5 0 t27.5 0 q13.75 -3.25 27.5 0 t27.5 0 V90 H0Z"/><path class="w-wv w-wv2 dw-f2" d="M0 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 q9.1675 -2.6 18.335 0 t18.335 0 V90 H0Z" transform="translate(0 6)"/></g>
+<ellipse class="dw-ring"${at('4800 5600-in')} cx="48" cy="31" rx="7" ry="2.4"/></g>
+<g class="dw-ink"><ellipse cx="50" cy="62" rx="38" ry="28"/><path d="${WHALE_TAIL}"/></g>
+<g class="dw-eye"><circle cx="30" cy="56" r="3.6" class="dw-face"/><circle cx="31.2" cy="54.8" r="1.1" fill="#fff"/><path d="M22 70Q32 76 42 70" class="dw-ink dw-thin"/></g>
+<g class="dw-happy"><path d="M26 57Q30 51.5 34 57" class="dw-lid"/><ellipse cx="24" cy="66" rx="4" ry="2.4" class="dw-blush"/><path d="M21 69Q32 79 43 69" class="dw-ink dw-thin"/></g>
+<path class="dw-drop"${at('4350')} d="${DROP}" transform="translate(48 0) scale(1.5)"/>
+<g class="dw-spout"${at('5500')}><path d="M48 32C46 20 40 14 34 16M48 32C50 18 56 12 62 14M48 32V12"/><circle cx="32" cy="12" r="2.5"/><circle cx="64" cy="10" r="2.5"/><circle cx="48" cy="6" r="2.5"/></g>
+<g class="dw-burst"${at('5500')}>${[[-34, -22], [34, -26], [-20, -34], [20, -36], [-44, -8], [44, -10]].map(([x, y], i) => `<path d="${DROP}" style="--x:${x}px;--y:${y}px;--d:${i * 60}ms"/>`).join('')}</g></svg>`;
+const drinkChip = (icon, kind, ml, when, taps) => `<span class="dk-chip"${when ? at(when) : ''}><span class="dk-ic">${ic(icon)}${ic('check', 'dk-ok')}</span><span><span class="mut">${kind}</span><b>${ml} ml</b></span>${taps ? `<i class="w-tap"${at(taps)}></i>` : ''}</span>`;
+const drinks = `<div class="dm pad dk">
+<div class="row sp"><span class="row dk-h"><i class="dk-dot"></i>Drinks &amp; hydration</span><span class="dk-plus">${ic('plus')}</span></div>
+<div class="row dk-r"><span class="dk-fig">${whaleFig}<i class="w-tap"${at('4200 4600-in')}></i></span><div>
+<div class="row base dk-amt"><span class="num big" data-n="1.5,2,900,700,1;2,2.5,2700,700,1;2.5,2.75,4800,900,1">2.8</span><span class="num dk-of">/ 2.6 L</span></div>
+<div class="dk-pc"><span data-n="58,77,900,700,i;77,96,2700,700,i;96,106,4800,900,i">106</span>%</div>
+<div class="mut s" data-tx="0|1.1 L to go;1300|0.6 L to go;3100|0.1 L to go;5500|goal reached">goal reached</div>
+<div class="mut s" data-tx="0|drank 1.6 L;1300|drank 2.1 L;3100|drank 2.6 L;5000|drank 2.9 L">drank 2.9 L</div></div></div>
+<div class="dk-toast"${at('4700')}><span class="dk-t">${ic('check')}Added: water, 250 ml</span><b>Undo</b></div>
+<div class="dk-chips">${drinkChip('drop', 'Water', 250)}${drinkChip('drop', 'Water', 500, '600:press 750-press 900:ok 2100-ok 2400:press 2550-press 2700:ok 3900-ok', '500 900-in 2300 2700-in')}${drinkChip('cup', 'Coffee', 200)}</div>
+</div>`;
+
 // ---- Coach (CoachView.swift: bubbles, ActionCard with a workout preview, the confirmed line) ----
 const coachScreen = `<div class="app glow-today chat">${STATUS}
 <div class="nav c"><span class="cb">${ic('x')}</span><b>Coach</b><span class="cb">⋯</span></div>
@@ -401,9 +432,43 @@ const actCoach = `<div class="dm wc coach2">
 <div class="wcard w-a"${at('1600')}><p class="sent">${typed.map(([x, start, len], i) => `<span${i === 1 ? ' class="grn w-it"' : ''} data-type="${start},${len}">${x}</span>`).join('')}</p></div>
 <div class="wcard row w-wo"${at(String(typed[2][1] + typed[2][2] + 200))}><span class="ib amb">${ic('lift')}</span><div><b>Legs, lighter</b><span class="mut s">40 min · 4 exercises</span></div><span class="w-add">Add</span></div>
 </div>`;
+// ---- Apple Watch (AurinWatch/: ReadinessHome.swift, GymSessionView.swift, FoodPage.swift, the watch face's
+// complications in AurinWatchWidgets) on the sample day. The watch is dark only (WatchStyle.swift: W). ----
+const WA = {ink: '#ECEAE6', muted: '#9AA39F', green: '#8FE6C4', amber: '#F2B46B', indigo: '#A5A1FF', blue: '#7CC3F0', red: '#F0907A'};
+const wRange = (pos, c) => `<i class="aw-rb"><b style="left:${pos}%;background:${c}"></b></i>`;
+// A ring of ten segments (the complications, the food ring): the share filled in its colour over a faint track.
+const wRing = (size, r, width, frac, c, inner) => `<span class="aw-ring" style="width:${size}px;height:${size}px"><svg viewBox="0 0 ${size} ${size}" aria-hidden="true"><circle cx="${size / 2}" cy="${size / 2}" r="${r}" pathLength="100" stroke="${c}" stroke-opacity=".22" stroke-width="${width}" stroke-dasharray="8 2"/><circle cx="${size / 2}" cy="${size / 2}" r="${r}" pathLength="100" stroke="${c}" stroke-width="${width}" stroke-dasharray="${frac === 1 ? '8 2' : `${'8 2 '.repeat(Math.round(frac * 10)).trim()} 0 100`}" transform="rotate(-90 ${size / 2} ${size / 2})"/></svg>${inner}</span>`;
+const wTop = (left, time, right) => `<div class="aw-top"><span>${left}</span><span class="aw-time">${time}</span><span>${right}</span></div>`;
+const wBtn = (icon, c) => `<span class="aw-ib" style="color:${c}">${ic(icon)}</span>`;
+const watchHome = `<div class="aw-s" style="--gw:#163A2E">${wTop(wBtn('alarm', WA.indigo), '7:12', wBtn('chat', WA.amber))}
+<div class="aw-k">Readiness</div><div class="aw-hero"><span class="aw-n" style="font-size:58px">78</span><span class="aw-pill" style="color:${WA.green}">high</span></div>
+<div class="aw-g">${[['Sleep', '7:12', '', 28, WA.amber, '89%'], ['Strain', '8.4', '', 14, WA.amber, 'of 11–14'], ['HRV', '64', 'ms', 76, WA.green, 'high']].map(([k, v, u, pos, c, note]) => `<div><span class="aw-k">${k}</span><span class="aw-n aw-v">${v}${u ? `<small>${u}</small>` : ''}</span>${wRange(pos, c)}<b style="color:${c}">${note}</b></div>`).join('')}</div>
+<div class="aw-next"><span style="color:${WA.amber}">${ic('gym')}</span>Strength training 45′ at 5:30 PM</div></div>`;
+const watchGym = `<div class="aw-s" style="--gw:#3A2A17">${wTop('', '5:41', `<span class="aw-ib">${ic('menu')}</span>`)}
+<div class="aw-ex"><b>Squat</b><span><i class="aw-ib aw-sm">${ic('minus')}</i>set 2/4<i class="aw-ib aw-sm">${ic('plus')}</i></span></div>
+<div class="aw-two"><div class="aw-box on"><span class="aw-n">80</span><span class="aw-k">kg</span></div><div class="aw-box"><span class="aw-n">8</span><span class="aw-k">reps</span></div></div>
+<div class="aw-done">Set done</div>
+<div class="aw-two aw-tiles"><div><span class="aw-k">Time</span><b>12:40</b></div><div><span class="aw-k">Heart</span><b style="color:${WA.red}">128 <small>bpm</small></b></div></div></div>`;
+const watchRest = `<div class="aw-s" style="--gw:#3A2A17">${wTop(`<b style="color:${WA.amber}">Rest</b>`, '5:42', '')}
+<span class="aw-rest"><svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="50" stroke="#2A2C2E" stroke-width="9"/><circle cx="60" cy="60" r="50" stroke="${WA.amber}" stroke-width="9" stroke-linecap="round" pathLength="100" stroke-dasharray="56 100" transform="rotate(-90 60 60)"/></svg><span class="aw-n">1:24</span></span>
+<div class="aw-c"><span class="aw-k">Next · </span>Squat 80 kg × 8</div></div>`;
+const watchFood = `<div class="aw-s" style="--gw:#163047">${wTop('', '12:20', '')}
+<div class="aw-food">${wRing(70, 29, 7, .52, WA.amber, `<span class="aw-in"><span class="aw-n">1,380</span><small>OF 2,650</small></span>`)}<div><b style="color:${WA.amber}">Food</b><span class="aw-news">1,270 kcal left</span><span class="aw-k">lunch logged 12:30</span></div></div>
+<div class="aw-mac">${[['Carbs', 177, 330, '#FFC274'], ['Protein', 84, 150, '#83C7FF'], ['Fat', 36, 80, '#B3A1FF']].map(([k, v, t, c]) => `<div><b style="color:${c}">${k}</b>${v}/${t} g<i><b style="width:${Math.round(v / t * 100)}%;background:${c}"></b></i></div>`).join('')}</div>
+<div class="aw-water"><span style="color:${WA.blue}">${ic('drop')}</span><div><b>1.5</b> <span class="aw-k">/ 2.6 L</span><i><b style="width:58%"></b></i></div><span class="aw-plus">+250</span></div></div>`;
+const watchFace = `<div class="aw-s aw-face"><div class="aw-date">THU<b>8</b></div><div class="aw-clock">7:12</div>
+<div class="aw-comps">${[['sun', '78', .78, WA.green], ['moon', '7:12', .89, WA.indigo], ['flame', '8.4', .6, WA.amber]].map(([icon, v, f, c]) => wRing(56, 23, 5, f, c, `<span class="aw-in" style="color:${c}">${ic(icon)}<b${v.length > 3 ? ' style="font-size:12.5px"' : ''}>${v}</b></span>`)).join('')}</div></div>`;
+// The watch section's steps: [the glow token behind the watch, title, text, screen].
+export const WATCH = [
+  ['glow-today', 'Your morning, at a glance.', 'Raise your wrist: readiness, sleep, strain and HRV, as on Today, and what’s next today in one line.', watchHome],
+  ['glow-training', 'Lift without your phone.', 'Set done on the wrist, the weight on the crown. Your heart rate and calories go into the same workout.', watchGym],
+  ['glow-training', 'Rest, then a tap.', 'The rest counts down on the wrist and taps you when it’s time, with the next set ready.', watchRest],
+  ['glow-health', 'Water in one tap.', 'What’s left to eat today, the macros, and +250 for a glass of water. Your iPhone gets it at once.', watchFood],
+  ['glow-health', 'On your watch face.', 'Readiness, last night’s sleep and today’s strain sit beside the time, so you don’t even open the app.', watchFace]];
+
 export const ACTS = each({readiness: actReadiness, training: actTraining, food: actFood, sleep: actSleep, coach: actCoach});
 
-export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, coachWeek});
+export const DEMOS = each({sleepNight, sleepNeed, dial, tonight, readyParts, journal, strainMade, week, builder, gymParts, tmTable, tmTick, tmRest, tmDone, foodTarget, foodAdd, drinks, coachWeek});
 export const SCREENS = each({strain: strainScreen, done: doneScreen, coach: coachScreen});
 
 // The demos' look: the app's cards (radius 22), Instrument Serif for numbers, Newsreader for sentences.
@@ -780,6 +845,74 @@ html:not(.js) .stage1{display:none}
 .w-wv{animation:w-wave 3s linear infinite}.w-wv2{animation-duration:4.4s}@keyframes w-wave{to{transform:translateX(-55px)}}.w-wv2{animation-name:w-wave2}@keyframes w-wave2{from{transform:translate(0,6px)}to{transform:translate(-36.67px,6px)}}
 @media (prefers-reduced-motion:reduce){.w-wv{animation:none}}
 .w-drink .row.base{flex-wrap:wrap;column-gap:6px}.w-drink .row.base .mut{white-space:nowrap}
+/* Drinks: the card in Výživa with the whale (DrinkFigure.swift), its colours in light and dark. */
+.dk{--wt:#4FA3D9;--wd:rgba(46,134,193,.35);--we:#EAF3F9;--wi:#1B4F72;--wf:#1B1A17;--wb:#F28AA0}
+@media (prefers-color-scheme:dark){.dk{--wt:#3C8FCB;--wd:rgba(42,116,168,.45);--we:#1D2932;--wi:#8CC4EA;--wf:#101010;--wb:#F59BB0}}
+.dk-h{gap:8px;font-weight:600}.dk-dot{width:9px;height:9px;border-radius:50%;background:var(--blue)}
+.dk-plus{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--blue);color:var(--on-button,#fff)}.dk-plus .di{width:16px;height:16px;stroke-width:2.6}
+.dk-r{gap:16px;margin-top:10px;align-items:center}.dk-fig{position:relative;flex:none;width:112px;height:112px}
+.dk-amt{gap:6px}.dk-of{font-size:20px;color:var(--faint,var(--muted))}.dk-pc{color:var(--blue);font-weight:600;font-size:13px;margin:4px 0 2px}
+.dk-toast{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:11px 14px;border-radius:14px;background:color-mix(in srgb,var(--blue) 14%,transparent);font-size:14px;max-height:60px;overflow:hidden;transition:opacity .2s,max-height .25s,margin .25s,padding .25s!important}
+.dk-toast b{color:var(--blue)}.dk-t{display:flex;align-items:center;gap:8px}.dk-t .di{width:15px;height:15px;color:var(--blue);stroke-width:2.6}
+.js .dk-toast.wait:not(.in){opacity:0;max-height:0;margin-top:0;padding-block:0}
+.dk-chips{display:flex;gap:8px;margin-top:12px}
+.dk-chip{position:relative;display:flex;align-items:center;gap:8px;height:48px;padding:0 14px 0 12px;border-radius:14px;background:color-mix(in srgb,var(--blue) 10%,transparent);transition:transform .15s!important}
+.dk-chip>span:last-of-type{display:flex;flex-direction:column;font-size:13px;line-height:1.2}.dk-chip .mut{font-size:11px;font-weight:500}
+.dk-chip.press{transform:scale(.95)}.dk-ic{display:grid;width:18px;color:var(--blue)}.dk-ic .di{grid-area:1/1;width:16px;height:16px;transition:opacity .2s!important}
+.dk-ic .dk-ok{stroke-width:2.6;opacity:0}.dk-chip.ok .dk-ok{opacity:1}.dk-chip.ok .dk-ic .di:first-child{opacity:0}
+.dw{display:block;width:112px;height:112px;overflow:visible;transform-origin:50% 70%;transition:transform .15s!important}
+.dw.press{transform:scale(.94)}.js .dw.goal{animation:dw-pop .7s cubic-bezier(.34,1.6,.5,1)}@keyframes dw-pop{35%{transform:scale(1.12)}}
+.dw-empty{fill:var(--we)}.dw-f1{fill:var(--wt)}.dw-f2{fill:var(--wd)}
+.dw-w{transform:translateY(56px);transition:transform 1s ease-in-out!important}.dw-w.a{transform:translateY(44px)}.dw-w.b{transform:translateY(32.5px)}.dw-w.c,html:not(.js) .dw-w{transform:translateY(30px)}
+.js .dw-w.wait:not(.in){opacity:1}
+.dw-ink{fill:none;stroke:var(--wi);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}.dw-thin{stroke-width:2}.dw-face{fill:var(--wf)}
+.dw-lid{fill:none;stroke:var(--wf);stroke-width:2.4;stroke-linecap:round}.dw-blush{fill:var(--wb);opacity:.45}
+.dw-happy,.dw.goal .dw-eye{opacity:0}.dw.goal .dw-happy{opacity:1}.dw-eye,.dw-happy{transition:opacity .2s!important}
+.dw-drop{fill:var(--wt);opacity:0}.js .dw-drop.in{animation:dw-fall .45s ease-in forwards}@keyframes dw-fall{from{opacity:1;transform:translate(48px,-14px) scale(1.5)}90%{opacity:1}to{opacity:0;transform:translate(48px,32px) scale(1.5)}}
+.dw-ring{fill:none;stroke:#fff;stroke-width:1.6;opacity:0;transform-origin:48px 31px}.js .dw-ring.in{animation:dw-ring .7s ease-out forwards}@keyframes dw-ring{from{opacity:.9;transform:scale(.6)}to{opacity:0;transform:scale(3.2,2.4)}}
+.dw-spout{fill:var(--wt);transform-origin:48px 32px;transition:transform .6s cubic-bezier(.34,1.6,.5,1),opacity .3s!important;animation:w-blow 1.6s ease-in-out infinite}.dw-spout path{fill:none;stroke:var(--wt);stroke-width:3;stroke-linecap:round}
+.js .dw-spout.wait:not(.in),html:not(.js) .dw-burst{opacity:0;transform:scale(.2)}
+.dw-burst path{fill:var(--wt);opacity:0;transform:translate(48px,8px)}.js .dw-burst.in path{animation:dw-fly 1.6s cubic-bezier(.2,.7,.4,1) var(--d) infinite}
+@keyframes dw-fly{0%{opacity:0;transform:translate(48px,10px) scale(1.1)}12%{opacity:1}40%{transform:translate(calc(48px + var(--x) * .6),calc(10px + var(--y))) scale(1)}75%{opacity:.8}100%{opacity:0;transform:translate(calc(48px + var(--x)),34px) scale(.6)}}
+/* Apple Watch: the case and its dark screens (WatchStyle.swift: Instrument Serif numbers, a glow at the top). */
+.aw-w{position:relative;width:236px;height:286px;border-radius:62px;padding:12px;background:linear-gradient(145deg,#3b3d41,#1c1d1f);box-shadow:0 30px 60px -24px rgba(40,30,10,.55),inset 0 0 0 1.5px #55585d}
+.aw-w:after{content:"";position:absolute;right:-7px;top:62px;width:9px;height:40px;border-radius:5px;background:linear-gradient(90deg,#2a2b2e,#4a4c50)}
+.aw-w:before{content:"";position:absolute;right:-5px;top:120px;width:6px;height:46px;border-radius:3px;background:#2e2f32}
+.aw-s{position:relative;height:100%;border-radius:50px;overflow:hidden;padding:14px 15px 12px;background:radial-gradient(120% 60% at 50% -5%,var(--gw,#000) 0,#000 70%);color:#ECEAE6;font:12px/1.3 -apple-system,BlinkMacSystemFont,Inter,system-ui,sans-serif;text-align:left}
+.aw-s .di{width:14px;height:14px}
+.aw-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;height:26px}.aw-top>span:last-child{justify-self:end}
+.aw-time{font-weight:600;font-size:14px}
+.aw-ib{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.12)}.aw-ib .di{stroke-width:2.4}
+.aw-ib.aw-sm{width:22px;height:22px}.aw-ib.aw-sm .di{width:11px;height:11px;stroke-width:3}
+.aw-n{font-family:"Instrument Serif","New York",Georgia,serif;font-weight:400;line-height:1}
+.aw-k{color:#9AA39F;font-size:11px}
+.aw-hero{display:flex;align-items:flex-end;gap:7px;margin-top:-2px}.aw-hero .aw-n{line-height:.95}
+.aw-pill{margin-bottom:7px;padding:2px 8px;border-radius:99px;background:rgba(143,230,196,.16);font-size:11px;font-weight:600}
+.aw-g{display:flex;margin-top:6px;border-radius:14px;background:rgba(255,255,255,.08)}.aw-g>div{flex:1;display:flex;flex-direction:column;padding:6px 6px 6px 7px}.aw-g>div+div{border-left:1px solid rgba(255,255,255,.1)}
+.aw-v{font-size:19px;line-height:1.1}.aw-v small{font:10px -apple-system,Inter,sans-serif;color:#9AA39F;margin-left:2px}.aw-g b{font-size:10px}
+.aw-rb{position:relative;display:block;height:4px;margin:4px 0 3px;border-radius:2px;background:#2A2C2E}.aw-rb:before{content:"";position:absolute;left:33%;width:34%;top:0;bottom:0;background:rgba(255,255,255,.18)}
+.aw-rb b{position:absolute;top:-2px;width:8px;height:8px;margin-left:-4px;border-radius:50%;border:1.5px solid #000}
+.aw-next{display:flex;align-items:center;gap:5px;margin-top:7px;font-size:10.5px;font-weight:600;white-space:nowrap}
+.aw-ex{display:flex;align-items:center;justify-content:space-between;margin-top:4px}.aw-ex b{font-size:16px}.aw-ex>span{display:flex;align-items:center;gap:5px;font-weight:500}
+.aw-two{display:flex;gap:6px;margin-top:6px}.aw-two>div{flex:1}
+.aw-box{display:flex;flex-direction:column;align-items:center;padding:4px 0 3px;border-radius:13px;background:rgba(255,255,255,.08)}.aw-box .aw-n{font-size:34px}
+.aw-box.on{background:#16352B;box-shadow:inset 0 0 0 2px #8FE6C4}
+.aw-done{display:grid;place-items:center;height:34px;margin-top:7px;border-radius:17px;background:#F4F2EE;color:#0A0B0C;font-size:14px;font-weight:700}
+.aw-tiles>div{padding:5px 9px;border-radius:12px;background:rgba(255,255,255,.07)}.aw-tiles b{display:block;font-size:17px}.aw-tiles small{font-size:10px}
+.aw-rest{position:relative;display:grid;place-items:center;width:150px;height:150px;margin:4px auto 0}.aw-rest svg{position:absolute;inset:0;fill:none}.aw-rest .aw-n{font-size:40px}
+.aw-c{margin-top:6px;text-align:center;font-weight:500}
+.aw-ring{position:relative;display:grid;place-items:center;flex:none}.aw-ring>svg{position:absolute;inset:0;fill:none}
+.aw-in{display:flex;flex-direction:column;align-items:center;line-height:1}.aw-in small{font-size:7.5px;color:#9AA39F;margin-top:2px}
+.aw-food{display:flex;align-items:center;gap:9px;margin-top:2px}.aw-food .aw-in .aw-n{font-size:16px}.aw-food>div{display:flex;flex-direction:column}
+.aw-news{font-family:Newsreader,Georgia,serif;font-size:16px;line-height:1.15;white-space:nowrap}
+.aw-mac{display:flex;gap:7px;margin-top:4px;font-size:10.5px}.aw-mac>div{flex:1}.aw-mac b{display:block}
+.aw-mac i,.aw-water i{display:block;height:3px;margin-top:2px;border-radius:2px;background:#2A2C2E}.aw-mac i b,.aw-water i b{display:block;height:100%;border-radius:2px;background:#7CC3F0}
+.aw-water{display:flex;align-items:center;gap:7px;margin-top:8px;padding:6px 6px 6px 10px;border-radius:14px;background:#141618}.aw-water>div{flex:1;font-size:13px}
+.aw-plus{padding:6px 10px;border-radius:99px;background:#7CC3F0;color:#000;font-size:13px;font-weight:700}
+.aw-face{background:#000}.aw-date{float:right;display:flex;flex-direction:column;align-items:center;justify-content:center;width:48px;height:48px;margin-top:4px;border-radius:50%;background:#1c1d1f;color:#FF6B5B;font-size:9px;font-weight:600}.aw-date b{color:#fff;font-size:17px}
+.aw-clock{clear:both;margin-top:2px;text-align:center;font-size:58px;font-weight:600;line-height:1;letter-spacing:-1px}
+.aw-comps{display:flex;justify-content:center;gap:9px;margin-top:12px}.aw-comps .aw-in .di{width:11px;height:11px}.aw-comps .aw-in b{color:#fff;font-size:15px;font-weight:700}
+@media (prefers-reduced-motion:reduce){.dw-spout,.js .dw.goal,.js .dw-burst.in path,.js .dw-drop.in,.js .dw-ring.in{animation:none}.dw-drop,.dw-ring{display:none}}
 .wc .th .di{font-size:12px}.wc .chips3 .ch3{border-radius:16px;transition:background .35s,border-color .35s}.wc .ch3 b{font-weight:600;font-size:15px}
 .wc .hg{margin-bottom:0}.hgt.w-draw{transition:clip-path 1.6s ease-in-out!important;clip-path:inset(0 0 0 0)}.js .hgt.w-draw.wait:not(.in){opacity:1;transform:none;clip-path:inset(0 100% 0 0)}
 .coach2{gap:12px}.coach2 .w-q{justify-self:end;padding:10px 14px;border-radius:18px;background:var(--button);color:var(--on-button);font-size:16px}

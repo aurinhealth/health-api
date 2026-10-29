@@ -7,7 +7,7 @@
 // have a Czech version under /cs/ (/cs/privacy, /cs/terms), linked from the page and the footer.
 import {DARK_SITE, siteTokens} from './design-system.js';
 import {icon, ICON_PATHS} from './icons.js';
-import {ACTS, DEMOS, SCREENS, demoCss, demoScript} from './site-demos.js';
+import {ACTS, DEMOS, SCREENS, WATCH, demoCss, demoScript} from './site-demos.js';
 import {scriptPolicy} from './web-security.js';
 import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
@@ -221,6 +221,15 @@ main:focus{outline:none}
 
 /* Connections: a row of the services the app connects; picking one says what Aurin reads from it and
    what it sends back. They take turns until one is picked. */
+/* Apple Watch: the watches in a row that wraps, each over a glow in its part's colour. */
+.watch{padding:150px 0 0}
+.watch .intro{max-width:620px}.watch .intro .sub{margin-top:16px}
+.aw-list{display:flex;flex-wrap:wrap;justify-content:center;gap:56px 28px;margin:56px 0 0;padding:0;list-style:none}
+.aw-list li{position:relative;display:flex;flex-direction:column;align-items:center;width:340px;text-align:center}
+.aw-list li:before{content:"";position:absolute;top:-20px;width:320px;height:320px;border-radius:50%;background:radial-gradient(var(--g) 0,transparent 68%);pointer-events:none}
+.aw-list .aw-w{margin-bottom:28px}
+.aw-list h3{font:400 var(--fs-28)/1.1 var(--serif);letter-spacing:-.01em}.aw-list p{max-width:340px;margin-top:8px;color:var(--muted);font-size:var(--fs-17)}
+.aw-note{margin-top:40px;text-align:center;color:var(--muted);font-size:var(--fs-14)}
 .connect{padding:150px 0 0}
 .connect .intro{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:end}
 .connect .intro .sub{margin:0}
@@ -432,7 +441,7 @@ main:focus{outline:none}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
   .opener{padding-top:110px}.chapter.opens{padding-top:64px}
   .sun{margin:-16px auto -8px}
-  .muscles,.connect,.privacy,#faq,.mid{padding-top:110px}
+  .muscles,.watch,.connect,.privacy,#faq,.mid{padding-top:110px}
   .faq .side{position:static}
 }
 @media (max-width:560px){
@@ -791,7 +800,8 @@ export function overviewPage(request) {
       ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired when you finish, saved to Apple Health. Then say how it went.', 6000]]],
     ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
       ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
-      ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000]]],
+      ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000],
+      ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500]]],
     ['spanek', '', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
       ['sleep', 'sleepNight', 300, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
       ['sleep-need', 'sleepNeed', 150, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
@@ -841,6 +851,13 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
 <div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn · tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
 </div></section>
 <div class="muscle-card" role="dialog" aria-modal="true" aria-labelledby="mc-name"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3 id="mc-name"></h3><p class="state"></p></div></div>`;
+
+  // Apple Watch: the watch app's screens (built in site-demos.js, CI takes no watch screenshots), one per thing it does.
+  const watch = `<section id="apple-watch" class="watch"><div class="wrap">
+<div class="intro reveal"><div class="eyebrow">Apple Watch</div><h2 class="big">Aurin on your wrist.</h2><p class="sub">Today’s readiness when you raise your wrist, your gym sets without your phone, water in one tap.</p></div>
+<ul class="aw-list">${WATCH.map(([tone, title, text, screen]) => `<li class="reveal" style="--g:var(--${tone})"><div class="aw-w" aria-hidden="true">${screen}</div><h3>${title}</h3><p>${text}</p></li>`).join('')}</ul>
+<p class="aw-note">Comes with the iPhone app. Sets, water and your workout sync both ways.</p>
+</div></section>`;
 
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
   // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
@@ -961,6 +978,8 @@ ${sun(104)}
 </div></section>
 
 ${ACT_LIST.map(a => act(a) + '\n' + a[4].map(id => id === 'svaly' ? muscles : chapter(scenes.find(x => x[0] === id), scenes.findIndex(x => x[0] === id))).join('\n')).join('\n')}
+
+${watch}
 
 <section class="mid"><div class="wrap reveal"><p>Try it on your own mornings.</p><a class="ghost" href="#join">Join the waitlist ${ARROW}</a></div></section>
 ${actNav}
