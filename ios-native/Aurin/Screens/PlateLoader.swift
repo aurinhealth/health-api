@@ -207,10 +207,11 @@ struct PlateLoaderSheet: View {
                 Button("Klávesnice") {
                     typed = PlateLoad.text(total)
                     typing = true
-                    focused = true
                 }
                 .font(.subheadline).foregroundStyle(Palette.muted)
                 .opacity(typing ? 0 : 1)
+                .disabled(typing)
+                .accessibilityHidden(typing)
                 Spacer()
                 Text(title).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1)
                 Spacer()
@@ -262,6 +263,8 @@ struct PlateLoaderSheet: View {
                 TextField("–", text: $typed)
                     .keyboardType(.decimalPad)
                     .focused($focused)
+                    // The keyboard once the field is there; set with `typing` it isn't yet.
+                    .onAppear { focused = true }
                     .multilineTextAlignment(.center)
                     .font(Typo.number(64)).foregroundStyle(Palette.ink)
                     .fixedSize()

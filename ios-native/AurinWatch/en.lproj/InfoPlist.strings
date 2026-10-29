@@ -1,0 +1,3 @@
+/* Health permission texts of the watch app (project.yml, AurinWatch target), by the watch's language. */
+"NSHealthShareUsageDescription" = "Aurin on your watch reads your heart rate and active calories during a gym workout.";
+"NSHealthUpdateUsageDescription" = "Aurin saves your gym workout from the watch to Apple Health, with heart rate and calories.";

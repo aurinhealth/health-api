@@ -270,7 +270,10 @@ struct EmailLoginSheet: View {
     @State private var sent = false
     @State private var busy = false
     @State private var error: String?
-    @FocusState private var focused: Bool
+    /// Each field its own value: after "Send code" the code field takes the keyboard
+    /// (and the code from Mail) instead of it closing with the e-mail field.
+    private enum Field { case email, code }
+    @FocusState private var focused: Field?
 
     var body: some View {
         NavigationStack {
@@ -282,7 +285,9 @@ struct EmailLoginSheet: View {
                         .keyboardType(.numberPad).textContentType(.oneTimeCode)
                         .font(Typo.number(34)).multilineTextAlignment(.center)
                         .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .focused($focused)
+                        .focused($focused, equals: .code)
+                        // Set when the field is there: in the same step as `sent` it doesn't exist yet.
+                        .onAppear { focused = .code }
                         .onChange(of: code) { _, value in
                             code = String(value.filter(\.isNumber).prefix(6))
                             if code.count == 6 { Task { await verify() } }
@@ -292,7 +297,8 @@ struct EmailLoginSheet: View {
                         .keyboardType(.emailAddress).textContentType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                         .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .focused($focused)
+                        .focused($focused, equals: .email)
+                        .onAppear { focused = .email }
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                 PrimaryButton(title: busy ? "Moment…" : sent ? "Přihlásit" : "Poslat kód", systemImage: sent ? "checkmark" : "envelope", busy: busy) {
@@ -307,7 +313,6 @@ struct EmailLoginSheet: View {
             .padding(24)
             .background { ScreenBackground(glow: Palette.Glow.today) }
             .toolbar { ToolbarItem(placement: .topBarLeading) { Button("Zrušit") { dismiss() } } }
-            .onAppear { focused = true }
         }
     }
 
@@ -318,7 +323,7 @@ struct EmailLoginSheet: View {
             try await model.api.startEmailLogin(email: email.trimmingCharacters(in: .whitespaces))
             sent = true
             error = nil
-            focused = true
+            focused = .code
         } catch {
             self.error = error.localizedDescription
         }

@@ -203,7 +203,10 @@ struct EmailChangeView: View {
     @State private var busy = false
     @State private var changed: String?
     @State private var error: String?
-    @FocusState private var focused: Bool
+    /// Each field its own value: after "Send code" the code field takes the keyboard
+    /// (and the code from Mail) instead of it closing with the e-mail field.
+    private enum Field { case email, code }
+    @FocusState private var focused: Field?
 
     private var address: String { email.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -229,7 +232,9 @@ struct EmailChangeView: View {
                         .keyboardType(.numberPad).textContentType(.oneTimeCode)
                         .font(Typo.number(34)).multilineTextAlignment(.center)
                         .padding(14).background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .focused($focused)
+                        .focused($focused, equals: .code)
+                        // Set when the field is there: in the same step as `sent` it doesn't exist yet.
+                        .onAppear { focused = .code }
                         .onChange(of: code) { _, value in code = String(value.filter(\.isNumber).prefix(6)) }
                     if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
                     PrimaryButton(title: L10n.tr(busy ? "Moment…" : "Změnit"), systemImage: "checkmark", busy: busy) { Task { await verify() } }
@@ -237,7 +242,7 @@ struct EmailChangeView: View {
                     HStack {
                         Button("Poslat nový kód") { Task { code = ""; await send() } }
                         Spacer()
-                        Button("Zadat jinou adresu") { sent = false; code = ""; error = nil; focused = true }
+                        Button("Zadat jinou adresu") { sent = false; code = ""; error = nil; focused = .email }
                     }
                     .font(Typo.bodyStrong).foregroundStyle(Palette.muted).disabled(busy)
                 }
@@ -249,7 +254,8 @@ struct EmailChangeView: View {
                             .textInputAutocapitalization(.never).autocorrectionDisabled()
                             .submitLabel(.send)
                             .onSubmit { if address.contains("@") { Task { await send() } } }
-                            .focused($focused)
+                            .focused($focused, equals: .email)
+                            .onAppear { focused = .email }
                             .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 50)
                     }
                     if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
@@ -258,7 +264,6 @@ struct EmailChangeView: View {
                 }
             }
         }
-        .onAppear { focused = true }
     }
 
     private func send() async {
@@ -269,7 +274,7 @@ struct EmailChangeView: View {
             try await model.api.startEmailChange(email: address)
             sent = true
             error = nil
-            focused = true
+            focused = .code
         } catch {
             // The server's own words: taken, the same address, too soon…
             self.error = error.localizedDescription

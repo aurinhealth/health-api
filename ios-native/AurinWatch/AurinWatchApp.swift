@@ -36,6 +36,14 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
     func handle(_ workoutConfiguration: HKWorkoutConfiguration) {
         GymStore.shared.openFromPhone()
     }
+
+    /// Relaunched while the gym's workout was running: it goes on where it was.
+    func handleActiveWorkoutRecovery() {
+        Task {
+            guard await GymWorkout.shared.recover() else { return }
+            GymStore.shared.openedFromPhone = true
+        }
+    }
 }
 
 struct WatchRoot: View {

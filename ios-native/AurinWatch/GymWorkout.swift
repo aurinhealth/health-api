@@ -48,6 +48,23 @@ final class GymWorkout: NSObject, ObservableObject {
         try? await builder.beginCollection(at: now)
     }
 
+    /// The app was relaunched during a workout (a crash, the system): the
+    /// running session is taken back, with its start, heart rate and calories,
+    /// instead of a new one from 0:00. True when there was one.
+    func recover() async -> Bool {
+        guard session == nil else { return true }
+        let recovered: HKWorkoutSession? = await withCheckedContinuation { continuation in
+            store.recoverActiveWorkoutSession { session, _ in continuation.resume(returning: session) }
+        }
+        guard let recovered, recovered.state == .running || recovered.state == .paused else { return false }
+        let builder = recovered.associatedWorkoutBuilder()
+        builder.delegate = self
+        session = recovered
+        self.builder = builder
+        start = recovered.startDate ?? builder.startDate ?? Date()
+        return true
+    }
+
     /// Ends the workout; saved to Apple Health when sets were done, else thrown away.
     func finish(save: Bool) async {
         guard let session, let builder else {
