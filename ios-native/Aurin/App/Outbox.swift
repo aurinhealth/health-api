@@ -2,7 +2,7 @@ import Foundation
 import Network
 
 /// A write made without signal: a meal, a drink, a weigh-in or the gym sheet
-/// of a day. It waits on the phone (OutboxStore) and AppModel.sendOutbox sends
+/// of a day. It waits on the phone (OutboxStore) and WriteQueue.send sends
 /// it when the app comes back or the network returns. Meals, drinks and
 /// weigh-ins carry a requestId, so the server keeps one even when an answer got
 /// lost and the write goes out again (src/idempotency.js).
@@ -138,11 +138,20 @@ enum OutboxStore {
         url.deletingLastPathComponent().appending(path: "outbox-unread.json")
     }
 
+    /// The file is read and written off the main thread, one change after
+    /// another in the order they were made.
+    private static let disk = DispatchQueue(label: "aurin.outbox", qos: .userInitiated)
+
+    /// Waits for the writes to the file asked for before it.
     static func load() -> [OutboxItem] {
-        read().items
+        disk.sync { read().items }
     }
 
     static func save(_ items: [OutboxItem]) {
+        disk.async { write(items) }
+    }
+
+    private static func write(_ items: [OutboxItem]) {
         let unread = read().unread
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if items.isEmpty {
@@ -162,8 +171,10 @@ enum OutboxStore {
 
     /// Signing out: this account's waiting writes go, the unread ones too.
     static func clear() {
-        try? FileManager.default.removeItem(at: url)
-        try? FileManager.default.removeItem(at: asideURL)
+        disk.sync {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: asideURL)
+        }
     }
 
     /// Each waiting write on its own: one this version cannot read does not
