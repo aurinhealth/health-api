@@ -30,7 +30,7 @@ test('public pages use the app’s light palette',async()=>{
 
 test('the overview follows the app section by section and every file it loads exists',async()=>{
   const html=await overviewPage(new Request('https://aurin.health/')).text();
-  for(const id of ['spanek','pripravenost','zatez','trenink','posilovna','rezim','svaly','vyziva','kouc','propojeni','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
+  for(const id of ['spanek','pripravenost','zatez','trenink','posilovna','rezim','svaly','vyziva','kouc','connections','soukromi','faq'])assert.match(html,new RegExp('<section id="'+id+'"'),id);
   const files=[...new Set([...html.matchAll(/(?:src|href|content)="(?:https:\/\/aurin\.health)?\/site\/([^"?]+)(?:\?[^"]*)?"/g)].map(m=>m[1]))];
   assert.ok(files.includes('og-en.jpg'),'share image');
   assert.ok(files.includes('fonts/newsreader.woff2'));
@@ -184,7 +184,7 @@ test('the support page follows the app’s Settings and every page has the foote
     assert.doesNotMatch(await page(new Request('https://aurin.health/x?lang='+lang)).text(),/Nastavení → Účet,|Settings → Account(?!;)|Settings → Account you|Nastavení → Propojení|Settings → Connections/);
   for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
     const html=await page().text();
-    for(const href of ['/#a-readiness','/#propojeni','/support#problem','mailto:support@aurin.health','/privacy','/terms'])assert.ok(html.includes('href="'+href+'"'),href);
+    for(const href of ['/#a-readiness','/#connections','/support#problem','mailto:support@aurin.health','/privacy','/terms'])assert.ok(html.includes('href="'+href+'"'),href);
     assert.match(html,/Aurin is not a medical device\./);
   }
   assert.match(support,/<h2 id="problem">/);
@@ -207,7 +207,7 @@ test('robots.txt and the sitemap list the public pages on the host they are serv
 // (Assets.xcassets), and say what Aurin sends back only where the app can sync to that service.
 test('the connections use the app’s own logos and only the services the app offers',async()=>{
   const html=await overviewPage().text();
-  const section=html.slice(html.indexOf('<section id="propojeni"'),html.indexOf('<section id="soukromi"'));
+  const section=html.slice(html.indexOf('<section id="connections"'),html.indexOf('<section id="soukromi"'));
   const asset=path=>readFileSync(new URL('../ios-native/Aurin/Resources/Assets.xcassets/'+path,import.meta.url));
   const site=file=>readFileSync(new URL('../public/site/logos/'+file,import.meta.url));
   for(const [file,source] of [['apple-health.png','AppleHealthLogo.imageset/apple-health.png'],['google-health.png','GoogleHealthLogo.imageset/google-health.png'],['intervals.svg','IntervalsLogo.imageset/intervals.svg'],['ultrahuman.svg','UltrahumanMark.imageset/ultrahuman-white.svg'],['whoop.svg','WhoopLogo.imageset/whoop-black.svg'],['wahoo.png','WahooLogo.imageset/wahoo-wordmark-white.png']]){
