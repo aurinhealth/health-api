@@ -90,3 +90,24 @@ test("with Intervals.icu a failed read of the watch's workouts gives a degraded 
   assert.match(entry, /watchOnlyFitness\(env,ctx,from,to\)\.catch\(error=>\{console\.error\('Watch-only load',error\.message\);return false;\}\);/);
   assert.match(entry, /\.\.\.\(watchExtra===false\?\{degraded:true\}:\{\}\)/);
 });
+
+test("requests asking for the same entry at once compute it once, and each gets its own copy", async () => {
+  const { env, store } = setup();
+  let calls = 0, release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const compute = async () => { calls++; await gate; return { status: "ok", days: [{ date: "2026-10-28", kcal: 2100 }] }; };
+  const all = Promise.all([1, 2, 3, 4].map(() => cached(env, null, "coach-inputs:2026-10-29", compute, { store })));
+  release();
+  const answers = await all;
+  assert.equal(calls, 1);
+  answers.forEach(a => assert.deepEqual(a, answers[0]));
+  answers[1].days[0].kcal = 0;
+  assert.equal(answers[0].days[0].kcal, 2100, "a caller changing its answer leaves the others alone");
+  // A failure reaches every waiting request and is not kept: the next one asks again.
+  let failing = 0;
+  const failed = await Promise.allSettled([1, 2].map(() => cached(env, null, "week:2026-10-27", async () => { failing++; throw new Error("D1 overloaded"); }, { store })));
+  assert.deepEqual(failed.map(f => f.status), ["rejected", "rejected"]);
+  assert.equal(failing, 1);
+  await cached(env, null, "week:2026-10-27", async () => { failing++; return { days: [] }; }, { store });
+  assert.equal(failing, 2);
+});

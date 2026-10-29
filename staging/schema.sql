@@ -208,6 +208,8 @@ CREATE INDEX IF NOT EXISTS idx_health_datapoints_user_0 ON health_datapoints(use
 
 CREATE INDEX IF NOT EXISTS idx_health_datapoints_user_1 ON health_datapoints(user_id, source_family, data_type, start_time);
 
+CREATE INDEX IF NOT EXISTS idx_health_datapoints_user_day ON health_datapoints(user_id, source_family, data_type, COALESCE(sample_time,end_time,start_time));
+
 CREATE INDEX IF NOT EXISTS idx_strength_sets_user_date ON strength_sets(user_id, workout_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_strength_sets_user_exercise_date ON strength_sets(user_id, exercise, workout_date DESC);

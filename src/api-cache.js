@@ -6,6 +6,10 @@
 // by itself (Intervals.icu, Google Health).
 
 export const CACHE_TTL_SECONDS = 600;
+// The same entry being computed in this isolate: Today's coach cards ask for
+// the same coach inputs at the same moment, and each used to compute them
+// (some 400 database reads each) before the first one was kept.
+const computing = new Map();
 
 export async function cacheVersion(db) {
   try { return (await db.prepare("SELECT version FROM api_cache_versions WHERE user_id=?").bind(db.userId).first())?.version || 0; }
@@ -28,7 +32,12 @@ export async function cached(env, ctx, key, compute, { ttl = CACHE_TTL_SECONDS, 
   const url = "https://cache.internal/" + scope + "/" + env.DB.userId + "/" + (await cacheVersion(env.DB)) + "/" + encodeURIComponent(key);
   const hit = await store.match(url).catch(() => null);
   if (hit) return hit.json();
-  const value = await compute();
+  // Waiting for the one computing it: a copy, as from the cache, since callers change what they get.
+  if (computing.has(url)) return computing.get(url).then(value => structuredClone(value));
+  const pending = compute();
+  computing.set(url, pending);
+  let value;
+  try { value = await pending; } finally { computing.delete(url); }
   // A failed read (an error answer, the {} callers fall back to, or an answer
   // marked degraded: part of it failed) is not kept: the next request asks
   // again instead of showing nothing for 10 minutes.
