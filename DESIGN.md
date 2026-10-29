@@ -23,8 +23,8 @@ palette changes, change `design-system.js` and this file together.
    on link text, eyebrows or labels.
 4. **Warm, not clinical.** Paper instead of white, serif headlines, soft tinted glows. Never cold grey, never
    neon on black.
-5. **Light only, for now.** The site has one look and no theme switch. It follows the app's light screenshots;
-   a dark version needs CI to take the dark screenshots too (see "Dark mode, next" below).
+5. **Light and dark.** The site follows the phone's or computer's light or dark mode with the app's own two
+   palettes, and has no switch of its own; each phone shows CI's screenshot in the same mode (see "Dark mode" below).
 6. **The welcome sets the tone.** The hero, the openings of the parts, the privacy lock and the end take the look
    and motion of the app's welcome before the sign-in (`WelcomePages.swift`): the logo rising behind spreading
    rings, a sunrise tint, the app's own cards rising into place one after another.
@@ -56,6 +56,7 @@ palette changes, change `design-system.js` and this file together.
 | `--sun` | #E09A55 | The rings and glow around the mark, the scanning beam, the progress pill's dot (`AurinMark.amber`) |
 | `--glow-sunrise` `--glow-coach` | #F7DFC2 · #E6E1F3 | The hero and final tint; the coach's part (`WelcomeGlow`) |
 | `--metal` `--plate-25` `--plate-5` | #BDB7AC · #C98A7C · #AEB2B9 | The plate loader's bar and plates, with their `-line` outlines |
+| `--sand` `--brown` | #E6D3B5 · #8A6D3B | The privacy lock's shackle (`WelcomeLock`), nothing else |
 | `--glow-today` `-health` `-training` `-food` | #DCEBE2 · #E3E6F3 · #F3E3C6 · #F2E4D0 | The soft glow behind each section's phone |
 
 Each section sets two variables, `--tone` (the bar under its active step) and `--glow` (the tint behind the phone):
@@ -90,7 +91,7 @@ headlines grow fluidly with the window, but only between two neighbouring steps.
 |---|---|---|
 | `--fs-12` | 12px | Eyebrows (700, 0.18em, uppercase), step numbers, footer headings and base line, flow labels |
 | `--fs-14` | 14px | Nav links, chips, notes under the waitlist, hero card labels, legends, footer links, legal small print |
-| `--fs-17` | 17px | Body (site base), step text, real-day captions, buttons, FAQ answers |
+| `--fs-17` | 17px | Body (site base), step text, buttons, FAQ answers |
 | `--fs-20` | 20px | Ledes and section sub-lines (17 on phones), FAQ questions, service names, legal h2 |
 | `--fs-28` | 28px | Step titles, the opener lines (20 on phones), the mid-page call, hero card numbers, the logo word |
 | `--fs-44` | 44px | h2 on phones, the smallest hero headline, legal h1 |
@@ -130,16 +131,17 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
 
 ## Shape and depth
 
-- **Corners** (`--r-*`): 8 (fields inside cards, small tiles), 12 (thumbnails such as the real-day screen),
+- **Corners** (`--r-*`): 8 (fields inside cards, small tiles), 12 (thumbnails),
   16 (bubbles, the connection nodes, inner panels), 22 (the app's cards, glass cards, lifted app parts, big boxes:
   the connections, the panels, the muscle card), `--r-pill` (buttons, nav, chips, the kicker). The phone keeps its
   real 58px corner, thin bars 2px.
 - **Two shadows**, warm (brown-tinted, never pure black):
-  - `--shadow-card`: a card resting on the paper (a 1px `--line` ring and a hairline shadow). Panels, real-day
-    cards, chips that travel the connections, the picked service.
+  - `--shadow-card`: a card resting on the paper (a 1px `--line` ring and a hairline shadow). Panels, chips that travel the connections, the picked service.
   - `--shadow-float`: anything floating over the page: the nav, the progress pill, the hero's glass numbers, the
     lifted app parts, the muscle bubble and card, the waitlist field (with a `--line` ring), the lock.
   - The phone keeps its own titanium shadow; the ink pill and glows are not shadows.
+  - Two, not three: the paper, the card and the glow already make the layers, so a third shadow step would only
+    blur the line between resting and floating. (Compared with August Health, Tines and Notion in October 2026.)
 - Blur (glass) only on things that sit over moving content: the nav pill, the three hero cards, the muscle
   bubble. Nowhere else.
 - Gradients only in these places: the sunrise behind the hero and the end, the parts' and sections' glows, the
@@ -158,8 +160,8 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
   and a secondary button down to the waitlist at the end. Light on purpose: the ink pill stays the hero's and
   the end's.
 - **Link:** `--primary-text`, underline on hover; a trailing chevron icon when it leads to another page.
-- **Nav:** a floating pill 12px from the top, sticky: the mark and the word Aurin in Newsreader, 4 section
-  links in `--muted`, a small ink pill "Join the waitlist" on the right that appears once the hero's own button
+- **Nav:** a floating pill 12px from the top, sticky: the mark and the word Aurin in Newsreader, links to the five
+  parts in `--muted`, a small ink pill "Join the waitlist" on the right that appears once the hero's own button
   has scrolled away (one waitlist button on screen at a time: it hides while the hero's or the end's field or the
   mid-page call is in view). Under 960px the links go; under 560px the logo
   and a smaller pill stay, so the page's one action is always a tap away.
@@ -172,7 +174,7 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
   counts down, plates slide onto the bar, sets tick off, the barcode is scanned, the drink fills, the night is
   drawn, the coach types its answer and offers the workout.
 - **Progress pill:** fixed 18px above the bottom, `--panel` glass, the part's name in 14px 600 and a 136px line
-  with a dot per part; the dots link to the parts.
+  with a dot per part; the dots link to the parts; it steps aside while a live demo card passes under it, so it never hides the demo's last rows.
 - **Privacy lock:** a paper lock with the mark whose shackle clicks shut when the promise scrolls in, the
   promise as a Newsreader headline, the line under it and the link to the policy.
 - **Phone:** the CSS iPhone (titanium edge, black bezel, glare) around a real screenshot. Never a flat rectangle.
@@ -203,14 +205,23 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
 - **Motion:** slow and soft (`cubic-bezier(.16,1,.3,1)`, 400-600ms); the phone stands up as you scroll, words of
   the headline rise one by one. Everything respects `prefers-reduced-motion` with a still version.
 
-## Dark mode, next
+## Dark mode
 
-Not built yet. The tokens are named by role, so a dark theme is a second `:root` block under
-`prefers-color-scheme: dark` with the app's dark values (`Palette.swift`: background #0A0B0C, card #1C1E1F, ink
-#ECEAE6, green #8FE6C4, amber #F2B46B, indigo #A5A1FF), the shadows turned to light rings, and the glows dimmed.
-What holds it back is the pictures: the phones show light screenshots, which would glare on a dark page. It
-needs CI to take the dark screenshots of the sample day as well (`ios-native.yml`), saved beside the light
-ones and picked with `<picture>` and `prefers-color-scheme`, and the "From a real day" cards in dark too.
+On since 2026-10-29 (`DARK_SITE`). `darkTokens` in `src/design-system.js` is the app's dark palette for every
+colour token (`Palette.swift`, `WelcomePages.swift`, `AurinMark.swift`, `PlateLoader.swift`: background #0A0B0C,
+card #1C1E1F, ink #ECEAE6, green #8FE6C4, amber #F2B46B, indigo #A5A1FF), under `prefers-color-scheme: dark`. The
+shadows turn into light rings, since a shadow does not show on near black; the glows are the app's dark tints; the
+ink pill turns light (`Palette.button`). Each phone becomes a `<picture>` whose dark source is the same screen
+taken in dark mode.
+
+When the screens change, take the dark ones again:
+
+1. A run of `ios-native.yml` takes the website's shots again in dark mode (`site-dark/`, `smoke-dark/` in the
+   Aurin-screens artifact; the app's own Vzhled setting, `-appearance dark`).
+2. `node scripts/site-screens.mjs screens/` saves them beside the light ones as `public/site/app/*-dark.webp`.
+3. `tests/design-tokens.test.mjs` fails while any screen lacks its dark file (`DARK_SITE` stays true).
+
+Still light in dark mode: the share image and the overview images for Reddit and the App Store.
 
 ## Voice
 

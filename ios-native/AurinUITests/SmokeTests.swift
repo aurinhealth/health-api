@@ -239,9 +239,11 @@ final class SmokeTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// The app in English and US English formats, as the website shows it.
+    /// The app in English and US English formats, as the website shows it: light,
+    /// or dark when CI takes the website's dark shots (SITE_APPEARANCE=dark).
     private func english(_ arguments: String...) {
-        app.launchArguments = ["-demo"] + arguments + ["-language", "en", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        let appearance = ProcessInfo.processInfo.environment["SITE_APPEARANCE"] ?? "light"
+        app.launchArguments = ["-demo"] + arguments + ["-language", "en", "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-appearance", appearance]
         app.launch()
     }
 

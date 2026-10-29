@@ -5,7 +5,7 @@
 // When the app changes what a section shows, change the section here too.
 // The site is in English only (Aurin is for the whole world); the privacy policy and the terms also
 // have a Czech version at ?lang=cs, linked from the page and the footer.
-import {themeTokens} from './design-system.js';
+import {DARK_SITE, siteTokens} from './design-system.js';
 import {icon, ICON_PATHS} from './icons.js';
 import {ACTS, DEMOS, SCREENS, demoCss, demoScript} from './site-demos.js';
 import {scriptPolicy} from './web-security.js';
@@ -14,13 +14,14 @@ import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
 const siteCss = `
 @font-face{font-family:Newsreader;src:url(/site/fonts/newsreader.woff2) format("woff2");font-display:swap}
-*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;overflow-x:clip}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;overflow-x:clip;color-scheme:light;scroll-padding-top:88px}
 body{margin:0;background:var(--bg);color:var(--text);font:var(--fs-17)/1.5 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:clip}
 a{color:var(--primary-text)}
 img{max-width:100%}
+a,button{touch-action:manipulation}
 .icon{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .wrap{max-width:1160px;margin:0 auto;padding:0 24px}
-h1,h2,h3{margin:0;font-weight:400}
+h1,h2,h3{margin:0;font-weight:400;text-wrap:balance}
 h1,h2{font-family:var(--serif);letter-spacing:-.02em;line-height:1.02}
 p{margin:0}
 .muted{color:var(--muted)}
@@ -112,6 +113,7 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .bezel{padding:5px;border-radius:49px;background:#000}
 .screen{position:relative;aspect-ratio:1206/2622;border-radius:44px;overflow:hidden;background:var(--bg)}
 .screen img{display:block;width:100%;height:100%}
+.screen picture{display:contents}
 .screen::after{content:"";position:absolute;inset:0;z-index:4;pointer-events:none;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.28),rgba(255,255,255,0) 32%)}
 /* The hero's Today: the coach's sentence scrolled under the tab bar fades into the paper instead of reading as cut off. */
 .hero .screen::before{content:"";position:absolute;left:0;right:0;bottom:0;height:56px;z-index:3;pointer-events:none;background:linear-gradient(to top,var(--bg) 45%,transparent)}
@@ -128,11 +130,12 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
    the other (sides alternate); each step shows its own screen and lifts a piece of it beside the phone.
    Steps take turns on their own while the chapter is in view, until one is picked. */
 .chapter{position:relative;padding:140px 0 0}
-.ch{display:grid;grid-template-columns:minmax(0,1fr) 640px;grid-template-areas:"head vis" "steps vis" "real vis";column-gap:56px;align-items:start}
-.chapter.flip .ch{grid-template-columns:640px minmax(0,1fr);grid-template-areas:"vis head" "vis steps" "vis real"}
+.ch{display:grid;grid-template-columns:minmax(0,1fr) 640px;grid-template-areas:"head vis" "steps vis";grid-template-rows:auto 1fr;column-gap:56px;align-items:start}
+.chapter.flip .ch{grid-template-columns:640px minmax(0,1fr);grid-template-areas:"vis head" "vis steps"}
 .ch .head{grid-area:head;padding-top:56px}
 .ch .vis-wrap{grid-area:vis;position:relative}
-.ch .steps{grid-area:steps;list-style:none;margin:40px 0 0;padding:0;max-width:480px}
+.ch .rail{grid-area:steps;margin-top:40px;max-width:480px}
+.ch .steps{list-style:none;margin:0;padding:0}
 .vis{position:relative;width:640px;height:702px;zoom:var(--z,1)}
 .vis .glow{position:absolute;left:50%;top:50%;width:880px;height:880px;margin:-440px 0 0 -440px;border-radius:50%;background:radial-gradient(circle,var(--glow) 0,transparent 62%);pointer-events:none}
 .vis .device{position:absolute;left:318px;top:18px}
@@ -155,6 +158,11 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .js .multi .step:not(.on) .tx{display:none}
 .js .multi .step:not(.on) .tt{color:var(--muted)}
 .js .multi .step>button:hover .tt{color:var(--text)}
+/* While steps take turns they can be paused (and they wait while the pointer or focus is on them). */
+.hold{display:none;align-items:center;gap:8px;margin-top:14px;padding:8px 14px 8px 10px;border:0;border-radius:var(--r-pill);background:transparent;font:inherit;font-size:var(--fs-14);font-weight:600;color:var(--sec);cursor:pointer}
+.hold:hover{background:var(--panel);color:var(--text)}
+.js .auto .hold{display:inline-flex}
+.hold .play,.hold.held .pause{display:none}.hold.held .play{display:inline}
 
 /* Parts: the welcome's pages, each before the chapters of its part. The title and line on one side, the
    app's cards on the other over the part's tint; the cards rise and move once the part is in view. */
@@ -193,13 +201,17 @@ main:focus{outline:none}
 .fig::before{content:"";position:absolute;inset:10% -20%;z-index:-1;background:radial-gradient(circle,color-mix(in srgb,var(--rust) 15%,transparent) 0,transparent 60%)}
 .fig canvas{display:block;width:100%;height:100%}
 .mu .fig{margin-bottom:36px}
-.fig .bubble{position:absolute;z-index:2;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border:1px solid var(--line);border-radius:var(--r-16);background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow-float);font:inherit;text-align:left;white-space:nowrap;cursor:pointer;transform:translate(-50%,-100%) scale(.85);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.16,1,.3,1)}
-.fig .bubble.on{opacity:1;transform:translate(-50%,-100%);pointer-events:auto}
+.fig .bubble{position:absolute;z-index:2;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border:1px solid var(--line);border-radius:var(--r-16);background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow-float);font:inherit;text-align:left;white-space:nowrap;cursor:pointer;transform:translate(-50%,-100%) scale(.85);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.16,1,.3,1),visibility .25s}
+.fig .bubble.on{opacity:1;visibility:visible;transform:translate(-50%,-100%);pointer-events:auto}
+/* For the keyboard: every muscle as a button (the figure turns and is tapped with a pointer); they show once one has focus. */
+.mpick{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.mpick:not(:focus-within){position:absolute;width:1px;height:1px;margin:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.mpick button{padding:6px 12px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--panel);font:inherit;font-size:var(--fs-14);color:var(--text);cursor:pointer}
 .fig .bubble b{display:block;font-size:var(--fs-17);font-weight:600;color:var(--text)}
 .fig .bubble span{font-size:var(--fs-14)}
 .fig .bubble .icon{color:var(--muted);width:14px;height:14px}
-.muscle-card{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .35s,visibility .35s}
-.muscle-card.on{opacity:1;visibility:visible;pointer-events:auto}
+.muscle-card{position:fixed;inset:0;z-index:30;overscroll-behavior:contain;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .35s,visibility .35s}
+.muscle-card.on{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .35s}
 .muscle-card .card{width:min(400px,calc(100% - 32px));padding:20px;border-radius:var(--r-22);background:var(--bg);text-align:left;box-shadow:var(--shadow-float);transform:scale(.94);transition:transform .45s cubic-bezier(.16,1,.3,1)}
 .muscle-card.on .card{transform:none}
 .muscle-card .zoom{height:220px;border-radius:var(--r-16);background:var(--panel) center/cover no-repeat}
@@ -213,13 +225,6 @@ main:focus{outline:none}
 .connect .intro .sub{margin:0}
 
 /* A real day: one of the owner's own screens (dark mode, his data) beside the sample day, as a small card. */
-.rd{display:flex;gap:18px;align-items:center;max-width:480px;margin:28px 0 0;padding:14px;border-radius:var(--r-22);background:var(--panel);box-shadow:var(--shadow-card)}
-.rd a{flex:none;display:block;width:112px;border-radius:var(--r-12);overflow:hidden;background:var(--track);box-shadow:0 0 0 1px var(--line)}
-.rd img{display:block;width:100%;height:auto}
-.rd figcaption{font-size:var(--fs-17);line-height:1.45;color:var(--sec)}
-.rd b{display:block;margin-bottom:4px;font-size:var(--fs-12);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--green)}
-.ch .rd{grid-area:real}
-.connect .rd{margin:28px auto 0}
 .connect .box{margin-top:48px}
 .flow{position:relative;aspect-ratio:1000/440;border-radius:var(--r-22);background:var(--panel2);overflow:hidden}
 .fc{position:absolute;left:0;top:0;width:1000px;height:440px;zoom:var(--fz,1)}
@@ -231,10 +236,15 @@ main:focus{outline:none}
 .pk .icon{width:14px;height:14px}.pk.in{color:var(--green)}.pk.out{color:var(--amber)}
 .pk:not(.on){visibility:hidden}
 @keyframes travel{0%{offset-distance:0%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
-.col-l,.col-r{position:absolute;top:18px;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.pk.tall{animation-name:travel-tall}.pk.tall.late{animation-name:travel-tall-late}
+@keyframes travel-tall{0%{offset-distance:0%;offset-anchor:var(--a0) 50%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;offset-anchor:var(--a1) 50%;opacity:0}}
+@keyframes travel-tall-late{0%{offset-distance:0%;offset-anchor:var(--a0) 50%;opacity:0}52%{opacity:0}60%{opacity:1}88%{opacity:1}100%{offset-distance:100%;offset-anchor:var(--a1) 50%;opacity:0}}
+/* On the darker panel the labels and names take a muted a touch deeper: plain --muted is under 4.5:1 there. */
+.flow{--flow-muted:color-mix(in srgb,var(--muted) 80%,var(--text))}
+.col-l,.col-r{position:absolute;top:18px;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--flow-muted)}
 .col-l{left:40px}.col-r{right:40px}
 .flow .core{position:absolute;left:50%;top:50%;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:var(--shadow-float)}
-.node,.dst{position:absolute;left:var(--x);top:var(--y);display:flex;align-items:center;gap:10px;transform:translate(-50%,-50%);border:0;background:none;padding:6px 10px 6px 6px;border-radius:var(--r-16);font:inherit;color:var(--muted);transition:background .3s,box-shadow .3s,color .3s}
+.node,.dst{position:absolute;left:var(--x);top:var(--y);display:flex;align-items:center;gap:10px;transform:translate(-50%,-50%);border:0;background:none;padding:6px 10px 6px 6px;border-radius:var(--r-16);font:inherit;color:var(--flow-muted);transition:background .3s,box-shadow .3s,color .3s}
 .node{cursor:pointer;flex-direction:row-reverse;transform:translate(calc(-100% + 34px),-50%)}
 .dst{transform:translate(-34px,-50%)}
 .node:hover,.node[aria-selected=true],.dst.on{color:var(--text)}
@@ -246,11 +256,12 @@ main:focus{outline:none}
 .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}.legend .in{background:var(--green)}.legend .out{background:var(--amber-bar)}
 @media (prefers-reduced-motion:reduce){.pk{display:none}}
 @media (max-width:640px){
-  .flow{aspect-ratio:340/660}.fc{width:340px;height:660px}
+  .flow{aspect-ratio:340/760}.fc{width:340px;height:760px}
   .lines.wide,.pks.wide{display:none}.lines.tall,.pks.tall{display:block}
   .node,.dst{left:var(--mx);top:var(--my);flex-direction:column;gap:4px;padding:6px;transform:translate(-50%,-50%)}
   .node .logo-tile,.dst .logo-tile{width:46px;height:46px}.node .nm,.dst .nm{font-size:var(--fs-12);font-weight:600;max-width:84px;text-align:center;white-space:normal;line-height:1.15}
-  .col-l{left:16px}.col-r{right:auto;left:16px;top:auto;bottom:118px}
+  /* "Sent back" beside the mark's way out, above the chips' curves. */
+  .col-l{left:16px}.col-r{right:auto;left:16px;top:474px}
   .flow .core{width:92px;height:92px;margin:-46px 0 0 -46px}.flow .core svg{width:46px;height:auto}
   .legend .tip{display:none}
 }
@@ -338,6 +349,7 @@ main:focus{outline:none}
 @media (hover:none),(max-width:960px){
   .site body::after{display:none}
   .site *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+  .pill-nav,.acts-nav{background:var(--panel)}
 }
 
 /* Motion, only with JS and without reduced motion: the headline rises word by word, the sun's rings spread,
@@ -368,7 +380,7 @@ main:focus{outline:none}
   @keyframes float{50%{transform:translateY(-8px)}}
   .js .auto .step.on .bar{display:block}
   .js .auto .step.on .bar i{animation:fill var(--dur,6.5s) linear forwards}
-  .js .auto.paused .step.on .bar i{animation-play-state:paused}
+  .js .auto:is(.paused,.held) .step.on .bar i{animation-play-state:paused}
   @keyframes fill{to{width:100%}}
   .js .multi .step.on .tx{animation:fade .5s both}
   @media (hover:none),(max-width:960px){.js .part.on{animation:none}}
@@ -401,7 +413,7 @@ main:focus{outline:none}
   .morning{padding-top:32px}
   /* Chapters: the words, then the phone with its piece over the lower part, then the steps. */
   .chapter{padding-top:110px}
-  .ch,.chapter.flip .ch{grid-template-columns:1fr;grid-template-areas:"head" "vis" "steps" "real"}
+  .ch,.chapter.flip .ch{grid-template-columns:1fr;grid-template-areas:"head" "vis" "steps"}
   .ch .head{padding-top:0}
   .ch .vis-wrap{display:flex;justify-content:center;margin-top:32px}
   .vis{width:440px;height:700px}
@@ -411,13 +423,12 @@ main:focus{outline:none}
   .vis{display:grid;justify-items:center;height:auto}
   .vis .device,.flip .vis .device{position:relative;left:auto;top:auto;grid-area:1/1}
   .part,.flip .part{position:relative;grid-area:2/1;align-self:start;left:auto;top:auto!important;width:380px;max-width:100%;margin-top:-170px}
-  .ch .steps{max-width:none;margin-top:44px}
+  .ch .rail{max-width:none;margin-top:44px}
   .mu,.connect .intro,.faq{grid-template-columns:1fr;gap:32px}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
   .opener{padding-top:110px}.chapter.opens{padding-top:64px}
   .sun{margin:-16px auto -8px}
   .muscles,.connect,.privacy,#faq,.mid{padding-top:110px}
-  .rd{max-width:none}
   .faq .side{position:static}
 }
 @media (max-width:560px){
@@ -436,9 +447,11 @@ main:focus{outline:none}
   .acts-nav{bottom:12px;padding:9px 14px 9px 14px;gap:12px}
   /* On a phone the floating cards would cover the real screen's numbers. */
   .glass{display:none}
+  /* The piece rebuilds what the screen shows, so on a phone it covers the screen's lower half: the same
+     numbers are not read twice in a row, one under the other. */
+  .part,.flip .part{margin-top:-310px}
   .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
   .panels{padding:20px}
-  .rd a{width:96px}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
 }
 `;
@@ -460,7 +473,7 @@ function deviceLang(request) {
 // The Aurin mark (Rovnováha): the load half over the recovery half, offset as in the app icon.
 const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" height="${Math.round(width * 80 / 88)}" aria-hidden="true"><path d="M6 46A36 36 0 0 1 78 46Z" fill="var(--logo-load)"/><path d="M22 54A36 36 0 0 0 94 54Z" fill="var(--logo-recovery)"/></svg>`;
 // The welcome's lock (WelcomeLock in WelcomePages.swift): a soft paper lock with the logo whose shackle clicks shut.
-const LOCK = `<div class="lock" aria-hidden="true"><i class="halo"></i><svg class="shackle" viewBox="0 0 62 58"><defs><linearGradient id="lk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--panel2)"/><stop offset="1" stop-color="var(--device-lo)"/></linearGradient></defs><path d="M5.5 58V31a25.5 25.5 0 0 1 51 0v27" fill="none" stroke="url(#lk)" stroke-width="11" stroke-linecap="round"/></svg><span class="body">${mark(46)}</span></div>`;
+const LOCK = `<div class="lock" aria-hidden="true"><i class="halo"></i><svg class="shackle" viewBox="0 0 62 58"><defs><linearGradient id="lk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sand)"/><stop offset="1" stop-color="color-mix(in srgb,var(--brown) 60%,transparent)"/></linearGradient></defs><path d="M5.5 58V31a25.5 25.5 0 0 1 51 0v27" fill="none" stroke="url(#lk)" stroke-width="11" stroke-linecap="round"/></svg><span class="body">${mark(46)}</span></div>`;
 // "Join the waitlist": the button opens an e-mail field; the address waits for the owner, who
 // invites people into TestFlight from the app (src/testflight-waitlist.js).
 const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
@@ -469,11 +482,13 @@ const SHARE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5
 // Cloudflare Turnstile's widget "Aurin web" (aurin.health and staging.aurin.health); the site key is public.
 const TURNSTILE_SITE_KEY = '0x4AAAAAAFmRgmk4ncclmfIi';
 const TURNSTILE = 'https://challenges.cloudflare.com';
+// Cloudflare Web Analytics: Cloudflare puts its beacon into the page (counts visits, no cookies).
+const WEB_ANALYTICS = 'https://static.cloudflareinsights.com';
 const turnstileScript = `<script src="${TURNSTILE}/turnstile/v0/api.js?render=explicit&onload=aurinTurnstile" async defer></script>`;
 const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
-<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
+<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" spellcheck="false" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
 <span class="ts" data-key="${TURNSTILE_SITE_KEY}"></span>
-<span class="done" role="status">${CHECK}<span>You're on the list</span></span>
+<span class="done" role="status">${CHECK}<span>You’re on the list</span></span>
 <button type="button" class="share">${SHARE}<span>Know someone who trains? Share Aurin</span></button>
 <span class="err" role="alert"></span>
 </form>`;
@@ -509,6 +524,11 @@ document.querySelectorAll('.chapter').forEach(function(ch){
  ch.addEventListener('demo:touch',function(){ch._touched=true;ch.classList.remove('auto');clearTimeout(loop);});
  if(multi)steps.forEach(function(s,i){s.querySelector('button').addEventListener('click',function(){ch.classList.remove('auto');show(i);});
   s.querySelector('.bar i').addEventListener('animationend',function(){if(ch.classList.contains('auto'))show((cur+1)%steps.length);});});
+ if(multi){var rail=ch.querySelector('.rail'),hold=rail.querySelector('.hold'),said=hold.querySelector('span'),held=false,over=false,inside=false;
+  function sync(){ch.classList.toggle('held',held||over||inside);hold.classList.toggle('held',held);said.textContent=held?'Play':'Pause';}
+  hold.addEventListener('click',function(){held=!held;sync();});
+  rail.addEventListener('mouseenter',function(){over=true;sync();});rail.addEventListener('mouseleave',function(){over=false;sync();});
+  rail.addEventListener('focusin',function(){inside=true;sync();});rail.addEventListener('focusout',function(e){if(!rail.contains(e.relatedTarget)){inside=false;sync();}});}
  if(still||!IO){seen=!IO;run(0);return;}
  if(multi)ch.classList.add('auto','paused');
  new IntersectionObserver(function(es){var on=es[0].isIntersecting;ch.classList.toggle('paused',!on);
@@ -520,9 +540,11 @@ document.querySelectorAll('.opener').forEach(function(a){var c=a.querySelector('
 // On a phone the pill steps aside while reading downwards and comes back on the way up.
 var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('kouc'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false,lastY=scrollY,down=false,narrow=matchMedia('(max-width:560px)');
  function where(){ticking=false;var mid=innerHeight*.5,i=-1,y=scrollY;if(Math.abs(y-lastY)>8){down=y>lastY;lastY=y;}acts.forEach(function(a,k){if(a.getBoundingClientRect().top<mid)i=k;});
-  var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid&&!(narrow.matches&&down);an.classList.toggle('on',shown);if(i<0)i=0;
+  var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid&&!(narrow.matches&&down)&&!covers();an.classList.toggle('on',shown);if(i<0)i=0;
   an.style.setProperty('--i',i);title.textContent=dots[i].getAttribute('aria-label');dots.forEach(function(d,k){d.classList.toggle('done',k<=i);});}
- addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(where);}},{passive:true});where();}
+ // The pill steps aside while a live demo card passes under it, so it never hides the demo's last rows.
+ function covers(){var w=an.offsetWidth/2+16,cx=innerWidth/2,top=innerHeight-an.offsetHeight-34;return [].some.call(document.querySelectorAll('.part.on'),function(p){var r=p.getBoundingClientRect();return r.bottom>top&&r.top<innerHeight&&r.left<cx+w&&r.right>cx-w;});}
+ addEventListener('scroll',function(){if(!ticking){ticking=true;requestAnimationFrame(where);}},{passive:true});setInterval(where,700);where();}
 window.aurinTurnstile=function(){dispatchEvent(new Event('aurin:turnstile'));};
 // Cloudflare Turnstile checks that a person sends the form (src/testflight-waitlist.js): unseen for most,
 // a "Verify you are human" box under the field when Cloudflare isn't sure. It starts on the first touch
@@ -597,12 +619,19 @@ addEventListener('pointerup',function(e){if(!drag)return;var moved=drag.moved;dr
  bub.style.left=Math.min(Math.max(e.clientX-f.left,115),f.width-115)+'px';bub.style.top=Math.max(60,e.clientY-f.top-16)+'px';
  bub.dataset.id=name;bub.classList.add('on');});
 // The bubble opens the muscle as its detail does in the app: the figure close on it, its name and how rested.
-bub.addEventListener('click',function(){var name=bub.dataset.id,st=STATE[name]||RESTED;
+// Closing it goes back to what opened it: the bubble, or the muscle's button.
+var opener=null;
+function open(name,from){var st=STATE[name]||RESTED;opener=from;
  card.querySelector('.zoom').style.backgroundImage='url('+base+'z-'+name+'.webp)';card.querySelector('h3').textContent=LABEL[name];
- var p=card.querySelector('.state');p.textContent=st[0];p.style.color=st[1];card.classList.add('on');card.querySelector('.close').focus();});
-function hide(){card.classList.remove('on');close();}
+ var p=card.querySelector('.state');p.textContent=st[0];p.style.color=st[1];card.classList.add('on');card.querySelector('.close').focus();}
+bub.addEventListener('click',function(){open(bub.dataset.id,bub);});
+var pick=document.querySelector('.mpick');
+Object.keys(LABEL).forEach(function(name){var b=document.createElement('button');b.type='button';b.textContent=LABEL[name];
+ b.addEventListener('click',function(){open(name,b);});pick.appendChild(b);});
+function hide(){card.classList.remove('on');if(opener)opener.focus();opener=null;}
 card.addEventListener('click',function(e){if(e.target===card||e.target.closest('.close'))hide();});
-addEventListener('keydown',function(e){if(e.key==='Escape'&&card.classList.contains('on'))hide();});
+addEventListener('keydown',function(e){if(!card.classList.contains('on'))return;
+ if(e.key==='Escape')hide();else if(e.key==='Tab'){e.preventDefault();card.querySelector('.close').focus();}});
 })();</script>`;
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
@@ -617,7 +646,7 @@ function sitePage({title, description, lang, origin, path, body, czech=false, in
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#F3EFE8">
+${DARK_SITE ? '<meta name="theme-color" content="#F3EFE8" media="(prefers-color-scheme:light)">\n<meta name="theme-color" content="#0A0B0C" media="(prefers-color-scheme:dark)">' : '<meta name="theme-color" content="#F3EFE8">'}
 <title>${title}</title>
 <meta name="description" content="${description}">
 <meta property="og:title" content="${title}">
@@ -647,20 +676,20 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(
 <link rel="preload" href="/site/fonts/newsreader.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/site/fonts/instrument-serif.woff2" as="font" type="font/woff2" crossorigin>
 ${headScript}
-<style>${themeTokens}${siteCss}${demoCss}</style>
+<style>${siteTokens}${siteCss}${demoCss}</style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
-<a class="logo" href="/">${mark(30)}<span>Aurin</span></a>
-<div class="links"><a href="/#pripravenost">Features</a><a href="/#kouc">AI coach</a><a href="/#propojeni">Connections</a><a href="/#soukromi">Privacy</a></div>
+<a class="logo" href="/">${mark(30)}<span translate="no">Aurin</span></a>
+<div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-sleep">Sleep</a><a href="/#a-coach">Coach</a></div>
 <a class="nav-cta" href="/#join">Join the waitlist</a>
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
 <div class="top">
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
-<nav aria-label="Aurin"><h3>Aurin</h3><ul><li><a href="/#pripravenost">Features</a></li><li><a href="/#kouc">AI coach</a></li><li><a href="/#propojeni">Connections</a></li></ul></nav>
+<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#propojeni">Connections</a></li></ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/privacy?lang=cs" hreflang="cs">Soukromí</a> · <a href="/terms?lang=cs" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
@@ -670,7 +699,7 @@ ${demoScript}
 ${siteScript}
 ${turnstileScript}
 </body></html>`;
-  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(headScript + demoScript + siteScript, [TURNSTILE])}});
+  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(headScript + demoScript + siteScript, [TURNSTILE, WEB_ANALYTICS])}});
 }
 
 // Pages take the request (to pick the host, and ?lang=cs on the pages that have Czech) or nothing
@@ -687,7 +716,7 @@ function pageLang(request, czech = false) {
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '28. října 2026', en: '28 October 2026'};
+const UPDATED = {cs: '29. října 2026', en: '29 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -700,20 +729,6 @@ const GOOGLE_CONNECTIONS = 'https://myaccount.google.com/connections';
 // Google's app verification reads this disclosure on the homepage, so it stays on the overview while Google
 // verifies the app (submitted 2026-10-25); after that this can go back to false.
 // The text stays word for word (tests/site-pages.test.mjs).
-// Real days: the owner's own screens (light mode, October 2026), one beside the sample day in the part
-// of the overview it belongs to: [image, width, height, alt, caption].
-const REAL_DAYS = {
-  spanek: ['sleep-night', 664, 1080, 'A night in Aurin: 5 h 51 min asleep, score 65, from 11:52 PM to 6:02 AM, with deep, REM and light sleep through the night', 'A short night as it was: 5 h 51 min, a quarter of it deep sleep.'],
-  zatez: ['ride-summary', 664, 1149, 'An indoor ride from Wahoo in Aurin: 1 h 30 min, 43.8 km, 74 TSS, NP 183 W, recovery 12 h, with the power graph', 'A ride straight from Wahoo: power, load and 12 hours to recover.'],
-  trenink: ['october', 664, 832, 'October 2026 in Aurin’s training calendar: 47 activities, 40 h 14 min, 20,099 kcal, the time of each day’s ride, gym session or walk', 'October in one screen: 47 activities and 40 hours, rest days included.'],
-  svaly: ['quads-strength', 664, 932, 'Aurin’s quads screen: 43 % rested, strength up 73 % in 6 weeks, estimated leg press max 291 kg', 'Leg press estimated max up 73 % in six weeks, from the sets already logged.'],
-  propojeni: ['ride-day', 664, 716, 'A day in Aurin: an indoor ride from Wahoo and two walks from Google Health, 2 h 17 min and 1,375 kcal', 'One day from two sources: the ride from Wahoo, the walks from the watch, nothing typed twice.'],
-};
-const realDay = id => {
-  const [name, w, h, alt, say] = REAL_DAYS[id];
-  return `<figure class="rd reveal"><a href="/site/real/${name}.webp" target="_blank" rel="noopener"><img src="/site/real/${name}.webp" alt="${alt}" width="${w}" height="${h}" loading="lazy" decoding="async"></a><figcaption><b>From a real day</b>${say}</figcaption></figure>`;
-};
-
 export const GOOGLE_DISCLOSURE_ON_HOME = true;
 export const googleDisclosure = () => `<div class="card disclosure reveal" lang="en"><h3>Google Health data disclosure</h3>
 <p>Aurin is a personal training service that organizes training history, generates strength workouts, uses cycling context, and supports nutrition workflows.</p>
@@ -742,7 +757,11 @@ export function overviewPage(request) {
     'sleep-need': 'Aurin’s sleep need for tonight and what made it grow',
     bedtime: 'Aurin’s bedtime dial: the moon for bedtime, the sun for the alarm',
     'bedtime-goal': 'Picking tonight’s sleep in Aurin: catch up, as usual or at least seven hours'};
-  const shot = (name, lazy = true) => `<img src="/site/app/${name}.webp" alt="${SHOT_ALT[name] || ''}" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
+  // In dark mode (DARK_SITE) each phone shows CI's dark shot of the same screen (scripts/site-screens.mjs).
+  const shot = (name, lazy = true) => {
+    const img = `<img src="/site/app/${name}.webp" alt="${SHOT_ALT[name] || ''}" width="600" height="1305"${lazy ? ' loading="lazy" decoding="async"' : ' fetchpriority="high"'}>`;
+    return DARK_SITE ? `<picture><source srcset="/site/app/${name}-dark.webp" media="(prefers-color-scheme:dark)">${img}</picture>` : img;
+  };
   // The chapters, one per area of the app: [section id, eyebrow, headline, line, tone, glow, steps]. Each step is
   // [the phone's screen, the live demo beside it (site-demos.js), how far down the stage, title, text, ms it
   // shows]. A screen is the app's screenshot (public/site/app/), or "html:" and a screen built in site-demos.js
@@ -754,14 +773,14 @@ export function overviewPage(request) {
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
     ['trenink', '', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon or a gran fondo, a strength plan, or let the AI plan the week. A busy day in your calendar gets a shorter workout, and when the load adds up, the coach proposes moving or easing a session. Send a planned ride or run to Wahoo, Intervals.icu, your Apple Watch or Zwift, and again if it didn’t arrive. A finished workout shows how much of the plan you did.', 9500]]],
+      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon or a gran fondo, or let the AI plan the week; a busy day in your calendar gets a shorter workout. Send a planned ride or run to Wahoo, Intervals.icu, your Apple Watch or Zwift.', 9500]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
       ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Then start.', 7000]]],
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
-      ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight and reps, and the plates to load on each side of the bar. Change them, add or remove a set, swap an exercise for a similar one or any other when its machine is taken, keep your own note on how to set it up, and start.', 6000],
+      ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight, its reps and the plates for each side of the bar. Machine taken? Swap the exercise for a similar one.', 6000],
       ['training-set', 'tmTick', 380, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets. Miss your reps or hit failure and the next set comes lighter; breeze through and it comes heavier.', 6000],
-      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, as long as the exercise needs, longer after squats than after curls. It stays on your lock screen and shows what comes next. The last seconds count down with a vibration you feel even with the phone on the bench, or a tone if you like. Ask the coach about the set or the next exercise while you rest.', 13500],
+      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, longer after squats than after curls, and stays on your lock screen. The last seconds count down with a vibration you feel even with the phone on the bench.', 13500],
       ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired when you finish, saved to Apple Health. Then say how it went.', 6000]]],
     ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
       ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
@@ -772,7 +791,7 @@ export function overviewPage(request) {
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
     ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout, or send a photo of a plan from your trainer. Tap Coach on a workout or your HRV to ask about just that, or during a gym session about the set, the rest or the next exercise. Earlier chats wait in the side panel, so the morning talk about sleep is still there after the workout. You can also reply straight from its notification. When it proposes a workout or a whole plan for your race, confirm it and it lands in your plan.', 11500]]]];
+      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500]]]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {
@@ -788,8 +807,7 @@ export function overviewPage(request) {
 <div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}"${screen.startsWith('html:') ? ' aria-hidden="true"' : ''}>${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>
 ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
 </div></div>
-<ol class="steps">${steps}</ol>
-${REAL_DAYS[id] ? realDay(id) : ''}
+<div class="rail"><ol class="steps">${steps}</ol>${multi ? `<button type="button" class="hold"><svg class="icon pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg><svg class="icon play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg><span>Pause</span></button>` : ''}</div>
 </div></section>`;
   };
   // The parts of the overview, as the welcome before the sign-in shows them (WelcomePages.swift): each opens with
@@ -811,30 +829,31 @@ ${REAL_DAYS[id] ? realDay(id) : ''}
   const muscles = `<section id="svaly" class="muscles"><div class="wrap mu">
 <div class="copy reveal"><div class="eyebrow">Muscles</div><h2 class="big">Know what’s recovered.</h2><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
 <div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
-${realDay('svaly')}</div>
+<div class="mpick" role="group" aria-label="Open a muscle"></div>
+</div>
 <div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn · tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
 </div></section>
-<div class="muscle-card" role="dialog" aria-modal="true" aria-label="Muscle"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3></h3><p class="state"></p></div></div>`;
+<div class="muscle-card" role="dialog" aria-modal="true" aria-labelledby="mc-name"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3 id="mc-name"></h3><p class="state"></p></div></div>`;
 
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
   // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
   const services = [
-    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="" width="40" height="40" loading="lazy">',
+    {id: 'apple', name: 'Apple Health', logo: '<img src="/site/logos/apple-health.png" alt="" width="40" height="40">',
       reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['scale', 'weight']],
       sends: [['bike', 'workouts'], ['scale', 'weight'], ['meal', 'food'], ['drop', 'water']]},
-    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" width="40" height="40" loading="lazy" class="pad">',
+    {id: 'google', name: 'Google Health', logo: '<img src="/site/logos/google-health.png" alt="" width="40" height="40" class="pad">',
       reads: [['moon', 'sleep'], ['bike', 'workouts'], ['heart', 'heart rate'], ['training', 'HRV'], ['steps', 'steps'], ['meal', 'food']],
       sends: [['meal', 'food'], ['drop', 'drinks'], ['bike', 'workouts, if you allow'], ['scale', 'weight, if you allow']]},
-    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="" width="40" height="40" loading="lazy">',
+    {id: 'intervals', name: 'Intervals.icu', logo: '<img src="/site/logos/intervals.svg" alt="" width="40" height="40">',
       reads: [['bolt', 'workouts with power'], ['calendar', 'plan'], ['zones', 'zones'], ['scale', 'weight']],
       sends: [['calendar', 'planned workouts'], ['flame', 'calorie target'], ['scale', 'weight'], ['training', 'sleep, HRV and daily values']]},
-    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="40" height="40" loading="lazy"></span>',
+    {id: 'ultrahuman', name: 'Ultrahuman Ring', logo: '<span class="uh-tile"><img src="/site/logos/ultrahuman.svg" alt="" width="40" height="40"></span>',
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'VO₂max'], ['thermo', 'temperature']], sends: [], none: 'nothing, Aurin only reads the ring'},
-    {id: 'whoop', name: 'WHOOP', logo: '<img src="/site/logos/whoop.svg" alt="" width="40" height="40" loading="lazy">',
+    {id: 'whoop', name: 'WHOOP', logo: '<img src="/site/logos/whoop.svg" alt="" width="40" height="40">',
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'breathing rate'], ['drop', 'blood oxygen']], sends: [], none: 'nothing, Aurin only reads WHOOP'},
-    {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="40" height="40" loading="lazy"></span>',
+    {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="40" height="40"></span>',
       reads: [['bike', 'finished rides and runs'], ['bolt', 'power and TSS'], ['heart', 'heart rate']],
-      sends: [['calendar', 'planned workouts, to ELEMNT and KICKR']]}];
+      sends: [['calendar', 'planned workouts, to ELEMNT and KICKR', 'planned workouts']]}];
   // The flow: each service on the left sends what Aurin reads along a curve into the mark, and what Aurin sends
   // back runs out to the services on the right that take it. Two layouts: wide (left to right) for computers,
   // tall (top to bottom) for phones. The things carried are chips that travel the curves (CSS offset-path); the
@@ -844,22 +863,29 @@ ${realDay('svaly')}</div>
     wide: {w: 1000, h: 440, core: [500, 220], src: i => [210, 62 + i * 64], dst: j => [790, 92 + j * 86],
       into: ([x, y], [cx, cy]) => `M${x + 42} ${y}C${(x + cx) / 2} ${y} ${(x + cx) / 2} ${cy} ${cx - 58} ${cy}`,
       out: ([cx, cy], [x, y]) => `M${cx + 58} ${cy}C${(x + cx) / 2} ${cy} ${(x + cx) / 2} ${y} ${x - 42} ${y}`},
-    tall: {w: 340, h: 660, core: [170, 330], src: i => [60 + (i % 3) * 110, 66 + Math.floor(i / 3) * 104], dst: j => [47 + j * 82, 606],
-      into: ([x, y], [cx, cy]) => `M${x} ${y + 40}C${x} ${(y + cy) / 2 + 20} ${cx} ${(y + cy) / 2} ${cx} ${cy - 56}`,
+    // Two rows of three: a first-row curve runs down the gap between the second row's services, not through them.
+    tall: {w: 340, h: 760, core: [170, 400], src: i => [60 + (i % 3) * 110, 84 + Math.floor(i / 3) * 104], dst: j => [47 + j * 82, 706],
+      into: ([x, y], [cx, cy]) => { const g = x > cx ? x - 55 : x + 55;
+        return y < 100 ? `M${x} ${y + 40}C${x} ${y + 78} ${g} ${y + 66} ${g} ${y + 104}C${g} ${y + 170} ${cx} ${(y + 104 + cy) / 2} ${cx} ${cy - 56}`
+          : `M${x} ${y + 40}C${x} ${(y + cy) / 2 + 20} ${cx} ${(y + cy) / 2} ${cx} ${cy - 56}`; },
       out: ([cx, cy], [x, y]) => `M${cx} ${cy + 56}C${cx} ${(y + cy) / 2} ${x} ${(y + cy) / 2 - 20} ${x} ${y - 40}`}};
   const pct = (v, all) => (v / all * 100).toFixed(2) + '%';
   const flowPaths = kind => { const L = FLOW[kind]; return {
     into: services.map((x, i) => L.into(L.src(i), L.core)),
     out: senders.map((x, j) => L.out(L.core, L.dst(j)))}; };
-  const travel = (d, items, cls, id, kind) => items.slice(0, 3).map(([name, label], k, all) =>
-    `<span class="pk ${cls} ${kind}" data-svc="${id}" style="offset-path:path('${d}');animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s">${icon(name)}${label}</span>`).join('');
+  // A chip can carry a shorter label than the panel (a third item). On the phone, a chip's anchor slides from
+  // where its service sits across the box (its left edge at the left column, its right edge at the right) to
+  // its middle at the mark, so chips at the edge stay inside; a chip from the first row shows once it is past
+  // the second row's names (late).
+  const travel = (d, items, cls, id, kind, x, late = false) => items.slice(0, 3).map(([name, label, short], k, all) =>
+    `<span class="pk ${cls} ${kind}${late ? ' late' : ''}" data-svc="${id}" style="offset-path:path('${d}');${kind === 'tall' ? `--a0:${cls === 'in' ? pct(x, FLOW.tall.w) : '50%'};--a1:${cls === 'in' ? '50%' : pct(x, FLOW.tall.w)};` : ''}animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s">${icon(name)}${short || label}</span>`).join('');
   const layer = kind => { const L = FLOW[kind], P = flowPaths(kind);
     return `<svg class="lines ${kind}" viewBox="0 0 ${L.w} ${L.h}" aria-hidden="true">${services.map(({id}, i) => `<path data-svc="${id}" class="in" d="${P.into[i]}"/>`).join('')}${senders.map(({id}, j) => `<path data-svc="${id}" class="out" d="${P.out[j]}"/>`).join('')}</svg>
-<div class="pks ${kind}" aria-hidden="true">${services.map(({id, reads}, i) => travel(P.into[i], reads, 'in', id, kind)).join('')}${senders.map(({id, sends}, j) => travel(P.out[j], sends, 'out', id, kind)).join('')}</div>`; };
+<div class="pks ${kind}" aria-hidden="true">${services.map(({id, reads}, i) => travel(P.into[i], reads, 'in', id, kind, L.src(i)[0], kind === 'tall' && L.src(i)[1] < 100)).join('')}${senders.map(({id, sends}, j) => travel(P.out[j], sends, 'out', id, kind, L.dst(j)[0])).join('')}</div>`; };
   const nodes = services.map(({id, name, logo}, i) => { const [x, y] = FLOW.wide.src(i), [mx, my] = FLOW.tall.src(i);
-    return `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, 660)}"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></button>`; }).join('');
+    return `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, FLOW.tall.h)}"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></button>`; }).join('');
   const backs = senders.map(({id, name, logo}, j) => { const [x, y] = FLOW.wide.dst(j), [mx, my] = FLOW.tall.dst(j);
-    return `<span class="dst" data-svc="${id}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, 660)}" aria-hidden="true"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></span>`; }).join('');
+    return `<span class="dst" data-svc="${id}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, FLOW.tall.h)}" aria-hidden="true"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></span>`; }).join('');
   const flow = `<div class="flow"><div class="fc">
 ${layer('wide')}${layer('tall')}
 <span class="col-l">Into Aurin</span><span class="col-r">Sent back</span>
@@ -941,7 +967,6 @@ ${flow}
 <div class="legend" aria-hidden="true"><span><i class="in"></i>Into Aurin</span><span><i class="out"></i>Sent back</span><span class="tip">Pick a service to see what it carries</span></div>
 <div class="panels">${panels}</div>
 </div>
-${realDay('propojeni')}
 </div></section>
 
 <section id="soukromi" class="privacy"><div class="wrap">
@@ -1050,7 +1075,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li><strong>Wahoo</strong>, if you connect it: the rides and runs you plan in Aurin, with their steps and targets, so they appear on your ELEMNT and KICKR. Wahoo handles this data under its own privacy policy.</li>
 <li><strong>Google Health</strong>: the food and drinks you log and, if you allow it, your weight and the workouts you finish in Aurin.</li>
 <li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data, including data from a connected Ultrahuman Ring or WHOOP. OpenAI processes it on our behalf under its API data processing terms: it does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse, unless the law requires it to keep it longer.</li>
-<li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''} On the website, Cloudflare Turnstile checks that the waitlist form is sent by a person. For that it reads technical details of your browser and sets no tracking cookies.</li>
+<li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''} On the website, Cloudflare Turnstile checks that the waitlist form is sent by a person. For that it reads technical details of your browser and sets no tracking cookies. Cloudflare Web Analytics counts visits to the website (which pages, from which site and country, on which kind of device) without cookies and without following you to other websites.</li>
 <li><strong>Apple</strong>, if you allow notifications (Settings → Notifications): your iPhone’s notification token and the text of each notification, such as the morning readiness or a note from the coach, which Apple’s push service delivers to your iPhone. Turning notifications off or signing out removes the token.</li>
 <li><strong>Apple</strong>, when you buy Aurin Pro: the random identifier of your Aurin account that the app adds to the purchase, so the App Store’s records of it reach the right account. Apple handles the purchase under its own privacy policy.</li>
 <li><strong>Apple</strong>, when we add you to the testers from the waitlist: your email address, so that TestFlight emails you how to install Aurin. Apple handles it under its own privacy policy.</li>
@@ -1159,7 +1184,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li><strong>Wahoo</strong>, když ho připojíš: jízdy a běhy, které naplánuješ v Aurinu, s jejich úseky a cíli, aby se objevily v ELEMNT a KICKR. Wahoo s nimi nakládá podle svých zásad ochrany osobních údajů.</li>
 <li><strong>Google Health</strong>: jídlo a pití, které zapíšeš, a když to povolíš, i tvoje váha a tréninky, které v Aurinu dokončíš.</li>
 <li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě, včetně dat z připojeného prstenu Ultrahuman nebo WHOOPu. OpenAI je zpracovává naším jménem podle svých podmínek zpracování dat přes API: data poslaná přes API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití, pokud mu zákon neukládá uchovat je déle.</li>
-<li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''} Na webu Cloudflare Turnstile ověřuje, že formulář čekací listiny posílá člověk. Čte k tomu technické údaje o prohlížeči a nenastavuje sledovací cookies.</li>
+<li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''} Na webu Cloudflare Turnstile ověřuje, že formulář čekací listiny posílá člověk. Čte k tomu technické údaje o prohlížeči a nenastavuje sledovací cookies. Cloudflare Web Analytics počítá návštěvy webu (které stránky, odkud a z jaké země, na jakém typu zařízení) bez cookies a bez sledování na jiných webech.</li>
 <li><strong>Apple</strong>, když povolíš oznámení (Nastavení → Oznámení): token tvého iPhonu pro oznámení a text každého oznámení, třeba ranní připravenosti nebo zprávy od kouče, které Applova služba pro oznámení doručí do tvého iPhonu. Vypnutím oznámení nebo odhlášením se token smaže.</li>
 <li><strong>Apple</strong>, když koupíš Aurin Pro: náhodný identifikátor tvého účtu Aurin, který aplikace k nákupu přidá, aby záznamy App Storu o něm došly ke správnému účtu. Apple s nákupem nakládá podle svých zásad ochrany soukromí.</li>
 <li><strong>Apple</strong>, když tě z waitlistu přidáme k testerům: tvůj e-mail, aby ti TestFlight poslal, jak Aurin nainstalovat. Apple s ním nakládá podle svých zásad ochrany soukromí.</li>

@@ -11,7 +11,8 @@ name: iOS native app
 # - Aurin-screens: whole-screen snapshots in light and dark mode
 #   from the sample data, plus simulator screenshots of the running app
 #   (site/: the English, light-mode shots the website uses; smoke/: each step
-#   of the smoke test Vydat relies on).
+#   of the smoke test Vydat relies on; site-dark/ and smoke-dark/: the website's
+#   shots again in dark mode, for its dark look).
 
 on:
   workflow_dispatch:
@@ -174,6 +175,31 @@ jobs:
           xcrun simctl uninstall "${{ steps.sim.outputs.udid }}" health.aurin.app || true
           xcodebuild -project Aurin.xcodeproj -scheme AurinSmoke -configuration Debug \
             -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO test
+
+      # The website's shots again in dark mode (scripts/site-screens.mjs saves them as
+      # public/site/app/*-dark.webp; the site's dark look waits for them, DARK_SITE in
+      # src/design-system.js). The app's own Vzhled setting (-appearance) turns it dark.
+      # Not a release check: a missing dark shot never fails the run.
+      - name: Screenshot the app for the website in dark mode
+        continue-on-error: true
+        env:
+          TEST_RUNNER_SMOKE_DIR: ${{ github.workspace }}/screens/smoke-dark
+          TEST_RUNNER_SITE_APPEARANCE: dark
+        run: |
+          udid=${{ steps.sim.outputs.udid }}
+          mkdir -p "$GITHUB_WORKSPACE/screens/site-dark"
+          for tab in today training; do
+            xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -tab "$tab" -AppleLanguages "(en)" -AppleLocale en_US -language en -appearance dark
+            sleep 6
+            xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site-dark/$tab.png"
+          done
+          xcrun simctl launch --terminate-running-process "$udid" health.aurin.app -demo -open muscles -AppleLanguages "(en)" -AppleLocale en_US -language en -appearance dark
+          sleep 7
+          xcrun simctl io "$udid" screenshot "$GITHUB_WORKSPACE/screens/site-dark/muscles.png"
+          xcodebuild -project Aurin.xcodeproj -scheme AurinSmoke -configuration Debug \
+            -destination "id=$udid" -derivedDataPath build \
+            -only-testing:AurinUITests/SmokeTests/test4WebsiteScenes \
             CODE_SIGNING_ALLOWED=NO test
 
       # Unsigned: Sideloadly signs it with the user's Apple ID.
