@@ -129,8 +129,8 @@ jobs:
               fi
               wait "$test" || { echo "::warning title=App videos::$clip did not finish"; tail -20 "$RUNNER_TEMP/test-$name.log"; }
               if [ -z "$rec" ] || [ ! -s "$raw" ]; then echo "::warning title=App videos::no $mode $name clip"; continue; fi
-              ffmpeg -loglevel error -y -i "$raw" -vf fps=30 \
-                -c:v libx264 -crf 18 -pix_fmt yuv420p -movflags +faststart -an "$out/clips/$mode/$name.mp4"
+              # XCUITest on CI can stand still for seconds before a tap; those stretches go.
+              python3 "$GITHUB_WORKSPACE/.github/scripts/trim_freezes.py" "$raw" "$out/clips/$mode/$name.mp4"
               # The whole recording stays only when its clip did not come out.
               rm -f "$raw"
               echo "$mode/$name.mp4: $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$out/clips/$mode/$name.mp4") s" | tee -a "$GITHUB_STEP_SUMMARY"
