@@ -1,8 +1,14 @@
 // Photos of the start and end position for catalog exercises, from the public
 // domain Free Exercise DB (github.com/yuhonas/free-exercise-db, Unlicense).
 // Each entry names the closest exercise there; exercises without a close
-// match are left out and fall back to a still from their video.
+// match are left out and fall back to drawings from RepDB's free tier, or else
+// to a still from their video.
 const BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
+// RepDB free tier (github.com/RepDB/exercise-dataset): flat 512 px drawings,
+// free in a commercial app with the visible credit the app shows in Settings.
+// Square, so the app shows them uncropped. Only drawings of the same movement
+// with the same equipment; "<id>~" marks a pair RepDB stores end first.
+const REPDB_BASE = 'https://raw.githubusercontent.com/RepDB/exercise-dataset/main/images/flat/';
 
 const PHOTOS = {
   'Dead bug': 'Dead_Bug', 'Push-up': 'Pushups', 'Bodyweight squat': 'Bodyweight_Squat', 'Glute bridge': 'Butt_Lift_Bridge',
@@ -45,10 +51,91 @@ const PHOTOS = {
   "Cable woodchop": "Standing_Cable_Wood_Chop", "Abduction machine forward lean": "Thigh_Abductor", "Smith Machine Bench Press": "Smith_Machine_Bench_Press", "Smith Machine Decline Bench Press": "Smith_Machine_Decline_Press", "Inverted Row": "Inverted_Row", "Smith Machine Bent-Over Row": "Smith_Machine_Bent_Over_Row", "Smith Machine Overhead Press": "Smith_Machine_Overhead_Shoulder_Press", "Smith Machine Seated Overhead Press": "Smith_Machine_Overhead_Shoulder_Press", "Smith Machine Close Grip Bench Press": "Smith_Machine_Close-Grip_Bench_Press", "Smith Machine Calf Raise": "Smith_Machine_Calf_Raise", "Cable Bench Chest Fly": "Flat_Bench_Cable_Flyes", "Cable Chest Press": "Cable_Chest_Press", "Cable High-to-Low Fly": "Cable_Crossover", "Cable Incline Bench Press": "Incline_Cable_Chest_Press", "Cable External Rotation": "External_Rotation_with_Cable", "Cable Front Raise": "Front_Cable_Raise", "Cable Overhead Press": "Cable_Shoulder_Press", "Leaning Cable Lateral Raise": "Standing_Low-Pulley_Deltoid_Raise", "Reverse-Grip Tricep Pushdown": "Reverse_Grip_Triceps_Pushdown", "Cable Single Arm Rope Pushdown": "Cable_One_Arm_Tricep_Extension", "Cable Standing Low To High Wood Chopper": "Standing_Cable_Lift", "Cable 30 Degree Shrug": "Cable_Shrugs", "Cable Wrist Curl": "Cable_Wrist_Curl", "Single-Arm Lat Pulldown": "One_Arm_Lat_Pulldown", "Calf Press": "Calf_Press_On_The_Leg_Press_Machine", "Hammer Strength High Row": "Leverage_High_Row", "Hammer Strength Iso-Lateral Row": "Leverage_Iso_Row", "Reverse Hyperextension": "Reverse_Hyperextension", "Machine Preacher Curl": "Machine_Preacher_Curls", "Machine Tricep Extension": "Machine_Triceps_Extension", "Machine Crunch": "Ab_Crunch_Machine", "Captain's Chair Knee Raise": "Knee_Hip_Raise_On_Parallel_Bars", "Forward Lunge": "Bodyweight_Walking_Lunge", "V-Up": "Jackknife_Sit-Up", "Slider Leg Curl": "Platform_Hamstring_Slides", "Reverse-Grip Barbell Bench Press": "Reverse_Triceps_Bench_Press", "Barbell High Incline Bench Press": "Barbell_Incline_Bench_Press_-_Medium_Grip"
 };
 
+const REPDB = {
+  'Standing rowing machine': 'rowing-machine', 'DB single-leg Romanian deadlift': 'single-leg-romanian-deadlift~',
+  'Cable triceps kickback': 'cable-tricep-kickback', 'Single-leg calf raise': 'single-leg-calf-raise',
+  'Smith machine hip thrust': 'smith-machine-hip-thrust', 'Landmine press': 'landmine-press',
+  'Smith Machine Front Squat': 'smith-machine-front-squat', 'Single-Leg Press': 'single-leg-press',
+  'Machine Back Extension': 'machine-back-extension',
+  'Dumbbell Push Press': 'dumbbell-push-press', 'Dumbbell Deadlift': 'dumbbell-deadlift', 'Dumbbell Front Squat': 'dumbbell-front-squat',
+  'Kettlebell Clean & Press (Double)': 'double-kettlebell-clean-and-press', 'Kettlebell Sumo Deadlift': 'kettlebell-sumo-deadlift',
+  'Band Romanian Deadlift': 'banded-romanian-deadlift~', 'Band Hip Abduction': 'banded-standing-hip-abduction',
+  'Banded Clamshell': 'banded-clamshell', 'TRX Squat': 'trx-squat', 'Bodyweight Knee Push Ups': 'knee-push-ups',
+  'Bodyweight Box Squat': 'box-squat', 'Bodyweight Hip Abduction': 'standing-hip-abduction', 'Cossack Squat': 'cossack-squat',
+  'Fire Hydrants': 'fire-hydrant', 'Bird Dog': 'bird-dog', 'Box Jump': 'box-jump', 'Squat Jump': 'jump-squat',
+  'Wide-Grip Pull-Up': 'wide-grip-pull-ups', 'Barbell Thruster': 'thruster', 'Band Glute Bridge': 'banded-glute-bridge'
+};
+
+// Start and end frames picked by hand from the exercise's own technique video
+// (29 Oct 2026), where neither photo source has the exercise and YouTube's
+// automatic frames miss the movement; served from public/exercise-frames/.
+// The value is the video's channel, credited under the frames.
+const FRAMES = {
+  'Standing multi flight': 'Ascendancy Fitness',
+  'Cable hip abduction': 'Hammer Fitness',
+  'Smith Machine Sumo Romanian Deadlift': 'Hammer Fitness',
+  'Cable Standing Single Arm Chest Press': 'Andrew Heming',
+  'Cable Row Bar Standing Row': "Germain Craddock's EVA",
+  'Cable Supinating Row': 'OPEX Fitness',
+  'Cable Single Arm Rear Delt Row': 'arkansasonline',
+  'Cross-Body Cable Tricep Extension': 'Thrive',
+  'Cable Side Bend': 'Fitway - Workout Trainer',
+  'Cable Single Leg Laying Leg Curl': 'Hammer Fitness',
+  'Reverse Hack Squat': 'OriGym',
+  'Machine Lat Pullover': 'Scott Abel Coaching',
+  'Belt Squat': 'Nexus Performance Australia',
+  'Selectorized Torso Rotation Machine': 'Live Lean TV Daily Exercises',
+  'Side Plank Lateral Raise': 'Jenny LaBaw',
+  'Bayesian Curl': 'Rune | FitByRune',
+  'Dumbbell Cossack Squat': 'Jeremy Smith',
+  'Dumbbell Cross Body Romanian Deadlift': 'Advanced Movement',
+  'Dumbbell Goblet Split Squat': 'Horton Barbell',
+  'Dumbbell Overhead Squat': 'Bobby Maximus',
+  'Dumbbell Single Leg Hip Thrust': 'Live Lean TV Daily Exercises',
+  'Dumbbell Thruster': 'IronmasterPro',
+  'Dumbbell Tibialis Raise': 'Live Lean TV Daily Exercises',
+  'Heel Elevated Dumbbell Front Squat': 'Julia Pettee',
+  'Dumbbell Single Arm Clean And Press': 'The Gym Starter',
+  'Kettlebell Romanian Deadlift': 'FCF Coach Jaye',
+  'Band Kneeling Pulldown': 'Live Lean TV Daily Exercises',
+  'Band Pullover': 'PersonalBestOz',
+  'Band Row': 'Get Healthy U - with Chris Freytag',
+  'Band Seated Pulldown': 'Clench Fitness',
+  'Band High Face Pull': 'Horton Barbell',
+  'Band Curl': 'YuryFit',
+  'Band Tricep Kickbacks': 'Whitney Wiser Savage',
+  'Plate Forward Lunge': 'TrainToSmileTV',
+  'Bodyweight Alternating Lateral Lunge': 'Ambitious Athletics',
+  'Bulgarian Split Squat': 'Live Lean TV Daily Exercises',
+  'Single-Leg Step-Down': 'Horton Barbell'
+};
+
 // Start and end position photo URLs for an exercise, or an empty list.
+// Video frames are paths on this site; the route makes them absolute.
 export function exercisePhotos(exercise) {
   const id = PHOTOS[exercise];
-  return id ? [0, 1].map(i => BASE + id + '/' + i + '.jpg') : [];
+  if (id) return [0, 1].map(i => BASE + id + '/' + i + '.jpg');
+  const rep = REPDB[exercise];
+  if (!rep) return FRAMES[exercise] ? ['start', 'end'].map(end => '/exercise-frames/' + frameSlug(exercise) + '-' + end + '.webp') : [];
+  const slug = rep.replace(/~$/, ''), ends = rep.endsWith('~') ? ['peak', 'start'] : ['start', 'peak'];
+  return ends.map(end => REPDB_BASE + slug + '-' + end + '.webp');
+}
+
+// Width to height of the photos: Free Exercise DB is 3:2, RepDB square, video frames 16:9.
+export function exercisePhotoAspect(exercise) {
+  if (PHOTOS[exercise]) return 1.5;
+  return REPDB[exercise] ? 1 : FRAMES[exercise] ? 16 / 9 : 1.5;
+}
+
+// The channel whose video the frames come from, or null.
+export function exercisePhotoCredit(exercise) {
+  return !PHOTOS[exercise] && !REPDB[exercise] && FRAMES[exercise] || null;
+}
+
+function frameSlug(exercise) {
+  return exercise.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 export const PHOTO_IDS = PHOTOS;
+export const REPDB_IDS = REPDB;
+export const FRAME_CREDITS = FRAMES;

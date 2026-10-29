@@ -324,7 +324,7 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
       const body=await request.json().catch(()=>({}));
       try{await saveOwnExerciseVideo(env.DB,body.exercise,body.url);}catch(error){return Response.json({message:error.message},{status:400});}
-      return Response.json({status:'ok',technique:techniqueFor(body.exercise,await ownExerciseVideo(env.DB,body.exercise))},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',technique:absolutePhotos(techniqueFor(body.exercise,await ownExerciseVideo(env.DB,body.exercise)),url)},{headers:{'Cache-Control':'no-store'}});
     }
     const exercise=String(url.searchParams.get('exercise')||'').slice(0,120),own=exercise?await ownExerciseVideo(env.DB,exercise).catch(()=>null):null;
     let technique=techniqueFor(exercise,own);
@@ -334,6 +334,12 @@ export async function handleGymPlanApi(request,env,ctx,url,session,internalAuth)
       if(!stored&&env.OPENAI_API_KEY&&await exerciseInUse(env.DB,exercise))stored=await generateTechnique(env,exercise).catch(error=>{console.error('Technique generation failed',error.message);return null;});
       if(stored)technique=techniqueFor(exercise,own,stored);
     }
+    technique=absolutePhotos(technique,url);
     return technique?Response.json({status:'ok',technique},{headers:{'Cache-Control':'no-store'}}):Response.json({message:L('Cvik není v databázi.', 'The exercise isn\'t in the database.')},{status:404});
   }
+}
+
+// Video frames are files on this site: the app needs the whole address.
+function absolutePhotos(technique,url){
+  return technique?{...technique,photos:(technique.photos||[]).map(photo=>new URL(photo,url.origin).href)}:technique;
 }

@@ -7,7 +7,7 @@ import { TECHNIQUE } from "../src/exercise-technique-data.js";
 import { TECHNIQUE_EN } from "../src/exercise-technique-data-en.js";
 import { FEEL } from "../src/exercise-feel.js";
 import { FEEL_EN } from "../src/exercise-feel-en.js";
-import { PHOTO_IDS } from "../src/exercise-photos.js";
+import { PHOTO_IDS, REPDB_IDS, FRAME_CREDITS } from "../src/exercise-photos.js";
 import { techniqueFor } from "../src/exercise-technique.js";
 
 // Machines and cables from the MoveKit audit (2026-10-17), part 1.
@@ -94,14 +94,14 @@ test("the generator keeps one variant for five weeks, then moves on", () => {
   assert.ok([...names].filter(n => family.includes(n)).length <= 1, [...names].join());
 });
 
-test("every new machine and cable exercise has a video; photos only from the Free Exercise DB", () => {
+test("every new machine and cable exercise has a video; photos only from the Free Exercise DB, RepDB or its own video", () => {
   for (const name of ADDED) {
     assert.match(TECHNIQUE[name]?.video?.id || "", /^[A-Za-z0-9_-]{11}$/, name + " video");
     assert.ok(TECHNIQUE[name].video.title, name + " video title");
     const t = techniqueFor(name);
     assert.equal(t.video.id, TECHNIQUE[name].video.id, name);
-    assert.equal(t.photos.length, PHOTO_IDS[name] ? 2 : 0, name + " photos");
-    for (const url of t.photos) { assert.match(url, /^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\//, name); assert.doesNotMatch(url, /ytimg/, name); }
+    assert.equal(t.photos.length, PHOTO_IDS[name] || REPDB_IDS[name] || FRAME_CREDITS[name] ? 2 : 0, name + " photos");
+    for (const url of t.photos) { assert.match(url, /^https:\/\/raw\.githubusercontent\.com\/(yuhonas\/free-exercise-db|RepDB\/exercise-dataset)\/|^\/exercise-frames\//, name); assert.doesNotMatch(url, /ytimg/, name); }
   }
 });
 

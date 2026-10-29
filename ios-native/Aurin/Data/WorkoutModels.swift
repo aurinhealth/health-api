@@ -572,6 +572,10 @@ struct GymTechnique: Decodable, Equatable {
     let breathing: String?
     let feel: [String]?
     let photos: [String]?
+    /// Width to height of the photos: 1.5 for Free Exercise DB, 1 for RepDB's drawings, 16:9 for video frames.
+    let photoAspect: Double?
+    /// The YouTube channel the photos are frames from, credited under them.
+    let photoCredit: String?
     let video: Video?
     let searchUrl: String?
 

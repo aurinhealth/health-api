@@ -195,6 +195,12 @@ struct SettingsMenu: View {
             Text(verbatim: "Aurin \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                 .font(Typo.caption).foregroundStyle(Palette.faint)
                 .frame(maxWidth: .infinity)
+            // The credit RepDB's free tier asks for: some exercise drawings are theirs.
+            Link(destination: URL(string: "https://repdb.co")!) {
+                Text(verbatim: "Exercise data by RepDB (repdb.co)")
+                    .font(Typo.caption).foregroundStyle(Palette.faint).underline()
+            }
+            .frame(maxWidth: .infinity)
         }
     }
 
