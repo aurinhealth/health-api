@@ -123,7 +123,7 @@ import { wahooDetail } from "./wahoo-detail.js";
 import { handleWahooOAuth, handleWahooWebhook, disconnectWahoo, syncWahoo, retryWahooExports, wahooRideExpected, readWahooTokens, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
 import { sendActivity, retrySyncSends, readSyncPrefs, healthAllowed } from "./sync-destinations.js";
 import { ensureTenancy, TenancyUpgradeInProgress, findUser, ownerUser, usersWithProviders, usersWithAccount, usersWithPushTokens, openSignup } from "./tenancy.js";
-import { userDataEnvironment, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
+import { userDataEnvironment, prefetchUserData, deletionDatabase, UserDataUnavailable } from './user-data-shards.js';
 import { FoodCatalogUnavailable, foodCatalogRequestPaused } from './food-catalog-storage.js';
 import { handlePasskeyLogin } from "./passkeys.js";
 import { handleEmailLogin } from "./email-login.js";
@@ -461,8 +461,10 @@ const worker = {
     if (!isPublic && !principal) {
       return unauthorizedResponse();
     }
-    let user = null;
+    let user = null, prefetched = null;
     if (principal?.kind === "user") {
+      // The route and the catalogue state alongside the user row (user-data-shards.js).
+      prefetched = prefetchUserData(rawEnv, principal.userId);
       user = await findUser(env.DB, principal.userId, env);
       // A cookie from before the user signed out everywhere (or changed the e-mail, removed a passkey or the Apple ID) is no cookie.
       if (user && !sessionMatchesUser(principal, user)) { user = null; principal = null; }
@@ -472,7 +474,7 @@ const worker = {
       user = await ownerUser(env.DB, env);
     }
     if (user) {
-      try { env = await connectionEnvironment(await userDataEnvironment(rawEnv, user)); }
+      try { env = await connectionEnvironment(await userDataEnvironment(rawEnv, user, prefetched && user.id === Number(principal.userId) ? prefetched : null)); }
       catch (error) {
         if (error instanceof UserDataUnavailable || error instanceof FoodCatalogUnavailable) return Response.json({status:'storage_unavailable',message:error instanceof FoodCatalogUnavailable?error.message:withLang(request.headers.get('X-Interface-Language')||/(?:^|;\s*)lw-lang=(cs|en)/.exec(request.headers.get('cookie')||'')?.[1],()=>L('Tvoje data jsou teď nedostupná. Zkus to za chvíli.', 'Your data is unavailable right now. Try again in a moment.'))},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
         throw error;
