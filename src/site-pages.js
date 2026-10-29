@@ -14,13 +14,14 @@ import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
 const siteCss = `
 @font-face{font-family:Newsreader;src:url(/site/fonts/newsreader.woff2) format("woff2");font-display:swap}
-*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;overflow-x:clip}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%;overflow-x:clip;color-scheme:light;scroll-padding-top:88px}
 body{margin:0;background:var(--bg);color:var(--text);font:var(--fs-17)/1.5 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:clip}
 a{color:var(--primary-text)}
 img{max-width:100%}
+a,button{touch-action:manipulation}
 .icon{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .wrap{max-width:1160px;margin:0 auto;padding:0 24px}
-h1,h2,h3{margin:0;font-weight:400}
+h1,h2,h3{margin:0;font-weight:400;text-wrap:balance}
 h1,h2{font-family:var(--serif);letter-spacing:-.02em;line-height:1.02}
 p{margin:0}
 .muted{color:var(--muted)}
@@ -132,7 +133,8 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .chapter.flip .ch{grid-template-columns:640px minmax(0,1fr);grid-template-areas:"vis head" "vis steps" "vis real"}
 .ch .head{grid-area:head;padding-top:56px}
 .ch .vis-wrap{grid-area:vis;position:relative}
-.ch .steps{grid-area:steps;list-style:none;margin:40px 0 0;padding:0;max-width:480px}
+.ch .rail{grid-area:steps;margin-top:40px;max-width:480px}
+.ch .steps{list-style:none;margin:0;padding:0}
 .vis{position:relative;width:640px;height:702px;zoom:var(--z,1)}
 .vis .glow{position:absolute;left:50%;top:50%;width:880px;height:880px;margin:-440px 0 0 -440px;border-radius:50%;background:radial-gradient(circle,var(--glow) 0,transparent 62%);pointer-events:none}
 .vis .device{position:absolute;left:318px;top:18px}
@@ -155,6 +157,11 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .js .multi .step:not(.on) .tx{display:none}
 .js .multi .step:not(.on) .tt{color:var(--muted)}
 .js .multi .step>button:hover .tt{color:var(--text)}
+/* While steps take turns they can be paused (and they wait while the pointer or focus is on them). */
+.hold{display:none;align-items:center;gap:8px;margin-top:14px;padding:8px 14px 8px 10px;border:0;border-radius:var(--r-pill);background:transparent;font:inherit;font-size:var(--fs-14);font-weight:600;color:var(--sec);cursor:pointer}
+.hold:hover{background:var(--panel);color:var(--text)}
+.js .auto .hold{display:inline-flex}
+.hold .play,.hold.held .pause{display:none}.hold.held .play{display:inline}
 
 /* Parts: the welcome's pages, each before the chapters of its part. The title and line on one side, the
    app's cards on the other over the part's tint; the cards rise and move once the part is in view. */
@@ -193,13 +200,17 @@ main:focus{outline:none}
 .fig::before{content:"";position:absolute;inset:10% -20%;z-index:-1;background:radial-gradient(circle,color-mix(in srgb,var(--rust) 15%,transparent) 0,transparent 60%)}
 .fig canvas{display:block;width:100%;height:100%}
 .mu .fig{margin-bottom:36px}
-.fig .bubble{position:absolute;z-index:2;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border:1px solid var(--line);border-radius:var(--r-16);background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow-float);font:inherit;text-align:left;white-space:nowrap;cursor:pointer;transform:translate(-50%,-100%) scale(.85);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.16,1,.3,1)}
-.fig .bubble.on{opacity:1;transform:translate(-50%,-100%);pointer-events:auto}
+.fig .bubble{position:absolute;z-index:2;display:flex;gap:12px;align-items:center;padding:10px 12px 10px 14px;border:1px solid var(--line);border-radius:var(--r-16);background:color-mix(in srgb,var(--panel) 86%,transparent);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow-float);font:inherit;text-align:left;white-space:nowrap;cursor:pointer;transform:translate(-50%,-100%) scale(.85);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s,transform .25s cubic-bezier(.16,1,.3,1),visibility .25s}
+.fig .bubble.on{opacity:1;visibility:visible;transform:translate(-50%,-100%);pointer-events:auto}
+/* For the keyboard: every muscle as a button (the figure turns and is tapped with a pointer); they show once one has focus. */
+.mpick{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.mpick:not(:focus-within){position:absolute;width:1px;height:1px;margin:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.mpick button{padding:6px 12px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--panel);font:inherit;font-size:var(--fs-14);color:var(--text);cursor:pointer}
 .fig .bubble b{display:block;font-size:var(--fs-17);font-weight:600;color:var(--text)}
 .fig .bubble span{font-size:var(--fs-14)}
 .fig .bubble .icon{color:var(--muted);width:14px;height:14px}
-.muscle-card{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .35s,visibility .35s}
-.muscle-card.on{opacity:1;visibility:visible;pointer-events:auto}
+.muscle-card{position:fixed;inset:0;z-index:30;overscroll-behavior:contain;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 60%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .35s,visibility .35s}
+.muscle-card.on{opacity:1;visibility:visible;pointer-events:auto;transition:opacity .35s}
 .muscle-card .card{width:min(400px,calc(100% - 32px));padding:20px;border-radius:var(--r-22);background:var(--bg);text-align:left;box-shadow:var(--shadow-float);transform:scale(.94);transition:transform .45s cubic-bezier(.16,1,.3,1)}
 .muscle-card.on .card{transform:none}
 .muscle-card .zoom{height:220px;border-radius:var(--r-16);background:var(--panel) center/cover no-repeat}
@@ -368,7 +379,7 @@ main:focus{outline:none}
   @keyframes float{50%{transform:translateY(-8px)}}
   .js .auto .step.on .bar{display:block}
   .js .auto .step.on .bar i{animation:fill var(--dur,6.5s) linear forwards}
-  .js .auto.paused .step.on .bar i{animation-play-state:paused}
+  .js .auto:is(.paused,.held) .step.on .bar i{animation-play-state:paused}
   @keyframes fill{to{width:100%}}
   .js .multi .step.on .tx{animation:fade .5s both}
   @media (hover:none),(max-width:960px){.js .part.on{animation:none}}
@@ -411,7 +422,7 @@ main:focus{outline:none}
   .vis{display:grid;justify-items:center;height:auto}
   .vis .device,.flip .vis .device{position:relative;left:auto;top:auto;grid-area:1/1}
   .part,.flip .part{position:relative;grid-area:2/1;align-self:start;left:auto;top:auto!important;width:380px;max-width:100%;margin-top:-170px}
-  .ch .steps{max-width:none;margin-top:44px}
+  .ch .rail{max-width:none;margin-top:44px}
   .mu,.connect .intro,.faq{grid-template-columns:1fr;gap:32px}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
   .opener{padding-top:110px}.chapter.opens{padding-top:64px}
@@ -471,9 +482,9 @@ const TURNSTILE_SITE_KEY = '0x4AAAAAAFmRgmk4ncclmfIi';
 const TURNSTILE = 'https://challenges.cloudflare.com';
 const turnstileScript = `<script src="${TURNSTILE}/turnstile/v0/api.js?render=explicit&onload=aurinTurnstile" async defer></script>`;
 const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
-<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
+<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" spellcheck="false" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
 <span class="ts" data-key="${TURNSTILE_SITE_KEY}"></span>
-<span class="done" role="status">${CHECK}<span>You're on the list</span></span>
+<span class="done" role="status">${CHECK}<span>You’re on the list</span></span>
 <button type="button" class="share">${SHARE}<span>Know someone who trains? Share Aurin</span></button>
 <span class="err" role="alert"></span>
 </form>`;
@@ -509,6 +520,11 @@ document.querySelectorAll('.chapter').forEach(function(ch){
  ch.addEventListener('demo:touch',function(){ch._touched=true;ch.classList.remove('auto');clearTimeout(loop);});
  if(multi)steps.forEach(function(s,i){s.querySelector('button').addEventListener('click',function(){ch.classList.remove('auto');show(i);});
   s.querySelector('.bar i').addEventListener('animationend',function(){if(ch.classList.contains('auto'))show((cur+1)%steps.length);});});
+ if(multi){var rail=ch.querySelector('.rail'),hold=rail.querySelector('.hold'),said=hold.querySelector('span'),held=false,over=false,inside=false;
+  function sync(){ch.classList.toggle('held',held||over||inside);hold.classList.toggle('held',held);said.textContent=held?'Play':'Pause';}
+  hold.addEventListener('click',function(){held=!held;sync();});
+  rail.addEventListener('mouseenter',function(){over=true;sync();});rail.addEventListener('mouseleave',function(){over=false;sync();});
+  rail.addEventListener('focusin',function(){inside=true;sync();});rail.addEventListener('focusout',function(e){if(!rail.contains(e.relatedTarget)){inside=false;sync();}});}
  if(still||!IO){seen=!IO;run(0);return;}
  if(multi)ch.classList.add('auto','paused');
  new IntersectionObserver(function(es){var on=es[0].isIntersecting;ch.classList.toggle('paused',!on);
@@ -597,12 +613,19 @@ addEventListener('pointerup',function(e){if(!drag)return;var moved=drag.moved;dr
  bub.style.left=Math.min(Math.max(e.clientX-f.left,115),f.width-115)+'px';bub.style.top=Math.max(60,e.clientY-f.top-16)+'px';
  bub.dataset.id=name;bub.classList.add('on');});
 // The bubble opens the muscle as its detail does in the app: the figure close on it, its name and how rested.
-bub.addEventListener('click',function(){var name=bub.dataset.id,st=STATE[name]||RESTED;
+// Closing it goes back to what opened it: the bubble, or the muscle's button.
+var opener=null;
+function open(name,from){var st=STATE[name]||RESTED;opener=from;
  card.querySelector('.zoom').style.backgroundImage='url('+base+'z-'+name+'.webp)';card.querySelector('h3').textContent=LABEL[name];
- var p=card.querySelector('.state');p.textContent=st[0];p.style.color=st[1];card.classList.add('on');card.querySelector('.close').focus();});
-function hide(){card.classList.remove('on');close();}
+ var p=card.querySelector('.state');p.textContent=st[0];p.style.color=st[1];card.classList.add('on');card.querySelector('.close').focus();}
+bub.addEventListener('click',function(){open(bub.dataset.id,bub);});
+var pick=document.querySelector('.mpick');
+Object.keys(LABEL).forEach(function(name){var b=document.createElement('button');b.type='button';b.textContent=LABEL[name];
+ b.addEventListener('click',function(){open(name,b);});pick.appendChild(b);});
+function hide(){card.classList.remove('on');if(opener)opener.focus();opener=null;}
 card.addEventListener('click',function(e){if(e.target===card||e.target.closest('.close'))hide();});
-addEventListener('keydown',function(e){if(e.key==='Escape'&&card.classList.contains('on'))hide();});
+addEventListener('keydown',function(e){if(!card.classList.contains('on'))return;
+ if(e.key==='Escape')hide();else if(e.key==='Tab'){e.preventDefault();card.querySelector('.close').focus();}});
 })();</script>`;
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
@@ -652,7 +675,7 @@ ${headScript}
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
-<a class="logo" href="/">${mark(30)}<span>Aurin</span></a>
+<a class="logo" href="/">${mark(30)}<span translate="no">Aurin</span></a>
 <div class="links"><a href="/#pripravenost">Features</a><a href="/#kouc">AI coach</a><a href="/#propojeni">Connections</a><a href="/#soukromi">Privacy</a></div>
 <a class="nav-cta" href="/#join">Join the waitlist</a>
 </nav></header>
@@ -660,7 +683,7 @@ ${body}
 <footer class="site-foot"><div class="wrap">
 <div class="top">
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
-<nav aria-label="Aurin"><h3>Aurin</h3><ul><li><a href="/#pripravenost">Features</a></li><li><a href="/#kouc">AI coach</a></li><li><a href="/#propojeni">Connections</a></li></ul></nav>
+<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#pripravenost">Features</a></li><li><a href="/#kouc">AI coach</a></li><li><a href="/#propojeni">Connections</a></li></ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/privacy?lang=cs" hreflang="cs">Soukromí</a> · <a href="/terms?lang=cs" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
@@ -788,7 +811,7 @@ export function overviewPage(request) {
 <div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}"${screen.startsWith('html:') ? ' aria-hidden="true"' : ''}>${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>
 ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
 </div></div>
-<ol class="steps">${steps}</ol>
+<div class="rail"><ol class="steps">${steps}</ol>${multi ? `<button type="button" class="hold"><svg class="icon pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg><svg class="icon play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg><span>Pause</span></button>` : ''}</div>
 ${REAL_DAYS[id] ? realDay(id) : ''}
 </div></section>`;
   };
@@ -811,10 +834,11 @@ ${REAL_DAYS[id] ? realDay(id) : ''}
   const muscles = `<section id="svaly" class="muscles"><div class="wrap mu">
 <div class="copy reveal"><div class="eyebrow">Muscles</div><h2 class="big">Know what’s recovered.</h2><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
 <div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
+<div class="mpick" role="group" aria-label="Open a muscle"></div>
 ${realDay('svaly')}</div>
 <div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn · tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
 </div></section>
-<div class="muscle-card" role="dialog" aria-modal="true" aria-label="Muscle"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3></h3><p class="state"></p></div></div>`;
+<div class="muscle-card" role="dialog" aria-modal="true" aria-labelledby="mc-name"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3 id="mc-name"></h3><p class="state"></p></div></div>`;
 
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
   // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
