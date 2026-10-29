@@ -325,6 +325,7 @@ schemes:
       # The tests check the Czech source texts; the simulator itself speaks English.
       language: cs
   # Its own scheme, so the unit tests and screen renders run as before.
+  # The clips for the socials (ClipTests) are recorded by app-videos.yml, not here.
   AurinSmoke:
     build:
       targets:
@@ -334,5 +335,15 @@ schemes:
       storeKitConfiguration: StoreKit/Aurin.storekit
     test:
       targets:
-        - AurinUITests
+        - name: AurinUITests
+          skippedTests: [ClipTests]
       language: cs
+  # The screen recordings for the socials (ClipTests, app-videos.yml).
+  AurinClips:
+    build:
+      targets:
+        Aurin: all
+        AurinUITests: [test]
+    test:
+      targets:
+        - AurinUITests
