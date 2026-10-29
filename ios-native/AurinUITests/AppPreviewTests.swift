@@ -19,10 +19,10 @@ final class AppPreviewTests: XCTestCase {
     private let labels = [
         "en": Labels(today: "Today", training: "Training", food: "Food",
                      start: "Start workout", setDone: "Set done", skip: "Skip",
-                     coach: "Coach", question: "How did today's run go?", glutes: "Glutes"),
+                     coach: "Coach", question: "How should I train today?", glutes: "Glutes"),
         "cs": Labels(today: "Dnes", training: "Trénink", food: "Jídlo",
                      start: "Začít trénink", setDone: "Série hotová", skip: "Přeskočit",
-                     coach: "Kouč", question: "Jak se mi povedl dnešní běh?", glutes: "Hýždě")]
+                     coach: "Kouč", question: "Jak mám dnes trénovat?", glutes: "Hýždě")]
 
     override func setUp() {
         continueAfterFailure = true
@@ -71,7 +71,8 @@ final class AppPreviewTests: XCTestCase {
     }
 
     /// The second video, app-preview-<language>-coach.mp4: the muscles and one of them,
-    /// then the coach answering a question about the sample day (the demo's ready answer).
+    /// then the coach answering "How should I train today?" (the demo's ready answer; the
+    /// coach suggests from the real date, so the sample day's own suggestions don't show).
     func testCoachPreview() {
         for language in ["en", "cs"] {
             self.language = language
@@ -83,8 +84,11 @@ final class AppPreviewTests: XCTestCase {
             let glutes = button(containing: l.glutes)
             guard glutes.waitForExistence(timeout: 20) else { continue }
             mark("in")
-            pause(2.5)
-            tapIfThere(glutes)
+            pause(2)
+            // The tired muscles sit under the figure: scrolled up to, then the glutes opened.
+            app.swipeUp()
+            pause(1)
+            if glutes.isHittable { glutes.tap() }
             pause(3)
             mark("out")
 
