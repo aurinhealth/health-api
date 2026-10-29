@@ -180,8 +180,10 @@ jobs:
       - name: Build for iPhone
         if: github.event_name != 'pull_request'
         run: |
+          # No -sdk: it would build the embedded watch app for iOS too; the
+          # destination alone picks the watchOS SDK for it, like the archive.
           xcodebuild -project Aurin.xcodeproj -scheme Aurin -configuration Release \
-            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            -destination 'generic/platform=iOS' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO build
           mkdir -p ipa/Payload
           cp -R build/Build/Products/Release-iphoneos/Aurin.app ipa/Payload/
