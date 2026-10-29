@@ -242,10 +242,13 @@ main:focus{outline:none}
 .pk .icon{width:14px;height:14px}.pk.in{color:var(--green)}.pk.out{color:var(--amber)}
 .pk:not(.on){visibility:hidden}
 @keyframes travel{0%{offset-distance:0%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
-.col-l,.col-r{position:absolute;top:18px;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+@keyframes travel-late{0%{offset-distance:0%;opacity:0}52%{opacity:0}60%{opacity:1}88%{opacity:1}100%{offset-distance:100%;opacity:0}}
+/* On the darker panel the labels and names take a muted a touch deeper: plain --muted is under 4.5:1 there. */
+.flow{--flow-muted:color-mix(in srgb,var(--muted) 80%,var(--text))}
+.col-l,.col-r{position:absolute;top:18px;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--flow-muted)}
 .col-l{left:40px}.col-r{right:40px}
 .flow .core{position:absolute;left:50%;top:50%;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:var(--shadow-float)}
-.node,.dst{position:absolute;left:var(--x);top:var(--y);display:flex;align-items:center;gap:10px;transform:translate(-50%,-50%);border:0;background:none;padding:6px 10px 6px 6px;border-radius:var(--r-16);font:inherit;color:var(--muted);transition:background .3s,box-shadow .3s,color .3s}
+.node,.dst{position:absolute;left:var(--x);top:var(--y);display:flex;align-items:center;gap:10px;transform:translate(-50%,-50%);border:0;background:none;padding:6px 10px 6px 6px;border-radius:var(--r-16);font:inherit;color:var(--flow-muted);transition:background .3s,box-shadow .3s,color .3s}
 .node{cursor:pointer;flex-direction:row-reverse;transform:translate(calc(-100% + 34px),-50%)}
 .dst{transform:translate(-34px,-50%)}
 .node:hover,.node[aria-selected=true],.dst.on{color:var(--text)}
@@ -257,11 +260,13 @@ main:focus{outline:none}
 .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}.legend .in{background:var(--green)}.legend .out{background:var(--amber-bar)}
 @media (prefers-reduced-motion:reduce){.pk{display:none}}
 @media (max-width:640px){
-  .flow{aspect-ratio:340/660}.fc{width:340px;height:660px}
+  .flow{aspect-ratio:340/760}.fc{width:340px;height:760px}
   .lines.wide,.pks.wide{display:none}.lines.tall,.pks.tall{display:block}
   .node,.dst{left:var(--mx);top:var(--my);flex-direction:column;gap:4px;padding:6px;transform:translate(-50%,-50%)}
   .node .logo-tile,.dst .logo-tile{width:46px;height:46px}.node .nm,.dst .nm{font-size:var(--fs-12);font-weight:600;max-width:84px;text-align:center;white-space:normal;line-height:1.15}
-  .col-l{left:16px}.col-r{right:auto;left:16px;top:auto;bottom:118px}
+  .pk.late{animation-name:travel-late}
+  /* "Sent back" beside the mark's way out, above the chips' curves. */
+  .col-l{left:16px}.col-r{right:auto;left:16px;top:474px}
   .flow .core{width:92px;height:92px;margin:-46px 0 0 -46px}.flow .core svg{width:46px;height:auto}
   .legend .tip{display:none}
 }
@@ -349,6 +354,7 @@ main:focus{outline:none}
 @media (hover:none),(max-width:960px){
   .site body::after{display:none}
   .site *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+  .pill-nav,.acts-nav{background:var(--panel)}
 }
 
 /* Motion, only with JS and without reduced motion: the headline rises word by word, the sun's rings spread,
@@ -447,6 +453,9 @@ main:focus{outline:none}
   .acts-nav{bottom:12px;padding:9px 14px 9px 14px;gap:12px}
   /* On a phone the floating cards would cover the real screen's numbers. */
   .glass{display:none}
+  /* The piece rebuilds what the screen shows, so on a phone it covers the screen's lower half: the same
+     numbers are not read twice in a row, one under the other. */
+  .part,.flip .part{margin-top:-310px}
   .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
   .panels{padding:20px}
   .rd a{width:96px}
@@ -868,22 +877,26 @@ ${realDay('svaly')}</div>
     wide: {w: 1000, h: 440, core: [500, 220], src: i => [210, 62 + i * 64], dst: j => [790, 92 + j * 86],
       into: ([x, y], [cx, cy]) => `M${x + 42} ${y}C${(x + cx) / 2} ${y} ${(x + cx) / 2} ${cy} ${cx - 58} ${cy}`,
       out: ([cx, cy], [x, y]) => `M${cx + 58} ${cy}C${(x + cx) / 2} ${cy} ${(x + cx) / 2} ${y} ${x - 42} ${y}`},
-    tall: {w: 340, h: 660, core: [170, 330], src: i => [60 + (i % 3) * 110, 66 + Math.floor(i / 3) * 104], dst: j => [47 + j * 82, 606],
-      into: ([x, y], [cx, cy]) => `M${x} ${y + 40}C${x} ${(y + cy) / 2 + 20} ${cx} ${(y + cy) / 2} ${cx} ${cy - 56}`,
+    // Two rows of three: a first-row curve runs down the gap between the second row's services, not through them.
+    tall: {w: 340, h: 760, core: [170, 400], src: i => [60 + (i % 3) * 110, 66 + Math.floor(i / 3) * 104], dst: j => [47 + j * 82, 706],
+      into: ([x, y], [cx, cy]) => { const g = x > cx ? x - 55 : x + 55;
+        return y < 100 ? `M${x} ${y + 40}C${x} ${y + 78} ${g} ${y + 66} ${g} ${y + 104}C${g} ${y + 170} ${cx} ${(y + 104 + cy) / 2} ${cx} ${cy - 56}`
+          : `M${x} ${y + 40}C${x} ${(y + cy) / 2 + 20} ${cx} ${(y + cy) / 2} ${cx} ${cy - 56}`; },
       out: ([cx, cy], [x, y]) => `M${cx} ${cy + 56}C${cx} ${(y + cy) / 2} ${x} ${(y + cy) / 2 - 20} ${x} ${y - 40}`}};
   const pct = (v, all) => (v / all * 100).toFixed(2) + '%';
   const flowPaths = kind => { const L = FLOW[kind]; return {
     into: services.map((x, i) => L.into(L.src(i), L.core)),
     out: senders.map((x, j) => L.out(L.core, L.dst(j)))}; };
-  const travel = (d, items, cls, id, kind) => items.slice(0, 3).map(([name, label], k, all) =>
-    `<span class="pk ${cls} ${kind}" data-svc="${id}" style="offset-path:path('${d}');animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s">${icon(name)}${label}</span>`).join('');
+  // A chip from the first row on a phone shows once it is past the second row's names (late).
+  const travel = (d, items, cls, id, kind, late = false) => items.slice(0, 3).map(([name, label], k, all) =>
+    `<span class="pk ${cls} ${kind}${late ? ' late' : ''}" data-svc="${id}" style="offset-path:path('${d}');animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s">${icon(name)}${label}</span>`).join('');
   const layer = kind => { const L = FLOW[kind], P = flowPaths(kind);
     return `<svg class="lines ${kind}" viewBox="0 0 ${L.w} ${L.h}" aria-hidden="true">${services.map(({id}, i) => `<path data-svc="${id}" class="in" d="${P.into[i]}"/>`).join('')}${senders.map(({id}, j) => `<path data-svc="${id}" class="out" d="${P.out[j]}"/>`).join('')}</svg>
-<div class="pks ${kind}" aria-hidden="true">${services.map(({id, reads}, i) => travel(P.into[i], reads, 'in', id, kind)).join('')}${senders.map(({id, sends}, j) => travel(P.out[j], sends, 'out', id, kind)).join('')}</div>`; };
+<div class="pks ${kind}" aria-hidden="true">${services.map(({id, reads}, i) => travel(P.into[i], reads, 'in', id, kind, kind === 'tall' && L.src(i)[1] < 100)).join('')}${senders.map(({id, sends}, j) => travel(P.out[j], sends, 'out', id, kind)).join('')}</div>`; };
   const nodes = services.map(({id, name, logo}, i) => { const [x, y] = FLOW.wide.src(i), [mx, my] = FLOW.tall.src(i);
-    return `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, 660)}"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></button>`; }).join('');
+    return `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, FLOW.tall.h)}"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></button>`; }).join('');
   const backs = senders.map(({id, name, logo}, j) => { const [x, y] = FLOW.wide.dst(j), [mx, my] = FLOW.tall.dst(j);
-    return `<span class="dst" data-svc="${id}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, 660)}" aria-hidden="true"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></span>`; }).join('');
+    return `<span class="dst" data-svc="${id}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, FLOW.tall.h)}" aria-hidden="true"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></span>`; }).join('');
   const flow = `<div class="flow"><div class="fc">
 ${layer('wide')}${layer('tall')}
 <span class="col-l">Into Aurin</span><span class="col-r">Sent back</span>
