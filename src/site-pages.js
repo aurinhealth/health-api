@@ -231,6 +231,8 @@ main:focus{outline:none}
 .pk .icon{width:14px;height:14px}.pk.in{color:var(--green)}.pk.out{color:var(--amber)}
 .pk:not(.on){visibility:hidden}
 @keyframes travel{0%{offset-distance:0%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
+.pk.tall{animation-name:travel-tall}
+@keyframes travel-tall{0%{offset-distance:0%;offset-anchor:var(--a0) 50%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;offset-anchor:var(--a1) 50%;opacity:0}}
 .col-l,.col-r{position:absolute;top:18px;font-size:var(--fs-12);font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
 .col-l{left:40px}.col-r{right:40px}
 .flow .core{position:absolute;left:50%;top:50%;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;display:grid;place-items:center;background:var(--panel);box-shadow:var(--shadow-float)}
@@ -653,14 +655,14 @@ ${headScript}
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
 <a class="logo" href="/">${mark(30)}<span>Aurin</span></a>
-<div class="links"><a href="/#pripravenost">Features</a><a href="/#kouc">AI coach</a><a href="/#propojeni">Connections</a><a href="/#soukromi">Privacy</a></div>
+<div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-sleep">Sleep</a><a href="/#a-coach">Coach</a></div>
 <a class="nav-cta" href="/#join">Join the waitlist</a>
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
 <div class="top">
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
-<nav aria-label="Aurin"><h3>Aurin</h3><ul><li><a href="/#pripravenost">Features</a></li><li><a href="/#kouc">AI coach</a></li><li><a href="/#propojeni">Connections</a></li></ul></nav>
+<nav aria-label="Aurin"><h3>Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#propojeni">Connections</a></li></ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/privacy?lang=cs" hreflang="cs">Soukromí</a> · <a href="/terms?lang=cs" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
@@ -754,14 +756,14 @@ export function overviewPage(request) {
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
     ['trenink', '', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon or a gran fondo, a strength plan, or let the AI plan the week. A busy day in your calendar gets a shorter workout, and when the load adds up, the coach proposes moving or easing a session. Send a planned ride or run to Wahoo, Intervals.icu, your Apple Watch or Zwift, and again if it didn’t arrive. A finished workout shows how much of the plan you did.', 9500]]],
+      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon or a gran fondo, or let the AI plan the week; a busy day in your calendar gets a shorter workout. Send a planned ride or run to Wahoo, Intervals.icu, your Apple Watch or Zwift.', 9500]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
       ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Then start.', 7000]]],
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
-      ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight and reps, and the plates to load on each side of the bar. Change them, add or remove a set, swap an exercise for a similar one or any other when its machine is taken, keep your own note on how to set it up, and start.', 6000],
+      ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight, its reps and the plates for each side of the bar. Machine taken? Swap the exercise for a similar one.', 6000],
       ['training-set', 'tmTick', 380, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets. Miss your reps or hit failure and the next set comes lighter; breeze through and it comes heavier.', 6000],
-      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, as long as the exercise needs, longer after squats than after curls. It stays on your lock screen and shows what comes next. The last seconds count down with a vibration you feel even with the phone on the bench, or a tone if you like. Ask the coach about the set or the next exercise while you rest.', 13500],
+      ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, longer after squats than after curls, and stays on your lock screen. The last seconds count down with a vibration you feel even with the phone on the bench.', 13500],
       ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired when you finish, saved to Apple Health. Then say how it went.', 6000]]],
     ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
       ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
@@ -772,7 +774,7 @@ export function overviewPage(request) {
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
     ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today, how to adjust your week or what to eat before a workout, or send a photo of a plan from your trainer. Tap Coach on a workout or your HRV to ask about just that, or during a gym session about the set, the rest or the next exercise. Earlier chats wait in the side panel, so the morning talk about sleep is still there after the workout. You can also reply straight from its notification. When it proposes a workout or a whole plan for your race, confirm it and it lands in your plan.', 11500]]]];
+      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500]]]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {
@@ -834,7 +836,7 @@ ${realDay('svaly')}</div>
       reads: [['moon', 'sleep'], ['heart', 'resting heart rate'], ['training', 'HRV'], ['wind', 'breathing rate'], ['drop', 'blood oxygen']], sends: [], none: 'nothing, Aurin only reads WHOOP'},
     {id: 'wahoo', name: 'Wahoo', logo: '<span class="uh-tile word"><img src="/site/logos/wahoo.png" alt="" width="40" height="40" loading="lazy"></span>',
       reads: [['bike', 'finished rides and runs'], ['bolt', 'power and TSS'], ['heart', 'heart rate']],
-      sends: [['calendar', 'planned workouts, to ELEMNT and KICKR']]}];
+      sends: [['calendar', 'planned workouts, to ELEMNT and KICKR', 'planned workouts']]}];
   // The flow: each service on the left sends what Aurin reads along a curve into the mark, and what Aurin sends
   // back runs out to the services on the right that take it. Two layouts: wide (left to right) for computers,
   // tall (top to bottom) for phones. The things carried are chips that travel the curves (CSS offset-path); the
@@ -851,11 +853,14 @@ ${realDay('svaly')}</div>
   const flowPaths = kind => { const L = FLOW[kind]; return {
     into: services.map((x, i) => L.into(L.src(i), L.core)),
     out: senders.map((x, j) => L.out(L.core, L.dst(j)))}; };
-  const travel = (d, items, cls, id, kind) => items.slice(0, 3).map(([name, label], k, all) =>
-    `<span class="pk ${cls} ${kind}" data-svc="${id}" style="offset-path:path('${d}');animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s">${icon(name)}${label}</span>`).join('');
+  // A chip can carry a shorter label than the panel (a third item). On the phone, a chip's anchor slides from
+  // where its service sits across the box (its left edge at the left column, its right edge at the right) to
+  // its middle at the mark, so chips at the edge stay inside.
+  const travel = (d, items, cls, id, kind, x) => items.slice(0, 3).map(([name, label, short], k, all) =>
+    `<span class="pk ${cls} ${kind}" data-svc="${id}" style="offset-path:path('${d}');${kind === 'tall' ? `--a0:${cls === 'in' ? pct(x, FLOW.tall.w) : '50%'};--a1:${cls === 'in' ? '50%' : pct(x, FLOW.tall.w)};` : ''}animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s">${icon(name)}${short || label}</span>`).join('');
   const layer = kind => { const L = FLOW[kind], P = flowPaths(kind);
     return `<svg class="lines ${kind}" viewBox="0 0 ${L.w} ${L.h}" aria-hidden="true">${services.map(({id}, i) => `<path data-svc="${id}" class="in" d="${P.into[i]}"/>`).join('')}${senders.map(({id}, j) => `<path data-svc="${id}" class="out" d="${P.out[j]}"/>`).join('')}</svg>
-<div class="pks ${kind}" aria-hidden="true">${services.map(({id, reads}, i) => travel(P.into[i], reads, 'in', id, kind)).join('')}${senders.map(({id, sends}, j) => travel(P.out[j], sends, 'out', id, kind)).join('')}</div>`; };
+<div class="pks ${kind}" aria-hidden="true">${services.map(({id, reads}, i) => travel(P.into[i], reads, 'in', id, kind, L.src(i)[0])).join('')}${senders.map(({id, sends}, j) => travel(P.out[j], sends, 'out', id, kind, L.dst(j)[0])).join('')}</div>`; };
   const nodes = services.map(({id, name, logo}, i) => { const [x, y] = FLOW.wide.src(i), [mx, my] = FLOW.tall.src(i);
     return `<button type="button" role="tab" class="node" id="tab-${id}" aria-controls="svc-${id}" aria-selected="${i === 0}" style="--x:${pct(x, 1000)};--y:${pct(y, 440)};--mx:${pct(mx, 340)};--my:${pct(my, 660)}"><span class="logo-tile">${logo}</span><span class="nm">${name}</span></button>`; }).join('');
   const backs = senders.map(({id, name, logo}, j) => { const [x, y] = FLOW.wide.dst(j), [mx, my] = FLOW.tall.dst(j);
