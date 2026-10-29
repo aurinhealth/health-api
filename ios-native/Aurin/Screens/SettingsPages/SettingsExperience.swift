@@ -54,7 +54,7 @@ struct ExperienceGroup: View {
                         }
                     }
                     .font(.subheadline).lineLimit(1).truncationMode(.tail)
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.up.chevron.down").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
                 }
             }
             .disabled(levels.isEmpty && !model.demo)

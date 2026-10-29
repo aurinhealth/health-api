@@ -242,7 +242,7 @@ struct GymPartsCard: View {
         return HStack(spacing: 10) {
             Button { open(part) } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: symbol(part)).font(.system(size: 15, weight: .medium)).foregroundStyle(color(part))
+                    Image(systemName: symbol(part)).scaledFont(15, weight: .medium, cap: .denseCap).foregroundStyle(color(part))
                         .frame(width: 34, height: 34)
                         .background(color(part).opacity(0.14), in: Circle())
                         .accessibilityHidden(true)
@@ -251,7 +251,7 @@ struct GymPartsCard: View {
                         HStack(spacing: 3) {
                             Text(verbatim: subtitle(part)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
                             if part != .exercises && !reordering {
-                                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.faint)
+                                Image(systemName: "chevron.right").scaledFont(9, weight: .semibold).foregroundStyle(Palette.faint)
                                     .accessibilityHidden(true)
                             }
                         }
@@ -292,7 +292,7 @@ struct GymPartsCard: View {
         Button {
             withAnimation(.snappy) { update { $0.step(part, by: up ? -1 : 1, day: day) } }
         } label: {
-            Image(systemName: up ? "chevron.up" : "chevron.down").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.ink)
+            Image(systemName: up ? "chevron.up" : "chevron.down").scaledFont(13, weight: .bold, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 34, height: 34)
                 .background(Palette.track, in: Circle())
         }
@@ -348,7 +348,7 @@ struct GymCardioSheet: View {
                                     Text(verbatim: GymCardio.name(option.id)).font(.body).foregroundStyle(Palette.ink)
                                     Spacer()
                                     if option.id == type {
-                                        Image(systemName: "checkmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.amber)
+                                        Image(systemName: "checkmark").scaledFont(14, weight: .semibold).foregroundStyle(Palette.amber)
                                     }
                                 }
                                 .padding(.horizontal, 16).frame(minHeight: 48)
@@ -484,7 +484,7 @@ struct GymRoutineSheet: View {
                 Spacer(minLength: 6)
                 if let minutes { Text(verbatim: "\(minutes) min").font(.subheadline).foregroundStyle(Palette.muted) }
                 if routine == id {
-                    Image(systemName: "checkmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.amber)
+                    Image(systemName: "checkmark").scaledFont(14, weight: .semibold).foregroundStyle(Palette.amber)
                 }
             }
             .padding(.horizontal, 16).frame(minHeight: 48)

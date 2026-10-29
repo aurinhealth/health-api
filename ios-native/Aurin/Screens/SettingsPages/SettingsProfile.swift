@@ -71,7 +71,7 @@ struct ProfileSettingsView: View {
                             Text("E-mail").font(.body).foregroundStyle(Palette.ink)
                             Spacer(minLength: 8)
                             Text(verbatim: email).font(.subheadline).foregroundStyle(Palette.muted).lineLimit(1).truncationMode(.middle)
-                            Image(systemName: copied ? "checkmark" : "doc.on.doc").font(.system(size: 13)).foregroundStyle(Palette.faint)
+                            Image(systemName: copied ? "checkmark" : "doc.on.doc").scaledFont(13).foregroundStyle(Palette.faint)
                         }
                         .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 50)
                         .contentShape(Rectangle())
@@ -211,7 +211,7 @@ struct EmailChangeView: View {
         SettingsPage(title: "Změnit e-mail") {
             if let changed {
                 VStack(alignment: .leading, spacing: 10) {
-                    Image(systemName: "checkmark.circle").font(.system(size: 36, weight: .light)).foregroundStyle(Palette.green)
+                    Image(systemName: "checkmark.circle").scaledFont(36, weight: .light).foregroundStyle(Palette.green)
                         .accessibilityHidden(true)
                     Text(L10n.f("E-mail účtu je teď %@.", changed)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)

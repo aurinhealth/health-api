@@ -34,7 +34,7 @@ struct ChartScale: View {
                     Rectangle().fill(Palette.hairline).frame(width: width, height: 1).offset(y: y(t.value))
                 }
                 Text(verbatim: t.text)
-                    .font(.system(size: 9, weight: t.line ? .regular : .semibold))
+                    .scaledFont(9, weight: t.line ? .regular : .semibold, cap: .denseCap)
                     .foregroundStyle(t.color)
                     .lineLimit(1).fixedSize()
                     .frame(height: 12)
@@ -54,7 +54,7 @@ struct ChartDates: View {
             let w = geo.size.width - trailing
             ForEach(marks.indices, id: \.self) { i in
                 Text(verbatim: marks[i].text)
-                    .font(.system(size: 9))
+                    .scaledFont(9, cap: .denseCap)
                     .foregroundStyle(Palette.faint)
                     .lineLimit(1).fixedSize()
                     .position(x: min(max(w * marks[i].at, 14), w - 14), y: 6)
@@ -75,7 +75,7 @@ struct ChartLegend: View {
             row(note: note)
             row(note: nil)
         }
-        .font(.system(size: 9))
+        .scaledFont(9, cap: .denseCap)
         .foregroundStyle(Palette.faint)
     }
 
@@ -104,7 +104,7 @@ struct ChartSpan: View {
             Spacer(minLength: 4)
             Text(verbatim: end)
         }
-        .font(.system(size: 9))
+        .scaledFont(9, cap: .denseCap)
         .foregroundStyle(Palette.faint)
         .lineLimit(1)
     }
@@ -165,7 +165,7 @@ struct BarChart: View {
                             .offset(y: -h * scaled(target, lo, top))
                         if let targetLabel {
                             Text(verbatim: targetLabel)
-                                .font(.system(size: 9))
+                                .scaledFont(9, cap: .denseCap)
                                 .foregroundStyle(targetColor)
                                 .lineLimit(1).fixedSize()
                                 .padding(.horizontal, 2)
@@ -180,7 +180,7 @@ struct BarChart: View {
             .overlay(alignment: .topLeading) {
                 if let caption {
                     Text(verbatim: caption)
-                        .font(.system(size: 9))
+                        .scaledFont(9, cap: .denseCap)
                         .foregroundStyle(Palette.faint)
                         .lineLimit(1).fixedSize()
                         .offset(y: -14)
@@ -192,7 +192,7 @@ struct BarChart: View {
                         // Wider than its bar when the bars are thin ("14" over 2.5 pt
                         // gaps): it may overflow sideways, it must not wrap.
                         Text(labels[i])
-                            .font(.system(size: 9, weight: i == highlighted ? .semibold : .regular))
+                            .scaledFont(9, weight: i == highlighted ? .semibold : .regular, cap: .denseCap)
                             .foregroundStyle(i == highlighted ? Palette.ink : Palette.faint)
                             .lineLimit(1)
                             .fixedSize()
@@ -293,7 +293,7 @@ struct TrendDotsChart: View {
                         .offset(y: y(goal))
                     if scale.isEmpty {
                         Text(L10n.f("cíl %@", goal.formatted(.number.precision(.fractionLength(0)).locale(Fmt.locale))))
-                            .font(.system(size: 9))
+                            .scaledFont(9, cap: .denseCap)
                             .foregroundStyle(Palette.green)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                             .offset(y: y(goal) - 13)

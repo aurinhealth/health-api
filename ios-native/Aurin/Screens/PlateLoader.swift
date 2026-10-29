@@ -354,7 +354,7 @@ struct PlateLoaderSheet: View {
             withAnimation(.snappy) { plates = PlateLoad.adding(plate, to: plates) }
         } label: {
             Text(verbatim: PlateLoad.text(plate))
-                .font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                .scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(.white)
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(width: 42, height: 42)
                 .background(Circle().fill(Self.fill(look)))
@@ -362,7 +362,7 @@ struct PlateLoaderSheet: View {
                 .overlay(Circle().stroke(Self.line(look), lineWidth: 1.5))
                 .overlay(alignment: .topTrailing) {
                     if count > 0 {
-                        Text(verbatim: "×\(count)").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Palette.onButton)
+                        Text(verbatim: "×\(count)").scaledFont(10.5, weight: .semibold).foregroundStyle(Palette.onButton)
                             .padding(.horizontal, 4).frame(minWidth: 19, minHeight: 19)
                             .background(Capsule().fill(Palette.button))
                             .offset(x: 6, y: -6)

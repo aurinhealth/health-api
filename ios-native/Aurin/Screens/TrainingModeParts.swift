@@ -253,7 +253,7 @@ struct GymSetRow: View {
             Button(action: toggle) {
                 Group {
                     if state == .done {
-                        Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.onAccent)
+                        Image(systemName: "checkmark").scaledFont(13, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                             .frame(width: 30, height: 30).background(Palette.green, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     } else {
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -522,7 +522,7 @@ struct HeartSourceButton: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Image(systemName: on ? "heart.fill" : "heart.slash")
-                    .font(.system(size: 13, weight: .medium))
+                    .scaledFont(13, weight: .medium)
                     .foregroundStyle(on ? Palette.rust : Palette.faint)
                 if let bpm {
                     Text(verbatim: "\(Int(bpm.rounded()))").font(Typo.number(18)).monospacedDigit().foregroundStyle(Palette.ink)
@@ -558,7 +558,7 @@ struct SmallInfoButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemImage).font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink)
+            Image(systemName: systemImage).scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 30, height: 30).background(Palette.track, in: Circle())
         }
         .buttonStyle(.plain)
@@ -591,7 +591,7 @@ struct MinimizedGymBar: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: 12) {
-                Image(systemName: "dumbbell.fill").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.rust)
+                Image(systemName: "dumbbell.fill").scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.rust)
                     .frame(width: 38, height: 38).background(Palette.track, in: Circle())
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     VStack(alignment: .leading, spacing: 1) {
@@ -664,7 +664,7 @@ struct RestSetsList: View {
                     HStack(spacing: 4) {
                         Text(s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number)
                         if let side = s.side { Text(verbatim: side).font(.caption.weight(.bold)).foregroundStyle(GymSides.color(side)) }
-                        if s.done { Image(systemName: "checkmark").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.green) }
+                        if s.done { Image(systemName: "checkmark").scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(Palette.green) }
                     }
                     .font(Typo.number(18)).foregroundStyle(s.done ? Palette.secondary : Palette.faint)
                     .frame(width: 40, alignment: .leading)
@@ -712,7 +712,7 @@ struct SwipeToDelete: ViewModifier {
                 if offset < 0 {
                     Button { delete() } label: {
                         VStack(spacing: 2) {
-                            Image(systemName: "trash").font(.system(size: 15, weight: .semibold))
+                            Image(systemName: "trash").scaledFont(15, weight: .semibold)
                             Text("Smazat").font(Typo.caption.weight(.semibold))
                         }
                         .foregroundStyle(.white)

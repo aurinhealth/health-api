@@ -233,12 +233,12 @@ struct SleepSettingsCard: View {
             HStack {
                 WidgetHeader(title: "Dnešní noc", color: Palette.indigo)
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
             }
             if let bed = tonight.bedtime, let wake = tonight.wake {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(ClockText.format(bed)).font(Typo.number(38)).foregroundStyle(Palette.ink)
-                    Image(systemName: "arrow.right").font(.system(size: 14, weight: .medium)).foregroundStyle(Palette.faint)
+                    Image(systemName: "arrow.right").scaledFont(14, weight: .medium).foregroundStyle(Palette.faint)
                     Text(ClockText.format(wake)).font(Typo.number(38)).foregroundStyle(Palette.ink)
                 }
                 Text(L10n.f("spánek %@", SleepPlanner.short(tonight.sleep ?? tonight.need)))

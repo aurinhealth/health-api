@@ -171,7 +171,7 @@ struct StartPlanSheet: View {
                                     Spacer()
                                     Text(verbatim: (target ?? preview?.race?.estimate).map(raceTime) ?? "–")
                                         .font(.body).foregroundStyle(target == nil ? Palette.muted : Palette.ink)
-                                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                                 }
                                 .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
                             }
@@ -184,7 +184,7 @@ struct StartPlanSheet: View {
                         HStack(spacing: 6) {
                             ForEach(choices, id: \.self) { d in dayChip(d) }
                             Button { pickingDate = true } label: {
-                                Image(systemName: "calendar").font(.system(size: 17, weight: .medium))
+                                Image(systemName: "calendar").scaledFont(17, weight: .medium)
                                     .foregroundStyle(choices.contains(start) ? Palette.ink : Palette.onButton)
                                     .frame(maxWidth: .infinity, minHeight: 54)
                                     .background(choices.contains(start) ? Palette.card : Palette.button, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -577,12 +577,12 @@ struct ActivePlanContent: View {
             SectionLabel(text: L10n.f("Tento týden · %@–%@", Fmt.dayMonth(week.monday), Fmt.dayMonth(ISODay.shift(week.monday, 6)))).padding(.top, 26)
             Button(action: editDays) {
                 HStack(spacing: 12) {
-                    Image(systemName: "clock").font(.system(size: 15, weight: .medium)).foregroundStyle(Palette.amber)
+                    Image(systemName: "clock").scaledFont(15, weight: .medium, cap: .denseCap).foregroundStyle(Palette.amber)
                         .frame(width: 30, height: 30).background(Palette.amberSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     Text("Čas tento týden").font(.body).foregroundStyle(Palette.ink)
                     Spacer()
                     Text(L10n.plural("%lld dní", week.weekDays ?? week.sessions.count)).font(.body).foregroundStyle(Palette.muted)
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                 }
                 .padding(.horizontal, 16).frame(minHeight: 52)
                 .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -900,7 +900,7 @@ struct PlanSessionList: View {
 
     @ViewBuilder private func badge(_ s: PlanWeekDetail.Session) -> some View {
         if s.done == true {
-            Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.green)
+            Image(systemName: "checkmark").scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Palette.green)
                 .frame(width: 24, height: 24).background(Palette.greenSoft, in: Circle())
                 .accessibilityLabel(L10n.tr("hotovo"))
         } else if s.date == today {
@@ -912,12 +912,12 @@ struct PlanSessionList: View {
     @ViewBuilder private func trailing(_ s: PlanWeekDetail.Session) -> some View {
         if s.editable == true {
             Menu { actions(s) } label: {
-                Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
                     .frame(width: 32, height: 32).contentShape(Rectangle())
             }
             .accessibilityLabel(L10n.tr("Upravit trénink"))
         } else {
-            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+            Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
         }
     }
 
@@ -1066,7 +1066,7 @@ struct WeekDaysSheet: View {
                             let out = dropped.contains(s.id)
                             HStack(spacing: 12) {
                                 Image(systemName: out ? "minus.circle" : "checkmark.circle.fill")
-                                    .font(.system(size: 20)).foregroundStyle(out ? Palette.faint : s.done == true ? Palette.green : Palette.amberBar)
+                                    .scaledFont(20).foregroundStyle(out ? Palette.faint : s.done == true ? Palette.green : Palette.amberBar)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(s.name).font(.body).foregroundStyle(out ? Palette.faint : Palette.ink).strikethrough(out)
                                     Text(Fmt.weekdayShort(s.date) + " · " + (s.done == true ? L10n.tr("hotovo") : out ? L10n.tr("vypadne") : planDuration(s.length)))
@@ -1157,7 +1157,7 @@ struct PlanResultContent: View {
                                 Text("FTP").font(Typo.caption).foregroundStyle(Palette.muted)
                                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                                     Text(Fmt.int(start)).font(Typo.number(30)).foregroundStyle(Palette.muted)
-                                    Image(systemName: "arrow.right").font(.system(size: 14)).foregroundStyle(Palette.faint)
+                                    Image(systemName: "arrow.right").scaledFont(14).foregroundStyle(Palette.faint)
                                     Text(Fmt.int(end) + " W").font(Typo.number(52)).foregroundStyle(Palette.ink)
                                 }
                                 let gain = end - start
@@ -1220,7 +1220,7 @@ struct PlanResultContent: View {
                                                 Text(next.goal).font(Typo.caption).foregroundStyle(Palette.muted)
                                             }
                                             Spacer()
-                                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                                            Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                                         }
                                         .padding(.horizontal, 16).padding(.vertical, 10).contentShape(Rectangle())
                                     }
@@ -1242,7 +1242,7 @@ struct PlanResultContent: View {
             Spacer()
             if let before {
                 Text(before).font(Typo.small).foregroundStyle(Palette.muted)
-                Image(systemName: "arrow.right").font(.system(size: 11)).foregroundStyle(Palette.faint)
+                Image(systemName: "arrow.right").scaledFont(11).foregroundStyle(Palette.faint)
             }
             Text(after).font(Typo.number(20)).foregroundStyle(Palette.ink)
             if let change {

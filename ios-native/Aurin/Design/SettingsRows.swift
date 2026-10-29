@@ -43,7 +43,7 @@ struct SettingsIcon: View {
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.system(size: 18, weight: .regular))
+            .scaledFont(18, weight: .regular, cap: .denseCap)
             .foregroundStyle(color)
             .frame(width: 26, height: 26)
             .accessibilityHidden(true)
@@ -81,7 +81,7 @@ struct SettingsRow: View {
                     .background(Palette.amber, in: Capsule())
             }
             if chevron {
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                     .accessibilityHidden(true)
             }
         }
@@ -209,7 +209,7 @@ struct PillToggle: View {
             HStack(spacing: 12) {
                 if let systemImage {
                     Image(systemName: systemImage)
-                        .font(.system(size: 15, weight: .semibold))
+                        .scaledFont(15, weight: .semibold, cap: .denseCap)
                         .foregroundStyle(isOn ? Palette.onButton : Palette.muted)
                         .frame(width: 34, height: 34)
                         .background(isOn ? Palette.green : Palette.track, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -248,7 +248,7 @@ struct OptionListRow: View {
                 Text(options.first { $0.0 == selection }?.1 ?? "nevybráno")
                     .font(.subheadline).foregroundStyle(Palette.muted)
                     .lineLimit(1).truncationMode(.tail)
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
             .padding(.horizontal, 16)
             .frame(minHeight: 50)

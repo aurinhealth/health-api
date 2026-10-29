@@ -188,11 +188,11 @@ struct ServiceConnectSheet: View {
             Image("AurinLogo").resizable().interpolation(.high).scaledToFit()
                 .frame(width: 72, height: 72)
                 .clipShape(RoundedRectangle(cornerRadius: 72 * 0.26, style: .continuous))
-            Text(verbatim: "• • •").font(.system(size: 18, weight: .semibold)).foregroundStyle(Palette.faint)
+            Text(verbatim: "• • •").scaledFont(18, weight: .semibold).foregroundStyle(Palette.faint)
             IntegrationIcon(id: target.id, size: 72)
                 .overlay(alignment: .bottomTrailing) {
                     if connected {
-                        Image(systemName: "checkmark").font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.onAccent)
+                        Image(systemName: "checkmark").scaledFont(14, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                             .frame(width: 30, height: 30).background(Palette.green, in: Circle())
                             .overlay(Circle().stroke(Palette.settingsBackground, lineWidth: 3))
                             .offset(x: 8, y: 8)
@@ -246,7 +246,7 @@ struct ServiceConnectSheet: View {
         VStack(spacing: 0) {
             if !first { Rectangle().fill(Palette.hairline).frame(height: 1) }
             HStack(alignment: .top, spacing: 14) {
-                Image(systemName: symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.green)
+                Image(systemName: symbol).scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.green)
                     .frame(width: 30, height: 30)
                     .background(Palette.track, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 VStack(alignment: .leading, spacing: 3) {

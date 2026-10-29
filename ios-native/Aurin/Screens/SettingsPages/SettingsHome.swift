@@ -54,7 +54,7 @@ struct SettingsProfileCard: View {
                     }
                 }
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, 18).padding(.vertical, 16)
@@ -102,7 +102,7 @@ struct SettingsGoalsCard: View {
                 HStack {
                     Text("Cíle").font(.body.weight(.medium)).foregroundStyle(Palette.ink)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                         .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 6)
@@ -191,7 +191,7 @@ struct SettingsSectionTiles: View {
             destination()
         } label: {
             VStack(alignment: .leading, spacing: 0) {
-                Image(systemName: symbol).font(.system(size: 16, weight: .medium)).foregroundStyle(color)
+                Image(systemName: symbol).scaledFont(16, weight: .medium, cap: .denseCap).foregroundStyle(color)
                     .frame(width: 34, height: 34)
                     .background(color.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                 Spacer(minLength: 14)

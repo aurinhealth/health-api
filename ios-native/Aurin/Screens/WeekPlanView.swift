@@ -256,7 +256,7 @@ struct WeekPlanView: View {
         } label: {
             Card(padding: 14) {
                 HStack(spacing: 12) {
-                    Image(systemName: "clock").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.amber)
+                    Image(systemName: "clock").scaledFont(16, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.amber)
                         .frame(width: 36, height: 36).background(Palette.amberSoft, in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
                         Text(weekStart == nextWeek ? "Čas příští týden" : "Čas tento týden").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
@@ -265,7 +265,7 @@ struct WeekPlanView: View {
                         }
                     }
                     Spacer(minLength: 4)
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                 }
             }
         }
@@ -365,11 +365,11 @@ struct WeekPlanView: View {
 
     private func chip(_ sport: String, removable: Bool, remove: @escaping () -> Void) -> some View {
         HStack(spacing: 5) {
-            Image(systemName: sportSymbol(sport)).font(.system(size: 11, weight: .semibold))
+            Image(systemName: sportSymbol(sport)).scaledFont(11, weight: .semibold)
             Text(sportLabel(sport)).font(Typo.caption.weight(.semibold))
             if removable {
                 Button(action: remove) {
-                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).padding(3)
+                    Image(systemName: "xmark").scaledFont(9, weight: .bold).padding(3)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.f("Odebrat %@", sportLabel(sport)))
@@ -591,7 +591,7 @@ struct WeekPlanView: View {
     private func row(_ s: WeekSessionDraft) -> some View {
         Card(padding: 14) {
             HStack(alignment: .center, spacing: 12) {
-                Image(systemName: sportSymbol(s.sport)).font(.system(size: 17)).foregroundStyle(Palette.amber)
+                Image(systemName: sportSymbol(s.sport)).scaledFont(17, cap: .denseCap).foregroundStyle(Palette.amber)
                     .frame(width: 38, height: 38).background(Palette.amberSoft, in: Circle())
                 VStack(alignment: .leading, spacing: 3) {
                     Text(Fmt.capitalized(Fmt.dayHeading(s.date))).font(Typo.caption).foregroundStyle(Palette.muted)
@@ -617,7 +617,7 @@ struct WeekPlanView: View {
                 case .waiting, .building: ProgressView()
                 case .saved: Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.green)
                 case .failed: Image(systemName: "exclamationmark.circle").foregroundStyle(Palette.rust)
-                case .ready: Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                case .ready: Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                 }
             }
         }

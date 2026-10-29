@@ -139,7 +139,7 @@ struct PlannedSendSheet: View {
     }
 
     private func symbol(_ name: String) -> some View {
-        Image(systemName: name).font(.system(size: 17, weight: .medium)).foregroundStyle(Palette.ink)
+        Image(systemName: name).scaledFont(17, weight: .medium, cap: .denseCap).foregroundStyle(Palette.ink)
             .frame(width: 36, height: 36).background(Palette.card, in: Circle())
     }
 

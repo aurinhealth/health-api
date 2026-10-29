@@ -19,7 +19,7 @@ struct SettingsView: View {
             .background(Palette.settingsBackground.ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
+                    Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
                         .accessibilityLabel("Zavřít")
                 }
             }
@@ -159,7 +159,7 @@ struct SettingsMenu: View {
                 Button(action: contact) {
                     SettingsRow(icon: SettingsIcon(systemImage: "envelope", color: Palette.indigo), title: "Kontaktovat nás", chevron: false)
                         .overlay(alignment: .trailing) {
-                            Image(systemName: "arrow.up.right.square").font(.system(size: 14)).foregroundStyle(Palette.faint)
+                            Image(systemName: "arrow.up.right.square").scaledFont(14).foregroundStyle(Palette.faint)
                                 .padding(.trailing, 18).accessibilityHidden(true)
                         }
                 }

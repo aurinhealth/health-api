@@ -229,7 +229,7 @@ struct CoachSubjectCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: subject.symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(subject.color)
+            Image(systemName: subject.symbol).scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(subject.color)
                 .frame(width: 34, height: 34).background(subject.color.opacity(0.14), in: Circle())
             VStack(alignment: .leading, spacing: 1) {
                 Text(verbatim: L10n.tr(subject.label)).font(Typo.caption).foregroundStyle(Palette.muted)

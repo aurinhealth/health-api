@@ -414,7 +414,7 @@ struct ShareEditView: View {
     private var header: some View {
         HStack {
             Button { dismiss() } label: {
-                Image(systemName: "chevron.left").font(.system(size: 18, weight: .semibold)).foregroundStyle(Palette.secondary)
+                Image(systemName: "chevron.left").scaledFont(18, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.secondary)
                     .frame(width: 44, height: 44, alignment: .leading)
             }
             .accessibilityLabel(L10n.tr("Zpět"))
@@ -447,7 +447,7 @@ struct ShareEditView: View {
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(on ? Palette.ink : Palette.ink.opacity(0.08), lineWidth: on ? 2 : 1))
             .overlay(alignment: .topTrailing) {
                 if on {
-                    Image(systemName: "checkmark").font(.system(size: 10, weight: .heavy)).foregroundStyle(Palette.onButton)
+                    Image(systemName: "checkmark").scaledFont(10, weight: .heavy, cap: .denseCap).foregroundStyle(Palette.onButton)
                         .frame(width: 20, height: 20).background(Palette.button, in: Circle())
                         .padding(7)
                 }

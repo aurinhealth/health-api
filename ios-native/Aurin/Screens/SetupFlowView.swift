@@ -265,7 +265,7 @@ struct SetupFlowView: View {
         Button { isOn.wrappedValue.toggle() } label: {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: isOn.wrappedValue ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 24, weight: .regular))
+                    .scaledFont(24, weight: .regular)
                     .foregroundStyle(isOn.wrappedValue ? Palette.green : Palette.faint)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title).font(Typo.small).foregroundStyle(Palette.ink)
@@ -368,7 +368,7 @@ struct SetupFlowView: View {
                 Text(birthYear.isEmpty ? L10n.tr("Rok") : birthYear).font(.body)
                     .foregroundStyle(birthYear.isEmpty ? Palette.faint : Palette.ink)
                 Image(systemName: yearWheel ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.muted)
+                    .scaledFont(12, weight: .semibold).foregroundStyle(Palette.muted)
             }
             .padding(.horizontal, 16)
             .frame(minHeight: 50)
@@ -708,7 +708,7 @@ struct NumberStepper: View {
             .frame(minWidth: 86)
             Button { value = min(range.upperBound, value + step) } label: { Image(systemName: "plus").frame(width: 38, height: 38).background(Palette.track, in: Circle()) }
         }
-        .font(.system(size: 15, weight: .semibold))
+        .scaledFont(15, weight: .semibold)
         .foregroundStyle(Palette.ink)
         .buttonStyle(.plain)
         .padding(.horizontal, 16).padding(.vertical, 10)

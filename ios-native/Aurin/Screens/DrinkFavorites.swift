@@ -91,7 +91,7 @@ struct DrinkPresetRow: View {
             HStack(spacing: 8) {
                 Group {
                     if busy == p.id { ProgressView().controlSize(.small) }
-                    else { Image(systemName: done == p.id ? "checkmark" : kind?.symbol ?? "drop.fill").font(.system(size: 14, weight: .semibold)) }
+                    else { Image(systemName: done == p.id ? "checkmark" : kind?.symbol ?? "drop.fill").scaledFont(14, weight: .semibold, cap: .denseCap) }
                 }
                 .foregroundStyle(Palette.blue)
                 .frame(width: 18)

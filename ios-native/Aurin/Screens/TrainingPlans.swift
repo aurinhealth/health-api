@@ -262,7 +262,7 @@ struct PlanWeeksChart: View {
                         Spacer(minLength: 0)
                         if !compact, let label = bar.done.map({ "\($0)" + Fmt.percentSign }) ?? bar.minutes.map(hoursLabel) {
                             Text(label)
-                                .font(.system(size: 11, weight: .semibold))
+                                .scaledFont(11, weight: .semibold)
                                 .foregroundStyle(bar.done != nil ? color : Palette.secondary)
                                 .lineLimit(1).minimumScaleFactor(0.7)
                         }
@@ -353,7 +353,7 @@ struct PlanWeekRow: View {
                 }
             }
             if chevron {
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint).padding(.top, 2)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint).padding(.top, 2)
             }
         }
         .padding(.vertical, 12)
@@ -417,7 +417,7 @@ struct TrainingPlanCard: View {
             HStack {
                 Text("Vybrat plán").font(Typo.sentence(22)).foregroundStyle(Palette.ink)
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
         }
     }
@@ -428,7 +428,7 @@ struct TrainingPlanCard: View {
             HStack {
                 Text(result.name).font(Typo.sentence(22)).foregroundStyle(Palette.ink)
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
         }
     }
@@ -555,7 +555,7 @@ struct ActivePlanSummary: View {
             if let countdown {
                 Rectangle().fill(Palette.hairline).frame(height: 1)
                 HStack(spacing: 12) {
-                    Image(systemName: "flag.checkered").font(.system(size: 14, weight: .semibold)).foregroundStyle(Palette.green)
+                    Image(systemName: "flag.checkered").scaledFont(14, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.green)
                         .frame(width: 32, height: 32).background(Palette.greenSoft, in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
                         Text(verbatim: countdown.0).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
@@ -635,7 +635,7 @@ struct TrainingPlansSheet: View {
             }
             Spacer(minLength: 8)
             Text(L10n.plural("%lld týdnů", template.weeksCount)).font(.body).foregroundStyle(Palette.muted)
-            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+            Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
         .contentShape(Rectangle())
@@ -786,7 +786,7 @@ struct PlanProposalCard: View {
         Card {
             if let done {
                 HStack(spacing: 12) {
-                    Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.onAccent)
+                    Image(systemName: "checkmark").scaledFont(13, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                         .frame(width: 28, height: 28).background(Palette.green, in: Circle())
                     Text(done).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     Spacer()
@@ -828,7 +828,7 @@ struct PlanProposalCard: View {
         let on = option.id == selected?.id
         return HStack(spacing: 12) {
             Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 21)).foregroundStyle(on ? Palette.amberBar : Palette.faint)
+                .scaledFont(21).foregroundStyle(on ? Palette.amberBar : Palette.faint)
             Text(option.label).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
             if option.recommended == true {
                 Text("doporučeno").font(.caption2.weight(.medium)).foregroundStyle(Palette.amber)

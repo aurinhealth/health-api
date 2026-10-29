@@ -43,7 +43,7 @@ struct MyWorkoutsView: View {
                                 Button { editing = EditorTarget(workout: nil, sport: s.id) } label: { Label(L10n.tr(s.label), systemImage: s.symbol) }
                             }
                         } label: {
-                            Image(systemName: "plus").font(.system(size: 18, weight: .semibold)).foregroundStyle(Palette.ink)
+                            Image(systemName: "plus").scaledFont(18, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                                 .frame(width: 40, height: 40).background(Palette.card, in: Circle())
                         }
                         .disabled(model.demo)
@@ -113,7 +113,7 @@ struct MyWorkoutsView: View {
         HStack(spacing: 12) {
             Button { plan(w) } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: sport.symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(sport.color)
+                    Image(systemName: sport.symbol).scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(sport.color)
                         .frame(width: 32, height: 32).background(Palette.track, in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
@@ -141,7 +141,7 @@ struct MyWorkoutsView: View {
                 Button(role: .destructive) { deleting = w } label: { Label("Smazat", systemImage: "trash") }
             } label: {
                 Group { if busy == w.id { ProgressView() } else { Image(systemName: "ellipsis") } }
-                    .font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                    .scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                     .frame(width: 32, height: 32)
             }
             .disabled(model.demo || busy != nil)

@@ -180,7 +180,7 @@ struct DataAgePill: View {
             if health.enabled, let last = health.lastSync, let text = Self.text(last: last, now: context.date) {
                 Button { Task { await model.refresh() } } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "clock").font(.system(size: 11, weight: .semibold))
+                        Image(systemName: "clock").scaledFont(11, weight: .semibold)
                         Text(verbatim: text + L10n.tr(" · obnovit"))
                     }
                     .font(.footnote.weight(.medium))
@@ -280,7 +280,7 @@ struct WeekStrip: View {
                     Circle().stroke(Palette.ink.opacity(0.3), lineWidth: 1.5)
                 }
                 Text(verbatim: Fmt.dayNumber(day.date))
-                    .font(.system(size: 15, weight: .semibold))
+                    .scaledFont(15, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(isToday && selected ? Palette.background : selected ? (color ?? Palette.ink) : future ? Palette.faint : Palette.ink)
             }
             .frame(width: 38, height: 38)
@@ -412,7 +412,7 @@ struct HeaderIcon: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 19, weight: .medium))
+                .scaledFont(19, weight: .medium)
                 .foregroundStyle(Palette.ink)
                 .offset(y: -lift)
                 .padding(.horizontal, Self.padding)
@@ -496,7 +496,7 @@ struct DayCapsule: View {
                 .disabled(!canGoForward)
                 .accessibilityLabel("Další den")
             }
-            .font(.system(size: 13, weight: .semibold))
+            .scaledFont(13, weight: .semibold)
             .foregroundStyle(Palette.muted)
             .buttonStyle(.plain)
             .padding(.horizontal, 2)
@@ -619,7 +619,7 @@ struct MorningCheckinCard: View {
                     let on: Bool = chosen == option.id
                     Button { Task { await choose(on ? nil : option.id) } } label: {
                         VStack(spacing: 4) {
-                            Text(verbatim: option.symbol).font(.system(size: 22))
+                            Text(verbatim: option.symbol).scaledFont(22)
                             Text(L10n.tr(option.label)).font(.footnote.weight(.semibold))
                                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                                 .lineLimit(1).minimumScaleFactor(0.8)
@@ -789,10 +789,10 @@ struct BedtimeSetupCard: View {
     var body: some View {
         Card {
             HStack(spacing: 12) {
-                Image(systemName: "moon.zzz").font(.system(size: 20)).foregroundStyle(Palette.indigo)
+                Image(systemName: "moon.zzz").scaledFont(20).foregroundStyle(Palette.indigo)
                 Text("Kdy jít spát?").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
             }
         }
     }
@@ -821,7 +821,7 @@ struct ConnectionProblemCard: View {
                     WidgetHeader(title: "Propojení", color: Palette.rust)
                     ForEach(problems) { provider in
                         HStack(spacing: 12) {
-                            Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 16)).foregroundStyle(Palette.rust)
+                            Image(systemName: "exclamationmark.triangle.fill").scaledFont(16).foregroundStyle(Palette.rust)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(provider.name ?? provider.id).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                                 if let problem = provider.problemText {

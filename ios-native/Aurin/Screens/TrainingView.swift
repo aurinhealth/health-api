@@ -171,7 +171,7 @@ struct StrainHero: View {
             HStack(spacing: 4) {
                 Text(title).font(Typo.body).foregroundStyle(Palette.muted)
                 if !isAhead {
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                 }
             }
             HStack(alignment: .lastTextBaseline, spacing: 14) {
@@ -247,7 +247,7 @@ struct WeekStrainBars: View {
             HStack(spacing: 10) {
                 ForEach(days) { day in
                     Text(Fmt.weekdayShort(day.date))
-                        .font(.system(size: 12, weight: day.today ? .semibold : .regular))
+                        .scaledFont(12, weight: day.today ? .semibold : .regular)
                         .foregroundStyle(day.today ? Palette.ink : Palette.faint)
                         .frame(maxWidth: .infinity)
                 }
@@ -386,13 +386,13 @@ struct NextSession: View {
                     Text(verbatim: when.uppercased(with: Fmt.locale))
                         .font(.caption.weight(.medium)).tracking(1.9)
                 } icon: {
-                    Image(systemName: "calendar").font(.system(size: 12, weight: .medium))
+                    Image(systemName: "calendar").scaledFont(12, weight: .medium)
                 }
                 .foregroundStyle(Palette.muted)
                 Spacer(minLength: 8)
                 Text(meta).font(Typo.small).foregroundStyle(Palette.muted).lineLimit(1)
                 if route != nil {
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
                 }
             }
             HStack(spacing: 12) {
@@ -520,7 +520,7 @@ struct FormWidget: View {
             SizedWidgetBody(size: size) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Text(Fmt.signed(form.form)).font(Typo.number(34)).foregroundStyle(Palette.ink)
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
                 }
                 Text(form.label).font(Typo.caption).foregroundStyle(zoneColor(form.zone)).lineLimit(1)
             } chart: { height in
@@ -777,7 +777,7 @@ struct ZoneWeekBars: View {
                         .frame(height: 1)
                         .offset(y: -h * scaled(target, 0, top))
                     Text(verbatim: L10n.f("cíl %@", Fmt.int(target)))
-                        .font(.system(size: 9, weight: .medium))
+                        .scaledFont(9, weight: .medium, cap: .denseCap)
                         .foregroundStyle(Palette.green)
                         .lineLimit(1).fixedSize()
                         .frame(width: geo.size.width, alignment: .trailing)
@@ -789,7 +789,7 @@ struct ZoneWeekBars: View {
             HStack(spacing: spacing) {
                 ForEach(weeks.indices, id: \.self) { i in
                     Text(verbatim: Self.label(weeks[i]))
-                        .font(.system(size: 9, weight: i == weeks.count - 1 ? .semibold : .regular))
+                        .scaledFont(9, weight: i == weeks.count - 1 ? .semibold : .regular)
                         .foregroundStyle(i == weeks.count - 1 ? Palette.ink : Palette.faint)
                         .lineLimit(1)
                         .fixedSize()

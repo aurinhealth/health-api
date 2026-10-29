@@ -426,7 +426,7 @@ struct CycleLogSheet: View {
             VStack(spacing: 8) {
                 HStack(spacing: 2) {
                     ForEach(Array(symbols.enumerated()), id: \.offset) { _, symbol in
-                        Image(systemName: symbol).font(.system(size: 17, weight: .medium))
+                        Image(systemName: symbol).scaledFont(17, weight: .medium)
                     }
                 }
                 Text(L10n.tr(title)).font(.footnote.weight(.medium)).lineLimit(1).minimumScaleFactor(0.8)
@@ -692,7 +692,7 @@ struct CycleSettingsView: View {
             HStack(alignment: .top) {
                 Text(verbatim: value).font(Typo.number(26)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.6)
                 Spacer(minLength: 4)
-                if chevron { Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint) }
+                if chevron { Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint) }
             }
             Text(L10n.tr(label)).font(Typo.caption).foregroundStyle(Palette.muted)
         }
@@ -748,7 +748,7 @@ struct LifeStagePicker: View {
                     let on = (settings?.stage ?? "regular") == option.id
                     Button { choose(option.id) } label: {
                         VStack(alignment: .leading, spacing: 12) {
-                            Image(systemName: option.symbol).font(.system(size: 19, weight: .medium))
+                            Image(systemName: option.symbol).scaledFont(19, weight: .medium, cap: .denseCap)
                                 .foregroundStyle(on ? Palette.pink : Palette.secondary)
                                 .frame(width: 42, height: 42)
                                 .background(on ? Palette.pink.opacity(0.18) : Palette.track, in: Circle())
@@ -761,7 +761,7 @@ struct LifeStagePicker: View {
                         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? Palette.pink : Color.clear, lineWidth: 1.5))
                         .overlay(alignment: .topTrailing) {
                             if on {
-                                Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(Palette.onAccent)
+                                Image(systemName: "checkmark").scaledFont(11, weight: .heavy, cap: .denseCap).foregroundStyle(Palette.onAccent)
                                     .frame(width: 22, height: 22).background(Palette.pink, in: Circle()).padding(10)
                             }
                         }
@@ -807,7 +807,7 @@ struct ContraceptionPicker: View {
                     let on = (model.cycle?.settings?.contraception ?? "none") == option.id
                     Button { choose(option.id) } label: {
                         VStack(alignment: .leading, spacing: 12) {
-                            Image(systemName: option.symbol).font(.system(size: 19, weight: .medium))
+                            Image(systemName: option.symbol).scaledFont(19, weight: .medium, cap: .denseCap)
                                 .foregroundStyle(on ? Palette.pink : Palette.secondary)
                                 .frame(width: 42, height: 42)
                                 .background(on ? Palette.pink.opacity(0.18) : Palette.track, in: Circle())
@@ -820,7 +820,7 @@ struct ContraceptionPicker: View {
                         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? Palette.pink : Color.clear, lineWidth: 1.5))
                         .overlay(alignment: .topTrailing) {
                             if on {
-                                Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)).foregroundStyle(Palette.onAccent)
+                                Image(systemName: "checkmark").scaledFont(11, weight: .heavy, cap: .denseCap).foregroundStyle(Palette.onAccent)
                                     .frame(width: 22, height: 22).background(Palette.pink, in: Circle()).padding(10)
                             }
                         }

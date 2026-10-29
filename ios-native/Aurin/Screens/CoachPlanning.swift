@@ -227,7 +227,7 @@ struct WeekRevisionCard: View {
                 Card {
                     HStack(spacing: 7) {
                         Image(systemName: changes.isEmpty || applied ? "checkmark.circle.fill" : "sparkles")
-                            .font(.system(size: 14, weight: .semibold))
+                            .scaledFont(14, weight: .semibold)
                             .foregroundStyle(changes.isEmpty || applied ? Palette.green : Palette.amber)
                         Text("Revize po tréninku").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
                     }
@@ -260,7 +260,7 @@ struct WeekRevisionCard: View {
     private func row(_ c: WeekRevision.Change, applied: Bool) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Text(Fmt.capitalized(Fmt.weekdayShort(c.date))).font(Typo.small.weight(.medium)).foregroundStyle(Palette.muted).frame(width: 30, alignment: .leading)
-            Image(systemName: c.sport == "run" ? "figure.run" : "bicycle").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.amber)
+            Image(systemName: c.sport == "run" ? "figure.run" : "bicycle").scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.amber)
                 .frame(width: 30, height: 30).background(Palette.amberSoft, in: Circle())
             VStack(alignment: .leading, spacing: 2) {
                 Text(Self.line(c.from)).font(Typo.small).foregroundStyle(Palette.faint).strikethrough()

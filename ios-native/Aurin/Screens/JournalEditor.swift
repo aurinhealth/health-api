@@ -130,7 +130,7 @@ struct JournalEditorView: View {
                     JournalIcon(symbol: "plus", color: Palette.ink)
                     Text("Vlastní položka").font(.body.weight(.medium)).foregroundStyle(Palette.ink)
                     Spacer(minLength: 8)
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                 }
                 .frame(minHeight: 54)
                 .contentShape(Rectangle())

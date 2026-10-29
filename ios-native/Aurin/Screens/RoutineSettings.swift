@@ -64,7 +64,7 @@ struct GymRestGroup: View {
                     Spacer(minLength: 8)
                     Text(GymRestSettingsView.label(value.wrappedValue)).font(.subheadline)
                         .foregroundStyle(shown ? Palette.ink : Palette.muted)
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.up.chevron.down").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
                         .opacity(shown ? 0 : 1)
                 }
                 .padding(.leading, 16).padding(.trailing, 14).frame(minHeight: 50)

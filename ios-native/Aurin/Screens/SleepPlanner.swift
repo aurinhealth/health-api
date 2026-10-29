@@ -172,10 +172,10 @@ struct SleepPlanner: View {
     private func tile(title: String, symbol: String, color: Color, time: Int, note: String?, chevron: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(color)
+                Image(systemName: symbol).scaledFont(12, weight: .semibold).foregroundStyle(color)
                 Text(L10n.tr(title)).font(Typo.small).foregroundStyle(Palette.muted)
                 Spacer(minLength: 0)
-                if chevron { Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint) }
+                if chevron { Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint) }
             }
             Text(ClockText.format(minutes: time)).font(Typo.number(36)).foregroundStyle(Palette.ink)
                 .contentTransition(.numericText())
@@ -252,7 +252,7 @@ struct SleepDial: View {
 
     private func handle(symbol: String, color: Color, at minutes: Int, r: CGFloat, c: CGPoint, label: String, change: @escaping (Int) -> Void) -> some View {
         Image(systemName: symbol)
-            .font(.system(size: 13, weight: .bold))
+            .scaledFont(13, weight: .bold, cap: .denseCap)
             .foregroundStyle(color)
             .frame(width: 32, height: 32)
             .background(Circle().fill(Palette.card))

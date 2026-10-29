@@ -23,7 +23,7 @@ struct LoginView: View {
                 HStack(spacing: 10) {
                     if page == Self.signIn {
                         Button { withAnimation { page = Self.signIn - 1 } } label: {
-                            Image(systemName: "chevron.left").font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.ink)
+                            Image(systemName: "chevron.left").scaledFont(17, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                                 .frame(width: 40, height: 40).background(Palette.card.opacity(0.7), in: Circle())
                         }
                         .accessibilityLabel(L10n.tr("Zpět"))
@@ -149,7 +149,7 @@ struct LoginView: View {
                 Task { await model.signIn() }
             } label: {
                 HStack(spacing: 10) {
-                    if model.signingInWith == .google { ProgressView().tint(Palette.ink) } else { Text(verbatim: "G").font(.system(size: 17, weight: .bold)) }
+                    if model.signingInWith == .google { ProgressView().tint(Palette.ink) } else { Text(verbatim: "G").scaledFont(17, weight: .bold) }
                     Text("Pokračovat přes Google")
                 }
                 .modifier(SignInButtonLook())
@@ -224,7 +224,7 @@ struct PasskeyOfferSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 14) {
-                Image(systemName: "faceid").font(.system(size: 40, weight: .light)).foregroundStyle(Palette.green)
+                Image(systemName: "faceid").scaledFont(40, weight: .light).foregroundStyle(Palette.green)
                 Text("Příště přes Face ID").font(Typo.sentence(30, relativeTo: .title)).foregroundStyle(Palette.ink)
                 Text("Aurin si uloží přístupový klíč do tvého iPhonu. Příště se přihlásíš obličejem nebo otiskem, bez kódu z e-mailu.")
                     .font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)

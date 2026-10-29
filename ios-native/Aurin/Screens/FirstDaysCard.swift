@@ -82,7 +82,7 @@ struct FirstDaysCard: View {
     private func row(_ title: LocalizedStringKey, _ note: LocalizedStringKey, done: Bool) -> some View {
         HStack(spacing: 12) {
             Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 24, weight: .regular))
+                .scaledFont(24, weight: .regular)
                 .foregroundStyle(done ? Palette.green : Palette.faint)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(Typo.bodyStrong).foregroundStyle(done ? Palette.muted : Palette.ink)
@@ -91,7 +91,7 @@ struct FirstDaysCard: View {
             }
             .multilineTextAlignment(.leading)
             Spacer(minLength: 8)
-            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())

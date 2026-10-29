@@ -57,7 +57,7 @@ struct LibraryTile: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top) {
                     Image(systemName: symbol)
-                        .font(.system(size: 14, weight: .semibold))
+                        .scaledFont(14, weight: .semibold, cap: .denseCap)
                         .foregroundStyle(Palette.onAccent)
                         .frame(width: 32, height: 32)
                         .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -105,7 +105,7 @@ struct LibrarySportPanel: View {
         RouteLink(route: .workoutLibrary(sport.id)) {
             VStack(alignment: .leading, spacing: 6) {
                 Image(systemName: sport.symbol)
-                    .font(.system(size: 15, weight: .semibold))
+                    .scaledFont(15, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(.white)
                     .frame(width: 32, height: 32)
                     .background(sport.color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -131,12 +131,12 @@ struct GymLibrarySection: View {
             RouteLink(route: .gymBuilder) {
                 HStack(spacing: 12) {
                     Image(systemName: "sparkles")
-                        .font(.system(size: 16, weight: .semibold)).foregroundStyle(.white)
+                        .scaledFont(16, weight: .semibold, cap: .denseCap).foregroundStyle(.white)
                         .frame(width: 38, height: 38)
                         .background(Palette.green, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     Text("Sestavit trénink").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                 }
                 .padding(14)
                 .cardSurface(cornerRadius: 18)
@@ -156,7 +156,7 @@ struct GymLibrarySection: View {
                             }
                         }
                         Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                        Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                     }
                     .padding(14)
                     .cardSurface(cornerRadius: 18)
@@ -504,7 +504,7 @@ struct LibraryWorkoutCard: View {
 struct AIMark: View {
     var body: some View {
         Image(systemName: "sparkle")
-            .font(.system(size: 11, weight: .semibold))
+            .scaledFont(11, weight: .semibold)
             .foregroundStyle(Palette.amber)
             .accessibilityLabel(Text("Navrženo AI"))
     }
@@ -770,7 +770,7 @@ struct ExerciseCatalog: View {
                 }
             }
             Spacer(minLength: 8)
-            Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+            Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
         }
         .padding(.vertical, 10)
         .contentShape(Rectangle())

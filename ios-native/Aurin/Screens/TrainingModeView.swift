@@ -553,7 +553,7 @@ struct TrainingModeView: View {
                 HStack(spacing: 8) {
                     Button { move(target - index) } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: "dumbbell").font(.system(size: 15)).foregroundStyle(Palette.secondary)
+                            Image(systemName: "dumbbell").scaledFont(15, cap: .denseCap).foregroundStyle(Palette.secondary)
                                 .frame(width: 34, height: 34).background(Palette.track, in: Circle())
                             VStack(alignment: .leading, spacing: 1) {
                                 Text("Další").font(Typo.caption).foregroundStyle(Palette.muted)

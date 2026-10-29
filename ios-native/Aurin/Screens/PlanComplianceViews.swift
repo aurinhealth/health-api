@@ -49,10 +49,10 @@ struct PlanComplianceCard: View {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Splnění plánu").font(.caption2.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
                         Text(verbatim: compliance.word ?? ComplianceScale.word(compliance.percent))
-                            .font(.system(size: 17, weight: .semibold)).foregroundStyle(ComplianceScale.color(compliance.percent))
+                            .scaledFont(17, weight: .semibold).foregroundStyle(ComplianceScale.color(compliance.percent))
                     }
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
                 }
                 .padding(.bottom, 10)
                 PlanComplianceRows(compliance: compliance, run: run)
@@ -97,7 +97,7 @@ struct PlanComplianceRows: View {
             (Text(verbatim: done).foregroundStyle(Palette.ink) + Text(verbatim: plan.map { " / " + $0 } ?? "").foregroundStyle(Palette.faint))
                 .font(Typo.body).lineLimit(1).minimumScaleFactor(0.8)
             Text(verbatim: percent.map { "\($0)" + Fmt.percentSign } ?? "")
-                .font(.system(size: 13, weight: .medium)).foregroundStyle(percent.map(ComplianceScale.color) ?? .clear)
+                .scaledFont(13, weight: .medium, cap: .denseCap).foregroundStyle(percent.map(ComplianceScale.color) ?? .clear)
                 .frame(width: 46, alignment: .trailing)
         }
         .padding(.vertical, 9)
@@ -142,7 +142,7 @@ struct PlanComplianceSheet: View {
                     ComplianceRing(percent: compliance.percent, size: 88)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(verbatim: compliance.word ?? ComplianceScale.word(compliance.percent))
-                            .font(.system(size: 18, weight: .semibold)).foregroundStyle(ComplianceScale.color(compliance.percent))
+                            .scaledFont(18, weight: .semibold).foregroundStyle(ComplianceScale.color(compliance.percent))
                         if let basis = basisLine { Text(verbatim: basis).font(Typo.caption).foregroundStyle(Palette.muted) }
                     }
                 }
@@ -265,7 +265,7 @@ struct ComplianceStepsChart: View {
                             .frame(width: max(w - 4, 1), height: max(geo.size.height - y(v), 1))
                             .offset(x: x0 + 2, y: y(v))
                     } else {
-                        Text(verbatim: "–").font(.system(size: 10)).foregroundStyle(Palette.faint)
+                        Text(verbatim: "–").scaledFont(10, cap: .denseCap).foregroundStyle(Palette.faint)
                             .frame(width: max(w, 1)).offset(x: x0, y: geo.size.height - 14)
                     }
                 }
@@ -325,7 +325,7 @@ struct GymComplianceSection: View {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text("Splnění plánu").font(.caption2.weight(.medium)).tracking(1.6).textCase(.uppercase).foregroundStyle(Palette.muted)
                                 Text(verbatim: compliance.word ?? ComplianceScale.word(compliance.percent))
-                                    .font(.system(size: 17, weight: .semibold)).foregroundStyle(ComplianceScale.color(compliance.percent))
+                                    .scaledFont(17, weight: .semibold).foregroundStyle(ComplianceScale.color(compliance.percent))
                             }
                             Spacer(minLength: 0)
                         }

@@ -122,7 +122,7 @@ struct PlanEditorSheet: View {
                     if on {
                         HStack(spacing: 3) {
                             Text(verbatim: parts.subtitle(part, day: day)).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
-                            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Palette.faint)
+                            Image(systemName: "chevron.right").scaledFont(9, weight: .semibold).foregroundStyle(Palette.faint)
                                 .accessibilityHidden(true)
                         }
                     }
@@ -202,10 +202,10 @@ struct PlanEditorSheet: View {
     @ViewBuilder
     private func status(_ offset: Int, _ exercise: GymExercise) -> some View {
         if exercise.workCount > 0, exercise.doneCount >= exercise.workCount {
-            Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(Palette.onAccent)
+            Image(systemName: "checkmark").scaledFont(12, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                 .frame(width: 28, height: 28).background(Palette.green, in: Circle())
         } else if offset == current || exercise.doneCount > 0 {
-            Text("\(exercise.doneCount)/\(exercise.workCount)").font(.system(size: 10, weight: .bold)).foregroundStyle(Palette.amber)
+            Text("\(exercise.doneCount)/\(exercise.workCount)").scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(Palette.amber)
                 .frame(width: 28, height: 28).overlay(Circle().stroke(Palette.amber, lineWidth: 2))
         } else {
             Circle().stroke(Palette.hairline, lineWidth: 1.5).frame(width: 28, height: 28)
@@ -341,7 +341,7 @@ struct ExercisePicker: View {
                                 Spacer()
                                 if used.contains(ex.name) { Text("v plánu").font(Typo.caption).foregroundStyle(Palette.faint) }
                                 if let liked = ex.liked {
-                                    Image(systemName: liked ? "hand.thumbsup" : "hand.thumbsdown").font(.system(size: 13))
+                                    Image(systemName: liked ? "hand.thumbsup" : "hand.thumbsdown").scaledFont(13)
                                         .foregroundStyle(liked ? Palette.green : Palette.faint)
                                         .accessibilityLabel(L10n.tr(liked ? "Baví mě" : "Nebaví mě"))
                                 }

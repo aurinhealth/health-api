@@ -349,7 +349,7 @@ struct MetricRow: View {
                 Spacer()
                 Text(verbatim: value).font(Typo.number(22)).foregroundStyle(Palette.ink)
                 if let unit { Text(unit).font(Typo.small).foregroundStyle(Palette.faint) }
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(12, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.faint)
             }
             .padding(.vertical, 13)
             .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }

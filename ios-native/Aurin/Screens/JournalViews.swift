@@ -86,7 +86,7 @@ struct JournalAnswerButtons: View {
 
     private func button(_ value: Int, symbol: String, label: String) -> some View {
         Button { choose(value) } label: {
-            Image(systemName: symbol).font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.secondary)
+            Image(systemName: symbol).scaledFont(13, weight: .bold, cap: .denseCap).foregroundStyle(Palette.secondary)
                 .frame(width: 34, height: 34).background(Palette.track, in: Circle())
         }
         .buttonStyle(.plain)
@@ -104,7 +104,7 @@ struct JournalStateMark: View {
         let own = item.fromData != true && item.fixed == nil
         let color = own ? (yes ? Palette.green : Palette.rust) : Palette.amber
         Image(systemName: yes ? "checkmark" : "xmark")
-            .font(.system(size: 13, weight: .bold))
+            .scaledFont(13, weight: .bold, cap: .denseCap)
             .foregroundStyle(own ? Palette.onAccent : color)
             .frame(width: 34, height: 34)
             .background(own ? color : color.opacity(0.18), in: Circle())
@@ -170,7 +170,7 @@ struct JournalHealthCard: View {
         let color = effect.effect < 0 ? Palette.rust : Palette.green
         return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Image(systemName: effect.icon).font(.system(size: 15, weight: .medium)).foregroundStyle(color)
+                Image(systemName: effect.icon).scaledFont(15, weight: .medium).foregroundStyle(color)
                 Text(verbatim: effect.name).font(Typo.sentence(19)).foregroundStyle(Palette.secondary).lineLimit(1)
             }
             HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -293,7 +293,7 @@ struct JournalView: View {
                         }
                     } label: { Label("Vypnout Deník", systemImage: "eye.slash") }
                 } label: {
-                    Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                    Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                         .frame(width: 36, height: 36).background(Palette.card, in: Circle())
                 }
                 .accessibilityLabel(L10n.tr("Další možnosti"))
@@ -397,7 +397,7 @@ struct JournalDayEditor: View {
     @ViewBuilder private func mark(_ state: String) -> some View {
         switch state {
         case "done":
-            Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Palette.green)
+            Image(systemName: "checkmark").scaledFont(11, weight: .bold, cap: .denseCap).foregroundStyle(Palette.green)
                 .frame(width: 26, height: 26).background(Palette.green.opacity(0.18), in: Circle())
         case "partial":
             Circle().stroke(Palette.amber, lineWidth: 2).frame(width: 24, height: 24).frame(width: 26, height: 26)
@@ -424,7 +424,7 @@ struct JournalDayEditor: View {
             HStack(spacing: 10) {
                 Text(verbatim: item.time ?? "").font(.footnote).foregroundStyle(Palette.faint)
                     .frame(width: 40, alignment: .leading)
-                Image(systemName: item.icon).font(.system(size: 16, weight: .medium)).foregroundStyle(JournalStyle.color(item.category))
+                Image(systemName: item.icon).scaledFont(16, weight: .medium, cap: .denseCap).foregroundStyle(JournalStyle.color(item.category))
                     .frame(width: 24)
                 Text(verbatim: item.name).font(.body.weight(open ? .medium : .regular))
                     .foregroundStyle(open ? Palette.ink : Palette.secondary).lineLimit(2)
@@ -432,7 +432,7 @@ struct JournalDayEditor: View {
                 if let short = item.short, item.isAnswered {
                     HStack(spacing: 4) {
                         if item.fixed != nil {
-                            Image(systemName: "arrow.triangle.2.circlepath").font(.system(size: 11, weight: .semibold))
+                            Image(systemName: "arrow.triangle.2.circlepath").scaledFont(11, weight: .semibold)
                         }
                         Text(verbatim: short).lineLimit(1)
                     }
@@ -629,14 +629,14 @@ struct JournalImpactLink: View {
             Card {
                 HStack(spacing: 5) {
                     Text("Co na tebe působí").font(Typo.bodyStrong).foregroundStyle(Palette.secondary)
-                    Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
                 }
                 if top.isEmpty {
                     Text("Ukážu, až bude dost dní s ✓ i s ✕.").font(Typo.caption).foregroundStyle(Palette.muted)
                 }
                 ForEach(top.prefix(2)) { effect in
                     HStack(spacing: 8) {
-                        Image(systemName: effect.icon).font(.system(size: 14)).foregroundStyle(Palette.muted).frame(width: 20)
+                        Image(systemName: effect.icon).scaledFont(14, cap: .denseCap).foregroundStyle(Palette.muted).frame(width: 20)
                         Text(verbatim: effect.name).font(.subheadline.weight(.medium)).foregroundStyle(Palette.secondary)
                         Spacer(minLength: 8)
                         Text(verbatim: JournalText.percent(effect.effect)).font(Typo.number(22))
@@ -713,7 +713,7 @@ struct JournalFollowUps: View {
 
     private func stepButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink)
+            Image(systemName: symbol).scaledFont(13, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 30, height: 30).background(Palette.track, in: Circle())
         }
         .buttonStyle(.plain)
@@ -851,7 +851,7 @@ struct JournalValueSheet: View {
 
     private func roundButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.system(size: 20, weight: .medium)).foregroundStyle(Palette.ink)
+            Image(systemName: symbol).scaledFont(20, weight: .medium, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 44, height: 44).background(Palette.track, in: Circle())
         }
         .buttonStyle(.plain)

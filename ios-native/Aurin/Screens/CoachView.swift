@@ -113,14 +113,14 @@ struct CoachView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { withAnimation(.easeOut(duration: 0.25)) { showChats = true } } label: {
-                        Image(systemName: "line.3.horizontal").font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "line.3.horizontal").scaledFont(16, weight: .semibold)
                     }
                     // Not while an answer streams in: it writes into the current conversation.
                     .disabled(sending)
                     .accessibilityLabel("Konverzace")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)) }
+                    Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
                         .accessibilityLabel("Zavřít")
                 }
             }
@@ -285,7 +285,7 @@ struct CoachView: View {
             .chromeGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .shadow(color: .black.opacity(0.08), radius: 6, y: 2)
             Button { Task { await send() } } label: {
-                Image(systemName: "arrow.up").font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.onButton)
+                Image(systemName: "arrow.up").scaledFont(16, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onButton)
                     .frame(width: 40, height: 40).background(Palette.button, in: Circle())
             }
             .disabled(sending || usedUp || (input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && photo == nil) || model.demo)
@@ -302,7 +302,7 @@ struct CoachView: View {
             Button { cameraOpen = true } label: { Label(L10n.tr("Vyfotit"), systemImage: "camera") }
             Button { galleryOpen = true } label: { Label(L10n.tr("Vybrat z Fotek"), systemImage: "photo") }
         } label: {
-            Image(systemName: "camera").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink)
+            Image(systemName: "camera").scaledFont(16, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                 .frame(width: 40, height: 40).contentShape(Circle())
         }
         .chromeGlass(in: Circle())
@@ -319,7 +319,7 @@ struct CoachView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(alignment: .topTrailing) {
                 Button { photo = nil } label: {
-                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                    Image(systemName: "xmark").scaledFont(9, weight: .bold, cap: .denseCap).foregroundStyle(.white)
                         .frame(width: 20, height: 20).background(Color.black.opacity(0.65), in: Circle())
                         // The small × in a 44 pt target, centred where it was.
                         .frame(width: 44, height: 44).contentShape(Rectangle())
@@ -753,7 +753,7 @@ struct ActionCard: View {
                         } label: {
                             VStack(spacing: 1) {
                                 Text(verbatim: Fmt.weekdayShort(day.date)).font(Typo.caption.weight(.medium))
-                                Text(verbatim: Fmt.dayMonth(day.date)).font(.system(size: 10.5)).foregroundStyle(day.fits ? Palette.muted : Palette.ink.opacity(0.25))
+                                Text(verbatim: Fmt.dayMonth(day.date)).scaledFont(10.5, cap: .denseCap).foregroundStyle(day.fits ? Palette.muted : Palette.ink.opacity(0.25))
                             }
                             .foregroundStyle(day.fits ? Palette.ink : Palette.ink.opacity(0.3))
                             .frame(width: 52, height: 44)

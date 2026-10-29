@@ -58,7 +58,7 @@ struct ReportProblemView: View {
                     Button {
                         withAnimation { self.preview = nil; screenshot = nil; photo = nil }
                     } label: {
-                        Image(systemName: "trash").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.rust)
+                        Image(systemName: "trash").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.rust)
                             .frame(width: 36, height: 36)
                     }
                     .buttonStyle(.plain)

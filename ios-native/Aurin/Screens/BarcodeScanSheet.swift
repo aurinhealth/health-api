@@ -106,7 +106,7 @@ struct BarcodeScanSheet: View {
 
     private func circle(_ systemImage: String, label: String, on: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: systemImage).font(.system(size: 15, weight: .semibold))
+            Image(systemName: systemImage).scaledFont(15, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .frame(width: 40, height: 40)
                 .background(on ? Palette.amber : Palette.ink.opacity(0.08), in: Circle())

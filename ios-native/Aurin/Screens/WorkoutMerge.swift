@@ -126,7 +126,7 @@ struct MergeWorkoutsSheet: View {
                 }
                 Spacer(minLength: 8)
                 Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 22)).foregroundStyle(on ? Palette.green : Palette.faint)
+                    .scaledFont(22, cap: .denseCap).foregroundStyle(on ? Palette.green : Palette.faint)
             }
             .padding(.vertical, 11)
             .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }

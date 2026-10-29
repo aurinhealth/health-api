@@ -59,7 +59,7 @@ struct ToolTile: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
-                .font(.system(size: 16, weight: .semibold))
+                .scaledFont(16, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(Palette.onAccent)
                 .frame(width: 34, height: 34)
                 .background(color, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -86,7 +86,7 @@ struct LibraryWidget: View {
                 HStack(spacing: -8) {
                     ForEach(Self.sports.indices, id: \.self) { i in
                         Image(systemName: Self.sports[i].symbol)
-                            .font(.system(size: 14, weight: .semibold))
+                            .scaledFont(14, weight: .semibold, cap: .denseCap)
                             .foregroundStyle(Palette.onAccent)
                             .frame(width: 34, height: 34)
                             .background(Self.sports[i].color, in: Circle())
@@ -95,7 +95,7 @@ struct LibraryWidget: View {
                 }
                 Text("Knihovna tréninků").font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.85)
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity, minHeight: 68, alignment: .leading)
@@ -277,8 +277,8 @@ struct GymBuilderView: View {
             }
         }
         .task {
-            if model.demo { day = earliest }
-            if let d = Self.isoFormatter.date(from: date), d >= earliest { day = d }
+            // The sample day keeps its own date; the real one opens on the day picked.
+            if model.demo { day = earliest } else if let d = Self.isoFormatter.date(from: date), d >= earliest { day = d }
             if let minutes = template?.template.minutes { self.minutes = minutes }
             // Read again on every return, so a list changed in Vybavení shows here (after its save).
             if !model.demo {
@@ -332,7 +332,7 @@ struct GymBuilderView: View {
                     }
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
             }
             .padding(14)
             .cardSurface(cornerRadius: 18)
@@ -398,7 +398,7 @@ struct GymBuilderView: View {
                         Text(needsPlace ? L10n.tr("vyber, kde cvičíš") : Fmt.capitalized(EquipmentView.summary(equipment))).font(Typo.caption).foregroundStyle(Palette.muted)
                     }
                     Spacer()
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.right").scaledFont(12, weight: .semibold).foregroundStyle(Palette.faint)
                 }
                 .padding(14)
                 .cardSurface(cornerRadius: 18)
@@ -502,7 +502,7 @@ struct GymBuilderView: View {
                         .opacity(busy == "adjust" ? 0.45 : 1)
                     Button { Task { await adjust() } } label: {
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 16, weight: .semibold))
+                            .scaledFont(16, weight: .semibold, cap: .denseCap)
                             .foregroundStyle(Palette.onButton)
                             .frame(width: 44, height: 44)
                             .background(Palette.button, in: Circle())
@@ -586,7 +586,7 @@ struct GymBuilderView: View {
                         Button(role: .destructive) { remove(ex.name) } label: { Label("Odebrat", systemImage: "trash") }
                             .disabled(p.exercises.count < 2)
                     } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.ink)
+                        Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
                             .frame(width: 32, height: 32).background(Palette.track, in: Circle())
                     }
                     .accessibilityLabel(L10n.f("Upravit %@", ex.name))
@@ -820,7 +820,7 @@ struct EquipmentView: View {
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: Self.icon(place))
-                        .font(.system(size: 16)).foregroundStyle(on ? Palette.green : Palette.muted)
+                        .scaledFont(16, cap: .denseCap).foregroundStyle(on ? Palette.green : Palette.muted)
                         .frame(width: 36, height: 36)
                         .background(Palette.track, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
@@ -834,7 +834,7 @@ struct EquipmentView: View {
             .buttonStyle(.plain)
             Button { toggleFavorite(place.id) } label: {
                 Image(systemName: place.favorite == true ? "star.fill" : "star")
-                    .font(.system(size: 18)).foregroundStyle(place.favorite == true ? Palette.amber : Palette.faint)
+                    .scaledFont(18, cap: .denseCap).foregroundStyle(place.favorite == true ? Palette.amber : Palette.faint)
                     .frame(width: 40, height: 40).contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1055,7 +1055,7 @@ struct ChoiceCard: View {
         Button(action: action) {
             HStack(spacing: 12) {
                 if let systemImage {
-                    Image(systemName: systemImage).font(.system(size: 18)).foregroundStyle(selected ? Palette.green : Palette.muted).frame(width: 26)
+                    Image(systemName: systemImage).scaledFont(18, cap: .denseCap).foregroundStyle(selected ? Palette.green : Palette.muted).frame(width: 26)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
@@ -1063,7 +1063,7 @@ struct ChoiceCard: View {
                 }
                 Spacer(minLength: 8)
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 22)).foregroundStyle(selected ? Palette.green : Palette.faint)
+                    .scaledFont(22).foregroundStyle(selected ? Palette.green : Palette.faint)
             }
             .padding(.horizontal, 16).padding(.vertical, 13)
             .cardSurface(cornerRadius: 18)

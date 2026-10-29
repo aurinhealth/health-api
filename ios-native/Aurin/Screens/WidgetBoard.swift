@@ -79,7 +79,7 @@ struct WidgetBoard: View {
             HStack {
                 Button { gallery = true } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
+                        .scaledFont(16, weight: .semibold, cap: .denseCap)
                         .foregroundStyle(Palette.ink)
                         .frame(width: 36, height: 36)
                         .background(Palette.card, in: Circle())
@@ -253,7 +253,7 @@ struct EditableWidget: View {
             .overlay(alignment: .topLeading) {
                 Button(action: remove) {
                     Image(systemName: "minus")
-                        .font(.system(size: 12, weight: .bold))
+                        .scaledFont(12, weight: .bold, cap: .denseCap)
                         .foregroundStyle(Palette.onButton)
                         .frame(width: 24, height: 24)
                         .background(Palette.muted, in: Circle())
@@ -439,7 +439,7 @@ struct WidgetSectionTile: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {
                 Image(systemName: section.icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .scaledFont(18, weight: .semibold)
                     .foregroundStyle(section.color)
                 Spacer()
                 Text(String(count)).font(Typo.caption).foregroundStyle(Palette.faint)
@@ -502,7 +502,7 @@ struct WidgetSectionPage: View {
             VStack(alignment: .leading, spacing: 20) {
                 HStack(spacing: 10) {
                     Image(systemName: section.icon)
-                        .font(.system(size: 22, weight: .semibold))
+                        .scaledFont(22, weight: .semibold)
                         .foregroundStyle(section.color)
                     Text(section.title)
                         .font(Typo.sentence(30, relativeTo: .title))
@@ -604,7 +604,7 @@ struct WidgetAddSheet: View {
     private var header: some View {
         HStack(spacing: 10) {
             Image(systemName: kind.section.icon)
-                .font(.system(size: 14, weight: .semibold))
+                .scaledFont(14, weight: .semibold, cap: .denseCap)
                 .foregroundStyle(kind.section.color)
                 .frame(width: 30, height: 30)
                 .background(kind.section.color.opacity(0.16), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -612,7 +612,7 @@ struct WidgetAddSheet: View {
             Spacer()
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .semibold))
+                    .scaledFont(15, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(Palette.ink)
                     .frame(width: 32, height: 32)
             }

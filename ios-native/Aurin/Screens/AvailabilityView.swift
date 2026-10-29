@@ -334,7 +334,7 @@ struct AvailabilityBarRow: View {
                 Text(verbatim: day).font(Typo.bodyStrong).foregroundStyle(minutes == 0 ? Palette.faint : Palette.ink)
                 if cut {
                     HStack(spacing: 3) {
-                        Image(systemName: "calendar").font(.system(size: 9, weight: .semibold))
+                        Image(systemName: "calendar").scaledFont(9, weight: .semibold)
                         Text(verbatim: Self.text(minutes)).lineLimit(1).minimumScaleFactor(0.8)
                     }
                     .font(Typo.tiny).foregroundStyle(Palette.amber)

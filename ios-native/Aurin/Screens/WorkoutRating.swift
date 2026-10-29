@@ -23,7 +23,7 @@ struct PlanFitPicker: View {
                 let on: Bool = rating == fit.id
                 Button { rating = on ? nil : fit.id } label: {
                     VStack(spacing: 4) {
-                        Text(verbatim: fit.symbol).font(.system(size: 24))
+                        Text(verbatim: fit.symbol).scaledFont(24)
                         Text(L10n.tr(fit.label)).font(.footnote.weight(.semibold))
                             .foregroundStyle(on ? Palette.onButton : Palette.ink)
                     }
@@ -103,7 +103,7 @@ struct GymRatingSheet: View {
             liked[name] = on ? nil : up
         } label: {
             Image(systemName: up ? (on ? "hand.thumbsup.fill" : "hand.thumbsup") : (on ? "hand.thumbsdown.fill" : "hand.thumbsdown"))
-                .font(.system(size: 18))
+                .scaledFont(18, cap: .denseCap)
                 .foregroundStyle(on ? (up ? Palette.green : Palette.rust) : Palette.muted)
                 .frame(width: 40, height: 40)
                 .contentShape(Rectangle())
@@ -159,7 +159,7 @@ struct FeedbackRow: View {
     var body: some View {
         Button(action: open) {
             HStack(spacing: 12) {
-                Image(systemName: "text.bubble").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.amber)
+                Image(systemName: "text.bubble").scaledFont(15, weight: .semibold).foregroundStyle(Palette.amber)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: title).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     if let note {
@@ -167,7 +167,7 @@ struct FeedbackRow: View {
                     }
                 }
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
+                Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
             }
             .padding(.horizontal, 16).frame(minHeight: 54)
             .cardSurface(cornerRadius: 18)

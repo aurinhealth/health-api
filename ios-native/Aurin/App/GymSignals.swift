@@ -251,7 +251,7 @@ struct ToolChip: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: systemImage).font(.system(size: 13, weight: .medium)).foregroundStyle(tint)
+            Image(systemName: systemImage).scaledFont(13, weight: .medium).foregroundStyle(tint)
             Text(verbatim: title).font(.subheadline.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(1)
         }
         .padding(.horizontal, 12)

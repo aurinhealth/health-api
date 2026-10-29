@@ -258,7 +258,7 @@ struct MaxHeartSuggestion: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "bolt.fill").font(.system(size: 15, weight: .medium)).foregroundStyle(Palette.amber)
+            Image(systemName: "bolt.fill").scaledFont(15, weight: .medium).foregroundStyle(Palette.amber)
             Text(L10n.f("Z tréninků: max %@", Fmt.int(bpm))).font(.subheadline).foregroundStyle(Palette.ink)
             Spacer(minLength: 8)
             Button(action: use) {

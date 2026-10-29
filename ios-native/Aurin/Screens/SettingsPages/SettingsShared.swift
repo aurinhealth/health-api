@@ -46,7 +46,7 @@ struct SettingsPicker: View {
                     Text(options.first { $0.0 == selection }?.1 ?? "nevybráno")
                         .font(.subheadline).foregroundStyle(Palette.muted)
                         .lineLimit(1).truncationMode(.tail)
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(Palette.faint)
+                    Image(systemName: "chevron.up.chevron.down").scaledFont(11, weight: .semibold).foregroundStyle(Palette.faint)
                 }
             }
         }

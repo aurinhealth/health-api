@@ -142,7 +142,7 @@ struct GymSessionView: View {
                         }
                         Button(role: .destructive) { deleting = true } label: { Label("Smazat aktivitu", systemImage: "trash") }
                     } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.muted)
+                        Image(systemName: "ellipsis").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.muted)
                             .frame(width: 36, height: 32).contentShape(Rectangle())
                     }
                     .accessibilityLabel("Další volby")
@@ -469,7 +469,7 @@ struct ExerciseCard: View {
                         Button(role: .destructive, action: onRemoveExercise) { Label("Odebrat cvik", systemImage: "trash") }
                     }
                 } label: {
-                    Image(systemName: "ellipsis").font(.system(size: 16, weight: .semibold)).frame(width: 36, height: 36)
+                    Image(systemName: "ellipsis").scaledFont(16, weight: .semibold, cap: .denseCap).frame(width: 36, height: 36)
                 }
                 .foregroundStyle(Palette.ink)
                 .accessibilityLabel("Možnosti cviku")
@@ -779,7 +779,7 @@ struct AlternativesSheet: View {
                 dismiss()
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "dumbbell.fill").font(.system(size: 16)).foregroundStyle(Palette.amber)
+                    Image(systemName: "dumbbell.fill").scaledFont(16, cap: .denseCap).foregroundStyle(Palette.amber)
                         .frame(width: 44, height: 44).background(Palette.amberSoft, in: Circle())
                     VStack(alignment: .leading, spacing: 2) {
                         Text(verbatim: ExerciseCatalog.shownName(alt.name))
@@ -827,7 +827,7 @@ struct ExerciseInfoButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "info.circle").font(.system(size: 18)).foregroundStyle(Palette.muted)
+            Image(systemName: "info.circle").scaledFont(18, cap: .denseCap).foregroundStyle(Palette.muted)
                 .frame(width: 32, height: 32).contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
