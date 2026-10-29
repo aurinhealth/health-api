@@ -76,8 +76,9 @@ final class ClipTests: XCTestCase {
         english("-open", "gym/2026-10-08")
         pause(4)
         start()
-        scroll(1)
-        scroll(1, up: true)
+        pause(1)
+        // Straight to the button, as test4WebsiteScenes does: after a scroll it sits
+        // under the top bar and the tap missed it.
         if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Start workout")).firstMatch) {
             pause(2)
             if tapIfThere(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Start workout")).firstMatch) { pause(2) }

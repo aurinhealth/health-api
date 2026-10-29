@@ -118,7 +118,14 @@ jobs:
                 -destination "id=$udid" -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
                 -only-testing:"AurinUITests/ClipTests/test$clip" test-without-building > "$RUNNER_TEMP/test-$name.log" 2>&1 \
                 || { echo "::warning title=App videos::$clip did not finish"; tail -20 "$RUNNER_TEMP/test-$name.log"; }
+              # The recording's clock: its last frame is when it stopped, so it began
+              # its length before that. Counting from "Recording started" put the cuts
+              # seconds late (the home screen at the end of each clip).
+              t1=$(python3 -c 'import time; print(time.time())')
               kill -INT "$rec"; wait "$rec" || true
+              if [ -s "$raw" ]; then
+                t0=$(python3 -c "print($t1 - $(ffprobe -v error -show_entries format=duration -of csv=p=0 "$raw"))")
+              fi
               marks="$TEST_RUNNER_CLIP_DIR/$name.marks"
               if [ ! -s "$marks" ] || [ ! -s "$raw" ]; then echo "::warning title=App videos::no $mode $name clip"; continue; fi
               from=$(awk -v t0="$t0" '$1=="start"{printf "%.2f", $2-t0}' "$marks")
