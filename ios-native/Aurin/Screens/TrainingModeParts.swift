@@ -107,18 +107,6 @@ enum GymSessionMath {
         }
     }
 
-    /// Plates on each side of a 20 kg bar: "20 + 10".
-    static func plates(_ kg: Double) -> String? {
-        guard !Units.imperial, kg > 20 else { return nil }
-        var side = (kg - 20) / 2
-        var out: [Double] = []
-        for plate in [25, 20, 15, 10, 5, 2.5, 1.25] where side >= plate - 0.001 {
-            while side >= plate - 0.001 { out.append(plate); side -= plate }
-        }
-        guard side < 0.01, !out.isEmpty else { return nil }
-        return out.map { GymCoach.shown($0) }.joined(separator: " + ")
-    }
-
     /// The plan's main muscles and how much of their sets is done (0…1).
     static func muscleProgress(_ exercises: [GymExercise], muscles: [String: [String: Double]]) -> [(id: String, done: Int, planned: Int)] {
         var planned: [String: Double] = [:], done: [String: Double] = [:]
