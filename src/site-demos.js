@@ -552,11 +552,12 @@ html:not(.js) .tgt .fill{width:${(16.7 / 21 * 100).toFixed(1)}%}
 .btn .sp1{display:none;width:15px;height:15px;border-radius:50%;border:2px solid color-mix(in srgb,var(--on-button) 35%,transparent);border-top-color:var(--on-button);animation:spin .8s linear infinite}
 .btn.busy .sp1{display:block}.btn.busy>.di{display:none}.btn.press.js{transform:scale(.96)}
 @keyframes spin{to{transform:rotate(360deg)}}
-.bld{position:relative;min-height:420px}
+.bld{display:grid;min-height:420px}
+/* Both stages share one cell, so the box is as tall as the longer one: the workout with its Save button. */
+.stage1,.stage2{grid-area:1/1}
 .stage1{transition:opacity .4s}.stage1.gone{opacity:0!important;pointer-events:none}
-.stage2{position:absolute;inset:16px 18px 18px}
 .js .stage1[data-at]{opacity:1;transform:none}.js .stage1.gone{opacity:0!important}
-html:not(.js) .stage1{display:none}html:not(.js) .stage2{position:static}
+html:not(.js) .stage1{display:none}
 .ss{display:grid}.ex{position:relative;display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:13px}
 .ex:first-child{border-top:0}.ex b{display:block;font-size:14px;font-weight:500}.ex .ix{font-size:18px;color:var(--muted)}
 .ex.sup{padding-left:10px}.ex.sup::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:3px;background:var(--indigo)}

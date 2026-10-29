@@ -22,7 +22,7 @@ a,button{touch-action:manipulation}
 .icon{width:1.15em;height:1.15em;flex:none;vertical-align:-.2em;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .wrap{max-width:1160px;margin:0 auto;padding:0 24px}
 h1,h2,h3{margin:0;font-weight:400;text-wrap:balance}
-h1,h2{font-family:var(--serif);letter-spacing:-.02em;line-height:1.02}
+h1,h2,h3.big{font-family:var(--serif);letter-spacing:-.02em;line-height:1.02}
 p{margin:0}
 .muted{color:var(--muted)}
 :focus-visible{outline:2px solid var(--primary);outline-offset:3px}
@@ -64,7 +64,7 @@ p{margin:0}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .sub{font-size:var(--fs-20);line-height:1.5;color:var(--sec);max-width:520px;margin-top:20px}
 .sub.free{margin-top:8px;color:var(--green);font-weight:600}
-h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spacing:-.025em}
+h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spacing:-.025em}
 .up{color:var(--green)}.sleep{color:var(--indigo)}.warm{color:var(--amber)}
 .nav-cta{display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:var(--r-pill);background:var(--button);color:var(--on-button);font-size:var(--fs-14);font-weight:600;text-decoration:none;white-space:nowrap}
 .nav-cta:hover{opacity:.9}
@@ -149,6 +149,7 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .step:last-child{border-bottom:1px solid var(--line)}
 .step>button,.step>div{display:grid;grid-template-columns:40px 1fr;column-gap:8px;width:100%;padding:20px 0;border:0;background:none;font:inherit;color:inherit;text-align:left}
 .step>button{cursor:pointer}
+.step>div{grid-template-columns:1fr}
 .step .n{grid-row:1/3;font-size:var(--fs-12);font-weight:700;letter-spacing:.06em;color:var(--green);padding-top:6px;font-variant-numeric:tabular-nums}
 .step .tt{font:400 var(--fs-28)/1.1 var(--serif);letter-spacing:-.015em}
 .step .tx{max-width:60ch;margin-top:8px;color:var(--sec);font-size:var(--fs-17)}
@@ -402,8 +403,9 @@ main:focus{outline:none}
   .rig{--hz:.9}
 }
 @media (max-width:1060px) and (min-width:961px){.rig{--hz:.8}}
+/* The section links fit the pill down to a portrait tablet; on a phone the pill has the logo and Join only. */
+@media (max-width:760px){.pill-nav .links{display:none}}
 @media (max-width:960px){
-  .pill-nav .links{display:none}
   /* Hero: the words first, the phone under them. */
   .hero{padding-top:120px}
   .hero .grid{grid-template-columns:1fr;text-align:center}
@@ -693,7 +695,7 @@ ${body}
 <footer class="site-foot"><div class="wrap">
 <div class="top">
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
-<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#propojeni">Connections</a></li></ul></nav>
+<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#connections">Connections</a></li></ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
@@ -802,12 +804,12 @@ export function overviewPage(request) {
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {
     const multi = list.length > 1;
     const subs = p.split('<span class="free">').map((t, j) => `<p class="sub${j ? ' free' : ''}">${t.replace('</span>', '')}</p>`).join('');
-    const body = ([, , , title, text], i) => `<span class="n">0${i + 1}</span><span class="tt">${title}</span><span class="tx">${text}</span>`;
+    const body = ([, , , title, text], i) => `${multi ? `<span class="n">0${i + 1}</span>` : ''}<span class="tt">${title}</span><span class="tx">${text}</span>`;
     const steps = list.map((x, i) => `<li class="step${i === 0 ? ' on' : ''}" style="--dur:${x[5] || 6500}ms" data-dur="${x[5] || 6500}">${multi
       ? `<button type="button" aria-pressed="${i === 0}">${body(x, i)}<span class="bar" aria-hidden="true"><i></i></span></button>`
       : `<div>${body(x, i)}</div>`}</li>`).join('');
     return `<section id="${id}" class="chapter${n % 2 ? ' flip' : ''}${multi ? ' multi' : ''}${eyebrow ? '' : ' opens'}" style="--tone:var(--${tone});--glow:var(--${glow})"><div class="wrap ch">
-<div class="head reveal">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h2 class="big">${h}</h2>${subs}</div>
+<div class="head reveal">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h3 class="big">${h}</h3>${subs}</div>
 <div class="vis-wrap"><div class="vis"><div class="glow"></div>
 <div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}"${screen.startsWith('html:') ? ' aria-hidden="true"' : ''}>${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>
 ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
@@ -832,7 +834,7 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
   // Muscles sit between training mode and food, as Svaly sits under Trénink in the app. The bubble's
   // words are the sample day's (DemoData.muscles), in English.
   const muscles = `<section id="svaly" class="muscles"><div class="wrap mu">
-<div class="copy reveal"><div class="eyebrow">Muscles</div><h2 class="big">Know what’s recovered.</h2><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
+<div class="copy reveal"><div class="eyebrow">Muscles</div><h3 class="big">Know what’s recovered.</h3><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
 <div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
 <div class="mpick" role="group" aria-label="Open a muscle"></div>
 </div>
@@ -963,7 +965,7 @@ ${ACT_LIST.map(a => act(a) + '\n' + a[4].map(id => id === 'svaly' ? muscles : ch
 <section class="mid"><div class="wrap reveal"><p>Try it on your own mornings.</p><a class="ghost" href="#join">Join the waitlist ${ARROW}</a></div></section>
 ${actNav}
 
-<section id="propojeni" class="connect"><div class="wrap">
+<section id="connections" class="connect"><div class="wrap">
 <div class="intro reveal"><div><div class="eyebrow">Connections</div><h2 class="big">Works with what you wear.</h2></div><p class="sub">Any watch or ring that saves to Apple Health or Google Health, plus power and plans from Intervals.icu. Wear more than one? Aurin takes each night and day from the one you wear most, or you pick.</p></div>
 <div class="box reveal">
 ${flow}
