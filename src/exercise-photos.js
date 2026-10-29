@@ -66,20 +66,76 @@ const REPDB = {
   'Wide-Grip Pull-Up': 'wide-grip-pull-ups', 'Barbell Thruster': 'thruster', 'Band Glute Bridge': 'banded-glute-bridge'
 };
 
+// Start and end frames picked by hand from the exercise's own technique video
+// (29 Oct 2026), where neither photo source has the exercise and YouTube's
+// automatic frames miss the movement; served from public/exercise-frames/.
+// The value is the video's channel, credited under the frames.
+const FRAMES = {
+  'Standing multi flight': 'Ascendancy Fitness',
+  'Cable hip abduction': 'Hammer Fitness',
+  'Smith Machine Sumo Romanian Deadlift': 'Hammer Fitness',
+  'Cable Standing Single Arm Chest Press': 'Andrew Heming',
+  'Cable Row Bar Standing Row': "Germain Craddock's EVA",
+  'Cable Supinating Row': 'OPEX Fitness',
+  'Cable Single Arm Rear Delt Row': 'arkansasonline',
+  'Cross-Body Cable Tricep Extension': 'Thrive',
+  'Cable Side Bend': 'Fitway - Workout Trainer',
+  'Cable Single Leg Laying Leg Curl': 'Hammer Fitness',
+  'Reverse Hack Squat': 'OriGym',
+  'Machine Lat Pullover': 'Scott Abel Coaching',
+  'Belt Squat': 'Nexus Performance Australia',
+  'Selectorized Torso Rotation Machine': 'Live Lean TV Daily Exercises',
+  'Side Plank Lateral Raise': 'Jenny LaBaw',
+  'Bayesian Curl': 'Rune | FitByRune',
+  'Dumbbell Cossack Squat': 'Jeremy Smith',
+  'Dumbbell Cross Body Romanian Deadlift': 'Advanced Movement',
+  'Dumbbell Goblet Split Squat': 'Horton Barbell',
+  'Dumbbell Overhead Squat': 'Bobby Maximus',
+  'Dumbbell Single Leg Hip Thrust': 'Live Lean TV Daily Exercises',
+  'Dumbbell Thruster': 'IronmasterPro',
+  'Dumbbell Tibialis Raise': 'Live Lean TV Daily Exercises',
+  'Heel Elevated Dumbbell Front Squat': 'Julia Pettee',
+  'Dumbbell Single Arm Clean And Press': 'The Gym Starter',
+  'Kettlebell Romanian Deadlift': 'FCF Coach Jaye',
+  'Band Kneeling Pulldown': 'Live Lean TV Daily Exercises',
+  'Band Pullover': 'PersonalBestOz',
+  'Band Row': 'Get Healthy U - with Chris Freytag',
+  'Band Seated Pulldown': 'Clench Fitness',
+  'Band High Face Pull': 'Horton Barbell',
+  'Band Curl': 'YuryFit',
+  'Band Tricep Kickbacks': 'Whitney Wiser Savage',
+  'Plate Forward Lunge': 'TrainToSmileTV',
+  'Bodyweight Alternating Lateral Lunge': 'Ambitious Athletics',
+  'Bulgarian Split Squat': 'Live Lean TV Daily Exercises',
+  'Single-Leg Step-Down': 'Horton Barbell'
+};
+
 // Start and end position photo URLs for an exercise, or an empty list.
+// Video frames are paths on this site; the route makes them absolute.
 export function exercisePhotos(exercise) {
   const id = PHOTOS[exercise];
   if (id) return [0, 1].map(i => BASE + id + '/' + i + '.jpg');
   const rep = REPDB[exercise];
-  if (!rep) return [];
+  if (!rep) return FRAMES[exercise] ? ['start', 'end'].map(end => '/exercise-frames/' + frameSlug(exercise) + '-' + end + '.webp') : [];
   const slug = rep.replace(/~$/, ''), ends = rep.endsWith('~') ? ['peak', 'start'] : ['start', 'peak'];
   return ends.map(end => REPDB_BASE + slug + '-' + end + '.webp');
 }
 
-// Width to height of the photos: Free Exercise DB is 3:2, RepDB square.
+// Width to height of the photos: Free Exercise DB is 3:2, RepDB square, video frames 16:9.
 export function exercisePhotoAspect(exercise) {
-  return !PHOTOS[exercise] && REPDB[exercise] ? 1 : 1.5;
+  if (PHOTOS[exercise]) return 1.5;
+  return REPDB[exercise] ? 1 : FRAMES[exercise] ? 16 / 9 : 1.5;
+}
+
+// The channel whose video the frames come from, or null.
+export function exercisePhotoCredit(exercise) {
+  return !PHOTOS[exercise] && !REPDB[exercise] && FRAMES[exercise] || null;
+}
+
+function frameSlug(exercise) {
+  return exercise.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 export const PHOTO_IDS = PHOTOS;
 export const REPDB_IDS = REPDB;
+export const FRAME_CREDITS = FRAMES;

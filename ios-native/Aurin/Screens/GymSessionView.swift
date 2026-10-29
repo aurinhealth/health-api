@@ -625,12 +625,19 @@ struct TechniqueSheet: View {
         .padding(.top, 6)
     }
 
-    /// Photos of the start and end position, swiped between; without them two
+    /// Photos of the start and end position, swiped between (frames picked from
+    /// the technique video credit its channel); without them two
     /// frames YouTube takes from the video itself (at a quarter and three
     /// quarters of it), not the author's thumbnail with its text on top.
     @ViewBuilder private var photo: some View {
         if let photos = technique?.photos, photos.count >= 2 {
-            ExercisePhotos(urls: photos.compactMap { URL(string: $0) }, aspect: CGFloat(technique?.photoAspect ?? 1.5))
+            VStack(spacing: 6) {
+                ExercisePhotos(urls: photos.compactMap { URL(string: $0) }, aspect: CGFloat(technique?.photoAspect ?? 1.5))
+                if let credit = technique?.photoCredit, !credit.isEmpty {
+                    Text(L10n.f("Snímky z videa: %@", credit))
+                        .font(Typo.caption).foregroundStyle(Palette.faint)
+                }
+            }
         } else if let id = videoId {
             ExercisePhotos(urls: ["hq1", "hq3"].compactMap { URL(string: "https://i.ytimg.com/vi/" + id + "/" + $0 + ".jpg") },
                            labeled: false, aspect: 16 / 9)
