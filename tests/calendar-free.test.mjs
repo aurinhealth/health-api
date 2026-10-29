@@ -57,3 +57,19 @@ test('a new reading replaces the days it sends and drops days older than a week'
   await saveCalendarFree(db, [{ date: '2026-10-25', minutes: 60 }], '2026-10-24');
   assert.deepEqual(await calendarFree(db, '2026-10-01', '2026-10-31'), { '2026-10-25': 60 });
 });
+
+// The app sends the calendar on most refreshes: the same minutes write nothing
+// and keep the cache (entrypoint.js UNCHANGED_HEADER).
+test('the same free time again changes nothing; a different minute does', async () => {
+  const raw = createD1(), db = scopedDb(raw, 1);
+  const days = [{ date: '2026-10-13', minutes: 45 }, { date: '2026-10-14', minutes: 90 }];
+  assert.equal((await saveCalendarFree(db, days, today)).changed, true);
+  raw.sqlite.exec("UPDATE calendar_free SET updated_at='2000-01-01'");
+  const again = await saveCalendarFree(db, days.map(d => ({ ...d })), today);
+  assert.equal(again.changed, false);
+  assert.deepEqual(again.days, days);
+  assert.equal(raw.sqlite.prepare("SELECT COUNT(*) n FROM calendar_free WHERE updated_at='2000-01-01'").get().n, 2);
+  assert.equal((await saveCalendarFree(db, [days[0], { ...days[1], minutes: 60 }], today)).changed, true);
+  assert.equal((await saveCalendarFree(db, [days[0]], today)).changed, true);
+  assert.deepEqual(await calendarFree(db, '2026-10-13', '2026-10-20'), { '2026-10-13': 45 });
+});

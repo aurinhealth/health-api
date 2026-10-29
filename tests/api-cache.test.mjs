@@ -111,3 +111,33 @@ test("requests asking for the same entry at once compute it once, and each gets 
   await cached(env, null, "week:2026-10-27", async () => { failing++; return { days: [] }; }, { store });
   assert.equal(failing, 2);
 });
+
+// A meal or a glass of water keeps what never shows food (C in
+// audit/zrychleni-aplikace-mereni-2026-10-29.md): the 90 days of fitness, zones,
+// a workout's detail stay; Today's inputs and the food week are computed again.
+test("a food write keeps entries without food; any other write makes everything outdated", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { createD1 } = await import("./helpers/d1.mjs");
+  const { scopedDb } = await import("../src/tenancy.js");
+  const { bumpCacheVersion, FOOD_WRITE } = await import("../src/api-cache.js");
+  const raw = createD1();
+  raw.sqlite.exec(readFileSync(new URL("../migrations/0005_api_cache_versions.sql", import.meta.url), "utf8"));
+  raw.sqlite.exec(readFileSync(new URL("../migrations/0030_food_cache_version.sql", import.meta.url), "utf8"));
+  const map = new Map(), store = { match: async key => (map.has(key) ? new Response(map.get(key)) : undefined), put: async (key, response) => { map.set(key, await response.text()); } };
+  const env = { DB: scopedDb(raw, 7) }, computed = [];
+  const read = key => cached(env, null, key, async () => { computed.push(key); return { key }; }, { store });
+  const both = async () => { computed.length = 0; await read("fitness:90"); await read("coach-inputs:2026-10-29"); return [...computed]; };
+  assert.deepEqual(await both(), ["fitness:90", "coach-inputs:2026-10-29"]);
+  assert.deepEqual(await both(), []);
+  await bumpCacheVersion(env.DB, { food: true });
+  assert.deepEqual(await both(), ["coach-inputs:2026-10-29"]);
+  await bumpCacheVersion(env.DB);
+  assert.deepEqual(await both(), ["fitness:90", "coach-inputs:2026-10-29"]);
+  // Before migration 0030 a food write bumps everything, as before.
+  const old = createD1();
+  old.sqlite.exec(readFileSync(new URL("../migrations/0005_api_cache_versions.sql", import.meta.url), "utf8"));
+  await bumpCacheVersion(scopedDb(old, 7), { food: true });
+  assert.equal(old.sqlite.prepare("SELECT version FROM api_cache_versions WHERE user_id=7").get().version, 1);
+  for (const path of ["/app/api/fluids", "/app/api/water", "/app/api/food/entry", "/app/api/food/entries", "/app/api/food/log", "/app/api/food/personal", "/app/api/food/recipes/12", "/app/api/food/nutrients/favorites", "/app/api/food/suggestions/decide"]) assert.ok(FOOD_WRITE.test(path), path);
+  for (const path of ["/app/api/food-today", "/app/api/food/nutrients", "/app/api/profile", "/app/api/gym", "/app/api/weight", "/app/api/fluidsx"]) assert.ok(!FOOD_WRITE.test(path), path);
+});
