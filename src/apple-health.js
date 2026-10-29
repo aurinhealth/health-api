@@ -312,12 +312,15 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
   const statements = rows.map(row => upsert(db, userId, row));
   // Rows really written: the upsert leaves a row that did not change alone.
   let changed = 0;
+  const written = [];
   // 200 statements a round trip: a first sync of 1500 records is 8 batches, not 30.
   for (let i = 0; i < statements.length; i += 200) {
-    for (const result of await db.batch(statements.slice(i, i + 200)) || []) changed += Number(result?.meta?.changes || 0);
+    const results = await db.batch(statements.slice(i, i + 200)) || [];
+    results.forEach((result, j) => { const n = Number(result?.meta?.changes || 0); changed += n; if (n) written.push(rows[i + j]); });
   }
 
   let removed = 0;
+  const deleted = [];
   // A window reaching further back than the range starts at the range: rows
   // older than that are kept, the app no longer sends them.
   const floor = new Date(now - PAST_MS).toISOString().replace(".000Z", "Z");
@@ -347,12 +350,18 @@ export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() 
       `DELETE FROM health_datapoints WHERE user_id = ? AND source_family = '${SOURCE}' AND data_type = ? AND start_time >= ? AND start_time < ?
        AND external_id NOT IN (SELECT value FROM json_each(?))`
     ).bind(userId, type, from, to, ids).run();
-    removed += Number(result?.meta?.changes || 0);
+    const gonePart = Number(result?.meta?.changes || 0);
+    removed += gonePart;
+    if (gonePart) deleted.push({ data_type: type, start_time: from });
   }
 
-  // Only the rows accepted above set how far back Google's copies are replaced.
-  const types = [...new Set(rows.map(r => r.data_type))];
-  const oldest = rows.map(r => String(r.sample_time || r.end_time || r.start_time || "").slice(0, 10)).filter(Boolean).sort()[0];
+  // Only the rows written or deleted above set what is replaced and chosen
+  // again, and from when: the usual sync sends the same hours again, and
+  // choosing every source again for them read the whole history (25 round
+  // trips for nothing new).
+  const touched = [...written, ...deleted];
+  const types = [...new Set(touched.map(r => r.data_type))];
+  const oldest = touched.map(r => String(r.sample_time || r.end_time || r.start_time || "").slice(0, 10)).filter(Boolean).sort()[0];
   // Deník's values come only from Apple Health: nothing of Google's to replace.
   const other = types.filter(t => !MANAGED_TYPES.includes(t) && !JOURNAL[t]);
   let replaced = other.length && oldest ? await replaceGoogleWithApple(db, userId, other, oldest) : 0;
