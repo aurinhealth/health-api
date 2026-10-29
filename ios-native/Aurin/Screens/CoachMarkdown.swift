@@ -56,7 +56,7 @@ struct CoachMarkdown: View, Equatable {
                 }
             }
         case .table(let rows):
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
                     ForEach(Array(rows.enumerated()), id: \.offset) { r, row in
                         GridRow {
@@ -71,6 +71,7 @@ struct CoachMarkdown: View, Equatable {
                 }
                 .padding(10)
             }
+            .scrollIndicators(.hidden)
             .background(Palette.track.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         case .rule:
             Rectangle().fill(Palette.hairline).frame(height: 1)

@@ -63,7 +63,7 @@ struct FoodDraftCard: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardSurface(cornerRadius: 18)
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.hairline, lineWidth: 1))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.hairline, lineWidth: 1) }
         .onAppear {
             if amounts.isEmpty { amounts = draft.items.map(\.startAmount) }
             if meal.isEmpty { meal = draft.items.compactMap { $0.meal }.first { !$0.isEmpty } ?? MealSlot.now() }

@@ -55,7 +55,7 @@ struct MergeProposalCard: View {
                     }
                     .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                     .frame(maxWidth: .infinity).frame(height: 36)
-                    .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                    .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
                     .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -65,7 +65,7 @@ struct MergeProposalCard: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .background(Palette.amber.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.amber.opacity(0.25), lineWidth: 1))
+        .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.amber.opacity(0.25), lineWidth: 1) }
     }
 }
 
@@ -104,7 +104,7 @@ struct MergeWorkoutsSheet: View {
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
         }
         .scrollBounceBehavior(.basedOnSize)
-        .background(Palette.background.ignoresSafeArea())
+        .background { Palette.background.ignoresSafeArea() }
         .presentationDetents([.height(contentHeight + 20)])
         .presentationDragIndicator(.visible)
         .onAppear { if energy.isEmpty { energy = proposal.energy.first?.key ?? "" } }

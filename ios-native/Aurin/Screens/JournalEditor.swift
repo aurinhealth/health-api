@@ -38,7 +38,7 @@ struct JournalEditorView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)
             }
-            .background(Palette.background.ignoresSafeArea())
+            .background { Palette.background.ignoresSafeArea() }
             .navigationTitle(L10n.tr("Co sledovat"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -71,11 +71,12 @@ struct JournalEditorView: View {
     }
 
     private func tabs(_ categories: [JournalCategory]) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 6) {
                 ForEach(categories) { c in chip(c.key, title: c.title) }
             }
         }
+        .scrollIndicators(.hidden)
     }
 
     private func chip(_ key: String, title: String) -> some View {
@@ -286,7 +287,7 @@ struct JournalCustomItemView: View {
             .padding(.top, 12)
             .padding(.bottom, 40)
         }
-        .background(Palette.background.ignoresSafeArea())
+        .background { Palette.background.ignoresSafeArea() }
         .navigationTitle(L10n.tr("Vlastní položka"))
         .navigationBarTitleDisplayMode(.inline)
     }

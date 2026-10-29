@@ -876,7 +876,7 @@ final class SnapshotTests: XCTestCase {
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
             let view = content()
                 .frame(width: 390, height: height)
-                .background(ScreenBackground(glow: glow))
+                .background { ScreenBackground(glow: glow) }
                 .environment(\.colorScheme, scheme)
             let renderer = ImageRenderer(content: view)
             renderer.scale = 2

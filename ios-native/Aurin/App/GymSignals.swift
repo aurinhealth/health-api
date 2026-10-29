@@ -256,7 +256,7 @@ struct ToolChip: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 34)
-        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
         .contentShape(Capsule())
     }
 }

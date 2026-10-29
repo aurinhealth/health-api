@@ -310,7 +310,7 @@ struct AppIconLockedSheet: View {
         }
         .padding(.horizontal, 22).padding(.top, 26)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Palette.settingsBackground.ignoresSafeArea())
+        .background { Palette.settingsBackground.ignoresSafeArea() }
     }
 
     private var section: String {

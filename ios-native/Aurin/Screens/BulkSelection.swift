@@ -156,7 +156,7 @@ struct BulkMoveSheet: View {
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 14).frame(height: 34)
                 .background(on ? Palette.button : .clear, in: Capsule())
-                .overlay(Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.18), lineWidth: 1))
+                .overlay { Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.18), lineWidth: 1) }
         }
         .buttonStyle(.plain)
     }

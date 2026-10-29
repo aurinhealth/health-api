@@ -57,7 +57,7 @@ struct CoachMemoryView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Palette.settingsBackground.ignoresSafeArea())
+        .background { Palette.settingsBackground.ignoresSafeArea() }
         .navigationTitle(L10n.tr("Co si kouč pamatuje"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $editing) { e in
@@ -117,7 +117,7 @@ struct CoachMemoryEditor: View {
                 Spacer()
             }
             .padding(20)
-            .background(Palette.settingsBackground.ignoresSafeArea())
+            .background { Palette.settingsBackground.ignoresSafeArea() }
             .navigationTitle(L10n.tr(original == nil ? "Přidat" : "Upravit"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -176,7 +176,7 @@ struct ShareCameraView: View {
                     Spacer()
                     Button { Task { await shoot() } } label: {
                         Circle().fill(Color.white).frame(width: 60, height: 60)
-                            .padding(5).overlay(Circle().stroke(Color.white, lineWidth: 4))
+                            .padding(5).overlay { Circle().stroke(Color.white, lineWidth: 4) }
                             .opacity(cameraReady && !taking ? 1 : 0.35)
                     }
                     .buttonStyle(.plain)
@@ -320,7 +320,7 @@ struct SharePlaceView: View {
                 let box = frame.offsetBy(dx: o.width * u, dy: o.height * u).insetBy(dx: -6, dy: -6)
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Palette.amber.opacity(0.1))
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Palette.amber, lineWidth: 1.5))
+                    .overlay { RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(Palette.amber, lineWidth: 1.5) }
                     .frame(width: box.width, height: box.height)
                     .offset(x: box.minX, y: box.minY)
             }

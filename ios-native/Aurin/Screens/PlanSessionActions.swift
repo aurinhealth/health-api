@@ -119,8 +119,8 @@ struct PlanStateIcon: View {
             .font(.system(size: size * 0.42, weight: .medium))
             .foregroundStyle(color)
             .frame(width: size, height: size)
-            .background(Circle().fill(color.opacity(state == .upcoming ? 0.06 : 0.14)))
-            .overlay(Circle().strokeBorder(color, style: StrokeStyle(lineWidth: 2, dash: dash)))
+            .background { Circle().fill(color.opacity(state == .upcoming ? 0.06 : 0.14)) }
+            .overlay { Circle().strokeBorder(color, style: StrokeStyle(lineWidth: 2, dash: dash)) }
     }
 }
 

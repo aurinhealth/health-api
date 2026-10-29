@@ -385,7 +385,7 @@ struct DumbbellWeightsEditor: View {
         Button { weights = Array(Set(values())).sorted() } label: {
             Text(title).font(.footnote.weight(.medium)).foregroundStyle(Palette.ink)
                 .padding(.horizontal, 12).frame(height: 30)
-                .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
         }
         .buttonStyle(.plain)
     }
@@ -519,7 +519,7 @@ struct AddGymSheet: View {
                     Label(photoCount == 0 ? L10n.tr("Přidat fotky") : L10n.f("Přidat fotky (%@)", String(photoCount)), systemImage: "camera")
                         .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 44)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
                 }
                 .disabled(busy)
                 PrimaryButton(title: L10n.tr(busy ? "Poznávám…" : "Poznat"), busy: busy) { Task { await detect() } }
@@ -529,7 +529,7 @@ struct AddGymSheet: View {
             }
             .padding(16)
             .cardSurface(cornerRadius: 22)
-            .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Palette.green, lineWidth: 1.5))
+            .overlay { RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(Palette.green, lineWidth: 1.5) }
 
             if !detectOnly {
                 Button {

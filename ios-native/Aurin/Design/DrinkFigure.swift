@@ -482,7 +482,7 @@ struct DrinkFigurePicker: View {
                         .padding(.vertical, 10)
                         .frame(maxWidth: .infinity)
                         .cardSurface(cornerRadius: 18)
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.blue, lineWidth: on ? 2.5 : 0))
+                        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Palette.blue, lineWidth: on ? 2.5 : 0) }
                         .overlay(alignment: .topTrailing) {
                             if on {
                                 Image(systemName: "checkmark").scaledFont(10, weight: .bold, cap: .denseCap).foregroundStyle(.white)

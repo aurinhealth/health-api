@@ -19,7 +19,7 @@ struct SleepSettingsView: View {
                 SleepSettingsForm(store: store, route: route)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Palette.settingsBackground.ignoresSafeArea())
+                    .background { Palette.settingsBackground.ignoresSafeArea() }
             }
         }
         .task {
@@ -268,7 +268,7 @@ private struct SleepSaveChrome: ViewModifier {
                 .floatingBack(title: "Spánek",
                               trailing: ChromeAction(systemImage: "checkmark", label: "Uložit", text: "Uložit", enabled: enabled && !saving, action: save),
                               pinTitle: true) { dismiss() }
-                .toolbar(.hidden, for: .navigationBar)
+                .navBarVisibility(.hidden)
         } else {
             content.toolbar { SaveButton(enabled: enabled, saving: saving, action: save) }
         }

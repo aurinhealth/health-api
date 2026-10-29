@@ -41,7 +41,7 @@ struct TrainingView: View {
                     ProgressView()
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navBarVisibility(.hidden)
             .appRoutes()
         }
         .overlay(alignment: .bottom) {
@@ -307,7 +307,7 @@ struct TodaySessions: View {
             NextSession(session: session, today: today, route: route(session), strainNow: strainNow)
         } else {
             VStack(spacing: 12) {
-                ScrollView(.horizontal, showsIndicators: false) {
+                ScrollView(.horizontal) {
                     HStack(alignment: .top, spacing: 24) {
                         ForEach(Array(sessions.enumerated()), id: \.offset) { index, session in
                             NextSession(session: session, today: today, route: route(session), strainNow: strainNow, fill: true)
@@ -321,6 +321,7 @@ struct TodaySessions: View {
                     .padding(.bottom, 24)
                     .scrollTargetLayout()
                 }
+                .scrollIndicators(.hidden)
                 .scrollTargetBehavior(.viewAligned)
                 .scrollPosition(id: $current)
                 .padding(.bottom, -24)

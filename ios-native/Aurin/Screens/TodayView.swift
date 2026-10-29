@@ -10,7 +10,7 @@ struct TodayView: View {
     var body: some View {
         NavigationStack(path: model.path(.today)) {
             screen
-                .toolbar(.hidden, for: .navigationBar)
+                .navBarVisibility(.hidden)
                 .appRoutes()
         }
         .journalMorningPrompt()

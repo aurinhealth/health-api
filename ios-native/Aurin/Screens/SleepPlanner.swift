@@ -138,7 +138,7 @@ struct SleepPlanner: View {
             }
             .frame(maxWidth: .infinity).padding(.vertical, 10)
             .background(on ? Palette.lilac : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Palette.indigo : .clear, lineWidth: 1.5))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Palette.indigo : .clear, lineWidth: 1.5) }
         }
         .buttonStyle(.plain)
         .disabled(saving)
@@ -255,7 +255,7 @@ struct SleepDial: View {
             .scaledFont(13, weight: .bold, cap: .denseCap)
             .foregroundStyle(color)
             .frame(width: 32, height: 32)
-            .background(Circle().fill(Palette.card))
+            .background { Circle().fill(Palette.card) }
             .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
             .frame(width: 48, height: 48)
             .contentShape(Circle())

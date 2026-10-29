@@ -119,8 +119,8 @@ struct AddFoodSheet: View {
                 .padding(.top, 20)
                 .padding(.bottom, 40)
             }
-            .background(Palette.background.ignoresSafeArea())
-            .toolbar(.hidden, for: .navigationBar)
+            .background { Palette.background.ignoresSafeArea() }
+            .navBarVisibility(.hidden)
             .navigationDestination(for: FoodRoute.self) { route in
                 switch route {
                 case .amount(let product): FoodAmountView(product: product, meal: meal, done: { dismiss() })
@@ -247,7 +247,7 @@ struct AddFoodSheet: View {
             Button { path.append(.recipe) } label: {
                 Label("Nový recept", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .frame(maxWidth: .infinity).frame(height: 44)
-                    .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                    .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
             }
             .buttonStyle(.plain)
             .disabled(model.demo)
@@ -531,12 +531,12 @@ struct FoodAmountView: View {
             }
             .padding(24)
         }
-        .background(Palette.background.ignoresSafeArea())
+        .background { Palette.background.ignoresSafeArea() }
         .floatingBack(trailing: product.canReport && !model.demo
                       ? ChromeAction(systemImage: mine ? "flag.fill" : "flag", label: mine ? "Nahlášeno" : "Hodnoty nesedí",
                                      enabled: !mine, tint: Palette.rust) { reporting = true }
                       : nil) { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
         .onAppear(perform: fill)
         .sheet(isPresented: $reporting) {
             FoodReportSheet(product: product) { withAnimation { reportedNow = true } }
@@ -714,9 +714,9 @@ struct ManualFoodView: View {
             }
             .padding(24)
         }
-        .background(Palette.background.ignoresSafeArea())
+        .background { Palette.background.ignoresSafeArea() }
         .floatingBack { dismiss() }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
     }
 
     private func number(_ text: String) -> Double? { Double(text.replacingOccurrences(of: ",", with: ".")) }
@@ -752,7 +752,7 @@ struct MealMenu: View {
             }
             .font(Typo.small.weight(.semibold)).foregroundStyle(Palette.ink)
             .padding(.horizontal, 10).padding(.vertical, 5)
-            .background(Capsule().fill(Palette.ink.opacity(0.06)))
+            .background { Capsule().fill(Palette.ink.opacity(0.06)) }
         }
     }
 }

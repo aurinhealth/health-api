@@ -107,7 +107,7 @@ struct CoachView: View {
                 }
                 inputBar
             }
-            .background(ScreenBackground(glow: Palette.Glow.today))
+            .background { ScreenBackground(glow: Palette.Glow.today) }
             .navigationTitle("Kouč")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -718,7 +718,7 @@ struct ActionCard: View {
                     }
                     Button { decide(false) } label: {
                         Text("Ne").font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
-                            .padding(.horizontal, 16).frame(height: 34).overlay(Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                            .padding(.horizontal, 16).frame(height: 34).overlay { Capsule().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
                     }
                 }
                 .buttonStyle(.plain)
@@ -746,7 +746,7 @@ struct ActionCard: View {
         }
         chip("day", "Jiný den", quick.day, on: pickingDay) { pickingDay.toggle() }
         if pickingDay {
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 HStack(spacing: 5) {
                     ForEach(quick.days, id: \.self) { day in
                         Button {
@@ -760,13 +760,14 @@ struct ActionCard: View {
                             .foregroundStyle(day.fits ? Palette.ink : Palette.ink.opacity(0.3))
                             .frame(width: 52, height: 44)
                             .background(day.fits ? Palette.card : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Palette.ink.opacity(0.1), lineWidth: 1))
+                            .overlay { RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Palette.ink.opacity(0.1), lineWidth: 1) }
                         }
                         .buttonStyle(.plain)
                         .disabled(!day.fits || adjusting != nil)
                     }
                 }
             }
+            .scrollIndicators(.hidden)
         }
     }
 
@@ -779,7 +780,7 @@ struct ActionCard: View {
             .foregroundStyle(on ? Palette.onButton : enabled ? Palette.ink : Palette.ink.opacity(0.3))
             .padding(.horizontal, 12).frame(height: 30)
             .background(on ? Palette.button : enabled ? Palette.card : Color.clear, in: Capsule())
-            .overlay(Capsule().stroke(on ? Color.clear : Palette.ink.opacity(0.1), lineWidth: 1))
+            .overlay { Capsule().stroke(on ? Color.clear : Palette.ink.opacity(0.1), lineWidth: 1) }
         }
         .buttonStyle(.plain)
         .disabled(!enabled || adjusting != nil)
@@ -987,7 +988,7 @@ struct ChatsPanel: View {
                 }
                 .frame(width: min(320, geo.size.width * 0.82))
                 .frame(maxHeight: .infinity)
-                .background(Palette.background.ignoresSafeArea())
+                .background { Palette.background.ignoresSafeArea() }
                 .shadow(color: .black.opacity(0.25), radius: 20, x: 6)
             }
         }

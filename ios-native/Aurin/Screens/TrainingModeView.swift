@@ -101,7 +101,7 @@ struct TrainingModeView: View {
                     Spacer()
                 } else if let day, !day.exercises.isEmpty {
                     if !finishedSession, let exercise = current(day) {
-                        ScrollView(showsIndicators: false) {
+                        ScrollView {
                             VStack(alignment: .leading, spacing: 0) {
                                 if live.running {
                                     LiveWorkoutStrip(live: live, volume: GymSessionMath.volume(day.exercises), zoneLows: zoneLows).padding(.top, 14)
@@ -131,9 +131,11 @@ struct TrainingModeView: View {
                             }
                             .padding(.bottom, 24)
                         }
+                        .scrollIndicators(.hidden)
                         .scrollDismissesKeyboard(.interactively)
                     } else {
-                        ScrollView(showsIndicators: false) { finished(day).padding(.bottom, 24) }
+                        ScrollView { finished(day).padding(.bottom, 24) }
+                        .scrollIndicators(.hidden)
                     }
                 } else {
                     empty
@@ -142,7 +144,7 @@ struct TrainingModeView: View {
             .padding(.horizontal, 20)
             .padding(.top, 12)
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
         .task { await load() }
         // A set or a change from the Apple Watch (WatchGymBridge.swift).
         .onReceive(NotificationCenter.default.publisher(for: .watchGym)) { note in
@@ -472,7 +474,7 @@ struct TrainingModeView: View {
             if !showsSides(exercise), sidesOpen(exercise) {
                 Button { Task { await setSides(exercise, true) } } label: {
                     Label(L10n.tr("Každá strana"), systemImage: "arrow.left.and.right").font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
-                        .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                        .padding(.horizontal, 10).frame(height: 30).overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
                 }
                 .buttonStyle(.plain)
                 .disabled(saving)
@@ -480,7 +482,7 @@ struct TrainingModeView: View {
             }
             if let plates = platesText(exercise) {
                 Text(plates).font(Typo.caption).foregroundStyle(Palette.secondary)
-                    .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                    .padding(.horizontal, 10).frame(height: 30).overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
             }
             Spacer(minLength: 0)
         }
@@ -518,7 +520,7 @@ struct TrainingModeView: View {
         let superset = ExerciseOrder.letter(exercise.superset)
         let failure = set.map { day.isToFailure(row: $0.row) } ?? false
         if !main.isEmpty || record != nil || superset != nil || failure {
-            ScrollView(.horizontal, showsIndicators: false) { HStack(spacing: 6) {
+            ScrollView(.horizontal) { HStack(spacing: 6) {
                 ForEach(main, id: \.self) { id in
                     Text(BodyFigure.label(id)).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
                         .padding(.horizontal, 9).frame(height: 24).background(Palette.track, in: Capsule())
@@ -530,6 +532,7 @@ struct TrainingModeView: View {
                 if let superset { GymTag.superset(superset) }
                 if failure { GymTag.failure }
             } }
+            .scrollIndicators(.hidden)
             .padding(.top, 10)
         }
     }
@@ -543,7 +546,7 @@ struct TrainingModeView: View {
     private func pill(_ systemImage: String, _ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Label(title, systemImage: systemImage).font(Typo.caption.weight(.medium)).foregroundStyle(Palette.secondary)
-                .padding(.horizontal, 10).frame(height: 30).overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                .padding(.horizontal, 10).frame(height: 30).overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.tr(systemImage == "plus" ? "O sérii víc" : "O sérii méně"))

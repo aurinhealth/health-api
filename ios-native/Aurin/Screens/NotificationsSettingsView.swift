@@ -373,7 +373,7 @@ private struct ReminderDayOverview: View {
             .scaledFont(12, weight: .semibold, cap: .denseCap)
             .foregroundStyle(mark.on ? Palette.onAccent : Palette.faint)
             .frame(width: size, height: size)
-            .background(Circle().fill(mark.on ? mark.kind.color : Palette.track))
+            .background { Circle().fill(mark.on ? mark.kind.color : Palette.track) }
     }
 }
 
@@ -559,7 +559,7 @@ private struct ReminderWeekdayChips: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity, minHeight: 40)
-                        .background(Capsule().fill(on ? Palette.button : Palette.track))
+                        .background { Capsule().fill(on ? Palette.button : Palette.track) }
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(on ? .isSelected : [])

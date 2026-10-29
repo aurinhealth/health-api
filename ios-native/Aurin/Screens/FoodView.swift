@@ -9,7 +9,7 @@ struct FoodView: View {
     var body: some View {
         NavigationStack(path: model.path(.food)) {
             screen
-                .toolbar(.hidden, for: .navigationBar)
+                .navBarVisibility(.hidden)
                 .appRoutes()
         }
         .task { await model.refreshIfStale(.food) }
@@ -426,7 +426,7 @@ struct DrinksCard: View {
         .sheet(isPresented: $choosing) {
             NavigationStack {
                 PageScroll { DrinkFigurePicker().padding(20) }
-                    .background(Palette.settingsBackground.ignoresSafeArea())
+                    .background { Palette.settingsBackground.ignoresSafeArea() }
                     .navigationTitle("Postavička pití")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Hotovo") { choosing = false } } }
@@ -530,7 +530,7 @@ struct MealRow: View {
                 .frame(width: 32, height: 32)
                 .foregroundStyle(tint)
                 .background(fill, in: Circle())
-                .overlay(Circle().stroke(Palette.ink.opacity(ring), lineWidth: 1))
+                .overlay { Circle().stroke(Palette.ink.opacity(ring), lineWidth: 1) }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(MealSlot.addText(meal.type))

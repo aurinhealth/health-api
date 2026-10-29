@@ -160,7 +160,7 @@ struct CyclePeriodButtons: View {
             Button { notYet() } label: {
                 Text("Ještě ne").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .frame(maxWidth: .infinity).frame(height: 42)
-                    .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                    .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
             }
             .disabled(saving)
         }
@@ -207,7 +207,7 @@ struct PillCard: View {
                     let done = i < number || (i == number && pill.taken != nil)
                     RoundedRectangle(cornerRadius: 3)
                         .fill(done ? Palette.indigo : i == number ? Color.clear : Palette.track)
-                        .overlay(RoundedRectangle(cornerRadius: 3).stroke(i == number && !done ? Palette.indigo : Color.clear, lineWidth: 1.5))
+                        .overlay { RoundedRectangle(cornerRadius: 3).stroke(i == number && !done ? Palette.indigo : Color.clear, lineWidth: 1.5) }
                         .frame(height: 7)
                 }
             }
@@ -434,7 +434,7 @@ struct CycleLogSheet: View {
             .foregroundStyle(on ? Palette.pink : Palette.secondary)
             .frame(maxWidth: .infinity).frame(height: 74)
             .background(on ? Palette.pinkSoft : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(on ? Palette.pink : Color.clear, lineWidth: 1.5))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(on ? Palette.pink : Color.clear, lineWidth: 1.5) }
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -513,7 +513,7 @@ struct CycleCalendarView: View {
                 Label(model.cycle?.settings?.hormonal == true ? L10n.tr("Zapsat krvácení") : L10n.tr("Zapsat menstruaci"), systemImage: "plus")
                     .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .frame(maxWidth: .infinity).frame(height: 46)
-                    .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+                    .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
             }
             .buttonStyle(.plain)
             .padding(.top, 12)
@@ -758,7 +758,7 @@ struct LifeStagePicker: View {
                         .padding(14)
                         .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
                         .background(on ? Palette.pinkSoft : Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? Palette.pink : Color.clear, lineWidth: 1.5))
+                        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? Palette.pink : Color.clear, lineWidth: 1.5) }
                         .overlay(alignment: .topTrailing) {
                             if on {
                                 Image(systemName: "checkmark").scaledFont(11, weight: .heavy, cap: .denseCap).foregroundStyle(Palette.onAccent)
@@ -817,7 +817,7 @@ struct ContraceptionPicker: View {
                         .padding(14)
                         .frame(maxWidth: .infinity, minHeight: 116, alignment: .topLeading)
                         .background(on ? Palette.pinkSoft : Palette.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? Palette.pink : Color.clear, lineWidth: 1.5))
+                        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? Palette.pink : Color.clear, lineWidth: 1.5) }
                         .overlay(alignment: .topTrailing) {
                             if on {
                                 Image(systemName: "checkmark").scaledFont(11, weight: .heavy, cap: .denseCap).foregroundStyle(Palette.onAccent)
@@ -1054,7 +1054,7 @@ struct CoachCycleConsentSheet: View {
                 Button { dismiss() } label: {
                     Text(isOn ? "Zavřít" : "Teď ne").font(Typo.body).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 46)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18)))
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18)) }
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 10)

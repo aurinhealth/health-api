@@ -145,7 +145,7 @@ struct RangeBar: View {
                 Capsule().fill(Palette.ink.opacity(0.07))
                 Capsule().fill(Palette.ink.opacity(0.34)).frame(width: w / 3).offset(x: w / 3)
                 Circle().fill(color)
-                    .overlay(Circle().stroke(Palette.card, lineWidth: 2.5))
+                    .overlay { Circle().stroke(Palette.card, lineWidth: 2.5) }
                     .frame(width: height + 6, height: height + 6)
                     .offset(x: position * w - (height + 6) / 2)
             }
@@ -245,7 +245,7 @@ struct CircleButton: View {
             Image(systemName: systemImage)
                 .scaledFont(15, weight: .medium, cap: .denseCap)
                 .frame(width: 36, height: 36)
-                .overlay(Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1))
+                .overlay { Circle().stroke(Palette.ink.opacity(0.2), lineWidth: 1) }
                 .tapTarget(width: 36, height: 36)
         }
         .foregroundStyle(Palette.ink)
@@ -314,6 +314,18 @@ extension View {
         background(.ultraThinMaterial, in: shape)
             .background(Palette.card.opacity(0.6), in: shape)
             .overlay(shape.stroke(Palette.hairline, lineWidth: 1))
+    }
+}
+
+extension View {
+    /// The navigation bar shown or hidden: `toolbarVisibility` from iOS 18,
+    /// before it the older `toolbar(_:for:)`, which the iOS 27 SDK deprecates.
+    @ViewBuilder func navBarVisibility(_ visibility: Visibility) -> some View {
+        if #available(iOS 18, *) {
+            toolbarVisibility(visibility, for: .navigationBar)
+        } else {
+            toolbar(visibility, for: .navigationBar)
+        }
     }
 }
 

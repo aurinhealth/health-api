@@ -192,7 +192,7 @@ struct SubscriptionView: View {
                                 .padding(14)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background(plan.best ? AurinMark.amber.opacity(0.08) : Palette.card, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(plan.best ? AurinMark.amber : .clear, lineWidth: 1.5))
+                                .overlay { RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(plan.best ? AurinMark.amber : .clear, lineWidth: 1.5) }
                             }
                             .buttonStyle(.plain)
                         }
@@ -784,7 +784,7 @@ struct PhoneMockup<Content: View>: View {
             .overlay(alignment: .top) { Capsule().fill(Color.black).frame(width: 122 * scale, height: 36 * scale).padding(.top, 11 * scale) }
             .padding(bezel)
             .background(Color.black, in: RoundedRectangle(cornerRadius: 56 * scale + bezel, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 56 * scale + bezel, style: .continuous).stroke(Palette.ink.opacity(0.22), lineWidth: 1.5))
+            .overlay { RoundedRectangle(cornerRadius: 56 * scale + bezel, style: .continuous).stroke(Palette.ink.opacity(0.22), lineWidth: 1.5) }
             .shadow(color: Palette.indigo.opacity(0.35), radius: 30)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
@@ -830,7 +830,7 @@ struct PlanCard: View {
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(selected ? Palette.ink.opacity(0.6) : Palette.hairline, lineWidth: selected ? 1.5 : 1))
+            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(selected ? Palette.ink.opacity(0.6) : Palette.hairline, lineWidth: selected ? 1.5 : 1) }
             .overlay(alignment: .top) {
                 if plan.best {
                     Text("Nejvýhodnější").font(.caption2.weight(.semibold)).foregroundStyle(Palette.onButton)
