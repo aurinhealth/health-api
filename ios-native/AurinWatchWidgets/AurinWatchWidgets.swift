@@ -504,12 +504,11 @@ struct SmallView: View {
     }
 
     /// The value, or the countdown that runs by itself.
-    @ViewBuilder private var valueText: some View {
+    private var valueText: Text {
         if let until = value.until, until > Date() {
-            Text(timerInterval: Date()...until, countsDown: true, showsHours: true)
-        } else {
-            Text(value.text)
+            return Text(timerInterval: Date()...until, countsDown: true, showsHours: true)
         }
+        return Text(value.text)
     }
 }
 
