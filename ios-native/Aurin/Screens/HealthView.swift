@@ -249,7 +249,7 @@ enum ReadinessText {
 
     /// "−8 bodů připravenosti".
     static func points(_ points: Int) -> String {
-        L10n.f("%@ %@ připravenosti", Fmt.signed(Double(points)), Fmt.plural(abs(points), "bod", "body", "bodů"))
+        L10n.plural("%@ bodů připravenosti", Fmt.signed(Double(points)), abs(points))
     }
 
     static func pill(_ zone: String?) -> (String, Color, Color)? {
@@ -443,7 +443,7 @@ struct SleepDebtWidget: View {
         }
     }
 
-    private var nights: String { L10n.f("za %@ %@", String(debt.nights), Fmt.plural(debt.nights, "noc", "noci", "nocí")) }
+    private var nights: String { L10n.plural("za %lld nocí", debt.nights) }
     private var color: Color { debt.minutes > 180 ? Palette.rust : Palette.amberBar }
 }
 
@@ -551,7 +551,7 @@ struct WristTempWidget: View {
     /// "14 nocí" above the bars.
     private var nights: String? {
         guard bars.count > 1, size != .small else { return nil }
-        return String(bars.count) + " " + Fmt.plural(bars.count, "noc", "noci", "nocí")
+        return L10n.plural("%lld nocí", bars.count)
     }
 }
 

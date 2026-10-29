@@ -75,17 +75,17 @@ struct CoachAllowance: Decodable, Equatable {
 
     /// "zbývají 3 zprávy" by the input.
     var counter: String {
-        String(format: Fmt.plural(left, "zbývá %@ zpráva", "zbývají %@ zprávy", "zbývá %@ zpráv"), String(left))
+        L10n.plural("zbývá %lld zpráv", left)
     }
     /// The one-time line in the chat.
     var chatNotice: String {
-        String(format: Fmt.plural(left, "Tento týden ti zbývá %@ zpráva koučovi.", "Tento týden ti zbývají %@ zprávy koučovi.", "Tento týden ti zbývá %@ zpráv koučovi."), String(left))
+        L10n.plural("Tento týden ti zbývá %lld zpráv koučovi.", left)
     }
     /// Settings → Aurin Pro: nothing under 75 %, then what is left and when it renews.
     var settingsLine: String? {
         if usedUp { return L10n.tr("Zprávy koučovi na tento týden jsou vyčerpané.") + "\n" + Self.comesBack }
         guard near else { return nil }
-        let left = String(format: Fmt.plural(self.left, "Tento týden zbývá %@ zpráva koučovi.", "Tento týden zbývají %@ zprávy koučovi.", "Tento týden zbývá %@ zpráv koučovi."), String(self.left))
+        let left = L10n.plural("Tento týden zbývá %lld zpráv koučovi.", self.left)
         return left + "\n" + L10n.tr(Self.tomorrow ? "Obnoví se zítra." : "Obnoví se v pondělí.")
     }
     static var comesBack: String { L10n.tr(tomorrow ? "Další přibudou zítra." : "Další přibudou v pondělí.") }

@@ -191,8 +191,8 @@ struct LiveGymView: View {
             sum + (s.kg.flatMap(LiftWeight.number) ?? 0) * (s.reps.flatMap(LiftWeight.number) ?? 0)
         }
         let caption: String = count > 0
-            ? L10n.f("%@ %@ · %@ %@", String(count), Fmt.plural(count, "série", "série", "sérií"), Fmt.int(LiftWeight.shownValue(volume)), Units.weightUnit)
-            : L10n.f("%@ %@ v plánu", String(exercise.workCount), Fmt.plural(exercise.workCount, "série", "série", "sérií"))
+            ? L10n.plural("%lld sérií · %@ %@", count, Fmt.int(LiftWeight.shownValue(volume)), Units.weightUnit)
+            : L10n.plural("%lld sérií v plánu", exercise.workCount)
         return HStack(spacing: 12) {
             Image(systemName: done ? "checkmark" : "circle.dashed")
                 .font(.footnote.weight(.bold))

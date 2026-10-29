@@ -216,7 +216,7 @@ struct NutrientDetailContent: View {
             HStack(alignment: .lastTextBaseline, spacing: 12) {
                 Text(NutrientItem.amount(detail.eaten ?? 0)).font(Typo.number(84)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.5)
                 if let target = detail.target {
-                    Text((detail.limit ? L10n.tr("max") + " " : L10n.tr("z") + " ") + NutrientItem.amount(target) + "\n" + detail.unit)
+                    Text(L10n.f(detail.limit ? "max %@" : "z %@", NutrientItem.amount(target)) + "\n" + detail.unit)
                         .font(Typo.small).foregroundStyle(Palette.muted)
                 }
             }

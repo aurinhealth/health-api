@@ -161,8 +161,8 @@ extension ShareMilestones.Item {
         switch key {
         case "ride": return L10n.tr(Units.imperial ? "mil na kole" : "kilometrů na kole")
         case "run": return L10n.tr(Units.imperial ? "naběhaných mil" : "naběhaných kilometrů")
-        case "gym": return Fmt.plural(n, "trénink v posilovně", "tréninky v posilovně", "tréninků v posilovně")
-        default: return Fmt.plural(n, "den v řadě", "dny v řadě", "dní v řadě")
+        case "gym": return L10n.plural("tréninků v posilovně", n)
+        default: return L10n.plural("dní v řadě", n)
         }
     }
 
@@ -219,9 +219,9 @@ extension ShareMilestones.Record {
     /// "20 minut", "5 sekund", "1 hodina".
     static func duration(_ seconds: Double) -> String {
         let s = Int(seconds.rounded())
-        if s < 60 { return "\(s) " + Fmt.plural(s, "sekunda", "sekundy", "sekund") }
-        if s < 3600 { return "\(s / 60) " + Fmt.plural(s / 60, "minuta", "minuty", "minut") }
-        return "\(s / 3600) " + Fmt.plural(s / 3600, "hodina", "hodiny", "hodin")
+        if s < 60 { return L10n.plural("%lld sekund", s) }
+        if s < 3600 { return L10n.plural("%lld minut", s / 60) }
+        return L10n.plural("%lld hodin", s / 3600)
     }
 
     /// The axis under the curve: "5 s", "1 min", "1 h".

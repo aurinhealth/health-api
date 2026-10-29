@@ -1,12 +1,13 @@
 import SwiftUI
 
-// The welcome before the sign-in (LoginView): an opening and five pages of
+// The welcome before the sign-in (LoginView): an opening and three pages of
 // what Aurin does, each a few of the app's own cards with the sample day
 // (DemoData) that move once the page is on screen. With Reduce Motion they
-// stand still in their final state.
+// stand still in their final state. Most people decide within the first
+// pages, so Výživa and Spánek have no page of their own (review 2026-10-28).
 
 enum WelcomePage: Int, CaseIterable, Identifiable {
-    case opening, readiness, training, food, sleep, coach
+    case opening, readiness, training, coach
 
     var id: Int { rawValue }
 
@@ -15,8 +16,6 @@ enum WelcomePage: Int, CaseIterable, Identifiable {
         case .opening: return ""
         case .readiness: return "Připravenost"
         case .training: return "Trénink"
-        case .food: return "Výživa"
-        case .sleep: return "Spánek"
         case .coach: return "Kouč"
         }
     }
@@ -26,8 +25,6 @@ enum WelcomePage: Int, CaseIterable, Identifiable {
         case .opening: return ""
         case .readiness: return "Každé ráno víš, kolik tělo dnes zvládne."
         case .training: return "Tréninky podle únavy, svalů a vybavení, které máš."
-        case .food: return "Vyfoť talíř nebo naskenuj kód. Hodnoty doplní AI."
-        case .sleep: return "Večerka podle budíku a spánku, který dnes potřebuješ."
         case .coach: return "Zeptej se na cokoli. Zná tvůj spánek, trénink i jídlo."
         }
     }
@@ -38,8 +35,6 @@ enum WelcomePage: Int, CaseIterable, Identifiable {
         case .opening: return WelcomeGlow.sunrise
         case .readiness: return Palette.Glow.today
         case .training: return Palette.Glow.training
-        case .food: return Palette.Glow.food
-        case .sleep: return Palette.Glow.health
         case .coach: return WelcomeGlow.coach
         }
     }
@@ -111,8 +106,6 @@ struct WelcomePageView: View {
         case .opening: EmptyView()
         case .readiness: WelcomeReadiness(play: play)
         case .training: WelcomeTraining(play: play)
-        case .food: WelcomeFood(play: play)
-        case .sleep: WelcomeSleep(play: play)
         case .coach: WelcomeCoach(play: play)
         }
     }
@@ -144,19 +137,6 @@ private extension View {
         opacity(play.shown ? 1 : 0)
             .offset(y: play.shown ? 0 : 26)
             .animation(.spring(response: 0.6, dampingFraction: 0.82).delay(delay), value: play.shown)
-    }
-}
-
-/// Uncovers its content from the leading edge.
-private struct Reveal: Shape {
-    var fraction: Double
-    var animatableData: Double {
-        get { fraction }
-        set { fraction = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        Path(CGRect(x: rect.minX, y: rect.minY - 20, width: rect.width * fraction, height: rect.height + 40))
     }
 }
 
@@ -213,6 +193,19 @@ private struct WelcomeOpening: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .rises(play, delay: 0.35)
                 .padding(.bottom, 8)
+            // Said up front, so nobody without an invite finds out only at the sign-in.
+            Label {
+                Text("Aurin je zatím jen na pozvánku. [Nemáš ji? Přidej se na čekací listinu.](https://aurin.health/#join)")
+                    .font(Typo.small).foregroundStyle(Palette.secondary)
+                    .tint(Palette.blue)
+                    .fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: "lock").foregroundStyle(Palette.amber)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .rises(play, delay: 0.6)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
         }
     }
 }
@@ -395,169 +388,6 @@ private struct WelcomeTraining: View {
         .padding(.horizontal, 8).frame(height: 26)
         .background(set.done ? Color.clear : Palette.amberSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(set.done ? Color.clear : Palette.amberBar, lineWidth: 1.2))
-    }
-}
-
-// MARK: - Food
-
-private struct WelcomeFood: View {
-    let play: WelcomePlay
-    @AppStorage(DrinkFigureKind.storageKey) private var figureRaw = DrinkFigureKind.fallback.rawValue
-
-    private var lunch: FoodSnapshot.Meal? { DemoData.food.meals.first { $0.type == "lunch" } }
-
-    var body: some View {
-        VStack(spacing: 12) {
-            if let lunch {
-                // Výživa's own meal row: the photo's food is already in it.
-                MealRow(meal: lunch)
-                    .padding(.horizontal, 16).padding(.vertical, 2)
-                    .welcomeCard(padding: 0)
-                    .overlay(alignment: .topLeading) {
-                        Label("Z fotky", systemImage: "sparkles")
-                            .font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.amber)
-                            .padding(.horizontal, 10).frame(height: 24)
-                            .background(Palette.amberSoft, in: Capsule())
-                            .offset(x: 12, y: -12)
-                            .scaleEffect(play.shown ? 1 : 0.6, anchor: .leading).opacity(play.shown ? 1 : 0)
-                            .animation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.8), value: play.shown)
-                    }
-                    .allowsHitTesting(false)
-                    .rises(play, delay: 0)
-                    .padding(.top, 12)
-            }
-            HStack(spacing: 12) {
-                barcode.rises(play, delay: 0.2)
-                drinks.rises(play, delay: 0.35)
-            }
-            .frame(height: 164)
-        }
-    }
-
-    private var barcode: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Čárový kód").font(Typo.small).foregroundStyle(Palette.muted)
-            TimelineView(.animation(paused: !play.live)) { context in
-                let t = play.elapsed(context.date)
-                GeometryReader { geo in
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Palette.background)
-                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Palette.ink.opacity(0.08), lineWidth: 1))
-                        HStack(spacing: 2) {
-                            ForEach(Array([2, 1, 3, 1, 2, 1, 1, 3, 2, 1, 2, 3, 1].enumerated()), id: \.offset) { _, w in
-                                Rectangle().fill(Palette.ink).frame(width: CGFloat(w), height: 44)
-                            }
-                        }
-                        ScanCorners()
-                            .stroke(Palette.amberBar, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                            .padding(8)
-                            .scaleEffect(play.shown ? 1 : 1.25)
-                            .opacity(play.shown ? 1 : 0)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.6).delay(0.6), value: play.shown)
-                        Capsule().fill(AurinMark.amber)
-                            .frame(height: 2).padding(.horizontal, 16)
-                            .shadow(color: AurinMark.amber.opacity(0.9), radius: 5)
-                            .offset(y: CGFloat(play.live ? sin(t * 2.2) : 0) * (geo.size.height / 2 - 14))
-                    }
-                }
-            }
-        }
-        .frame(maxHeight: .infinity, alignment: .top)
-        .welcomeCard(padding: 14)
-    }
-
-    /// Pití with the figure chosen in Nastavení (the whale until then), filling up.
-    private var drinks: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Circle().fill(Palette.blue).frame(width: 8, height: 8)
-                Text("Pití").font(Typo.small.weight(.medium)).foregroundStyle(Palette.ink)
-            }
-            DrinkFigure(kind: DrinkFigureKind.from(figureRaw), fraction: play.shown ? 1500 / 2600 : 0, size: 84, animate: play.live)
-                .frame(maxWidth: .infinity)
-                .animation(.easeInOut(duration: 1.6).delay(0.6), value: play.shown)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(verbatim: Units.volumeText(1500)).font(Typo.number(22)).foregroundStyle(Palette.ink)
-                Text(L10n.f("zbývá %@", Units.volumeText(1100))).font(Typo.caption).foregroundStyle(Palette.muted)
-                    .lineLimit(1).minimumScaleFactor(0.8)
-            }
-        }
-        .frame(maxHeight: .infinity, alignment: .top)
-        .welcomeCard(padding: 14)
-    }
-}
-
-/// The four corners of a camera's frame.
-private struct ScanCorners: Shape {
-    func path(in rect: CGRect) -> Path {
-        let l = min(rect.width, rect.height) * 0.2, r: CGFloat = 8
-        var p = Path()
-        for (corner, dx, dy) in [(CGPoint(x: rect.minX, y: rect.minY), 1.0, 1.0), (CGPoint(x: rect.maxX, y: rect.minY), -1.0, 1.0),
-                                 (CGPoint(x: rect.minX, y: rect.maxY), 1.0, -1.0), (CGPoint(x: rect.maxX, y: rect.maxY), -1.0, -1.0)] {
-            p.move(to: CGPoint(x: corner.x, y: corner.y + dy * l))
-            p.addLine(to: CGPoint(x: corner.x, y: corner.y + dy * r))
-            p.addQuadCurve(to: CGPoint(x: corner.x + dx * r, y: corner.y), control: corner)
-            p.addLine(to: CGPoint(x: corner.x + dx * l, y: corner.y))
-        }
-        return p
-    }
-}
-
-// MARK: - Sleep
-
-private struct WelcomeSleep: View {
-    let play: WelcomePlay
-
-    private let levels: [(title: String, minutes: Int)] = [("Dospat", 510), ("Normálně", 480), ("Aspoň", 420)]
-
-    var body: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                tile(title: "Do postele", symbol: "moon.fill", color: Palette.indigo, minutes: 22 * 60 + 10)
-                    .rises(play, delay: 0)
-                tile(title: "Vstávání", symbol: "sun.max.fill", color: Palette.amber, minutes: 7 * 60 + 15)
-                    .rises(play, delay: 0.12)
-            }
-            HStack(spacing: 8) {
-                ForEach(levels.indices, id: \.self) { i in
-                    let on = play.shown && i == 0
-                    VStack(spacing: 3) {
-                        Text(LocalizedStringKey(levels[i].title)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(verbatim: SleepPlanner.short(levels[i].minutes)).font(Typo.caption).monospacedDigit().foregroundStyle(on ? Palette.indigo : Palette.muted)
-                    }
-                    .frame(maxWidth: .infinity).padding(.vertical, 10)
-                    .background(on ? Palette.lilac : Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(on ? Palette.indigo : .clear, lineWidth: 1.5))
-                    .shadow(color: .black.opacity(0.05), radius: 10, y: 6)
-                    .animation(.spring(response: 0.4, dampingFraction: 0.7).delay(0.9), value: play.shown)
-                }
-            }
-            .rises(play, delay: 0.24)
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Minulá noc").font(Typo.small).foregroundStyle(Palette.muted)
-                    Spacer()
-                    Text(verbatim: "7:12").font(Typo.number(22)).foregroundStyle(Palette.ink)
-                }
-                Hypnogram(segments: DemoData.night.night?.segments ?? [])
-                    .clipShape(Reveal(fraction: play.shown ? 1 : 0))
-                    .animation(.easeInOut(duration: 1.6).delay(0.6), value: play.shown)
-            }
-            .welcomeCard(padding: 14)
-            .rises(play, delay: 0.36)
-        }
-    }
-
-    private func tile(title: String, symbol: String, color: Color, minutes: Int) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Image(systemName: symbol).font(.system(size: 12, weight: .semibold)).foregroundStyle(color)
-                Text(LocalizedStringKey(title)).font(Typo.small).foregroundStyle(Palette.muted)
-            }
-            Text(verbatim: ClockText.format(minutes: minutes)).font(Typo.number(34)).foregroundStyle(Palette.ink)
-                .lineLimit(1).minimumScaleFactor(0.7)
-        }
-        .welcomeCard(padding: 14)
     }
 }
 

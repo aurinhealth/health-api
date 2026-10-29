@@ -31,7 +31,7 @@ final class SourceActions {
     static func when(_ date: Date) -> String {
         // The time of day in the phone's 12/24-hour format.
         let time = ClockText.format(date)
-        if Calendar.current.isDateInToday(date) { return L10n.tr("dnes") + " " + time }
+        if Calendar.current.isDateInToday(date) { return L10n.f("dnes %@", time) }
         let out = DateFormatters.make(L10n.isEnglish ? "MMM d," : "d. M.", locale: Fmt.locale)
         return out.string(from: date) + " " + time
     }

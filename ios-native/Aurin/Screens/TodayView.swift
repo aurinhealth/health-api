@@ -100,6 +100,11 @@ struct TodayContent: View {
         }
         .padding(.top, 40)
 
+        // The first two weeks after the setup: what fills Today (FirstDaysCard).
+        if selectedDate == nil && !model.demo {
+            FirstDaysCard(today: today, openCoach: openCoach).padding(.top, 20)
+        }
+
         // Today's weather at the week plan's place (or the offer to set
         // it) with the athlete's status, above the key numbers.
         if selectedDate == nil {
@@ -203,7 +208,7 @@ struct DataAgePill: View {
             return L10n.f("data ze včera %@", time)
         }
         let day = DateFormatters.make(L10n.isEnglish ? "MMM d" : "d. M.", locale: Fmt.locale, timeZone: calendar.timeZone, template: L10n.isEnglish)
-        return L10n.f("data z %@", day.string(from: last) + " " + time)
+        return L10n.f("data z %@ %@", day.string(from: last), time)
     }
 }
 
@@ -545,7 +550,7 @@ struct ReadinessHero: View {
     /// Why the number may still move: a new data source without 14 days of its own.
     private var provisionalLine: String {
         if let days = readiness.provisionalDays, days > 0 {
-            return L10n.f("Orientační: nový zdroj dat, zpřesní se za %@.", String(days) + " " + Fmt.plural(days, "den", "dny", "dní"))
+            return L10n.plural("Orientační: nový zdroj dat, zpřesní se za %lld dní.", days)
         }
         return L10n.tr("Orientační: nový zdroj dat, číslo se ještě zpřesní.")
     }

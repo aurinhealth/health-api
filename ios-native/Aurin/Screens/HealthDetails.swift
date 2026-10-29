@@ -10,7 +10,7 @@ struct SleepDetailView: View {
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.health, title: "Spánek",
-                     coach: .sleep(line: health.sleep.night?.minutes.map { L10n.tr("Dnes") + " " + Fmt.duration(Int($0)) }, date: health.date)) {
+                     coach: .sleep(line: health.sleep.night?.minutes.map { L10n.f("Dnes %@", Fmt.duration(Int($0))) }, date: health.date)) {
             SleepDetailContent(health: health, detail: detail, failed: failed) { await load() }
         }
         .task {

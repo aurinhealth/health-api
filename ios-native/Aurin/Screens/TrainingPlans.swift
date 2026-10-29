@@ -573,7 +573,7 @@ struct ActivePlanSummary: View {
               let today = ISODay.date(APIClient.localToday()) else { return nil }
         let days = Int((day.timeIntervalSince(today) / 86400).rounded())
         guard days >= 0 else { return nil }
-        let title = days == 0 ? L10n.tr("Závod dnes") : days == 1 ? L10n.tr("Závod zítra") : L10n.f("Závod za %@", "\(days) " + Fmt.plural(days, "den", "dny", "dní"))
+        let title = days == 0 ? L10n.tr("Závod dnes") : days == 1 ? L10n.tr("Závod zítra") : L10n.plural("Závod za %lld dní", days)
         let km = active.raceKm ?? active.template.race?.km
         let heading = Fmt.dayHeading(race)
         return (title, (L10n.isEnglish ? heading.capitalized : heading.lowercased()) + (km.map { " · " + raceDistance($0) } ?? ""))
@@ -634,7 +634,7 @@ struct TrainingPlansSheet: View {
                 Text(template.goal).font(Typo.caption).foregroundStyle(Palette.muted).lineLimit(1)
             }
             Spacer(minLength: 8)
-            Text("\(template.weeksCount) " + Fmt.plural(template.weeksCount, "týden", "týdny", "týdnů")).font(.body).foregroundStyle(Palette.muted)
+            Text(L10n.plural("%lld týdnů", template.weeksCount)).font(.body).foregroundStyle(Palette.muted)
             Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.faint)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -669,9 +669,9 @@ struct PlanDetailView: View {
                 Text(template.description).font(Typo.small).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
             }
             HStack(alignment: .top, spacing: 28) {
-                stat(String(template.weeksCount), Fmt.plural(template.weeksCount, "týden", "týdny", "týdnů"))
+                stat(String(template.weeksCount), L10n.plural("týdnů", template.weeksCount))
                 if perWeek > 0 { stat("\(perWeek)×", L10n.tr("týdně")) }
-                if tests > 0 { stat(String(tests), Fmt.plural(tests, "test síly", "testy síly", "testů síly")) }
+                if tests > 0 { stat(String(tests), L10n.plural("testů síly", tests)) }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 4)

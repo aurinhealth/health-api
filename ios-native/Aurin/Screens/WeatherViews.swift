@@ -493,14 +493,14 @@ struct WeatherDayRow: View {
             .foregroundStyle(indoor ? Palette.amber : Palette.green)
             .frame(width: 28, height: 24)
             .background(indoor ? Palette.amberSoft : Palette.greenSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .accessibilityLabel(Text(verbatim: L10n.tr(symbol == "bicycle" ? "Kolo" : "Běh") + " " + L10n.tr(indoor ? "uvnitř" : "venku")))
+            .accessibilityLabel(Text(verbatim: L10n.tr(symbol == "bicycle" ? (indoor ? "Kolo uvnitř" : "Kolo venku") : (indoor ? "Běh uvnitř" : "Běh venku"))))
     }
 
     /// "Kolo uvnitř: Nejvýš 6°, venku je zima." with "Kolo uvnitř" in amber (or green outdoors).
     @ViewBuilder private func reason(_ sport: String, _ advice: TodaySnapshot.Advice?) -> some View {
         if let advice {
             let indoor = WeatherText.indoor(advice)
-            let head = L10n.tr(sport) + " " + L10n.tr(indoor ? "uvnitř" : "venku")
+            let head = L10n.tr(sport == "Kolo" ? (indoor ? "Kolo uvnitř" : "Kolo venku") : (indoor ? "Běh uvnitř" : "Běh venku"))
             let why = advice.reason.flatMap { $0.isEmpty ? nil : $0 }
             (Text(verbatim: head + (why == nil ? "." : ": ")).fontWeight(.semibold).foregroundColor(indoor ? Palette.amber : Palette.green)
              + Text(verbatim: why ?? "").foregroundColor(Palette.muted))

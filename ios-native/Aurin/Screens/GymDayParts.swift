@@ -313,7 +313,7 @@ struct GymPartsCard: View {
         switch part {
         case .exercises:
             let count = day.exercises.count
-            let word = count == 1 ? L10n.f("%@ cvik", String(count)) : (2...4).contains(count) ? L10n.f("%@ cviky", String(count)) : L10n.f("%@ cviků", String(count))
+            let word = L10n.plural("%lld cviků", count)
             return day.plannedMinutes.map { word + " · \($0) min" } ?? word
         default:
             return parts.subtitle(part, day: day)

@@ -39,7 +39,7 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     static func signInError(_ code: String) -> Error {
         switch code {
         case "cancelled": return APIError.message(L10n.tr("Přihlášení přes Google bylo zrušeno."))
-        case "not_invited": return APIError.message(L10n.tr("Tento Google účet nemá do Aurinu pozvánku. Požádej o ni správce, nebo se přihlas jiným účtem."))
+        case "not_invited": return APIError.notInvited(L10n.tr("Tento Google účet nemá do Aurinu pozvánku. Aurin je teď jen pro pozvané."))
         case "expired": return APIError.message(L10n.tr("Přihlášení se přerušilo. Zkus to znovu."))
         case "unavailable": return APIError.message(L10n.tr("Přihlášení přes Google teď nejde. Zkus to později nebo se přihlas e-mailem."))
         default: return APIError.message(L10n.tr("Google přihlášení se nepodařilo ověřit. Zkus to znovu."))

@@ -101,9 +101,11 @@ final class AppModel {
     var paths: [AppTab: [AppRoute]] = [:]
     /// After the first sign-in: the profile setup has not been done yet.
     var needsSetup = false
-    /// After the first e-mail sign-in on this phone: the "Příště přes Face ID"
-    /// sheet, shown before the setup (RootView).
+    /// The "Příště přes Face ID" sheet, the next time the app opens after the
+    /// first e-mail sign-in on this phone (PasskeyOfferLater, RootView).
     var passkeyOffer = false
+    /// The last sign-in failed for want of an invite: the sign-in offers the waitlist.
+    var notInvited = false
     /// A full-screen flow (Režim tréninku) hides the tab bar.
     var immersive = false
     /// Režim tréninku hidden with its arrow: the workout goes on and a bar
@@ -349,6 +351,7 @@ final class AppModel {
             // The user closed the sign-in sheet.
         } catch {
             errorMessage = error.localizedDescription
+            notInvited = error as? APIError == .notInvited(error.localizedDescription)
         }
     }
 
@@ -369,14 +372,16 @@ final class AppModel {
             await refresh()
         } catch {
             errorMessage = error.localizedDescription
+            notInvited = error as? APIError == .notInvited(error.localizedDescription)
         }
     }
 
     /// Signs in with the code from the e-mail. The first time on this phone
-    /// the app then offers a passkey ("Příště přes Face ID", RootView).
+    /// the app offers a passkey ("Příště přes Face ID") the next time it opens
+    /// (PasskeyOfferLater), not between the sign-in and the setup.
     func signIn(email: String, code: String) async throws {
         try await api.verifyEmailLogin(email: email, code: code)
-        if ServerChoice.current.passkeys && !PasskeyService.mayHaveOne { passkeyOffer = true }
+        if ServerChoice.current.passkeys && !PasskeyService.mayHaveOne { PasskeyOfferLater.note() }
         await signedIn()
         await refresh()
     }
@@ -403,6 +408,7 @@ final class AppModel {
             demo = false
         }
         errorMessage = nil
+        notInvited = false
         let defaults = UserDefaults.standard
         if defaults.string(forKey: AvatarStore.emailKey) != nil { defaults.set(true, forKey: Self.accountUncheckedKey) }
         let account = try? await api.account()
@@ -1647,6 +1653,8 @@ final class AppModel {
         UserDefaults.standard.removeObject(forKey: Self.accountInitialKey)
         needsSetup = false
         passkeyOffer = false
+        PasskeyOfferLater.forget()
+        FirstDays.forget()
         paths = [:]
         tab = .today
         offline = false

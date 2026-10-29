@@ -109,7 +109,7 @@ struct CycleStateSummary: View {
             if let days = state.daysSinceBleeding {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(verbatim: String(days)).font(Typo.number(40)).foregroundStyle(Palette.ink)
-                    Text(Fmt.plural(days, "den od krvácení", "dny od krvácení", "dní od krvácení"))
+                    Text(L10n.plural("dní od krvácení", days))
                         .font(Typo.sentence(19)).foregroundStyle(Palette.secondary)
                 }
             } else {
@@ -140,7 +140,7 @@ extension CycleState {
         if next.late { return L10n.tr("menstruace se čeká") }
         let days = daysToNext ?? 0
         if days == 0 { return L10n.tr("menstruace asi dnes") }
-        return L10n.f("menstruace asi za %@", String(days) + " " + Fmt.plural(days, "den", "dny", "dní"))
+        return L10n.plural("menstruace asi za %lld dní", days)
     }
 }
 
@@ -329,7 +329,7 @@ struct CycleWidget: View {
             Text(verbatim: summary).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
         } else if let state, state.hormonal, let days = state.daysSinceBleeding {
-            NumberText(value: String(days), unit: Fmt.plural(days, "den", "dny", "dní"))
+            NumberText(value: String(days), unit: L10n.plural("dní", days))
             line(L10n.tr("od krvácení"))
         } else if !past, !cycle.hormonal, let day = cycle.cycleDay {
             NumberText(value: "\(day).", unit: L10n.tr("den"))
@@ -677,10 +677,10 @@ struct CycleSettingsView: View {
     private var lengthText: String {
         // Perimenopause: the range of the recent cycles, "24–45 dní".
         if settings?.stage == "perimenopause", let range = model.cycle?.state?.range {
-            return "\(range.shortest)–\(range.longest) " + Fmt.plural(range.longest, "den", "dny", "dní")
+            return L10n.plural("%lld–%lld dní", range.shortest, range.longest)
         }
         let n = model.cycle?.state?.length ?? settings?.cycleLength ?? 28
-        return String(n) + " " + Fmt.plural(n, "den", "dny", "dní")
+        return L10n.plural("%lld dní", n)
     }
 
     private func tile(value: String, label: String, action: @escaping () -> Void) -> some View {
@@ -888,7 +888,7 @@ struct LengthChoiceSheet: View {
             Text("Délka cyklu").font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
             Picker("", selection: $length) {
                 ForEach(21...40, id: \.self) { n in
-                    Text(verbatim: String(n) + " " + Fmt.plural(n, "den", "dny", "dní")).tag(n)
+                    Text(verbatim: L10n.plural("%lld dní", n)).tag(n)
                 }
             }
             .pickerStyle(.wheel)

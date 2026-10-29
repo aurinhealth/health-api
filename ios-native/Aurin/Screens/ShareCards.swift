@@ -613,7 +613,7 @@ struct ShareTimeline: View {
         return point(s.t.blue, ShareText.clock(day.stepsTime)) {
             HStack(alignment: .firstTextBaseline, spacing: s.u * 2) {
                 s.value(Fmt.int(day.steps), size: 8)
-                Text(L10n.tr(Fmt.plural(steps, "krok", "kroky", "kroků"))).font(s.sans(3.8)).foregroundStyle(s.t.secondary)
+                Text(L10n.plural("kroků", steps)).font(s.sans(3.8)).foregroundStyle(s.t.secondary)
             }
         }
     }

@@ -143,7 +143,7 @@ struct InsightsView: View {
             if found.isEmpty {
                 Text("Žádný cvik tomu neodpovídá.").font(Typo.body).foregroundStyle(Palette.muted).padding(.top, 20)
             } else {
-                SectionLabel(text: "\(found.count) " + Fmt.plural(found.count, "cvik", "cviky", "cviků")).padding(.top, 24)
+                SectionLabel(text: L10n.plural("%lld cviků", found.count)).padding(.top, 24)
                 liftCard(found)
             }
         } else {
@@ -268,7 +268,7 @@ struct InsightsView: View {
                     legend("Anaerobní", p.anaerobic, Palette.rust)
                 }
                 if let minutes = focus.minutes, let count = focus.activities {
-                    Text("\(count) " + Fmt.plural(count, "aktivita", "aktivity", "aktivit") + " · " + Fmt.duration(minutes))
+                    Text(L10n.plural("%lld aktivit", count) + " · " + Fmt.duration(minutes))
                         .font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }

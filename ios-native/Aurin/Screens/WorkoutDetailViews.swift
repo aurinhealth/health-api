@@ -665,7 +665,7 @@ struct StreamChart: View {
                     Text(verbatim: Self.clock(picked.minute) + "   " + Fmt.int(picked.value) + " " + unit)
                         .font(Typo.number(17)).foregroundStyle(Palette.ink)
                 } else {
-                    Text(verbatim: L10n.tr("prům.") + " " + Fmt.int(average) + " " + unit).font(Typo.caption).foregroundStyle(Palette.muted)
+                    Text(verbatim: L10n.f("prům. %@ %@", Fmt.int(average), unit)).font(Typo.caption).foregroundStyle(Palette.muted)
                 }
             }
             Chart {
@@ -701,7 +701,7 @@ struct StreamChart: View {
             Text("min").font(Typo.tiny).foregroundStyle(Palette.faint).frame(maxWidth: .infinity, alignment: .trailing)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(verbatim: L10n.tr(title) + ", " + L10n.tr("prům.") + " " + Fmt.int(average) + " " + unit))
+        .accessibilityLabel(Text(verbatim: L10n.tr(title) + ", " + L10n.f("prům. %@ %@", Fmt.int(average), unit)))
     }
 
     /// 31.5 → "31:30".
@@ -1451,7 +1451,7 @@ struct ManualWorkoutSheet: View {
 
     private var windowText: String {
         let style = Date.FormatStyle(date: .omitted, time: .shortened).locale(Fmt.locale)
-        return L10n.f("Tep z %@", startAt.formatted(style) + "–" + endAt.formatted(style))
+        return L10n.f("Tep z %@–%@", startAt.formatted(style), endAt.formatted(style))
     }
 
     private func loadHeart() async {

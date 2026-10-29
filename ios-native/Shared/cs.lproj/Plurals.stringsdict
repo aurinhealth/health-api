@@ -1,0 +1,1121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%@ %% za %lld týdnů</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%@ %% za %#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld týdny</string>
+			<key>many</key>
+			<string>%lld týdnů</string>
+			<key>one</key>
+			<string>%lld týden</string>
+			<key>other</key>
+			<string>%lld týdnů</string>
+		</dict>
+	</dict>
+	<key>%@ bodů připravenosti</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%@ %#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>body připravenosti</string>
+			<key>many</key>
+			<string>bodů připravenosti</string>
+			<key>one</key>
+			<string>bod připravenosti</string>
+			<key>other</key>
+			<string>bodů připravenosti</string>
+		</dict>
+	</dict>
+	<key>%@ kroků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%@ %#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>kroky</string>
+			<key>many</key>
+			<string>kroků</string>
+			<key>one</key>
+			<string>krok</string>
+			<key>other</key>
+			<string>kroků</string>
+		</dict>
+	</dict>
+	<key>%@ · %lld nových cviků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%@ · %#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld nové cviky</string>
+			<key>many</key>
+			<string>%lld nových cviků</string>
+			<key>one</key>
+			<string>%lld nový cvik</string>
+			<key>other</key>
+			<string>%lld nových cviků</string>
+		</dict>
+	</dict>
+	<key>%lld aktivit</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld aktivity</string>
+			<key>many</key>
+			<string>%lld aktivit</string>
+			<key>one</key>
+			<string>%lld aktivita</string>
+			<key>other</key>
+			<string>%lld aktivit</string>
+		</dict>
+	</dict>
+	<key>%lld běhů</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld běhy</string>
+			<key>many</key>
+			<string>%lld běhů</string>
+			<key>one</key>
+			<string>%lld běh</string>
+			<key>other</key>
+			<string>%lld běhů</string>
+		</dict>
+	</dict>
+	<key>%lld cviků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld cviky</string>
+			<key>many</key>
+			<string>%lld cviků</string>
+			<key>one</key>
+			<string>%lld cvik</string>
+			<key>other</key>
+			<string>%lld cviků</string>
+		</dict>
+	</dict>
+	<key>%lld dní</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld dny</string>
+			<key>many</key>
+			<string>%lld dní</string>
+			<key>one</key>
+			<string>%lld den</string>
+			<key>other</key>
+			<string>%lld dní</string>
+		</dict>
+	</dict>
+	<key>%lld hodin</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld hodiny</string>
+			<key>many</key>
+			<string>%lld hodin</string>
+			<key>one</key>
+			<string>%lld hodina</string>
+			<key>other</key>
+			<string>%lld hodin</string>
+		</dict>
+	</dict>
+	<key>%lld jízd</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld jízdy</string>
+			<key>many</key>
+			<string>%lld jízd</string>
+			<key>one</key>
+			<string>%lld jízda</string>
+			<key>other</key>
+			<string>%lld jízd</string>
+		</dict>
+	</dict>
+	<key>%lld minut</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld minuty</string>
+			<key>many</key>
+			<string>%lld minut</string>
+			<key>one</key>
+			<string>%lld minuta</string>
+			<key>other</key>
+			<string>%lld minut</string>
+		</dict>
+	</dict>
+	<key>%lld nocí</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld noci</string>
+			<key>many</key>
+			<string>%lld nocí</string>
+			<key>one</key>
+			<string>%lld noc</string>
+			<key>other</key>
+			<string>%lld nocí</string>
+		</dict>
+	</dict>
+	<key>%lld otázek</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld otázky</string>
+			<key>many</key>
+			<string>%lld otázek</string>
+			<key>one</key>
+			<string>%lld otázka</string>
+			<key>other</key>
+			<string>%lld otázek</string>
+		</dict>
+	</dict>
+	<key>%lld položek</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld položky</string>
+			<key>many</key>
+			<string>%lld položek</string>
+			<key>one</key>
+			<string>%lld položku</string>
+			<key>other</key>
+			<string>%lld položek</string>
+		</dict>
+	</dict>
+	<key>%lld rozcvičovacích sérií</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld rozcvičovací série</string>
+			<key>many</key>
+			<string>%lld rozcvičovacích sérií</string>
+			<key>one</key>
+			<string>%lld rozcvičovací série</string>
+			<key>other</key>
+			<string>%lld rozcvičovacích sérií</string>
+		</dict>
+	</dict>
+	<key>%lld sekund</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld sekundy</string>
+			<key>many</key>
+			<string>%lld sekund</string>
+			<key>one</key>
+			<string>%lld sekunda</string>
+			<key>other</key>
+			<string>%lld sekund</string>
+		</dict>
+	</dict>
+	<key>%lld surovin</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld suroviny</string>
+			<key>many</key>
+			<string>%lld surovin</string>
+			<key>one</key>
+			<string>%lld surovina</string>
+			<key>other</key>
+			<string>%lld surovin</string>
+		</dict>
+	</dict>
+	<key>%lld sérií</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld série</string>
+			<key>many</key>
+			<string>%lld sérií</string>
+			<key>one</key>
+			<string>%lld série</string>
+			<key>other</key>
+			<string>%lld sérií</string>
+		</dict>
+	</dict>
+	<key>%lld sérií v plánu</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld série v plánu</string>
+			<key>many</key>
+			<string>%lld sérií v plánu</string>
+			<key>one</key>
+			<string>%lld série v plánu</string>
+			<key>other</key>
+			<string>%lld sérií v plánu</string>
+		</dict>
+	</dict>
+	<key>%lld sérií · %@ %@</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@ · %@ %@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld série</string>
+			<key>many</key>
+			<string>%lld sérií</string>
+			<key>one</key>
+			<string>%lld série</string>
+			<key>other</key>
+			<string>%lld sérií</string>
+		</dict>
+	</dict>
+	<key>%lld tréninků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld tréninky</string>
+			<key>many</key>
+			<string>%lld tréninků</string>
+			<key>one</key>
+			<string>%lld trénink</string>
+			<key>other</key>
+			<string>%lld tréninků</string>
+		</dict>
+	</dict>
+	<key>%lld týdnů</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld týdny</string>
+			<key>many</key>
+			<string>%lld týdnů</string>
+			<key>one</key>
+			<string>%lld týden</string>
+			<key>other</key>
+			<string>%lld týdnů</string>
+		</dict>
+	</dict>
+	<key>%lld týdnů od %@</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@ od %@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld týdny</string>
+			<key>many</key>
+			<string>%lld týdnů</string>
+			<key>one</key>
+			<string>%lld týden</string>
+			<key>other</key>
+			<string>%lld týdnů</string>
+		</dict>
+	</dict>
+	<key>%lld vah</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld váhy</string>
+			<key>many</key>
+			<string>%lld vah</string>
+			<key>one</key>
+			<string>%lld váha</string>
+			<key>other</key>
+			<string>%lld vah</string>
+		</dict>
+	</dict>
+	<key>%lld věcí</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld věci</string>
+			<key>many</key>
+			<string>%lld věcí</string>
+			<key>one</key>
+			<string>%lld věc</string>
+			<key>other</key>
+			<string>%lld věcí</string>
+		</dict>
+	</dict>
+	<key>%lld z %lld sérií</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%lld z %#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld sérií</string>
+			<key>many</key>
+			<string>%lld sérií</string>
+			<key>one</key>
+			<string>%lld série</string>
+			<key>other</key>
+			<string>%lld sérií</string>
+		</dict>
+	</dict>
+	<key>%lld zpráv</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld zprávy</string>
+			<key>many</key>
+			<string>%lld zpráv</string>
+			<key>one</key>
+			<string>%lld zpráva</string>
+			<key>other</key>
+			<string>%lld zpráv</string>
+		</dict>
+	</dict>
+	<key>%lld zápisů čeká na signál</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld zápisy čekají na signál</string>
+			<key>many</key>
+			<string>%lld zápisů čeká na signál</string>
+			<key>one</key>
+			<string>%lld zápis čeká na signál</string>
+			<key>other</key>
+			<string>%lld zápisů čeká na signál</string>
+		</dict>
+	</dict>
+	<key>%lld/%lld sérií</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%lld/%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld série</string>
+			<key>many</key>
+			<string>%lld sérií</string>
+			<key>one</key>
+			<string>%lld série</string>
+			<key>other</key>
+			<string>%lld sérií</string>
+		</dict>
+	</dict>
+	<key>%lld/%lld sérií · %lld cviků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%lld/%#@n@ · %#@m@</string>
+		<key>m</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld cviky</string>
+			<key>many</key>
+			<string>%lld cviků</string>
+			<key>one</key>
+			<string>%lld cvik</string>
+			<key>other</key>
+			<string>%lld cviků</string>
+		</dict>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld sérií</string>
+			<key>many</key>
+			<string>%lld sérií</string>
+			<key>one</key>
+			<string>%lld série</string>
+			<key>other</key>
+			<string>%lld sérií</string>
+		</dict>
+	</dict>
+	<key>%lld–%lld dní</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%lld–%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>%lld dny</string>
+			<key>many</key>
+			<string>%lld dní</string>
+			<key>one</key>
+			<string>%lld den</string>
+			<key>other</key>
+			<string>%lld dní</string>
+		</dict>
+	</dict>
+	<key>+ další %lld týdnů</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>+ další %lld týdny</string>
+			<key>many</key>
+			<string>+ další %lld týdnů</string>
+			<key>one</key>
+			<string>+ další %lld týden</string>
+			<key>other</key>
+			<string>+ další %lld týdnů</string>
+		</dict>
+	</dict>
+	<key>Odesláno do %lld aplikací</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Odesláno do %lld aplikací</string>
+			<key>many</key>
+			<string>Odesláno do %lld aplikací</string>
+			<key>one</key>
+			<string>Odesláno do %lld aplikace</string>
+			<key>other</key>
+			<string>Odesláno do %lld aplikací</string>
+		</dict>
+	</dict>
+	<key>Orientační: nový zdroj dat, zpřesní se za %lld dní.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Orientační: nový zdroj dat, zpřesní se za %lld dny.</string>
+			<key>many</key>
+			<string>Orientační: nový zdroj dat, zpřesní se za %lld dní.</string>
+			<key>one</key>
+			<string>Orientační: nový zdroj dat, zpřesní se za %lld den.</string>
+			<key>other</key>
+			<string>Orientační: nový zdroj dat, zpřesní se za %lld dní.</string>
+		</dict>
+	</dict>
+	<key>Tento týden ti zbývá %lld zpráv koučovi.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Tento týden ti zbývají %lld zprávy koučovi.</string>
+			<key>many</key>
+			<string>Tento týden ti zbývá %lld zpráv koučovi.</string>
+			<key>one</key>
+			<string>Tento týden ti zbývá %lld zpráva koučovi.</string>
+			<key>other</key>
+			<string>Tento týden ti zbývá %lld zpráv koučovi.</string>
+		</dict>
+	</dict>
+	<key>Tento týden zbývá %lld zpráv koučovi.</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Tento týden zbývají %lld zprávy koučovi.</string>
+			<key>many</key>
+			<string>Tento týden zbývá %lld zpráv koučovi.</string>
+			<key>one</key>
+			<string>Tento týden zbývá %lld zpráva koučovi.</string>
+			<key>other</key>
+			<string>Tento týden zbývá %lld zpráv koučovi.</string>
+		</dict>
+	</dict>
+	<key>Z knihovny · %lld tréninků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Z knihovny · %lld tréninky</string>
+			<key>many</key>
+			<string>Z knihovny · %lld tréninků</string>
+			<key>one</key>
+			<string>Z knihovny · %lld trénink</string>
+			<key>other</key>
+			<string>Z knihovny · %lld tréninků</string>
+		</dict>
+	</dict>
+	<key>Zbývá %lld sérií</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Zbývají %lld série</string>
+			<key>many</key>
+			<string>Zbývá %lld sérií</string>
+			<key>one</key>
+			<string>Zbývá %lld série</string>
+			<key>other</key>
+			<string>Zbývá %lld sérií</string>
+		</dict>
+	</dict>
+	<key>Závod za %lld dní</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>Závod za %lld dny</string>
+			<key>many</key>
+			<string>Závod za %lld dní</string>
+			<key>one</key>
+			<string>Závod za %lld den</string>
+			<key>other</key>
+			<string>Závod za %lld dní</string>
+		</dict>
+	</dict>
+	<key>a %lld dalších</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>a %lld další</string>
+			<key>many</key>
+			<string>a %lld dalších</string>
+			<key>one</key>
+			<string>a %lld další</string>
+			<key>other</key>
+			<string>a %lld dalších</string>
+		</dict>
+	</dict>
+	<key>dní</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>dny</string>
+			<key>many</key>
+			<string>dní</string>
+			<key>one</key>
+			<string>den</string>
+			<key>other</key>
+			<string>dní</string>
+		</dict>
+	</dict>
+	<key>dní od krvácení</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>dny od krvácení</string>
+			<key>many</key>
+			<string>dní od krvácení</string>
+			<key>one</key>
+			<string>den od krvácení</string>
+			<key>other</key>
+			<string>dní od krvácení</string>
+		</dict>
+	</dict>
+	<key>dní v řadě</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>dny v řadě</string>
+			<key>many</key>
+			<string>dní v řadě</string>
+			<key>one</key>
+			<string>den v řadě</string>
+			<key>other</key>
+			<string>dní v řadě</string>
+		</dict>
+	</dict>
+	<key>kroků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>kroky</string>
+			<key>many</key>
+			<string>kroků</string>
+			<key>one</key>
+			<string>krok</string>
+			<key>other</key>
+			<string>kroků</string>
+		</dict>
+	</dict>
+	<key>menstruace asi za %lld dní</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>menstruace asi za %lld dny</string>
+			<key>many</key>
+			<string>menstruace asi za %lld dní</string>
+			<key>one</key>
+			<string>menstruace asi za %lld den</string>
+			<key>other</key>
+			<string>menstruace asi za %lld dní</string>
+		</dict>
+	</dict>
+	<key>testů</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>testy</string>
+			<key>many</key>
+			<string>testů</string>
+			<key>one</key>
+			<string>test</string>
+			<key>other</key>
+			<string>testů</string>
+		</dict>
+	</dict>
+	<key>testů FTP</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>testy FTP</string>
+			<key>many</key>
+			<string>testů FTP</string>
+			<key>one</key>
+			<string>test FTP</string>
+			<key>other</key>
+			<string>testů FTP</string>
+		</dict>
+	</dict>
+	<key>testů síly</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>testy síly</string>
+			<key>many</key>
+			<string>testů síly</string>
+			<key>one</key>
+			<string>test síly</string>
+			<key>other</key>
+			<string>testů síly</string>
+		</dict>
+	</dict>
+	<key>tréninků</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>tréninky</string>
+			<key>many</key>
+			<string>tréninků</string>
+			<key>one</key>
+			<string>trénink</string>
+			<key>other</key>
+			<string>tréninků</string>
+		</dict>
+	</dict>
+	<key>tréninků hotovo</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>tréninků hotovo</string>
+			<key>many</key>
+			<string>tréninků hotovo</string>
+			<key>one</key>
+			<string>tréninku hotovo</string>
+			<key>other</key>
+			<string>tréninků hotovo</string>
+		</dict>
+	</dict>
+	<key>tréninků v posilovně</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>tréninky v posilovně</string>
+			<key>many</key>
+			<string>tréninků v posilovně</string>
+			<key>one</key>
+			<string>trénink v posilovně</string>
+			<key>other</key>
+			<string>tréninků v posilovně</string>
+		</dict>
+	</dict>
+	<key>týdnů</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>týdny</string>
+			<key>many</key>
+			<string>týdnů</string>
+			<key>one</key>
+			<string>týden</string>
+			<key>other</key>
+			<string>týdnů</string>
+		</dict>
+	</dict>
+	<key>z %@ porcí</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>z %@ %#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>porce</string>
+			<key>many</key>
+			<string>porcí</string>
+			<key>one</key>
+			<string>porce</string>
+			<key>other</key>
+			<string>porcí</string>
+		</dict>
+	</dict>
+	<key>za %lld nocí</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>za %lld noci</string>
+			<key>many</key>
+			<string>za %lld nocí</string>
+			<key>one</key>
+			<string>za %lld noc</string>
+			<key>other</key>
+			<string>za %lld nocí</string>
+		</dict>
+	</dict>
+	<key>zbývá %lld zpráv</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@n@</string>
+		<key>n</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>lld</string>
+			<key>few</key>
+			<string>zbývají %lld zprávy</string>
+			<key>many</key>
+			<string>zbývá %lld zpráv</string>
+			<key>one</key>
+			<string>zbývá %lld zpráva</string>
+			<key>other</key>
+			<string>zbývá %lld zpráv</string>
+		</dict>
+	</dict>
+</dict>
+</plist>
