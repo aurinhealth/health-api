@@ -118,6 +118,11 @@ enum W {
         imperial ? number(ml / mlPerFluidOunce) + " fl oz" : number(ml / 1000, digits: 1) + " l"
     }
 
+    /// A glass of a drink: "200 ml" or "7 fl oz".
+    static func glass(_ ml: Int) -> String {
+        imperial ? number(Double(ml) / mlPerFluidOunce) + " fl oz" : "\(ml) ml"
+    }
+
     /// A glass: 250 ml or 8 fl oz.
     static var glassMl: Int { imperial ? Int((8 * mlPerFluidOunce).rounded()) : 250 }
     static var glassText: String { imperial ? "+8 fl oz" : "+250 ml" }

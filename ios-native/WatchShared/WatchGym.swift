@@ -35,6 +35,8 @@ struct WatchGym: Codable, Equatable, Sendable {
         var done: Bool
         /// The rest after it, from the plan or the setting.
         var rest: Int
+        /// The letter it is planned or rated at (GymIntensity on the iPhone).
+        var intensity: String? = nil
         /// Not a warm-up nor a drop set.
         var work: Bool { !warmup && !drop }
     }
@@ -45,6 +47,13 @@ struct WatchGym: Codable, Equatable, Sendable {
         var row: Int
         var kg: Double
         var reps: Int
+    }
+
+    /// How a set done on the watch went: E, M, H or F, tapped during the rest.
+    struct Rated: Codable, Equatable, Sendable {
+        var date: String
+        var row: Int
+        var letter: String
     }
 
     /// A change of the plan from the watch (the menu under ≡); the iPhone
@@ -81,6 +90,7 @@ struct WatchGym: Codable, Equatable, Sendable {
     static let requestKey = "gymRequest"
     static let replyKey = "gym"
     static let doneKey = "gymDone"
+    static let ratedKey = "gymRated"
     static let changeKey = "gymChange"
     /// Watch → iPhone every few seconds of the gym: the heart rate and calories
     /// (Live) for Training mode, which then leaves Apple Health to the watch.
@@ -105,6 +115,11 @@ struct WatchGym: Codable, Equatable, Sendable {
 extension WatchGym.Done {
     func encoded() -> Data? { try? JSONEncoder().encode(self) }
     static func decode(_ data: Data) -> WatchGym.Done? { try? JSONDecoder().decode(WatchGym.Done.self, from: data) }
+}
+
+extension WatchGym.Rated {
+    func encoded() -> Data? { try? JSONEncoder().encode(self) }
+    static func decode(_ data: Data) -> WatchGym.Rated? { try? JSONDecoder().decode(WatchGym.Rated.self, from: data) }
 }
 
 extension WatchGym.Change {

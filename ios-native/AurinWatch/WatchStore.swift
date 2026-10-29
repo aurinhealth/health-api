@@ -86,8 +86,13 @@ final class WatchStore: NSObject, ObservableObject {
             WidgetCenter.shared.reloadAllTimelines()
             return
         }
-        guard let value = WatchSnapshot.decode(data) else { return }
+        guard var value = WatchSnapshot.decode(data) else { return }
         if let snapshot, snapshot.date == value.date, snapshot.updated > value.updated { return }
+        // A drink still waiting for Undo isn't in the iPhone's day yet.
+        if let drink, var food = value.food {
+            food.water = (food.water ?? 0) + drink.counted
+            value.food = food
+        }
         // The iPhone sends the same Today by context, reply and message: draw it once.
         if let snapshot, Self.same(snapshot, value) { return }
         snapshot = value
@@ -116,23 +121,49 @@ final class WatchStore: NSObject, ObservableObject {
         WatchAlarm.shared.fromPhone(value.alarmOnWatch)
     }
 
-    /// A drink of water from the Food page: shown at once, sent to the iPhone
-    /// now when it is in reach, else as soon as it is.
-    func addWater(ml: Int) {
-        if var value = snapshot, var food = value.food {
-            food.water = (food.water ?? 0) + Double(ml)
-            value.food = food
-            value.updated = Date()
-            snapshot = value
-            if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
-            ComplicationShelf.save(value)
-            WidgetCenter.shared.reloadTimelines(ofKind: "aurin.small.drinks")
-            WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.drinks")
+    /// A drink from the Food page: shown at once, sent to the iPhone after a
+    /// few seconds in which Undo takes it back (mockup 9), then now when it
+    /// is in reach, else as soon as it is.
+    func addWater(ml: Int, kind: String = "water", name: String? = nil, factor: Double = 1) {
+        sendDrink()
+        count(ml: Double(ml) * factor)
+        let id = UUID()
+        drink = Drink(id: id, ml: ml, kind: kind, name: name, counted: Double(ml) * factor)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Self.undoSeconds))
+            guard WatchStore.shared.drink?.id == id else { return }
+            WatchStore.shared.sendDrink()
         }
+    }
+
+    /// The drink just added, while Undo can still take it back.
+    struct Drink: Equatable {
+        let id: UUID
+        let ml: Int
+        let kind: String
+        let name: String?
+        let counted: Double
+    }
+
+    @Published private(set) var drink: Drink?
+    static let undoSeconds = 5.0
+
+    /// Undo: the drink never reaches the iPhone.
+    func undoDrink() {
+        guard let drink else { return }
+        self.drink = nil
+        count(ml: -drink.counted)
+    }
+
+    /// The drink waiting for Undo goes to the iPhone now (its time ran out,
+    /// another drink came, or the app goes to the background).
+    func sendDrink() {
+        guard let drink else { return }
+        self.drink = nil
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
         guard session.activationState == .activated else { return }
-        let message: [String: Any] = [WatchSnapshot.waterKey: ml]
+        let message: [String: Any] = [WatchSnapshot.waterKey: drink.ml, WatchSnapshot.drinkKindKey: drink.kind]
         if session.isReachable {
             session.sendMessage(message, replyHandler: { _ in }, errorHandler: { _ in
                 WCSession.default.transferUserInfo(message)
@@ -140,6 +171,19 @@ final class WatchStore: NSObject, ObservableObject {
         } else {
             session.transferUserInfo(message)
         }
+    }
+
+    /// The water on the Food page and the drinks complications.
+    private func count(ml: Double) {
+        guard var value = snapshot, var food = value.food else { return }
+        food.water = max(0, (food.water ?? 0) + ml)
+        value.food = food
+        value.updated = Date()
+        snapshot = value
+        if let data = value.encoded() { UserDefaults.standard.set(data, forKey: Self.savedKey) }
+        ComplicationShelf.save(value)
+        WidgetCenter.shared.reloadTimelines(ofKind: "aurin.small.drinks")
+        WidgetCenter.shared.reloadTimelines(ofKind: "aurin.wide.drinks")
     }
 
     /// The wake time the iPhone just saved, until its new Today comes.

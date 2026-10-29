@@ -14,6 +14,9 @@ final class GymWorkout: NSObject, ObservableObject {
     @Published private(set) var calories: Double = 0
     @Published private(set) var averageHeartRate: Double?
     @Published private(set) var maxHeartRate: Double?
+    /// Paused (mockup 7): since when, and how long the pauses before took.
+    @Published private(set) var pausedAt: Date?
+    @Published private(set) var pausedTotal: TimeInterval = 0
 
     private let store = HKHealthStore()
     private var session: HKWorkoutSession?
@@ -64,7 +67,33 @@ final class GymWorkout: NSObject, ObservableObject {
         session = recovered
         self.builder = builder
         start = recovered.startDate ?? builder.startDate ?? Date()
+        // The pauses before the relaunch, as the builder counted them.
+        pausedTotal = max(0, Date().timeIntervalSince(start ?? Date()) - builder.elapsedTime)
+        if recovered.state == .paused { pausedAt = Date() }
         return true
+    }
+
+    /// The clock of the workout without its pauses: the time cell counts from here.
+    var clockStart: Date? { start.map { $0.addingTimeInterval(pausedTotal) } }
+
+    /// The workout's time so far, pauses left out.
+    var elapsed: TimeInterval {
+        guard let start else { return 0 }
+        return max(0, (pausedAt ?? Date()).timeIntervalSince(start) - pausedTotal)
+    }
+
+    /// A pause: the time and heart rate stop; Apple Health leaves it out.
+    func pause() {
+        guard pausedAt == nil, start != nil else { return }
+        pausedAt = Date()
+        session?.pause()
+    }
+
+    func resume() {
+        guard let pausedAt else { return }
+        pausedTotal += Date().timeIntervalSince(pausedAt)
+        self.pausedAt = nil
+        session?.resume()
     }
 
     /// Ends the workout; saved to Apple Health when sets were done, else thrown away.
@@ -94,6 +123,8 @@ final class GymWorkout: NSObject, ObservableObject {
         calories = 0
         averageHeartRate = nil
         maxHeartRate = nil
+        pausedAt = nil
+        pausedTotal = 0
     }
 
     /// What the builder measured so far, read off its statistics.

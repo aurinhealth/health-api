@@ -48,6 +48,20 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
     var alarm: Alarm? = nil
     /// Settings → Units on the iPhone: pounds and fluid ounces on the watch too.
     var imperial: Bool? = nil
+    /// Food → Drinks on the iPhone: the favourite drinks in their usual
+    /// glasses, for the watch's list under the drop.
+    var drinks: [Drink]? = nil
+
+    struct Drink: Codable, Equatable, Sendable, Identifiable {
+        var kind: String
+        var ml: Int
+        /// In the app's language.
+        var name: String
+        var symbol: String
+        /// How much of it counts as water (coffee 0.9).
+        var factor: Double
+        var id: String { kind + "." + String(ml) }
+    }
 
     struct Alarm: Codable, Equatable, Sendable {
         /// "07:00" on work days and at the weekend; nil without an alarm.
@@ -85,6 +99,8 @@ struct WatchSnapshot: Codable, Equatable, Sendable {
 
     /// The watch asks the iPhone to add a drink of water: its ml.
     static let waterKey = "addWater"
+    /// The drink sent with waterKey; water when missing.
+    static let drinkKindKey = "addWaterKind"
 
     struct Session: Codable, Hashable, Sendable {
         var date: String

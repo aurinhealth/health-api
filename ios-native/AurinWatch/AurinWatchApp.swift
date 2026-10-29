@@ -20,7 +20,10 @@ struct AurinWatchApp: App {
                         store.ask()
                         WatchAlarm.shared.schedule()
                     }
-                    if now == .background { store.scheduleMorning() }
+                    if now == .background {
+                        store.sendDrink()
+                        store.scheduleMorning()
+                    }
                 }
         }
         // In the morning: today from the server before the first look at the watch.
