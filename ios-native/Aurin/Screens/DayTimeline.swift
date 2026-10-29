@@ -454,7 +454,7 @@ private struct DayDot: View {
     var body: some View {
         Circle()
             .strokeBorder(color, style: future ? StrokeStyle(lineWidth: 2, dash: [2.6, 2.4]) : StrokeStyle(lineWidth: 3))
-            .background(Circle().fill(Palette.card))
+            .background { Circle().fill(Palette.card) }
             .frame(width: Rail.dot, height: Rail.dot)
             .shadow(color: future ? .clear : color.opacity(0.45), radius: 4)
     }
@@ -590,7 +590,7 @@ private struct DayNowRow: View {
             ZStack {
                 TrackLine(first: first, last: last)
                 Circle().fill(Palette.amber).frame(width: 9, height: 9)
-                    .background(Circle().fill(Palette.amber.opacity(0.2)).frame(width: 17, height: 17))
+                    .background { Circle().fill(Palette.amber.opacity(0.2)).frame(width: 17, height: 17) }
             }
             .frame(width: Rail.width)
             .frame(maxHeight: .infinity)

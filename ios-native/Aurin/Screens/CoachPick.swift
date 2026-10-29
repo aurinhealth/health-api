@@ -131,7 +131,7 @@ private struct PickIcon: View {
     var body: some View {
         Image(systemName: option.symbol).font(.system(size: size * 0.38, weight: .semibold)).foregroundStyle(option.color)
             .frame(width: size, height: size)
-            .overlay(Circle().stroke(option.color, lineWidth: 2.5))
+            .overlay { Circle().stroke(option.color, lineWidth: 2.5) }
     }
 }
 
@@ -263,7 +263,7 @@ struct CoachPickCard: View {
                 NavigationLink(value: AppRoute.coachPick(false)) {
                     Text("Další možnosti").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 50)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
                 }
                 .buttonStyle(.plain)
             }

@@ -91,7 +91,7 @@ struct AthleteStatusPill: View {
             }
             .padding(.leading, 6).padding(.trailing, 14).padding(.vertical, 6)
             .background(Palette.card, in: Capsule())
-            .overlay(Capsule().stroke(Palette.hairline, lineWidth: 1))
+            .overlay { Capsule().stroke(Palette.hairline, lineWidth: 1) }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.f("Stav sportovce: %@, %@", kind.title, AthleteStatusSheet.untilText(status.statusUntil)))
@@ -175,7 +175,7 @@ struct AthleteStatusSheet: View {
                             }
                             .padding(12)
                             .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(kind == option ? Palette.ink.opacity(0.25) : .clear, lineWidth: 1))
+                            .overlay { RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(kind == option ? Palette.ink.opacity(0.25) : .clear, lineWidth: 1) }
                         }
                         .buttonStyle(.plain)
                         .accessibilityAddTraits(kind == option ? .isSelected : [])
@@ -214,7 +214,7 @@ struct AthleteStatusSheet: View {
                 .padding(20)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
             }
-            .background(Palette.background.ignoresSafeArea())
+            .background { Palette.background.ignoresSafeArea() }
             .navigationTitle("Stav sportovce")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

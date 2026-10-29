@@ -70,7 +70,7 @@ struct LiveGymView: View {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
         .task { await load() }
         .onAppear {
             UIApplication.shared.isIdleTimerDisabled = true; model.immersive = true

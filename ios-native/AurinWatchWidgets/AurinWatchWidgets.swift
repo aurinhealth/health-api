@@ -480,7 +480,7 @@ struct SmallView: View {
                             .font(.system(size: 10, weight: .heavy))
                             .foregroundStyle(arrow.color)
                             .frame(width: 14, height: 14)
-                            .background(Circle().fill(.black))
+                            .background { Circle().fill(.black) }
                     }
                 }
             }
@@ -813,8 +813,8 @@ struct WideView: View {
                     let eaten = row.1?.eaten ?? 0
                     let goal = row.1?.target ?? 0
                     VStack(alignment: .leading, spacing: 2) {
-                        (Text(row.0 + " ").foregroundColor(row.2) + Text(Days.int(eaten)).foregroundColor(.white)
-                            + Text(goal > 0 ? "/" + Days.int(goal) : "").foregroundColor(C.muted))
+                        (Text(row.0 + " ").foregroundStyle(row.2) + Text(Days.int(eaten)).foregroundStyle(.white)
+                            + Text(goal > 0 ? "/" + Days.int(goal) : "").foregroundStyle(C.muted))
                             .font(.system(size: 9.5, weight: .semibold))
                             .lineLimit(1).minimumScaleFactor(0.7)
                         Line(fraction: goal > 0 ? eaten / goal : 0, color: goal > 0 && eaten >= goal ? C.green : row.2, height: 4)
@@ -939,7 +939,7 @@ struct NightLine: View {
                     .frame(width: max(0, w - bedX), height: 5)
                     .offset(x: bedX)
                 Circle().fill(.white).frame(width: 9, height: 9)
-                    .overlay(Circle().stroke(.black, lineWidth: 2))
+                    .overlay { Circle().stroke(.black, lineWidth: 2) }
                     .offset(x: x(now) - 4.5)
             }
             .frame(height: g.size.height)

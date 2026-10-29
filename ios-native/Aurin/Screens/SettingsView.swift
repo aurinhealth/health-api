@@ -16,7 +16,7 @@ struct SettingsView: View {
                     ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .background(Palette.settingsBackground.ignoresSafeArea())
+            .background { Palette.settingsBackground.ignoresSafeArea() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { dismiss() } label: { Image(systemName: "xmark").scaledFont(14, weight: .semibold) }
@@ -103,7 +103,7 @@ struct SettingsMenu: View {
                         .overlay(alignment: .topLeading) {
                             if !store.problems.isEmpty {
                                 Circle().fill(Palette.rust).frame(width: 9, height: 9)
-                                    .overlay(Circle().stroke(Palette.card, lineWidth: 2))
+                                    .overlay { Circle().stroke(Palette.card, lineWidth: 2) }
                                     .offset(x: 36, y: 10)
                                     .accessibilityLabel("Připojit znovu")
                             }

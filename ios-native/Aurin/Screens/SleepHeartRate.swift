@@ -162,14 +162,14 @@ struct NightHeartChart: View {
                 .stroke(Palette.rust, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                 if detailed {
                     ForEach(spikes, id: \.m) { spike in
-                        Circle().fill(Palette.card).overlay(Circle().stroke(Palette.rust, lineWidth: 1.6)).frame(width: 7, height: 7)
+                        Circle().fill(Palette.card).overlay { Circle().stroke(Palette.rust, lineWidth: 1.6) }.frame(width: 7, height: 7)
                             .position(x: x(spike.m), y: y(spike.max))
                         Text(verbatim: Fmt.int(spike.max)).font(Typo.tiny).foregroundStyle(Palette.muted)
                             .position(x: x(spike.m), y: y(spike.max) - 12)
                     }
                 }
                 if let low, let avg = low.avg {
-                    Circle().fill(Palette.rust).overlay(Circle().stroke(Palette.background, lineWidth: 2)).frame(width: 10, height: 10)
+                    Circle().fill(Palette.rust).overlay { Circle().stroke(Palette.background, lineWidth: 2) }.frame(width: 10, height: 10)
                         .position(x: x(low.m), y: y(avg))
                     // Beside the dot, on the side with more room.
                     let right = x(low.m) < width - 80

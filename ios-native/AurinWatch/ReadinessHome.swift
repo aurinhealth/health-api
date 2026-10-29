@@ -210,7 +210,7 @@ struct WatchRangeBar: View {
                 Capsule().fill(W.track)
                 Capsule().fill(W.dim).frame(width: w / 3, height: 4).offset(x: w / 3)
                 Circle().fill(color)
-                    .overlay(Circle().stroke(W.track, lineWidth: 1.5))
+                    .overlay { Circle().stroke(W.track, lineWidth: 1.5) }
                     .frame(width: 9, height: 9)
                     .offset(x: position * w - 4.5)
             }

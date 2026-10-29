@@ -22,7 +22,7 @@ struct TrainingTools: View {
                 NavigationLink(value: AppRoute.trainingMode(today)) {
                     Label("Prázdný trénink v posilovně", systemImage: "plus").font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                         .frame(maxWidth: .infinity).frame(height: 46)
-                        .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
                         .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -38,7 +38,7 @@ struct TrainingTools: View {
                 Label("Zapsat trénink ručně", systemImage: "square.and.pencil")
                     .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     .frame(maxWidth: .infinity).frame(height: 46)
-                    .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                    .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
             }
             .buttonStyle(.plain)
             .padding(.top, 2)
@@ -90,7 +90,7 @@ struct LibraryWidget: View {
                             .foregroundStyle(Palette.onAccent)
                             .frame(width: 34, height: 34)
                             .background(Self.sports[i].color, in: Circle())
-                            .overlay(Circle().stroke(Palette.card, lineWidth: 2.5))
+                            .overlay { Circle().stroke(Palette.card, lineWidth: 2.5) }
                     }
                 }
                 Text("Knihovna tréninků").font(Typo.bodyStrong).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.85)
@@ -129,7 +129,7 @@ struct ChipFlow<Item: Hashable>: View {
                     .foregroundStyle(isOn(item) ? Palette.onButton : Palette.ink)
                     .padding(.horizontal, 12).frame(height: 32)
                     .background(isOn(item) ? Palette.button : Palette.card, in: Capsule())
-                    .overlay(Capsule().stroke(Palette.ink.opacity(isOn(item) ? 0 : 0.12), lineWidth: 1))
+                    .overlay { Capsule().stroke(Palette.ink.opacity(isOn(item) ? 0 : 0.12), lineWidth: 1) }
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(isOn(item) ? .isSelected : [])
@@ -198,7 +198,7 @@ struct SecondaryButton: View {
                 .labelStyle(TitleAndOptionalIcon(hasIcon: systemImage != nil))
                 .font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                 .frame(maxWidth: .infinity).frame(height: 46)
-                .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+                .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -843,7 +843,7 @@ struct EquipmentView: View {
         }
         .padding(.leading, 14).padding(.trailing, 6).padding(.vertical, 10)
         .cardSurface(cornerRadius: 18)
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? Palette.green : .clear, lineWidth: 1.5))
+        .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(on ? Palette.green : .clear, lineWidth: 1.5) }
         .accessibilityAddTraits(on ? .isSelected : [])
     }
 
@@ -1067,7 +1067,7 @@ struct ChoiceCard: View {
             }
             .padding(.horizontal, 16).padding(.vertical, 13)
             .cardSurface(cornerRadius: 18)
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(selected ? Palette.green : .clear, lineWidth: 1.5))
+            .overlay { RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(selected ? Palette.green : .clear, lineWidth: 1.5) }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

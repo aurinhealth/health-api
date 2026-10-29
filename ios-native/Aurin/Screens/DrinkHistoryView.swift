@@ -65,7 +65,7 @@ struct DrinkHistoryView: View {
         .confirmationDialog(L10n.f("Smazat %@?", BulkMoveSheet.items(selected.count)), isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Smazat", role: .destructive) { Task { _ = await run("delete") } }
         }
-        .toolbar(.hidden, for: .navigationBar)
+        .navBarVisibility(.hidden)
         .sheet(item: $editing) { d in
             DrinkSheet(kind: d.kind, ml: Int(d.ml ?? 250), editing: true) { ml, kind in _ = await model.updateDrink(id: d.id, ml: ml, kind: kind) }
         }
@@ -114,7 +114,7 @@ struct DrinkHistoryView: View {
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 14).frame(height: 34)
                 .background(on ? Palette.button : .clear, in: Capsule())
-                .overlay(Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.18), lineWidth: 1))
+                .overlay { Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.18), lineWidth: 1) }
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])

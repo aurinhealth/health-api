@@ -389,7 +389,7 @@ struct WorkoutLibrarySection: View {
                         .foregroundStyle(own == nil ? Palette.faint : Palette.amber)
                         .padding(.horizontal, 12).frame(minWidth: 32, minHeight: 32)
                         .background(own == nil ? Color.clear : Palette.amberSoft, in: Capsule())
-                        .overlay(Capsule().stroke(own == nil ? Palette.ink.opacity(0.25) : Palette.amberBar, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+                        .overlay { Capsule().stroke(own == nil ? Palette.ink.opacity(0.25) : Palette.amberBar, style: StrokeStyle(lineWidth: 1, dash: [3, 3])) }
                 }
                 .buttonStyle(.plain)
                 .disabled(own == nil || presets.count >= 8)
@@ -421,7 +421,7 @@ struct WorkoutLibrarySection: View {
                 .foregroundStyle(on ? Palette.onButton : Palette.ink)
                 .padding(.horizontal, 12).frame(height: 32)
                 .background(on ? Palette.button : Palette.card, in: Capsule())
-                .overlay(Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.12), lineWidth: 1))
+                .overlay { Capsule().stroke(Palette.ink.opacity(on ? 0 : 0.12), lineWidth: 1) }
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -692,7 +692,7 @@ struct ExerciseCatalog: View {
             .background(Palette.card, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .padding(.top, 12)
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     chip("Vše", muscle == nil && !rested) { muscle = nil; rested = false }
                     if model.muscles.map({ !$0.tired.isEmpty }) == true {
@@ -705,6 +705,7 @@ struct ExerciseCatalog: View {
                 }
                 .padding(.vertical, 2)
             }
+            .scrollIndicators(.hidden)
             .padding(.top, 12)
 
             PillToggle(title: "Jen s mým vybavením", subtitle: EquipmentView.summary(equipment), isOn: $mine)
@@ -859,7 +860,7 @@ struct ExerciseSheet: View {
             .padding(24)
         }
         .presentationDetents([.medium, .large])
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         .sheet(isPresented: $technique) { TechniqueSheet(exercise: exercise.name) }
     }
 

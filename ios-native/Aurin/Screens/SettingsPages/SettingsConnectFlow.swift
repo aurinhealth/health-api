@@ -194,7 +194,7 @@ struct ServiceConnectSheet: View {
                     if connected {
                         Image(systemName: "checkmark").scaledFont(14, weight: .bold, cap: .denseCap).foregroundStyle(Palette.onAccent)
                             .frame(width: 30, height: 30).background(Palette.green, in: Circle())
-                            .overlay(Circle().stroke(Palette.settingsBackground, lineWidth: 3))
+                            .overlay { Circle().stroke(Palette.settingsBackground, lineWidth: 3) }
                             .offset(x: 8, y: 8)
                     }
                 }

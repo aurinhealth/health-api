@@ -199,7 +199,7 @@ struct GymSessionView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
         .background(on ? W.green.opacity(0.18) : W.tile, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(on ? W.green : .clear, lineWidth: 2))
+        .overlay { RoundedRectangle(cornerRadius: 12).stroke(on ? W.green : .clear, lineWidth: 2) }
         .focusable(true)
         .focused($focus, equals: field)
         .focusEffectDisabled()

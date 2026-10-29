@@ -270,7 +270,7 @@ struct GymSetRow: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(state == .current ? Palette.track : .clear, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(state == .current ? Palette.amber.opacity(0.55) : .clear, lineWidth: 1.5))
+        .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(state == .current ? Palette.amber.opacity(0.55) : .clear, lineWidth: 1.5) }
         .onAppear { editKg = kg; editReps = reps }
         .onChange(of: kg) { _, value in if focus == nil { editKg = value } }
         .onChange(of: reps) { _, value in if focus == nil { editReps = value } }
@@ -536,11 +536,11 @@ struct HeartSourceButton: View {
             .frame(height: 34)
             // The whole capsule takes the tap, not only the heart's outline.
             .contentShape(Capsule())
-            .overlay(Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1))
+            .overlay { Capsule().stroke(Palette.ink.opacity(0.18), lineWidth: 1) }
             .overlay(alignment: .topTrailing) {
                 if measuring || sensor.connected {
                     Circle().fill(Palette.green).frame(width: 9, height: 9)
-                        .overlay(Circle().stroke(Palette.background, lineWidth: 2))
+                        .overlay { Circle().stroke(Palette.background, lineWidth: 2) }
                         .offset(x: -1, y: 1)
                 }
             }
@@ -677,7 +677,7 @@ struct RestSetsList: View {
                             .focused($focused)
                             .frame(width: 64, height: 32)
                             .background(Palette.track, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(focused ? Palette.amber : .clear, lineWidth: 1.5))
+                            .overlay { RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(focused ? Palette.amber : .clear, lineWidth: 1.5) }
                             .onAppear { typed = kg == "–" ? "" : kg }
                     } else {
                         Text(kg).font(Typo.number(20)).foregroundStyle(s.done ? Palette.ink : Palette.faint).frame(width: 64)
