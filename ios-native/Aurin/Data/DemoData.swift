@@ -84,6 +84,19 @@ enum DemoData {
         try? JSONDecoder().decode(MuscleDetailData.self, from: Data(muscleDetailJSON.utf8))
     }
 
+    /// The coach's answer in the demo, which has no account to ask with: the
+    /// suggestions the sample day offers (CoachSuggestions.forDay) get their own,
+    /// anything else the day in one sentence.
+    static func coachAnswer(_ question: String) -> String {
+        let answers = [
+            "Jak se mi povedl dnešní běh?": "Ranní běh byl klidný, 42 minut za 48 TSS, přesně jak měl být. Nohy moc nezatížil, takže silový trénink v 17:30 platí. K obědu si dej dost sacharidů.",
+            "Co mám dát zítra?": "Zítra dej lehčí den, třeba procházku nebo protažení. Po dnešních dřepech budou nohy unavené a v sobotu tě čeká delší běh, ten chci mít na čerstvých nohách.",
+            "Co sníst po tréninku?": "Do hodiny po tréninku si dej bílkoviny se sacharidy, třeba řecký jogurt s ovocem a müsli nebo kuře s rýží. Do dnešního cíle ti zbývá 1 270 kcal, tak se klidně pořádně najez.",
+            "Jak mám dnes trénovat?": "Připravenost je 78, takže dnes můžeš jít naplno. Nohy se po pondělí ještě zotavují, tak dřep dej se střední zátěží 80 kg a víc přidej na horní části těla: tlak na lavici a přítahy. V sobotu tě čeká delší běh."]
+        let key = answers.keys.first { L10n.tr($0) == question } ?? ""
+        return L10n.tr(answers[key] ?? "V ukázce odpovídám podle vzorového dne: připravenost 78, spánek 7:12 a v 17:30 silový trénink celého těla. Po přihlášení ti odpovím podle tvých vlastních dat.")
+    }
+
     private static let muscleDetailJSON = #"""
 {"status":"ok","date":"2026-10-08","id":"quads","label":"Přední stehna","strength":{"exercise":"Barbell back squat","points":[{"week":"2026-08-17","kg":93.3},{"week":"2026-08-24","kg":96.3},{"week":"2026-08-31","kg":96.3},{"week":"2026-09-07","kg":99.2},{"week":"2026-09-14","kg":99.2},{"week":"2026-09-21","kg":102.1},{"week":"2026-09-28","kg":102.1},{"week":"2026-10-05","kg":102.1}],"change":0.094},"calendar":{"from":"2026-09-14","days":["2026-09-14","2026-09-21","2026-09-24","2026-09-28","2026-10-01","2026-10-05"],"target":2,"perWeek":1.7,"thisWeek":1,"weeks":[{"monday":"2026-09-14","times":1},{"monday":"2026-09-21","times":2},{"monday":"2026-09-28","times":2},{"monday":"2026-10-05","times":1}]},"recent":[{"exercise":"Barbell back squat","date":"2026-10-05","day":"pondělí","sets":4,"kg":87.5,"reps":5},{"exercise":"Barbell back squat","date":"2026-10-01","day":"1. 10.","sets":4,"kg":87.5,"reps":5},{"exercise":"Barbell back squat","date":"2026-09-28","day":"28. 9.","sets":4,"kg":85,"reps":5}],"best":{"exercise":"Barbell back squat","kg":87.5,"reps":5,"e1rm":102.1,"date":"2026-09-24","day":"24. 9."}}
 """#
