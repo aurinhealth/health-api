@@ -9,6 +9,7 @@ import { readinessFor, primaryNights, sleepIndexFor } from "./readiness.js";
 import { localDate, localDateTime } from "./user-time.js";
 import { sleepSettings, tonightChoice } from "./energy-profile.js";
 import { L } from "./lang.js";
+import { dayCalories } from "./app-food.js";
 import { readinessMessage } from "./push.js";
 import { activityKindOf } from "./activity-match.js";
 import { daySessions, deviceEnergyExtra, withHeartRateLoad } from "./app-training.js";
@@ -210,7 +211,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
   const totals = nutrition.foodLog?.totals || {};
   const macros = nutrition.macros || {};
   const breakdown = nutrition.calorieBreakdown || {};
-  const bonus = num(breakdown.activityAdjustment) != null ? Math.round(num(breakdown.activityAdjustment) * (num(breakdown.trainingCoverage) ?? 0.7)) : null;
+  const { bonus } = dayCalories(nutrition);
 
   // Trends for the widgets.
   const last = (n, key) => rows.filter(r => r.id <= date && r.id > shift(date, -n)).map(r => ({ date: r.id, value: num(r[key]) })).filter(p => p.value > 0);
