@@ -77,7 +77,7 @@ function intervalsAuth(env) { if (!env.INTERVALS_API_KEY) throw new Error("INTER
 async function intervalsGet(env, path) {
   if(/\/(activities|events)\?/.test(path)){
     const query=new URL('https://internal'+path).searchParams,type=path.includes('/events?')?'planned-workout':'activity';
-    const rows=(await env.DB.prepare("SELECT source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND (source_family IN ('intervals','local','wahoo') AND data_type=? OR ?='activity' AND source_family IN ('apple-health','google-wearables') AND data_type='exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,type,type,query.get('oldest'),query.get('newest')+'T23:59:59').all()).results||[];
+    const rows=(await env.DB.prepare("SELECT source_family,start_time,end_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local','wahoo','apple-health','google-wearables') AND data_type IN ('planned-workout','activity','exercise') AND (source_family IN ('intervals','local','wahoo') AND data_type=? OR ?='activity' AND source_family IN ('apple-health','google-wearables') AND data_type='exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(env.USER_ID,type,type,query.get('oldest'),query.get('newest')+'T23:59:59').all()).results||[];
     // Workouts from the watch (Apple Health, Google Health) count like the
     // ones from Intervals.icu; one recorded by both is kept from Intervals.
     const own=rows.filter(r=>r.source_family==='intervals'||r.source_family==='local');
