@@ -50,6 +50,20 @@ final class GymAdjustmentTests: XCTestCase {
         XCTAssertEqual(GymSessionMath.adjustment(next, after: done), GymSessionMath.Adjustment(kg: "15", lighter: false))
     }
 
+    func testRatedHarderThanPlannedStaysDespiteTheReps() {
+        // 15 kg × 15 of 10–12 rated M before an E set: the letter wins, no step up.
+        let done = set(1, "1", kg: "15", reps: "15", done: true, letter: "M", planned: "10–12")
+        let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "E", planned: "10–12")
+        XCTAssertNil(GymSessionMath.adjustment(next, after: done))
+        XCTAssertEqual(GymSessionMath.carried(next, in: exercise([done, next]))?.kg, "15")
+    }
+
+    func testUnratedOverTheRepsGoesHeavier() {
+        let done = set(1, "1", kg: "15", reps: "15", done: true, letter: nil, planned: "10–12")
+        let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "E", planned: "10–12")
+        XCTAssertEqual(GymSessionMath.adjustment(next, after: done)?.lighter, false)
+    }
+
     func testHardButAllRepsStays() {
         let done = set(1, "1", kg: "12.5", reps: "12", done: true, letter: "H")
         let next = set(2, "2", kg: nil, reps: nil, done: false, letter: "M")

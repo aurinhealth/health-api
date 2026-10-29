@@ -436,7 +436,7 @@ struct TrainingModeView: View {
         return GymSetRow(label: s.warmup ? "W" : s.drop ? "↳" : s.side == "P" ? "" : s.number, side: s.side,
                          lastTime: GymSessionMath.lastTime(s, in: exercise, last: last),
                          kg: shownKg, reps: shownReps, state: phase,
-                         kgText: $kg, repsText: $reps, repsHint: s.plannedReps.map(Fmt.range),
+                         kgText: $kg, repsText: $reps, kgHint: shownKg, repsHint: s.plannedReps.map(Fmt.range),
                          drop: s.drop, intensity: letter, planned: !s.done && !picked.contains(s.row),
                          onIntensity: { intensityFor = SetRef(id: s.row) },
                          onEdit: s.done ? { k, r in Task { await editDone(s, kg: k, reps: r) } } : nil,
@@ -964,6 +964,20 @@ struct TrainingModeView: View {
         reps = set.reps ?? carry?.reps ?? ""
     }
 
+    /// The set before changed after its tick (its weight, reps or letter):
+    /// the set at hand follows it, unless something else was typed there.
+    private func refill(from old: GymDay?) {
+        guard let old, let exercise = day?.exercises[safe: index], let set = nextSet(exercise),
+              let before = old.exercises.first(where: { $0.name == exercise.name && $0.sets.contains { $0.row == set.row } }),
+              let was = before.sets.first(where: { $0.row == set.row }) else { return }
+        let wasCarry = GymSessionMath.carried(was, in: before, keep: kept)
+        let carry = GymSessionMath.carried(set, in: exercise, keep: kept)
+        if kg.isEmpty || kg == LiftWeight.shown(was.kg ?? wasCarry?.kg ?? was.plannedKg) ?? "" {
+            kg = LiftWeight.shown(set.kg ?? carry?.kg ?? set.plannedKg) ?? ""
+        }
+        if reps == was.reps ?? wasCarry?.reps ?? "" { reps = set.reps ?? carry?.reps ?? "" }
+    }
+
     private func move(_ by: Int) {
         guard let count = day?.exercises.count else { return }
         index = min(max(0, index + by), count - 1)
@@ -1306,7 +1320,9 @@ struct TrainingModeView: View {
         let r = reps.trimmingCharacters(in: .whitespaces)
         guard !k.isEmpty || !r.isEmpty, (set.kg ?? "") != k || (set.reps ?? "") != r else { return }
         next.edit(row: set.row, kg: k.isEmpty ? (set.kg ?? "") : k, reps: r.isEmpty ? (set.reps ?? "") : r)
+        let old = day
         day = next
+        refill(from: old)
         guard !model.demo else { return }
         do {
             try await model.saveGym(next, date: date)
@@ -1370,7 +1386,9 @@ struct TrainingModeView: View {
         // Rows after an added drop set move one down.
         picked = Set(picked.map { $0 > row && letter == "D" ? $0 + 1 : $0 }).union([row])
         if letter == "D" { kept = Set(kept.map { $0 > row ? $0 + 1 : $0 }) }
+        let old = day
         await saveDay(next)
+        if letter != "D" { refill(from: old) }
     }
 
     private func removeDrop(_ row: Int) async {
@@ -1447,7 +1465,9 @@ struct TrainingModeView: View {
         // Nothing typed in reps: the plan's lower number ("5" of "5–8").
         let planned: String = GymCoach.firstNumber(set.plannedReps).map { String($0) } ?? (set.plannedReps ?? "")
         // The letter in the set (the plan's, the one chosen, or the one chosen for the set before) goes with it.
-        next.complete(row: set.row, kg: k.isEmpty ? (set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.drop ? "" : planned) : r, rpe: "", intensity: carried)
+        // Nothing typed in kg: the weight the field showed (carried from the set before, else the plan's).
+        let shown: String? = day?.exercises.first(where: { $0.sets.contains { $0.row == set.row } }).flatMap { GymSessionMath.carried(set, in: $0, keep: kept)?.kg }
+        next.complete(row: set.row, kg: k.isEmpty ? (shown ?? set.plannedKg ?? "") : k, reps: r.isEmpty ? (set.drop ? "" : planned) : r, rpe: "", intensity: carried)
         // The start in the sheet: after iOS closes the app the clock goes on from it.
         if next.startedAt == nil { next.markStarted(live.start ?? Date()) }
         day = next
