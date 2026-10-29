@@ -3,7 +3,7 @@
 // failed syncs per service, connections that broke, server errors, and how
 // full the account capacity is, what AI cost per user and feature, and account
 // deletions that keep failing, and the accounts and AI against what Pro brings
-// in (accountsReport). No e-mail when there is nothing to report.
+// in, with proposals for the limits (accountsReport), every morning.
 import { AsyncLocalStorage } from "node:async_hooks";
 import { emailConfigured, sendEmail } from "./email-sender.js";
 import { accountCapacity } from "./tenancy.js";
@@ -118,27 +118,31 @@ export const TESTER_CAP = 20;
 const pct = (a, b) => b > 0 ? Math.round(a / b * 100) : 0;
 
 // stats: { accounts, newWeek, aiUsersWeek, paidMonthly, paidYearly, trial, sandbox,
-// weekUsd, monthUsd, monthDay, monthDays, nearCap: [{ email, cost, limit }] }
-// (accountStats). Warnings every day they hold; all the numbers on Mondays.
-export function accountsReport(stats, { monday = false, monthlyLimit = null, unpaidShare = 1 } = {}) {
+// weekUsd, monthUsd, monthDay, monthDays, totalYesterdayUsd, nearCap: [{ email, cost, limit }] }
+// (accountStats). Every morning: the numbers, what to watch and a proposal
+// for each, so a limit is raised before people hit it. limits: the Worker
+// settings ({ monthly, unpaidShare, totalAlert, totalLimit }).
+export function accountsReport(stats, limits = {}) {
   if (!stats) return null;
+  const { monthly = null, unpaidShare = 1, totalAlert = null, totalLimit = null } = limits;
   const paid = stats.paidMonthly + stats.paidYearly;
   const revenue = stats.paidMonthly * NET_USD_PER_MONTH.monthly + stats.paidYearly * NET_USD_PER_MONTH.yearly;
   const projected = stats.monthDay > 0 ? stats.monthUsd / stats.monthDay * stats.monthDays : 0;
-  const warnings = [];
-  if (paid > 0 && projected > revenue) warnings.push(`AI tento měsíc vyjde asi na ${usd(projected)}, víc, než Pro vydělá (${usd(revenue)} za ${paid} platících).`);
-  if (stats.accounts >= TESTER_CAP - 2) warnings.push(`Účtů je ${stats.accounts} z ${TESTER_CAP} testerů, které chceš v TestFlightu.`);
-  for (const row of stats.nearCap) warnings.push(`${row.email} má za měsíc ${usd(row.cost)} z ${usd(row.limit)} (${pct(row.cost, row.limit)} %).`);
-  const lines = [];
-  if (warnings.length) lines.push(`Pozor\n${warnings.map(w => `- ${w}`).join("\n")}`);
-  if (monday) {
-    lines.push(`Účty a AI (bez tebe)
+  const perUser = stats.aiUsersWeek ? stats.weekUsd / stats.aiUsersWeek : 0;
+  const lines = [`Účty a AI (bez tebe)
 - Účtů: ${stats.accounts}, nových za 7 dní ${stats.newWeek}, AI za 7 dní použilo ${stats.aiUsersWeek}
 - Platí: ${paid} (měsíčně ${stats.paidMonthly}, ročně ${stats.paidYearly}), ve zkušebním týdnu ${stats.trial}, nákupy z TestFlightu ${stats.sandbox}
-- AI za 7 dní ${usd(stats.weekUsd)}, za měsíc zatím ${usd(stats.monthUsd)} (do konce měsíce asi ${usd(projected)}), na uživatele s AI ${usd(stats.aiUsersWeek ? stats.weekUsd / stats.aiUsersWeek : 0)} za týden
-- Pro vydělá asi ${usd(revenue)} za měsíc${monthlyLimit != null ? ` · strop na účet ${usd(monthlyLimit)}, bez placení ${usd(monthlyLimit * unpaidShare)}` : ""}`);
-  }
-  return lines.length ? lines.join("\n\n") : null;
+- AI včera všichni dohromady ${usd(stats.totalYesterdayUsd)}${totalLimit != null ? ` z denní brzdy ${usd(totalLimit)}` : ""}
+- AI za 7 dní ${usd(stats.weekUsd)} (${usd(perUser)} na uživatele s AI), za měsíc zatím ${usd(stats.monthUsd)}, do konce měsíce asi ${usd(projected)}
+- Pro vydělá asi ${usd(revenue)} za měsíc${monthly != null ? ` · strop na účet ${usd(monthly)}, bez placení ${usd(monthly * unpaidShare)}` : ""}`];
+  const proposals = [];
+  for (const row of stats.nearCap) proposals.push(`${row.email} má za měsíc ${usd(row.cost)} z ${usd(row.limit)} (${pct(row.cost, row.limit)} %). Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z ${usd(monthly)} na ${usd((monthly || 0) + 2)}; jestli ne, nech to, brzda ho zastaví.`);
+  if (stats.aiUsersWeek >= 3 && stats.nearCap.length / stats.aiUsersWeek >= 0.2) proposals.push(`U stropu je ${stats.nearCap.length} z ${stats.aiUsersWeek} lidí s AI. Strop je nejspíš moc nízko: zvedni AI_MONTHLY_LIMIT_USD o 2 USD.`);
+  if (paid > 0 && projected > revenue) proposals.push(`AI tento měsíc vyjde asi na ${usd(projected)}, víc, než Pro vydělá (${usd(revenue)} za ${paid} platících). Sniž COACH_WEEKLY_MESSAGES z 30 na 25, nebo strop na účet.`);
+  if (totalLimit != null && stats.totalYesterdayUsd >= totalLimit * 0.7) proposals.push(`Včera padlo ${pct(stats.totalYesterdayUsd, totalLimit)} % denní brzdy pro všechny. Než AI vypne všem, zvedni AI_TOTAL_DAILY_LIMIT_USD na ${usd(Math.ceil(totalLimit * 1.5))}${totalAlert != null ? ` a AI_TOTAL_DAILY_ALERT_USD na ${usd(Math.ceil(totalAlert * 1.5))}` : ""}.`);
+  if (stats.accounts >= TESTER_CAP - 2) proposals.push(`Účtů je ${stats.accounts} z ${TESTER_CAP} testerů v TestFlightu. Rozhodni, jestli limit 20 zvedneš, nebo přestaneš schvalovat zájemce.`);
+  lines.push(proposals.length ? `Návrhy\n${proposals.map(p => `- ${p}`).join("\n")}` : "Návrhy\n- Limity stačí, není potřeba nic měnit.");
+  return lines.join("\n\n");
 }
 
 // The numbers for accountsReport from the central database (users,
@@ -152,7 +156,8 @@ export async function accountStats(env, date, { now = Date.now() } = {}) {
   const users = (await db.prepare("SELECT id, email, created_at FROM users WHERE lower(email) <> ?").bind(owner).all()).results || [];
   const ids = new Set(users.map(u => Number(u.id)));
   const subs = (await db.prepare("SELECT user_id, plan, valid_until, product_id, store_environment, free_trial FROM subscriptions WHERE plan = 'ai'").all()).results || [];
-  const stats = { accounts: users.length, newWeek: users.filter(u => String(u.created_at || "").slice(0, 10) >= weekFrom).length, aiUsersWeek: 0, paidMonthly: 0, paidYearly: 0, trial: 0, sandbox: 0, weekUsd: 0, monthUsd: 0, monthDay: d, monthDays, nearCap: [] };
+  const total = await db.prepare("SELECT cost_usd FROM ai_spend_days WHERE day = ?").bind(date).first().catch(() => null);
+  const stats = { totalYesterdayUsd: Number(total?.cost_usd) || 0, accounts: users.length, newWeek: users.filter(u => String(u.created_at || "").slice(0, 10) >= weekFrom).length, aiUsersWeek: 0, paidMonthly: 0, paidYearly: 0, trial: 0, sandbox: 0, weekUsd: 0, monthUsd: 0, monthDay: d, monthDays, nearCap: [] };
   const paid = new Set();
   for (const sub of subs) {
     if (!ids.has(Number(sub.user_id)) || !(Date.parse(sub.valid_until) > now)) continue;
@@ -208,7 +213,8 @@ export async function sendDailyOpsReport(env, now = new Date()) {
   const capacity = await accountCapacity(env.DB, env).catch(() => null);
   const ai = await aiSection(env, yesterday).catch(error => { console.warn("AI usage report failed", error?.message || error); return null; });
   const stuck = await stuckAccountDeletions(env.DB).catch(error => { console.warn("Stuck account deletions read failed", error?.message || error); return []; });
-  const accounts = await accountStats(env, yesterday).then(stats => accountsReport(stats, { monday: now.getUTCDay() === 1, monthlyLimit: aiMonthlyLimitUsd(env), unpaidShare: unpaidLimitShare(env) }))
+  const setting = value => value == null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value);
+  const accounts = await accountStats(env, yesterday).then(stats => accountsReport(stats, { monthly: aiMonthlyLimitUsd(env), unpaidShare: unpaidLimitShare(env), totalAlert: setting(env.AI_TOTAL_DAILY_ALERT_USD), totalLimit: setting(env.AI_TOTAL_DAILY_LIMIT_USD) }))
     .catch(error => { console.warn("Accounts report failed", error?.message || error); return null; });
   const report = opsReport(rows, capacity, yesterday, ai, stuck, accounts);
   const to = String(env.OWNER_EMAIL || "").trim();

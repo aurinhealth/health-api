@@ -71,7 +71,7 @@ test("account deletions that keep failing are in the morning e-mail", async () =
   assert.equal(opsReport([], null, "2026-10-15", null, []), null);
 });
 
-test("accounts and AI against what Pro brings in: warnings daily, the numbers on Mondays", async () => {
+test("every morning: accounts and AI against what Pro brings in, with a proposal for each limit", async () => {
   const db = createD1();
   db.sqlite.exec("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP)");
   db.sqlite.exec("INSERT INTO users (id, email, created_at) VALUES (1, 'owner@example.com', '2026-10-01'), (2, 'paid@x.cz', '2026-10-01'), (3, 'free@x.cz', '2026-10-27'), (4, 'trial@x.cz', '2026-10-28')");
@@ -90,13 +90,14 @@ test("accounts and AI against what Pro brings in: warnings daily, the numbers on
   assert.equal(stats.monthUsd, 3, "the owner and carried-over rows are not spending");
   assert.deepEqual(stats.nearCap, [{ email: "free@x.cz", cost: 2.5, limit: 3 }], "an unpaid account at 83 % of its halved cap");
 
-  const daily = accountsReport(stats, { monthlyLimit: 6, unpaidShare: 0.5 });
-  assert.match(daily, /Pozor\n- free@x\.cz má za měsíc 2\.50 \$ z 3\.00 \$ \(83 %\)/);
-  assert.doesNotMatch(daily, /Účty a AI/);
-  const monday = accountsReport(stats, { monday: true, monthlyLimit: 6, unpaidShare: 0.5 });
-  assert.match(monday, /Platí: 1 \(měsíčně 1, ročně 0\), ve zkušebním týdnu 1/);
-  assert.match(monday, /Pro vydělá asi 5\.90 \$ za měsíc · strop na účet 6\.00 \$, bez placení 3\.00 \$/);
-  assert.match(accountsReport({ ...stats, nearCap: [], monthUsd: 10 }, {}), /AI tento měsíc vyjde asi na 11\.07 \$, víc, než Pro vydělá \(5\.90 \$ za 1 platících\)/);
-  assert.equal(accountsReport({ ...stats, nearCap: [] }, {}), null, "a quiet day sends nothing");
-  assert.match(accountsReport({ ...stats, nearCap: [], accounts: 18 }, {}), /Účtů je 18 z 20 testerů/);
+  const limits = { monthly: 6, unpaidShare: 0.5, totalAlert: 10, totalLimit: 30 };
+  const daily = accountsReport(stats, limits);
+  assert.match(daily, /Platí: 1 \(měsíčně 1, ročně 0\), ve zkušebním týdnu 1/);
+  assert.match(daily, /Pro vydělá asi 5\.90 \$ za měsíc · strop na účet 6\.00 \$, bez placení 3\.00 \$/);
+  assert.match(daily, /Návrhy\n- free@x\.cz má za měsíc 2\.50 \$ z 3\.00 \$ \(83 %\)\. Jestli je to běžné používání, zvedni AI_MONTHLY_LIMIT_USD z 6\.00 \$ na 8\.00 \$/);
+  const quiet = { ...stats, nearCap: [] };
+  assert.match(accountsReport(quiet, limits), /Návrhy\n- Limity stačí, není potřeba nic měnit\./, "the numbers come every day, quiet or not");
+  assert.match(accountsReport({ ...quiet, monthUsd: 10 }, limits), /AI tento měsíc vyjde asi na 11\.07 \$, víc, než Pro vydělá \(5\.90 \$ za 1 platících\)\. Sniž COACH_WEEKLY_MESSAGES/);
+  assert.match(accountsReport({ ...quiet, totalYesterdayUsd: 22 }, limits), /Včera padlo 73 % denní brzdy pro všechny\. Než AI vypne všem, zvedni AI_TOTAL_DAILY_LIMIT_USD na 45\.00 \$ a AI_TOTAL_DAILY_ALERT_USD na 15\.00 \$/);
+  assert.match(accountsReport({ ...quiet, accounts: 18 }, limits), /Účtů je 18 z 20 testerů/);
 });
