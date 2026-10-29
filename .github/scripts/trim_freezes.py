@@ -7,13 +7,22 @@ stay as they are.
 
     python3 trim_freezes.py in.mp4 out.mp4
 """
+import os
 import re
 import subprocess
 import sys
+import tempfile
 
 HOLD = 1.2
 
-src, dst = sys.argv[1], sys.argv[2]
+raw, dst = sys.argv[1], sys.argv[2]
+# The simulator writes a frame only when the screen changes, so a freeze can be
+# one frame lasting seconds; at a steady 30 fps it is counted and cut in time.
+src = os.path.join(tempfile.mkdtemp(), "steady.mp4")
+subprocess.run(
+    ["ffmpeg", "-loglevel", "error", "-y", "-i", raw, "-vf", "fps=30", "-c:v", "libx264", "-crf", "14", "-an", src],
+    check=True,
+)
 probe = subprocess.run(
     ["ffmpeg", "-hide_banner", "-i", src, "-vf", f"freezedetect=n=0.002:d={HOLD}", "-an", "-f", "null", "-"],
     capture_output=True, text=True,
@@ -32,4 +41,4 @@ subprocess.run(
      "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", dst],
     check=True,
 )
-print(f"{src}: {len(cuts)} still stretches cut")
+print(f"{raw}: {len(cuts)} still stretches cut")
