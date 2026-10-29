@@ -373,15 +373,19 @@ enum Small {
         }
         if !todays.isEmpty, todays.allSatisfy(\.done), !evening {
             let added = s.date == key ? (s.strain.training ?? s.strain.score) : nil
-            return SmallValue(fraction: 1, color: C.green, word: tr("HOTOVO", "DONE"), text: added.map { "+" + Days.one($0) } ?? "✓",
-                              line: tr("Trénink hotový", "Workout done") + (added.map { " · +" + Days.one($0) } ?? ""), symbol: "checkmark")
+            let plus: String? = added.map { "+" + Days.one($0) }
+            let line: String = Days.join([tr("Trénink hotový", "Workout done"), plus])
+            return SmallValue(fraction: 1, color: C.green, word: tr("HOTOVO", "DONE"), text: plus ?? "✓", line: line, symbol: "checkmark")
         }
         // Tomorrow's, in the evening or after today's.
         guard let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: now).map(Days.key),
               let next = week.first(where: { $0.date == tomorrow }) else { return nil }
         let day = Days.weekday(tomorrow)
-        return SmallValue(fraction: 0, color: C.muted, word: day.uppercased(), text: next.time ?? (next.minutes.map { "\($0)′" } ?? "–"),
-                          line: day + " " + next.title + (next.time.map { " " + $0 } ?? ""), symbol: Days.sport(next.sport))
+        let length: String? = next.minutes.map { "\($0)′" }
+        let text: String = next.time ?? length ?? "–"
+        var line: String = day + " " + next.title
+        if let time = next.time { line += " " + time }
+        return SmallValue(fraction: 0, color: C.muted, word: day.uppercased(), text: text, line: line, symbol: Days.sport(next.sport))
     }
 
     /// During the day the bedtime with the day filling to it; from the bedtime
@@ -427,7 +431,7 @@ struct SmallView: View {
     var body: some View {
         switch family {
         case .accessoryInline:
-            Label(value.line + (value.arrow.map { " " + $0.text } ?? ""), systemImage: value.symbol)
+            Label(inlineLine, systemImage: value.symbol)
         case .accessoryCorner:
             if metric == .logo {
                 AurinMark().padding(4)
@@ -454,37 +458,49 @@ struct SmallView: View {
             if metric == .logo {
                 AurinMark()
             } else {
-                ZStack {
-                    SegmentedArc(fraction: value.fraction, color: value.color)
-                    valueText
-                        .font(.system(size: value.text.count > 4 || value.until != nil ? 13 : 17, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .minimumScaleFactor(0.5)
-                        .lineLimit(1)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 7)
-                        .padding(.bottom, 3)
-                    Text(value.word)
-                        .font(.system(size: 7.5, weight: .bold))
-                        .foregroundStyle(value.color)
-                        .widgetAccentable()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .frame(maxHeight: .infinity, alignment: .bottom)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 1)
-                }
-                .overlay(alignment: .topTrailing) {
-                    if let arrow = value.arrow {
-                        Text(arrow.text)
-                            .font(.system(size: 10, weight: .heavy))
-                            .foregroundStyle(arrow.color)
-                            .frame(width: 14, height: 14)
-                            .background { Circle().fill(.black) }
-                    }
-                }
+                ring
             }
         }
+    }
+
+    private var valueSize: CGFloat { value.text.count > 4 || value.until != nil ? 13 : 17 }
+
+    /// The ring with the value and the word in its gap, the arrow at the top right.
+    private var ring: some View {
+        ZStack {
+            SegmentedArc(fraction: value.fraction, color: value.color)
+            valueText
+                .font(.system(size: valueSize, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 7)
+                .padding(.bottom, 3)
+            Text(value.word)
+                .font(.system(size: 7.5, weight: .bold))
+                .foregroundStyle(value.color)
+                .widgetAccentable()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 1)
+        }
+        .overlay(alignment: .topTrailing) {
+            if let arrow = value.arrow {
+                Text(arrow.text)
+                    .font(.system(size: 10, weight: .heavy))
+                    .foregroundStyle(arrow.color)
+                    .frame(width: 14, height: 14)
+                    .background { Circle().fill(.black) }
+            }
+        }
+    }
+
+    private var inlineLine: String {
+        guard let arrow = value.arrow else { return value.line }
+        return value.line + " " + arrow.text
     }
 
     /// The value, or the countdown that runs by itself.
@@ -643,7 +659,7 @@ struct WideView: View {
                 if let today {
                     head(tr("DNES · ", "TODAY · ") + dayWord(today.zone), C.zone(today.zone))
                     if let next {
-                        Text(next.title + (next.minutes.map { " \($0)′" } ?? ""))
+                        Text(Self.titled(next))
                             .font(.system(size: 14, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
                         startLine(next, on: today.date)
                     } else if let headline = today.headline {
@@ -658,6 +674,12 @@ struct WideView: View {
             }
             Spacer(minLength: 0)
         }
+    }
+
+    /// "Sweet spot 75′".
+    static func titled(_ s: WatchSnapshot.Session) -> String {
+        guard let minutes = s.minutes else { return s.title }
+        return s.title + " \(minutes)′"
     }
 
     /// The ring's word: high, moderate, low.
@@ -675,7 +697,7 @@ struct WideView: View {
             (Text((s.time ?? "") + " · " + tr("za ", "in ")) + Text(start, style: .relative))
                 .font(.system(size: 11)).foregroundStyle(C.muted).lineLimit(1)
         } else {
-            Text([s.time, s.minutes.map { "\($0) min" }].compactMap { $0 }.joined(separator: " · "))
+            Text(Days.join([s.time, s.minutes.map(Days.minutes)]))
                 .font(.system(size: 11)).foregroundStyle(C.muted).lineLimit(1)
         }
     }
@@ -691,10 +713,7 @@ struct WideView: View {
                     Text(today.sleep?.minutes.map { tr("Spánek ", "Slept ") + Days.hm($0) } ?? tr("Spánek –", "Sleep –"))
                         .font(.system(size: 14, weight: .semibold)).lineLimit(1)
                     if let hrv = today.hrv?.value {
-                        Text("HRV " + Days.int(hrv) + (today.hrv.map { m in
-                            guard let low = m.low, let high = m.high else { return "" }
-                            return " · " + (hrv < low ? tr("pod normálem", "below normal") : hrv > high ? tr("nad normálem", "above normal") : tr("v normálu", "normal"))
-                        } ?? ""))
+                        Text(hrvLine(hrv, today.hrv))
                         .font(.system(size: 11)).foregroundStyle(C.muted).lineLimit(1)
                     }
                 } else {
@@ -704,6 +723,45 @@ struct WideView: View {
             }
             Spacer(minLength: 0)
         }
+    }
+
+    /// "760 kcal left", "120 kcal over".
+    private func foodLeft(_ kcal: Double, _ target: Double) -> String {
+        if kcal <= target { return tr("zbývá ", "") + Days.thousands(target - kcal) + tr(" kcal", " kcal left") }
+        return Days.thousands(kcal - target) + tr(" kcal navíc", " kcal over")
+    }
+
+    private func addedStrain(_ value: Double) -> String { "+" + Days.one(value) + tr(" námahy", " strain") }
+
+    /// "day 8.4 of 11–14".
+    private func dayStrain(_ score: Double) -> String {
+        var text = tr("den ", "day ") + Days.one(score)
+        if let low = today?.strain.low, let high = today?.strain.high {
+            text += tr(" z ", " of ") + Days.int(low) + "–" + Days.int(high)
+        }
+        return text
+    }
+
+    /// "HRV 64 · normal".
+    private func hrvLine(_ hrv: Double, _ metric: WatchSnapshot.Metric?) -> String {
+        var text = "HRV " + Days.int(hrv)
+        guard let low = metric?.low, let high = metric?.high else { return text }
+        if hrv < low {
+            text += " · " + tr("pod normálem", "below normal")
+        } else if hrv > high {
+            text += " · " + tr("nad normálem", "above normal")
+        } else {
+            text += " · " + tr("v normálu", "normal")
+        }
+        return text
+    }
+
+    /// "C 150/300" with the letter in the macro's colour.
+    private func macroText(_ letter: String, eaten: Double, goal: Double, color: Color) -> Text {
+        let head: Text = Text(letter + " ").foregroundColor(color)
+        let value: Text = Text(Days.int(eaten)).foregroundColor(.white)
+        let target: Text = Text(goal > 0 ? "/" + Days.int(goal) : "").foregroundColor(C.muted)
+        return head + value + target
     }
 
     /// Readiness, sleep and strain with their names, values and ten-step bars.
@@ -742,12 +800,10 @@ struct WideView: View {
                 }
                 .font(.system(size: 12, weight: .semibold)).foregroundStyle(C.green)
                 let added = today?.strain.training
-                Text([last.minutes.map { "\($0) min" }, added.map { "+" + Days.one($0) + tr(" námahy", " strain") }].compactMap { $0 }.joined(separator: " · "))
+                Text(Days.join([last.minutes.map(Days.minutes), added.map(addedStrain)]))
                     .font(.system(size: 15, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
                 if let score = today?.strain.score {
-                    Text(tr("den ", "day ") + Days.one(score) + (today?.strain.high.map { h in
-                        today?.strain.low.map { tr(" z ", " of ") + Days.int($0) + "–" + Days.int(h) } ?? ""
-                    } ?? ""))
+                    Text(dayStrain(score))
                     .font(.system(size: 11)).foregroundStyle(C.muted)
                 }
             } else if let next {
@@ -761,8 +817,7 @@ struct WideView: View {
                     }
                 }
                 .font(.system(size: 12, weight: .semibold))
-                Text([next.date == key ? tr("Dnes", "Today") : Days.weekday(next.date), next.time, next.minutes.map { "\($0) min" }]
-                    .compactMap { $0 }.joined(separator: " · "))
+                Text(Days.join([next.date == key ? tr("Dnes", "Today") : Days.weekday(next.date), next.time, next.minutes.map(Days.minutes)]))
                     .font(.system(size: 11)).foregroundStyle(C.muted).lineLimit(1)
                 if let plan = entry.plan, plan.id == next.eventId {
                     PlanSteps(plan: plan.plan).frame(height: 17).padding(.top, 2)
@@ -796,8 +851,7 @@ struct WideView: View {
                     if food?.kcal == nil {
                         Text(tr("Jídlo", "Food"))
                     } else if target > 0 {
-                        Text(kcal <= target ? tr("zbývá ", "") + Days.thousands(target - kcal) + tr(" kcal", " kcal left")
-                                            : Days.thousands(kcal - target) + tr(" kcal navíc", " kcal over"))
+                        Text(foodLeft(kcal, target))
                     } else {
                         Text(Days.thousands(kcal) + " kcal")
                     }
@@ -813,8 +867,7 @@ struct WideView: View {
                     let eaten = row.1?.eaten ?? 0
                     let goal = row.1?.target ?? 0
                     VStack(alignment: .leading, spacing: 2) {
-                        (Text(row.0 + " ").foregroundStyle(row.2) + Text(Days.int(eaten)).foregroundStyle(.white)
-                            + Text(goal > 0 ? "/" + Days.int(goal) : "").foregroundStyle(C.muted))
+                        macroText(row.0, eaten: eaten, goal: goal, color: row.2)
                             .font(.system(size: 9.5, weight: .semibold))
                             .lineLimit(1).minimumScaleFactor(0.7)
                         Line(fraction: goal > 0 ? eaten / goal : 0, color: goal > 0 && eaten >= goal ? C.green : row.2, height: 4)
@@ -930,7 +983,10 @@ struct NightLine: View {
             let start = bed.flatMap { Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: $0) } ?? now.addingTimeInterval(-12 * 3600)
             let end = wake ?? (bed ?? now).addingTimeInterval(8 * 3600)
             let span = max(end.timeIntervalSince(start), 1)
-            let x = { (d: Date) in CGFloat(min(1, max(0, d.timeIntervalSince(start) / span))) * w }
+            let x = { (d: Date) -> CGFloat in
+                let share: Double = min(1, max(0, d.timeIntervalSince(start) / span))
+                return CGFloat(share) * w
+            }
             let bedX = bed.map(x) ?? w * 0.6
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.white.opacity(0.18)).frame(height: 5)
@@ -952,6 +1008,11 @@ struct NightLine: View {
 struct PlanSteps: View {
     let plan: WatchPlan
 
+    static func height(_ zone: Int) -> CGFloat {
+        let z = Double(min(zone, 6))
+        return CGFloat(0.28 + 0.12 * z)
+    }
+
     var body: some View {
         let steps = plan.ridden
         let total = max(steps.map(\.seconds).reduce(0, +), 1)
@@ -963,7 +1024,7 @@ struct PlanSteps: View {
                     RoundedRectangle(cornerRadius: 1.5)
                         .fill(C.zoneStep(s.zone))
                         .frame(width: max(1, width * CGFloat(s.seconds / total)),
-                               height: geo.size.height * CGFloat(0.28 + 0.12 * Double(min(s.zone, 6))))
+                               height: geo.size.height * Self.height(s.zone))
                 }
             }
             .frame(maxHeight: .infinity, alignment: .bottom)
@@ -1152,6 +1213,13 @@ enum Days {
     }
 
     static func int(_ v: Double) -> String { String(Int(v.rounded())) }
+
+    static func minutes(_ m: Int) -> String { "\(m) min" }
+
+    /// The parts there are, joined with " · ".
+    static func join(_ parts: [String?]) -> String {
+        parts.compactMap { $0 }.joined(separator: " · ")
+    }
 
     private static func number(_ digits: Int, grouping: Bool) -> NumberFormatter {
         let id = (english ? "en" : "cs") + "\(digits)\(grouping)"
