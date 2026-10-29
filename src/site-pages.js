@@ -864,7 +864,7 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
       into: ([x, y], [cx, cy]) => `M${x + 42} ${y}C${(x + cx) / 2} ${y} ${(x + cx) / 2} ${cy} ${cx - 58} ${cy}`,
       out: ([cx, cy], [x, y]) => `M${cx + 58} ${cy}C${(x + cx) / 2} ${cy} ${(x + cx) / 2} ${y} ${x - 42} ${y}`},
     // Two rows of three: a first-row curve runs down the gap between the second row's services, not through them.
-    tall: {w: 340, h: 760, core: [170, 400], src: i => [60 + (i % 3) * 110, 66 + Math.floor(i / 3) * 104], dst: j => [47 + j * 82, 706],
+    tall: {w: 340, h: 760, core: [170, 400], src: i => [60 + (i % 3) * 110, 84 + Math.floor(i / 3) * 104], dst: j => [47 + j * 82, 706],
       into: ([x, y], [cx, cy]) => { const g = x > cx ? x - 55 : x + 55;
         return y < 100 ? `M${x} ${y + 40}C${x} ${y + 78} ${g} ${y + 66} ${g} ${y + 104}C${g} ${y + 170} ${cx} ${(y + 104 + cy) / 2} ${cx} ${cy - 56}`
           : `M${x} ${y + 40}C${x} ${(y + cy) / 2 + 20} ${cx} ${(y + cy) / 2} ${cx} ${cy - 56}`; },

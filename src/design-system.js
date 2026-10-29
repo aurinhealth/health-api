@@ -34,10 +34,10 @@ export const themeTokens = `
 `;
 
 // The same tokens in the app's dark palette (Palette.swift, WelcomePages.swift, AurinMark.swift, PlateLoader.swift),
-// for a phone set to dark mode. Off until CI's dark screenshots of the sample day are in public/site/app/*-dark.webp:
+// for a phone set to dark mode. It needs CI's dark screenshots of the sample day in public/site/app/*-dark.webp:
 // light screenshots would glare on a dark page (DESIGN.md, "Dark mode"). Shadows turn into light rings, since a
 // shadow does not show on near black, and the glows are the app's dark tints.
-export const DARK_SITE = false;
+export const DARK_SITE = true;
 export const darkTokens = `
 @media (prefers-color-scheme:dark){:root{color-scheme:dark;
   --bg:#0A0B0C;--panel:#1C1E1F;--panel2:#141617;--text:#ECEAE6;--sec:#D9D6D0;--muted:#9AA39F;

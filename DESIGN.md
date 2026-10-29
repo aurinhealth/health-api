@@ -23,9 +23,8 @@ palette changes, change `design-system.js` and this file together.
    on link text, eyebrows or labels.
 4. **Warm, not clinical.** Paper instead of white, serif headlines, soft tinted glows. Never cold grey, never
    neon on black.
-5. **Light, and dark once its screens are in.** The site follows the phone's light or dark mode with the app's own
-   two palettes, and has no switch of its own. The dark half is built but off (`DARK_SITE`) until CI's dark
-   screenshots are on the site (see "Dark mode" below); until then it is light everywhere.
+5. **Light and dark.** The site follows the phone's or computer's light or dark mode with the app's own two
+   palettes, and has no switch of its own; each phone shows CI's screenshot in the same mode (see "Dark mode" below).
 6. **The welcome sets the tone.** The hero, the openings of the parts, the privacy lock and the end take the look
    and motion of the app's welcome before the sign-in (`WelcomePages.swift`): the logo rising behind spreading
    rings, a sunrise tint, the app's own cards rising into place one after another.
@@ -208,19 +207,19 @@ wide (60-70 characters). Headlines are one short sentence that ends with a full 
 
 ## Dark mode
 
-Built, and off until its screens are in. `darkTokens` in `src/design-system.js` is the app's dark palette for every
+On since 2026-10-29 (`DARK_SITE`). `darkTokens` in `src/design-system.js` is the app's dark palette for every
 colour token (`Palette.swift`, `WelcomePages.swift`, `AurinMark.swift`, `PlateLoader.swift`: background #0A0B0C,
 card #1C1E1F, ink #ECEAE6, green #8FE6C4, amber #F2B46B, indigo #A5A1FF), under `prefers-color-scheme: dark`. The
 shadows turn into light rings, since a shadow does not show on near black; the glows are the app's dark tints; the
 ink pill turns light (`Palette.button`). Each phone becomes a `<picture>` whose dark source is the same screen
 taken in dark mode.
 
-To turn it on:
+When the screens change, take the dark ones again:
 
 1. A run of `ios-native.yml` takes the website's shots again in dark mode (`site-dark/`, `smoke-dark/` in the
    Aurin-screens artifact; the app's own Vzhled setting, `-appearance dark`).
 2. `node scripts/site-screens.mjs screens/` saves them beside the light ones as `public/site/app/*-dark.webp`.
-3. Set `DARK_SITE = true`. `tests/design-tokens.test.mjs` fails while any screen lacks its dark file.
+3. `tests/design-tokens.test.mjs` fails while any screen lacks its dark file (`DARK_SITE` stays true).
 
 Still light in dark mode: the share image and the overview images for Reddit and the App Store.
 
