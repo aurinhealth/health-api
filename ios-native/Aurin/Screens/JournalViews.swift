@@ -780,7 +780,7 @@ struct JournalValueSheet: View {
             .padding(24)
         }
         // Save stays at the bottom, so the time wheel never pushes it off the sheet.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .sheetActions {
             VStack(spacing: 10) {
                 PrimaryButton(title: L10n.tr("Uložit"), busy: busy) { submit(1) }
                     .disabled(busy || (item.type == "scale" && level == nil))
@@ -793,11 +793,9 @@ struct JournalValueSheet: View {
                 .disabled(busy)
             }
             .padding(.horizontal, 24).padding(.top, 12).padding(.bottom, 8)
-            .background(Palette.background)
-            .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
         }
         .presentationDetents([.medium, .large], selection: $detent)
-        .presentationBackground(Palette.background)
+        .glassSheetBackground()
         // Turning on the time shows the wheel: the sheet grows to show it whole.
         .onChange(of: hasTime) { _, on in
             if on { withAnimation(.snappy) { detent = .large } }
@@ -886,6 +884,32 @@ struct JournalValueSheet: View {
             let failure = await save(request)
             busy = false
             if let failure { error = failure } else { dismiss() }
+        }
+    }
+}
+
+private extension View {
+    /// The sheet's buttons at the bottom: on iOS 26 over the sheet's glass, with
+    /// the system's soft edge fading the rows out under them; before it on the
+    /// paper with a hairline above.
+    @ViewBuilder func sheetActions<A: View>(@ViewBuilder _ actions: () -> A) -> some View {
+        let actions = actions()
+        #if compiler(>=6.2)
+        if #available(iOS 26, *) {
+            safeAreaBar(edge: .bottom, spacing: 0) { actions }
+        } else {
+            paperActions(actions)
+        }
+        #else
+        paperActions(actions)
+        #endif
+    }
+
+    func paperActions(_ actions: some View) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            actions
+                .background(Palette.background)
+                .overlay(alignment: .top) { Rectangle().fill(Palette.hairline).frame(height: 1) }
         }
     }
 }
