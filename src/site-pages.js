@@ -482,6 +482,8 @@ const SHARE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5
 // Cloudflare Turnstile's widget "Aurin web" (aurin.health and staging.aurin.health); the site key is public.
 const TURNSTILE_SITE_KEY = '0x4AAAAAAFmRgmk4ncclmfIi';
 const TURNSTILE = 'https://challenges.cloudflare.com';
+// Cloudflare Web Analytics: Cloudflare puts its beacon into the page (counts visits, no cookies).
+const WEB_ANALYTICS = 'https://static.cloudflareinsights.com';
 const turnstileScript = `<script src="${TURNSTILE}/turnstile/v0/api.js?render=explicit&onload=aurinTurnstile" async defer></script>`;
 const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
 <span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" spellcheck="false" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
@@ -697,7 +699,7 @@ ${demoScript}
 ${siteScript}
 ${turnstileScript}
 </body></html>`;
-  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(headScript + demoScript + siteScript, [TURNSTILE])}});
+  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(headScript + demoScript + siteScript, [TURNSTILE, WEB_ANALYTICS])}});
 }
 
 // Pages take the request (to pick the host, and ?lang=cs on the pages that have Czech) or nothing
@@ -714,7 +716,7 @@ function pageLang(request, czech = false) {
 // secured, and what happens on disconnecting and deleting; the support page is the help on managing and
 // deleting data. Keep both in step with the code: scopes in google-scopes.js, the wellness copy in
 // wellness-sync.js, the download and deletion in account-data.js.
-const UPDATED = {cs: '28. října 2026', en: '28 October 2026'};
+const UPDATED = {cs: '29. října 2026', en: '29 October 2026'};
 // The controller's address for questions and data requests (privacy policy and support page).
 const CONTACT_EMAIL = 'support@aurin.health';
 const API_POLICY = 'https://developers.google.com/terms/api-services-user-data-policy';
@@ -1073,7 +1075,7 @@ export function privacyPage(request, {apple = false, email = false, open = false
 <li><strong>Wahoo</strong>, if you connect it: the rides and runs you plan in Aurin, with their steps and targets, so they appear on your ELEMNT and KICKR. Wahoo handles this data under its own privacy policy.</li>
 <li><strong>Google Health</strong>: the food and drinks you log and, if you allow it, your weight and the workouts you finish in Aurin.</li>
 <li><strong>OpenAI</strong> (USA), when you use an AI feature (such as the assistant, recognizing food from a photo, label or description, plan reviews, workout reflections or exercise descriptions): the data that request needs, such as your message, the photo and related training, sleep, health and nutrition data, including data from a connected Ultrahuman Ring or WHOOP. OpenAI processes it on our behalf under its API data processing terms: it does not use data sent through its API to train its models and keeps it for up to 30 days to detect abuse, unless the law requires it to keep it longer.</li>
-<li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''} On the website, Cloudflare Turnstile checks that the waitlist form is sent by a person. For that it reads technical details of your browser and sets no tracking cookies.</li>
+<li><strong>Cloudflare</strong> runs Aurin, stores its database in Europe and keeps the technical logs.${email ? ' Its Email Service sends the sign-in codes and the notices about new passkeys.' : ''} On the website, Cloudflare Turnstile checks that the waitlist form is sent by a person. For that it reads technical details of your browser and sets no tracking cookies. Cloudflare Web Analytics counts visits to the website (which pages, from which site and country, on which kind of device) without cookies and without following you to other websites.</li>
 <li><strong>Apple</strong>, if you allow notifications (Settings → Notifications): your iPhone’s notification token and the text of each notification, such as the morning readiness or a note from the coach, which Apple’s push service delivers to your iPhone. Turning notifications off or signing out removes the token.</li>
 <li><strong>Apple</strong>, when you buy Aurin Pro: the random identifier of your Aurin account that the app adds to the purchase, so the App Store’s records of it reach the right account. Apple handles the purchase under its own privacy policy.</li>
 <li><strong>Apple</strong>, when we add you to the testers from the waitlist: your email address, so that TestFlight emails you how to install Aurin. Apple handles it under its own privacy policy.</li>
@@ -1182,7 +1184,7 @@ ${apple ? '<li>You can stop using Sign in with Apple for Aurin in your Apple ID 
 <li><strong>Wahoo</strong>, když ho připojíš: jízdy a běhy, které naplánuješ v Aurinu, s jejich úseky a cíli, aby se objevily v ELEMNT a KICKR. Wahoo s nimi nakládá podle svých zásad ochrany osobních údajů.</li>
 <li><strong>Google Health</strong>: jídlo a pití, které zapíšeš, a když to povolíš, i tvoje váha a tréninky, které v Aurinu dokončíš.</li>
 <li><strong>OpenAI</strong> (USA), když použiješ AI funkci (třeba asistenta, rozpoznání jídla z fotky, etikety nebo popisu, revizi plánu, zhodnocení tréninku nebo popis cviku): data, která daný požadavek potřebuje, třeba tvoji zprávu, fotku a související údaje o tréninku, spánku, zdraví a výživě, včetně dat z připojeného prstenu Ultrahuman nebo WHOOPu. OpenAI je zpracovává naším jménem podle svých podmínek zpracování dat přes API: data poslaná přes API nepoužívá k trénování modelů a uchovává je nejvýš 30 dní kvůli odhalování zneužití, pokud mu zákon neukládá uchovat je déle.</li>
-<li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''} Na webu Cloudflare Turnstile ověřuje, že formulář čekací listiny posílá člověk. Čte k tomu technické údaje o prohlížeči a nenastavuje sledovací cookies.</li>
+<li><strong>Cloudflare</strong> provozuje Aurin, ukládá jeho databázi v Evropě a uchovává technické záznamy.${email ? ' Jeho služba Email Service posílá kódy pro přihlášení a upozornění na nové přístupové klíče.' : ''} Na webu Cloudflare Turnstile ověřuje, že formulář čekací listiny posílá člověk. Čte k tomu technické údaje o prohlížeči a nenastavuje sledovací cookies. Cloudflare Web Analytics počítá návštěvy webu (které stránky, odkud a z jaké země, na jakém typu zařízení) bez cookies a bez sledování na jiných webech.</li>
 <li><strong>Apple</strong>, když povolíš oznámení (Nastavení → Oznámení): token tvého iPhonu pro oznámení a text každého oznámení, třeba ranní připravenosti nebo zprávy od kouče, které Applova služba pro oznámení doručí do tvého iPhonu. Vypnutím oznámení nebo odhlášením se token smaže.</li>
 <li><strong>Apple</strong>, když koupíš Aurin Pro: náhodný identifikátor tvého účtu Aurin, který aplikace k nákupu přidá, aby záznamy App Storu o něm došly ke správnému účtu. Apple s nákupem nakládá podle svých zásad ochrany soukromí.</li>
 <li><strong>Apple</strong>, když tě z waitlistu přidáme k testerům: tvůj e-mail, aby ti TestFlight poslal, jak Aurin nainstalovat. Apple s ním nakládá podle svých zásad ochrany soukromí.</li>

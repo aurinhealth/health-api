@@ -101,8 +101,9 @@ test("no script runs unless the page names it", async () => {
 test("the website runs its own scripts and only them", async () => {
   for (const response of [overviewPage(), privacyPage()]) {
     const policy = response.headers.get("Content-Security-Policy"), html = await response.text();
-    // Every inline script of the page, nothing more, and Cloudflare Turnstile's own script.
-    assert.equal(policy, scriptPolicy(html, ["https://challenges.cloudflare.com"]));
+    // Every inline script of the page, nothing more, Cloudflare Turnstile's own script and the Web Analytics
+    // beacon Cloudflare puts into the page.
+    assert.equal(policy, scriptPolicy(html, ["https://challenges.cloudflare.com", "https://static.cloudflareinsights.com"]));
     assert.match(html, /<script src="https:\/\/challenges\.cloudflare\.com\/turnstile\/v0\/api\.js\?render=explicit&onload=aurinTurnstile" async defer><\/script>/);
     // The js class set in the head, the demos, the page's motion and the muscle figure.
     assert.equal(policy.match(/'sha256-/g).length, 4);
