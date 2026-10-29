@@ -234,3 +234,25 @@ test('values the AI looked up or estimated stay private and keep out of the comm
   await savePersonalFood(b.DB,product);
   assert.equal(count(f.core,'shared_foods'),1);
 });
+
+// D in audit/zrychleni-aplikace-mereni-2026-10-29.md: the route and the
+// catalogue state go to the core database at once.
+test('the route and the catalogue state are read at the same time', async () => {
+  const f=setup();
+  let open=0,most=0;
+  const prepare=f.core.prepare.bind(f.core);
+  f.core.prepare=sql=>{const s=prepare(sql);const wrap=st=>({...st,bind:(...v)=>wrap(st.bind(...v)),first:async(...a)=>{open++;most=Math.max(most,open);await new Promise(r=>setTimeout(r,5));open--;return st.first(...a);},all:async(...a)=>{open++;most=Math.max(most,open);await new Promise(r=>setTimeout(r,5));open--;return st.all(...a);}});return wrap(s);};
+  const {prefetchUserData}=await import('../src/user-data-shards.js');
+  const a=await userDataEnvironment(f.env,user(3),prefetchUserData(f.env,3));
+  assert.equal(most,2);
+  assert.equal(a.USER_DATA_SHARD,'data-001');
+  assert.equal(a.FOOD_CATALOG_STATE,(await foodCatalogEnvironment(f.env)).FOOD_CATALOG_STATE);
+  // No route yet: the lookup finds none, and userDataEnvironment allocates one as before.
+  assert.equal((await prefetchUserData(f.env,5))[0],null);
+});
+
+test('a request starts the route lookup before it waits for the user row', () => {
+  const source=read('src/entrypoint.js');
+  const start=source.indexOf('prefetched = prefetchUserData(rawEnv, principal.userId);');
+  assert.ok(start>0&&start<source.indexOf('user = await findUser(env.DB, principal.userId, env);'));
+});

@@ -73,9 +73,19 @@ export async function resolveUserData(env, userId, { existingOnly = false } = {}
   return { db: database(env, current), key: current.shard_key };
 }
 
-export async function userDataEnvironment(env, user) {
-  const resolved = await resolveUserData(env, user.id);
-  const catalogue = await foodCatalogEnvironment(env);
+// The user's route and the food catalogue's state, read at the same time.
+// A request starts this before its user row is checked (entrypoint.js), so
+// the three core reads before any work take one round trip instead of three.
+// Only a lookup: a user without a route gets one in userDataEnvironment.
+export function prefetchUserData(env, userId) {
+  const parts = Promise.all([env.USER_DATA_ROUTING === 'true' ? route(env, Number(userId)) : null, foodCatalogEnvironment(env)]);
+  parts.catch(() => {});
+  return parts;
+}
+
+export async function userDataEnvironment(env, user, prefetched = null) {
+  const [found, catalogue] = await (prefetched || prefetchUserData(env, user.id));
+  const resolved = found ? { db: database(env, found), key: found.shard_key } : await resolveUserData(env, user.id);
   return userEnv({ ...catalogue, USER_DATA_DB: resolved.db, USER_DATA_SHARD: resolved.key }, user);
 }
 
