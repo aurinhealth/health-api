@@ -25,7 +25,7 @@ availability) updates the overview in the same pull request. The site is in Engl
   2026-10-29).
 - Colours come from the light palette in `ios-native/Shared/Palette.swift`.
 - After changing the hero, render the share image `public/site/og-en.png` (1200×630) again.
-- The privacy policy and the terms also have a Czech version (`?lang=cs`, linked from the page and the
+- The privacy policy and the terms also have a Czech version (`/cs/privacy`, `/cs/terms`; the old `?lang=cs` redirects there; linked from the page and the
   footer) that says the same as the English one; change both together.
 - The privacy, terms and support pages are legal texts that Google verification reads: change them only
   when the way data is handled changes. The Google Health disclosure stays word for word

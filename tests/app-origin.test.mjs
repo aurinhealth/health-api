@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { appOrigin, wwwRedirect } from "../src/app-origin.js";
+import { appOrigin, wwwRedirect, languageRedirect } from "../src/app-origin.js";
 import { handleGoogleLogin } from "../src/google-login.js";
 import { handleGoogleOAuth } from "../src/google-oauth.js";
 import { handleIntervalsOAuth } from "../src/intervals-oauth.js";
@@ -58,9 +58,21 @@ test("the public pages link to the host they are served on, aurin.health by defa
     assert.equal(ld['@graph'][0].url, origin);
     assert.match(html, new RegExp(`<link rel="canonical" href="${origin}/">`));
     const privacy = await (await privacyPage(new Request(origin + "/privacy"))).text();
-    assert.match(privacy, new RegExp(`hreflang="cs" href="${origin}/privacy\\?lang=cs"`));
+    assert.match(privacy, new RegExp(`hreflang="cs" href="${origin}/cs/privacy"`));
   }
   assert.match(await overviewPage().text(), /content="https:\/\/aurin\.health\/site\/og-en\.png\?v=\d+"/);
   const unknown = await (await privacyPage(new Request("https://evil.example/privacy"))).text();
   assert.match(unknown, /<link rel="canonical" href="https:\/\/aurin\.health\/privacy">/);
+});
+
+test("?lang= leads to the address of that language; /cs to the English home page", () => {
+  const to = path => languageRedirect(new URL("https://aurin.health" + path))?.headers.get("Location") ?? null;
+  assert.equal(to("/privacy?lang=cs"), "https://aurin.health/cs/privacy");
+  assert.equal(to("/terms?lang=cs"), "https://aurin.health/cs/terms");
+  assert.equal(to("/privacy?lang=en"), "https://aurin.health/privacy");
+  assert.equal(to("/cs"), "https://aurin.health/");
+  assert.equal(to("/?lang=cs"), "https://aurin.health/");
+  assert.equal(languageRedirect(new URL("https://aurin.health/privacy?lang=cs")).status, 301);
+  for (const path of ["/", "/privacy", "/cs/privacy", "/t/abc?lang=cs", "/auth/email/verify?lang=cs"]) assert.equal(to(path), null, path);
+  assert.equal(languageRedirect(new URL("https://aurin.health/privacy?lang=cs"), "POST"), null);
 });

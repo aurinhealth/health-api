@@ -4,7 +4,7 @@
 // the app whose phone walks through its screens), taken in CI from the sample data in English.
 // When the app changes what a section shows, change the section here too.
 // The site is in English only (Aurin is for the whole world); the privacy policy and the terms also
-// have a Czech version at ?lang=cs, linked from the page and the footer.
+// have a Czech version under /cs/ (/cs/privacy, /cs/terms), linked from the page and the footer.
 import {DARK_SITE, siteTokens} from './design-system.js';
 import {icon, ICON_PATHS} from './icons.js';
 import {ACTS, DEMOS, SCREENS, demoCss, demoScript} from './site-demos.js';
@@ -87,7 +87,7 @@ h2.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;letter-spa
 .kicker i{width:8px;height:8px;border-radius:50%;background:var(--green)}
 .hero h1{font-size:clamp(var(--fs-44),6.4vw,var(--fs-88));line-height:.98;letter-spacing:-.03em;margin-top:22px}
 /* Each word rises inside its own clipped box; the box reaches past the letters so the italic's overhang isn't cut. */
-.hero h1 .w{display:inline-block;overflow:hidden;vertical-align:top;padding:0 .14em .1em;margin:0 -.14em -.1em}
+.hero h1 .w{display:inline-block;vertical-align:top}
 .hero h1 .w>span{display:inline-block}
 .hero h1 .it{font-style:italic;color:var(--green)}
 .lede{max-width:500px;margin-top:26px;font-size:var(--fs-20);color:var(--sec)}
@@ -324,7 +324,7 @@ main:focus{outline:none}
 .final{position:relative;padding:180px 0 170px;text-align:center;overflow:clip}
 .final .wrap{position:relative;z-index:1}
 .final .sun{margin:0 auto 10px}
-.final h2{font-size:clamp(var(--fs-44),6vw,var(--fs-64));max-width:760px;margin:0 auto}
+.final h2,.final h1{font-size:clamp(var(--fs-44),6vw,var(--fs-64));max-width:760px;margin:0 auto}
 .final .sub{margin:18px auto 0;text-align:center}
 .final .wl{margin-top:32px}
 
@@ -356,9 +356,11 @@ main:focus{outline:none}
    content fades up as it scrolls in, a step's bar fills while it is shown and its piece floats. */
 @media (prefers-reduced-motion:no-preference){
   html{scroll-behavior:smooth}
-  .js .hero h1 .w>span{transform:translateY(105%);animation:rise .7s cubic-bezier(.16,1,.3,1) forwards;animation-delay:calc(var(--i) * 40ms)}
-  @keyframes rise{to{transform:none}}
-  .js .hero .lede,.js .hero .cta,.js .hero .kicker{opacity:0;animation:fade .5s .15s forwards}
+  /* The headline is there from the first frame (it is the page's largest text): its words only settle in. */
+  .js .hero h1 .w>span{animation:rise .7s cubic-bezier(.16,1,.3,1) both;animation-delay:calc(var(--i) * 40ms)}
+  @keyframes rise{from{opacity:.6;transform:translateY(.18em)}}
+  .js .hero .lede,.js .hero .cta,.js .hero .kicker{animation:settle .5s .15s both}
+  @keyframes settle{from{opacity:.6}}
   .js .hero .kicker{animation-delay:.1s}.js .hero .cta{animation-delay:.25s}
   .js .stage{opacity:0;transform:translateY(40px);animation:lift 1s cubic-bezier(.16,1,.3,1) .2s forwards}
   .js .glass{opacity:0;animation:pop .9s cubic-bezier(.16,1,.3,1) forwards}
@@ -436,10 +438,10 @@ main:focus{outline:none}
   .nav-cta{height:36px;padding:0 14px}
   .hero{padding-top:110px}
   .lede,.sub{font-size:var(--fs-17)}
-  /* On a phone the app comes right under the line, before the waitlist (the nav's Join is always there). */
+  /* On a phone the waitlist comes right under the line, on the first screen, and the app after it, as on a tablet. */
   /* Left-aligned on a phone: four centred lines read badly. */
   .hero .grid{gap:0;text-align:left}.hero .copy{display:contents}.hero .kicker{justify-self:start}.hero .lede{margin-left:0}
-  .hero .stage{order:1;margin-top:32px}.hero .cta{order:2;margin-top:32px}
+  .hero .cta{order:1;margin-top:28px}.hero .stage{order:2;margin-top:40px}
   .rig{width:322px;height:672px;--hz:.8}
   .rig .device{left:0}
   /* On a phone a part opens with its title and line only: its chapters right under show the same day. */
@@ -472,6 +474,8 @@ function deviceLang(request) {
 
 // The Aurin mark (Rovnováha): the load half over the recovery half, offset as in the app icon.
 const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" height="${Math.round(width * 80 / 88)}" aria-hidden="true"><path d="M6 46A36 36 0 0 1 78 46Z" fill="var(--logo-load)"/><path d="M22 54A36 36 0 0 0 94 54Z" fill="var(--logo-recovery)"/></svg>`;
+// The logo rising like the sun behind soft rings that keep spreading (the welcome's first page).
+const sun = size => `<div class="sun" aria-hidden="true" style="--s:${size}px"><i class="halo"></i><i class="rg"></i><i class="rg"></i><i class="rg"></i>${mark(size)}</div>`;
 // The welcome's lock (WelcomeLock in WelcomePages.swift): a soft paper lock with the logo whose shackle clicks shut.
 const LOCK = `<div class="lock" aria-hidden="true"><i class="halo"></i><svg class="shackle" viewBox="0 0 62 58"><defs><linearGradient id="lk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sand)"/><stop offset="1" stop-color="color-mix(in srgb,var(--brown) 60%,transparent)"/></linearGradient></defs><path d="M5.5 58V31a25.5 25.5 0 0 1 51 0v27" fill="none" stroke="url(#lk)" stroke-width="11" stroke-linecap="round"/></svg><span class="body">${mark(46)}</span></div>`;
 // "Join the waitlist": the button opens an e-mail field; the address waits for the owner, who
@@ -639,8 +643,8 @@ addEventListener('keydown',function(e){if(!card.classList.contains('on'))return;
 const SHARE_IMAGE = '/site/og-en.png?v=9';
 const SHARE_IMAGE_ALT = 'Aurin: A coach that knows how you slept. The Today screen with readiness 78.';
 
-function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null}) {
-  const self = `${origin}${path}${lang === 'cs' ? '?lang=cs' : ''}`;
+function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null, status=200}) {
+  const self = `${origin}${lang === 'cs' ? '/cs' : ''}${path}`;
   const html = `<!doctype html>
 <html lang="${lang}" class="site">
 <head>
@@ -667,7 +671,7 @@ ${DARK_SITE ? '<meta name="theme-color" content="#F3EFE8" media="(prefers-color-
 <meta name="twitter:image" content="${origin}${SHARE_IMAGE}">
 <meta name="twitter:image:alt" content="${SHARE_IMAGE_ALT}">
 <link rel="canonical" href="${self}">
-${czech ? `<link rel="alternate" hreflang="en" href="${origin}${path}">\n<link rel="alternate" hreflang="cs" href="${origin}${path}?lang=cs">` : ''}
+${czech ? `<link rel="alternate" hreflang="en" href="${origin}${path}">\n<link rel="alternate" hreflang="cs" href="${origin}/cs${path}">` : ''}
 ${index ? '' : '<meta name="robots" content="noindex">'}
 ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="icon" href="/logo.svg" type="image/svg+xml">
@@ -691,7 +695,7 @@ ${body}
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
 <nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#propojeni">Connections</a></li></ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
-<nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/privacy?lang=cs" hreflang="cs">Soukromí</a> · <a href="/terms?lang=cs" hreflang="cs">Podmínky</a></li></ul></nav>
+<nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
 <div class="base"><span>© 2026 Aurin · run by Petr Bouma, Czech Republic</span><span>Aurin is not a medical device.</span></div>
 </div></footer>
@@ -699,17 +703,18 @@ ${demoScript}
 ${siteScript}
 ${turnstileScript}
 </body></html>`;
-  return new Response(html, {status:200, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(headScript + demoScript + siteScript, [TURNSTILE, WEB_ANALYTICS])}});
+  return new Response(html, {status, headers:{'content-type':'text/html; charset=utf-8', 'content-language':lang, 'cache-control':'private, max-age=0, must-revalidate', 'Content-Security-Policy':scriptPolicy(headScript + demoScript + siteScript, [TURNSTILE, WEB_ANALYTICS])}});
 }
 
-// Pages take the request (to pick the host, and ?lang=cs on the pages that have Czech) or nothing
+// Pages take the request (to pick the host, and /cs/ on the pages that have Czech) or nothing
 // (English on aurin.health, for tests).
 function pageLang(request, czech = false) {
   if (!request) return {lang: 'en', origin: SITE_ORIGIN};
+  const url = new URL(request.url);
+  // ?lang=cs is the old address: the worker sends it on to /cs/… (entrypoint.js).
+  const lang = czech && (url.pathname.startsWith('/cs/') || url.searchParams.get('lang') === 'cs') ? 'cs' : 'en';
   // Absolute links (share image, language versions) keep to the host the page is served on.
-  const host = new URL(request.url).hostname;
-  const lang = czech && new URL(request.url).searchParams.get('lang') === 'cs' ? 'cs' : 'en';
-  return {lang, origin: SERVER_HOSTS.has(host) ? `https://${host}` : SITE_ORIGIN};
+  return {lang, origin: SERVER_HOSTS.has(url.hostname) ? `https://${url.hostname}` : SITE_ORIGIN};
 }
 
 // Google's policies ask the privacy policy to name every party that receives data, how it is stored and
@@ -913,8 +918,6 @@ ${layer('wide')}${layer('tall')}
   // The hero says what the welcome's first page says, its last words in the coach's green italic.
   const headline = 'A coach that knows how you slept.';
   const SLANT = 4;
-  // The logo rising like the sun behind soft rings that keep spreading (the welcome's first page).
-  const sun = size => `<div class="sun" aria-hidden="true" style="--s:${size}px"><i class="halo"></i><i class="rg"></i><i class="rg"></i><i class="rg"></i>${mark(size)}</div>`;
   // The sample morning (DemoData.swift) the hero phone shows; the sentence under the hero says the same.
   const day = {readiness: 78, hrv: 64, hrvBaseline: 58, sleep: '7:12', sleepScore: 82};
 
@@ -992,11 +995,27 @@ ${store('end')}
   });
 }
 
+// Any other address a browser opens: a page in the site's look with the way home and the waitlist,
+// instead of the API's sign-in error (entrypoint.js).
+export function notFoundPage(request) {
+  const {lang, origin} = pageLang(request);
+  return sitePage({lang, origin, path: request ? new URL(request.url).pathname : '/', index: false, status: 404,
+    title: 'Page not found · Aurin', description: 'This page doesn’t exist on aurin.health.',
+    body: `<main id="main" tabindex="-1">
+<section class="final"><div class="wrap" id="join">
+${sun(104)}
+<h1>This page doesn’t exist.</h1>
+<p class="sub">The link may be old or mistyped. <a href="/">Go to the home page</a>, or leave your email and we’ll invite you to try Aurin on your iPhone.</p>
+${store('lost')}
+</div></section>
+</main>`});
+}
+
 function doc(request, path, title, html) {
   const czech = Boolean(html.cs), {lang, origin} = pageLang(request, czech), pick = x => lang === 'cs' ? x.cs : x.en;
   const other = !czech ? '' : lang === 'cs'
     ? `<p class="muted"><a href="${path}" lang="en" hreflang="en">English version</a></p>`
-    : `<p class="muted"><a href="${path}?lang=cs" lang="cs" hreflang="cs">Česká verze</a></p>`;
+    : `<p class="muted"><a href="/cs${path}" lang="cs" hreflang="cs">Česká verze</a></p>`;
   return sitePage({lang, origin, path, czech, title: `${pick(title)} · Aurin`, description: lang === 'cs' ? `${title.cs} pro Aurin (aurin.health).` : `${title.en} for Aurin (aurin.health).`,
     body: `<main id="main" tabindex="-1" class="wrap doc"><h1>${pick(title)}</h1>${other}${pick(html)}</main>`});
 }
@@ -1224,7 +1243,7 @@ ${apple ? '<li>Přihlašování přes Apple pro Aurin ukončíš v nastavení sv
 <p>Zásady upravíme, když se změní Aurin nebo způsob práce s daty, a aktuální verzi s datem zveřejníme na této stránce. Než data, která už máme, použijeme novým způsobem, požádáme tě o souhlas.</p>
 <h2>Kontakt</h2>
 <p>S dotazy k těmto zásadám nebo ke svým datům a s uplatněním svých práv se obrať na <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>
-<p class="muted">Závazné je anglické znění: <a href="/privacy?lang=en">Privacy Policy</a>.</p>`
+<p class="muted">Závazné je anglické znění: <a href="/privacy">Privacy Policy</a>.</p>`
   });
 }
 
@@ -1370,7 +1389,7 @@ export function termsPage(request) {
 <p>Tyto podmínky se řídí českým právem. Pokud jsi spotřebitel s bydlištěm v jiné zemi, zůstává ti ochrana, kterou ti dávají kogentní předpisy té země. Když se něco pokazí, napiš nám nejdřív a pokusíme se to napravit. Spotřebitel v České republice se může s mimosoudním řešením sporu obrátit také na Českou obchodní inspekci (<a href="https://www.coi.cz">coi.cz</a>).</p>
 <h2>Kontakt</h2>
 <p><a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>
-<p class="muted">Závazné je anglické znění: <a href="/terms?lang=en">Terms of Use</a>.</p>`
+<p class="muted">Závazné je anglické znění: <a href="/terms">Terms of Use</a>.</p>`
   });
 }
 
@@ -1468,7 +1487,7 @@ export function healthDataPage(request) {
 
 // Search engines: the public pages are listed in the sitemap; sign-in, the app's API and shared
 // workouts are left out of the index.
-const PUBLIC_PAGES = ['/', '/support', '/privacy', '/terms', '/health-data', '/privacy?lang=cs', '/terms?lang=cs'];
+const PUBLIC_PAGES = ['/', '/support', '/privacy', '/terms', '/health-data', '/cs/privacy', '/cs/terms'];
 
 export function robotsTxt(request) {
   const {origin} = pageLang(request);

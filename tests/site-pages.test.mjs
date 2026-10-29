@@ -87,15 +87,15 @@ test('the site is English whatever the browser says; privacy and terms also have
   for(const page of [overviewPage,supportPage])assert.equal(await lang(page,'/?lang=cs',{'accept-language':'cs',cookie:'lw-lang=cs'}),'en');
   for(const page of [privacyPage,termsPage]){
     assert.equal(await lang(page,'/x',{'accept-language':'cs-CZ',cookie:'lw-lang=cs'}),'en');
-    assert.equal(await lang(page,'/x?lang=cs'),'cs');
+    assert.equal(await lang(page,'/cs/x'),'cs');
   }
   for(const page of [overviewPage,privacyPage,termsPage,supportPage]){
     const html=await page().text();
     assert.doesNotMatch(html,/data-lang-choice|lang-switch/,'no language switch');
-    assert.match(html,/<li lang="cs">Česky: <a href="\/privacy\?lang=cs" hreflang="cs">Soukromí<\/a> · <a href="\/terms\?lang=cs" hreflang="cs">Podmínky<\/a><\/li>/);
+    assert.match(html,/<li lang="cs">Česky: <a href="\/cs\/privacy" hreflang="cs">Soukromí<\/a> · <a href="\/cs\/terms" hreflang="cs">Podmínky<\/a><\/li>/);
   }
-  assert.match(await privacyPage().text(),/<a href="\/privacy\?lang=cs" lang="cs" hreflang="cs">Česká verze<\/a>/);
-  assert.match(await termsPage(new Request('https://aurin.health/terms?lang=cs')).text(),/<a href="\/terms" lang="en" hreflang="en">English version<\/a>/);
+  assert.match(await privacyPage().text(),/<a href="\/cs\/privacy" lang="cs" hreflang="cs">Česká verze<\/a>/);
+  assert.match(await termsPage(new Request('https://aurin.health/cs/terms')).text(),/<a href="\/terms" lang="en" hreflang="en">English version<\/a>/);
   assert.doesNotMatch(await overviewPage().text(),/hreflang="cs" href=/,'the overview has no Czech version');
   assert.equal(overviewPage(new Request('https://aurin.health/',{headers:{'accept-language':'cs'}})).headers.get('content-language'),'en');
 });
@@ -131,7 +131,7 @@ test('the privacy policy and support page cover what Google verification asks fo
   assert.match(privacy,/uoou\.gov\.cz/);
   assert.match(support,/<h2>Deleting your account and data<\/h2>/);
   assert.match(support,/myaccount\.google\.com\/connections/);
-  const cs=await privacyPage(visit('/privacy?lang=cs')).text();
+  const cs=await privacyPage(visit('/cs/privacy')).text();
   assert.match(cs,/Data uživatelů z Googlu slouží jen k funkcím Aurinu/);
   assert.match(cs,/<strong>Smazání účtu<\/strong> v Nastavení/);
 });
@@ -152,7 +152,7 @@ test('the privacy policy names the controller and the contact',async()=>{
 
 test('with open sign-up the privacy policy and support page no longer speak of invitations',async()=>{
   const invite=/invitation|pozvánk|pozvan/i;
-  for(const [page,path] of [[privacyPage,'/privacy?lang=en'],[privacyPage,'/privacy?lang=cs'],[supportPage,'/support']]){
+  for(const [page,path] of [[privacyPage,'/privacy?lang=en'],[privacyPage,'/cs/privacy'],[supportPage,'/support']]){
     const req=()=>new Request('https://aurin.health'+path);
     assert.match(await page(req(),{apple:true,email:true}).text(),invite,path+' invite only');
     assert.doesNotMatch(await page(req(),{apple:true,email:true,open:true}).text(),invite,path+' open');
@@ -192,7 +192,7 @@ test('the support page follows the app’s Settings and every page has the foote
 
 test('the privacy policy says what Aurin writes to Apple Health, in both languages',async()=>{
   assert.match(await privacyPage().text(),/<li>Writing to Apple Health, only if you turn it on \(Settings → Data sources → Apple Health\)/);
-  assert.match(await privacyPage(new Request('https://aurin.health/privacy?lang=cs')).text(),/<li>Zápis do Apple Health, jen když ho zapneš/);
+  assert.match(await privacyPage(new Request('https://aurin.health/cs/privacy')).text(),/<li>Zápis do Apple Health, jen když ho zapneš/);
 });
 
 test('robots.txt and the sitemap list the public pages on the host they are served on',async()=>{
@@ -200,7 +200,7 @@ test('robots.txt and the sitemap list the public pages on the host they are serv
   assert.match(robots,/Disallow: \/app\//);
   assert.match(robots,/Sitemap: https:\/\/aurin\.health\/sitemap\.xml/);
   const map=await sitemapXml(new Request('https://aurin.health/sitemap.xml')).text();
-  for(const path of ['/','/support','/privacy','/terms','/health-data','/privacy?lang=cs','/terms?lang=cs'])assert.ok(map.includes('<loc>https://aurin.health'+path+'</loc>'),path);
+  for(const path of ['/','/support','/privacy','/terms','/health-data','/cs/privacy','/cs/terms'])assert.ok(map.includes('<loc>https://aurin.health'+path+'</loc>'),path);
 });
 
 // Connections show only the services the app offers to connect, each with the app's own logo file
