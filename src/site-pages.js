@@ -182,6 +182,8 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
    into --night and back, with faint stars. In the light look --night is the page and --stars 0, so nothing shows. */
 /* Above the chapter, so its glow runs on over the chapter's night instead of ending in an edge. */
 #a-sleep{z-index:1;background:linear-gradient(var(--bg),var(--night) 75%)}
+/* Its glow fades out inside the opener, since the opener sits above the chapter and would tint its words. */
+#a-sleep::before{height:calc(100% + 80px)}
 #spanek{isolation:isolate;background:linear-gradient(var(--night),var(--night) 60%,var(--bg))}
 #a-sleep::after,#spanek::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:var(--stars);background:url("${STARS}") top center/400px 900px;-webkit-mask-image:linear-gradient(transparent,#000 240px,#000 calc(100% - 320px),transparent);mask-image:linear-gradient(transparent,#000 240px,#000 calc(100% - 320px),transparent)}
 .ac{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:56px;align-items:center}

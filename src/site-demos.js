@@ -948,7 +948,7 @@ html:not(.js) .stage1{display:none}
 .one .rb{margin:16px 0 14px}.one-pt{display:inline-block;padding:6px 14px;border-radius:999px;background:color-mix(in srgb,var(--green) 12%,transparent);font-size:17px;font-weight:600}
 .one-ip{margin-left:auto;transform:scale(1.5)}
 .one-pt.rst{background:color-mix(in srgb,var(--rust) 12%,transparent);color:var(--rust-ink)}.one-pt.ind{background:color-mix(in srgb,var(--indigo) 12%,transparent);color:var(--indigo)}.one-pt.amb{background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--sec)}
-.one-pt .icon{width:16px;height:16px;vertical-align:-2px;margin-right:4px}.one .rst{color:var(--rust-ink)}.one-ft{margin-top:14px}
+.one-pt .di{width:16px;height:16px;vertical-align:-2px;margin-right:4px}.one .rst{color:var(--rust-ink)}.one-ft{margin-top:14px}
 /* The coach's memory: the green line under an answer and the list it keeps. */
 .mchip{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:7px 12px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:13px;font-weight:500;transition:opacity .3s,transform .3s!important}
 .mchip .di{width:13px;height:13px;stroke-width:2.8}.mchip .mut{margin-left:4px}
@@ -956,7 +956,7 @@ html:not(.js) .stage1{display:none}
 .mem .row b{font-size:15px}.mem .row .mut{font-size:15px}
 .ml{margin-top:14px;border-radius:14px;background:var(--panel2);overflow:hidden}
 .mi2{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;font-size:15px;transition:max-height .45s,padding .45s,opacity .4s,background-color 1.2s!important;max-height:60px}
-.mi2+.mi2{border-top:1px solid var(--line)}.mi2 .di{width:13px;height:13px;color:var(--muted);stroke-width:2.6}
+.mi2+.mi2{border-top:1px solid var(--line)}.js .mi2.new.wait:not(.in)+.mi2{border-top-color:transparent}.mi2 .di{width:13px;height:13px;color:var(--muted);stroke-width:2.6}
 .mi2.new.in{background:color-mix(in srgb,var(--green) 10%,transparent)}
 .js .mi2.new.wait:not(.in){max-height:0;padding-block:0;opacity:0}
 .madd{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;padding:13px;border-radius:14px;background:var(--panel2);font-size:15px;font-weight:600}.madd .di{width:14px;height:14px;stroke-width:2.6}
