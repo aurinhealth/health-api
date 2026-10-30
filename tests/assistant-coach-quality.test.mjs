@@ -328,25 +328,58 @@ test('the coach sees how the nights went, not only how long, and the sleep debt'
   assert.equal(sleepNeedContext([],{date:'2026-10-05'}),null);
 });
 
-test('a strength athlete gets a gym day from the engine; a ride or run only when asked (nález 20b)', () => {
-  const today = '2026-10-30';
-  assert.equal(gymDay({ sport: 'strength' }), true);
-  assert.equal(gymDay({ sport: 'strength' }, null, 'Můžu dnes jet na kolo?'), false);
-  assert.equal(gymDay({ sport: 'strength' }, { sport: 'run' }), false);
+test('a strength athlete gets a gym day from the engine; a ride, run or swim only when asked or planned (nález 20b)', () => {
+  const today = '2026-10-30', strength = { sport: 'strength' };
+  assert.equal(gymDay(strength), true);
+  assert.equal(gymDay(strength, { message: 'Můžu dnes jet na kolo?' }), false);
+  assert.equal(gymDay(strength, { message: 'Can I go for a run?' }), false);
+  assert.equal(gymDay(strength, { message: 'A co plavání?' }), false);
+  assert.equal(gymDay(strength, { appContext: { sport: 'run' } }), false);
+  assert.equal(gymDay(strength, { appContext: { sport: 'swim' } }), false);
   assert.equal(gymDay({ sport: 'cycling' }), false);
-  const context = coachContext({ date: today, week: { days: [] }, gym: { history: [] }, focus: { sport: 'strength' }, gymFirst: true, availabilityMinutes: 50 });
+  // Ordinary words are no ride or run: during, around, rounds, a cycle.
+  for (const message of ['Mám čas kolem 40 minut', 'Co během obědové pauzy?', 'Kolik kol dřepů?', 'Jsem na začátku cyklu', 'My cycle started']) assert.equal(gymDay(strength, { message }), true, message);
+  // A ride planned for today stays the day's session.
+  assert.equal(gymDay(strength, { daily: { training: { planned: [{ type: 'Ride', name: 'Endurance' }] } } }), false);
+  assert.equal(gymDay(strength, { daily: { training: { planned: [{ type: 'WeightTraining', name: 'Legs' }] } } }), true);
+  const context = coachContext({ date: today, week: { days: [] }, gym: { history: [] }, focus: strength, availabilityMinutes: 50 });
   const rec = context.cyclingCoachV2.recommendation;
+  assert.equal(context.gymDay, true);
   assert.equal(context.cyclingCoachV2.sport, 'gym');
   assert.match(rec.session.kind, /^gym/);
-  assert.ok(rec.session.durationMinutes <= 50);
+  assert.equal(rec.session.durationMinutes, 50);
   assert.equal(rec.decisionRule, 'strength_main_sport');
   assert.ok(context.cyclingCoachV2.alternatives.every(a => a.onlyWhenAsked));
   assert.ok(context.cyclingCoachV2.readiness, 'readiness stays');
-  // Red readiness: mobility; legs trained in 48 h: upper body.
-  const red = strengthDay({ readiness: { status: 'red' }, load: {}, recommendation: { session: { kind: 'recovery' } }, alternatives: [] });
+  // Asked about a ride: the engine's ride, not a gym day.
+  const asked = coachContext({ date: today, week: { days: [] }, gym: { history: [] }, focus: strength, message: 'Dlouhá jízda dnes?' });
+  assert.equal(asked.gymDay, undefined);
+  assert.notEqual(asked.cyclingCoachV2.sport, 'gym');
+  // The week plan's time for the day sizes it; 0 minutes is no training.
+  const base = { readiness: { status: 'green' }, load: {}, constraints: { autoLength: true, availableMinutes: 75 }, recommendation: { session: { kind: 'endurance' } }, alternatives: [] };
+  assert.equal(strengthDay(base, { dayMinutes: 30 }).recommendation.session.durationMinutes, 30);
+  assert.equal(strengthDay({ ...base, constraints: { autoLength: false, availableMinutes: 40 } }).recommendation.session.durationMinutes, 40);
+  assert.equal(strengthDay(base).recommendation.session.durationMinutes, 60);
+  const none = strengthDay(base, { availabilityMinutes: 0, dayMinutes: 60 }).recommendation.session;
+  assert.equal(none.kind, 'rest'); assert.equal(none.durationMinutes, 0);
+  // Red readiness: mobility; legs trained in 48 h (gym sets, a hard run, a long ride): upper body.
+  const red = strengthDay({ ...base, readiness: { status: 'red' } });
   assert.equal(red.recommendation.session.kind, 'gym_recovery');
-  const legs = strengthDay({ readiness: { status: 'green' }, load: { lowerBodyGymSignals48h: 2 }, recommendation: { session: { kind: 'threshold' } }, alternatives: [] });
-  assert.equal(legs.recommendation.session.focus, 'upper');
+  assert.equal(strengthDay({ ...base, load: { lowerBodyGymSignals48h: 2 } }).recommendation.session.focus, 'upper');
+  const ran = { days: [{ date: '2026-10-29', daily: { training: { completed: [{ type: 'Run', name: 'Intervals', durationHours: 1, intensity: true }] } } }] };
+  assert.equal(strengthDay(base, { week: ran, date: today }).recommendation.session.focus, 'upper');
+  const rode = { days: [{ date: '2026-10-28', daily: { training: { completed: [{ type: 'Ride', name: 'Long ride', durationHours: 3, intensity: false }] } } }] };
+  assert.equal(strengthDay(base, { week: rode, date: today }).recommendation.session.focus, 'upper');
+  const old = { days: [{ date: '2026-10-26', daily: { training: { completed: [{ type: 'Run', name: 'Intervals', durationHours: 1, intensity: true }] } } }] };
+  assert.equal(strengthDay(base, { week: old, date: today }).recommendation.session.focus, 'full');
   const paused = { athleteState: { paused: true }, recommendation: { session: { kind: 'rest' } } };
   assert.equal(strengthDay(paused), paused, 'illness or injury keeps the pause');
+});
+
+test('the engine sport reads whole words only', () => {
+  assert.equal(engineSport({ sport: 'running' }, null, 'Mám čas kolem 40 minut'), 'run');
+  assert.equal(engineSport({ sport: 'cycling' }, null, 'Co během obědové pauzy?'), 'ride');
+  assert.equal(engineSport({ sport: 'cycling' }, null, 'Zítra běh?'), 'run');
+  assert.equal(engineSport({ sport: 'running' }, null, 'Na kole v sobotu?'), 'ride');
+  assert.equal(engineSport({ sport: 'running' }, null, 'Plavání v bazénu'), 'swim');
 });
