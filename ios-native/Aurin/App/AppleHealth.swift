@@ -225,6 +225,9 @@ final class AppleHealth {
         let wasOn = enabled
         let waiting = UserDefaults.standard.string(forKey: Self.resumeKey)
         disconnect()
+        // The sources one account switched off are not the next one's.
+        hidden = [:]
+        UserDefaults.standard.removeObject(forKey: Self.hiddenKey)
         // Off already (a second sign-out): the account that read it still gets it back.
         if wasOn, let email { UserDefaults.standard.set(Self.fingerprint(email), forKey: Self.resumeKey) }
         else if let waiting { UserDefaults.standard.set(waiting, forKey: Self.resumeKey) }
@@ -527,6 +530,9 @@ final class HealthReader: @unchecked Sendable {
     private let closed = ClosedFlag()
     /// By type identifier: the switched-off sources' samples from their time on (hide).
     private var hiddenPredicates: [String: NSPredicate] = [:]
+    /// Food's switched-off apps (bundle identifier → since): a meal logged as a
+    /// food correlation is left out by its app, as its parts are by the predicates.
+    private var hiddenFood: [String: Double] = [:]
     private let hiddenLock = NSLock()
 
     private func hiddenPredicate(_ type: HKSampleType) -> NSPredicate? {
@@ -553,7 +559,7 @@ final class HealthReader: @unchecked Sendable {
                 out[type.identifier] = out[type.identifier].map { NSCompoundPredicate(andPredicateWithSubpredicates: [$0, left]) } ?? left
             }
         }
-        hiddenLock.lock(); hiddenPredicates = out; hiddenLock.unlock()
+        hiddenLock.lock(); hiddenPredicates = out; hiddenFood = categories.contains(.food) ? hidden[HealthCategory.food.rawValue] ?? [:] : [:]; hiddenLock.unlock()
     }
 
     private func sourceSet(_ type: HKSampleType) async -> Set<HKSource> {
@@ -568,9 +574,12 @@ final class HealthReader: @unchecked Sendable {
     func sources(_ types: [HKSampleType]) async -> [AppleHealth.Source] {
         var seen: [String: String] = [:]
         let own = HKSource.default().bundleIdentifier
-        for type in types {
-            for source in await sourceSet(type) where source.bundleIdentifier != own { seen[source.bundleIdentifier] = source.name }
+        // All types asked at once: Food alone has a dozen.
+        let found = await withTaskGroup(of: Set<HKSource>.self) { group in
+            for type in types { group.addTask { await self.sourceSet(type) } }
+            return await group.reduce(into: Set<HKSource>()) { $0.formUnion($1) }
         }
+        for source in found where source.bundleIdentifier != own { seen[source.bundleIdentifier] = source.name }
         return seen.map { AppleHealth.Source(id: $0.key, name: $0.value) }.sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
     }
 
@@ -849,9 +858,12 @@ final class HealthReader: @unchecked Sendable {
     private func foodCorrelations(from: Date, to: Date) async -> [HKCorrelation] {
         await withCheckedContinuation { continuation in
             let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [HKQuery.predicateForSamples(withStart: from, end: to, options: []), notOurs])
+            hiddenLock.lock(); let off = hiddenFood; hiddenLock.unlock()
             let query = HKCorrelationQuery(type: HKCorrelationType(.food), predicate: predicate, samplePredicates: nil) { [closed] _, correlations, error in
                 closed.note(error)
-                continuation.resume(returning: correlations ?? [])
+                continuation.resume(returning: (correlations ?? []).filter { c in
+                    off[c.sourceRevision.source.bundleIdentifier].map { c.startDate.timeIntervalSince1970 < $0 } ?? true
+                })
             }
             store.execute(query)
         }
