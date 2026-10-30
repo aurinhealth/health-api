@@ -827,11 +827,13 @@ async function waterPush(env, ctx) {
   if (!pushConfigured(env) || !env.DB) return { sent: 0, reason: 'not-configured' };
   const db = env.DB, now = new Date(), hour = localHour(now), date = localToday(now);
   if (hour !== 14 && hour !== 18) return { sent: 0, reason: 'off' };
+  const kind = 'water-' + hour;
+  // The job runs every 5 minutes of the hour: once sent, one row read ends it.
+  if (await db.prepare('SELECT 1 FROM push_log WHERE user_id=? AND kind=? AND local_date=?').bind(db.userId, kind, date).first().catch(() => null)) return { sent: 0, reason: 'already-sent' };
   const devices = await listPushTokens(db);
   if (!devices.length) return { sent: 0, reason: 'no-tokens' };
   const profile = await dashboardProfile(env).catch(() => null);
   if (profile?.waterMode !== 'build') return { sent: 0, reason: 'not-building' };
-  const kind = 'water-' + hour;
   const claimed = await db.prepare('INSERT INTO push_log(user_id,kind,local_date) VALUES(?,?,?) ON CONFLICT(user_id,kind,local_date) DO NOTHING').bind(db.userId, kind, date).run().then(r => Boolean(Number(r?.meta?.changes)));
   if (!claimed) return { sent: 0, reason: 'already-sent' };
   const fluids = await handleDashboardApi(new Request('https://internal/app/api/fluids?date=' + date), env, ctx, new URL('https://internal/app/api/fluids?date=' + date)).then(r => r.ok ? r.json() : null).catch(() => null);
