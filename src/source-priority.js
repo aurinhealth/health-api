@@ -14,6 +14,8 @@
 // source is the device worn longest over the 30 days (hours with heart rate).
 // The user can name the source for either part instead; it then wins wherever
 // it has data, and the automatic rule fills the rest.
+import { wearFromSummary, rebuildHourSummary } from './hour-summary.js';
+
 const PRIORITY = 'source_priority';
 export const MARK = 'source-priority';
 // Markers of the rules this replaces (apple-health.js, ultrahuman.js): rows they
@@ -78,6 +80,8 @@ export async function saveSourcePriority(db, userId, input = {}, { now = Date.no
   // Nights are a row a day, so their whole history follows; hours only the last three months.
   const changed = (next.night !== current.night ? await resolveSources(db, userId, { part: 'night', since: addDays(today, -400), now }) : 0)
     + (next.day !== current.day ? await resolveSources(db, userId, { part: 'day', since: addDays(today, -92), now }) : 0);
+  // Steps, energy and zones that count changed with the day's choice.
+  if (next.day !== current.day) await rebuildHourSummary(db, userId, addDays(today, -92)).catch(error => console.error('Hour summary rebuild failed', error.message));
   return { status: 'ok', priority: next, changed };
 }
 
@@ -88,14 +92,29 @@ async function history(db, userId, from, to) {
       AND end_time >= ? AND end_time < ? AND (julianday(end_time) - julianday(start_time)) * 24 >= 3 GROUP BY 1, 2`).bind(userId, from, to).all(),
     // Hours with heart rate: Apple Watch's from the phone, Google's from its zone minutes (every minute worn).
     db.prepare(`SELECT source_family f, sample_time d, MAX(value_numeric) h FROM health_datapoints WHERE user_id = ? AND data_type = '${WEAR_TYPE}' AND sample_time >= ? AND sample_time < ? GROUP BY 1, 2`).bind(userId, from, to).all(),
-    db.prepare(`SELECT source_family f, substr(start_time,1,10) d, SUM(value_numeric) / 60.0 h FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'time-in-heart-rate-zone'
-      AND start_time >= ? AND start_time < ? GROUP BY 1, 2`).bind(userId, from, to).all()
+    // From the hourly summary once it reaches back far enough (~60 k zone minutes a month otherwise).
+    wearFromSummary(db, userId, from, to).catch(() => null).then(rows => rows ? { results: rows } : db.prepare(`SELECT source_family f, substr(start_time,1,10) d, SUM(value_numeric) / 60.0 h FROM health_datapoints WHERE user_id = ? AND source_family = 'google-wearables' AND data_type = 'time-in-heart-rate-zone'
+      AND start_time >= ? AND start_time < ? GROUP BY 1, 2`).bind(userId, from, to).all())
   ]);
   const night = new Map(), wear = new Map();
   const add = (map, f, d, v) => { if (!map.has(f)) map.set(f, new Map()); map.get(f).set(d, Math.min(24, (map.get(f).get(d) || 0) + v)); };
   for (const r of nights.results || []) add(night, r.f, r.d, 1);
   for (const r of [...(worn.results || []), ...(zones.results || [])]) add(wear, r.f, r.d, Number(r.h) || 0);
   return { night, wear };
+}
+
+// The 30-day history behind the home source, kept an hour per user for the
+// Google sync (every 5 minutes, a type at a time): it read ~60 k zone-minute
+// rows each time, and an hour's new minutes hardly move a 30-day total.
+const HISTORY_TTL = 60 * 60 * 1000;
+const histories = new Map();
+async function cachedHistory(db, userId, from, to, now) {
+  const hit = histories.get(userId);
+  if (hit && now - hit.at < HISTORY_TTL && hit.from <= from && hit.to >= to) return hit.value;
+  const value = await history(db, userId, from, to);
+  histories.set(userId, { at: now, from, to, value });
+  if (histories.size > 500) histories.delete(histories.keys().next().value);
+  return value;
 }
 
 // The home source on a day: the most over the 30 days up to it; ties go by FAMILIES.
@@ -119,7 +138,7 @@ function winner(candidates, chosen, homeFamily, off) {
 
 // Applies the rules to the rows of one part ('night' or 'day', or both) from
 // `since` on, or only to the groups of `types`. Returns the rows changed.
-export async function resolveSources(db, userId, { part, types, since, now = Date.now() } = {}) {
+export async function resolveSources(db, userId, { part, types, since, now = Date.now(), cacheHistory = false } = {}) {
   const wanted = types ? new Set(types.filter(t => PART[t])) : null;
   const pick = groups => groups.filter(g => (!part || PART[g[0]] === part) && (!wanted || g.some(t => wanted.has(t))));
   const night = pick(NIGHT), hourly = pick(DAY_HOURLY), daily = pick(DAY_DAILY);
@@ -127,7 +146,10 @@ export async function resolveSources(db, userId, { part, types, since, now = Dat
   const today = new Date(now).toISOString().slice(0, 10);
   const from = String(since || addDays(today, -35)).slice(0, 10);
   const priority = await readSourcePriority(db, userId);
-  const hist = await history(db, userId, addDays(from, -WINDOW_DAYS), addDays(today, 2));
+  // Read only when a key has rows from two sources and the user named none of them.
+  let hist = null;
+  const histFrom = addDays(from, -WINDOW_DAYS), histTo = addDays(today, 2);
+  const loadHistory = () => hist ||= cacheHistory ? cachedHistory(db, userId, histFrom, histTo, now) : history(db, userId, histFrom, histTo);
   const chosen = { night: PROVIDER_FAMILY[priority.night], day: PROVIDER_FAMILY[priority.day] };
   const apple = await db.prepare("SELECT status FROM sync_status WHERE user_id = ? AND sync_name = 'apple_health'").bind(userId).first().catch(() => null);
   const off = new Set(apple?.status === 'disconnected' ? ['apple-health'] : []);
@@ -143,7 +165,9 @@ export async function resolveSources(db, userId, { part, types, since, now = Dat
     // Only the keys whose rows change: a winner with rows set aside, a loser with rows still counted.
     const keep = new Map(FAMILIES.map(f => [f, []])), drop = new Map(FAMILIES.map(f => [f, []]));
     for (const [key, families] of byKey) {
-      const win = winner(families, chosen[partName], homeOf(key.slice(0, 10)), off);
+      const mine = chosen[partName];
+      const needsHome = families.size > 1 && !(mine && families.has(mine) && !off.has(mine));
+      const win = winner(families, mine, needsHome ? homeOf(await loadHistory(), key.slice(0, 10)) : null, off);
       for (const [f, r] of families) {
         if (f === win) { if (Number(r.aside)) keep.get(f).push(key); }
         else if (Number(r.kept)) drop.get(f).push(key);
@@ -156,9 +180,9 @@ export async function resolveSources(db, userId, { part, types, since, now = Dat
         WHERE user_id = ? AND source_family = ? AND data_type IN (${names}) AND record_role = 'duplicate' AND matched_activity_id IN ${OURS} AND COALESCE(sample_time,end_time,start_time) >= ? AND ${keyExpr} IN (SELECT value FROM json_each(?))`).bind(userId, f, from, JSON.stringify(keep.get(f))));
     }
   };
-  for (const g of night) await apply(g, g[0] === 'sleep' ? SLEEP_KEY : DAY_OF, 'night', d => home(hist.night, d));
-  for (const g of hourly) await apply(g, HOUR_OF, 'day', d => home(hist.wear, d));
-  for (const g of daily) await apply(g, DAY_OF, 'day', d => home(hist.wear, d));
+  for (const g of night) await apply(g, g[0] === 'sleep' ? SLEEP_KEY : DAY_OF, 'night', (h, d) => home(h.night, d));
+  for (const g of hourly) await apply(g, HOUR_OF, 'day', (h, d) => home(h.wear, d));
+  for (const g of daily) await apply(g, DAY_OF, 'day', (h, d) => home(h.wear, d));
   let changed = 0;
   for (let i = 0; i < statements.length; i += 50) {
     for (const result of await db.batch(statements.slice(i, i + 50))) changed += Number(result?.meta?.changes || 0);

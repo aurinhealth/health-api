@@ -83,10 +83,10 @@ export function prefetchUserData(env, userId) {
   return parts;
 }
 
-export async function userDataEnvironment(env, user, prefetched = null) {
+export async function userDataEnvironment(env, user, prefetched = null, options = {}) {
   const [found, catalogue] = await (prefetched || prefetchUserData(env, user.id));
   const resolved = found ? { db: database(env, found), key: found.shard_key } : await resolveUserData(env, user.id);
-  return userEnv({ ...catalogue, USER_DATA_DB: resolved.db, USER_DATA_SHARD: resolved.key }, user);
+  return userEnv({ ...catalogue, USER_DATA_DB: resolved.db, USER_DATA_SHARD: resolved.key }, user, options);
 }
 
 export async function deletionDatabase(env, userId) {

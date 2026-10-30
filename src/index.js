@@ -17,7 +17,7 @@ import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, sk
 import { importGoogleFood } from "./google-food.js";
 import { pairSessions } from "./activity-match.js";
 import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
-import { afterGoogleSync } from "./apple-health.js";
+import { afterGoogleSync, flushGoogleSync } from "./apple-health.js";
 import { localToday, zonedIso, localNoon, dayStartUtc, localDate } from "./user-time.js";
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { markConnectionBroken, markConnectionOk, isGoogleAuthFailure, isIntervalsAuthFailure } from "./connection-health.js";
@@ -922,12 +922,24 @@ async function saveGooglePointsBatch(env, family, type, points) {
   });
 
   // D1 batch executes the statements sequentially in one database call.
-  let changed=0;
-  for(let i=0;i<statements.length;i+=50)for(const result of await env.DB.batch(statements.slice(i,i+50)))changed+=Number(result?.meta?.changes||0);
+  // The oldest hour a changed row has: the source choice after it starts there.
+  let changed=0,oldest=null;
+  for(let i=0;i<statements.length;i+=50){
+    const results=await env.DB.batch(statements.slice(i,i+50));
+    results.forEach((result,j)=>{
+      const rows=Number(result?.meta?.changes||0);
+      if(!rows)return;
+      changed+=rows;
+      const info=googleInfo(type,points[i+j]);
+      // The hour, so the summary after the sync rebuilds only the hours written.
+      const day=String(info.sample||info.start||info.end||'').slice(0,13);
+      if(/^\d{4}-\d{2}-\d{2}(T\d{2})?$/.test(day)&&(!oldest||day<oldest))oldest=day;
+    });
+  }
   // Days Apple Health already covers keep the Apple rows (apple-health.js).
   // Only when a row changed: the recent sync reads the same two days every
   // 5 minutes, and choosing the source again read ~1 B rows a day for nothing.
-  if(changed)await afterGoogleSync(env, type, points);
+  if(changed)await afterGoogleSync(env, type, points, {since:oldest});
   return points.length;
 }
 // A workout changed in Google Health a few days later (a run that was a walk)
@@ -944,6 +956,8 @@ async function syncGoogleRecent(env){
   if(googleTypeAllowed(env,'heart-rate'))results.push(await workoutHeartRate(env,token).then(saved=>({type:'workout-heart-rate',saved,status:'ok'}),error=>({type:'workout-heart-rate',status:skippedForPermission(env,error)?'skipped':'error',message:error.message})));
   // Data the user did not give permission for is not a failure.
   const result={status:results.some(r=>r.status!=='ok'&&r.status!=='skipped')?'partial':'ok',results};
+  // Which device counts, for every type the pages above changed, once (flushGoogleSync).
+  await flushGoogleSync(env);
   if(results.some(r=>r.type==='exercise'&&r.saved>0))await matchActivities(env,{days:14}).catch(error=>console.error('Activity matching failed',error.message));
   await ensureSyncStatusTable(env);
   await env.DB.prepare("INSERT INTO sync_status(user_id,sync_name,status,details_json,updated_at) VALUES(?,'google_recent',?,?,datetime('now')) ON CONFLICT(user_id,sync_name) DO UPDATE SET status=excluded.status,details_json=excluded.details_json,updated_at=excluded.updated_at").bind(env.USER_ID,result.status,JSON.stringify(result)).run();
@@ -1024,7 +1038,11 @@ async function startGoogleSync(env) {
   return { started: true, details };
 }
 
+// The source choice for what the pages changed runs once at the end (flushGoogleSync).
 async function processGoogleSyncBatch(env) {
+  try { return await processGoogleSyncPages(env); } finally { await flushGoogleSync(env); }
+}
+async function processGoogleSyncPages(env) {
   let processed = 0;
 
   while (processed < 5) {
@@ -1735,7 +1753,7 @@ export async function heartRateInWindows(db, userId, windows) {
   const asked = spans.map((s, i) => [s, i]).filter(([[start, end]]) => Number.isFinite(start) && Number.isFinite(end) && end > start);
   const out = windows.map(() => null);
   if (!asked.length) return out;
-  const one = `SELECT ? AS i, AVG(bpm) AS bpm, COUNT(*) AS n FROM (SELECT ${SAMPLE_BPM} AS bpm FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', 'heart-rate-5min') AND sample_time >= ? AND sample_time <= ?) WHERE bpm BETWEEN 30 AND 240`;
+  const one = `SELECT ? AS i, AVG(bpm) AS bpm, COUNT(*) AS n FROM (SELECT ${SAMPLE_BPM} AS bpm FROM health_datapoints WHERE user_id = ? AND data_type IN ('heart-rate', 'heart_rate', 'heart-rate-5min', 'heart-rate-1h') AND sample_time >= ? AND sample_time <= ?) WHERE bpm BETWEEN 30 AND 240`;
   // Stored times are RFC 3339 UTC without milliseconds; they compare as text.
   // One statement a window, all in one batch: D1 refuses a UNION ALL of more
   // than a few SELECTs ("too many terms in compound SELECT"), which stopped the

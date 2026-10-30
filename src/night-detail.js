@@ -108,8 +108,9 @@ export async function nightDetail(db, { date }) {
 }
 
 // Heart rate in 5-minute buckets within the given nights: the raw samples, and
-// for nights older than two weeks the 5-minute rows they were compacted into
-// (heart-rate-compaction.js). A raw bucket wins over a compacted one.
+// for nights older than a week the 5-minute rows they were compacted into, a
+// point an hour after a month (heart-rate-compaction.js). A raw bucket wins over a
+// compacted one.
 async function heartRateBuckets(db, nights) {
   const within = nights.map(() => "(sample_time>=? AND sample_time<?)").join(" OR ");
   // The outer range keeps the scan on the index; the windows pick the nights in it.
@@ -124,7 +125,7 @@ async function heartRateBuckets(db, nights) {
       GROUP BY bucket ORDER BY bucket`).bind(...args).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS bucket, value_numeric AS avg,
         json_extract(payload_json, '$.min') AS min, json_extract(payload_json, '$.max') AS max
-      FROM health_datapoints WHERE user_id=? AND data_type='heart-rate-5min' AND sample_time>=? AND sample_time<? AND (${within})
+      FROM health_datapoints WHERE user_id=? AND data_type IN ('heart-rate-5min','heart-rate-1h') AND sample_time>=? AND sample_time<? AND (${within})
       ORDER BY sample_time`).bind(...args).all().then(r => r.results || []).catch(() => [])
   ]);
   const buckets = new Map(compact.map(r => [n(r.bucket), r]));

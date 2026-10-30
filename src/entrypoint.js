@@ -139,7 +139,8 @@ import { coachNudge, swapOffer, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY,
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
 import { lang, withLang, storedLanguage, rememberLanguage, withUnits, storedUnits, rememberUnits, L } from "./lang.js";
 import { appUpdateRequired } from "./app-version.js";
-import { compactHeartRate } from "./heart-rate-compaction.js";
+import { compactOldData } from "./heart-rate-compaction.js";
+import { upkeepHourSummary } from "./hour-summary.js";
 import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, rememberTimeZone, localNow, localToday, localDate, localHour, timeZone, zoneOffsetMs } from "./user-time.js";
 import { shiftDate, googleHealthFor, dashboardProfile, mondayOfDate, dayStartSql, mapLimit, userWeekStart } from "./dashboard-shared.js";
 import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
@@ -290,11 +291,16 @@ async function forIntervalsAthlete(env, ctx, athlete, parts, kinds, deleted = []
 const minute = (cron, now, test) => cron === "* * * * *" && test(now.getUTCMinutes(), now.getUTCHours());
 const every5 = (cron, now) => minute(cron, now, m => m % 5 === 0);
 const USER_JOBS = [
-  // After the user's midnight (0:00–6:00 in their zone), heart-rate samples
-  // older than two weeks become 5-minute rows, six hours of samples a minute.
+  // After the user's midnight (0:00–6:00 in their zone), old Google data gets
+  // thinner a step a minute: heart-rate samples older than a week become 5-minute
+  // rows, those older than a month hourly rows, zone minutes hourly rows
+  // (heart-rate-compaction.js). The hourly summary of steps and zones fills back a
+  // day a minute and is checked once a night (hour-summary.js).
   { name: "sync", providers: ["google", "intervals"], due: () => true, run: async (scoped, ctx, controller) => {
     await app.scheduled(controller, scoped, ctx);
-    if (controller.cron === "* * * * *" && localHour() < 6 && (scoped.CONNECTED_PROVIDERS || []).includes("google")) await compactHeartRate(scoped.DB, scoped.USER_ID).catch(error => console.error("Heart-rate compaction failed", error.message));
+    if (controller.cron !== "* * * * *" || !(scoped.CONNECTED_PROVIDERS || []).includes("google")) return;
+    await upkeepHourSummary(scoped.DB, scoped.USER_ID).catch(error => console.error("Hour summary upkeep failed", error.message));
+    if (localHour() < 6) await compactOldData(scoped.DB, scoped.USER_ID).catch(error => console.error("Heart-rate compaction failed", error.message));
   } },
   // The morning readiness push once the night's data has synced (push.js), checked
   // every five minutes, at most once a local day. A job of its own: inside "sync" a
@@ -482,7 +488,8 @@ const worker = {
       user = await ownerUser(env.DB, env);
     }
     if (user) {
-      try { env = await connectionEnvironment(await userDataEnvironment(rawEnv, user, prefetched && user.id === Number(principal.userId) ? prefetched : null)); }
+      // A GET only reads: repeated identical reads within it are asked once (tenancy.js memoizableSql).
+      try { env = await connectionEnvironment(await userDataEnvironment(rawEnv, user, prefetched && user.id === Number(principal.userId) ? prefetched : null, { memo: request.method === "GET" })); }
       catch (error) {
         if (error instanceof UserDataUnavailable || error instanceof FoodCatalogUnavailable) return Response.json({status:'storage_unavailable',message:error instanceof FoodCatalogUnavailable?error.message:withLang(request.headers.get('X-Interface-Language')||/(?:^|;\s*)lw-lang=(cs|en)/.exec(request.headers.get('cookie')||'')?.[1],()=>L('Tvoje data jsou teď nedostupná. Zkus to za chvíli.', 'Your data is unavailable right now. Try again in a moment.'))},{status:503,headers:{'Retry-After':'30','Cache-Control':'no-store'}});
         throw error;

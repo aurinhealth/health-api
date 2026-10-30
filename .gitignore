@@ -20,3 +20,5 @@ __pycache__/
 
 # The licensed 3D muscle model, for scripts/render-muscles-site.mjs only (never in the repository).
 scripts/muscles-v1.bin
+# The same model CI puts in the app's bundle (.github/scripts/fetch-muscle-model.sh).
+ios-native/Aurin/Resources/Models/

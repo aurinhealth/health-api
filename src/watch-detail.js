@@ -39,7 +39,8 @@ export function parseTcx(xml, start) {
 }
 
 // Heart rate through [start, end) from the stored samples: 10-second averages
-// (5-minute rows once the samples are older than two weeks), seconds from start.
+// (5-minute rows once the samples are older than a week, hourly after a month),
+// seconds from start.
 export async function storedHeartRate(db, userId, start, end) {
   const s = Date.parse(start), e = Date.parse(end);
   if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s || e - s > 24 * 3600e3) return [];
@@ -49,7 +50,7 @@ export async function storedHeartRate(db, userId, start, end) {
       WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<? AND ${bpm} BETWEEN 25 AND 250 GROUP BY at ORDER BY at`)
       .bind(userId, start, end).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS at, value_numeric AS v FROM health_datapoints
-      WHERE user_id=? AND data_type='heart-rate-5min' AND sample_time>=? AND sample_time<? ORDER BY sample_time`)
+      WHERE user_id=? AND data_type IN ('heart-rate-5min','heart-rate-1h') AND sample_time>=? AND sample_time<? ORDER BY sample_time`)
       .bind(userId, start, end).all().then(r => r.results || []).catch(() => [])
   ]);
   const rows = raw.length ? raw : buckets;
@@ -98,7 +99,8 @@ export function zoneBounds(hrZones = []) {
 }
 
 // Seconds in each zone. The watch's samples can be minutes apart (5-minute
-// rows after two weeks), so a gap counts up to 6 minutes.
+// rows after a week), so a gap counts up to 6 minutes; the hourly rows after a
+// month are too sparse for zones.
 export function zoneSeconds(bounds, time, bpm, maxGap = 360) {
   const out = bounds.map(() => 0);
   for (let i = 1; i < bpm.length; i++) {

@@ -36,7 +36,7 @@ export function plan(dir) {
 }
 
 if (process.argv[1]?.endsWith("upload-world-foods.mjs")) {
-  const [dir, bucket = "loadwise-food-catalog"] = process.argv.slice(2);
+  const [dir, bucket = "aurin-food-catalog"] = process.argv.slice(2);
   if (!dir) { console.error("Usage: node scripts/upload-world-foods.mjs <out-dir>/<version> [bucket]"); process.exit(2); }
   const { version, files } = plan(dir);
   // In Eastern Europe, next to the Worker and D1; an existing bucket stays as it is.

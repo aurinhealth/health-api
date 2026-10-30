@@ -304,7 +304,7 @@ struct MusclesView: View {
             }
         }
         .task { await load() }
-        .task { if !model.demo { await MuscleModelStore.shared.load(api: model.api) } }
+        .task { await MuscleModelStore.shared.load(api: model.demo ? nil : model.api) }
         .refreshable { await load() }
         .sheet(isPresented: $explaining) { MuscleFatigueInfoSheet() }
     }
@@ -591,7 +591,7 @@ struct MuscleDetailView: View {
             }
         }
         .task { await load() }
-        .task { if !model.demo { await MuscleModelStore.shared.load(api: model.api) } }
+        .task { await MuscleModelStore.shared.load(api: model.demo ? nil : model.api) }
     }
 
     private func load() async {

@@ -1,4 +1,4 @@
-import { HEART_RATE_BUCKET_TYPE } from "./heart-rate-compaction.js";
+import { HEART_RATE_COMPACT_TYPES } from "./heart-rate-compaction.js";
 import {trainingSetup} from './onboarding.js';
 import { getAthleteState } from './athlete-state.js';
 import { isHardSession } from './session-intensity.js';
@@ -111,7 +111,7 @@ export async function d1Recovery(env, startDate, endDate) {
   const types = ((await env.DB.prepare(`WITH RECURSIVE t(data_type) AS (SELECT MIN(data_type) FROM health_datapoints WHERE user_id = ?
       UNION ALL SELECT (SELECT MIN(data_type) FROM health_datapoints WHERE user_id = ? AND data_type > t.data_type) FROM t WHERE t.data_type IS NOT NULL)
     SELECT data_type FROM t WHERE data_type IS NOT NULL`).bind(env.USER_ID, env.USER_ID).all()).results || [])
-    .map(r => r.data_type).filter(t => RECOVERY_TYPE.test(String(t || "")) && t !== HEART_RATE_BUCKET_TYPE);
+    .map(r => r.data_type).filter(t => RECOVERY_TYPE.test(String(t || "")) && !HEART_RATE_COMPACT_TYPES.includes(t));
   if (!types.length) return {};
   const google = "data_type = ? AND source_family LIKE 'google%'";
   const latest = await env.DB.batch(types.flatMap(type => [
