@@ -710,7 +710,8 @@ struct KeyNumbers: View {
         let low = Double(need) - 30, high = Double(need) + 30
         return Gauge(bar: (minutes, low, high), edges: (Fmt.hoursMinutes(low), Fmt.hoursMinutes(high)),
                      note: L10n.f("%@ %% potřeby", Fmt.int(minutes / Double(need) * 100)),
-                     color: minutes >= low ? Palette.green : Palette.amber)
+                     // Red under three quarters of the need, as on the watch.
+                     color: minutes >= low ? Palette.green : minutes >= Double(need) * 0.75 ? Palette.amber : Palette.red)
     }
 
     private var strain: Gauge {

@@ -168,7 +168,8 @@ struct ReadinessHome: View {
         let low = need - 30, high = need + 30
         g.bar = (minutes, low, high)
         g.note = W.tr("\(W.number(minutes / need * 100)) %", "\(W.number(minutes / need * 100))%")
-        g.color = minutes >= low ? W.green : W.amber
+        // As on the watch face: red under three quarters of the need.
+        g.color = minutes >= low ? W.green : minutes >= need * 0.75 ? W.amber : W.red
         return g
     }
 

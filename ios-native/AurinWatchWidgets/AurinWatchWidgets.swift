@@ -163,6 +163,9 @@ struct SmallValue {
     var until: Date? = nil
     /// ↑ or ↓ against yesterday, with its own colour.
     var arrow: (text: String, color: Color)? = nil
+    /// The day's goal in the same units as `fraction` (sleep: the need ± half
+    /// an hour; strain: today's band), marked on the Day complication's steps.
+    var goal: ClosedRange<Double>? = nil
 }
 
 enum Small {
@@ -253,14 +256,17 @@ enum Small {
                               line: name(m) + " \(r)", symbol: symbol(m))
         case .sleep:
             guard let minutes = today?.sleep?.minutes, minutes > 0 else { return empty }
-            let need = today?.sleep?.need ?? 480
-            return SmallValue(fraction: minutes / max(need, 1), color: C.sleep(minutes, need: need), word: word(m), text: Days.hm(minutes),
-                              line: name(m) + " " + Days.duration(minutes), symbol: symbol(m))
+            let need = max(today?.sleep?.need ?? 480, 31)
+            return SmallValue(fraction: minutes / need, color: C.sleep(minutes, need: need), word: word(m), text: Days.hm(minutes),
+                              line: name(m) + " " + Days.duration(minutes), symbol: symbol(m),
+                              goal: (need - 30) / need...(need + 30) / need)
         case .strain:
             guard let score = today?.strain.score else { return empty }
             let top = max(today?.strain.high ?? 14, score, 1)
+            var goal: ClosedRange<Double>? = nil
+            if let low = today?.strain.low, let high = today?.strain.high, high >= low { goal = low / top...high / top }
             return SmallValue(fraction: score / top, color: C.strain(score, low: today?.strain.low, high: today?.strain.high, at: now),
-                              word: word(m), text: Days.one(score), line: name(m) + " " + Days.one(score), symbol: symbol(m))
+                              word: word(m), text: Days.one(score), line: name(m) + " " + Days.one(score), symbol: symbol(m), goal: goal)
         case .calories:
             guard let food = today?.food, let kcal = food.kcal else { return empty }
             let target = food.target ?? 0
@@ -719,7 +725,11 @@ struct WideView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     head(v.word, v.color)
                     Text(v.text).font(.system(size: 18, weight: .bold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.6)
-                    StepBar(fraction: v.fraction, color: v.color)
+                    // With a goal the steps reach past it (its top at 85 %),
+                    // so short of it, in it and over it all show.
+                    let scale = v.goal.map { 0.85 / max($0.upperBound, 0.01) } ?? 1
+                    StepBar(fraction: v.fraction * scale, color: v.color,
+                            goal: v.goal.map { $0.lowerBound * scale...$0.upperBound * scale })
                 }
                 .padding(.horizontal, 5)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -877,10 +887,12 @@ struct WideView: View {
     }
 }
 
-/// Ten steps filled up to the value, the rest dim.
+/// Ten steps filled up to the value, the rest dim; the steps of the goal
+/// (by their middle) have a light edge.
 struct StepBar: View {
     let fraction: Double
     let color: Color
+    var goal: ClosedRange<Double>? = nil
 
     var body: some View {
         let filled = Int((min(1, max(0, fraction)) * 10).rounded())
@@ -889,6 +901,11 @@ struct StepBar: View {
                 RoundedRectangle(cornerRadius: 1)
                     .fill(i < filled ? color : color.opacity(0.28))
                     .widgetAccentable(i < filled)
+                    .overlay {
+                        if goal?.contains((Double(i) + 0.5) / 10) == true {
+                            RoundedRectangle(cornerRadius: 1).strokeBorder(Color.white.opacity(0.75), lineWidth: 1)
+                        }
+                    }
             }
         }
         .frame(height: 4)
