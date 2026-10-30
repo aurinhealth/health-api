@@ -143,8 +143,8 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .part{position:absolute;left:-44px;width:380px;border-radius:var(--r-22);overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float);opacity:0;z-index:3}
 .flip .part{left:304px}
 /* The watch chapter: one watch, larger, its screens taking turns like the phone's. */
-.vis .wdev{position:absolute;left:150px;top:140px;zoom:1.45}
-.flip .vis .wdev{left:110px}
+/* Zoom scales left and top too, so they are in the watch's own units: this centres it on the glow. */
+.vis .wdev{position:absolute;left:103px;top:99px;zoom:1.45}
 .part img{display:block;width:100%;height:auto}
 .part.on{opacity:1}
 .part:has(>.dm.wait:not(.in)){opacity:0!important}
@@ -546,7 +546,8 @@ document.querySelectorAll('.chapter').forEach(function(ch){
 // Parts: the welcome's cards rise and move the first time a part comes into view (their last frame with reduced motion).
 document.querySelectorAll('.opener').forEach(function(a){var c=a.querySelector('.cards');if(still||!IO){D.last(c);a.classList.add('on');return;}D.first(c);
  new IntersectionObserver(function(es){var on=es[0].isIntersecting;a.classList.toggle('on',on);if(on&&!a._played){a._played=true;D.play(c);}},{threshold:.3}).observe(c);});
-// The pill at the bottom: shown from the first part to the end of the last one, its dot on the part in view.
+// The pill at the bottom: shown from the first part to the end of the last one, its dot on the part whose
+// opener has risen past the lowest fifth of the window (the watch part is short, so a half would skip it).
 // On a phone the pill steps aside while reading downwards and comes back on the way up.
 var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('hodinky'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false,lastY=scrollY,down=false,narrow=matchMedia('(max-width:560px)');
  function where(){ticking=false;var mid=innerHeight*.5,i=-1,y=scrollY;if(Math.abs(y-lastY)>8){down=y>lastY;lastY=y;}acts.forEach(function(a,k){if(a.getBoundingClientRect().top<innerHeight*.8)i=k;});
@@ -808,7 +809,7 @@ export function overviewPage(request) {
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
     ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
       ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500]]],
-    ['hodinky', '', 'Aurin on your wrist.', 'Today’s readiness when you raise your wrist, your gym sets without your phone, water in one tap.', 'green', 'glow-today',
+    ['hodinky', '', 'Aurin on your wrist.', 'Today’s readiness when you raise your wrist, your gym sets without your phone, water in one tap. It comes with the iPhone app.', 'green', 'glow-today',
       WATCH.map(([, title, text], i) => [`watch:${i}`, '', 0, title, text, 6000])]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.

@@ -877,7 +877,7 @@ html:not(.js) .stage1{display:none}
 .dw-burst path{fill:var(--wt);opacity:0;transform:translate(48px,8px)}.js .dw-burst.in path{animation:dw-fly 1.6s cubic-bezier(.2,.7,.4,1) var(--d) infinite}
 @keyframes dw-fly{0%{opacity:0;transform:translate(48px,10px) scale(1.1)}12%{opacity:1}40%{transform:translate(calc(48px + var(--x) * .6),calc(10px + var(--y))) scale(1)}75%{opacity:.8}100%{opacity:0;transform:translate(calc(48px + var(--x)),34px) scale(.6)}}
 /* Apple Watch: the case and its dark screens (WatchStyle.swift: Instrument Serif numbers, a glow at the top). */
-.aw-act{display:grid;place-items:center;width:auto}
+.aw-act{place-items:center}
 .aw-w>.scr{inset:12px;border-radius:50px;overflow:hidden}
 .aw-w{position:relative;width:236px;height:286px;border-radius:62px;padding:12px;background:linear-gradient(145deg,#3b3d41,#1c1d1f);box-shadow:0 30px 60px -24px rgba(40,30,10,.55),inset 0 0 0 1.5px #55585d}
 .aw-w:after{content:"";position:absolute;right:-7px;top:62px;width:9px;height:40px;border-radius:5px;background:linear-gradient(90deg,#2a2b2e,#4a4c50)}
