@@ -8,6 +8,7 @@ import { ultrahumanConfigured } from "./ultrahuman.js";
 import { whoopConfigured } from "./whoop.js";
 import { wahooConfigured } from "./wahoo.js";
 import { readSourcePriority } from "./source-priority.js";
+import { readReadOff, READ_TYPES } from "./source-reading.js";
 // Connection metadata never exposes credentials. Provider consent remains on the provider's site.
 export async function connectionStatus(env) {
   const google = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
@@ -23,7 +24,9 @@ export async function connectionStatus(env) {
   const apple = env.DB && env.USER_ID != null ? await appleHealthStatus(env.DB, env.USER_ID).catch(() => ({ connected: false })) : { connected: false };
   // Where nights and days come from when several sources measure them (source-priority.js).
   const priority = env.DB && env.USER_ID != null ? await readSourcePriority(env.DB, env.USER_ID) : { night: "auto", day: "auto" };
-  return {status:"ok",priority,providers:[
+  // The types switched off per service under Zdroje dat → Health data (source-reading.js).
+  const readOff = env.DB && env.USER_ID != null ? await readReadOff(env.DB, env.USER_ID) : { google: [], ultrahuman: [], whoop: [] };
+  return {status:"ok",priority,readOff,readTypes:READ_TYPES,providers:[
     {id:"google",name:"Google Health",required:false,configured:google,connected:googleConnected,...state("google",googleConnected),connectUrl:google?"/oauth/google":null,extras:grantedExtras(env),extrasUrl:google?"/oauth/google?extra=1":null,
       // Permissions unticked on Google's consent screen: that data stays empty until they are granted.
       missingPermissions:googleConnected?missingHealthPermissions(env):[],

@@ -103,7 +103,8 @@ struct TrainingContent: View {
                         .padding(.top, 18)
                 }
 
-                TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay)
+                TrainingCalendarCard(today: training.date, onPick: pickDay, jump: jumpDay,
+                                     plannedTodayBelow: Set(upcoming.filter { $0.date == training.date }.map(\.title)))
                     .padding(.top, 18)
 
                 // Right under the week (Petr, 2026-10-25): every workout left today,
@@ -418,7 +419,9 @@ struct NextSession: View {
                     .foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let detail {
+            if let lines = session.lines, !lines.isEmpty {
+                exerciseList(lines)
+            } else if let detail {
                 Text(detail).font(Typo.small).foregroundStyle(Palette.muted).lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -457,6 +460,51 @@ struct NextSession: View {
         let left = (1 - min(a, 20.9) / 21) * (1 - min(b, 20.9) / 21)
         return ((21 * (1 - left)) * 10).rounded() / 10
     }
+
+    /// A gym plan as rows (Petr, 2026-10-30): exercises, sets and the main muscles in one
+    /// line, then each exercise with sets × reps · weight; five, the rest in the gym day.
+    private func exerciseList(_ lines: [TrainingSnapshot.Session.Line]) -> some View {
+        // What is still left: sets ticked off in the gym day leave the count.
+        let sets = lines.reduce(0) { $0 + Self.left($1) }
+        let summary = [L10n.plural("%lld cviků", lines.count), L10n.plural("%lld sérií", sets)] + (session.muscles ?? []).prefix(3)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text(verbatim: summary.joined(separator: " · ")).font(Typo.small).foregroundStyle(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 6)
+            ForEach(Array(lines.prefix(5).enumerated()), id: \.offset) { _, line in
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(verbatim: line.name).font(Typo.body).foregroundStyle(Palette.ink).lineLimit(1)
+                    Spacer(minLength: 8)
+                    Group {
+                        if Self.left(line) == 0 {
+                            Label("Hotovo", systemImage: "checkmark").foregroundColor(Palette.green)
+                        } else if Self.amount(line).isEmpty {
+                            Text(L10n.plural("%lld sérií", Self.left(line))).foregroundColor(Palette.muted)
+                        } else {
+                            Text(verbatim: "\(Self.left(line)) × ").fontWeight(.medium).foregroundColor(Palette.ink)
+                                + Text(verbatim: Self.amount(line)).foregroundColor(Palette.muted)
+                        }
+                    }
+                    .font(Typo.caption).lineLimit(1).layoutPriority(1)
+                }
+                .padding(.vertical, 9)
+            }
+            if lines.count > 5 {
+                Rectangle().fill(Palette.hairline).frame(height: 1)
+                Text(L10n.plural("a %lld dalších", lines.count - 5)).font(Typo.small).foregroundStyle(Palette.muted)
+                    .padding(.vertical, 9)
+            }
+        }
+    }
+
+    /// "8–10 · 16 kg": the heaviest planned set's reps and weight.
+    static func amount(_ line: TrainingSnapshot.Session.Line) -> String {
+        [line.reps, line.kg.map(EquipmentView.kg)].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// The exercise's work sets not yet ticked off.
+    static func left(_ line: TrainingSnapshot.Session.Line) -> Int { max(0, line.sets - (line.done ?? 0)) }
 
     private var detail: String? {
         if !session.exercises.isEmpty {

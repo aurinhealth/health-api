@@ -590,7 +590,8 @@ export function buildIntervalsEvent(workout, date, environment = "indoor", { thr
   };
 }
 
-export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, confirm = false, environment = "indoor" }) {
+// startTime: "HH:MM" chosen in the week plan, or none for the day without a time.
+export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, confirm = false, environment = "indoor", startTime = null }) {
   if (confirm !== true) throw new Error(L("Uložení tréninku vyžaduje potvrzení.", "Saving the workout requires confirmation."));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || "")) || new Date(date + "T12:00:00Z").toISOString().slice(0, 10) !== date) throw new Error(L("Neplatné datum.", "Invalid date."));
   const workout = await getWorkout(db, workoutId); if (!workout) throw new Error(L("Workout nebyl nalezen.", "Workout not found."));
@@ -599,12 +600,19 @@ export async function scheduleWorkoutInIntervals(env, db, { workoutId, date, con
   // proposals. Availability limits belong to generation, never to this write.
   await ensureTrainingTables(db);
   await ensureLocalWorkouts(db);
-  let event = buildIntervalsEvent(workout, date, environmentOf(environment));
+  let event = buildIntervalsEvent(workout, date, environmentOf(environment), { startTime });
   const existing = await db.prepare("SELECT intervals_event_id,status FROM workout_schedule_links WHERE user_id=? AND intervals_external_id=?").bind(db.userId, event.external_id).first();
-  if (existing) return { sync: await syncLocalWorkout({...env,DB:db},existing.intervals_event_id), status: "already_scheduled", workout: { id: workout.id, name: workout.name }, date, externalId: event.external_id, intervalsEventId: existing.intervals_event_id || null };
+  if (existing) {
+    // Saved before (a retry, or added from the library): the time picked now still applies.
+    if (startTime && existing.intervals_event_id) {
+      const row = await db.prepare("SELECT start_time FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local') AND data_type='planned-workout' AND external_id=?").bind(db.userId, 'planned:' + existing.intervals_event_id).first();
+      if (String(row?.start_time || '').slice(0, 16) !== date + 'T' + startTime) { const { movePlannedEvent } = await import('./planned-events.js'); await movePlannedEvent({ ...env, DB: db }, { eventId: existing.intervals_event_id, date, time: startTime }); }
+    }
+    return { sync: await syncLocalWorkout({...env,DB:db},existing.intervals_event_id), status: "already_scheduled", workout: { id: workout.id, name: workout.name }, date, externalId: event.external_id, intervalsEventId: existing.intervals_event_id || null, ...(existing.intervals_event_id ? { eventId: 'planned:' + existing.intervals_event_id } : {}) };
+  }
   // Watts in the description only for a new event.
   const thresholds = await athleteThresholds(env).catch(() => null);
-  event = buildIntervalsEvent(workout, date, environmentOf(environment), { thresholds });
+  event = buildIntervalsEvent(workout, date, environmentOf(environment), { thresholds, startTime });
   const rendered=renderForEnvironment(workout,environmentOf(environment));
   event.moving_time=Math.round(rendered.duration_minutes*60);event.icu_training_load=event.load_target;
   const local=await storeLocalEvent(db,event);

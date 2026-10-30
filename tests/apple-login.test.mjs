@@ -84,6 +84,27 @@ test("the app signs in with Apple natively and keeps the token that deleting the
   assert.equal(await revokeApple({ ...apple }), "none");
 });
 
+test("a token is revoked with the app's and the Loadwise app's client, even when the first answers 200", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push(new URLSearchParams(String(init.body)).get("client_id"));
+    return new Response("");
+  };
+  assert.equal(await revokeApple({ ...apple, APPLE_REFRESH_TOKEN: "legacy-refresh" }, fetchImpl), "revoked");
+  assert.deepEqual(calls, ["health.aurin.app", "eu.petrfitnessdata.loadwise.native"]);
+  // A client refusing or unreachable is "failed": its 200 could not tell which client issued the token.
+  const legacyOnly = async (url, init) => {
+    if (new URLSearchParams(String(init.body)).get("client_id") === "health.aurin.app") throw new Error("offline");
+    return new Response("");
+  };
+  assert.equal(await revokeApple({ ...apple, APPLE_REFRESH_TOKEN: "t" }, legacyOnly), "failed");
+  assert.equal(await revokeApple({ ...apple, APPLE_REFRESH_TOKEN: "t" }, async () => Response.json({ error: "invalid_client" }, { status: 400 })), "failed");
+  // An app configured with the legacy ID asks Apple once.
+  calls.length = 0;
+  await revokeApple({ ...apple, APPLE_APP_BUNDLE_ID: "eu.petrfitnessdata.loadwise.native", APPLE_REFRESH_TOKEN: "t" }, fetchImpl);
+  assert.deepEqual(calls, ["eu.petrfitnessdata.loadwise.native"]);
+});
+
 test("the old Loadwise app no longer signs in with Apple", async () => {
   const env = await withUsers();
   const token = await idToken({ aud: "eu.petrfitnessdata.loadwise.native", nonce: await hex(APP_NONCE) });
