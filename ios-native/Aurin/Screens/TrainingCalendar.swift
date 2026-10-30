@@ -11,9 +11,10 @@ struct TrainingCalendarCard: View {
     var onPick: (String) -> Void = { _ in }
     /// A day chosen in the pinned bar (its arrows and "Dnes").
     var jump: DayJump? = nil
-    /// Today's workouts still to do have their own card under the calendar (TodaySessions):
-    /// today's list then shows only what was done, and no row when nothing was.
-    var plannedTodayBelow = false
+    /// Today's workouts still to do that have their own card under the calendar
+    /// (TodaySessions), by title: today's list leaves out those planned rows, the
+    /// rest (done, or planned but not on the card) stays.
+    var plannedTodayBelow: Set<String> = []
     @State private var selected: String?
     @State private var centered: String?
     @State private var expanded = false
@@ -36,7 +37,7 @@ struct TrainingCalendarCard: View {
     }
 
     private var day: String { selected ?? today }
-    private var hidePlanned: Bool { plannedTodayBelow && day == today }
+    private var hidePlanned: Set<String> { day == today ? plannedTodayBelow : [] }
     /// How far the strip (and the pinned bar's arrow) goes ahead.
     static let daysAhead = 30
     private var stripDays: [String] { ISODay.range(ISODay.shift(today, -60), ISODay.shift(today, Self.daysAhead)) }
@@ -368,8 +369,8 @@ struct CalendarDayList: View {
     let date: String
     let today: String
     let day: CalendarDay?
-    /// Today's planned workouts are in the card below (TrainingCalendarCard.plannedTodayBelow).
-    var hidePlanned = false
+    /// Today's planned workouts in the card below, by title (TrainingCalendarCard.plannedTodayBelow).
+    var hidePlanned: Set<String> = []
     /// A watch session (no Intervals.icu detail) opened in its summary.
     @State private var watch: CalendarActivity?
     /// Two records of one workout: the merge sheet, and the answer being sent.
@@ -415,8 +416,8 @@ struct CalendarDayList: View {
         }
     }
 
-    static func shown(_ list: [CalendarActivity], hidePlanned: Bool) -> [CalendarActivity] {
-        hidePlanned ? list.filter { $0.status != "planned" } : list
+    static func shown(_ list: [CalendarActivity], hidePlanned: Set<String>) -> [CalendarActivity] {
+        list.filter { $0.status != "planned" || !hidePlanned.contains($0.title) }
     }
 
     private struct Proposed: Identifiable {

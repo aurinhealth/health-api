@@ -63,6 +63,8 @@ struct TrainingSnapshot: Decodable, Equatable {
         struct Line: Decodable, Equatable {
             let name: String
             let sets: Int
+            /// Work sets already ticked off (older servers: nil).
+            let done: Int?
             let reps: String?
             let kg: Double?
         }

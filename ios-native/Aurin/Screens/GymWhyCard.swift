@@ -52,7 +52,7 @@ enum GymWhy {
         if has("short jumps", "krátké výskoky") {
             return Reason(symbol: "figure.jumprope", title: L10n.tr("Výskoky"), detail: firstClause(s, cut: ":"))
         }
-        if has("deload", "odlehčen") {
+        if has("deload", "odlehčen", "recovery week", "regenerační týden") {
             return Reason(symbol: "arrow.down.right", title: L10n.tr("Odlehčený týden"), detail: firstClause(s, cut: ";"))
         }
         if has("sparing your legs", "šetřím nohy", "leg loading", "zatížení nohou", "legs get at most", "nohy nejvýše", "nohy proto mají") {

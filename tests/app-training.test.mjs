@@ -83,9 +83,18 @@ test("A gym plan's rows: work sets per exercise, reps, the heaviest weight and t
   ];
   const { lines, muscles } = gymPlanSummary(rows);
   assert.deepEqual(lines, [
-    { name: "Standing Dumbbell Press", sets: 2, reps: "8–10", kg: 16 },
-    { name: "Close-grip lat pulldown", sets: 1, reps: "10", kg: null },
-    { name: "Dumbbell lunge", sets: 1, reps: "10", kg: 12 }
+    { name: "Standing Dumbbell Press", sets: 2, done: 0, reps: "8–10", kg: 16 },
+    { name: "Close-grip lat pulldown", sets: 1, done: 0, reps: "10", kg: null },
+    { name: "Dumbbell lunge", sets: 1, done: 0, reps: "10", kg: 12 }
+  ]);
+  // A pyramid shows the heaviest set with its own reps; sets done count once per set (L and P together).
+  const pyramid = gymPlanSummary([
+    ["WORK", "Squat", "1", "60", "12", "60", "12", "", "TRUE"], ["WORK", "Squat", "2", "70", "10"], ["WORK", "Squat", "3", "80", "8"],
+    ["WORK", "Dumbbell lunge", "1", "12", "10", "", "10", "", "", "", "", "", "", "L"], ["WORK", "Dumbbell lunge", "1", "12", "10", "", "10", "", "", "", "", "", "", "P"]
+  ]).lines;
+  assert.deepEqual(pyramid, [
+    { name: "Squat", sets: 3, done: 1, reps: "8", kg: 80 },
+    { name: "Dumbbell lunge", sets: 1, done: 1, reps: "10", kg: 12 }
   ]);
   assert.equal(muscles[0], "Ramena");
   const gym = { [day(4)]: { name: "Celé tělo", exercises: ["Dřep"], lines: [{ name: "Dřep", sets: 3, reps: "8", kg: 80 }], muscles: ["Přední stehna"] } };
