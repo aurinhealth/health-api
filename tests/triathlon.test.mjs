@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { triathlonSplit, disciplineCategory, yearBySport, splitFacts } from "../src/triathlon-split.js";
+import { triathlonSplit, disciplineCategory, splitFacts } from "../src/triathlon-split.js";
+import { yearFromWeeks } from "../src/training-history.js";
 import { weekProposal } from "../src/adaptive-week.js";
 import { sanitizeWeekPlan, planWeekRoles } from "../src/week-planner.js";
 import { sanitizeWeekDays } from "../src/week-ai.js";
@@ -26,8 +27,8 @@ test("the discipline being learnt gets more short sessions, the strongest keeps 
   assert.equal(splitFacts(s).weakest, "swim");
 });
 
-test("the year per sport comes from the activities already read", () => {
-  const y = yearBySport([{ kind: "swim", date: "2026-01-02", minutes: 30 }, { kind: "swim", date: "2025-01-02", minutes: 30 }, { kind: "ride", date: "2026-02-01", minutes: 90 }], "2025-10-30");
+test("the year per sport comes from the stored weeks", () => {
+  const y = yearFromWeeks([{ week: "2025-12-29", swim_n: 1, swim_min: 30 }, { week: "2024-12-30", swim_n: 1, swim_min: 30 }, { week: "2026-01-26", ride_n: 1, ride_min: 90 }], "2025-10-27");
   assert.deepEqual(y, { swim: { count: 1, hours: .5 }, ride: { count: 1, hours: 1.5 } });
 });
 
