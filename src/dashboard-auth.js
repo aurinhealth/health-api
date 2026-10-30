@@ -14,6 +14,29 @@ export const SESSION_REFRESH_SECONDS = 24 * 60 * 60;
 // However much it is used, a session ends a year after the sign-in it came
 // from (`at` in the cookie), so a copied cookie does not live for ever.
 export const SESSION_MAX_SECONDS = 365 * 24 * 60 * 60;
+// The browser sheet that connects a service (native-connect.js) gets a cookie
+// of its own: a quarter of an hour, good only on the way to the service and
+// back (/auth/app/connect, /oauth/…), and cleared when the service sends the
+// user back to the app. The sheet shares Safari's cookies, so a full session
+// would stay there after the connection.
+export const CONNECT_SESSION_SECONDS = 15 * 60;
+const CONNECT_SCOPE = "connect";
+const connectPath = pathname => pathname === "/auth/app/connect" || pathname.startsWith("/oauth/");
+// What the deploy smoke test (a GitHub Actions token, github-oidc.js) may call
+// as the owner: the reads it checks, the food search and the gym generator's
+// preview. Any other route refuses the token.
+const SYSTEM_ROUTES = new Set([
+  "POST /automation/strength",
+  "GET /health/nutrition",
+  "GET /app/api/today",
+  "GET /app/api/daily",
+  "GET /app/api/sleep",
+  "GET /app/api/gym",
+  "GET /app/api/activities",
+  "GET /app/api/week",
+  "POST /app/api/food/search"
+]);
+export const systemRouteAllowed = request => SYSTEM_ROUTES.has(request.method + " " + new URL(request.url).pathname);
 
 // Routes reachable without a dashboard session or API key. Everything else
 // requires authentication. Routes listed here either serve static/public
@@ -55,19 +78,18 @@ export function isPublicPath(pathname) {
   return PUBLIC_PATHS.has(pathname) || PUBLIC_PREFIXES.some(prefix => pathname.startsWith(prefix));
 }
 
-// Identifies who is calling: a signed-in user (session cookie), the owner's
-// API key (API clients) or a GitHub Actions workflow. Returns null for
-// anonymous or invalid credentials.
+// Identifies who is calling: a signed-in user (session cookie) or the deploy
+// smoke test (a GitHub Actions token, only on SYSTEM_ROUTES). Returns null for
+// anonymous or invalid credentials. The owner's old API key (STRENGTH_API_KEY)
+// opens nothing any more.
 export async function resolvePrincipal(request, env, verifyOidc = verifyGitHubActionsToken) {
   const session = await verifyDashboardSession(request, sessionSecret(env));
-  if (session) return { kind: "user", userId: session.uid, epoch: session.epoch };
+  // A connect cookie is no session anywhere else.
+  if (session && (session.scope !== CONNECT_SCOPE || connectPath(new URL(request.url).pathname))) return { kind: "user", userId: session.uid, epoch: session.epoch };
   const authorization = request.headers.get("Authorization") || "";
   if (!authorization.startsWith("Bearer ")) return null;
   const token = authorization.slice(7).trim();
-  if (!token) return null;
-  const ownerKey = String(env.STRENGTH_API_KEY || "");
-  if (ownerKey && timingSafeEqualString(token, ownerKey)) return { kind: "owner" };
-  if (token.split(".").length !== 3) return null;
+  if (!token || token.split(".").length !== 3 || !systemRouteAllowed(request)) return null;
   try { await verifyOidc(request); return { kind: "system" }; } catch { return null; }
 }
 
@@ -98,13 +120,32 @@ export function handleDashboardLogout() {
   return new Response(JSON.stringify({status:"ok"}),{status:200,headers:{"content-type":"application/json; charset=utf-8","Set-Cookie":CLEARED_SESSION_COOKIE,"Cache-Control":"no-store"}});
 }
 
+// "Odhlásit se" (POST /app/logout): the cookie goes, and the account's epoch moves
+// on, so no copy of a session of this account works any more (the Watch's, one a
+// connection left in Safari, one taken from the phone). `user` is the caller
+// signed in with a cookie of the current epoch, else null: a cookie already
+// signed out (or none) only gets cleared, so an old copy cannot sign the user
+// out again and again. This device stays a known one for e-mail codes.
+export async function handleSignOut(request, env, user) {
+  const response = handleDashboardLogout();
+  if (!user?.id || !env.DB) return response;
+  try {
+    const known = await heldKnownDevice(request, env, env.DB, user.id);
+    const moved = await env.DB.prepare("UPDATE users SET session_epoch = session_epoch + 1 WHERE id=? AND session_epoch=?").bind(Number(user.id), Number(user.sessionEpoch) || 0).run();
+    const device = known && Number(moved?.meta?.changes) > 0 ? await knownDeviceCookie(env.DB, env, user.id) : null;
+    if (device) response.headers.append("Set-Cookie", device);
+  } catch (error) { console.error("Sign-out: sessions not ended", error?.message); }
+  return response;
+}
+
 // A session cookie is good for the user row it names only while its epoch is the row's.
 export function sessionMatchesUser(principal, user) {
   if (principal?.kind !== "user") return true;
   return Number(principal.epoch || 0) === Number(user?.sessionEpoch || 0);
 }
 
-// Returns the session payload ({uid, exp, epoch, iat, at}) or null. Cookies from
+// Returns the session payload ({uid, exp, epoch, iat, at}) or null; the connect
+// sheet's cookie also carries scope "connect". Cookies from
 // before the sliding sessions carry no iat; they count as issued 30 days before exp.
 // Cookies from before the year's limit carry no sign-in time: their iat stands in.
 export async function verifyDashboardSession(request, secret) {
@@ -125,7 +166,8 @@ export async function verifyDashboardSession(request, secret) {
     const exp = Number(data.exp), iat = Number.isFinite(Number(data.iat)) ? Number(data.iat) : exp - SESSION_SECONDS;
     const at = Number.isFinite(Number(data.at)) ? Math.min(Number(data.at), iat) : iat;
     if (Math.floor(Date.now()/1000) - at > SESSION_MAX_SECONDS) return null;
-    return { uid, exp, epoch, iat, at };
+    if (data.sc !== undefined && data.sc !== CONNECT_SCOPE) return null;
+    return { uid, exp, epoch, iat, at, ...(data.sc === CONNECT_SCOPE ? { scope: CONNECT_SCOPE } : {}) };
   } catch { return null; }
 }
 
@@ -140,6 +182,20 @@ export async function sessionCookie(uid, exp, secret, epoch = 0, iat = Math.floo
   const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp:Math.min(exp,at+SESSION_MAX_SECONDS),se:Number(epoch)||0,iat,at})));
   const signature = await dashboardHmac(payload, secret);
   return SESSION_COOKIE+"="+payload+"."+signature+"; Path=/; Max-Age="+SESSION_SECONDS+"; HttpOnly; Secure; SameSite=Lax";
+}
+
+// The connect sheet's cookie (CONNECT_SESSION_SECONDS, see above), of the user's current epoch.
+export async function connectSessionCookie(db, uid, secret, now = Math.floor(Date.now() / 1000)) {
+  const payload = base64url(new TextEncoder().encode(JSON.stringify({uid:Number(uid),exp:now+CONNECT_SESSION_SECONDS,se:await sessionEpochOf(db, uid),iat:now,at:now,sc:CONNECT_SCOPE})));
+  return SESSION_COOKIE+"="+payload+"."+await dashboardHmac(payload, secret)+"; Path=/; Max-Age="+CONNECT_SESSION_SECONDS+"; HttpOnly; Secure; SameSite=Lax";
+}
+
+// The service sent the user back to the app (loadwise://connected): the connect cookie goes.
+export function endConnectSession(response) {
+  if (!response || !String(response.headers.get("Location") || "").startsWith("loadwise://")) return response;
+  const ended = new Response(response.body, response);
+  ended.headers.append("Set-Cookie", CLEARED_SESSION_COOKIE);
+  return ended;
 }
 
 // The user's current epoch; a users table from before the column counts as 0.
@@ -252,7 +308,7 @@ export function sessionNeedsRefresh(session, now = Math.floor(Date.now() / 1000)
 export async function slidingSession(request, response, secret, now = Math.floor(Date.now() / 1000)) {
   if (!response || !secret) return response;
   const session = await verifyDashboardSession(request, secret);
-  if (!sessionNeedsRefresh(session, now)) return response;
+  if (session?.scope || !sessionNeedsRefresh(session, now)) return response;
   const setCookies = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [response.headers.get("Set-Cookie") || ""];
   if (setCookies.some(value => String(value).startsWith(SESSION_COOKIE + "="))) return response;
   const refreshed = new Response(response.body, response);

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { foreignOriginChange, isPublicPath, resolvePrincipal, sessionCookie, sessionSecret, timingSafeEqualString, verifyDashboardSession, sessionMatchesUser, userSessionCookie, signText, handleSignOutEverywhere, SESSION_SECONDS, SESSION_REFRESH_SECONDS, SESSION_MAX_SECONDS, sessionNeedsRefresh, slidingSession } from "../src/dashboard-auth.js";
+import { foreignOriginChange, isPublicPath, resolvePrincipal, sessionCookie, sessionSecret, timingSafeEqualString, verifyDashboardSession, sessionMatchesUser, userSessionCookie, signText, handleSignOutEverywhere, handleSignOut, connectSessionCookie, endConnectSession, CONNECT_SESSION_SECONDS, SESSION_SECONDS, SESSION_REFRESH_SECONDS, SESSION_MAX_SECONDS, sessionNeedsRefresh, slidingSession } from "../src/dashboard-auth.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { ensureTenancy, findUser, bumpSessionEpoch, _resetTenancyForTest } from "../src/tenancy.js";
 
@@ -31,11 +31,22 @@ test("anonymous and wrong-key requests have no principal", async () => {
   assert.equal(await resolvePrincipal(req({ Authorization: "Bearer test-secret-key" }), {}, rejectOidc), null);
 });
 
-test("sessions identify their user; the API key and GitHub OIDC act as owner and system", async () => {
+test("sessions identify their user; GitHub OIDC acts as system; the old owner API key opens nothing", async () => {
   const cookie = (await sessionCookie(7, future(), env.SESSION_SECRET)).split(";")[0];
   assert.deepEqual(await resolvePrincipal(req({ Cookie: cookie }), env, rejectOidc), { kind: "user", userId: 7, epoch: 0 });
-  assert.deepEqual(await resolvePrincipal(req({ Authorization: "Bearer test-secret-key" }), env, rejectOidc), { kind: "owner" });
+  assert.equal(await resolvePrincipal(req({ Authorization: "Bearer test-secret-key" }), env, async () => ({})), null);
   assert.deepEqual(await resolvePrincipal(req({ Authorization: "Bearer a.b.c" }), env, async () => ({})), { kind: "system" });
+});
+
+test("the deploy token acts as the owner only on the routes the smoke test calls", async () => {
+  const at = (path, method = "GET") => new Request("https://aurin.health" + path, { method, headers: { Authorization: "Bearer a.b.c" } });
+  const accept = async () => ({});
+  for (const [path, method] of [["/automation/strength", "POST"], ["/health/nutrition"], ["/app/api/today"], ["/app/api/daily"], ["/app/api/sleep"], ["/app/api/gym"], ["/app/api/activities"], ["/app/api/week"], ["/app/api/food/search", "POST"]]) {
+    assert.deepEqual(await resolvePrincipal(at(path, method), env, accept), { kind: "system" }, path);
+  }
+  for (const [path, method] of [["/app/api/account/export"], ["/app/api/account/delete", "POST"], ["/app/api/me"], ["/app/api/food/log", "POST"], ["/app/api/today", "POST"], ["/app/api/admin/users"], ["/strength/history"], ["/sync/google"]]) {
+    assert.equal(await resolvePrincipal(at(path, method), env, accept), null, method + " " + path);
+  }
 });
 
 test("expired, forged or user-less sessions are rejected", async () => {
@@ -58,7 +69,7 @@ test("only SESSION_SECRET signs sessions, never the owner API key", async () => 
   const minted = (await sessionCookie(7, future(), env.STRENGTH_API_KEY)).split(";")[0];
   assert.equal(await resolvePrincipal(req({ Cookie: minted }), env, rejectOidc), null);
   assert.equal(await resolvePrincipal(req({ Cookie: minted }), { STRENGTH_API_KEY: "test-secret-key" }, rejectOidc), null);
-  assert.deepEqual(await resolvePrincipal(req({ Authorization: "Bearer test-secret-key" }), env, rejectOidc), { kind: "owner" });
+  assert.equal(await resolvePrincipal(req({ Authorization: "Bearer test-secret-key" }), env, rejectOidc), null);
 });
 
 test("sessions and GitHub automations work without the owner API key", async () => {
@@ -146,6 +157,64 @@ test("sign out everywhere moves the epoch on, keeps this device signed in and si
   assert.equal(sessionMatchesUser(await resolvePrincipal(req({ Cookie: before }), env, rejectOidc), moved), false, "every other device");
   assert.equal(await bumpSessionEpoch(DB, 2), 2);
   assert.equal(await bumpSessionEpoch(DB, 999), 0);
+});
+
+test("signing out ends every session of the account, also the copies elsewhere", async () => {
+  _resetTenancyForTest();
+  const DB = createD1(), e = { ...env, OWNER_EMAIL: "owner@example.com", DB };
+  await ensureTenancy(DB, e);
+  await DB.prepare("INSERT INTO users(email) VALUES ('friend@example.com')").run();
+  const phone = (await userSessionCookie(DB, 2, env.SESSION_SECRET)).split(";")[0];
+  const watch = (await userSessionCookie(DB, 2, env.SESSION_SECRET)).split(";")[0];
+  const logout = cookie => new Request("https://aurin.health/app/logout", { method: "POST", headers: { Cookie: cookie, Origin: "https://aurin.health" } });
+  const response = await handleSignOut(logout(phone), e, await findUser(DB, 2, e));
+  assert.deepEqual(await response.json(), { status: "ok" });
+  assert.match(response.headers.get("Set-Cookie"), /^pfd_session=; Path=\/; Max-Age=0/);
+  const moved = await findUser(DB, 2, e);
+  assert.equal(moved.sessionEpoch, 1);
+  for (const cookie of [phone, watch]) assert.equal(sessionMatchesUser(await resolvePrincipal(req({ Cookie: cookie }), env, rejectOidc), moved), false);
+  // A cookie already signed out (or none) is only cleared: an old copy cannot sign the user out again.
+  for (const user of [null, { ...moved, sessionEpoch: 0 }]) {
+    const again = await handleSignOut(logout(watch), e, user);
+    assert.match(again.headers.get("Set-Cookie"), /^pfd_session=; /);
+  }
+  assert.equal((await findUser(DB, 2, e)).sessionEpoch, 1);
+  // A database that fails still clears this device's cookie.
+  const broken = await handleSignOut(logout(phone), { ...e, DB: { prepare() { throw new Error("down"); } } }, moved);
+  assert.match(broken.headers.get("Set-Cookie"), /^pfd_session=; /);
+});
+
+test("the connect sheet's cookie is good only for connecting, for a quarter of an hour", async () => {
+  _resetTenancyForTest();
+  const DB = createD1(), e = { ...env, OWNER_EMAIL: "owner@example.com", DB };
+  await ensureTenancy(DB, e);
+  await DB.prepare("INSERT INTO users(email) VALUES ('friend@example.com')").run();
+  await bumpSessionEpoch(DB, 2);
+  const header = await connectSessionCookie(DB, 2, env.SESSION_SECRET);
+  assert.match(header, new RegExp("^pfd_session=.+; Path=/; Max-Age=" + CONNECT_SESSION_SECONDS + "; HttpOnly; Secure; SameSite=Lax$"));
+  assert.equal(CONNECT_SESSION_SECONDS, 15 * 60);
+  const cookie = header.split(";")[0];
+  const at = path => new Request("https://aurin.health" + path, { headers: { Cookie: cookie } });
+  for (const path of ["/auth/app/connect", "/oauth/google", "/oauth/intervals/callback", "/oauth/wahoo/callback"]) {
+    assert.deepEqual(await resolvePrincipal(at(path), env, rejectOidc), { kind: "user", userId: 2, epoch: 1 }, path);
+  }
+  for (const path of ["/app/api/today", "/app/api/account/export", "/app/api/me", "/app/logout", "/health/nutrition"]) {
+    assert.equal(await resolvePrincipal(at(path), env, rejectOidc), null, path);
+  }
+  // It never slides into a month-long session.
+  const day = Math.floor(Date.now() / 1000) + DAY;
+  assert.equal((await slidingSession(at("/app/api/today"), okResponse(), env.SESSION_SECRET, day)).headers.get("Set-Cookie"), null);
+  // A cookie with a scope it does not know is no session.
+  const odd = b64({ uid: 2, exp: future(), se: 1, iat: 1, at: 1, sc: "admin" });
+  const oddCookie = "pfd_session=" + odd + "." + await signText(odd, env.SESSION_SECRET);
+  assert.equal(await verifyDashboardSession(new Request("https://aurin.health/oauth/google", { headers: { Cookie: oddCookie } }), env.SESSION_SECRET), null);
+  // Coming back to the app clears it; any other answer is left alone.
+  const back = endConnectSession(new Response(null, { status: 302, headers: { Location: "loadwise://connected?event=google", "Set-Cookie": "pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0" } }));
+  assert.equal(back.headers.get("Location"), "loadwise://connected?event=google");
+  assert.deepEqual(back.headers.getSetCookie(), ["pfd_google_oauth_state=; Path=/oauth/google; Max-Age=0", "pfd_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax"]);
+  const onward = new Response(null, { status: 302, headers: { Location: "https://accounts.google.com/o/oauth2/v2/auth" } });
+  assert.equal(endConnectSession(onward), onward);
+  assert.equal(endConnectSession(null), null);
 });
 
 // ---- Sliding sessions ----

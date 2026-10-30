@@ -2,8 +2,8 @@
 // provider's consent page opens in a system browser sheet, which does not
 // share the app's session cookie, so:
 // 1. the app asks POST /app/api/connect/start for a short-lived signed ticket,
-// 2. the sheet opens /auth/app/connect?ticket=…, which signs the browser in as
-//    the same user and continues to /oauth/<provider>?return=native. Only the
+// 2. the sheet opens /auth/app/connect?ticket=…, which gives the browser a
+//    quarter-hour cookie of the same user, good only for connecting, and continues to /oauth/<provider>?return=native. Only the
 //    app's own sheet gets through: it sends the ticket again in the
 //    X-Aurin-Connect header (iOS 17.4+, the app's minimum), which a link opened
 //    anywhere else cannot. A ticket link sent by another user would otherwise
@@ -11,8 +11,8 @@
 //    account (pentest 2026-10-25, L4), so such a link only expires. A browser
 //    already signed in as the ticket's user also continues. Each ticket works once,
 // 3. the provider's callback ends at loadwise://connected?event=…, which
-//    closes the sheet (connect-return.js).
-import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
+//    closes the sheet (connect-return.js) and clears that cookie.
+import { signText, connectSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { L, lang } from "./lang.js";
 
 const TICKET_SECONDS = 120;
@@ -64,7 +64,8 @@ async function continueToProvider(env, ticket, hl) {
   // Google shows its consent page in the app's language (hl).
   const location = ticket.provider.startsWith("google") ? next + "&hl=" + hl : next;
   const headers = new Headers({ Location: location, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-  headers.append("Set-Cookie", await userSessionCookie(env.DB, ticket.uid, sessionSecret(env)));
+  // A connect-only cookie (dashboard-auth.js), not a session: the sheet shares Safari's cookies.
+  headers.append("Set-Cookie", await connectSessionCookie(env.DB, ticket.uid, sessionSecret(env)));
   return new Response(null, { status: 303, headers });
 }
 
