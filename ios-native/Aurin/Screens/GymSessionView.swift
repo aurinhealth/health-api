@@ -199,8 +199,10 @@ struct GymSessionView: View {
                     }
                     .padding(.top, 16)
                 }
-                if let note = Self.withoutMuscleList(day.note) {
-                    Text(note).font(Typo.small).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true).padding(.top, 10)
+                // The note as short reasons (GymWhyCard.swift), not a paragraph.
+                let reasons = GymWhy.reasons(day.note)
+                if !reasons.isEmpty {
+                    GymWhyCard(reasons: reasons).padding(.top, 16)
                 }
                 GymPartsCard(day: day, date: date).padding(.top, 18)
                 NavigationLink(value: AppRoute.trainingMode(date)) {

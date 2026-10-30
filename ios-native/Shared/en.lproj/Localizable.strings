@@ -3300,6 +3300,17 @@
 "Unce" = "Ounces";
 "Libry" = "Pounds";
 
+/* Why this workout in the gym day (GymWhyCard.swift) */
+"Proč tenhle trénink" = "Why this workout";
+"%@, podle tvého sportu" = "%@, from your sport";
+"Nové cviky" = "New exercises";
+"Jiné než %@" = "Different from %@";
+"Bolest" = "Pain";
+"První trénink" = "First workout";
+"Nová varianta" = "New variant";
+"Výskoky" = "Jumps";
+"Odlehčený týden" = "Deload week";
+"Šetřím nohy" = "Legs spared";
 /* Swimming */
 "%@ pauza" = "%@ rest";
 "Bazén" = "Pool";

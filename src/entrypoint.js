@@ -2425,7 +2425,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const api=path=>handleDashboardApi(new Request(url.origin+path,{headers:request.headers}),env,ctx,new URL(url.origin+path),session).then(r=>r.ok?r.json():{}).catch(()=>({}));
       const [days,gym,health,fitness,insights,coaches,profiles,plans]=await Promise.all([
         cached(env,ctx,'training-days:'+start+':'+date,()=>mapLimit(dates,3,async d=>({date:d,daily:await read('/analysis/daily?date='+d)})),{ttl:120}),
-        trainingGymPlans(env,start,end).catch(()=>({})),
+        trainingGymPlans(env,start,end,{summary:true}).catch(()=>({})),
         googleHealthFor(env,ctx,date).catch(()=>({})),
         cached(env,ctx,'fitness:180',()=>api('/app/api/fitness?days=180')).catch(()=>({})),
         loadFitnessInsights(env.DB,date).catch(()=>({})),

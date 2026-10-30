@@ -260,6 +260,8 @@ final class SnapshotTests: XCTestCase {
             ]), date: "2026-10-14").padding(20)
         }
         try render("gym-time", height: 200) { GymTimeCard(minutes: 60, warmup: 6, stretching: 5).padding(20) }
+        let why = "Cíl podle tvého sportu – síla a svaly: těžší hlavní cviky. Na tvoje přání šetřím nohy a trénink soustředím na horní část těla; cviky vybírám podle čerstvosti a nedávné svalové zátěže. Cviky se liší od plánu na čt 29. 10. Časový plán: přibližně 74 z 75 minut včetně rozcvičení, pauz, nastavování strojů a rezervy."
+        try render("gym-why", height: 360) { GymWhyCard(reasons: GymWhy.reasons(why)).padding(20) }
         try render("gym-stretch-info", height: 700) {
             StretchInfoSheet(item: .init(id: "child", name: "Dětská pozice", seconds: 45, sides: false,
                                          steps: ["Z pozice na všech čtyřech si sedni hýžděmi na paty.", "Paže nech natažené před sebou na zemi a čelo polož na podložku.", "Zhluboka dýchej a s každým výdechem povol záda."]))
