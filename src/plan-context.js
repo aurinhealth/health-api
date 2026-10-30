@@ -7,8 +7,9 @@ import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { getCapabilities } from "./workout-library.js";
 import { athleteThresholds } from "./intervals-athlete.js";
 import { latestStoredWeight } from "./athlete-weight.js";
-import { getWeekPlan, planWeekRoles, roleTime } from "./week-planner.js";
+import { getWeekPlan, planWeekRoles, roleTime, planRoleOptions } from "./week-planner.js";
 import { getAthleteState } from "./athlete-state.js";
+import { loadProfiles } from "./profile-suggestions.js";
 import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports } from "./training-plans.js";
 import { weekWeather, dayHours } from "./adaptive-week.js";
 import { weatherKitConfigured, weatherKitDetail } from "./weatherkit.js";
@@ -34,12 +35,29 @@ export async function planForWeek(env,ctx,start){
     plan=(await reviewPlan(env.DB,plan,thisMonday,{keyDates,doneDates:await planSportDates(env,plan.sport,last,thisMonday).catch(()=>[])}).catch(()=>({plan}))).plan;
   }
   const pw=plan&&!plan.pauseFrom?planWeek(plan,start):null;
-  if(!pw)return {plan:null,pw:null,roles:{},load:null,apply:t=>t};
+  if(!pw)return {plan:null,pw:null,roles:await weekRoleOptions(env,ctx,null,null),load:null,apply:t=>t};
   // A triathlon plan: the capabilities of each of its sports.
   const tri=plan.sport==='triathlon',capabilitiesOf=()=>tri?Promise.all(planSports(plan.sport).map(s=>getCapabilities(env.DB,s).catch(()=>({})))).then(list=>Object.fromEntries(planSports(plan.sport).map((s,i)=>[s,list[i]]))):getCapabilities(env.DB,plan.sport).catch(()=>({}));
   const [thresholds,capabilities,weight]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),capabilitiesOf(),plan.sport==='ride'||tri?latestStoredWeight(env.DB).catch(()=>null):null]);
   const options={thresholdPace:thresholds.runThresholdPace,hasPower:Number(thresholds.ftp)>0,shifts:capabilities,ftp:Number(thresholds.ftp)||null,weight:weightKg(weight),swimCss:thresholds.swimCss||null};
-  return {plan,pw,roles:{quality:planQuality(pw),prefer:tri?'ride':plan.sport},load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options)};
+  return {plan,pw,roles:await weekRoleOptions(env,ctx,plan,pw),load:planLoad(pw),apply:t=>applyPlan(t,plan,start,options)};
+}
+// The options planWeekRoles takes for a week (week-planner.js), the same for
+// every caller: a plan's week sets its quality days and its sport as the main
+// one; without one the profile's main sport leads and the other endurance
+// sports support it. An automatic main sport leads only when it is an
+// endurance sport: a gym-heavy history does not turn every ride and run into
+// support. The profile is read only without a plan, once per data version.
+export async function weekRoleOptions(env,ctx,plan,pw){
+  if(plan&&pw)return planRoleOptions(plan,planQuality(pw));
+  const mainSport=await cached(env,ctx,'main-sport',()=>profileMainSport(env)).catch(()=>null);
+  return mainSport?{mainSport}:{};
+}
+async function profileMainSport(env){
+  const {saved,effective}=await loadProfiles(env.DB,env.USER_ID);
+  const sport={cycling:'ride',running:'run',swimming:'swim',strength:'gym'}[effective?.mainSport]||null;
+  const chosen=saved?.mainSport&&saved.mainSport!=='auto';
+  return chosen||['ride','run','swim'].includes(sport)?sport:null;
 }
 // The endurance and the gym plan with the athlete's status applied: sick,
 // injured or on a break pauses them, back to training moves them on
@@ -63,7 +81,7 @@ export async function planSportMinutes(env,sport,from,to){
 export async function planKeyDates(env,plan,monday){
   const pw=planWeek(plan,monday),prefs=pw?await getWeekPlan(env.DB,monday).catch(()=>null):null;
   if(!prefs?.days)return [];
-  const roles=planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:plan.sport==='triathlon'?'ride':plan.sport,...roleTime(prefs)});
+  const roles=planWeekRoles(prefs.days,{...await weekRoleOptions(env,null,plan,pw),...roleTime(prefs)});
   return roles.map((d,i)=>d.items.some(x=>planSports(plan.sport).includes(x.sport)&&['quality','long'].includes(x.role))?shiftDate(monday,i):null).filter(Boolean);
 }
 

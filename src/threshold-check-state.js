@@ -4,9 +4,10 @@ import { rideIntervals } from "./activity-detail.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { athleteThresholds } from "./intervals-athlete.js";
 import { getWeekPlan, planWeekRoles, roleTime, roleFor } from "./week-planner.js";
+import { weekRoleOptions } from "./plan-context.js";
 import { availabilityOn } from "./training-availability.js";
 import { getChecks, thresholdSessions, estimateRideFtp, estimateRunPace, saveCheck, testResult, getTestWorkout, thresholdOffer, recommendTestDay } from "./threshold-check.js";
-import { activePlan, planWeek, planQuality } from "./training-plans.js";
+import { activePlan, planWeek } from "./training-plans.js";
 import { L } from "./lang.js";
 import { shiftDate, dashboardProfile, mondayOfDate } from "./dashboard-shared.js";
 
@@ -38,22 +39,27 @@ export async function thresholdCheckState(env,ctx,today){
   const [{sessions,thresholds,athlete},checks]=await Promise.all([loadThresholdSessions(env,ctx,today),getChecks(env.DB)]);
   const current={ftp:thresholds.ftp||null,lthr:thresholds.lthr||null,runThresholdPace:thresholds.runThresholdPace||null};
   const estimates={ride:estimateRideFtp(sessions,athlete,today),run:estimateRunPace(sessions,athlete,today)};
+  // The active plan's weeks set the days' roles (weekRoleOptions, as on Today).
+  const active=await activePlan(env.DB,today).catch(()=>null);
+  const live=active&&!active.pauseFrom?active:null;
+  const weekOf=monday=>{const pw=live?planWeek(live,monday):null;return {pw,options:weekRoleOptions(env,ctx,live,pw).catch(()=>({}))};};
   // The week plan's next 10 days for the recommended test day.
-  const plans=new Map();
+  const plans=new Map(),weeks=new Map();
   const days=[];
   for(let k=1;k<=10;k++){
     const date=shiftDate(today,k),monday=mondayOfDate(date);
     if(!plans.has(monday))plans.set(monday,await getWeekPlan(env.DB,date).catch(()=>null));
+    if(!weeks.has(monday))weeks.set(monday,weekOf(monday));
     const prefs=plans.get(monday),weekday=(new Date(date+'T12:00:00Z').getUTCDay()+6)%7;
-    days.push({date,prefs,sports:prefs?.days?.[weekday]||[],minutes:prefs?availabilityOn(prefs,date).minutes:null});
+    days.push({date,prefs,options:await weeks.get(monday).options,sports:prefs?.days?.[weekday]||[],minutes:prefs?availabilityOn(prefs,date).minutes:null});
   }
   // A plan with tests (ride FTP: the first and the last week) schedules each
   // on its week's first quality day, so the coach eases the days before it.
-  const active=await activePlan(env.DB,today).catch(()=>null);
-  for(const monday of active&&!active.pauseFrom?[mondayOfDate(today),shiftDate(mondayOfDate(today),7)]:[]){
-    const pw=planWeek(active,monday);
+  for(const monday of live?[mondayOfDate(today),shiftDate(mondayOfDate(today),7)]:[]){
+    if(!weeks.has(monday))weeks.set(monday,weekOf(monday));
+    const {pw,options}=weeks.get(monday);
     if(!pw?.spec.q[0]?.test)continue;
-    const prefs=await getWeekPlan(env.DB,monday).catch(()=>null),roles=prefs?planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:active.sport,...roleTime(prefs)}):[];
+    const prefs=await getWeekPlan(env.DB,monday).catch(()=>null),roles=prefs?planWeekRoles(prefs.days,{...await options,...roleTime(prefs)}):[];
     const i=roles.findIndex(d=>d.items.some(x=>x.sport===active.sport&&x.role==='quality'));
     const testDate=i>=0?shiftDate(monday,i):null,c=checks[active.sport];
     if(!testDate||testDate<=today||testDate>shiftDate(today,10))continue;
@@ -82,7 +88,7 @@ export async function thresholdCheckState(env,ctx,today){
     const offer=thresholdOffer({sport,sessions,current,estimate:estimates[sport],check:c,today});
     if(!offer)continue;
     const w=getTestWorkout(offer.testId);
-    const when=recommendTestDay({today,sport,minutes:w.duration_minutes,days:days.map(d=>({date:d.date,sports:d.sports,minutes:d.minutes,role:d.prefs?roleFor(d.prefs,d.date,sport)?.role||null:null}))});
+    const when=recommendTestDay({today,sport,minutes:w.duration_minutes,days:days.map(d=>({date:d.date,sports:d.sports,minutes:d.minutes,role:d.prefs?roleFor(d.prefs,d.date,sport,d.options)?.role||null:null}))});
     offers.push({...offer,testName:w.name,testMinutes:w.duration_minutes,testDescription:w.description,...when});
   }
   return {status:'ok',current,estimates,offers,scheduled,results,manual};

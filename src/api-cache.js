@@ -42,7 +42,7 @@ export async function bumpCacheVersion(db, { food = false } = {}) {
 }
 
 // Entries that never show food or drinks: a meal logged keeps them.
-export const FOOD_FREE = /^(fitness|thresholds|curves|laps|intervals-wellness|activity-detail|training-calendar|milestones|share-milestones):?/;
+export const FOOD_FREE = /^(fitness|thresholds|curves|laps|intervals-wellness|activity-detail|training-calendar|milestones|share-milestones|main-sport):?/;
 // The routes that change only food and drinks (entrypoint.js).
 export const FOOD_WRITE = /^\/app\/api\/(fluids|water|food\/(entry|entries|log|personal|recipes|nutrients\/favorites|suggestions\/decide|report))(\/|$)/;
 // A handler that saved nothing new says so, and nothing is made outdated.
