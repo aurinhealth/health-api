@@ -190,7 +190,10 @@ enum PushRegistration {
     /// False when the server still has it.
     @discardableResult
     static func unregister(api: APIClient) async -> Bool {
-        guard let token = UserDefaults.standard.string(forKey: sentKey), api.hasSession else { return true }
+        guard let token = UserDefaults.standard.string(forKey: sentKey) else { return true }
+        // Without a session the server cannot be told: false, so "Odhlásit se"
+        // leaves Apple's push service instead of keeping the account's pushes.
+        guard api.hasSession else { return false }
         do {
             try await api.removePushToken(token)
             UserDefaults.standard.removeObject(forKey: sentKey)
