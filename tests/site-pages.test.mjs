@@ -102,7 +102,7 @@ test('the site is English whatever the browser says; privacy and terms also have
 
 test('the overview speaks English and offers the waitlist',async()=>{
   const en=await overviewPage().text();
-  assert.match(en,/Join the waitlist/);
+  assert.match(en,/Get early access/);
   assert.match(en,/<form class="wl" action="\/waitlist"/);
   assert.match(en,/Train for how you feel today/);
   assert.doesNotMatch(en,/href="\/app"/);
@@ -274,16 +274,17 @@ test('the overview opens the parts the welcome shows with its page, in the appâ€
   assert.match(html,/<nav class="acts-nav" aria-label="Parts of Aurin">/);
 });
 
-// The watch section shows the watch app on the same sample morning as the phones.
-test('the Apple Watch section shows the watch app on the sample morning',async()=>{
+// The watch chapter shows the watch app on the same sample morning as the phones.
+test('the Apple Watch chapter shows the watch app on the sample morning',async()=>{
   const demo=readFileSync(new URL('../ios-native/Aurin/Data/DemoData.swift',import.meta.url),'utf8');
   const today=JSON.parse(demo.match(/json = """\n([\s\S]*?)\n    """/)[1]);
   const html=await overviewPage().text();
-  const section=html.match(/<section id="apple-watch"[\s\S]*?<\/section>/)[0];
+  const section=html.match(/<section id="hodinky"[\s\S]*?<\/section>/)[0];
   const clock=m=>Math.floor(m/60)+':'+String(m%60).padStart(2,'0');
   assert.match(section,new RegExp('>'+today.readiness.score+'<'));
   assert.ok(section.includes('>'+clock(today.sleep.minutes)+'<'),'sleep');
   assert.ok(section.includes('>'+today.hrv.value+'<small>ms'),'HRV');
   assert.ok(section.includes('>'+today.strain.score+'<'),'strain');
-  assert.equal((section.match(/class="aw-w"/g)||[]).length,5);
+  assert.equal((section.match(/class="aw-s[ "]/g)||[]).length,5,'one watch, five screens');
+  assert.equal((section.match(/class="aw-w"/g)||[]).length,1);
 });
