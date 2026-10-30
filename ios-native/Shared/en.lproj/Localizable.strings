@@ -3327,3 +3327,6 @@
 "o 25 m" = "by 25 m";
 "o 100 m" = "by 100 m";
 "u stěny" = "at the wall";
+
+/* Triathlon */
+"Jak je týden rozdělený" = "How your week is split";

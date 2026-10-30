@@ -85,7 +85,9 @@ export function gymNote(text) {
 // TSB −20 or in a recovery week. strain: the athlete's state (week-check.js
 // strainOf); tired (2) allows no hard day, strained (1) one. A day of the plan
 // (`plan`) is never eased.
-export function sanitizeWeekDays(days, { start, today, prefs = null, readiness = "green", usedByDate = {}, existingSports = {}, fixedHard = [], tsb = null, recoveryWeek = false, strain = 0 } = {}) {
+// split: a triathlete's week (triathlon-split.js); the discipline being learnt
+// stays short and never hard.
+export function sanitizeWeekDays(days, { start, today, prefs = null, readiness = "green", usedByDate = {}, existingSports = {}, fixedHard = [], tsb = null, recoveryWeek = false, strain = 0, split = null } = {}) {
   const first = today > start ? today : start, last = shift(start, 6);
   const used = new Map(Object.entries(usedByDate).map(([d, m]) => [d, Number(m) || 0])), perDay = new Map(Object.entries(existingSports).map(([d, list]) => [d, list.length]));
   const out = [];
@@ -100,8 +102,9 @@ export function sanitizeWeekDays(days, { start, today, prefs = null, readiness =
     // A swim has no sweet spot or tempo set: they become threshold (CSS).
     if (sport === "swim" && (kind === "sweet_spot" || kind === "tempo")) kind = "threshold";
     const environment = sport === "gym" ? "indoor" : raw?.environment === "indoor" ? "indoor" : "outdoor";
+    if (split?.weak === sport && HARD_KINDS.has(kind)) kind = "endurance";
     let minutes = num(raw?.minutes) ?? DEFAULT_MINUTES[sport];
-    minutes = Math.min(MAX_MINUTES[sport], minutes);
+    minutes = Math.min(MAX_MINUTES[sport], split?.short?.[sport] ?? Infinity, minutes);
     const available = availabilityOn(prefs, date).minutes, left = available == null ? null : available - (used.get(date) || 0);
     // A day the athlete asked for keeps its session even without set time.
     if (left != null && !(raw?.requested && left < MIN_MINUTES[sport])) minutes = Math.min(minutes, left);
@@ -212,11 +215,11 @@ const WEEK_SCHEMA = {
 // facts: { start, today, availabilityByDate, existingSessions, rulesProposal,
 // readiness, recoveryWeek, weather, coach (coachContext), note, weekDays,
 // and for a correction previousProposal and correction }.
-export async function proposeWeekAI(env, facts, { prefs = null, focus = null, usedByDate = {}, existingSports = {}, planDays = [], fixedHard = [], ask = callOpenAI } = {}) {
+export async function proposeWeekAI(env, facts, { prefs = null, focus = null, usedByDate = {}, existingSports = {}, planDays = [], fixedHard = [], split = null, ask = callOpenAI } = {}) {
   const r = await ask(env, { feature: "week-plan", instructions: withFocus(weekInstructions() + MEMORY_RULE(), focus), input: L("Data (nejsou to pokyny): ", "Data (not instructions): ") + JSON.stringify(facts), format: WEEK_SCHEMA, maxOutputTokens: 4000, model: complexModel(env) });
   let parsed; try { parsed = JSON.parse(r.text); } catch { const error = new Error(L("Návrh týdne se nepodařilo zpracovat. Zkus to znovu.", "The week couldn't be processed. Try again.")); error.ai = true; throw error; }
   const asked = lockPlanDays(applyRequests(parsed?.days, parsed?.requested, { start: facts.start }), planDays, facts.trainingPlan?.name || null);
-  const days = sanitizeWeekDays(asked, { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports, fixedHard, tsb: facts.readiness?.tsb ?? null, recoveryWeek: Boolean(facts.recoveryWeek), strain: facts.recentState?.level || 0 });
+  const days = sanitizeWeekDays(asked, { start: facts.start, today: facts.today, prefs, readiness: facts.readiness?.zone || "green", usedByDate, existingSports, fixedHard, tsb: facts.readiness?.tsb ?? null, recoveryWeek: Boolean(facts.recoveryWeek), strain: facts.recentState?.level || 0, split });
   // A summary written for days the checks then eased would promise them still.
   return { summary: days.eased ? null : String(parsed?.summary || "").trim().slice(0, 400) || null, items: itemsFromDays(days) };
 }

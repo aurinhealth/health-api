@@ -37,6 +37,7 @@ import {buildFood} from './app-food.js';
 import {buildFoodWeek} from './app-food-week.js';
 import {normalizeProfile} from './energy-profile.js';
 import {athleteFocus} from './athlete-focus.js';
+import { splitFacts, triathlonSplit } from './triathlon-split.js';
 import { loadProfiles, refreshSuggestions } from './profile-suggestions.js';
 import {syncWeights} from './weight-sync.js';
 import {syncWellnessToIntervals} from './wellness-sync.js';
@@ -145,7 +146,7 @@ import { DEFAULT_TIME_ZONE, validTimeZone, withTimeZone, storedTimeZone, remembe
 import { shiftDate, googleHealthFor, dashboardProfile, mondayOfDate, dayStartSql, mapLimit, userWeekStart } from "./dashboard-shared.js";
 import { recentCoachProposals, ensureCoachInboxTable } from "./coach-inbox.js";
 import { recentWorkoutFeedback, reconcileWorkoutLibraryCompletions, matchScheduledActivity, writeIntervalsRpe } from "./library-workouts.js";
-import { planningHistory, planForWeek, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans, weightKg } from "./plan-context.js";
+import { planningHistory, triathlonHistory, planForWeek, syncedPlans, planSportDates, planSportMinutes, todayPlace, trainingGymPlans, weightKg } from "./plan-context.js";
 import { rideReviewsForCoach, rideDetailsFor } from "./coach-ride-reviews.js";
 import { planComplianceRoute } from "./plan-compliance-route.js";
 import { activityCompareRoute } from "./activity-compare.js";
@@ -1080,6 +1081,15 @@ function withRecoveryTime(today,training){
   if(training)today.recoveryTime=recoveryTime({...training,now:Date.now(),sleep:today.sleep,hrv:today.hrv,restingHR:today.restingHR});
   return today;
 }
+// Settings → Goals, "How your week is split": the split from the year (already
+// in the suggestions), the levels chosen by hand (one row) and the usual week.
+async function profileTriathlonSplit(env,profile,history){
+  if(!history?.sports)return null;
+  const setup=await env.DB.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(env.USER_ID).first().catch(()=>null);
+  let levels={};try{levels=JSON.parse(setup?.training_json||'{}').experienceBySport||{};}catch{}
+  const sessions=Math.max(6,Math.min(10,Math.round((history.recentCount||0)/4))),hours=Number(profile?.weeklyHours)||null;
+  return triathlonSplit({year:history.sports,levels,sessions,minutes:hours?hours*60:history.weeklyMinutes||null});
+}
 async function loadCoachInputsFresh(env,ctx,internalAuth,date){
   const monday=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
   const start=monday(date),weeks=[shiftDate(start,-7),start,shiftDate(start,7)];
@@ -1214,7 +1224,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [[ride,run],[profiles,recent,state,gym,less,place]]=await Promise.all([Promise.all([defaultDayCoach(env,{...inputs,athleteState:athlete},date,'ride',week),defaultDayCoach(env,{...inputs,athleteState:athlete},date,'run',week)]),around]);
       // The swim coach only for a swimmer: swimming as the main sport or a swim
       // in the last 60 days (one small capabilities read more, nobody else pays it).
-      const swims=profiles?.effective?.mainSport==='swimming'||(recent.sports||[]).includes('swim');
+      const swims=['swimming','triathlon'].includes(profiles?.effective?.mainSport)||(recent.sports||[]).includes('swim');
       const swim=swims?await defaultDayCoach(env,{...inputs,athleteState:athlete},date,'swim',week).catch(()=>null):null;
       const planned=[...(swim?.constraints?.plannedToday&&activityKindOf(swim.constraints.plannedToday.type||swim.constraints.plannedToday.name)==='swim'?['swim']:[]),...(ride.constraints?.plannedToday&&activityKindOf(ride.constraints.plannedToday.type||ride.constraints.plannedToday.name)==='ride'?['ride']:[]),...(run.constraints?.plannedToday&&activityKindOf(run.constraints.plannedToday.type||run.constraints.plannedToday.name)==='run'?['run']:[]),...((gym?.values||[]).length>7?['gym']:[])];
       // Nemoc, Zranění or Pauza leaves only rest; signs of an illness drop the sauna.
@@ -1280,7 +1290,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The athlete's state now (week-check.js): it eases the week, and a week
       // that starts later by one step less.
       const strain=await weekCheckState(env,inputs,today).then(x=>({...x.strain,level:start>today?Math.max(0,x.strain.level-1):x.strain.level})).catch(()=>null);
-      const [weather,history]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<localToday()?start:localToday(),28)]),proposal=weekProposal({prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan:await planForWeek(env,ctx,start),strain});
+      const [weather,history,triathlon]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<localToday()?start:localToday(),28),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null]),proposal=weekProposal({triathlon,prefs,state,start,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan:await planForWeek(env,ctx,start),strain});
       // "Vygenerovat tréninky": the week's sessions to prepare. Reviewing the plan is the AI chat's job.
       return Response.json({status:'ok',start,proposal},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({message:error.message},{status:400})}
@@ -1298,10 +1308,10 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const previous=correction&&Array.isArray(body.previous)?body.previous.slice(0,28).filter(x=>validTrainingDay(x?.date)&&WEEK_SPORTS.includes(x?.sport)).map(x=>({date:x.date,sport:x.sport,minutes:Number(x.minutes)||null,environment:x.environment==='indoor'?'indoor':x.sport==='gym'?null:'outdoor',kind:KINDS.includes(x.kind)?x.kind:null})):[];
       const [prefs,state,inputs]=await Promise.all([getWeekPlan(env.DB,start),getAthleteState(env.DB),loadCoachInputs(env,ctx,internalAuth,today)]);
       if(!inputs.week.days.some(d=>d.date===start)){const extra=await handleDashboardApi(new Request('https://internal/app/api/week?start='+start),env,ctx,new URL('https://internal/app/api/week?start='+start));const data=await extra.json();inputs.week={...inputs.week,days:[...inputs.week.days,...(data.days||[])]};}
-      const [weather,history,plan]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<today?start:today,28),planForWeek(env,ctx,start)]);
+      const [weather,history,plan,triathlon]=await Promise.all([weekWeather(prefs.location,start,env),planningHistory(env,start<today?start:today,28),planForWeek(env,ctx,start),inputs.focus?.sport==='triathlon'?triathlonHistory(env):null]);
       // The rules see an empty week, so they propose every day the athlete has time for.
       const strain=await weekCheckState(env,inputs,today).then(x=>({...x.strain,level:start>today?Math.max(0,x.strain.level-1):x.strain.level})).catch(()=>null);
-      const rules=weekProposal({prefs:{...prefs,days:prefs.days.map(()=>[])},state,start,today,week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
+      const rules=weekProposal({triathlon,prefs:{...prefs,days:prefs.days.map(()=>[])},state,start,today,week:inputs.week,fitness:inputs.fitness,health:inputs.health,focus:inputs.focus,weather,history,plan,strain});
       const fallback=rules.items.map(x=>({date:x.date,sport:x.sport==='strength'?'gym':x.sport,minutes:x.minutes,environment:x.sport==='gym'?null:x.environment,kind:null,focus:ROLE_FOCUS[x.role]||null,label:x.label||null,reason:x.reason||null,role:x.role||null,slot:x.slot||0}));
       if(state.status&&state.status!=='active')return Response.json({status:'ok',start,ai:false,summary:null,items:[],warnings:rules.warnings},{headers:{'Cache-Control':'no-store'}});
       const dates=Array.from({length:7},(_,i)=>shiftDate(start,i)),weekDays=inputs.week.days.filter(d=>dates.includes(d.date));
@@ -1313,7 +1323,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       delete coach.methodology;delete coach.cyclingCoachV2;
       const weekdayNames=L(['pondělí','úterý','středa','čtvrtek','pátek','sobota','neděle'],['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']);
       const facts={start,today,note:note||null,...(correction?{correction,previousProposal:previous}:{}),weekDays:dates.map((d,i)=>({date:d,weekday:weekdayNames[i]})),availabilityByDate:Object.fromEntries(dates.map(d=>[d,availabilityOn(prefs,d).minutes??null])),existingSessions,
-        rulesProposal:rules.items.map(x=>({date:x.date,sport:x.sport,minutes:x.minutes,environment:x.environment,role:x.role,label:x.label,...(x.plan?{planSession:x.plan.kind}:{})})),recoveryWeek:Boolean(rules.targets?.recovery),readiness,
+        rulesProposal:rules.items.map(x=>({date:x.date,sport:x.sport,minutes:x.minutes,environment:x.environment,role:x.role,label:x.label,...(x.brick?{brick:true}:{}),...(x.plan?{planSession:x.plan.kind}:{})})),...(rules.split?{triathlonSplit:splitFacts(rules.split)}:{}),recoveryWeek:Boolean(rules.targets?.recovery),readiness,
         ...(strain?.level?{recentState:{level:strain.level,signs:strain.chips}}:{}),
         weather:Object.fromEntries(Object.entries(weather||{}).map(([d,w])=>[d,{max:w.max,rain:w.rain,wind:w.wind}])),
         trainingPlan:plan.pw?{name:plan.pw.template?.name||null,week:plan.pw.week,weeks:plan.pw.weeks,phase:plan.pw.spec?.phase||null}:null,coach,
@@ -1321,7 +1331,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       try{
         // Hard sessions the AI doesn't plan: in the calendar or done from the day before the week on.
         const fixedHard=inputs.week.days.filter(d=>d.date>=shiftDate(start,-1)&&d.date<=shiftDate(start,7)).flatMap(d=>[...(d.daily?.training?.planned||[]),...(d.daily?.training?.completed||[])].filter(a=>['ride','run'].includes(sportOf(a))&&isHardSession(a,sportOf(a))).map(()=>d.date));
-        const r=await proposeWeekAI(env,facts,{prefs,focus:inputs.focus,usedByDate,existingSports,planDays:rules.items.filter(x=>x.plan),fixedHard});
+        const r=await proposeWeekAI(env,facts,{prefs,focus:inputs.focus,usedByDate,existingSports,planDays:rules.items.filter(x=>x.plan),fixedHard,split:rules.split||null});
         return Response.json({status:'ok',start,ai:true,summary:r.summary,items:r.items,warnings:rules.warnings},{headers:{'Cache-Control':'no-store'}});
       }catch(error){
         if(!error?.ai&&!/AI|souhlas|consent/i.test(String(error?.message||'')))console.error('Week AI failed',error?.message||error);
@@ -1570,7 +1580,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   {const r=await handleGymToolsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   {const r=await handleWorkoutTemplatesApi(request,env,url,session);if(r!==undefined)return r;}
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
-  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});return Response.json({profile:r?JSON.parse(r.profile_json):null,suggestions});}
+  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});const profile=r?JSON.parse(r.profile_json):null;return Response.json({profile,suggestions:suggestions&&{...suggestions,triathlonSplit:await profileTriathlonSplit(env,profile,suggestions.trainingHistory).catch(()=>null)}});}
   {const r=await handleTrainingEditsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   // "Revize dne": the coach checks one planned day in the context of the week.
   if(url.pathname==='/app/api/coach/review'&&request.method==='POST'){
@@ -1919,6 +1929,8 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         const coachNotes=notes.map(r=>({date:r.date,text:r.text}));
         coachCtx=coachContext({...inputs,availabilityMinutes,manualReadiness,goal,preferences,capabilities,athleteFeedback,coachNotes,athleteState,workoutRatings:await recentWorkoutRatings(env.DB,{since:shiftDate(date,-28),limit:12}),thresholds,profile:inputs.profile,focus,sport:engineSport(focus,selected.appContext,message),now:localNow(),availabilityByDate:safety.availabilityByDate});
         Object.assign(coachCtx,{availability:prefs.availability,weeklyActivities:prefs.weeklyActivities,weather:{...(prefs.weather||{}),...openWeekWeather},coachProposals:earlierProposals},safety);
+        // A triathlete's week split and why, so the coach can explain it ("why three swims?").
+        if(focus?.sport==='triathlon')coachCtx.triathlonSplit=splitFacts(triathlonSplit({...await triathlonHistory(env).catch(()=>({})),sessions:prefs.weeklyActivities??6,minutes:(prefs.availability||[]).reduce((n,d)=>n+(Number(d?.minutes)||0),0)||null,daysToRace:focus.event?.daysLeft??null}));
         // The active plan's sessions this week, the days the generator will follow.
         const targets=await computeWeekTargets(env,ctx,thisWeek,prefs).catch(()=>null);
         // The multi-week plans the coach can start from the chat (type=plan).
