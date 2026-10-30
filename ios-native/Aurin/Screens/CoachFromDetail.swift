@@ -148,8 +148,8 @@ struct CoachSubject: Equatable {
         switch metric {
         case .hrv: questions = [low ? "Proč mám nízké HRV?" : "Co mi říká moje HRV?", "Mám dnes trénovat?", "Co s tím do večera?"]
         case .restingHR: questions = [low ? "Proč mám klidový tep výš než obvykle?" : "Co mi říká můj klidový tep?", "Mám dnes trénovat?", "Jak klidový tep snížit?"]
-        case .respiration: questions = ["Co znamená můj dech ve spánku?", "Může to být začínající nemoc?", "Mám dnes trénovat?"]
-        case .temperature: questions = ["Co znamená teplota zápěstí?", "Může to být začínající nemoc?", "Mám dnes trénovat?"]
+        case .respiration: questions = ["Co znamená můj dech ve spánku?", "Co ho ovlivňuje?", "Mám dnes trénovat?"]
+        case .temperature: questions = ["Co znamená teplota zápěstí?", "Co ji ovlivňuje?", "Mám dnes trénovat?"]
         case .oxygen: questions = ["Je můj kyslík v krvi v pořádku?", "Co ho ovlivňuje?", "Mám dnes trénovat?"]
         case .bodyFat: questions = ["Jak se mi vyvíjí tělesný tuk?", "Jak upravit jídlo?", "Jak upravit trénink?"]
         case .muscle: questions = ["Jak se mi vyvíjí svalová hmota?", "Mám jíst víc bílkovin?", "Jak upravit posilovnu?"]
