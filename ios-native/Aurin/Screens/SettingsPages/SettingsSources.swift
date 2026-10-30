@@ -15,6 +15,8 @@ struct SourcesSettingsView: View {
     @State private var connectingApple = false
     @State private var flow = ConnectFlowState()
     @State private var choosing: PriorityPart?
+    /// What Aurin sends where, for Zdravotní data.
+    @State private var sync: SyncSettingsStore?
 
     /// Apple Health also when Aurin only writes to it (Aurin posílá on its page).
     private var connected: [ConnectionsResponse.Provider] {
@@ -67,6 +69,11 @@ struct SourcesSettingsView: View {
                     if dayChoices.count > 1 { priorityRow(.day) }
                 }
                 .padding(.top, 10)
+            }
+
+            // Each type of data: where it comes from and where it goes (SettingsHealthData.swift).
+            if store.loaded {
+                HealthDataGroup(store: store, sync: sync).padding(.top, 10)
             }
 
             if store.loaded && !store.demo {
@@ -139,6 +146,12 @@ struct SourcesSettingsView: View {
             AppleHealthConnectSheet { await store.load(); actions.message = L10n.tr("Apple Health je připojené.") }
         }
         .connectFlow($flow, actions: actions, store: store)
+        .task {
+            guard sync == nil else { return }
+            let s = SyncSettingsStore(api: model.api, demo: model.demo)
+            sync = s
+            await s.load()
+        }
     }
 
     /// The connected sources that measure the night (the ring too) and the day, in the server's order.

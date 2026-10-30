@@ -627,6 +627,12 @@ final class APIClient: @unchecked Sendable {
         return url
     }
 
+    /// One Reads from switch under Zdroje dat → Health data (src/source-reading.js).
+    func saveReadSwitch(provider: String, type: String, on: Bool) async throws {
+        let _: JSONValue = try await send("/app/api/sources/reading", method: "POST",
+                                          body: ["provider": JSONValue.string(provider), "type": .string(type), "on": .bool(on)])
+    }
+
     func saveSourcePriority(_ priority: SourcePriority) async throws {
         let _: JSONValue = try await send("/app/api/sources/priority", method: "POST", body: priority)
     }

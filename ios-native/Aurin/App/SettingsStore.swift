@@ -13,6 +13,9 @@ final class SettingsStore {
     private(set) var training: TrainingProfileResponse?
     private(set) var connections: [ConnectionsResponse.Provider] = []
     private(set) var priority: SourcePriority = .auto
+    /// Health data → Reads from: the types switched off per service and what each can give.
+    private(set) var readOff: [String: [String]] = [:]
+    private(set) var readTypes: [String: [String]] = [:]
     private(set) var sync: SyncStatus?
     private(set) var loaded = false
     /// The profile really came from the server. The server replaces the whole
@@ -39,6 +42,7 @@ final class SettingsStore {
         if demo {
             profile = DemoData.profile
             connections = DemoData.connections
+            readTypes = ["google": ["sleep", "heart", "hrv", "resting", "breathing", "steps", "energy", "body", "food"]]
             loaded = true
         }
     }
@@ -64,6 +68,8 @@ final class SettingsStore {
             let status = try? await connections
             self.connections = status?.providers ?? []
             priority = status?.priority ?? .auto
+            readOff = status?.readOff ?? [:]
+            readTypes = status?.readTypes ?? [:]
             self.training = try? await training
             self.sync = try? await sync
             if let roles = try? await roles {
@@ -156,8 +162,36 @@ final class SettingsStore {
     /// After a reconnect: only the data sources and the sync state.
     func reloadConnections() async {
         guard !demo else { return }
-        if let response = try? await api.connections() { connections = response.providers; priority = response.priority ?? .auto }
+        if let response = try? await api.connections() {
+            connections = response.providers
+            priority = response.priority ?? .auto
+            readOff = response.readOff ?? [:]
+            readTypes = response.readTypes ?? [:]
+        }
         if let status = try? await api.syncStatus() { sync = status }
+    }
+
+    /// Whether a service gives this type at all, and whether Aurin reads it now.
+    func reads(_ provider: String, _ type: String) -> Bool? {
+        guard readTypes[provider]?.contains(type) == true else { return nil }
+        return !(readOff[provider] ?? []).contains(type)
+    }
+
+    /// One Reads from switch: off stops reading new data of the type, what is stored stays.
+    func saveRead(_ provider: String, _ type: String, on: Bool) async {
+        let previous = readOff
+        var list = readOff[provider] ?? []
+        list.removeAll { $0 == type }
+        if !on { list.append(type) }
+        readOff[provider] = list
+        guard !demo else { return }
+        do {
+            try await api.saveReadSwitch(provider: provider, type: type, on: on)
+            errorMessage = nil
+        } catch {
+            readOff = previous
+            errorMessage = error.localizedDescription
+        }
     }
 
     /// Saves where the night and the day come from; the server re-picks the stored days.

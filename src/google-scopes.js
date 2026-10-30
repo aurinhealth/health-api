@@ -1,3 +1,5 @@
+import { readAllowed } from "./source-reading.js";
+
 // Google OAuth scopes. Connecting Google Health asks for HEALTH_SCOPES and the
 // optional extras on one Google page; the user may untick the extras there, so
 // nothing depends on them. Each user's granted scopes are stored with
@@ -65,7 +67,9 @@ const TYPE_PERMISSION = {
   distance: "activity", floors: "activity", "sedentary-period": "activity", "time-in-heart-rate-zone": "activity",
   "daily-heart-rate-zones": "activity", "daily-vo2-max": "activity", exercise: "activity", "total-calories": "activity"
 };
+// A type the user switched off in Zdroje dat (env.READ_OFF, source-reading.js) is skipped too.
 export function googleTypeAllowed(env, type) {
+  if (!readAllowed(env.READ_OFF, "google", type)) return false;
   const permission = TYPE_PERMISSION[type];
   return !permission || hasGoogleScope(env, HEALTH_PERMISSIONS[permission]);
 }

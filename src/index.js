@@ -14,6 +14,7 @@ import { loadEffectiveProfile } from "./profile-suggestions.js";
 import { writeIntervalsWeight, importIntervalsWeights } from "./weight-sync.js";
 import { latestStoredWeight } from './athlete-weight.js';
 import { healthScopes, hasGoogleScope, HEALTH_PERMISSIONS, googleTypeAllowed, skippedForPermission } from "./google-scopes.js";
+import { readReadOff } from "./source-reading.js";
 import { importGoogleFood } from "./google-food.js";
 import { pairSessions } from "./activity-match.js";
 import { heldMerges, mergedSpan, sourcesOf } from "./workout-merge.js";
@@ -948,10 +949,11 @@ async function saveGooglePointsBatch(env, family, type, points) {
 // day's strain do not wait for the nightly run (Monday's week stayed at 0).
 const RECENT_EXERCISE_DAYS=7;
 async function syncGoogleRecent(env){
+  env.READ_OFF=await readReadOff(env.DB,env.USER_ID);
   const token=await googleToken(env),wanted=['sleep','daily-heart-rate-variability','daily-resting-heart-rate','steps','active-energy-burned','time-in-heart-rate-zone','exercise','weight'],configs=GOOGLE_SYNC_CONFIGS.filter(c=>wanted.includes(c[0])).map(c=>c[0]==='weight'?['weight','weight','sample','all-sources',2]:c);
   const results=await Promise.all(configs.map(async([type,filter,typeFilter,family])=>{let pageToken=null,saved=0;if(!googleTypeAllowed(env,type))return{type,saved,status:'skipped'};try{for(let i=0;i<8;i++){const page=await googleReconcilePage(token,type,filter,typeFilter,dateDaysAgo(type==='exercise'?RECENT_EXERCISE_DAYS:2),googleSourceFamily(type,family),dateDaysFromNow(1),pageToken);saved+=await saveGooglePointsBatch(env,family,type,page.dataPoints);pageToken=page.nextPageToken;if(!pageToken)break;}return{type,saved,status:pageToken?'partial':'ok'};}catch(error){return{type,saved,status:skippedForPermission(env,error)?'skipped':'error',message:error.message};}}));
   // Food and drinks other apps logged in Google Health (google-food.js).
-  results.push(await importGoogleFood(env,{token}).then(r=>({type:'food',...r}),error=>({type:'food',status:skippedForPermission(env,error)?'skipped':'error',message:error.message})));
+  if(googleTypeAllowed(env,'food'))results.push(await importGoogleFood(env,{token}).then(r=>({type:'food',...r}),error=>({type:'food',status:skippedForPermission(env,error)?'skipped':'error',message:error.message})));
   // A fresh workout's heart rate now, not with the nightly run (workoutHeartRate).
   if(googleTypeAllowed(env,'heart-rate'))results.push(await workoutHeartRate(env,token).then(saved=>({type:'workout-heart-rate',saved,status:'ok'}),error=>({type:'workout-heart-rate',status:skippedForPermission(env,error)?'skipped':'error',message:error.message})));
   // Data the user did not give permission for is not a failure.
@@ -1048,6 +1050,8 @@ async function processGoogleSyncPages(env) {
   while (processed < 5) {
     const state = await readGoogleSyncState(env);
     if (!state || state.status !== "running") return { status: processed ? "running" : "idle" };
+    // Types switched off in Zdroje dat are skipped (googleTypeAllowed); read only while a sync runs.
+    env.READ_OFF ??= await readReadOff(env.DB, env.USER_ID);
 
     const details = state.details || {};
     let configIndex = Number(details.config_index || 0);
