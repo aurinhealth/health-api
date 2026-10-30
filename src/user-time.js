@@ -113,4 +113,58 @@ export async function rememberTimeZone(db, userId, value) {
     known.set(userId, zone);
   } catch { /* remembered on the next request */ }
 }
-export function _resetTimeZonesForTest() { known.clear(); }
+
+// ---- The zone the AI limits count days in ----
+// The daily, weekly and monthly AI limits (ai-usage.js, coach-allowance.js)
+// count the user's days. The request's zone comes from the app, so switching it
+// back and forth across the date line would reach the next day's limits early.
+// The limits therefore follow a zone of the account that changes at most once in
+// LIMIT_ZONE_HOURS: someone who flies lives on the new zone's days within a day.
+// One read per account and isolate, one write when the zone changes.
+export const LIMIT_ZONE_HOURS = 20;
+const limitZones = new Map();
+async function ensureLimitZone(db) {
+  await db.prepare("CREATE TABLE IF NOT EXISTS user_time_zone (user_id INTEGER PRIMARY KEY, time_zone TEXT NOT NULL, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, limit_zone TEXT, limit_zone_at INTEGER)").run();
+  for (const column of ["limit_zone TEXT", "limit_zone_at INTEGER"]) await db.prepare("ALTER TABLE user_time_zone ADD COLUMN " + column).run().catch(() => { /* already there */ });
+}
+
+// The zone the account's AI limits count in now; wanted is the request's zone.
+export async function limitTimeZone(db, userId, wanted = timeZone(), now = Date.now()) {
+  const zone = validTimeZone(wanted) || DEFAULT_TIME_ZONE;
+  if (!db || !(Number(userId) > 0)) return zone;
+  const settled = held => Boolean(held) && (held.zone === zone || now - held.at < LIMIT_ZONE_HOURS * 3600000);
+  if (settled(limitZones.get(userId))) return limitZones.get(userId).zone;
+  const read = async () => {
+    const select = () => db.prepare("SELECT limit_zone, limit_zone_at FROM user_time_zone WHERE user_id=?").bind(userId).first();
+    let row;
+    try { row = await select(); } catch (error) {
+      if (!/no such (column|table)|has no column/i.test(String(error?.message || error))) throw error;
+      await ensureLimitZone(db);
+      row = await select();
+    }
+    return validTimeZone(row?.limit_zone) ? { zone: validTimeZone(row.limit_zone), at: Number(row.limit_zone_at) || 0 } : null;
+  };
+  try {
+    const held = await read();
+    if (settled(held)) { limitZones.set(userId, held); return held.zone; }
+    // The switch is claimed in one statement, so two requests at once cannot both make one.
+    const switched = await db.prepare(`INSERT INTO user_time_zone(user_id, time_zone, limit_zone, limit_zone_at) VALUES(?, ?, ?, ?)
+      ON CONFLICT(user_id) DO UPDATE SET limit_zone = excluded.limit_zone, limit_zone_at = excluded.limit_zone_at
+      WHERE limit_zone IS NULL OR limit_zone_at IS NULL OR limit_zone_at < ? RETURNING limit_zone`).bind(userId, zone, zone, now, now - LIMIT_ZONE_HOURS * 3600000).first();
+    if (switched) { limitZones.set(userId, { zone, at: now }); return zone; }
+    const latest = await read();
+    if (latest) limitZones.set(userId, latest);
+    return latest?.zone || zone;
+  } catch (error) {
+    console.error("AI limit zone not read", error?.message || error);
+    return zone;
+  }
+}
+
+// Today in the zone the account's AI limits count in (limitTimeZone).
+export async function limitToday(env, at = new Date()) {
+  const zone = await limitTimeZone(env?.DB, env?.USER_ID, timeZone(), at.getTime());
+  return current.run(zone, () => localToday(at));
+}
+
+export function _resetTimeZonesForTest() { known.clear(); limitZones.clear(); }

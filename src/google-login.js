@@ -1,6 +1,6 @@
 import { signText, userSessionCookie, sessionSecret, sessionEpochOf, timingSafeEqualString } from "./dashboard-auth.js";
 import { scriptPolicy } from "./web-security.js";
-import { ensureTenancy, signInGoogleUser } from "./tenancy.js";
+import { ensureTenancy, signInGoogleUser, SignupLimited } from "./tenancy.js";
 import { appOrigin } from "./app-origin.js";
 import { L } from "./lang.js";
 
@@ -93,7 +93,9 @@ async function finishLogin(request, env, fetchImpl = fetch) {
   catch (error) { console.error("Google ID token rejected", error.message); return fail("failed"); }
 
   await ensureTenancy(env.DB, env, { request });
-  const user = await signInGoogleUser(env.DB, env, { sub: claims.sub, email: claims.email, name: claims.name });
+  let user;
+  try { user = await signInGoogleUser(env.DB, env, { sub: claims.sub, email: claims.email, name: claims.name, request }); }
+  catch (error) { if (error instanceof SignupLimited) return fail("unavailable"); throw error; }
   if (!user) {
     console.warn("Google login denied for an account without an invitation");
     return fail("not_invited");

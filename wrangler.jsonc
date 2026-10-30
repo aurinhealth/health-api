@@ -100,6 +100,9 @@
     // the alert; past the limit AI waits until the next day for everyone but the owner.
     "AI_TOTAL_DAILY_ALERT_USD": "10",
     "AI_TOTAL_DAILY_LIMIT_USD": "30",
+    // What accounts without a paid Pro may use of it together; the remaining 10 USD
+    // stay for the paying ones, so free accounts made in bulk cannot stop their AI.
+    "AI_TOTAL_DAILY_UNPAID_LIMIT_USD": "20",
     // The weekly allowance of messages to the coach (src/coach-allowance.js): per week,
     // extra ones to finish a conversation, and how many messages of a conversation
     // after a workout count as one. Unpaid accounts get half (AI_UNPAID_LIMIT_SHARE).
@@ -170,6 +173,7 @@
         // Testing costs at most 1 USD of AI a day, the owner included (src/ai-total.js).
         "AI_TOTAL_DAILY_ALERT_USD": "1",
         "AI_TOTAL_DAILY_LIMIT_USD": "1",
+        "AI_TOTAL_DAILY_UNPAID_LIMIT_USD": "0.7",
         "COACH_WEEKLY_MESSAGES": "30",
         "COACH_EXTRA_MESSAGES": "2",
         "COACH_WORKOUT_CHAT_MESSAGES": "5",

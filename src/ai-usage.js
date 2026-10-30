@@ -9,8 +9,10 @@
 // 0 in either turns AI off for everyone but the owner. The owner is never limited. The App Review
 // account (APP_REVIEW_EMAIL) never gets more than REVIEW_AI_MONTHLY_LIMIT_USD.
 // The messages name no amount: the user is told when it resets, not what it costs.
+// Days and months are the account's own (limitToday, user-time.js), not the
+// zone a single request names.
 import { L } from './lang.js';
-import { localToday } from "./user-time.js";
+import { limitToday } from "./user-time.js";
 import { isReviewAccount, REVIEW_AI_MONTHLY_LIMIT_USD } from "./app-review.js";
 import { aiLimitShare } from "./ai-limit-share.js";
 import { addAiSpend } from "./ai-total.js";
@@ -70,14 +72,14 @@ export const CARRIED_MONTH_FEATURE = "carried-over-month";
 export async function aiSpentToday(env, { exceptId = 0 } = {}) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') NOT IN (?, ?) AND id != ?").bind(env.USER_ID, localToday(), COACH_CHAT_FEATURE, CARRIED_MONTH_FEATURE, Number(exceptId) || 0).first();
+  const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day = ? AND COALESCE(feature, '') NOT IN (?, ?) AND id != ?").bind(env.USER_ID, await limitToday(env), COACH_CHAT_FEATURE, CARRIED_MONTH_FEATURE, Number(exceptId) || 0).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
 
 export async function aiSpentThisMonth(env, { exceptId = 0 } = {}) {
   if (!tracked(env)) return 0;
   await ensureAiUsage(env.DB);
-  const month = localToday().slice(0, 7);
+  const month = (await limitToday(env)).slice(0, 7);
   const row = await env.DB.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS spent FROM ai_usage WHERE user_id = ? AND day >= ? AND day <= ? AND id != ?").bind(env.USER_ID, month + "-01", month + "-31", Number(exceptId) || 0).first();
   return Math.round(Number(row?.spent || 0) * 1e5) / 1e5;
 }
@@ -122,10 +124,10 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 export async function claimAiSlot(env, { waitMs = AI_SLOT_WAIT_MS, pollMs = 800, feature = null, reserveUsd = 0 } = {}) {
   if (!tracked(env) || (aiMonthlyLimitUsd(env) == null && aiDailyLimitUsd(env) == null)) return async () => {};
   await ensureAiUsage(env.DB);
-  const reserve = Math.max(0, n(reserveUsd) || 0);
+  const reserve = Math.max(0, n(reserveUsd) || 0), today = await limitToday(env);
   const claim = () => env.DB.prepare(`INSERT INTO ai_usage (user_id, day, feature, model, cost_usd) SELECT ?, ?, ?, 'pending', ?
     WHERE (SELECT COUNT(*) FROM ai_usage WHERE user_id = ? AND model = 'pending' AND created_at > datetime('now', '-${AI_PENDING_MINUTES} minutes')) < ? RETURNING id`)
-    .bind(env.USER_ID, localToday(), feature || 'pending', reserve, env.USER_ID, AI_PARALLEL_CALLS).first();
+    .bind(env.USER_ID, today, feature || 'pending', reserve, env.USER_ID, AI_PARALLEL_CALLS).first();
   const deadline = Date.now() + Math.max(0, waitMs);
   let claimed = await claim();
   while (!claimed && Date.now() < deadline) {
@@ -189,7 +191,7 @@ export async function recordAiUsage(env, { feature = null, model = null, usage =
       if (Number(settled?.meta?.changes) > 0) return;
     }
     await env.DB.prepare("INSERT INTO ai_usage (user_id, day, feature, model, input_tokens, output_tokens, cost_usd, cached_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(env.USER_ID, localToday(), ...values).run();
+      .bind(env.USER_ID, await limitToday(env), ...values).run();
   } catch (error) {
     console.error("AI usage not recorded", error?.message || error);
   }

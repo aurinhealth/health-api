@@ -2,6 +2,8 @@ import { L } from './lang.js';
 import { routedUserDb } from './user-data-routing.js';
 import { inheritAiLimits } from './ai-limit-memory.js';
 import { readOnlySql, withD1Retry } from './d1-retry.js';
+import { allowClient } from './ip-rate-limit.js';
+import { sessionSecret } from './dashboard-auth.js';
 // Multi-user support: every personal row carries user_id, requests run with a
 // user-scoped env, and the schema upgrade that adds user_id to existing tables.
 
@@ -455,7 +457,7 @@ export async function ownerUser(db, env) {
 // The Google address names a new account only: an existing one keeps its own
 // e-mail (changed in Settings → Účet, or OWNER_EMAIL for the owner), so signing
 // in with the same Google account after a change finds the same account.
-export async function signInGoogleUser(db, env, { sub, email, name }) {
+export async function signInGoogleUser(db, env, { sub, email, name, request = null }) {
   const address = normalizeEmail(email);
   if (!sub || !address) return null;
   let row = await db.prepare("SELECT id, email, name, role, disabled, google_sub FROM users WHERE google_sub=?").bind(String(sub)).first();
@@ -464,7 +466,7 @@ export async function signInGoogleUser(db, env, { sub, email, name }) {
     if (row && row.google_sub && row.google_sub !== String(sub)) return null;
   }
   if (!row) {
-    if (!(await mayCreateAccount(db, env, address))) return null;
+    if (!(await mayCreateAccount(db, env, address, { request }))) return null;
     const made = await createAccount(db, env, address);
     if (!made) return null;
     row = await db.prepare("SELECT id, email, name, role, disabled, google_sub FROM users WHERE email=?").bind(address).first();
@@ -502,8 +504,21 @@ export async function emailCodeAccess(db, env, email) {
 // release needs. Otherwise only invited addresses and the owner do.
 export const openSignup = env => String(env?.OPEN_SIGNUP || "").trim() === "true";
 
+// New accounts one caller (a network, ip-rate-limit.js) may open by open sign-up, so
+// one machine cannot make free accounts in bulk to use up the AI (ai-total.js).
+// Invited addresses and the owner are not counted.
+export const NEW_ACCOUNT_LIMITS = { hour: 3, day: 5 };
+export class SignupLimited extends Error {
+  constructor() {
+    super(L("Z této sítě dnes vzniklo příliš mnoho nových účtů. Zkus to prosím zítra.", "Too many new accounts were created from this network today. Please try again tomorrow."));
+    this.status = 429;
+  }
+}
+
 // Whether a sign-in with this verified address may create a new account.
-export async function mayCreateAccount(db, env, address) {
+// request: the sign-in's request, whose network the new account counts against;
+// throws SignupLimited when that network made too many today.
+export async function mayCreateAccount(db, env, address, { request = null } = {}) {
   if (!address) return false;
   if (address === ownerEmail(env)) return true;
   const invited = Boolean(await db.prepare("SELECT email FROM user_invites WHERE email=?").bind(address).first());
@@ -519,6 +534,10 @@ export async function mayCreateAccount(db, env, address) {
   // of it would fail, so the address waits on the list (signup_waitlist) instead.
   const room = await accountCapacity(db, env).catch(() => null);
   if (room && room.free <= 0) return waitlist(db, address, "the user databases are full");
+  if (!invited && request && !(await allowClient(db, request, sessionSecret(env), "signup", Date.now(), NEW_ACCOUNT_LIMITS))) {
+    console.warn("New account refused: too many from one network today");
+    throw new SignupLimited();
+  }
   return true;
 }
 
@@ -566,12 +585,12 @@ export async function accountCapacity(db, env) {
 
 // Signs in the owner of an e-mail address that confirmed a code: an existing
 // user, or an invited address / the owner, whose account is created now.
-export async function signInEmailUser(db, env, email) {
+export async function signInEmailUser(db, env, email, { request = null } = {}) {
   const address = normalizeEmail(email);
   if (!address) return null;
   let row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first(), created = false;
   if (!row) {
-    if (!(await mayCreateAccount(db, env, address))) return null;
+    if (!(await mayCreateAccount(db, env, address, { request }))) return null;
     const made = await createAccount(db, env, address);
     if (!made) return null;
     created = made === "created";

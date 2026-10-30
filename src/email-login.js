@@ -17,7 +17,7 @@
 // account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
 import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice } from "./dashboard-auth.js";
 import { allowClient, allowRequest } from "./ip-rate-limit.js";
-import { normalizeEmail, emailCodeAccess, signInEmailUser, changeUserEmail } from "./tenancy.js";
+import { normalizeEmail, emailCodeAccess, signInEmailUser, changeUserEmail, SignupLimited } from "./tenancy.js";
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail } from "./email-sender.js";
 import { siteLang } from "./site-pages.js";
 import { reviewCodeActive } from "./app-review.js";
@@ -72,7 +72,7 @@ export async function handleEmailLogin(request, env, pathname, ctx) {
     return json({ status: "ok" });
   }
   if (!(await allowClient(env.DB, request, sessionSecret(env), "email-verify", Date.now(), VERIFY_LIMITS))) return json({ message: TOO_MANY() }, 429);
-  return verifyCode(env, email, body?.code, await knownDevice(request, env, email));
+  return verifyCode(env, email, body?.code, await knownDevice(request, env, email), request);
 }
 
 function randomCode() {
@@ -164,10 +164,12 @@ export const codesPerDay = env => { const n = Number(env?.EMAIL_CODES_PER_DAY); 
 export const openCodesPerDay = env => { const all = codesPerDay(env); return all - Math.ceil(all * RESERVED_SHARE); };
 export const changeCodesPerDay = env => { const n = Number(env?.EMAIL_CHANGE_CODES_PER_DAY); return Number.isInteger(n) && n > 0 ? n : DEFAULT_CHANGE_CODES_PER_DAY; };
 
-async function verifyCode(env, email, input, known = null) {
+async function verifyCode(env, email, input, known = null, request = null) {
   const refused = await useCode(env.DB, env, email, input, "email-code", known);
   if (refused) return refused;
-  const user = await signInEmailUser(env.DB, env, email);
+  let user;
+  try { user = await signInEmailUser(env.DB, env, email, { request }); }
+  catch (error) { if (error instanceof SignupLimited) return json({ message: error.message }, 429); throw error; }
   if (!user) return json({ message: L("Tento e-mail nemá do Aurinu přístup.", "This email doesn't have access to Aurin.") }, 403);
   // This device signed in with the address: a stranger's wrong codes no longer lock it out.
   const response = await signedInResponse(user.id, env, { status: "ok", created: user.created });

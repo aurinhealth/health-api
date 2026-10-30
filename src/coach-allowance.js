@@ -1,7 +1,8 @@
 // The weekly allowance of messages to the coach (audit/aurin-pro-ai-limity-plan-2026-10-18.md).
 // Every answered message the user writes to the coach counts; food sentences,
 // generated plans, buttons and failed answers do not. The week is Monday to
-// Sunday in the user's time and a new one starts on Monday at midnight.
+// Sunday in the user's time and a new one starts on Monday at midnight (in the
+// account's zone for limits, limitToday in user-time.js).
 // - A conversation started within WORKOUT_CHAT_HOURS after the end of a
 //   workout counts as one message up to COACH_WORKOUT_CHAT_MESSAGES messages;
 //   any further one counts as usual.
@@ -11,7 +12,7 @@
 //   the messages the deleted one used (coach_carryover, ai-limit-memory.js).
 // The owner has no allowance. The numbers are Worker settings (wrangler.jsonc).
 import { L } from './lang.js';
-import { localToday } from './user-time.js';
+import { limitToday } from './user-time.js';
 import { aiLimitShare } from './ai-limit-share.js';
 import { mondayOfDate, shiftDate } from './dashboard-shared.js';
 import { sessionOf } from './activity-match.js';
@@ -51,8 +52,9 @@ async function carriedOver(env, week) {
 }
 
 // { limit, used, left, resetsOn, near } for this week; null when there is none.
-export async function coachAllowance(env, today = localToday()) {
+export async function coachAllowance(env, today) {
   if (!tracked(env)) return null;
+  today ??= await limitToday(env);
   await ensure(env.DB);
   const week = mondayOfDate(today), limit = await weeklyLimit(env);
   const row = await env.DB.prepare('SELECT COUNT(*) AS used FROM coach_messages WHERE user_id = ? AND week = ? AND counted = 1').bind(env.USER_ID, week).first();
@@ -94,7 +96,8 @@ async function nextKind(env, chatId, today, now) {
 
 // Whether the next message may go and how it will count, without taking it.
 // Throws (status 429, coachAllowance) when the week's messages are used up.
-export async function checkCoachMessage(env, chatId, { today = localToday(), now = Date.now() } = {}) {
+export async function checkCoachMessage(env, chatId, { today, now = Date.now() } = {}) {
+  today ??= await limitToday(env);
   const allowance = await coachAllowance(env, today);
   if (!allowance) return null;
   const { chat, kind } = await nextKind(env, chatId, today, now);
@@ -112,7 +115,8 @@ const countedKind = kind => kind === 'message' || kind === 'workout' ? 1 : 0;
 // statement whose condition is the limit itself, so messages sent at once
 // cannot all pass a count none of them is in yet. A row whose answer failed is
 // given back (releaseCoachMessage); one left by a Worker that died stays.
-export async function claimCoachMessage(env, chatId, { today = localToday(), now = Date.now() } = {}) {
+export async function claimCoachMessage(env, chatId, { today, now = Date.now() } = {}) {
+  today ??= await limitToday(env);
   const week = mondayOfDate(today), chat = Number(chatId) > 0 ? Number(chatId) : null;
   for (let attempt = 0; ; attempt++) {
     const claim = await checkCoachMessage(env, chatId, { today, now });
@@ -141,8 +145,9 @@ export async function releaseCoachMessage(env, claim) {
 // allowance to show, with `notice` on the message that crossed into the last
 // quarter and `more: false` once not even this conversation can go on (the
 // app then shows the used-up card instead of waiting for a refused message).
-export async function recordCoachMessage(env, chatId, claim, { today = localToday(), now = Date.now() } = {}) {
+export async function recordCoachMessage(env, chatId, claim, { today, now = Date.now() } = {}) {
   if (!tracked(env) || !claim) return null;
+  today ??= await limitToday(env);
   const before = claim.before || await coachAllowance(env, today), chat = Number(chatId) > 0 ? Number(chatId) : null;
   // A claim without a row (its read failed) is logged here, as before.
   if (claim.id) await env.DB.prepare('UPDATE coach_messages SET chat_id = ?, created_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?').bind(chat, claim.id, env.USER_ID).run();

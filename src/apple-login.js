@@ -1,5 +1,5 @@
 import { sessionSecret, signedInResponse } from "./dashboard-auth.js";
-import { ensureTenancy, normalizeEmail, publicUser, mayCreateAccount, createAccount } from "./tenancy.js";
+import { ensureTenancy, normalizeEmail, publicUser, mayCreateAccount, createAccount, SignupLimited } from "./tenancy.js";
 import { inheritAiLimits } from "./ai-limit-memory.js";
 import { L } from "./lang.js";
 
@@ -40,7 +40,9 @@ export async function handleNativeAppleLogin(request, env, pathname, { fetchImpl
   catch (error) { console.error("Apple app ID token rejected", error.message); return appJson({ error: "failed", message: L("Účet Apple se nepodařilo ověřit.", "Couldn't verify your Apple account.") }, 401); }
   const verified = claims.email_verified === true || claims.email_verified === "true";
   await ensureTenancy(env.DB, env, { request });
-  const user = await signInAppleUser(env.DB, env, { sub: String(claims.sub), email: verified ? claims.email : null, name: cleanName(body?.name) });
+  let user;
+  try { user = await signInAppleUser(env.DB, env, { sub: String(claims.sub), email: verified ? claims.email : null, name: cleanName(body?.name), request }); }
+  catch (error) { if (error instanceof SignupLimited) return appJson({ error: "too_many", message: error.message }, 429); throw error; }
   if (!user) {
     console.warn("Apple app login denied for an account without an invitation");
     return appJson({ error: "not_invited", message: L("Tento účet Apple nemá do Aurinu pozvánku. Přihlas se přes Google nebo e-mailem, na který ti pozvánka přišla.", "This Apple account isn't invited to Aurin. Continue with Google or with the email your invitation went to.") }, 403);
@@ -165,7 +167,7 @@ async function ensureIdentities(db) {
 
 // A verified Apple identity signs in: a linked Apple ID, else an existing user, an invited e-mail
 // or the owner by the e-mail Apple confirmed (anyone, with OPEN_SIGNUP). The invitation is consumed on first login.
-export async function signInAppleUser(db, env, { sub, email, name = null }) {
+export async function signInAppleUser(db, env, { sub, email, name = null, request = null }) {
   if (!sub) return null;
   await ensureIdentities(db);
   const address = normalizeEmail(email);
@@ -175,7 +177,7 @@ export async function signInAppleUser(db, env, { sub, email, name = null }) {
     // An account that already has another Apple ID does not take a second one by e-mail.
     if (row && await db.prepare("SELECT 1 AS linked FROM user_identities WHERE provider = 'apple' AND user_id = ?").bind(row.id).first()) return null;
     if (!row) {
-      if (!(await mayCreateAccount(db, env, address))) return null;
+      if (!(await mayCreateAccount(db, env, address, { request }))) return null;
       const made = await createAccount(db, env, address, name);
       if (!made) return null;
       row = await db.prepare("SELECT id, email, name, role, disabled FROM users WHERE email=?").bind(address).first();
