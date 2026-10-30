@@ -24,6 +24,19 @@ How Aurin Pro is bought and how the server learns about it. The code is in
 4. While `AI_PAYWALL_ENABLED` is off (the pilot) everyone keeps AI; the purchase only shows
    in Settings → Aurin Pro. Turn the paywall on separately.
 
+## Extra coach messages (packs)
+
+Two consumable In-App Purchases, `<bundle>.coach.messages40` and `<bundle>.coach.messages100`
+(`src/coach-packs.js`). The app sends the purchase like any other transaction; the server
+records it once in `coach_pack_purchases` (central database) and keeps a SHA-256 of the
+transaction id in `coach_pack_seen`, which outlives a deleted account, so one purchase never
+fills two accounts. The coach takes a bought message only after the week's messages and the
+running conversation's 2 extra ones (`coach-allowance.js`, kind `pack`); `coach_pack_balance.used`
+counts them in one conditional statement. Apple's REFUND notification sets `refunded_at` and the
+pack stops counting. A Sandbox purchase (TestFlight) is recorded but adds messages only on the
+test server. Packs cannot be restored: they belong to the account, not the Apple ID.
+`GET /app/api/coach-packs` gives the messages left and the purchases for the app's history.
+
 Transactions from Xcode's StoreKit testing (`StoreKit/Aurin.storekit`, the Aurin scheme in
 the simulator) are signed by Xcode, never verify, and stay on the phone.
 
@@ -44,15 +57,18 @@ No private key is needed: verification uses Apple's public certificate chain onl
 2. The app (bundle `health.aurin.app`) → Monetization → Subscriptions → a subscription group
    **Aurin Pro** with two auto-renewable subscriptions at the same level:
    - `health.aurin.app.pro.monthly`, 1 month, 199 Kč (base storefront Czechia),
-   - `health.aurin.app.pro.yearly`, 1 year, 1 490 Kč.
+   - `health.aurin.app.pro.yearly`, 1 year, 1 490 Kč, with the billing plan **Monthly with
+     12-Month Commitment** at 149 Kč (iOS 26.4+, not in the US).
    Display names and descriptions in Czech and English, and a review screenshot of the offer.
-3. On the yearly one, an **introductory offer**: free trial, 1 week, new subscribers, all storefronts.
+3. On the yearly one, an **introductory offer**: free trial, 1 week, new subscribers, all storefronts,
+   once for each billing plan (1 Year Upfront and Monthly with 12-Month Commitment).
+   In-App Purchases: the two packs above as **Consumable**, 99 Kč and 199 Kč.
 4. On the yearly one, an **offer code** campaign: pay up front, 1 year, 745 Kč, one-time-use
    codes, for new and expired subscribers. Codes are redeemed in the app (⋯ → Uplatnit promo kód)
    or by the App Store link.
 5. App Information → **App Store Server Notifications**: Version 2, the production URL
-   `https://aurin.health/webhooks/app-store` and the sandbox URL the same (or the staging
-   server's). Send a test notification: the server answers 200.
+   `https://aurin.health/webhooks/app-store` and the sandbox URL the same (TestFlight builds
+   talk to the live server). Send a test notification: the server answers 200.
 6. Users and Access → Sandbox: sandbox testers for trying it outside TestFlight. TestFlight
    testers buy with sandbox purchases automatically and are never charged.
 7. Attach both subscriptions to the next app version when submitting it for review.

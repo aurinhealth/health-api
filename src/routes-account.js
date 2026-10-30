@@ -4,6 +4,7 @@ import { initialImport } from "./account-sync.js";
 import { onboardingStatus, completeOnboarding } from "./onboarding.js";
 import { subscriptionStatus } from "./subscription.js";
 import { appAccountToken, saveAppTransaction, storePurchase } from "./app-store.js";
+import { packMessagesLeft, packPurchases } from './coach-packs.js';
 import { coachAllowance } from "./coach-allowance.js";
 import { consentStatus, saveConsent } from "./consent.js";
 import { missingProviders, connectionEnvironment, deleteConnectionSecret } from "./connection-secrets.js";
@@ -98,6 +99,10 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
   if(url.pathname==='/app/api/subscription'&&request.method==='GET'){
     const store=session.signedIn?await Promise.all([appAccountToken(env),storePurchase(env)]).catch(error=>{console.error('App Store row failed',error.message);return [null,null];}):[null,null];
     return Response.json({...await subscriptionStatus(env),coachAllowance:await coachAllowance(env).catch(()=>null),appAccountToken:store[0],purchase:store[1]},{headers:{'Cache-Control':'no-store'}});
+  }
+  // Extra coach messages: how many are left and the purchases, for "Your purchases" (coach-packs.js).
+  if(url.pathname==='/app/api/coach-packs'&&request.method==='GET'){
+    return Response.json({status:'ok',left:await packMessagesLeft(env),purchases:await packPurchases(env)},{headers:{'Cache-Control':'no-store'}});
   }
   // A signed transaction the app saw: a purchase, a renewal, a restore or a redeemed code.
   if(url.pathname==='/app/api/subscription/transaction'&&request.method==='POST'){
