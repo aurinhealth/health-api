@@ -27,6 +27,11 @@ async function start(env, email, options) {
   return response;
 }
 const verify = (env, email, code, options) => handleEmailLogin(request("/auth/email/verify", { email, code }, options), env, "/auth/email/verify");
+// What a browser or URLSession sends to `path` of a Set-Cookie: the name=value when its Path covers it.
+const sentTo = (setCookie, path) => {
+  const cookiePath = /;\s*Path=([^;]*)/i.exec(setCookie)?.[1] || "/";
+  return path === cookiePath || path.startsWith(cookiePath.endsWith("/") ? cookiePath : cookiePath + "/") ? setCookie.split(";")[0] : "";
+};
 const codeIn = message => message.text.match(/\b(\d{6})\b/)[1];
 // Runs `work` as if the clock showed `time` (the handlers read Date.now()).
 async function at(time, work) {
@@ -367,9 +372,11 @@ test("signing out everywhere ends the other devices' exemption, not the caller's
   const signIn = async (ip, time) => {
     await at(time, () => start(env, "owner@example.com", { ip }));
     const ok = await at(time + 1000, () => verify(env, "owner@example.com", codeIn(sent.at(-1)), { ip }));
-    return ok.headers.getSetCookie().find(c => c.startsWith("aurin_known=")).split(";")[0];
+    return ok.headers.getSetCookie().find(c => c.startsWith("aurin_known="));
   };
-  const phone = await signIn("192.0.2.1", t0), laptop = await signIn("192.0.2.2", t0 + 61_000);
+  const phoneSet = await signIn("192.0.2.1", t0), laptop = sentTo(await signIn("192.0.2.2", t0 + 61_000), "/auth/email/start");
+  const phone = sentTo(phoneSet, "/app/api/account/sign-out-everywhere");
+  assert.ok(phone, "the account routes see the device cookie");
   let caller = 0;
   for (let round = 0; round < 5; round++) {
     const time = t0 + 180_000 + round * 61_000;
@@ -381,7 +388,7 @@ test("signing out everywhere ends the other devices' exemption, not the caller's
   const id = env.DB.sqlite.prepare("SELECT id FROM users WHERE email='owner@example.com'").get().id;
   const url = new URL("https://aurin.health/app/api/account/sign-out-everywhere");
   const out = await handleSignOutEverywhere(new Request(url, { method: "POST", headers: { Origin: url.origin, Cookie: phone } }), env, url, { signedIn: true, user: { id } });
-  const fresh = out.headers.getSetCookie().find(c => c.startsWith("aurin_known=")).split(";")[0];
+  const fresh = sentTo(out.headers.getSetCookie().find(c => c.startsWith("aurin_known=")), "/auth/email/start");
   assert.notEqual(fresh, phone);
   const later = t0 + 12 * 61_000;
   let before = sent.length;
@@ -389,7 +396,8 @@ test("signing out everywhere ends the other devices' exemption, not the caller's
   assert.equal(sent.length, before, "the laptop gets no code past the daily limit");
   assert.equal((await at(later + 1000, () => verify(env, "owner@example.com", "123456", { ip: "192.0.2.2", cookie: laptop }))).status, 429);
   before = sent.length;
-  await at(later + 61_000, () => start(env, "owner@example.com", { ip: "192.0.2.1", cookie: fresh }));
+  // A cookie from before (Path=/auth/email, sent first there) does not hide the fresh one.
+  await at(later + 61_000, () => start(env, "owner@example.com", { ip: "192.0.2.1", cookie: phone + "; " + fresh }));
   assert.equal(sent.length, before + 1, "the phone still gets a code");
   assert.equal((await at(later + 62_000, () => verify(env, "owner@example.com", codeIn(sent.at(-1)), { ip: "192.0.2.1", cookie: fresh }))).status, 200);  // A signed-in device without a device cookie gets none; a session alone never mints one.
   const bare = await handleSignOutEverywhere(new Request(url, { method: "POST", headers: { Origin: url.origin } }), env, url, { signedIn: true, user: { id } });
