@@ -5,6 +5,8 @@ name: iOS native app
 # Artifacts (Actions → this run → Artifacts):
 # - Aurin-unsigned.ipa: install with Sideloadly (free Apple ID,
 #   valid for 7 days, then install again). It sits next to the Capacitor app.
+#   Without the licensed 3D muscle figure, which only the simulator build and
+#   TestFlight carry (.github/scripts/fetch-muscle-model.sh).
 #   Built on main and by hand only: on a pull request the Release build took
 #   about 12 of the run's 28 minutes, and after the merge the TestFlight
 #   archive (ios-testflight.yml) builds Release again anyway.
@@ -58,6 +60,15 @@ jobs:
           xcode=$(ls -d /Applications/Xcode_*.app 2>/dev/null | grep -vi -e beta -e release_candidate -e _rc | sort -V | tail -1)
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
           xcodebuild -version
+
+      # The licensed 3D muscle figure, from R2 into the bundle (never in the repository):
+      # the sample day's screens and the App Store preview show it.
+      - name: Put the 3D muscle model in the app
+        env:
+          MUSCLE_MODEL_R2_KEY_ID: ${{ secrets.MUSCLE_MODEL_R2_KEY_ID }}
+          MUSCLE_MODEL_R2_SECRET: ${{ secrets.MUSCLE_MODEL_R2_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: ../.github/scripts/fetch-muscle-model.sh
 
       # The team goes into the watch's Keychain group (project.yml); a
       # placeholder is enough for the simulator and the unsigned build.
@@ -251,6 +262,9 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build
           mkdir -p ipa/Payload
           cp -R build/Build/Products/Release-iphoneos/Aurin.app ipa/Payload/
+          # The artifact can be downloaded from the public repository: the licensed
+          # 3D figure stays out of it (the app downloads it after sign-in).
+          rm -f ipa/Payload/Aurin.app/muscles-v1.bin
           # Ad-hoc signatures carry the App Group the widgets share with the
           # app; Sideloadly re-signs with the user's Apple ID and keeps them.
           app=ipa/Payload/Aurin.app

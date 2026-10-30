@@ -40,7 +40,7 @@ export function sessionTimes({ sets = [], activities = [], now }) {
   const since = now - LOOKBACK_DAYS * DAY;
   for (const a of activities) {
     const kind = a.kind || activityKind(a);
-    if (!["ride", "run", "walk"].includes(kind) || !Number.isFinite(a.end) || a.end > now || a.end < since) continue;
+    if (!["ride", "run", "swim", "walk"].includes(kind) || !Number.isFinite(a.end) || a.end > now || a.end < since) continue;
     const r = sessionRecoveryHours({ kind, tss: a.tss, minutes: a.minutes, intensity: intensityOf(a) });
     if (!r.hours) continue;
     // A watch names a workout by its type only ("Ride"): then as Svaly says it.

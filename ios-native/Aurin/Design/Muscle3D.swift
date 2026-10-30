@@ -3,9 +3,11 @@ import SwiftUI
 import UIKit
 
 // Svaly's 3D figure: the licensed ecorché ("Muscle Anatomy Visualized | Ecorche" by Alexander
-// Lashko) as scripts/build-muscle-model.mjs packs it. The model is paid, so it is not in the app:
-// it is downloaded once from /app/api/muscles/model (src/muscle-model.js) and kept in
-// Application Support. Until it is there, the screens show the flat MuscleFigurePair.
+// Lashko) as scripts/build-muscle-model.mjs packs it. The model is paid, so it never goes in the
+// public repository: CI copies it from R2 into the app's bundle at build
+// (.github/scripts/fetch-muscle-model.sh), which also shows it in the sample day. A build without
+// it (no secret) downloads it once from /app/api/muscles/model (src/muscle-model.js) and keeps it
+// in Application Support. Until it is there, the screens show the flat MuscleFigurePair.
 
 /// The parsed file: vertices, normals and the triangles of each muscle group.
 struct MuscleMesh: Sendable {
@@ -84,7 +86,7 @@ final class MuscleFigure3D {
     }
 }
 
-/// Downloads the model once and keeps it.
+/// Reads the model from the bundle, or downloads it once and keeps it.
 @MainActor
 @Observable
 final class MuscleModelStore {
@@ -99,16 +101,26 @@ final class MuscleModelStore {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "muscles-v\(format).bin")
     }
 
-    func load(api: APIClient) async {
+    /// The copy CI put in the app (muscles-v1.bin), nil in a build without it.
+    private static var bundled: URL? { Bundle.main.url(forResource: "muscles-v\(format)", withExtension: "bin") }
+
+    /// `api` nil (the sample day): only the bundle and a kept copy, never the server.
+    func load(api: APIClient?) async {
         guard figure == nil, !loading else { return }
         loading = true
         defer { loading = false }
         let file = Self.file
+        if let bundled = Self.bundled, let data = try? Data(contentsOf: bundled), let mesh = await Self.parse(data) {
+            figure = MuscleFigure3D(mesh: mesh)
+            // A copy downloaded before the model came in the app is no longer needed.
+            try? FileManager.default.removeItem(at: file)
+            return
+        }
         if let data = try? Data(contentsOf: file), let mesh = await Self.parse(data) {
             figure = MuscleFigure3D(mesh: mesh)
             return
         }
-        guard let data = try? await api.getData("/app/api/muscles/model?v=\(Self.format)"), let mesh = await Self.parse(data) else { return }
+        guard let api, let data = try? await api.getData("/app/api/muscles/model?v=\(Self.format)"), let mesh = await Self.parse(data) else { return }
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: file, options: .atomic)
         figure = MuscleFigure3D(mesh: mesh)

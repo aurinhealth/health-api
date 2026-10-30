@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { planTemplates, getTemplate, planWorkoutId, planStart, planDays, planWeek, planQuality, planLoad, applyPlan, raceWorkout, raceId, templateSummary, levelShift } from "../src/training-plans.js";
 import { planWeekRoles, weekTargets } from "../src/week-planner.js";
 import { CYCLING_WORKOUTS, RUNNING_WORKOUTS, getWorkout } from "../src/workout-library.js";
+import { SWIMMING_WORKOUTS } from "../src/swimming-workouts.js";
 
-const CATALOGUE = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS };
+const CATALOGUE = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS, swim: SWIMMING_WORKOUTS };
 const monday = "2026-10-12";
 const week = k => new Date(Date.parse(monday + "T12:00:00Z") + k * 7 * 86400000).toISOString().slice(0, 10);
 
@@ -13,10 +14,12 @@ test("every session of every plan is in the catalogue", () => {
     for (const w of t.weeks) {
       for (const k of w.q) {
         if (k.test) continue;
-        const levels = CATALOGUE[t.sport].filter(x => x.family === k.family).map(x => x.level);
+        // A triathlon plan's key sessions say their sport.
+        const levels = CATALOGUE[k.sport || t.sport].filter(x => x.family === k.family).map(x => x.level);
         assert.ok(levels.includes(k.level), `${t.id} ${k.family} level ${k.level}`);
       }
       for (const f of [w.long?.family, w.easy?.family].filter(Boolean)) assert.ok(CATALOGUE[t.sport].some(x => x.family === f), `${t.id} ${f}`);
+      for (const [sport, sub] of Object.entries(w.sports || {})) if (sub.long?.family) assert.ok(CATALOGUE[sport].some(x => x.family === sub.long.family && (sub.long.level == null || x.level === sub.long.level)), `${t.id} ${sport} ${sub.long.family}`);
       assert.ok(w.load > 0 && w.load <= 1.1, t.id);
     }
     // A lighter week at least every fourth week, and race plans end with the race.

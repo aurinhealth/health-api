@@ -155,7 +155,8 @@ const RUN_ZONE_RANGE = { Z1: [65, 77], Z2: [78, 88], Z3: [88, 94], Z4: [94, 100]
 // pace targets in s/km, paceFast from the upper % and paceSlow from the lower).
 // hrZones: without FTP (ride) or threshold pace (run) each step also gets the
 // heart-rate zone of its power or pace zone, so the watch has a target.
-export function stepRows(structure = [], { ftp = null, environment = "indoor", zones = null, sport = "ride", thresholdPace = null, hrZones = null } = {}) {
+export function stepRows(structure = [], { ftp = null, environment = "indoor", zones = null, sport = "ride", thresholdPace = null, hrZones = null, swimPace = null } = {}) {
+  if (sport === "swim") return swimRows(structure, { swimPace });
   const run = sport === "run";
   const watts = pct => ftp ? Math.round(ftp * pct / 100) : null;
   const pace = pct => thresholdPace && pct > 0 ? Math.round(thresholdPace * 100 / pct) : null;
@@ -179,6 +180,60 @@ export function stepRows(structure = [], { ftp = null, environment = "indoor", z
   // What each step is for, as in the Intervals.icu text (warmup, interval, recovery, active, cooldown).
   const kinds = stepIntensities(structure, sport);
   return structure.map((block, i) => block.steps ? { repeats: n(block.repeats, 1), note: block.note || null, steps: block.steps.map((s, j) => ({ ...row(s), intensity: kinds[i][j] })) } : { repeats: 1, steps: [{ ...row(block), intensity: kinds[i] }] });
+}
+
+// Swim steps: metres (or minutes in open water), pace per 100 m from the
+// athlete's CSS, rests at the wall without a target.
+function swimRows(structure, { swimPace }) {
+  const pace = pct => swimPace && pct > 0 ? Math.round(swimPace * 100 / pct) : null;
+  const kinds = stepIntensities(structure, "swim");
+  const row = (s, intensity) => s.rest
+    ? { durationSeconds: Math.round(n(s.durationMinutes, 0) * 60), rest: true, note: s.note || null, intensity }
+    : { durationSeconds: Math.round(n(s.durationMinutes, 0) * (swimPace ? swimPace / 120 : 1) * 60), meters: s.meters ? Math.round(s.meters) : null, percentLow: Math.round(n(s.power, 0)) - 2, percentHigh: Math.round(n(s.power, 0)) + 2,
+      paceSlow: formatPace(pace(n(s.power, 0) - 2)), paceFast: formatPace(pace(n(s.power, 0) + 2)), note: s.note || null, intensity };
+  return structure.map((block, i) => block.steps ? { repeats: n(block.repeats, 1), note: block.note || null, steps: block.steps.map((s, j) => row(s, kinds[i][j])) } : { repeats: 1, steps: [row(block, kinds[i])] });
+}
+
+const SWIM_HOW_CS = {
+  recovery: ["Úplně volně, dýchej pravidelně, klidně s piškotem.", "Mysli na dlouhý záběr a uvolněná ramena."],
+  endurance: ["Plynule, tempo o 6–10 s na 100 m pomaleji než práh; mluvit by po úseku šlo.", "Všechny úseky stejně rychle, první nepřepal."],
+  threshold: ["Úseky v prahovém tempu (CSS): těžké, ale udržitelné, poslední úsek stejně rychlý jako první.", "Krátké pauzy u stěny, nezačínej rychleji, než máš."],
+  vo2max: ["Rychle, ale s technikou: když se záběr rozpadá, zpomal.", "Delší pauzy u stěny jsou součást tréninku."],
+  sprint: ["Krátce naplno, s plnou pauzou.", "Silný záběr a rychlé nohy, hlava dole."]
+};
+const SWIM_HOW_EN = {
+  recovery: ["Completely easy, breathe regularly, a pull buoy is fine.", "Think of a long stroke and relaxed shoulders."],
+  endurance: ["Steady, 6–10 s per 100 m slower than threshold; you could talk after a repeat.", "Every repeat at the same speed, don't overcook the first."],
+  threshold: ["Repeats at threshold pace (CSS): hard but sustainable, the last one as fast as the first.", "Short rests at the wall; don't start faster than your pace."],
+  vo2max: ["Fast but with technique: if your stroke falls apart, slow down.", "The longer rests at the wall are part of the session."],
+  sprint: ["Short and all out, with full rests.", "A strong catch and quick legs, head down."]
+};
+// A swim's food and drink by its length (Precision Fuel & Hydration: up to 1 h
+// 0–30 g of carbs/h, 1–2 h 30–60 g/h, longer 60–90 g/h). Drinking in the pool
+// is a sensible reminder, not a measured need.
+function swimFueling(minutes, environment) {
+  const open = environment === "outdoor";
+  const before = L("Ráno nalačno stačí malá svačina se sacharidy (banán, rohlík s medem) půl hodiny před plaváním.", "Swimming early: a small carb snack (a banana, toast with honey) half an hour before is enough.");
+  const after = L("Po plavání jídlo se sacharidy a bílkovinami do hodiny.", "After the swim, a meal with carbs and protein within the hour.");
+  if (minutes <= 60) return [before, L("Během plavání stačí voda.", "Water is enough during the swim."), after];
+  if (minutes <= 120) return [before, open ? L("Na 1–2 h ve volné vodě: 30–60 g sacharidů za hodinu, gel v kapse neoprenu nebo od parťáka na břehu.", "For 1–2 h in open water: 30–60 g of carbs an hour, a gel in your wetsuit or from a buddy on the shore.") : L("30–60 g sacharidů za hodinu: iontový nápoj v láhvi na kraji, napij se mezi sériemi; i ve vodě se potíš.", "30–60 g of carbs an hour: a sports drink in a bottle at the side, sipped between sets; you sweat in the water too."), after];
+  return [before, L("Přes 2 h: 60–90 g sacharidů za hodinu (směs glukózy a fruktózy), každých 20–30 min kousek.", "Over 2 h: 60–90 g of carbs an hour (a glucose and fructose mix), a little every 20–30 min."), after];
+}
+function explainSwim(workout, structure, { coach, environment, thresholds, planned, system, minutes }) {
+  const swimPace = n(thresholds?.swimCss);
+  const how = [...(L(SWIM_HOW_CS, SWIM_HOW_EN)[system] || L(SWIM_HOW_CS, SWIM_HOW_EN).endurance)];
+  how.unshift(swimPace ? L("Tempo počítám z tvého prahového tempa (CSS) " + formatPace(swimPace) + " /100 m.", "Paces come from your threshold pace (CSS) " + formatPace(swimPace) + " /100 m.")
+    : L("Prahové tempo (CSS) neznám: plav podle pocitu. Test 400 + 200 m najdeš v Zónách → Plavání.", "I don't know your threshold pace (CSS): swim by feel. The 400 + 200 m test is in Zones → Swim."));
+  return {
+    title: L({ recovery: "Volné plavání", endurance: "Vytrvalost", threshold: "Práh (CSS)", vo2max: "Rychlost", sprint: "Sprinty" }, { recovery: "Easy swim", endurance: "Endurance", threshold: "Threshold (CSS)", vo2max: "Speed", sprint: "Sprints" })[system] || system,
+    why: [...(coach.rationale || []), ...readinessLines(coach)],
+    how,
+    environment: [...(workout.environment_notes || [])],
+    fueling: swimFueling(minutes, environment),
+    swimPace: swimPace || null, poolLength: n(thresholds?.poolLength) || null, distanceMeters: n(workout.distance_meters) || null,
+    steps: swimRows(structure, { swimPace }),
+    planned: planned ? { name: planned.name, minutes: planned.minutes, system: planned.system, intensityFactor: planned.intensityFactor, steps: swimRows(planned.structure || [], { swimPace }) } : null
+  };
 }
 
 function heartRateFor(percent, ranges, hrZones) {
@@ -205,6 +260,7 @@ export function explainWorkout(workout, { coach = {}, environment = "indoor", th
   try { structure = JSON.parse(workout.structure_json || "[]"); } catch {}
   const system = workout.primary_system, minutes = n(workout.duration_minutes, 0);
   if (sport === "run") return explainRun(workout, structure, { coach, environment, thresholds, planned, system, minutes });
+  if (sport === "swim") return explainSwim(workout, structure, { coach, environment, thresholds, planned, system, minutes });
   const { ftp, estimated } = rideFtpFor(thresholds, environment);
   const why = [...(coach.rationale || []), ...readinessLines(coach)];
   const p = coach.recommendation?.progression;
@@ -299,6 +355,7 @@ const CARBS = {
   }
 };
 export function carbsPerHour(minutes, system, sport = "ride") {
+  if (sport === "swim") return null;
   const m = n(minutes, 0), table = CARBS[sport === "run" ? "run" : "ride"];
   const row = table[system] || table.endurance, i = [45, 75, 120, 180].findIndex(limit => m <= limit);
   return row[i < 0 ? 4 : i] || null;
@@ -311,6 +368,7 @@ const FOCUS_LABELS = () => ({ recovery: L("Regenerace", "Recovery"), endurance: 
 // threshold and min/km), and the carbohydrate per hour.
 // "Zaměření: VO2max na trenažéru, 30 min. Hlavní část: 4× 3 min na 110 % FTP (≈ 286 W), mezi nimi 2 min lehce. Sacharidy cca 30 g/h."
 export function focusLine(rendered, { thresholds = {} } = {}) {
+  if (rendered.sport === "swim") return swimFocusLine(rendered, thresholds);
   const sport = rendered.sport === "run" ? "run" : "ride", environment = rendered.environment === "outdoor" ? "outdoor" : "indoor", system = rendered.primary_system;
   let structure = [];
   try { structure = JSON.parse(rendered.structure_json || "[]"); } catch {}
@@ -323,4 +381,20 @@ export function focusLine(rendered, { thresholds = {} } = {}) {
     main || "",
     carbs ? L("Sacharidy cca " + carbs + " g/h.", "Carbs about " + carbs + " g/h.") : ""
   ].filter(Boolean).join(" ");
+}
+
+function swimFocusLine(rendered, thresholds) {
+  const where = rendered.environment === "outdoor" ? L("ve volné vodě", "in open water") : L("v bazénu", "in the pool");
+  const meters = n(rendered.distance_meters), pace = n(thresholds?.swimCss);
+  return [L("Zaměření: ", "Focus: ") + (FOCUS_LABELS()[rendered.primary_system] || L("Plavání", "Swim")) + " " + where + ", " + Math.round(n(rendered.duration_minutes, 0)) + " min" + (meters ? ", " + meters + " m" : "") + ".",
+    pace ? L("Prahové tempo (CSS) " + formatPace(pace) + " /100 m.", "Threshold pace (CSS) " + formatPace(pace) + " /100 m.") : ""].filter(Boolean).join(" ");
+}
+
+// The step rows of a ride, run or swim with the athlete's own targets
+// (watts, pace per km or per 100 m), as the app shows them.
+export function athleteSteps(structure, sport, environment, thresholds = {}) {
+  const t = thresholds || {};
+  if (sport === "swim") return stepRows(structure, { sport, environment, swimPace: t.swimCss });
+  if (sport === "run") return stepRows(structure, { environment, sport, thresholdPace: t.runThresholdPace, zones: t.paceZones, hrZones: t.runHrZones?.length ? t.runHrZones : t.hrZones });
+  return stepRows(structure, { environment, ftp: rideFtpFor(t, environment).ftp, zones: t.powerZones, hrZones: t.hrZones });
 }

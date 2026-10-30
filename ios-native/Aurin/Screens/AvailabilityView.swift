@@ -11,7 +11,7 @@ import SwiftUI
 /// The week plan's object as the server sends it: the editor reads a few keys
 /// and changes them, every other key goes back as it came.
 enum WeekPlanPrefs {
-    static let sports = ["ride", "run", "gym"]
+    static let sports = ["ride", "run", "swim", "gym"]
     /// The most sessions on one day (src/week-planner.js MAX_PER_DAY).
     static let maxPerDay = 4
 
@@ -109,9 +109,7 @@ struct AvailabilityView: View {
     /// The calendar's free minutes on this week's days (nil: not read).
     @State private var calendarFree = Array(repeating: Int?.none, count: 7)
     @State private var readCalendar = CalendarTime.shared.reads
-    @State private var writeCalendar = CalendarTime.shared.writes
-    @State private var target = CalendarTime.shared.target
-    @State private var calendarBusy = false
+    @State private var calendarStatus = CalendarSettingsView.status
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Kdy mám čas") {
@@ -203,48 +201,21 @@ struct AvailabilityView: View {
 
     // MARK: Kalendář v iPhonu
 
+    /// The switches live in Settings → Data → Kalendář; this row opens the same page.
     private var calendarGroup: some View {
         SettingsGroup(title: L10n.tr("Kalendář v iPhonu")) {
-            SettingsToggle(title: L10n.tr("Číst kalendář"), isOn: Binding(get: { readCalendar }, set: { on in Task { await setRead(on) } }),
-                           disabled: calendarBusy || saving || model.demo)
-            if readCalendar {
-                SettingsDivider()
-                SettingsToggle(title: L10n.tr("Zapisovat tréninky"), isOn: Binding(get: { writeCalendar }, set: { on in
-                    if !on { CalendarTime.shared.removeMirrored() }
-                    UserDefaults.standard.set(on, forKey: CalendarTime.writeKey)
-                    writeCalendar = CalendarTime.shared.writes
-                    if on { Task { await CalendarTime.shared.mirror(api: model.api, force: true) } }
-                }), disabled: calendarBusy || saving)
-                if writeCalendar {
-                    SettingsDivider()
-                    SettingsPicker(title: L10n.tr("Kalendář"), selection: Binding(get: { target }, set: { id in
-                        CalendarTime.shared.target = id
-                        target = id
-                    }), options: CalendarTime.shared.calendars().map { ($0.id, $0.title) })
-                }
+            NavigationLink {
+                CalendarSettingsView(onChange: { Task { await calendarChanged() } })
+            } label: {
+                SettingsRow(title: L10n.tr("Kalendář"), value: calendarStatus)
             }
+            .buttonStyle(.plain)
         }
     }
 
-    private func setRead(_ on: Bool) async {
-        calendarBusy = true
-        defer { calendarBusy = false }
-        error = nil
-        if on {
-            guard await CalendarTime.shared.requestAccess() else {
-                readCalendar = false
-                error = L10n.tr("Aurin nemá přístup ke kalendáři. Povol ho v Nastavení iPhonu → Aplikace → Aurin → Kalendáře.")
-                return
-            }
-            UserDefaults.standard.set(true, forKey: CalendarTime.readKey)
-            readCalendar = true
-            await CalendarTime.shared.send(api: model.api, force: true)
-        } else {
-            readCalendar = false
-            if CalendarTime.shared.writes { CalendarTime.shared.removeMirrored() }
-            do { try await CalendarTime.shared.stopReading(api: model.api) } catch { self.error = error.localizedDescription }
-        }
-        writeCalendar = CalendarTime.shared.writes
+    private func calendarChanged() async {
+        readCalendar = CalendarTime.shared.reads
+        calendarStatus = CalendarSettingsView.status
         await loadCalendar()
         onSave()
     }

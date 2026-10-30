@@ -16,6 +16,7 @@ test("queries, rows read and database time are counted for the request they ran 
     return store;
   });
   assert.equal(work.queries, 5);
+  assert.equal(work.trips, 4);
   assert.equal(work.rowsRead, 132);
   assert.match(serverTiming(work), /^app;dur=\d+, db;dur=\d+;desc="5 queries, 132 rows read"$/);
   // Outside a request nothing is counted and nothing breaks.
@@ -30,6 +31,9 @@ test("a request is slow from 3 s, 400 queries or a million rows; a cron job only
   assert.match(slowness(store(100, 1, MANY_ROWS)), /1000000 řádků/);
   assert.equal(slowness(store(60000, 10, 10), { cron: true }), null);
   assert.ok(slowness(store(10, 10, MANY_ROWS + 1), { cron: true }));
+  // The Google sync's batches: thousands of statements in a few trips are not slow.
+  assert.equal(slowness({ ...store(18000, 4660, 14497), trips: 93 }, { cron: true }), null);
+  assert.match(slowness({ ...store(100, 4660, 0), trips: 450 }, { cron: true }), /^\d+ ms, 450 dotazů \(4660 příkazů v dávkách\), 0 řádků$/);
 });
 
 test("a cron job that reads a million rows lands in the morning report", async () => {

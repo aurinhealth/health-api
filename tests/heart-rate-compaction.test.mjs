@@ -14,20 +14,20 @@ function database() {
 }
 const now = Date.parse("2026-10-11T15:00:00Z");
 
-test("heart rate older than two weeks becomes 5-minute rows, newer samples stay", async () => {
+test("heart rate older than a week becomes 5-minute rows, newer samples stay", async () => {
   const { db, sample, rows } = database();
   // 10 minutes of samples every 2 s, a month ago: 60, 62, 64, … in the first bucket.
   for (let i = 0; i < 300; i++) sample(1, new Date(Date.parse("2026-09-10T22:00:00Z") + i * 2000).toISOString().replace(".000Z", "Z"), i < 150 ? 60 + (i % 3) * 2 : 70);
   sample(1, "2026-10-10T08:00:00Z", 80);
   sample(2, "2026-09-10T22:00:00Z", 90);
   sample(1, "2026-09-10T22:00:00Z", 55, "apple-health");
-  // Two weeks back from 11 October in Prague: the day starts 26 September 22:00 UTC.
-  sample(1, "2026-09-26T21:59:58Z", 65);
-  sample(1, "2026-09-26T22:00:02Z", 66);
+  // A week back from 11 October in Prague: the day starts 3 October 22:00 UTC.
+  sample(1, "2026-10-03T21:59:58Z", 65);
+  sample(1, "2026-10-03T22:00:02Z", 66);
   let runs = 0;
   while (await withTimeZone("Europe/Prague", () => compactHeartRate(db, 1, { now }))) runs++;
   assert.equal(runs, 2);
-  assert.equal(rows(`SELECT value_numeric FROM health_datapoints WHERE external_id = 'hr5:' || ${Date.parse("2026-09-26T21:55:00Z") / 1000}`)[0].value_numeric, 65);
+  assert.equal(rows(`SELECT value_numeric FROM health_datapoints WHERE external_id = 'hr5:' || ${Date.parse("2026-10-03T21:55:00Z") / 1000}`)[0].value_numeric, 65);
   const buckets = rows(`SELECT external_id, sample_time, end_time, value_numeric, payload_json FROM health_datapoints WHERE data_type = '${HEART_RATE_BUCKET_TYPE}' AND sample_time < '2026-09-20' ORDER BY sample_time`);
   assert.deepEqual(buckets.map(b => [b.sample_time, b.end_time, b.value_numeric, JSON.parse(b.payload_json)]), [
     ["2026-09-10T22:00:00Z", "2026-09-10T22:05:00Z", 62, { avg: 62, min: 60, max: 64, n: 150 }],
@@ -36,16 +36,17 @@ test("heart rate older than two weeks becomes 5-minute rows, newer samples stay"
   // Recent samples, another user's and other sources stay as they were.
   assert.deepEqual(rows("SELECT user_id, source_family, sample_time FROM health_datapoints WHERE data_type = 'heart-rate' ORDER BY user_id, sample_time"), [
     { user_id: 1, source_family: "apple-health", sample_time: "2026-09-10T22:00:00Z" },
-    { user_id: 1, source_family: "google-wearables", sample_time: "2026-09-26T22:00:02Z" },
+    { user_id: 1, source_family: "google-wearables", sample_time: "2026-10-03T22:00:02Z" },
     { user_id: 1, source_family: "google-wearables", sample_time: "2026-10-10T08:00:00Z" },
     { user_id: 2, source_family: "google-wearables", sample_time: "2026-09-10T22:00:00Z" }
   ]);
-  // A sample arriving late is merged into its bucket, weighted by count.
+  // A bucket that exists (the sync writes 5-minute rows itself) already holds the samples: it stays.
   for (let i = 0; i < 150; i++) sample(1, new Date(Date.parse("2026-09-10T22:05:00Z") + i * 2000 + 1000).toISOString().replace(".000Z", "Z"), 80);
   await withTimeZone("Europe/Prague", () => compactHeartRate(db, 1, { now }));
   const late = rows(`SELECT value_numeric, payload_json FROM health_datapoints WHERE external_id = 'hr5:' || ${Date.parse("2026-09-10T22:05:00Z") / 1000}`)[0];
-  assert.deepEqual([late.value_numeric, JSON.parse(late.payload_json)], [75, { avg: 75, min: 70, max: 80, n: 300 }]);
+  assert.deepEqual([late.value_numeric, JSON.parse(late.payload_json)], [70, { avg: 70, min: 70, max: 70, n: 150 }]);
+  assert.equal(rows("SELECT COUNT(*) n FROM health_datapoints WHERE data_type = 'heart-rate' AND sample_time < '2026-09-11'")[0].n, 2, "the late samples are gone, other sources and users stay");
   // The 5-minute rows still give an activity's average heart rate.
   const compacted = rows(`SELECT sample_time, value_numeric, payload_json FROM health_datapoints WHERE data_type = '${HEART_RATE_BUCKET_TYPE}' AND sample_time < '2026-09-20'`);
-  assert.equal(heartRateFromSamples({ start: "2026-09-10T21:55:00Z", end: "2026-09-10T22:20:00Z" }, [...compacted, { ...compacted[0], sample_time: "2026-09-10T22:10:00Z" }]), 66);
+  assert.equal(heartRateFromSamples({ start: "2026-09-10T21:55:00Z", end: "2026-09-10T22:20:00Z" }, [...compacted, { ...compacted[0], sample_time: "2026-09-10T22:10:00Z" }]), 65);
 });

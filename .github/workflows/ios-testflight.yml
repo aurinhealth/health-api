@@ -95,6 +95,15 @@ jobs:
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode/Contents/Developer"; fi
           xcodebuild -version
 
+      # The licensed 3D muscle figure, from R2 into the bundle (never in the repository).
+      - name: Put the 3D muscle model in the app
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          MUSCLE_MODEL_R2_KEY_ID: ${{ secrets.MUSCLE_MODEL_R2_KEY_ID }}
+          MUSCLE_MODEL_R2_SECRET: ${{ secrets.MUSCLE_MODEL_R2_SECRET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: ../.github/scripts/fetch-muscle-model.sh
+
       # The team goes into the watch's Keychain group (project.yml).
       - name: Generate the Xcode project
         if: steps.secrets.outputs.ready == 'true'

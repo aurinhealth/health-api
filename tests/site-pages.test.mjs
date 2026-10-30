@@ -102,7 +102,7 @@ test('the site is English whatever the browser says; privacy and terms also have
 
 test('the overview speaks English and offers the waitlist',async()=>{
   const en=await overviewPage().text();
-  assert.match(en,/Join the waitlist/);
+  assert.match(en,/Get early access/);
   assert.match(en,/<form class="wl" action="\/waitlist"/);
   assert.match(en,/Train for how you feel today/);
   assert.doesNotMatch(en,/href="\/app"/);

@@ -1,8 +1,10 @@
 import { activityTelemetryEnergy } from './activity-energy-check.js';
+import { pickBuckets, BUCKET_SECONDS } from './heart-rate-compaction.js';
 
 // A workout typed in afterwards (Zapsat trénink): the heart rate the watch
-// recorded between its start and end, and the calories. Google Health keeps
-// every sample for two weeks and 5-minute rows after (heart-rate-compaction.js);
+// recorded between its start and end, and the calories. Aurin stores Google's
+// heart rate as 5-minute rows (every sample only within a workout, for a week),
+// hourly rows after a month (heart-rate-compaction.js);
 // the phone reads Apple Health itself and sends what it found.
 const bpm = "CAST(COALESCE(value_numeric, json_extract(payload_json, '$.heartRate.beatsPerMinute')) AS REAL)";
 const iso = ms => new Date(ms).toISOString().replace('.000Z', 'Z');
@@ -12,14 +14,17 @@ export async function heartRateWindow(db, userId, { start, end, weightKg = null,
   if (!(to > from && to - from <= 12 * 3600000)) return null;
   const between = [userId, iso(from), iso(to)];
   const [raw, buckets, energy] = await Promise.all([
-    db.prepare(`SELECT AVG(${bpm}) AS avg, MAX(${bpm}) AS max, COUNT(*) AS n FROM health_datapoints
-      WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<? AND ${bpm} BETWEEN 20 AND 250`).bind(...between).first().catch(() => null),
-    db.prepare(`SELECT value_numeric AS avg, json_extract(payload_json, '$.max') AS max, json_extract(payload_json, '$.n') AS n FROM health_datapoints
-      WHERE user_id=? AND data_type='heart-rate-5min' AND sample_time>=? AND sample_time<?`).bind(...between).all().then(r => r.results || []).catch(() => []),
+    db.prepare(`SELECT (CAST(strftime('%s', sample_time) AS INTEGER) / ${BUCKET_SECONDS}) * ${BUCKET_SECONDS} AS bucket, AVG(${bpm}) AS avg, MAX(${bpm}) AS max, COUNT(*) AS n FROM health_datapoints
+      WHERE user_id=? AND data_type='heart-rate' AND sample_time>=? AND sample_time<? AND ${bpm} BETWEEN 20 AND 250 GROUP BY bucket`).bind(...between).all().then(r => r.results || []).catch(() => []),
+    db.prepare(`SELECT CAST(strftime('%s', sample_time) AS INTEGER) AS bucket, value_numeric AS avg, json_extract(payload_json, '$.max') AS max, json_extract(payload_json, '$.n') AS n FROM health_datapoints
+      WHERE user_id=? AND data_type IN ('heart-rate-5min','heart-rate-1h') AND sample_time>=? AND sample_time<?`).bind(...between).all().then(r => r.results || []).catch(() => []),
     db.prepare(`SELECT start_time,end_time,value_numeric FROM health_datapoints WHERE user_id=? AND source_family='google-wearables' AND data_type='active-energy-burned'
       AND end_time>? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time`).bind(...between).all().then(r => r.results || []).catch(() => [])
   ]);
-  const parts = [...(Number(raw?.n) > 0 ? [raw] : []), ...buckets].map(r => ({ avg: Number(r.avg), max: Number(r.max), n: Number(r.n) || 1 })).filter(r => r.avg > 20 && r.avg < 250);
+  // Per 5 minutes the samples (a workout's own) or the stored row, which holds the
+  // same samples: both together would count them twice, the samples alone would
+  // leave out the minutes around the workout.
+  const parts = pickBuckets(raw, buckets).map(r => ({ avg: Number(r.avg), max: Number(r.max), n: Number(r.n) || 1 })).filter(r => r.avg > 20 && r.avg < 250);
   const count = parts.reduce((s, r) => s + r.n, 0);
   const avgHr = count ? Math.round(parts.reduce((s, r) => s + r.avg * r.n, 0) / count) : null;
   const maxHr = parts.length ? Math.round(Math.max(...parts.map(r => r.max || r.avg))) : null;

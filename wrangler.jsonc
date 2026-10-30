@@ -51,10 +51,11 @@
   ],
   // The read-only world food catalogue (src/world-foods.js), uploaded with
   // scripts/upload-world-foods.mjs; without current.json in it search skips it.
+  // Copied from the old loadwise-food-catalog on 2026-10-30 (R2 can't rename a bucket).
   "r2_buckets": [
     {
       "binding": "FOOD_CATALOG_R2",
-      "bucket_name": "loadwise-food-catalog"
+      "bucket_name": "aurin-food-catalog"
     }
   ],
   // Cloudflare Email Service: sign-in codes and notices about new passkeys. Nothing is sent

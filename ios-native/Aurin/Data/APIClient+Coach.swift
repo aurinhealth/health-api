@@ -119,8 +119,10 @@ struct WeekAIItem: Decodable {
     let label: String?
     let reason: String?
     let role: String?
+    /// The week's brick: this run straight after the ride before it (src/week-ai.js markBrick).
+    var brick = false
 
-    enum CodingKeys: String, CodingKey { case date, sport, minutes, environment, kind, focus, label, reason, role }
+    enum CodingKeys: String, CodingKey { case date, sport, minutes, environment, kind, focus, label, reason, role, brick }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -133,6 +135,7 @@ struct WeekAIItem: Decodable {
         label = try? c.decodeIfPresent(String.self, forKey: .label)
         reason = try? c.decodeIfPresent(String.self, forKey: .reason)
         role = try? c.decodeIfPresent(String.self, forKey: .role)
+        brick = (try? c.decodeIfPresent(Bool.self, forKey: .brick)).flatMap { $0 } ?? false
     }
 }
 
@@ -255,6 +258,18 @@ struct FitnessInsights: Decodable {
     struct Estimates: Decodable {
         let run: Run?
         let ride: Ride?
+        var swim: Swim? = nil
+    }
+
+    /// The best 100, 200 and 400 m of the last 12 months (Intervals.icu pace curve).
+    struct Swim: Decodable {
+        let best: [SwimBest]
+    }
+
+    struct SwimBest: Decodable {
+        let meters: Int
+        let seconds: Int
+        let per100: Double
     }
 
     struct Run: Decodable {
