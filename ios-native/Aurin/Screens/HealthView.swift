@@ -310,16 +310,8 @@ struct ReadinessDetailContent: View {
                          labels: r.history.map { Fmt.weekdayShort($0.date) },
                          highlighted: r.history.count - 1,
                          height: 110,
-                         scale: [0, 34, 67].map { ScaleTick(value: $0, text: Fmt.int($0)) })
+                         scale: Self.readinessBands)
                     .padding(.top, 14)
-                HStack(spacing: 14) {
-                    zone(Palette.green.opacity(0.7), L10n.f("%@+ vysoká", "67"))
-                    zone(Palette.amberBar.opacity(0.8), L10n.f("%@ střední", "34–66"))
-                    zone(Palette.rust.opacity(0.8), L10n.f("pod %@ nízká", "34"))
-                    Spacer(minLength: 0)
-                }
-                .font(Typo.tiny).foregroundStyle(Palette.faint).lineLimit(1)
-                .padding(.top, 10)
             }
         }
     }
@@ -337,11 +329,13 @@ struct ReadinessDetailContent: View {
     }
 
     /// A readiness zone's colour and its range under the last 14 days.
-    private func zone(_ color: Color, _ text: String) -> some View {
-        HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 7, height: 7)
-            Text(verbatim: text)
-        }
+    /// The bands' edges as hairlines, each band's name in its colour at its middle.
+    static var readinessBands: [ScaleTick] {
+        [34, 67].map { ScaleTick(value: $0, text: "") } + [
+            ScaleTick(value: 83.5, text: L10n.tr("vysoká"), color: Palette.green, line: false),
+            ScaleTick(value: 50.5, text: L10n.tr("střední"), color: Palette.amber, line: false),
+            ScaleTick(value: 17, text: L10n.tr("nízká"), color: Palette.rust, line: false),
+        ]
     }
 
     private func partRow(_ part: HealthSnapshot.Part) -> some View {
@@ -415,7 +409,7 @@ struct SleepWidget: View {
                              highlighted: sleep.week.count - 1,
                              spacing: size == .small ? 3 : 4,
                              height: height,
-                             targetLabel: L10n.f("potřeba %@", Fmt.hoursMinutes(Double(sleep.need))))
+                             targetTag: (name: L10n.tr("potřeba"), value: Fmt.hoursMinutes(Double(sleep.need))))
                 }
             }
         }
@@ -463,7 +457,10 @@ struct OxygenWidget: View {
                     Text(L10n.f("14 dní %@–%@ %%", Fmt.int(oxygen.low), Fmt.int(oxygen.high))).font(Typo.caption).foregroundStyle(Palette.faint)
                 }
             } chart: { height in
-                LineChart(values: values, color: Palette.blue, lo: (values.min() ?? 90) - 1, hi: 100, height: height)
+                VStack(spacing: 6) {
+                    LineChart(values: values, color: Palette.blue, lo: (values.min() ?? 90) - 1, hi: 100, height: height)
+                    ChartSpan(dates: oxygen.series.map(\.date))
+                }
             }
         }
     }
@@ -486,8 +483,11 @@ struct RespirationWidget: View {
                     Text(respiration.elevated ? "zrychlený" : "stabilní").font(Typo.caption).foregroundStyle(respiration.elevated ? Palette.rust : Palette.green)
                 }
             } chart: { height in
-                LineChart(values: values, color: Palette.green, lo: (values.min() ?? 12) - 0.5, hi: (values.max() ?? 18) + 0.5,
-                          band: respiration.baseline.map { ($0 - 0.5)...($0 + 0.5) }, height: height)
+                VStack(spacing: 6) {
+                    LineChart(values: values, color: Palette.green, lo: (values.min() ?? 12) - 0.5, hi: (values.max() ?? 18) + 0.5,
+                              band: respiration.baseline.map { ($0 - 0.5)...($0 + 0.5) }, height: height)
+                    ChartSpan(dates: respiration.series.map(\.date))
+                }
             }
         }
     }
@@ -507,8 +507,11 @@ struct SkinTempWidget: View {
                 // The usual night is within half a degree of the athlete's own average.
                 TileRange(value: skin.deviation, low: -0.5, high: 0.5, worseAbove: true, edges: TileRange.temperatureEdges)
             } chart: { height in
-                BarChart(values: skin.series.map { $0.value + 1 }, styles: skin.series.map { BarStyle(fill: $0.value > 0 ? Palette.rust.opacity(0.6) : Palette.blue.opacity(0.5)) },
-                         lo: 0, hi: 2, target: 1, height: height)
+                VStack(spacing: 6) {
+                    BarChart(values: skin.series.map { $0.value + 1 }, styles: skin.series.map { BarStyle(fill: $0.value > 0 ? Palette.rust.opacity(0.6) : Palette.blue.opacity(0.5)) },
+                             lo: 0, hi: 2, target: 1, height: height)
+                    ChartSpan(dates: skin.series.map(\.date))
+                }
             }
         }
     }
@@ -583,7 +586,10 @@ struct MuscleWidget: View {
                 }
             } chart: { height in
                 let values = muscle.series.map { Units.weight($0.value) }
-                LineChart(values: values, color: Palette.brown, lo: (values.min() ?? 0) - 0.5, hi: (values.max() ?? 1) + 0.5, height: height)
+                VStack(spacing: 6) {
+                    LineChart(values: values, color: Palette.brown, lo: (values.min() ?? 0) - 0.5, hi: (values.max() ?? 1) + 0.5, height: height)
+                    ChartSpan(dates: muscle.series.map(\.date))
+                }
             }
         }
         .accessibilityElement(children: .combine)
@@ -605,7 +611,10 @@ struct BodyFatWidget: View {
                         .lineLimit(1).minimumScaleFactor(0.8)
                 }
             } chart: { height in
-                LineChart(values: values, color: Palette.gold, lo: (values.min() ?? 10) - 0.5, hi: (values.max() ?? 25) + 0.5, height: height)
+                VStack(spacing: 6) {
+                    LineChart(values: values, color: Palette.gold, lo: (values.min() ?? 10) - 0.5, hi: (values.max() ?? 25) + 0.5, height: height)
+                    ChartSpan(dates: fat.series.map(\.date))
+                }
             }
         }
     }
