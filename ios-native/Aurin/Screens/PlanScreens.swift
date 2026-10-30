@@ -555,7 +555,7 @@ struct ActivePlanView: View {
         }
         .sheet(isPresented: $editingPlanDays, onDismiss: { Task { await reload() } }) {
             if let active {
-                DaysAndTimeSheet(sport: active.template.sport, range: (active.template.days.first ?? 1)...(active.template.days.last ?? 7), initial: preview?.days ?? [], time: preview?.time)
+                DaysAndTimeSheet(sport: active.template.sport, range: (active.template.days.first ?? 1)...(active.template.days.last ?? 7), initial: preview?.days ?? [], time: preview?.time, long: preview?.long)
             }
         }
         .sheet(isPresented: $editingGoal) {

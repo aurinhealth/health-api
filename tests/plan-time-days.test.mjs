@@ -135,3 +135,26 @@ test("review fixes: a lighter gym phase stays lighter, the home plan stays bodyw
   assert.equal(gym.gym.days[0].minutes, 0);
   assert.equal(gym.gym.short, true);
 });
+
+test("the athlete's own long day wins, with no key session the day before", async () => {
+  const { roleTime } = await import("../src/week-planner.js");
+  const days = [[], ["run"], [], ["run"], [], ["run"], ["run"]];
+  const roles = longDay => planWeekRoles(days, { quality: 2, ...roleTime({ availability: time([0, 60, 0, 75, 0, 150, 120]), longDay }) });
+  const longOf = r => r.findIndex(d => d.items.some(x => x.role === "long"));
+  assert.equal(longOf(roles(undefined)), 5, "automatic: Saturday has the most time");
+  const own = roles(6);
+  assert.equal(longOf(own), 6, "Sunday chosen");
+  assert.notEqual(own[5].items[0].role, "quality", "no key session on Saturday");
+  assert.equal(longOf(roles(2)), 5, "a day without a run is ignored");
+  assert.equal(sanitizeWeekPlan({ longDay: 6 }).longDay, 6);
+  assert.equal(sanitizeWeekPlan({ longDay: 9 }).longDay, null);
+  assert.equal(longOf(planWeekRoles(days, { quality: 2, avoid: "run", ...roleTime({ availability: time([0, 60, 0, 75, 0, 150, 120]), longDay: 6 }) })) === 6, false, "not on a sport still being learnt");
+});
+
+test("from next week: this week keeps its long day", async () => {
+  const { weekOverride } = await import("../src/week-planner.js");
+  const week = sanitizeWeekPlan({ days: [[], ["run"], [], ["run"], [], ["run"], ["run"]] });
+  const usual = sanitizeWeekPlan({ ...week, longDay: 6 });
+  assert.deepEqual(weekOverride(week, usual), { longDay: null });
+  assert.equal(sanitizeWeekPlan({ ...usual, ...weekOverride(week, usual) }).longDay, null);
+});

@@ -3326,6 +3326,12 @@
 "Úpravy" = "Adjust";
 "dva týdny" = "two weeks";
 "podle odhadu" = "from the estimate";
+"Dlouhý běh" = "Long run";
+"Dlouhá jízda" = "Long ride";
+"teď %@, nejvíc volného času" = "now %@, the most free time";
+"Nabízím jen tvoje dny běhu. Den před dlouhým během plán nedá klíčový trénink." = "Only your run days are offered. The plan keeps a key session off the day before the long run.";
+"Nabízím jen tvoje dny na kole. Den před dlouhou jízdou plán nedá klíčový trénink." = "Only your ride days are offered. The plan keeps a key session off the day before the long ride.";
+"%@ má %@: dlouhý trénink se do toho vejde, dokud dni nepřidáš víc času." = "%@ has %@: the long session stays within it until you give that day more time.";
 
 /* Why this workout in the gym day (GymWhyCard.swift) */
 "Proč tenhle trénink" = "Why this workout";

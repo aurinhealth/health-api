@@ -24,7 +24,7 @@ test('week targets without prefs use the saved week plan', async () => {
     weekWeather: async location => { seen.location = location; return {}; },
     weeklyRunCap: () => null, planningHistory: async () => [],
     planForWeek: async () => ({ plan: { id: 1 }, roles: {}, load: null, apply: t => ({ ...t, items: [{ date: '2026-10-19', sport: 'ride', slot: 0, plan: { workoutId: 'z2-60' } }] }) }),
-    planWeekRoles: days => { seen.days = days; return {}; }, freeMinutes: () => [],
+    planWeekRoles: days => { seen.days = days; return {}; }, freeMinutes: () => [], roleTime: () => ({}),
     weekTargets: () => ({ status: 'ok', items: [] }), estimatedTargets: () => ({ status: 'ok', items: [] }),
     weekLoadsBefore: () => [], hrvWeekTrendDown: () => false,
     hrvSourceRows: rows => rows, googleHealthFor: async () => null,
@@ -53,7 +53,7 @@ test('week targets count today\'s planned run once against the running cap', asy
       sportOfType: type => /run/i.test(type) ? 'run' : null, activityFromRow: r => ({ minutes: JSON.parse(r.payload_json).minutes }),
       weekWeather: async () => ({}), weeklyRunCap: () => ({ cap: 120 }), planningHistory: async () => [],
       planForWeek: async () => ({ plan: null, roles: {}, load: null, apply: t => t }),
-      planWeekRoles: () => ({}), freeMinutes: () => [], weekTargets: () => ({ status: 'ok', items: [] }), estimatedTargets: () => ({ status: 'ok', items: [] }),
+      planWeekRoles: () => ({}), freeMinutes: () => [], roleTime: () => ({}), weekTargets: () => ({ status: 'ok', items: [] }), estimatedTargets: () => ({ status: 'ok', items: [] }),
       weekLoadsBefore: () => [], hrvWeekTrendDown: () => false, hrvSourceRows: x => x, googleHealthFor: async () => null,
       athleteFocus: () => ({}), dashboardProfile: async () => null,
       capRunVolume: (t, _cap, c) => { committed = c; return t; }, committedRunMinutes, capWeekTargets: t => t

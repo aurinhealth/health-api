@@ -70,7 +70,7 @@ import { athleteThresholds, rideFtpFor } from "./intervals-athlete.js";
 import { grantedExtras } from "./google-scopes.js";
 import { renderForEnvironment } from "./workout-model.js";
 import { plannedEventWorkout } from "./planned-detail.js";
-import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes } from "./week-planner.js";
+import { getWeekPlan, saveWeekPlan, addWeekSport, resetWeekPlan, planWeekRoles, freeMinutes, roleTime, usualFor, roleFor, ROLE_FOCUS, weekTargets, targetFor, weekLoadsBefore, hrvWeekTrendDown, hrvSourceRows, weeklyRunCap, capRunVolume, committedRunMinutes } from "./week-planner.js";
 import { availabilityOn, trainingBudget, validDay as validTrainingDay } from './training-availability.js';
 import { saveCalendarFree, clearCalendarFree } from './calendar-free.js';
 import { getCheckin, readinessCheckin, saveCheckin } from './morning-checkin.js';
@@ -942,7 +942,7 @@ async function computeWeekTargets(env,ctx,start,prefs){
   // The forecast decides outdoor or indoor (and so the length) unless the athlete chose.
   const weather=await weekWeather(prefs.location,start,env).catch(()=>({}));
   const runCap=weeklyRunCap(await planningHistory(env,start,28).catch(()=>[]),start);
-  const plan=await planForWeek(env,ctx,start),roles=planWeekRoles(prefs.days,{...plan.roles,minutes:freeMinutes(prefs)});
+  const plan=await planForWeek(env,ctx,start),roles=planWeekRoles(prefs.days,{...plan.roles,...roleTime(prefs)});
   let targets=weekTargets({roles,ctl,lastWeekLoad,weekLoads:weekLoadsBefore(wellness,start),hrvDown:hrvWeekTrendDown(hrvSourceRows(wellness,(await googleHealthFor(env,ctx,today).catch(()=>({})))?.wellness,start),start),rampRate:[...wellness].reverse().find(r=>Number.isFinite(Number(r.rampRate)))?.rampRate??null,days,today,weekStart:start,plan:plan.load,eventDate:plan.plan?null:athleteFocus(await dashboardProfile(env).catch(()=>null),today).event?.date||null});
   // A plan needs its sessions even before there is a fitness history.
   if(plan.plan&&targets.status!=='ok')targets=estimatedTargets(roles,start,today,days);
@@ -1613,7 +1613,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // The recovery model's readiness of the reviewed day, or today's for a day ahead (the inputs are already loaded and cached).
       const readinessDate=date<localToday()?date:localToday();
       const readiness=dayReadiness({date:readinessDate,fitness:inputs.fitness,health:inputs.health,profile:inputs.profile,checkin:readinessDate===date?inputs.checkin:await readinessCheckin(env.DB,readinessDate).catch(()=>null)});
-      const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days,{minutes:freeMinutes(prefs)}):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text})),readiness});
+      const input=buildReviewInput({date,today:localToday(),week:inputs.week,fitness:inputs.fitness,health:inputs.health,gymRows,roles:prefs?planWeekRoles(prefs.days,roleTime(prefs)):[],feedback,coachNotes:notes.map(r=>({date:r.date,text:r.text})),readiness});
       const state=await getAthleteState(env.DB);Object.assign(input,{athleteState:state.status,statusNote:state.note,preferenceMemory:state.memories,availability:availabilityOn(prefs,date),...(inputs.cycle?{cycle:inputs.cycle}:{}),...(inputs.upcomingTest?{upcomingTest:inputs.upcomingTest}:{})});
       const reviews=[await reviewDay(env,input,null,inputs.focus).catch(error=>({model:lightModel(env),error:error.message}))];
       return Response.json({status:'ok',date,reviews},{headers:{'Cache-Control':'no-store'}});
@@ -1725,7 +1725,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const monday=start?mondayOfDate(start):mondayOfDate(localToday());
       const targets=await computeWeekTargets(env,ctx,monday,prefs).catch(error=>({status:'error',message:error.message,items:[]}));
       const historyEstimate=activityHistoryEstimate(await planningHistory(env,localToday(),21),localToday());
-      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days,{...(await planForWeek(env,ctx,monday)).roles,minutes:freeMinutes(prefs)}),start:monday,targets,historyEstimate},{headers:{'Cache-Control':'no-store'}});
+      return Response.json({status:'ok',prefs,roles:planWeekRoles(prefs.days,{...(await planForWeek(env,ctx,monday)).roles,...roleTime(prefs)}),start:monday,targets,historyEstimate},{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   // Free time from the iPhone calendar (calendar-free.js): POST {days:[{date,minutes}]}
@@ -1753,7 +1753,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
         if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
         const body=await request.json().catch(()=>({}));
         const current=async()=>{const plan=(await syncedPlans(env,today)).active;if(!plan)throw new Error(L('Nemáš aktivní plán.', 'You have no active plan.'));return plan;};
-        if(body.action==='stop')await stopPlan(env.DB,{gym:body.sport==='gym'});
+        if(body.action==='stop'){
+          await stopPlan(env.DB,{gym:body.sport==='gym'});
+          // The own long day belonged to the plan that ended.
+          if(body.sport!=='gym'){const prefs=await getWeekPlan(env.DB);if(Number.isInteger(prefs.longDay))await saveWeekPlan(env.DB,{...prefs,longDay:null});}
+        }
         // The answer to the plan's proposal (planProposal), and undoing it.
         else if(body.action==='proposal'||body.action==='undo'){
           const plan=await current();
@@ -1805,10 +1809,12 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           if(chosen.length<range[0]||chosen.length>range[1])throw new Error(L(`Tento plán má ${range[0]}–${range[1]} dní týdně.`, `This plan has ${range[0]}–${range[1]} days a week.`));
           const prefs=await getWeekPlan(env.DB),week=body.from==='next'?await getWeekPlan(env.DB,today,{calendar:false}):null;
           const usual=withSportDays(prefs,template.sport,chosen);
-          await saveWeekPlan(env.DB,{...prefs,days:usual.days,...(body.availability?{availability:withMinutes(prefs.availability,minutesList(body.availability)),availabilityMode:'manual'}:{})});
+          // longDay: the long ride's or run's day (0–6), null for the day with the most free time.
+          const longDay=body.longDay===undefined||!['ride','run'].includes(template.sport)?prefs.longDay:Number.isInteger(body.longDay)&&chosen.includes(body.longDay)?body.longDay:null;
+          await saveWeekPlan(env.DB,{...prefs,days:usual.days,longDay,...(body.availability?{availability:withMinutes(prefs.availability,minutesList(body.availability)),availabilityMode:'manual'}:{})});
           if(week)await saveWeekPlan(env.DB,week,today);
           // From this week: a week changed on its own (its days, its time) takes the new days too.
-          else{const own=await getWeekPlan(env.DB,today,{calendar:false});if(own.source==='week')await saveWeekPlan(env.DB,{...own,days:withSportDays(own,template.sport,chosen).days},today);}
+          else{const own=await getWeekPlan(env.DB,today,{calendar:false});if(own.source==='week')await saveWeekPlan(env.DB,{...own,days:withSportDays(own,template.sport,chosen).days,longDay},today);}
           if(template.sport==='gym'&&plan.perWeek&&plan.perWeek!==chosen.length)await savePlanState(env.DB,{...plan,perWeek:chosen.length});
         }
         // A gym plan's sessions a week (2–7): gym days added or left out to match.
@@ -1829,7 +1835,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
           const perWeek=template.sport==='gym'&&Number(body.perWeek)>=2&&Number(body.perWeek)<=7?Math.round(Number(body.perWeek)):null;
           const count=perWeek||(Number(body.count)>0?Number(body.count):null);
           const need=chosen&&template.sport!=='triathlon'?withSportDays(prefs,template.sport,chosen):planDays(template,prefs,template.sport==='triathlon'?null:count);
-          if(need.added.length||need.removed?.length||(chosen&&template.sport!=='triathlon'))await saveWeekPlan(env.DB,{...prefs,days:need.days});
+          // A new ride or run plan starts without an earlier plan's own long day.
+          const dropLong=template.sport!=='gym'&&Number.isInteger(prefs.longDay);
+          if(need.added.length||need.removed?.length||(chosen&&template.sport!=='triathlon')||dropLong)await saveWeekPlan(env.DB,{...prefs,days:need.days,...(dropLong?{longDay:null}:{})});
           // What the result compares with at the end: FTP, fitness and the estimate now.
           const [thresholds,ctl]=await Promise.all([cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),currentCtl(env,ctx)]);
           const estimate=planPreview(template,{ctl,days:sportDays(need.days,template.sport),firstDay:when.firstDay,startDate:when.startDate,...planTimeOf(prefs),perWeek});
@@ -1890,6 +1898,11 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const other=template.sport==='gym'?plans.active:plans.gym;
       const otherTemplate=other&&getTemplate(other.templateId);
       preview.added=need.added||[];
+      // The long ride's or run's day: the athlete's own, or the one the plan picks from the free time.
+      // The whole usual week with the plan's days, as planWeekRoles sees it (gym and other sports too).
+      if(['ride','run'].includes(template.sport)){const week=usualFor(prefs,today),planned=withSportDays(week,template.sport,days).days;
+        const longOf=time=>{const i=planWeekRoles(planned,time).findIndex(d=>d.items.some(x=>x.role==='long'));return i>=0?i:null;};
+        const day=longOf(roleTime(week));preview.long={day,auto:longOf({minutes:freeMinutes(week)}),own:day!=null&&day===week.longDay};}
       if(otherTemplate&&other.templateId!==template.id)preview.other={name:otherTemplate.name,sport:otherTemplate.sport,days:sportDays(prefs.days,otherTemplate.sport)};
       // A race plan: the race's estimate (a running race) or power and time (a cycling race) for ?raceKm=.
       let race=null;
