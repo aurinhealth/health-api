@@ -92,12 +92,12 @@ test("a token is revoked with the app's and the Loadwise app's client, even when
   };
   assert.equal(await revokeApple({ ...apple, APPLE_REFRESH_TOKEN: "legacy-refresh" }, fetchImpl), "revoked");
   assert.deepEqual(calls, ["health.aurin.app", "eu.petrfitnessdata.loadwise.native"]);
-  // One client refusing or unreachable still revokes with the other; both failing is "failed".
+  // A client refusing or unreachable is "failed": its 200 could not tell which client issued the token.
   const legacyOnly = async (url, init) => {
     if (new URLSearchParams(String(init.body)).get("client_id") === "health.aurin.app") throw new Error("offline");
     return new Response("");
   };
-  assert.equal(await revokeApple({ ...apple, APPLE_REFRESH_TOKEN: "t" }, legacyOnly), "revoked");
+  assert.equal(await revokeApple({ ...apple, APPLE_REFRESH_TOKEN: "t" }, legacyOnly), "failed");
   assert.equal(await revokeApple({ ...apple, APPLE_REFRESH_TOKEN: "t" }, async () => Response.json({ error: "invalid_client" }, { status: 400 })), "failed");
   // An app configured with the legacy ID asks Apple once.
   calls.length = 0;
