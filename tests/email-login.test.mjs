@@ -380,7 +380,10 @@ test("signing out everywhere ends the other devices' exemption, not the caller's
   // The phone signs out everywhere: it gets a fresh device cookie, the laptop's no longer counts.
   const id = env.DB.sqlite.prepare("SELECT id FROM users WHERE email='owner@example.com'").get().id;
   const url = new URL("https://aurin.health/app/api/account/sign-out-everywhere");
-  const out = await handleSignOutEverywhere(new Request(url, { method: "POST", headers: { Origin: url.origin } }), env, url, { signedIn: true, user: { id } });
+  // A signed-in device without a device cookie gets none; a session alone never mints one.
+  const bare = await handleSignOutEverywhere(new Request(url, { method: "POST", headers: { Origin: url.origin } }), env, url, { signedIn: true, user: { id } });
+  assert.ok(!bare.headers.getSetCookie().some(c => c.startsWith("aurin_known=")));
+  const out = await handleSignOutEverywhere(new Request(url, { method: "POST", headers: { Origin: url.origin, Cookie: phone } }), env, url, { signedIn: true, user: { id } });
   const fresh = out.headers.getSetCookie().find(c => c.startsWith("aurin_known=")).split(";")[0];
   assert.notEqual(fresh, phone);
   const later = t0 + 12 * 61_000;

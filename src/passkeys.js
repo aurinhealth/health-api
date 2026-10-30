@@ -190,7 +190,7 @@ export async function handlePasskeyApi(request, env, url, session, ctx) {
     const removed = await db.prepare("DELETE FROM user_passkeys WHERE id = ? AND user_id = ?").bind(String(url.searchParams.get("id") || ""), user.id).run();
     const response = json({ status: "ok", rpId, userHandle, passkeys: await listPasskeys(db, user.id) });
     // Whoever signed in with the removed passkey elsewhere is signed out; this device stays.
-    return Number(removed.meta?.changes) > 0 ? signedOutElsewhere(db, user.id, env, response) : response;
+    return Number(removed.meta?.changes) > 0 ? signedOutElsewhere(db, user.id, env, response, request) : response;
   }
   return json({ message: L("Nepodporovaná metoda.", "Unsupported method.") }, 405);
 }

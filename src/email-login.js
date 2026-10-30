@@ -15,7 +15,7 @@
 // Codes for moving an account to another address have their own day's budget
 // (EMAIL_CHANGE_CODES_PER_DAY, 100), so they never take from the codes for signing in, and one
 // account asks for at most 2 a minute, 5 an hour and 10 a day, one caller for 5, 20 and 30.
-import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie } from "./dashboard-auth.js";
+import { signText, sessionSecret, timingSafeEqualString, signedInResponse, userSessionCookie, knownDevice, knownDeviceCookie, heldKnownDevice } from "./dashboard-auth.js";
 import { allowClient, allowRequest } from "./ip-rate-limit.js";
 import { normalizeEmail, emailCodeAccess, signInEmailUser, changeUserEmail } from "./tenancy.js";
 import { emailConfigured, sendEmail, signInCodeEmail, emailChangeCodeEmail, emailChangedEmail } from "./email-sender.js";
@@ -259,14 +259,15 @@ export async function handleEmailChange(request, env, url, session, ctx) {
   }
   const refused = await useCode(db, env, email, body?.code, purpose);
   if (refused) return refused;
+  const known = await heldKnownDevice(request, env, db, user.id);
   const changed = await changeUserEmail(db, env, user.id, email);
   if (changed.error) return emailChangeRefusal(changed.error);
   await notifyOldAddress(env, changed, requestLanguage(request), ctx);
   // The change signs every other device out (session_epoch); this one gets a fresh cookie, and
-  // stays a known device for the new address.
+  // a known device stays one for the new address.
   const response = json({ status: "ok", email: changed.email });
   response.headers.append("Set-Cookie", await userSessionCookie(db, user.id, sessionSecret(env)));
-  const device = await knownDeviceCookie(db, env, user.id);
+  const device = known ? await knownDeviceCookie(db, env, user.id) : null;
   if (device) response.headers.append("Set-Cookie", device);
   return response;
 }

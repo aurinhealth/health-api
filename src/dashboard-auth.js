@@ -161,17 +161,19 @@ export async function signedInResponse(userId, env, body = { status: "ok" }) {
 
 // Moves the user's epoch on (every other device is signed out) and keeps the
 // caller signed in: the answer carries a fresh cookie.
-export async function signedOutElsewhere(db, userId, env, response) {
+export async function signedOutElsewhere(db, userId, env, response, request = null) {
+  const known = request ? await heldKnownDevice(request, env, db, userId) : false;
   await bumpSessionEpoch(db, userId);
   response.headers.append("Set-Cookie", await userSessionCookie(db, userId, sessionSecret(env)));
-  // This device stays a known device for e-mail codes; the others lose it with the epoch.
-  const device = await knownDeviceCookie(db, env, userId);
-  if (device) response.headers.append("Set-Cookie", device);
+  // A known device for e-mail codes stays one; the others lose it with the epoch.
+  if (known) {
+    const device = await knownDeviceCookie(db, env, userId);
+    if (device) response.headers.append("Set-Cookie", device);
+  }
   return response;
 }
 
-// The device a sign-in happened on (e-mail code sign-in, or a device that just got a fresh
-// session): "<nonce>.<signature of the account, its session epoch, the address and the nonce>".
+// The device an e-mail code sign-in happened on (kept by that device when it bumps the epoch): "<nonce>.<signature of the account, its session epoch, the address and the nonce>".
 // It exempts the device from the address's daily code limit and wrong-code lock
 // (email-login.js). Bumping the epoch (sign out everywhere, e-mail change, removing a passkey,
 // unlinking Apple ID, blocking) or deleting the account ends it everywhere but on the device that
@@ -197,14 +199,28 @@ export async function knownDeviceCookie(db, env, userId) {
   return KNOWN_COOKIE + "=" + nonce + "." + await knownSignature(env, owner, nonce) + "; Path=/auth/email; Max-Age=" + KNOWN_SECONDS + "; HttpOnly; Secure; SameSite=Lax";
 }
 
-// The nonce when the request comes from a known device of the account that owns this address, else null.
-export async function knownDevice(request, env, email) {
+function knownDeviceValue(request) {
   const value = String(request.headers.get("Cookie") || "").split(/;\s*/).find(c => c.startsWith(KNOWN_COOKIE + "="))?.slice(KNOWN_COOKIE.length + 1) || "";
   const [nonce, signature] = value.split(".");
-  if (!/^[0-9a-f]{24}$/.test(nonce || "") || !/^[A-Za-z0-9_\-+/=]{16,128}$/.test(signature || "")) return null;
+  return /^[0-9a-f]{24}$/.test(nonce || "") && /^[A-Za-z0-9_\-+/=]{16,128}$/.test(signature || "") ? { nonce, signature } : null;
+}
+
+// The nonce when the request comes from a known device of the account that owns this address, else null.
+export async function knownDevice(request, env, email) {
+  const cookie = knownDeviceValue(request);
+  if (!cookie) return null;
   const owner = await knownOwner(env.DB, "email", email);
-  const match = timingSafeEqualString(signature, await knownSignature(env, owner || NO_OWNER, nonce));
-  return owner && match ? nonce : null;
+  const match = timingSafeEqualString(cookie.signature, await knownSignature(env, owner || NO_OWNER, cookie.nonce));
+  return owner && match ? cookie.nonce : null;
+}
+
+// Whether the signed-in caller holds a valid known-device cookie of this account, read before the
+// epoch changes: only such a device gets a new one, so a session alone never mints one.
+export async function heldKnownDevice(request, env, db, userId) {
+  const cookie = knownDeviceValue(request);
+  if (!cookie) return false;
+  const owner = await knownOwner(db, "id", Number(userId));
+  return Boolean(owner?.email) && timingSafeEqualString(cookie.signature, await knownSignature(env, owner, cookie.nonce));
 }
 
 // Settings → Účet: POST /app/api/account/sign-out-everywhere.
@@ -213,7 +229,7 @@ export async function handleSignOutEverywhere(request, env, url, session) {
   if (request.method !== "POST") return Response.json({ message: L("Použij POST.", "Use POST.") }, { status: 405 });
   if (!session.signedIn || !session.user) return unauthorizedResponse();
   if (request.headers.get("Origin") !== url.origin) return Response.json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, { status: 403 });
-  return signedOutElsewhere(env.RAW_DB || env.DB, session.user.id, env, Response.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } }));
+  return signedOutElsewhere(env.RAW_DB || env.DB, session.user.id, env, Response.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } }), request);
 }
 
 // Whether the session is old enough for a fresh cookie (SESSION_REFRESH_SECONDS since it was issued).

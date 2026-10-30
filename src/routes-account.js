@@ -73,7 +73,7 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
     const keys = await connectionEnvironment(env);
     if (keys.APPLE_REFRESH_TOKEN) { await revokeApple(keys); await deleteConnectionSecret(env, "apple"); }
     // Whoever is signed in through that Apple ID elsewhere is signed out; this device stays.
-    return signedOutElsewhere(env.RAW_DB, session.user.id, env, Response.json({status:"ok"},{headers:{"Cache-Control":"no-store"}}));
+    return signedOutElsewhere(env.RAW_DB, session.user.id, env, Response.json({status:"ok"},{headers:{"Cache-Control":"no-store"}}), request);
   }
   // The user's own data: download everything, or delete the account with it.
   if(url.pathname==='/app/api/account/export'&&request.method==='GET'){
