@@ -51,7 +51,7 @@ struct FoodPage: View {
             }
             .padding(.top, 18)
             HStack(alignment: .top, spacing: 7) {
-                macro(food.carbs.net == true ? W.tr("Čisté sacharidy", "Net carbs") : W.tr("Sacharidy", "Carbs"), food.carbs, W.carbs)
+                macro(food.carbs.net == true ? W.tr("Čisté sach.", "Net carbs") : W.tr("Sacharidy", "Carbs"), food.carbs, W.carbs)
                 macro(W.tr("Bílkoviny", "Protein"), food.protein, W.protein)
                 macro(W.tr("Tuky", "Fat"), food.fat, W.fat)
             }
