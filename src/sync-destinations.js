@@ -50,16 +50,17 @@ export const SUPPORTS = {
   wahoo: { pushPlanned: true, pushActivities: false, pullActivities: true, health: false }
 };
 
-// Before this screen: Intervals.icu got the plan, the wellness and the
-// weight, activities came from it, and a manual workout was promised there
-// ("pošle do Intervals.icu"). Google Health got the food log and, with the
+// Before this screen: Intervals.icu got the plan and activities came from
+// it, and a manual workout was promised there ("pošle do Intervals.icu").
+// Health data (wellness, weight) goes to Intervals.icu, a third party, only
+// once the athlete turns it on (the connect sheet or Synchronizace). Google Health got the food log and, with the
 // permission, the weight, and its workouts came in; writing workouts there
 // needs a permission nobody has yet, so it starts off. Apple Health got
 // nothing.
 const DEFAULTS = {
   apple: { pushPlanned: false, pushActivities: false, pullActivities: false, health: [] },
   google: { pushPlanned: false, pushActivities: false, pullActivities: true, health: 'all' },
-  intervals: { pushPlanned: true, pushActivities: true, pullActivities: true, health: 'all' },
+  intervals: { pushPlanned: true, pushActivities: true, pullActivities: true, health: [] },
   // Whoever connects Wahoo wants the plan on the head unit and the rides back.
   wahoo: { pushPlanned: true, pushActivities: false, pullActivities: true, health: [] }
 };

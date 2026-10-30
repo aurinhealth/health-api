@@ -315,3 +315,20 @@ test("a sync with nothing new chooses no source again; a changed hour does", asy
   assert.ok(choosing() > 0);
   assert.equal(rows(raw, "source_family='google-wearables' AND data_type='steps'")[0].record_role, "duplicate");
 });
+
+test("sexual activity is kept only while the app says Sex is in the journal; otherwise what came before goes", async () => {
+  const { raw, db } = setup();
+  const now = Date.parse("2026-10-16T12:00:00Z");
+  const records = [{ type: "daily-sexual-activity", id: "journal:daily-sexual-activity:2026-10-15", date: "2026-10-15", value: 1 }];
+  const stored = () => raw.sqlite.prepare("SELECT COUNT(*) AS n FROM health_datapoints WHERE data_type='daily-sexual-activity'").get().n;
+  await saveAppleHealth(db, 1, { records, sexualActivity: true }, { now });
+  assert.equal(stored(), 1);
+  // An app too old to say, or Sex taken out of the journal: not kept, the old days deleted.
+  await saveAppleHealth(db, 1, { records }, { now });
+  assert.equal(stored(), 0);
+  await saveAppleHealth(db, 1, { records: [], sexualActivity: true }, { now });
+  await saveAppleHealth(db, 1, { records, sexualActivity: true }, { now });
+  assert.equal(stored(), 1);
+  await saveAppleHealth(db, 1, { records: [], sexualActivity: false }, { now });
+  assert.equal(stored(), 0);
+});

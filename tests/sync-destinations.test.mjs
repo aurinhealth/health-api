@@ -23,9 +23,9 @@ function recorder(reply) {
   return { calls, fetchImpl };
 }
 
-test("without a choice everything keeps today's behaviour", async () => {
+test("without a choice the plan and activities keep going; health data to Intervals.icu waits for a yes", async () => {
   const d = db({ migrate: false });
-  assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { pushPlanned: true, pushActivities: true, pullActivities: true, health: "all", stored: false });
+  assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { pushPlanned: true, pushActivities: true, pullActivities: true, health: [], stored: false });
   assert.deepEqual(await readSyncPrefs(d, 7, "apple"), { pushPlanned: false, pushActivities: false, pullActivities: false, health: [], stored: false });
   // Writing workouts to Google needs a permission nobody has yet: off until chosen.
   assert.equal((await readSyncPrefs(d, 7, "google")).pushActivities, false);
@@ -36,7 +36,7 @@ test("preferences are saved per user and destination, cleaned up", async () => {
   const saved = await saveSyncPrefs(d, 7, "intervals", { pushPlanned: false, health: ["hrv", "sleep", "nonsense", "hrv"] });
   assert.deepEqual(saved, { pushPlanned: false, pushActivities: true, pullActivities: true, health: ["hrv", "sleep"] });
   assert.deepEqual(await readSyncPrefs(d, 7, "intervals"), { ...saved, stored: true });
-  assert.equal((await readSyncPrefs(d, 8, "intervals")).health, "all");
+  assert.deepEqual((await readSyncPrefs(d, 8, "intervals")).health, []);
   // A partial update keeps the rest; "all" again.
   assert.deepEqual(await saveSyncPrefs(d, 7, "intervals", { health: "all" }), { ...saved, health: "all" });
   // Apple Health has no plans.

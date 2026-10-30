@@ -207,11 +207,14 @@ struct SettingsSectionTiles: View {
 }
 
 /// Deník: on or off (the Zdraví card, the morning sheet and the coach's view
-/// of it), the morning questions, and what it follows.
+/// of it), the morning questions, what it follows, and whether the coach sees
+/// the sensitive items (with their own consent, GDPR art. 9).
 struct JournalSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var enabled = JournalSwitch.isOn
     @State private var askMorning = true
+    @State private var shareSensitive = false
+    @State private var askingConsent = false
     @State private var tracked: Int?
     @State private var tracking = false
 
@@ -238,9 +241,22 @@ struct JournalSettingsView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                SettingsGroup(title: "AI kouč", footer: "Sex, konopí a léky kouč nevidí, dokud tohle nezapneš.") {
+                    SettingsToggle(title: "Citlivé položky", isOn: Binding(get: { shareSensitive }, set: { on in
+                        if on { askingConsent = true; return }
+                        shareSensitive = false
+                        Task { await save(["shareSensitive": .bool(false)]) }
+                    }))
+                }
             }
         }
         .sheet(isPresented: $tracking, onDismiss: { Task { await load() } }) { JournalEditorView() }
+        .sheet(isPresented: $askingConsent) {
+            JournalSensitiveConsentSheet {
+                shareSensitive = true
+                Task { await save(["shareSensitive": .bool(true)]) }
+            }
+        }
         .task { await load() }
     }
 
@@ -252,6 +268,7 @@ struct JournalSettingsView: View {
         guard let catalog = try? await model.api.journalCatalog() else { return }
         enabled = catalog.enabled ?? true
         askMorning = catalog.askMorning ?? true
+        shareSensitive = catalog.shareSensitive ?? false
         tracked = catalog.pinned.count
         JournalSwitch.remember(catalog.enabled)
     }
@@ -259,6 +276,71 @@ struct JournalSettingsView: View {
     private func save(_ body: JSONObject) async {
         guard !model.demo else { return }
         try? await model.api.setJournalOptions(body)
+    }
+}
+
+/// What the coach gets from the sensitive journal items (src/routes-journal.js
+/// journalForCoach) and the explicit consent (GDPR art. 9), like the cycle's.
+struct JournalSensitiveConsentSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let accept: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Kouč vidí citlivé položky").font(Typo.sentence(26, relativeTo: .title)).foregroundStyle(Palette.ink)
+                Text("Tvoje odpovědi o sexu, konopí a lécích pomohou kouči vysvětlit tvou regeneraci.")
+                    .font(Typo.sentence(17)).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 6)
+                section("Co tím získáš")
+                point("Rady, které počítají s léky, které bereš")
+                point("Jasnější důvod, proč se připravenost změnila")
+                section("Co kouč uvidí")
+                point("Včerejší odpovědi u těchto položek a jak působí na připravenost")
+                point("Starší záznamy", included: false)
+                section("Které položky")
+                Text("Sex, Konopí a všechno v Lécích").font(.body).foregroundStyle(Palette.secondary)
+                    .fixedSize(horizontal: false, vertical: true).padding(.vertical, 5)
+                Text("Jde o údaje o zdraví (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jejich předáním AI kouči (OpenAI). Kdykoli ho vypneš a kouč je přestane dostávat.")
+                    .font(Typo.caption).foregroundStyle(Palette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 16)
+                Button {
+                    accept()
+                    dismiss()
+                } label: {
+                    Text("Zapnout").font(Typo.bodyStrong).foregroundStyle(Palette.onButton)
+                        .frame(maxWidth: .infinity).frame(height: 50).background(Palette.button, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 18)
+                Button { dismiss() } label: {
+                    Text("Teď ne").font(Typo.body).foregroundStyle(Palette.ink)
+                        .frame(maxWidth: .infinity).frame(height: 46)
+                        .overlay { Capsule().stroke(Palette.ink.opacity(0.18)) }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 10)
+            }
+            .padding(24)
+        }
+        .presentationDetents([.large])
+        .presentationBackground(Palette.background)
+    }
+
+    private func section(_ title: LocalizedStringKey) -> some View {
+        Text(title).font(Typo.caption).textCase(.uppercase).tracking(1.2).foregroundStyle(Palette.muted)
+            .padding(.top, 18).padding(.bottom, 4)
+    }
+
+    private func point(_ text: LocalizedStringKey, included: Bool = true) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: included ? "checkmark" : "xmark").font(.footnote.weight(.semibold))
+                .foregroundStyle(included ? Palette.green : Palette.muted)
+            Text(text).font(.body).foregroundStyle(Palette.ink).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 5)
     }
 }
 

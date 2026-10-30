@@ -8,7 +8,7 @@
 // is never overwritten, while today's steps can grow through the day.
 //
 // Settings → Synchronizace → Intervals.icu → Zdravotní data limits the fields
-// (sync-destinations.js); without a choice everything goes, as before.
+// (sync-destinations.js); without a choice nothing goes.
 
 import { heartRateInWindows } from "./index.js";
 import { intervalsAuthorization } from "./intervals-auth.js";

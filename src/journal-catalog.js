@@ -43,6 +43,12 @@ const minutes = (value, step, max) => ({ ...MIN, min: step, max, step, default: 
 const y = (key, cs, en, cat, icon, extra = {}) => ({ key, cs, en, cat, type: "yesno", icon, ...extra });
 const amount = (key, cs, en, cat, icon, unit, step, usual, max, extra = {}) => ({ key, cs, en, cat, type: "amount", icon, unit, step, usual, max, ...extra });
 
+// Items the AI coach sees only with the athlete's explicit consent
+// (Nastavení → Deník → Citlivé položky, GDPR art. 9): sex life, drugs and
+// every medication.
+const SENSITIVE_KEYS = new Set(["sex", "cannabis"]);
+export const isSensitive = item => Boolean(item && (SENSITIVE_KEYS.has(item.key) || item.cat === "meds"));
+
 export const CATALOG = [
   // Večer a noc
   y("phone_in_bed", "Mobil v posteli", "Phone in bed", "sleep", "iphone"),

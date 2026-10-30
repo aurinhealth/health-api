@@ -113,6 +113,8 @@ struct JournalCatalog: Decodable, Equatable {
     let pinned: [String]
     var enabled: Bool? = nil
     var askMorning: Bool? = nil
+    /// The coach sees sex, cannabis and medication (src/journal-catalog.js isSensitive).
+    var shareSensitive: Bool? = nil
 }
 
 /// The Today card: the questions about yesterday in the morning.
@@ -168,8 +170,14 @@ struct JournalToday: Decodable, Equatable {
 /// Whether Deník is on, kept on the phone so Zdraví knows before loading.
 enum JournalSwitch {
     static let key = "journal.enabled"
+    static let sexKey = "journal.tracksSex"
     static var isOn: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
     static func remember(_ on: Bool?) { if let on { UserDefaults.standard.set(on, forKey: key) } }
+
+    /// Sex is among the journal's items: only then Apple Health's sexual
+    /// activity is asked for, read and sent (AppleHealth, src/apple-health.js).
+    static var tracksSex: Bool { isOn && UserDefaults.standard.bool(forKey: sexKey) }
+    static func remember(pinned: [String]) { UserDefaults.standard.set(pinned.contains("sex"), forKey: sexKey) }
 }
 
 /// GET /app/api/journal/impact?metric=: Co na tebe působí.
@@ -273,11 +281,14 @@ extension APIClient {
     }
 
     func journalCatalog() async throws -> JournalCatalog {
-        try await get("/app/api/journal/catalog")
+        let catalog: JournalCatalog = try await get("/app/api/journal/catalog")
+        JournalSwitch.remember(pinned: catalog.pinned)
+        return catalog
     }
 
     func setJournalPinned(_ keys: [String]) async throws {
         let _: JSONValue = try await send("/app/api/journal/pinned", method: "POST", body: ["pinned": JSONValue.array(keys.map { .string($0) })])
+        JournalSwitch.remember(pinned: keys)
     }
 
     /// A new own item (name, type, unit, usual, when, category); its key.

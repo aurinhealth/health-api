@@ -202,6 +202,12 @@ extension APIClient {
         try await send("/app/api/sync/prefs/" + destination, method: "PUT", body: prefs)
     }
 
+    /// Every health type to the destination, the rest of its preferences kept
+    /// (the Intervals.icu connect sheet's "Posílat i zdravotní data").
+    func sendAllHealth(to destination: String) async throws {
+        let _: SyncPrefsSaved = try await send("/app/api/sync/prefs/" + destination, method: "PUT", body: ["health": JSONValue.string("all")])
+    }
+
     func sendActivity(_ activity: ActivityToSync) async throws -> SyncActivityResult {
         try await send("/app/api/sync/activity", method: "POST", body: activity.body)
     }

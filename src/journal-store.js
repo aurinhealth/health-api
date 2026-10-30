@@ -45,6 +45,10 @@ function normalizeSettings(raw) {
     // Deník is on for everyone until they turn it off (Nastavení → Deník).
     enabled: s.enabled !== false,
     askMorning: s.askMorning !== false,
+    // The AI coach sees the sensitive items (journal-catalog.js isSensitive)
+    // only after the consent sheet; sensitiveAt is when it was given.
+    shareSensitive: s.shareSensitive === true,
+    sensitiveAt: s.shareSensitive === true && typeof s.sensitiveAt === "string" ? s.sensitiveAt : null,
     // "Vždy ne" / "Vždy ano": the answer filled in every day from `since` on
     // where the day's data says nothing.
     fixed: Object.fromEntries(Object.entries(s.fixed && typeof s.fixed === "object" ? s.fixed : {})
@@ -92,12 +96,16 @@ export function pinnedItems(settings) {
   return settings.pinned.map(k => findItem(settings, k)).filter(Boolean);
 }
 
-// {enabled, askMorning}: Nastavení → Deník.
+// {enabled, askMorning, shareSensitive}: Nastavení → Deník.
 export async function setJournalOptions(db, options) {
   const settings = await getJournalSettings(db);
   const next = { ...settings };
   if (typeof options?.enabled === "boolean") next.enabled = options.enabled;
   if (typeof options?.askMorning === "boolean") next.askMorning = options.askMorning;
+  if (typeof options?.shareSensitive === "boolean") {
+    next.sensitiveAt = options.shareSensitive ? (settings.shareSensitive && settings.sensitiveAt) || new Date().toISOString() : null;
+    next.shareSensitive = options.shareSensitive;
+  }
   return saveJournalSettings(db, next);
 }
 

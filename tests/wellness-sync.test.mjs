@@ -54,6 +54,10 @@ test("one pass writes to Intervals.icu, remembers, and does not repeat", async (
   };
   const env = { DB: d, USER_ID: 7, INTERVALS_API_KEY: "k", CONNECTED_PROVIDERS: ["google", "intervals"] };
   const deps = { fetchImpl, sleepSessions: async () => sleep, now: Date.parse("2026-10-02T10:00:00Z") };
+  // Nothing goes to Intervals.icu until the athlete turns health data on.
+  assert.deepEqual(await syncWellnessToIntervals(env, deps), { status: "skipped", reason: "off" });
+  assert.deepEqual(puts, []);
+  await saveSyncPrefs(d, 7, "intervals", { health: "all" });
   await syncWellnessToIntervals(env, deps);
   assert.deepEqual(puts, [{ id: "2026-10-01", restingHR: 51, spO2: 96.2, respiration: 14.4, vo2max: 52.3, steps: 8000, sleepSecs: 24720, avgSleepingHR: 52 }]);
   puts.length = 0;

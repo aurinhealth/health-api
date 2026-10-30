@@ -446,6 +446,9 @@ struct AppleHealthUpload: Encodable {
     var records: [AppleRecord]
     var windows: [String: Window]? = nil
     var categories: [String]
+    /// Sex is in the journal: without it the server keeps no sexual activity
+    /// and deletes what it had (src/apple-health.js saveAppleHealth).
+    var sexualActivity = JournalSwitch.tracksSex
     /// Food and water other apps logged, every one from these days (src/apple-food.js).
     var food: Food? = nil
 
@@ -701,7 +704,8 @@ final class HealthReader: @unchecked Sendable {
     // MARK: Deník
 
     /// What fills in journal items (src/journal-store.js autoDays): mindful
-    /// minutes, time in daylight, noise in sleep, symptoms, sexual activity and
+    /// minutes, time in daylight, noise in sleep, symptoms, sexual activity
+    /// (only with Sex among the journal's items, JournalSwitch.tracksSex) and
     /// yoga or stretching workouts.
     static let symptoms: [(HKCategoryTypeIdentifier, String)] = [
         (.headache, "headache"), (.runnyNose, "runny-nose"), (.generalizedBodyAche, "body-ache"),
@@ -710,7 +714,8 @@ final class HealthReader: @unchecked Sendable {
 
     static var journalTypes: Set<HKObjectType> {
         var out: Set<HKObjectType> = [HKCategoryType(.mindfulSession), HKQuantityType(.timeInDaylight), HKQuantityType(.environmentalAudioExposure),
-                                      HKCategoryType(.sleepAnalysis), HKCategoryType(.sexualActivity), HKObjectType.workoutType()]
+                                      HKCategoryType(.sleepAnalysis), HKObjectType.workoutType()]
+        if JournalSwitch.tracksSex { out.insert(HKCategoryType(.sexualActivity)) }
         for (id, _) in symptoms { out.insert(HKCategoryType(id)) }
         return out
     }
@@ -725,7 +730,7 @@ final class HealthReader: @unchecked Sendable {
 
         async let mindfulRead = samples(HKCategoryType(.mindfulSession), from: from, to: to)
         async let daylightRead = samples(HKQuantityType(.timeInDaylight), from: from, to: to)
-        async let sexRead = samples(HKCategoryType(.sexualActivity), from: from, to: to)
+        async let sexRead = JournalSwitch.tracksSex ? samples(HKCategoryType(.sexualActivity), from: from, to: to) : []
         async let workoutRead = samples(HKObjectType.workoutType(), from: from, to: to, predicate: notOurs)
         async let sleepRead = samples(HKCategoryType(.sleepAnalysis), from: from.addingTimeInterval(-9 * 3600), to: to)
         async let noiseRead = samples(HKQuantityType(.environmentalAudioExposure), from: from.addingTimeInterval(-9 * 3600), to: to)
