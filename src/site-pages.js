@@ -12,6 +12,13 @@ import {scriptPolicy} from './web-security.js';
 import {SITE_ORIGIN, SERVER_HOSTS} from './app-origin.js';
 
 
+// Faint stars for the night behind Sleep, the same scatter every time.
+const STARS = (() => {
+  let seed = 3, dots = '';
+  const rnd = () => (seed = (seed * 69069 + 1) % 4294967296) / 4294967296;
+  for (let i = 0; i < 60; i++) dots += `<circle cx='${(rnd() * 400).toFixed(0)}' cy='${(rnd() * 900).toFixed(0)}' r='${(.5 + rnd() * .8).toFixed(1)}' fill='white' opacity='${(.08 + rnd() * .25).toFixed(2)}'/>`;
+  return 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='400' height='900'>${dots}</svg>`);
+})();
 const siteCss = `
 @font-face{font-family:Newsreader;src:url(/site/fonts/newsreader.woff2) format("woff2");font-display:swap}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%;overflow-x:clip;color-scheme:light;scroll-padding-top:88px}
@@ -39,14 +46,16 @@ p{margin:0}
 /* The waitlist: the app is not in the App Store yet; an e-mail field with its button (store()). */
 .wl{display:inline-flex;flex-direction:column;align-items:center;max-width:100%}
 .wl .done{display:none}
-.wl .field{display:flex;align-items:center;gap:6px;height:56px;width:340px;max-width:100%;padding:0 6px 0 22px;border-radius:var(--r-pill);background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float)}
+.wl .field{display:flex;align-items:center;gap:6px;height:56px;width:420px;max-width:100%;padding:0 6px 0 22px;border-radius:var(--r-pill);background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float)}
 .wl input{flex:1;min-width:0;border:0;outline:0;background:transparent;font:inherit;font-size:var(--fs-17);color:var(--text)}
 .wl .field:has(input:focus-visible){outline:2px solid var(--primary);outline-offset:3px}
-.wl .go{flex:none;width:44px;height:44px;border:0;border-radius:50%;background:var(--button);display:flex;align-items:center;justify-content:center;cursor:pointer}
-.wl .go svg,.wl .done svg{width:20px;height:20px;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
-.wl .go svg{stroke:var(--on-button)}
+.wl .go{flex:none;display:flex;align-items:center;justify-content:center;gap:6px;height:44px;padding:0 16px 0 18px;border:0;border-radius:var(--r-pill);background:var(--button);color:var(--on-button);font:inherit;font-size:var(--fs-14);font-weight:600;white-space:nowrap;cursor:pointer}
+.wl .go svg,.wl .done svg{fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.wl .go svg{width:16px;height:16px;stroke:var(--on-button)}
+/* On the smallest phones the button drops its arrow so the address keeps room. */
+@media (max-width:360px){.wl .field{padding-left:16px}.wl .go{padding:0 14px}.wl .go svg{display:none}}
 .wl .done{align-items:center;gap:10px;height:56px;padding:0 26px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--green) 13%,var(--panel));color:var(--green);font-size:var(--fs-17);font-weight:600}
-.wl .done svg{stroke:currentColor}
+.wl .done svg{width:20px;height:20px;stroke:currentColor}
 .wl .err{margin-top:10px;font-size:var(--fs-14);color:var(--rust-ink)}.wl .err:empty{display:none}
 .wl.sent .field{display:none}.wl.sent .done{display:inline-flex}
 /* After joining: pass Aurin on (the phone's own sharing, or the link copied). Nothing about it is stored. */
@@ -77,7 +86,7 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .sun .rg{position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--sun) 35%,transparent);transform:scale(var(--r,.6));opacity:var(--o,.6)}
 .sun .rg:nth-child(2){--r:.5;--o:.75}.sun .rg:nth-child(3){--r:.72;--o:.5}.sun .rg:nth-child(4){--r:.94;--o:.25}
 .sun .mark{position:relative;filter:drop-shadow(0 14px 22px color-mix(in srgb,var(--sun) 45%,transparent))}
-.hero::before,.final::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(70% 55% at 22% 18%,var(--glow-sunrise) 0,transparent 100%)}
+.hero::before,.final::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:radial-gradient(70% 55% at 22% 18%,var(--glow-sunrise) 0,transparent 100%);-webkit-mask-image:linear-gradient(#000 60%,transparent);mask-image:linear-gradient(#000 60%,transparent)}
 .final::before{background:radial-gradient(60% 60% at 50% 40%,var(--glow-sunrise) 0,transparent 100%)}
 
 /* Hero: the line on the left, the app's Today on the right with three numbers floating beside it. */
@@ -88,6 +97,8 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .hero h1{font-size:clamp(var(--fs-44),6.4vw,var(--fs-88));line-height:.98;letter-spacing:-.03em;margin-top:22px}
 /* Each word rises inside its own clipped box; the box reaches past the letters so the italic's overhang isn't cut. */
 .hero h1 .w{display:inline-block;vertical-align:top}
+/* On a laptop's short screen the headline takes less height, so the email field stays on the first screen. */
+@media (min-width:961px) and (max-height:860px){.hero h1{max-width:10.5ch;font-size:clamp(var(--fs-44),min(6.4vw,9vh),var(--fs-88))}.hero .sun{zoom:.75}}
 .hero h1 .w>span{display:inline-block}
 .hero h1 .it{font-style:italic;color:var(--green)}
 .lede{max-width:500px;margin-top:26px;font-size:var(--fs-20);color:var(--sec)}
@@ -142,6 +153,10 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 .flip .vis .device{left:0}
 .part{position:absolute;left:-44px;width:380px;border-radius:var(--r-22);overflow:hidden;background:var(--panel);box-shadow:0 0 0 1px var(--line),var(--shadow-float);opacity:0;z-index:3}
 .flip .part{left:304px}
+.part:has(>.one){width:300px;left:-6px}.flip .part:has(>.one){left:346px}
+/* The watch chapter: one watch, larger, its screens taking turns like the phone's. */
+/* Zoom scales left and top too, so they are in the watch's own units: this centres it on the glow. */
+.vis .wdev{position:absolute;left:103px;top:99px;zoom:1.45}
 .part img{display:block;width:100%;height:auto}
 .part.on{opacity:1}
 .part:has(>.dm.wait:not(.in)){opacity:0!important}
@@ -168,7 +183,16 @@ h2.big,h3.big{font-size:clamp(var(--fs-44),5vw,var(--fs-64));line-height:.98;let
 /* Parts: the welcome's pages, each before the chapters of its part. The title and line on one side, the
    app's cards on the other over the part's tint; the cards rise and move once the part is in view. */
 .opener{position:relative;isolation:isolate;padding:150px 0 10px}
-.opener::before{content:"";position:absolute;left:0;right:0;top:40px;height:760px;z-index:-1;pointer-events:none;background:radial-gradient(60% 50% at 30% 30%,var(--glow) 0,transparent 100%)}
+/* The tint fades out at its top and bottom, so it never ends in a straight edge across the page. */
+.opener::before{content:"";position:absolute;left:0;right:0;top:-80px;height:1000px;z-index:-1;pointer-events:none;background:radial-gradient(60% 42% at 30% 38%,var(--glow) 0,transparent 100%);-webkit-mask-image:linear-gradient(transparent,#000 200px,#000 calc(100% - 240px),transparent);mask-image:linear-gradient(transparent,#000 200px,#000 calc(100% - 240px),transparent)}
+/* Sleep's part and chapter sit under a night sky in dark mode (the paywall's night, only here): the page darkens
+   into --night and back, with faint stars. In the light look --night is the page and --stars 0, so nothing shows. */
+/* Above the chapter, so its glow runs on over the chapter's night instead of ending in an edge. */
+#a-sleep{z-index:1;background:linear-gradient(var(--bg),var(--night) 75%)}
+/* Its glow fades out inside the opener, since the opener sits above the chapter and would tint its words. */
+#a-sleep::before{height:calc(100% + 80px)}
+#spanek{isolation:isolate;background:linear-gradient(var(--night),var(--night) 60%,var(--bg))}
+#a-sleep::after,#spanek::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:var(--stars);background:url("${STARS}") top center/400px 900px;-webkit-mask-image:linear-gradient(transparent,#000 240px,#000 calc(100% - 320px),transparent);mask-image:linear-gradient(transparent,#000 240px,#000 calc(100% - 320px),transparent)}
 .ac{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:56px;align-items:center}
 .opener h2.big{font-size:clamp(var(--fs-64),7vw,var(--fs-88))}
 .opener .sub{font-family:var(--serif);font-size:var(--fs-28);line-height:1.3}
@@ -181,13 +205,13 @@ main:focus{outline:none}
 .acts-nav{position:fixed;left:50%;bottom:18px;z-index:19;display:flex;align-items:center;gap:14px;padding:10px 18px 10px 16px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--panel) 86%,transparent);-webkit-backdrop-filter:saturate(1.4) blur(18px);backdrop-filter:saturate(1.4) blur(18px);box-shadow:0 0 0 1px var(--line),var(--shadow-float);transform:translate(-50%,24px);opacity:0;pointer-events:none;transition:opacity .4s,transform .5s cubic-bezier(.16,1,.3,1)}
 .acts-nav.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 .an-t{min-width:76px;font-size:var(--fs-14);font-weight:600}
-.an-l{position:relative;width:136px;height:12px}
+.an-l{position:relative;width:160px;height:12px}
 .an-l::before,.an-fill{content:"";position:absolute;left:0;right:0;top:5px;height:2px;border-radius:2px;background:var(--track)}
-.an-fill{right:auto;width:calc(var(--i,0) * 25%);background:linear-gradient(90deg,color-mix(in srgb,var(--sun) 40%,transparent),var(--sun));transition:width .45s cubic-bezier(.16,1,.3,1)}
-.an-l a{position:absolute;left:calc(var(--k) * 25%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%}
+.an-fill{right:auto;width:calc(var(--i,0) * 20%);background:linear-gradient(90deg,color-mix(in srgb,var(--sun) 40%,transparent),var(--sun));transition:width .45s cubic-bezier(.16,1,.3,1)}
+.an-l a{position:absolute;left:calc(var(--k) * 20%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%}
 .an-l a::after{content:"";position:absolute;left:3px;top:3px;width:6px;height:6px;border-radius:50%;background:color-mix(in srgb,var(--text) 18%,transparent);transition:background .3s}
 .an-l a.done::after{background:var(--sun)}
-.an-dot{position:absolute;left:calc(var(--i,0) * 25%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--sun);box-shadow:0 0 0 2px var(--panel),0 0 10px var(--sun);pointer-events:none;transition:left .45s cubic-bezier(.16,1,.3,1)}
+.an-dot{position:absolute;left:calc(var(--i,0) * 20%);top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--sun);box-shadow:0 0 0 2px var(--panel),0 0 10px var(--sun);pointer-events:none;transition:left .45s cubic-bezier(.16,1,.3,1)}
 
 /* Muscles: the app's 3D figure (Muscle3D.swift). The model is licensed and stays out of the page: the
    figure is drawn ahead from 72 sides (scripts/render-muscles-site.html), and a map per side says which
@@ -221,15 +245,6 @@ main:focus{outline:none}
 
 /* Connections: a row of the services the app connects; picking one says what Aurin reads from it and
    what it sends back. They take turns until one is picked. */
-/* Apple Watch: the watches in a row that wraps, each over a glow in its part's colour. */
-.watch{padding:150px 0 0}
-.watch .intro{max-width:620px}.watch .intro .sub{margin-top:16px}
-.aw-list{display:flex;flex-wrap:wrap;justify-content:center;gap:56px 28px;margin:56px 0 0;padding:0;list-style:none}
-.aw-list li{position:relative;display:flex;flex-direction:column;align-items:center;width:340px;text-align:center}
-.aw-list li:before{content:"";position:absolute;top:-20px;width:320px;height:320px;border-radius:50%;background:radial-gradient(var(--g) 0,transparent 68%);pointer-events:none}
-.aw-list .aw-w{margin-bottom:28px}
-.aw-list h3{font:400 var(--fs-28)/1.1 var(--serif);letter-spacing:-.01em}.aw-list p{max-width:340px;margin-top:8px;color:var(--muted);font-size:var(--fs-17)}
-.aw-note{margin-top:40px;text-align:center;color:var(--muted);font-size:var(--fs-14)}
 .connect{padding:150px 0 0}
 .connect .intro{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:56px;align-items:end}
 .connect .intro .sub{margin:0}
@@ -244,6 +259,8 @@ main:focus{outline:none}
 .lines path.on{stroke-width:3}.lines .in.on{stroke:var(--green)}.lines .out.on{stroke:var(--amber-bar)}
 .pk{position:absolute;left:0;top:0;display:inline-flex;align-items:center;gap:5px;height:26px;padding:0 10px 0 8px;border-radius:var(--r-pill);background:var(--panel);box-shadow:var(--shadow-card);font-size:var(--fs-12);font-weight:600;white-space:nowrap;offset-rotate:0deg;offset-anchor:50% 50%;opacity:0;animation:travel 4.4s linear infinite;transition:filter .4s}
 .pk .icon{width:14px;height:14px}.pk.in{color:var(--green)}.pk.out{color:var(--amber)}
+/* What a line carries is named in the panel below; on the lines it travels as dots, which never cover each other's words. */
+.pk{width:10px;height:10px;padding:0;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px color-mix(in srgb,currentColor 22%,transparent)}.pk.out{color:var(--amber-bar)}
 .pk:not(.on){visibility:hidden}
 @keyframes travel{0%{offset-distance:0%;opacity:0}12%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
 .pk.tall{animation-name:travel-tall}.pk.tall.late{animation-name:travel-tall-late}
@@ -322,13 +339,6 @@ main:focus{outline:none}
 .faq summary::after{content:"";flex:none;width:10px;height:10px;margin-top:-5px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(45deg);transition:transform .3s}
 .faq details[open] summary::after{transform:translateY(5px) rotate(-135deg)}
 .faq details p{padding:0 2px 22px;color:var(--sec);max-width:640px}
-
-/* A light call between the parts and the rest: one line and a secondary button down to the waitlist. */
-.mid{padding:120px 0 0;text-align:center}
-.mid p{font:400 var(--fs-28)/1.2 var(--serif);letter-spacing:-.01em}
-.ghost{display:inline-flex;align-items:center;gap:8px;height:48px;margin-top:20px;padding:0 22px;border:1px solid var(--line);border-radius:var(--r-pill);color:var(--text);font-size:var(--fs-17);font-weight:600;text-decoration:none}
-.ghost:hover{background:var(--track)}
-.ghost svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 
 /* The end: the mark, the name and the waitlist once more. */
 .final{position:relative;padding:180px 0 170px;text-align:center;overflow:clip}
@@ -418,11 +428,11 @@ main:focus{outline:none}
   /* Hero: the words first, the phone under them. */
   .hero{padding-top:120px}
   .hero .grid{grid-template-columns:1fr;text-align:center}
+  /* The mark is already in the nav: on a tablet and a phone the hero starts with the words. */
+  .hero .sun{display:none}
   .lede{margin-left:auto;margin-right:auto}
   .hero .wl{align-items:center}
   .stage{margin-top:48px}
-  /* The mark is already in the nav: the hero starts with the words and the phone. */
-  .hero .sun{display:none}
   .morning{padding-top:32px}
   /* Chapters: the words, then the phone with its piece over the lower part, then the steps. */
   .chapter{padding-top:110px}
@@ -434,14 +444,16 @@ main:focus{outline:none}
   .vis .device,.flip .vis .device{left:59px;top:0}
   /* The phone, then its piece under it, over the phone's lowest quarter only: the pieces share one grid cell. */
   .vis{display:grid;justify-items:center;height:auto}
-  .vis .device,.flip .vis .device{position:relative;left:auto;top:auto;grid-area:1/1}
+  .vis .device,.flip .vis .device,.vis .wdev,.flip .vis .wdev{position:relative;left:auto;top:auto;grid-area:1/1}
+  .vis .wdev{zoom:1.2;margin:40px 0}
   .part,.flip .part{position:relative;grid-area:2/1;align-self:start;left:auto;top:auto!important;width:380px;max-width:100%;margin-top:-170px}
+  .part:has(>.one),.flip .part:has(>.one){left:auto;width:300px;margin-top:-56px}
   .ch .rail{max-width:none;margin-top:44px}
   .mu,.connect .intro,.faq{grid-template-columns:1fr;gap:32px}
   .ac{grid-template-columns:1fr;gap:32px;justify-items:center}.opener .head{justify-self:stretch}
   .opener{padding-top:110px}.chapter.opens{padding-top:64px}
   .sun{margin:-16px auto -8px}
-  .muscles,.watch,.connect,.privacy,#faq,.mid{padding-top:110px}
+  .muscles,.connect,.privacy,#faq{padding-top:110px}
   .faq .side{position:static}
 }
 @media (max-width:560px){
@@ -463,6 +475,8 @@ main:focus{outline:none}
   /* The piece rebuilds what the screen shows, so on a phone it covers the screen's lower half: the same
      numbers are not read twice in a row, one under the other. */
   .part,.flip .part{margin-top:-310px}
+  /* A one-thing card only touches the phone's lower edge: the screen above it stays whole. */
+  .part:has(>.one),.flip .part:has(>.one){margin-top:-56px}
   .svc .io{grid-template-columns:1fr;gap:8px}.svc .lbl{padding-top:0}
   .panels{padding:20px}
   .site-foot .top{grid-template-columns:1fr 1fr;gap:28px 20px}.site-foot .brand{grid-column:1/-1}
@@ -489,7 +503,7 @@ const mark = width => `<svg class="mark" viewBox="6 10 88 80" width="${width}" h
 const sun = size => `<div class="sun" aria-hidden="true" style="--s:${size}px"><i class="halo"></i><i class="rg"></i><i class="rg"></i><i class="rg"></i>${mark(size)}</div>`;
 // The welcome's lock (WelcomeLock in WelcomePages.swift): a soft paper lock with the logo whose shackle clicks shut.
 const LOCK = `<div class="lock" aria-hidden="true"><i class="halo"></i><svg class="shackle" viewBox="0 0 62 58"><defs><linearGradient id="lk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--sand)"/><stop offset="1" stop-color="color-mix(in srgb,var(--brown) 60%,transparent)"/></linearGradient></defs><path d="M5.5 58V31a25.5 25.5 0 0 1 51 0v27" fill="none" stroke="url(#lk)" stroke-width="11" stroke-linecap="round"/></svg><span class="body">${mark(46)}</span></div>`;
-// "Join the waitlist": the button opens an e-mail field; the address waits for the owner, who
+// The waitlist: an e-mail field with a "Get early access" button; the address waits for the owner, who
 // invites people into TestFlight from the app (src/testflight-waitlist.js).
 const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -501,7 +515,7 @@ const TURNSTILE = 'https://challenges.cloudflare.com';
 const WEB_ANALYTICS = 'https://static.cloudflareinsights.com';
 const turnstileScript = `<script src="${TURNSTILE}/turnstile/v0/api.js?render=explicit&onload=aurinTurnstile" async defer></script>`;
 const store = id => `<form class="wl" action="/waitlist" method="post" novalidate>
-<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" spellcheck="false" required><button type="submit" class="go" aria-label="Join the waitlist">${ARROW}</button></span>
+<span class="field"><label class="vh" for="wl-${id}">Your email</label><input id="wl-${id}" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@email.com" spellcheck="false" required><button type="submit" class="go">Get early access${ARROW}</button></span>
 <span class="ts" data-key="${TURNSTILE_SITE_KEY}"></span>
 <span class="done" role="status">${CHECK}<span>You’re on the list</span></span>
 <button type="button" class="share">${SHARE}<span>Know someone who trains? Share Aurin</span></button>
@@ -515,7 +529,7 @@ const store = id => `<form class="wl" action="/waitlist" method="post" novalidat
 const headScript = `<script>document.documentElement.classList.add('js')</script>`;
 const siteScript = `<script>(function(){var r=document.documentElement;
 var rm=matchMedia('(prefers-reduced-motion: reduce)'),still=rm.matches,IO='IntersectionObserver' in window;if(rm.addEventListener)rm.addEventListener('change',function(e){still=e.matches;});
-if(IO){var sh=document.querySelector('.site-head'),cta=[].slice.call(document.querySelectorAll('.wl,.mid .ghost')),seen=new Set();if(sh&&cta.length){var co=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)seen.add(e.target);else seen.delete(e.target);});sh.classList.toggle('away',!seen.size);});cta.forEach(function(el){co.observe(el);});}}
+if(IO){var sh=document.querySelector('.site-head'),cta=[].slice.call(document.querySelectorAll('.wl')),seen=new Set();if(sh&&cta.length){var co=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)seen.add(e.target);else seen.delete(e.target);});sh.classList.toggle('away',!seen.size);});cta.forEach(function(el){co.observe(el);});}}
 if(IO){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});},{rootMargin:'0px 0px -8% 0px'});
 document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});}else document.querySelectorAll('.reveal').forEach(function(el){el.classList.add('in');});
 // Each chapter's stage is drawn at one size and scaled to the window.
@@ -551,10 +565,11 @@ document.querySelectorAll('.chapter').forEach(function(ch){
 // Parts: the welcome's cards rise and move the first time a part comes into view (their last frame with reduced motion).
 document.querySelectorAll('.opener').forEach(function(a){var c=a.querySelector('.cards');if(still||!IO){D.last(c);a.classList.add('on');return;}D.first(c);
  new IntersectionObserver(function(es){var on=es[0].isIntersecting;a.classList.toggle('on',on);if(on&&!a._played){a._played=true;D.play(c);}},{threshold:.3}).observe(c);});
-// The pill at the bottom: shown from the first part to the end of the last one, its dot on the part in view.
+// The pill at the bottom: shown from the first part to the end of the last one, its dot on the part whose
+// opener has risen past the lowest fifth of the window (the watch part is short, so a half would skip it).
 // On a phone the pill steps aside while reading downwards and comes back on the way up.
-var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('kouc'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false,lastY=scrollY,down=false,narrow=matchMedia('(max-width:560px)');
- function where(){ticking=false;var mid=innerHeight*.5,i=-1,y=scrollY;if(Math.abs(y-lastY)>8){down=y>lastY;lastY=y;}acts.forEach(function(a,k){if(a.getBoundingClientRect().top<mid)i=k;});
+var an=document.querySelector('.acts-nav');if(an){var acts=[].slice.call(document.querySelectorAll('.opener')),endEl=document.getElementById('hodinky'),dots=[].slice.call(an.querySelectorAll('a')),title=an.querySelector('.an-t'),ticking=false,lastY=scrollY,down=false,narrow=matchMedia('(max-width:560px)');
+ function where(){ticking=false;var mid=innerHeight*.5,i=-1,y=scrollY;if(Math.abs(y-lastY)>8){down=y>lastY;lastY=y;}acts.forEach(function(a,k){if(a.getBoundingClientRect().top<innerHeight*.8)i=k;});
   var shown=i>=0&&endEl.getBoundingClientRect().bottom>mid&&!(narrow.matches&&down)&&!covers();an.classList.toggle('on',shown);if(i<0)i=0;
   an.style.setProperty('--i',i);title.textContent=dots[i].getAttribute('aria-label');dots.forEach(function(d,k){d.classList.toggle('done',k<=i);});}
  // The pill steps aside while a live demo card passes under it, so it never hides the demo's last rows.
@@ -655,7 +670,7 @@ addEventListener('keydown',function(e){if(!card.classList.contains('on'))return;
 
 // The share image (link previews on X, Facebook, LinkedIn, Slack, iMessage). The networks keep an image
 // for days by its URL, so ?v= goes up whenever og-en.jpg is rendered again (a JPEG: a tenth of the PNG's size).
-const SHARE_IMAGE = '/site/og-en.jpg?v=10';
+const SHARE_IMAGE = '/site/og-en.jpg?v=11';
 const SHARE_IMAGE_ALT = 'Aurin: A coach that knows how you slept. The Today screen with readiness 78.';
 
 function sitePage({title, description, lang, origin, path, body, czech=false, index=true, jsonLd=null, status=200}) {
@@ -701,14 +716,14 @@ ${headScript}
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-head"><nav class="pill-nav" aria-label="Main">
 <a class="logo" href="/">${mark(30)}<span translate="no">Aurin</span></a>
-<div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-sleep">Sleep</a><a href="/#a-coach">Coach</a></div>
-<a class="nav-cta" href="/#join">Join the waitlist</a>
+<div class="links"><a href="/#a-readiness">Readiness</a><a href="/#a-training">Training</a><a href="/#a-food">Nutrition</a><a href="/#a-sleep">Sleep</a><a href="/#a-coach">Coach</a><a href="/#a-watch">Watch</a></div>
+<a class="nav-cta" href="/#join">Get early access</a>
 </nav></header>
 ${body}
 <footer class="site-foot"><div class="wrap">
 <div class="top">
 <div class="brand">${mark(40)}<p>Train for how you feel today.</p></div>
-<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#connections">Connections</a></li></ul></nav>
+<nav aria-label="Aurin"><h3 translate="no">Aurin</h3><ul><li><a href="/#a-readiness">Readiness</a></li><li><a href="/#a-training">Training</a></li><li><a href="/#a-food">Nutrition</a></li><li><a href="/#a-sleep">Sleep</a></li><li><a href="/#a-coach">Coach</a></li><li><a href="/#a-watch">Apple Watch</a></li><li><a href="/#connections">Connections</a></li></ul></nav>
 <nav aria-label="Help"><h3>Help</h3><ul><li><a href="/support">Support</a></li><li><a href="/#faq">Questions</a></li><li><a href="/support#problem">Report a problem</a></li><li><a href="mailto:${CONTACT_EMAIL}">Write to us</a></li></ul></nav>
 <nav aria-label="Documents"><h3>Documents</h3><ul><li><a href="/privacy">Privacy Policy</a></li><li><a href="/terms">Terms of Use</a></li><li><a href="/health-data">Consumer Health Data</a></li><li lang="cs">Česky: <a href="/cs/privacy" hreflang="cs">Soukromí</a> · <a href="/cs/terms" hreflang="cs">Podmínky</a></li></ul></nav>
 </div>
@@ -788,35 +803,40 @@ export function overviewPage(request) {
   // where the screenshot cannot show the step (a moving screen, or one the sample day draws wrong).
   const scenes = [
     ['pripravenost', '', 'One number every morning.', 'HRV, resting heart rate and sleep, weighed against your own normal.', 'green', 'glow-today', [
-      ['readiness-parts', 'readyParts', 70, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal. The morning notification brings the same numbers and what to do today, weighing the days before and tomorrow’s workout.', 7000],
-      ['journal-impact', 'journal', 110, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000]]],
+      ['readiness-parts', 'readyOne', 330, 'See what’s behind it.', 'Sleep, resting heart rate and HRV each add or take points, against your own normal. The morning notification brings the same numbers and what to do today, weighing the days before and tomorrow’s workout.', 7000],
+      ['journal-impact', 'journalOne', 330, 'Learn what helps you.', 'The journal fills in what it can from your data. Tick off a sauna, a late meal or alcohol and see what each does to your mornings.', 7000]]],
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
     ['trenink', '', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon, a gran fondo or a triathlon from sprint to full distance, or one that takes you to 1,500 m of swimming without stopping, or let the AI plan the week of rides, runs, swims and gym; for a triathlon your newest sport gets more short sessions, with a short run straight after a ride that goes to your Apple Watch as one multisport workout, or apart, each at its own time. Give it the time you have each day, even two weeks in turn for shift work, and the plan fits it; a busy day in your calendar gets a shorter workout. Send a planned ride, run or pool swim to Intervals.icu or your Apple Watch, and a ride or run also to Wahoo or Zwift.', 9500]]],
+      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon, a gran fondo or a triathlon from sprint to full distance, or one that takes you to 1,500 m of swimming without stopping, or let the AI plan the week of rides, runs, swims and gym; for a triathlon your newest sport gets more short sessions, with a short run straight after a ride that goes to your Apple Watch as one multisport workout, or apart, each at its own time. Give it the time you have each day, even two weeks in turn for shift work, and the plan fits it; give each ride, run and swim a time of day before it goes to your calendar; a busy day in your calendar gets a shorter workout. Send a planned ride, run or pool swim to Intervals.icu or your Apple Watch, and a ride or run also to Wahoo or Zwift.', 9500]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
       ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Then start.', 7000]]],
     ['rezim', 'Training mode', 'Log every set in a tap.', 'Weights from last time, a rest timer and your summary.', 'green', 'glow-today', [
-      ['training-mode', 'tmTable', 140, 'Your weights, ready.', 'Every set is filled in with its weight, its reps and the plates for each side of the bar. Machine taken? Swap the exercise for a similar one.', 6000],
-      ['training-set', 'tmTick', 380, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets. Miss your reps or hit failure and the next set comes lighter; breeze through and it comes heavier.', 6000],
+      ['training-mode', 'tmOne', 220, 'Your weights, ready.', 'Every set is filled in with its weight, its reps and the plates for each side of the bar. Machine taken? Swap the exercise for a similar one.', 6000],
+      ['training-set', 'tickOne', 300, 'Tick off every set.', 'One tap marks a set done. A letter says how hard it was, from warm-up to failure and drop sets. Miss your reps or hit failure and the next set comes lighter; breeze through and it comes heavier.', 6000],
       ['training-rest', 'tmRest', 120, 'Rest on time.', 'The timer starts by itself, longer after squats than after curls, and stays on your lock screen. The last seconds count down with a vibration you feel even with the phone on the bench.', 13500],
       ['html:done', 'tmDone', 250, 'See what you lifted.', 'Time, sets, volume, new records and the muscles you tired when you finish, saved to Apple Health. Then say how it went.', 6000]]],
     ['vyziva', '', 'Eat for the day you’re having.', 'Your target moves with your training.', 'amber', 'glow-food', [
-      ['food-day', 'foodTarget', 120, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
+      ['food-day', 'foodOne', 220, 'A target that moves.', 'Train harder and you get more to eat. The coach says what that means for your next meal.', 7500],
       ['food-add', 'foodAdd', 100, 'Snap, scan or search.', 'Take a photo of your plate, scan a barcode or search, set the portion your way, and log drinks with one tap.', 8000],
       ['food-day', 'drinks', 330, 'Drink to your goal.', 'Tap a drink, or the whale itself for your usual glass. At today’s goal it blows its spout. Rather a bottle, a flower or an octopus? Pick one in Settings.', 9500]]],
     ['spanek', '', 'Every night, in detail.', 'From any watch or ring you wear.', 'indigo', 'glow-health', [
-      ['sleep', 'sleepNight', 300, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
-      ['sleep-need', 'sleepNeed', 150, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
+      ['sleep', 'sleepOne', 330, 'See how you slept.', 'Deep, REM and light sleep, when you fell asleep and when you woke up.'],
+      ['sleep-need', 'needOne', 220, 'Know what you need tonight.', 'Your sleep need grows with a hard day and with the debt from the week, and you see why.'],
       ['bedtime', 'dial', 40, 'Plan your bedtime.', 'Turn the moon and the sun on the dial, here too. Aurin tells you when to go to bed to wake up rested.', 9500],
       ['bedtime-goal', 'tonight', 220, 'Catch up when you need to.', 'Pick how much you want tonight: catch up, as usual or at least seven hours, and your bedtime follows.', 9000]]],
     ['kouc', '', 'Just ask. It knows your data.', 'It remembers what you tell it, and you can see and edit what it remembers.', 'green', 'glow-today', [
-      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500]]]];
+      ['html:coach', 'coachWeek', 520, 'Answers from your numbers.', 'Ask how to train today or what to eat before a workout, or send a photo of your trainer’s plan. When it proposes a workout or a plan for your race, confirm it and it lands in your plan.', 11500],
+      ['html:memory', 'coachMemory', 140, 'It remembers you.', 'Tell it about a sore knee, your schedule or a goal and it keeps that in mind. See everything it remembers, edit it or delete it.', 7000]]],
+    ['hodinky', '', 'Aurin on your wrist.', 'Today’s readiness when you raise your wrist, your gym sets without your phone, water in one tap. It comes with the iPhone app.', 'green', 'glow-today',
+      WATCH.map(([, title, text], i) => [`watch:${i}`, '', 0, title, text, 6000])]];
   // A chapter: the words, the phone with a screen and a lifted piece per step, and the steps. Sides
   // alternate. Steps of a chapter with more than one are buttons that switch the phone's screen.
   const chapter = ([id, eyebrow, h, p, tone, glow, list], n) => {
     const multi = list.length > 1;
+    // The watch chapter shows the watch app's screens on one watch, with no piece beside it.
+    const watch = list[0][0].startsWith('watch:');
     const subs = p.split('<span class="free">').map((t, j) => `<p class="sub${j ? ' free' : ''}">${t.replace('</span>', '')}</p>`).join('');
     const body = ([, , , title, text], i) => `${multi ? `<span class="n">0${i + 1}</span>` : ''}<span class="tt">${title}</span><span class="tx">${text}</span>`;
     const steps = list.map((x, i) => `<li class="step${i === 0 ? ' on' : ''}" style="--dur:${x[5] || 6500}ms" data-dur="${x[5] || 6500}">${multi
@@ -825,8 +845,9 @@ export function overviewPage(request) {
     return `<section id="${id}" class="chapter${n % 2 ? ' flip' : ''}${multi ? ' multi' : ''}${eyebrow ? '' : ' opens'}" style="--tone:var(--${tone});--glow:var(--${glow})"><div class="wrap ch">
 <div class="head reveal">${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ''}<h3 class="big">${h}</h3>${subs}</div>
 <div class="vis-wrap"><div class="vis"><div class="glow"></div>
-<div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}"${screen.startsWith('html:') ? ' aria-hidden="true"' : ''}>${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>
-${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
+${watch ? `<div class="wdev"><div class="aw-w">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}" aria-hidden="true">${WATCH[+screen.slice(6)][3]}</div>`).join('')}</div></div>`
+  : `<div class="device"><div class="bezel"><div class="screen">${list.map(([screen], i) => `<div class="scr${i === 0 ? ' on' : ''}"${screen.startsWith('html:') ? ' aria-hidden="true"' : ''}>${screen.startsWith('html:') ? SCREENS[screen.slice(5)] : shot(screen)}</div>`).join('')}</div></div></div>`}
+${list.filter(([, demo]) => demo).map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style="top:${top}px"${demo === 'dial' ? '' : ' aria-hidden="true"'}>${DEMOS[demo]}</div>`).join('')}
 </div></div>
 <div class="rail"><ol class="steps">${steps}</ol>${multi ? `<button type="button" class="hold"><svg class="icon pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5v14M15 5v14"/></svg><svg class="icon play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5z"/></svg><span>Pause</span></button>` : ''}</div>
 </div></section>`;
@@ -839,7 +860,8 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
     ['training', 'Training', 'Workouts built around your fatigue, muscles and equipment.', 'glow-training', ['trenink', 'posilovna', 'rezim', 'svaly']],
     ['food', 'Nutrition', 'Snap your plate or scan a barcode. AI fills in the values.', 'glow-food', ['vyziva']],
     ['sleep', 'Sleep', 'A bedtime from your alarm and the sleep you need tonight.', 'glow-health', ['spanek']],
-    ['coach', 'Coach', 'Ask anything. It knows your sleep, training and food.', 'glow-coach', ['kouc']]];
+    ['coach', 'Coach', 'Ask anything. It knows your sleep, training and food.', 'glow-coach', ['kouc']],
+    ['watch', 'Apple Watch', 'Your morning, your sets and your water, without taking out your phone.', 'glow-today', ['hodinky']]];
   const act = ([id, title, line, glow]) => `<section id="a-${id}" class="opener" style="--glow:var(--${glow})"><div class="wrap ac">
 <div class="head reveal"><h2 class="big">${title}</h2><p class="sub">${line}</p></div>
 <div class="cards" aria-hidden="true">${ACTS[id]}</div>
@@ -855,13 +877,6 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
 <div class="fig" data-base="/site/muscles/"><canvas width="640" height="1000" role="img" aria-label="Aurin’s 3D figure of the muscles: legs and glutes tired, chest and back recovering, the rest rested"></canvas><p class="hint">Drag to turn · tap a muscle</p><button type="button" class="bubble"><span class="txt"><span class="vh">Muscle: </span><b></b><span></span></span><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
 </div></section>
 <div class="muscle-card" role="dialog" aria-modal="true" aria-labelledby="mc-name"><div class="card"><button type="button" class="close" aria-label="Close">×</button><div class="zoom"></div><h3 id="mc-name"></h3><p class="state"></p></div></div>`;
-
-  // Apple Watch: the watch app's screens (built in site-demos.js, CI takes no watch screenshots), one per thing it does.
-  const watch = `<section id="apple-watch" class="watch"><div class="wrap">
-<div class="intro reveal"><div class="eyebrow">Apple Watch</div><h2 class="big">Aurin on your wrist.</h2><p class="sub">Today’s readiness when you raise your wrist, your gym sets without your phone, water in one tap.</p></div>
-<ul class="aw-list">${WATCH.map(([tone, title, text, screen]) => `<li class="reveal" style="--g:var(--${tone})"><div class="aw-w" aria-hidden="true">${screen}</div><h3>${title}</h3><p>${text}</p></li>`).join('')}</ul>
-<p class="aw-note">Comes with the iPhone app. Sets, water and your workout sync both ways.</p>
-</div></section>`;
 
   // Connections: what Aurin reads from each service and what it sends back, as the app's connect
   // sheet says it (SettingsConnectFlow.swift, SyncViews.swift). Each logo is the app's own file.
@@ -901,12 +916,11 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
   const flowPaths = kind => { const L = FLOW[kind]; return {
     into: services.map((x, i) => L.into(L.src(i), L.core)),
     out: senders.map((x, j) => L.out(L.core, L.dst(j)))}; };
-  // A chip can carry a shorter label than the panel (a third item). On the phone, a chip's anchor slides from
-  // where its service sits across the box (its left edge at the left column, its right edge at the right) to
-  // its middle at the mark, so chips at the edge stay inside; a chip from the first row shows once it is past
-  // the second row's names (late).
-  const travel = (d, items, cls, id, kind, x, late = false) => items.slice(0, 3).map(([name, label, short], k, all) =>
-    `<span class="pk ${cls} ${kind}${late ? ' late' : ''}" data-svc="${id}" style="offset-path:path('${d}');${kind === 'tall' ? `--a0:${cls === 'in' ? pct(x, FLOW.tall.w) : '50%'};--a1:${cls === 'in' ? '50%' : pct(x, FLOW.tall.w)};` : ''}animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s">${icon(name)}${short || label}</span>`).join('');
+  // Each thing carried travels its line as a dot (its name is in the panel below). On the phone, a dot's anchor
+  // slides from where its service sits across the box to its middle at the mark, so dots at the edge stay inside;
+  // a dot from the first row shows once it is past the second row's names (late).
+  const travel = (d, items, cls, id, kind, x, late = false) => items.slice(0, 3).map((item, k, all) =>
+    `<span class="pk ${cls} ${kind}${late ? ' late' : ''}" data-svc="${id}" style="offset-path:path('${d}');${kind === 'tall' ? `--a0:${cls === 'in' ? pct(x, FLOW.tall.w) : '50%'};--a1:${cls === 'in' ? '50%' : pct(x, FLOW.tall.w)};` : ''}animation-delay:${(-k * 4.4 / all.length - (id.length % 3) * .6).toFixed(2)}s"></span>`).join('');
   const layer = kind => { const L = FLOW[kind], P = flowPaths(kind);
     return `<svg class="lines ${kind}" viewBox="0 0 ${L.w} ${L.h}" aria-hidden="true">${services.map(({id}, i) => `<path data-svc="${id}" class="in" d="${P.into[i]}"/>`).join('')}${senders.map(({id}, j) => `<path data-svc="${id}" class="out" d="${P.out[j]}"/>`).join('')}</svg>
 <div class="pks ${kind}" aria-hidden="true">${services.map(({id, reads}, i) => travel(P.into[i], reads, 'in', id, kind, L.src(i)[0], kind === 'tall' && L.src(i)[1] < 100)).join('')}${senders.map(({id, sends}, j) => travel(P.out[j], sends, 'out', id, kind, L.dst(j)[0])).join('')}</div>`; };
@@ -931,7 +945,7 @@ ${layer('wide')}${layer('tall')}
     ['Do I need an Apple Watch?', 'No. Aurin works with any watch or ring that saves to Apple Health or Google Health, such as Apple Watch, Fitbit, Pixel Watch or Garmin. The Ultrahuman Ring, WHOOP and Wahoo connect directly.'],
     ['Which phones does Aurin run on?', 'Aurin is an iPhone app. Google Health data comes through your Google account, so a Fitbit or a Pixel Watch works with it too.'],
     ['What does it cost?', 'Nothing during testing. After the release, the coach, food from a photo and reviews come with Aurin Pro: CZK 199 a month or CZK 1,490 a year with the first week free, in your own currency in the App Store. Everything else stays free. Apple handles the purchase and cancelling, and in TestFlight you can try buying with Apple’s test purchases, which cost nothing.'],
-    ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from.'],
+    ['I wear more than one device. Which one counts?', 'For your nights, Aurin uses the device you wore most nights in the last 30 days, and the others only fill the nights it missed. Your day is put together hour by hour from whichever device measured that hour. You can also pick the source yourself in Settings → Data sources → Where to take data from, and under Health data see for each type where Aurin reads it from and sends it to, with a switch for each.'],
     ['What does the AI coach see?', 'Only the data the question needs, when you use an AI feature such as the coach or a food photo. It goes to OpenAI, which does not use it to train its models. <a href="/privacy">More in the privacy policy</a>.'],
     ['Where is my data and who sees it?', 'In Aurin’s database in Europe, encrypted. We never sell it or use it for ads. AI features get only what a question needs, and only once you allow them. <a href="/privacy">More in the privacy policy</a>.'],
     ['Can I delete my data?', 'Yes. In Settings → Privacy &amp; data you can download all your data or delete your account with everything in it.'],
@@ -963,11 +977,11 @@ ${layer('wide')}${layer('tall')}
 <div class="hero">
 <div class="wrap grid">
 <div class="copy">
-${sun(104)}
-<span class="kicker"><i></i>For iPhone · now in TestFlight</span>
+${sun(72)}
+<span class="kicker"><i></i>For iPhone · early access</span>
 <h1 aria-label="${headline}">${headline.split(' ').map((w, i) => `<span class="w${i >= SLANT ? ' it' : ''}" aria-hidden="true"><span style="--i:${i}">${w}</span></span>`).join(' ')}</h1>
 <p class="lede">Aurin reads your sleep, HRV and workouts from the watch or ring you wear, and every morning turns them into one number, one plan and one coach.</p>
-<div class="cta">${store('top')}<p class="note">We invite people to the test version in TestFlight. Testing costs nothing.</p></div>
+<div class="cta">${store('top')}<p class="note">Free early access on iPhone through TestFlight.</p></div>
 </div>
 <div class="stage"><div class="rig">
 <div class="glass g1" aria-hidden="true"><div class="k">HRV</div><div class="v">${day.hrv} ms</div><div class="d up">↑ ${day.hrv - day.hrvBaseline} ms above normal</div></div>
@@ -984,9 +998,6 @@ ${sun(104)}
 
 ${ACT_LIST.map(a => act(a) + '\n' + a[4].map(id => id === 'svaly' ? muscles : chapter(scenes.find(x => x[0] === id), scenes.findIndex(x => x[0] === id))).join('\n')).join('\n')}
 
-${watch}
-
-<section class="mid"><div class="wrap reveal"><p>Try it on your own mornings.</p><a class="ghost" href="#join">Join the waitlist ${ARROW}</a></div></section>
 ${actNav}
 
 <section id="connections" class="connect"><div class="wrap">
@@ -1448,6 +1459,7 @@ export function supportPage(request, {apple = false, email = false, open = false
 <li>Disconnecting stops Aurin from reading and writing data in that service. For Google, Aurin also gives up its access at Google. Disconnecting the Ultrahuman Ring, WHOOP or Wahoo also deletes the data Aurin got from it.</li>
 <li>You can also remove Aurin’s access in your Google Account: open <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>, choose Aurin and remove its access.</li>
 <li>When two of your devices measure the same thing, <strong>Where to take data from</strong> in Data sources decides which one Aurin uses for your nights and your days. <strong>Automatic</strong> picks it for you.</li>
+<li><strong>Health data</strong> in Data sources lists each type of data with where Aurin reads it from and where it sends it, each with a switch. Turning one off stops reading or sending from then on; what Aurin already has stays.</li>
 </ul>
 <h2>Managing your data</h2>
 <ul>

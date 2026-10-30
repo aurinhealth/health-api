@@ -3327,6 +3327,17 @@
 "dva týdny" = "two weeks";
 "podle odhadu" = "from the estimate";
 
+/* Why this workout in the gym day (GymWhyCard.swift) */
+"Proč tenhle trénink" = "Why this workout";
+"%@, podle tvého sportu" = "%@, from your sport";
+"Nové cviky" = "New exercises";
+"Jiné než %@" = "Different from %@";
+"Bolest" = "Pain";
+"První trénink" = "First workout";
+"Nová varianta" = "New variant";
+"Výskoky" = "Jumps";
+"Odlehčený týden" = "Deload week";
+"Šetřím nohy" = "Legs spared";
 /* Swimming */
 "%@ pauza" = "%@ rest";
 "Bazén" = "Pool";
@@ -3365,6 +3376,12 @@
 "Odhad: %@." = "Estimate: %@.";
 "Odhad času z tvých prahových hodnot, bez depa." = "Estimated from your thresholds, without transitions.";
 "Plavání týdně" = "Swims a week";
+
+/* Zdroje dat → Zdravotní data (SettingsHealthData.swift) */
+"Čte z" = "Reads from";
+"Posílá do" = "Sends to";
+"Vypnuté Aurin přestane číst. Co už má, zůstane." = "Off: Aurin stops reading it. What it already has stays.";
+"v tomhle iPhonu" = "on this iPhone";
 "Hned po sobě" = "Back to back";
 "Zvlášť" = "Separately";
 "Jak" = "How";

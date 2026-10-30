@@ -161,10 +161,74 @@ export async function signedInResponse(userId, env, body = { status: "ok" }) {
 
 // Moves the user's epoch on (every other device is signed out) and keeps the
 // caller signed in: the answer carries a fresh cookie.
-export async function signedOutElsewhere(db, userId, env, response) {
+export async function signedOutElsewhere(db, userId, env, response, request = null) {
+  const known = request ? await heldKnownDevice(request, env, db, userId) : false;
   await bumpSessionEpoch(db, userId);
   response.headers.append("Set-Cookie", await userSessionCookie(db, userId, sessionSecret(env)));
+  // A known device for e-mail codes stays one; the others lose it with the epoch.
+  if (known) {
+    const device = await knownDeviceCookie(db, env, userId);
+    if (device) response.headers.append("Set-Cookie", device);
+  }
   return response;
+}
+
+// The device an e-mail code sign-in happened on (kept by that device when it bumps the epoch): "<nonce>.<signature of the account, its session epoch, the address and the nonce>".
+// It exempts the device from the address's daily code limit and wrong-code lock
+// (email-login.js). Bumping the epoch (sign out everywhere, e-mail change, removing a passkey,
+// unlinking Apple ID, blocking) or deleting the account ends it everywhere but on the device that
+// made the change, and an address that later belongs to someone else never matches an older cookie.
+export const KNOWN_COOKIE = "aurin_known";
+const KNOWN_SECONDS = 365 * 24 * 60 * 60;
+// Read with the request: a missing account is compared against a dummy, so both take as long.
+const NO_OWNER = { id: 0, email: "", session_epoch: -1 };
+async function knownOwner(db, where, value) {
+  try {
+    return await db.prepare(`SELECT id, email, session_epoch FROM users WHERE ${where}=?`).bind(value).first();
+  } catch (error) {
+    console.error("Known device: account not read", error?.message);
+    return null;
+  }
+}
+const knownSignature = (env, owner, nonce) => signText("known-device:" + owner.id + ":" + (Number(owner.session_epoch) || 0) + ":" + owner.email + ":" + nonce, sessionSecret(env));
+
+export async function knownDeviceCookie(db, env, userId) {
+  const owner = await knownOwner(db, "id", Number(userId));
+  if (!owner?.email) return null;
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(16).padStart(2, "0")).join("");
+  return KNOWN_COOKIE + "=" + nonce + "." + await knownSignature(env, owner, nonce) + "; Path=/; Max-Age=" + KNOWN_SECONDS + "; HttpOnly; Secure; SameSite=Lax";
+}
+
+// Path=/ so the account routes that bump the epoch see it too. A browser may still hold one from
+// before with Path=/auth/email (and sends it first there), so up to three values are tried.
+function knownDeviceValues(request) {
+  return String(request.headers.get("Cookie") || "").split(/;\s*/).filter(c => c.startsWith(KNOWN_COOKIE + "=")).slice(0, 3).map(c => {
+    const [nonce, signature] = c.slice(KNOWN_COOKIE.length + 1).split(".");
+    return /^[0-9a-f]{24}$/.test(nonce || "") && /^[A-Za-z0-9_\-+/=]{16,128}$/.test(signature || "") ? { nonce, signature } : null;
+  }).filter(Boolean);
+}
+async function matchingKnown(env, owner, cookies) {
+  let found = null;
+  for (const cookie of cookies) if (timingSafeEqualString(cookie.signature, await knownSignature(env, owner, cookie.nonce))) found ||= cookie.nonce;
+  return found;
+}
+
+// The nonce when the request comes from a known device of the account that owns this address, else null.
+export async function knownDevice(request, env, email) {
+  const cookies = knownDeviceValues(request);
+  if (!cookies.length) return null;
+  const owner = await knownOwner(env.DB, "email", email);
+  const match = await matchingKnown(env, owner || NO_OWNER, cookies);
+  return owner ? match : null;
+}
+
+// Whether the signed-in caller holds a valid known-device cookie of this account, read before the
+// epoch changes: only such a device gets a new one, so a session alone never mints one.
+export async function heldKnownDevice(request, env, db, userId) {
+  const cookies = knownDeviceValues(request);
+  if (!cookies.length) return false;
+  const owner = await knownOwner(db, "id", Number(userId));
+  return Boolean(owner?.email) && Boolean(await matchingKnown(env, owner, cookies));
 }
 
 // Settings → Účet: POST /app/api/account/sign-out-everywhere.
@@ -173,7 +237,7 @@ export async function handleSignOutEverywhere(request, env, url, session) {
   if (request.method !== "POST") return Response.json({ message: L("Použij POST.", "Use POST.") }, { status: 405 });
   if (!session.signedIn || !session.user) return unauthorizedResponse();
   if (request.headers.get("Origin") !== url.origin) return Response.json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, { status: 403 });
-  return signedOutElsewhere(env.RAW_DB || env.DB, session.user.id, env, Response.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } }));
+  return signedOutElsewhere(env.RAW_DB || env.DB, session.user.id, env, Response.json({ status: "ok" }, { headers: { "Cache-Control": "no-store" } }), request);
 }
 
 // Whether the session is old enough for a fresh cookie (SESSION_REFRESH_SECONDS since it was issued).
