@@ -7,6 +7,7 @@ import { scopedDb } from '../src/tenancy.js';
 import { healthPointJson } from '../src/health-point-json.js';
 import { importIntervalsWeights } from '../src/weight-sync.js';
 import { KEEP_TYPE_SQL } from '../src/activity-type.js';
+import { BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE } from '../src/heart-rate-compaction.js';
 
 const source = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
 const schema = readFileSync(new URL('../staging/schema.sql', import.meta.url), 'utf8');
@@ -17,7 +18,7 @@ function setup() {
   raw.sqlite.exec(schema);
   const env = { DB: scopedDb(raw, 1), USER_ID: 1 };
   const afterSync = [], sinces = [];
-  const context = vm.createContext({ healthPointJson, KEEP_TYPE_SQL, crypto, googleInfo: (_type, p) => p.info, afterGoogleSync: async (_env, type, _points, opts) => { afterSync.push(type); sinces.push(opts?.since); return 0; } });
+  const context = vm.createContext({ healthPointJson, BUCKET_SECONDS, HEART_RATE_BUCKET_TYPE, KEEP_TYPE_SQL, crypto, googleInfo: (_type, p) => p.info, afterGoogleSync: async (_env, type, _points, opts) => { afterSync.push(type); sinces.push(opts?.since); return 0; } });
   for (const [start, end] of [
     ['function pointStatement(', '// GOOGLE NUTRITION API'],
     ['async function saveGooglePointsBatch(', 'async function syncGoogleRecent(']
@@ -142,6 +143,9 @@ test('Google heart rate is stored as 5-minute rows; a re-read writes nothing, a 
   assert.deepEqual(rows(), expected);
   // Samples that reached Google late: the bucket read again with more samples replaces it.
   await context.saveGooglePointsBatch(env, 'google-wearables', 'heart-rate', [...points, sample('2026-10-10T06:09:59Z', 110)]);
+  assert.deepEqual(rows()[1].slice(3), [80.2, 151, 80, 110]);
+  // A part of the bucket from another page cut (other values inside it) never replaces the whole.
+  await context.saveGooglePointsBatch(env, 'google-wearables', 'heart-rate', [sample('2026-10-10T06:06:00Z', 150), sample('2026-10-10T06:07:00Z', 150)]);
   assert.deepEqual(rows()[1].slice(3), [80.2, 151, 80, 110]);
   // A workout's own minutes keep every sample.
   await context.saveGooglePointsBatch(env, 'google-wearables', 'heart-rate', [{ name: 'w1', info: { sample: '2026-10-10T07:00:00Z', start: null, end: null, value: 120, unit: 'bpm' } }], { raw: true });

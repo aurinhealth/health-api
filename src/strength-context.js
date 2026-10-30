@@ -1,4 +1,4 @@
-import { HEART_RATE_COMPACT_TYPES } from "./heart-rate-compaction.js";
+import { HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE } from "./heart-rate-compaction.js";
 import {trainingSetup} from './onboarding.js';
 import { getAthleteState } from './athlete-state.js';
 import { isHardSession } from './session-intensity.js';
@@ -108,10 +108,14 @@ export async function d1Recovery(env, startDate, endDate) {
   const from = `${startDate}T00:00:00`, to = `${endDate}T23:59:59`;
   // The user's data types by skipping through the index one type at a time
   // (~30 rows read); SELECT DISTINCT read every row, heart rate included (1.3M).
-  const types = ((await env.DB.prepare(`WITH RECURSIVE t(data_type) AS (SELECT MIN(data_type) FROM health_datapoints WHERE user_id = ?
+  let types = ((await env.DB.prepare(`WITH RECURSIVE t(data_type) AS (SELECT MIN(data_type) FROM health_datapoints WHERE user_id = ?
       UNION ALL SELECT (SELECT MIN(data_type) FROM health_datapoints WHERE user_id = ? AND data_type > t.data_type) FROM t WHERE t.data_type IS NOT NULL)
     SELECT data_type FROM t WHERE data_type IS NOT NULL`).bind(env.USER_ID, env.USER_ID).all()).results || [])
-    .map(r => r.data_type).filter(t => RECOVERY_TYPE.test(String(t || "")) && !HEART_RATE_COMPACT_TYPES.includes(t));
+    .map(r => r.data_type).filter(t => RECOVERY_TYPE.test(String(t || "")) && t !== HEART_RATE_HOUR_TYPE);
+  // Google heart rate is stored as 5-minute rows; the raw samples left are a
+  // workout's own, so the newest of them is not the heart rate of the moment.
+  // The 5-minute row is read instead, under the same name.
+  if (types.includes(HEART_RATE_BUCKET_TYPE)) types = types.filter(t => t !== "heart-rate" && t !== "heart_rate");
   if (!types.length) return {};
   const google = "data_type = ? AND source_family LIKE 'google%'";
   const latest = await env.DB.batch(types.flatMap(type => [
@@ -139,8 +143,9 @@ export async function d1Recovery(env, startDate, endDate) {
     const r = reads[k++]?.results?.[0], avg = baseline ? reads[k++]?.results?.[0] : null;
     if (!r) continue;
     let payload = null; try { payload = JSON.parse(r.payload_json || "null"); } catch {}
-    out[type] = [{ sampleTime: r.sample_time, startTime: r.start_time, endTime: r.end_time, value: r.value_numeric, unit: r.value_unit, payload }];
-    if (avg?.c >= 5 && Number(avg.v) > 0) out[type][0].baseline = Math.round(Number(avg.v) * 10) / 10;
+    const key = type === HEART_RATE_BUCKET_TYPE ? "heart-rate" : type;
+    out[key] = [{ sampleTime: r.sample_time, startTime: r.start_time, endTime: r.end_time, value: r.value_numeric, unit: r.value_unit, payload }];
+    if (avg?.c >= 5 && Number(avg.v) > 0) out[key][0].baseline = Math.round(Number(avg.v) * 10) / 10;
   }
   return out;
 }

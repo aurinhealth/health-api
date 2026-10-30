@@ -17,7 +17,20 @@ export const HEART_RATE_BUCKET_TYPE = 'heart-rate-5min';
 export const HEART_RATE_HOUR_TYPE = 'heart-rate-1h';
 // Every compacted heart-rate type, for the readers that fall back to them.
 export const HEART_RATE_COMPACT_TYPES = [HEART_RATE_BUCKET_TYPE, HEART_RATE_HOUR_TYPE];
-const BUCKET_SECONDS = 300;
+export const BUCKET_SECONDS = 300;
+// The same 5 minutes from the raw samples and from a stored row: the one made of
+// more samples counts. A workout keeps its own samples, which inside it are the
+// same as the stored row's, while at its edges they cover only part of the 5
+// minutes. Rows: { bucket (seconds), avg, min, max, n }.
+export function pickBuckets(raw, stored) {
+  const out = new Map();
+  for (const r of stored) if (r && Number.isFinite(Number(r.bucket))) out.set(Number(r.bucket), r);
+  for (const r of raw) {
+    const have = out.get(Number(r.bucket));
+    if (!have || Number(r.n) >= Number(have.n || 1)) out.set(Number(r.bucket), r);
+  }
+  return [...out.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => r);
+}
 const WINDOW_MS = 6 * 3600 * 1000;
 
 const bpm = "CAST(COALESCE(value_numeric, json_extract(payload_json, '$.heartRate.beatsPerMinute')) AS REAL)";
