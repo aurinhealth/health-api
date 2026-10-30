@@ -739,16 +739,37 @@ final class SnapshotTests: XCTestCase {
         XCTAssertEqual(parts[0].drinks.map(\.id), [11, 12])
     }
 
-    /// The offer: the app playing in the phone at moments of the tour, and
-    /// the list with the plans.
+    /// The offer in night violet: the opening at moments of its animation,
+    /// the offer with its phones, all plans and the free week.
     func testPaywallTour() throws {
-        for time in [0.6, 2.9, 5.0, 7.6, 10.2, 12.0, 14.6] {
+        for time in [0.5, 2.0, 3.6, 5.0, 8.0] {
             try render("paywall-\(Int(time * 10))", height: 844) { PaywallView(close: {}, frozenTime: time, store: ProStore()) }
         }
         try render("paywall-plans", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore()) }
-        // A new Apple ID: the free-week switch under the plans, then the week as a timeline.
-        try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 1, store: ProStore(trialEligible: true)) }
+        try render("paywall-plans-trial", height: 844) { PaywallView(close: {}, frozenTime: 5.5, step: 1, store: ProStore(trialEligible: true)) }
         try render("paywall-free-week", height: 844) { PaywallView(close: {}, frozenTime: 3, step: 2, store: ProStore(trialEligible: true)) }
+        try render("paywall-all-plans", height: 700) {
+            AllProPlans(offers: ProOffer.all(ProStore(trialEligible: true)), selected: .constant(.yearOnce), buying: false, start: {}, redeem: {}, restore: {})
+                .background(Night.bottom)
+        }
+    }
+
+    func testFreeWeekDates() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Prague"))
+        let bought = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 10, day: 29, hour: 21)))
+        let first = PaywallView.firstPayment(from: bought, calendar: calendar)
+        XCTAssertEqual(calendar.dateComponents([.month, .day], from: first), DateComponents(month: 11, day: 5), "Thursday to Thursday")
+        // The reminder (ProStore, day 5) comes before the first payment.
+        XCTAssertLessThan(try XCTUnwrap(ProStore.trialReminderDate(purchased: bought, calendar: calendar)), first)
+    }
+
+    @MainActor
+    func testOffersWithoutMonthlyPayments() throws {
+        // No "Monthly with 12-Month Commitment" here (older iOS, the US, the simulator): yearly and monthly.
+        let plans = ProOffer.main(ProStore(trialEligible: true))
+        XCTAssertEqual(plans.map(\.kind), [.yearOnce, .monthly])
+        XCTAssertEqual(plans.map(\.trial), [true, false], "the free week only on the yearly plan")
     }
 
     /// Training plans: before the start, the running plan, a week and the result.
