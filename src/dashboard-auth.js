@@ -34,6 +34,7 @@ const PUBLIC_PATHS = new Set([
   "/auth/google/callback",
   "/auth/app/session",
   "/auth/app/return",
+  "/auth/app/connected",
   "/auth/app/connect",
   "/auth/app/apple",
   "/auth/passkey/options",

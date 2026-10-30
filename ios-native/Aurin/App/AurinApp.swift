@@ -22,7 +22,7 @@ struct AurinApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                // loadwise://open/sleep from the home-screen widgets.
+                // aurin://open/sleep from the home-screen widgets.
                 .onOpenURL { model.handle($0) }
                 // A planned session found in Spotlight (AurinSpotlight.swift).
                 .onContinueUserActivity(CSSearchableItemActionType) { activity in

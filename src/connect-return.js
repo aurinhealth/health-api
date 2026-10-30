@@ -1,10 +1,18 @@
-// Where the user lands after connecting a service on the provider's own page:
-// the iPhone app, through loadwise://connected?event=…, which closes its browser sheet.
-const EVENTS = new Set(["google", "google-cancelled", "intervals", "intervals-cancelled", "intervals-failed", "ultrahuman", "ultrahuman-cancelled", "ultrahuman-failed", "whoop", "whoop-cancelled", "whoop-failed", "wahoo", "wahoo-cancelled", "wahoo-failed"]);
+import { SITE_ORIGIN } from "./app-origin.js";
 
-// Only the iPhone app starts a connection (return=native); kept with the OAuth state.
-export function connectReturn() {
-  return "native";
+// Where the user lands after connecting a service on the provider's own page:
+// the iPhone app's browser sheet, which closes on https://aurin.health/auth/app/connected?event=….
+// iOS hands that address only to the Aurin app (its associated domain), on the test server too.
+// Builds from before 2026-11 wait for loadwise://connected instead; they start with
+// return=native (native-connect.js) and get that until they are gone.
+const EVENTS = new Set(["expired", "google", "google-cancelled", "intervals", "intervals-cancelled", "intervals-failed", "ultrahuman", "ultrahuman-cancelled", "ultrahuman-failed", "whoop", "whoop-cancelled", "whoop-failed", "wahoo", "wahoo-cancelled", "wahoo-failed"]);
+
+export const CONNECTED_PATH = "/auth/app/connected";
+
+// Only the iPhone app starts a connection: return=app, or return=native from an
+// older build; kept with the OAuth state.
+export function connectReturn(request) {
+  return new URL(request.url).searchParams.get("return") === "native" ? "native" : "app";
 }
 
 // The OAuth state cookie: the state, where to return and the user who started, so the
@@ -32,5 +40,6 @@ export function startedBy(uid, env) {
 }
 
 export function connectReturnUrl(back, event) {
-  return "loadwise://connected?event=" + (EVENTS.has(event) ? event : "unknown");
+  const query = "?event=" + (EVENTS.has(event) ? event : "unknown");
+  return back === "native" ? "loadwise://connected" + query : SITE_ORIGIN + CONNECTED_PATH + query;
 }

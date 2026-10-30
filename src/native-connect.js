@@ -10,10 +10,13 @@
 //    sign the reader in as that user and put their health data in the sender's
 //    account (pentest 2026-10-25, L4), so such a link only expires. A browser
 //    already signed in as the ticket's user also continues. Each ticket works once,
-// 3. the provider's callback ends at loadwise://connected?event=…, which
-//    closes the sheet (connect-return.js).
+// 3. the provider's callback ends at https://aurin.health/auth/app/connected?event=…,
+//    which closes the sheet (connect-return.js). A build from before 2026-11
+//    (no X-Aurin-Api header) gets loadwise://connected, which it waits for.
 import { signText, userSessionCookie, sessionSecret, timingSafeEqualString } from "./dashboard-auth.js";
 import { L, lang } from "./lang.js";
+import { APP_API_HEADER } from "./app-version.js";
+import { connectReturnUrl, CONNECTED_PATH } from "./connect-return.js";
 
 const TICKET_SECONDS = 120;
 // "google-extra": the optional Google scopes (writing weight and workouts).
@@ -22,9 +25,10 @@ const PROVIDERS = new Set(["google", "google-extra", "intervals", "ultrahuman", 
 const b64 = bytes => { let s = ""; for (const b of bytes) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
 const unb64 = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), c => c.charCodeAt(0));
 
-export async function connectTicket(uid, provider, secret, now = Date.now()) {
+// back: "app" (https return) or "native" (an older build's loadwise:// return).
+export async function connectTicket(uid, provider, secret, now = Date.now(), back = "app") {
   const id = b64(crypto.getRandomValues(new Uint8Array(12)));
-  const payload = b64(new TextEncoder().encode(JSON.stringify({ uid, p: provider, exp: Math.floor(now / 1000) + TICKET_SECONDS, id })));
+  const payload = b64(new TextEncoder().encode(JSON.stringify({ uid, p: provider, exp: Math.floor(now / 1000) + TICKET_SECONDS, id, ...(back === "native" ? { r: "native" } : {}) })));
   return payload + "." + await signText("app-connect." + payload, secret);
 }
 
@@ -36,7 +40,7 @@ export async function readConnectTicket(ticket, secret, now = Date.now()) {
   try { data = JSON.parse(new TextDecoder().decode(unb64(payload))); } catch { return null; }
   const uid = Number(data?.uid);
   if (!Number.isInteger(uid) || uid <= 0 || !PROVIDERS.has(data?.p) || !(Number(data?.exp) > Math.floor(now / 1000))) return null;
-  return { uid, provider: data.p, id: typeof data.id === "string" ? data.id : null, exp: Number(data.exp) };
+  return { uid, provider: data.p, id: typeof data.id === "string" ? data.id : null, exp: Number(data.exp), back: data.r === "native" ? "native" : "app" };
 }
 
 // Marks the ticket used (auth_challenges, purpose app-connect); false when it was used before.
@@ -50,7 +54,7 @@ async function useTicket(db, ticket) {
   return Number(used?.meta?.changes) > 0;
 }
 
-const expired = () => new Response(null, { status: 302, headers: { Location: "loadwise://connected?event=expired", "Cache-Control": "no-store" } });
+const expired = (back = "app") => new Response(null, { status: 302, headers: { Location: connectReturnUrl(back, "expired"), "Cache-Control": "no-store" } });
 
 // The app's language rides along from /app/api/connect/start (hl=en|cs): the
 // browser's own language can differ from the one chosen in Aurin.
@@ -58,9 +62,9 @@ const pageLang = (url, request) => ["en", "cs"].includes(url.searchParams.get("h
   : /^en\b/i.test(request.headers.get("Accept-Language") || "") ? "en" : "cs";
 
 async function continueToProvider(env, ticket, hl) {
-  if (!(await useTicket(env.DB, ticket))) return expired();
+  if (!(await useTicket(env.DB, ticket))) return expired(ticket.back);
   // Google's data policy: the app showed its own disclosure right before this (consent=1).
-  const next = { google: "/oauth/google?consent=1&return=native", "google-extra": "/oauth/google?consent=1&extra=1&return=native", ultrahuman: "/oauth/ultrahuman?return=native", whoop: "/oauth/whoop?return=native", wahoo: "/oauth/wahoo?return=native" }[ticket.provider] || "/oauth/intervals?return=native";
+  const next = { google: "/oauth/google?consent=1&return=" + ticket.back, "google-extra": "/oauth/google?consent=1&extra=1&return=" + ticket.back, ultrahuman: "/oauth/ultrahuman?return=" + ticket.back, whoop: "/oauth/whoop?return=" + ticket.back, wahoo: "/oauth/wahoo?return=" + ticket.back }[ticket.provider] || "/oauth/intervals?return=" + ticket.back;
   // Google shows its consent page in the app's language (hl).
   const location = ticket.provider.startsWith("google") ? next + "&hl=" + hl : next;
   const headers = new Headers({ Location: location, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
@@ -74,7 +78,7 @@ export async function handleNativeConnect(request, env, url, { user, signedIn })
     if (request.headers.get("Origin") !== url.origin) return Response.json({ message: L("Neplatný původ požadavku.", "Invalid request origin.") }, { status: 403 });
     const { provider } = await request.json().catch(() => ({}));
     if (!PROVIDERS.has(provider)) return Response.json({ message: L("Neznámá služba.", "Unknown service.") }, { status: 400 });
-    const ticket = await connectTicket(user.id, provider, sessionSecret(env));
+    const ticket = await connectTicket(user.id, provider, sessionSecret(env), Date.now(), request.headers.has(APP_API_HEADER) ? "app" : "native");
     return Response.json({ status: "ok", url: url.origin + "/auth/app/connect?ticket=" + encodeURIComponent(ticket) + "&hl=" + lang() }, { headers: { "Cache-Control": "no-store" } });
   }
   if (url.pathname === "/auth/app/connect" && request.method === "GET") {
@@ -86,7 +90,11 @@ export async function handleNativeConnect(request, env, url, { user, signedIn })
     if (signedIn && Number(user?.id) === ticket.uid) return continueToProvider(env, ticket, hl);
     // Opened by the app's own sheet (Auth.swift): nobody else's link can add this header.
     if (request.headers.get("X-Aurin-Connect") === ticketText) return continueToProvider(env, ticket, hl);
-    return expired();
+    return expired(ticket.back);
+  }
+  // Seen only when the app's browser sheet did not catch the address (it never carries a secret).
+  if (url.pathname === CONNECTED_PATH && (request.method === "GET" || request.method === "HEAD")) {
+    return new Response("<!doctype html><html lang=\"" + L("cs", "en") + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Aurin</title></head><body style=\"font-family:system-ui;max-width:560px;margin:50px auto;padding:24px;line-height:1.5;background:#0a0d12;color:#e8edf5\"><h1>" + L("Pokračuj v aplikaci", "Continue in the app") + "</h1><p>" + L("Vrať se do aplikace Aurin. Pokud se nic nestane, aktualizuj Aurin na nejnovější verzi.", "Go back to the Aurin app. If nothing happens, update Aurin to the latest version.") + "</p></body></html>", { status: 200, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex" } });
   }
   return null;
 }

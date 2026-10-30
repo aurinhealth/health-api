@@ -443,7 +443,7 @@ ${muscles.length ? `<div class="bars">${muscles.map((name, i) => `<div><i class=
 ${endurance ? intervalGraph(template) : ""}
 <ol class="card">${list}</ol>
 <p class="note">${endurance ? t(share.sport === "swim" ? "Tempo na 100 m ti aplikace přepočte podle tvého CSS." : share.sport === "run" ? "Tempo ti aplikace přepočte podle tvého prahového tempa." : "Watty ti aplikace přepočte podle tvého FTP.", share.sport === "swim" ? "The app turns the paces per 100 m into yours from your CSS." : share.sport === "run" ? "The app turns the paces into yours from your threshold pace." : "The app turns the watts into yours from your FTP.") : t("Váhy ti aplikace navrhne podle tvých vlastních tréninků a toho, jak jsi odpočatý.", "The app suggests the weights from your own workouts and how rested you are.")}</p>
-<a class="button" id="open" href="loadwise://open/share/${share.id}">${t("Otevřít v Aurinu", "Open in Aurin")}</a>
+<a class="button" id="open" href="aurin://open/share/${share.id}">${t("Otevřít v Aurinu", "Open in Aurin")}</a>
 <p class="note" id="noapp" hidden>${store ? `<a href="${store}">${t("Stáhni si Aurin z App Store", "Get Aurin on the App Store")}</a>` : t("Aurin bude brzy v App Store.", "Aurin is coming soon to the App Store.")}</p>${share.sport === "ride" ? `
 <a class="button ghost" href="/t/${share.id}/workout.zwo">${t("Stáhnout .zwo pro Zwift", "Download .zwo for Zwift")}</a>` : ""}`;
   // Without the app the scheme does nothing: the page stays, so it shows the way to the app.

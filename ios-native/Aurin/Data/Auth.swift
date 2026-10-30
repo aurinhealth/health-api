@@ -53,13 +53,14 @@ final class AuthService: NSObject, ASWebAuthenticationPresentationContextProvidi
     }
 
     /// Connects Google or Intervals.icu: the provider's page in the browser
-    /// sheet, back at loadwise://connected?event=… (src/connect-return.js).
+    /// sheet, back at https://aurin.health/auth/app/connected?event=…, which only
+    /// this app can catch, like the sign-in (src/connect-return.js).
     func connect(provider: String) async throws -> String {
         let link = try await api.connectLink(provider: provider)
         // The ticket again as a header: without it the server lets nobody in, so a
         // ticket link sent to someone else expires (src/native-connect.js).
         let ticket = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "ticket" })?.value
-        let callback = try await openBrowser(link, callback: .customScheme("loadwise"), headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
+        let callback = try await openBrowser(link, callback: .https(host: "aurin.health", path: "/auth/app/connected"), headers: ticket.map { ["X-Aurin-Connect": $0] } ?? [:])
         return URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "event" })?.value ?? "unknown"
     }
 

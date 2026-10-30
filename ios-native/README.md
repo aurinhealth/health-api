@@ -65,7 +65,7 @@ web app (`/app/api/today` for the Today screen), so the numbers match.
 
 ## Version check
 
-Every request carries `X-Loadwise-Api: <APIClient.apiLevel>`. When the server
+Every request carries `X-Aurin-Api: <APIClient.apiLevel>`. When the server
 needs a newer app (`MIN_APP_API` in `src/app-version.js`) it answers 426 and
 the app shows "Je potřeba nová verze" instead of the screens. Raise both
 numbers in the same pull request, only for changes that break what installed

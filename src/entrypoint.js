@@ -2721,7 +2721,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const apiKey = String(env.INTERVALS_API_KEY || "");
       // Without Intervals.icu the load comes from the watch's workouts and the gym (training-load.js);
       // a failed read answers with an error below, which the callers' cache does not keep.
-      if (!apiKey) return Response.json({status:"ok",source:"loadwise",connected:false,days,wellness:await ownFitness(env,from,to)},{headers:{"Cache-Control":"no-store"}});
+      if (!apiKey) return Response.json({status:"ok",source:"aurin",connected:false,days,wellness:await ownFitness(env,from,to)},{headers:{"Cache-Control":"no-store"}});
       const auth = intervalsAuthorization(apiKey);
       const target = "https://intervals.icu/api/v1/athlete/0/wellness?oldest="+encodeURIComponent(from)+"&newest="+encodeURIComponent(to);
       const response = await intervalsReads(env,ctx)(target,{headers:{Authorization:auth,Accept:"application/json"}});

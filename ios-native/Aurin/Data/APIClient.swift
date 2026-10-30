@@ -35,7 +35,7 @@ enum APIError: LocalizedError, Equatable {
 /// this run of the app and SessionKeychain keeps in the Keychain.
 final class APIClient: @unchecked Sendable {
     static let sessionCookie = "pfd_session"
-    /// The version of the server's API this app reads, sent as X-Loadwise-Api.
+    /// The version of the server's API this app reads, sent as X-Aurin-Api.
     /// Raise it together with MIN_APP_API in src/app-version.js when a server
     /// change breaks what installed apps expect; older apps then ask for an update.
     static let apiLevel = 1
@@ -789,7 +789,7 @@ final class APIClient: @unchecked Sendable {
         request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Time-Zone")
         request.setValue(L10n.language, forHTTPHeaderField: "X-Interface-Language")
         request.setValue(Units.imperial ? "imperial" : "metric", forHTTPHeaderField: "X-Units")
-        request.setValue(String(Self.apiLevel), forHTTPHeaderField: "X-Loadwise-Api")
+        request.setValue(String(Self.apiLevel), forHTTPHeaderField: "X-Aurin-Api")
         // Writes with the session cookie must come from the site's own origin.
         if method != "GET" && (path.hasPrefix("/app/") || path.hasPrefix("/auth/")) {
             request.setValue(baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")), forHTTPHeaderField: "Origin")

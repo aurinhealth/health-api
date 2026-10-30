@@ -10,7 +10,7 @@ final class GoogleSignInCallbackTests: XCTestCase {
         let callback = AuthService.signInCallback
         XCTAssertTrue(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/return?token=abc.def"))))
         XCTAssertTrue(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/app/return?error=cancelled"))))
-        XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "loadwise://auth?token=abc.def"))))
+        XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "aurin://auth?token=abc.def"))))
         XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "https://aurin.health/auth/google/callback?code=x"))))
         XCTAssertFalse(callback.matchesURL(try XCTUnwrap(URL(string: "https://evil.example/auth/app/return?token=abc.def"))))
     }
