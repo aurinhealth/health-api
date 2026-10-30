@@ -48,6 +48,7 @@ struct SettingsMenu: View {
     var signOut: () -> Void = {}
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var close
+    @State private var calendarStatus = CalendarSettingsView.status
 
     var body: some View {
         SettingsPage(title: "Nastavení") {
@@ -108,6 +109,10 @@ struct SettingsMenu: View {
                                     .accessibilityLabel("Připojit znovu")
                             }
                         }
+                }
+                SettingsDivider()
+                NavigationLink { CalendarSettingsView(onChange: { calendarStatus = CalendarSettingsView.status }) } label: {
+                    SettingsRow(icon: SettingsIcon(systemImage: "calendar", color: Palette.amber), title: "Kalendář", value: calendarStatus)
                 }
                 SettingsDivider()
                 NavigationLink { PrivacySettingsView() } label: {

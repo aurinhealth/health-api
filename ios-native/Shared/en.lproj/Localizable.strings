@@ -3290,3 +3290,8 @@
 "Kouč a fotky jídla posílají jen to, co otázka potřebuje. OpenAI se na nich neučí." = "The coach and food photos send only what the question needs. OpenAI doesn’t train on it.";
 "Stáhneš je, nebo smažeš" = "Yours to take or delete";
 "Všechno si stáhneš nebo smažeš účet se všemi daty, přímo tady." = "Download everything or delete your account with all its data, right here.";
+"Čte a zapisuje" = "Read and write";
+"Čte" = "Read";
+"Plán týdne a Aktivita dne se vejdou do volného času" = "The week plan and Activity of the day fit your free time";
+"Tréninky, které v Aurinu naplánuješ, se objeví v kalendáři" = "Workouts you plan in Aurin appear in the calendar";
+"Počítají se i kalendáře Google, Outlook a iCloud přidané v iPhonu (Nastavení iOS → Aplikace → Kalendář → Účty). Aurin posílá jen volné minuty na každý den, nikdy tvoje události." = "Google, Outlook and iCloud calendars added on your iPhone count too (iOS Settings → Apps → Calendar → Calendar Accounts). Aurin sends only the free minutes per day, never your events.";
