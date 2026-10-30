@@ -1,23 +1,28 @@
 import SwiftUI
 
-// MARK: - Own rides and runs (Moje tréninky)
+// MARK: - Own rides, runs and swims (Moje tréninky)
 
-/// Zone presets of the editor, as % of FTP or of threshold pace (the same as
-/// src/endurance-templates.js ZONES).
+/// Zone presets of the editor, as % of FTP, of threshold pace or of CSS (the
+/// same as src/endurance-templates.js ZONES).
 enum EnduranceZones {
     static func all(_ sport: String) -> [(id: String, low: Int, high: Int)] {
-        sport == "run"
-            ? [("Z1", 70, 77), ("Z2", 78, 88), ("Z3", 89, 95), ("Z4", 96, 101), ("Z5", 102, 110)]
-            : [("Z1", 45, 55), ("Z2", 56, 75), ("Z3", 76, 87), ("SS", 88, 93), ("Z4", 95, 105), ("Z5", 106, 120)]
+        switch sport {
+        case "run": return [("Z1", 70, 77), ("Z2", 78, 88), ("Z3", 89, 95), ("Z4", 96, 101), ("Z5", 102, 110)]
+        case "swim": return [("Z1", 80, 89), ("Z2", 90, 95), ("Z3", 96, 98), ("Z4", 99, 102), ("Z5", 103, 110)]
+        default: return [("Z1", 45, 55), ("Z2", 56, 75), ("Z3", 76, 87), ("SS", 88, 93), ("Z4", 95, 105), ("Z5", 106, 120)]
+        }
     }
 
     static func name(_ sport: String, _ step: EnduranceStep) -> String {
+        if step.isRest { return L10n.tr("Pauza") }
         let mid = Double(step.low + step.high) / 2
         return all(sport).first { mid >= Double($0.low) - 0.5 && mid <= Double($0.high) + 0.5 }?.id ?? (mid < 50 ? "Z1" : "Z5+")
     }
 
-    /// "15 min", "4:30 min" or "2 km".
+    /// "15 min", "4:30 min", "2 km", "100 m" or "20 s".
     static func length(_ step: EnduranceStep) -> String {
+        if let meters = step.meters { return Fmt.int(Double(meters)) + " m" }
+        if step.isRest { return Fmt.int(Double(step.seconds ?? 0)) + " s" }
         if let km = step.km { return Units.distanceText(km, digits: km < 10 ? 1 : 0) }
         let s = step.seconds ?? 0
         return s % 60 == 0 ? Fmt.duration(s / 60) : "\(s / 60):" + String(format: "%02d", s % 60) + " min"
@@ -25,7 +30,12 @@ enum EnduranceZones {
 
     /// "88–93 % · 229–242 W" or "78–88 % · 5:40–6:10 /km".
     static func target(_ sport: String, _ step: EnduranceStep, _ athlete: AthleteThresholds) -> String {
+        if step.isRest { return L10n.tr("u stěny") }
         let percent = step.low == step.high ? "\(step.low)" + Fmt.percentSign : "\(step.low)–\(step.high)" + Fmt.percentSign
+        if sport == "swim" {
+            guard let css = athlete.swimCss else { return percent + " CSS" }
+            return percent + " · " + ZonesSettingsView.pace(css * 100 / Double(step.high)) + "–" + ZonesSettingsView.pace(css * 100 / Double(step.low)) + " /100 m"
+        }
         if sport == "run", let pace = athlete.runThresholdPace {
             return percent + " · " + ZonesSettingsView.pace(Units.pace(pace * 100 / Double(step.high))) + "–" + ZonesSettingsView.pace(Units.pace(pace * 100 / Double(step.low))) + " " + Units.paceUnit
         }
@@ -79,15 +89,19 @@ struct EnduranceEditorSheet: View {
                         Picker("Sport", selection: $sport) {
                             Text("Kolo").tag("ride")
                             Text("Běh").tag("run")
+                            Text("Plavání").tag("swim")
                         }
                         .pickerStyle(.segmented)
-                        .onChange(of: sport) { _, value in if value == "ride" { dropDistances() } }
+                        .onChange(of: sport) { old, value in
+                            // A swim is in metres and rests: nothing carries over to or from it.
+                            if value == "swim" || old == "swim" { blocks = [] } else if value == "ride" { dropDistances() }
+                        }
                     }
-                    TextField(sport == "run" ? "Název, třeba Kilometrovky" : "Název, třeba Sweet spot 3×15", text: $name)
+                    TextField(sport == "swim" ? "Název, třeba Práh 8×100" : sport == "run" ? "Název, třeba Kilometrovky" : "Název, třeba Sweet spot 3×15", text: $name)
                 }
 
                 Section {
-                    TextField(sport == "run" ? "Třeba „rozběh 2 km, 6× 1 km rychle s 2 min klusem, vyklusání“" : "Třeba „hodina, rozjetí, 5× 4 min VO2max se 4 min volně, vyjetí“", text: $wish, axis: .vertical)
+                    TextField(sport == "swim" ? "Třeba „rozplavání 300 m, 8× 100 m na prahu s 20 s pauzou, vyplavání 200 m“" : sport == "run" ? "Třeba „rozběh 2 km, 6× 1 km rychle s 2 min klusem, vyklusání“" : "Třeba „hodina, rozjetí, 5× 4 min VO2max se 4 min volně, vyjetí“", text: $wish, axis: .vertical)
                         .lineLimit(2...4)
                     Button { Task { await describe() } } label: {
                         Label(busy == "describe" ? "Sestavuji…" : "Sestavit", systemImage: "sparkles").font(Typo.bodyStrong)
@@ -101,7 +115,7 @@ struct EnduranceEditorSheet: View {
 
                 if !blocks.isEmpty {
                     Section {
-                        WorkoutProfile(blocks: template.profile(ftp: athlete.ftp, thresholdPace: athlete.runThresholdPace), sport: sport)
+                        WorkoutProfile(blocks: template.profile(ftp: athlete.ftp, thresholdPace: athlete.runThresholdPace, swimCss: athlete.swimCss), sport: sport)
                             .padding(.vertical, 6)
                     }
                 }
@@ -113,19 +127,20 @@ struct EnduranceEditorSheet: View {
                     .onMove { blocks.move(fromOffsets: $0, toOffset: $1) }
                     .onDelete { blocks.remove(atOffsets: $0) }
                     HStack(spacing: 10) {
-                        Button { add(EnduranceBlock(repeats: 1, steps: [defaultStep(zone: "Z2", minutes: 10)])) } label: {
+                        Button { add(EnduranceBlock(repeats: 1, steps: [sport == "swim" ? swimStep(zone: "Z2", meters: 200) : defaultStep(zone: "Z2", minutes: 10)])) } label: {
                             Label("Úsek", systemImage: "plus").font(Typo.bodyStrong).frame(maxWidth: .infinity)
                         }
-                        Button { add(EnduranceBlock(repeats: 3, steps: [defaultStep(zone: sport == "run" ? "Z4" : "SS", minutes: 5), defaultStep(zone: "Z1", minutes: 2)])) } label: {
+                        Button { add(sport == "swim" ? EnduranceBlock(repeats: 4, steps: [swimStep(zone: "Z4", meters: 100), Self.restStep(20)])
+                                     : EnduranceBlock(repeats: 3, steps: [defaultStep(zone: sport == "run" ? "Z4" : "SS", minutes: 5), defaultStep(zone: "Z1", minutes: 2)])) } label: {
                             Label("Opakování", systemImage: "arrow.2.squarepath").font(Typo.bodyStrong).frame(maxWidth: .infinity)
                         }
                     }
                     .buttonStyle(.borderless)
                     .disabled(blocks.count >= 20)
                 } header: {
-                    Text(blocks.isEmpty ? "Úseky" : Fmt.duration(Int(template.enduranceMinutes(thresholdPace: athlete.runThresholdPace).rounded())))
+                    Text(blocks.isEmpty ? "Úseky" : Fmt.duration(Int(template.enduranceMinutes(thresholdPace: athlete.runThresholdPace, swimCss: athlete.swimCss).rounded())))
                 } footer: {
-                    Text(sport == "run" ? "Intenzita je v procentech prahového tempa, kamarádovi se přepočte na jeho tempo." : "Intenzita je v procentech FTP, kamarádovi se přepočte na jeho watty.")
+                    Text(sport == "swim" ? "Intenzita je v procentech CSS, kamarádovi se přepočte na jeho tempo na 100 m." : sport == "run" ? "Intenzita je v procentech prahového tempa, kamarádovi se přepočte na jeho tempo." : "Intenzita je v procentech FTP, kamarádovi se přepočte na jeho watty.")
                 }
                 if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
             }
@@ -165,7 +180,7 @@ struct EnduranceEditorSheet: View {
                     stepButton(i, j, step).padding(.leading, 14)
                 }
                 if block.steps.count < 6 {
-                    Button { blocks[i].steps.append(defaultStep(zone: "Z1", minutes: 2)) } label: {
+                    Button { blocks[i].steps.append(sport == "swim" ? Self.restStep(20) : defaultStep(zone: "Z1", minutes: 2)) } label: {
                         Label("Přidat úsek do opakování", systemImage: "plus.circle").font(Typo.small).foregroundStyle(Palette.green)
                     }
                     .padding(.leading, 14)
@@ -178,7 +193,7 @@ struct EnduranceEditorSheet: View {
     private func stepButton(_ i: Int, _ j: Int, _ step: EnduranceStep) -> some View {
         Button { editing = StepRef(block: i, step: j) } label: {
             HStack(spacing: 12) {
-                RoundedRectangle(cornerRadius: 2).fill(WorkoutProfile.color(Double(step.low + step.high) / 2)).frame(width: 4, height: 34)
+                RoundedRectangle(cornerRadius: 2).fill(step.isRest ? Palette.faint : WorkoutProfile.color(WorkoutProfile.shown(Double(step.low + step.high) / 2, sport: sport))).frame(width: 4, height: 34)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(step.label.isEmpty ? EnduranceZones.name(sport, step) : step.label).font(.body.weight(.medium)).foregroundStyle(Palette.ink)
                     Text([EnduranceZones.length(step), EnduranceZones.name(sport, step), EnduranceZones.target(sport, step, athlete)].joined(separator: " · "))
@@ -195,6 +210,15 @@ struct EnduranceEditorSheet: View {
     private func defaultStep(zone: String, minutes: Int) -> EnduranceStep {
         let z = EnduranceZones.all(sport).first { $0.id == zone } ?? EnduranceZones.all(sport)[1]
         return EnduranceStep(label: "", seconds: minutes * 60, km: nil, low: z.low, high: z.high, cadence: nil)
+    }
+
+    private func swimStep(zone: String, meters: Int) -> EnduranceStep {
+        let z = EnduranceZones.all("swim").first { $0.id == zone } ?? EnduranceZones.all("swim")[1]
+        return EnduranceStep(label: "", seconds: nil, km: nil, low: z.low, high: z.high, cadence: nil, meters: meters)
+    }
+
+    static func restStep(_ seconds: Int) -> EnduranceStep {
+        EnduranceStep(label: "", seconds: seconds, km: nil, low: 0, high: 0, cadence: nil, rest: true)
     }
 
     private func add(_ block: EnduranceBlock) {
@@ -266,6 +290,16 @@ struct StepEditorSheet: View {
     }
 
     private var seconds: Binding<Int> { Binding(get: { step.seconds ?? 600 }, set: { step.seconds = $0 }) }
+    private var meters: Binding<Int> { Binding(get: { step.meters ?? 100 }, set: { step.meters = max(25, min(5000, $0)) }) }
+    /// A swim section is swum or a rest at the wall.
+    private var isRest: Binding<Bool> {
+        Binding(get: { step.isRest }, set: { rest in
+            if rest { var r = EnduranceEditorSheet.restStep(20); r.label = step.label; step = r } else {
+                let z = EnduranceZones.all("swim")[1]
+                step = EnduranceStep(label: step.label, seconds: nil, km: nil, low: z.low, high: z.high, cadence: nil, meters: 100)
+            }
+        })
+    }
     /// The distance in the app's unit (km or mi), kept in km.
     private var distance: Binding<Double> {
         Binding(get: { (Units.distance(step.km ?? 1) * 10).rounded() / 10 },
@@ -279,49 +313,69 @@ struct StepEditorSheet: View {
                     TextField(EnduranceZones.name(sport, step), text: $step.label)
                 } header: { Text("Název úseku") }
 
-                Section {
-                    if sport == "run" {
-                        Picker("Délka", selection: $byDistance) {
-                            Text("Čas").tag(false)
-                            Text("Vzdálenost").tag(true)
+                if sport == "swim" {
+                    Section {
+                        Picker("Úsek", selection: isRest) {
+                            Text("Plavání").tag(false)
+                            Text("Pauza u stěny").tag(true)
                         }
                         .pickerStyle(.segmented)
-                        .onChange(of: byDistance) { _, value in
-                            if value { step.km = step.km ?? 1; step.seconds = nil } else { step.seconds = step.seconds ?? 600; step.km = nil }
+                        if step.isRest {
+                            Text(Fmt.int(Double(step.seconds ?? 20)) + " s").font(Typo.number(48)).foregroundStyle(Palette.ink).frame(maxWidth: .infinity)
+                            Stepper("Sekundy", value: Binding(get: { step.seconds ?? 20 }, set: { step.seconds = max(5, min(600, $0)) }), in: 5...600, step: 5)
+                        } else {
+                            Text(Fmt.int(Double(meters.wrappedValue)) + " m").font(Typo.number(48)).foregroundStyle(Palette.ink).frame(maxWidth: .infinity)
+                            Stepper("o 25 m", value: meters, in: 25...5000, step: 25)
+                            Stepper("o 100 m", value: meters, in: 25...5000, step: 100)
                         }
-                    }
-                    if byDistance {
-                        Text(Units.distanceText(step.km ?? 1, digits: 1))
-                            .font(Typo.number(48)).foregroundStyle(Palette.ink).frame(maxWidth: .infinity)
-                        Stepper(L10n.f("o 0,1 %@", Units.distanceUnit), value: distance, in: 0.1...30, step: 0.1)
-                        Stepper(L10n.f("o 1 %@", Units.distanceUnit), value: distance, in: 0.1...30, step: 1)
-                    } else {
-                        Text("\(seconds.wrappedValue / 60):" + String(format: "%02d", seconds.wrappedValue % 60))
-                            .font(Typo.number(48)).foregroundStyle(Palette.ink).frame(maxWidth: .infinity)
-                        Stepper("Minuty", value: Binding(get: { seconds.wrappedValue / 60 }, set: { seconds.wrappedValue = max(10, $0 * 60 + seconds.wrappedValue % 60) }), in: 0...300)
-                        Stepper("Sekundy", value: Binding(get: { seconds.wrappedValue % 60 }, set: { seconds.wrappedValue = max(10, seconds.wrappedValue / 60 * 60 + $0) }), in: 0...55, step: 5)
-                    }
-                } header: { Text("Délka") }
-
-                Section {
-                    ChipFlow(items: EnduranceZones.all(sport).map { $0.id }, label: { $0 },
-                             isOn: { EnduranceZones.name(sport, step) == $0 },
-                             toggle: { id in if let z = EnduranceZones.all(sport).first(where: { $0.id == id }) { step.low = z.low; step.high = z.high } })
-                    Stepper(value: Binding(get: { step.low }, set: { step.low = min($0, step.high) }), in: 30...200) {
-                        row("Od", step.low)
-                    }
-                    Stepper(value: Binding(get: { step.high }, set: { step.high = max($0, step.low) }), in: 30...200) {
-                        row("Do", step.high)
-                    }
-                    if sport != "run" {
-                        Toggle("Kadence", isOn: Binding(get: { step.cadence != nil }, set: { step.cadence = $0 ? 90 : nil }))
-                        if let cadence = step.cadence {
-                            Stepper(value: Binding(get: { cadence }, set: { step.cadence = $0 }), in: 40...140, step: 5) {
-                                Text(L10n.f("%@ ot/min", String(cadence)))
+                    } header: { Text("Délka") }
+                } else {
+                    Section {
+                        if sport == "run" {
+                            Picker("Délka", selection: $byDistance) {
+                                Text("Čas").tag(false)
+                                Text("Vzdálenost").tag(true)
+                            }
+                            .pickerStyle(.segmented)
+                            .onChange(of: byDistance) { _, value in
+                                if value { step.km = step.km ?? 1; step.seconds = nil } else { step.seconds = step.seconds ?? 600; step.km = nil }
                             }
                         }
-                    }
-                } header: { Text("Intenzita") }
+                        if byDistance {
+                            Text(Units.distanceText(step.km ?? 1, digits: 1))
+                                .font(Typo.number(48)).foregroundStyle(Palette.ink).frame(maxWidth: .infinity)
+                            Stepper(L10n.f("o 0,1 %@", Units.distanceUnit), value: distance, in: 0.1...30, step: 0.1)
+                            Stepper(L10n.f("o 1 %@", Units.distanceUnit), value: distance, in: 0.1...30, step: 1)
+                        } else {
+                            Text("\(seconds.wrappedValue / 60):" + String(format: "%02d", seconds.wrappedValue % 60))
+                                .font(Typo.number(48)).foregroundStyle(Palette.ink).frame(maxWidth: .infinity)
+                            Stepper("Minuty", value: Binding(get: { seconds.wrappedValue / 60 }, set: { seconds.wrappedValue = max(10, $0 * 60 + seconds.wrappedValue % 60) }), in: 0...300)
+                            Stepper("Sekundy", value: Binding(get: { seconds.wrappedValue % 60 }, set: { seconds.wrappedValue = max(10, seconds.wrappedValue / 60 * 60 + $0) }), in: 0...55, step: 5)
+                        }
+                    } header: { Text("Délka") }
+                }
+
+                if !step.isRest {
+                    Section {
+                        ChipFlow(items: EnduranceZones.all(sport).map { $0.id }, label: { $0 },
+                                 isOn: { EnduranceZones.name(sport, step) == $0 },
+                                 toggle: { id in if let z = EnduranceZones.all(sport).first(where: { $0.id == id }) { step.low = z.low; step.high = z.high } })
+                        Stepper(value: Binding(get: { step.low }, set: { step.low = min($0, step.high) }), in: sport == "swim" ? 70...130 : 30...200) {
+                            row("Od", step.low)
+                        }
+                        Stepper(value: Binding(get: { step.high }, set: { step.high = max($0, step.low) }), in: sport == "swim" ? 70...130 : 30...200) {
+                            row("Do", step.high)
+                        }
+                        if sport == "ride" {
+                            Toggle("Kadence", isOn: Binding(get: { step.cadence != nil }, set: { step.cadence = $0 ? 90 : nil }))
+                            if let cadence = step.cadence {
+                                Stepper(value: Binding(get: { cadence }, set: { step.cadence = $0 }), in: 40...140, step: 5) {
+                                    Text(L10n.f("%@ ot/min", String(cadence)))
+                                }
+                            }
+                        }
+                    } header: { Text("Intenzita") }
+                }
 
                 if canDelete {
                     Section {
@@ -351,6 +405,7 @@ struct StepEditorSheet: View {
     }
 
     private func value(_ percent: Int) -> String {
+        if sport == "swim" { return athlete.swimCss.map { "\(percent) % · " + Units.swimPaceText($0 * 100 / Double(percent)) } ?? "\(percent) % CSS" }
         if sport == "run", let pace = athlete.runThresholdPace { return "\(percent) % · " + Units.paceText(pace * 100 / Double(percent)) }
         if sport != "run", let ftp = athlete.ftp { return "\(percent) % · \(Int((ftp * Double(percent) / 100).rounded())) W" }
         return "\(percent)" + Fmt.percentSign
@@ -390,8 +445,8 @@ struct SavedEnduranceSheet: View {
                     DatePicker("Den", selection: $date, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
                         .environment(\.locale, Fmt.locale)
                     Picker("Kde", selection: $indoor) {
-                        Text(workout.sport == "run" ? "Pás" : "Trenažér").tag(true)
-                        Text("Venku").tag(false)
+                        Text(workout.sport == "swim" ? "Bazén" : workout.sport == "run" ? "Pás" : "Trenažér").tag(true)
+                        Text(workout.sport == "swim" ? "Volná voda" : "Venku").tag(false)
                     }
                     .pickerStyle(.segmented)
                     if done {

@@ -19,7 +19,7 @@ struct TrainingPlans: Decodable, Equatable {
     struct Race: Decodable, Equatable {
         let km: Double
         let options: [Double]?
-        /// A cycling race: granfondo, mtb, tt or climb.
+        /// A cycling race: granfondo, mtb, tt or climb; a triathlon: sprint, olympic, half or full.
         var kind: String? = nil
     }
 
@@ -36,6 +36,8 @@ struct TrainingPlans: Decodable, Equatable {
         let weeks: [Week]
         /// Tests in the plan (an FTP test, a strength test).
         var tests: Bool? = nil
+        /// A triathlon plan's sessions a week per sport ("ride", "run", "swim").
+        var perSport: [String: Int]? = nil
     }
 
     struct Active: Decodable, Equatable {
@@ -183,6 +185,27 @@ struct PlanRace: Decodable, Equatable {
     var goalPace: Int? = nil
     /// How bold the goal is: easy, real, bold or hard.
     var verdict: String? = nil
+    /// A triathlon: each leg's distance and estimated minutes.
+    var legs: Legs? = nil
+
+    struct Legs: Decodable, Equatable {
+        let swim: Leg
+        let ride: Leg
+        let run: Leg
+    }
+
+    struct Leg: Decodable, Equatable {
+        var meters: Int? = nil
+        var km: Double? = nil
+        let minutes: Int
+    }
+
+    /// "Plavání ~29 min · kolo ~1:03 h · běh ~50 min".
+    var legsText: String? {
+        guard let legs else { return nil }
+        return [(L10n.tr("Plavání"), legs.swim), (L10n.tr("kolo"), legs.ride), (L10n.tr("běh"), legs.run)]
+            .map { $0.0 + " ~" + planDuration($0.1.minutes) }.joined(separator: " · ")
+    }
 }
 
 /// "160 km", "21,1 km": a race's distance.
@@ -639,9 +662,9 @@ struct TrainingPlansSheet: View {
     var body: some View {
         NavigationStack {
             SettingsPage(title: "Tréninkové plány") {
-                // The sports as tiles in the library's order (Kolo, Běh, Posilovna).
-                HStack(spacing: 8) {
-                    ForEach(LibraryWidget.sports.indices, id: \.self) { i in sportTile(LibraryWidget.sports[i]) }
+                // The sports as tiles in the library's order (Kolo, Běh, Plavání, triatlon, Posilovna).
+                HStack(spacing: 6) {
+                    ForEach(Self.sports.indices, id: \.self) { i in sportTile(Self.sports[i]) }
                 }
                 let list = plans.templates.filter { $0.sport == sport }
                 let raced = list.filter { $0.race != nil }, open = list.filter { $0.race == nil }
@@ -674,18 +697,24 @@ struct TrainingPlansSheet: View {
         }
     }
 
+    /// Ride, run, swim, triathlon, gym: the sport order everywhere in the app.
+    static let sports: [(id: String, symbol: String, color: Color)] = [
+        ("ride", "bicycle", Palette.amberBar), ("run", "figure.run", Palette.rust), ("swim", "figure.pool.swim", Palette.blue),
+        ("triathlon", "figure.open.water.swim", Palette.green), ("gym", "dumbbell.fill", Palette.indigo)
+    ]
+
     private func sportTile(_ item: (id: String, symbol: String, color: Color)) -> some View {
         let on = sport == item.id
-        let title = L10n.tr(["ride": "Kolo", "run": "Běh", "gym": "Posilovna"][item.id] ?? "")
+        let title = item.id == "triathlon" ? "Tri" : L10n.tr(["ride": "Kolo", "run": "Běh", "swim": "Plavání", "gym": "Posilovna"][item.id] ?? "")
         return Button { withAnimation(.snappy) { sport = item.id } } label: {
             VStack(spacing: 6) {
-                Image(systemName: item.symbol).scaledFont(17, weight: .semibold, cap: .denseCap)
+                Image(systemName: item.symbol).scaledFont(15, weight: .semibold, cap: .denseCap)
                     .foregroundStyle(on ? Palette.onAccent : item.color)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 32, height: 32)
                     .background(on ? item.color : item.color.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Text(verbatim: title).font(Typo.caption.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                Text(verbatim: title).font(.caption2.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
             }
-            .frame(maxWidth: .infinity).padding(.vertical, 12)
+            .frame(maxWidth: .infinity).padding(.vertical, 10).padding(.horizontal, 2)
             .cardSurface(cornerRadius: 18)
             .overlay { if on { RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(item.color, lineWidth: 1.5) } }
         }

@@ -99,4 +99,11 @@ enum Units {
         let s = Int(pace(secondsPerKm).rounded())
         return "\(s / 60):" + String(format: "%02d", s % 60) + " " + paceUnit
     }
+
+    /// A swim pace, "1:52 /100 m": pools are measured in metres everywhere we ship.
+    static func swimPaceText(_ secondsPer100m: Double?) -> String {
+        guard let secondsPer100m, secondsPer100m > 0 else { return "–" }
+        let s = Int(secondsPer100m.rounded())
+        return "\(s / 60):" + String(format: "%02d", s % 60) + " /100 m"
+    }
 }

@@ -78,15 +78,15 @@ struct RecoveryTime: Decodable, Equatable {
         var low: Int? = nil
         var high: Int? = nil
 
-        var isSession: Bool { ["ride", "run", "walk", "gym"].contains(kind) }
+        var isSession: Bool { ["ride", "run", "swim", "walk", "gym"].contains(kind) }
         var ready: Date? { readyAt.flatMap(RecoveryTime.date) }
     }
 
     var ready: Date? { Self.date(readyAt) }
     var start: Date? { Self.date(from) }
     var light: Date? { lightAt.flatMap(Self.date) }
-    /// The main session works the legs (anything but a gym day that spared them).
-    var legsTired: Bool { causes.first.map { $0.kind != "gym" || ($0.title ?? "").contains("nohy") || ($0.title ?? "").contains("legs") } ?? false }
+    /// The main session works the legs (anything but a swim or a gym day that spared them).
+    var legsTired: Bool { causes.first.map { $0.kind != "swim" && $0.kind != "gym" || ($0.title ?? "").contains("nohy") || ($0.title ?? "").contains("legs") } ?? false }
 
     static func date(_ iso: String) -> Date? {
         fractional.date(from: iso) ?? whole.date(from: iso)

@@ -35,6 +35,12 @@ struct WorkoutProfile: View {
         return out
     }
 
+    /// A swim's % of CSS speed spreads over 84–115 %: stretched to the scale
+    /// and colours of the bike's zones (CSS at 100, a rest at the bottom).
+    nonisolated static func shown(_ percent: Double, sport: String) -> Double {
+        sport == "swim" ? max(5, 100 + (percent - 100) * 2.5) : percent
+    }
+
     /// Coggan zones on % of threshold.
     static func color(_ percent: Double) -> Color {
         switch percent {
@@ -51,7 +57,8 @@ struct WorkoutProfile: View {
     var body: some View {
         let segments = Self.segments(blocks)
         let total = segments.last?.end ?? 1
-        let top = max(130, (segments.map(\.percent).max() ?? 100) + 10)
+        let shown = { (p: Double) in Self.shown(p, sport: sport) }
+        let top = max(130, (segments.map { shown($0.percent) }.max() ?? 100) + 10)
         let picked = cursor.flatMap { c in segments.first { c >= $0.start && c < $0.end } ?? (c >= total ? segments.last : nil) }
 
         VStack(alignment: .leading, spacing: 10) {
@@ -59,7 +66,7 @@ struct WorkoutProfile: View {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     if let picked {
                         Text(verbatim: Self.length(picked)).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
-                        Text(verbatim: value(picked)).font(Typo.small).foregroundStyle(Self.color(picked.percent))
+                        Text(verbatim: value(picked)).font(Typo.small).foregroundStyle(Self.color(shown(picked.percent)))
                     } else {
                         Text(verbatim: Fmt.duration(Int(total.rounded()))).font(Typo.bodyStrong).foregroundStyle(Palette.ink)
                     }
@@ -69,8 +76,8 @@ struct WorkoutProfile: View {
             Chart {
                 ForEach(segments) { s in
                     RectangleMark(xStart: .value("Od", s.start), xEnd: .value("Do", s.end),
-                                  yStart: .value("Spodek", 0), yEnd: .value("Intenzita", s.percent))
-                        .foregroundStyle(Self.color(s.percent).opacity(picked == nil || picked?.id == s.id ? 1 : 0.55))
+                                  yStart: .value("Spodek", 0), yEnd: .value("Intenzita", shown(s.percent)))
+                        .foregroundStyle(Self.color(shown(s.percent)).opacity(picked == nil || picked?.id == s.id ? 1 : 0.55))
                 }
                 if let picked {
                     RuleMark(x: .value("Minuta", (picked.start + picked.end) / 2)).foregroundStyle(Palette.ink.opacity(0.7))
@@ -100,6 +107,11 @@ struct WorkoutProfile: View {
 
     private func value(_ s: Segment) -> String {
         let pct = Fmt.int(s.percent) + Fmt.percentSign
+        if s.step.rest == true { return L10n.tr("pauza") }
+        if sport == "swim" {
+            let pace = s.step.paceSlow.flatMap { slow in s.step.paceFast.map { ZonesSettingsView.pace((slow + $0) / 2) + " /100 m" } }
+            return [s.step.meters.map { Fmt.int($0) + " m" }, pace, "(" + pct + ")"].compactMap { $0 }.joined(separator: " ")
+        }
         if sport == "run", let slow = s.step.paceSlow, let fast = s.step.paceFast {
             return ZonesSettingsView.pace(Units.pace((slow + fast) / 2)) + " " + Units.paceUnit + " (" + pct + ")"
         }
