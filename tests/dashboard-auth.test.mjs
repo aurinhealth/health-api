@@ -198,7 +198,7 @@ test("the connect sheet's cookie is good only for connecting, for a quarter of a
   for (const path of ["/auth/app/connect", "/oauth/google", "/oauth/intervals/callback", "/oauth/wahoo/callback"]) {
     assert.deepEqual(await resolvePrincipal(at(path), env, rejectOidc), { kind: "user", userId: 2, epoch: 1 }, path);
   }
-  for (const path of ["/app/api/today", "/app/api/account/export", "/app/api/me", "/app/logout", "/health/nutrition"]) {
+  for (const path of ["/app/api/today", "/app/api/account/export", "/app/api/me", "/app/logout", "/health/nutrition", "/oauth/other", "/oauth/google/other"]) {
     assert.equal(await resolvePrincipal(at(path), env, rejectOidc), null, path);
   }
   // It never slides into a month-long session.

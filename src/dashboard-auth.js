@@ -16,12 +16,12 @@ export const SESSION_REFRESH_SECONDS = 24 * 60 * 60;
 export const SESSION_MAX_SECONDS = 365 * 24 * 60 * 60;
 // The browser sheet that connects a service (native-connect.js) gets a cookie
 // of its own: a quarter of an hour, good only on the way to the service and
-// back (/auth/app/connect, /oauth/…), and cleared when the service sends the
+// back (/auth/app/connect, /oauth/<service>[/callback]), and cleared when the service sends the
 // user back to the app. The sheet shares Safari's cookies, so a full session
 // would stay there after the connection.
 export const CONNECT_SESSION_SECONDS = 15 * 60;
 const CONNECT_SCOPE = "connect";
-const connectPath = pathname => pathname === "/auth/app/connect" || pathname.startsWith("/oauth/");
+const connectPath = pathname => pathname === "/auth/app/connect" || /^\/oauth\/(google|intervals|ultrahuman|whoop|wahoo)(\/callback)?$/.test(pathname);
 // What the deploy smoke test (a GitHub Actions token, github-oidc.js) may call
 // as the owner: the reads it checks, the food search and the gym generator's
 // preview. Any other route refuses the token.
