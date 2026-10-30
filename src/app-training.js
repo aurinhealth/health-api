@@ -403,6 +403,9 @@ function sessionOf(w, date, status) {
     tss: round(num(w.tss)),
     activityId: activityId && /^[a-zA-Z0-9_-]{1,80}$/.test(activityId) ? activityId : null,
     eventId: !done && /^planned:/.test(String(w.id || "")) ? String(w.id) : null,
+    // Joined to the session before or after it, done one right after the other (planned-links.js).
+    ...(!done && /^local-/.test(String(w.after ?? w.payload?.after ?? "")) ? { after: "planned:" + (w.after ?? w.payload.after) } : {}),
+    ...(!done && /^local-/.test(String(w.next ?? w.payload?.next ?? "")) ? { next: "planned:" + (w.next ?? w.payload.next) } : {}),
     // A workout from the watch opens its own detail (watch-detail.js), one from Wahoo too (wahoo-detail.js).
     ...(done && ["google-wearables", "apple-health"].includes(w.family) && w.id ? { watch: { source: w.family, id: String(w.id) } }
       : done && /^wahoo:\d+$/.test(String(w.id || "")) ? { watch: { source: "wahoo", id: String(w.id) } }
