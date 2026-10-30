@@ -270,11 +270,15 @@ export async function resolveWorkoutCopies(db, userId, since) {
 // several devices take follow source-priority.js; the rest (workouts, weight)
 // keep Apple Health's on the days it has them.
 const appleUsers = new WeakMap();
-export async function afterGoogleSync(env, type, points) {
+export async function afterGoogleSync(env, type, points, { since: changedFrom = null } = {}) {
   if (!points?.length || !env?.DB) return 0;
   try {
-    const since = new Date(Date.now() - 35 * 86400000).toISOString().slice(0, 10);
-    if (MANAGED_TYPES.includes(type)) return await resolveSources(env.DB, env.USER_ID, { types: [type], since });
+    // From the oldest day a row changed (the recent sync: today and yesterday),
+    // else the last 35 days. Reading 35 days of every type after each 5-minute
+    // sync was most of the D1 rows read.
+    const floor = new Date(Date.now() - 35 * 86400000).toISOString().slice(0, 10);
+    const since = changedFrom && changedFrom > floor ? changedFrom : floor;
+    if (MANAGED_TYPES.includes(type)) return await resolveSources(env.DB, env.USER_ID, { types: [type], since, cacheHistory: true });
     let on = appleUsers.get(env);
     if (on === undefined) { on = Boolean(await env.DB.prepare("SELECT 1 FROM sync_status WHERE user_id = ? AND sync_name = ? AND status != 'disconnected'").bind(env.USER_ID, STATUS).first()); appleUsers.set(env, on); }
     if (!on) return 0;

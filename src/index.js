@@ -922,12 +922,23 @@ async function saveGooglePointsBatch(env, family, type, points) {
   });
 
   // D1 batch executes the statements sequentially in one database call.
-  let changed=0;
-  for(let i=0;i<statements.length;i+=50)for(const result of await env.DB.batch(statements.slice(i,i+50)))changed+=Number(result?.meta?.changes||0);
+  // The oldest day a changed row has: the source choice after it starts there.
+  let changed=0,oldest=null;
+  for(let i=0;i<statements.length;i+=50){
+    const results=await env.DB.batch(statements.slice(i,i+50));
+    results.forEach((result,j)=>{
+      const rows=Number(result?.meta?.changes||0);
+      if(!rows)return;
+      changed+=rows;
+      const info=googleInfo(type,points[i+j]);
+      const day=String(info.sample||info.start||info.end||'').slice(0,10);
+      if(/^\d{4}-\d{2}-\d{2}$/.test(day)&&(!oldest||day<oldest))oldest=day;
+    });
+  }
   // Days Apple Health already covers keep the Apple rows (apple-health.js).
   // Only when a row changed: the recent sync reads the same two days every
   // 5 minutes, and choosing the source again read ~1 B rows a day for nothing.
-  if(changed)await afterGoogleSync(env, type, points);
+  if(changed)await afterGoogleSync(env, type, points, {since:oldest});
   return points.length;
 }
 // A workout changed in Google Health a few days later (a run that was a walk)
