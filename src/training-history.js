@@ -1,6 +1,7 @@
 // Measured history and conservative starting templates are separate inputs.
 import { L } from './lang.js';
 import {activityFromRow,dedupeActivities} from './coach-reflection.js';
+import {POOL_LENGTHS} from './training-zones.js';
 import {localToday} from './user-time.js';
 import {latestStoredWeight} from './athlete-weight.js';
 import {yearBySport} from './triathlon-split.js';
@@ -63,7 +64,7 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   const end=localToday(new Date(now)),daysBack=n=>new Date(Date.parse(end+'T12:00:00Z')-n*DAY).toISOString().slice(0,10),since=daysBack(84);
   // Up to two years for the per-sport experience; the rest uses the last 12 weeks.
   const rows=(await db.prepare("SELECT source_family,data_type,start_time,end_time,sample_time,payload_json FROM health_datapoints WHERE user_id=? AND data_type IN ('activity','exercise') AND COALESCE(start_time,sample_time)>=? AND COALESCE(start_time,sample_time)<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY COALESCE(start_time,sample_time)").bind(userId,daysBack(EXPERIENCE_DAYS),end+'T23:59:59').all().catch(()=>({results:[]}))).results||[];
-  const all=dedupeActivities(rows.map(row=>{const a=activityFromRow({...row,start_time:row.start_time||row.sample_time});if(a){let p={};try{p=JSON.parse(row.payload_json||'{}');}catch{}const num=v=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):null;a.distanceKm=num(p.distance)!=null?num(p.distance)/1000:null;a.ftp=num(p.icu_ftp);a.thresholdSpeed=num(p.threshold_pace);}return a;}).filter(a=>a&&a.minutes>0&&a.minutes<=1440));
+  const all=dedupeActivities(rows.map(row=>{const a=activityFromRow({...row,start_time:row.start_time||row.sample_time});if(a){let p={};try{p=JSON.parse(row.payload_json||'{}');}catch{}const num=v=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):null;a.distanceKm=num(p.distance)!=null?num(p.distance)/1000:null;a.ftp=num(p.icu_ftp);a.thresholdSpeed=num(p.threshold_pace);a.poolLength=num(p.pool_length);}return a;}).filter(a=>a&&a.minutes>0&&a.minutes<=1440));
   const activities=all.filter(a=>a.date>=since);
   const sets=(await db.prepare("SELECT workout_date,exercise,actual_kg,actual_reps FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' AND workout_date>=?").bind(userId,daysBack(EXPERIENCE_DAYS)).all().catch(()=>({results:[]}))).results||[];
   const weight=await latestStoredWeight(db,userId).catch(()=>null);
@@ -82,7 +83,9 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   const weekdayMinutes=Array(7).fill(0);for(const a of recent)weekdayMinutes[(new Date(a.date+'T12:00:00Z').getUTCDay()+6)%7]+=a.minutes/4;
   // The last 12 months per sport (sessions, hours) for the triathlon split, from the rows already read.
   const sports=yearBySport(all,daysBack(365));
-  return {mainSport,experience,sportExperience:sportExperienceLevels,sports,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>weekOf(a.date))).size,weekdayMinutes,periods:{sportDays:56,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
+  // The pool of the last pool swim (25 or 50 m, 25 yd), from the rows already read: the default until one is chosen by hand.
+  const poolLength=[...all].reverse().find(a=>a.kind==='swim'&&POOL_LENGTHS.some(m=>Math.abs(m-a.poolLength)<.1))?.poolLength??null;
+  return {mainSport,experience,sportExperience:sportExperienceLevels,sports,poolLength,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>weekOf(a.date))).size,weekdayMinutes,periods:{sportDays:56,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
 }
 export function starterPlan(history,experience=history.experience){
   // These are app templates, not published averages of free time. An inactive

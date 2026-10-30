@@ -255,6 +255,18 @@ struct FitnessInsights: Decodable {
     struct Estimates: Decodable {
         let run: Run?
         let ride: Ride?
+        var swim: Swim? = nil
+    }
+
+    /// The best 100, 200 and 400 m of the last 12 months (Intervals.icu pace curve).
+    struct Swim: Decodable {
+        let best: [SwimBest]
+    }
+
+    struct SwimBest: Decodable {
+        let meters: Int
+        let seconds: Int
+        let per100: Double
     }
 
     struct Run: Decodable {

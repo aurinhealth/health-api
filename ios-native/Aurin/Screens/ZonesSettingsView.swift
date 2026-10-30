@@ -19,7 +19,7 @@ struct ZonesSettingsView: View {
     @State private var hrModel = "frielLthr"
     @State private var paceModel = "friel"
     @State private var swimCss = ""
-    @State private var poolLength = "25"
+    @State private var poolLength = ""
     @State private var openWater = "off"
     @State private var test400 = ""
     @State private var test200 = ""
@@ -131,6 +131,12 @@ struct ZonesSettingsView: View {
     static let pools = [("25", "25 m"), ("50", "50 m"), ("22.86", "25 yd"), ("33.33", "33⅓ m")]
     static let openWaterOptions = [("off", "Vypnuto"), ("races", "Před závody"), ("season", "V sezóně")]
 
+    /// "automaticky · 25 m": the pool of the last pool swim until one is picked.
+    private func poolOptions(_ t: TrainingProfileResponse) -> [(String, String)] {
+        let last = t.resolved.poolLengthSource == "auto" ? t.resolved.poolLength.flatMap { n in Self.pools.first { Double($0.0) == n }?.1 } : nil
+        return [("", last.map { L10n.tr("automaticky") + " · " + $0 } ?? L10n.tr("automaticky"))] + Self.pools
+    }
+
     @ViewBuilder
     private func swim(_ t: TrainingProfileResponse) -> some View {
         SettingsGroup(title: "Prahové hodnoty", footer: "CSS je tempo, které udržíš zhruba 30 minut. Z něj jsou plavecké zóny.") {
@@ -154,7 +160,7 @@ struct ZonesSettingsView: View {
             }
         }
         SettingsGroup(title: "Kde plaveš") {
-            OptionListRow(title: "Obvyklý bazén", selection: $poolLength, options: Self.pools)
+            OptionListRow(title: "Obvyklý bazén", selection: $poolLength, options: poolOptions(t))
             SettingsDivider()
             OptionListRow(title: "Otevřená voda", selection: $openWater, options: Self.openWaterOptions.map { ($0.0, L10n.tr($0.1)) },
                           footer: L10n.tr("Vypnuto: plánujeme jen bazén. Před závody: jednou týdně 6–8 týdnů před závodem. V sezóně: jednou týdně od května do září. Ve volné vodě nikdy neplav sám."))
@@ -276,7 +282,7 @@ struct ZonesSettingsView: View {
         hrModel = p["hrZoneModel"]?.string ?? "frielLthr"
         paceModel = p["paceZoneModel"]?.string ?? "friel"
         swimCss = (p["swimCss"]?.number).map { Self.pace($0) } ?? ""
-        poolLength = (p["poolLength"]?.number).map { n in Self.pools.first { Double($0.0) == n }?.0 ?? "25" } ?? "25"
+        poolLength = (p["poolLength"]?.number).flatMap { n in Self.pools.first { Double($0.0) == n }?.0 } ?? ""
         openWater = p["openWater"]?.string ?? "off"
         original = changes
     }
@@ -289,7 +295,7 @@ struct ZonesSettingsView: View {
             "runLthr": .field(runLthr),
             "powerZoneModel": .string(powerModel), "hrZoneModel": .string(hrModel), "paceZoneModel": .string(paceModel),
             "swimCss": swimCss.trimmingCharacters(in: .whitespaces).isEmpty ? .null : .string(swimCss.trimmingCharacters(in: .whitespaces)),
-            "poolLength": .number(Double(poolLength) ?? 25), "openWater": .string(openWater)
+            "poolLength": Double(poolLength).map { .number($0) } ?? .null, "openWater": .string(openWater)
         ]
     }
 

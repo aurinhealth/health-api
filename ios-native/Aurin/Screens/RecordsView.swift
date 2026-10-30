@@ -116,7 +116,7 @@ struct InsightsView: View {
             gym(insights)
         } else {
             focusCard(insights)
-            if current == .run { runEstimates(insights) } else if current == .ride { rideEstimates(insights) }
+            if current == .run { runEstimates(insights) } else if current == .ride { rideEstimates(insights) } else { swimBests(insights) }
             cardio(insights, current)
         }
     }
@@ -294,6 +294,21 @@ struct InsightsView: View {
             .padding(.top, 8)
             Text(verbatim: L10n.f("Z tvého prahového tempa %@. Maraton platí jen s dlouhými běhy kolem dvou hodin.", Units.paceText(run.thresholdPace)))
                 .font(Typo.caption).foregroundStyle(Palette.muted).padding(.top, 8).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Plavání: the fastest 100, 200 and 400 m of the last 12 months.
+    @ViewBuilder
+    private func swimBests(_ insights: FitnessInsights) -> some View {
+        if let best = insights.estimates?.swim?.best, !best.isEmpty {
+            SectionLabel(text: "Nejlepší časy za 12 měsíců").padding(.top, 24)
+            Card {
+                ForEach(Array(best.enumerated()), id: \.offset) { index, b in
+                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    recordRow("\(b.meters) m", value: raceTime(b.seconds), detail: Units.swimPaceText(b.per100))
+                }
+            }
+            .padding(.top, 8)
         }
     }
 

@@ -168,7 +168,7 @@ import { ownerOnlyRefusal } from "./owner-only-routes.js";
 import { setActivityKcal } from "./activity-edits.js";
 import { hideActivity, mergeActivities, setActivityTime, undoActivityChange } from "./activity-chat-edits.js";
 import { loadThresholdSessions } from "./threshold-check-state.js";
-import { performanceTrends, intervalsCurves, recentIntervals } from "./performance-trends.js";
+import { performanceTrends, intervalsCurves, recentIntervals, swimBests } from "./performance-trends.js";
 // The largest request body the coach route reads (POST /app/api/assistant).
 const ASSISTANT_REQUEST_CHARS=64000;
 // One photo with a message: a JPEG the app has made smaller, as a data URL.
@@ -1675,7 +1675,9 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const [insights,thresholds,weight]=await Promise.all([loadFitnessInsights(env.DB,localToday()),cached(env,ctx,'thresholds',()=>athleteThresholds(env)).catch(()=>({})),latestStoredWeight(env.DB,env.USER_ID).catch(()=>null)]);
       const kg=weightKg(weight),ftp=Number(thresholds.ftp)||null,ride=rideEstimates(ftp,kg);
       if(ride)ride.races=[['tt',40],['granfondo',160]].map(([kind,km])=>rideRace(kind,km,{ftp,weight:kg}));
-      return Response.json({...insights,estimates:{run:runEstimates(thresholds.runThresholdPace),ride}},{headers:{'Cache-Control':'no-store'}});
+      // Plavání: the best 100, 200 and 400 m of the year (Intervals.icu pace curve), one read a day, only after a swim.
+      const swim=insights.records?.cardio?.longestSwim?await cached(env,ctx,'curves:swim:'+localToday(),()=>swimBests(env,intervalsAuthorization(env.INTERVALS_API_KEY))).catch(()=>null):null;
+      return Response.json({...insights,estimates:{run:runEstimates(thresholds.runThresholdPace),ride,...(swim?{swim:{best:swim}}:{})}},{headers:{'Cache-Control':'no-store'}});
     }
     catch(error){return Response.json({status:'error',message:error.message},{status:500})}
   }

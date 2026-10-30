@@ -134,6 +134,8 @@ struct TrainingProfileResponse: Decodable, Equatable {
         /// CSS, seconds per 100 m.
         let swimCss: Double?
         let poolLength: Double?
+        /// "manual", or "auto": the pool of the last pool swim.
+        var poolLengthSource: String? = nil
         /// "off", "races" or "season".
         let openWater: String?
     }
