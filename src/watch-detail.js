@@ -39,8 +39,8 @@ export function parseTcx(xml, start) {
 }
 
 // Heart rate through [start, end) from the stored samples: 10-second averages
-// (5-minute rows once the samples are older than a week, hourly after a month),
-// seconds from start.
+// where samples are kept, else the 5-minute rows (hourly after a month), seconds
+// from start.
 export async function storedHeartRate(db, userId, start, end) {
   const s = Date.parse(start), e = Date.parse(end);
   if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s || e - s > 24 * 3600e3) return [];
@@ -53,7 +53,10 @@ export async function storedHeartRate(db, userId, start, end) {
       WHERE user_id=? AND data_type IN ('heart-rate-5min','heart-rate-1h') AND sample_time>=? AND sample_time<? ORDER BY sample_time`)
       .bind(userId, start, end).all().then(r => r.results || []).catch(() => [])
   ]);
-  const rows = raw.length ? raw : buckets;
+  // The 10-second averages where samples are kept (a Google workout's own
+  // minutes), the stored rows for the 5 minutes without any.
+  const covered = new Set(raw.map(r => Math.floor(n(r.at) / 300)));
+  const rows = [...raw, ...buckets.filter(r => !covered.has(Math.floor(n(r.at) / 300)))].sort((a, b) => n(a.at) - n(b.at));
   return thin(rows.map(r => [Math.round(n(r.at) - s / 1000), Math.round(n(r.v))]).filter(([t, v]) => t >= 0 && v > 0));
 }
 
