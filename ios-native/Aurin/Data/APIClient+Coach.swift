@@ -119,8 +119,10 @@ struct WeekAIItem: Decodable {
     let label: String?
     let reason: String?
     let role: String?
+    /// The week's brick: this run straight after the ride before it (src/week-ai.js markBrick).
+    var brick = false
 
-    enum CodingKeys: String, CodingKey { case date, sport, minutes, environment, kind, focus, label, reason, role }
+    enum CodingKeys: String, CodingKey { case date, sport, minutes, environment, kind, focus, label, reason, role, brick }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -133,6 +135,7 @@ struct WeekAIItem: Decodable {
         label = try? c.decodeIfPresent(String.self, forKey: .label)
         reason = try? c.decodeIfPresent(String.self, forKey: .reason)
         role = try? c.decodeIfPresent(String.self, forKey: .role)
+        brick = (try? c.decodeIfPresent(Bool.self, forKey: .brick)).flatMap { $0 } ?? false
     }
 }
 

@@ -10,6 +10,7 @@ import { validDay as validTrainingDay } from "./training-availability.js";
 import { getChecks, saveCheck } from "./threshold-check.js";
 import { setPlannedEnvironment, movePlannedEvent, deletePlannedEvent } from "./planned-events.js";
 import { plannedDestinations, sendPlanned } from "./planned-send.js";
+import { linkPlanned } from "./planned-links.js";
 import { saveTrainingProfile, getTrainingProfile } from "./training-profile.js";
 import { estimateThresholdPace, estimateFtp, FTP_METHODS, PACE_METHODS, PACE_ZONE_MODELS, POWER_ZONE_MODELS, HR_ZONE_MODELS } from "./training-zones.js";
 import { writeIntervalsZones } from "./intervals-zones.js";
@@ -29,6 +30,17 @@ export async function handleTrainingEditsApi(request,env,ctx,url,session,interna
       if(url.pathname.endsWith('/move')&&String(body.date||'')<localToday())return Response.json({status:'error',message:L('Trénink jde přesunout jen na dnešek nebo pozdější den.', 'A workout can only be moved to today or a later day.')},{status:400});
       if(url.pathname.endsWith('/environment')){const result=await setPlannedEnvironment(env,body);return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
       return Response.json(url.pathname.endsWith('/move')?await movePlannedEvent(env,body):await deletePlannedEvent(env,body),{headers:{'Cache-Control':'no-store'}});
+    }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
+  }
+  // Two sessions of a day one right after the other, or apart again (planned-links.js).
+  if(url.pathname==='/app/api/planned/link'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.method!=='POST')return Response.json({message:'Method not allowed'},{status:405});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    try{
+      const body=await request.json().catch(()=>({}));
+      const result=await linkPlanned(env,{eventId:body.eventId,after:body.after??null},(id,date,time)=>movePlannedEvent(env,{eventId:id,date,time},undefined,{links:false}));
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
     }catch(error){return Response.json({status:'error',message:error.message},{status:400})}
   }
   // "Send to" on a planned ride or run: where it went, and a send by hand (planned-send.js).
