@@ -195,7 +195,7 @@ struct StartPlanSheet: View {
                     }
                 }
                 VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(text: template.sport == "run" ? "Dny běhu" : "Dny na kole")
+                    SectionLabel(text: template.sport == "run" ? "Dny běhu" : template.sport == "swim" ? "Dny plavání" : "Dny na kole")
                     HStack(spacing: 6) {
                         ForEach(0..<7, id: \.self) { i in
                             let on = days.contains(i)
