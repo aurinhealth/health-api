@@ -4,7 +4,6 @@ import {activityFromRow,dedupeActivities} from './coach-reflection.js';
 import {POOL_LENGTHS} from './training-zones.js';
 import {localToday} from './user-time.js';
 import {latestStoredWeight} from './athlete-weight.js';
-import {mondayOfDate,shiftDate} from './dashboard-shared.js';
 import {supportSports} from './athlete-focus.js';
 export const TRAINING_REFERENCES=[
   {name:'WHO 2020: 150–300 min střední intenzity týdně; síla alespoň 2 dny',url:'https://doi.org/10.1136/bjsports-2020-102955'},
@@ -26,17 +25,20 @@ const EXPERIENCE_DAYS=730;
 // technique and loading tolerance do not).
 const LIFT={squat:/^barbell (back |front )?squat$/i,bench:/^barbell bench press$/i,deadlift:/^(barbell |trap bar |conventional |sumo )?deadlift$/i};
 export const epley1rm=(kg,reps)=>Number(kg)>0&&Number(reps)>=1&&Number(reps)<=12?Number(kg)*(1+(Number(reps)===1?0:Number(reps)/30)):null;
-const SPORT_KINDS=['ride','run','swim','strength'];
+const SPORT_KINDS=['ride','run','swim','strength'],GYM_DAY_MIN=60;
+// Date helpers here, not from dashboard-shared.js (which imports this module through profile-suggestions.js).
+const shiftDate=(date,days)=>new Date(Date.parse(String(date).slice(0,10)+'T12:00:00Z')+days*86400000).toISOString().slice(0,10);
+const mondayOfDate=iso=>shiftDate(iso,-((new Date(iso+'T12:00:00Z').getUTCDay()+6)%7));
 // One row a week (Monday): minutes and sessions per sport, running km, the
 // latest FTP and threshold pace and the best estimated 1RM of the main lifts.
 // Gym sessions count each day once, from activities and from logged sets.
 export function summarizeWeeks({activities=[],strengthSets=[]}={},mondays=null){
   const weeks=new Map();
-  const row=date=>{const week=mondayOfDate(date);if(!weeks.has(week))weeks.set(week,{week,ride_min:0,ride_n:0,run_min:0,run_n:0,run_km:0,swim_min:0,swim_n:0,gym_min:0,gym_n:0,ftp:null,run_pace:null,squat:null,bench:null,deadlift:null,pool:null,gymDays:new Set()});return weeks.get(week);};
+  const row=date=>{const week=mondayOfDate(date);if(!weeks.has(week))weeks.set(week,{week,ride_min:0,ride_n:0,run_min:0,run_n:0,run_km:0,swim_min:0,swim_n:0,gym_min:0,gym_n:0,ftp:null,run_pace:null,squat:null,bench:null,deadlift:null,pool:null,gymDays:new Set(),timedGym:new Set()});return weeks.get(week);};
   for(const a of [...activities].filter(a=>a&&a.date&&SPORT_KINDS.includes(a.kind)).sort((x,y)=>x.date<y.date?-1:1)){
     const w=row(a.date),key=a.kind==='strength'?'gym':a.kind;
     w[key+'_min']+=Number(a.minutes)||0;
-    if(a.kind==='strength')w.gymDays.add(a.date);else w[key+'_n']++;
+    if(a.kind==='strength'){w.gymDays.add(a.date);if(Number(a.minutes)>0)w.timedGym.add(a.date);}else w[key+'_n']++;
     if(a.kind==='run')w.run_km+=Number(a.distanceKm)||0;
     if(a.kind==='ride'&&a.ftp>0)w.ftp=a.ftp;
     if(a.kind==='run'&&a.thresholdSpeed>0)w.run_pace=a.thresholdSpeed<20?1000/a.thresholdSpeed:a.thresholdSpeed;
@@ -49,7 +51,8 @@ export function summarizeWeeks({activities=[],strengthSets=[]}={},mondays=null){
     if(rm!=null)for(const [lift,re] of Object.entries(LIFT))if(re.test(name))w[lift]=Math.max(w[lift]||0,rm);
   }
   for(const m of mondays||[])row(m);
-  for(const w of weeks.values()){w.gym_n=w.gymDays.size;delete w.gymDays;w.run_km=Math.round(w.run_km*10)/10;}
+  // A gym day logged only as sets has no duration: it counts as a usual hour.
+  for(const w of weeks.values()){w.gym_n=w.gymDays.size;w.gym_min+=GYM_DAY_MIN*[...w.gymDays].filter(d=>!w.timedGym.has(d)).length;delete w.gymDays;delete w.timedGym;w.run_km=Math.round(w.run_km*10)/10;}
   return [...weeks.values()].sort((x,y)=>x.week<y.week?-1:1);
 }
 // Per-sport experience (gym, cycling, running) from up to two years of weeks.
@@ -119,41 +122,52 @@ async function ensureWeeks(db){
   await db.prepare(`CREATE TABLE IF NOT EXISTS training_weeks (user_id INTEGER NOT NULL, week TEXT NOT NULL, ${WEEK_COLUMNS.map(c=>c+' REAL').join(', ')}, built TEXT NOT NULL, PRIMARY KEY (user_id, week))`).run();
   weeksReady.add(db);
 }
-const REBUILD_DAYS=28,FRESH_DAYS=14;
+const REBUILD_DAYS=7,FRESH_DAYS=14;
 async function readActivities(db,userId,from,to){
-  // Source and type in front so the read seeks (user_id, source_family, data_type, start_time).
+  // Source and type in front so the read seeks (user_id, source_family, data_type, start_time);
+  // the activity sources as everywhere else, and activities always carry start_time.
   const rows=(await db.prepare("SELECT source_family,data_type,start_time,end_time,sample_time,payload_json FROM health_datapoints WHERE user_id=? AND source_family IN ('intervals','local','wahoo','google-wearables','apple-health') AND data_type IN ('activity','exercise') AND start_time>=? AND start_time<? AND (record_role IS NULL OR record_role!='duplicate') ORDER BY start_time").bind(userId,from,to+'T23:59:59').all().catch(()=>({results:[]}))).results||[];
   return dedupeActivities(rows.map(row=>{const a=activityFromRow({...row,start_time:row.start_time||row.sample_time});if(a){let p={};try{p=JSON.parse(row.payload_json||'{}');}catch{}const num=v=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):null;a.distanceKm=num(p.distance)!=null?num(p.distance)/1000:null;a.ftp=num(p.icu_ftp);a.thresholdSpeed=num(p.threshold_pace);a.poolLength=num(p.pool_length);}return a;}).filter(a=>a&&a.minutes>0&&a.minutes<=1440));
 }
 // Two years of finished weeks (training_weeks): stored once each, so a day
 // reads at most 104 rows instead of every activity. Missing weeks, and once a
-// day the last two (late uploads), are counted from the activities of just those days;
-// every 4 weeks the whole two years count again (a service connected later
-// brings old activities). Nothing is stored while there are no activities.
+// day the last two (late uploads), are counted from the activities of just those
+// days; every 7 days the whole two years count again (a service connected later
+// brings old activities, a deleted one takes them away). Nothing is stored
+// while there are no activities. A failed write keeps the weeks just counted.
+// Also returns the activities it read (from `from`), so trainingHistory does
+// not read them again.
 export async function trainingWeeks(db,userId,today){
-  await ensureWeeks(db);
   const thisMonday=mondayOfDate(today),first=shiftDate(thisMonday,-104*7);
-  const stored=(await db.prepare(`SELECT week,${WEEK_COLUMNS.join(',')},built FROM training_weeks WHERE user_id=? AND week>=? AND week<? ORDER BY week`).bind(userId,first,thisMonday).all().catch(()=>({results:[]}))).results||[];
+  const ready=await ensureWeeks(db).then(()=>true,error=>{console.error('Training weeks unavailable',error.message);return false;});
+  const stored=ready?(await db.prepare(`SELECT week,${WEEK_COLUMNS.join(',')},built FROM training_weeks WHERE user_id=? AND week>=? AND week<? ORDER BY week`).bind(userId,first,thisMonday).all().catch(()=>({results:[]}))).results||[]:[];
   const all=[];for(let m=first;m<thisMonday;m=shiftDate(m,7))all.push(m);
   const rebuild=!stored.length||stored.some(r=>r.built<shiftDate(today,-REBUILD_DAYS));
   const have=new Map(stored.map(r=>[r.week,r]));
   const todo=rebuild?all:all.filter(m=>!have.has(m)||(have.get(m).built<shiftDate(m,7+FRESH_DAYS)&&have.get(m).built<today));
-  if(!todo.length)return stored;
+  if(!todo.length)return {weeks:stored,activities:[],from:null};
   const from=todo[0],to=shiftDate(thisMonday,-1);
   const activities=await readActivities(db,userId,from,to);
   const sets=(await db.prepare("SELECT workout_date,exercise,actual_kg,actual_reps FROM strength_sets WHERE user_id=? AND completed=1 AND type='WORK' AND workout_date>=? AND workout_date<?").bind(userId,from,thisMonday).all().catch(()=>({results:[]}))).results||[];
   const fresh=new Map(summarizeWeeks({activities,strengthSets:sets},all.filter(m=>m>=from)).map(w=>[w.week,{...w,built:today}]));
-  if(!activities.length&&!sets.length&&!stored.length)return [...fresh.values()];
-  const write=all.filter(m=>m>=from&&(rebuild||todo.includes(m)));
-  const statements=write.map(m=>{const w=fresh.get(m);return db.prepare(`INSERT INTO training_weeks(user_id,week,${WEEK_COLUMNS.join(',')},built) VALUES(?,?,${WEEK_COLUMNS.map(()=>'?').join(',')},?) ON CONFLICT(user_id,week) DO UPDATE SET ${WEEK_COLUMNS.map(c=>c+'=excluded.'+c).join(',')},built=excluded.built`).bind(userId,m,...WEEK_COLUMNS.map(c=>w[c]??null),today);});
-  if(rebuild)await db.prepare('DELETE FROM training_weeks WHERE user_id=?').bind(userId).run();
-  for(let i=0;i<statements.length;i+=50)await (db.batch?db.batch(statements.slice(i,i+50)):Promise.all(statements.slice(i,i+50).map(s=>s.run())));
-  return all.map(m=>m>=from&&write.includes(m)?fresh.get(m):have.get(m)).filter(Boolean);
+  const weeks=all.map(m=>m>=from&&(rebuild||todo.includes(m))?fresh.get(m):have.get(m)).filter(Boolean);
+  if(ready&&(activities.length||sets.length||stored.length)){
+    const write=all.filter(m=>m>=from&&(rebuild||todo.includes(m)));
+    const statements=write.map(m=>{const w=fresh.get(m);return db.prepare(`INSERT INTO training_weeks(user_id,week,${WEEK_COLUMNS.join(',')},built) VALUES(?,?,${WEEK_COLUMNS.map(()=>'?').join(',')},?) ON CONFLICT(user_id,week) DO UPDATE SET ${WEEK_COLUMNS.map(c=>c+'=excluded.'+c).join(',')},built=excluded.built`).bind(userId,m,...WEEK_COLUMNS.map(c=>w[c]??null),today);});
+    // Weeks older than the two years are no longer read; a rebuild drops them.
+    if(rebuild)statements.push(db.prepare('DELETE FROM training_weeks WHERE user_id=? AND week<?').bind(userId,first));
+    try{for(let i=0;i<statements.length;i+=50)await (db.batch?db.batch(statements.slice(i,i+50)):Promise.all(statements.slice(i,i+50).map(s=>s.run())));}
+    catch(error){console.error('Training weeks not stored',error.message);}
+  }
+  return {weeks,activities,from};
 }
-// Forgets the stored weeks, e.g. after a new service is connected.
-export async function forgetTrainingWeeks(db,userId=db.userId){
-  await ensureWeeks(db);
-  await db.prepare('DELETE FROM training_weeks WHERE user_id=?').bind(userId).run();
+
+// Sessions and hours per sport of the weeks from `since` (triathlon-split.js).
+export function yearFromWeeks(weeks=[],since=''){
+  const out={};
+  for(const w of weeks)if(w.week>=since)for(const [kind,key] of [['ride','ride'],['run','run'],['swim','swim'],['strength','gym']]){if(!(w[key+'_n']>0))continue;const o=out[kind]||(out[kind]={count:0,hours:0});o.count+=Number(w[key+'_n']);o.hours+=(Number(w[key+'_min'])||0)/60;}
+  for(const o of Object.values(out))o.hours=Math.round(o.hours*10)/10;
+  return out;
 }
 
 export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
@@ -163,8 +177,9 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   // Finished weeks (up to two years) from training_weeks; the last 12 weeks of
   // activities for the overall experience, the volume, the weekdays and a new
   // account's sport.
-  const weeks=await trainingWeeks(db,userId,end);
-  const activities=await readActivities(db,userId,daysBack(84),end);
+  const {weeks,activities:read,from}=await trainingWeeks(db,userId,end);
+  // The weeks' read already covers the 84 days up to last Sunday when it went back that far.
+  const activities=from&&from<=daysBack(84)?[...read.filter(a=>a.date>=daysBack(84)),...await readActivities(db,userId,mondayOfDate(end),end)]:await readActivities(db,userId,daysBack(84),end);
   const weight=await latestStoredWeight(db,userId).catch(()=>null);
   const sportExperienceLevels=experienceFromWeeks(weeks,{weightKg:weight?.value_numeric});
   const training=activities.filter(a=>SPORT_KINDS.includes(a.kind));
@@ -174,12 +189,11 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   const experience=perWeek>=4&&activeWeeks>=10?'experienced':perWeek>=2&&activeWeeks>=6?'regular':'beginner';
   const weeklyMinutes=Math.round(recent.reduce((sum,a)=>sum+a.minutes,0)/4);
   const weekdayMinutes=Array(7).fill(0);for(const a of recent)weekdayMinutes[(new Date(a.date+'T12:00:00Z').getUTCDay()+6)%7]+=a.minutes/4;
-  // The last 12 months per sport (sessions, hours) for the triathlon split, from the weeks.
-  const sports={};for(const w of weeks.filter(w=>w.week>=mondayOfDate(daysBack(364))))for(const [kind,key] of [['ride','ride'],['run','run'],['swim','swim'],['strength','gym']]){if(!(w[key+'_n']>0))continue;const o=sports[kind]||(sports[kind]={count:0,hours:0});o.count+=Number(w[key+'_n']);o.hours+=(Number(w[key+'_min'])||0)/60;}
-  for(const o of Object.values(sports))o.hours=Math.round(o.hours*10)/10;
+  // The last 12 months per sport (sessions, hours) for the triathlon split.
+  const sports=yearFromWeeks(weeks,mondayOfDate(daysBack(364)));
   // The pool of the last pool swim (25 or 50 m, 25 yd): the default until one is chosen by hand.
   const poolLength=[...activities].reverse().find(a=>a.kind==='swim'&&POOL_LENGTHS.some(m=>Math.abs(m-a.poolLength)<.1))?.poolLength??[...weeks].reverse().find(w=>w.pool>0)?.pool??null;
-  return {mainSport,supportSports:support,regularSports,experience,sportExperience:sportExperienceLevels,sports,poolLength,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0||yearCount>0,activeWeeks,activityCount:training.length,yearCount,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>mondayOfDate(a.date))).size,weekdayMinutes,periods:{sportDays:364,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
+  return {mainSport,supportSports:support,regularSports,experience,sportExperience:sportExperienceLevels,sports,poolLength,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,yearCount,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>mondayOfDate(a.date))).size,weekdayMinutes,periods:{sportDays:364,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
 }
 export function starterPlan(history,experience=history.experience){
   // These are app templates, not published averages of free time. An inactive

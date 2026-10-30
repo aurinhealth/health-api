@@ -23,7 +23,7 @@ const WORD = re => new RegExp("(?<![\\p{L}])(?:" + re + ")", "iu");
 const NAMES = {
   triathlon: WORD("triatl|triathl|ironman|70\\.3"),
   cycling: WORD("kol(?:o|a|e|u|ech)(?![\\p{L}])|cyklist|cyklo|bike|biking|ride|riding|cycling|cyclist|gran ?fondo|granfondo|mtb|gravel|silni[cč]|ftp|[eé]tap"),
-  running: WORD("b[eě]h|b[eě][zž]|run|marat[oó]n|p[uů]lmarat|half ?marathon|\\d+ ?km b|trail|parkrun"),
+  running: WORD("b[eě]h(?:u|y|ů|at|ání|áme|ám|ách)?(?![\\p{L}])|b[eě]žec|b[eě]žc|b[eě]žet|b[eě]hat|run|marat[oó]n|p[uů]lmarat|half ?marathon|\\d+ ?km b|trail|parkrun"),
   swimming: WORD("plav|swim|baz[eé]n|open ?water|voln[aá] voda|p[rř]eplav"),
   strength: WORD("posil|silov|s[ií]l[ayu]|strength|gym|powerlift|bench|d[rř]ep|mrtv[ýy]|deadlift|hypertrof|sval|muscle|kulturist|bodybuild|crossfit")
 };

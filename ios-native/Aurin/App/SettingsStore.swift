@@ -110,7 +110,10 @@ final class SettingsStore {
         next.merge(changes) { $1 }
         do {
             try await api.saveProfile(next)
-            profile = try await api.profile()
+            // The suggestions too: "automaticky · …" follows the saved goal and race.
+            let response = try await api.profileWithSuggestions()
+            profile = response.profile ?? [:]
+            if let fresh = response.suggestions { suggestions = fresh }
             // New wake times for the watch's alarm.
             WatchBridge.shared.update(profile: profile)
             errorMessage = nil

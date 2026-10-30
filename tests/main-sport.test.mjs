@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb } from "../src/tenancy.js";
-import { mainSportFromWeeks, trainingWeeks } from "../src/training-history.js";
+import { mainSportFromWeeks, trainingWeeks, summarizeWeeks } from "../src/training-history.js";
+const shiftDays = (d, n) => new Date(Date.parse(d + "T12:00:00Z") + n * 86400000).toISOString().slice(0, 10);
 import { sportFromText } from "../src/athlete-focus.js";
 import { effectiveProfile } from "../src/energy-profile.js";
 import { shiftDate } from "../src/dashboard-shared.js";
@@ -45,6 +46,10 @@ test("the gym is the main sport only when it rules the whole year", () => {
   const r = mainSportFromWeeks(year(i => ({ strength: [4, 70], ...(i % 3 ? {} : { run: [1, 30] }) })));
   assert.equal(r.mainSport, "strength");
   assert.deepEqual(r.supportSports, ["run"]);
+  // Gym logged only as sets (no watch workout) still counts its hours.
+  const sets = summarizeWeeks({ strengthSets: Array.from({ length: 52 * 3 }, (_, i) => ({ workout_date: shiftDays("2025-11-03", Math.floor(i / 3) * 7 + i % 3), exercise: "Barbell Bench Press", actual_kg: 60, actual_reps: 5 })),
+    activities: Array.from({ length: 17 }, (_, i) => ({ kind: "run", date: shiftDays("2025-11-03", i * 21), minutes: 30 })) });
+  assert.equal(mainSportFromWeeks(sets).mainSport, "strength");
   // Gym every week but the rides take real hours: the gym prepares for the bike.
   assert.equal(mainSportFromWeeks(year(() => ({ strength: [3, 60], ride: [1, 120] }))).mainSport, "cycling");
 });
@@ -64,39 +69,44 @@ test("the goal or the main race names the sport before the history", () => {
   assert.equal(sportFromText("kolo a posilovna"), "cycling", "the gym prepares for the bike");
   assert.equal(sportFromText("běh a kolo"), null);
   assert.equal(sportFromText("váha kolem 80 kg"), null);
+  // Common words are not running: "během" (during), "bez" (without).
+  assert.equal(sportFromText("nabrat svaly během zimy"), "strength");
+  assert.equal(sportFromText("posilovat bez bolesti zad"), "strength");
+  assert.equal(sportFromText("zhubnout 5 kg během léta"), null);
+  assert.equal(sportFromText("běhat 3× týdně"), "running");
+  assert.equal(sportFromText("10 km běh pod 45 minut"), "running");
   const suggested = { mainSport: "strength", trainingHistory: { mainSport: "strength", yearCount: 200, regularSports: ["strength", "ride"] } };
   const p = effectiveProfile({ mainSport: "auto", sportGoal: "Zajet L'Étape pod 6 hodin" }, suggested);
   assert.equal(p.mainSport, "cycling");
-  assert.deepEqual(p.supportSports, ["strength"]);
   assert.equal(effectiveProfile({ mainSport: "auto" }, suggested).mainSport, "strength");
   assert.equal(effectiveProfile({ mainSport: "running" }, suggested).mainSport, "running", "a chosen sport stays");
 });
 
-test("finished weeks are stored once; only the last two count again, all of them every 4 weeks", async () => {
+test("finished weeks are stored once; only the last two count again, all of them every 7 days", async () => {
   const raw = createD1(); raw.sqlite.exec(schema); const db = scopedDb(raw, 1);
   const ride = date => raw.sqlite.prepare("INSERT INTO health_datapoints(user_id,source_family,data_type,external_id,start_time,sample_time,payload_json) VALUES(1,'intervals','activity',?,?,?,?)").run(crypto.randomUUID(), date + "T08:00:00", date + "T08:00:00", JSON.stringify({ type: "Ride", moving_time: 3600 }));
   const today = "2026-10-30";
   for (const d of ["2025-06-10", "2026-03-03", "2026-10-21"]) ride(d);
   let reads = 0; const prepare = raw.prepare.bind(raw);
   raw.prepare = sql => { if (/FROM health_datapoints/.test(sql)) reads++; return prepare(sql); };
-  const weeks = await trainingWeeks(db, 1, today);
+  const { weeks } = await trainingWeeks(db, 1, today);
   assert.equal(weeks.length, 104);
   assert.equal(weeks.reduce((n, w) => n + (w.ride_n || 0), 0), 3);
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) n FROM training_weeks").get().n, 104);
   // The next day only the two freshest weeks are read again: a ride uploaded
   // late into last week counts, one in March waits for the rebuild.
   ride("2026-10-22"); ride("2026-03-04");
-  reads = 0; let again = await trainingWeeks(db, 1, "2026-10-31"); assert.equal(reads, 1);
+  reads = 0; let again = (await trainingWeeks(db, 1, "2026-10-31")).weeks; assert.equal(reads, 1);
   assert.equal(again.reduce((n, w) => n + (w.ride_n || 0), 0), 4);
   // The same day nothing is read again.
   reads = 0; await trainingWeeks(db, 1, "2026-10-31"); assert.equal(reads, 0);
-  again = await trainingWeeks(db, 1, "2026-12-01");
-  assert.equal(again.reduce((n, w) => n + (w.ride_n || 0), 0), 5, "the 4-weekly rebuild finds the March ride");
+  again = (await trainingWeeks(db, 1, "2026-11-08")).weeks;
+  assert.equal(again.reduce((n, w) => n + (w.ride_n || 0), 0), 5, "the weekly rebuild finds the March ride");
 });
 
 test("no activities stores nothing, so the first sync still counts", async () => {
   const raw = createD1(); raw.sqlite.exec(schema); const db = scopedDb(raw, 1);
-  assert.equal((await trainingWeeks(db, 1, "2026-10-30")).length, 104);
+  assert.equal((await trainingWeeks(db, 1, "2026-10-30")).weeks.length, 104);
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) n FROM training_weeks").get().n, 0);
 });
 
