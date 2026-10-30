@@ -19,7 +19,7 @@ struct TrainingPlans: Decodable, Equatable {
     struct Race: Decodable, Equatable {
         let km: Double
         let options: [Double]?
-        /// A cycling race: granfondo, mtb, tt or climb.
+        /// A cycling race: granfondo, mtb, tt or climb; a triathlon: sprint, olympic, half or full.
         var kind: String? = nil
     }
 
@@ -36,6 +36,8 @@ struct TrainingPlans: Decodable, Equatable {
         let weeks: [Week]
         /// Tests in the plan (an FTP test, a strength test).
         var tests: Bool? = nil
+        /// A triathlon plan's sessions a week per sport ("ride", "run", "swim").
+        var perSport: [String: Int]? = nil
     }
 
     struct Active: Decodable, Equatable {
@@ -135,6 +137,27 @@ struct PlanRace: Decodable, Equatable {
     var goalPace: Int? = nil
     /// How bold the goal is: easy, real, bold or hard.
     var verdict: String? = nil
+    /// A triathlon: each leg's distance and estimated minutes.
+    var legs: Legs? = nil
+
+    struct Legs: Decodable, Equatable {
+        let swim: Leg
+        let ride: Leg
+        let run: Leg
+    }
+
+    struct Leg: Decodable, Equatable {
+        var meters: Int? = nil
+        var km: Double? = nil
+        let minutes: Int
+    }
+
+    /// "Plavání ~29 min · kolo ~1:03 h · běh ~50 min".
+    var legsText: String? {
+        guard let legs else { return nil }
+        return [(L10n.tr("Plavání"), legs.swim), (L10n.tr("kolo"), legs.ride), (L10n.tr("běh"), legs.run)]
+            .map { $0.0 + " ~" + planDuration($0.1.minutes) }.joined(separator: " · ")
+    }
 }
 
 /// "160 km", "21,1 km": a race's distance.
@@ -590,10 +613,11 @@ struct TrainingPlansSheet: View {
         NavigationStack {
             SettingsPage(title: "Tréninkové plány") {
                 Picker("Sport", selection: $sport) {
-                    // The library's order (Kolo, Běh, Posilovna).
+                    // The library's order (Kolo, Běh, Plavání, triatlon, Posilovna).
                     Text("Kolo").tag("ride")
                     Text("Běh").tag("run")
                     Text("Plavání").tag("swim")
+                    Text(verbatim: "Tri").tag("triathlon")
                     Text("Posilovna").tag("gym")
                 }
                 .pickerStyle(.segmented)
