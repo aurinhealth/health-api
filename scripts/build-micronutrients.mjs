@@ -649,7 +649,7 @@ export async function upload(dir, version, bucket, log = console.log) {
 if (process.argv[1]?.endsWith('build-micronutrients.mjs')) {
   const args = process.argv.slice(2), flag = n => { const i = args.indexOf(n); return i >= 0 ? args.splice(i, 2)[1] : null; };
   const doUpload = args.includes('--upload'); if (doUpload) args.splice(args.indexOf('--upload'), 1);
-  const bucket = flag('--bucket') || 'loadwise-food-catalog';
+  const bucket = flag('--bucket') || 'aurin-food-catalog';
   const version = flag('--version') || new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const [work, outDir] = args;
   if (!work || !outDir) { console.error('Usage: node scripts/build-micronutrients.mjs <work-dir> <out-dir> [--upload] [--bucket name] [--version v]'); process.exit(2); }
