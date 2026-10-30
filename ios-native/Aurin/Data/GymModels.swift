@@ -17,7 +17,7 @@ struct GymEquipment: Decodable, Equatable {
     /// follows the active one ("bodyweight": none).
     var places: [GymPlace]? = nil
     var activePlace: String? = nil
-    /// The picker's body parts and kinds of equipment, in order (nil from an older server).
+    /// The picker's kinds of equipment, in order (nil from an older server).
     var sections: [Section]? = nil
 
     struct Station: Decodable, Equatable, Identifiable, Hashable {
@@ -28,6 +28,10 @@ struct GymEquipment: Decodable, Equatable {
         var sections: [String]? = nil
         /// One line on what it is.
         var description: String? = nil
+        /// The muscles it is for, shown under its name (STATION_USE; nil from an older server).
+        var uses: String? = nil
+        /// Words to search it by beyond its name, in both languages.
+        var keywords: String? = nil
 
         /// Its sections; an older server has only the group.
         var sectionIds: [String] { (sections ?? []).isEmpty ? [group] : sections ?? [] }
