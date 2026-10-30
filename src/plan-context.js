@@ -92,6 +92,17 @@ export async function todayPlace(env,ctx,date){
   }catch{return {location:null,forecast:null};}
 }
 
+// A triathlete's history for the week split (triathlon-split.js): the year per
+// sport as the profile suggestions last saved it and the levels chosen by hand.
+// Two single-row reads, only for a triathlete; never the activity history again.
+export async function triathlonHistory(env){
+  const [suggestions,setup]=await Promise.all([
+    env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=2').bind(env.USER_ID).first().catch(()=>null),
+    env.DB.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(env.USER_ID).first().catch(()=>null)
+  ]);
+  const parse=t=>{try{return JSON.parse(t||'{}')||{};}catch{return {};}};
+  return {year:parse(suggestions?.profile_json).trainingHistory?.sports??null,levels:parse(setup?.training_json).experienceBySport||{}};
+}
 export async function planningHistory(env,date,days=84){
   const from=shiftDate(date,-days),to=shiftDate(date,1);
   const [rows,gymDays]=await Promise.all([

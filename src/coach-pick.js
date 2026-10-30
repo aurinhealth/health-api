@@ -20,7 +20,8 @@ const KIND_NAMES = () => ({
   tempo: L("tempo", "tempo"), sweet_spot: L("sweet spot", "sweet spot"), threshold: L("práh", "threshold"), vo2: L("VO2max", "VO2max"),
   vo2max: L("VO2max", "VO2max"), anaerobic: L("anaerobní", "anaerobic"), sprint: L("sprinty", "sprints"), rest: L("volno", "rest")
 });
-const MAIN = { cycling: "ride", running: "run", swimming: "swim", strength: "gym", triathlon: "ride" };
+// A triathlete has three main sports.
+const MAIN = { cycling: ["ride"], running: ["run"], swimming: ["swim"], strength: ["gym"], triathlon: ["ride", "run", "swim"] };
 
 const sentence = text => { const t = String(text || "").trim(); return t ? t[0].toUpperCase() + t.slice(1).replace(/\.?$/, ".") : ""; };
 
@@ -35,7 +36,7 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", spo
   const status = ride?.readiness?.status || run?.readiness?.status || "yellow";
   const names = KIND_NAMES();
   const lowerTired = (ride?.load?.lowerBodyGymSignals48h || 0) > 0;
-  const practised = new Set(sports), main = MAIN[mainSport] || null, trainedToday = today.some(k => k !== "walk");
+  const practised = new Set(sports), main = MAIN[mainSport] || [], trainedToday = today.some(k => k !== "walk");
   const session = coach => coach?.recommendation?.session || {};
   const endurance = (sport, coach) => {
     const s = session(coach), kind = s.kind || "endurance", minutes = Math.round(Number(s.durationMinutes) || (sport === "swim" ? 40 : sport === "run" ? 45 : 75));
@@ -58,8 +59,10 @@ export function rankOptions({ ride, run, swim = null, mainSport = "general", spo
   for (const o of options) {
     let score = base[o.kind] ?? 30;
     if (["ride", "run", "gym", "swim"].includes(o.kind)) {
-      if (o.kind === main) score += 15;
-      if (!practised.has(o.kind === "gym" ? "strength" : o.kind)) score -= o.kind === main ? 0 : 25;
+      if (main.includes(o.kind)) score += 15;
+      if (!practised.has(o.kind === "gym" ? "strength" : o.kind)) score -= main.includes(o.kind) ? 0 : 25;
+      // A triathlete with tired legs: swimming trains without loading them.
+      if (o.kind === "swim" && mainSport === "triathlon" && lowerTired) score += 10;
       if (planned.includes(o.kind) && status !== "red") score += 30;
       if (o.hard && status === "green") score += 5;
       if (o.rest) score -= 20;

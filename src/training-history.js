@@ -3,6 +3,7 @@ import { L } from './lang.js';
 import {activityFromRow,dedupeActivities} from './coach-reflection.js';
 import {localToday} from './user-time.js';
 import {latestStoredWeight} from './athlete-weight.js';
+import {yearBySport} from './triathlon-split.js';
 const DAY=86400000;
 export const TRAINING_REFERENCES=[
   {name:'WHO 2020: 150–300 min střední intenzity týdně; síla alespoň 2 dny',url:'https://doi.org/10.1136/bjsports-2020-102955'},
@@ -79,7 +80,9 @@ export async function trainingHistory(db,userId=db.userId,{now=Date.now()}={}){
   const experience=perWeek>=4&&activeWeeks>=10?'experienced':perWeek>=2&&activeWeeks>=6?'regular':'beginner';
   const weeklyMinutes=Math.round(recent.reduce((sum,a)=>sum+a.minutes,0)/4);
   const weekdayMinutes=Array(7).fill(0);for(const a of recent)weekdayMinutes[(new Date(a.date+'T12:00:00Z').getUTCDay()+6)%7]+=a.minutes/4;
-  return {mainSport,experience,sportExperience:sportExperienceLevels,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>weekOf(a.date))).size,weekdayMinutes,periods:{sportDays:56,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
+  // The last 12 months per sport (sessions, hours) for the triathlon split, from the rows already read.
+  const sports=yearBySport(all,daysBack(365));
+  return {mainSport,experience,sportExperience:sportExperienceLevels,sports,weeklyMinutes,weeklyHours:Math.round(weeklyMinutes/60*10)/10,automaticSportAvailable:recent.length>0,activeWeeks,activityCount:training.length,recentCount:recent.length,recentActiveWeeks:new Set(recent.map(a=>weekOf(a.date))).size,weekdayMinutes,periods:{sportDays:56,experienceDays:84,sportExperienceDays:EXPERIENCE_DAYS,volumeDays:28}};
 }
 export function starterPlan(history,experience=history.experience){
   // These are app templates, not published averages of free time. An inactive
