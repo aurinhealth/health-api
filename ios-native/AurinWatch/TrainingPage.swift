@@ -234,7 +234,7 @@ struct TrainingPage: View {
                 .padding(.top, 3)
             }
             Group {
-                if let plan {
+                if let plan, !plan.steps.isEmpty {
                     PlanBars(plan: plan)
                 } else {
                     RoundedRectangle(cornerRadius: 3).fill(W.track)
@@ -242,9 +242,9 @@ struct TrainingPage: View {
             }
             .frame(height: 26)
             .padding(.top, 7)
-            if s.date == today, let workout = startable(s, plan: plan) {
+            if let plan, canStart(s, plan: plan) {
                 Button {
-                    Task { try? await workout.openInWorkoutApp() }
+                    Task { await start(s, plan: plan) }
                 } label: {
                     Label(W.tr("Otevřít ve Cvičení", "Open in Workout"), systemImage: "play.fill")
                         .font(.system(size: 14, weight: .semibold)).foregroundStyle(.black)
@@ -261,19 +261,29 @@ struct TrainingPage: View {
         .overlay { if picked { RoundedRectangle(cornerRadius: 14).stroke(W.amber, lineWidth: 1.5) } }
         .onAppear {
             plans.load(s)
-            if let leg = nextLeg(s) { plans.load(leg) }
+            // The next leg's plan only for the multisport start: the complication keeps this one's.
+            if let leg = nextLeg(s) { plans.load(leg, shelf: false) }
         }
     }
 
-    /// What Open in Workout starts: a brick of steady legs as one multisport
-    /// workout (as the iPhone sends it, WatchWorkout.multisport), else the leg itself.
-    private func startable(_ s: WatchSnapshot.Session, plan: WatchPlan?) -> WorkoutPlan? {
-        guard let plan else { return nil }
-        if let leg = nextLeg(s), let legPlan = leg.eventId.flatMap({ plans.plans[$0] }), plan.steady, legPlan.steady,
-           let multi = WorkoutOpener.multisport([(s.sport, plan), (leg.sport, legPlan)], name: Self.name(s) + " + " + Self.name(leg).lowercased()) {
-            return multi
+    /// Open in Workout shows today once what it starts is known: a brick
+    /// waits for its next leg's plan, and a leg without steps goes only with it.
+    private func canStart(_ s: WatchSnapshot.Session, plan: WatchPlan) -> Bool {
+        guard s.date == today else { return false }
+        guard let id = nextLeg(s)?.eventId else { return !plan.steps.isEmpty }
+        guard let legPlan = plans.plans[id] else { return plans.failed.contains(id) && !plan.steps.isEmpty }
+        return !plan.steps.isEmpty || (plan.steady && legPlan.steady)
+    }
+
+    /// A brick of steady legs as one multisport workout (as the iPhone sends
+    /// it, WatchWorkout.multisport), else the leg itself with its steps.
+    private func start(_ s: WatchSnapshot.Session, plan: WatchPlan) async {
+        var multi: WorkoutPlan?
+        if let leg = nextLeg(s), let legPlan = leg.eventId.flatMap({ plans.plans[$0] }), plan.steady, legPlan.steady {
+            multi = WorkoutOpener.multisport([(s.sport, plan), (leg.sport, legPlan)], name: Self.name(s) + " + " + Self.name(leg))
         }
-        return WorkoutOpener.workout(plan, sport: s.sport, name: Self.name(s))
+        guard let workout = multi ?? WorkoutOpener.workout(plan, sport: s.sport, name: Self.name(s)) else { return }
+        try? await workout.openInWorkoutApp()
     }
 
     /// The not yet done leg that follows this one right after (a brick).
@@ -293,15 +303,21 @@ struct TrainingPage: View {
         }
     }
 
-    /// A brick's second leg right after its first, the rest in the server's order.
+    /// A brick's legs in order, each right after the one it follows, whatever
+    /// the server's order; the rest as the server lists them.
     static func joined(_ list: [WatchSnapshot.Session]) -> [WatchSnapshot.Session] {
-        var rest = list
+        let ids = Set(list.compactMap(\.eventId))
+        var placed = Set<Int>()
         var out: [WatchSnapshot.Session] = []
-        while !rest.isEmpty {
-            let s = rest.removeFirst()
-            out.append(s)
-            if let next = s.next, let i = rest.firstIndex(where: { $0.eventId == next }) { out.append(rest.remove(at: i)) }
+        func add(_ i: Int) {
+            guard placed.insert(i).inserted else { return }
+            out.append(list[i])
+            guard let id = list[i].eventId else { return }
+            for j in list.indices where list[j].after == id { add(j) }
         }
+        // A leg whose first is in the list waits for it.
+        for i in list.indices where !(list[i].after.map(ids.contains) ?? false) { add(i) }
+        for i in list.indices { add(i) }
         return out
     }
 
@@ -400,7 +416,7 @@ enum WorkoutOpener {
         // A swim in the pool goes by metres as from the iPhone (WatchWorkout.swift); the
         // watch asks for the pool length. Open water goes by time, without rests.
         let openWater = sport == "swim" && plan.openWater == true
-        let location: HKWorkoutSessionLocationType = sport == "swim" && !openWater ? .indoor : .outdoor
+        let location: HKWorkoutSessionLocationType = sport == "swim" ? (openWater ? .outdoor : .indoor) : plan.indoor == true ? .indoor : .outdoor
         for step in plan.steps {
             if step.first { flush(); repeats = step.repeats }
             if step.rest == true {
@@ -426,18 +442,13 @@ enum WorkoutOpener {
         let activities: [SwimBikeRunWorkout.Activity] = legs.compactMap { leg in
             switch leg.sport {
             case "swim": return .swimming(leg.plan.openWater == true ? .openWater : .pool)
-            case "run": return .running(.outdoor)
-            case "ride": return .cycling(.outdoor)
+            case "run": return .running(leg.plan.indoor == true ? .indoor : .outdoor)
+            case "ride": return .cycling(leg.plan.indoor == true ? .indoor : .outdoor)
             default: return nil
             }
         }
         guard activities.count == legs.count, activities.count >= 2, SwimBikeRunWorkout.supportsActivityOrdering(activities) else { return nil }
         return WorkoutPlan(.swimBikeRun(SwimBikeRunWorkout(activities: activities, displayName: String(name.prefix(60)))))
-    }
-
-    static func open(_ plan: WatchPlan, sport: String, name: String) async {
-        guard let workout = workout(plan, sport: sport, name: name) else { return }
-        try? await workout.openInWorkoutApp()
     }
 }
 

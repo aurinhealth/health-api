@@ -51,7 +51,7 @@ struct FoodPage: View {
             }
             .padding(.top, 18)
             HStack(alignment: .top, spacing: 7) {
-                macro(food.carbs.net == true ? W.tr("Sacharidy", "Net carbs") : W.tr("Sacharidy", "Carbs"), food.carbs, W.carbs)
+                macro(W.tr("Sacharidy", "Carbs"), food.carbs, W.carbs)
                 macro(W.tr("Bílkoviny", "Protein"), food.protein, W.protein)
                 macro(W.tr("Tuky", "Fat"), food.fat, W.fat)
             }
@@ -71,8 +71,8 @@ struct FoodPage: View {
             : W.tr("o \(W.number(-rest)) kcal víc", "\(W.number(-rest)) kcal over")
     }
 
-    /// Keto and less carbs: the carbs are a limit (mockup strava-hodinky-web 1), with a tick at
-    /// its end (Czech keeps "Sacharidy": "Čisté sacharidy" does not fit the cell); past it the number and the bar turn rust, as on the iPhone's Food.
+    /// Keto and less carbs: the carbs are a limit, "41/max 66 g" as on the iPhone's Food (FiberRow),
+    /// with a tick at the bar's end; past it the number and the bar turn rust.
     private func macro(_ title: String, _ m: WatchSnapshot.Macro, _ color: Color) -> some View {
         let limit = m.limit == true
         let over = limit && (m.eaten ?? 0) > (m.target ?? .infinity)
@@ -80,7 +80,7 @@ struct FoodPage: View {
             Text(title).font(.system(size: 9, weight: .semibold)).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
             HStack(alignment: .firstTextBaseline, spacing: 0) {
                 Text(W.number(m.eaten ?? 0)).foregroundStyle(over ? W.rust : W.ink)
-                Text((m.target.map { "/" + W.number($0) } ?? "") + " g").foregroundStyle(W.muted)
+                Text((m.target.map { (limit ? "/max " : "/") + W.number($0) } ?? "") + " g").foregroundStyle(W.muted)
             }
             .font(.system(size: 11, weight: .medium).monospacedDigit())
             .lineLimit(1)

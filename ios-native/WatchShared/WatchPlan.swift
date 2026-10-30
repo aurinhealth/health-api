@@ -13,6 +13,8 @@ struct WatchPlan: Codable, Equatable, Sendable {
     var steps: [Step]
     /// A swim in open water: by time, no rests at the wall.
     var openWater: Bool? = nil
+    /// A ride or run indoors (a trainer, a treadmill).
+    var indoor: Bool? = nil
 
     struct Step: Codable, Equatable, Sendable {
         var seconds: Double
@@ -26,6 +28,8 @@ struct WatchPlan: Codable, Equatable, Sendable {
         /// A swim: the length in metres, or a rest at the wall.
         var meters: Double? = nil
         var rest: Bool? = nil
+        /// The plan calls it an interval.
+        var interval: Bool? = nil
     }
 
     struct Request: Codable, Sendable {
@@ -33,9 +37,9 @@ struct WatchPlan: Codable, Equatable, Sendable {
         var date: String
     }
 
-    /// No repeats and no hard steps (zone 4 and up): a leg a multisport workout
-    /// loses nothing of (WatchWorkout.steady on the iPhone).
-    var steady: Bool { !steps.contains { $0.repeats > 1 || $0.zone >= 4 } }
+    /// No repeats and no interval steps, or no steps at all: a leg a multisport
+    /// workout loses nothing of (the same test as WatchWorkout.steady on the iPhone).
+    var steady: Bool { !steps.contains { $0.repeats > 1 || $0.interval == true } }
 
     /// Steps in the order they are ridden, the repeats unrolled.
     var ridden: [Step] {
@@ -105,9 +109,10 @@ struct WatchPlan: Codable, Equatable, Sendable {
                                   rest: s["rest"] as? Bool == true, swim: swim, english: english, repeats: repeats, first: i == 0))
             }
         }
-        guard !steps.isEmpty else { return nil }
+        // A plan without steps (a steady run after a ride) still comes back: a brick needs to know it.
         return WatchPlan(name: workout["name"] as? String, minutes: number(workout["duration_minutes"]).map { Int($0.rounded()) }, steps: steps,
-                         openWater: swim && workout["environment"] as? String == "outdoor" ? true : nil)
+                         openWater: swim && workout["environment"] as? String == "outdoor" ? true : nil,
+                         indoor: !swim && workout["environment"] as? String == "indoor" ? true : nil)
     }
 
     /// One step of the server's plan; a rest at the wall is zone 1.
@@ -116,7 +121,8 @@ struct WatchPlan: Codable, Equatable, Sendable {
         let mid = low.flatMap { l in high.map { (l + $0) / 2 } } ?? high ?? low
         return Step(seconds: seconds ?? 60, zone: rest ? 1 : zone(percent: mid, swim: swim),
                     label: label(note: note, intensity: intensity, english: english, swim: swim, rest: rest),
-                    repeats: repeats, first: first, meters: swim && !rest ? meters.flatMap { $0 > 0 ? $0 : nil } : nil, rest: rest ? true : nil)
+                    repeats: repeats, first: first, meters: swim && !rest ? meters.flatMap { $0 > 0 ? $0 : nil } : nil, rest: rest ? true : nil,
+                    interval: intensity == "interval" ? true : nil)
     }
 
     func encoded() -> Data? { try? JSONEncoder().encode(self) }
