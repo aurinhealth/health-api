@@ -72,7 +72,8 @@ export async function syncIntervalsWorkout(env,id,fetchImpl=fetch,{force=false}=
       if(remoteId){const r=await fetchImpl('https://intervals.icu/api/v1/athlete/0/events/'+encodeURIComponent(remoteId),{method:'DELETE',headers});if(!r.ok&&r.status!==404)throw new Error('Intervals.icu HTTP '+r.status);}
     }else{
       // Keep a provider event id through date/environment edits.
-      const {id:ignoredId,...providerEvent}=event;void ignoredId;
+      // Joined pairs (planned-links.js) stay in the app.
+      const {id:ignoredId,after:ignoredAfter,next:ignoredNext,...providerEvent}=event;void ignoredId;void ignoredAfter;void ignoredNext;
       const put=remoteId=>fetchImpl(remoteId?'https://intervals.icu/api/v1/athlete/0/events/'+encodeURIComponent(remoteId):'https://intervals.icu/api/v1/athlete/0/events/bulk?upsert=true',{method:remoteId?'PUT':'POST',headers,body:JSON.stringify(remoteId?providerEvent:[providerEvent])});
       let r=await put(remoteId);
       // Deleted in Intervals.icu (404): sent again by hand, it is made anew.

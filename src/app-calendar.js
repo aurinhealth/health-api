@@ -143,7 +143,9 @@ function plannedWorkout(row) {
     activityId: null,
     eventId: /^planned:/.test(String(row.external_id || "")) ? String(row.external_id) : null,
     tss: num(p.icu_training_load ?? p.training_load),
-    pair: { id: String(row.external_id), name, type: p.type || "", start, durationHours: hours > 0 && hours < 12 ? hours : null, tss: num(p.icu_training_load ?? p.training_load) },
+    pair: { id: String(row.external_id), name, type: p.type || "", start, durationHours: hours > 0 && hours < 12 ? hours : null, tss: num(p.icu_training_load ?? p.training_load),
+      // A joined pair, one right after the other (planned-links.js).
+      ...(p.after ? { after: String(p.after) } : {}), ...(p.next ? { next: String(p.next) } : {}) },
     // "Weekly" notes, nutrition and plain notes are no workouts.
     weekly: (/^weekly$/i.test(name) && !hours) || /nutrition/i.test(name + " " + (p.category || "")) || /^(NOTE|HOLIDAY|SICK|INJURED|SET_EFTP|FITNESS_DAYS|TARGET)$/i.test(String(p.category || ""))
   };
