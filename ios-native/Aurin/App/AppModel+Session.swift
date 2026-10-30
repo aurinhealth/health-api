@@ -9,7 +9,11 @@ extension AppModel {
     func checkSetup() async {
         guard !demo, phase == .signedIn else { return }
         // An account set up before the health-data consent still has to give it.
-        let consent = (try? await api.healthConsentNeeded()) ?? false
+        let state = try? await api.healthConsentState()
+        // Paused on the server (here or on another device): the paused screen instead.
+        if let state { notePaused(state.paused) }
+        if healthPaused { needsSetup = resumingHealth; return }
+        let consent = state?.needed ?? false
         if UserDefaults.standard.bool(forKey: Self.setupDoneKey) {
             if consent { needsSetup = true }
             return
@@ -23,6 +27,7 @@ extension AppModel {
     func finishSetup() async {
         UserDefaults.standard.set(true, forKey: Self.setupDoneKey)
         needsSetup = false
+        if resumingHealth { healthResumed() }
         await refresh()
         await refreshFood()
         await refreshHealth()
@@ -165,7 +170,7 @@ extension AppModel {
     }
 
     /// The tabs' data of the account that left.
-    private func clearScreens() {
+    func clearScreens() {
         todayScreen.clear()
         foodScreen.clear()
         healthScreen.clear()
@@ -266,6 +271,8 @@ extension AppModel {
         UserDefaults.standard.removeObject(forKey: Self.setupDoneKey)
         UserDefaults.standard.removeObject(forKey: Self.accountInitialKey)
         needsSetup = false
+        resumingHealth = false
+        notePaused(false)
         passkeyOffer = false
         PasskeyOfferLater.forget()
         FirstDays.forget()

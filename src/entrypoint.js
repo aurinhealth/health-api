@@ -157,6 +157,7 @@ import { heatAdvice } from "./heat-advice.js";
 import { ownFitness, watchOnlyFitness, fitnessDays } from "./own-fitness.js";
 import { handleStrengthAutomation, handleAdminApi } from "./routes-admin.js";
 import { handleAccountApi } from "./routes-account.js";
+import { pausedRefusal, finishHealthPauses } from "./health-pause.js";
 import { handleSyncApi } from "./routes-sync.js";
 import { handleGymToolsApi, handleGymPlanApi } from "./routes-gym.js";
 import { handleTrainingEditsApi, handleThresholdApi } from "./routes-training.js";
@@ -432,6 +433,8 @@ const worker = {
     await ensureTenancy(env.DB, env);
     useCookbookDatabase(env.DB);
     // Data of deleted accounts that the delete request had no time for.
+    // The rest of paused health data, and the last pass after a pause (health-pause.js).
+    if (controller.cron === "* * * * *") await finishHealthPauses(env.DB, env.USER_DATA_ROUTING === 'true' || env.FOOD_CATALOG_ROUTING === 'true' ? { databaseForUser: id => deletionDatabase(env, id) } : {}).catch(error => console.error("Health data deletion failed", error.message));
     if (controller.cron === "* * * * *") await finishAccountDeletions(env.DB, env.USER_DATA_ROUTING === 'true' || env.FOOD_CATALOG_ROUTING === 'true' ? { databaseForUser: id => deletionDatabase(env, id) } : {}).catch(error => console.error("Account deletion failed", error.message));
     // Accounts unused for two years go with their data (privacy policy). Tried
     // every ten minutes between 2:00 and 3:00 UTC, as a cron minute can be missed.
@@ -529,6 +532,8 @@ async function routeRequest(request, env, ctx, { url, rawEnv, principal, user, i
     // Routes only the old web dashboard used: the owner's (owner-only-routes.js).
     const ownerOnly = ownerOnlyRefusal(url.pathname, { signedIn, user });
     if (ownerOnly) return ownerOnly;
+    // Health data paused (health-pause.js): only the account, consent, Pro and settings answer.
+    if (signedIn && user.healthPaused && !user.isOwner) { const paused = pausedRefusal(request.method, url.pathname); if (paused) return paused; }
     if(signedIn&&needsAIAccess(request.method,url.pathname)){
       try{await assertAIAccess(env);}catch(error){return error.consent?Response.json({status:'ai_consent_required',message:error.message},{status:403}):Response.json({status:'subscription_required',message:error.message},{status:402});}
     }

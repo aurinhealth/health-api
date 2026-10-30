@@ -20,6 +20,20 @@ import { localToday } from "./user-time.js";
 import { internalTester } from "./staging.js";
 import { appSettings, saveAppSettings } from "./app-settings.js";
 import { profilePhoto, saveProfilePhoto, removeProfilePhoto } from "./profile-photo.js";
+import { healthPaused, pauseHealthData, resumeBlocked } from "./health-pause.js";
+import { syncUltrahuman, FIRST_IMPORT_DAYS as ULTRAHUMAN_FIRST_DAYS } from "./ultrahuman.js";
+import { syncWhoop, FIRST_IMPORT_DAYS as WHOOP_FIRST_DAYS } from "./whoop.js";
+import { syncWahoo, FIRST_IMPORT_DAYS as WAHOO_FIRST_DAYS } from "./wahoo.js";
+
+// Health data turned on again after a pause (health-pause.js): every connected
+// service brings its history in again, as when it was connected.
+function reimportAfterPause(env,ctx){
+  const first=(name,run)=>ctx.waitUntil(run().then(()=>bumpCacheVersion(env.DB)).catch(error=>console.error(name+" import after pause failed",error.message)));
+  first("Google and Intervals.icu",()=>initialImport(env,ctx,{force:true}));
+  if(env.ULTRAHUMAN_TOKEN)first("Ultrahuman",()=>syncUltrahuman(env,{days:ULTRAHUMAN_FIRST_DAYS}));
+  if(env.WHOOP_TOKEN)first("WHOOP",()=>syncWhoop(env,{days:WHOOP_FIRST_DAYS}));
+  if(env.WAHOO_TOKEN)first("Wahoo",()=>syncWahoo(env,{days:WAHOO_FIRST_DAYS}));
+}
 
 export async function handleAccountApi(request,env,ctx,url,session,internalAuth){
   if (url.pathname === "/app/api/me" && request.method === "GET") {
@@ -51,7 +65,25 @@ export async function handleAccountApi(request,env,ctx,url,session,internalAuth)
   if(url.pathname==='/app/api/consent'&&request.method==='POST'){
     if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
     if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
-    try{const result=await saveConsent(env,await request.json().catch(()=>({})));return Response.json(result,{headers:{'Cache-Control':'no-store'}});}
+    const body=await request.json().catch(()=>({}));
+    // Turning paused health data back on: the deletion finishes first (health-pause.js).
+    const resuming=body?.health===true&&!session.user?.isOwner&&await healthPaused(env.RAW_DB||env.DB,env.USER_ID);
+    if(resuming){const blocked=await resumeBlocked(env);if(blocked)return Response.json({status:'health_deleting',message:blocked},{status:409,headers:{'Retry-After':'60','Cache-Control':'no-store'}});}
+    try{
+      const result=await saveConsent(env,body);
+      if(resuming){await bumpCacheVersion(env.DB);reimportAfterPause(env,ctx);}
+      return Response.json(result,{headers:{'Cache-Control':'no-store'}});
+    }
+    catch(error){return Response.json({message:error.message},{status:400});}
+  }
+  // Settings → Privacy and data → Pause health data: the consent is withdrawn and
+  // the health data deleted; the account stays (health-pause.js).
+  if(url.pathname==='/app/api/health-pause'&&request.method==='POST'){
+    if(!session.signedIn)return Response.json({message:L('Přihlas se do dashboardu.', 'Sign in to the app.')},{status:401});
+    if(request.headers.get('Origin')!==url.origin)return Response.json({message:L('Neplatný původ požadavku.', 'Invalid request origin.')},{status:403});
+    const body=await request.json().catch(()=>({}));
+    if(String(body.confirm||'').trim().toUpperCase()!=='PAUSE')return Response.json({message:L('Potvrzení chybí.', 'The confirmation is missing.')},{status:400});
+    try{const result=await pauseHealthData(env,session.user);await bumpCacheVersion(env.DB);return Response.json({...result,consent:await consentStatus(env)},{headers:{'Cache-Control':'no-store'}});}
     catch(error){return Response.json({message:error.message},{status:400});}
   }
   if (url.pathname.startsWith("/app/api/passkeys")) {

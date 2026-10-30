@@ -106,10 +106,11 @@ const DELETE_ORDER = [...FIRST_DELETED, ...Object.keys(PERSONAL_TABLES).filter(t
 // continues. Only chunks that deleted rows count toward maxChunks (an empty
 // table costs one query per call), and at least one runs per call, so every
 // call makes progress.
-export async function purgeUserData(db, userId, { deadline = Date.now() + REQUEST_BUDGET_MS, chunkRows = DELETE_CHUNK_ROWS, maxChunks = MAX_CHUNKS } = {}) {
+// `tables`: only these (pausing health data keeps the account; health-pause.js).
+export async function purgeUserData(db, userId, { deadline = Date.now() + REQUEST_BUDGET_MS, chunkRows = DELETE_CHUNK_ROWS, maxChunks = MAX_CHUNKS, tables = DELETE_ORDER } = {}) {
   const deleted = {};
   let chunks = 0;
-  for (const table of DELETE_ORDER) {
+  for (const table of tables) {
     for (;;) {
       if (chunks > 0 && (chunks >= maxChunks || Date.now() >= deadline)) return { done: false, deleted, chunks };
       let changes;

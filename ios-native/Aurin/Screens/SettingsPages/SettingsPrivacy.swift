@@ -12,6 +12,7 @@ struct PrivacySettingsView: View {
     @State private var exportURL: URL?
     @State private var exporting = false
     @State private var confirmDelete = false
+    @State private var pausing = false
     @State private var error: String?
 
     var body: some View {
@@ -24,10 +25,13 @@ struct PrivacySettingsView: View {
                 SettingsDivider()
                 fact("sparkles", Palette.indigo, "AI jen s tvým souhlasem", "Kouč a fotky jídla posílají jen to, co otázka potřebuje. OpenAI se na nich neučí.")
                 SettingsDivider()
-                fact("tray.and.arrow.down", Palette.green, "Stáhneš je, nebo smažeš", "Všechno si stáhneš nebo smažeš účet se všemi daty, přímo tady.")
+                fact("tray.and.arrow.down", Palette.green, "Stáhneš, pozastavíš, nebo smažeš", "Všechno si stáhneš, zdravotní data pozastavíš, nebo smažeš účet, přímo tady.")
             }
-            SettingsGroup(footer: "Kouč včetně fotek v chatu, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál.") {
-                SettingsToggle(title: "AI funkce", isOn: Binding(get: { ai }, set: { setAI($0) }), disabled: !aiLoaded || model.demo)
+            // Paused health data takes the AI consent with it (src/health-pause.js).
+            if !model.healthPaused {
+                SettingsGroup(footer: "Kouč včetně fotek v chatu, čtení fotek jídla a dohledání potravin posílají potřebná data k AI. Bez souhlasu fungují ostatní části aplikace dál.") {
+                    SettingsToggle(title: "AI funkce", isOn: Binding(get: { ai }, set: { setAI($0) }), disabled: !aiLoaded || model.demo)
+                }
             }
             SettingsGroup {
                 if let exportURL {
@@ -50,6 +54,14 @@ struct PrivacySettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+            // Taking back the consent to health data without deleting the account (GDPR art. 7(3)).
+            if !model.healthPaused {
+                SettingsGroup(footer: "Odvolá souhlas a smaže tvoje zdravotní data. Účet a Pro zůstanou.") {
+                    Button { pausing = true } label: { SettingsRow(title: "Pozastavit zdravotní data") }
+                        .buttonStyle(.plain)
+                        .disabled(model.demo)
+                }
+            }
             SettingsGroup(footer: "Smaže účet i všechna data na serveru. Nejde vrátit. Data v Intervals.icu a Google zůstanou, kde jsou.") {
                 Button { confirmDelete = true } label: { SettingsRow(title: "Smazat účet", chevron: false, titleColor: Palette.rust) }
                     .buttonStyle(.plain)
@@ -57,8 +69,9 @@ struct PrivacySettingsView: View {
             }
             if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust) }
         }
+        .sheet(isPresented: $pausing) { HealthPauseSheet { dismiss() } }
         .task {
-            guard !model.demo else { return }
+            guard !model.demo, !model.healthPaused else { return }
             ai = (try? await model.api.aiAllowed()) ?? false
             aiLoaded = true
         }
@@ -79,11 +92,11 @@ struct PrivacySettingsView: View {
     /// Face ID, Touch ID or the phone's code, so someone holding an unlocked
     /// phone cannot delete the account in two taps. A phone with no code set
     /// has nothing to ask; the question before is the confirmation then.
-    private static func ownerConfirms() async -> Bool {
+    static func ownerConfirms(_ reason: String = L10n.tr("Smazat účet Aurin")) async -> Bool {
         let context = LAContext()
         var unavailable: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &unavailable) else { return true }
-        return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: L10n.tr("Smazat účet Aurin"))) ?? false
+        return (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) ?? false
     }
 
     /// The policy on aurin.health, in Czech while the app speaks Czech.
