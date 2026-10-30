@@ -3334,3 +3334,6 @@
 "Dny plavání" = "Swimming days";
 "Nejlepší časy za 12 měsíců" = "Best times in the last 12 months";
 "Třeba „rozplavání 300 m, 8× 100 m na prahu s 20 s pauzou, vyplavání 200 m“" = "E.g. “300 m warm-up, 8× 100 m at threshold with 20 s rest, 200 m cool-down”";
+"Kolo %@×, běh %@× a plavání %@× týdně. Dny rozdělím podle času, který v týdnu máš." = "Riding %@×, running %@× and swimming %@× a week. I'll spread the days by the time you have in the week.";
+"Odhad: %@." = "Estimate: %@.";
+"Odhad času z tvých prahových hodnot, bez depa." = "Estimated from your thresholds, without transitions.";

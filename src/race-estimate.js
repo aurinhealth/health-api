@@ -50,7 +50,11 @@ export const RIDE_RACES = {
   granfondo: { low: .65, high: .75, course: "road" },
   mtb: { low: .7, high: .8, course: "mtb" },
   tt: { course: "tt" },
-  climb: { course: "climb" }
+  climb: { course: "climb" },
+  // A triathlon's ride: lower the longer the race, the run still to come (Friel).
+  "tri-short": { low: .8, high: .88, course: "tt" },
+  "tri-half": { low: .72, high: .8, course: "tt" },
+  "tri-full": { low: .65, high: .72, course: "tt" }
 };
 const COURSE = {
   road: { cda: .32, crr: .0045, grade: 0 },
