@@ -1,55 +1,60 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildUp, waterGoal, waterNudge, weekStep, loadBuild } from "../src/water-goal.js";
+import { nextBase, waterGoal, waterNudge, loadBuild, forgetWaterFrom } from "../src/water-goal.js";
 import { ensure } from "../src/fluids.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { applyEnergyBudget } from "../src/energy-budget.js";
 import { normalizeProfile } from "../src/energy-profile.js";
 
-const week = (monday, ml) => Object.fromEntries(Array.from({ length: 7 }, (_, i) => [new Date(Date.parse(monday + "T12:00:00Z") + i * 864e5).toISOString().slice(0, 10), ml]));
 const auto = { ml: 3700, baseMl: 3200, exerciseMl: 500 };
 
-test("the automatic step follows how the week went", () => {
-  assert.equal(weekStep(1), 250);
-  assert.equal(weekStep(0.85), 100);
-  assert.equal(weekStep(0.7), 0);
-  assert.equal(weekStep(0.5), -250);
-  assert.equal(weekStep(0.9, "500"), 500);
-  assert.equal(weekStep(0.5, "100"), -100);
-});
+const d = (drunkMl, goalMl, extraMl = 0) => ({ drunkMl, goalMl, extraMl, logged: drunkMl > 0 });
 
-test("Build-up moves week by week, never above Auto nor under a litre", () => {
-  const drunk = { ...week("2026-10-05", 2000), ...week("2026-10-12", 1700), ...week("2026-10-19", 1000) };
-  const r = buildUp({ startMl: 2000, from: "2026-10-05", date: "2026-10-28", capMl: 3200, drunk });
-  assert.deepEqual(r.weeks.map(w => w.targetMl), [2000, 2250, 2250]);
-  assert.equal(r.targetMl, 2000);
-  assert.equal(buildUp({ startMl: 3100, from: "2026-10-05", date: "2026-10-14", capMl: 3200, drunk: week("2026-10-05", 3100) }).targetMl, 3200);
-  assert.equal(buildUp({ startMl: 1000, from: "2026-10-05", date: "2026-10-14", capMl: 3200, drunk: {} }).targetMl, 1000);
+test("Build-up follows what the athlete drinks two days in a row", () => {
+  // Mon 1.3, Tue 1.5, Wed 1.5 at 1.5 → Thursday 1.6.
+  assert.equal(nextBase(1500, [d(1300, 1500), d(1500, 1500), d(1500, 1500)]), 1600);
+  // Thu 2.0 at 1.6 → Friday 1.7 (the smaller day is Wednesday's 1.5).
+  assert.equal(nextBase(1600, [d(1300, 1500), d(1500, 1500), d(1500, 1500), d(2000, 1600)]), 1700);
+  // Fri 1.7 at 1.7 → Saturday 1.8.
+  assert.equal(nextBase(1700, [d(1500, 1500), d(2000, 1600), d(1700, 1700)]), 1800);
+  // Fri 2.2, Sat 2.3 at 1.8 → Sunday 2.1, at most 0.3 l a day.
+  assert.equal(nextBase(1800, [d(2200, 1800), d(2300, 1800)]), 2100);
+  // One weak day (71 %) keeps it; a second under 80 % takes 0.1 l off; under 60 % at once.
+  assert.equal(nextBase(1700, [d(2000, 1600), d(1200, 1700)]), 1700);
+  assert.equal(nextBase(1700, [d(1200, 1700), d(1300, 1700)]), 1600);
+  assert.equal(nextBase(1700, [d(2000, 1600), d(900, 1700)]), 1600);
+  // A day with nothing logged keeps it.
+  assert.equal(nextBase(1700, [d(1700, 1700), d(0, 1700)]), 1700);
+  // A training day is judged against its goal with the training extra.
+  assert.equal(nextBase(1500, [d(1500, 1500), d(2000, 2000, 500)]), 1600);
+  // Never above the Auto base.
+  assert.equal(nextBase(3100, [d(3500, 3100), d(3500, 3100)], { capMl: 3200 }), 3200);
 });
 
 test("the day's goal: Custom and Build-up add the training on top, Auto keeps the target", () => {
   assert.equal(waterGoal(auto, {}).ml, 3700);
   assert.equal(waterGoal(auto, { waterMode: "custom", waterGoal: 2000 }).ml, 2500);
-  const built = waterGoal(auto, { waterMode: "build", waterStart: 2000 }, { targetMl: 2250, weeks: [] });
-  assert.equal(built.ml, 2750);
+  const built = waterGoal(auto, { waterMode: "build", waterStart: 2000 }, { baseMl: 2200, days: [] });
+  assert.equal(built.ml, 2700);
   assert.equal(built.autoMl, 3700);
-  assert.equal(built.build.weekMl, 2250);
+  assert.equal(built.build.baseMl, 2200);
 });
 
-test("Build-up stores each finished week once, so a later day reads only those rows", async () => {
+test("Build-up stores each finished day once and counts a day again after a late drink", async () => {
   const db = createD1(); db.userId = 1;
   await ensure(db);
-  for (let i = 0; i < 7; i++) await db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind) VALUES(1,?,?,2000,'water')").bind(`2026-10-${19 + i}`, `2026-10-${19 + i}T10:00`).run();
-  const profile = { waterMode: "build", waterStart: 2000, waterStep: "auto", waterFrom: "2026-10-19" };
-  const first = await loadBuild(db, profile, "2026-10-28", 3200);
-  assert.equal(first.targetMl, 2250);
-  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build").get().n, 1);
+  const drink = (date, ml) => db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind) VALUES(1,?,?,?,'water')").bind(date, date + "T10:00", ml).run();
+  await drink("2026-10-26", 1300); await drink("2026-10-27", 1500); await drink("2026-10-28", 1500);
+  const profile = { waterMode: "build", waterStart: 1500, waterFrom: "2026-10-26" }, autoT = { baseMl: 3200, exerciseMl: 0 };
+  assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1600);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build").get().n, 3);
+  // The next request of the day reads only the stored rows.
   db.sqlite.exec("DELETE FROM fluid_log");
-  const again = await loadBuild(db, profile, "2026-10-29", 3200);
-  assert.equal(again.targetMl, 2250);
-  assert.deepEqual(again.weeks.map(w => w.percent), [100]);
-  // A new start begins a new run.
-  assert.equal((await loadBuild(db, { ...profile, waterStart: 1500, waterFrom: "2026-10-29" }, "2026-10-29", 3200)).targetMl, 1500);
+  assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1600);
+  // Wednesday's drinks were wrong: it counts again from the log.
+  await forgetWaterFrom(db, "2026-10-28", "2026-10-29");
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build").get().n, 2);
+  assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1500);
 });
 
 test("one push only on a day behind, at 14:00 and 18:00", () => {
@@ -67,8 +72,8 @@ test("an own calorie goal replaces the target and keeps the computed one", () =>
 });
 
 test("the profile keeps the goals only in range", () => {
-  const p = normalizeProfile({ kcalGoal: 200, waterMode: "build", waterStart: 2000, waterStep: "250", waterFrom: "2026-10-26" });
+  const p = normalizeProfile({ kcalGoal: 200, waterMode: "build", waterStart: 2000, waterFrom: "2026-10-26" });
   assert.equal(p.kcalGoal, null);
-  assert.deepEqual([p.waterMode, p.waterStart, p.waterStep, p.waterFrom], ["build", 2000, "250", "2026-10-26"]);
-  assert.equal(normalizeProfile({ waterMode: "x", waterStep: "7" }).waterStep, "auto");
+  assert.deepEqual([p.waterMode, p.waterStart, p.waterFrom], ["build", 2000, "2026-10-26"]);
+  assert.equal(normalizeProfile({ waterMode: "x" }).waterMode, "");
 });

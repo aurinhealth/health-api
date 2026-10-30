@@ -1,39 +1,36 @@
 // The daily water goal the athlete chose (Nastavení → Cíle → Pití): Auto is the
 // target from body weight and training (fluids.js hydrationTarget), Custom a fixed
-// amount, Build-up a start that moves each week by how the last week went, up to
-// the Auto target. Training days add their extra on top of Custom and Build-up.
+// amount, Build-up a start that moves day by day with what the athlete drinks,
+// up to the Auto target. Training days add their extra on top of Custom and
+// Build-up, and a day is judged against its own goal with that extra.
 import { L } from "./lang.js";
-import { hydrationMl } from "./fluids.js";
-import { shiftDate, mondayOfDate } from "./dashboard-shared.js";
+import { hydrationMl, dayActivityHours, hydrationTarget } from "./fluids.js";
+import { shiftDate } from "./dashboard-shared.js";
 
-export const WATER_STEPS = ["auto", "100", "250", "500"];
-const MIN_ML = 1000, MAX_ML = 6000, MAX_WEEKS = 52;
-const round50 = ml => Math.round(ml / 50) * 50;
+const MIN_ML = 1000, MAX_ML = 6000, STEP = 100, MAX_JUMP = 300, OVER_AVERAGE = 500, CATCH_UP_DAYS = 14;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const floor100 = ml => Math.floor(ml / 100) * 100;
 
-// The next week's step from the share of the goal drunk on average: with Auto
-// +0.25 l at 95 % and more, +0.1 l at 80 %, the same at 60 %, −0.25 l below;
-// a chosen step goes up by itself at 80 %, stays at 60 % and goes back below.
-export function weekStep(share, step = "auto") {
-  if (step === "auto") return share >= 0.95 ? 250 : share >= 0.8 ? 100 : share >= 0.6 ? 0 : -250;
-  const s = Number(step) || 250;
-  return share >= 0.8 ? s : share >= 0.6 ? 0 : -s;
-}
-
-// The Build-up target of the week of `date`, and the finished weeks it came
-// from. drunk: { "YYYY-MM-DD": hydration ml } of the days since the start.
-export function buildUp({ startMl, step = "auto", from, date, capMl, drunk = {} }) {
-  const cap = Math.max(MIN_ML, Number(capMl) || MAX_ML);
-  let target = clamp(round50(Number(startMl) || 2000), MIN_ML, cap);
-  const weeks = [], first = mondayOfDate(from || date), current = mondayOfDate(date);
-  for (let monday = first; monday < current && weeks.length < MAX_WEEKS; monday = shiftDate(monday, 7)) {
-    let sum = 0;
-    for (let i = 0; i < 7; i++) sum += Number(drunk[shiftDate(monday, i)]) || 0;
-    const avg = Math.round(sum / 7), share = avg / target;
-    weeks.push({ week: monday, targetMl: target, avgMl: avg, percent: Math.round(share * 100) });
-    target = clamp(target + weekStep(share, step), MIN_ML, cap);
+// Tomorrow's base (the goal without training) after the finished days in
+// `days` (oldest first: { goalMl, extraMl, drunkMl, logged }). What the athlete
+// managed two days in a row (the smaller of the two, without the training
+// extra) raises it: both days at 95 % of their goal = the higher of +0.1 l and
+// that amount, at most +0.3 l a day. One day under 60 %, or two under 80 %,
+// takes 0.1 l off. A day with nothing logged keeps it. Never above the Auto
+// base (cap), nor more than 0.5 l over the average of the logged days.
+export function nextBase(base, days, { capMl = MAX_ML } = {}) {
+  const y = days.at(-1), x = days.at(-2);
+  if (!y?.logged) return base;
+  const share = d => d.drunkMl / Math.max(1, d.goalMl);
+  let next = base;
+  if (share(y) < 0.6 || (share(y) < 0.8 && x?.logged && share(x) < 0.8)) next = base - STEP;
+  else if (share(y) >= 0.95 && x?.logged && share(x) >= 0.95) {
+    const managed = floor100(Math.min(x.drunkMl - x.extraMl, y.drunkMl - y.extraMl));
+    next = Math.min(Math.max(base + STEP, managed), base + MAX_JUMP);
+    const logged = days.filter(d => d.logged), average = logged.reduce((s, d) => s + d.drunkMl - d.extraMl, 0) / logged.length;
+    next = Math.min(next, Math.max(base, floor100(average + OVER_AVERAGE)));
   }
-  return { targetMl: target, weeks };
+  return clamp(next, MIN_ML, Math.max(MIN_ML, Number(capMl) || MAX_ML));
 }
 
 // The day's goal: auto = hydrationTarget() of the day; built = loadBuild() for Build-up.
@@ -43,34 +40,56 @@ export function waterGoal(auto, profile = {}, built = null) {
   if (mode === "custom" && Number(profile.waterGoal) > 0)
     return { ...auto, ml: Math.min(MAX_ML, Number(profile.waterGoal) + extra), autoMl, mode };
   if (mode === "build" && built) {
-    const weekMl = Math.min(built.targetMl, Math.max(MIN_ML, Number(auto?.baseMl) || MAX_ML));
-    return { ...auto, ml: Math.min(MAX_ML, weekMl + extra), autoMl, mode, build: { weekMl, step: profile.waterStep || "auto", weeks: built.weeks.slice(-2).reverse() } };
+    const baseMl = Math.min(built.baseMl, Math.max(MIN_ML, Number(auto?.baseMl) || MAX_ML));
+    return { ...auto, ml: Math.min(MAX_ML, baseMl + extra), autoMl, mode,
+      build: { baseMl, done: baseMl >= (Number(auto?.baseMl) || MAX_ML), days: built.days.slice(-2).reverse() } };
   }
   return { ...auto, autoMl, mode: "auto" };
 }
 
 const tableReady = new WeakSet();
+async function ensureTable(db) {
+  if (tableReady.has(db)) return;
+  await db.prepare("CREATE TABLE IF NOT EXISTS water_build (user_id INTEGER NOT NULL, since TEXT NOT NULL, date TEXT NOT NULL, goal_ml INTEGER NOT NULL, extra_ml INTEGER NOT NULL, drunk_ml INTEGER NOT NULL, logged INTEGER NOT NULL, next_ml INTEGER NOT NULL, PRIMARY KEY (user_id, since, date))").run();
+  tableReady.add(db);
+}
 
-// Build-up's weeks are stored once each (water_build), so a day reads at most three
-// rows; only the first request of a new week reads that week's drinks (7 days of
-// fluid_log). A start or a step changed in Cíle starts a new run (since).
-export async function loadBuild(db, profile, date, capMl) {
+// Build-up's finished days are stored once each (water_build): a day reads the
+// last 14 stored rows, and only the first request of a day reads yesterday's
+// drinks and training (more after days without the app, at most 14). A new
+// start in Cíle starts a new run (since). A drink added, changed or deleted on
+// an earlier day forgets the days from it (forgetWaterFrom), so they count again.
+export async function loadBuild(db, profile, date, auto) {
   const start = Number(profile?.waterStart);
   if (profile?.waterMode !== "build" || !(start > 0)) return null;
-  const step = profile.waterStep || "auto", since = `${profile.waterFrom || date}|${start}|${step}`;
-  if (!tableReady.has(db)) { await db.prepare("CREATE TABLE IF NOT EXISTS water_build (user_id INTEGER NOT NULL, since TEXT NOT NULL, week TEXT NOT NULL, target_ml INTEGER NOT NULL, avg_ml INTEGER NOT NULL, percent INTEGER NOT NULL, PRIMARY KEY (user_id, since, week))").run(); tableReady.add(db); }
-  const stored = ((await db.prepare("SELECT week,target_ml,avg_ml,percent FROM water_build WHERE user_id=? AND since=? ORDER BY week DESC LIMIT 2")
-    .bind(db.userId, since).all()).results || []).reverse().map(r => ({ week: r.week, targetMl: Number(r.target_ml), avgMl: Number(r.avg_ml), percent: Number(r.percent) }));
-  const current = mondayOfDate(date), last = stored.at(-1);
-  // The target the last stored week ended with is where the next one starts.
-  const next = last ? shiftDate(last.week, 7) : mondayOfDate(profile.waterFrom || date);
-  const from = next < shiftDate(current, -56) ? shiftDate(current, -56) : next;
-  const startMl = last ? Math.max(MIN_ML, last.targetMl + weekStep(last.percent / 100, step)) : start;
-  if (from >= current) return { targetMl: clamp(startMl, MIN_ML, Math.max(MIN_ML, Number(capMl) || MAX_ML)), weeks: stored };
-  const built = buildUp({ startMl, step, from, date, capMl, drunk: await drunkByDay(db, from, current) });
-  for (const w of built.weeks) await db.prepare("INSERT INTO water_build(user_id,since,week,target_ml,avg_ml,percent) VALUES(?,?,?,?,?,?) ON CONFLICT(user_id,since,week) DO NOTHING")
-    .bind(db.userId, since, w.week, w.targetMl, w.avgMl, w.percent).run();
-  return { targetMl: built.targetMl, weeks: [...stored, ...built.weeks].slice(-2) };
+  await ensureTable(db);
+  const since = `${profile.waterFrom || date}|${start}`, first = profile.waterFrom || date, cap = Number(auto?.baseMl) || MAX_ML;
+  const rows = ((await db.prepare("SELECT date,goal_ml,extra_ml,drunk_ml,logged,next_ml FROM water_build WHERE user_id=? AND since=? AND date<? ORDER BY date DESC LIMIT ?")
+    .bind(db.userId, since, date, CATCH_UP_DAYS).all()).results || []).reverse()
+    .map(r => ({ date: r.date, goalMl: Number(r.goal_ml), extraMl: Number(r.extra_ml), drunkMl: Number(r.drunk_ml), logged: Boolean(r.logged), nextMl: Number(r.next_ml) }));
+  let base = rows.length ? rows.at(-1).nextMl : clamp(start, MIN_ML, Math.max(MIN_ML, cap));
+  let day = rows.length ? shiftDate(rows.at(-1).date, 1) : first;
+  if (day < shiftDate(date, -CATCH_UP_DAYS)) day = shiftDate(date, -CATCH_UP_DAYS);
+  if (day < date) {
+    const drunk = await drunkByDay(db, day, date);
+    for (; day < date; day = shiftDate(day, 1)) {
+      const extraMl = hydrationTarget(await dayActivityHours(db, db.userId, day)).exerciseMl;
+      const d = { date: day, goalMl: base + extraMl, extraMl, drunkMl: drunk[day] || 0, logged: drunk[day] > 0 };
+      rows.push(d);
+      base = nextBase(base, rows.slice(-CATCH_UP_DAYS), { capMl: cap });
+      d.nextMl = base;
+      await db.prepare("INSERT INTO water_build(user_id,since,date,goal_ml,extra_ml,drunk_ml,logged,next_ml) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(user_id,since,date) DO NOTHING")
+        .bind(db.userId, since, day, d.goalMl, extraMl, d.drunkMl, d.logged ? 1 : 0, base).run();
+    }
+  }
+  return { baseMl: base, days: rows.slice(-CATCH_UP_DAYS).map(({ nextMl, ...d }) => d) };
+}
+
+// A drink of an earlier day changed: that day and the ones after count again.
+export async function forgetWaterFrom(db, date, today) {
+  if (!date || date >= today) return;
+  await ensureTable(db);
+  await db.prepare("DELETE FROM water_build WHERE user_id=? AND date>=?").bind(db.userId, date).run();
 }
 
 // Hydration ml per day from `from` to the day before `to` (the drinks logged in Aurin).

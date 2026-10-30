@@ -3303,13 +3303,8 @@
 "Aurin dnes doporučuje %@ kcal" = "Aurin recommends %@ kcal today";
 "Aurin dnes doporučuje %@" = "Aurin recommends %@ today";
 "Začít na" = "Start at";
-"Každý týden" = "Each week";
-"Splněno na 95 % a víc: + 0,25 l. Na 80 %: + 0,1 l. Na 60 %: zůstává. Méně: − 0,25 l." = "Met 95 % or more: + 0.25 l. 80 %: + 0.1 l. 60 %: stays. Less: − 0.25 l.";
-"Splněno na 80 % a víc: o krok výš. Na 60 %: zůstává. Méně: o krok níž." = "Met 80 % or more: one step up. 60 %: stays. Less: one step down.";
 "Jak to šlo" = "How it went";
-"Minulý týden" = "Last week";
-"Týden předtím" = "Week before";
-"%@ z %@ denně" = "%@ of %@ a day";
-"+ 0,1 l" = "+ 0.1 l";
-"+ 0,25 l" = "+ 0.25 l";
-"+ 0,5 l" = "+ 0.5 l";
+"Dva dny po sobě splněno: cíl jde nahoru podle toho, co vypiješ. Dva slabší dny: o 0,1 l níž. Den bez zápisu cíl nemění." = "Two days in a row met: the goal rises with what you drink. Two weaker days: 0.1 l lower. A day with nothing logged keeps it.";
+"Došel jsi na doporučený cíl." = "You reached the recommended goal.";
+"Předevčírem" = "Day before";
+"Nezapsáno" = "Not logged";

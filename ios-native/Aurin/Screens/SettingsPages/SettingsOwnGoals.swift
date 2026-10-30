@@ -1,9 +1,9 @@
 import SwiftUI
 
 // Cíle → Kalorie and Pití: Auto follows the computed target; Vlastní is the
-// athlete's own number; Pití can also build up week by week to the target
-// (Postupně, src/water-goal.js). Saved in the profile: kcalGoal, waterMode,
-// waterGoal, waterStart, waterStep, waterFrom.
+// athlete's own number; Pití can also build up day by day with what the athlete
+// drinks, up to the target (Postupně, src/water-goal.js). Saved in the profile:
+// kcalGoal, waterMode, waterGoal, waterStart, waterFrom.
 
 /// "2,0 l" or "67.6 fl oz".
 func waterText(_ ml: Double?) -> String {
@@ -124,9 +124,6 @@ struct WaterGoalSheet: View {
     @State private var mode = "auto"
     @State private var custom: Double = 2000
     @State private var start: Double = 2000
-    @State private var step = "auto"
-
-    static let steps = [("auto", "Auto"), ("100", "+ 0,1 l"), ("250", "+ 0,25 l"), ("500", "+ 0,5 l")]
 
     var body: some View {
         ScrollView {
@@ -158,7 +155,7 @@ struct WaterGoalSheet: View {
         .onAppear(perform: fill)
     }
 
-    /// Start, the weekly step, and how the last two weeks went.
+    /// Start, today's goal, and how the last two days went.
     private var build: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
@@ -166,33 +163,21 @@ struct WaterGoalSheet: View {
                 ValueStepper(text: waterText(start),
                              minus: { start = max(1000, start - 100) }, plus: { start = min(6000, start + 100) })
             }
-            SettingsGroup(title: "Každý týden", footer: step == "auto"
-                          ? "Splněno na 95 % a víc: + 0,25 l. Na 80 %: + 0,1 l. Na 60 %: zůstává. Méně: − 0,25 l."
-                          : "Splněno na 80 % a víc: o krok výš. Na 60 %: zůstává. Méně: o krok níž.") {
-                ForEach(Array(Self.steps.enumerated()), id: \.element.0) { index, item in
-                    if index > 0 { SettingsDivider() }
-                    Button { step = item.0 } label: {
-                        HStack {
-                            Text(L10n.tr(item.1)).font(.body).foregroundStyle(Palette.ink)
-                            Spacer()
-                            Image(systemName: "checkmark").scaledFont(15, weight: .semibold, cap: .denseCap).foregroundStyle(Palette.ink)
-                                .opacity(step == item.0 ? 1 : 0)
-                        }
-                        .padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(step == item.0 ? .isSelected : [])
-                }
-            }
-            if let weeks = water?.build?.weeks, !weeks.isEmpty, water?.mode == "build" {
-                SettingsGroup(title: "Jak to šlo") {
-                    ForEach(Array(weeks.enumerated()), id: \.element.week) { index, week in
-                        if index > 0 { SettingsDivider() }
-                        SettingsRow(title: index == 0 ? "Minulý týden" : "Týden předtím",
-                                    subtitle: L10n.f("%@ z %@ denně", waterText(week.avgMl), waterText(week.targetMl)),
-                                    value: Fmt.int(week.percent) + Fmt.percentSign, chevron: false)
+            if let build = water?.build, water?.mode == "build" {
+                SettingsGroup(title: "Jak to šlo", footer: "Dva dny po sobě splněno: cíl jde nahoru podle toho, co vypiješ. Dva slabší dny: o 0,1 l níž. Den bez zápisu cíl nemění.") {
+                    SettingsRow(title: build.done ? "Hotovo" : "Dnes",
+                                subtitle: build.done ? L10n.tr("Došel jsi na doporučený cíl.") : nil,
+                                value: waterText(build.baseMl), chevron: false)
+                    ForEach(Array(build.days.enumerated()), id: \.element.date) { index, day in
+                        SettingsDivider()
+                        SettingsRow(title: index == 0 ? "Včera" : "Předevčírem",
+                                    subtitle: day.logged ? L10n.f("%@ z %@", waterText(day.drunkMl), waterText(day.goalMl)) : L10n.tr("Nezapsáno"),
+                                    value: day.logged ? Fmt.int(day.drunkMl / max(1, day.goalMl) * 100) + Fmt.percentSign : "–", chevron: false)
                     }
                 }
+            } else {
+                Text(L10n.tr("Dva dny po sobě splněno: cíl jde nahoru podle toho, co vypiješ. Dva slabší dny: o 0,1 l níž. Den bez zápisu cíl nemění."))
+                    .font(Typo.small).foregroundStyle(Palette.muted)
             }
         }
     }
@@ -203,9 +188,8 @@ struct WaterGoalSheet: View {
         if mode == "custom" { out["waterGoal"] = .number(custom) }
         if mode == "build" {
             out["waterStart"] = .number(start)
-            out["waterStep"] = .string(step)
-            // A new start or step begins a new run from today.
-            let same = p["waterMode"]?.string == "build" && p["waterStart"]?.number == start && (p["waterStep"]?.string ?? "auto") == step
+            // A new start begins a new run from today.
+            let same = p["waterMode"]?.string == "build" && p["waterStart"]?.number == start
             out["waterFrom"] = .string(same ? (p["waterFrom"]?.string ?? today) : today)
         }
         return out
@@ -218,7 +202,6 @@ struct WaterGoalSheet: View {
         let auto = water?.autoTarget ?? 2000
         custom = p["waterGoal"]?.number ?? (auto / 100).rounded() * 100
         start = p["waterStart"]?.number ?? max(1000, ((auto * 0.65) / 100).rounded() * 100)
-        step = p["waterStep"]?.string ?? "auto"
     }
 }
 

@@ -103,7 +103,7 @@ struct GoalsSettingsView: View {
         let water = model.today?.nutrition.water
         let mode = store.profile["waterMode"]?.string ?? ""
         let word = mode == "custom" ? "Vlastní" : mode == "build" ? "Postupně" : "Auto"
-        let ml = mode == "build" ? water?.build?.weekMl ?? store.profile["waterStart"]?.number : mode == "custom" ? store.profile["waterGoal"]?.number : water?.target
+        let ml = mode == "build" ? water?.build?.baseMl ?? store.profile["waterStart"]?.number : mode == "custom" ? store.profile["waterGoal"]?.number : water?.target
         return L10n.tr(word) + (ml.map { " · " + waterText($0) } ?? "")
     }
 
