@@ -145,7 +145,8 @@ struct SourcesSettingsView: View {
         .sheet(isPresented: $connectingApple) {
             AppleHealthConnectSheet { await store.load(); actions.message = L10n.tr("Apple Health je připojené.") }
         }
-        .connectFlow($flow, actions: actions, store: store)
+        // A service connected or disconnected here changes where data can go.
+        .connectFlow($flow, actions: actions, store: store, connected: { await sync?.load() }, disconnected: { Task { await sync?.load() } })
         .task {
             guard sync == nil else { return }
             let s = SyncSettingsStore(api: model.api, demo: model.demo)

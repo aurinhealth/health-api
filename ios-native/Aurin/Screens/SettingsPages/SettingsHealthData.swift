@@ -20,6 +20,7 @@ enum HealthDataSources {
         case (.food, _): return ["nutrition"]
         case (.water, _): return ["water"]
         case (.resting, _): return ["restingHR"]
+        case (.heart, _): return ["vo2max"]
         case (.hrv, _): return ["hrv"]
         case (.sleep, _): return ["sleep"]
         case (.steps, _): return ["steps"]
@@ -114,6 +115,9 @@ struct HealthDataTypeView: View {
     let store: SettingsStore
     let sync: SyncSettingsStore?
     @State private var working = false
+    /// Google asks on its own page before Aurin may write there (as on Google's page).
+    @State private var askingGoogle = false
+    @State private var connectingGoogle = false
     private var health: AppleHealth { AppleHealth.shared }
 
     var body: some View {
@@ -143,6 +147,18 @@ struct HealthDataTypeView: View {
                 Text(message).font(Typo.small).foregroundStyle(Palette.rust).fixedSize(horizontal: false, vertical: true)
             }
         }
+        .sheet(isPresented: $askingGoogle) {
+            GoogleWriteSheet(missing: sync?.destination("google")?.missingScopes ?? [], busy: connectingGoogle) { await extendGoogle() }
+        }
+    }
+
+    private func extendGoogle() async {
+        connectingGoogle = true
+        defer { connectingGoogle = false }
+        _ = try? await model.connect(provider: "google-extra")
+        askingGoogle = false
+        await sync?.load()
+        await store.load()
     }
 
     private func row(_ id: String, subtitle: String?, isOn: Binding<Bool>) -> some View {
@@ -155,11 +171,7 @@ struct HealthDataTypeView: View {
     }
 
     static func name(_ id: String) -> String {
-        switch id {
-        case "intervals": "Intervals.icu"
-        case "wahoo": "Wahoo"
-        default: SourcePrioritySheet.name(id)
-        }
+        ["ultrahuman", "whoop"].contains(id) ? SourcePrioritySheet.name(id) : SyncApp.name(id)
     }
 
     private func readSubtitle(_ id: String) -> String? {
@@ -177,8 +189,9 @@ struct HealthDataTypeView: View {
             return Binding(get: { health.enabled && health.categories.contains(type) },
                            set: { on in Task { await setApple(on) } })
         }
+        // One save at a time: the server writes the whole list each time.
         return Binding(get: { store.reads(id, type.rawValue) ?? false },
-                       set: { on in Task { await store.saveRead(id, type.rawValue, on: on) } })
+                       set: { on in Task { working = true; await store.saveRead(id, type.rawValue, on: on); working = false } })
     }
 
     /// Apple Health's switch for this type, as on its page: the last one off
@@ -220,7 +233,10 @@ struct HealthDataTypeView: View {
                 if on { chosen += types.filter(d.healthTypes.contains) }
                 var prefs = d.prefs
                 prefs.health = .some(d.healthTypes.filter(chosen.contains))
-                Task { [prefs] in await sync.save(id, prefs) }
+                Task { [prefs] in
+                    await sync.save(id, prefs)
+                    if on, id == "google", !(sync.destination("google")?.missingScopes ?? []).isEmpty { askingGoogle = true }
+                }
             })
     }
 }

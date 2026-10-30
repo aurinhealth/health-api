@@ -189,7 +189,11 @@ final class SettingsStore {
             try await api.saveReadSwitch(provider: provider, type: type, on: on)
             errorMessage = nil
         } catch {
-            readOff = previous
+            // Only this switch goes back; another one saved meanwhile stays.
+            var back = readOff[provider] ?? []
+            back.removeAll { $0 == type }
+            if previous[provider]?.contains(type) == true { back.append(type) }
+            readOff[provider] = back
             errorMessage = error.localizedDescription
         }
     }
