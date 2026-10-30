@@ -10,7 +10,7 @@ struct CoachPick: Decodable, Equatable {
         let detail: String?
         let reason: String?
         let best: Bool?
-        /// "library" (ride, run), "gym" or "accept".
+        /// "library" (ride, run, swim), "gym" or "accept".
         let action: String
         /// The rows under the profile: a section and its length or target.
         var lines: [[String]]? = nil
@@ -55,7 +55,7 @@ struct CoachPick: Decodable, Equatable {
         case "ride": return "bicycle"
         case "run": return "figure.run"
         case "gym": return "dumbbell.fill"
-        case "swim": return "drop"
+        case "swim": return "figure.pool.swim"
         case "sauna": return "flame"
         case "stretch": return "figure.flexibility"
         default: return "moon"

@@ -10,7 +10,7 @@ const schema=readFileSync(new URL('../staging/schema.sql',import.meta.url),'utf8
 const sessions=(kind,months,n=4,extra={})=>months.flatMap(m=>Array.from({length:n},(_,i)=>({kind,date:`${m}-${String(i*7+1).padStart(2,'0')}`,minutes:60,...extra})));
 const monthsFrom=(year,month,count)=>Array.from({length:count},(_,i)=>{const d=new Date(Date.UTC(year,month-1+i,1));return d.toISOString().slice(0,7);});
 test('no data is a beginner in every sport',()=>{
-  assert.deepEqual(sportExperience(),{strength:'beginner',ride:'beginner',run:'beginner'});
+  assert.deepEqual(sportExperience(),{strength:'beginner',ride:'beginner',run:'beginner',swim:'beginner'});
 });
 test('months with training set the level; a long pause does not lower it',()=>{
   // 14 months of gym, then an 8-month injury pause: still experienced.
@@ -39,7 +39,8 @@ test('FTP in W/kg, threshold pace and running volume',()=>{
 });
 test('another sport raises a level by one step at most',()=>{
   const cyclist=sportExperience({activities:sessions('ride',monthsFrom(2024,10,25))});
-  assert.deepEqual(cyclist,{strength:'regular',ride:'experienced',run:'regular'});
+  // Swimming is technique: riding does not raise it.
+  assert.deepEqual(cyclist,{strength:'regular',ride:'experienced',run:'regular',swim:'beginner'});
   assert.equal(sportExperience({activities:sessions('ride',monthsFrom(2026,1,5))}).strength,'regular');
 });
 test('settings: per-sport auto/manual, the old single experience is the gym manual level',async()=>{

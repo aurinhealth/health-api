@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Zkušenost: the level per sport (cycling, running, gym) that the workouts are
+// Zkušenost: the level per sport (cycling, running, swimming, gym) that the workouts are
 // made for. "Auto" follows up to two years of history (src/training-history.js);
 // a chosen level stays until it is set back to Auto.
 
@@ -11,14 +11,14 @@ struct SportExperience: Decodable, Equatable {
     let autoLevel: String
 }
 
-/// The group in Profil, under the personal details: Kolo, Běh, Posilovna
+/// The group in Profil, under the personal details: Kolo, Běh, Plavání, Posilovna
 /// (the order of the workout library).
 struct ExperienceGroup: View {
     @Environment(AppModel.self) private var model
     @State private var levels: [String: SportExperience] = [:]
     @State private var error: String?
 
-    static let sports = [("ride", "Kolo"), ("run", "Běh"), ("strength", "Posilovna")]
+    static let sports = [("ride", "Kolo"), ("run", "Běh"), ("swim", "Plavání"), ("strength", "Posilovna")]
     static let names = [("beginner", "Začátečník"), ("regular", "Mírně pokročilý"), ("experienced", "Pokročilý")]
     static func name(_ level: String) -> String { L10n.tr(names.first { $0.0 == level }?.1 ?? "Začátečník") }
 

@@ -21,7 +21,7 @@ struct GoalsSettingsView: View {
     @State private var original: JSONObject = [:]
     @State private var filled = false
 
-    static let sports = [("cycling", "cyklistika"), ("running", "běh"), ("triathlon", "triatlon"), ("strength", "silový trénink"), ("general", "všeobecná kondice")]
+    static let sports = [("cycling", "cyklistika"), ("running", "běh"), ("swimming", "plavání"), ("triathlon", "triatlon"), ("strength", "silový trénink"), ("general", "všeobecná kondice")]
 
     var body: some View {
         SettingsPage(title: "Cíle") {
@@ -57,6 +57,14 @@ struct GoalsSettingsView: View {
                     .font(.body)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
+            }
+            if mainSport == "triathlon", !split.isEmpty {
+                SettingsGroup(title: "Jak je týden rozdělený", footer: splitReason) {
+                    ForEach(Array(split.enumerated()), id: \.element.sport.id) { index, row in
+                        if index > 0 { SettingsDivider() }
+                        SettingsRow(icon: SettingsIcon(systemImage: row.sport.symbol, color: row.sport.color), title: L10n.tr(row.sport.label), value: row.value, chevron: false)
+                    }
+                }
             }
             SettingsGroup(title: "Hlavní závod") {
                 SettingsToggle(title: "Mám hlavní závod", isOn: $hasEvent)
@@ -164,6 +172,21 @@ struct GoalsSettingsView: View {
         let recent = (history["recentCount"]?.number ?? 0) > 0 ? store.suggestions["mainSport"]?.string ?? history["mainSport"]?.string : nil
         let label = recent.flatMap { id in Self.sports.first { $0.0 == id }?.1 }
         return [("auto", label.map { L10n.tr("automaticky") + " · " + L10n.tr($0) } ?? L10n.tr("automaticky"))] + Self.sports
+    }
+
+    /// A triathlete's week (src/triathlon-split.js): "2× · 3 h" per sport, ride, run, swim.
+    private var split: [(sport: LibrarySport, value: String)] {
+        guard case .object(let s)? = store.suggestions["triathlonSplit"], case .object(let sessions)? = s["sessions"] else { return [] }
+        let minutes: JSONObject = { if case .object(let m)? = s["minutes"] { return m }; return [:] }()
+        return ["ride", "run", "swim"].compactMap { id in
+            guard let sport = LibrarySport.find(id), let count = sessions[id]?.number, count > 0 else { return nil }
+            return (sport, "\(Int(count))×" + (minutes[id]?.number.map { " · " + Fmt.duration(Int($0)) } ?? ""))
+        }
+    }
+
+    private var splitReason: String? {
+        guard case .object(let s)? = store.suggestions["triathlonSplit"] else { return nil }
+        return s["reason"]?.string
     }
 
     private static let isoDay: DateFormatter = {

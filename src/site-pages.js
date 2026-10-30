@@ -793,7 +793,7 @@ export function overviewPage(request) {
     ['zatez', 'Strain', 'Know when to push.', 'Every workout and every step adds up.', 'amber', 'glow-training', [
       ['html:strain', 'strainMade', 200, 'A target for today.', 'Aurin shows where today’s strain should land, from your readiness, sleep debt and plan, and what fills it.', 7000]]],
     ['trenink', '', 'A plan that adapts.', 'An activity for every day, picked for how you recovered.', 'green', 'glow-today', [
-      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon or a gran fondo, or let the AI plan the week; a busy day in your calendar gets a shorter workout. Send a planned ride or run to Wahoo, Intervals.icu, your Apple Watch or Zwift.', 9500]]],
+      ['training', 'week', 150, 'Your week at a glance.', 'Follow a plan for your race, from 5 km to a marathon, a gran fondo or a triathlon from sprint to full distance, or one that takes you to 1,500 m of swimming without stopping, or let the AI plan the week of rides, runs, swims and gym; for a triathlon your newest sport gets more short sessions, with a short run straight after a ride that goes to your Apple Watch as one multisport workout, or apart, each at its own time. A busy day in your calendar gets a shorter workout. Send a planned ride, run or pool swim to Intervals.icu or your Apple Watch, and a ride or run also to Wahoo or Zwift.', 9500]]],
     ['posilovna', 'Gym', 'A workout made for today.', 'From your rested muscles, your time and your gym.', 'amber', 'glow-training', [
       ['builder', 'builder', 200, 'Say how long and what.', 'Pick the day, the length and the focus. Aurin knows which muscles are rested and builds the workout only from the equipment your gym has.', 8500],
       ['gym-day', 'gymParts', 150, 'Warm-up to stretching.', 'Switch the warm-up, cardio and stretching on or off, set their length or pick a warm-up of your own, and move them into the order you like. Then start.', 7000]]],
@@ -848,7 +848,7 @@ ${list.map(([, demo, top], i) => `<div class="part${i === 0 ? ' on' : ''}" style
   // Muscles sit between training mode and food, as Svaly sits under Trénink in the app. The bubble's
   // words are the sample day's (DemoData.muscles), in English.
   const muscles = `<section id="svaly" class="muscles"><div class="wrap mu">
-<div class="copy reveal"><div class="eyebrow">Muscles</div><h3 class="big">Know what’s recovered.</h3><p class="sub">From the gym and from your runs and rides. Turn the figure and tap a muscle.</p>
+<div class="copy reveal"><div class="eyebrow">Muscles</div><h3 class="big">Know what’s recovered.</h3><p class="sub">From the gym and from your rides, runs and swims. Turn the figure and tap a muscle.</p>
 <div class="key" aria-hidden="true"><span style="--c:var(--rust)"><i></i>Tired</span><span style="--c:var(--amber-bar)"><i></i>Recovering</span><span style="--c:color-mix(in srgb,var(--text) 22%,var(--bg))"><i></i>Rested</span></div>
 <div class="mpick" role="group" aria-label="Open a muscle"></div>
 </div>

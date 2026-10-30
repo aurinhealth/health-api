@@ -147,6 +147,27 @@ export async function intervalsCurves(env, authorization, fetchImpl = intervalsR
   return ride || run ? { ...(ride ? { ridePower: ride } : {}), ...(run ? { runBest: run } : {}) } : null;
 }
 
+// A swimmer's best times of the last 12 months from the Intervals.icu pace
+// curve (every swim, the fastest stretch of each distance): 100, 200 and 400 m.
+const SWIM_POINTS = [100, 200, 400];
+export function swimBestPoints(body) {
+  const curve = (Array.isArray(body?.list) ? body.list : [])[0];
+  const times = Array.isArray(curve?.values) ? curve.values : curve?.secs;
+  if (!Array.isArray(curve?.distance) || !Array.isArray(times)) return null;
+  const out = SWIM_POINTS.map(meters => {
+    const seconds = at(curve.distance, times, meters);
+    return seconds ? { meters, seconds: Math.round(seconds), per100: Math.round(seconds / (meters / 100)) } : null;
+  }).filter(Boolean);
+  return out.length ? out : null;
+}
+// One read a day, and only for someone who swam this year (the fitness-insights route).
+export async function swimBests(env, authorization, fetchImpl = intervalsReads(env)) {
+  if (!env.INTERVALS_API_KEY) return null;
+  const body = await fetchImpl("https://intervals.icu/api/v1/athlete/0/pace-curves?type=Swim&curves=1y", { headers: { Authorization: authorization, Accept: "application/json" }, signal: AbortSignal.timeout(8000) })
+    .then(r => (r.ok ? r.json() : null)).catch(() => null);
+  return swimBestPoints(body);
+}
+
 // ---- intervals and laps -----------------------------------------------------
 // The work intervals (laps, or the efforts Intervals.icu found) of the last
 // two weeks' rides and runs from Intervals.icu, newest first: what the athlete

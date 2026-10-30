@@ -6,6 +6,7 @@ import {editLocalWorkout} from './local-workouts.js';
 import { cancelGymPlan, moveGymPlan } from './gym-plan-store.js';
 import { intervalsAuthorization } from "./intervals-auth.js";
 import { intervalsReads } from "./intervals-reads.js";
+import { followMove, unlinkPartners } from './planned-links.js';
 
 const BASE = "https://intervals.icu/api/v1/athlete/0/events/";
 export const isStrengthEvent = event => /^(WeightTraining|Strength|Gym)$/i.test(String(event?.type || ''));
@@ -34,8 +35,9 @@ async function plannedRow(db, eventId) {
 }
 
 // A move keeps the time of day, unless the app sends one: "HH:MM", or null
-// for the day without a time (midnight, as Intervals.icu shows it).
-export async function movePlannedEvent(env, { eventId, date, time }, fetchImpl = intervalsReads(env)) {
+// for the day without a time (midnight, as Intervals.icu shows it). A joined
+// pair (planned-links.js) moves together; links: false is that second move.
+export async function movePlannedEvent(env, { eventId, date, time }, fetchImpl = intervalsReads(env), { links = true } = {}) {
   const id = eventIdOf(eventId);
   if (!id) throw new Error(L("Neplatný plánovaný trénink.", "Invalid planned workout."));
   if (!validDate(date)) throw new Error(L("Neplatné datum.", "Invalid date."));
@@ -43,7 +45,11 @@ export async function movePlannedEvent(env, { eventId, date, time }, fetchImpl =
   const row = await plannedRow(env.DB, id);
   let payload = {}; try { payload = JSON.parse(row?.payload_json || "{}"); } catch {}
   const start = time === undefined ? shiftEventStart(payload.start_date_local || row?.start_time, date) : date + "T" + (time ? time + ":00" : "00:00:00");
-  if(id.startsWith('local-')){const result=await editLocalWorkout(env,id,{start_date_local:start,end_date_local:null},fetchImpl);const gym=isStrengthEvent(payload)?await moveGymPlan(env.DB,eventDate(payload),date):{moved:false};return {...result,date,gymPlanMoved:gym.moved};}
+  if(id.startsWith('local-')){
+    const result=await editLocalWorkout(env,id,{start_date_local:start,end_date_local:null},fetchImpl);const gym=isStrengthEvent(payload)?await moveGymPlan(env.DB,eventDate(payload),date):{moved:false};
+    const linked=links&&(payload.after||payload.next)?await followMove(env,id,payload,{...payload,start_date_local:start},(other,d,t)=>movePlannedEvent(env,{eventId:other,date:d,time:t},fetchImpl,{links:false})):null;
+    return {...result,date,gymPlanMoved:gym.moved,...(linked||{})};
+  }
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "PUT", headers: auth(env), body: JSON.stringify({ start_date_local: start }) });
   if (!response.ok) throw new Error(L("Intervals.icu přesun odmítlo (HTTP ", "Intervals.icu rejected the move (HTTP ") + response.status + ").");
   const updated = await response.json().catch(() => ({}));
@@ -86,7 +92,12 @@ export async function deletePlannedEvent(env, { eventId }, fetchImpl = intervals
   let event = {}; try { event = JSON.parse(row?.payload_json || '{}'); } catch {}
   // What went, so the coach can put it back after an illness (athlete-state.js cancelled).
   const gone = { date: eventDate(event) || String(row?.start_time || "").slice(0, 10) || null, name: event.name || null, type: event.type || null, minutes: Number(event.moving_time) > 0 ? Math.round(Number(event.moving_time) / 60) : null };
-  if(id.startsWith('local-')){if(isStrengthEvent(event))await cancelGymPlan(env.DB,eventDate(event),event);return {...await editLocalWorkout(env,id,{deleted:true},fetchImpl),cancelled:gone};}
+  if(id.startsWith('local-')){
+    if(isStrengthEvent(event))await cancelGymPlan(env.DB,eventDate(event),event);
+    // The other half of a joined pair stays, on its own.
+    if(event.after||event.next)await unlinkPartners(env.DB,{id,event});
+    return {...await editLocalWorkout(env,id,{deleted:true},fetchImpl),cancelled:gone};
+  }
   const response = await fetchImpl(BASE + encodeURIComponent(id), { method: "DELETE", headers: auth(env) });
   // Already gone in Intervals.icu: still remove the local copy.
   if (!response.ok && response.status !== 404) throw new Error(L("Intervals.icu smazání odmítlo (HTTP ", "Intervals.icu rejected the deletion (HTTP ") + response.status + ").");

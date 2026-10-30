@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Rekordy a zaměření, one sport at a time. Posilovna: every exercise with its
 /// best weight, a search, up to five pinned on top, and a tap opens the
-/// exercise's history (ExerciseHistorySheet). Kolo and Běh: the records of a
+/// exercise's history (ExerciseHistorySheet). Kolo, Běh and Plavání: the records of a
 /// period with the change against the best before it, and where the cardio
 /// went in the last weeks.
 struct InsightsView: View {
@@ -27,13 +27,15 @@ struct InsightsView: View {
     private var year: String { String(today.prefix(4)) }
 
     enum Sport: String, CaseIterable {
-        case gym, ride, run
+        // The app's order of sports: Ride, Run, Swim, Gym.
+        case ride, run, swim, gym
 
         var title: String {
             switch self {
             case .gym: return "Posilovna"
             case .ride: return "Kolo"
             case .run: return "Běh"
+            case .swim: return "Plavání"
             }
         }
     }
@@ -43,6 +45,8 @@ struct InsightsView: View {
         ("bestRidePower", "Nejlepší výkon (20+ min)"), ("ftp", "FTP")
     ]
     private static let runMetrics: [(String, String)] = [("longestRun", "Nejdelší běh"), ("runPace", "Nejrychlejší tempo na 5+ km")]
+    /// Pool swims only for the pace: open water is measured by GPS.
+    private static let swimMetrics: [(String, String)] = [("swimPace", "Nejrychlejší tempo na 400+ m v bazénu"), ("longestSwim", "Nejdelší plavání")]
 
     var body: some View {
         DetailScreen(glow: Palette.Glow.training, title: "Rekordy a zaměření") {
@@ -85,7 +89,7 @@ struct InsightsView: View {
     }
 
     private func metrics(_ insights: FitnessInsights, _ sport: Sport) -> [(String, String)] {
-        let list = sport == .ride ? Self.rideMetrics : Self.runMetrics
+        let list = sport == .ride ? Self.rideMetrics : sport == .swim ? Self.swimMetrics : Self.runMetrics
         let cardio = insights.records?.trends?.cardio ?? [:]
         return list.filter { key, _ in (cardio[key] ?? nil)?.change?.values.contains { $0?.value != nil } == true }
     }
@@ -112,7 +116,7 @@ struct InsightsView: View {
             gym(insights)
         } else {
             focusCard(insights)
-            if current == .run { runEstimates(insights) } else { rideEstimates(insights) }
+            if current == .run { runEstimates(insights) } else if current == .ride { rideEstimates(insights) } else { swimBests(insights) }
             cardio(insights, current)
         }
     }
@@ -293,6 +297,21 @@ struct InsightsView: View {
         }
     }
 
+    /// Plavání: the fastest 100, 200 and 400 m of the last 12 months.
+    @ViewBuilder
+    private func swimBests(_ insights: FitnessInsights) -> some View {
+        if let best = insights.estimates?.swim?.best, !best.isEmpty {
+            SectionLabel(text: "Nejlepší časy za 12 měsíců").padding(.top, 24)
+            Card {
+                ForEach(Array(best.enumerated()), id: \.offset) { index, b in
+                    if index > 0 { Rectangle().fill(Palette.hairline).frame(height: 1) }
+                    recordRow("\(b.meters) m", value: raceTime(b.seconds), detail: Units.swimPaceText(b.per100))
+                }
+            }
+            .padding(.top, 8)
+        }
+    }
+
     /// Kolo: what FTP gives for 5, 20 and 60 minutes, and two races.
     @ViewBuilder
     private func rideEstimates(_ insights: FitnessInsights) -> some View {
@@ -374,6 +393,7 @@ struct InsightsView: View {
         guard let value else { return "–" }
         switch unit {
         case "s/km": return Units.paceText(value)
+        case "s/100m": return Units.swimPaceText(value)
         case "km": return Units.distanceText(value)
         case "min": return Fmt.duration(Int(value))
         default: return Fmt.decimal(value, digits: value.rounded() == value ? 0 : 1) + (unit.isEmpty ? "" : " " + unit)
@@ -383,8 +403,8 @@ struct InsightsView: View {
     /// "+22,4 km" in green when better, "o 0:07 /km pomaleji" for a pace.
     private static func delta(_ delta: Double?, _ unit: String) -> (String, Bool)? {
         guard let delta, delta != 0 else { return nil }
-        if unit == "s/km" {
-            let text = Units.paceText(abs(delta))
+        if unit == "s/km" || unit == "s/100m" {
+            let text = unit == "s/100m" ? Units.swimPaceText(abs(delta)) : Units.paceText(abs(delta))
             return delta < 0 ? (L10n.f("o %@ rychleji", text), true) : (L10n.f("o %@ pomaleji", text), false)
         }
         return ((delta > 0 ? "+" : "−") + format(abs(delta), unit), delta > 0)

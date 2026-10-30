@@ -2,6 +2,7 @@
 // from the athlete's RPE and note, the day's timeline, the days before and
 // the body's state (form, sleep, HRV). They are computed here, so the note
 // works without AI too; with AI they become a short coach's message.
+import { swimTss } from "./training-zones.js";
 import { callOpenAI, lightModel } from "./coach-assistant.js";
 import { withFocus } from "./athlete-focus.js";
 import { trainingStatus } from './training-status.js';
@@ -38,7 +39,10 @@ function activityFields(row) {
   const seconds = google ? Number(String(p.exercise.activeDuration || "").replace(/s$/i, "")) : n(p.moving_time ?? p.elapsed_time);
   const span = row.end_time ? (Date.parse(row.end_time) - Date.parse(row.start_time)) / 1000 : null;
   const minutes = Number.isFinite(seconds) && seconds > 0 ? seconds / 60 : Number.isFinite(span) && span > 0 ? span / 60 : null;
-  return { date: start.slice(0, 10), start, kind: activityKindOf(type), name: (google ? p.exercise.displayName : p.name) || String(type || L("Aktivita", "Activity")), minutes: minutes == null ? null : round(minutes), tss: n(p.icu_training_load ?? p.training_load), source: google ? "google" : "intervals" };
+  const kind = activityKindOf(type);
+  // A swim without a load from Intervals.icu: from its pace and threshold (sTSS).
+  const tss = n(p.icu_training_load ?? p.training_load) ?? (kind === "swim" && !google ? swimTss({ meters: p.distance, seconds: p.moving_time, thresholdSpeed: p.threshold_pace }) : null);
+  return { date: start.slice(0, 10), start, kind, name: (google ? p.exercise.displayName : p.name) || String(type || L("Aktivita", "Activity")), minutes: minutes == null ? null : round(minutes), tss, source: google ? "google" : "intervals" };
 }
 // The same with the instant and length used to recognise one workout from two
 // sources (activity-match.js); kept out of JSON so it never reaches the AI.

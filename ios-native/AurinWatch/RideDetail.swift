@@ -166,11 +166,12 @@ struct RideDetail: View {
         var zone: Int
     }
 
-    /// One line per step; a repeated block shows once as "4 × 3′".
+    /// One line per step; a repeated block shows once as "4 × 3′", a pool swim as "4 × 100 m".
     private func rows(_ plan: WatchPlan) -> [Row] {
         plan.steps.map { s in
             let minutes = s.seconds >= 60 ? W.number(s.seconds / 60, digits: s.seconds.truncatingRemainder(dividingBy: 60) == 0 ? 0 : 1) + "′" : "\(Int(s.seconds))″"
-            return Row(length: s.repeats > 1 ? "\(s.repeats) × " + minutes : minutes, label: s.label, zone: s.zone)
+            let length = plan.openWater != true ? s.meters.map { "\(Int($0.rounded())) m" } ?? minutes : minutes
+            return Row(length: s.repeats > 1 ? "\(s.repeats) × " + length : length, label: s.label, zone: s.zone)
         }
     }
 

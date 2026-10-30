@@ -79,7 +79,42 @@ export function sanitizeTrainingProfile(input = {}) {
     if (!validBounds(input.paceZoneBounds, 200)) throw new Error(L("Hranice tempových zón musí být rostoucí čísla v % prahové rychlosti.", "Pace zone limits must be increasing numbers in % of threshold speed."));
     out.paceZoneBounds = input.paceZoneBounds.map(Number);
   }
+  const css = parsePace(input.swimCss);
+  if (css != null) { if (css < 60 || css > 240) throw new Error(L("Prahové tempo v plavání musí být 1:00–4:00 /100 m.", "Swim threshold pace must be 1:00–4:00 /100 m.")); out.swimCss = round(css); }
+  const pool = Number(input.poolLength);
+  if (POOL_LENGTHS.includes(pool)) out.poolLength = pool;
+  if (OPEN_WATER.includes(input.openWater)) out.openWater = input.openWater;
   return out;
+}
+
+// ---- Swimming: CSS (critical swim speed) and pace zones ----------------------
+// CSS is seconds per 100 m from a 400 m and a 200 m swim, both all out:
+// (T400 − T200) / 2 (Swim Smooth). Zones are seconds per 100 m off CSS, as
+// Swim Smooth teaches them; wrist heart rate is unreliable in water, so
+// swimming has no heart-rate zones here.
+export const POOL_LENGTHS = [25, 50, 22.86, 33.33];
+// Open water in the plans: never (pool only), once a week before races, or
+// once a week from May to September.
+export const OPEN_WATER = ["off", "races", "season"];
+export function cssFromTest(t400, t200) {
+  const a = parseTime(t400), b = parseTime(t200);
+  if (!a || !b || a <= b || b / 2 >= a / 4) return null;
+  const css = (a - b) / 2;
+  return css >= 60 && css <= 240 ? Math.round(css) : null;
+}
+// The zones as offsets from CSS per 100 m (seconds; null = open end) and the
+// % of CSS speed Intervals.icu stores as pace zones.
+// [zone, name, slowest offset, fastest offset]; null is the open end.
+const SWIM_ZONES = () => [["Z1", L("Regenerace", "Recovery"), null, 12], ["Z2", L("Vytrvalost", "Endurance"), 11, 6], ["Z3", "Tempo", 5, 3], ["Z4", L("Práh", "Threshold"), 2, -2], ["Z5", L("Rychlost", "Speed"), -3, null]];
+export function swimZones(css = null) {
+  return SWIM_ZONES().map(([zone, name, slow, fast], i) => ({
+    zone: i + 1, name: zone + " " + name, offsetSlow: slow, offsetFast: fast,
+    paceSlow: css && slow != null ? formatPace(css + slow) : null, paceFast: css && fast != null ? formatPace(css + fast) : null
+  }));
+}
+// The upper bound of each zone as % of CSS speed at this CSS, for Intervals.icu.
+export function swimZoneBounds(css = 120) {
+  return SWIM_ZONES().slice(0, -1).map(([, , , fast]) => Math.round(css / (css + fast) * 1000) / 10);
 }
 
 // Power zones in % FTP and watts.
@@ -259,4 +294,14 @@ for (const table of [FTP_METHODS, PACE_METHODS, POWER_ZONE_MODELS, HR_ZONE_MODEL
   Object.defineProperty(item, 'label', { get: () => zoneText(label), enumerable: true });
   if (names) Object.defineProperty(item, 'names', { get: () => names.map(zoneText), enumerable: true });
   if (inputs) Object.defineProperty(item, 'inputs', { get: () => inputs.map(([key, text]) => [key, zoneText(text)]), enumerable: true });
+}
+
+// A swim's load from its pace (TrainingPeaks sTSS): IF = speed / threshold
+// speed, cubed because water resistance climbs steeply with speed; rests are
+// not in the moving time. thresholdSpeed in m/s (Intervals.icu threshold_pace).
+export function swimTss({ meters, seconds, thresholdSpeed }) {
+  const m = Number(meters), s = Number(seconds), t = Number(thresholdSpeed);
+  if (!(m > 0 && s > 0 && t > 0)) return null;
+  const intensity = Math.min(1.3, m / s / t);
+  return Math.round(intensity ** 3 * s / 3600 * 100);
 }
