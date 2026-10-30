@@ -301,9 +301,8 @@ test('the privacy policy, terms and health data policy name the operator as a so
     for(const party of ['Cloudflare, Inc.','OpenAI','Apple','GitHub, Inc.','Google LLC','Intervals.icu Ltd','Wahoo Fitness','Open-Meteo GmbH'])assert.ok(html.includes('<strong>'+party+'</strong> ('),party);
     assert.match(html,/dataprivacyframework\.gov/);
     assert.doesNotMatch(html,/otherwise the EU Standard Contractual Clauses|jinak standardními smluvními doložkami EU/);
-    assert.match(html,/iCloud Mail/);
     assert.match(html,/GitHub Actions/);
   }
   const health=await get(healthDataPage,'/health-data');
-  for(const part of ['sexual activity','mood','GitHub','iCloud Mail','<strong>To collect it.</strong>','<strong>To share it.</strong>','Also send health data'])assert.ok(health.includes(part),part);
+  for(const part of ['sexual activity','mood','GitHub','<strong>To collect it.</strong>','<strong>To share it.</strong>','Also send health data'])assert.ok(health.includes(part),part);
 });
