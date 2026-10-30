@@ -6,7 +6,7 @@
 # without it and the app downloads the figure as before.
 #
 # Repository secrets: MUSCLE_MODEL_R2_KEY_ID and MUSCLE_MODEL_R2_SECRET, an R2 API token
-# (Object Read only, bucket loadwise-food-catalog only), and CLOUDFLARE_ACCOUNT_ID.
+# (Object Read only, bucket aurin-food-catalog only), and CLOUDFLARE_ACCOUNT_ID.
 set -euo pipefail
 
 key=models/muscles-v1.bin.gz   # src/muscle-model.js MUSCLE_MODEL_FORMATS[1]
@@ -21,7 +21,7 @@ command -v aws >/dev/null || brew install --quiet awscli
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 AWS_ACCESS_KEY_ID="$MUSCLE_MODEL_R2_KEY_ID" AWS_SECRET_ACCESS_KEY="$MUSCLE_MODEL_R2_SECRET" AWS_DEFAULT_REGION=auto \
-  aws s3 cp --only-show-errors "s3://loadwise-food-catalog/$key" "$tmp/model.gz" \
+  aws s3 cp --only-show-errors "s3://aurin-food-catalog/$key" "$tmp/model.gz" \
   --endpoint-url "https://$CLOUDFLARE_ACCOUNT_ID.r2.cloudflarestorage.com"
 gunzip -c "$tmp/model.gz" > "$tmp/model.bin"
 # The format build-muscle-model.mjs writes starts with AURM.
