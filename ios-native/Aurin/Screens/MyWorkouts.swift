@@ -39,7 +39,7 @@ struct MyWorkoutsView: View {
                     Spacer()
                     if !friends {
                         Menu {
-                            ForEach(LibrarySport.all) { s in
+                            ForEach(LibrarySport.single) { s in
                                 Button { editing = EditorTarget(workout: nil, sport: s.id) } label: { Label(L10n.tr(s.label), systemImage: s.symbol) }
                             }
                         } label: {

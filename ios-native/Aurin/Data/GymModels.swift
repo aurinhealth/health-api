@@ -341,6 +341,27 @@ struct GeneratedWorkout: Decodable {
     }
 }
 
+/// Knihovna → Tri: a brick, two legs one right after the other (src/brick-workouts.js).
+struct LibraryBrick: Decodable, Identifiable {
+    let id: String
+    let name: String
+    let note: String
+    let minutes: Int
+    let legs: [Leg]
+
+    struct Leg: Decodable {
+        let sport: String
+        let workoutId: String
+        let minutes: Int
+        var meters: Double? = nil
+        let steps: [PlannedWorkout.Block]
+    }
+}
+
+struct BricksResponse: Decodable {
+    let bricks: [LibraryBrick]
+}
+
 struct WorkoutSearchResponse: Decodable {
     let workouts: [LibraryWorkout]
     let total: Int?
