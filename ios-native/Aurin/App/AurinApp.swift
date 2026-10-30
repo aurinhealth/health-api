@@ -15,6 +15,7 @@ struct AurinApp: App {
     init() {
         // Začít posilovnu in Control Center or on the Lock Screen (Shared/AurinControls.swift).
         ControlInbox.startGym = { QuickActions.shared.pick = QuickActions.Pick(id: "liveGym") }
+        AurinTips.configure()
     }
 
     var body: some Scene {

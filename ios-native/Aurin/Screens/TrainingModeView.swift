@@ -1,4 +1,5 @@
 import SwiftUI
+import TipKit
 import UIKit
 
 /// Režim tréninku: one exercise and one set at a time, big enough to use
@@ -646,6 +647,7 @@ struct TrainingModeView: View {
                 SecondaryButton(title: "Přeskočit") { restEnd = nil }
             }
             .padding(.top, 6)
+            TipView(LockScreenRestTip()).tipBackground(Palette.card)
             // Its own view: each heartbeat redraws the card, not the whole screen.
             if let restStart { LiveHeartRecovery(live: live, since: restStart) }
             if let set {
