@@ -36,7 +36,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // Crashes from MetricKit for "Nahlásit problém" (CrashReports.swift).
         CrashReports.shared.start()
         let center = UNUserNotificationCenter.current()
-        center.setNotificationCategories([Reminders.pillNotificationCategory, CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory])
+        center.setNotificationCategories([Reminders.pillNotificationCategory, CoachPush.category, CoachPush.replyCategory, CoachPush.actionCategory,
+                                          MorningPush.category])
         center.delegate = self
         return true
     }
@@ -90,6 +91,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         let content = response.notification.request.content
         if CoachPush.categories.contains(content.categoryIdentifier) || content.userInfo["coach"] != nil {
             await CoachPush.answer(response, api: api)
+            return
+        }
+        if content.categoryIdentifier == MorningPush.categoryID {
+            MorningPush.answer(response)
             return
         }
         if let product = FoodPush.product(from: content.userInfo) {
@@ -213,6 +218,26 @@ enum PushRegistration {
     static func forget() {
         UserDefaults.standard.removeObject(forKey: sentKey)
         UserDefaults.standard.removeObject(forKey: sentChoicesKey)
+    }
+}
+
+/// The morning readiness push (src/push.js): held down it shows the morning
+/// in full (AurinMorning), with "Zeptat se kouče" under it, which opens the
+/// coach about today. A tap opens the app as before.
+enum MorningPush {
+    static let categoryID = "MORNING_READINESS"
+    private static let coachAction = "MORNING_ASK_COACH"
+
+    static var category: UNNotificationCategory {
+        UNNotificationCategory(identifier: categoryID, actions: [
+            UNNotificationAction(identifier: coachAction, title: L10n.tr("Zeptat se kouče"), options: [.foreground])
+        ], intentIdentifiers: [], options: [])
+    }
+
+    @MainActor
+    static func answer(_ response: UNNotificationResponse) {
+        guard response.actionIdentifier == coachAction else { return }
+        QuickActions.shared.pick = QuickActions.Pick(id: "coach")
     }
 }
 

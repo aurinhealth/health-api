@@ -171,6 +171,8 @@ test("the morning push goes out once a local day, between 5:00 and 11:00", async
   assert.deepEqual(calls[0].body.aps.alert, { title: "Připravenost 72 · Dnes klidně naplno", body: "Nic naplánováno. Dobrý den na těžší trénink." });
   // The app's notification extension draws the ring from the score and zone.
   assert.equal(calls[0].body.aps["mutable-content"], 1);
+  // Held down, the app shows the morning in full (its content extension).
+  assert.equal(calls[0].body.aps.category, "MORNING_READINESS");
   assert.deepEqual(calls[0].body.readiness, { score: 72, zone: "green" });
   // The next sync the same morning sends nothing.
   assert.equal((await sendMorningReadiness(env, { readiness, now: new Date("2026-10-12T07:00:00Z"), fetchImpl })).reason, "already-sent");

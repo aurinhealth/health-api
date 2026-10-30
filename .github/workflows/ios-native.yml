@@ -254,6 +254,7 @@ jobs:
           app=ipa/Payload/Aurin.app
           codesign --force --sign - --entitlements AurinWidgets/AurinWidgets.entitlements "$app/PlugIns/AurinWidgets.appex"
           codesign --force --sign - "$app/PlugIns/AurinNotifications.appex"
+          codesign --force --sign - "$app/PlugIns/AurinMorning.appex"
           codesign --force --sign - --entitlements AurinWatchWidgets/AurinWatchWidgets.entitlements "$app/Watch/AurinWatch.app/PlugIns/AurinWatchWidgets.appex"
           codesign --force --sign - --entitlements AurinWatch/AurinWatch.entitlements "$app/Watch/AurinWatch.app"
           codesign --force --sign - --entitlements Aurin/Aurin.entitlements "$app"

@@ -41,6 +41,7 @@ targets:
     dependencies:
       - target: AurinWidgets
       - target: AurinNotifications
+      - target: AurinMorning
       # The Apple Watch app, in the app's Watch folder ("Embed Watch Content").
       - target: AurinWatch
         embed: true
@@ -196,6 +197,35 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+  # The morning readiness push held down: the morning in full on the
+  # welcome screen's sunrise (MorningViewController.swift), embedded in the app.
+  AurinMorning:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: AurinMorning
+      - path: Aurin/Resources/Fonts/InstrumentSerif-Regular.ttf
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: health.aurin.app.morning
+        PRODUCT_NAME: AurinMorning
+        TARGETED_DEVICE_FAMILY: "1"
+        SKIP_INSTALL: YES
+    info:
+      path: AurinMorning/Info.plist
+      properties:
+        CFBundleDisplayName: Aurin
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.content-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MorningViewController
+          NSExtensionAttributes:
+            UNNotificationExtensionCategory: MORNING_READINESS
+            UNNotificationExtensionInitialContentSizeRatio: 0.9
+            # The banner's own texts are in the view already.
+            UNNotificationExtensionDefaultContentHidden: true
   # The Apple Watch app (AurinWatch/): Today from the iPhone over
   # WatchConnectivity (WatchStore), embedded in the app and installed with it.
   AurinWatch:

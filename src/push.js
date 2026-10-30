@@ -262,7 +262,8 @@ export async function sendMorningReadiness(env, { readiness, details = null, now
     const full = more ? { ...value, sleep: more.sleep ?? null, hrv: more.hrv ?? null, restingHR: more.restingHR ?? null, planned: more.planned || [], tomorrow: more.tomorrow || [], context: more.context || null, date } : value;
     const message = text ? null : readinessMessage(full);
     const alert = text || message.alert;
-    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true } : {};
+    // Its category lets the app show the morning in full when it is held down.
+    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true, category: "MORNING_READINESS" } : {};
     let sent = 0, removed = 0;
     for (const device of devices) {
       const result = await sendPush(env, device, alert, { fetchImpl, now: now.getTime(), ...extra }).catch(error => ({ ok: false, error: error.message }));

@@ -6,6 +6,7 @@ ipa/
 Aurin/Aurin.entitlements
 AurinWidgets/Info.plist
 AurinNotifications/Info.plist
+AurinMorning/Info.plist
 AurinWidgets/AurinWidgets.entitlements
 AurinWatch/AurinWatch.entitlements
 AurinWatch/Info.plist
