@@ -158,9 +158,11 @@ enum PushRegistration {
     /// Settings → Oznámení → Skrýt zdravotní údaje; on until turned off. The
     /// server's pushes then say only what came ("Kouč odpověděl"); the texts
     /// themselves come in `private` (src/push.js hidesValues, NotificationText).
-    static let hideValuesKey = "remind.hideValues"
+    /// The app's own notifications leave their numbers out too (Reminders).
+    /// One value for the account: Settings → Oznámení takes the server's.
+    nonisolated static let hideValuesKey = "remind.hideValues"
 
-    static var hideValuesOn: Bool {
+    nonisolated static var hideValuesOn: Bool {
         UserDefaults.standard.object(forKey: hideValuesKey) as? Bool ?? true
     }
 
@@ -224,16 +226,41 @@ enum PushRegistration {
         UIApplication.shared.unregisterForRemoteNotifications()
     }
 
-    /// The server sends only the pushes whose switch is on; told when a switch changed.
+    /// The server sends only the pushes whose switch is on; told when a switch
+    /// changed. Only the switches changed on this phone go, so a second iPhone
+    /// of the account doesn't put back its old value of the others.
     private static func sendChoices(api: APIClient) async {
-        let choices = "\(morningOn),\(coachOn),\(waterOn),\(hideValuesOn)"
-        guard UserDefaults.standard.string(forKey: sentChoicesKey) != choices else { return }
+        let now = [morningOn, coachOn, waterOn, hideValuesOn]
+        let choices = now.map { "\($0)" }.joined(separator: ",")
+        let sent = UserDefaults.standard.string(forKey: sentChoicesKey)
+        guard sent != choices else { return }
+        let before = sent?.split(separator: ",").map { $0 == "true" }
+        let changed = Self.changedChoices(now, before: before?.count == now.count ? before : nil)
         do {
-            try await api.setPushChoices(morning: morningOn, coach: coachOn, water: waterOn, hideValues: hideValuesOn)
+            try await api.setPushChoices(changed)
             UserDefaults.standard.set(choices, forKey: sentChoicesKey)
         } catch {
             // Told on the next refresh.
         }
+    }
+
+    /// The server's names of the switches that differ from what was sent
+    /// (all of them when nothing was): morning, coach, water, private.
+    nonisolated static func changedChoices(_ now: [Bool], before: [Bool]?) -> [String: Bool] {
+        let names = ["morning", "coach", "water", "private"]
+        var changed: [String: Bool] = [:]
+        for (index, name) in names.enumerated() where index < now.count && before?[index] != now[index] {
+            changed[name] = now[index]
+        }
+        return changed
+    }
+
+    /// Settings → Oznámení: the account's "Skrýt zdravotní údaje", set on
+    /// another iPhone, replaces this phone's (and counts as sent).
+    static func adoptAccountChoice(api: APIClient) async {
+        guard api.hasSession, let value = try? await api.pushHidesValues(), value != hideValuesOn else { return }
+        UserDefaults.standard.set(value, forKey: hideValuesKey)
+        UserDefaults.standard.set([morningOn, coachOn, waterOn, hideValuesOn].map { "\($0)" }.joined(separator: ","), forKey: sentChoicesKey)
     }
 
     /// Signed out: the next account sends the token and the switches again for itself.
@@ -325,7 +352,7 @@ enum CoachPush {
                 let result = try await api.decideCoachAction(draftId: draft, confirm: confirm)
                 guard confirm else { return }
                 note.title = L10n.tr("Hotovo")
-                note.body = result.message ?? L10n.tr("Změna je v plánu.")
+                note.body = PushRegistration.hideValuesOn ? L10n.tr("Změna je v plánu.") : result.message ?? L10n.tr("Změna je v plánu.")
             } catch {
                 note.title = L10n.tr("Změna neprošla")
                 note.body = error.localizedDescription
@@ -342,7 +369,8 @@ enum CoachPush {
                 let nudge = try await api.answerCoachNudge(date: date, decision: "swap")
                 guard nudge?.status == "swapped" else { return }
                 content.title = L10n.tr("Vyměněno")
-                content.body = [nudge?.to?.name, nudge?.to?.minutes.map { L10n.f("%@ min", String($0)) }].compactMap { $0 }.joined(separator: " · ")
+                content.body = PushRegistration.hideValuesOn ? L10n.tr("Změna je v plánu.")
+                    : [nudge?.to?.name, nudge?.to?.minutes.map { L10n.f("%@ min", String($0)) }].compactMap { $0 }.joined(separator: " · ")
             } catch {
                 content.title = L10n.tr("Trénink zůstal, jak byl")
                 content.body = error.localizedDescription

@@ -153,7 +153,7 @@ struct NotificationsSettingsView: View {
     @AppStorage(PushRegistration.morningKey) private var morning = true
     /// The coach's own message from the server (src/coach-push.js).
     @AppStorage(PushRegistration.coachKey) private var coach = true
-    /// The two above say only what came; held down on an unlocked phone they show it all.
+    /// The two above say only what came, the app's reminders leave their numbers out; opened they show it all.
     @AppStorage(PushRegistration.hideValuesKey) private var hideValues = true
     @State private var allowed: Bool?
     /// Bumped by every change, so the reminders are planned again once (and
@@ -183,8 +183,7 @@ struct NotificationsSettingsView: View {
                 SettingsDivider()
                 SettingsToggle(title: "Kouč", subtitle: "Ozve se sám, nejvýš 1× denně", isOn: $coach)
                 SettingsDivider()
-                SettingsToggle(title: "Skrýt zdravotní údaje", subtitle: "Celé oznámení uvidíš po podržení na odemčeném iPhonu",
-                               isOn: $hideValues)
+                SettingsToggle(title: "Skrýt zdravotní údaje", subtitle: "Celé oznámení uvidíš po otevření", isOn: $hideValues)
             }
             // The pill: only with cycle tracking on and the pill chosen.
             if let cycle = model.cycle, cycle.enabled, let settings = cycle.settings, settings.contraception == "pill" {
@@ -200,6 +199,8 @@ struct NotificationsSettingsView: View {
         .sheet(item: $editing) { kind in
             ReminderEditSheet(kind: kind)
         }
+        // Skrýt zdravotní údaje as another iPhone of the account set it.
+        .task { await PushRegistration.adoptAccountChoice(api: model.api) }
         .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in revision += 1 }
         .task(id: revision) {
             if revision > 0 {

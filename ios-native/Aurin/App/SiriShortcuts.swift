@@ -101,8 +101,8 @@ enum SiriData {
 
 /// Health data and the diary stay behind the lock: Siri and Shortcuts ask
 /// for Face ID or the passcode before an intent that reads or writes them runs
-/// on a locked phone. "Hodnota z Aurinu" (no voice phrase) stays open, so a
-/// morning automation still gets its number; "Začít trénink" opens the app.
+/// on a locked phone, "Hodnota z Aurinu" in an automation too; "Začít
+/// trénink" opens the app.
 enum SiriAccess {
     static let policy: IntentAuthenticationPolicy = .requiresAuthentication
 }
@@ -276,6 +276,8 @@ enum SiriMetric: String, AppEnum {
 struct TodayValueIntent: AppIntent {
     static let title: LocalizedStringResource = "Hodnota z Aurinu"
     static let description = IntentDescription("Vrátí dnešní číslo z Aurinu pro automatizace ve Zkratkách.")
+    /// Siri on a locked phone asks for Face ID or the passcode first (SiriAccess).
+    static let authenticationPolicy = SiriAccess.policy
 
     @Parameter(title: "Hodnota", default: .readiness)
     var metric: SiriMetric

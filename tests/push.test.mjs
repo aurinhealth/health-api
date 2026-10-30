@@ -171,11 +171,30 @@ test("hidden values: the banner says only that the morning is in, the numbers wa
   assert.equal(body.aps["content-available"], 1);
 });
 
-test("values are hidden until the switch is turned off", () => {
-  assert.equal(hidesValues(null), true);
-  assert.equal(hidesValues({ notify: { morning: true } }), true);
+test("values are hidden once the app has sent the switch on; builds without it keep the full texts", () => {
+  assert.equal(hidesValues(null), false);
+  assert.equal(hidesValues({ notify: { morning: true } }), false);
   assert.equal(hidesValues({ notify: { private: false } }), false);
-  for (const kind of ["morning", "coach", "swap", "reply"]) assert.doesNotMatch(JSON.stringify(privateAlert(kind)), /\d/);
+  assert.equal(hidesValues({ notify: { private: true } }), true);
+  for (const kind of ["morning", "coach", "swap", "reply", "water"]) assert.doesNotMatch(JSON.stringify(privateAlert(kind)), /\d/);
+});
+
+test("a hidden push sends the stock text and keeps its own in private", async () => {
+  _resetPushForTest();
+  const { env } = setup();
+  const { calls, fetchImpl } = fakeApns();
+  const device = { token: TOKEN_A, environment: "production" };
+  await sendPush(env, device, { title: "Kouč", body: "Zítra místo prahu 40 min sweet spot." }, { fetchImpl, category: "COACH_ACTION", data: { coach: { kind: "reply", chatId: 7, draftId: 41 } }, hide: "reply" });
+  assert.deepEqual(calls[0].body.aps.alert, { title: "Kouč", body: "Kouč odpověděl." });
+  assert.equal(calls[0].body.aps.category, "COACH_ACTION");
+  assert.deepEqual(calls[0].body.coach, { kind: "reply", chatId: 7, draftId: 41 });
+  assert.deepEqual(calls[0].body.private, { title: "Kouč", body: "Zítra místo prahu 40 min sweet spot." });
+  await sendPush(env, device, { title: "Pití", body: "Zatím 0,8 l." }, { fetchImpl, hide: "water" });
+  assert.deepEqual(calls[1].body.aps.alert, { title: "Pití", body: "Čas na sklenici vody." });
+  // Without hide the push goes as it came.
+  await sendPush(env, device, { title: "Pití", body: "Zatím 0,8 l." }, { fetchImpl });
+  assert.deepEqual(calls[2].body.aps.alert, { title: "Pití", body: "Zatím 0,8 l." });
+  assert.equal(calls[2].body.private, undefined);
 });
 
 test("the morning push goes out once a local day, between 5:00 and 11:00", async () => {

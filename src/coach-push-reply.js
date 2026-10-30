@@ -3,7 +3,6 @@
 // again; one proposal in the answer gets "Potvrdit" and "Ne" right there
 // (PushRegistration.swift CoachPush).
 import { L } from './lang.js';
-import { privateAlert } from './push.js';
 
 // The phone's notification categories (PushRegistration.swift).
 export const COACH_REPLY_CATEGORY = 'COACH_REPLY';
@@ -36,18 +35,16 @@ export function pushOpening(title, body) {
 }
 
 // The push with the coach's answer: {alert, category, data}. One proposal is
-// confirmed from the notification; several only in the app. hide: the answer
-// goes in `private`, the banner says only that the coach replied (push.js hidesValues).
-export function replyPush(result, chatId, { hide = false } = {}) {
+// confirmed from the notification; several only in the app.
+export function replyPush(result, chatId) {
   const actions = (result?.actions || []).filter(a => a?.draftId != null);
   const one = actions.length === 1 ? actions[0] : null;
   const more = actions.length > 1 ? L(' Návrhy potvrdíš v aplikaci.', ' Confirm the proposals in the app.') : '';
   const body = shortBody(result?.answer || '', BODY_CHARS - more.length) + more;
-  const alert = { title: L('Kouč', 'Coach'), body: body || L('Odpověď je v aplikaci.', 'The answer is in the app.') };
   return {
-    alert: hide ? privateAlert('reply') : alert,
+    alert: { title: L('Kouč', 'Coach'), body: body || L('Odpověď je v aplikaci.', 'The answer is in the app.') },
     category: one ? COACH_ACTION_CATEGORY : COACH_REPLY_CATEGORY,
-    data: { coach: { kind: 'reply', chatId: chatId ?? null, ...(one ? { draftId: one.draftId } : {}) }, ...(hide ? { private: alert } : {}) }
+    data: { coach: { kind: 'reply', chatId: chatId ?? null, ...(one ? { draftId: one.draftId } : {}) } }
   };
 }
 

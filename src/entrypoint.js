@@ -137,7 +137,7 @@ import { needsAIAccess } from "./ai-routes.js";
 import { clearConnectionHealth, connectionProblems, withoutBrokenConnections } from "./connection-health.js";
 import { handleSupportReport } from "./support-report.js";
 import { saveAppleHealth, appleHealthStatus, disconnectAppleHealth, appleBodyTooLarge } from "./apple-health.js";
-import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS, hidesValues, privateAlert } from "./push.js";
+import { handlePushToken, sendMorningReadiness, hasLastNight, inMorningWindow, pushConfigured, listPushTokens, sendPush, deletePushToken, MORNING_READINESS, hidesValues } from "./push.js";
 import { coachNudge, swapOffer, zoneShiftHours, COACH_PUSH, COACH_SWAP_CATEGORY, COACH_FROM_HOUR, COACH_TO_HOUR, EVENING_FROM_HOUR } from "./coach-push.js";
 import { waterNudge } from "./water-goal.js";
 import { overviewPage, privacyPage, termsPage, supportPage, healthDataPage, notFoundPage, robotsTxt, sitemapXml } from './site-pages.js';
@@ -815,10 +815,10 @@ async function coachPush(env, ctx) {
   // Today shows the same offer until it is answered (/app/api/coach/check-in).
   if (nudge.swap) await updateAthleteState(db, { nudge: { ...nudge.swap, title: nudge.title, day: date, status: 'pending' } });
   // Settings → Oznámení → Skrýt zdravotní údaje: the texts only in `private` (push.js hidesValues).
-  const shown = { title: nudge.title, body: nudge.body }, hide = hidesValues(state);
+  const hide = hidesValues(state) ? (nudge.swap ? 'swap' : 'coach') : null;
   let sent = 0;
   for (const device of devices) {
-    const result = await sendPush(env, device, hide ? privateAlert(nudge.swap ? 'swap' : 'coach') : shown, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date }, ...(hide ? { private: shown } : {}) } }).catch(error => ({ ok: false, error: error.message }));
+    const result = await sendPush(env, device, { title: nudge.title, body: nudge.body }, { category: nudge.swap ? COACH_SWAP_CATEGORY : COACH_REPLY_CATEGORY, data: { coach: { kind: nudge.kind, date } }, hide }).catch(error => ({ ok: false, error: error.message }));
     if (result.ok) sent++;
     else if (result.gone) await deletePushToken(db, device.token);
     else console.error('Coach push not delivered', result.status || '', result.reason || result.error || '');
@@ -845,7 +845,8 @@ async function waterPush(env, ctx) {
   const profile = await dashboardProfile(env).catch(() => null);
   if (profile?.waterMode !== 'build') return { sent: 0, reason: 'not-building' };
   // Oznámení → Pití off on the phone stops this push too.
-  if ((await getAthleteState(db).catch(() => null))?.notify?.water === false) return { sent: 0, reason: 'off' };
+  const state = await getAthleteState(db).catch(() => null);
+  if (state?.notify?.water === false) return { sent: 0, reason: 'off' };
   const devices = await listPushTokens(db);
   if (!devices.length) return { sent: 0, reason: 'no-tokens' };
   const fluids = await handleDashboardApi(new Request('https://internal/app/api/fluids?date=' + date), env, ctx, new URL('https://internal/app/api/fluids?date=' + date)).then(r => r.ok ? r.json() : null).catch(() => null);
@@ -854,7 +855,7 @@ async function waterPush(env, ctx) {
   if (!nudge) return { sent: 0, reason: 'on-track' };
   let sent = 0;
   for (const device of devices) {
-    const result = await sendPush(env, device, nudge).catch(error => ({ ok: false, error: error.message }));
+    const result = await sendPush(env, device, nudge, { hide: hidesValues(state) ? 'water' : null }).catch(error => ({ ok: false, error: error.message }));
     if (result.ok) sent++;
     else if (result.gone) await deletePushToken(db, device.token);
     else console.error('Water push not delivered', result.status || '', result.reason || result.error || '');
@@ -2154,16 +2155,18 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       const opening=pushOpening(body.title,body.body);
       chatId=opening?await startChatWithCoach(env.DB,body.title,opening):null;
     }
+    const stateRead=getAthleteState(env.DB).catch(()=>null);
     const askUrl=new URL('/app/api/assistant',url.origin);
     const response=await handleDashboardApi(new Request(askUrl,{method:'POST',headers:{Origin:url.origin,'Content-Type':'application/json'},body:JSON.stringify({message:text,chatId,mode:'coach',appContext:{view:'today',date:localToday()}})}),env,ctx,askUrl,session).catch(error=>{console.error('Push reply failed',error.message);return null;});
     const result=response?await response.json().catch(()=>null):null;
     const answered=response?.ok&&result?.answer;
     if(answered&&result.chatId)chatId=result.chatId;
-    const hide=answered?hidesValues(await getAthleteState(env.DB).catch(()=>null)):false;
-    const push=answered?replyPush(result,chatId,{hide}):failedReplyPush(result?.message,chatId);
+    const push=answered?replyPush(result,chatId):failedReplyPush(result?.message,chatId);
+    // Settings → Oznámení → Skrýt zdravotní údaje (push.js hidesValues), read while the coach answered.
+    const hide=answered&&hidesValues(await stateRead)?'reply':null;
     let sent=0;
     for(const device of await listPushTokens(env.DB)){
-      const r=await sendPush(env,device,push.alert,{category:push.category,data:push.data}).catch(error=>({ok:false,error:error.message}));
+      const r=await sendPush(env,device,push.alert,{category:push.category,data:push.data,hide}).catch(error=>({ok:false,error:error.message}));
       if(r.ok)sent++;else if(r.gone)await deletePushToken(env.DB,device.token);else console.error('Coach reply push not delivered',r.status||'',r.reason||r.error||'');
     }
     return Response.json({status:answered?'ok':'error',chatId,sent},{headers:{'Cache-Control':'no-store'}});

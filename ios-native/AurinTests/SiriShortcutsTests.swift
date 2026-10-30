@@ -20,7 +20,7 @@ final class SiriShortcutsTests: XCTestCase {
             ("activity", ActivityOfTheDayIntent.authenticationPolicy), ("sleep", SleepLastNightIntent.authenticationPolicy),
             ("coach", AskCoachIntent.authenticationPolicy), ("food", FoodLeftIntent.authenticationPolicy),
             ("drink", LogDrinkIntent.authenticationPolicy), ("weight", LogWeightIntent.authenticationPolicy),
-            ("water", AddWaterIntent.authenticationPolicy)
+            ("water", AddWaterIntent.authenticationPolicy), ("value", TodayValueIntent.authenticationPolicy)
         ]
         for (name, policy) in policies {
             guard case .requiresAuthentication = policy else { XCTFail("\(name) runs on a locked phone"); continue }

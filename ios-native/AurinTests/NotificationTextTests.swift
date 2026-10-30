@@ -25,4 +25,12 @@ final class NotificationTextTests: XCTestCase {
         XCTAssertNil(NotificationText.hidden(content.userInfo))
         XCTAssertFalse(NotificationText.isMorning(content.userInfo))
     }
+
+    /// Only the switches changed on this iPhone go to the server, so another iPhone's choice stays.
+    func testOnlyChangedPushChoicesAreSent() {
+        XCTAssertEqual(PushRegistration.changedChoices([true, true, false, true], before: nil),
+                       ["morning": true, "coach": true, "water": false, "private": true])
+        XCTAssertEqual(PushRegistration.changedChoices([true, false, false, true], before: [true, true, false, true]), ["coach": false])
+        XCTAssertEqual(PushRegistration.changedChoices([true, true, false, true], before: [true, true, false, true]), [:])
+    }
 }

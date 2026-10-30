@@ -200,8 +200,7 @@ targets:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
   # The morning readiness push held down: the morning in full on the
-  # welcome screen's sunrise (MorningViewController.swift), and the coach's
-  # pushes as text, embedded in the app.
+  # welcome screen's sunrise (MorningViewController.swift), embedded in the app.
   AurinMorning:
     type: app-extension
     platform: iOS
@@ -226,8 +225,7 @@ targets:
           NSExtensionPointIdentifier: com.apple.usernotifications.content-extension
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MorningViewController
           NSExtensionAttributes:
-            # The coach's pushes too: their hidden texts, held down on an unlocked phone.
-            UNNotificationExtensionCategory: [MORNING_READINESS, COACH_SWAP, COACH_REPLY, COACH_ACTION]
+            UNNotificationExtensionCategory: MORNING_READINESS
             UNNotificationExtensionInitialContentSizeRatio: 0.9
             # The banner's own texts are in the view already.
             UNNotificationExtensionDefaultContentHidden: true

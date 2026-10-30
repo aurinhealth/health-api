@@ -1,10 +1,10 @@
 import UserNotifications
 
 /// What a push from the server says. With Settings → Oznámení → Skrýt
-/// zdravotní údaje on, the banner and the lock screen show only what came
-/// ("Kouč odpověděl"), and the push's own texts come in `private` (src/push.js
-/// hidesValues): the app and, held down on an unlocked phone, AurinMorning use
-/// those. Also compiled into AurinMorning (project.yml).
+/// zdravotní údaje on, the banner, the lock screen and the notification held
+/// down show only what came ("Kouč odpověděl"), and the push's own texts come
+/// in `private` (src/push.js hidesValues) for the app once opened and the
+/// watch. Also compiled into AurinMorning (project.yml).
 struct NotificationText: Equatable {
     var title: String
     var subtitle: String

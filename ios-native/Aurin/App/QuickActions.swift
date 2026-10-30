@@ -97,8 +97,14 @@ final class QuickActionSceneDelegate: NSObject, UIWindowSceneDelegate {
     /// The app's background over everything while the app is in the
     /// background: iOS takes the app switcher's picture after
     /// sceneDidEnterBackground, so it never shows Today, the diary or a chat.
-    /// Not on inactive, so Face ID, purchases and Control Center don't flash it.
+    /// Not on inactive, so Face ID, purchases and Control Center don't flash
+    /// it. A launch in the background (the morning push waking the app for
+    /// the widgets, a background refresh) starts covered, as its picture is taken too.
     private var cover: UIWindow?
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        if scene.activationState == .background { sceneDidEnterBackground(scene) }
+    }
 
     func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem,
                      completionHandler: @escaping (Bool) -> Void) {

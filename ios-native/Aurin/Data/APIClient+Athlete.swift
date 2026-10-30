@@ -33,10 +33,17 @@ extension APIClient {
 
     /// Settings → Oznámení: which of the server's pushes the phone wants
     /// (the morning readiness, the coach's own messages, the water Build-up nudge).
-    func setPushChoices(morning: Bool, coach: Bool, water: Bool, hideValues: Bool) async throws {
-        let _: JSONValue = try await send("/app/api/athlete-state", method: "POST", body: ["notify": JSONValue.object([
-            "morning": .bool(morning), "coach": .bool(coach), "water": .bool(water), "private": .bool(hideValues)
-        ])])
+    /// Only the switches named go; the server keeps the others (src/athlete-state.js).
+    /// "private" is Skrýt zdravotní údaje (src/push.js hidesValues).
+    func setPushChoices(_ choices: [String: Bool]) async throws {
+        let _: JSONValue = try await send("/app/api/athlete-state", method: "POST",
+                                          body: ["notify": JSONValue.object(choices.mapValues { JSONValue.bool($0) })])
+    }
+
+    /// The account's Skrýt zdravotní údaje, nil while no phone has sent it.
+    func pushHidesValues() async throws -> Bool? {
+        let answer: AthleteNotifyAnswer = try await get("/app/api/athlete-state")
+        return answer.state?.notify?.hidesValues
     }
 }
 
@@ -49,4 +56,21 @@ extension APIClient {
         return OutboxItem(path: "/app/api/morning-checkin", method: "POST", body: OutboxItem.json(body),
                           label: L10n.tr("Ranní pocit"), key: "checkin:" + date)
     }
+}
+
+/// GET /app/api/athlete-state, only its notification switches.
+struct AthleteNotifyAnswer: Decodable {
+    struct State: Decodable {
+        let notify: Notify?
+    }
+
+    struct Notify: Decodable {
+        let hidesValues: Bool?
+
+        enum CodingKeys: String, CodingKey {
+            case hidesValues = "private"
+        }
+    }
+
+    let state: State?
 }

@@ -28,15 +28,17 @@ const MAX_TOKENS_PER_USER = 10;
 const TOKEN = /^[0-9a-f]{64,200}$/i;
 const ENVIRONMENTS = new Set(["production", "development"]);
 
-// Settings → Oznámení → Skrýt zdravotní údaje (on until turned off): the banner and
-// the lock screen say only what came; the push's own texts travel in `private`
-// for the app, which shows them held down on an unlocked phone (ios-native
-// AurinMorning) and when opened.
-export const hidesValues = state => state?.notify?.private !== false;
+// Settings → Oznámení → Skrýt zdravotní údaje: the banner, the lock screen
+// and the notification held down say only what came; the push's own texts
+// travel in `private` for the app (when opened) and the watch. The app sends
+// the switch (on until turned off) with its push choices; a build from before
+// it never sends one and keeps the full texts, which it alone can show.
+export const hidesValues = state => state?.notify?.private === true;
 export function privateAlert(kind) {
   if (kind === "morning") return { title: L("Připravenost", "Readiness"), body: L("Dnešní připravenost je spočítaná.", "Today's readiness is in.") };
   if (kind === "swap") return { title: L("Kouč", "Coach"), body: L("Kouč navrhuje změnu v plánu.", "Your coach suggests a change to your plan.") };
   if (kind === "reply") return { title: L("Kouč", "Coach"), body: L("Kouč odpověděl.", "Your coach replied.") };
+  if (kind === "water") return { title: L("Pití", "Water"), body: L("Čas na sklenici vody.", "Time for a glass of water.") };
   return { title: L("Kouč", "Coach"), body: L("Kouč ti napsal.", "Your coach sent you a message.") };
 }
 
@@ -141,9 +143,16 @@ const DEAD_TOKEN = new Set(["BadDeviceToken", "Unregistered", "DeviceTokenNotFor
 // alert: a text, or {title, subtitle, body}; category names the phone's buttons
 // for it (the coach's "Vyměnit" / "Nechat"), data rides along for them;
 // mutable lets the app's notification extension add an image (the ring);
-// wake also wakes the app in the background (content-available).
-export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null, mutable = false, wake = false, topic = APNS_TOPIC } = {}) {
+// wake also wakes the app in the background (content-available). hide (a
+// privateAlert kind, when hidesValues) sends privateAlert(hide) and moves the
+// alert and the morning's score into `private`, so no ring is drawn either.
+export async function sendPush(env, device, alert, { fetchImpl = fetch, now = Date.now(), category = null, data = null, mutable = false, wake = false, topic = APNS_TOPIC, hide = null } = {}) {
   if (!pushConfigured(env)) return { ok: false, skipped: true };
+  if (hide && alert && typeof alert === "object") {
+    const { readiness, ...rest } = data || {};
+    data = { ...rest, private: { ...alert, ...(readiness ? { readiness } : {}) } };
+    alert = privateAlert(hide);
+  }
   const jwt = await apnsJwt(env, now);
   const response = await fetchImpl(`https://${apnsHost(env, device.environment)}/3/device/${device.token}`, {
     method: "POST",
@@ -275,13 +284,12 @@ export async function sendMorningReadiness(env, { readiness, details = null, now
     const more = text || typeof details !== "function" ? null : await Promise.resolve().then(() => details(date)).catch(() => null);
     const full = more ? { ...value, sleep: more.sleep ?? null, hrv: more.hrv ?? null, restingHR: more.restingHR ?? null, planned: more.planned || [], tomorrow: more.tomorrow || [], context: more.context || null, date } : value;
     const message = text ? null : readinessMessage(full);
-    const alert = text || (hide ? privateAlert("morning") : message.alert);
+    const alert = text || message.alert;
     // It also wakes the app, which loads Today for the widgets, so they show
     // the morning before the app is opened (ios-native AppDelegate). Its
     // category lets the app show the morning in full when it is held down.
-    // Hidden, the score and the texts wait in `private`: no ring on the banner.
-    const ring = message ? { score: Math.round(Number(value.score)), zone: message.zone } : null;
-    const extra = message ? { data: hide ? { private: { ...message.alert, readiness: ring } } : { readiness: ring }, mutable: true, wake: true, category: "MORNING_READINESS" } : {};
+    // Hidden, the score and the texts wait in `private` (sendPush): no ring on the banner.
+    const extra = message ? { data: { readiness: { score: Math.round(Number(value.score)), zone: message.zone } }, mutable: true, wake: true, category: "MORNING_READINESS", hide: hide ? "morning" : null } : {};
     let sent = 0, removed = 0;
     for (const device of devices) {
       const result = await sendPush(env, device, alert, { fetchImpl, now: now.getTime(), ...extra }).catch(error => ({ ok: false, error: error.message }));
