@@ -143,7 +143,11 @@ export async function completeOnboarding(env,input={}){
   const oldProfile=await db.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(db.userId).first();
   const previous=JSON.parse(oldProfile?.profile_json||'{}');
   const oldTraining=await db.prepare('SELECT training_json FROM user_setup WHERE user_id=?').bind(db.userId).first();
-  const profile=normalizeProfile({...previous,...input.profile,goal:input.profile?.goal||previous.goal||'maintain'}),oldSaved=JSON.parse(oldTraining?.training_json||'{}'),training=normalizeTraining({...oldSaved,...input.training,...mergeExperience(oldSaved,input.training||{})});
+  // The diet's Pro fields (custom macros, own protein, own nutrient targets) are
+  // set only in Settings, where POST /app/api/profile checks Pro; here they stay as saved.
+  const {proteinPerKg:_ownProtein,nutrientTargets:_ownTargets,...given}=input.profile||{};
+  if(given.dietStyle==='custom')delete given.dietStyle;
+  const profile=normalizeProfile({...previous,...given,goal:given.goal||previous.goal||'maintain'}),oldSaved=JSON.parse(oldTraining?.training_json||'{}'),training=normalizeTraining({...oldSaved,...input.training,...mergeExperience(oldSaved,input.training||{})});
   const supplied=input.weightKg!=null&&input.weightKg!=='';
   const previousWeight=await latestStoredWeight(db);
   const weight=supplied?Number(input.weightKg):previousWeight?.value_numeric;
