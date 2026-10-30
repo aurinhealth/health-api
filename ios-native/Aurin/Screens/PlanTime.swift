@@ -41,6 +41,14 @@ enum FreeTime {
         return ISODay.shift(iso, -(((days % 7) + 7) % 7))
     }
 
+    /// With two weeks in turn: true when the week of `iso` is a week B
+    /// (`alternate` is a Monday of a week A), as the server counts it.
+    static func isWeekB(_ iso: String, alternate: String?) -> Bool {
+        guard let alternate, let a = ISODay.date(alternate), let b = ISODay.date(monday(iso)) else { return false }
+        let weeks = Int((b.timeIntervalSince(a) / (7 * 86400)).rounded())
+        return ((weeks % 2) + 2) % 2 == 1
+    }
+
     /// The minutes as the server takes them: a number or null for each weekday.
     static func json(_ list: [Int?]) -> JSONValue {
         .array(list.map { $0.map { .number(Double($0)) } ?? .null })
@@ -149,7 +157,7 @@ struct FreeTimeForm: View {
                 if let daysB = time.daysB {
                     b = Array(daysB.prefix(7)) + Array(repeating: nil, count: max(0, 7 - daysB.count))
                     twoWeeks = true
-                    thisWeekB = time.alternate != nil && time.alternate != FreeTime.monday(APIClient.localToday())
+                    thisWeekB = FreeTime.isWeekB(APIClient.localToday(), alternate: time.alternate)
                 } else {
                     b = a
                 }

@@ -133,8 +133,10 @@ async function generateStrengthPlanRoute(env, request, url, ctx) {
       const gymPlan = await activePlan(env.DB, null, { gym: true }).catch(() => null);
       const phase = gymPlan ? gymPhaseFor(gymPlan, context.date, prefs?.days) : null;
       if (phase) options.planPhase = phase;
-      // A plan day without a length asked for takes the day's free time, up to 90 minutes.
-      if (phase && body?.preview !== true && body?.durationMinutes == null && body?.userInitiated !== true) options.durationMinutes = trainingBudget(prefs, context.date, 90);
+      // A plan day without a length asked for takes the day's free time, up to 90 minutes;
+      // a day without a set time keeps the usual length.
+      const free = phase && body?.preview !== true && body?.durationMinutes == null && body?.userInitiated !== true ? trainingBudget(prefs, context.date) : null;
+      if (free != null) options.durationMinutes = Math.min(90, free);
       // A body-weight plan ignores the equipment chosen (Doma bez vybavení).
       if (phase?.equipment) context.trainingSetup = { ...(context.trainingSetup || {}), equipment: phase.equipment, stations: [] };
     }

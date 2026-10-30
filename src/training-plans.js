@@ -809,7 +809,7 @@ export function gymPhaseFor(plan, date, days = []) {
     name: head + week, phaseName: g.name, sets: 2, reps: "10–12", rpe: "5–6", exercises: MOBILITY, equipment,
     rationale: L(`Plán ${pw.template.name}, týden ${pw.week}/${pw.weeks}: lehký den na pohyblivost a střed těla. Sedm dní v týdnu nechává tělu jen tento den na zotavení.`, `Plan ${pw.template.name}, week ${pw.week}/${pw.weeks}: a light day for mobility and the trunk. Seven days a week leaves only this day for recovery.`)
   };
-  const sets = chosen ? gymSets(g, sessions, gymUsual(pw.template), part) : g.sets, exercises = part ? gymPartSlots(g.exercises, part) : g.exercises;
+  const sets = chosen ? gymSets(g, sessions, g.sessions, part) : g.sets, exercises = part ? gymPartSlots(g.exercises, part, equipment) : g.exercises;
   return {
     name: head + week, phaseName: g.name, sets, reps: g.reps, rpe: g.rpe, exercises, equipment,
     rationale: L(`Plán ${head}, týden ${pw.week}/${pw.weeks}: ${sets} série po ${g.reps} opakováních, RPE ${g.rpe} (tolik opakování nech v rezervě, kolik chybí do 10).`, `Plan ${head}, week ${pw.week}/${pw.weeks}: ${sets} sets of ${g.reps} reps, RPE ${g.rpe} (keep as many reps in reserve as are missing to 10).`)
@@ -846,9 +846,10 @@ export function gymPickDays(days = [], sessions) {
 export const gymPart = (sessions, k) => sessions <= 3 || k < 0 ? null : k === 6 ? "light" : sessions === 4 ? ["upper", "lower"][k % 2] : ["push", "pull", "legs"][k % 3];
 export const GYM_PARTS = () => ({ upper: L("horní polovina", "upper body"), lower: L("dolní polovina", "lower body"), push: L("tlaky", "push"), pull: L("tahy", "pull"), legs: L("nohy", "legs"), light: L("lehký den", "light day") });
 export const gymSplitName = sessions => sessions <= 3 ? L("Celé tělo", "Full body") : sessions === 4 ? L("Horní / dolní", "Upper / Lower") : sessions <= 6 ? L("Tlaky / tahy / nohy", "Push / Pull / Legs") + (sessions === 6 ? " ×2" : "") : L("Tlaky / tahy / nohy ×2 + pohyblivost", "PPL ×2 + mobility");
-export function gymSets(g, sessions, usual, part = null) {
+// `phase`: the phase's own sessions, so a lighter phase keeps its lighter week.
+export function gymSets(g, sessions, phase, part = null) {
   if (part) return Math.min(5, g.sets + 1);
-  return clamp(Math.round(g.sets * (usual || sessions) / Math.max(1, sessions)), 2, 6);
+  return clamp(Math.round(g.sets * (phase || sessions) / Math.max(1, sessions)), 2, 6);
 }
 const CORE = /dead bug|pallof|plank|crunch|leg raise|bird dog|superman|woodchop/i;
 const LEGS = /squat|lunge|step-up|deadlift|thrust|glute|calf|leg curl|leg press|nordic|soleus|cossack/i;
@@ -859,14 +860,22 @@ const EXTRA = {
   pull: [["Low row", "Chest-supported row", "Single-arm cable row", "One-arm DB row"], ["Cable curl", "DB curl", "Hammer curl"]],
   push: [["DB shoulder press", "Shoulder press Prime", "Push-up"], ["Cable lateral raise", "DB lateral raise"], ["Cable triceps extension", "DB overhead triceps extension", "Diamond Push Ups"]]
 };
+// The bodyweight plan's own fill-ups: nothing a home without equipment lacks
+// (a table or a low bar for the inverted row, a chair for the dips).
+const EXTRA_HOME = {
+  legs: [["Forward Lunge", "Walking Lunge"], ["Single Leg Glute Bridge", "Glute bridge"], ["Eccentric Calf Lowers", "Bent-Knee Soleus Raise"], ["Cossack Squat", "Bodyweight Alternating Lateral Lunge"]],
+  pull: [["Inverted Row", "Prone Y-T Raises"], ["Prone Y-T Raises", "Supermans"]],
+  push: [["Push-up", "Bodyweight Knee Push Ups"], ["Bench Dips", "Diamond Push Ups"], ["Diamond Push Ups", "Bodyweight Knee Push Ups"]]
+};
 const MOBILITY = [["Cossack Squat", "Bodyweight Alternating Lateral Lunge"], ["Bird Dog"], ["Dead bug"], ["Glute bridge", "Single Leg Glute Bridge"], ["Pallof press"]];
 // A split day's exercises: the phase's slots of that part (the trunk on leg
 // days), filled up to four with more of the same part.
-export function gymPartSlots(slots, part) {
+export function gymPartSlots(slots, part, equipment = null) {
+  const extra = equipment === "bodyweight" ? EXTRA_HOME : EXTRA;
   const parts = { upper: ["push", "pull"], lower: ["legs", "core"], push: ["push"], pull: ["pull"], legs: ["legs", "core"] }[part] || [];
   const out = slots.filter(slot => parts.includes(slotPart(slot)));
   const first = new Set(out.map(slot => [].concat(slot)[0]));
-  for (const p of parts) for (const slot of EXTRA[p] || []) if (out.filter(x => slotPart(x) !== "core").length < 4 && !first.has(slot[0])) { out.push(slot); first.add(slot[0]); }
+  for (const p of parts) for (const slot of extra[p] || []) if (out.filter(x => slotPart(x) !== "core").length < 4 && !first.has(slot[0])) { out.push(slot); first.add(slot[0]); }
   return out;
 }
 
@@ -1125,12 +1134,14 @@ const isWeekBOf = (monday, alternate) => {
   return ((weeks % 2) + 2) % 2 === 1;
 };
 const GYM_DAY = [30, 90];
+const setMinutes = m => m == null || m === "" || !Number.isFinite(Number(m)) ? null : Math.max(0, Number(m));
 export function planPreview(template, { ctl = null, days = [], firstDay = null, startDate, availability = [], availabilityB = null, alternate = null, perWeek = null } = {}) {
   const sport = template.sport, gym = sport === "gym", tri = sport === "triathlon";
   // A triathlon week has its sessions per sport, some days two.
   const n = tri ? Object.values(template.perSport).reduce((a, b) => a + b, 0) : clamp(days.length || template.days[0], template.days[0], template.days[1]);
   const start = Math.max(Number(ctl) || 35, 20), intensity = sport === "run" ? .75 : .72, perTss = 60 / (intensity * intensity * 100);
-  const minutesOf = (list, i) => Number(list?.[i]?.minutes) > 0 ? Number(list[i].minutes) : null;
+  // A day set to no time counts as 0; only a day without a set time is open.
+  const minutesOf = (list, i) => setMinutes(list?.[i]?.minutes);
   // Days without a set time do not limit the week.
   const freeOf = list => days.length ? days.reduce((sum, i) => sum + (minutesOf(list, i) ?? Infinity), 0) : Infinity;
   const shifts = Boolean(alternate && availabilityB);
@@ -1167,7 +1178,7 @@ export function planPreview(template, { ctl = null, days = [], firstDay = null, 
 // keeps its key sessions and shortens the easy ones (`short`).
 function planTime(template, { days, availability, availabilityB, alternate, fitness, perTss, n }) {
   const perDay = list => Array.from({ length: 7 }, (_, i) => Number(list?.[i]?.minutes) > 0 ? Number(list[i].minutes) : null);
-  const total = list => days.some(i => perDay(list)[i] == null) ? null : days.reduce((sum, i) => sum + perDay(list)[i], 0);
+  const total = list => days.some(i => setMinutes(list?.[i]?.minutes) == null) ? null : days.reduce((sum, i) => sum + setMinutes(list[i].minutes), 0);
   const out = { days: perDay(availability), total: total(availability), ...(availabilityB ? { daysB: perDay(availabilityB), totalB: total(availabilityB), alternate } : {}) };
   if (template.sport === "gym") return out;
   const loads = template.weeks.filter(w => !w.race).map(w => w.load), round = m => Math.round(m / 15) * 15;
