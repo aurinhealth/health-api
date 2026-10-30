@@ -31,7 +31,8 @@ export function applyEnergyBudget(daily,profile,health){
     daily.nutrition.energyBudget=budget;setTarget(daily,target);
   }
   const own=Number(profile?.kcalGoal);
-  if(daily?.nutrition&&own>0){daily.nutrition.autoCalorieTarget=daily.nutrition.calorieTarget??null;setTarget(daily,own);}
+  // The own goal is fixed: no training bonus on top and no budget behind it.
+  if(daily?.nutrition&&own>0){daily.nutrition.autoCalorieTarget=daily.nutrition.calorieTarget??null;daily.nutrition.ownTarget=true;delete daily.nutrition.energyBudget;setTarget(daily,own);}
   return daily;
 }
 

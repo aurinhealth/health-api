@@ -350,7 +350,7 @@ export function buildToday({ date, hour = null, morning = null, daily = {}, heal
     nutrition: {
       kcal: round(num(totals.kcal)),
       target: num(nutrition.calorieTarget),
-      autoTarget: num(nutrition.autoCalorieTarget ?? nutrition.calorieTarget),
+      autoTarget: num("autoCalorieTarget" in nutrition ? nutrition.autoCalorieTarget : nutrition.calorieTarget),
       trainingBonus: bonus,
       protein: { eaten: round(num(totals.protein_g)), target: num(macros.protein_g) },
       carbs: { eaten: round(num(totals.carbs_g)), target: num(macros.carbs_g) },

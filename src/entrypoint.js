@@ -828,16 +828,21 @@ async function waterPush(env, ctx) {
   const db = env.DB, now = new Date(), hour = localHour(now), date = localToday(now);
   if (hour !== 14 && hour !== 18) return { sent: 0, reason: 'off' };
   const kind = 'water-' + hour;
-  // The job runs every 5 minutes of the hour: once sent, one row read ends it.
+  // The job runs every 5 minutes of the hour: the hour's claim (push_log), taken
+  // also by athletes not on Build-up, ends the later runs with one row read.
   if (await db.prepare('SELECT 1 FROM push_log WHERE user_id=? AND kind=? AND local_date=?').bind(db.userId, kind, date).first().catch(() => null)) return { sent: 0, reason: 'already-sent' };
-  const devices = await listPushTokens(db);
-  if (!devices.length) return { sent: 0, reason: 'no-tokens' };
-  const profile = await dashboardProfile(env).catch(() => null);
-  if (profile?.waterMode !== 'build') return { sent: 0, reason: 'not-building' };
   const claimed = await db.prepare('INSERT INTO push_log(user_id,kind,local_date) VALUES(?,?,?) ON CONFLICT(user_id,kind,local_date) DO NOTHING').bind(db.userId, kind, date).run().then(r => Boolean(Number(r?.meta?.changes)));
   if (!claimed) return { sent: 0, reason: 'already-sent' };
+  // Nothing sent for a reason that can pass (no answer, no delivery): the claim
+  // goes back, so a later run of the hour tries again.
+  const release = () => db.prepare('DELETE FROM push_log WHERE user_id=? AND kind=? AND local_date=?').bind(db.userId, kind, date).run().catch(() => null);
+  const profile = await dashboardProfile(env).catch(() => null);
+  if (profile?.waterMode !== 'build') return { sent: 0, reason: 'not-building' };
+  const devices = await listPushTokens(db);
+  if (!devices.length) return { sent: 0, reason: 'no-tokens' };
   const fluids = await handleDashboardApi(new Request('https://internal/app/api/fluids?date=' + date), env, ctx, new URL('https://internal/app/api/fluids?date=' + date)).then(r => r.ok ? r.json() : null).catch(() => null);
-  const nudge = waterNudge({ hour, drunkMl: fluids?.hydrationMl, goalMl: fluids?.target?.ml });
+  if (!fluids?.target?.ml) { await release(); return { sent: 0, reason: 'no-fluids' }; }
+  const nudge = waterNudge({ hour, drunkMl: fluids.hydrationMl, goalMl: fluids.target.ml });
   if (!nudge) return { sent: 0, reason: 'on-track' };
   let sent = 0;
   for (const device of devices) {
@@ -846,6 +851,7 @@ async function waterPush(env, ctx) {
     else if (result.gone) await deletePushToken(db, device.token);
     else console.error('Water push not delivered', result.status || '', result.reason || result.error || '');
   }
+  if (!sent) await release();
   return { sent };
 }
 
@@ -1597,7 +1603,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
   {const r=await handleGymToolsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   {const r=await handleWorkoutTemplatesApi(request,env,url,session);if(r!==undefined)return r;}
   if(url.pathname==='/app/api/sync/recent'&&request.method==='POST')return legacyHealthApi.fetch(new Request('https://internal/sync/google/recent',{method:'POST',headers:internalAuth}),env,ctx);
-  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});return Response.json({profile:r?JSON.parse(r.profile_json):null,suggestions});}
+  if(url.pathname==='/app/api/profile'){await env.DB.prepare("CREATE TABLE IF NOT EXISTS dashboard_profile (user_id INTEGER NOT NULL,id INTEGER NOT NULL,profile_json TEXT NOT NULL,PRIMARY KEY (user_id,id))").run();if(request.method==='POST'){const profile=normalizeProfile(await request.json().catch(()=>({})));if(profile.waterMode==='build'&&!profile.waterFrom)profile.waterFrom=localToday();await env.DB.prepare('INSERT INTO dashboard_profile(user_id,id,profile_json) VALUES(?,1,?) ON CONFLICT(user_id,id) DO UPDATE SET profile_json=excluded.profile_json').bind(env.USER_ID,JSON.stringify(profile)).run();return Response.json({status:'ok',profile});}const r=await env.DB.prepare('SELECT profile_json FROM dashboard_profile WHERE user_id=? AND id=1').bind(env.USER_ID).first();const suggestions=await refreshSuggestions(env,{googleToken}).catch(error=>{console.error('Profile suggestions failed',error.message);return null;});return Response.json({profile:r?JSON.parse(r.profile_json):null,suggestions});}
   {const r=await handleTrainingEditsApi(request,env,ctx,url,session,internalAuth);if(r!==undefined)return r;}
   // "Revize dne": the coach checks one planned day in the context of the week.
   if(url.pathname==='/app/api/coach/review'&&request.method==='POST'){
@@ -2721,7 +2727,7 @@ async function handleDashboardApi(request, env, ctx, url, session = {}) {
       // nothing is eaten on a past day any more. They fit meals to the day's
       // calorie target and food log read here (before the energy budget below,
       // as /analysis/energy gives it), instead of computing the day again.
-      const known = reads.then(([d, f]) => d.ok && f.ok ? { energy: { final: { calorieTarget: d.body.calories?.target ?? null, estimatedTDEE: d.body.calories?.estimatedTDEE ?? null }, energyProfile: { missing: d.body.nutrition?.missing || [] } }, food: f.body } : null);
+      const known = reads.then(([d, f]) => d.ok && f.ok ? { energy: { final: { calorieTarget: Number(profile?.kcalGoal) > 0 ? Number(profile.kcalGoal) : d.body.calories?.target ?? null, estimatedTDEE: d.body.calories?.estimatedTDEE ?? null }, energyProfile: { missing: d.body.nutrition?.missing || [] } }, food: f.body } : null);
       const [[{ body: daily }, { body: food }], recommendations] = await Promise.all([
         reads,
         date >= localToday() ? foodRecommend(env, recommendUrl, known).then(r => r.json()).catch(error => ({ status: "error", message: error.message })) : null

@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nextBase, waterGoal, waterNudge, loadBuild, forgetWaterFrom } from "../src/water-goal.js";
+import { nextBase, waterGoal, waterNudge, loadBuild, forgetWaterFrom, drunkByDay } from "../src/water-goal.js";
 import { ensure } from "../src/fluids.js";
 import { createD1 } from "./helpers/d1.mjs";
 import { applyEnergyBudget } from "../src/energy-budget.js";
+import { dayCalories } from "../src/app-food.js";
 import { normalizeProfile } from "../src/energy-profile.js";
 
 const auto = { ml: 3700, baseMl: 3200, exerciseMl: 500 };
@@ -40,21 +41,46 @@ test("the day's goal: Custom and Build-up add the training on top, Auto keeps th
   assert.equal(built.build.baseMl, 2200);
 });
 
-test("Build-up stores each finished day once and counts a day again after a late drink", async () => {
+test("Build-up stores each finished day once, counts yesterday on every request and a day again after a late drink", async () => {
   const db = createD1(); db.userId = 1;
   await ensure(db);
   const drink = (date, ml) => db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind) VALUES(1,?,?,?,'water')").bind(date, date + "T10:00", ml).run();
   await drink("2026-10-26", 1300); await drink("2026-10-27", 1500); await drink("2026-10-28", 1500);
   const profile = { waterMode: "build", waterStart: 1500, waterFrom: "2026-10-26" }, autoT = { baseMl: 3200, exerciseMl: 0 };
   assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1600);
-  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build").get().n, 3);
-  // The next request of the day reads only the stored rows.
-  db.sqlite.exec("DELETE FROM fluid_log");
-  assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1600);
-  // Wednesday's drinks were wrong: it counts again from the log.
-  await forgetWaterFrom(db, "2026-10-28", "2026-10-29");
+  // Yesterday (28) is not stored yet: its drinks may still sync.
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build").get().n, 2);
+  db.sqlite.exec("DELETE FROM fluid_log WHERE date='2026-10-28'");
   assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1500);
+  await drink("2026-10-28", 1500);
+  // The stored days are not read from the log again.
+  db.sqlite.exec("DELETE FROM fluid_log WHERE date<'2026-10-28'");
+  assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1600);
+  // Tuesday's drinks were wrong: it counts again from the log.
+  await forgetWaterFrom(db, "2026-10-27", "2026-10-29");
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build").get().n, 1);
+  assert.equal((await loadBuild(db, profile, "2026-10-29", autoT)).baseMl, 1500);
+});
+
+test("a future day of Food judges no day from today on and stores none of them", async () => {
+  const db = createD1(); db.userId = 1;
+  await ensure(db);
+  await db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind) VALUES(1,'2026-10-29','2026-10-29T09:00',300,'water')").run();
+  const profile = { waterMode: "build", waterStart: 1500, waterFrom: "2026-10-27" }, autoT = { baseMl: 3200, exerciseMl: 0 };
+  const built = await loadBuild(db, profile, "2026-11-02", autoT, "2026-10-29");
+  assert.equal(built.baseMl, 1500);
+  assert.ok(built.days.every(d => d.date < "2026-10-29"));
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS n FROM water_build WHERE date>='2026-10-28'").get().n, 0);
+});
+
+test("drinks from the food diary count for Build-up as they do in Pití", async () => {
+  const db = createD1(); db.userId = 1;
+  await ensure(db);
+  db.sqlite.exec("CREATE TABLE food_logs (id INTEGER PRIMARY KEY, user_id INTEGER, consumed_date TEXT, consumed_at TEXT, recipe_title TEXT, note TEXT, status TEXT)");
+  await db.prepare("INSERT INTO fluid_log(user_id,date,consumed_at,ml,kind) VALUES(1,'2026-10-27','2026-10-27T09:00',1000,'water')").run();
+  await db.prepare("INSERT INTO food_logs(user_id,consumed_date,consumed_at,recipe_title,note) VALUES(1,'2026-10-27','2026-10-27T12:00','Smoothie',?)").bind(JSON.stringify({ ingredients: [{ name: "Smoothie", amount: 500, unit: "ml" }] })).run();
+  const drunk = await drunkByDay(db, "2026-10-27", "2026-10-28");
+  assert.ok(drunk["2026-10-27"] > 1000);
 });
 
 test("one push only on a day behind, at 14:00 and 18:00", () => {
@@ -69,6 +95,9 @@ test("an own calorie goal replaces the target and keeps the computed one", () =>
   assert.equal(daily.nutrition.calorieTarget, 2200);
   assert.equal(daily.nutrition.autoCalorieTarget, 2450);
   assert.equal(daily.nutrition.macros.carbs_g, Math.round((2200 - 600 - 630) / 4));
+  // A fixed goal: no training bonus on top of it.
+  daily.nutrition.calorieBreakdown = { activityAdjustment: 400, trainingCoverage: 1 };
+  assert.deepEqual(dayCalories(daily.nutrition), { target: 2200, everyday: 2200, bonus: null });
 });
 
 test("the profile keeps the goals only in range", () => {
