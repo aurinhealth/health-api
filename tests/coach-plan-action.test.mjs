@@ -64,6 +64,7 @@ test('the plan card shows the weeks, the days and the plan it ends', async () =>
   const running = { templateId: 'ride-base', startDate: '2026-09-28', raceDate: null };
   const ctx = vm.createContext({ getTemplate, planDays, planPreview, planSummary, localToday: () => today,
     sportDays: (days, sport) => days.map((d, i) => d.includes(sport) ? i : null).filter(i => i != null),
+    planTimeOf: p => ({ availability: p.availability }),
     getWeekPlan: async () => prefs, currentCtl: async () => 45, syncedPlans: async () => ({ active: running, gym: null }) });
   vm.runInContext(source.slice(from, to), ctx);
   const [a] = validateCoachActions([plan({ planId: 'run-half', date: '2027-03-21' })], context, today, { userInitiated: true });

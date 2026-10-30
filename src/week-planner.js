@@ -57,8 +57,21 @@ export function sanitizeWeekPlan(input = {}) {
     : null;
   const count = input.weeklyActivities == null || input.weeklyActivities === '' ? null : Number(input.weeklyActivities);
   if (count != null && (!Number.isInteger(count) || count < 0 || count > 14)) throw new Error(L('Počet aktivit musí být 0 až 14.', 'The number of activities must be 0 to 14.'));
-  return { days, location, availability: normalizeAvailability(input.availability), weeklyActivities: count, sessions: sanitizeSessions(input.sessions, days),...(['auto','manual'].includes(input.availabilityMode)?{availabilityMode:input.availabilityMode}:{}) };
+  // Shift work: two usual weeks in turn, week B with its own time per weekday
+  // (`alternate` is a Monday of a week A).
+  const alternate = validDay(input.alternate) ? mondayOfWeek(input.alternate) : null;
+  return { days, location, availability: normalizeAvailability(input.availability), weeklyActivities: count, sessions: sanitizeSessions(input.sessions, days),...(['auto','manual'].includes(input.availabilityMode)?{availabilityMode:input.availabilityMode}:{}),
+    ...(alternate ? { alternate, availabilityB: normalizeAvailability(input.availabilityB) } : {}) };
 }
+const mondayOfWeek = date => { const d = new Date(date + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); };
+// With two weeks in turn: true when the week of `date` is a week B.
+export function isWeekB(prefs, date) {
+  if (!prefs?.alternate || !prefs.availabilityB || !validDay(date)) return false;
+  const weeks = Math.round((Date.parse(mondayOfWeek(date) + "T12:00:00Z") - Date.parse(prefs.alternate + "T12:00:00Z")) / (7 * 86400000));
+  return ((weeks % 2) + 2) % 2 === 1;
+}
+// The usual week for a date: on a week B its own time per weekday.
+export const usualFor = (prefs, date) => isWeekB(prefs, date) ? { ...prefs, availability: prefs.availabilityB, weekB: true } : prefs;
 
 // The athlete's own length or place for one plan chip, keyed "weekday|sport|slot"
 // (slot = the n-th session of that sport that day). Gym has no place to choose.
@@ -94,9 +107,10 @@ export async function getWeekPlan(db, date = null, { calendar = true } = {}) {
     }
   }
   if (!date) return defaults;
+  defaults = usualFor(defaults, date);
   await ensureWeekOverrides(db);
   const override = await db.prepare('SELECT prefs_json FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).first();
-  const prefs = override ? { ...sanitizeWeekPlan({ ...defaults, ...JSON.parse(override.prefs_json) }), source: 'week' } : { ...defaults, source: 'default' };
+  const prefs = override ? { ...sanitizeWeekPlan({ ...defaults, ...JSON.parse(override.prefs_json) }), source: 'week', ...(defaults.weekB ? { weekB: true } : {}) } : { ...defaults, source: 'default' };
   return calendar ? weekWithCalendar(db, prefs, date) : prefs;
 }
 
@@ -107,13 +121,18 @@ export async function saveWeekPlan(db, input, date = null) {
     await ensureWeekOverrides(db);
     // A week keeps only what differs from the usual week, so a later change of
     // the usual week (the time for a weekday, the place) still reaches it.
-    const own = weekOverride(prefs, await getWeekPlan(db));
+    const own = weekOverride(prefs, usualFor(await getWeekPlan(db), date));
     if (!Object.keys(own).length) {
       await db.prepare('DELETE FROM week_plan_overrides WHERE user_id=? AND week_start=?').bind(db.userId, weekStartOf(date)).run();
       return { ...prefs, source: 'default' };
     }
     await db.prepare('INSERT INTO week_plan_overrides(user_id,week_start,prefs_json) VALUES(?,?,?) ON CONFLICT(user_id,week_start) DO UPDATE SET prefs_json=excluded.prefs_json').bind(db.userId, weekStartOf(date), JSON.stringify(own)).run();
     return { ...prefs, source: 'week' };
+  }
+  // The usual week read on a week B carries B's time: saved as the usual week, it stays B's.
+  if (input?.weekB === true && prefs.alternate) {
+    const stored = await getWeekPlan(db);
+    Object.assign(prefs, { availabilityB: prefs.availability, availability: stored.availability });
   }
   await db.prepare("INSERT INTO week_plan_preferences(user_id,prefs_json,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET prefs_json=excluded.prefs_json,updated_at=CURRENT_TIMESTAMP").bind(db.userId, JSON.stringify(prefs)).run();
   return prefs;
@@ -152,21 +171,35 @@ export async function resetWeekPlan(db, date) {
 // - gym on a quality or long day, or the day before quality, is upper body only.
 // A training plan (training-plans.js) sets how many quality days the week has
 // (`quality`, still capped by readiness) and puts them on its sport's days first (`prefer`).
+// With the free time of every endurance day known (`minutes`, Monday first),
+// the long session goes to the longest day and quality to days with an hour or more.
 // avoid: sports that get no key session (a triathlete's disciplines being learnt).
-export function planWeekRoles(days = [], { readiness = "green", quality = null, prefer = null, avoid = null } = {}) {
+export function planWeekRoles(days = [], { readiness = "green", quality = null, prefer = null, minutes = null, avoid = null } = {}) {
   const has = (i, s) => (days[i] || []).includes(s);
   const main = i => (days[i] || []).find(s => s !== "gym");
   const avoided = i => [].concat(avoid || []).includes(main(i));
   const endurance = [0, 1, 2, 3, 4, 5, 6].filter(i => has(i, "ride") || has(i, "run") || has(i, "swim"));
   const role = {};
+  const timed = Array.isArray(minutes) && endurance.length > 0 && endurance.every(i => Number(minutes[i]) > 0);
+  const free = i => timed ? Number(minutes[i]) : 0;
   const weekend = endurance.filter(i => i >= 5 && !avoided(i)).sort((a, b) => Number(has(a, "gym")) - Number(has(b, "gym")) || b - a);
   let long = weekend[0];
   if (long == null && endurance.length >= 3) long = endurance.filter(i => !avoided(i)).at(-1);
+  // A clearly longer weekday (30 minutes more than the weekend's day) takes the long session.
+  if (timed && endurance.length >= 2) {
+    const longest = endurance.filter(i => !avoided(i)).sort((a, b) => free(b) - free(a) || Number(b >= 5) - Number(a >= 5) || b - a)[0];
+    // With no weekend day, a weekday is the long day only when it is clearly the longest.
+    const next = long ?? endurance.filter(i => i !== longest).sort((a, b) => free(b) - free(a))[0];
+    if (longest != null && (long == null ? endurance.length >= 3 || free(longest) >= free(next) + 30 : free(longest) >= free(long) + 30)) long = longest;
+  }
   if (long != null && endurance.length >= 2) role[long] = "long";
   const usual = endurance.length >= 4 ? 2 : endurance.length >= 2 ? 1 : 0;
   const planned = Number.isInteger(quality) ? Math.min(quality, Math.max(0, endurance.length - (long != null && endurance.length >= 2 ? 1 : 0))) : usual;
   const wanted = readiness === "red" ? 0 : readiness === "yellow" ? Math.min(1, planned) : planned;
-  const picks = prefer ? [...endurance.filter(i => (days[i] || []).find(s => s !== "gym") === prefer), ...endurance.filter(i => (days[i] || []).find(s => s !== "gym") !== prefer)] : endurance;
+  // Short days (under an hour) take quality only when no other day of the same group can;
+  // the plan's own sport still comes first.
+  const byTime = list => timed ? [...list.filter(i => free(i) >= 60), ...list.filter(i => free(i) < 60)] : list;
+  const picks = prefer ? [...byTime(endurance.filter(i => main(i) === prefer)), ...byTime(endurance.filter(i => main(i) !== prefer))] : byTime(endurance);
   const qualityDays = [];
   for (const gap of [2, 1]) {
     for (const i of picks) {
@@ -195,12 +228,15 @@ export function planWeekRoles(days = [], { readiness = "green", quality = null, 
   });
 }
 
+// The free time per weekday (Monday first) for planWeekRoles.
+export const freeMinutes = prefs => (prefs?.availability || []).map(a => a?.minutes ?? null);
+
 // Role of one sport on one date, for the generator.
 export function roleFor(prefs, date, sport, options = {}) {
   const d = new Date(String(date) + "T12:00:00Z");
   if (Number.isNaN(d.getTime())) return null;
   const weekday = (d.getUTCDay() + 6) % 7;
-  return planWeekRoles(prefs?.days || [], options)[weekday].items.find(x => x.sport === sport) || null;
+  return planWeekRoles(prefs?.days || [], { minutes: freeMinutes(prefs), ...options })[weekday].items.find(x => x.sport === sport) || null;
 }
 
 // ---- One recovery week for the whole app -----------------------------------

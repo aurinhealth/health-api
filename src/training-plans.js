@@ -791,11 +791,12 @@ export const planLoad = pw => pw ? { load: pw.spec.load, light: ["recovery", "ta
 export function gymPhaseFor(plan, date, days = []) {
   const pw = planWeek(plan, date);
   if (!pw || pw.template.sport !== "gym") return null;
-  const g = pw.spec.gym, picked = [];
-  for (let i = 0; i < 7 && picked.length < g.sessions; i++) if ((days[i] || []).includes("gym") && picked.every(p => i - p >= 2)) picked.push(i);
+  const g = pw.spec.gym, sessions = gymSessions(plan, pw), picked = gymPickDays(days, sessions);
   const weekday = (new Date(date + "T12:00:00Z").getUTCDay() + 6) % 7;
   if (!picked.includes(weekday)) return null;
-  const head = pw.template.name + " · " + g.name, week = L(" · týden ", " · week ") + pw.week + "/" + pw.weeks;
+  // Without the athlete's own number the phase stays as the plan was made: full body.
+  const chosen = sessions !== g.sessions || Number(plan?.perWeek) > 0, part = chosen ? gymPart(sessions, picked.indexOf(weekday)) : null;
+  const head = pw.template.name + " · " + g.name + (part ? " · " + GYM_PARTS()[part] : ""), week = L(" · týden ", " · week ") + pw.week + "/" + pw.weeks;
   const equipment = pw.template.equipment || null;
   // A test week: its first session is the strength test (one heavy set of 3–5
   // after the warm-up sets, the estimated max from it); the others are light.
@@ -803,10 +804,79 @@ export function gymPhaseFor(plan, date, days = []) {
     name: head + week, phaseName: g.name, sets: 1, reps: "3–5", rpe: "9", exercises: g.test, test: true, equipment,
     rationale: L(`Plán ${pw.template.name}, týden ${pw.week}/${pw.weeks}: test síly. Po rozcvičovacích sériích jedna těžká série, kde zvládneš 3–5 opakování s jedním v rezervě; z ní se spočítá tvoje maximum. Když nemáš velkou činku, test proběhne na nejbližším cviku, na který vybavení máš.`, `Plan ${pw.template.name}, week ${pw.week}/${pw.weeks}: strength test. After the warm-up sets, one heavy set where you manage 3–5 repetitions with one in reserve; your max is worked out from it. Without a barbell the test runs on the closest exercise your equipment allows.`)
   };
-  return {
-    name: head + week, phaseName: g.name, sets: g.sets, reps: g.reps, rpe: g.rpe, exercises: g.exercises, equipment,
-    rationale: L(`Plán ${head}, týden ${pw.week}/${pw.weeks}: ${g.sets} série po ${g.reps} opakováních, RPE ${g.rpe} (tolik opakování nech v rezervě, kolik chybí do 10).`, `Plan ${head}, week ${pw.week}/${pw.weeks}: ${g.sets} sets of ${g.reps} reps, RPE ${g.rpe} (keep as many reps in reserve as are missing to 10).`)
+  // The seventh day of seven is light: mobility and the trunk, nothing heavy.
+  if (part === "light") return {
+    name: head + week, phaseName: g.name, sets: 2, reps: "10–12", rpe: "5–6", exercises: MOBILITY, equipment,
+    rationale: L(`Plán ${pw.template.name}, týden ${pw.week}/${pw.weeks}: lehký den na pohyblivost a střed těla. Sedm dní v týdnu nechává tělu jen tento den na zotavení.`, `Plan ${pw.template.name}, week ${pw.week}/${pw.weeks}: a light day for mobility and the trunk. Seven days a week leaves only this day for recovery.`)
   };
+  const sets = chosen ? gymSets(g, sessions, g.sessions, part) : g.sets, exercises = part ? gymPartSlots(g.exercises, part, equipment) : g.exercises;
+  return {
+    name: head + week, phaseName: g.name, sets, reps: g.reps, rpe: g.rpe, exercises, equipment,
+    rationale: L(`Plán ${head}, týden ${pw.week}/${pw.weeks}: ${sets} série po ${g.reps} opakováních, RPE ${g.rpe} (tolik opakování nech v rezervě, kolik chybí do 10).`, `Plan ${head}, week ${pw.week}/${pw.weeks}: ${sets} sets of ${g.reps} reps, RPE ${g.rpe} (keep as many reps in reserve as are missing to 10).`)
+  };
+}
+
+// ---- the gym plan's sessions a week ----------------------------------------------
+// The athlete picks 2–7 sessions a week (`perWeek`); without a choice each
+// phase keeps its own. A lighter phase (fewer sessions in the template)
+// stays lighter. Up to three sessions are full body, four upper and lower
+// body, five and six push, pull and legs, the seventh a light mobility day
+// (the split of the gym generator, PR #350). The weekly sets per muscle stay
+// about the same: two full-body sessions get more sets each, a split day one
+// set more for its fewer exercises (Schoenfeld 2017: 10–20 sets a muscle a week).
+export const GYM_PER_WEEK = [2, 7];
+export const gymUsual = template => Math.max(...template.weeks.map(w => w.gym?.sessions || 0));
+export function gymSessions(plan, pw) {
+  const g = pw.spec.gym, n = Math.round(Number(plan?.perWeek));
+  if (!(n >= GYM_PER_WEEK[0] && n <= GYM_PER_WEEK[1])) return g.sessions;
+  return g.sessions < gymUsual(pw.template) ? Math.max(1, Math.min(n, g.sessions)) : n;
+}
+// The gym days the plan uses: the first ones of the week, two days apart up to
+// three sessions (a day apart when the days are too close), any day for a split.
+export function gymPickDays(days = [], sessions) {
+  const gym = [0, 1, 2, 3, 4, 5, 6].filter(i => (days[i] || []).includes("gym"));
+  if (sessions >= 4) return gym.slice(0, sessions);
+  for (const gap of [2, 1]) {
+    const picked = [];
+    for (const i of gym) if (picked.length < sessions && picked.every(p => i - p >= gap)) picked.push(i);
+    if (picked.length >= Math.min(sessions, gym.length) || gap === 1) return picked;
+  }
+  return [];
+}
+export const gymPart = (sessions, k) => sessions <= 3 || k < 0 ? null : k === 6 ? "light" : sessions === 4 ? ["upper", "lower"][k % 2] : ["push", "pull", "legs"][k % 3];
+export const GYM_PARTS = () => ({ upper: L("horní polovina", "upper body"), lower: L("dolní polovina", "lower body"), push: L("tlaky", "push"), pull: L("tahy", "pull"), legs: L("nohy", "legs"), light: L("lehký den", "light day") });
+export const gymSplitName = sessions => sessions <= 3 ? L("Celé tělo", "Full body") : sessions === 4 ? L("Horní / dolní", "Upper / Lower") : sessions <= 6 ? L("Tlaky / tahy / nohy", "Push / Pull / Legs") + (sessions === 6 ? " ×2" : "") : L("Tlaky / tahy / nohy ×2 + pohyblivost", "PPL ×2 + mobility");
+// `phase`: the phase's own sessions, so a lighter phase keeps its lighter week.
+export function gymSets(g, sessions, phase, part = null) {
+  if (part) return Math.min(5, g.sets + 1);
+  return clamp(Math.round(g.sets * (phase || sessions) / Math.max(1, sessions)), 2, 6);
+}
+const CORE = /dead bug|pallof|plank|crunch|leg raise|bird dog|superman|woodchop/i;
+const LEGS = /squat|lunge|step-up|deadlift|thrust|glute|calf|leg curl|leg press|nordic|soleus|cossack/i;
+const PULL = /row|pull|chin|curl/i;
+const slotPart = slot => { const name = [].concat(slot)[0] || ""; return CORE.test(name) ? "core" : LEGS.test(name) ? "legs" : PULL.test(name) ? "pull" : "push"; };
+const EXTRA = {
+  legs: [["DB Bulgarian split squat", "Smith machine split squat", "DB reverse lunge", "Forward Lunge"], ["Seated leg curl", "Prone leg curl Prime", "Single Leg Glute Bridge"], ["Standing calf raise", "Single-leg calf raise", "Eccentric Calf Lowers"], ["Hip thrust", "Glute bridge"]],
+  pull: [["Low row", "Chest-supported row", "Single-arm cable row", "One-arm DB row"], ["Cable curl", "DB curl", "Hammer curl"]],
+  push: [["DB shoulder press", "Shoulder press Prime", "Push-up"], ["Cable lateral raise", "DB lateral raise"], ["Cable triceps extension", "DB overhead triceps extension", "Diamond Push Ups"]]
+};
+// The bodyweight plan's own fill-ups: nothing a home without equipment lacks
+// (a table or a low bar for the inverted row, a chair for the dips).
+const EXTRA_HOME = {
+  legs: [["Forward Lunge", "Walking Lunge"], ["Single Leg Glute Bridge", "Glute bridge"], ["Eccentric Calf Lowers", "Bent-Knee Soleus Raise"], ["Cossack Squat", "Bodyweight Alternating Lateral Lunge"]],
+  pull: [["Inverted Row", "Prone Y-T Raises"], ["Prone Y-T Raises", "Supermans"]],
+  push: [["Push-up", "Bodyweight Knee Push Ups"], ["Bench Dips", "Diamond Push Ups"], ["Diamond Push Ups", "Bodyweight Knee Push Ups"]]
+};
+const MOBILITY = [["Cossack Squat", "Bodyweight Alternating Lateral Lunge"], ["Bird Dog"], ["Dead bug"], ["Glute bridge", "Single Leg Glute Bridge"], ["Pallof press"]];
+// A split day's exercises: the phase's slots of that part (the trunk on leg
+// days), filled up to four with more of the same part.
+export function gymPartSlots(slots, part, equipment = null) {
+  const extra = equipment === "bodyweight" ? EXTRA_HOME : EXTRA;
+  const parts = { upper: ["push", "pull"], lower: ["legs", "core"], push: ["push"], pull: ["pull"], legs: ["legs", "core"] }[part] || [];
+  const out = slots.filter(slot => parts.includes(slotPart(slot)));
+  const first = new Set(out.map(slot => [].concat(slot)[0]));
+  for (const p of parts) for (const slot of extra[p] || []) if (out.filter(x => slotPart(x) !== "core").length < 4 && !first.has(slot[0])) { out.push(slot); first.add(slot[0]); }
+  return out;
 }
 
 // ---- starting a plan -----------------------------------------------------------
@@ -836,7 +906,10 @@ export function planStart(template, { today, raceDate = null, startDate = null }
 }
 // Training days the plan needs: the athlete's days of the sport first; when
 // there are too few, the days with the most free time are added, spread out.
-export function planDays(template, prefs) {
+// `count`: the sessions a week the athlete chose (the plan's range, 2–7 for a
+// gym plan); more days of the sport than that leave out the ones with the
+// least free time (`removed`).
+export function planDays(template, prefs, count = null) {
   // A triathlon plan: each sport's days in turn (ride, run, swim), a swim may share a day.
   if (template.sport === "triathlon") {
     const days = Array.from({ length: 7 }, (_, i) => [...(prefs?.days?.[i] || [])]), added = new Set();
@@ -857,9 +930,15 @@ export function planDays(template, prefs) {
   const days = (prefs?.days || []).map(d => [...(d || [])]);
   while (days.length < 7) days.push([]);
   const has = i => days[i].includes(template.sport);
-  const added = [];
+  const added = [], removed = [];
   const free = i => Number(prefs?.availability?.[i]?.minutes ?? 60);
-  while (days.filter((_, i) => has(i)).length < template.days[0]) {
+  const range = template.sport === "gym" ? GYM_PER_WEEK : template.days;
+  const want = Number(count) > 0 ? clamp(Math.round(Number(count)), range[0], range[1]) : template.days[0];
+  if (Number(count) > 0) {
+    const mine = [0, 1, 2, 3, 4, 5, 6].filter(has).sort((a, b) => free(a) - free(b) || b - a);
+    for (const i of mine.slice(0, Math.max(0, mine.length - want))) { days[i] = days[i].filter(x => x !== template.sport); removed.push(i); }
+  }
+  while (days.filter((_, i) => has(i)).length < want) {
     const options = [0, 1, 2, 3, 4, 5, 6].filter(i => !has(i) && free(i) >= (template.sport === "swim" ? 15 : template.sport === "run" ? 20 : 30));
     if (!options.length) break;
     const near = i => [-1, 1].filter(k => has((i + k + 7) % 7)).length;
@@ -867,7 +946,7 @@ export function planDays(template, prefs) {
     days[options[0]].push(template.sport);
     added.push(options[0]);
   }
-  return { days, added: added.sort() };
+  return { days, added: added.sort((a, b) => a - b), removed: removed.sort((a, b) => a - b) };
 }
 
 // ---- storage -------------------------------------------------------------------
@@ -889,8 +968,8 @@ const fromRow = r => r ? { id: r.id, templateId: r.template_id, sport: r.sport, 
 // { skip }); weekDays: fewer training days in a week ({ monday: days });
 // start: FTP, fitness and the estimate when the plan started (its result);
 // seen: the finished plan's result was closed; target: a running race's goal
-// time in seconds.
-const STATE_KEYS = ["pauseFrom", "pauseUntil", "shiftedWeeks", "returnFrom", "returnWeeks", "reviewed", "moves", "lightWeeks", "proposal", "undo", "firstDay", "edits", "weekDays", "start", "seen", "target"];
+// time in seconds; perWeek: a gym plan's sessions a week the athlete chose.
+const STATE_KEYS = ["pauseFrom", "pauseUntil", "shiftedWeeks", "returnFrom", "returnWeeks", "reviewed", "moves", "lightWeeks", "proposal", "undo", "firstDay", "edits", "weekDays", "start", "seen", "target", "perWeek"];
 async function savePlan(db, plan) {
   const state = Object.fromEntries(STATE_KEYS.filter(k => plan[k] != null).map(k => [k, plan[k]]));
   await db.prepare("UPDATE training_plans SET start_date=?,state_json=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=? AND id=?").bind(plan.startDate, JSON.stringify(state), db.userId, plan.id).run();
@@ -1044,26 +1123,83 @@ export function planWeekDays(plan, monday, days) {
 // An estimate for the plan's weeks before it starts: the sessions on the
 // athlete's days of the sport (the plan's range), the time from the usual
 // load (fitness × 7) times the week's load, at the plan sport's typical
-// intensity, and no more than the days' free time. The week planner makes the
-// real week from the same load, so the numbers are close but not exact.
-export function planPreview(template, { ctl = null, days = [], firstDay = null, startDate, availability = [] } = {}) {
-  const sport = template.sport, tri = sport === "triathlon";
+// intensity, and no more than the days' free time. Fitness follows what each
+// week does (a 42-day average moves 1 − e^(−7/42) ≈ 15 % of the way a week),
+// so a lot of free time is a ceiling the plan grows into, not the first
+// week. With two weeks in turn (shift work) each week takes its own time. The
+// week planner makes the real week from the same load, so the numbers are
+// close but not exact.
+const isWeekBOf = (monday, alternate) => {
+  const weeks = Math.round((Date.parse(monday + "T12:00:00Z") - Date.parse(mondayOf(alternate) + "T12:00:00Z")) / (7 * 86400000));
+  return ((weeks % 2) + 2) % 2 === 1;
+};
+const GYM_DAY = [30, 90];
+const setMinutes = m => m == null || m === "" || !Number.isFinite(Number(m)) ? null : Math.max(0, Number(m));
+export function planPreview(template, { ctl = null, days = [], firstDay = null, startDate, availability = [], availabilityB = null, alternate = null, perWeek = null } = {}) {
+  const sport = template.sport, gym = sport === "gym", tri = sport === "triathlon";
   // A triathlon week has its sessions per sport, some days two.
   const n = tri ? Object.values(template.perSport).reduce((a, b) => a + b, 0) : clamp(days.length || template.days[0], template.days[0], template.days[1]);
-  const weekly = Math.max(Number(ctl) || 35, 20) * 7, intensity = sport === "run" ? .75 : .72, perTss = 60 / (intensity * intensity * 100);
+  const start = Math.max(Number(ctl) || 35, 20), intensity = sport === "run" ? .75 : .72, perTss = 60 / (intensity * intensity * 100);
+  // A day set to no time counts as 0; only a day without a set time is open.
+  const minutesOf = (list, i) => setMinutes(list?.[i]?.minutes);
   // Days without a set time do not limit the week.
-  const free = days.length ? days.reduce((sum, i) => sum + (Number(availability?.[i]?.minutes) > 0 ? Number(availability[i].minutes) : Infinity), 0) : Infinity;
+  const freeOf = list => days.length ? days.reduce((sum, i) => sum + (minutesOf(list, i) ?? Infinity), 0) : Infinity;
+  const shifts = Boolean(alternate && availabilityB);
+  const listFor = i => shifts && isWeekBOf(shift(startDate, i * 7), alternate) ? availabilityB : availability;
   const firstFrom = firstDay ? (new Date(firstDay + "T12:00:00Z").getUTCDay() + 6) % 7 : 0;
   const summary = templateSummary(template);
+  // A gym plan: its days (the first gym days of the week, two apart up to three
+  // sessions), the part of the body each trains and the day's time up to 90 minutes.
+  const gymDays = sessions => gymPickDays(Array.from({ length: 7 }, (_, i) => days.includes(i) ? ["gym"] : []), sessions);
+  const gymMinutes = (list, i) => clamp(minutesOf(list, i) ?? 60, 0, GYM_DAY[1]);
+  let fitness = start;
   const weeks = template.weeks.map((w, i) => {
+    const list = listFor(i), free = freeOf(list), b = shifts && list === availabilityB;
     const left = i === 0 && firstFrom ? days.filter(d => d >= firstFrom).length : days.length;
-    const sessions = template.sport === "gym" ? w.gym.sessions : i === 0 && firstFrom ? Math.min(n, Math.max(tri ? Math.round(n * left / Math.max(1, days.length)) : left, Math.min(n, w.q.length))) : n;
-    const share = sessions / n, tss = Math.round(weekly * w.load * share);
-    const minutes = Math.round(Math.min(tss * perTss, free * share) / 5) * 5;
-    return { week: i + 1, phase: w.phase, phaseLabel: summary.weeks[i].phaseLabel, keys: summary.weeks[i].keys, race: Boolean(w.race), sessions, minutes, tss: Math.round(minutes / perTss) };
+    if (gym) {
+      const sessions = gymSessions({ perWeek }, { spec: w, template }), picked = gymDays(sessions);
+      return { week: i + 1, phase: w.phase, phaseLabel: summary.weeks[i].phaseLabel, keys: summary.weeks[i].keys, race: Boolean(w.race), sessions, minutes: picked.reduce((sum, d) => sum + gymMinutes(list, d), 0) || sessions * 60, tss: 0, ...(b ? { weekB: true } : {}) };
+    }
+    const sessions = i === 0 && firstFrom ? Math.min(n, Math.max(tri ? Math.round(n * left / Math.max(1, days.length)) : left, Math.min(n, w.q.length))) : n;
+    const share = sessions / n, want = fitness * 7 * w.load * share * perTss, capped = want > free * share;
+    const minutes = Math.round(Math.min(want, free * share) / 5) * 5;
+    fitness += (minutes / perTss / 7 - fitness) * (1 - Math.exp(-7 / 42));
+    return { week: i + 1, phase: w.phase, phaseLabel: summary.weeks[i].phaseLabel, keys: summary.weeks[i].keys, race: Boolean(w.race), sessions, minutes, tss: Math.round(minutes / perTss), ...(capped ? { capped: true } : {}), ...(b ? { weekB: true } : {}) };
   });
   const sum = k => weeks.reduce((a, w) => a + w[k], 0);
-  return { startDate, firstDay, endDate: shift(startDate, template.weeks.length * 7 - 1), days, weeks, totals: { sessions: sum("sessions"), minutes: sum("minutes"), tss: sum("tss") } };
+  return { startDate, firstDay, endDate: shift(startDate, template.weeks.length * 7 - 1), days, weeks, totals: { sessions: sum("sessions"), minutes: sum("minutes"), tss: sum("tss") },
+    time: planTime(template, { days, availability, availabilityB: shifts ? availabilityB : null, alternate: shifts ? mondayOf(alternate) : null, fitness: start, perTss, n }),
+    ...(gym ? { gym: gymPreview(template, { perWeek, days, availability, gymDays, gymMinutes }) } : {}) };
+}
+// The free time the plan works with: each weekday's minutes (both weeks with
+// shift work), the plan days' total and the range that suits the plan at the
+// athlete's fitness now: the usual week's time from fitness (the lower end)
+// to its hardest week (the upper end). Less than the lower end: the plan
+// keeps its key sessions and shortens the easy ones (`short`).
+function planTime(template, { days, availability, availabilityB, alternate, fitness, perTss, n }) {
+  const perDay = list => Array.from({ length: 7 }, (_, i) => Number(list?.[i]?.minutes) > 0 ? Number(list[i].minutes) : null);
+  const total = list => days.some(i => setMinutes(list?.[i]?.minutes) == null) ? null : days.reduce((sum, i) => sum + setMinutes(list[i].minutes), 0);
+  const out = { days: perDay(availability), total: total(availability), ...(availabilityB ? { daysB: perDay(availabilityB), totalB: total(availabilityB), alternate } : {}) };
+  if (template.sport === "gym") return out;
+  const loads = template.weeks.filter(w => !w.race).map(w => w.load), round = m => Math.round(m / 15) * 15;
+  const suits = [round(fitness * 7 * perTss), round(fitness * 7 * Math.max(...loads) * perTss * 1.15)];
+  const least = [out.total, out.totalB].filter(x => x != null);
+  const short = least.length ? Math.min(...least) < suits[0] * .85 : false;
+  const note = template.sport === "run"
+    ? L("Na tento plán je času málo. Klíčové běhy zůstanou, lehké se zkrátí a odhad cíle bude opatrnější.", "Time is short for this plan. The key runs stay, the easy ones get shorter and the goal estimate is more careful.")
+    : template.sport === "ride" ? L("Na tento plán je času málo. Klíčové jízdy zůstanou, lehké se zkrátí a odhad cíle bude opatrnější.", "Time is short for this plan. The key rides stay, the easy ones get shorter and the goal estimate is more careful.")
+    : L("Na tento plán je času málo. Klíčové tréninky zůstanou, lehké se zkrátí a odhad cíle bude opatrnější.", "Time is short for this plan. The key sessions stay, the easy ones get shorter and the goal estimate is more careful.");
+  return { ...out, suits, short, ...(short ? { note } : {}), sessions: n };
+}
+function gymPreview(template, { perWeek, days, availability, gymDays, gymMinutes }) {
+  const usual = gymUsual(template), n = Number(perWeek) >= GYM_PER_WEEK[0] && Number(perWeek) <= GYM_PER_WEEK[1] ? Math.round(Number(perWeek)) : usual;
+  const picked = gymDays(n), parts = GYM_PARTS();
+  return {
+    perWeek: n, usual, range: GYM_PER_WEEK, split: gymSplitName(n),
+    days: picked.map((d, k) => ({ day: d, part: gymPart(n, k), label: gymPart(n, k) ? parts[gymPart(n, k)] : L("celé tělo", "full body"), minutes: gymMinutes(availability, d) })),
+    ...(picked.some(d => gymMinutes(availability, d) < GYM_DAY[0]) ? { short: true, note: L("Některý den má méně než 30 minut. Trénink ten den bude krátký, nebo si vyber jiný den.", "A day has less than 30 minutes. That session will be short, or pick another day.") } : {}),
+    ...(n === 7 ? { noRest: true, note: L("Sedm dní bez volna: sedmý den je lehký, jen pohyblivost a střed těla.", "Seven days without rest: the seventh is light, only mobility and the trunk.") } : {})
+  };
 }
 // How much of each past week was done, in %: days with a session of the
 // sport (gym days for a gym plan) against the sessions the week had (the
@@ -1077,7 +1213,7 @@ export function planCompletion(plan, { days = [], doneDates = [], today }) {
     const monday = shift(plan.startDate, i * 7), end = shift(monday, 7);
     if (end > today) break;
     // A gym week has its own number of sessions.
-    let planned = template.weeks[i].gym ? Math.min(template.weeks[i].gym.sessions, n) : Number(plan.weekDays?.[monday]) || n;
+    let planned = template.weeks[i].gym ? Math.min(gymSessions(plan, { spec: template.weeks[i], template }), days.length || 7) : Number(plan.weekDays?.[monday]) || n;
     if (plan.firstDay && monday === mondayOf(plan.firstDay)) planned = Math.min(planned, Math.max(1, days.filter(d => shift(monday, d) >= plan.firstDay).length));
     planned -= Object.entries(plan.edits || {}).filter(([d, e]) => e.skip && d >= monday && d < end).length;
     const did = [...done].filter(d => d >= monday && d < end).length;
@@ -1100,7 +1236,7 @@ export function planSummary(plan, today) {
   const template = plan && getTemplate(plan.templateId);
   if (!template) return null;
   const pw = planWeek(plan, today), started = today >= plan.startDate;
-  return { id: plan.id, templateId: template.id, sport: template.sport, name: template.name, goal: template.goal, startDate: plan.startDate, firstDay: plan.firstDay || null, endDate: shift(plan.startDate, template.weeks.length * 7 - 1), weekDays: plan.weekDays?.[mondayOf(today)] ?? null, raceDate: plan.raceDate, raceKm: plan.raceKm, target: plan.target ?? null, week: pw?.week ?? (started ? template.weeks.length : 0), weeksCount: template.weeks.length, phase: pw?.spec.phase ?? null, phaseLabel: pw ? pw.spec.gym?.name ?? phaseLabel(pw.spec.phase, template.sport) : null, started, paused: Boolean(plan.pauseFrom), shiftedWeeks: plan.shiftedWeeks || 0, returning: Boolean(pw?.spec.returning || pw?.spec.light), template: templateSummary(template) };
+  return { id: plan.id, templateId: template.id, sport: template.sport, name: template.name, goal: template.goal, startDate: plan.startDate, firstDay: plan.firstDay || null, endDate: shift(plan.startDate, template.weeks.length * 7 - 1), weekDays: plan.weekDays?.[mondayOf(today)] ?? null, raceDate: plan.raceDate, raceKm: plan.raceKm, target: plan.target ?? null, week: pw?.week ?? (started ? template.weeks.length : 0), weeksCount: template.weeks.length, phase: pw?.spec.phase ?? null, phaseLabel: pw ? pw.spec.gym?.name ?? phaseLabel(pw.spec.phase, template.sport) : null, started, paused: Boolean(plan.pauseFrom), shiftedWeeks: plan.shiftedWeeks || 0, returning: Boolean(pw?.spec.returning || pw?.spec.light), ...(template.sport === "gym" ? { perWeek: pw ? gymSessions(plan, pw) : plan.perWeek ?? gymUsual(template), split: gymSplitName(pw ? gymSessions(plan, pw) : plan.perWeek ?? gymUsual(template)) } : {}), template: templateSummary(template) };
 }
 
 // ---- a proposal in words (Today's plan card) -----------------------------------

@@ -133,6 +133,12 @@ struct StartPlanSheet: View {
     @State private var preview: PlanPreview?
     @State private var busy = false
     @State private var error: String?
+    /// Rides or runs a week; nil: the plan's fewest.
+    @State private var count: Int?
+    /// The athlete picked the days; until then the plan picks them from the count.
+    @State private var ownDays = false
+    @State private var editingTime = false
+    @State private var timeSaved = 0
 
     private var today: String { AppModel.localDate(Date()) }
     /// Today, the next three days and next Monday.
@@ -145,7 +151,8 @@ struct StartPlanSheet: View {
         } ?? ISODay.shift(today, 7)
         return Array(Set((0...3).map { ISODay.shift(today, $0) } + [next])).sorted()
     }
-    private var key: String { [start, days.map(String.init).joined(separator: ","), AppModel.localDate(raceDate), String(raceKm), String(target ?? 0)].joined(separator: "|") }
+    private var key: String { [start, ownDays ? days.map(String.init).joined(separator: ",") : "", AppModel.localDate(raceDate), String(raceKm), String(target ?? 0), String(count ?? 0), String(timeSaved)].joined(separator: "|") }
+    private var range: ClosedRange<Int> { (template.days.first ?? 3)...(template.days.last ?? 3) }
 
     var body: some View {
         NavigationStack {
@@ -202,22 +209,7 @@ struct StartPlanSheet: View {
                             .font(Typo.body).foregroundStyle(Palette.secondary).fixedSize(horizontal: false, vertical: true)
                     }
                 } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    SectionLabel(text: template.sport == "run" ? "Dny běhu" : template.sport == "swim" ? "Dny plavání" : "Dny na kole")
-                    HStack(spacing: 6) {
-                        ForEach(0..<7, id: \.self) { i in
-                            let on = days.contains(i)
-                            Button { toggle(i) } label: {
-                                Text(weekdays[i]).font(.footnote.weight(.semibold))
-                                    .foregroundStyle(on ? Palette.onAccent : Palette.muted)
-                                    .frame(maxWidth: .infinity, minHeight: 38)
-                                    .background(on ? Palette.amberBar : Palette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(on ? .isSelected : [])
-                        }
-                    }
-                }
+                    planSetup
                 }
                 if let preview {
                     VStack(alignment: .leading, spacing: 8) {
@@ -251,6 +243,9 @@ struct StartPlanSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Zrušit") { dismiss() } }
             }
+            .sheet(isPresented: $editingTime) {
+                FreeTimeSheet(time: preview?.time, planDays: days) { timeSaved += 1 }
+            }
             .sheet(isPresented: $pickingGoal) {
                 GoalTimeSheet(km: raceKm > 0 ? raceKm : template.race?.km ?? 10, estimate: preview?.race?.estimate, weeks: preview?.weeks.count ?? template.weeksCount, initial: target) { target = $0 }
                     .presentationDetents([.medium, .large])
@@ -279,15 +274,67 @@ struct StartPlanSheet: View {
             try? await Task.sleep(nanoseconds: 250_000_000)
             if Task.isCancelled { return }
             do {
-                let fresh = try await model.api.trainingPlanPreview(templateId: template.id, startDate: template.race == nil ? start : nil, days: days.isEmpty || template.perSport != nil ? nil : days, raceDate: template.race == nil ? nil : AppModel.localDate(raceDate),
-                                                                     raceKm: template.race == nil ? nil : raceKm, targetSeconds: target)
+                let fresh = try await model.api.trainingPlanPreview(templateId: template.id, startDate: template.race == nil ? start : nil, days: template.perSport == nil && ownDays && !days.isEmpty ? days : nil, raceDate: template.race == nil ? nil : AppModel.localDate(raceDate),
+                                                                     raceKm: template.race == nil ? nil : raceKm, targetSeconds: target, count: template.perSport == nil && !ownDays ? count : nil)
                 preview = fresh
-                if days.isEmpty { days = fresh.days }
+                if !ownDays || days.isEmpty { days = fresh.days }
                 error = nil
             } catch {
                 self.error = error.localizedDescription
             }
         }
+    }
+
+    /// Sessions a week, the days (the plan's own dashed), the free time, and a
+    /// note when it is short or shared with the other plan.
+    @ViewBuilder private var planSetup: some View {
+            if range.count > 1 {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionLabel(text: template.sport == "run" ? "Běhů týdně" : template.sport == "swim" ? "Plavání týdně" : "Jízd týdně")
+                    HStack(spacing: 6) {
+                        ForEach(Array(range), id: \.self) { n in
+                            let on = n == (count ?? (ownDays ? days.count : preview?.days.count ?? range.lowerBound))
+                            Button { count = n; ownDays = false } label: {
+                                Text(verbatim: String(n)).font(Typo.number(17))
+                                    .foregroundStyle(on ? Palette.onButton : Palette.ink)
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                    .background(on ? Palette.button : Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(on ? .isSelected : [])
+                        }
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                SectionLabel(text: template.sport == "run" ? "Dny běhu" : "Dny na kole")
+                PlanDayChips(days: days, added: ownDays ? [] : preview?.added ?? [], toggle: toggle)
+                if !ownDays, !(preview?.added ?? []).isEmpty {
+                    Text("Čárkované dny plán přidal podle volného času. Klepnutím je změníš.")
+                        .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Button { editingTime = true } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "clock").scaledFont(15, weight: .medium, cap: .denseCap).foregroundStyle(Palette.amber)
+                        .frame(width: 30, height: 30).background(Palette.amberSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Tvůj čas").font(.body).foregroundStyle(Palette.ink)
+                        if preview?.time?.daysB != nil { Text("Dva týdny po sobě").font(Typo.caption).foregroundStyle(Palette.muted) }
+                    }
+                    Spacer()
+                    Text(verbatim: preview?.time.map { FreeTime.total($0.days, days: days) } ?? "–").font(.body).foregroundStyle(Palette.muted)
+                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
+                }
+                .padding(.horizontal, 16).frame(minHeight: 56)
+                .cardSurface(cornerRadius: 18)
+            }
+            .buttonStyle(.plain)
+            if let note = preview?.time?.note, preview?.time?.short == true { PlanTimeNote(text: note) }
+            if let other = preview?.other {
+                Text(verbatim: L10n.f("Volný čas sdílí s plánem %@ (%@).", other.name, other.days.map { weekdays[$0] }.joined(separator: " ")))
+                    .font(Typo.caption).foregroundStyle(Palette.muted).fixedSize(horizontal: false, vertical: true)
+            }
     }
 
     private var weekdays: [String] { Fmt.weekdaysFromMonday }
@@ -329,6 +376,8 @@ struct StartPlanSheet: View {
     }
 
     private func toggle(_ i: Int) {
+        ownDays = true
+        count = nil
         if days.contains(i) { if days.count > 1 { days.removeAll { $0 == i } } } else { days = (days + [i]).sorted() }
     }
 
@@ -461,11 +510,11 @@ struct ActivePlanView: View {
     @State var plans: TrainingPlans
     @State var preview: PlanPreview? = nil
     @State var week: PlanWeekDetail? = nil
-    @State private var menu = false
     @State private var confirmStop = false
     @State private var choosing = false
     @State private var rescheduling = false
     @State private var editingDays = false
+    @State private var editingPlanDays = false
     @State private var editingGoal = false
     @State private var error: String?
 
@@ -479,7 +528,9 @@ struct ActivePlanView: View {
                     BackSlot { dismiss() }
                     if let active {
                         ActivePlanContent(active: active, preview: preview, week: week, error: error, editDays: { editingDays = true },
-                                          editGoal: active.template.sport == "run" && active.race != nil ? { editingGoal = true } : nil) { await reload() }
+                                          editGoal: active.template.sport == "run" && active.race != nil ? { editingGoal = true } : nil,
+                                          editPlanDays: { editingPlanDays = true }, reschedule: { rescheduling = true },
+                                          choose: { choosing = true }, stop: { confirmStop = true }) { await reload() }
                     }
                 }
                 .padding(.horizontal, 24)
@@ -488,16 +539,11 @@ struct ActivePlanView: View {
             }
             .refreshable { await reload() }
         }
-        .floatingBack(title: active?.name, trailing: ChromeAction(systemImage: "ellipsis", label: L10n.tr("Plán")) { menu = true }) { dismiss() }
+        .floatingBack(title: active?.name) { dismiss() }
         .navBarVisibility(.hidden)
         .task {
             guard !model.demo else { return }
             await reload()
-        }
-        .confirmationDialog(active?.name ?? "", isPresented: $menu, titleVisibility: .hidden) {
-            if active?.template.race == nil { Button("Změnit začátek") { rescheduling = true } }
-            Button("Jiný plán") { choosing = true }
-            Button("Ukončit plán", role: .destructive) { confirmStop = true }
         }
         .confirmationDialog("Ukončit plán?", isPresented: $confirmStop, titleVisibility: .visible) {
             Button("Ukončit plán", role: .destructive) { Task { await stop() } }
@@ -505,7 +551,12 @@ struct ActivePlanView: View {
         .sheet(isPresented: $choosing, onDismiss: { Task { await reload() } }) { TrainingPlansSheet(plans: plans) }
         .sheet(isPresented: $rescheduling, onDismiss: { Task { await reload() } }) { ReschedulePlanSheet() }
         .sheet(isPresented: $editingDays, onDismiss: { Task { await reload() } }) {
-            if let week { WeekDaysSheet(week: week, usual: preview?.days.count ?? week.sessions.count) }
+            if let week { TimeThisWeekSheet(week: week, planDays: preview?.days ?? [], usual: preview?.days.count ?? week.sessions.count) }
+        }
+        .sheet(isPresented: $editingPlanDays, onDismiss: { Task { await reload() } }) {
+            if let active {
+                DaysAndTimeSheet(sport: active.template.sport, range: (active.template.days.first ?? 1)...(active.template.days.last ?? 7), initial: preview?.days ?? [], time: preview?.time)
+            }
         }
         .sheet(isPresented: $editingGoal) {
             if let active, let race = active.race {
@@ -564,6 +615,10 @@ struct ActivePlanContent: View {
     var editDays: () -> Void = {}
     /// A running race plan: change the goal time.
     var editGoal: (() -> Void)? = nil
+    var editPlanDays: () -> Void = {}
+    var reschedule: () -> Void = {}
+    var choose: () -> Void = {}
+    var stop: () -> Void = {}
     var reload: () async -> Void = {}
     @State private var allWeeks = false
 
@@ -583,22 +638,12 @@ struct ActivePlanContent: View {
             if race.legs != nil { triRace(race).padding(.top, 12) } else if active.template.sport == "run" { runGoal(race).padding(.top, 12) } else { rideRace(race).padding(.top, 12) }
         }
 
+        // Upravit: at most four tiles, a title on one line and up to two lines under it.
+        SectionLabel(text: "Úpravy").padding(.top, 26)
+        adjustTiles.padding(.top, 10)
+
         if active.started, active.paused != true, let week {
             SectionLabel(text: L10n.f("Tento týden · %@–%@", Fmt.dayMonth(week.monday), Fmt.dayMonth(ISODay.shift(week.monday, 6)))).padding(.top, 26)
-            Button(action: editDays) {
-                HStack(spacing: 12) {
-                    Image(systemName: "clock").scaledFont(15, weight: .medium, cap: .denseCap).foregroundStyle(Palette.amber)
-                        .frame(width: 30, height: 30).background(Palette.amberSoft, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    Text("Čas tento týden").font(.body).foregroundStyle(Palette.ink)
-                    Spacer()
-                    Text(L10n.plural("%lld dní", week.weekDays ?? week.sessions.count)).font(.body).foregroundStyle(Palette.muted)
-                    Image(systemName: "chevron.right").scaledFont(13, weight: .semibold).foregroundStyle(Palette.faint)
-                }
-                .padding(.horizontal, 16).frame(minHeight: 52)
-                .background(Palette.card, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 10)
             PlanSessionList(detail: week, sport: active.template.sport, changed: reload)
                 .padding(.top, 10)
         }
@@ -630,7 +675,47 @@ struct ActivePlanContent: View {
         }
         .padding(.top, 10)
         if let error { Text(error).font(Typo.small).foregroundStyle(Palette.rust).padding(.top, 12) }
+        // Another plan and the end as quiet links, not tiles: their words fit in any language.
+        VStack(spacing: 14) {
+            Button(action: choose) { Text("Jiný plán").font(Typo.bodyStrong).foregroundStyle(Palette.amber) }
+                .buttonStyle(.plain)
+            Button(action: stop) { Text("Ukončit plán").font(Typo.bodyStrong).foregroundStyle(Palette.rust) }
+                .buttonStyle(.plain)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 28)
+        }
+    }
+
+    /// Time this week, the days and time, the start or the goal.
+    private var adjustTiles: some View {
+        PlanAdjustGrid {
+            if active.started, active.paused != true, let week {
+                PlanAdjustTile(symbol: "clock", title: L10n.tr("Čas tento týden"), subtitle: weekTimeText(week), action: editDays)
+            }
+            PlanAdjustTile(symbol: "calendar", title: L10n.tr("Dny a čas"), subtitle: daysText, color: Palette.green, action: editPlanDays)
+            if active.template.race == nil {
+                PlanAdjustTile(symbol: "arrow.uturn.backward", title: L10n.tr("Změnit začátek"),
+                               subtitle: L10n.f("od %@", Fmt.dayMonth(active.firstDay ?? active.startDate)), color: Palette.blue, action: reschedule)
+            } else if let editGoal, let race = active.race {
+                PlanAdjustTile(symbol: "flag.checkered", title: L10n.tr("Cílový čas"),
+                               subtitle: race.target.map(raceTime) ?? L10n.tr("podle odhadu"), color: Palette.green, action: editGoal)
+            }
+        }
+    }
+
+    /// "6 h 30 · jen tento týden": this week's free time on the plan's days.
+    private func weekTimeText(_ week: PlanWeekDetail) -> String {
+        let total: String
+        if let time = week.time { total = FreeTime.total(time.days, days: preview?.days) } else { total = L10n.plural("%lld dní", week.weekDays ?? week.sessions.count) }
+        return week.time?.own == true ? total + " · " + L10n.tr("jen tento týden") : total
+    }
+
+    /// "Út Čt So Ne · dva týdny": the plan's weekdays.
+    private var daysText: String {
+        let days: [String] = (preview?.days ?? []).map { Fmt.weekdaysFromMonday[$0] }
+        let text = days.joined(separator: " ")
+        return preview?.time?.daysB != nil ? text + " · " + L10n.tr("dva týdny") : text
     }
 
     /// A running race: the goal, the estimate now and how far it moved since the start.
@@ -667,12 +752,6 @@ struct ActivePlanContent: View {
                     Spacer()
                     Text(verbatim: active.raceDate.map { L10n.f("cíl %@", Fmt.dayMonth($0)) } ?? L10n.tr("cíl")).font(Typo.caption).foregroundStyle(Palette.faint)
                 }
-            }
-            if let editGoal {
-                Button(action: editGoal) {
-                    Text(verbatim: L10n.tr(race.target == nil ? "Zadat cílový čas" : "Změnit cílový čas")).font(Typo.bodyStrong).foregroundStyle(Palette.amber)
-                }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -787,6 +866,14 @@ struct PlanWeekDetail: Decodable, Equatable {
     let phaseLabel: String?
     let sessions: [Session]
     var weekDays: Int? = nil
+    /// This week's free time by weekday; own: changed for this week only.
+    var time: Time? = nil
+
+    struct Time: Decodable, Equatable {
+        let days: [Int?]
+        var own: Bool? = nil
+        var weekB: Bool? = nil
+    }
 }
 
 extension APIClient {
