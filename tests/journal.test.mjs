@@ -483,3 +483,17 @@ test("a finding about sex never reaches the coach, pinned or not", async () => {
   raw.sqlite.prepare("UPDATE journal_settings SET findings_json=? WHERE user_id=13").run(JSON.stringify({ date: now, ranked: [{ key: "sex", effect: 6, yes: 8, no: 30 }, { key: "sauna", effect: 5, yes: 9, no: 29 }] }));
   assert.deepEqual((await journalForCoach(db, now)).findings.map(f => f.item), ["Sauna"]);
 });
+
+test("sexual activity from Apple Health has its own consent, kept with its time", async () => {
+  const db = scopedDb(createD1(), 14);
+  assert.deepEqual([(await getJournalSettings(db)).appleSex, (await getJournalSettings(db)).appleSexAt], [false, null]);
+  await setJournalOptions(db, { appleSex: true });
+  const at = (await getJournalSettings(db)).appleSexAt;
+  assert.ok(at);
+  await setJournalOptions(db, { shareSensitive: true });
+  assert.equal((await getJournalSettings(db)).appleSexAt, at);
+  assert.equal((await journalCatalog(db)).appleSex, true);
+  await setJournalOptions(db, { appleSex: false });
+  assert.deepEqual([(await getJournalSettings(db)).appleSex, (await getJournalSettings(db)).appleSexAt], [false, null]);
+});
+

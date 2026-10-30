@@ -7,7 +7,7 @@
 // POST /app/api/journal/custom         {name, type, unit, usual, when, category}, or {remove: key}
 // GET  /app/api/journal/today          the morning sheet about yesterday, the Zdraví card's effects and a new finding
 // POST /app/api/journal/dismiss        {date}: the morning sheet put away for that day; {discovery: true}: the finding seen
-// POST /app/api/journal/options        {enabled, askMorning, shareSensitive}: Nastavení → Deník
+// POST /app/api/journal/options        {enabled, askMorning, shareSensitive, appleSex}: Nastavení → Deník
 // POST /app/api/journal/fixed          {key, answer: 0 | 1 | null, date}: "Vždy ne" / "Vždy ano" from that day on
 // GET  /app/api/journal/impact?metric= Co na tebe působí: readiness, hrv, sleep or rhr
 // GET  /app/api/journal/item?key=&metric=  one item in detail
@@ -98,7 +98,7 @@ export async function journalCatalog(db) {
   const collator = new Intl.Collator(L("cs", "en"));
   // Co sledovat: what is tracked first, then by name.
   items.sort((a, b) => (b.pinned - a.pinned) || collator.compare(a.name, b.name));
-  return { count: items.length, categories: CATEGORIES.map(c => ({ key: c, title: categoryTitle(c) })), items, pinned: settings.pinned, enabled: settings.enabled, askMorning: settings.askMorning, shareSensitive: settings.shareSensitive };
+  return { count: items.length, categories: CATEGORIES.map(c => ({ key: c, title: categoryTitle(c) })), items, pinned: settings.pinned, enabled: settings.enabled, askMorning: settings.askMorning, shareSensitive: settings.shareSensitive, appleSex: settings.appleSex };
 }
 
 // ---- Impact ----
@@ -294,7 +294,7 @@ export async function handleJournalApi(request, env, ctx, url, session, { mornin
     }
     if (url.pathname === "/app/api/journal/options") {
       const settings = await setJournalOptions(db, body);
-      return Response.json({ status: "ok", enabled: settings.enabled, askMorning: settings.askMorning, shareSensitive: settings.shareSensitive }, journalNoStore);
+      return Response.json({ status: "ok", enabled: settings.enabled, askMorning: settings.askMorning, shareSensitive: settings.shareSensitive, appleSex: settings.appleSex }, journalNoStore);
     }
     if (url.pathname === "/app/api/journal/fixed") {
       const date = isJournalDate(body.date) && body.date <= today ? body.date : shiftDay(today, -1);

@@ -115,6 +115,8 @@ struct JournalCatalog: Decodable, Equatable {
     var askMorning: Bool? = nil
     /// The coach sees sex, cannabis and medication (src/journal-catalog.js isSensitive).
     var shareSensitive: Bool? = nil
+    /// Sexual activity from Apple Health, with its own consent.
+    var appleSex: Bool? = nil
 }
 
 /// The Today card: the questions about yesterday in the morning.
@@ -170,14 +172,16 @@ struct JournalToday: Decodable, Equatable {
 /// Whether Deník is on, kept on the phone so Zdraví knows before loading.
 enum JournalSwitch {
     static let key = "journal.enabled"
-    static let sexKey = "journal.tracksSex"
+    static let sexKey = "journal.appleSex"
     static var isOn: Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
     static func remember(_ on: Bool?) { if let on { UserDefaults.standard.set(on, forKey: key) } }
 
-    /// Sex is among the journal's items: only then Apple Health's sexual
-    /// activity is asked for, read and sent (AppleHealth, src/apple-health.js).
+    /// Sexual activity from Apple Health is on with its own consent
+    /// (Nastavení → Deník): only then it is asked for, read and sent
+    /// (AppleHealth, src/apple-health.js). Off at first, and for whoever had
+    /// it before the consent existed.
     static var tracksSex: Bool { isOn && UserDefaults.standard.bool(forKey: sexKey) }
-    static func remember(pinned: [String]) { UserDefaults.standard.set(pinned.contains("sex"), forKey: sexKey) }
+    static func remember(appleSex: Bool?) { if let appleSex { UserDefaults.standard.set(appleSex, forKey: sexKey) } }
 }
 
 /// GET /app/api/journal/impact?metric=: Co na tebe působí.
@@ -282,13 +286,12 @@ extension APIClient {
 
     func journalCatalog() async throws -> JournalCatalog {
         let catalog: JournalCatalog = try await get("/app/api/journal/catalog")
-        JournalSwitch.remember(pinned: catalog.pinned)
+        JournalSwitch.remember(appleSex: catalog.appleSex ?? false)
         return catalog
     }
 
     func setJournalPinned(_ keys: [String]) async throws {
         let _: JSONValue = try await send("/app/api/journal/pinned", method: "POST", body: ["pinned": JSONValue.array(keys.map { .string($0) })])
-        JournalSwitch.remember(pinned: keys)
     }
 
     /// A new own item (name, type, unit, usual, when, category); its key.

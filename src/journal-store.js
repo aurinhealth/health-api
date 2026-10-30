@@ -49,6 +49,10 @@ function normalizeSettings(raw) {
     // only after the consent sheet; sensitiveAt is when it was given.
     shareSensitive: s.shareSensitive === true,
     sensitiveAt: s.shareSensitive === true && typeof s.sensitiveAt === "string" ? s.sensitiveAt : null,
+    // Sexual activity from Apple Health fills in Sex only after its own
+    // consent (sex life, GDPR art. 9); appleSexAt is when it was given.
+    appleSex: s.appleSex === true,
+    appleSexAt: s.appleSex === true && typeof s.appleSexAt === "string" ? s.appleSexAt : null,
     // "Vždy ne" / "Vždy ano": the answer filled in every day from `since` on
     // where the day's data says nothing.
     fixed: Object.fromEntries(Object.entries(s.fixed && typeof s.fixed === "object" ? s.fixed : {})
@@ -96,12 +100,16 @@ export function pinnedItems(settings) {
   return settings.pinned.map(k => findItem(settings, k)).filter(Boolean);
 }
 
-// {enabled, askMorning, shareSensitive}: Nastavení → Deník.
+// {enabled, askMorning, shareSensitive, appleSex}: Nastavení → Deník.
 export async function setJournalOptions(db, options) {
   const settings = await getJournalSettings(db);
   const next = { ...settings };
   if (typeof options?.enabled === "boolean") next.enabled = options.enabled;
   if (typeof options?.askMorning === "boolean") next.askMorning = options.askMorning;
+  if (typeof options?.appleSex === "boolean") {
+    next.appleSexAt = options.appleSex ? (settings.appleSex && settings.appleSexAt) || new Date().toISOString() : null;
+    next.appleSex = options.appleSex;
+  }
   if (typeof options?.shareSensitive === "boolean") {
     next.sensitiveAt = options.shareSensitive ? (settings.shareSensitive && settings.sensitiveAt) || new Date().toISOString() : null;
     next.shareSensitive = options.shareSensitive;

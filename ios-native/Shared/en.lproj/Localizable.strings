@@ -2637,6 +2637,14 @@
 "Sledovat deník" = "Keep a journal";
 "Ptát se ráno" = "Ask in the morning";
 "Citlivé položky" = "Sensitive items";
+"Vyplní v deníku Sex. Zůstane v Aurinu a do AI nejde." = "Fills in Sex in your journal. It stays in Aurin and never goes to AI.";
+"Sexuální aktivita" = "Sexual activity";
+"Sexuální aktivita z Apple Health" = "Sexual activity from Apple Health";
+"Vyplní v deníku položku Sex a ukáže, jak působí na tvou připravenost." = "Fills in Sex in your journal and shows what it does to your readiness.";
+"Jedna hodnota za den: ano, nebo ne" = "One value a day: yes or no";
+"Zůstane v Aurinu" = "It stays in Aurin";
+"Do AI kouče nejde nikdy" = "It never goes to the AI coach";
+"Jde o údaj o sexuálním životě (čl. 9 GDPR). Zapnutím dáváš výslovný souhlas s jeho zpracováním. Kdykoli ho vypneš a uložené údaje smažeme." = "This is sex life data (GDPR Art. 9). By turning it on you explicitly consent to it being processed. Turn it off any time and we delete what is stored.";
 "Náladu, konopí a léky kouč nevidí, dokud tohle nezapneš. Sex nevidí nikdy." = "Mood, cannabis and medication stay out of what the coach sees unless you turn this on. Sex never reaches the coach.";
 "Kouč vidí citlivé položky" = "The coach sees sensitive items";
 "Tvoje odpovědi o náladě, konopí a lécích pomohou kouči vysvětlit tvou regeneraci." = "Your answers about mood, cannabis and medication help the coach explain your recovery.";

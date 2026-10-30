@@ -451,8 +451,8 @@ struct AppleHealthUpload: Encodable {
     var records: [AppleRecord]
     var windows: [String: Window]? = nil
     var categories: [String]
-    /// Sex is in the journal: without it the server keeps no sexual activity
-    /// and deletes what it had (src/apple-health.js saveAppleHealth).
+    /// Sexual activity's consent: without it the server keeps none and
+    /// deletes what it had (src/apple-health.js saveAppleHealth).
     var sexualActivity = JournalSwitch.tracksSex
     /// Food and water other apps logged, every one from these days (src/apple-food.js).
     var food: Food? = nil
@@ -615,9 +615,11 @@ final class HealthReader: @unchecked Sendable {
         try await store.requestAuthorization(toShare: share, read: read)
     }
 
-    /// Asks for the categories' types iOS has not asked about yet; true when it did.
+    /// Asks for the categories' types iOS has not asked about yet (and sexual
+    /// activity once its consent is on); true when it did.
     func askNewTypes(_ categories: Set<HealthCategory>) async -> Bool {
-        let read = categories.reduce(into: Set<HKObjectType>()) { $0.formUnion($1.types) }
+        var read = categories.reduce(into: Set<HKObjectType>()) { $0.formUnion($1.types) }
+        if JournalSwitch.tracksSex { read.insert(HKCategoryType(.sexualActivity)) }
         guard (try? await store.statusForAuthorizationRequest(toShare: [], read: read)) == .shouldRequest else { return false }
         return (try? await store.requestAuthorization(toShare: [], read: read)) != nil
     }
@@ -669,6 +671,8 @@ final class HealthReader: @unchecked Sendable {
         async let breathingRecords = categories.contains(.breathing) ? breathing(from: from90, to: now) : nothing
         async let bodyRecords = categories.contains(.body) ? body(from: from365, to: now) : nothing
         async let journalRecords = categories.contains(.journal) ? journal(from: from90, to: now) : nothing
+        // Its own consent (Nastavení → Deník), with or without the rest of Deník.
+        async let sexRecords = JournalSwitch.tracksSex ? sexualActivity(from: from90, to: now) : nothing
         let readFood = categories.contains(.food) || categories.contains(.water)
         async let foodRead: AppleHealthUpload.Food? = readFood
             ? foodUpload(from: from30, to: now, meals: categories.contains(.food), drinks: categories.contains(.water)) : nil
@@ -690,7 +694,7 @@ final class HealthReader: @unchecked Sendable {
         rest += await restingRecords + hrvRecords
         rest += await heartRecords + breathingRecords
         rest += await bodyRecords
-        rest += await journalRecords
+        rest += await journalRecords + sexRecords
         let food = await foodRead
 
         if closed.get() { return nil }
@@ -709,9 +713,8 @@ final class HealthReader: @unchecked Sendable {
     // MARK: Deník
 
     /// What fills in journal items (src/journal-store.js autoDays): mindful
-    /// minutes, time in daylight, noise in sleep, symptoms, sexual activity
-    /// (only with Sex among the journal's items, JournalSwitch.tracksSex) and
-    /// yoga or stretching workouts.
+    /// minutes, time in daylight, noise in sleep, symptoms and yoga or
+    /// stretching workouts; sexual activity has its own consent (sexualActivity).
     static let symptoms: [(HKCategoryTypeIdentifier, String)] = [
         (.headache, "headache"), (.runnyNose, "runny-nose"), (.generalizedBodyAche, "body-ache"),
         (.abdominalCramps, "stomach"), (.nausea, "stomach"), (.diarrhea, "stomach"), (.vomiting, "stomach"), (.bloating, "stomach"), (.heartburn, "stomach")
@@ -720,9 +723,19 @@ final class HealthReader: @unchecked Sendable {
     static var journalTypes: Set<HKObjectType> {
         var out: Set<HKObjectType> = [HKCategoryType(.mindfulSession), HKQuantityType(.timeInDaylight), HKQuantityType(.environmentalAudioExposure),
                                       HKCategoryType(.sleepAnalysis), HKObjectType.workoutType()]
-        if JournalSwitch.tracksSex { out.insert(HKCategoryType(.sexualActivity)) }
         for (id, _) in symptoms { out.insert(HKCategoryType(id)) }
         return out
+    }
+
+    /// Sexual activity, one value a day (daily-sexual-activity), only with its
+    /// own consent (JournalSwitch.tracksSex).
+    private func sexualActivity(from: Date, to: Date) async -> [AppleRecord] {
+        var byDay: [String: Double] = [:]
+        for s in await samples(HKCategoryType(.sexualActivity), from: from, to: to) { byDay[day(s.startDate), default: 0] += 1 }
+        let last = day(to), type = "daily-sexual-activity"
+        return byDay.compactMap { date, value in
+            date <= last ? AppleRecord(type: type, id: "journal:sexual-activity:" + date, date: date, value: value) : nil
+        }
     }
 
     /// One value a day per kind: daily-mindful-minutes, daily-daylight-minutes
@@ -735,7 +748,6 @@ final class HealthReader: @unchecked Sendable {
 
         async let mindfulRead = samples(HKCategoryType(.mindfulSession), from: from, to: to)
         async let daylightRead = samples(HKQuantityType(.timeInDaylight), from: from, to: to)
-        async let sexRead = JournalSwitch.tracksSex ? samples(HKCategoryType(.sexualActivity), from: from, to: to) : []
         async let workoutRead = samples(HKObjectType.workoutType(), from: from, to: to, predicate: notOurs)
         async let sleepRead = samples(HKCategoryType(.sleepAnalysis), from: from.addingTimeInterval(-9 * 3600), to: to)
         async let noiseRead = samples(HKQuantityType(.environmentalAudioExposure), from: from.addingTimeInterval(-9 * 3600), to: to)
@@ -746,7 +758,6 @@ final class HealthReader: @unchecked Sendable {
             add("daily-daylight-minutes", date, minutes)
             add("daily-morning-daylight-minutes", date, calendar.component(.hour, from: s.startDate) < 10 ? minutes : 0)
         }
-        for s in await sexRead { add("daily-sexual-activity", day(s.startDate), 1) }
         for w in await workoutRead.compactMap({ $0 as? HKWorkout }) {
             switch w.workoutActivityType {
             case .yoga, .mindAndBody: add("daily-yoga-minutes", day(w.startDate), w.duration / 60)

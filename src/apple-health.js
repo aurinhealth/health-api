@@ -342,8 +342,8 @@ export const appleBodyTooLarge = request => Number(request.headers.get("Content-
 export async function saveAppleHealth(db, userId, body = {}, { now = Date.now() } = {}) {
   const input = Array.isArray(body.records) ? body.records : [];
   if (input.length > MAX_RECORDS) return { status: "error", code: 413, message: "Too many records in one request." };
-  // Sexual activity only while the athlete keeps Sex in their journal (the
-  // app says so with sexualActivity: true); otherwise it is not kept and what
+  // Sexual activity only with its own consent in Nastavení → Deník (the app
+  // says so with sexualActivity: true); otherwise it is not kept and what
   // came before goes. An app too old to say counts as not keeping it.
   const keepSex = body.sexualActivity === true;
   const rows = input.map(r => appleRow(r, now)).filter(row => row && (keepSex || row.data_type !== SEXUAL_ACTIVITY));
