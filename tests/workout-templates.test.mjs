@@ -284,3 +284,19 @@ test("Popiš slovy sends the athlete's FTP or threshold pace, so watts and paces
   assert.deepEqual(JSON.parse(describeInput("run", "5×1 km za 4:10", { runThresholdPace: 265 })).threshold, { thresholdPace: "4:25/km", thresholdPaceSeconds: 265 });
   assert.equal(JSON.parse(describeInput("ride", "hodinu lehce", null)).threshold, null);
 });
+
+test("Popiš slovy a swim: CSS and pool go along, lengths end at the wall, rests stay rests", async () => {
+  const { describeInput, describedTemplate } = await import("../src/workout-templates.js");
+  const input = JSON.parse(describeInput("swim", "8×100 na 1:40 s 20 s pauzou", { swimCss: 105, poolLength: 50 }));
+  assert.deepEqual(input.threshold, { css: "1:45/100m", cssSeconds: 105 });
+  assert.equal(input.poolLengthMeters, 50);
+  assert.equal(JSON.parse(describeInput("swim", "lehce 1 km", null)).poolLengthMeters, 25);
+  const t = describedTemplate("swim", { name: "Práh 8×100", blocks: [
+    { repeats: 1, steps: [{ label: "Rozplavání", meters: 310, seconds: null, rest: false, low: 85, high: 90 }] },
+    { repeats: 8, steps: [{ label: "Práh", meters: 100, seconds: null, rest: false, low: 103, high: 107 }, { label: "Pauza", meters: null, seconds: 20, rest: true, low: 0, high: 0 }] }
+  ] }, { poolLength: 50 });
+  assert.equal(t.sport, "swim");
+  assert.equal(t.blocks[0].steps[0].meters, 300, "rounded to the 50 m pool");
+  assert.deepEqual(t.blocks[1].steps[1], { label: "Pauza", rest: true, seconds: 20 });
+  assert.equal(t.blocks[1].repeats, 8);
+});

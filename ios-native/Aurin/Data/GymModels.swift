@@ -375,6 +375,8 @@ struct LibraryWorkout: Decodable, Equatable, Identifiable, Hashable {
     let source_name: String?
     let environment: String?
     let steps: [PlannedWorkout.Block]?
+    /// A swim's length in metres (src/workout-model.js).
+    var distance_meters: Double? = nil
     /// Why it suits today (src/workout-library.js rankWorkoutCandidates).
     var reasons: [String]? = nil
     var suitability: Double? = nil

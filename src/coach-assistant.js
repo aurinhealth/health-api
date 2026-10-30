@@ -18,7 +18,7 @@ import { sleepNeedFor, weekSleepDebt } from './recovery-model.js';
 import { SPORT_RULES, coachInstructionsFor, safetyNote } from './private/coach-assistant.js';
 export { coachInstructionsFor, safetyNote };
 
-export const focusSportKey=focus=>({cycling:'ride',triathlon:'ride',running:'run',strength:'strength',general:'general'})[focus?.sport]||'ride';
+export const focusSportKey=focus=>({cycling:'ride',triathlon:'ride',running:'run',swimming:'swim',strength:'strength',general:'general'})[focus?.sport]||'ride';
 // The default (Czech, cycling) prompt; askCoach builds the athlete's own.
 export const coachInstructions = coachInstructionsFor();
 
@@ -128,7 +128,8 @@ export function thresholdsContext(t){
   const indoor=rideFtpFor(t,'indoor');
   return compactObject({ftp:t.ftp,ftpSource:t.source,indoorFtp:indoor.ftp,indoorFtpEstimated:t.ftp?indoor.estimated:null,lthr:t.lthr,maxHr:t.maxHr,restHr:t.restHr,
     runThresholdPace:t.runThresholdPace,runThresholdPaceText:paceText(t.runThresholdPace),runLthr:t.runLthr,
-    powerZones:t.ftp?t.powerZones:null,hrZones:(t.hrZones||[]).some(z=>z.bpmHigh!=null)?t.hrZones:null,paceZones:t.runThresholdPace?t.paceZones:null});
+    powerZones:t.ftp?t.powerZones:null,hrZones:(t.hrZones||[]).some(z=>z.bpmHigh!=null)?t.hrZones:null,paceZones:t.runThresholdPace?t.paceZones:null,
+    swimCss:t.swimCss,swimZones:t.swimCss?t.swimZones:null,poolLength:t.poolLength,openWater:t.openWater||null});
 }
 export function athleteProfileContext(profile,weightKg=null){
   const out=compactObject({weightKg:round(num(weightKg),1),sex:['male','female'].includes(profile?.sex)?profile.sex:null,age:num(profile?.age),heightCm:num(profile?.height)});
@@ -155,14 +156,14 @@ export function sleepNeedContext(sessions=[],{date,profile=null,wellness=[]}={})
   const debt=weekSleepDebt(sessions,date,{age:num(profile?.age),goal:profile?.sleepGoal});
   return compactObject({tonightMinutes:need?.need??null,usualMinutes:debt?.need??null,debt7dMinutes:debt?.minutes??null,nights7d:debt?.nights??null});
 }
-// The engine plans rides or runs: the open screen first, then the sport the
-// message asks about ("a run tomorrow?"), then the main sport.
-const RUN_WORDS=/\bběh|\bběž|\bběhat|\bbehat|\bklus|\brun(?:s|ning)?\b|\bjog/i,RIDE_WORDS=/\bkol[aeou]?\b|\bkolem\b|\bjízd|\bjezd|\bvyjížď|\btrenažér|\bride|\bbike|\bcycl/i;
+// The engine plans rides, runs or swims: the open screen first, then the
+// sport the message asks about ("a run tomorrow?"), then the main sport.
+const RUN_WORDS=/\bběh|\bběž|\bběhat|\bbehat|\bklus|\brun(?:s|ning)?\b|\bjog/i,RIDE_WORDS=/\bkol[aeou]?\b|\bkolem\b|\bjízd|\bjezd|\bvyjížď|\btrenažér|\bride|\bbike|\bcycl/i,SWIM_WORDS=/\bplav|\bbazén|\bbazen|\bswim|\bpool\b/i;
 export function engineSport(focus,appContext=null,message=''){
-  const s=appContext?.sport;if(s==='ride'||s==='run')return s;
-  const run=RUN_WORDS.test(message),ride=RIDE_WORDS.test(message);
-  if(run!==ride)return run?'run':'ride';
-  return focus?.sport==='running'?'run':'ride';
+  const s=appContext?.sport;if(s==='ride'||s==='run'||s==='swim')return s;
+  const asked=[RUN_WORDS.test(message)&&'run',RIDE_WORDS.test(message)&&'ride',SWIM_WORDS.test(message)&&'swim'].filter(Boolean);
+  if(asked.length===1)return asked[0];
+  return focus?.sport==='running'?'run':focus?.sport==='swimming'?'swim':'ride';
 }
 // The engine's goal from the main event: base far out, build in the last 12
 // weeks; the final 3 weeks stay automatic (the engine has no taper phase).

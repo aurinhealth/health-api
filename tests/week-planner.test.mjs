@@ -49,7 +49,7 @@ test("roleFor maps a date to its weekday role", () => {
 
 test("week plan preferences are sanitised and stored per user", async () => {
   const raw = createD1(), a = scopedDb(raw, 1), b = scopedDb(raw, 2);
-  assert.deepEqual(sanitizeWeekPlan({ days: [["ride", "swim"]], location: { latitude: 999 } }).days[0], ["ride"]);
+  assert.deepEqual(sanitizeWeekPlan({ days: [["ride", "rowing"]], location: { latitude: 999 } }).days[0], ["ride"]);
   // No weather without a place the user chose; the old default place counts as none.
   assert.equal(sanitizeWeekPlan({}).location, null);
   assert.equal(sanitizeWeekPlan({ location: { name: "Kutná Hora", latitude: 49.9484, longitude: 15.2682 } }).location, null);
