@@ -692,7 +692,8 @@ function applyTriathlon(targets, plan, weekStart, pw, { thresholdPace = null, sh
   if (plan.firstDay && inWeek(plan.firstDay)) items = items.filter(x => !TRI_SPORTS.includes(x.sport) || x.date >= plan.firstDay);
   if (race) {
     items = items.filter(x => !TRI_SPORTS.includes(x.sport) || x.date < race);
-    TRI_SPORTS.forEach((sport, i) => items.push({ date: race, sport, slot: i, role: "race", minutes: day[sport].minutes, tss: 0, intensity: .85 }));
+    // In the race's order: swim, ride, run.
+    ["swim", "ride", "run"].forEach((sport, i) => items.push({ date: race, sport, slot: i, role: "race", minutes: day[sport].minutes, tss: 0, intensity: .85 }));
   }
   const edits = Object.fromEntries(Object.entries(plan.edits || {}).filter(([d]) => inWeek(d)));
   items = items.filter(x => !(TRI_SPORTS.includes(x.sport) && x.date !== race && edits[x.date]?.skip));

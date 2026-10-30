@@ -49,7 +49,7 @@ test("a build week: a key session per sport, the long ride at the weekend with t
 
 test("race day: the three legs on the day, nothing after it", () => {
   const a = week("tri-olympic", 16), race = a.items.filter(x => x.plan?.kind === "race");
-  assert.deepEqual(race.map(x => x.sport), ["ride", "run", "swim"]);
+  assert.deepEqual(race.map(x => x.sport), ["swim", "ride", "run"], "in the race's order");
   assert.ok(race.every(x => x.date === "2027-02-21"));
   assert.ok(!a.items.some(x => x.date > "2027-02-21"));
   const d = triRaceDay("olympic", { thresholdPace: 280, ftp: 250, swimCss: 110 });
