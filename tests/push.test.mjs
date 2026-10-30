@@ -308,7 +308,8 @@ test("push tokens and the push log are personal data", () => {
 test("the morning push waits for last night and never says 'intervals' to a sick athlete", async () => {
   const signs = readinessMessage({ score: 80, zone: "green", flags: ["skin_temp_elevated"], planned: [{ title: "Intervaly", sport: "ride" }] });
   assert.equal(signs.alert.title, "Připravenost 80 · Dnes bez intenzity");
-  assert.match(signs.alert.body, /začátek nemoci/);
+  assert.match(signs.alert.body, /nad tvým normálem/);
+  assert.doesNotMatch(signs.alert.body, /nemoc/);
   // A green score with a sign of illness gets an amber ring, never a green one.
   assert.equal(signs.zone, "yellow");
   assert.deepEqual(readinessMessage({ score: 80, zone: "green", flags: ["checkin_sick"] }), { alert: { title: "Připravenost 80 · Dnes odpočinek", body: "Dej tělu klid." }, zone: "red" });
