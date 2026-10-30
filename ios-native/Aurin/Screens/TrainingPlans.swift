@@ -593,6 +593,7 @@ struct TrainingPlansSheet: View {
                     // The library's order (Kolo, Běh, Posilovna).
                     Text("Kolo").tag("ride")
                     Text("Běh").tag("run")
+                    Text("Plavání").tag("swim")
                     Text("Posilovna").tag("gym")
                 }
                 .pickerStyle(.segmented)

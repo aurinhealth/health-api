@@ -57,6 +57,11 @@ function catalog(t) {
     ([m]) => t(`Volné plavání ${m} m`, `Easy swim ${m} m`),
     ([m]) => [swim(m / 2, 84, t("volně", "easy")), swim(m / 2, 84, t("volně, piškot", "easy, pull buoy"))],
     t("Lehké plavání: uvolní ramena a záda po náročnějších dnech.", "Easy swimming loosens shoulders and back after harder days."), ["recovery"]);
+  // Continuous swims: the goal of the swim plans ("400 m without stopping", "1,500 m").
+  add("swim-continuous", "endurance", [[300], [400], [600], [800], [1000], [1200], [1500]],
+    ([m]) => t(`Souvisle ${m} m`, `Continuous ${m} m`),
+    ([m]) => [swim(100, 84, t("rozplavání, volně", "warm-up, easy")), swim(m, 88, t("souvisle, klidné tempo, pravidelný dech", "without stopping, an easy pace, steady breathing")), swim(100, 82, t("vyplavání", "cool-down"))],
+    t("Souvislé plavání bez zastavení: klidné tempo, které vydržíš celou vzdálenost.", "Swimming without stopping: an easy pace you can hold for the whole distance."), ["continuous"]);
   // Open water practice: goes by time outside (workout-model.js adaptStructure).
   add("swim-open-water", "endurance", [[1000], [1500], [2000]],
     ([m]) => t(`Volná voda ≈ ${m} m`, `Open water ≈ ${m} m`),

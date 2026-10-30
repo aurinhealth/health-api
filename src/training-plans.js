@@ -2,6 +2,7 @@ import { L, plural } from "./lang.js";
 import { buildWorkout, step } from "./workout-model.js";
 import { CYCLING_WORKOUTS } from "./cycling-workouts.js";
 import { RUNNING_WORKOUTS } from "./running-workouts.js";
+import { SWIMMING_WORKOUTS, SWIMMING_WORKOUTS_EN } from "./swimming-workouts.js";
 import { RACE_PACE, rideRace, RIDE_RACES, durationShare } from "./race-estimate.js";
 // Multi-week training plans: the plan sets the week, the data sets the day.
 // A plan is a list of weeks; each week has a phase, a load factor against the
@@ -274,6 +275,30 @@ const GYM_HOME = () => [
 ];
 
 // days: [fewest, most] training days of the sport a week the plan is made for.
+// Swimming (swimming-workouts.js families): learning by short lengths first,
+// then continuous swims that grow; three swims a week (USA Triathlon).
+const SWIM_400 = [
+  W("base", 1, [], { easy: { family: "swim-first", level: 1 }, long: { family: "swim-first", level: 2 } }),
+  W("base", 1, [], { easy: { family: "swim-first", level: 2 }, long: { family: "swim-first", level: 3 } }),
+  W("base", 1, [], { easy: { family: "swim-first", level: 3 }, long: { family: "swim-first", level: 4 } }),
+  W("recovery", .7, [], { easy: { family: "swim-first", level: 2 }, long: { family: "swim-first", level: 3 } }),
+  W("build", 1, [], { easy: { family: "swim-first", level: 4 }, long: { family: "swim-first", level: 5 } }),
+  W("build", 1, [], { easy: { family: "swim-technique", level: 1 }, long: { family: "swim-first", level: 6 } }),
+  W("build", 1, [], { easy: { family: "swim-first", level: 5 }, long: { family: "swim-continuous", level: 1 } }),
+  W("peak", .9, [], { easy: { family: "swim-technique", level: 1 }, long: { family: "swim-continuous", level: 2 } })
+];
+const SWIM_1500 = [
+  W("base", 1, [q("swim-technique", 1)], { easy: { family: "swim-recovery", level: 1 }, long: { family: "swim-continuous", level: 2 } }),
+  W("base", 1.03, [q("swim-endurance", 1)], { easy: { family: "swim-recovery", level: 1 }, long: { family: "swim-continuous", level: 3 } }),
+  W("build", 1.06, [q("swim-css", 1)], { easy: { family: "swim-technique", level: 2 }, long: { family: "swim-continuous", level: 4 } }),
+  W("recovery", .7, [], { easy: { family: "swim-recovery", level: 1 }, long: { family: "swim-continuous", level: 3 } }),
+  W("build", 1.03, [q("swim-css", 2)], { easy: { family: "swim-recovery", level: 2 }, long: { family: "swim-continuous", level: 5 } }),
+  W("build", 1.06, [q("swim-endurance", 3)], { easy: { family: "swim-technique", level: 2 }, long: { family: "swim-continuous", level: 5 } }),
+  W("build", 1.08, [q("swim-css", 4)], { easy: { family: "swim-recovery", level: 2 }, long: { family: "swim-continuous", level: 6 } }),
+  W("recovery", .72, [q("swim-technique", 2)], { easy: { family: "swim-recovery", level: 1 }, long: { family: "swim-continuous", level: 4 } }),
+  W("peak", 1.05, [q("swim-css", 5)], { easy: { family: "swim-recovery", level: 2 }, long: { family: "swim-continuous", level: 6 } }),
+  W("peak", .9, [q("swim-speed", 1)], { easy: { family: "swim-recovery", level: 1 }, long: { family: "swim-continuous", level: 7 } })
+];
 const TEMPLATES = () => [
   { id: "run-5k-start", sport: "run", weeks: RUN_START, days: [3, 3], level: "beginner", race: { km: 5 },
     name: L("Od nuly na 5 km", "Couch to 5 km"), goal: L("Uběhnout 5 km bez zastavení", "Run 5 km without stopping"),
@@ -293,6 +318,12 @@ const TEMPLATES = () => [
   { id: "run-maintain", sport: "run", weeks: RUN_MAINTAIN, days: [4, 5], level: "intermediate",
     name: L("Mezi závody", "Between races"), goal: L("Udržet a posunout formu", "Keep and lift your form"),
     description: L("Tři čtyřtýdenní bloky: fartlek, rychlost, práh a dlouhý běh. Každý blok o stupeň těžší, čtvrtý týden lehčí.", "Three four-week blocks: fartlek, speed, threshold and a long run. Each block a step harder, the fourth week lighter.") },
+  { id: "swim-400", sport: "swim", weeks: SWIM_400, days: [3, 3], level: "beginner",
+    name: L("Uplavat 400 m", "Learn to swim 400 m"), goal: L("Uplavat 400 m bez zastavení", "Swim 400 m without stopping"),
+    description: L("8 týdnů, tři plavání týdně: krátké délky s pauzou a technika, na konci souvislé plavání. Čtvrtý týden je lehčí.", "8 weeks, three swims a week: short lengths with rests and technique, then swimming without stopping at the end. Week four is lighter.") },
+  { id: "swim-1500", sport: "swim", weeks: SWIM_1500, days: [3, 4], level: "intermediate",
+    name: L("1 500 m bez zastavení", "1,500 m without stopping"), goal: L("Uplavat 1 500 m vcelku", "Swim 1,500 m in one go"),
+    description: L("10 týdnů, tři až čtyři plavání týdně: jednou týdně práh (CSS) nebo vytrvalost, souvislé plavání roste ze 400 na 1 500 m. Lehčí týdny 4 a 8.", "10 weeks, three to four swims a week: threshold (CSS) or endurance once a week, and the continuous swim grows from 400 to 1,500 m. Weeks 4 and 8 are lighter.") },
   { id: "gym-cycling", sport: "gym", weeks: GYM_CYCLING(), days: [2, 4], level: "intermediate",
     name: L("Posilovna ke kolu", "Strength for cyclists"), goal: L("Silnější nohy a stabilní trup na kolo", "Stronger legs and a stable trunk for the bike"),
     description: L("18 týdnů, dva tréninky týdně: od stability a práce na jedné noze k těžké síle s málo opakováními. Zátěž podle RPE, nohy šetří den před náročnou jízdou.", "18 weeks, two sessions a week: from stability and single-leg work to heavy strength with few repetitions. Load by RPE; the legs are spared the day before a hard ride.") },
@@ -334,8 +365,8 @@ export const planTemplates = () => TEMPLATES();
 export const getTemplate = id => TEMPLATES().find(t => t.id === id) || null;
 
 // ---- the catalogue -------------------------------------------------------------
-const CATALOGUE = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS };
-const LIMITS = { ride: [30, 360], run: [20, 240] };
+const CATALOGUE = { ride: CYCLING_WORKOUTS, run: RUNNING_WORKOUTS, swim: SWIMMING_WORKOUTS };
+const LIMITS = { ride: [30, 360], run: [20, 240], swim: [15, 90] };
 const familyLevels = (sport, family) => [...new Set(CATALOGUE[sport].filter(w => w.family === family).map(w => w.level).filter(Number.isFinite))].sort((a, b) => a - b);
 // A key session one or two levels easier for a beginner, one harder for an
 // experienced athlete (their capability in that energy system, level 3 = normal).
@@ -358,6 +389,8 @@ export function planWorkoutId(sport, { family, level = null }, minutes, shiftBy 
     if (fits.length) { best = pick(fits); break; }
   }
   best ??= at(wanted).reduce((a, w) => w.duration_minutes < a.duration_minutes ? w : a);
+  // A swim keeps its metres: never resized to a length.
+  if (sport === "swim") return best.id;
   return Math.abs(best.duration_minutes - target) <= 2 ? best.id : best.id + "~" + target;
 }
 // The shortest catalogue session of a family's level: a key session gets at
@@ -371,7 +404,8 @@ const systemOf = (sport, family) => CATALOGUE[sport].find(w => w.family === fami
 export { systemOf };
 // The cycling catalogue names its sessions in English; in Czech the plan says Práh, Nad/pod prahem.
 export const planName = name => name == null ? name : L(String(name).replace(/ \(\d+\/\d+\)/, "").replace("Threshold Over-Under", "Nad/pod prahem").replace("Over-Under", "Nad/pod prahem").replace("Sub-threshold", "Pod prahem").replace("Threshold", "Práh").replace("Sweet Spot", "Sweet spot"), String(name));
-const baseName = id => { const w = Object.values(CATALOGUE).flat().find(x => x.id === String(id).replace(/~\d+$/, "")); return w ? w.name.replace(/ · \d+ min$/, "") : null; };
+// A swim is named in both languages in its catalogue (swimming-workouts.js).
+const baseName = id => { let w = Object.values(CATALOGUE).flat().find(x => x.id === String(id).replace(/~\d+$/, "")); if (w?.sport === "swim") w = L(w, SWIMMING_WORKOUTS_EN.find(x => x.id === w.id) || w); return w ? w.name.replace(/ · \d+ min$/, "") : null; };
 
 // ---- race day ----------------------------------------------------------------
 // Running: race pace against threshold speed (race-estimate.js RACE_PACE), or
@@ -464,6 +498,10 @@ export { phaseLabel };
 // `today` the athlete's day: a key session (intervals, a test, the long one)
 // missed on an earlier day moves to the next easy day of the week that is
 // not next to another key day.
+// The plan's sport's sessions without a family of their own.
+const EASY_FAMILY = { ride: "z2", run: "run-easy", swim: "swim-recovery" };
+const LONG_FAMILY = { ride: "z2", run: "run-long", swim: "swim-endurance" };
+const RECOVERY_FAMILY = { ride: "z2", run: "run-recovery", swim: "swim-recovery" };
 export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasPower = true, shifts = {}, ftp = null, weight = null } = {}) {
   const pw = planWeek(plan, weekStart);
   if (!pw || !targets?.items || pw.template.sport === "gym") return targets;
@@ -515,12 +553,12 @@ export function applyPlan(targets, plan, weekStart, { thresholdPace = null, hasP
       if (spec.q[k].test) { const testId = sport === "run" ? "test-run-tt30" : hasPower ? "test-ride-ftp20" : "test-ride-lthr30"; return { kind: "test", workoutId: testId }; }
       return { kind: "quality", ...spec.q[k] };
     }
-    if (x === longDay && spec.long) return { kind: "long", family: spec.long.family || spec.easy?.family || (sport === "run" ? "run-long" : "z2"), level: spec.long.level ?? spec.easy?.level ?? null, minutes: spec.long.minutes ?? spec.easy?.minutes ?? null };
+    if (x === longDay && spec.long) return { kind: "long", family: spec.long.family || spec.easy?.family || LONG_FAMILY[sport], level: spec.long.level ?? spec.easy?.level ?? null, minutes: spec.long.minutes ?? spec.easy?.minutes ?? null };
     if (x === longDay && spec.easy?.minutes) return { kind: "long", family: spec.easy.family, level: spec.easy.level ?? null, minutes: spec.easy.minutes };
-    if (longDay && spec.backToBack && daysBetween(longDay.date, x.date) === 1) return { kind: "long", family: sport === "run" ? "run-long" : "z2", minutes: spec.backToBack };
-    if (x.role === "recovery" && !spec.easy) return { kind: "recovery", family: sport === "run" ? "run-recovery" : "z2" };
+    if (longDay && spec.backToBack && daysBetween(longDay.date, x.date) === 1) return { kind: "long", family: LONG_FAMILY[sport], minutes: spec.backToBack };
+    if (x.role === "recovery" && !spec.easy) return { kind: "recovery", family: RECOVERY_FAMILY[sport] };
     if (stridesLeft && sport === "run" && !spec.easy) { stridesLeft--; return { kind: "easy", family: "run-easy-strides" }; }
-    return { kind: "easy", family: spec.easy?.family || (sport === "run" ? "run-easy" : "z2"), level: spec.easy?.level ?? null, minutes: spec.easy?.minutes ?? null };
+    return { kind: "easy", family: spec.easy?.family || EASY_FAMILY[sport], level: spec.easy?.level ?? null, minutes: spec.easy?.minutes ?? null };
   };
   const moved = new Map(), dropped = new Set(edits.filter(([, e]) => e.skip).map(([d]) => d));
   if (moves.length || swaps.length) {
@@ -638,7 +676,7 @@ export function planDays(template, prefs) {
   const added = [];
   const free = i => Number(prefs?.availability?.[i]?.minutes ?? 60);
   while (days.filter((_, i) => has(i)).length < template.days[0]) {
-    const options = [0, 1, 2, 3, 4, 5, 6].filter(i => !has(i) && free(i) >= (template.sport === "run" ? 20 : 30));
+    const options = [0, 1, 2, 3, 4, 5, 6].filter(i => !has(i) && free(i) >= (template.sport === "swim" ? 15 : template.sport === "run" ? 20 : 30));
     if (!options.length) break;
     const near = i => [-1, 1].filter(k => has((i + k + 7) % 7)).length;
     options.sort((a, b) => near(a) - near(b) || free(b) - free(a) || Number(b >= 5) - Number(a >= 5));
@@ -863,12 +901,12 @@ export function planCompletion(plan, { days = [], doneDates = [], today }) {
 }
 
 // ---- what the app shows ----------------------------------------------------------
-const keyLabel = (sport, k) => k.test ? (sport === "run" ? L("Běžecký test", "Run test") : L("Test FTP", "FTP test")) : planName(baseName(planWorkoutId(sport, k, sport === "run" ? 60 : 90))) || k.family;
+const keyLabel = (sport, k) => k.test ? (sport === "run" ? L("Běžecký test", "Run test") : L("Test FTP", "FTP test")) : planName(baseName(planWorkoutId(sport, k, sport === "swim" ? 45 : sport === "run" ? 60 : 90))) || k.family;
 export function templateSummary(t) {
   return {
     id: t.id, sport: t.sport, name: t.name, goal: t.goal, description: t.description, level: t.level, weeksCount: t.weeks.length, days: t.days,
     race: t.race ? { km: t.race.km, options: t.race.options || null, kind: t.race.ride || null } : null, tests: Boolean(t.tests),
-    weeks: t.weeks.map((w, i) => ({ week: i + 1, phase: w.phase, phaseLabel: w.gym ? w.gym.name : phaseLabel(w.phase, t.sport), load: w.load, keys: w.gym?.test ? [TEST_KEYS(), L(`${w.gym.sessions}× týdně`, `${w.gym.sessions}× a week`)] : w.gym ? [L(`${w.gym.sessions}× týdně`, `${w.gym.sessions}× a week`), `${w.gym.sets} × ${w.gym.reps}`, "RPE " + w.gym.rpe] : w.q.map(k => keyLabel(t.sport, k)), longMinutes: w.long?.minutes ?? w.easy?.minutes ?? null, race: Boolean(w.race) }))
+    weeks: t.weeks.map((w, i) => ({ week: i + 1, phase: w.phase, phaseLabel: w.gym ? w.gym.name : phaseLabel(w.phase, t.sport), load: w.load, keys: w.gym?.test ? [TEST_KEYS(), L(`${w.gym.sessions}× týdně`, `${w.gym.sessions}× a week`)] : w.gym ? [L(`${w.gym.sessions}× týdně`, `${w.gym.sessions}× a week`), `${w.gym.sets} × ${w.gym.reps}`, "RPE " + w.gym.rpe] : [...w.q.map(k => keyLabel(t.sport, k)), ...(t.sport === "swim" && w.long?.family ? [keyLabel(t.sport, w.long)] : [])], longMinutes: w.long?.minutes ?? w.easy?.minutes ?? null, race: Boolean(w.race) }))
   };
 }
 export function planSummary(plan, today) {
