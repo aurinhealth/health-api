@@ -4,7 +4,7 @@ import { L } from './lang.js';
 // encrypted with CONNECTION_KEY. Each row starts with "v2." and is bound to its
 // user and provider, so a row copied to another account does not decrypt. The
 // older rows encrypted with a key from STRENGTH_API_KEY were all moved over
-// (none left on 2026-10-26), so that key guards nobody's keys any more.
+// (none left on 2026-10-26), so that key guards nobody's keys and is not read.
 // Changing or removing CONNECTION_KEY later disconnects everyone (each user
 // connects again).
 const V2 = 'v2.';
@@ -45,7 +45,7 @@ export async function deleteConnectionSecret(env,provider){const uid=userId(env)
 // connection once (env.DB is the whole database). Returns how many it saved.
 export async function backfillConnectionAccounts(env,provider){
   const key=Object.keys(ACCOUNTS).find(k=>ACCOUNTS[k].provider===provider);
-  if(!key||!env.DB||!(hasConnectionKey(env)||env.STRENGTH_API_KEY))return 0;
+  if(!key||!env.DB||!hasConnectionKey(env))return 0;
   let rows;
   try{rows=(await env.DB.prepare('SELECT c.user_id,c.encrypted FROM connection_credentials c WHERE c.provider=? AND NOT EXISTS (SELECT 1 FROM connection_accounts a WHERE a.user_id=c.user_id AND a.provider=?)').bind(key,provider).all()).results||[];}
   catch(error){noAccounts(error);return 0;}
@@ -95,7 +95,7 @@ export async function refreshConnectionTokens(env,provider,held,refresh,{now=Dat
 // A key that does not decrypt counts as not connected, so the user can connect
 // again instead of every request failing.
 export async function connectionEnvironment(env){
-  if(!env.DB||!env.USER_ID||!(hasConnectionKey(env)||env.STRENGTH_API_KEY))return env;
+  if(!env.DB||!env.USER_ID||!hasConnectionKey(env))return env;
   await table(env);
   const uid=userId(env),result=await env.DB.prepare('SELECT provider,encrypted FROM connection_credentials WHERE user_id=?').bind(uid).all();
   const resolved={...env,CONNECTED_PROVIDERS:[]};
