@@ -95,7 +95,7 @@ struct BrickSheet: View {
                 watchLine.padding(.top, 12)
                 Text(verbatim: together
                      ? L10n.tr("Běh na unavených nohou je smysl bricku: nohy se učí přechod, který tě čeká v závodě.")
-                     : L10n.tr("Zvlášť jdeš do druhé části odpočatý. Na nabitý den to stačí, kouč brick dá zase příště."))
+                     : L10n.tr("Zvlášť jdeš do druhé části odpočatý. Na nabitý den to stačí, jen to už není brick."))
                     .font(Typo.caption).foregroundStyle(Palette.muted)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 10)

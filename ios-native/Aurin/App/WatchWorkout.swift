@@ -49,7 +49,7 @@ enum WatchWorkout {
             default: return nil
             }
         }
-        guard activities.count == legs.count, activities.count >= 2 else { return nil }
+        guard activities.count == legs.count, activities.count >= 2, SwimBikeRunWorkout.supportsActivityOrdering(activities) else { return nil }
         return WorkoutPlan(.swimBikeRun(SwimBikeRunWorkout(activities: activities, displayName: String(title.prefix(60)))))
     }
 
