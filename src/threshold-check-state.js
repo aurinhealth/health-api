@@ -3,7 +3,7 @@ import { cached } from "./api-cache.js";
 import { rideIntervals } from "./activity-detail.js";
 import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { athleteThresholds } from "./intervals-athlete.js";
-import { getWeekPlan, planWeekRoles, roleFor } from "./week-planner.js";
+import { getWeekPlan, planWeekRoles, roleTime, roleFor } from "./week-planner.js";
 import { availabilityOn } from "./training-availability.js";
 import { getChecks, thresholdSessions, estimateRideFtp, estimateRunPace, saveCheck, testResult, getTestWorkout, thresholdOffer, recommendTestDay } from "./threshold-check.js";
 import { activePlan, planWeek, planQuality } from "./training-plans.js";
@@ -53,7 +53,7 @@ export async function thresholdCheckState(env,ctx,today){
   for(const monday of active&&!active.pauseFrom?[mondayOfDate(today),shiftDate(mondayOfDate(today),7)]:[]){
     const pw=planWeek(active,monday);
     if(!pw?.spec.q[0]?.test)continue;
-    const prefs=await getWeekPlan(env.DB,monday).catch(()=>null),roles=prefs?planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:active.sport}):[];
+    const prefs=await getWeekPlan(env.DB,monday).catch(()=>null),roles=prefs?planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:active.sport,...roleTime(prefs)}):[];
     const i=roles.findIndex(d=>d.items.some(x=>x.sport===active.sport&&x.role==='quality'));
     const testDate=i>=0?shiftDate(monday,i):null,c=checks[active.sport];
     if(!testDate||testDate<=today||testDate>shiftDate(today,10))continue;

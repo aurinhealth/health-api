@@ -181,7 +181,7 @@ export function withAppTarget(plan, daily) {
     ...plan,
     calorieTarget: target,
     estimatedCalorieTarget: plan.calorieTarget,
-    targetSource: daily.nutrition.energyBudget ? "app (Google Health energy budget)" : "app",
+    targetSource: daily.nutrition.ownTarget ? "athlete's own goal" : daily.nutrition.energyBudget ? "app (Google Health energy budget)" : "app",
     // The app's target carries its own trend correction; report that one.
     adaptiveCalorieAdjustment: Number(daily.nutrition.calorieBreakdown?.trendAdjustment) || 0,
     adaptiveCalorieReason: daily.nutrition.calorieBreakdown?.trendReason || "app_target",

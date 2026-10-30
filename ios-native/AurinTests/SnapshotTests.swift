@@ -831,6 +831,29 @@ final class SnapshotTests: XCTestCase {
             NavigationStack { PlanWeekContent(week: active.template.weeks[2], sport: "ride", detail: week).padding(.horizontal, 24) }.environment(model)
         }
         try render("plan-week-days", height: 700) { WeekDaysSheet(week: week, usual: 4).environment(model) }
+        // Free time by weekday, two weeks in turn, this week only and the plan's days.
+        let timeJSON = #"{"days":[45,60,0,60,0,180,240],"total":585,"daysB":[0,90,90,0,90,240,120],"totalB":630,"alternate":"2026-10-26","suits":[300,420],"short":false}"#
+        let time = try decoder.decode(PlanPreview.Time.self, from: Data(timeJSON.utf8))
+        try render("plan-free-time", height: 900) { FreeTimeSheet(time: time, planDays: [1, 3, 5, 6]).environment(model) }
+        let weekWithTime = try decoder.decode(PlanWeekDetail.self, from: Data(weekJSON.replacingOccurrences(of: #""weekDays":null,"#, with: #""weekDays":null,"time":{"days":[45,60,0,45,0,120,180],"own":true,"weekB":false},"#).utf8))
+        try render("plan-time-this-week", height: 900) { TimeThisWeekSheet(week: weekWithTime, planDays: [1, 3, 5, 6], usual: 4).environment(model) }
+        let long = try decoder.decode(PlanPreview.Long.self, from: Data(#"{"day":5,"auto":5,"own":false}"#.utf8))
+        try render("plan-days-and-time", height: 700) { DaysAndTimeSheet(sport: "ride", range: 3...6, initial: [1, 3, 5, 6], time: time, long: long).environment(model) }
+        try render("plan-long-day", height: 600) { NavigationStack { LongDayPicker(sport: "run", days: [1, 3, 5, 6], time: time, auto: 5, selection: .constant(6)) } }
+        try render("plan-time-short", height: 120) { PlanTimeNote(text: L10n.tr("Na tento plán je času málo. Klíčové jízdy zůstanou, lehké se zkrátí a odhad cíle bude opatrnější.")).padding(16) }
+        // The "Úpravy" tiles must fit: an iPhone SE in both languages, and the largest text (one tile a row).
+        let language = L10n.language
+        defer { L10n.setLanguage(language) }
+        for name in ["cs", "en"] {
+            L10n.setLanguage(name)
+            try render("plan-active-se-\(name)", glow: Palette.Glow.training, height: 1500, width: 320) {
+                NavigationStack { ActivePlanContent(active: active, preview: preview, week: weekWithTime).padding(.horizontal, 16) }.environment(model).environment(\.locale, L10n.locale)
+            }
+            try render("plan-active-xxxl-\(name)", glow: Palette.Glow.training, height: 2600, width: 320, typeSize: .accessibility3) {
+                NavigationStack { ActivePlanContent(active: active, preview: preview, week: weekWithTime).padding(.horizontal, 16) }.environment(model).environment(\.locale, L10n.locale)
+            }
+        }
+        try render("plan-choose", height: 900) { TrainingPlansSheet(plans: plans).environment(model) }
         try render("plan-move", height: 340) { MoveSessionSheet(session: week.sessions[2], detail: week) { _ in } }
         try render("plan-result", glow: Palette.Glow.today, height: 1150) {
             NavigationStack { PlanResultContent(result: result, plans: plans).padding(.horizontal, 24) }.environment(model)
@@ -867,6 +890,12 @@ final class SnapshotTests: XCTestCase {
         try render("plan-gym-strength", height: 1500) {
             NavigationStack { PlanDetailView(template: strength, active: nil, days: [0, 2, 4]) }.environment(model)
         }
+        // Gym five times a week: push, pull and legs, each day's time up to 90 minutes.
+        let gymPreviewJSON = #"{"startDate":"2026-11-02","endDate":"2027-01-24","days":[0,1,2,3,4],"weeks":[],"totals":{"sessions":0,"minutes":0,"tss":0},"added":[1,3],"gym":{"perWeek":5,"usual":3,"range":[2,7],"split":"Tlaky / tahy / nohy","days":[{"day":0,"part":"push","label":"tlaky","minutes":60},{"day":1,"part":"pull","label":"tahy","minutes":45},{"day":2,"part":"legs","label":"nohy","minutes":90},{"day":3,"part":"push","label":"tlaky","minutes":60},{"day":4,"part":"pull","label":"tahy","minutes":75}]}}"#
+        let gymPreview = try decoder.decode(PlanPreview.self, from: Data(gymPreviewJSON.utf8))
+        try render("plan-gym-five", height: 2000) {
+            NavigationStack { PlanDetailView(template: strength, active: nil, days: [0, 1, 2, 3, 4], gymPreview: gymPreview) }.environment(model)
+        }
         let gymResultJSON = #"{"id":10,"templateId":"gym-strength","name":"Síla","sport":"gym","startDate":"2026-10-19","endDate":"2027-01-10","ftpStart":null,"ftpEnd":null,"ctlStart":null,"ctlEnd":null,"sessionsDone":33,"sessionsPlanned":34,"minutesDone":0,"minutesPlanned":null,"completion":{"1":100,"2":100,"3":67,"4":100,"5":100,"6":100,"7":100,"8":100,"9":67,"10":100,"11":100,"12":100},"weeks":[\#(strengthWeeks)],"next":[],"lifts":[{"exercise":"Barbell back squat","before":136,"after":148},{"exercise":"Barbell bench press","before":104,"after":110},{"exercise":"Barbell Deadlift","before":158,"after":171}]}"#
         let gymResult = try decoder.decode(PlanResult.self, from: Data(gymResultJSON.utf8))
         try render("plan-result-gym", glow: Palette.Glow.today, height: 1100) {
@@ -874,11 +903,12 @@ final class SnapshotTests: XCTestCase {
         }
     }
 
-    private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, @ViewBuilder _ content: () -> V) throws {
+    private func render<V: View>(_ name: String, glow: Color = Palette.Glow.today, height: CGFloat? = nil, width: CGFloat = 390, typeSize: DynamicTypeSize = .large, @ViewBuilder _ content: () -> V) throws {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         for (suffix, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
             let view = content()
-                .frame(width: 390, height: height)
+                .dynamicTypeSize(typeSize)
+                .frame(width: width, height: height)
                 .background { ScreenBackground(glow: glow) }
                 .environment(\.colorScheme, scheme)
             let renderer = ImageRenderer(content: view)

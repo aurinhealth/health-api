@@ -178,3 +178,11 @@ test("a plant word hides only the dairy after it, never meat or fish", () => {
   for (const meal of ["Kokosové kuře s rýží", "Coconut chicken curry", "Mandlový losos", "Peanut chicken stir-fry"]) assert.equal(fitsEating(meal, "vegetarian"), false, meal);
   for (const meal of ["Ovesná kaše s mandlovým mlékem", "Toast with peanut butter", "Sójový jogurt s ovocem", "Coconut milk curry with tofu"]) assert.equal(fitsEating(meal, "vegan"), true, meal);
 });
+
+test("an own calorie goal on keto moves the fat, the carbs stay at the limit", () => {
+  const macros = dayMacros(80, 2400, {}, { dietStyle: "keto" });
+  const daily = applyEnergyBudget({ nutrition: { calorieTarget: 2400, macros: { ...macros } }, calories: { target: 2400 } }, { kcalGoal: 2000 }, null);
+  assert.equal(daily.nutrition.calorieTarget, 2000);
+  assert.equal(daily.nutrition.macros.carbs_g, macros.carbs_g);
+  assert.ok(daily.nutrition.macros.fat_g < macros.fat_g);
+});

@@ -3299,6 +3299,51 @@
 "Kilogramy" = "Kilograms";
 "Unce" = "Ounces";
 "Libry" = "Pounds";
+"Postupně" = "Build-up";
+"Aurin dnes doporučuje %@ kcal" = "Aurin recommends %@ kcal today";
+"Aurin dnes doporučuje %@" = "Aurin recommends %@ today";
+"Začít na" = "Start at";
+"Jak to šlo" = "How it went";
+"Dva dny po sobě splněno: cíl jde nahoru podle toho, co vypiješ. Dva slabší dny: o 0,1 l níž. Den bez zápisu cíl nemění." = "Two days in a row met: the goal rises with what you drink. Two weaker days: 0.1 l lower. A day with nothing logged keeps it.";
+"Došel jsi na doporučený cíl." = "You reached the recommended goal.";
+"Předevčírem" = "Day before";
+"Nezapsáno" = "Not logged";
+"Posledních 7 dní" = "Last 7 days";
+"7 dní předtím" = "7 days before";
+"%@ z %@ denně · splněno %@ z %@ dní" = "%@ of %@ a day · %@ of %@ days met";
+"bez omezení" = "no limit";
+"Každý týden stejně" = "Same every week";
+"Dva týdny po sobě" = "Two weeks in turn";
+"Týden A" = "Week A";
+"Týden B" = "Week B";
+"Tento týden je týden B" = "This week is week B";
+"Čas je strop. Plán využije tolik, kolik dovolí tvoje kondice, a k víc času se dopracuje postupně." = "The time is a ceiling. The plan uses as much as your fitness allows and works up to more time step by step.";
+"Volný čas" = "Free time";
+"Platí jen pro tento týden. Klíčové tréninky zůstanou, lehké se zkrátí nebo vypadnou." = "For this week only. The key sessions stay; the easy ones get shorter or drop out.";
+"Zpět na obvyklý týden" = "Back to the usual week";
+"Méně dní tento týden" = "Fewer days this week";
+"Dny a čas" = "Days and time";
+"Tento plán má %@ dní týdně." = "This plan has %@ days a week.";
+"Od tohoto týdne" = "From this week";
+"Od příštího týdne" = "From next week";
+"navrženo" = "suggested";
+"Tréninků týdně" = "Sessions a week";
+"%@× týdně" = "%@× a week";
+"Délka tréninku podle volného času toho dne, nejvýš 90 minut." = "Each session as long as that day's free time, up to 90 minutes.";
+"Běhů týdně" = "Runs a week";
+"Jízd týdně" = "Rides a week";
+"Čárkované dny plán přidal podle volného času. Klepnutím je změníš." = "The plan added the dashed days from your free time. Tap to change them.";
+"Tvůj čas" = "Your time";
+"Volný čas sdílí s plánem %@ (%@)." = "Shares the free time with %@ (%@).";
+"Úpravy" = "Adjust";
+"dva týdny" = "two weeks";
+"podle odhadu" = "from the estimate";
+"Dlouhý běh" = "Long run";
+"Dlouhá jízda" = "Long ride";
+"teď %@, nejvíc volného času" = "now %@, the most free time";
+"Nabízím jen tvoje dny běhu. Den před dlouhým během plán nedá klíčový trénink." = "Only your run days are offered. The plan keeps a key session off the day before the long run.";
+"Nabízím jen tvoje dny na kole. Den před dlouhou jízdou plán nedá klíčový trénink." = "Only your ride days are offered. The plan keeps a key session off the day before the long ride.";
+"%@ má %@: dlouhý trénink se do toho vejde, dokud dni nepřidáš víc času." = "%@ has %@: the long session stays within it until you give that day more time.";
 
 /* Why this workout in the gym day (GymWhyCard.swift) */
 "Proč tenhle trénink" = "Why this workout";
@@ -3394,6 +3439,7 @@
 "Kolo %@×, běh %@× a plavání %@× týdně. Dny rozdělím podle času, který v týdnu máš." = "Riding %@×, running %@× and swimming %@× a week. I'll spread the days by the time you have in the week.";
 "Odhad: %@." = "Estimate: %@.";
 "Odhad času z tvých prahových hodnot, bez depa." = "Estimated from your thresholds, without transitions.";
+"Plavání týdně" = "Swims a week";
 
 /* Zdroje dat → Zdravotní data (SettingsHealthData.swift) */
 "Čte z" = "Reads from";

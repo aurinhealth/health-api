@@ -7,7 +7,7 @@ import { activityFromRow, dedupeActivities } from "./coach-reflection.js";
 import { getCapabilities } from "./workout-library.js";
 import { athleteThresholds } from "./intervals-athlete.js";
 import { latestStoredWeight } from "./athlete-weight.js";
-import { getWeekPlan, planWeekRoles } from "./week-planner.js";
+import { getWeekPlan, planWeekRoles, roleTime } from "./week-planner.js";
 import { getAthleteState } from "./athlete-state.js";
 import { reviewPlan, planWeek, planQuality, planLoad, applyPlan, activePlan, planSports } from "./training-plans.js";
 import { weekWeather, dayHours } from "./adaptive-week.js";
@@ -63,7 +63,7 @@ export async function planSportMinutes(env,sport,from,to){
 export async function planKeyDates(env,plan,monday){
   const pw=planWeek(plan,monday),prefs=pw?await getWeekPlan(env.DB,monday).catch(()=>null):null;
   if(!prefs?.days)return [];
-  const roles=planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:plan.sport==='triathlon'?'ride':plan.sport});
+  const roles=planWeekRoles(prefs.days,{quality:planQuality(pw),prefer:plan.sport==='triathlon'?'ride':plan.sport,...roleTime(prefs)});
   return roles.map((d,i)=>d.items.some(x=>planSports(plan.sport).includes(x.sport)&&['quality','long'].includes(x.role))?shiftDate(monday,i):null).filter(Boolean);
 }
 

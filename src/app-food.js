@@ -63,6 +63,8 @@ export function dayCalories(nutrition = {}) {
   const target = num(nutrition.calorieTarget);
   const raw = num(breakdown.activityAdjustment) != null ? Math.round(num(breakdown.activityAdjustment) * (num(breakdown.trainingCoverage) ?? 0.7)) : null;
   if (target == null) return { target: null, everyday: null, bonus: raw };
+  // An own goal (Cíle → Kalorie) is the same every day.
+  if (nutrition.ownTarget) return { target, everyday: Math.round(target), bonus: null };
   const rest = num(breakdown.restIntakeTarget);
   const everyday = Math.min(Math.round(target), rest != null
     ? Math.max(num(breakdown.minTarget) ?? 0, Math.round(rest + (num(breakdown.sportDailyAverage) ?? 0)))
