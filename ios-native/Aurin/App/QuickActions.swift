@@ -89,14 +89,36 @@ final class QuickActions {
     }
 }
 
-/// The window's scene delegate, only for the icon's menu: a pick while the app
-/// runs. A pick that launches the app comes with the scene's connection
-/// (AppDelegate).
+/// The window's scene delegate: the icon's menu, a pick while the app runs (a
+/// pick that launches the app comes with the scene's connection, AppDelegate),
+/// and the cover for the app switcher.
 @MainActor
 final class QuickActionSceneDelegate: NSObject, UIWindowSceneDelegate {
+    /// The app's background over everything while the app is in the
+    /// background: iOS takes the app switcher's picture after
+    /// sceneDidEnterBackground, so it never shows Today, the diary or a chat.
+    /// Not on inactive, so Face ID, purchases and Control Center don't flash it.
+    private var cover: UIWindow?
+
     func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem,
                      completionHandler: @escaping (Bool) -> Void) {
         QuickActions.shared.receive(shortcutItem)
         completionHandler(true)
+    }
+
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        guard cover == nil, let windowScene = scene as? UIWindowScene else { return }
+        let window = UIWindow(windowScene: windowScene)
+        let controller = UIViewController()
+        controller.view.backgroundColor = UIColor(Palette.background)
+        window.rootViewController = controller
+        window.windowLevel = .alert + 1
+        window.isHidden = false
+        cover = window
+    }
+
+    func sceneWillEnterForeground(_ scene: UIScene) {
+        cover?.isHidden = true
+        cover = nil
     }
 }

@@ -51,6 +51,10 @@ test('the coach answers a notification with a notification', () => {
   const two = replyPush({ answer: 'Dvě změny.', actions: [{ draftId: 1 }, { draftId: 2 }] }, 7);
   assert.equal(two.category, COACH_REPLY_CATEGORY);assert.match(two.alert.body, /v aplikaci/);assert.equal(two.data.coach.draftId, undefined);
   assert.equal(replyPush({ answer: 'Jen text.', actions: [] }, 7).category, COACH_REPLY_CATEGORY);
+  const hidden = replyPush({ answer: 'Dobře, zítra místo prahu 40 min sweet spot.', actions: [{ type: 'replace', draftId: 41 }] }, 7, { hide: true });
+  assert.deepEqual(hidden.alert, { title: 'Kouč', body: 'Kouč odpověděl.' });
+  assert.equal(hidden.category, COACH_ACTION_CATEGORY);
+  assert.deepEqual(hidden.data, { coach: { kind: 'reply', chatId: 7, draftId: 41 }, private: { title: 'Kouč', body: 'Dobře, zítra místo prahu 40 min sweet spot.' } });
   assert.equal(failedReplyPush(null, 7).category, null);
   assert.ok(shortBody('slovo '.repeat(300)).length <= 600);
   assert.equal(plainText('# Nadpis\n- jedna\n- dvě'), 'Nadpis\n· jedna\n· dvě');

@@ -99,10 +99,20 @@ enum SiriData {
     }
 }
 
+/// Health data and the diary stay behind the lock: Siri and Shortcuts ask
+/// for Face ID or the passcode before an intent that reads or writes them runs
+/// on a locked phone. "Hodnota z Aurinu" (no voice phrase) stays open, so a
+/// morning automation still gets its number; "Začít trénink" opens the app.
+enum SiriAccess {
+    static let policy: IntentAuthenticationPolicy = .requiresAuthentication
+}
+
 /// "Připravenost dnes": the number and its word from Today, read aloud.
 struct ReadinessTodayIntent: AppIntent {
     static let title: LocalizedStringResource = "Připravenost dnes"
     static let description = IntentDescription("Řekne dnešní připravenost a co s ní dnes dělat.")
+    /// Siri on a locked phone asks for Face ID or the passcode first (SiriAccess).
+    static let authenticationPolicy = SiriAccess.policy
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -121,6 +131,8 @@ struct ReadinessTodayIntent: AppIntent {
 struct WorkoutTodayIntent: AppIntent {
     static let title: LocalizedStringResource = "Trénink dnes"
     static let description = IntentDescription("Řekne, jaký trénink máš dnes v plánu.")
+    /// Siri on a locked phone asks for Face ID or the passcode first (SiriAccess).
+    static let authenticationPolicy = SiriAccess.policy
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -135,6 +147,8 @@ struct WorkoutTodayIntent: AppIntent {
 struct ActivityOfTheDayIntent: AppIntent {
     static let title: LocalizedStringResource = "Aktivita dne"
     static let description = IntentDescription("Řekne, co ti kouč na dnes doporučuje.")
+    /// Siri on a locked phone asks for Face ID or the passcode first (SiriAccess).
+    static let authenticationPolicy = SiriAccess.policy
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -149,6 +163,8 @@ struct ActivityOfTheDayIntent: AppIntent {
 struct SleepLastNightIntent: AppIntent {
     static let title: LocalizedStringResource = "Spánek dnes"
     static let description = IntentDescription("Řekne, jak dlouho a jak dobře se ti dnes v noci spalo.")
+    /// Siri on a locked phone asks for Face ID or the passcode first (SiriAccess).
+    static let authenticationPolicy = SiriAccess.policy
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -164,6 +180,8 @@ struct SleepLastNightIntent: AppIntent {
 struct AskCoachIntent: AppIntent {
     static let title: LocalizedStringResource = "Zeptat se kouče"
     static let description = IntentDescription("Zeptá se AI kouče a přečte odpověď.")
+    /// Siri on a locked phone asks for Face ID or the passcode first (SiriAccess).
+    static let authenticationPolicy = SiriAccess.policy
 
     @Parameter(title: "Otázka", requestValueDialog: IntentDialog("Na co se chceš zeptat?"))
     var question: String
@@ -202,6 +220,8 @@ struct AskCoachIntent: AppIntent {
 struct FoodLeftIntent: AppIntent {
     static let title: LocalizedStringResource = "Zbývá sníst"
     static let description = IntentDescription("Řekne, kolik kalorií, bílkovin a vody ti dnes zbývá.")
+    /// Siri on a locked phone asks for Face ID or the passcode first (SiriAccess).
+    static let authenticationPolicy = SiriAccess.policy
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -300,6 +320,8 @@ enum SiriDrink: String, AppEnum {
 struct LogDrinkIntent: AppIntent {
     static let title: LocalizedStringResource = "Zapsat pití"
     static let description = IntentDescription("Zapíše pití do dnešního dne.")
+    /// Siri on a locked phone asks for Face ID or the passcode first (SiriAccess).
+    static let authenticationPolicy = SiriAccess.policy
 
     /// What one drink may be, in ml.
     static let range: ClosedRange<Int> = 10...3000
@@ -342,6 +364,8 @@ struct LogDrinkIntent: AppIntent {
 struct LogWeightIntent: AppIntent {
     static let title: LocalizedStringResource = "Zapsat váhu"
     static let description = IntentDescription("Zapíše dnešní váhu.")
+    /// Siri on a locked phone asks for Face ID or the passcode first (SiriAccess).
+    static let authenticationPolicy = SiriAccess.policy
 
     /// What Zdraví → Váha accepts, in kg.
     static let range: ClosedRange<Double> = 30...300

@@ -153,6 +153,8 @@ struct NotificationsSettingsView: View {
     @AppStorage(PushRegistration.morningKey) private var morning = true
     /// The coach's own message from the server (src/coach-push.js).
     @AppStorage(PushRegistration.coachKey) private var coach = true
+    /// The two above say only what came; held down on an unlocked phone they show it all.
+    @AppStorage(PushRegistration.hideValuesKey) private var hideValues = true
     @State private var allowed: Bool?
     /// Bumped by every change, so the reminders are planned again once (and
     /// the meals and days, read straight from UserDefaults, are shown anew).
@@ -180,6 +182,9 @@ struct NotificationsSettingsView: View {
                 SettingsToggle(title: "Ranní připravenost", isOn: $morning)
                 SettingsDivider()
                 SettingsToggle(title: "Kouč", subtitle: "Ozve se sám, nejvýš 1× denně", isOn: $coach)
+                SettingsDivider()
+                SettingsToggle(title: "Skrýt zdravotní údaje", subtitle: "Celé oznámení uvidíš po podržení na odemčeném iPhonu",
+                               isOn: $hideValues)
             }
             // The pill: only with cycle tracking on and the pill chosen.
             if let cycle = model.cycle, cycle.enabled, let settings = cycle.settings, settings.contraception == "pill" {

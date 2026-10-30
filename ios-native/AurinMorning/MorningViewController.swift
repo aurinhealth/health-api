@@ -10,17 +10,29 @@ import UserNotificationsUI
 /// the subtitle as chips and the day's plan from the body. Every text comes
 /// from the push, already in the user's language. The buttons under it are
 /// the category's (PushRegistration.swift).
+///
+/// The coach's pushes held down show their title and text. With the values
+/// hidden (Settings → Oznámení → Skrýt zdravotní údaje) both show the push's
+/// own texts (`private`) only on an unlocked phone; locked, what the banner says.
 final class MorningViewController: UIViewController, UNNotificationContentExtension {
-    private var host: UIHostingController<MorningView>?
+    private var host: UIHostingController<AnyView>?
 
     func didReceive(_ notification: UNNotification) {
         let content = notification.request.content
-        let readiness = content.userInfo["readiness"] as? [String: Any]
-        let view = MorningView(morning: Morning(score: (readiness?["score"] as? NSNumber)?.intValue,
-                                                zone: readiness?["zone"] as? String,
-                                                title: content.title, subtitle: content.subtitle, body: content.body))
+        let open = NotificationText.hidden(content.userInfo) == nil || DeviceLock.isUnlocked
+        let text = open ? NotificationText(content) : NotificationText.shown(content)
+        let view: AnyView
+        if content.categoryIdentifier == "MORNING_READINESS" {
+            let readiness = open ? NotificationText.readiness(content.userInfo) : nil
+            view = AnyView(MorningView(morning: Morning(score: (readiness?["score"] as? NSNumber)?.intValue,
+                                                        zone: readiness?["zone"] as? String,
+                                                        title: text.title, subtitle: text.subtitle, body: text.body)))
+        } else {
+            view = AnyView(CoachNoteView(text: text))
+        }
         if let host {
             host.rootView = view
+            resize(host)
             return
         }
         let host = UIHostingController(rootView: view)
@@ -36,8 +48,42 @@ final class MorningViewController: UIViewController, UNNotificationContentExtens
         ])
         host.didMove(toParent: self)
         self.host = host
+        resize(host)
+    }
+
+    private func resize(_ host: UIHostingController<AnyView>) {
         let size = host.sizeThatFits(in: CGSize(width: self.view.bounds.width, height: .greatestFiniteMagnitude))
         preferredContentSize = CGSize(width: self.view.bounds.width, height: size.height)
+    }
+}
+
+/// Is the phone unlocked? A file with complete protection can be read only
+/// then (iOS drops its key about ten seconds after locking). Written once on
+/// an unlocked phone; until then the phone counts as locked.
+enum DeviceLock {
+    static var isUnlocked: Bool {
+        guard let folder = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return false }
+        let probe = folder.appendingPathComponent("unlock-probe")
+        if !FileManager.default.fileExists(atPath: probe.path) {
+            try? Data([1]).write(to: probe, options: [.completeFileProtection])
+        }
+        return (try? Data(contentsOf: probe)) != nil
+    }
+}
+
+/// A coach's push held down: its title and text in the system's own look.
+struct CoachNoteView: View {
+    let text: NotificationText
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(text.title).font(.headline)
+            if !text.body.isEmpty {
+                Text(text.body).font(.body).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
     }
 }
 

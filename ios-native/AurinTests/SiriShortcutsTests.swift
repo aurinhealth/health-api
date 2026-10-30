@@ -1,3 +1,4 @@
+import AppIntents
 import XCTest
 @testable import Aurin
 
@@ -10,6 +11,20 @@ final class SiriShortcutsTests: XCTestCase {
 
     override func tearDown() {
         L10n.setLanguage("cs")
+    }
+
+    /// A locked phone asks for Face ID or the passcode before Siri reads or writes health data.
+    func testHealthIntentsAskForUnlockOnALockedPhone() {
+        let policies: [(String, IntentAuthenticationPolicy)] = [
+            ("readiness", ReadinessTodayIntent.authenticationPolicy), ("workout", WorkoutTodayIntent.authenticationPolicy),
+            ("activity", ActivityOfTheDayIntent.authenticationPolicy), ("sleep", SleepLastNightIntent.authenticationPolicy),
+            ("coach", AskCoachIntent.authenticationPolicy), ("food", FoodLeftIntent.authenticationPolicy),
+            ("drink", LogDrinkIntent.authenticationPolicy), ("weight", LogWeightIntent.authenticationPolicy),
+            ("water", AddWaterIntent.authenticationPolicy)
+        ]
+        for (name, policy) in policies {
+            guard case .requiresAuthentication = policy else { XCTFail("\(name) runs on a locked phone"); continue }
+        }
     }
 
     func testReadinessSaysTheNumberTheWordAndTheAdvice() {

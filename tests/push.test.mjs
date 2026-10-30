@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createD1 } from "./helpers/d1.mjs";
 import { scopedDb, PERSONAL_TABLES } from "../src/tenancy.js";
-import { apnsJwt, pkcs8FromP8, sendPush, sendMorningReadiness, handlePushToken, savePushToken, listPushTokens, readinessMessage, hasLastNight, sendFoodApproved, foodApprovedMessage, inMorningWindow, pushConfigured, APNS_TOPIC, _resetPushForTest } from "../src/push.js";
+import { apnsJwt, pkcs8FromP8, sendPush, sendMorningReadiness, handlePushToken, savePushToken, listPushTokens, readinessMessage, hasLastNight, sendFoodApproved, foodApprovedMessage, inMorningWindow, pushConfigured, APNS_TOPIC, _resetPushForTest, hidesValues, privateAlert } from "../src/push.js";
 import { withLang } from "../src/lang.js";
 import { withTimeZone } from "../src/user-time.js";
 
@@ -152,6 +152,30 @@ test("the token endpoint wants a signed-in user, the site's origin and a real to
   assert.equal((await handlePushToken(request("POST", {}), env, { signedIn: true, origin: ORIGIN })).status, 400);
   assert.equal((await handlePushToken(new Request(ORIGIN + "/app/api/push/token"), env, { signedIn: true, origin: ORIGIN })).status, 405);
   assert.equal(raw.sqlite.prepare("SELECT COUNT(*) AS n FROM push_tokens").get().n, 0);
+});
+
+test("hidden values: the banner says only that the morning is in, the numbers wait in private", async () => {
+  _resetPushForTest();
+  const { env } = setup();
+  await savePushToken(env.DB, TOKEN_A);
+  const { calls, fetchImpl } = fakeApns();
+  const result = await sendMorningReadiness(env, { readiness: () => ({ score: 72, zone: "green" }), now: MORNING, fetchImpl, hide: true });
+  assert.equal(result.sent, 1);
+  const body = calls[0].body;
+  assert.deepEqual(body.aps.alert, privateAlert("morning"));
+  assert.doesNotMatch(JSON.stringify(body.aps), /72/);
+  // No ring on the banner: the service extension draws it only from a top-level readiness.
+  assert.equal(body.readiness, undefined);
+  assert.deepEqual(body.private, { title: "Připravenost 72 · Dnes klidně naplno", body: "Nic naplánováno. Dobrý den na těžší trénink.", readiness: { score: 72, zone: "green" } });
+  assert.equal(body.aps.category, "MORNING_READINESS");
+  assert.equal(body.aps["content-available"], 1);
+});
+
+test("values are hidden until the switch is turned off", () => {
+  assert.equal(hidesValues(null), true);
+  assert.equal(hidesValues({ notify: { morning: true } }), true);
+  assert.equal(hidesValues({ notify: { private: false } }), false);
+  for (const kind of ["morning", "coach", "swap", "reply"]) assert.doesNotMatch(JSON.stringify(privateAlert(kind)), /\d/);
 });
 
 test("the morning push goes out once a local day, between 5:00 and 11:00", async () => {

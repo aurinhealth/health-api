@@ -304,7 +304,7 @@ enum Reminders {
 
     static var pillNotificationCategory: UNNotificationCategory {
         UNNotificationCategory(identifier: pillCategory, actions: [
-            UNNotificationAction(identifier: pillTakenAction, title: L10n.tr("Vzato"), options: []),
+            UNNotificationAction(identifier: pillTakenAction, title: L10n.tr("Vzato"), options: [.authenticationRequired]),
             UNNotificationAction(identifier: pillSnoozeAction, title: L10n.tr("Za 30 minut"), options: [])
         ], intentIdentifiers: [], options: [])
     }

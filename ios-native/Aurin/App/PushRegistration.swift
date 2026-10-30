@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// The morning readiness push (src/push.js) comes with content-available:
     /// Today for the widgets in the background (BackgroundRefresh.morningPush).
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
-        guard userInfo["readiness"] != nil, !ProcessInfo.processInfo.arguments.contains("-demo") else { return .noData }
+        guard NotificationText.isMorning(userInfo), !ProcessInfo.processInfo.arguments.contains("-demo") else { return .noData }
         return await BackgroundRefresh.morningPush(api: api) ? .newData : .failed
     }
 
@@ -155,6 +155,15 @@ enum PushRegistration {
         UserDefaults.standard.object(forKey: coachKey) as? Bool ?? true
     }
 
+    /// Settings → Oznámení → Skrýt zdravotní údaje; on until turned off. The
+    /// server's pushes then say only what came ("Kouč odpověděl"); the texts
+    /// themselves come in `private` (src/push.js hidesValues, NotificationText).
+    static let hideValuesKey = "remind.hideValues"
+
+    static var hideValuesOn: Bool {
+        UserDefaults.standard.object(forKey: hideValuesKey) as? Bool ?? true
+    }
+
     /// Oznámení → Pití also stops the server's water push (Build-up, src/water-goal.js).
     static var waterOn: Bool { Reminders.isOn(Reminders.waterKey) }
 
@@ -217,10 +226,10 @@ enum PushRegistration {
 
     /// The server sends only the pushes whose switch is on; told when a switch changed.
     private static func sendChoices(api: APIClient) async {
-        let choices = "\(morningOn),\(coachOn),\(waterOn)"
+        let choices = "\(morningOn),\(coachOn),\(waterOn),\(hideValuesOn)"
         guard UserDefaults.standard.string(forKey: sentChoicesKey) != choices else { return }
         do {
-            try await api.setPushChoices(morning: morningOn, coach: coachOn, water: waterOn)
+            try await api.setPushChoices(morning: morningOn, coach: coachOn, water: waterOn, hideValues: hideValuesOn)
             UserDefaults.standard.set(choices, forKey: sentChoicesKey)
         } catch {
             // Told on the next refresh.
@@ -259,7 +268,8 @@ enum MorningPush {
 /// app; a short notification says how a swap went. Every coach push has
 /// "Odpovědět": the text goes to the coach (CoachReplyUpload), who answers
 /// with a push of his own (src/coach-push-reply.js); one proposal in it gets
-/// "Potvrdit" and "Ne". A tap on an answer opens its chat.
+/// "Potvrdit" and "Ne". A tap on an answer opens its chat. Every button asks
+/// for Face ID or the passcode first, so a locked phone changes nothing.
 enum CoachPush {
     static let categoryID = "COACH_SWAP"
     static let replyCategoryID = "COACH_REPLY"
@@ -272,14 +282,14 @@ enum CoachPush {
     private static let rejectAction = "COACH_ACTION_NO"
 
     private static var reply: UNTextInputNotificationAction {
-        UNTextInputNotificationAction(identifier: replyAction, title: L10n.tr("Odpovědět"), options: [],
+        UNTextInputNotificationAction(identifier: replyAction, title: L10n.tr("Odpovědět"), options: [.authenticationRequired],
                                       textInputButtonTitle: L10n.tr("Odeslat"), textInputPlaceholder: L10n.tr("Napiš kouči…"))
     }
 
     static var category: UNNotificationCategory {
         UNNotificationCategory(identifier: categoryID, actions: [
-            UNNotificationAction(identifier: swapAction, title: L10n.tr("Vyměnit"), options: []),
-            UNNotificationAction(identifier: keepAction, title: L10n.tr("Nechat"), options: []),
+            UNNotificationAction(identifier: swapAction, title: L10n.tr("Vyměnit"), options: [.authenticationRequired]),
+            UNNotificationAction(identifier: keepAction, title: L10n.tr("Nechat"), options: [.authenticationRequired]),
             reply
         ], intentIdentifiers: [], options: [])
     }
@@ -290,8 +300,8 @@ enum CoachPush {
 
     static var actionCategory: UNNotificationCategory {
         UNNotificationCategory(identifier: actionCategoryID, actions: [
-            UNNotificationAction(identifier: confirmAction, title: L10n.tr("Potvrdit"), options: []),
-            UNNotificationAction(identifier: rejectAction, title: L10n.tr("Ne"), options: []),
+            UNNotificationAction(identifier: confirmAction, title: L10n.tr("Potvrdit"), options: [.authenticationRequired]),
+            UNNotificationAction(identifier: rejectAction, title: L10n.tr("Ne"), options: [.authenticationRequired]),
             reply
         ], intentIdentifiers: [], options: [])
     }
@@ -305,7 +315,8 @@ enum CoachPush {
             guard let text = (response as? UNTextInputNotificationResponse)?.userText.trimmingCharacters(in: .whitespacesAndNewlines),
                   !text.isEmpty else { return }
             // The coach takes a while: the upload goes on in the background.
-            CoachReplyUpload.shared.send(text: text, title: content.title, body: content.body, chatId: chatId, api: api)
+            let shown = NotificationText(content)
+            CoachReplyUpload.shared.send(text: text, title: shown.title, body: shown.body, chatId: chatId, api: api)
         case confirmAction, rejectAction:
             guard let draft = (coach?["draftId"] as? NSNumber)?.intValue else { return }
             let confirm = response.actionIdentifier == confirmAction
