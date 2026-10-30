@@ -587,6 +587,9 @@ final class SnapshotTests: XCTestCase {
         try render("library-widget", glow: Palette.Glow.training, height: 220) {
             NavigationStack { LibraryWidget().padding(24) }
         }
+        try render("watch-settings", glow: Palette.Glow.training, height: 1100) {
+            NavigationStack { WatchSettingsView() }
+        }
     }
 
     func testRoundFourLogic() {
