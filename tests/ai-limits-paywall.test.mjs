@@ -4,7 +4,8 @@ import { createD1 } from "./helpers/d1.mjs";
 import { grantAiConsent } from "./helpers/consent.mjs";
 import { scopedDb, mayCreateAccount, signInEmailUser, SignupLimited, NEW_ACCOUNT_LIMITS } from "../src/tenancy.js";
 import { callOpenAI } from "../src/coach-assistant.js";
-import { groupBrakeUsd } from "../src/ai-total.js";
+import { groupBrakeUsd, aiSpendingReport } from "../src/ai-total.js";
+import { handleAdminApi } from "../src/routes-admin.js";
 import { groupOfSubscription } from "../src/ai-limit-share.js";
 import { ensureStoreColumns } from "../src/app-store.js";
 import { aiSpentToday } from "../src/ai-usage.js";
@@ -111,6 +112,34 @@ test("the owner hears once a day that a group passed half of its brake", async (
     await ask(env);
     assert.equal(mail.sent.length, 1);
   });
+});
+
+test("the owner sees today's spending by group against its brake, yesterday and the month", async () => {
+  const db = await accounts();
+  await withOpenAI(async () => {
+    await ask(envFor(db, 7, { AI_GROUP_BRAKES: BRAKES }));
+    await ask(envFor(db, 8, { AI_GROUP_BRAKES: BRAKES }));
+  });
+  const today = new Date().toISOString().slice(0, 10), yesterday = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  db.sqlite.prepare("INSERT INTO ai_spend_days (day, cost_usd) VALUES (?, 2.5)").run(yesterday);
+  const report = await aiSpendingReport({ RAW_DB: db, AI_GROUP_BRAKES: BRAKES });
+  assert.equal(report.today, 1.4);
+  assert.equal(report.yesterday, 2.5);
+  assert.equal(report.month, yesterday.slice(0, 7) === today.slice(0, 7) ? 3.9 : 1.4);
+  assert.equal(report.resetsAt.slice(11), "00:00:00.000Z");
+  assert.deepEqual(report.groups.map(g => g.group), ["paid", "gift", "trial", "testflight", "free", "system"]);
+  const by = Object.fromEntries(report.groups.map(g => [g.group, g]));
+  assert.deepEqual(by.paid, { group: "paid", spent: 0.7, brake: 1, accounts: 1 });
+  assert.deepEqual(by.free, { group: "free", spent: 0.7, brake: 1, accounts: null }, "a fixed brake has no accounts");
+  assert.deepEqual(by.testflight, { group: "testflight", spent: 0, brake: 0.5, accounts: 1 }, "a group with no spending yet shows the brake it would get");
+
+  const user = { isAdmin: true, isOwner: false }, url = new URL("https://aurin.health/app/api/admin/ai-spending");
+  const get = who => handleAdminApi(new Request(url), { RAW_DB: db, AI_GROUP_BRAKES: BRAKES }, url, { signedIn: true, user: who });
+  assert.equal((await get(user)).status, 403, "an admin who isn't the owner");
+  const response = await get({ ...user, isOwner: true });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Cache-Control"), "no-store");
+  assert.equal((await response.json()).today, 1.4);
 });
 
 test("an offer code is stored with the purchase", async () => {

@@ -2790,6 +2790,18 @@
 "Uživatel %d" = "User %d";
 "návrhy %d, schválené %d" = "%d sent, %d approved";
 "Zamítnout" = "Reject";
+
+/* Nastavení → Správa → Útraty AI (AISpendingView.swift) */
+"Útraty AI" = "AI spending";
+"%@ dnes" = "%@ today";
+"Včera %@ · %@ %@" = "Yesterday %@ · %@ %@";
+"pevná" = "fixed";
+"Stojí do %@" = "Stopped until %@";
+"Den začíná znovu v %@" = "Day resets at %@";
+"Platící" = "Paying";
+"Pilot, dárky a ty" = "Pilot, gifts and you";
+"Bez nákupu" = "No purchase";
+"Úlohy serveru" = "Server jobs";
 "Schválit" = "Approve";
 "Na míru od AI" = "Made for you by AI";
 "Skládám trénink podle tvého výběru…" = "Building a workout to your choice…";

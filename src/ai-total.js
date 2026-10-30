@@ -61,6 +61,14 @@ export async function groupBrakeUsd(db, env, group, now = Date.now()) {
   if (n(brake.usd) != null) return Math.max(0, n(brake.usd));
   if (n(brake.perAccount) == null) return n(brake.min);
   const count = (await accountsByGroup(db, now).catch(error => { console.error("Accounts by group not read", error?.message || error); return {}; }))[group] || 0;
+  return brakeFor(brake, count);
+}
+
+// A brake that grows with the accounts: perAccount each, at least min, at most max.
+function brakeFor(brake, count) {
+  if (!brake || typeof brake !== "object") return null;
+  if (n(brake.usd) != null) return Math.max(0, n(brake.usd));
+  if (n(brake.perAccount) == null) return n(brake.min);
   const grown = Math.max(n(brake.min) || 0, rounded(n(brake.perAccount) * count));
   return n(brake.max) != null ? Math.min(n(brake.max), grown) : grown;
 }
@@ -145,4 +153,32 @@ async function alertGroup(env, db, day, group, row) {
 export async function aiSpendByGroup(db, day) {
   await ensureAiSpendDays(db);
   return (await db.prepare("SELECT grp, cost_usd, brake_usd FROM ai_spend_groups WHERE day = ?").bind(day).all()).results || [];
+}
+
+// The owner's Nastavení → Správa → Útraty AI: what each group spent today
+// against its brake, the day's total, yesterday and the month so far (UTC days,
+// like the brakes). One read of the days, one of the groups, one of the
+// subscriptions with Pro; a group's brake not set yet today is worked out the
+// way groupDay would.
+export async function aiSpendingReport(env, now = new Date()) {
+  const db = central(env) || env?.DB;
+  await ensureAiSpendDays(db);
+  const today = utcDay(now), yesterday = utcDay(new Date(now.getTime() - 864e5)), monthStart = `${today.slice(0, 7)}-01`;
+  const [days, groups, counts] = await Promise.all([
+    db.prepare("SELECT day, cost_usd FROM ai_spend_days WHERE day >= ? AND day <= ?").bind(yesterday < monthStart ? yesterday : monthStart, today).all().then(r => r.results || []),
+    db.prepare("SELECT grp, cost_usd, brake_usd FROM ai_spend_groups WHERE day = ?").bind(today).all().then(r => r.results || []),
+    accountsByGroup(db, now.getTime()).catch(error => { console.error("Accounts by group not read", error?.message || error); return {}; })
+  ]);
+  const spentOn = day => rounded(days.find(row => row.day === day)?.cost_usd);
+  const brakes = groupBrakes(env), byGroup = Object.fromEntries(groups.map(row => [row.grp, row]));
+  const next = new Date(`${today}T00:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
+  return {
+    today: spentOn(today), yesterday: spentOn(yesterday),
+    month: rounded(days.filter(row => row.day >= monthStart).reduce((sum, row) => sum + Number(row.cost_usd || 0), 0)),
+    resetsAt: next.toISOString(),
+    groups: AI_GROUPS.filter(group => brakes[group] || byGroup[group]).map(group => {
+      const row = byGroup[group], brake = brakes[group], growing = brake && n(brake.usd) == null && n(brake.perAccount) != null;
+      return { group, spent: rounded(row?.cost_usd), brake: row?.brake_usd != null ? Number(row.brake_usd) : brakeFor(brake, counts[group] || 0), accounts: growing ? counts[group] || 0 : null };
+    })
+  };
 }
