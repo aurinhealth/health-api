@@ -28,7 +28,7 @@ import { parseConfig, shardPlan } from './provision-user-shards.mjs';
 import { cloudflareD1 } from './food-catalog-tools.mjs';
 import { USER_ROUTES_SQL, routeBinding } from '../src/user-data-shards.js';
 import { PERSONAL_TABLES } from '../src/tenancy.js';
-import { CENTRAL_PERSONAL_TABLES } from '../src/user-data-routing.js';
+import { shardTableNames } from '../src/user-data-routing.js';
 
 // D1 takes at most 100 bound parameters per statement.
 const MAX_PARAMS = 99;
@@ -41,9 +41,10 @@ const name = value => {
 };
 
 // Literal names (more tables than D1 takes parameters) of the personal tables
-// a shard holds. The rest (sign-in, consents, connections, subscriptions, push)
-// stay in the central database for every account, the way the router reads them.
-const SHARD_TABLE_LIST = `(${Object.keys(PERSONAL_TABLES).filter(t => !CENTRAL_PERSONAL_TABLES.has(t)).map(t => `'${name(t)}'`).join(',')})`;
+// a shard holds, as the router reads them. The rest (sign-in, consents,
+// connections, subscriptions, push) stay in the central database, the food
+// contributions in the food catalogue.
+const SHARD_TABLE_LIST = `(${shardTableNames(PERSONAL_TABLES).map(t => `'${name(t)}'`).join(',')})`;
 
 async function rows(api, db, sql, params = []) {
   return (await api.query(db, sql, params)).results || [];
