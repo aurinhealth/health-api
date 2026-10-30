@@ -118,6 +118,8 @@ struct HealthDataTypeView: View {
     /// Google asks on its own page before Aurin may write there (as on Google's page).
     @State private var askingGoogle = false
     @State private var connectingGoogle = false
+    /// The apps and devices that wrote this type into Apple Health.
+    @State private var appleSources: [AppleHealth.Source] = []
     private var health: AppleHealth { AppleHealth.shared }
 
     var body: some View {
@@ -128,6 +130,16 @@ struct HealthDataTypeView: View {
                     ForEach(Array(readers.enumerated()), id: \.element) { index, id in
                         if index > 0 { SettingsDivider() }
                         row(id, subtitle: readSubtitle(id), isOn: readBinding(id))
+                        // Each app and device in Apple Health, while it is read.
+                        if id == "apple", health.enabled, health.categories.contains(type) {
+                            ForEach(appleSources) { source in
+                                SettingsDivider()
+                                SettingsToggle(title: source.name, subtitle: L10n.tr("přes Apple Health"), isOn: Binding(
+                                    get: { health.isShown(source.id, in: type) },
+                                    set: { health.setShown(source.id, in: type, $0) }))
+                                    .padding(.leading, 44)
+                            }
+                        }
                     }
                 }
                 .disabled(working || store.demo || health.syncing)
@@ -149,6 +161,10 @@ struct HealthDataTypeView: View {
         }
         .sheet(isPresented: $askingGoogle) {
             GoogleWriteSheet(missing: sync?.destination("google")?.missingScopes ?? [], busy: connectingGoogle) { await extendGoogle() }
+        }
+        .task(id: health.enabled && health.categories.contains(type)) {
+            guard health.enabled, health.categories.contains(type), !store.demo else { appleSources = []; return }
+            appleSources = await health.sources(for: type)
         }
     }
 

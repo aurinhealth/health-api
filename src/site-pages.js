@@ -1459,7 +1459,7 @@ export function supportPage(request, {apple = false, email = false, open = false
 <li>Disconnecting stops Aurin from reading and writing data in that service. For Google, Aurin also gives up its access at Google. Disconnecting the Ultrahuman Ring, WHOOP or Wahoo also deletes the data Aurin got from it.</li>
 <li>You can also remove Aurin’s access in your Google Account: open <a href="${GOOGLE_CONNECTIONS}">Third-party apps and services</a>, choose Aurin and remove its access.</li>
 <li>When two of your devices measure the same thing, <strong>Where to take data from</strong> in Data sources decides which one Aurin uses for your nights and your days. <strong>Automatic</strong> picks it for you.</li>
-<li><strong>Health data</strong> in Data sources lists each type of data with where Aurin reads it from and where it sends it, each with a switch. Turning one off stops reading or sending from then on; what Aurin already has stays.</li>
+<li><strong>Health data</strong> in Data sources lists each type of data with where Aurin reads it from (for Apple Health, each app and device too) and where it sends it, each with a switch. Turning one off stops reading or sending from then on; what Aurin already has stays.</li>
 </ul>
 <h2>Managing your data</h2>
 <ul>
